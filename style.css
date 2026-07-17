@@ -41,6 +41,10 @@ nav.site a, nav.site .here { margin: 0 0.6rem; }
 a { color: var(--maroon); text-decoration: underline; text-underline-offset: 2px; }
 a:hover { color: var(--maroon-dark); }
 
+/* Bare-URL links (pandoc's a.uri): let the URL break mid-string rather than
+   force the page wider than a phone screen. */
+a.uri { overflow-wrap: anywhere; }
+
 /* Headings */
 h1, h2, h3, h4 {
   font-weight: bold;
