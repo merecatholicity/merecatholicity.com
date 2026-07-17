@@ -19,7 +19,7 @@ html:
 	    confession.tex | \
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	    --metadata title="Mere Catholicity" \
-	    --css=style.css -B nav.html \
+	    --css=style.css -H social.html -B nav.html -A footer.html \
 	    -o book.html
 	python toc-prune.py
 	@echo "built book.html"
