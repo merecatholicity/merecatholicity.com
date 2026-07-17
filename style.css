@@ -28,14 +28,19 @@ body {
 
 /* Site navigation */
 nav.site {
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  column-gap: 1.15rem;
+  row-gap: 0.2rem;
   font-size: 0.95rem;
   letter-spacing: 0.04em;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--rule);
   margin-bottom: 1.5rem;
 }
-nav.site a, nav.site .here { margin: 0 0.6rem; }
+/* Placeholder for a link that is not live yet, in the nav or the doors list */
+.soon { color: var(--faint); }
 
 /* Links: maroon, underlined, in the old manner */
 a { color: var(--maroon); text-decoration: underline; text-underline-offset: 2px; }
@@ -112,6 +117,33 @@ th { color: var(--maroon-dark); }
 
 /* Images (cover) */
 img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
+
+/* Amazon editions strip: cover beside the caption, stacked on phones */
+.amazon {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  margin: 1.4em 0;
+}
+.amazon img { width: 62%; margin: 0; cursor: zoom-in; }
+
+/* Click-to-zoom overlay for the cover. Any click closes it. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  z-index: 10;
+}
+.lightbox img { max-width: 96vw; max-height: 96vh; margin: 0; }
+.amazon .canon { margin: 0; flex: 1; }
+@media (max-width: 600px) {
+  .amazon { flex-direction: column; gap: 0.8rem; }
+  .amazon img { width: 100%; }
+}
 
 /* Home page link list */
 ul.doors { list-style: none; padding: 0; text-align: center; font-size: 1.15rem; clear: both; }
