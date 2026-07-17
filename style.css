@@ -11,6 +11,10 @@
 
 * { box-sizing: border-box; }
 
+/* Reserve the scrollbar's width from first paint, so the centered column
+   never shifts when the bar appears mid-load. */
+html { overflow-y: scroll; }
+
 body {
   font-family: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
   color: var(--ink);
