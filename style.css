@@ -1,0 +1,177 @@
+/* Mere Catholicity — site style in the idiom of the old scholarly readers:
+   white ground, black serif text, deep maroon accents, thin rules. */
+
+:root {
+  --ink: #1a1a1a;
+  --maroon: #8b1a1a;
+  --maroon-dark: #6d1414;
+  --rule: #b9a58c;
+  --faint: #757068;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
+  color: var(--ink);
+  background: #ffffff;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+  line-height: 1.55;
+  font-size: 1.05rem;
+}
+
+/* Site navigation */
+nav.site {
+  text-align: center;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1.5rem;
+}
+nav.site a { margin: 0 0.6rem; }
+
+/* Links: maroon, underlined, in the old manner */
+a { color: var(--maroon); text-decoration: underline; text-underline-offset: 2px; }
+a:hover { color: var(--maroon-dark); }
+
+/* Headings */
+h1, h2, h3, h4 {
+  font-weight: bold;
+  color: var(--maroon);
+  line-height: 1.25;
+  margin: 1.6em 0 0.5em;
+}
+h1 { font-size: 1.65rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.25em; }
+h2 { font-size: 1.3rem; }
+h3 { font-size: 1.15rem; color: var(--maroon-dark); }
+h4 { font-size: 1.02rem; color: var(--maroon-dark); margin: 1.2em 0 0.2em; }
+
+header#title-block-header h1, .home-title {
+  text-align: center;
+  border-bottom: none;
+  margin-top: 0.5em;
+}
+
+/* Epigraph / canon line */
+.canon {
+  text-align: center;
+  font-style: italic;
+  color: var(--faint);
+  margin: 0.25em 0 1.2em;
+}
+
+hr { border: none; border-top: 1px solid var(--rule); margin: 2em auto; width: 60%; clear: both; }
+
+/* Body text */
+p { margin: 0.7em 0; }
+blockquote {
+  margin: 1.2em 1.5em;
+  padding-left: 1em;
+  border-left: 2px solid var(--rule);
+  font-style: italic;
+}
+
+/* Table of contents (pandoc) */
+nav#TOC {
+  border: 1px solid var(--rule);
+  padding: 0.8rem 1.2rem;
+  margin: 1.5rem 0;
+  font-size: 0.95rem;
+}
+nav#TOC ul { list-style: none; padding-left: 0.8rem; margin: 0.2rem 0; }
+nav#TOC > ul { padding-left: 0; }
+nav#TOC a { text-decoration: none; }
+nav#TOC a:hover { text-decoration: underline; }
+
+/* The acts table and any others */
+table {
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.92rem;
+  display: block;
+  overflow-x: auto;
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.35em 0.9em 0.35em 0;
+  border-bottom: 1px solid #e4dccd;
+}
+th { color: var(--maroon-dark); }
+
+/* Images (cover) */
+img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
+
+/* Home page link list */
+ul.doors { list-style: none; padding: 0; text-align: center; font-size: 1.15rem; clear: both; }
+ul.doors li { margin: 0.7em 0; }
+
+footer, .colophon {
+  margin-top: 2.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.85rem;
+  color: var(--faint);
+  text-align: center;
+}
+
+/* Small screens */
+@media (max-width: 600px) {
+  body { font-size: 1rem; padding: 0.9rem 0.8rem 2rem; }
+  h1 { font-size: 1.4rem; }
+  nav#TOC { font-size: 0.9rem; }
+}
+
+/* Current page in the nav: present but not a link */
+nav.site .here { color: var(--faint); }
+
+/* The confession, as the PDF's parchment box */
+.creed {
+  background: #d1e7dd;
+  border: 1px dashed #333;
+  border-radius: 3px;
+  padding: 1rem 1.4rem;
+  margin: 1rem auto 1.5rem;
+  max-width: 36rem;
+  font-family: 'Hoefler Text', Baskerville, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.creed-head {
+  text-align: center;
+  font-weight: bold;
+  color: #0f5132;
+  margin: 0 0 0.6em;
+}
+
+/* Introduction (review) on the home page */
+.intro h2 { text-align: center; margin-top: 1.2em; }
+.intro h3 { text-align: center; }
+.intro-attrib {
+  text-align: right;
+  font-style: italic;
+  color: var(--faint);
+  margin-top: 0.9em;
+}
+
+/* Pull-quote from the afterword, floated beside the introduction */
+blockquote.pullquote {
+  float: right;
+  width: 46%;
+  margin: 0.4rem 0 1rem 1.6rem;
+  padding: 1rem 1.2rem;
+  border: 1px dashed #333;
+  border-left: 1px dashed #333;
+  font-family: 'Hoefler Text', Baskerville, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+blockquote.pullquote .intro-attrib { font-size: 0.85rem; }
+@media (max-width: 700px) {
+  blockquote.pullquote { float: none; width: auto; margin: 1rem 0; }
+}
