@@ -35,7 +35,7 @@ nav.site {
   border-bottom: 1px solid var(--rule);
   margin-bottom: 1.5rem;
 }
-nav.site a { margin: 0 0.6rem; }
+nav.site a, nav.site .here { margin: 0 0.6rem; }
 
 /* Links: maroon, underlined, in the old manner */
 a { color: var(--maroon); text-decoration: underline; text-underline-offset: 2px; }
