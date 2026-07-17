@@ -21,12 +21,17 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<nav class="site"><span class="here">Home</span> &middot; <a href="book.html">Book (HTML)</a> <a href="Mere_Catholicity.pdf">(PDF)</a></nav>
+<nav class="site"><span class="here">About</span> &middot; <span>Book (<a href="book.html">HTML</a> | <a href="Mere_Catholicity.pdf">PDF</a> | <span class="soon" title="coming soon">Paperback</span> | <span class="soon" title="coming soon">Kindle</span>)</span></nav>
 
 <h1 class="home-title">Mere Catholicity</h1>
 <p class="canon">What has been believed everywhere, always, and by all.</p>
 
 <hr>
+
+<div class="amazon">
+<img src="book_cover.png" alt="Mere Catholicity paperback cover">
+<p class="canon">Paperback ($4.99) and Kindle ($0.99) editions coming soon on Amazon.</p>
+</div>
 
 <h2>For the reader who found this page</h2>
 
@@ -47,6 +52,8 @@
 <ul class="doors">
 <li><a href="book.html">Read the book online</a></li>
 <li><a href="Mere_Catholicity.pdf">Download the PDF</a></li>
+<li><span class="soon" title="coming soon">Paperback on Amazon</span></li>
+<li><span class="soon" title="coming soon">Kindle on Amazon</span></li>
 </ul>
 
 <div class="creed">
@@ -56,6 +63,21 @@
 </div>
 
 <p class="canon">Quod ubique, quod semper, quod ab omnibus.</p>
+
+<script>
+document.querySelector('.amazon img').addEventListener('click', function () {
+  var box = document.createElement('div');
+  box.className = 'lightbox';
+  var img = document.createElement('img');
+  img.src = this.src;
+  img.alt = this.alt;
+  box.appendChild(img);
+  function close() { box.remove(); document.onkeydown = null; }
+  box.onclick = close;
+  document.onkeydown = function (e) { if (e.key === 'Escape') close(); };
+  document.body.appendChild(box);
+});
+</script>
 
 <footer>
 This work is dedicated to the public domain (Creative Commons CC0 1.0). No rights reserved.<br>
