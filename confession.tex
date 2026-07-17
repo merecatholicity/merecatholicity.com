@@ -1,9 +1,23 @@
+% One shared source for both editions. Building with \PAPERBACK defined
+% (see make publish) switches trim size, margins, links, ink, and the
+% appendix table widths. The text is identical in both editions.
+\ifdefined\PAPERBACK
+\documentclass[11pt,twoside]{article}
+\else
 \documentclass[11pt,letterpaper]{article}
+\fi
 % Anonymity hygiene: suppress the pdfTeX banner (it names the OS), fix the
 % trailer ID for reproducible builds, and set neutral document metadata.
 \ifdefined\pdfsuppressptexinfo\pdfsuppressptexinfo=-1 \fi
 \ifdefined\pdftrailerid\pdftrailerid{}\fi
+\ifdefined\PAPERBACK
+% KDP 6x9 trim. Mirrored margins, gutter on the inside edge.
+\usepackage[paperwidth=6in,paperheight=9in,inner=0.75in,outer=0.5in,top=0.75in,bottom=0.75in]{geometry}
+% The narrower measure needs a little slack to avoid protruding lines.
+\setlength{\emergencystretch}{1.5em}
+\else
 \usepackage[margin=1in]{geometry}
+\fi
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage{mathpazo}
@@ -17,7 +31,12 @@
 \usepackage{longtable}
 \usepackage{graphicx}
 \usepackage{array}
+\ifdefined\PAPERBACK
+% Links are dead ink on paper. No boxes, no color.
+\usepackage[hidelinks]{hyperref}
+\else
 \usepackage[colorlinks=true,linkcolor=ink,urlcolor=maroon,citecolor=ink,filecolor=ink]{hyperref}
+\fi
 \urlstyle{same}
 \hypersetup{pdftitle={Mere Catholicity},pdfauthor={Anonymous}}
 \linespread{1.06}
@@ -31,6 +50,30 @@
 \definecolor{brieftitle}{HTML}{9A6B3F}
 \definecolor{creedbg}{HTML}{F3EEE7}
 \colorlet{briefrule}{accent!35!white}
+\ifdefined\PAPERBACK
+% Print edition: pure black text and rules, white box grounds with gray
+% frames. KDP grayscales color anyway, and deliberate black beats a
+% washed-out conversion of the warm palette.
+\definecolor{ink}{HTML}{000000}
+\definecolor{heading}{HTML}{000000}
+\definecolor{subhead}{HTML}{000000}
+\definecolor{accent}{HTML}{000000}
+\definecolor{maroon}{HTML}{000000}
+\definecolor{brieftitle}{HTML}{000000}
+\definecolor{briefbg}{HTML}{FFFFFF}
+\definecolor{creedbg}{HTML}{FFFFFF}
+\colorlet{briefrule}{black!35!white}
+\fi
+% Appendix A column widths, set per edition so the table fits the measure.
+\newlength{\actcol}
+\newlength{\gradecol}
+\ifdefined\PAPERBACK
+\setlength{\actcol}{1.95in}
+\setlength{\gradecol}{1.55in}
+\else
+\setlength{\actcol}{2.6in}
+\setlength{\gradecol}{2.0in}
+\fi
 
 \titleformat{\section}[hang]{\needspace{4\baselineskip}\normalfont\fontsize{13}{16}\selectfont\bfseries\color{heading}}{\thesection.}{0.5em}{}[{\vspace{2pt}\color{accent}\titlerule[1pt]}]
 \titlespacing{\section}{0pt}{1.4em}{0.6em}
@@ -64,6 +107,7 @@
 \begin{document}
 \color{ink}
 \maketitle
+\ifdefined\PAPERBACK\thispagestyle{empty}\fi
 \vspace{-4.6em}
 \begin{center}\itshape\color{subhead}Quod ubique, quod semper, quod ab omnibus, what has been believed everywhere, always, and by all.\end{center}
 \vspace{-0.4em}
@@ -476,7 +520,7 @@ We hold, then, that we are on the way and not yet at the goal, that we may be wr
 
 \medskip
 \small
-\begin{longtable}{>{\raggedright\arraybackslash}p{2.6in}>{\raggedright\arraybackslash}p{2.0in}l}
+\begin{longtable}{>{\raggedright\arraybackslash}p{\actcol}>{\raggedright\arraybackslash}p{\gradecol}l}
 \textbf{Act} & \textbf{Grade} & \textbf{Argued} \\
 \hline
 \endhead
