@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact | Mere Catholicity</title>
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="site">
+<button class="nav-toggle" aria-expanded="false" aria-controls="nav-list"><span class="nav-icon" aria-hidden="true">&#9776;</span><span class="nav-label">Menu</span></button>
+<ul class="nav-list" id="nav-list">
+<li><a href="index.html">About</a></li>
+<li class="has-sub">
+<button class="sub-toggle" aria-expanded="false">Books <span aria-hidden="true">&#9662;</span></button>
+<ul class="sub">
+<li class="sub-back"><button class="back-btn" type="button">&#8592; Back</button></li>
+<li class="sub-row">
+<ul class="sub-col">
+<li class="has-sub">
+<button class="sub-toggle" aria-expanded="false">Mere Catholicity <span aria-hidden="true">&#9662;</span></button>
+<ul class="sub">
+<li class="sub-back"><button class="back-btn" type="button">&#8592; Back</button></li>
+<li class="sub-row">
+<ul class="sub-col">
+<li><a href="book.html">Read online (HTML)</a></li>
+<li><a href="Mere_Catholicity.pdf">Download (PDF)</a></li>
+<li><span class="soon" title="coming soon">Paperback (soon)</span></li>
+<li><span class="soon" title="coming soon">Kindle (soon)</span></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="journal.html">Journal</a></li>
+<li><a href="resources.html">Resources</a></li>
+<li><a href="contact.html">Contact</a></li>
+</ul>
+</nav>
+<script defer src="nav.js"></script>
+
+<h1 class="home-title">Contact</h1>
+
+<form id="contact-form" class="contact" action="https://contact-api.merecatholicity.com/" method="POST">
+<label>Name<br>
+<input type="text" name="name" maxlength="200" autocomplete="name"></label>
+<label>Email, if you want a reply<br>
+<input type="email" name="email" maxlength="200" autocomplete="email"></label>
+<label>Message<br>
+<textarea name="message" maxlength="5000" rows="8" required></textarea></label>
+<input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+<div class="cf-turnstile" data-sitekey="0x4AAAAAAD4gH6kfaUH2IRSI"></div>
+<button type="submit" class="btn btn-send">Send</button>
+<p id="contact-status" class="canon" role="status"></p>
+</form>
+
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script>
+document.getElementById('contact-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var form = e.target;
+  var status = document.getElementById('contact-status');
+  var button = form.querySelector('.btn-send');
+  button.disabled = true;
+  status.textContent = 'Sending...';
+  fetch(form.action, { method: 'POST', body: new FormData(form) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.ok) {
+        form.reset();
+        status.textContent = 'Sent. Thank you.';
+      } else {
+        status.textContent = d.error || 'Something went wrong. Please try again.';
+        if (window.turnstile) turnstile.reset();
+      }
+    })
+    .catch(function () {
+      status.textContent = 'Could not reach the server. Please try again.';
+      if (window.turnstile) turnstile.reset();
+    })
+    .finally(function () { button.disabled = false; });
+});
+</script>
+
+<footer>
+&copy; merecatholicity.com
+</footer>
+</body>
+</html>

@@ -1,0 +1,11 @@
+// Contact form handler for merecatholicity.com. Free tier only:
+// sends are to a verified destination address, which is free on all plans.
+// Deploy with: make worker (from the repo root)
+{
+  "name": "merecatholicity-contact",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-18",
+  "observability": { "enabled": true },
+  "send_email": [{ "name": "EMAIL" }],
+  "routes": [{ "pattern": "contact-api.merecatholicity.com", "custom_domain": true }]
+}
