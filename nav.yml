@@ -1,0 +1,17 @@
+# Site menu. Edit this file, then run: make menu
+#
+# Each item is one line:        - Title: destination
+# A submenu is a title with an indented list under it instead of a
+# destination. Submenus can nest as deep as you like, the menu system
+# handles placement automatically.
+# The special destination "soon" makes a grayed-out unclickable
+# placeholder with a "coming soon" tooltip.
+# If a title or destination contains a colon, wrap it in quotes.
+
+- About: index.html
+- Book:
+    - Read online (HTML): book.html
+    - Download (PDF): Mere_Catholicity.pdf
+    - Paperback (soon): soon
+    - Kindle (soon): soon
+- Resources: resources.html

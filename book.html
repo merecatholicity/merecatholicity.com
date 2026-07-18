@@ -40,7 +40,24 @@
   <meta name="twitter:image" content="https://merecatholicity.com/cover.jpg">
 </head>
 <body>
-<nav class="site"><a href="index.html">About</a> &middot; <span>Book (<span class="here">HTML</span> | <a href="Mere_Catholicity.pdf">PDF</a> | <span class="soon" title="coming soon">Paperback</span> | <span class="soon" title="coming soon">Kindle</span>)</span></nav>
+<nav class="site">
+<button class="nav-toggle" aria-expanded="false" aria-controls="nav-list"><span class="nav-icon" aria-hidden="true">&#9776;</span><span class="nav-label">Menu</span></button>
+<ul class="nav-list" id="nav-list">
+<li><a href="index.html">About</a></li>
+<li class="has-sub">
+<button class="sub-toggle" aria-expanded="false">Book <span aria-hidden="true">&#9662;</span></button>
+<ul class="sub">
+<li class="sub-back"><button class="back-btn" type="button">&#8592; Back</button></li>
+<li><a href="book.html">Read online (HTML)</a></li>
+<li><a href="Mere_Catholicity.pdf">Download (PDF)</a></li>
+<li><span class="soon" title="coming soon">Paperback (soon)</span></li>
+<li><span class="soon" title="coming soon">Kindle (soon)</span></li>
+</ul>
+</li>
+<li><a href="resources.html">Resources</a></li>
+</ul>
+</nav>
+<script defer src="nav.js"></script>
 <header id="title-block-header">
 <h1 class="title">Mere Catholicity</h1>
 </header>
