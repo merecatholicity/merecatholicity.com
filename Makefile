@@ -37,6 +37,13 @@ publish:
 	cp confession-paperback.pdf Mere_Catholicity_Paperback.pdf
 	@echo "built Mere_Catholicity_Paperback.pdf ($$(pdfinfo confession-paperback.pdf | awk '/^Pages/{print $$2}') pages)"
 
+# Rebuild the site menus from nav.yml: regenerates nav.html, rewrites the
+# nav block in index.html and resources.html, then rebuilds book.html.
+.PHONY: menu
+menu:
+	python nav.py
+	$(MAKE) html
+
 .PHONY: serve
 serve:
 	python -m http.server 8000
