@@ -139,7 +139,8 @@ img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
   z-index: 10;
 }
 .lightbox img { max-width: 96vw; max-height: 96vh; margin: 0; }
-.amazon .canon { margin: 0; flex: 1; }
+.amazon .doors { flex: 1; margin: 0; }
+.amazon .doors .btn { min-width: 0; width: 100%; font-size: 1rem; }
 @media (max-width: 600px) {
   .amazon { flex-direction: column; gap: 0.8rem; }
   .amazon img { width: 100%; }
@@ -148,6 +149,24 @@ img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
 /* Home page link list */
 ul.doors { list-style: none; padding: 0; text-align: center; font-size: 1.15rem; clear: both; }
 ul.doors li { margin: 0.7em 0; }
+
+/* Edition buttons in the Bootstrap idiom, no library. Green means free and
+   available here, yellow means coming soon on Amazon. */
+.btn {
+  display: inline-block;
+  min-width: 16rem;
+  padding: 0.45rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+.btn-read { background: #198754; border-color: #198754; color: #fff; }
+.btn-read:hover { background: #146c43; border-color: #146c43; color: #fff; }
+.btn-pdf { background: transparent; border-color: #198754; color: #198754; }
+.btn-pdf:hover { background: #198754; color: #fff; }
+.btn-amazon { background: #ffc107; border-color: #ffc107; color: #212529; opacity: 0.68; cursor: default; }
 
 footer, .colophon {
   margin-top: 2.5rem;
@@ -168,8 +187,9 @@ footer, .colophon {
 /* Current page in the nav: present but not a link */
 nav.site .here { color: var(--faint); }
 
-/* The confession, as the PDF's parchment box */
-.creed {
+/* The confession, as the PDF's parchment box. .creed on the home page,
+   .creedbox in the pandoc book edition. */
+.creed, .creedbox {
   background: #d1e7dd;
   border: 1px dashed #333;
   border-radius: 3px;

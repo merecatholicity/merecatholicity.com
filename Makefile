@@ -16,6 +16,7 @@ html:
 	sed -e 's/\\unit{/\\paragraph{/g' \
 	    -e 's/\\hrule height [0-9.]*pt//g' \
 	    -e 's/\\section\*{\\color{heading}/\\section*{/g' \
+	    -e 's/\\begin{center}{\\large\\bfseries\\color{heading}The confession}\\end{center}/\\section*{The confession}/' \
 	    confession.tex | \
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	    --metadata title="Mere Catholicity" \
