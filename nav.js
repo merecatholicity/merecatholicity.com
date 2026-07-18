@@ -7,8 +7,11 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!nav) return;
   var toggle = nav.querySelector('.nav-toggle');
   var icon = toggle.querySelector('.nav-icon') || toggle;
+  /* Mode is decided at event time, never at load time, so resizing the
+     window or toggling device emulation always behaves like a fresh load. */
   var desktop = window.matchMedia('(min-width: 601px)');
-  var canHover = window.matchMedia('(hover: hover) and (min-width: 601px)');
+  var canHover = window.matchMedia('(hover: hover)');
+  function hoverMode() { return desktop.matches && canHover.matches; }
 
   /* Place an opened cascade panel. Prefer opening to the right with a small
      overlap. If the right edge would leave the window, mirror to the left.
@@ -46,18 +49,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  /* A click on a Book toggle pins its state, open or closed, so hovering
-     away no longer changes it. Clicking back on an earlier panel unpins,
-     restoring the default hover-driven behavior. */
-  function resetPins(except) {
-    nav.querySelectorAll('.has-sub.pinned').forEach(function (li) {
-      if (!except || !li.contains(except)) li.classList.remove('pinned');
-    });
-  }
-
   function closeAll() {
     closeBranches(null);
-    resetPins(null);
     nav.classList.remove('open');
     toggle.setAttribute('aria-expanded', 'false');
     icon.textContent = '☰';
@@ -74,18 +67,9 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.addEventListener('click', function () {
       var li = btn.parentElement;
       clearTimeout(li._hoverTimer);
+      clearTimeout(li._closeTimer);
       var willOpen = !li.classList.contains('open');
-      if (willOpen) {
-        /* Pinning holds a branch open against mouseaway. A pinned child
-           needs its ancestors pinned too or they would close under it. */
-        for (var p = li; p; p = p.parentElement && p.parentElement.closest('.has-sub')) {
-          p.classList.add('pinned');
-        }
-      } else {
-        /* Click-close is not a pin. It closes the branch and returns it,
-           and everything nested in it, to hover-driven behavior. */
-        li.classList.remove('pinned');
-        li.querySelectorAll('.has-sub.pinned').forEach(function (d) { d.classList.remove('pinned'); });
+      if (!willOpen) {
         li.querySelectorAll('.has-sub.open').forEach(function (d) { setSub(d, false); });
       }
       setSub(li, willOpen);
@@ -104,7 +88,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target === nav) { closeAll(); return; }
     if (!e.target.closest('.nav-toggle') && !e.target.closest('.sub-toggle')) {
       closeBranches(e.target);
-      resetPins(e.target);
     }
   });
 
@@ -116,21 +99,32 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   /* Hover opens after a short delay, so a decisive clicker can click the
-     toggle before hover fires. Leaving or clicking cancels the pending open. */
-  var HOVER_DELAY = 275;
-  if (canHover.matches) {
-    nav.querySelectorAll('.has-sub').forEach(function (li) {
-      li.addEventListener('mouseenter', function () {
-        if (!li.classList.contains('pinned') && !li.classList.contains('open')) {
-          li._hoverTimer = setTimeout(function () { setSub(li, true); }, HOVER_DELAY);
-        }
-      });
-      li.addEventListener('mouseleave', function () {
-        clearTimeout(li._hoverTimer);
-        if (!li.classList.contains('pinned')) setSub(li, false);
-      });
+     toggle before hover fires. Leaving or clicking cancels the pending open.
+     Listeners are always attached but check the mode when they fire, so a
+     desktop browser narrowed to mobile width stops hovering immediately. */
+  var HOVER_DELAY = 60;
+  /* Closing on mouseaway waits a grace period, so crossing a gap between
+     an item and its panel, or a clamped panel's odd geometry, does not
+     drop the menu mid-journey. Re-entering cancels the pending close. */
+  var CLOSE_GRACE = 250;
+  nav.querySelectorAll('.has-sub').forEach(function (li) {
+    li.addEventListener('mouseenter', function () {
+      clearTimeout(li._closeTimer);
+      if (!hoverMode()) return;
+      if (!li.classList.contains('open')) {
+        li._hoverTimer = setTimeout(function () { setSub(li, true); }, HOVER_DELAY);
+      }
     });
-  }
+    li.addEventListener('mouseleave', function () {
+      clearTimeout(li._hoverTimer);
+      if (!hoverMode()) return;
+      li._closeTimer = setTimeout(function () { setSub(li, false); }, CLOSE_GRACE);
+    });
+  });
+
+  /* Crossing the breakpoint resets the menu, so no open panels, pins, or
+     computed positions leak from one layout into the other. */
+  desktop.addEventListener('change', closeAll);
 
   var here = location.pathname.split('/').pop() || 'index.html';
   nav.querySelectorAll('a').forEach(function (a) {

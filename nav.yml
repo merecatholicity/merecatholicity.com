@@ -7,6 +7,16 @@
 # The special destination "soon" makes a grayed-out unclickable
 # placeholder with a "coming soon" tooltip.
 # If a title or destination contains a colon, wrap it in quotes.
+#
+# Columns (desktop submenus only): give an item a col number to place it
+# in that column of its panel. Items sharing a col stack in file order.
+# Without col everything goes in column 1. Mobile ignores columns and
+# keeps the flat file order. Both of these forms work:
+#   - Download (PDF): {dest: Mere_Catholicity.pdf, col: 2}
+#   - Extras:
+#       col: 2
+#       items:
+#         - Errata: errata.html
 
 - About: index.html
 - Book:
