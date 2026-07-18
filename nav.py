@@ -22,34 +22,61 @@ TOGGLE = (
 BACK_ROW = '<li class="sub-back"><button class="back-btn" type="button">&#8592; Back</button></li>'
 
 
-def render_items(items):
-    out = []
-    for item in items:
-        if not isinstance(item, dict) or len(item) != 1:
-            sys.exit(f"nav.yml: each item must be a single 'Title: destination' pair, got: {item!r}")
-        ((title, dest),) = item.items()
-        t = html.escape(str(title))
-        if isinstance(dest, list):
-            out.append('<li class="has-sub">')
-            out.append(
-                f'<button class="sub-toggle" aria-expanded="false">{t} '
-                '<span aria-hidden="true">&#9662;</span></button>'
-            )
-            out.append('<ul class="sub">')
-            out.append(BACK_ROW)
-            out.extend(render_items(dest))
-            out.append("</ul>")
-            out.append("</li>")
-        elif str(dest).strip().lower() == "soon":
-            out.append(f'<li><span class="soon" title="coming soon">{t}</span></li>')
-        else:
-            out.append(f'<li><a href="{html.escape(str(dest), quote=True)}">{t}</a></li>')
-    return out
+def parse_item(item):
+    """Return (title, kind, payload, col) for one nav.yml entry."""
+    if not isinstance(item, dict) or len(item) != 1:
+        sys.exit(f"nav.yml: each item must be a single 'Title: destination' pair, got: {item!r}")
+    ((title, val),) = item.items()
+    col = 1
+    if isinstance(val, dict):
+        col = int(val.get("col", 1))
+        if "items" in val:
+            return title, "sub", val["items"], col
+        if "dest" in val:
+            return title, "leaf", str(val["dest"]), col
+        sys.exit(f"nav.yml: '{title}' needs a 'dest' or 'items' key, got: {val!r}")
+    if isinstance(val, list):
+        return title, "sub", val, col
+    return title, "leaf", str(val), col
+
+
+def render_leaf(title, dest):
+    t = html.escape(str(title))
+    if dest.strip().lower() == "soon":
+        return [f'<li><span class="soon" title="coming soon">{t}</span></li>']
+    return [f'<li><a href="{html.escape(dest, quote=True)}">{t}</a></li>']
+
+
+def render_sub(title, children):
+    t = html.escape(str(title))
+    lines = ['<li class="has-sub">']
+    lines.append(
+        f'<button class="sub-toggle" aria-expanded="false">{t} '
+        '<span aria-hidden="true">&#9662;</span></button>'
+    )
+    lines.append('<ul class="sub">')
+    lines.append(BACK_ROW)
+    lines.append('<li class="sub-row">')
+    cols = {}
+    for child in children:
+        ctitle, kind, payload, col = parse_item(child)
+        rendered = render_leaf(ctitle, payload) if kind == "leaf" else render_sub(ctitle, payload)
+        cols.setdefault(col, []).extend(rendered)
+    for col in sorted(cols):
+        lines.append('<ul class="sub-col">')
+        lines.extend(cols[col])
+        lines.append("</ul>")
+    lines.append("</li>")
+    lines.append("</ul>")
+    lines.append("</li>")
+    return lines
 
 
 def build_nav(items):
     lines = ['<nav class="site">', TOGGLE, '<ul class="nav-list" id="nav-list">']
-    lines.extend(render_items(items))
+    for item in items:
+        title, kind, payload, _col = parse_item(item)  # col is ignored on the top bar
+        lines.extend(render_leaf(title, payload) if kind == "leaf" else render_sub(title, payload))
     lines.extend(["</ul>", "</nav>", '<script defer src="nav.js"></script>'])
     return "\n".join(lines) + "\n"
 

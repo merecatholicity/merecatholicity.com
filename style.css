@@ -98,7 +98,7 @@ nav.site .sub-back { display: none; }
     z-index: 12;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
   }
   nav.site .sub li { margin: 0.7em 0; }
   nav.site .sub a, nav.site .sub .soon {
@@ -109,7 +109,20 @@ nav.site .sub-back { display: none; }
     transition: background-color 0.15s ease;
   }
   nav.site .sub a:hover { background: rgba(139, 26, 26, 0.07); color: var(--maroon-dark); }
+  /* Column layout inside a panel, driven by col numbers in nav.yml. */
+  nav.site .sub-row { display: flex; align-items: flex-start; gap: 0 1.6rem; margin: 0; padding: 0; }
+  nav.site .sub-col { flex: 1; list-style: none; margin: 0; padding: 0; min-width: 9rem; }
   nav.site .nav-list > li > .sub { top: calc(100% + 0.55rem); left: 0; transform: translate(0, -0.4rem); }
+  /* Invisible bridge over the visual gap between a bar item and its panel,
+     so mousing slowly across the gap never leaves the hover subtree. */
+  nav.site .nav-list > li > .sub::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -0.7rem;
+    height: 0.7rem;
+  }
   nav.site .has-sub.open > .sub { opacity: 1; visibility: visible; transform: none; }
 }
 @media (max-width: 600px) {
@@ -207,6 +220,9 @@ nav.site .sub-back { display: none; }
     font-size: 0.95rem;
   }
   nav.site.open .sub-back .back-btn:active { color: var(--maroon-dark); }
+  /* Columns are a desktop notion. The sheet flattens the wrappers away
+     and keeps the plain nav.yml order. */
+  nav.site .sub-row, nav.site .sub-col { display: contents; }
 }
 @keyframes drillin {
   from { opacity: 0; transform: translateX(1.5rem); }
