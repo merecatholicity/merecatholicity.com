@@ -6,3 +6,6 @@ confession*.toc
 confession.pdf
 confession-paperback.pdf
 Mere_Catholicity_Paperback.pdf
+.wrangler/
+contact-worker/.wrangler/
+contact-worker/node_modules/
