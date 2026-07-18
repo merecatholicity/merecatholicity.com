@@ -74,6 +74,8 @@ nav.site .sub-toggle:hover { color: var(--maroon-dark); }
 }
 nav.site a.here, nav.site .sub-toggle.here { color: var(--faint); text-decoration: none; }
 nav.site .sub { list-style: none; margin: 0; padding: 0; display: none; }
+nav.site .sub-row, nav.site .sub-col { list-style: none; margin: 0; padding: 0; }
+nav.site .sub li { list-style: none; }
 nav.site .sub-back { display: none; }
 
 /* Desktop dropdown, scoped to wide screens so nothing here can leak into
@@ -87,7 +89,7 @@ nav.site .sub-back { display: none; }
     transform: translate(-0.4rem, 0);
     padding: 1.8rem 2.4rem;
     font-size: 1.05rem;
-    background: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(3px);
     -webkit-backdrop-filter: blur(3px);
     border: none;
@@ -167,7 +169,7 @@ nav.site .sub-back { display: none; }
     top: calc(5rem + env(safe-area-inset-top, 0px));
     margin: 0;
     padding: 0.7rem 0.6rem;
-    background: rgba(255, 255, 255, 0.96);
+    background: rgba(255, 255, 255, 0.97);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     border-radius: 12px;
@@ -356,6 +358,26 @@ ul.doors li { margin: 0.7em 0; }
 .btn-pdf { background: transparent; border-color: #198754; color: #198754; }
 .btn-pdf:hover { background: #198754; color: #fff; }
 .btn-amazon { background: #ffc107; border-color: #ffc107; color: #212529; opacity: 0.68; cursor: default; }
+
+/* Contact form */
+form.contact { max-width: 34rem; margin: 1.5rem auto; }
+form.contact label { display: block; margin: 0.9em 0; }
+form.contact input[type="text"], form.contact input[type="email"], form.contact textarea {
+  width: 100%;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+form.contact textarea { resize: vertical; }
+form.contact input:focus, form.contact textarea:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+form.contact .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+form.contact .cf-turnstile { margin: 1em 0; }
+.btn-send { background: var(--maroon); border-color: var(--maroon); color: #fff; font: inherit; letter-spacing: inherit; cursor: pointer; }
+.btn-send:hover { background: var(--maroon-dark); border-color: var(--maroon-dark); color: #fff; }
+.btn-send:disabled { opacity: 0.6; cursor: default; }
 
 footer, .colophon {
   margin-top: 2.5rem;

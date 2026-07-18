@@ -12,19 +12,15 @@ the nav on every page.
 
 ## License
 
-The book and the website are dedicated to the public domain under
-[Creative Commons CC0 1.0](LICENSE). No rights reserved. This covers:
+This repository is under the [MIT License](LICENSE), copyright
+merecatholicity.com. That covers the website, the build system, the menu
+system, and anything else not listed below.
 
-- `confession.tex` (the book itself)
-- `book.html`, `index.html`, `resources.html` (the web pages)
-- `nav.html`, `footer.html`, `social.html` (page fragments used by the build)
-- `style.css` and `nav.js`
-- `Mere_Catholicity.pdf`
-- `cover.jpg`
+The book itself, in its source and rendered forms, is dedicated to the
+public domain under [Creative Commons CC0 1.0](LICENSE-CC0). No rights
+reserved. This covers only:
 
-The build scripts are under the [MIT License](LICENSE-MIT). This covers:
-
-- `Makefile`
-- `build-confession.sh`
-- `toc-prune.py`
-- `nav.py` and `nav.yml`
+- `confession.tex` (the book's source)
+- `Mere_Catholicity.pdf` and `Mere_Catholicity_Paperback.pdf` (the renders)
+- `book.html` (the web edition of the book)
+- `cover.jpg` and `book_cover.png` (the cover images)

@@ -19,9 +19,12 @@
 #         - Errata: errata.html
 
 - About: index.html
-- Book:
-    - Read online (HTML): book.html
-    - Download (PDF): Mere_Catholicity.pdf
-    - Paperback (soon): soon
-    - Kindle (soon): soon
+- Books:
+    - Mere Catholicity:
+        - Read online (HTML): book.html
+        - Download (PDF): Mere_Catholicity.pdf
+        - Paperback (soon): soon
+        - Kindle (soon): soon
+- Journal: journal.html
 - Resources: resources.html
+- Contact: contact.html
