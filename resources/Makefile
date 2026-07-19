@@ -45,6 +45,36 @@ pdf:
 	$(call LATEX2,councils)
 	cp councils.pdf ../Seven_Ecumenical_Councils.pdf
 	@echo "built Seven_Ecumenical_Councils.pdf ($$(pdfinfo councils.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,ignatius)
+	cp ignatius.pdf ../Epistles_of_Ignatius.pdf
+	@echo "built Epistles_of_Ignatius.pdf ($$(pdfinfo ignatius.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,irenaeus3)
+	cp irenaeus3.pdf ../Against_Heresies_Book_III.pdf
+	@echo "built Against_Heresies_Book_III.pdf ($$(pdfinfo irenaeus3.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,baptism)
+	cp baptism.pdf ../On_Baptism.pdf
+	@echo "built On_Baptism.pdf ($$(pdfinfo baptism.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,unity)
+	cp unity.pdf ../On_the_Unity_of_the_Church.pdf
+	@echo "built On_the_Unity_of_the_Church.pdf ($$(pdfinfo unity.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,tome)
+	cp tome.pdf ../Tome_of_St_Leo.pdf
+	@echo "built Tome_of_St_Leo.pdf ($$(pdfinfo tome.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,clement)
+	cp clement.pdf ../First_Epistle_of_Clement.pdf
+	@echo "built First_Epistle_of_Clement.pdf ($$(pdfinfo clement.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,justin)
+	cp justin.pdf ../First_Apology_of_Justin_Martyr.pdf
+	@echo "built First_Apology_of_Justin_Martyr.pdf ($$(pdfinfo justin.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,didache)
+	cp didache.pdf ../Didache.pdf
+	@echo "built Didache.pdf ($$(pdfinfo didache.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,festal39)
+	cp festal39.pdf ../Festal_Letter_39.pdf
+	@echo "built Festal_Letter_39.pdf ($$(pdfinfo festal39.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,gregory-letters)
+	cp gregory-letters.pdf ../Letters_on_the_Title_Universal_Bishop.pdf
+	@echo "built Letters_on_the_Title_Universal_Bishop.pdf ($$(pdfinfo gregory-letters.pdf | awk '/^Pages/{print $$2}') pages)"
 
 # Site HTML editions from the same .tex files, with the site nav and
 # footer, like book.html. The heading macros become \section* and
@@ -92,11 +122,21 @@ html:
 	    -o ../law.html
 	rm law-body-html.tex
 	@echo "built law.html"
-	for w in cyril:"The Catechetical Lectures of S. Cyril of Jerusalem" \
-	         gregory:"The Great Catechism of St. Gregory of Nyssa" \
-	         enchiridion:"The Enchiridion on Faith, Hope, and Love" \
-	         councils:"The Seven Ecumenical Councils of the Undivided Church"; do \
-	  n=$${w%%:*}; t=$${w#*:}; \
+	for w in cyril:2:"The Catechetical Lectures of S. Cyril of Jerusalem" \
+	         gregory:2:"The Great Catechism of St. Gregory of Nyssa" \
+	         enchiridion:2:"The Enchiridion on Faith, Hope, and Love" \
+	         councils:2:"The Seven Ecumenical Councils of the Undivided Church" \
+	         ignatius:1:"The Epistles of St. Ignatius of Antioch" \
+	         irenaeus3:2:"Against Heresies, Book III" \
+	         baptism:2:"On Baptism, by Tertullian" \
+	         unity:1:"On the Unity of the Church" \
+	         tome:1:"The Tome of St. Leo" \
+	         clement:2:"The First Epistle of Clement to the Corinthians" \
+	         justin:2:"The First Apology of St. Justin Martyr" \
+	         didache:2:"The Didache" \
+	         festal39:1:"The Thirty-Ninth Festal Letter of St. Athanasius" \
+	         gregory-letters:1:"Letters of St. Gregory the Great on the Title Universal Bishop"; do \
+	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \
 	      -e 's/\\xsubsection{/\\paragraph{/g' \
@@ -104,7 +144,7 @@ html:
 	      -e 's/\\texthebrew{/{/g' \
 	      $$n-body.tex > $$n-body-html.tex; \
 	  sed -e "s/{$$n-body.tex}/{$$n-body-html.tex}/" $$n.tex | \
-	  pandoc -f latex -t html5 --standalone --toc \
+	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
 	      --css=style.css -B ../nav.html -A ../footer.html \
 	      -o ../$$n.html; \
