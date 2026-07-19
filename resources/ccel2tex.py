@@ -418,6 +418,57 @@ def gregletters_post(body):
     return body
 
 
+def soulres_heading(div_id, title):
+    """Argument and the dialogue itself as the two divisions."""
+    if div_id in ("x.iii.i", "x.iii.ii"):
+        return title
+    return None
+
+
+def soulres_post(body):
+    return body.replace("On the Soul and the Resurrection.\n\n", "", 1)
+
+
+ONBAPTISM_BOOKS = {
+    "v.iv.ii": "Preface.",
+    "v.iv.iii": "Book I.", "v.iv.iv": "Book II.", "v.iv.v": "Book III.",
+    "v.iv.vi": "Book IV.", "v.iv.vii": "Book V.", "v.iv.viii": "Book VI.",
+    "v.iv.ix": "Book VII.",
+}
+
+
+def onbaptism_heading(div_id, title):
+    """Preface and Books I-VII; the printed argument-titles join the
+    book number in the heading."""
+    if div_id not in ONBAPTISM_BOOKS:
+        return None
+    num = ONBAPTISM_BOOKS[div_id]
+    if num.startswith("Book"):
+        return num + " " + title
+    return num
+
+
+def onbaptism_post(body):
+    half_title = ("The\n\nSeven Books of Augustin,\n\nBishop of Hippo\n\n"
+                  "On Baptism, Against the Donatists\n\n"
+                  "\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\\_\n\n")
+    assert half_title in body, "onbaptism half title not found"
+    return body.replace(half_title, "", 1)
+
+
+def cassian_heading(div_id, title):
+    if div_id in ("iv.iv.x", "iv.iv.xi"):
+        return title
+    return None
+
+
+def benedict_heading(div_id, title):
+    """Prologue and Chapters I-LXXIII; skip title page and indexes."""
+    if div_id in ("i", "lxxvi") or title == "Indexes":
+        return None
+    return title
+
+
 # (src, out, heading_fn, inner_heads, post_fn, skip_titles)
 WORKS = [
     ("cyril-thml.xml", "cyril-body.tex", cyril_heading, True, cyril_post, ()),
@@ -438,6 +489,14 @@ WORKS = [
     ("festal39-thml.xml", "festal39-body.tex", festal_heading, False, None, ()),
     ("gregory-letters-thml.xml", "gregory-letters-body.tex",
      gregletters_heading, False, gregletters_post, ()),
+    ("soulres-thml.xml", "soulres-body.tex", soulres_heading, False,
+     soulres_post, ("Title Page.",)),
+    ("onbaptism-thml.xml", "onbaptism-body.tex", onbaptism_heading, False,
+     onbaptism_post, ("Title Page.",)),
+    ("cassian-prayer-thml.xml", "cassian-prayer-body.tex", cassian_heading,
+     False, None, ()),
+    ("benedict-rule.xml", "benedict-rule-body.tex", benedict_heading,
+     False, None, ()),
 ]
 
 

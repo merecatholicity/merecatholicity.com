@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Contact | Mere Catholicity</title>
+<title>The Hours | Mere Catholicity</title>
 <link rel="icon" href="favicon.ico">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -57,48 +57,36 @@
 </nav>
 <script defer src="nav.js"></script>
 
-<h1 class="home-title">Contact</h1>
+<h1 class="home-title">The Hours</h1>
+<p class="canon">The daily Psalter is the first-millennium layman&rsquo;s foundation.</p>
 
-<form id="contact-form" class="contact" action="https://contact-api.merecatholicity.com/" method="POST">
-<label>Name<br>
-<input type="text" name="name" maxlength="200" autocomplete="name"></label>
-<label>Email, if you want a reply<br>
-<input type="email" name="email" maxlength="200" autocomplete="email"></label>
-<label>Message<br>
-<textarea name="message" maxlength="5000" rows="8" required></textarea></label>
-<input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
-<div class="cf-turnstile" data-sitekey="0x4AAAAAAD4gH6kfaUH2IRSI"></div>
-<button type="submit" class="btn btn-send">Send</button>
-<p id="contact-status" class="canon" role="status"></p>
-</form>
+<p>We hold that the Divine Office, the Church&rsquo;s daily round of
+psalms and prayer at fixed hours, is the ordinary way a Christian
+sanctifies time. It is older than the monasteries that perfected it. The
+Psalter was the prayer book of the Lord Himself, and praying it through,
+week by week, was the first-millennium layman&rsquo;s foundation.</p>
 
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<script>
-document.getElementById('contact-form').addEventListener('submit', function (e) {
-  e.preventDefault();
-  var form = e.target;
-  var status = document.getElementById('contact-status');
-  var button = form.querySelector('.btn-send');
-  button.disabled = true;
-  status.textContent = 'Sending...';
-  fetch(form.action, { method: 'POST', body: new FormData(form) })
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      if (d.ok) {
-        form.reset();
-        status.textContent = 'Sent. Thank you.';
-      } else {
-        status.textContent = d.error || 'Something went wrong. Please try again.';
-        if (window.turnstile) turnstile.reset();
-      }
-    })
-    .catch(function () {
-      status.textContent = 'Could not reach the server. Please try again.';
-      if (window.turnstile) turnstile.reset();
-    })
-    .finally(function () { button.disabled = false; });
-});
-</script>
+<p>Any of its forms will serve. The Monastic Diurnal, the older Breviary,
+the Liturgy of the Hours, or the Orthodox Horologion. The counsel for
+beginning is old and simple. Do not attempt everything. Take one hour,
+Prime in the morning or Compline before bed, pray it every day until it
+is a habit, and add more only when the habit holds. Consistency is worth
+more than volume.</p>
+
+<p><em>The Holy Rule of St. Benedict</em>, chapters 8 to 19. The oldest
+surviving ordering of the hours in the West, with the whole Psalter
+appointed week by week.<br>
+<a href="benedict-rule.html">Read online (HTML)</a> &middot;
+<a href="Rule_of_St_Benedict.pdf">Download (PDF)</a></p>
+
+<p><em>Divinum Officium</em>. The complete older Breviary, free online,
+day by day in Latin and English.<br>
+<a href="https://divinumofficium.com">Pray it at divinumofficium.com</a></p>
+
+<p><em>The Monastic Diurnal</em>. The day hours of the traditional
+Benedictine breviary, Latin and English on facing pages, in one leather
+volume from the monks of Farnborough.<br>
+<a href="https://www.theabbeyshop.com/product/the-monastic-diurnal-or-the-day-hours-of-the-monastic-breviary-8th-edition">Buy from St Michael&rsquo;s Abbey</a></p>
 
 <footer>
 &copy; merecatholicity.com
