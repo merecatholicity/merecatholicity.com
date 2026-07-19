@@ -20,6 +20,9 @@ resources/gregory.pdf
 resources/enchiridion.pdf
 resources/npnf205.xml
 resources/npnf207.xml
+resources/npnf214.xml
+resources/councils.pdf
+resources/cbuild.log
 resources/build.log
 resources/dbuild.log
 .wrangler/

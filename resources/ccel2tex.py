@@ -35,10 +35,13 @@ class Converter(HTMLParser):
     """heading_fn(div_id, title) returns the chapter heading, or None to
     skip that division entirely."""
 
-    def __init__(self, heading_fn, inner_heads=True):
+    def __init__(self, heading_fn, inner_heads=True, skip_titles=()):
         super().__init__(convert_charrefs=True)
         self.heading_fn = heading_fn
         self.inner_heads = inner_heads
+        self.skip_titles = set(skip_titles)
+        self.suppressed = 0
+        self.chapter_depth = 0
         self.out = []
         self.buf = None
         self.note_buf = None
@@ -47,6 +50,7 @@ class Converter(HTMLParser):
         self.in_chapter = False
         self.skip_h = 0
         self.head_variants = set()
+        self.section_variants = set()
 
     def emit(self, text):
         if self.note_buf is not None:
@@ -62,9 +66,13 @@ class Converter(HTMLParser):
         if not text:
             return
         # print furniture: dash rules, and repeats of the chapter head
+        # or of the most recent section head, with or without a leading
+        # numeral
         if re.fullmatch(r"[—\s]+", text):
             return
-        if text.strip().strip("()").rstrip(".").strip() in self.head_variants:
+        norm = text.strip().strip("()").rstrip(".").strip()
+        bare = re.sub(r"^[IVXLC0-9]+\.\s*", "", norm)
+        if {norm, bare} & (self.head_variants | self.section_variants):
             return
         self.out.append(text)
 
@@ -73,13 +81,20 @@ class Converter(HTMLParser):
         if tag in ("div1", "div2", "div3", "div4"):
             title = re.sub(r"\s+", " ", a.get("title", "")).strip()
             if self.in_chapter:
-                self.divstack.append((tag, False))
-                if title:
+                suppress = title in self.skip_titles
+                self.divstack.append((tag, False, suppress))
+                if suppress:
+                    self.suppressed += 1
+                elif title and not self.suppressed:
                     self.flush_paragraph()
-                    self.out.append("\\xsection{%s}" % esc(htmlmod.unescape(title)))
+                    depth = len(self.divstack) - self.chapter_depth
+                    macro = "xsection" if depth <= 1 else "xsubsection"
+                    self.section_variants = {title.rstrip(".").strip()}
+                    self.out.append("\\%s{%s}" % (macro, esc(htmlmod.unescape(title))))
                 return
             head = self.heading_fn(a.get("id", ""), title)
-            self.divstack.append((tag, head is not None))
+            self.divstack.append((tag, head is not None, False))
+            self.chapter_depth = len(self.divstack)
             if head is not None:
                 self.in_chapter = True
                 # repeats of the head, or of its "Lecture N." / title
@@ -95,10 +110,14 @@ class Converter(HTMLParser):
                         self.head_variants.add(norm(part))
                 self.out.append("\\xchapter{%s}" % esc(htmlmod.unescape(head)))
             return
-        if not self.in_chapter:
+        if not self.in_chapter or self.suppressed:
             return
         if tag == "note":
             self.note_buf = []
+            return
+        if tag == "sup":
+            self.emit("\\textsuperscript{")
+            self.stack.append("}")
             return
         if tag == "p":
             if self.note_buf is not None:
@@ -145,12 +164,14 @@ class Converter(HTMLParser):
     def handle_endtag(self, tag):
         if tag in ("div1", "div2", "div3", "div4"):
             if self.divstack:
-                _t, was_chapter = self.divstack.pop()
+                _t, was_chapter, was_suppressed = self.divstack.pop()
+                if was_suppressed:
+                    self.suppressed -= 1
                 if was_chapter:
                     self.flush_paragraph()
                     self.in_chapter = False
             return
-        if not self.in_chapter:
+        if not self.in_chapter or self.suppressed:
             return
         if tag == "h1":
             if self.skip_h:
@@ -180,7 +201,7 @@ class Converter(HTMLParser):
             self.flush_paragraph()
             self.out.append("\\end{quote}")
             return
-        if tag in ("i", "b", "span"):
+        if tag in ("i", "b", "span", "sup"):
             if self.stack:
                 self.emit(self.stack.pop())
             return
@@ -193,7 +214,7 @@ class Converter(HTMLParser):
         return "\n"
 
     def handle_data(self, data):
-        if not self.in_chapter or self.skip_h:
+        if not self.in_chapter or self.skip_h or self.suppressed:
             return
         text = re.sub(r"\s+", " ", data)
         # straight double quotes to TeX quotes by context
@@ -269,17 +290,29 @@ def cyril_post(body):
     return body.replace(mangled, clean, 1)
 
 
-# (src, out, heading_fn, inner_heads, post_fn)
+COUNCILS_IDS = set("ii iii iv v vi vii viii ix x xi xii xiii xiv xv xvi "
+                   "xvii".split())
+
+
+def councils_heading(div_id, title):
+    if div_id in COUNCILS_IDS:
+        return title
+    return None
+
+
+# (src, out, heading_fn, inner_heads, post_fn, skip_titles)
 WORKS = [
-    ("cyril-thml.xml", "cyril-body.tex", cyril_heading, True, cyril_post),
-    ("gregory-thml.xml", "gregory-body.tex", gregory_heading, True, None),
-    ("enchiridion.xml", "enchiridion-body.tex", ench_heading, False, None),
+    ("cyril-thml.xml", "cyril-body.tex", cyril_heading, True, cyril_post, ()),
+    ("gregory-thml.xml", "gregory-body.tex", gregory_heading, True, None, ()),
+    ("enchiridion.xml", "enchiridion-body.tex", ench_heading, False, None, ()),
+    ("councils-thml.xml", "councils-body.tex", councils_heading, True, None,
+     ("Title Page.",)),
 ]
 
 
 def main():
-    for src, out, heading_fn, inner_heads, post_fn in WORKS:
-        conv = Converter(heading_fn, inner_heads)
+    for src, out, heading_fn, inner_heads, post_fn, skip_titles in WORKS:
+        conv = Converter(heading_fn, inner_heads, skip_titles)
         with open(src, encoding="utf-8") as f:
             conv.feed(f.read())
         conv.flush_paragraph()
@@ -298,6 +331,7 @@ def main():
             f.write(body)
         print(f"wrote {out}: {body.count(chr(92) + 'xchapter{')} chapters, "
               f"{body.count(chr(92) + 'xsection{')} sections, "
+              f"{body.count(chr(92) + 'xsubsection{')} subsections, "
               f"{body.count(chr(92) + 'footnote{')} footnotes")
 
 
