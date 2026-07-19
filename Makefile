@@ -23,6 +23,7 @@ html:
 	    --css=style.css -H social.html -B nav.html -A footer.html \
 	    -o book.html
 	python toc-prune.py
+	$(MAKE) -C resources html
 	@echo "built book.html"
 
 # Logos/Verbum Personal Book edition: a .docx from the same .tex, using the

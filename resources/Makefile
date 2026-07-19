@@ -1,0 +1,106 @@
+# Resources build tasks. Public-domain texts kept as LaTeX docs of our own.
+# Outputs land in the site root so GitHub Pages serves them.
+
+.PHONY: all pdf html body
+
+all: pdf html
+
+# Regenerate the LaTeX bodies from the preserved sources.
+body:
+	python thml2tex.py
+	python dev2tex.py
+	python consulting2tex.py
+	python summa2tex.py
+	python ccel2tex.py
+
+define LATEX2
+	pdflatex -interaction=nonstopmode -halt-on-error $(1).tex >/dev/null
+	pdflatex -interaction=nonstopmode -halt-on-error $(1).tex >/dev/null
+endef
+
+pdf:
+	$(call LATEX2,commonitory)
+	cp commonitory.pdf ../The_Commonitory.pdf
+	@echo "built The_Commonitory.pdf ($$(pdfinfo commonitory.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,development)
+	cp development.pdf ../Development_of_Christian_Doctrine.pdf
+	@echo "built Development_of_Christian_Doctrine.pdf ($$(pdfinfo development.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,consulting)
+	cp consulting.pdf ../On_Consulting_the_Faithful.pdf
+	@echo "built On_Consulting_the_Faithful.pdf ($$(pdfinfo consulting.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,law)
+	cp law.pdf ../Treatise_on_Law.pdf
+	@echo "built Treatise_on_Law.pdf ($$(pdfinfo law.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,cyril)
+	cp cyril.pdf ../Catechetical_Lectures.pdf
+	@echo "built Catechetical_Lectures.pdf ($$(pdfinfo cyril.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,gregory)
+	cp gregory.pdf ../Great_Catechism.pdf
+	@echo "built Great_Catechism.pdf ($$(pdfinfo gregory.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,enchiridion)
+	cp enchiridion.pdf ../Enchiridion.pdf
+	@echo "built Enchiridion.pdf ($$(pdfinfo enchiridion.pdf | awk '/^Pages/{print $$2}') pages)"
+
+# Site HTML editions from the same .tex files, with the site nav and
+# footer, like book.html. The heading macros become \section* and
+# friends so pandoc keeps them. Rebuilt by the root 'make html' so menu
+# changes reach them.
+html:
+	sed -e 's/\\commchapter{/\\section*{/g' \
+	    -e 's/\\textgreek{/{/g' \
+	    commonitory-body.tex > commonitory-body-html.tex
+	sed -e 's/{commonitory-body.tex}/{commonitory-body-html.tex}/' \
+	    commonitory.tex | \
+	pandoc -f latex -t html5 --standalone --toc \
+	    --metadata title="The Commonitory of Vincent of Lérins" \
+	    --css=style.css -B ../nav.html -A ../footer.html \
+	    -o ../commonitory.html
+	rm commonitory-body-html.tex
+	@echo "built commonitory.html"
+	sed -e 's/\\devchapter{/\\section*{/g' \
+	    -e 's/\\devsection{/\\subsection*{/g' \
+	    -e 's/\\devunit{/\\paragraph{/g' \
+	    development-body.tex > development-body-html.tex
+	sed -e 's/{development-body.tex}/{development-body-html.tex}/' \
+	    development.tex | \
+	pandoc -f latex -t html5 --standalone --toc \
+	    --metadata title="An Essay on the Development of Christian Doctrine" \
+	    --css=style.css -B ../nav.html -A ../footer.html \
+	    -o ../development.html
+	rm development-body-html.tex
+	@echo "built development.html"
+	pandoc -f latex -t html5 --standalone \
+	    --metadata title="On Consulting the Faithful in Matters of Doctrine" \
+	    --css=style.css -B ../nav.html -A ../footer.html \
+	    consulting.tex -o ../consulting.html
+	@echo "built consulting.html"
+	sed -e 's/\\lawpart{/\\section*{/g' \
+	    -e 's/\\lawquestion{/\\subsection*{/g' \
+	    -e 's/\\lawarticle{/\\subsubsection*{/g' \
+	    -e 's/\\lawsummary{/\\emph{/g' \
+	    law-body.tex > law-body-html.tex
+	sed -e 's/{law-body.tex}/{law-body-html.tex}/' \
+	    law.tex | \
+	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
+	    --metadata title="The Treatise on Law" \
+	    --css=style.css -B ../nav.html -A ../footer.html \
+	    -o ../law.html
+	rm law-body-html.tex
+	@echo "built law.html"
+	for w in cyril:"The Catechetical Lectures of S. Cyril of Jerusalem" \
+	         gregory:"The Great Catechism of St. Gregory of Nyssa" \
+	         enchiridion:"The Enchiridion on Faith, Hope, and Love"; do \
+	  n=$${w%%:*}; t=$${w#*:}; \
+	  sed -e 's/\\xchapter{/\\section*{/g' \
+	      -e 's/\\xsection{/\\paragraph{/g' \
+	      -e 's/\\textgreek{/{/g' \
+	      -e 's/\\texthebrew{/{/g' \
+	      $$n-body.tex > $$n-body-html.tex; \
+	  sed -e "s/{$$n-body.tex}/{$$n-body-html.tex}/" $$n.tex | \
+	  pandoc -f latex -t html5 --standalone --toc \
+	      --metadata title="$$t" \
+	      --css=style.css -B ../nav.html -A ../footer.html \
+	      -o ../$$n.html; \
+	  rm $$n-body-html.tex; \
+	  echo "built $$n.html"; \
+	done

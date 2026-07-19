@@ -1,0 +1,87 @@
+% The Commonitory of Vincent of Lérins, translated by C. A. Heurtley.
+% Text from NPNF Second Series, Vol. XI (Schaff and Wace, eds., 1894),
+% via CCEL's ThML edition. Chapters I-XXXIII with the translator's
+% footnotes. The chapter text lives in commonitory-body.tex, generated
+% by thml2tex.py; this file owns the preamble and front matter.
+\documentclass[11pt,letterpaper]{article}
+\ifdefined\pdfsuppressptexinfo\pdfsuppressptexinfo=-1 \fi
+\ifdefined\pdftrailerid\pdftrailerid{}\fi
+\usepackage[margin=1in]{geometry}
+% Greek: Chapter XI quotes one phrase. With texlive-langgreek installed
+% (LGR encoding + textalpha) it renders in Greek type. Without it, fall
+% back to a transliteration so the build still succeeds. If more Greek
+% ever enters the body, install the package rather than extending the
+% fallback.
+\IfFileExists{textalpha.sty}{%
+  \usepackage[LGR,T1]{fontenc}%
+  \usepackage[utf8]{inputenc}%
+  \usepackage{textalpha}%
+}{%
+  \usepackage[T1]{fontenc}%
+  \usepackage[utf8]{inputenc}%
+}
+\ifdefined\ensuregreek
+  \newcommand{\textgreek}[1]{\ensuregreek{#1}}
+\else
+  \newcommand{\textgreek}[1]{\emph{psilos anthropos}}
+\fi
+\usepackage{mathpazo}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{needspace}
+\usepackage[colorlinks=true,linkcolor=ink,urlcolor=maroon,citecolor=ink,filecolor=ink]{hyperref}
+\urlstyle{same}
+\hypersetup{pdftitle={The Commonitory of Vincent of Lerins},pdfauthor={Vincent of Lerins}}
+\linespread{1.06}
+
+\definecolor{ink}{HTML}{2A2521}
+\definecolor{heading}{HTML}{8C4A32}
+\definecolor{subhead}{HTML}{6E5642}
+\definecolor{accent}{HTML}{B0894C}
+\definecolor{maroon}{HTML}{7B2E2E}
+
+% Chapter heads: unnumbered sections carrying their own roman numerals,
+% each listed in the table of contents.
+\newcommand{\commchapter}[1]{%
+  \par\vspace{1.4em}\phantomsection\addcontentsline{toc}{section}{#1}%
+  \needspace{4\baselineskip}%
+  {\normalfont\fontsize{13}{16}\selectfont\bfseries\color{heading}%
+   \emergencystretch=1.5em #1\par}%
+  \vspace{2pt}{\color{accent}\hrule height 1pt}\medskip}
+
+\begin{document}
+\color{ink}
+
+\begin{titlepage}
+\centering
+\vspace*{4em}
+{\LARGE\bfseries\color{heading} The Commonitory\footnote{\textsc{Commonitory}.
+I have retained the original title in its anglicised form, already familiar
+to English ears in connection with the name of Vincentius. Its meaning as he
+uses it is indicated sufficiently, in \S~3, ``An aid to memory.''
+Technically, it meant a Paper of Instructions given to a person charged with
+a commission, to assist his memory as to its details.---\emph{Translator's
+note.}}\par}
+\vspace{1em}
+{\large of\par}
+\vspace{1em}
+{\LARGE\bfseries\color{heading} Vincent of Lérins\par}
+\vspace{2em}
+{\itshape\color{subhead} For the Antiquity and Universality of the Catholic
+Faith Against the Profane Novelties of All Heresies.\par}
+\vspace{3em}
+{Translated by the Rev.\ C.\ A.\ Heurtley, D.D.\par}
+\vfill
+{\small From \emph{A Select Library of Nicene and Post-Nicene Fathers of the
+Christian Church}, Second Series, Volume XI, edited by Philip Schaff and
+Henry Wace, 1894. The translation is in the public domain.\par}
+\vspace{2em}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\input{commonitory-body.tex}
+
+\end{document}
