@@ -13,9 +13,11 @@ body:
 	python summa2tex.py
 	python ccel2tex.py
 
+# Fixed date + trailer id (set in each preamble) keep rebuilds
+# byte-identical, so git only churns when the text really changes.
 define LATEX2
-	pdflatex -interaction=nonstopmode -halt-on-error $(1).tex >/dev/null
-	pdflatex -interaction=nonstopmode -halt-on-error $(1).tex >/dev/null
+	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error $(1).tex >/dev/null
+	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error $(1).tex >/dev/null
 endef
 
 pdf:
@@ -40,6 +42,9 @@ pdf:
 	$(call LATEX2,enchiridion)
 	cp enchiridion.pdf ../Enchiridion.pdf
 	@echo "built Enchiridion.pdf ($$(pdfinfo enchiridion.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,councils)
+	cp councils.pdf ../Seven_Ecumenical_Councils.pdf
+	@echo "built Seven_Ecumenical_Councils.pdf ($$(pdfinfo councils.pdf | awk '/^Pages/{print $$2}') pages)"
 
 # Site HTML editions from the same .tex files, with the site nav and
 # footer, like book.html. The heading macros become \section* and
@@ -89,10 +94,12 @@ html:
 	@echo "built law.html"
 	for w in cyril:"The Catechetical Lectures of S. Cyril of Jerusalem" \
 	         gregory:"The Great Catechism of St. Gregory of Nyssa" \
-	         enchiridion:"The Enchiridion on Faith, Hope, and Love"; do \
+	         enchiridion:"The Enchiridion on Faith, Hope, and Love" \
+	         councils:"The Seven Ecumenical Councils of the Undivided Church"; do \
 	  n=$${w%%:*}; t=$${w#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
-	      -e 's/\\xsection{/\\paragraph{/g' \
+	      -e 's/\\xsection{/\\subsection*{/g' \
+	      -e 's/\\xsubsection{/\\paragraph{/g' \
 	      -e 's/\\textgreek{/{/g' \
 	      -e 's/\\texthebrew{/{/g' \
 	      $$n-body.tex > $$n-body-html.tex; \
