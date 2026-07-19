@@ -1,0 +1,42 @@
+\documentclass[11pt,letterpaper]{article}
+\ifdefined\pdfsuppressptexinfo\pdfsuppressptexinfo=-1 \fi
+\ifdefined\pdftrailerid\pdftrailerid{}\fi
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathpazo}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{needspace}
+\usepackage[colorlinks=true,linkcolor=ink,urlcolor=maroon,citecolor=ink,filecolor=ink]{hyperref}
+\urlstyle{same}
+\hypersetup{pdftitle={Joint Declaration on the Doctrine of Justification},pdfauthor={Lutheran World Federation and the Catholic Church}}
+\linespread{1.06}
+\setlength{\emergencystretch}{1.5em}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+
+\definecolor{ink}{HTML}{2A2521}
+\definecolor{heading}{HTML}{8C4A32}
+\definecolor{subhead}{HTML}{6E5642}
+\definecolor{accent}{HTML}{B0894C}
+\definecolor{maroon}{HTML}{7B2E2E}
+
+\titleformat{\section}[hang]{\needspace{4\baselineskip}\normalfont\fontsize{13}{16}\selectfont\bfseries\color{heading}\raggedright}{}{0em}{}[{\vspace{2pt}\color{accent}\titlerule[1pt]}]
+\titlespacing{\section}{0pt}{1.4em}{0.6em}
+\titleformat{\subsection}{\normalfont\fontsize{12}{14.5}\selectfont\bfseries\color{subhead}\raggedright}{}{0em}{}
+\titlespacing{\subsection}{0pt}{1.0em}{0.35em}
+\titleformat{\subsubsection}{\normalfont\bfseries\color{subhead}\raggedright}{}{0em}{}
+\setcounter{secnumdepth}{0}
+
+\begin{document}
+\color{ink}
+
+\input{jddj-body.tex}
+
+\vspace{2em}
+{\small\noindent Republished from the Dicastery for Promoting Christian Unity. The
+original is at
+\url{https://www.christianunity.va/content/unitacristiani/en/dialoghi/sezione-occidentale/luterani/dialogo/documenti-di-dialogo/1999-dichiarazione-congiunta-sulla-dottrina-della-giustificazion/en.html}.\par}
+
+\end{document}

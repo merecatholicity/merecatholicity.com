@@ -8,6 +8,7 @@ all: pdf html
 # Regenerate the LaTeX bodies from the preserved sources.
 body:
 	python thml2tex.py
+	python docs2tex.py
 	python dev2tex.py
 	python consulting2tex.py
 	python summa2tex.py
@@ -75,6 +76,33 @@ pdf:
 	$(call LATEX2,gregory-letters)
 	cp gregory-letters.pdf ../Letters_on_the_Title_Universal_Bishop.pdf
 	@echo "built Letters_on_the_Title_Universal_Bishop.pdf ($$(pdfinfo gregory-letters.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,soulres)
+	cp soulres.pdf ../On_the_Soul_and_the_Resurrection.pdf
+	@echo "built On_the_Soul_and_the_Resurrection.pdf ($$(pdfinfo soulres.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,onbaptism)
+	cp onbaptism.pdf ../On_Baptism_Against_the_Donatists.pdf
+	@echo "built On_Baptism_Against_the_Donatists.pdf ($$(pdfinfo onbaptism.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,ravenna)
+	cp ravenna.pdf ../The_Ravenna_Document.pdf
+	@echo "built The_Ravenna_Document.pdf ($$(pdfinfo ravenna.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,chieti)
+	cp chieti.pdf ../The_Chieti_Document.pdf
+	@echo "built The_Chieti_Document.pdf ($$(pdfinfo chieti.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,jddj)
+	cp jddj.pdf ../Joint_Declaration_on_Justification.pdf
+	@echo "built Joint_Declaration_on_Justification.pdf ($$(pdfinfo jddj.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,encyclical1848)
+	cp encyclical1848.pdf ../Encyclical_of_the_Eastern_Patriarchs.pdf
+	@echo "built Encyclical_of_the_Eastern_Patriarchs.pdf ($$(pdfinfo encyclical1848.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,scranton)
+	cp scranton.pdf ../Declaration_of_Scranton.pdf
+	@echo "built Declaration_of_Scranton.pdf ($$(pdfinfo scranton.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,cassian-prayer)
+	cp cassian-prayer.pdf ../Conferences_on_Prayer.pdf
+	@echo "built Conferences_on_Prayer.pdf ($$(pdfinfo cassian-prayer.pdf | awk '/^Pages/{print $$2}') pages)"
+	$(call LATEX2,benedict-rule)
+	cp benedict-rule.pdf ../Rule_of_St_Benedict.pdf
+	@echo "built Rule_of_St_Benedict.pdf ($$(pdfinfo benedict-rule.pdf | awk '/^Pages/{print $$2}') pages)"
 
 # Site HTML editions from the same .tex files, with the site nav and
 # footer, like book.html. The heading macros become \section* and
@@ -135,6 +163,15 @@ html:
 	         justin:2:"The First Apology of St. Justin Martyr" \
 	         didache:2:"The Didache" \
 	         festal39:1:"The Thirty-Ninth Festal Letter of St. Athanasius" \
+	         soulres:1:"On the Soul and the Resurrection" \
+	         onbaptism:1:"On Baptism, Against the Donatists" \
+	         ravenna:2:"The Ravenna Document" \
+	         chieti:2:"The Chieti Document" \
+	         jddj:2:"Joint Declaration on the Doctrine of Justification" \
+	         encyclical1848:1:"Encyclical of the Eastern Patriarchs, 1848" \
+	         scranton:1:"The Declaration of Scranton" \
+	         cassian-prayer:1:"The Conferences on Prayer, by St. John Cassian" \
+	         benedict-rule:1:"The Holy Rule of St. Benedict" \
 	         gregory-letters:1:"Letters of St. Gregory the Great on the Title Universal Bishop"; do \
 	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
