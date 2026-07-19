@@ -5,7 +5,10 @@ confession*.out
 confession*.toc
 confession.pdf
 confession-paperback.pdf
-Mere_Catholicity_Paperback.pdf
+memorandum.aux
+memorandum.log
+memorandum.out
+memorandum.pdf
 resources/npnf211.*
 resources/*.aux
 resources/*.log
