@@ -208,6 +208,9 @@ nav.site .sub-back { display: none; }
   nav.site.open .has-sub.open > .sub-toggle { display: none; }
   nav.site.open .has-sub.open > .sub { display: block; animation: drillin 0.22s ease; }
   nav.site.open .sub-back { display: block; }
+  /* One step back at a time: while a deeper level is open, the
+     ancestor levels' back rows stay hidden. */
+  nav.site.open .sub:has(.has-sub.open) > .sub-back { display: none; }
   nav.site.open .sub-back .back-btn {
     display: block;
     width: 100%;
@@ -418,6 +421,18 @@ nav.site .here { color: var(--faint); }
   color: #0f5132;
   margin: 0 0 0.6em;
 }
+.creed-note {
+  font-style: normal;
+  font-size: 0.8rem;
+  color: var(--faint);
+  margin-top: 1em;
+}
+/* The Nicene Creed on the credo page: plain ground, dashed frame */
+.creed.nicene { background: #fff; }
+
+/* Topic list on the credo page */
+.credo-toc { list-style: none; padding: 0; margin: 1.2rem auto 1.5rem; max-width: 36rem; }
+.credo-toc li { margin: 0.25em 0; }
 
 /* Introduction (review) on the home page */
 .intro h2 { text-align: center; margin-top: 1.2em; }

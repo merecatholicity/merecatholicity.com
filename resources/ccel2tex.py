@@ -17,6 +17,7 @@ Run: python ccel2tex.py
 import html as htmlmod
 import re
 import sys
+import unicodedata
 from html.parser import HTMLParser
 
 TEX_SPECIALS = {
@@ -300,6 +301,123 @@ def councils_heading(div_id, title):
     return None
 
 
+def ignatius_heading(div_id, title):
+    """The seven epistles, shorter and longer versions as printed."""
+    if re.fullmatch(r"v\.(ii|iii|iv|v|vi|vii|viii)", div_id):
+        return title.replace(": Shorter and Longer Versions", "")
+    return None
+
+
+def ignatius_post(body):
+    """Restore the print's column labels: where a chapter (or the
+    greeting) carries two versions of the text, the first is the
+    shorter recension and the second the longer."""
+    blocks = re.split(r"\n\n(?=\\x)", body)
+    out = []
+    for block in blocks:
+        lines = block.split("\n\n")
+        head, pars = lines[0], lines[1:]
+        if len(pars) == 2:
+            pars[0] = "\\textsc{Shorter.}~" + pars[0]
+            pars[1] = "\\textsc{Longer.}~" + pars[1]
+        out.append("\n\n".join([head] + pars))
+    return "\n\n".join(out)
+
+
+def irenaeus3_heading(div_id, title):
+    if div_id == "ix.iv":
+        return title
+    return None
+
+
+def baptism_heading(div_id, title):
+    if div_id == "vi.iii":
+        return title
+    return None
+
+
+def unity_heading(div_id, title):
+    if div_id == "iv.v.i":
+        return title
+    return None
+
+
+def unity_post(body):
+    return (body.replace("The Treatises of Cyprian.\n\n", "", 1)
+                .replace("Treatise I.\n\n", "", 1))
+
+
+def tome_heading(div_id, title):
+    if div_id == "ii.iv.xxviii":
+        return title
+    return None
+
+
+def clement_heading(div_id, title):
+    if div_id == "ii.ii":
+        return title
+    return None
+
+
+def justin_heading(div_id, title):
+    if div_id == "viii.ii":
+        return title
+    return None
+
+
+def didache_heading(div_id, title):
+    if div_id == "viii.iii":
+        return title
+    return None
+
+
+def festal_heading(div_id, title):
+    if div_id == "xxv.iii.iii.xxv":
+        return ("Letter XXXIX. Of the particular books and their number, "
+                "which are accepted by the Church.")
+    return None
+
+
+# Gregory's letters on the title "universal bishop": the six epistles in
+# the NPNF selection that argue the question, with their book and number
+# restored to the heading.
+GREGORY_LETTERS = {
+    "iii.v.v.viii":
+        ("Book V, Epistle XVIII. To John, Bishop of Constantinople.",
+         "Epistle XVIII.", "To John, Bishop."),
+    "iii.v.v.x":
+        ("Book V, Epistle XX. To Mauricius Augustus.",
+         "Epistle XX.", "To Mauricius Augustus."),
+    "iii.v.v.xi":
+        ("Book V, Epistle XXI. To Constantina Augusta.",
+         "Epistle XXI.", "To Constantina Augusta."),
+    "iii.v.v.xxii":
+        ("Book V, Epistle XLIII. To Eulogius and Anastasius, Bishops.",
+         "Epistle XLIII.", "To Eulogius and Anastasius, Bishops."),
+    "iii.v.vii.xvi":
+        ("Book VII, Epistle XXVII. To Anastasius, Bishop.",
+         "Epistle XXVII.", "To Anastasius, Bishop."),
+    "iii.v.viii.xviii":
+        ("Book VIII, Epistle XXX. To Eulogius, Bishop of Alexandria.",
+         "Epistle XXX.", "To Eulogius, Bishop."),
+}
+
+
+def gregletters_heading(div_id, title):
+    if div_id in GREGORY_LETTERS:
+        return GREGORY_LETTERS[div_id][0]
+    return None
+
+
+def gregletters_post(body):
+    """Drop the print's number and addressee lines, which the restored
+    chapter headings now carry."""
+    for _head, num, addr in GREGORY_LETTERS.values():
+        body = body.replace(num + "\n\n", "", 1)
+        body = body.replace(addr + "\n\n", "", 1)
+    return body
+
+
 # (src, out, heading_fn, inner_heads, post_fn, skip_titles)
 WORKS = [
     ("cyril-thml.xml", "cyril-body.tex", cyril_heading, True, cyril_post, ()),
@@ -307,6 +425,19 @@ WORKS = [
     ("enchiridion.xml", "enchiridion-body.tex", ench_heading, False, None, ()),
     ("councils-thml.xml", "councils-body.tex", councils_heading, True, None,
      ("Title Page.",)),
+    ("ignatius-thml.xml", "ignatius-body.tex", ignatius_heading, False,
+     ignatius_post, ()),
+    ("irenaeus3-thml.xml", "irenaeus3-body.tex", irenaeus3_heading, False,
+     None, ()),
+    ("baptism-thml.xml", "baptism-body.tex", baptism_heading, False, None, ()),
+    ("unity-thml.xml", "unity-body.tex", unity_heading, False, unity_post, ()),
+    ("tome-thml.xml", "tome-body.tex", tome_heading, False, None, ()),
+    ("clement-thml.xml", "clement-body.tex", clement_heading, False, None, ()),
+    ("justin-thml.xml", "justin-body.tex", justin_heading, False, None, ()),
+    ("didache-thml.xml", "didache-body.tex", didache_heading, False, None, ()),
+    ("festal39-thml.xml", "festal39-body.tex", festal_heading, False, None, ()),
+    ("gregory-letters-thml.xml", "gregory-letters-body.tex",
+     gregletters_heading, False, gregletters_post, ()),
 ]
 
 
@@ -317,6 +448,13 @@ def main():
             conv.feed(f.read())
         conv.flush_paragraph()
         body = "\n\n".join(conv.out) + "\n"
+        # the transcription sometimes splits a combining accent into its
+        # own Greek span; merge abutting spans, print the inverted breve
+        # as the circumflex it stands for, then compose
+        while "}\\textgreek{" in body:
+            body = body.replace("}\\textgreek{", "")
+        body = body.replace("\u0311", "\u0342")
+        body = unicodedata.normalize("NFC", body)
         if post_fn:
             body = post_fn(body)
         # Hebrew word-citations (tagged Greek in the source) cannot be

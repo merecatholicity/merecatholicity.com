@@ -11,7 +11,8 @@ import sys
 
 import yaml
 
-PAGES = ["index.html", "resources.html", "contact.html", "logos.html"]
+PAGES = ["index.html", "resources.html", "contact.html", "logos.html",
+         "credo.html"]
 FRAGMENT = "nav.html"
 
 TOGGLE = (
