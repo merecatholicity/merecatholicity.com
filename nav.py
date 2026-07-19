@@ -15,7 +15,7 @@ PAGES = ["index.html", "resources.html", "contact.html", "logos.html",
          "credo.html", "lex-orandi.html", "altar.html", "hours.html",
          "jesus-prayer.html", "lectio-divina.html",
          "confession-fasting.html", "theotokos.html",
-         "rule-of-benedict.html", "mary.html", "rosary.html"]
+         "rule-of-benedict.html", "mary.html", "rosary.html", "about.html"]
 FRAGMENT = "nav.html"
 
 TOGGLE = (

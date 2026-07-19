@@ -17,6 +17,10 @@ memorandum:
 	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error memorandum.tex >/dev/null
 	cp memorandum.pdf Memorandum.pdf
 	@echo "built Memorandum.pdf ($$(pdfinfo memorandum.pdf | awk '/^Pages/{print $$2}') pages)"
+	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error bishop-presbyter.tex >/dev/null
+	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error bishop-presbyter.tex >/dev/null
+	cp bishop-presbyter.pdf The_Bishop_and_the_Presbyter.pdf
+	@echo "built The_Bishop_and_the_Presbyter.pdf ($$(pdfinfo bishop-presbyter.pdf | awk '/^Pages/{print $$2}') pages)"
 
 # HTML edition from the same .tex, with pandoc-friendly preprocessing:
 #  - \unit{...} heads become \paragraph{...} so pandoc keeps them
@@ -32,11 +36,16 @@ html:
 	    --css=style.css -H social.html -B nav.html -A footer.html \
 	    -o book.html
 	python toc-prune.py
-	sed -e 's/\\unit{/\\paragraph{/g' memorandum.tex | \
+	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' memorandum.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="Memorandum" \
 	    --css=style.css -B nav.html -A footer.html \
 	    -o memorandum.html
+	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' bishop-presbyter.tex | \
+	pandoc -f latex -t html5 --standalone \
+	    --metadata title="The bishop and the presbyter, a question recorded" \
+	    --css=style.css -B nav.html -A footer.html \
+	    -o bishop-presbyter.html
 	$(MAKE) -C resources html
 	@echo "built book.html and memorandum.html"
 
