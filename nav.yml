@@ -18,7 +18,7 @@
 #       items:
 #         - Errata: errata.html
 
-- About: index.html
+- Home: index.html
 - Papers:
     - Mere Catholicity:
         - Read online (HTML): book.html
@@ -29,7 +29,11 @@
     - Memorandum:
         - Read online (HTML): memorandum.html
         - Download (PDF): Memorandum.pdf
+    - The bishop and the presbyter:
+        - Read online (HTML): bishop-presbyter.html
+        - Download (PDF): The_Bishop_and_the_Presbyter.pdf
 - Credo: credo.html
 - Lex orandi, lex credendi: lex-orandi.html
 - Sources: resources.html
 - Contact: contact.html
+- About: about.html

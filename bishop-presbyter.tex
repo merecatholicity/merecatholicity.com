@@ -1,0 +1,51 @@
+% The bishop and the presbyter, a question recorded. The afterword
+% subsection of Mere Catholicity, published also as its own paper. The
+% body is extracted verbatim from confession.tex; edit the book, then
+% re-extract, rather than editing bishop-presbyter-body.tex directly.
+\documentclass[11pt,letterpaper]{article}
+\ifdefined\pdfsuppressptexinfo\pdfsuppressptexinfo=-1 \fi
+\ifdefined\pdftrailerid\pdftrailerid{}\fi
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathpazo}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{needspace}
+\usepackage[colorlinks=true,linkcolor=ink,urlcolor=maroon,citecolor=ink,filecolor=ink]{hyperref}
+\urlstyle{same}
+\hypersetup{pdftitle={The bishop and the presbyter, a question recorded},pdfauthor={Anonymous}}
+\linespread{1.06}
+\setlength{\emergencystretch}{1.5em}
+
+\definecolor{ink}{HTML}{2A2521}
+\definecolor{heading}{HTML}{8C4A32}
+\definecolor{subhead}{HTML}{6E5642}
+\definecolor{accent}{HTML}{B0894C}
+\definecolor{maroon}{HTML}{7B2E2E}
+
+\newcommand{\unit}[1]{\needspace{3\baselineskip}\par\medskip{\normalfont\bfseries\color{subhead}#1}\par\nobreak\smallskip}
+
+\begin{document}
+\color{ink}
+
+\begin{center}
+{\LARGE\bfseries\color{heading} The bishop and the presbyter,\par}
+\vspace{0.3em}
+{\LARGE\bfseries\color{heading} a question recorded\par}
+\vspace{0.8em}
+{\itshape\color{subhead} From the afterword of Mere Catholicity.\par}
+\vspace{0.5em}
+{\color{accent}\hrule height 1pt}
+\end{center}
+\vspace{1em}
+
+\input{bishop-presbyter-body.tex}
+
+\vspace{2em}
+{\small\noindent This work is dedicated to the public domain (Creative
+Commons CC0 1.0). No rights reserved. It may be copied, translated,
+printed, and distributed freely, by anyone, for any purpose.
+\href{https://merecatholicity.com}{merecatholicity.com}\par}
+
+\end{document}

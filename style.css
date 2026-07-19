@@ -13,7 +13,7 @@
 
 /* Reserve the scrollbar's width from first paint, so the centered column
    never shifts when the bar appears mid-load. */
-html { overflow-y: scroll; }
+html { overflow-y: scroll; overflow-x: hidden; }
 
 body {
   font-family: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
@@ -54,11 +54,21 @@ nav.site .sub-toggle:hover { color: var(--maroon-dark); }
    any panel that would leave the window. */
 @media (min-width: 601px) {
   nav.site { position: relative; text-align: center; }
+  /* The item row may grow wider than the text column: it sizes to its
+     content and centers itself over the page, wrapping only when the
+     viewport truly runs out. The nav box and its rule stay put. */
   nav.site .nav-list {
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     column-gap: 1.4rem;
+    width: max-content;
+    max-width: calc(100vw - 2rem);
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
   }
+  nav.site .nav-list > li { white-space: nowrap; }
   nav.site .nav-list > li > a, nav.site .sub-toggle {
     display: block;
     width: 100%;
