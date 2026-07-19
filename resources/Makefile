@@ -132,10 +132,11 @@ html:
 	    -o ../development.html
 	rm development-body-html.tex
 	@echo "built development.html"
+	sed -e 's/\\hrule height [0-9.]*pt//g' consulting.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="On Consulting the Faithful in Matters of Doctrine" \
 	    --css=style.css -B ../nav.html -A ../footer.html \
-	    consulting.tex -o ../consulting.html
+	    -o ../consulting.html
 	@echo "built consulting.html"
 	sed -e 's/\\lawpart{/\\section*{/g' \
 	    -e 's/\\lawquestion{/\\subsection*{/g' \
@@ -180,7 +181,8 @@ html:
 	      -e 's/\\textgreek{/{/g' \
 	      -e 's/\\texthebrew{/{/g' \
 	      $$n-body.tex > $$n-body-html.tex; \
-	  sed -e "s/{$$n-body.tex}/{$$n-body-html.tex}/" $$n.tex | \
+	  sed -e "s/{$$n-body.tex}/{$$n-body-html.tex}/" \
+	      -e 's/\\hrule height [0-9.]*pt//g' $$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
 	      --css=style.css -B ../nav.html -A ../footer.html \
