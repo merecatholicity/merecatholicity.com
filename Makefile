@@ -4,10 +4,19 @@
 
 all: build
 
-build: pdf html logos
+build: pdf html logos publish
 
 pdf:
 	./build-confession.sh
+	$(MAKE) memorandum
+
+# The Memorandum, split from the book at version 1.1, as its own paper.
+.PHONY: memorandum
+memorandum:
+	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error memorandum.tex >/dev/null
+	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error memorandum.tex >/dev/null
+	cp memorandum.pdf Memorandum.pdf
+	@echo "built Memorandum.pdf ($$(pdfinfo memorandum.pdf | awk '/^Pages/{print $$2}') pages)"
 
 # HTML edition from the same .tex, with pandoc-friendly preprocessing:
 #  - \unit{...} heads become \paragraph{...} so pandoc keeps them
@@ -23,8 +32,13 @@ html:
 	    --css=style.css -H social.html -B nav.html -A footer.html \
 	    -o book.html
 	python toc-prune.py
+	sed -e 's/\\unit{/\\paragraph{/g' memorandum.tex | \
+	pandoc -f latex -t html5 --standalone \
+	    --metadata title="Memorandum" \
+	    --css=style.css -B nav.html -A footer.html \
+	    -o memorandum.html
 	$(MAKE) -C resources html
-	@echo "built book.html"
+	@echo "built book.html and memorandum.html"
 
 # Logos/Verbum Personal Book edition: a .docx from the same .tex, using the
 # same preprocessing as the html target. Word heading styles carry the
