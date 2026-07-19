@@ -4,7 +4,7 @@
 
 all: build
 
-build: pdf html
+build: pdf html logos
 
 pdf:
 	./build-confession.sh
@@ -24,6 +24,22 @@ html:
 	    -o book.html
 	python toc-prune.py
 	@echo "built book.html"
+
+# Logos/Verbum Personal Book edition: a .docx from the same .tex, using the
+# same preprocessing as the html target. Word heading styles carry the
+# structure; Logos builds its own TOC from them and auto-links Bible
+# references at compile time, so no pandoc --toc and no HTML fragments.
+.PHONY: logos
+logos:
+	sed -e 's/\\unit{/\\paragraph{/g' \
+	    -e 's/\\hrule height [0-9.]*pt//g' \
+	    -e 's/\\section\*{\\color{heading}/\\section*{/g' \
+	    -e 's/\\begin{center}{\\large\\bfseries\\color{heading}The confession}\\end{center}/\\section*{The confession}/' \
+	    confession.tex | \
+	pandoc -f latex -t docx \
+	    --metadata title="Mere Catholicity" \
+	    -o Mere_Catholicity_Logos.docx
+	@echo "built Mere_Catholicity_Logos.docx"
 
 # KDP paperback interior: 6x9 trim, mirrored margins with gutter, black ink,
 # plain links. Same confession.tex, switched by the \PAPERBACK flag. Separate
