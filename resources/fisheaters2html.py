@@ -60,6 +60,11 @@ def convert(src, out, title, h1, start_probe, end_probe, orig):
     # relative links keep pointing at Fish Eaters
     frag = re.sub(r'href="(?!https?://|#|mailto:)([^"]+)"',
                   r'href="https://www.fisheaters.com/\1"', frag)
+    # staycatholic.com no longer resolves; point its one link at the
+    # Wayback Machine copy
+    frag = frag.replace(
+        "http://www.staycatholic.com/the_mother_of_god.htm",
+        "https://web.archive.org/web/20260123110858/http://www.staycatholic.com/the_mother_of_god.htm")
 
     p = subprocess.run(["pandoc", "-f", "html", "-t", "html5"],
                        input=frag, capture_output=True, text=True)
