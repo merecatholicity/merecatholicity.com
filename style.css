@@ -25,6 +25,10 @@ body {
   line-height: 1.55;
   font-size: 1.05rem;
 }
+/* Desktop container widens on the Bootstrap ladder. */
+@media (min-width: 992px) { body { max-width: 960px; } }
+@media (min-width: 1200px) { body { max-width: 1140px; } }
+@media (min-width: 1400px) { body { max-width: 1320px; } }
 
 /* Site navigation */
 nav.site {
@@ -472,4 +476,69 @@ blockquote.pullquote {
 blockquote.pullquote .intro-attrib { font-size: 0.85rem; }
 @media (max-width: 700px) {
   blockquote.pullquote { float: none; width: auto; margin: 1rem 0; }
+}
+
+/* Reception matrix: the argument in one table. Green = confessed and
+   binding there, maroon = not confessed there. First-millennium rows
+   run green across every column; post-schism rows go green only in the
+   communion that defined them. */
+.table-wrap { margin: 1.5em 0; }
+/* Only narrow screens need the scroll container, and only sideways.
+   The rotated marginalia's transform box would otherwise conjure a
+   spurious vertical scrollbar on desktop. */
+@media (max-width: 991px) {
+  .table-wrap { overflow-x: auto; overflow-y: hidden; padding-bottom: 0.25rem; }
+}
+table.reception {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92rem;
+  /* Undo the generic block-table scroller above. The wrapper handles
+     narrow screens, and a scroll context here would grow a vertical bar
+     from the rotated marginalia's transform box. */
+  display: table;
+  overflow: visible;
+}
+.reception th, .reception td { border: 1px solid var(--rule); padding: 0.35em 0.55em; }
+.reception thead th { text-align: center; font-weight: bold; color: var(--maroon-dark); }
+.reception thead th:first-child { text-align: left; }
+.reception tbody th { text-align: left; font-weight: normal; }
+.reception tr.group th {
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  color: var(--maroon-dark);
+  background: rgba(139, 26, 26, 0.05);
+}
+.reception td { text-align: center; font-weight: bold; font-family: Georgia, serif; font-size: 1.2rem; line-height: 1.1; }
+.reception td.y { color: #2f6b2f; }
+.reception td.n { color: var(--maroon); }
+.reception td.q { color: var(--faint); }
+.table-note { font-size: 0.88rem; color: var(--faint); margin-top: 0.4em; }
+/* Sideways marginalia beside each block of the reception table,
+   reading upward like spine text, in a handwritten hand. */
+.reception th.side-head { border: none; background: none; }
+.reception td.side {
+  border: none;
+  background: none;
+  padding: 0;
+  position: relative;
+  vertical-align: middle;
+  font-weight: normal;
+  width: 4.5em;
+  min-width: 4.5em;
+}
+.reception td.side .side-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-70deg);
+  white-space: nowrap;
+  text-align: center;
+  font-family: 'Snell Roundhand', 'Apple Chancery', 'Segoe Script',
+    'Lucida Handwriting', 'Comic Sans MS', cursive;
+  font-style: italic;
+  font-size: 1.25rem;
+  line-height: 1.3;
+  color: var(--maroon);
+  letter-spacing: 0.06em;
 }
