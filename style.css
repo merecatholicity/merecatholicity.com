@@ -370,7 +370,9 @@ ul.doors li { margin: 0.7em 0; }
 .btn-read:hover { background: #146c43; border-color: #146c43; color: #fff; }
 .btn-pdf { background: transparent; border-color: #198754; color: #198754; }
 .btn-pdf:hover { background: #198754; color: #fff; }
-.btn-amazon { background: #ffc107; border-color: #ffc107; color: #212529; opacity: 0.68; cursor: default; }
+.btn-amazon { background: #ffc107; border-color: #ffc107; color: #212529; }
+span.btn-amazon { opacity: 0.68; cursor: default; }
+a.btn-amazon:hover { background: #e0a800; border-color: #e0a800; color: #212529; }
 
 /* Contact form */
 form.contact { max-width: 34rem; margin: 1.5rem auto; }
