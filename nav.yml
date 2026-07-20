@@ -24,8 +24,9 @@
         - Read online (HTML): book.html
         - Download (PDF): Mere_Catholicity.pdf
         - Logos & Verbum: logos.html
-        - Paperback (soon): soon
-        - Kindle (soon): soon
+        - Paperback: "https://www.amazon.com/dp/B0H9JW58CB/"
+        # Kindle (soon): not live yet
+
     - Memorandum:
         - Read online (HTML): memorandum.html
         - Download (PDF): Memorandum.pdf
