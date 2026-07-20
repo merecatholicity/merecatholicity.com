@@ -59,6 +59,15 @@ def main():
         if i > 0:
             i = frag.rfind("<h", 0, i)
             frag = frag[i:] if i > 0 else frag
+        if name.startswith("jddj"):
+            # The original links footnotes 16 and 20 by absolute vatican.va
+            # URL (now dead) where every other note uses the local #16/#r20
+            # scheme, and it carries one empty anchor with a bogus href.
+            frag = re.sub(r'href="http://www\.vatican\.va/[^"]*#_ftnref(\d+)"',
+                          r'href="#r\1"', frag)
+            frag = re.sub(r'href="http://www\.vatican\.va/[^"]*#_ftn(\d+)"',
+                          r'href="#\1"', frag)
+            frag = frag.replace('<a href="1"></a>', "")
         tex = clean(pandoc_latex(frag))
         open(out, "w").write(tex)
         print("wrote", out, len(tex))

@@ -1,10 +1,16 @@
 # Mere Catholicity build tasks. Add new actions as targets below.
 
-.PHONY: all build pdf html
+.PHONY: all build pdf html check
 
 all: build
 
-build: pdf html logos publish
+build: pdf html logos publish check
+
+# Fail loudly if any page links at a file or anchor that does not exist.
+# Runs at the end of 'build' and 'html' so a missing output (a PDF stanza
+# added but never built, a typo'd href) can never ship silently again.
+check:
+	python linkcheck.py
 
 pdf:
 	./build-confession.sh
@@ -48,6 +54,7 @@ html:
 	    -o bishop-presbyter.html
 	$(MAKE) -C resources html
 	@echo "built book.html and memorandum.html"
+	$(MAKE) check
 
 # Logos/Verbum Personal Book edition: a .docx from the same .tex, using the
 # same preprocessing as the html target. Word heading styles carry the

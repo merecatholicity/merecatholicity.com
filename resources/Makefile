@@ -21,88 +21,55 @@ define LATEX2
 	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error $(1).tex >/dev/null
 endef
 
-pdf:
-	$(call LATEX2,commonitory)
-	cp commonitory.pdf ../The_Commonitory.pdf
-	@echo "built The_Commonitory.pdf ($$(pdfinfo commonitory.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,development)
-	cp development.pdf ../Development_of_Christian_Doctrine.pdf
-	@echo "built Development_of_Christian_Doctrine.pdf ($$(pdfinfo development.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,consulting)
-	cp consulting.pdf ../On_Consulting_the_Faithful.pdf
-	@echo "built On_Consulting_the_Faithful.pdf ($$(pdfinfo consulting.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,law)
-	cp law.pdf ../Treatise_on_Law.pdf
-	@echo "built Treatise_on_Law.pdf ($$(pdfinfo law.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,cyril)
-	cp cyril.pdf ../Catechetical_Lectures.pdf
-	@echo "built Catechetical_Lectures.pdf ($$(pdfinfo cyril.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,gregory)
-	cp gregory.pdf ../Great_Catechism.pdf
-	@echo "built Great_Catechism.pdf ($$(pdfinfo gregory.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,enchiridion)
-	cp enchiridion.pdf ../Enchiridion.pdf
-	@echo "built Enchiridion.pdf ($$(pdfinfo enchiridion.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,councils)
-	cp councils.pdf ../Seven_Ecumenical_Councils.pdf
-	@echo "built Seven_Ecumenical_Councils.pdf ($$(pdfinfo councils.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,ignatius)
-	cp ignatius.pdf ../Epistles_of_Ignatius.pdf
-	@echo "built Epistles_of_Ignatius.pdf ($$(pdfinfo ignatius.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,irenaeus3)
-	cp irenaeus3.pdf ../Against_Heresies_Book_III.pdf
-	@echo "built Against_Heresies_Book_III.pdf ($$(pdfinfo irenaeus3.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,baptism)
-	cp baptism.pdf ../On_Baptism.pdf
-	@echo "built On_Baptism.pdf ($$(pdfinfo baptism.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,unity)
-	cp unity.pdf ../On_the_Unity_of_the_Church.pdf
-	@echo "built On_the_Unity_of_the_Church.pdf ($$(pdfinfo unity.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,tome)
-	cp tome.pdf ../Tome_of_St_Leo.pdf
-	@echo "built Tome_of_St_Leo.pdf ($$(pdfinfo tome.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,clement)
-	cp clement.pdf ../First_Epistle_of_Clement.pdf
-	@echo "built First_Epistle_of_Clement.pdf ($$(pdfinfo clement.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,justin)
-	cp justin.pdf ../First_Apology_of_Justin_Martyr.pdf
-	@echo "built First_Apology_of_Justin_Martyr.pdf ($$(pdfinfo justin.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,didache)
-	cp didache.pdf ../Didache.pdf
-	@echo "built Didache.pdf ($$(pdfinfo didache.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,festal39)
-	cp festal39.pdf ../Festal_Letter_39.pdf
-	@echo "built Festal_Letter_39.pdf ($$(pdfinfo festal39.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,gregory-letters)
-	cp gregory-letters.pdf ../Letters_on_the_Title_Universal_Bishop.pdf
-	@echo "built Letters_on_the_Title_Universal_Bishop.pdf ($$(pdfinfo gregory-letters.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,soulres)
-	cp soulres.pdf ../On_the_Soul_and_the_Resurrection.pdf
-	@echo "built On_the_Soul_and_the_Resurrection.pdf ($$(pdfinfo soulres.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,onbaptism)
-	cp onbaptism.pdf ../On_Baptism_Against_the_Donatists.pdf
-	@echo "built On_Baptism_Against_the_Donatists.pdf ($$(pdfinfo onbaptism.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,ravenna)
-	cp ravenna.pdf ../The_Ravenna_Document.pdf
-	@echo "built The_Ravenna_Document.pdf ($$(pdfinfo ravenna.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,chieti)
-	cp chieti.pdf ../The_Chieti_Document.pdf
-	@echo "built The_Chieti_Document.pdf ($$(pdfinfo chieti.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,jddj)
-	cp jddj.pdf ../Joint_Declaration_on_Justification.pdf
-	@echo "built Joint_Declaration_on_Justification.pdf ($$(pdfinfo jddj.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,encyclical1848)
-	cp encyclical1848.pdf ../Encyclical_of_the_Eastern_Patriarchs.pdf
-	@echo "built Encyclical_of_the_Eastern_Patriarchs.pdf ($$(pdfinfo encyclical1848.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,scranton)
-	cp scranton.pdf ../Declaration_of_Scranton.pdf
-	@echo "built Declaration_of_Scranton.pdf ($$(pdfinfo scranton.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,cassian-prayer)
-	cp cassian-prayer.pdf ../Conferences_on_Prayer.pdf
-	@echo "built Conferences_on_Prayer.pdf ($$(pdfinfo cassian-prayer.pdf | awk '/^Pages/{print $$2}') pages)"
-	$(call LATEX2,benedict-rule)
-	cp benedict-rule.pdf ../Rule_of_St_Benedict.pdf
-	@echo "built Rule_of_St_Benedict.pdf ($$(pdfinfo benedict-rule.pdf | awk '/^Pages/{print $$2}') pages)"
+# One line per work: source name = published root PDF. Each entry becomes
+# a real file target below, rebuilt only when its .tex or -body.tex is
+# newer, so 'make pdf' is incremental, an interrupted run resumes where it
+# stopped, and a completed run can never omit a declared output. To add a
+# work, add its line HERE (and its html stanza to the html target below).
+WORKS = \
+  commonitory=The_Commonitory.pdf \
+  development=Development_of_Christian_Doctrine.pdf \
+  consulting=On_Consulting_the_Faithful.pdf \
+  law=Treatise_on_Law.pdf \
+  cyril=Catechetical_Lectures.pdf \
+  gregory=Great_Catechism.pdf \
+  enchiridion=Enchiridion.pdf \
+  councils=Seven_Ecumenical_Councils.pdf \
+  ignatius=Epistles_of_Ignatius.pdf \
+  irenaeus3=Against_Heresies_Book_III.pdf \
+  baptism=On_Baptism.pdf \
+  unity=On_the_Unity_of_the_Church.pdf \
+  tome=Tome_of_St_Leo.pdf \
+  clement=First_Epistle_of_Clement.pdf \
+  justin=First_Apology_of_Justin_Martyr.pdf \
+  didache=Didache.pdf \
+  festal39=Festal_Letter_39.pdf \
+  gregory-letters=Letters_on_the_Title_Universal_Bishop.pdf \
+  soulres=On_the_Soul_and_the_Resurrection.pdf \
+  onbaptism=On_Baptism_Against_the_Donatists.pdf \
+  ravenna=The_Ravenna_Document.pdf \
+  chieti=The_Chieti_Document.pdf \
+  jddj=Joint_Declaration_on_Justification.pdf \
+  encyclical1848=Encyclical_of_the_Eastern_Patriarchs.pdf \
+  scranton=Declaration_of_Scranton.pdf \
+  cassian-prayer=Conferences_on_Prayer.pdf \
+  benedict-rule=Rule_of_St_Benedict.pdf
+
+work_name = $(firstword $(subst =, ,$(1)))
+work_out  = $(lastword  $(subst =, ,$(1)))
+
+PDF_TARGETS = $(foreach w,$(WORKS),../$(call work_out,$(w)))
+
+pdf: $(PDF_TARGETS)
+
+define PDF_RULE
+../$(call work_out,$(1)): $(call work_name,$(1)).tex $(call work_name,$(1))-body.tex
+	$$(call LATEX2,$(call work_name,$(1)))
+	cp $(call work_name,$(1)).pdf $$@
+	@echo "built $(call work_out,$(1)) ($$$$(pdfinfo $(call work_name,$(1)).pdf | awk '/^Pages/{print $$$$2}') pages)"
+endef
+
+$(foreach w,$(WORKS),$(eval $(call PDF_RULE,$(w))))
 
 # Site HTML editions from the same .tex files, with the site nav and
 # footer, like book.html. The heading macros become \section* and
