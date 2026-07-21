@@ -561,3 +561,6 @@ table.reception {
 /* The circle: nothing bound at all. A quiet plum, distinct from every judgment color. */
 .reception td.o { color: #6d4b8b; font-weight: normal; }
 .legend .o { color: #6d4b8b; font-weight: bold; }
+
+.objections td { vertical-align: top; }
+.objections td:first-child { width: 34%; }
