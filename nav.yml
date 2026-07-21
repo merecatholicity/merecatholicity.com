@@ -20,32 +20,31 @@
 
 - Home: index.html
 - Papers:
-    - Mere Catholicity:
+    - "Mere Catholicity: the book":
         - Read online (HTML): book.html
         - Download (PDF): Mere_Catholicity.pdf
         - Logos & Verbum: logos.html
         - Paperback: "https://www.amazon.com/dp/B0H9JW58CB/"
         - Kindle: "https://www.amazon.com/dp/B0H8S87TV8/"
-        - Memorandum:
-            - Read online (HTML): memorandum.html
-            - Download (PDF): Memorandum.pdf
-
-    - The bishop and the presbyter:
-        - Read online (HTML): bishop-presbyter.html
-        - Download (PDF): The_Bishop_and_the_Presbyter.pdf
-    - "9Marks, Mark Dever, Tim Challies, and catholicity":
-        - Read online (HTML): nine-marks.html
-        - Download (PDF): Nine_Marks_and_Catholicity.pdf
-    - Charting mere catholicity:
-        - "Part 1: the historic communions":
+    - "Mere Catholicity: the companion papers & charts":
+        - The bishop and the presbyter:
+            - Read online (HTML): bishop-presbyter.html
+            - Download (PDF): The_Bishop_and_the_Presbyter.pdf
+        - "Charting, part 1: the historic communions":
             - Read online (HTML): charting-communions.html
             - Download (PDF): Charting_Historic_Communions.pdf
-        - "Part 2: the free churches":
+        - "Charting, part 2: the free churches":
             - Read online (HTML): free-churches.html
             - Download (PDF): Charting_Free_Churches.pdf
-        - "Part 3: fifty objections":
+        - "Charting, part 3: fifty objections":
             - Read online (HTML): objections.html
             - Download (PDF): Fifty_Objections.pdf
+        - "9Marks, Mark Dever, Tim Challies, and catholicity":
+            - Read online (HTML): nine-marks.html
+            - Download (PDF): Nine_Marks_and_Catholicity.pdf
+    - "An open letter to the churches: the Memorandum":
+        - Read online (HTML): memorandum.html
+        - Download (PDF): Memorandum.pdf
 - Credo: credo.html
 - Lex orandi, lex credendi: lex-orandi.html
 - Sources: resources.html
