@@ -556,3 +556,8 @@ table.reception {
 .legend-grid { display: flex; gap: 1.8rem; margin: 1.5em 0; align-items: flex-start; }
 .legend-grid > .legend { flex: 1 1 0; margin: 0; }
 @media (max-width: 700px) { .legend-grid { flex-direction: column; gap: 1em; } }
+/* Comparison variant: text cells, not marks. */
+.reception.compare td { font-size: 0.98rem; font-weight: normal; text-align: left; font-family: inherit; }
+/* The circle: nothing bound at all. A quiet plum, distinct from every judgment color. */
+.reception td.o { color: #6d4b8b; font-weight: normal; }
+.legend .o { color: #6d4b8b; font-weight: bold; }
