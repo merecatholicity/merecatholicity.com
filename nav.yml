@@ -26,10 +26,10 @@
         - Logos & Verbum: logos.html
         - Paperback: "https://www.amazon.com/dp/B0H9JW58CB/"
         - Kindle: "https://www.amazon.com/dp/B0H8S87TV8/"
+        - Memorandum:
+            - Read online (HTML): memorandum.html
+            - Download (PDF): Memorandum.pdf
 
-    - Memorandum:
-        - Read online (HTML): memorandum.html
-        - Download (PDF): Memorandum.pdf
     - The bishop and the presbyter:
         - Read online (HTML): bishop-presbyter.html
         - Download (PDF): The_Bishop_and_the_Presbyter.pdf
