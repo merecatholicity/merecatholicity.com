@@ -564,3 +564,12 @@ table.reception {
 
 .objections td { vertical-align: top; }
 .objections td:first-child { width: 34%; }
+
+@media print {
+  nav.site, .nav-toggle { display: none; }
+  body { max-width: none; padding: 0 0.5in; }
+  a { color: inherit; text-decoration: none; }
+  .table-wrap { overflow: visible; }
+  .reception { font-size: 0.85em; }
+  tr, .legend { break-inside: avoid; }
+}
