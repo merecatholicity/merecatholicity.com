@@ -511,9 +511,16 @@ table.reception {
 }
 .reception td { text-align: center; font-weight: bold; font-family: Georgia, serif; font-size: 1.2rem; line-height: 1.1; }
 .reception td.y { color: #2f6b2f; }
-.reception td.n { color: var(--maroon); }
+.reception td.n { color: var(--maroon); font-weight: normal; }
 .reception td.q { color: var(--faint); }
-.table-note { font-size: 0.88rem; color: var(--faint); margin-top: 0.4em; }
+.table-note {
+  font-size: 0.95rem;
+  color: #55504a;
+  line-height: 1.5;
+  margin: 0.7em 0;
+  padding-left: 0.9em;
+  border-left: 2px solid var(--rule);
+}
 /* Sideways marginalia beside each block of the reception table,
    reading upward like spine text, in a handwritten hand. */
 .reception th.side-head { border: none; background: none; }
