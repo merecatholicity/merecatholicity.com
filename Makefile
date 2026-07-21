@@ -96,7 +96,6 @@ chart-pdfs:
 	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Charting_Historic_Communions.pdf "file://$$(pwd)/charting-communions.html"
 	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Charting_Free_Churches.pdf "file://$$(pwd)/free-churches.html"
 	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Fifty_Objections.pdf "file://$$(pwd)/objections.html"
-	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Nine_Marks_and_Catholicity.pdf "file://$$(pwd)/nine-marks.html"
 
 .PHONY: serve
 serve:
