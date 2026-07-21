@@ -91,6 +91,12 @@ menu:
 	python nav.py
 	$(MAKE) html
 
+.PHONY: chart-pdfs
+chart-pdfs:
+	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Charting_Historic_Communions.pdf "file://$$(pwd)/charting-communions.html"
+	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Charting_Free_Churches.pdf "file://$$(pwd)/free-churches.html"
+	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Fifty_Objections.pdf "file://$$(pwd)/objections.html"
+
 .PHONY: serve
 serve:
 	python -m http.server 8000
