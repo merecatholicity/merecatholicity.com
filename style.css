@@ -549,3 +549,10 @@ table.reception {
   color: var(--maroon);
   letter-spacing: 0.06em;
 }
+.legend { font-size: 0.98rem; }
+.legend .y { color: #2f6b2f; font-weight: bold; }
+.legend .q { color: var(--faint); font-weight: bold; }
+.legend .n { color: var(--maroon); }
+.legend-grid { display: flex; gap: 1.8rem; margin: 1.5em 0; align-items: flex-start; }
+.legend-grid > .legend { flex: 1 1 0; margin: 0; }
+@media (max-width: 700px) { .legend-grid { flex-direction: column; gap: 1em; } }
