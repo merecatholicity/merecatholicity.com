@@ -512,7 +512,7 @@ table.reception {
 .reception td { text-align: center; font-weight: bold; font-family: Georgia, serif; font-size: 1.2rem; line-height: 1.1; }
 .reception td.y { color: #2f6b2f; }
 .reception td.n { color: var(--maroon); font-weight: normal; }
-.reception td.q { color: var(--faint); }
+.reception td.q { color: #6f6f6f; }
 .table-note {
   font-size: 0.95rem;
   color: #55504a;
@@ -551,7 +551,7 @@ table.reception {
 }
 .legend { font-size: 0.98rem; }
 .legend .y { color: #2f6b2f; font-weight: bold; }
-.legend .q { color: var(--faint); font-weight: bold; }
+.legend .q { color: #6f6f6f; font-weight: bold; }
 .legend .n { color: var(--maroon); }
 .legend-grid { display: flex; gap: 1.8rem; margin: 1.5em 0; align-items: flex-start; }
 .legend-grid > .legend { flex: 1 1 0; margin: 0; }
