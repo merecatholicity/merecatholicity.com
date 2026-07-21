@@ -562,7 +562,7 @@ table.reception {
 .reception td.o { color: #6d4b8b; font-weight: normal; }
 .legend .o { color: #6d4b8b; font-weight: bold; }
 
-.objections td { vertical-align: top; }
+.objections td { vertical-align: top; font-size: 1.05rem; line-height: 1.55; }
 .objections td:first-child { width: 34%; }
 
 @media print {
