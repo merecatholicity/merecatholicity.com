@@ -68,6 +68,13 @@ document.addEventListener('DOMContentLoaded', function () {
       var li = btn.parentElement;
       clearTimeout(li._hoverTimer);
       clearTimeout(li._closeTimer);
+      /* In hover mode a click only ever opens, beating the hover delay for
+         decisive clickers. Mouseaway is the sole closer there. The mobile
+         sheet keeps the toggle, since it has no hover to close with. */
+      if (hoverMode()) {
+        if (!li.classList.contains('open')) setSub(li, true);
+        return;
+      }
       var willOpen = !li.classList.contains('open');
       if (!willOpen) {
         li.querySelectorAll('.has-sub.open').forEach(function (d) { setSub(d, false); });
