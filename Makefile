@@ -16,13 +16,11 @@ pdf:
 	./build-confession.sh
 	$(MAKE) memorandum
 
-# The Memorandum, split from the book at version 1.1, as its own paper.
+# The companion papers. The Memorandum is no longer built standalone, it
+# closes the book as an annex since version 1.2. Its dormant wrapper
+# memorandum.tex remains for a future submission copy if ever needed.
 .PHONY: memorandum
 memorandum:
-	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error memorandum.tex >/dev/null
-	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error memorandum.tex >/dev/null
-	cp memorandum.pdf Memorandum.pdf
-	@echo "built Memorandum.pdf ($$(pdfinfo memorandum.pdf | awk '/^Pages/{print $$2}') pages)"
 	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error bishop-presbyter.tex >/dev/null
 	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error bishop-presbyter.tex >/dev/null
 	cp bishop-presbyter.pdf The_Bishop_and_the_Presbyter.pdf
@@ -44,12 +42,6 @@ html:
 	    --css=style.css -H social.html -B nav.html -A footer.html \
 	    -o book.html
 	python toc-prune.py
-	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' \
-	    -e 's/{memorandum-body.tex}/{memorandum-body-html.tex}/' memorandum.tex | \
-	pandoc -f latex -t html5 --standalone \
-	    --metadata title="Memorandum" \
-	    --css=style.css -B nav.html -A footer.html \
-	    -o memorandum.html
 	rm memorandum-body-html.tex
 	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' bishop-presbyter.tex | \
 	pandoc -f latex -t html5 --standalone \
@@ -57,7 +49,7 @@ html:
 	    --css=style.css -B nav.html -A footer.html \
 	    -o bishop-presbyter.html
 	$(MAKE) -C resources html
-	@echo "built book.html and memorandum.html"
+	@echo "built book.html"
 	$(MAKE) check
 
 # Logos/Verbum Personal Book edition: a .docx from the same .tex, using the
