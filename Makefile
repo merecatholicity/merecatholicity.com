@@ -32,9 +32,11 @@ memorandum:
 #  - \unit{...} heads become \paragraph{...} so pandoc keeps them
 #  - \color{...} stripped out of starred section headings
 html:
+	sed -e 's/\\unit{/\\paragraph{/g' memorandum-body.tex > memorandum-body-html.tex
 	sed -e 's/\\unit{/\\paragraph{/g' \
 	    -e 's/\\hrule height [0-9.]*pt//g' \
 	    -e 's/\\section\*{\\color{heading}/\\section*{/g' \
+	    -e 's/{memorandum-body.tex}/{memorandum-body-html.tex}/' \
 	    -e 's/\\begin{center}{\\large\\bfseries\\color{heading}The confession}\\end{center}/\\section*{The confession}/' \
 	    confession.tex | \
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
@@ -42,11 +44,13 @@ html:
 	    --css=style.css -H social.html -B nav.html -A footer.html \
 	    -o book.html
 	python toc-prune.py
-	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' memorandum.tex | \
+	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' \
+	    -e 's/{memorandum-body.tex}/{memorandum-body-html.tex}/' memorandum.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="Memorandum" \
 	    --css=style.css -B nav.html -A footer.html \
 	    -o memorandum.html
+	rm memorandum-body-html.tex
 	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' bishop-presbyter.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="The bishop and the presbyter, a question recorded" \
@@ -62,14 +66,17 @@ html:
 # references at compile time, so no pandoc --toc and no HTML fragments.
 .PHONY: logos
 logos:
+	sed -e 's/\\unit{/\\paragraph{/g' memorandum-body.tex > memorandum-body-html.tex
 	sed -e 's/\\unit{/\\paragraph{/g' \
 	    -e 's/\\hrule height [0-9.]*pt//g' \
 	    -e 's/\\section\*{\\color{heading}/\\section*{/g' \
+	    -e 's/{memorandum-body.tex}/{memorandum-body-html.tex}/' \
 	    -e 's/\\begin{center}{\\large\\bfseries\\color{heading}The confession}\\end{center}/\\section*{The confession}/' \
 	    confession.tex | \
 	pandoc -f latex -t docx \
 	    --metadata title="Mere Catholicity" \
 	    -o Mere_Catholicity_Logos.docx
+	rm memorandum-body-html.tex
 	@echo "built Mere_Catholicity_Logos.docx"
 
 # KDP paperback interior: 6x9 trim, mirrored margins with gutter, black ink,
