@@ -194,7 +194,13 @@
 
   function load() {
     var list = section.querySelector('.comments-list');
-    fetch(API + '?page=' + encodeURIComponent(pagePath()))
+    /* The comment list is browser-cached for 60s. To someone who just
+       posted, that cache makes their own comment vanish on reload, so
+       recent posters bypass it until the cache would be fresh again. */
+    var posted = 0;
+    try { posted = Number(localStorage.getItem('mc-posted-at')) || 0; } catch (e) {}
+    var opts = (Date.now() - posted < 90000) ? { cache: 'no-store' } : undefined;
+    fetch(API + '?page=' + encodeURIComponent(pagePath()), opts)
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
@@ -383,6 +389,7 @@
       if (!d.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
       var list = section.querySelector('.comments-list');
       list.appendChild(commentNode(d.comment, d.status === 'pending'));
+      try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
       textarea.value = '';
       setStatus('');
       status.textContent = d.status === 'pending'
