@@ -931,6 +931,10 @@
         crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
         var headEl = el('h2', 'board-topic-head', d.topic.title);
         if (d.topic.locked) headEl.appendChild(el('span', 'board-locked', '(locked)'));
+        var topicRss = el('a', 'comments-rss', 'RSS');
+        topicRss.href = API + '/feed?topic=' + d.topic.id;
+        topicRss.title = 'Follow this topic with a feed reader';
+        headEl.appendChild(topicRss);
         section.appendChild(headEl);
         var list = el('div', 'comments-list');
         section.appendChild(list);
