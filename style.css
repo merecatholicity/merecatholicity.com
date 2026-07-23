@@ -691,3 +691,4 @@ a.trust-toggle:hover { text-decoration: underline; }
 .board-pages { color: #666; }
 .board-pages a { margin-right: 0.4em; }
 .board-pages strong { margin-right: 0.4em; color: var(--ink); }
+.trust-line { margin-top: 0.25em; }

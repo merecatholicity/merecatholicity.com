@@ -392,35 +392,41 @@
           (m.os ? ' · ' + m.os : '') + (m.tz ? ' · ' + m.tz : '') +
           (m.lang ? ' · ' + m.lang : '')));
         if (m.ua) details.appendChild(el('div', null, m.ua));
-        /* Trusted authors skip the AI screen. The toggle names the action
-           it would take, and flipping it updates every fingerprint of the
-           same author on the page. The author never sees any of this. */
+        /* Trusted authors skip the AI screen. The line states the standing
+           fact and offers the reversal, and flipping it updates every
+           fingerprint of the same author on the page. The author never
+           sees any of this. */
         if (m.author_hash) {
-          var toggle = el('a', 'trust-toggle', m.trusted ? '(toggle-untrusted)' : '(toggle-trusted)');
-          toggle.href = '#';
-          toggle.setAttribute('data-hash', m.author_hash);
-          toggle.setAttribute('data-trusted', m.trusted ? '1' : '0');
-          toggle.addEventListener('click', function (e) {
-            e.preventDefault();
-            var now = toggle.getAttribute('data-trusted') === '1';
-            fetch(API + '/trust', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, hash: m.author_hash, trusted: !now }),
-            }).then(function (r) { return r.json(); }).then(function (d) {
-              if (!d.ok) return;
-              section.querySelectorAll('.trust-toggle[data-hash="' + m.author_hash + '"]')
-                .forEach(function (l) {
-                  l.setAttribute('data-trusted', d.trusted ? '1' : '0');
-                  l.textContent = d.trusted ? '(toggle-untrusted)' : '(toggle-trusted)';
-                });
-            }).catch(function () {});
-          });
-          details.appendChild(toggle);
+          var line = el('div', 'trust-line');
+          line.setAttribute('data-hash', m.author_hash);
+          renderTrustLine(line, m.author_hash, !!m.trusted);
+          details.appendChild(line);
         }
         node.appendChild(details);
       });
     }).catch(function () {});
+  }
+
+  function renderTrustLine(line, hash, trusted) {
+    line.textContent = '';
+    line.appendChild(document.createTextNode(trusted
+      ? 'Trusted. Posts skip the AI spam screen. '
+      : 'Untrusted. Posts are AI-screened for spam. '));
+    var a = el('a', 'trust-toggle', trusted ? '(toggle-untrusted)' : '(toggle-trusted)');
+    a.href = '#';
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      fetch(API + '/trust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, hash: hash, trusted: !trusted }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.ok) return;
+        section.querySelectorAll('.trust-line[data-hash="' + hash + '"]')
+          .forEach(function (l) { renderTrustLine(l, hash, d.trusted); });
+      }).catch(function () {});
+    });
+    line.appendChild(a);
   }
 
   /* ---- Identity UI ---- */
