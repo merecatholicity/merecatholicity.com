@@ -119,6 +119,7 @@
     ['rc', 'Roman Catholicism', 'In-house talk for Roman Catholics.'],
     ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
     ['prot', 'Protestantism', 'In-house talk for Protestants.'],
+    ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
   ];
   function catByKey(key) {
     for (var i = 0; i < CATS.length; i++) if (CATS[i][0] === key) return CATS[i];
@@ -696,6 +697,13 @@
 
   function viewIndex() {
     document.title = 'Catholicity Board | Mere Catholicity';
+    /* The identity drawer lives on the front page too, so a reader can
+       create, show, or swap a key before ever entering a room. */
+    section.appendChild(el('div', 'comment-identity'));
+    var keyBox = el('div', 'key-box');
+    keyBox.hidden = true;
+    section.appendChild(keyBox);
+    renderIdentity();
     var wrap = el('div', 'board-cats');
     var stats = {};
     CATS.forEach(function (cat) {
@@ -717,9 +725,22 @@
         if (!d.ok) return;
         CATS.forEach(function (cat) {
           var c = d.cats[cat[0]];
-          stats[cat[0]].textContent = c
-            ? c.topics + (c.topics === 1 ? ' topic · ' : ' topics · ') + c.posts + (c.posts === 1 ? ' post' : ' posts')
-            : 'quiet so far';
+          var cell = stats[cat[0]];
+          cell.textContent = '';
+          if (!c) { cell.textContent = 'quiet so far'; return; }
+          cell.appendChild(el('div', null,
+            c.topics + (c.topics === 1 ? ' topic · ' : ' topics · ') + c.posts + (c.posts === 1 ? ' post' : ' posts')));
+          if (c.latest && c.latest.title) {
+            var line = el('div', 'board-latest');
+            var t = String(c.latest.title);
+            var a = el('a', null, t.length > 42 ? t.slice(0, 42) + '…' : t);
+            a.href = 'community.html?topic=' + c.latest.topic_id;
+            line.appendChild(a);
+            line.appendChild(document.createTextNode(' · ' +
+              (c.latest.author_hash ? displayName(c.latest.author_hash) : 'Anonymous') +
+              ' · ' + fmtDate(c.latest.created_at)));
+            cell.appendChild(line);
+          }
         });
       })
       .catch(function () {});

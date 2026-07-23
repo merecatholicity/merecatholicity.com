@@ -676,3 +676,7 @@ section.board { max-width: 40rem; }
   .board-cat, .board-topic { flex-direction: column; gap: 0.15rem; }
   .board-stats { text-align: left; white-space: normal; }
 }
+.board-latest { white-space: normal; margin-top: 0.15em; max-width: 18rem; }
+.board-latest a { color: var(--maroon); text-decoration: none; }
+.board-latest a:hover { text-decoration: underline; }
+section.board .comment-identity { margin-bottom: 0.4rem; }
