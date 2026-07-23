@@ -127,9 +127,25 @@
     ['history', 'History', 'World, church, and national history. All of it.'],
     ['rc', 'Roman Catholicism', 'In-house talk for Roman Catholics.'],
     ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
-    ['prot', 'Protestantism', 'In-house talk for Protestants.'],
+    ['lutheran', 'Confessional Lutheran', 'In-house talk for confessional Lutherans.'],
+    ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
+    ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Baptists are welcome to coexist here too.'],
+    ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
     ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
   ];
+
+  /* A description with an optional trailing link, built as nodes so the
+     link is real and everything else stays inert text. */
+  function catDescNode(tag, cat) {
+    var node = el(tag, 'board-cat-desc', cat[2]);
+    if (cat[3]) {
+      var a = el('a', null, cat[3]);
+      a.href = cat[4];
+      node.appendChild(a);
+      node.appendChild(document.createTextNode('.'));
+    }
+    return node;
+  }
   function catByKey(key) {
     for (var i = 0; i < CATS.length; i++) if (CATS[i][0] === key) return CATS[i];
     return null;
@@ -782,7 +798,7 @@
       var name = el('a', 'board-cat-name', cat[1]);
       name.href = 'community.html?cat=' + cat[0];
       left.appendChild(name);
-      left.appendChild(el('div', 'board-cat-desc', cat[2]));
+      left.appendChild(catDescNode('div', cat));
       row.appendChild(left);
       stats[cat[0]] = el('div', 'board-stats', '—');
       row.appendChild(stats[cat[0]]);
@@ -846,7 +862,7 @@
     rss.title = 'Follow this category with a feed reader';
     head.appendChild(document.createTextNode(' '));
     head.appendChild(rss);
-    section.appendChild(el('p', 'board-cat-desc', cat[2]));
+    section.appendChild(catDescNode('p', cat));
     var list = el('div', 'board-topics');
     list.textContent = 'Loading topics...';
     section.appendChild(list);
