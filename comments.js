@@ -810,9 +810,29 @@
       .catch(function () {});
   }
 
+  /* Admin topic controls on the category page. Reload after the act so
+     the list, markers, and counts return true. */
+  function modLinkEl(id, act, label) {
+    var a = el('a', 'trust-toggle', label);
+    a.href = '#';
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (act === 'delete' && !confirm('Delete this topic?')) return;
+      fetch(API + '/moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, id: id, act: act }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) { stampFresh(); location.reload(); }
+      }).catch(function () {});
+    });
+    return a;
+  }
+
   function viewCat(key) {
     var cat = catByKey(key);
     if (!cat) return viewIndex();
+    var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     document.title = cat[1] + ' | Catholicity Board';
     var head = crumb([['Catholicity Board', 'community.html'], [cat[1]]]);
     var rss = el('a', 'comments-rss', 'RSS');
@@ -842,7 +862,7 @@
       });
     });
     armBoardForm();
-    fetchRetry(API + '/board/cat?cat=' + key + freshParam('&'), freshOpts(), [1000, 3000])
+    fetchRetry(API + '/board/cat?cat=' + key + '&p=' + pageNum + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
@@ -853,14 +873,40 @@
         }
         d.topics.forEach(function (t) {
           var row = el('div', 'board-topic');
+          var left = el('div', 'board-topic-left');
           var title = el('a', 'board-topic-title', t.title);
           title.href = 'community.html?topic=' + t.id;
-          row.appendChild(title);
+          left.appendChild(title);
+          if (t.locked) left.appendChild(el('span', 'board-locked', '(locked)'));
+          if (isAdmin()) {
+            var admin = el('span', 'board-admin-links');
+            admin.appendChild(modLinkEl(t.id, t.locked ? 'unlock' : 'lock', t.locked ? '(unlock)' : '(lock)'));
+            admin.appendChild(document.createTextNode(' '));
+            admin.appendChild(modLinkEl(t.id, 'delete', '(delete)'));
+            left.appendChild(admin);
+          }
+          row.appendChild(left);
           row.appendChild(el('div', 'board-stats',
             (t.author_hash ? displayName(t.author_hash) : 'Anonymous') + ' · ' +
             t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDate(t.last)));
           list.appendChild(row);
         });
+        var pages = Math.ceil(d.total / d.per);
+        if (pages > 1) {
+          var bar = el('p', 'board-pages');
+          bar.appendChild(document.createTextNode('Pages: '));
+          for (var i = 1; i <= pages; i++) {
+            if (i === d.page) {
+              bar.appendChild(el('strong', null, String(i)));
+            } else {
+              var pl = el('a', null, String(i));
+              pl.href = 'community.html?cat=' + key + '&p=' + i;
+              bar.appendChild(pl);
+            }
+            if (i < pages) bar.appendChild(document.createTextNode(' '));
+          }
+          section.insertBefore(bar, section.querySelector('.comment-form'));
+        }
       })
       .catch(function () {
         list.textContent = '';
@@ -877,12 +923,23 @@
         state.anonAllowed = !!d.anon;
         document.title = d.topic.title + ' | Catholicity Board';
         crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
-        section.appendChild(el('h2', 'board-topic-head', d.topic.title));
+        var headEl = el('h2', 'board-topic-head', d.topic.title);
+        if (d.topic.locked) headEl.appendChild(el('span', 'board-locked', '(locked)'));
+        section.appendChild(headEl);
         var list = el('div', 'comments-list');
         section.appendChild(list);
         list.appendChild(commentNode(d.topic, false));
         d.replies.forEach(function (c) { list.appendChild(commentNode(c, false)); });
         section.appendChild(el('p', 'comments-status', ''));
+        if (d.topic.locked) {
+          section.appendChild(el('p', 'comments-status', 'This topic is locked. No new replies.'));
+          if (/^#comment-\d+$/.test(location.hash)) {
+            var lockedTarget = document.getElementById(location.hash.slice(1));
+            if (lockedTarget) lockedTarget.scrollIntoView();
+          }
+          annotateMeta('board:' + d.cat);
+          return;
+        }
         buildBoardForm(false, 'Reply');
         boardButtons('Reply', function () {
           var body = section.querySelector('.comment-text').value.replace(/\s+$/, '');

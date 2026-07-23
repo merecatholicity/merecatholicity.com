@@ -685,3 +685,9 @@ section.board .comment-identity { margin-bottom: 0.4rem; }
 .comment-admin { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
 a.trust-toggle { color: #8a6d3b; font-size: 0.85em; text-decoration: none; display: inline-block; margin-top: 0.2em; }
 a.trust-toggle:hover { text-decoration: underline; }
+.board-locked { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.5em; }
+.board-admin-links { display: block; margin-top: 0.1em; }
+.board-topic-left { min-width: 0; }
+.board-pages { color: #666; }
+.board-pages a { margin-right: 0.4em; }
+.board-pages strong { margin-right: 0.4em; color: var(--ink); }

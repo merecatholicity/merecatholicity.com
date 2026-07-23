@@ -16,7 +16,10 @@ CREATE TABLE IF NOT EXISTS comments (
   ua          TEXT,
   os          TEXT,
   tz          TEXT,
-  lang        TEXT
+  lang        TEXT,
+  locked      INTEGER,
+  replies     INTEGER,
+  last_at     INTEGER
 );
 CREATE INDEX IF NOT EXISTS comments_page_idx ON comments(page, status, id);
 

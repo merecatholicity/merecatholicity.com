@@ -118,6 +118,19 @@ async function verifyTurnstile(env, token, ip) {
   }
 }
 
+/* The topic row carries denormalized replies and last_at so category
+   pages read topic rows alone. Recomputed, never incremented, from the
+   indexed replies whenever anything in the thread mutates, so the numbers
+   cannot drift. */
+async function refreshTopicStats(env, topicId) {
+  await env.DB.prepare(
+    'UPDATE comments SET ' +
+    "replies = (SELECT COUNT(*) FROM comments r WHERE r.parent_id = ?1 AND r.status = 'live'), " +
+    "last_at = (SELECT MAX(c2.created_at) FROM comments c2 WHERE (c2.id = ?1 OR c2.parent_id = ?1) AND c2.status = 'live') " +
+    'WHERE id = ?1'
+  ).bind(topicId).run();
+}
+
 async function isTrusted(env, hash) {
   if (!hash) return false;
   const row = await env.DB.prepare('SELECT 1 AS t FROM trusted WHERE hash = ?1').bind(hash).first();
@@ -241,9 +254,10 @@ async function handlePost(request, env, ctx) {
     const topicId = Number(data.topic);
     if (!Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
     const topic = await env.DB.prepare(
-      "SELECT id, page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+      "SELECT id, page, locked FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
     ).bind(topicId).first();
     if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+    if (topic.locked) return json({ ok: false, error: 'This topic is locked.' }, 403);
     page = topic.page;
     parentId = topic.id;
   } else if (data.cat != null) {
@@ -299,6 +313,8 @@ async function handlePost(request, env, ctx) {
   ).bind(page, parentId, title, authorHash, body, status, createdAt, ipHash, verdict, ip || null, ua || null, os || null,
     tz || null, lang || null).first();
 
+  if (boardKey(page)) await refreshTopicStats(env, parentId || inserted.id);
+
   const comment = { id: inserted.id, page, parent_id: parentId, title, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os, tz, lang };
   ctx.waitUntil(notify(env, comment));
 
@@ -320,14 +336,15 @@ async function handleSelfDelete(request, env) {
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const authorHash = await sha256hex(key);
   const isAdmin = isAdminHash(env, authorHash);
-  const result = isAdmin
+  const row = isAdmin
     ? await env.DB.prepare(
-        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted'"
-      ).bind(id).run()
+        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted' RETURNING page, parent_id"
+      ).bind(id).first()
     : await env.DB.prepare(
-        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
-      ).bind(id, authorHash).run();
-  if (!result.meta.changes) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted' RETURNING page, parent_id"
+      ).bind(id, authorHash).first();
+  if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+  if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
   return json({ ok: true }, 200);
 }
 
@@ -405,6 +422,7 @@ async function handleEdit(request, env, ctx) {
   await env.DB.prepare(
     'UPDATE comments SET body = ?1, status = ?2, ai_verdict = ?3, edited_at = ?4 WHERE id = ?5'
   ).bind(body, status, verdict, editedAt, id).run();
+  if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
   const comment = { id, page: row.page, parent_id: row.parent_id, title: row.title,
     author_hash: authorHash, body, status,
     created_at: row.created_at, ai_verdict: verdict, edited: true,
@@ -470,21 +488,26 @@ async function handleBoardIndex(request, env, url) {
   return json({ ok: true, cats }, 200, cacheHeader(url));
 }
 
-/* One category: its topics, newest activity first. */
+/* One category page: twenty topics by newest activity, read from the
+   denormalized topic rows alone, the replies never scanned. */
+const TOPICS_PER_PAGE = 20;
 async function handleBoardCat(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const page = boardKey('board:' + url.searchParams.get('cat'));
   if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
+  const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
+  const total = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM comments WHERE page = ?1 AND parent_id IS NULL AND status = 'live'"
+  ).bind(page).first();
   const rows = await env.DB.prepare(
-    "SELECT t.id, t.title, t.author_hash, t.created_at, " +
-    "COUNT(r.id) AS replies, MAX(COALESCE(r.created_at, t.created_at)) AS last " +
-    "FROM comments t LEFT JOIN comments r ON r.parent_id = t.id AND r.status = 'live' " +
-    "WHERE t.page = ?1 AND t.parent_id IS NULL AND t.status = 'live' " +
-    "GROUP BY t.id ORDER BY last DESC LIMIT 100"
-  ).bind(page).all();
-  return json({ ok: true, topics: rows.results }, 200, cacheHeader(url));
+    'SELECT id, title, author_hash, created_at, locked, ' +
+    'COALESCE(replies, 0) AS replies, COALESCE(last_at, created_at) AS last ' +
+    "FROM comments WHERE page = ?1 AND parent_id IS NULL AND status = 'live' " +
+    'ORDER BY last DESC LIMIT ?2 OFFSET ?3'
+  ).bind(page, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
+  return json({ ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE }, 200, cacheHeader(url));
 }
 
 /* One topic with its live replies in order. */
@@ -495,7 +518,7 @@ async function handleTopicView(request, env, url) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT id, page, title, author_hash, body, created_at, edited_at FROM comments " +
+    "SELECT id, page, title, author_hash, body, created_at, edited_at, locked FROM comments " +
     "WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
   ).bind(id).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
@@ -507,9 +530,41 @@ async function handleTopicView(request, env, url) {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at },
+    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0 },
     replies: replies.results,
   }, 200, cacheHeader(url));
+}
+
+/* Admin-only topic moderation from the page: lock and unlock close and
+   reopen a thread to new replies, delete takes the topic down. */
+async function handleModerate(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  const act = String(data.act || '');
+  if (!key || !Number.isInteger(id) || id < 1 || !['lock', 'unlock', 'delete'].includes(act)) {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  const topic = await env.DB.prepare(
+    "SELECT id, page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status != 'deleted'"
+  ).bind(id).first();
+  if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  if (act === 'delete') {
+    await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
+    return json({ ok: true, deleted: true }, 200);
+  }
+  const locked = act === 'lock' ? 1 : 0;
+  await env.DB.prepare('UPDATE comments SET locked = ?1 WHERE id = ?2').bind(locked, id).run();
+  return json({ ok: true, locked: locked }, 200);
 }
 
 /* Admin-only trust toggle. A trusted author's posts skip the AI screen.
@@ -591,26 +646,29 @@ async function handleMod(request, env, url) {
   if (!timingSafeEqual(sig, expected)) return modPage('Bad signature.', 403);
 
   if (act === 'approve') {
-    const result = await env.DB.prepare(
-      "UPDATE comments SET status = 'live' WHERE id = ?1 AND status = 'pending'"
-    ).bind(id).run();
-    return modPage(result.meta.changes ? 'Comment ' + id + ' approved and live.' : 'Nothing to approve. Already handled.', 200);
+    const row = await env.DB.prepare(
+      "UPDATE comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING page, parent_id"
+    ).bind(id).first();
+    if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
+    return modPage(row ? 'Comment ' + id + ' approved and live.' : 'Nothing to approve. Already handled.', 200);
   }
   if (act === 'delete') {
-    const result = await env.DB.prepare(
-      "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted'"
-    ).bind(id).run();
-    return modPage(result.meta.changes ? 'Comment ' + id + ' deleted.' : 'Already deleted.', 200);
+    const row = await env.DB.prepare(
+      "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted' RETURNING page, parent_id"
+    ).bind(id).first();
+    if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
+    return modPage(row ? 'Comment ' + id + ' deleted.' : 'Already deleted.', 200);
   }
   /* Ban the keyed author when there is one, the IP hash otherwise, and
      take the comment down in the same act. */
-  const comment = await env.DB.prepare('SELECT author_hash, ip_hash FROM comments WHERE id = ?1').bind(id).first();
+  const comment = await env.DB.prepare('SELECT author_hash, ip_hash, page, parent_id FROM comments WHERE id = ?1').bind(id).first();
   if (!comment) return modPage('No such comment.', 404);
   const hash = comment.author_hash || comment.ip_hash;
   if (!hash) return modPage('Nothing to ban on this comment.', 200);
   await env.DB.prepare('INSERT OR IGNORE INTO bans (hash, kind, created_at) VALUES (?1, ?2, ?3)')
     .bind(hash, comment.author_hash ? 'author' : 'ip', Math.floor(Date.now() / 1000)).run();
   await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
+  if (boardKey(comment.page)) await refreshTopicStats(env, comment.parent_id || id);
   return modPage('Banned ' + (comment.author_hash ? 'author' : 'IP') + ' of comment ' + id + ' and deleted it.', 200);
 }
 
@@ -627,6 +685,7 @@ export default {
       if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
       if (path === '/api/comments/audit' && request.method === 'POST') return await handleAudit(request, env);
       if (path === '/api/comments/trust' && request.method === 'POST') return await handleTrust(request, env);
+      if (path === '/api/comments/moderate' && request.method === 'POST') return await handleModerate(request, env);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
