@@ -32,6 +32,20 @@ export default {
       return json({ ok: false, error: 'Method not allowed.' }, 405, request);
     }
 
+    /* Enforce the origin allow-list server-side; CORS only advises browsers. */
+    const origin = request.headers.get('Origin');
+    if (origin && !ALLOWED_ORIGINS.includes(origin)) {
+      return json({ ok: false, error: 'Bad origin.' }, 403, request);
+    }
+
+    /* Rate limit before the Turnstile call and the send, so a flood cannot
+       burn the verify or email quotas. Turnstile alone is not a throttle. */
+    const ip = request.headers.get('CF-Connecting-IP') || '';
+    const limit = await env.SEND_LIMIT.limit({ key: ip });
+    if (!limit.success) {
+      return json({ ok: false, error: 'Too many messages. Wait a minute and try again.' }, 429, request);
+    }
+
     let form;
     try {
       form = await request.formData();
@@ -44,7 +58,7 @@ export default {
       return json({ ok: true }, 200, request);
     }
 
-    const name = String(form.get('name') || '').slice(0, 200).trim();
+    const name = String(form.get('name') || '').replace(/[\r\n\t]+/g, ' ').slice(0, 200).trim();
     const email = String(form.get('email') || '').slice(0, 200).trim();
     const message = String(form.get('message') || '').slice(0, 5000).trim();
     if (!message) {
@@ -57,11 +71,13 @@ export default {
       body: new URLSearchParams({
         secret: env.TURNSTILE_SECRET,
         response: token,
-        remoteip: request.headers.get('CF-Connecting-IP') || '',
+        remoteip: ip,
       }),
     });
     const verdict = await verifyResponse.json();
-    if (!verdict.success) {
+    /* Defense in depth on top of the sitekey's own domain lock. */
+    const allowedHosts = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h) => h.trim()).filter(Boolean);
+    if (!verdict.success || (allowedHosts.length && !allowedHosts.includes(verdict.hostname))) {
       return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403, request);
     }
 

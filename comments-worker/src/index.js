@@ -4,7 +4,7 @@
    rate-limit binding throttles by IP, and Llama Guard screens the text
    (flagged or unscreenable comments are held pending, never dropped).
    Secrets: TURNSTILE_SECRET, ADMIN_SECRET (signs the moderation links in
-   notification emails), IP_HASH_SECRET (IPs are stored only as HMACs). */
+   notification emails), IP_HASH_SECRET (bans match on an HMAC of the IP). */
 
 const PAGES = [
   '/book.html',
@@ -73,6 +73,15 @@ function timingSafeEqual(a, b) {
   return diff === 0;
 }
 
+/* Same-origin API. A cross-origin browser POST always carries an Origin, so
+   reject any Origin that is not ours; a missing Origin (non-browser clients,
+   some same-origin form posts) is allowed through to the usual gates. */
+const ALLOWED_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];
+function originOk(request) {
+  const o = request.headers.get('Origin');
+  return !o || ALLOWED_ORIGINS.includes(o);
+}
+
 function json(body, status, headers) {
   return new Response(JSON.stringify(body), {
     status: status,
@@ -111,7 +120,15 @@ async function verifyTurnstile(env, token, ip) {
       body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }),
     });
     const verdict = await res.json();
-    return !!verdict.success;
+    if (!verdict.success) return false;
+    /* Defense in depth on top of the sitekey's own domain lock: if a host
+       allow-list is configured, the token must have been solved on one. */
+    const allow = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h) => h.trim()).filter(Boolean);
+    if (allow.length && !allow.includes(verdict.hostname)) {
+      console.log(JSON.stringify({ event: 'turnstile_hostname', hostname: verdict.hostname }));
+      return false;
+    }
+    return true;
   } catch (err) {
     console.log(JSON.stringify({ event: 'siteverify_failed', error: String(err) }));
     return false;
@@ -170,9 +187,11 @@ function viewLink(page, id, parentId) {
   return SITE + page + '#comment-' + id;
 }
 
+const MOD_LINK_TTL = 30 * 86400; // 30 days
 async function modLink(env, id, act) {
-  const sig = await hmacHex(env.ADMIN_SECRET, id + '|' + act);
-  return SITE + '/api/comments/mod?id=' + id + '&act=' + act + '&sig=' + sig;
+  const exp = Math.floor(Date.now() / 1000) + MOD_LINK_TTL;
+  const sig = await hmacHex(env.ADMIN_SECRET, id + '|' + act + '|' + exp);
+  return SITE + '/api/comments/mod?id=' + id + '&act=' + act + '&exp=' + exp + '&sig=' + sig;
 }
 
 async function notify(env, comment) {
@@ -245,6 +264,12 @@ async function handlePost(request, env, ctx) {
   /* Honeypot field. Bots fill it, people never see it. Pretend success. */
   if (data.website) return json({ ok: true, status: 'live' }, 200);
 
+  /* Throttle before any lookup work, so a flood cannot cost a DB read per
+     request before the limit engages. */
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many comments at once. Wait a minute and try again.' }, 429);
+
   /* Three targets share this pipeline: a site page, a new board topic
      under a category, or a reply to an existing topic. */
   let page = null;
@@ -281,10 +306,6 @@ async function handlePost(request, env, ctx) {
   if (body.length > MAX_BODY) return json({ ok: false, error: 'The comment is too long.' }, 400);
   /* Control characters other than newline and tab are nothing a person types. */
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
-
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many comments at once. Wait a minute and try again.' }, 429);
 
   if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
@@ -661,26 +682,90 @@ async function handleAudit(request, env) {
   return json({ ok: true, pages: pages.results, topics: topics.results }, 200);
 }
 
+const MOD_HEADERS = {
+  'Content-Type': 'text/html; charset=utf-8',
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+};
+
 function modPage(text, status) {
   return new Response(
     '<!doctype html><meta charset="utf-8"><title>merecatholicity.com comments</title>' +
     '<body style="font-family: Georgia, serif; max-width: 36rem; margin: 4rem auto; color: #222;"><p>' + text + '</p>',
-    { status: status, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    { status: status, headers: MOD_HEADERS }
   );
 }
 
-async function handleMod(request, env, url) {
+/* The page a moderation link lands on. The signed action is carried out only
+   when this form is POSTed, so a mail scanner or link prefetcher that merely
+   GETs the URL changes nothing. */
+function modConfirmPage(id, act, exp, sig) {
+  const verb = act === 'approve' ? 'Approve' : act === 'delete' ? 'Delete' : 'Ban the author of';
+  const label = verb + ' comment ' + id;
+  return new Response(
+    '<!doctype html><meta charset="utf-8"><title>merecatholicity.com comments</title>' +
+    '<body style="font-family: Georgia, serif; max-width: 36rem; margin: 4rem auto; color: #222;">' +
+    '<p>' + label + '?</p>' +
+    '<form method="POST" action="/api/comments/mod">' +
+    '<input type="hidden" name="id" value="' + id + '">' +
+    '<input type="hidden" name="act" value="' + xmlEscape(act) + '">' +
+    '<input type="hidden" name="exp" value="' + exp + '">' +
+    '<input type="hidden" name="sig" value="' + xmlEscape(sig) + '">' +
+    '<button type="submit" style="font: inherit; padding: .5rem 1rem; cursor: pointer;">' + label + '</button>' +
+    '</form>',
+    { status: 200, headers: MOD_HEADERS }
+  );
+}
+
+/* Returns 'ok' | 'bad' | 'sig' | 'expired'. The signature covers the expiry,
+   so neither the action nor its deadline can be tampered with. */
+async function modVerify(env, id, act, exp, sig) {
+  if (!Number.isInteger(id) || id < 1 || !['approve', 'delete', 'ban'].includes(act)) return 'bad';
+  if (!Number.isInteger(exp) || exp < 1) return 'bad';
+  const expected = await hmacHex(env.ADMIN_SECRET, id + '|' + act + '|' + exp);
+  if (!timingSafeEqual(sig, expected)) return 'sig';
+  if (Math.floor(Date.now() / 1000) >= exp) return 'expired';
+  return 'ok';
+}
+
+function modReject(v) {
+  if (v === 'sig') return modPage('Bad signature.', 403);
+  if (v === 'expired') return modPage('This link has expired. Moderate from the board instead.', 403);
+  return modPage('Bad request.', 400);
+}
+
+/* GET renders the confirmation form only, mutating nothing. */
+async function handleModConfirm(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return modPage('Too many requests. Slow down.', 429);
   const id = Number(url.searchParams.get('id'));
   const act = String(url.searchParams.get('act') || '');
+  const exp = Number(url.searchParams.get('exp'));
   const sig = String(url.searchParams.get('sig') || '');
-  if (!Number.isInteger(id) || id < 1 || !['approve', 'delete', 'ban'].includes(act)) {
+  const v = await modVerify(env, id, act, exp, sig);
+  if (v !== 'ok') return modReject(v);
+  return modConfirmPage(id, act, exp, sig);
+}
+
+/* POST carries out the signed action, re-checking signature and expiry. */
+async function handleMod(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return modPage('Too many requests. Slow down.', 429);
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
     return modPage('Bad request.', 400);
   }
-  const expected = await hmacHex(env.ADMIN_SECRET, id + '|' + act);
-  if (!timingSafeEqual(sig, expected)) return modPage('Bad signature.', 403);
+  const id = Number(form.get('id'));
+  const act = String(form.get('act') || '');
+  const exp = Number(form.get('exp'));
+  const sig = String(form.get('sig') || '');
+  const v = await modVerify(env, id, act, exp, sig);
+  if (v !== 'ok') return modReject(v);
 
   if (act === 'approve') {
     const row = await env.DB.prepare(
@@ -715,6 +800,10 @@ export default {
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, '') || '/';
 
+      if (request.method === 'POST' && !originOk(request)) {
+        return json({ ok: false, error: 'Bad origin.' }, 403);
+      }
+
       if (path === '/api/comments' && request.method === 'GET') return await handleGet(request, env, url);
       if (path === '/api/comments' && request.method === 'POST') return await handlePost(request, env, ctx);
       if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env);
@@ -727,7 +816,8 @@ export default {
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
       if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
-      if (path === '/api/comments/mod' && request.method === 'GET') return await handleMod(request, env, url);
+      if (path === '/api/comments/mod' && request.method === 'GET') return await handleModConfirm(request, env, url);
+      if (path === '/api/comments/mod' && request.method === 'POST') return await handleMod(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);
     } catch (err) {
       console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));
