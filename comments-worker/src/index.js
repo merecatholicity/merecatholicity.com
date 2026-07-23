@@ -487,6 +487,38 @@ async function handleTopicView(request, env, url) {
   }, 200, { 'Cache-Control': 'public, max-age=60' });
 }
 
+/* Admin-only activity audit: the newest non-deleted post on every site
+   page and in every board topic, author and moment, nothing else. Pending
+   posts count as activity, they are exactly what an admin wants to see. */
+async function handleAudit(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  const pages = await env.DB.prepare(
+    "SELECT c.page, c.author_hash, c.created_at, c.status FROM comments c " +
+    "WHERE c.page NOT LIKE 'board:%' AND c.status != 'deleted' AND c.id = (" +
+    "  SELECT MAX(id) FROM comments c2 WHERE c2.page = c.page AND c2.status != 'deleted') " +
+    "ORDER BY c.created_at DESC"
+  ).all();
+  const topics = await env.DB.prepare(
+    "SELECT t.page, t.title, c.author_hash, c.created_at, c.status " +
+    "FROM comments c JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
+    "WHERE c.page LIKE 'board:%' AND c.status != 'deleted' AND t.status != 'deleted' AND c.id = (" +
+    "  SELECT MAX(c2.id) FROM comments c2 WHERE COALESCE(c2.parent_id, c2.id) = t.id AND c2.status != 'deleted') " +
+    "ORDER BY c.created_at DESC"
+  ).all();
+  return json({ ok: true, pages: pages.results, topics: topics.results }, 200);
+}
+
 function modPage(text, status) {
   return new Response(
     '<!doctype html><meta charset="utf-8"><title>merecatholicity.com comments</title>' +
@@ -543,6 +575,7 @@ export default {
       if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env);
       if (path === '/api/comments/edit' && request.method === 'POST') return await handleEdit(request, env, ctx);
       if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
+      if (path === '/api/comments/audit' && request.method === 'POST') return await handleAudit(request, env);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
