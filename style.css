@@ -639,3 +639,4 @@ a.comment-date:hover { text-decoration: underline; }
   color: #8a6d3b;
 }
 .comments-title .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
+.agree-row { display: block; font-size: 0.95rem; color: #444; margin-bottom: 0.6em; cursor: pointer; }

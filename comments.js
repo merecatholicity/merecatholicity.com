@@ -301,16 +301,7 @@
       line.appendChild(document.createTextNode(state.anonAllowed
         ? 'Commenting anonymously. '
         : 'To comment, create an identity. One click, no signup. '));
-      line.appendChild(identityAction('Create an identity', function () {
-        var key = makeKey();
-        setKey(key);
-        state.key = key;
-        sha256hex(key).then(function (h) {
-          state.myHash = h;
-          renderIdentity();
-          showKeyBox();
-        });
-      }));
+      line.appendChild(identityAction('Create an identity', showAgreeBox));
       line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('I have a key', showPasteBox));
     }
@@ -322,6 +313,44 @@
     a.href = '#';
     a.addEventListener('click', function (e) { e.preventDefault(); onClick(); });
     return a;
+  }
+
+  /* Signup is one checkbox deep. Agreeing to the terms is what creates
+     the identity, so every commenter has agreed by construction. */
+  function showAgreeBox() {
+    var box = section.querySelector('.key-box');
+    box.textContent = '';
+    var label = el('label', 'agree-row');
+    var check = el('input');
+    check.type = 'checkbox';
+    label.appendChild(check);
+    label.appendChild(document.createTextNode(' I agree to the '));
+    var terms = el('a', null, 'terms & conds');
+    terms.href = 'terms.html';
+    terms.target = '_blank';
+    label.appendChild(terms);
+    box.appendChild(label);
+    var row = el('div', 'key-row');
+    var create = el('button', 'btn btn-send key-copy', 'Create');
+    create.type = 'button';
+    create.disabled = true;
+    check.addEventListener('change', function () { create.disabled = !check.checked; });
+    create.addEventListener('click', function () {
+      if (!check.checked) return;
+      try { localStorage.setItem('mc-agreed-at', String(Date.now())); } catch (e) {}
+      var key = makeKey();
+      setKey(key);
+      state.key = key;
+      sha256hex(key).then(function (h) {
+        state.myHash = h;
+        renderIdentity();
+        showKeyBox();
+      });
+    });
+    row.appendChild(create);
+    box.appendChild(row);
+    box.appendChild(identityAction('Cancel', hideKeyBox));
+    box.hidden = false;
   }
 
   function showKeyBox() {
