@@ -59,6 +59,23 @@
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; }
   }
 
+  /* Bounded retries for network failures only. An HTTP response of any
+     status is final: the server spoke, retrying could only double an
+     action. A rejected fetch means nothing arrived, so a short backoff
+     and another try are safe, and the attempt count is small on purpose:
+     after the last one the reader's manual refresh is the only restart. */
+  function fetchRetry(url, opts, delays, onRetry) {
+    function attempt(i) {
+      return fetch(url, opts).catch(function (err) {
+        if (i >= delays.length) throw new Error('Network error. Check your connection and try again.');
+        if (onRetry) onRetry();
+        return new Promise(function (resolve) { setTimeout(resolve, delays[i]); })
+          .then(function () { return attempt(i + 1); });
+      });
+    }
+    return attempt(0);
+  }
+
   function fmtDate(epoch) {
     return new Date(epoch * 1000).toLocaleDateString('en-US',
       { year: 'numeric', month: 'long', day: 'numeric' });
@@ -126,11 +143,16 @@
     script.id = 'mc-ts-script';
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__mcCommentsTs&render=explicit';
     script.async = true;
+    script.onerror = function () { state.tsError = true; };
     document.head.appendChild(script);
   }
 
   function getToken() {
     return new Promise(function (resolve, reject) {
+      if (state.tsError) {
+        reject(new Error('Verification could not load. Check your connection and reload the page.'));
+        return;
+      }
       if (!window.turnstile || state.widgetId === null) {
         reject(new Error('Verification is still loading. Try again in a moment.'));
         return;
@@ -167,13 +189,16 @@
       del.addEventListener('click', function (e) {
         e.preventDefault();
         if (!confirm('Delete this comment?')) return;
-        fetch(API + '/delete', {
+        fetchRetry(API + '/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: c.id, key: state.key }),
-        }).then(function (r) { return r.json(); }).then(function (d) {
+        }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
           if (d.ok) article.remove();
-        }).catch(function () {});
+          else setStatus(d.error || 'Could not delete the comment.');
+        }).catch(function () {
+          setStatus('Network error. The comment was not deleted.');
+        });
       });
       head.appendChild(del);
     }
@@ -200,7 +225,8 @@
     var posted = 0;
     try { posted = Number(localStorage.getItem('mc-posted-at')) || 0; } catch (e) {}
     var opts = (Date.now() - posted < 90000) ? { cache: 'no-store' } : undefined;
-    fetch(API + '?page=' + encodeURIComponent(pagePath()), opts)
+    fetchRetry(API + '?page=' + encodeURIComponent(pagePath()), opts, [1000, 3000],
+      function () { setStatus('Network hiccup, retrying...'); })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
@@ -220,7 +246,7 @@
         annotateMeta();
       })
       .catch(function () {
-        setStatus('Comments could not be loaded right now.');
+        setStatus('Comments could not be loaded. Check your connection and reload the page.');
       });
   }
 
@@ -241,7 +267,8 @@
         var details = el('details', 'comment-meta');
         details.appendChild(el('summary', null, 'user-fingerprint'));
         details.appendChild(el('div', null,
-          (m.ip || 'ip?') + (m.os ? ' · ' + m.os : '') + (m.tz ? ' · ' + m.tz : '') +
+          (m.ip ? (m.ip.indexOf(':') !== -1 ? 'IPv6 ' : 'IPv4 ') + m.ip : 'ip?') +
+          (m.os ? ' · ' + m.os : '') + (m.tz ? ' · ' + m.tz : '') +
           (m.lang ? ' · ' + m.lang : '')));
         if (m.ua) details.appendChild(el('div', null, m.ua));
         node.appendChild(details);
@@ -373,7 +400,7 @@
     status.textContent = 'Verifying...';
     getToken().then(function (token) {
       status.textContent = 'Posting...';
-      return fetch(API, {
+      return fetchRetry(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -384,7 +411,8 @@
           website: section.querySelector('.hp').value,
           tz: browserTz(),
         }),
-      }).then(function (r) { return r.json(); });
+      }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
+        .then(function (r) { return r.json(); });
     }).then(function (d) {
       if (!d.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
       var list = section.querySelector('.comments-list');

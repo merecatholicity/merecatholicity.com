@@ -89,13 +89,20 @@ function normalizePage(raw) {
   return PAGES.includes(p) ? p : null;
 }
 
+/* Fails closed. A blip reaching siteverify refuses the post rather than
+   crashing the worker or waving the post through unverified. */
 async function verifyTurnstile(env, token, ip) {
-  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }),
-  });
-  const verdict = await res.json();
-  return !!verdict.success;
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }),
+    });
+    const verdict = await res.json();
+    return !!verdict.success;
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'siteverify_failed', error: String(err) }));
+    return false;
+  }
 }
 
 /* Returns {status, verdict}. Anything unscreenable is held pending: the
@@ -135,7 +142,9 @@ async function notify(env, comment) {
     '',
     'View:    ' + SITE + comment.page + '#comment-' + comment.id +
       (comment.status === 'pending' ? ' (after approval)' : ''),
-    'IP:      ' + (comment.ip || 'unknown') + (comment.os ? ' · ' + comment.os : ''),
+    'IP:      ' + (comment.ip
+      ? (comment.ip.includes(':') ? 'IPv6 ' : 'IPv4 ') + comment.ip
+      : 'unknown') + (comment.os ? ' · ' + comment.os : ''),
     'Agent:   ' + (comment.ua || 'unknown'),
     'Locale:  ' + (comment.tz || 'tz unknown') + ' · ' + (comment.lang || 'lang unknown'),
   ];
@@ -361,15 +370,20 @@ async function handleMod(request, env, url) {
 
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname.replace(/\/+$/, '') || '/';
+    try {
+      const url = new URL(request.url);
+      const path = url.pathname.replace(/\/+$/, '') || '/';
 
-    if (path === '/api/comments' && request.method === 'GET') return handleGet(request, env, url);
-    if (path === '/api/comments' && request.method === 'POST') return handlePost(request, env, ctx);
-    if (path === '/api/comments/delete' && request.method === 'POST') return handleSelfDelete(request, env);
-    if (path === '/api/comments/meta' && request.method === 'POST') return handleMeta(request, env);
-    if (path === '/api/comments/feed' && request.method === 'GET') return handleFeed(request, env, url);
-    if (path === '/api/comments/mod' && request.method === 'GET') return handleMod(request, env, url);
-    return json({ ok: false, error: 'Not found.' }, 404);
+      if (path === '/api/comments' && request.method === 'GET') return await handleGet(request, env, url);
+      if (path === '/api/comments' && request.method === 'POST') return await handlePost(request, env, ctx);
+      if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env);
+      if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
+      if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
+      if (path === '/api/comments/mod' && request.method === 'GET') return await handleMod(request, env, url);
+      return json({ ok: false, error: 'Not found.' }, 404);
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));
+      return json({ ok: false, error: 'Server hiccup. Please try again shortly.' }, 500);
+    }
   },
 };
