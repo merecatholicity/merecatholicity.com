@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS comments (
   status      TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live','pending','deleted')),
   created_at  INTEGER NOT NULL,
   ip_hash     TEXT,
-  ai_verdict  TEXT
+  ai_verdict  TEXT,
+  ip          TEXT,
+  ua          TEXT,
+  os          TEXT
 );
 CREATE INDEX IF NOT EXISTS comments_page_idx ON comments(page, status, id);
 

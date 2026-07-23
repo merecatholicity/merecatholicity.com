@@ -68,6 +68,20 @@ function json(body, status, headers) {
   });
 }
 
+function parseOS(ua) {
+  if (/iphone|ipad|ipod/i.test(ua)) return 'iOS';
+  if (/android/i.test(ua)) return 'Android';
+  if (/windows nt/i.test(ua)) return 'Windows';
+  if (/mac os x/i.test(ua)) return 'macOS';
+  if (/cros/i.test(ua)) return 'ChromeOS';
+  if (/linux/i.test(ua)) return 'Linux';
+  return ua ? 'Other' : '';
+}
+
+function isAdminHash(env, hash) {
+  return (env.ADMIN_HASHES || '').split(',').includes(hash);
+}
+
 function normalizePage(raw) {
   let p = String(raw || '').split('?')[0].split('#')[0];
   if (!p.startsWith('/')) return null;
@@ -120,6 +134,10 @@ async function notify(env, comment) {
     '',
     comment.body,
     '',
+    'View:    ' + SITE + comment.page + '#comment-' + comment.id +
+      (comment.status === 'pending' ? ' (after approval)' : ''),
+    'IP:      ' + (comment.ip || 'unknown') + (comment.os ? ' · ' + comment.os : ''),
+    'Agent:   ' + (comment.ua || 'unknown'),
   ];
   if (comment.status === 'pending') {
     lines.push('Held for review (' + comment.ai_verdict + ').');
@@ -188,6 +206,8 @@ async function handlePost(request, env, ctx) {
   const key = String(data.key || '');
   const authorHash = key ? await sha256hex(key) : null;
   const ipHash = ip ? (await hmacHex(env.IP_HASH_SECRET, ip)).slice(0, 32) : null;
+  const ua = String(request.headers.get('User-Agent') || '').slice(0, 400);
+  const os = parseOS(ua);
 
   const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash IN (?1, ?2)')
     .bind(authorHash || '-', ipHash || '-').all();
@@ -196,11 +216,11 @@ async function handlePost(request, env, ctx) {
   const { status, verdict } = await screen(env, body);
   const createdAt = Math.floor(Date.now() / 1000);
   const inserted = await env.DB.prepare(
-    'INSERT INTO comments (page, author_hash, body, status, created_at, ip_hash, ai_verdict) ' +
-    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id'
-  ).bind(page, authorHash, body, status, createdAt, ipHash, verdict).first();
+    'INSERT INTO comments (page, author_hash, body, status, created_at, ip_hash, ai_verdict, ip, ua, os) ' +
+    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) RETURNING id'
+  ).bind(page, authorHash, body, status, createdAt, ipHash, verdict, ip || null, ua || null, os || null).first();
 
-  const comment = { id: inserted.id, page, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict };
+  const comment = { id: inserted.id, page, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os };
   ctx.waitUntil(notify(env, comment));
 
   return json({ ok: true, status, comment: { id: comment.id, author_hash: authorHash, body, created_at: createdAt } }, 200);
@@ -220,7 +240,7 @@ async function handleSelfDelete(request, env) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const authorHash = await sha256hex(key);
-  const isAdmin = (env.ADMIN_HASHES || '').split(',').includes(authorHash);
+  const isAdmin = isAdminHash(env, authorHash);
   const result = isAdmin
     ? await env.DB.prepare(
         "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted'"
@@ -230,6 +250,28 @@ async function handleSelfDelete(request, env) {
       ).bind(id, authorHash).run();
   if (!result.meta.changes) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
   return json({ ok: true }, 200);
+}
+
+/* Admin-only view of the logged metadata. The public GET never carries
+   these fields; this endpoint demands a key hashing into ADMIN_HASHES. */
+async function handleMeta(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const page = normalizePage(data.page);
+  const key = String(data.key || '');
+  if (!page || !key) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  const rows = await env.DB.prepare(
+    'SELECT id, status, ai_verdict, ip, ua, os FROM comments WHERE page = ?1 ORDER BY id LIMIT 500'
+  ).bind(page).all();
+  return json({ ok: true, meta: rows.results }, 200);
 }
 
 function modPage(text, status) {
@@ -285,6 +327,7 @@ export default {
     if (path === '/api/comments' && request.method === 'GET') return handleGet(request, env, url);
     if (path === '/api/comments' && request.method === 'POST') return handlePost(request, env, ctx);
     if (path === '/api/comments/delete' && request.method === 'POST') return handleSelfDelete(request, env);
+    if (path === '/api/comments/meta' && request.method === 'POST') return handleMeta(request, env);
     if (path === '/api/comments/mod' && request.method === 'GET') return handleMod(request, env, url);
     return json({ ok: false, error: 'Not found.' }, 404);
   },

@@ -619,3 +619,10 @@ a.identity-action { color: var(--maroon); }
 @media print {
   section.comments { display: none; }
 }
+
+/* Comment permalinks. The date is the shareable anchor, and the targeted
+   comment is tinted so an arriving reader sees which one was meant. */
+a.comment-date { text-decoration: none; }
+a.comment-date:hover { text-decoration: underline; }
+.comment:target { background: #f9f3e6; outline: 2px solid var(--rule); outline-offset: 4px; }
+.comment-meta { font-size: 0.78rem; color: #999; overflow-wrap: anywhere; margin-top: 0.3em; }

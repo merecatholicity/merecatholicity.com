@@ -19,7 +19,8 @@
      to one of these shows delete links on every comment, and the server
      honors those deletes. Publishing the hash reveals nothing usable, the
      power is in the key, which never leaves the owner's browser. */
-  var ADMIN_HASHES = ['d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6'];
+  var ADMIN_HASHES = ['d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6',
+    'c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03'];
 
   /* Must stay identical to the lists in comments-worker/src/index.js. */
   var ADJ = ['Patient','Quiet','Steadfast','Humble','Gentle','Sober','Watchful','Earnest',
@@ -142,10 +143,20 @@
 
   function commentNode(c, pending) {
     var article = el('article', 'comment' + (pending ? ' comment-pending' : ''));
+    article.id = 'comment-' + c.id;
+    /* Machine-readable notice that this is a visitor's comment, not the
+       site's own text. */
+    article.setAttribute('itemscope', '');
+    article.setAttribute('itemtype', 'https://schema.org/Comment');
     var head = el('div', 'comment-head');
-    head.appendChild(el('span', 'comment-author',
-      c.author_hash ? displayName(c.author_hash) : 'Anonymous'));
-    head.appendChild(el('span', 'comment-date', fmtDate(c.created_at)));
+    var author = el('span', 'comment-author',
+      c.author_hash ? displayName(c.author_hash) : 'Anonymous');
+    author.setAttribute('itemprop', 'author');
+    head.appendChild(author);
+    /* The date doubles as the comment's shareable permalink. */
+    var date = el('a', 'comment-date', fmtDate(c.created_at));
+    date.href = '#comment-' + c.id;
+    head.appendChild(date);
     if (state.myHash && (c.author_hash === state.myHash || ADMIN_HASHES.indexOf(state.myHash) !== -1)) {
       var del = el('a', 'comment-delete', 'delete');
       del.href = '#';
@@ -163,7 +174,9 @@
       head.appendChild(del);
     }
     article.appendChild(head);
-    article.appendChild(el('div', 'comment-body', c.body));
+    var body = el('div', 'comment-body', c.body);
+    body.setAttribute('itemprop', 'text');
+    article.appendChild(body);
     if (pending) {
       article.appendChild(el('p', 'comment-note',
         'Held for review. It will appear here once approved.'));
@@ -188,10 +201,37 @@
         section.querySelector('.comments-title').textContent =
           d.comments.length ? 'Comments (' + d.comments.length + ')' : 'Comments';
         setStatus(d.comments.length ? '' : 'No comments yet. Yours can be the first.');
+        /* A shared permalink points at markup that only now exists, so the
+           browser's own hash jump has already missed. Finish it by hand. */
+        if (/^#comment-\d+$/.test(location.hash)) {
+          var target = document.getElementById(location.hash.slice(1));
+          if (target) target.scrollIntoView();
+        }
+        annotateMeta();
       })
       .catch(function () {
         setStatus('Comments could not be loaded right now.');
       });
+  }
+
+  /* Admin only. Fetches the logged IP, OS, and agent for each comment and
+     writes them under the comments. The server refuses non-admin keys, so
+     for everyone else this function returns without a trace. */
+  function annotateMeta() {
+    if (!state.key || ADMIN_HASHES.indexOf(state.myHash) === -1) return;
+    fetch(API + '/meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page: pagePath(), key: state.key }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) return;
+      d.meta.forEach(function (m) {
+        var node = document.getElementById('comment-' + m.id);
+        if (!node || node.querySelector('.comment-meta')) return;
+        node.appendChild(el('div', 'comment-meta',
+          (m.ip || 'ip?') + (m.os ? ' · ' + m.os : '') + (m.ua ? ' · ' + m.ua : '')));
+      });
+    }).catch(function () {});
   }
 
   /* ---- Identity UI ---- */
@@ -379,6 +419,10 @@
     if (state.started) return;
     state.started = true;
 
+    /* Tell search engines this block is visitor content: keep it out of
+       snippets, and never let it read as the site's own words. */
+    section.setAttribute('data-nosnippet', '');
+
     section.appendChild(el('h2', 'comments-title', 'Comments'));
     section.appendChild(el('div', 'comments-list'));
     section.appendChild(el('p', 'comments-status', 'Loading comments...'));
@@ -421,7 +465,9 @@
     loadTurnstile();
   }
 
-  if ('IntersectionObserver' in window) {
+  if (/^#comment-\d+$/.test(location.hash)) {
+    start();
+  } else if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
         if (entry.isIntersecting) { io.disconnect(); start(); }
