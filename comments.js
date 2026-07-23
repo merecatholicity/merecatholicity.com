@@ -194,8 +194,12 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: c.id, key: state.key }),
         }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.ok) article.remove();
-          else setStatus(d.error || 'Could not delete the comment.');
+          if (d.ok) {
+            article.remove();
+            /* Same freshness stamp as posting: the deleter's own reloads
+               must not resurrect the comment from the list cache. */
+            try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
+          } else setStatus(d.error || 'Could not delete the comment.');
         }).catch(function () {
           setStatus('Network error. The comment was not deleted.');
         });
