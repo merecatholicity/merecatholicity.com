@@ -25,3 +25,4 @@ CREATE TABLE IF NOT EXISTS bans (
   kind       TEXT NOT NULL CHECK (kind IN ('author','ip')),
   created_at INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS comments_parent_idx ON comments(parent_id, status, id);
