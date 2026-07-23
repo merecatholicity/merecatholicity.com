@@ -44,6 +44,10 @@
     // address here MUST first be verified under Email Routing, dashboard:
     // Email > Email Routing > Destination addresses (Cloudflare mails the
     // person a confirmation). Then add it here and redeploy.
-    "NOTIFY_EMAILS": "adam.schaefers@icloud.com"
+    "NOTIFY_EMAILS": "adam.schaefers@icloud.com",
+    // Turnstile tokens are accepted only when solved on one of these hosts
+    // (comma-separated), a check layered on top of the sitekey's own domain
+    // lock. Leave unset in local dev so the always-pass test key still works.
+    "TURNSTILE_HOSTNAMES": "merecatholicity.com,www.merecatholicity.com"
   }
 }
