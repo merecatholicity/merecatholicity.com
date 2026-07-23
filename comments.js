@@ -403,6 +403,7 @@
         clearKey();
         state.key = '';
         state.myHash = '';
+        if (BOARD) { location.reload(); return; }
         hideKeyBox();
         renderIdentity();
         load();
@@ -508,6 +509,9 @@
       if (key.length < 16) { input.focus(); return; }
       setKey(key);
       state.key = key;
+      /* On the board the cleanest login is the og one: reload, and the
+         current view returns with the right name, buttons, and links. */
+      if (BOARD) { location.reload(); return; }
       sha256hex(key).then(function (h) {
         state.myHash = h;
         hideKeyBox();

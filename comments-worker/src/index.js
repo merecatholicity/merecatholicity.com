@@ -352,7 +352,7 @@ async function handleFeed(request, env, url) {
     items + '</channel></rss>';
   return new Response(xml, {
     status: 200,
-    headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+    headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=1800' },
   });
 }
 
@@ -422,25 +422,29 @@ async function handleBoardIndex(request, env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  /* One pass: per room, window counts plus the newest post whose thread
+     is still live, its title borrowed from the thread. */
   const rows = await env.DB.prepare(
-    "SELECT page, COUNT(CASE WHEN parent_id IS NULL THEN 1 END) AS topics, COUNT(*) AS posts, MAX(created_at) AS last " +
-    "FROM comments WHERE page LIKE 'board:%' AND status = 'live' GROUP BY page"
-  ).all();
-  /* The newest live post of each room, provided its thread is still live,
-     titled by its thread so the index can say where the life is. */
-  const latest = await env.DB.prepare(
-    "SELECT c.page, c.author_hash, c.created_at, COALESCE(c.title, p.title) AS title, " +
-    "COALESCE(c.parent_id, c.id) AS topic_id " +
-    "FROM comments c LEFT JOIN comments p ON p.id = c.parent_id " +
-    "WHERE c.page LIKE 'board:%' AND c.status = 'live' AND c.id = (" +
-    "  SELECT MAX(c2.id) FROM comments c2 WHERE c2.page = c.page AND c2.status = 'live' AND (" +
-    "    c2.parent_id IS NULL OR EXISTS (SELECT 1 FROM comments t WHERE t.id = c2.parent_id AND t.status = 'live')))"
+    'SELECT page, author_hash, created_at, title, topic_id, topics, posts FROM (' +
+    '  SELECT c.page, c.author_hash, c.created_at, ' +
+    '         COALESCE(c.title, p.title) AS title, ' +
+    '         COALESCE(c.parent_id, c.id) AS topic_id, ' +
+    '         COUNT(CASE WHEN c.parent_id IS NULL THEN 1 END) OVER (PARTITION BY c.page) AS topics, ' +
+    '         COUNT(*) OVER (PARTITION BY c.page) AS posts, ' +
+    '         ROW_NUMBER() OVER (PARTITION BY c.page ORDER BY c.id DESC) AS rn ' +
+    '  FROM comments c LEFT JOIN comments p ON p.id = c.parent_id ' +
+    "  WHERE c.page LIKE 'board:%' AND c.status = 'live' " +
+    "    AND (c.parent_id IS NULL OR p.status = 'live')" +
+    ') WHERE rn = 1'
   ).all();
   const cats = {};
-  rows.results.forEach(function (r) { cats[r.page.slice(6)] = { topics: r.topics, posts: r.posts, last: r.last }; });
-  latest.results.forEach(function (r) {
-    const c = cats[r.page.slice(6)];
-    if (c) c.latest = { topic_id: r.topic_id, title: r.title, author_hash: r.author_hash, created_at: r.created_at };
+  rows.results.forEach(function (r) {
+    cats[r.page.slice(6)] = {
+      topics: r.topics,
+      posts: r.posts,
+      last: r.created_at,
+      latest: { topic_id: r.topic_id, title: r.title, author_hash: r.author_hash, created_at: r.created_at },
+    };
   });
   return json({ ok: true, cats }, 200, { 'Cache-Control': 'public, max-age=60' });
 }
