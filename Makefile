@@ -39,7 +39,7 @@ html:
 	    confession.tex | \
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	    --metadata title="Mere Catholicity" \
-	    --css=style.css -H social.html -B nav.html -A footer.html \
+	    --css=style.css -H social.html -B nav.html -A book-tail.html \
 	    -o book.html
 	python toc-prune.py
 	rm memorandum-body-html.tex
@@ -99,3 +99,10 @@ chart-pdfs:
 .PHONY: serve
 serve:
 	python -m http.server 8000
+
+# Export the live comments database to a local .sql file. The file stays out
+# of git: commenters' text belongs on the site, not in the repo history.
+.PHONY: comments-backup
+comments-backup:
+	cd comments-worker && deno run -A npm:wrangler d1 export merecatholicity-comments --remote --output ../comments-backup.sql
+	@echo "exported comments-backup.sql (kept out of git)"

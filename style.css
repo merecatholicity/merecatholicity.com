@@ -577,3 +577,45 @@ table.reception {
   .legend-grid { display: flex; flex-direction: row; gap: 1rem; }
   .legend-grid > .legend { flex: 1 1 0; }
 }
+
+/* Comments. The section is empty markup until comments.js builds it, and it
+   never belongs in the printed editions (make chart-pdfs prints three of the
+   pages that carry it). */
+section.comments { max-width: 34rem; margin: 3rem auto 1.5rem; }
+.comment { border-top: 1px solid var(--rule); padding: 0.9em 0 0.4em; }
+.comment-head { font-size: 0.92rem; }
+.comment-author { font-weight: bold; color: var(--maroon); }
+.comment-date { color: #666; margin-left: 0.7em; font-size: 0.9em; }
+a.comment-delete { color: #666; margin-left: 0.9em; font-size: 0.85em; }
+.comment-body { white-space: pre-wrap; overflow-wrap: break-word; margin-top: 0.35em; }
+.comment-pending { opacity: 0.75; }
+.comment-note { font-style: italic; color: #666; font-size: 0.9rem; }
+.comments-status, .form-status { color: #666; font-size: 0.95rem; min-height: 1.3em; }
+.comment-form { margin-top: 1.6rem; }
+.comment-form .comment-text {
+  width: 100%;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  resize: vertical;
+}
+.comment-form .comment-text:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+.comment-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.comment-form .ts-slot { margin: 0.6em 0; }
+.comment-buttons { display: flex; gap: 0.6em; flex-wrap: wrap; margin: 0.8em 0 0.3em; }
+section.comments .btn { min-width: 0; }
+.btn-anon { background: transparent; border-color: var(--maroon); color: var(--maroon); font: inherit; cursor: pointer; }
+.btn-anon:hover { background: var(--maroon); color: #fff; }
+.btn-anon:disabled { opacity: 0.6; cursor: default; }
+.identity-line { font-size: 0.95rem; color: #444; }
+a.identity-action { color: var(--maroon); }
+.key-box { border: 1px solid var(--rule); border-radius: 6px; padding: 0.8em 0.9em; margin: 0.8em 0; font-size: 0.95rem; }
+.key-note { margin-top: 0; color: #444; font-size: 0.9rem; }
+.key-row { display: flex; gap: 0.5em; margin-bottom: 0.5em; }
+.key-input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.85rem; padding: 0.4em 0.6em; border: 1px solid var(--rule); border-radius: 6px; }
+@media print {
+  section.comments { display: none; }
+}

@@ -63,3 +63,6 @@ contact-worker/.wrangler/
 contact-worker/node_modules/
 resources/__pycache__/
 resources/docs-src/bor.txt
+comments-worker/.wrangler/
+comments-worker/.dev.vars
+comments-backup.sql
