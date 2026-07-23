@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS comments (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   page        TEXT NOT NULL,
   parent_id   INTEGER,
+  title       TEXT,
   author_hash TEXT,
   body        TEXT NOT NULL,
   status      TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live','pending','deleted')),

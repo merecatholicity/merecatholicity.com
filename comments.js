@@ -105,8 +105,25 @@
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
-  var section = document.querySelector('section[data-comments]');
+  var section = document.querySelector('section[data-comments], section[data-board]');
   if (!section) return;
+  var BOARD = section.hasAttribute('data-board');
+
+  /* Keys must match BOARD_CATS in the worker. */
+  var CATS = [
+    ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific.'],
+    ['news', 'News', 'News of the Church and of the world.'],
+    ['theology', 'Theology', 'Historical, biblical, systematic, covenant, all of it.'],
+    ['philosophy', 'Philosophy', 'Does this board really exist.'],
+    ['history', 'History', 'What happened, when, and to whom.'],
+    ['rc', 'Roman Catholicism', 'In-house talk for Roman Catholics.'],
+    ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
+    ['prot', 'Protestantism', 'In-house talk for Protestants.'],
+  ];
+  function catByKey(key) {
+    for (var i = 0; i < CATS.length; i++) if (CATS[i][0] === key) return CATS[i];
+    return null;
+  }
 
   var state = {
     key: getKey(),
@@ -293,15 +310,22 @@
     ta.focus();
   }
 
-  function load() {
-    var list = section.querySelector('.comments-list');
-    /* The comment list is browser-cached for 60s. To someone who just
-       posted, that cache makes their own comment vanish on reload, so
-       recent posters bypass it until the cache would be fresh again. */
+  /* Reads are browser-cached for 60s. To someone who just wrote, that
+     cache makes their own change vanish on reload, so recent writers
+     bypass it until the cache would be fresh again. */
+  function freshOpts() {
     var posted = 0;
     try { posted = Number(localStorage.getItem('mc-posted-at')) || 0; } catch (e) {}
-    var opts = (Date.now() - posted < 90000) ? { cache: 'no-store' } : undefined;
-    fetchRetry(API + '?page=' + encodeURIComponent(pagePath()), opts, [1000, 3000],
+    return (Date.now() - posted < 90000) ? { cache: 'no-store' } : undefined;
+  }
+
+  function stampFresh() {
+    try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
+  }
+
+  function load() {
+    var list = section.querySelector('.comments-list');
+    fetchRetry(API + '?page=' + encodeURIComponent(pagePath()), freshOpts(), [1000, 3000],
       function () { setStatus('Network hiccup, retrying...'); })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -329,12 +353,12 @@
   /* Admin only. Fetches the logged IP, OS, and agent for each comment and
      writes them under the comments. The server refuses non-admin keys, so
      for everyone else this function returns without a trace. */
-  function annotateMeta() {
+  function annotateMeta(pageKey) {
     if (!state.key || ADMIN_HASHES.indexOf(state.myHash) === -1) return;
     fetch(API + '/meta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page: pagePath(), key: state.key }),
+      body: JSON.stringify({ page: pageKey || pagePath(), key: state.key }),
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) return;
       d.meta.forEach(function (m) {
@@ -563,6 +587,253 @@
     }
   }
 
+  /* ---- The Catholicity Board ---- */
+
+  function crumb(parts) {
+    var p = el('p', 'board-crumb');
+    parts.forEach(function (part, i) {
+      if (i) p.appendChild(document.createTextNode(' › '));
+      if (part[1]) {
+        var a = el('a', null, part[0]);
+        a.href = part[1];
+        p.appendChild(a);
+      } else {
+        p.appendChild(el('span', null, part[0]));
+      }
+    });
+    section.appendChild(p);
+    return p;
+  }
+
+  function buildBoardForm(withTitle, heading) {
+    var form = el('div', 'comment-form');
+    form.appendChild(el('h3', 'board-form-head', heading));
+    form.appendChild(el('div', 'comment-identity'));
+    var keyBox = el('div', 'key-box');
+    keyBox.hidden = true;
+    form.appendChild(keyBox);
+    if (withTitle) {
+      var title = el('input', 'board-title');
+      title.type = 'text';
+      title.maxLength = 120;
+      title.placeholder = 'Topic title';
+      form.appendChild(title);
+    }
+    var textarea = el('textarea', 'comment-text');
+    textarea.maxLength = 4000;
+    textarea.rows = 5;
+    textarea.placeholder = 'Say what you want to say.';
+    form.appendChild(textarea);
+    var hp = el('input', 'hp');
+    hp.type = 'text';
+    hp.name = 'website';
+    hp.tabIndex = -1;
+    hp.autocomplete = 'off';
+    hp.setAttribute('aria-hidden', 'true');
+    form.appendChild(hp);
+    form.appendChild(el('div', 'ts-slot'));
+    form.appendChild(el('div', 'comment-buttons'));
+    form.appendChild(el('p', 'form-status'));
+    section.appendChild(form);
+    return form;
+  }
+
+  function boardButtons(labelBase, submit) {
+    state.boardBtn = [labelBase, submit];
+    var row = section.querySelector('.comment-buttons');
+    if (!row) return;
+    row.textContent = '';
+    var keyed = state.key && state.myHash;
+    var label = keyed ? labelBase + ' as ' + displayName(state.myHash).split(' ')[0] : labelBase;
+    var button = el('button', 'btn btn-send', label);
+    button.type = 'button';
+    if (keyed || state.anonAllowed) {
+      button.addEventListener('click', submit);
+    } else {
+      button.disabled = true;
+      button.title = 'Create an identity first. One click, above the box.';
+    }
+    row.appendChild(button);
+  }
+
+  function boardPost(payload, onSuccess) {
+    var status = section.querySelector('.form-status');
+    var buttons = section.querySelectorAll('.comment-buttons button');
+    buttons.forEach(function (b) { b.disabled = true; });
+    status.textContent = 'Verifying...';
+    getToken().then(function (token) {
+      status.textContent = 'Posting...';
+      payload.token = token;
+      payload.key = state.key || '';
+      payload.website = section.querySelector('.hp').value;
+      payload.tz = browserTz();
+      return fetchRetry(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
+        .then(function (r) { return r.json(); });
+    }).then(function (d) {
+      if (!d.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
+      stampFresh();
+      status.textContent = '';
+      onSuccess(d);
+    }).catch(function (err) {
+      status.textContent = err.message || 'Could not reach the server. Please try again.';
+    }).finally(function () {
+      buttons.forEach(function (b) { b.disabled = false; });
+      if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+    });
+  }
+
+  function armBoardForm() {
+    renderIdentity();
+    new MutationObserver(function () {
+      if (state.boardBtn) boardButtons(state.boardBtn[0], state.boardBtn[1]);
+    }).observe(section.querySelector('.comment-identity'), { childList: true });
+    loadTurnstile();
+  }
+
+  function viewIndex() {
+    document.title = 'Catholicity Board | Mere Catholicity';
+    var wrap = el('div', 'board-cats');
+    var stats = {};
+    CATS.forEach(function (cat) {
+      var row = el('div', 'board-cat');
+      var left = el('div', 'board-cat-left');
+      var name = el('a', 'board-cat-name', cat[1]);
+      name.href = 'community.html?cat=' + cat[0];
+      left.appendChild(name);
+      left.appendChild(el('div', 'board-cat-desc', cat[2]));
+      row.appendChild(left);
+      stats[cat[0]] = el('div', 'board-stats', '—');
+      row.appendChild(stats[cat[0]]);
+      wrap.appendChild(row);
+    });
+    section.appendChild(wrap);
+    fetchRetry(API + '/board', freshOpts(), [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) return;
+        CATS.forEach(function (cat) {
+          var c = d.cats[cat[0]];
+          stats[cat[0]].textContent = c
+            ? c.topics + (c.topics === 1 ? ' topic · ' : ' topics · ') + c.posts + (c.posts === 1 ? ' post' : ' posts')
+            : 'quiet so far';
+        });
+      })
+      .catch(function () {});
+  }
+
+  function viewCat(key) {
+    var cat = catByKey(key);
+    if (!cat) return viewIndex();
+    document.title = cat[1] + ' | Catholicity Board';
+    var head = crumb([['Catholicity Board', 'community.html'], [cat[1]]]);
+    var rss = el('a', 'comments-rss', 'RSS');
+    rss.href = API + '/feed?cat=' + key;
+    rss.title = 'Follow this category with a feed reader';
+    head.appendChild(document.createTextNode(' '));
+    head.appendChild(rss);
+    section.appendChild(el('p', 'board-cat-desc', cat[2]));
+    var list = el('div', 'board-topics');
+    list.textContent = 'Loading topics...';
+    section.appendChild(list);
+    buildBoardForm(true, 'Start a topic');
+    boardButtons('Post topic', function () {
+      var title = section.querySelector('.board-title').value.replace(/\s+/g, ' ').trim();
+      var body = section.querySelector('.comment-text').value.replace(/\s+$/, '');
+      var status = section.querySelector('.form-status');
+      if (title.length < 3) { section.querySelector('.board-title').focus(); return; }
+      if (!body.trim()) { section.querySelector('.comment-text').focus(); return; }
+      boardPost({ cat: key, title: title, body: body }, function (d) {
+        if (d.status === 'pending') {
+          status.textContent = 'Held for review. It will appear once approved.';
+          section.querySelector('.board-title').value = '';
+          section.querySelector('.comment-text').value = '';
+        } else {
+          location.href = 'community.html?topic=' + d.comment.id;
+        }
+      });
+    });
+    armBoardForm();
+    fetchRetry(API + '/board/cat?cat=' + key, freshOpts(), [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        list.textContent = '';
+        if (!d.topics.length) {
+          list.appendChild(el('p', 'comments-status', 'No topics yet. Yours can be the first.'));
+          return;
+        }
+        d.topics.forEach(function (t) {
+          var row = el('div', 'board-topic');
+          var title = el('a', 'board-topic-title', t.title);
+          title.href = 'community.html?topic=' + t.id;
+          row.appendChild(title);
+          row.appendChild(el('div', 'board-stats',
+            (t.author_hash ? displayName(t.author_hash) : 'Anonymous') + ' · ' +
+            t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDate(t.last)));
+          list.appendChild(row);
+        });
+      })
+      .catch(function () {
+        list.textContent = '';
+        list.appendChild(el('p', 'comments-status', 'Topics could not be loaded. Check your connection and reload the page.'));
+      });
+  }
+
+  function viewTopic(id) {
+    fetchRetry(API + '/board/topic?id=' + id, freshOpts(), [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        var cat = catByKey(d.cat);
+        state.anonAllowed = !!d.anon;
+        document.title = d.topic.title + ' | Catholicity Board';
+        crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
+        section.appendChild(el('h2', 'board-topic-head', d.topic.title));
+        var list = el('div', 'comments-list');
+        section.appendChild(list);
+        list.appendChild(commentNode(d.topic, false));
+        d.replies.forEach(function (c) { list.appendChild(commentNode(c, false)); });
+        section.appendChild(el('p', 'comments-status', ''));
+        buildBoardForm(false, 'Reply');
+        boardButtons('Reply', function () {
+          var body = section.querySelector('.comment-text').value.replace(/\s+$/, '');
+          var status = section.querySelector('.form-status');
+          if (!body.trim()) { section.querySelector('.comment-text').focus(); return; }
+          boardPost({ topic: id, body: body }, function (d2) {
+            list.appendChild(commentNode(d2.comment, d2.status === 'pending'));
+            section.querySelector('.comment-text').value = '';
+            status.textContent = d2.status === 'pending'
+              ? 'Held for review. It will appear once approved.' : 'Posted.';
+          });
+        });
+        armBoardForm();
+        if (/^#comment-\d+$/.test(location.hash)) {
+          var target = document.getElementById(location.hash.slice(1));
+          if (target) target.scrollIntoView();
+        }
+        annotateMeta('board:' + d.cat);
+      })
+      .catch(function (err) {
+        crumb([['Catholicity Board', 'community.html'], ['Topic']]);
+        section.appendChild(el('p', 'comments-status',
+          err.message === 'No such topic.' ? 'No such topic. It may have been removed.'
+            : 'The topic could not be loaded. Check your connection and reload the page.'));
+      });
+  }
+
+  function startBoard() {
+    section.setAttribute('data-nosnippet', '');
+    var params = new URLSearchParams(location.search);
+    var topic = Number(params.get('topic'));
+    if (Number.isInteger(topic) && topic > 0) return viewTopic(topic);
+    if (params.get('cat')) return viewCat(params.get('cat'));
+    viewIndex();
+  }
+
   /* ---- Assembly ---- */
 
   function start() {
@@ -629,7 +900,9 @@
     loadTurnstile();
   }
 
-  if (/^#comment-\d+$/.test(location.hash)) {
+  if (BOARD) {
+    startBoard();
+  } else if (/^#comment-\d+$/.test(location.hash)) {
     start();
   } else if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function (entries) {

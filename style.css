@@ -643,3 +643,36 @@ a.comment-date:hover { text-decoration: underline; }
 a.comment-edit { color: #666; margin-left: 0.9em; font-size: 0.85em; }
 .comment-edited { color: #999; margin-left: 0.6em; font-size: 0.8em; font-style: italic; }
 .comment-editor { margin-top: 0.4em; }
+
+/* The Catholicity Board */
+.board-intro { color: #444; }
+.board-crumb { color: #666; font-size: 0.95rem; }
+.board-crumb a { color: var(--maroon); }
+.board-cats, .board-topics { border: 1px solid var(--rule); border-radius: 6px; margin: 1rem 0; }
+.board-cat, .board-topic { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.65em 0.9em; border-top: 1px solid var(--rule); }
+.board-cat:first-child, .board-topic:first-child { border-top: 0; }
+a.board-cat-name { font-weight: bold; color: var(--maroon); text-decoration: none; }
+a.board-cat-name:hover { text-decoration: underline; }
+.board-cat-desc { color: #555; font-size: 0.92rem; }
+.board-stats { color: #777; font-size: 0.85rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
+a.board-topic-title { color: var(--ink); text-decoration: none; font-weight: bold; overflow-wrap: anywhere; }
+a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
+.board-topics .comments-status { padding: 0.65em 0.9em; margin: 0; }
+.board-form-head { margin-bottom: 0.3em; }
+.board-topic-head { overflow-wrap: anywhere; }
+.board-title {
+  width: 100%;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  margin-bottom: 0.6em;
+}
+.board-title:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+section.board { max-width: 40rem; }
+@media (max-width: 600px) {
+  .board-cat, .board-topic { flex-direction: column; gap: 0.15rem; }
+  .board-stats { text-align: left; white-space: normal; }
+}

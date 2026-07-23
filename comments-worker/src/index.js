@@ -16,9 +16,21 @@ const PAGES = [
   '/about.html',
 ];
 
+/* The Catholicity Board. A category is a virtual page key, a topic is a
+   titled comment with no parent, a reply is a comment whose parent is the
+   topic. Everything else, identity, screening, limits, moderation, is the
+   one pipeline all comments share. Keys must match CATS in comments.js. */
+const BOARD_CATS = ['pub', 'news', 'theology', 'philosophy', 'history', 'rc', 'eo', 'prot'];
+
+function boardKey(raw) {
+  const m = /^board:([a-z]+)$/.exec(String(raw || ''));
+  return m && BOARD_CATS.includes(m[1]) ? raw : null;
+}
+
 const FROM = { email: 'comments@merecatholicity.com', name: 'merecatholicity.com comments' };
 const SITE = 'https://merecatholicity.com';
 const MAX_BODY = 4000;
+const MAX_TITLE = 120;
 const CONTROL_RE = /[\u0000-\u0008\u000B-\u001F\u007F]/;
 
 /* Must stay identical to the lists in comments.js, or the name in the
@@ -127,6 +139,15 @@ async function screen(env, body) {
   }
 }
 
+/* Where a human clicks to see the comment: the page anchor for site
+   comments, the topic view for board posts. */
+function viewLink(page, id, parentId) {
+  if (page.indexOf('board:') === 0) {
+    return SITE + '/community.html?topic=' + (parentId || id) + '#comment-' + id;
+  }
+  return SITE + page + '#comment-' + id;
+}
+
 async function modLink(env, id, act) {
   const sig = await hmacHex(env.ADMIN_SECRET, id + '|' + act);
   return SITE + '/api/comments/mod?id=' + id + '&act=' + act + '&sig=' + sig;
@@ -135,13 +156,14 @@ async function modLink(env, id, act) {
 async function notify(env, comment) {
   const name = comment.author_hash ? displayName(comment.author_hash) : 'Anonymous';
   const lines = [
-    'Page: ' + SITE + comment.page,
+    'Page: ' + (comment.page.indexOf('board:') === 0 ? comment.page : SITE + comment.page),
+    ...(comment.title ? ['Topic: ' + comment.title] : []),
     'From: ' + name,
     'Status: ' + comment.status,
     '',
     comment.body,
     '',
-    'View:    ' + SITE + comment.page + '#comment-' + comment.id +
+    'View:    ' + viewLink(comment.page, comment.id, comment.parent_id) +
       (comment.status === 'pending' ? ' (after approval)' : ''),
     'IP:      ' + (comment.ip
       ? (comment.ip.includes(':') ? 'IPv6 ' : 'IPv4 ') + comment.ip
@@ -193,8 +215,31 @@ async function handlePost(request, env, ctx) {
   /* Honeypot field. Bots fill it, people never see it. Pretend success. */
   if (data.website) return json({ ok: true, status: 'live' }, 200);
 
-  const page = normalizePage(data.page);
-  if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
+  /* Three targets share this pipeline: a site page, a new board topic
+     under a category, or a reply to an existing topic. */
+  let page = null;
+  let parentId = null;
+  let title = null;
+  if (data.topic != null) {
+    const topicId = Number(data.topic);
+    if (!Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+    const topic = await env.DB.prepare(
+      "SELECT id, page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+    ).bind(topicId).first();
+    if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+    page = topic.page;
+    parentId = topic.id;
+  } else if (data.cat != null) {
+    page = boardKey('board:' + String(data.cat));
+    if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
+    title = String(data.title || '').replace(/\s+/g, ' ').trim();
+    if (title.length < 3) return json({ ok: false, error: 'The topic needs a title.' }, 400);
+    if (title.length > MAX_TITLE) return json({ ok: false, error: 'The title is too long.' }, 400);
+    if (CONTROL_RE.test(title)) return json({ ok: false, error: 'Bad request.' }, 400);
+  } else {
+    page = normalizePage(data.page);
+    if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
+  }
 
   if (!String(data.key || '') && env.ALLOW_ANON !== 'true') {
     return json({ ok: false, error: 'Comments here need an identity. Create one with the link above the box.' }, 400);
@@ -227,18 +272,19 @@ async function handlePost(request, env, ctx) {
     .bind(authorHash || '-', ipHash || '-').all();
   if (banned.results.length) return json({ ok: false, error: 'Posting is not available.' }, 403);
 
-  const { status, verdict } = await screen(env, body);
+  /* A topic's title is screened with its body, one judgment for the pair. */
+  const { status, verdict } = await screen(env, title ? title + '\n\n' + body : body);
   const createdAt = Math.floor(Date.now() / 1000);
   const inserted = await env.DB.prepare(
-    'INSERT INTO comments (page, author_hash, body, status, created_at, ip_hash, ai_verdict, ip, ua, os, tz, lang) ' +
-    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id'
-  ).bind(page, authorHash, body, status, createdAt, ipHash, verdict, ip || null, ua || null, os || null,
+    'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ip_hash, ai_verdict, ip, ua, os, tz, lang) ' +
+    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) RETURNING id'
+  ).bind(page, parentId, title, authorHash, body, status, createdAt, ipHash, verdict, ip || null, ua || null, os || null,
     tz || null, lang || null).first();
 
-  const comment = { id: inserted.id, page, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os, tz, lang };
+  const comment = { id: inserted.id, page, parent_id: parentId, title, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os, tz, lang };
   ctx.waitUntil(notify(env, comment));
 
-  return json({ ok: true, status, comment: { id: comment.id, author_hash: authorHash, body, created_at: createdAt } }, 200);
+  return json({ ok: true, status, comment: { id: comment.id, title, author_hash: authorHash, body, created_at: createdAt } }, 200);
 }
 
 async function handleSelfDelete(request, env) {
@@ -278,25 +324,31 @@ async function handleFeed(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return new Response('Too many requests.', { status: 429 });
-  const page = normalizePage(url.searchParams.get('page'));
+  const cat = url.searchParams.get('cat');
+  const page = cat ? boardKey('board:' + cat) : normalizePage(url.searchParams.get('page'));
   if (!page) return new Response('Unknown page.', { status: 400 });
   const rows = await env.DB.prepare(
-    "SELECT id, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id DESC LIMIT 50"
+    "SELECT id, parent_id, title, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id DESC LIMIT 50"
   ).bind(page).all();
   const items = rows.results.map(function (c) {
     const name = c.author_hash ? displayName(c.author_hash) : 'Anonymous';
-    const link = SITE + page + '#comment-' + c.id;
-    return '<item><title>' + xmlEscape(name + ' on ' + page) + '</title>' +
+    const link = viewLink(page, c.id, c.parent_id);
+    return '<item><title>' + xmlEscape(c.title ? c.title : name + ' on ' + page) + '</title>' +
       '<link>' + xmlEscape(link) + '</link>' +
       '<guid isPermaLink="true">' + xmlEscape(link) + '</guid>' +
       '<pubDate>' + new Date(c.created_at * 1000).toUTCString() + '</pubDate>' +
       '<description>' + xmlEscape(c.body) + '</description></item>';
   }).join('');
+  const isBoard = page.indexOf('board:') === 0;
+  const feedTitle = isBoard
+    ? 'Catholicity Board - ' + page.slice(6) + ' - merecatholicity.com'
+    : 'Comments on ' + page + ' - merecatholicity.com';
+  const feedLink = isBoard ? SITE + '/community.html?cat=' + page.slice(6) : SITE + page;
   const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<rss version="2.0"><channel>' +
-    '<title>' + xmlEscape('Comments on ' + page + ' - merecatholicity.com') + '</title>' +
-    '<link>' + xmlEscape(SITE + page) + '</link>' +
-    '<description>' + xmlEscape('Reader comments on ' + page) + '</description>' +
+    '<title>' + xmlEscape(feedTitle) + '</title>' +
+    '<link>' + xmlEscape(feedLink) + '</link>' +
+    '<description>' + xmlEscape(isBoard ? 'Topics and replies' : 'Reader comments on ' + page) + '</description>' +
     items + '</channel></rss>';
   return new Response(xml, {
     status: 200,
@@ -327,7 +379,7 @@ async function handleEdit(request, env, ctx) {
   if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
   const authorHash = await sha256hex(key);
   const row = await env.DB.prepare(
-    "SELECT page, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
+    "SELECT page, parent_id, title, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
   ).bind(id, authorHash).first();
   if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
   const { status, verdict } = await screen(env, body);
@@ -335,7 +387,8 @@ async function handleEdit(request, env, ctx) {
   await env.DB.prepare(
     'UPDATE comments SET body = ?1, status = ?2, ai_verdict = ?3, edited_at = ?4 WHERE id = ?5'
   ).bind(body, status, verdict, editedAt, id).run();
-  const comment = { id, page: row.page, author_hash: authorHash, body, status,
+  const comment = { id, page: row.page, parent_id: row.parent_id, title: row.title,
+    author_hash: authorHash, body, status,
     created_at: row.created_at, ai_verdict: verdict, edited: true,
     ip: row.ip, ua: row.ua, os: row.os, tz: row.tz, lang: row.lang };
   ctx.waitUntil(notify(env, comment));
@@ -354,7 +407,7 @@ async function handleMeta(request, env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const page = normalizePage(data.page);
+  const page = normalizePage(data.page) || boardKey(data.page);
   const key = String(data.key || '');
   if (!page || !key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
@@ -362,6 +415,62 @@ async function handleMeta(request, env) {
     'SELECT id, status, ai_verdict, ip, ua, os, tz, lang FROM comments WHERE page = ?1 ORDER BY id LIMIT 500'
   ).bind(page).all();
   return json({ ok: true, meta: rows.results }, 200);
+}
+
+/* The board index: per-category topic and post counts with last activity. */
+async function handleBoardIndex(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const rows = await env.DB.prepare(
+    "SELECT page, COUNT(CASE WHEN parent_id IS NULL THEN 1 END) AS topics, COUNT(*) AS posts, MAX(created_at) AS last " +
+    "FROM comments WHERE page LIKE 'board:%' AND status = 'live' GROUP BY page"
+  ).all();
+  const cats = {};
+  rows.results.forEach(function (r) { cats[r.page.slice(6)] = { topics: r.topics, posts: r.posts, last: r.last }; });
+  return json({ ok: true, cats }, 200, { 'Cache-Control': 'public, max-age=60' });
+}
+
+/* One category: its topics, newest activity first. */
+async function handleBoardCat(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const page = boardKey('board:' + url.searchParams.get('cat'));
+  if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
+  const rows = await env.DB.prepare(
+    "SELECT t.id, t.title, t.author_hash, t.created_at, " +
+    "COUNT(r.id) AS replies, MAX(COALESCE(r.created_at, t.created_at)) AS last " +
+    "FROM comments t LEFT JOIN comments r ON r.parent_id = t.id AND r.status = 'live' " +
+    "WHERE t.page = ?1 AND t.parent_id IS NULL AND t.status = 'live' " +
+    "GROUP BY t.id ORDER BY last DESC LIMIT 100"
+  ).bind(page).all();
+  return json({ ok: true, topics: rows.results }, 200, { 'Cache-Control': 'public, max-age=60' });
+}
+
+/* One topic with its live replies in order. */
+async function handleTopicView(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const id = Number(url.searchParams.get('id'));
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const topic = await env.DB.prepare(
+    "SELECT id, page, title, author_hash, body, created_at, edited_at FROM comments " +
+    "WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+  ).bind(id).first();
+  if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  const replies = await env.DB.prepare(
+    "SELECT id, author_hash, body, created_at, edited_at FROM comments " +
+    "WHERE parent_id = ?1 AND status = 'live' ORDER BY id LIMIT 500"
+  ).bind(id).all();
+  return json({
+    ok: true,
+    anon: env.ALLOW_ANON === 'true',
+    cat: topic.page.slice(6),
+    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at },
+    replies: replies.results,
+  }, 200, { 'Cache-Control': 'public, max-age=60' });
 }
 
 function modPage(text, status) {
@@ -421,6 +530,9 @@ export default {
       if (path === '/api/comments/edit' && request.method === 'POST') return await handleEdit(request, env, ctx);
       if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
+      if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env);
+      if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
+      if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
       if (path === '/api/comments/mod' && request.method === 'GET') return await handleMod(request, env, url);
       return json({ ok: false, error: 'Not found.' }, 404);
     } catch (err) {
