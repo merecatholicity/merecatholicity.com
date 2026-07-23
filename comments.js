@@ -122,7 +122,7 @@
   var CATS = [
     ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific.'],
     ['news', 'News', 'News of the Church and of the world.'],
-    ['theology', 'Theology', 'All genres, including what may not quite fit elsewhere, apologetics and hermeneutics among them.'],
+    ['theology', 'Theology', 'All genres. Anything without a room of its own.'],
     ['philosophy', 'Philosophy', 'Does this board really exist.'],
     ['history', 'History', 'World, church, and national history. All of it.'],
     ['rc', 'Roman Catholicism', 'In-house talk for Roman Catholics.'],
