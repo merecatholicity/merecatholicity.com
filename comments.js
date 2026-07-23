@@ -15,6 +15,11 @@
   var API = '/api/comments';
   var SITEKEY = '0x4AAAAAAD8IYH9_xQ0HE0yB';
   var STORAGE = 'mc-comment-key';
+  /* Fingerprints of the site owners' identities. Holding a key that hashes
+     to one of these shows delete links on every comment, and the server
+     honors those deletes. Publishing the hash reveals nothing usable, the
+     power is in the key, which never leaves the owner's browser. */
+  var ADMIN_HASHES = ['d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6'];
 
   /* Must stay identical to the lists in comments-worker/src/index.js. */
   var ADJ = ['Patient','Quiet','Steadfast','Humble','Gentle','Sober','Watchful','Earnest',
@@ -87,6 +92,7 @@
     started: false,
     widgetId: null,
     tokenWait: null,
+    anonAllowed: false,
   };
 
   /* ---- Turnstile. Loaded lazily, challenge run only at post time so the
@@ -140,7 +146,7 @@
     head.appendChild(el('span', 'comment-author',
       c.author_hash ? displayName(c.author_hash) : 'Anonymous'));
     head.appendChild(el('span', 'comment-date', fmtDate(c.created_at)));
-    if (c.author_hash && c.author_hash === state.myHash) {
+    if (state.myHash && (c.author_hash === state.myHash || ADMIN_HASHES.indexOf(state.myHash) !== -1)) {
       var del = el('a', 'comment-delete', 'delete');
       del.href = '#';
       del.addEventListener('click', function (e) {
@@ -175,6 +181,8 @@
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
+        state.anonAllowed = !!d.anon;
+        renderIdentity();
         list.textContent = '';
         d.comments.forEach(function (c) { list.appendChild(commentNode(c, false)); });
         section.querySelector('.comments-title').textContent =
@@ -197,9 +205,9 @@
       line.appendChild(el('strong', null, displayName(state.myHash)))
       line.appendChild(document.createTextNode('. '));
       line.appendChild(identityAction('Show my key', showKeyBox));
-      line.appendChild(document.createTextNode(' '));
-      line.appendChild(identityAction('Forget this browser', function () {
-        if (!confirm('Forget this identity here? Unless you saved your key, there is no way back to this name.')) return;
+      line.appendChild(document.createTextNode(' · '));
+      line.appendChild(identityAction('Logout', function () {
+        if (!confirm('Log out and forget this identity here? Unless you saved your key, there is no way back to this name.')) return;
         clearKey();
         state.key = '';
         state.myHash = '';
@@ -208,7 +216,9 @@
         load();
       }));
     } else {
-      line.appendChild(document.createTextNode('Commenting anonymously. '));
+      line.appendChild(document.createTextNode(state.anonAllowed
+        ? 'Commenting anonymously. '
+        : 'To comment, create an identity. One click, no signup. '));
       line.appendChild(identityAction('Create an identity', function () {
         var key = makeKey();
         setKey(key);
@@ -219,7 +229,7 @@
           showKeyBox();
         });
       }));
-      line.appendChild(document.createTextNode(' '));
+      line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('I have a key', showPasteBox));
     }
     box.appendChild(line);
@@ -235,9 +245,12 @@
   function showKeyBox() {
     var box = section.querySelector('.key-box');
     box.textContent = '';
-    box.appendChild(el('p', 'key-note',
-      'This key is your identity. Save it somewhere private to sign in on ' +
+    var note = el('p', 'key-note');
+    note.appendChild(el('strong', null, 'Your key. '));
+    note.appendChild(document.createTextNode(
+      'This is your identity. Save it somewhere private to log in on ' +
       'another device or after this browser forgets it. Anyone who has it can post under your name.'));
+    box.appendChild(note);
     var row = el('div', 'key-row');
     var input = el('input', 'key-input');
     input.type = 'text';
@@ -341,14 +354,21 @@
       keyed.type = 'button';
       keyed.addEventListener('click', function () { post(true); });
       row.appendChild(keyed);
-      var anon = el('button', 'btn btn-anon', 'Post anonymously');
-      anon.type = 'button';
-      anon.addEventListener('click', function () { post(false); });
-      row.appendChild(anon);
+      if (state.anonAllowed) {
+        var anon = el('button', 'btn btn-anon', 'Post anonymously');
+        anon.type = 'button';
+        anon.addEventListener('click', function () { post(false); });
+        row.appendChild(anon);
+      }
     } else {
       var button = el('button', 'btn btn-send', 'Post comment');
       button.type = 'button';
-      button.addEventListener('click', function () { post(false); });
+      if (state.anonAllowed) {
+        button.addEventListener('click', function () { post(false); });
+      } else {
+        button.disabled = true;
+        button.title = 'Create an identity first. One click, above the box.';
+      }
       row.appendChild(button);
     }
   }
@@ -371,7 +391,7 @@
     var textarea = el('textarea', 'comment-text');
     textarea.maxLength = 4000;
     textarea.rows = 5;
-    textarea.placeholder = 'Say what you hold, and why.';
+    textarea.placeholder = 'Say what you want to say.';
     form.appendChild(textarea);
     var hp = el('input', 'hp');
     hp.type = 'text';
