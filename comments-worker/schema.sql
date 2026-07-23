@@ -26,3 +26,8 @@ CREATE TABLE IF NOT EXISTS bans (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS comments_parent_idx ON comments(parent_id, status, id);
+
+CREATE TABLE IF NOT EXISTS trusted (
+  hash       TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL
+);
