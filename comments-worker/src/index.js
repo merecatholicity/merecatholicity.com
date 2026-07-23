@@ -20,7 +20,7 @@ const PAGES = [
    titled comment with no parent, a reply is a comment whose parent is the
    topic. Everything else, identity, screening, limits, moderation, is the
    one pipeline all comments share. Keys must match CATS in comments.js. */
-const BOARD_CATS = ['pub', 'news', 'theology', 'philosophy', 'history', 'rc', 'eo', 'prot'];
+const BOARD_CATS = ['pub', 'news', 'theology', 'philosophy', 'history', 'rc', 'eo', 'prot', 'offtopic'];
 
 function boardKey(raw) {
   const m = /^board:([a-z]+)$/.exec(String(raw || ''));
@@ -426,8 +426,22 @@ async function handleBoardIndex(request, env) {
     "SELECT page, COUNT(CASE WHEN parent_id IS NULL THEN 1 END) AS topics, COUNT(*) AS posts, MAX(created_at) AS last " +
     "FROM comments WHERE page LIKE 'board:%' AND status = 'live' GROUP BY page"
   ).all();
+  /* The newest live post of each room, provided its thread is still live,
+     titled by its thread so the index can say where the life is. */
+  const latest = await env.DB.prepare(
+    "SELECT c.page, c.author_hash, c.created_at, COALESCE(c.title, p.title) AS title, " +
+    "COALESCE(c.parent_id, c.id) AS topic_id " +
+    "FROM comments c LEFT JOIN comments p ON p.id = c.parent_id " +
+    "WHERE c.page LIKE 'board:%' AND c.status = 'live' AND c.id = (" +
+    "  SELECT MAX(c2.id) FROM comments c2 WHERE c2.page = c.page AND c2.status = 'live' AND (" +
+    "    c2.parent_id IS NULL OR EXISTS (SELECT 1 FROM comments t WHERE t.id = c2.parent_id AND t.status = 'live')))"
+  ).all();
   const cats = {};
   rows.results.forEach(function (r) { cats[r.page.slice(6)] = { topics: r.topics, posts: r.posts, last: r.last }; });
+  latest.results.forEach(function (r) {
+    const c = cats[r.page.slice(6)];
+    if (c) c.latest = { topic_id: r.topic_id, title: r.title, author_hash: r.author_hash, created_at: r.created_at };
+  });
   return json({ ok: true, cats }, 200, { 'Cache-Control': 'public, max-age=60' });
 }
 
