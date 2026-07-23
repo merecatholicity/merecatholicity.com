@@ -921,7 +921,11 @@
   }
 
   function viewTopic(id) {
-    fetchRetry(API + '/board/topic?id=' + id + freshParam('&'), freshOpts(), [1000, 3000])
+    var qs = new URLSearchParams(location.search);
+    var pNum = Math.max(1, Math.floor(Number(qs.get('p')) || 0));
+    var hashMatch = /^#comment-(\d+)$/.exec(location.hash);
+    var extra = pNum ? '&p=' + pNum : (hashMatch ? '&find=' + hashMatch[1] : '');
+    fetchRetry(API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
@@ -938,8 +942,24 @@
         section.appendChild(headEl);
         var list = el('div', 'comments-list');
         section.appendChild(list);
-        list.appendChild(commentNode(d.topic, false));
+        if (d.page === 1) list.appendChild(commentNode(d.topic, false));
         d.replies.forEach(function (c) { list.appendChild(commentNode(c, false)); });
+        var totalPages = Math.ceil(d.total / d.per);
+        if (totalPages > 1) {
+          var bar = el('p', 'board-pages');
+          bar.appendChild(document.createTextNode('Pages: '));
+          for (var i = 1; i <= totalPages; i++) {
+            if (i === d.page) {
+              bar.appendChild(el('strong', null, String(i)));
+            } else {
+              var pl = el('a', null, String(i));
+              pl.href = 'community.html?topic=' + id + '&p=' + i;
+              bar.appendChild(pl);
+            }
+            if (i < totalPages) bar.appendChild(document.createTextNode(' '));
+          }
+          section.appendChild(bar);
+        }
         section.appendChild(el('p', 'comments-status', ''));
         if (d.topic.locked) {
           section.appendChild(el('p', 'comments-status', 'This topic is locked. No new replies.'));

@@ -542,20 +542,33 @@ async function handleTopicView(request, env, url) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT id, page, title, author_hash, body, created_at, edited_at, locked FROM comments " +
+    "SELECT id, page, title, author_hash, body, created_at, edited_at, locked, replies FROM comments " +
     "WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
   ).bind(id).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  /* Twenty replies a page. A permalink arrives with find=<reply id> and
+     one indexed count places it on the right page. */
+  let p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
+  const find = Number(url.searchParams.get('find'));
+  if (Number.isInteger(find) && find > 0 && !url.searchParams.get('p')) {
+    const pos = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM comments WHERE parent_id = ?1 AND status = 'live' AND id < ?2"
+    ).bind(id, find).first();
+    p = Math.floor(pos.n / TOPICS_PER_PAGE) + 1;
+  }
   const replies = await env.DB.prepare(
     "SELECT id, author_hash, body, created_at, edited_at FROM comments " +
-    "WHERE parent_id = ?1 AND status = 'live' ORDER BY id LIMIT 500"
-  ).bind(id).all();
+    "WHERE parent_id = ?1 AND status = 'live' ORDER BY id LIMIT ?2 OFFSET ?3"
+  ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
   return json({
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
     topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0 },
     replies: replies.results,
+    total: topic.replies || 0,
+    page: p,
+    per: TOPICS_PER_PAGE,
   }, 200, cacheHeader(url));
 }
 
