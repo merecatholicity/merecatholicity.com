@@ -206,6 +206,10 @@
       c.author_hash ? displayName(c.author_hash) : 'Anonymous');
     author.setAttribute('itemprop', 'author');
     head.appendChild(author);
+    /* The house speaks under its own colors. */
+    if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) {
+      head.appendChild(el('span', 'comment-admin', '(admin)'));
+    }
     /* The date doubles as the comment's shareable permalink. */
     var date = el('a', 'comment-date', fmtDate(c.created_at));
     date.href = '#comment-' + c.id;

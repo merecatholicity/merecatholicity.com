@@ -682,3 +682,4 @@ section.board { max-width: 40rem; }
 section.board .comment-identity { margin-bottom: 0.4rem; }
 .board-audit-link { margin: 0.2rem 0 0; font-size: 0.9rem; }
 .audit-where { overflow-wrap: anywhere; font-size: 0.95rem; }
+.comment-admin { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
