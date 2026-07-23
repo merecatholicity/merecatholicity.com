@@ -683,3 +683,5 @@ section.board .comment-identity { margin-bottom: 0.4rem; }
 .board-audit-link { margin: 0.2rem 0 0; font-size: 0.9rem; }
 .audit-where { overflow-wrap: anywhere; font-size: 0.95rem; }
 .comment-admin { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
+a.trust-toggle { color: #8a6d3b; font-size: 0.85em; text-decoration: none; display: inline-block; margin-top: 0.2em; }
+a.trust-toggle:hover { text-decoration: underline; }

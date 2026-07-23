@@ -392,6 +392,32 @@
           (m.os ? ' · ' + m.os : '') + (m.tz ? ' · ' + m.tz : '') +
           (m.lang ? ' · ' + m.lang : '')));
         if (m.ua) details.appendChild(el('div', null, m.ua));
+        /* Trusted authors skip the AI screen. The toggle names the action
+           it would take, and flipping it updates every fingerprint of the
+           same author on the page. The author never sees any of this. */
+        if (m.author_hash) {
+          var toggle = el('a', 'trust-toggle', m.trusted ? '(toggle-untrusted)' : '(toggle-trusted)');
+          toggle.href = '#';
+          toggle.setAttribute('data-hash', m.author_hash);
+          toggle.setAttribute('data-trusted', m.trusted ? '1' : '0');
+          toggle.addEventListener('click', function (e) {
+            e.preventDefault();
+            var now = toggle.getAttribute('data-trusted') === '1';
+            fetch(API + '/trust', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, hash: m.author_hash, trusted: !now }),
+            }).then(function (r) { return r.json(); }).then(function (d) {
+              if (!d.ok) return;
+              section.querySelectorAll('.trust-toggle[data-hash="' + m.author_hash + '"]')
+                .forEach(function (l) {
+                  l.setAttribute('data-trusted', d.trusted ? '1' : '0');
+                  l.textContent = d.trusted ? '(toggle-untrusted)' : '(toggle-trusted)';
+                });
+            }).catch(function () {});
+          });
+          details.appendChild(toggle);
+        }
         node.appendChild(details);
       });
     }).catch(function () {});

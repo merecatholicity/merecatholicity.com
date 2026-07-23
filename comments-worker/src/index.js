@@ -118,12 +118,21 @@ async function verifyTurnstile(env, token, ip) {
   }
 }
 
+async function isTrusted(env, hash) {
+  if (!hash) return false;
+  const row = await env.DB.prepare('SELECT 1 AS t FROM trusted WHERE hash = ?1').bind(hash).first();
+  return !!row;
+}
+
 /* Returns {status, verdict}. Anything unscreenable is held pending: the
-   failure mode must be a delay for the poster, never a silent publish. */
-async function screen(env, body) {
+   failure mode must be a delay for the poster, never a silent publish.
+   A trusted author skips the screen entirely, though hold-all, the
+   emergency brake, still holds everyone, and bans are checked upstream. */
+async function screen(env, body, trusted) {
   const mode = env.MODERATION_MODE || 'ai';
-  if (mode === 'off') return { status: 'live', verdict: 'off' };
   if (mode === 'hold-all') return { status: 'pending', verdict: 'hold-all' };
+  if (trusted) return { status: 'live', verdict: 'trusted' };
+  if (mode === 'off') return { status: 'live', verdict: 'off' };
   const links = (body.match(/https?:\/\//gi) || []).length;
   if (links >= 3) return { status: 'pending', verdict: 'links:' + links };
   try {
@@ -281,7 +290,8 @@ async function handlePost(request, env, ctx) {
   if (banned.results.length) return json({ ok: false, error: 'Posting is not available.' }, 403);
 
   /* A topic's title is screened with its body, one judgment for the pair. */
-  const { status, verdict } = await screen(env, title ? title + '\n\n' + body : body);
+  const { status, verdict } = await screen(env, title ? title + '\n\n' + body : body,
+    await isTrusted(env, authorHash));
   const createdAt = Math.floor(Date.now() / 1000);
   const inserted = await env.DB.prepare(
     'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ip_hash, ai_verdict, ip, ua, os, tz, lang) ' +
@@ -390,7 +400,7 @@ async function handleEdit(request, env, ctx) {
     "SELECT page, parent_id, title, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
   ).bind(id, authorHash).first();
   if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
-  const { status, verdict } = await screen(env, body);
+  const { status, verdict } = await screen(env, body, await isTrusted(env, authorHash));
   const editedAt = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
     'UPDATE comments SET body = ?1, status = ?2, ai_verdict = ?3, edited_at = ?4 WHERE id = ?5'
@@ -420,7 +430,10 @@ async function handleMeta(request, env) {
   if (!page || !key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
   const rows = await env.DB.prepare(
-    'SELECT id, status, ai_verdict, ip, ua, os, tz, lang FROM comments WHERE page = ?1 ORDER BY id LIMIT 500'
+    'SELECT c.id, c.status, c.ai_verdict, c.ip, c.ua, c.os, c.tz, c.lang, c.author_hash, ' +
+    'CASE WHEN t.hash IS NULL THEN 0 ELSE 1 END AS trusted ' +
+    'FROM comments c LEFT JOIN trusted t ON t.hash = c.author_hash ' +
+    'WHERE c.page = ?1 ORDER BY c.id LIMIT 500'
   ).bind(page).all();
   return json({ ok: true, meta: rows.results }, 200);
 }
@@ -497,6 +510,31 @@ async function handleTopicView(request, env, url) {
     topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at },
     replies: replies.results,
   }, 200, cacheHeader(url));
+}
+
+/* Admin-only trust toggle. A trusted author's posts skip the AI screen.
+   The flag lives by fingerprint and its holder never learns it exists. */
+async function handleTrust(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const hash = String(data.hash || '');
+  if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  if (data.trusted) {
+    await env.DB.prepare('INSERT OR IGNORE INTO trusted (hash, created_at) VALUES (?1, ?2)')
+      .bind(hash, Math.floor(Date.now() / 1000)).run();
+  } else {
+    await env.DB.prepare('DELETE FROM trusted WHERE hash = ?1').bind(hash).run();
+  }
+  return json({ ok: true, trusted: !!data.trusted }, 200);
 }
 
 /* Admin-only activity audit: the newest non-deleted post on every site
@@ -588,6 +626,7 @@ export default {
       if (path === '/api/comments/edit' && request.method === 'POST') return await handleEdit(request, env, ctx);
       if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
       if (path === '/api/comments/audit' && request.method === 'POST') return await handleAudit(request, env);
+      if (path === '/api/comments/trust' && request.method === 'POST') return await handleTrust(request, env);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
