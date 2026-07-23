@@ -38,6 +38,6 @@
     // Public fingerprints (SHA-256 of the commenter key, comma-separated) of
     // the site owners. A delete signed by a key hashing to one of these works
     // on any comment. The hash is safe to publish, the power is in the key.
-    "ADMIN_HASHES": "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6"
+    "ADMIN_HASHES": "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6,c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03"
   }
 }
