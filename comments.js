@@ -55,6 +55,10 @@
     return node;
   }
 
+  function browserTz() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; }
+  }
+
   function fmtDate(epoch) {
     return new Date(epoch * 1000).toLocaleDateString('en-US',
       { year: 'numeric', month: 'long', day: 'numeric' });
@@ -198,7 +202,7 @@
         renderIdentity();
         list.textContent = '';
         d.comments.forEach(function (c) { list.appendChild(commentNode(c, false)); });
-        section.querySelector('.comments-title').textContent =
+        section.querySelector('.comments-title-text').textContent =
           d.comments.length ? 'Comments (' + d.comments.length + ')' : 'Comments';
         setStatus(d.comments.length ? '' : 'No comments yet. Yours can be the first.');
         /* A shared permalink points at markup that only now exists, so the
@@ -228,8 +232,13 @@
       d.meta.forEach(function (m) {
         var node = document.getElementById('comment-' + m.id);
         if (!node || node.querySelector('.comment-meta')) return;
-        node.appendChild(el('div', 'comment-meta',
-          (m.ip || 'ip?') + (m.os ? ' · ' + m.os : '') + (m.ua ? ' · ' + m.ua : '')));
+        var details = el('details', 'comment-meta');
+        details.appendChild(el('summary', null, 'user-fingerprint'));
+        details.appendChild(el('div', null,
+          (m.ip || 'ip?') + (m.os ? ' · ' + m.os : '') + (m.tz ? ' · ' + m.tz : '') +
+          (m.lang ? ' · ' + m.lang : '')));
+        if (m.ua) details.appendChild(el('div', null, m.ua));
+        node.appendChild(details);
       });
     }).catch(function () {});
   }
@@ -367,6 +376,7 @@
           token: token,
           key: asKeyed ? state.key : '',
           website: section.querySelector('.hp').value,
+          tz: browserTz(),
         }),
       }).then(function (r) { return r.json(); });
     }).then(function (d) {
@@ -423,7 +433,21 @@
        snippets, and never let it read as the site's own words. */
     section.setAttribute('data-nosnippet', '');
 
-    section.appendChild(el('h2', 'comments-title', 'Comments'));
+    var feedUrl = API + '/feed?page=' + encodeURIComponent(pagePath());
+    var discover = document.createElement('link');
+    discover.rel = 'alternate';
+    discover.type = 'application/rss+xml';
+    discover.title = 'Comments feed';
+    discover.href = feedUrl;
+    document.head.appendChild(discover);
+
+    var title = el('h2', 'comments-title');
+    title.appendChild(el('span', 'comments-title-text', 'Comments'));
+    var rss = el('a', 'comments-rss', 'RSS');
+    rss.href = feedUrl;
+    rss.title = 'Follow these comments with a feed reader';
+    title.appendChild(rss);
+    section.appendChild(title);
     section.appendChild(el('div', 'comments-list'));
     section.appendChild(el('p', 'comments-status', 'Loading comments...'));
 

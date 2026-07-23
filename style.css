@@ -626,3 +626,16 @@ a.comment-date { text-decoration: none; }
 a.comment-date:hover { text-decoration: underline; }
 .comment:target { background: #f9f3e6; outline: 2px solid var(--rule); outline-offset: 4px; }
 .comment-meta { font-size: 0.78rem; color: #999; overflow-wrap: anywhere; margin-top: 0.3em; }
+.comment-meta summary { cursor: pointer; color: #b09a7a; }
+.comments-title .comments-rss {
+  font-size: 0.65em;
+  font-weight: normal;
+  margin-left: 0.9em;
+  vertical-align: middle;
+  text-decoration: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.1em 0.5em;
+  color: #8a6d3b;
+}
+.comments-title .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
