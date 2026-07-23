@@ -640,3 +640,6 @@ a.comment-date:hover { text-decoration: underline; }
 }
 .comments-title .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
 .agree-row { display: block; font-size: 0.95rem; color: #444; margin-bottom: 0.6em; cursor: pointer; }
+a.comment-edit { color: #666; margin-left: 0.9em; font-size: 0.85em; }
+.comment-edited { color: #999; margin-left: 0.6em; font-size: 0.8em; font-style: italic; }
+.comment-editor { margin-top: 0.4em; }

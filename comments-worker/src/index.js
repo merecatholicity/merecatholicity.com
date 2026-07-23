@@ -19,6 +19,7 @@ const PAGES = [
 const FROM = { email: 'comments@merecatholicity.com', name: 'merecatholicity.com comments' };
 const SITE = 'https://merecatholicity.com';
 const MAX_BODY = 4000;
+const CONTROL_RE = /[\u0000-\u0008\u000B-\u001F\u007F]/;
 
 /* Must stay identical to the lists in comments.js, or the name in the
    notification email will not match the name on the page. */
@@ -154,8 +155,10 @@ async function notify(env, comment) {
   }
   lines.push('Delete:  ' + (await modLink(env, comment.id, 'delete')));
   lines.push('Ban:     ' + (await modLink(env, comment.id, 'ban')));
-  const subject = 'merecatholicity.com: ' +
-    (comment.status === 'pending' ? 'comment held for review on ' : 'new comment on ') + comment.page;
+  const kind = comment.edited
+    ? (comment.status === 'pending' ? 'edit held for review on ' : 'comment edited on ')
+    : (comment.status === 'pending' ? 'comment held for review on ' : 'new comment on ');
+  const subject = 'merecatholicity.com: ' + kind + comment.page;
   const recipients = (env.NOTIFY_EMAILS || '').split(',').map((a) => a.trim()).filter(Boolean);
   for (const to of recipients) {
     try {
@@ -173,7 +176,7 @@ async function handleGet(request, env, url) {
   const page = normalizePage(url.searchParams.get('page'));
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   const rows = await env.DB.prepare(
-    "SELECT id, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id LIMIT 500"
+    "SELECT id, author_hash, body, created_at, edited_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id LIMIT 500"
   ).bind(page).all();
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: rows.results }, 200,
     { 'Cache-Control': 'public, max-age=60' });
@@ -201,7 +204,7 @@ async function handlePost(request, env, ctx) {
   if (!body) return json({ ok: false, error: 'The comment is empty.' }, 400);
   if (body.length > MAX_BODY) return json({ ok: false, error: 'The comment is too long.' }, 400);
   /* Control characters other than newline and tab are nothing a person types. */
-  if (/[\u0000-\u0008\u000B-\u001F\u007F]/.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
 
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -301,6 +304,44 @@ async function handleFeed(request, env, url) {
   });
 }
 
+/* Author-only editing. The key must hash to the comment's own author,
+   admins included only for their own comments. Every edit passes the same
+   screen as a new post, or a clean comment could be edited into filth
+   after approval, and a flagged edit drops the comment to pending. */
+async function handleEdit(request, env, ctx) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const id = Number(data.id);
+  const key = String(data.key || '');
+  if (!Number.isInteger(id) || id < 1 || !key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
+  if (!body) return json({ ok: false, error: 'The comment is empty.' }, 400);
+  if (body.length > MAX_BODY) return json({ ok: false, error: 'The comment is too long.' }, 400);
+  if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
+  const authorHash = await sha256hex(key);
+  const row = await env.DB.prepare(
+    "SELECT page, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
+  ).bind(id, authorHash).first();
+  if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+  const { status, verdict } = await screen(env, body);
+  const editedAt = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(
+    'UPDATE comments SET body = ?1, status = ?2, ai_verdict = ?3, edited_at = ?4 WHERE id = ?5'
+  ).bind(body, status, verdict, editedAt, id).run();
+  const comment = { id, page: row.page, author_hash: authorHash, body, status,
+    created_at: row.created_at, ai_verdict: verdict, edited: true,
+    ip: row.ip, ua: row.ua, os: row.os, tz: row.tz, lang: row.lang };
+  ctx.waitUntil(notify(env, comment));
+  return json({ ok: true, status, edited_at: editedAt }, 200);
+}
+
 /* Admin-only view of the logged metadata. The public GET never carries
    these fields; this endpoint demands a key hashing into ADMIN_HASHES. */
 async function handleMeta(request, env) {
@@ -377,6 +418,7 @@ export default {
       if (path === '/api/comments' && request.method === 'GET') return await handleGet(request, env, url);
       if (path === '/api/comments' && request.method === 'POST') return await handlePost(request, env, ctx);
       if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env);
+      if (path === '/api/comments/edit' && request.method === 'POST') return await handleEdit(request, env, ctx);
       if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
       if (path === '/api/comments/mod' && request.method === 'GET') return await handleMod(request, env, url);

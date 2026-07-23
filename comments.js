@@ -183,6 +183,16 @@
     var date = el('a', 'comment-date', fmtDate(c.created_at));
     date.href = '#comment-' + c.id;
     head.appendChild(date);
+    if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
+    if (c.author_hash && c.author_hash === state.myHash) {
+      var ed = el('a', 'comment-edit', 'edit');
+      ed.href = '#';
+      ed.addEventListener('click', function (e) {
+        e.preventDefault();
+        startEdit(c, article);
+      });
+      head.appendChild(ed);
+    }
     if (state.myHash && (c.author_hash === state.myHash || ADMIN_HASHES.indexOf(state.myHash) !== -1)) {
       var del = el('a', 'comment-delete', 'delete');
       del.href = '#';
@@ -219,6 +229,68 @@
 
   function setStatus(text) {
     section.querySelector('.comments-status').textContent = text;
+  }
+
+  /* Inline editing of one's own comment. Every save is re-screened by the
+     server, so a flagged edit sends the comment back to review. */
+  function startEdit(c, article) {
+    if (article.querySelector('.comment-editor')) return;
+    var bodyDiv = article.querySelector('.comment-body');
+    var editor = el('div', 'comment-editor');
+    var ta = el('textarea', 'comment-text');
+    ta.maxLength = 4000;
+    ta.rows = 4;
+    ta.value = c.body;
+    editor.appendChild(ta);
+    var row = el('div', 'comment-buttons');
+    var save = el('button', 'btn btn-send key-copy', 'Save');
+    save.type = 'button';
+    row.appendChild(save);
+    editor.appendChild(row);
+    var note = el('div', 'comment-note');
+    editor.appendChild(note);
+    editor.appendChild(identityAction('Cancel', function () {
+      editor.remove();
+      bodyDiv.hidden = false;
+    }));
+    save.addEventListener('click', function () {
+      var newBody = ta.value.replace(/\s+$/, '');
+      if (!newBody.trim()) { ta.focus(); return; }
+      save.disabled = true;
+      note.textContent = 'Saving...';
+      fetchRetry(API + '/edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, key: state.key, body: newBody }),
+      }, [1500], function () { note.textContent = 'Network hiccup, retrying...'; })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error(d.error || 'Could not save the edit.');
+          try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
+          c.body = newBody;
+          c.edited_at = d.edited_at;
+          editor.remove();
+          bodyDiv.textContent = newBody;
+          bodyDiv.hidden = false;
+          var head = article.querySelector('.comment-head');
+          if (!head.querySelector('.comment-edited')) {
+            head.insertBefore(el('span', 'comment-edited', 'edited'),
+              head.querySelector('.comment-edit'));
+          }
+          if (d.status === 'pending' && !article.querySelector('.comment-note')) {
+            article.className += ' comment-pending';
+            article.appendChild(el('p', 'comment-note',
+              'Edit held for review. It will reappear here once approved.'));
+          }
+        })
+        .catch(function (err) {
+          note.textContent = err.message || 'Network error. Try again in a moment.';
+          save.disabled = false;
+        });
+    });
+    bodyDiv.hidden = true;
+    article.insertBefore(editor, bodyDiv.nextSibling);
+    ta.focus();
   }
 
   function load() {
