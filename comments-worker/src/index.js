@@ -360,25 +360,49 @@ async function handleFeed(request, env, url) {
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return new Response('Too many requests.', { status: 429 });
   const cat = url.searchParams.get('cat');
-  const page = cat ? boardKey('board:' + cat) : normalizePage(url.searchParams.get('page'));
-  if (!page) return new Response('Unknown page.', { status: 400 });
-  const rows = await env.DB.prepare(
-    "SELECT id, parent_id, title, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id DESC LIMIT 50"
-  ).bind(page).all();
-  const items = rows.results.map(function (c) {
+  const topicParam = Number(url.searchParams.get('topic'));
+  let page, results, topicRow = null;
+  if (Number.isInteger(topicParam) && topicParam > 0) {
+    /* A single thread's feed: the topic and its live replies, so anyone
+       can follow one conversation, their own included. */
+    topicRow = await env.DB.prepare(
+      "SELECT id, page, title FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+    ).bind(topicParam).first();
+    if (!topicRow || !boardKey(topicRow.page)) return new Response('No such topic.', { status: 404 });
+    page = topicRow.page;
+    const rows = await env.DB.prepare(
+      "SELECT id, parent_id, title, author_hash, body, created_at FROM comments " +
+      "WHERE (id = ?1 OR parent_id = ?1) AND status = 'live' ORDER BY id DESC LIMIT 50"
+    ).bind(topicParam).all();
+    results = rows.results;
+  } else {
+    page = cat ? boardKey('board:' + cat) : normalizePage(url.searchParams.get('page'));
+    if (!page) return new Response('Unknown page.', { status: 400 });
+    const rows = await env.DB.prepare(
+      "SELECT id, parent_id, title, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id DESC LIMIT 50"
+    ).bind(page).all();
+    results = rows.results;
+  }
+  const items = results.map(function (c) {
     const name = c.author_hash ? displayName(c.author_hash) : 'Anonymous';
     const link = viewLink(page, c.id, c.parent_id);
-    return '<item><title>' + xmlEscape(c.title ? c.title : name + ' on ' + page) + '</title>' +
+    const itemTitle = c.title ? c.title
+      : topicRow ? name + ' re: ' + topicRow.title
+      : name + ' on ' + page;
+    return '<item><title>' + xmlEscape(itemTitle) + '</title>' +
       '<link>' + xmlEscape(link) + '</link>' +
       '<guid isPermaLink="true">' + xmlEscape(link) + '</guid>' +
       '<pubDate>' + new Date(c.created_at * 1000).toUTCString() + '</pubDate>' +
       '<description>' + xmlEscape(c.body) + '</description></item>';
   }).join('');
   const isBoard = page.indexOf('board:') === 0;
-  const feedTitle = isBoard
+  const feedTitle = topicRow
+    ? topicRow.title + ' - Catholicity Board - merecatholicity.com'
+    : isBoard
     ? 'Catholicity Board - ' + page.slice(6) + ' - merecatholicity.com'
     : 'Comments on ' + page + ' - merecatholicity.com';
-  const feedLink = isBoard ? SITE + '/community.html?cat=' + page.slice(6) : SITE + page;
+  const feedLink = topicRow ? SITE + '/community.html?topic=' + topicRow.id
+    : isBoard ? SITE + '/community.html?cat=' + page.slice(6) : SITE + page;
   const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<rss version="2.0"><channel>' +
     '<title>' + xmlEscape(feedTitle) + '</title>' +
