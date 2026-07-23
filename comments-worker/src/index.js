@@ -140,13 +140,17 @@ async function notify(env, comment) {
   }
 }
 
-async function handleGet(env, url) {
+async function handleGet(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const page = normalizePage(url.searchParams.get('page'));
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   const rows = await env.DB.prepare(
     "SELECT id, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id LIMIT 500"
   ).bind(page).all();
-  return json({ ok: true, comments: rows.results }, 200, { 'Cache-Control': 'public, max-age=60' });
+  return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: rows.results }, 200,
+    { 'Cache-Control': 'public, max-age=60' });
 }
 
 async function handlePost(request, env, ctx) {
@@ -162,6 +166,10 @@ async function handlePost(request, env, ctx) {
 
   const page = normalizePage(data.page);
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
+
+  if (!String(data.key || '') && env.ALLOW_ANON !== 'true') {
+    return json({ ok: false, error: 'Comments here need an identity. Create one with the link above the box.' }, 400);
+  }
 
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   if (!body) return json({ ok: false, error: 'The comment is empty.' }, 400);
@@ -212,9 +220,14 @@ async function handleSelfDelete(request, env) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const authorHash = await sha256hex(key);
-  const result = await env.DB.prepare(
-    "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
-  ).bind(id, authorHash).run();
+  const isAdmin = (env.ADMIN_HASHES || '').split(',').includes(authorHash);
+  const result = isAdmin
+    ? await env.DB.prepare(
+        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted'"
+      ).bind(id).run()
+    : await env.DB.prepare(
+        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
+      ).bind(id, authorHash).run();
   if (!result.meta.changes) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
   return json({ ok: true }, 200);
 }
@@ -227,7 +240,10 @@ function modPage(text, status) {
   );
 }
 
-async function handleMod(env, url) {
+async function handleMod(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return modPage('Too many requests. Slow down.', 429);
   const id = Number(url.searchParams.get('id'));
   const act = String(url.searchParams.get('act') || '');
   const sig = String(url.searchParams.get('sig') || '');
@@ -266,10 +282,10 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
 
-    if (path === '/api/comments' && request.method === 'GET') return handleGet(env, url);
+    if (path === '/api/comments' && request.method === 'GET') return handleGet(request, env, url);
     if (path === '/api/comments' && request.method === 'POST') return handlePost(request, env, ctx);
     if (path === '/api/comments/delete' && request.method === 'POST') return handleSelfDelete(request, env);
-    if (path === '/api/comments/mod' && request.method === 'GET') return handleMod(env, url);
+    if (path === '/api/comments/mod' && request.method === 'GET') return handleMod(request, env, url);
     return json({ ok: false, error: 'Not found.' }, 404);
   },
 };
