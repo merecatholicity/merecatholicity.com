@@ -131,6 +131,7 @@
     ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
     ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Baptists are welcome to coexist here too.'],
     ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
+    ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
     ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
   ];
 
