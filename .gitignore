@@ -66,3 +66,8 @@ resources/docs-src/bor.txt
 comments-worker/.wrangler/
 comments-worker/.dev.vars
 comments-backup.sql
+
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
