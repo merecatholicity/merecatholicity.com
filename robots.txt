@@ -1,0 +1,10 @@
+# Google may crawl everything, the forum included. Every other bot stays
+# out of the forum and its API, the worker request budget is not for
+# crawlers. The rest of the site remains open to all bots by design.
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: *
+Disallow: /community.html
+Disallow: /api/
