@@ -191,6 +191,14 @@ async function notify(env, comment) {
   }
 }
 
+/* Two browser-cache profiles on the read endpoints. Keyed visitors ask
+   for the fresh one with ?fresh=1 and live as they always have. Anonymous
+   readers ride a five-minute cache, their repeat views never reaching the
+   worker at all. */
+function cacheHeader(url) {
+  return { 'Cache-Control': 'public, max-age=' + (url.searchParams.get('fresh') ? 60 : 300) };
+}
+
 async function handleGet(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
@@ -201,7 +209,7 @@ async function handleGet(request, env, url) {
     "SELECT id, author_hash, body, created_at, edited_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id LIMIT 500"
   ).bind(page).all();
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: rows.results }, 200,
-    { 'Cache-Control': 'public, max-age=60' });
+    cacheHeader(url));
 }
 
 async function handlePost(request, env, ctx) {
@@ -418,7 +426,7 @@ async function handleMeta(request, env) {
 }
 
 /* The board index: per-category topic and post counts with last activity. */
-async function handleBoardIndex(request, env) {
+async function handleBoardIndex(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -446,7 +454,7 @@ async function handleBoardIndex(request, env) {
       latest: { topic_id: r.topic_id, title: r.title, author_hash: r.author_hash, created_at: r.created_at },
     };
   });
-  return json({ ok: true, cats }, 200, { 'Cache-Control': 'public, max-age=60' });
+  return json({ ok: true, cats }, 200, cacheHeader(url));
 }
 
 /* One category: its topics, newest activity first. */
@@ -463,7 +471,7 @@ async function handleBoardCat(request, env, url) {
     "WHERE t.page = ?1 AND t.parent_id IS NULL AND t.status = 'live' " +
     "GROUP BY t.id ORDER BY last DESC LIMIT 100"
   ).bind(page).all();
-  return json({ ok: true, topics: rows.results }, 200, { 'Cache-Control': 'public, max-age=60' });
+  return json({ ok: true, topics: rows.results }, 200, cacheHeader(url));
 }
 
 /* One topic with its live replies in order. */
@@ -488,7 +496,7 @@ async function handleTopicView(request, env, url) {
     cat: topic.page.slice(6),
     topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at },
     replies: replies.results,
-  }, 200, { 'Cache-Control': 'public, max-age=60' });
+  }, 200, cacheHeader(url));
 }
 
 /* Admin-only activity audit: the newest non-deleted post on every site
@@ -581,7 +589,7 @@ export default {
       if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
       if (path === '/api/comments/audit' && request.method === 'POST') return await handleAudit(request, env);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
-      if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env);
+      if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
       if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
       if (path === '/api/comments/mod' && request.method === 'GET') return await handleMod(request, env, url);

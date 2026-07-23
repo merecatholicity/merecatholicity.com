@@ -337,9 +337,16 @@
     try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
   }
 
+  /* Keyed visitors ask the server for the short-cache profile and keep
+     today's behavior to the letter. Anonymous readers ride a five-minute
+     browser cache, their repeat views never reaching the worker. */
+  function freshParam(sep) {
+    return state.key ? sep + 'fresh=1' : '';
+  }
+
   function load() {
     var list = section.querySelector('.comments-list');
-    fetchRetry(API + '?page=' + encodeURIComponent(pagePath()), freshOpts(), [1000, 3000],
+    fetchRetry(API + '?page=' + encodeURIComponent(pagePath()) + freshParam('&'), freshOpts(), [1000, 3000],
       function () { setStatus('Network hiccup, retrying...'); })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -750,7 +757,7 @@
       wrap.appendChild(row);
     });
     section.appendChild(wrap);
-    fetchRetry(API + '/board', freshOpts(), [1000, 3000])
+    fetchRetry(API + '/board' + freshParam('?'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) return;
@@ -809,7 +816,7 @@
       });
     });
     armBoardForm();
-    fetchRetry(API + '/board/cat?cat=' + key, freshOpts(), [1000, 3000])
+    fetchRetry(API + '/board/cat?cat=' + key + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
@@ -836,7 +843,7 @@
   }
 
   function viewTopic(id) {
-    fetchRetry(API + '/board/topic?id=' + id, freshOpts(), [1000, 3000])
+    fetchRetry(API + '/board/topic?id=' + id + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
