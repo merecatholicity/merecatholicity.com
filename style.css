@@ -680,3 +680,5 @@ section.board { max-width: 40rem; }
 .board-latest a { color: var(--maroon); text-decoration: none; }
 .board-latest a:hover { text-decoration: underline; }
 section.board .comment-identity { margin-bottom: 0.4rem; }
+.board-audit-link { margin: 0.2rem 0 0; font-size: 0.9rem; }
+.audit-where { overflow-wrap: anywhere; font-size: 0.95rem; }

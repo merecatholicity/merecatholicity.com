@@ -81,6 +81,15 @@
       { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
+  function fmtDateTime(epoch) {
+    return new Date(epoch * 1000).toLocaleString('en-US',
+      { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  function isAdmin() {
+    return !!state.key && ADMIN_HASHES.indexOf(state.myHash) !== -1;
+  }
+
   function sha256hex(text) {
     return crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then(function (buf) {
       return Array.prototype.map.call(new Uint8Array(buf), function (x) {
@@ -704,6 +713,20 @@
     keyBox.hidden = true;
     section.appendChild(keyBox);
     renderIdentity();
+    /* Admins alone see the door to the audit. The server would refuse
+       anyone else anyway, so hiding it is courtesy, not the lock. */
+    var auditSlot = el('p', 'board-audit-link');
+    section.appendChild(auditSlot);
+    function ensureAuditLink() {
+      auditSlot.textContent = '';
+      if (!isAdmin()) return;
+      var a = el('a', 'identity-action', 'Activity audit');
+      a.href = 'community.html?audit=1';
+      auditSlot.appendChild(a);
+    }
+    ensureAuditLink();
+    new MutationObserver(ensureAuditLink)
+      .observe(section.querySelector('.comment-identity'), { childList: true });
     var wrap = el('div', 'board-cats');
     var stats = {};
     CATS.forEach(function (cat) {
@@ -846,13 +869,69 @@
       });
   }
 
+  /* The audit: one line per commented page and per board topic, the last
+     poster and the moment, pending marked. A quick answer to what is new. */
+  function viewAudit() {
+    document.title = 'Activity audit | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Activity audit']]);
+    if (!isAdmin()) {
+      section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
+      return;
+    }
+    var status = el('p', 'comments-status', 'Loading activity...');
+    section.appendChild(status);
+    fetchRetry(API + '/audit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }),
+    }, [1000, 3000], function () { status.textContent = 'Network hiccup, retrying...'; })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        status.remove();
+        function row(label, r) {
+          var line = el('div', 'board-topic');
+          line.appendChild(el('span', 'audit-where', label));
+          line.appendChild(el('div', 'board-stats',
+            (r.author_hash ? displayName(r.author_hash) : 'Anonymous') +
+            ' · ' + fmtDateTime(r.created_at) +
+            (r.status === 'pending' ? ' · pending' : '')));
+          return line;
+        }
+        section.appendChild(el('h3', 'board-form-head', 'Site pages'));
+        var pages = el('div', 'board-topics');
+        if (!d.pages.length) pages.appendChild(el('p', 'comments-status', 'No comments anywhere yet.'));
+        d.pages.forEach(function (r) { pages.appendChild(row(r.page, r)); });
+        section.appendChild(pages);
+        section.appendChild(el('h3', 'board-form-head', 'Board topics'));
+        var topics = el('div', 'board-topics');
+        if (!d.topics.length) topics.appendChild(el('p', 'comments-status', 'No topics yet.'));
+        d.topics.forEach(function (r) {
+          var cat = catByKey(String(r.page).slice(6));
+          topics.appendChild(row((cat ? cat[1] : r.page) + ' › ' + r.title, r));
+        });
+        section.appendChild(topics);
+      })
+      .catch(function (err) {
+        status.textContent = err.message === 'No.' ? 'This page is for the admins.'
+          : 'The audit could not be loaded. Check your connection and reload the page.';
+      });
+  }
+
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
-    var params = new URLSearchParams(location.search);
-    var topic = Number(params.get('topic'));
-    if (Number.isInteger(topic) && topic > 0) return viewTopic(topic);
-    if (params.get('cat')) return viewCat(params.get('cat'));
-    viewIndex();
+    /* Resolve the identity before any view renders, or a keyed visitor
+       reads as anonymous and the owner's own links never appear. */
+    var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
+    ready.then(function (h) {
+      state.myHash = h;
+      var params = new URLSearchParams(location.search);
+      if (params.get('audit')) return viewAudit();
+      var topic = Number(params.get('topic'));
+      if (Number.isInteger(topic) && topic > 0) return viewTopic(topic);
+      if (params.get('cat')) return viewCat(params.get('cat'));
+      viewIndex();
+    });
   }
 
   /* ---- Assembly ---- */
