@@ -16,7 +16,6 @@ const PAGES = [
   '/about.html',
 ];
 
-const TO = 'adam.schaefers@icloud.com';
 const FROM = { email: 'comments@merecatholicity.com', name: 'merecatholicity.com comments' };
 const SITE = 'https://merecatholicity.com';
 const MAX_BODY = 4000;
@@ -138,6 +137,7 @@ async function notify(env, comment) {
       (comment.status === 'pending' ? ' (after approval)' : ''),
     'IP:      ' + (comment.ip || 'unknown') + (comment.os ? ' · ' + comment.os : ''),
     'Agent:   ' + (comment.ua || 'unknown'),
+    'Locale:  ' + (comment.tz || 'tz unknown') + ' · ' + (comment.lang || 'lang unknown'),
   ];
   if (comment.status === 'pending') {
     lines.push('Held for review (' + comment.ai_verdict + ').');
@@ -145,16 +145,15 @@ async function notify(env, comment) {
   }
   lines.push('Delete:  ' + (await modLink(env, comment.id, 'delete')));
   lines.push('Ban:     ' + (await modLink(env, comment.id, 'ban')));
-  try {
-    await env.EMAIL.send({
-      to: TO,
-      from: FROM,
-      subject: 'merecatholicity.com: ' +
-        (comment.status === 'pending' ? 'comment held for review on ' : 'new comment on ') + comment.page,
-      text: lines.join('\n') + '\n',
-    });
-  } catch (err) {
-    console.log(JSON.stringify({ event: 'notify_failed', error: String(err) }));
+  const subject = 'merecatholicity.com: ' +
+    (comment.status === 'pending' ? 'comment held for review on ' : 'new comment on ') + comment.page;
+  const recipients = (env.NOTIFY_EMAILS || '').split(',').map((a) => a.trim()).filter(Boolean);
+  for (const to of recipients) {
+    try {
+      await env.EMAIL.send({ to, from: FROM, subject, text: lines.join('\n') + '\n' });
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'notify_failed', to, error: String(err) }));
+    }
   }
 }
 
@@ -208,6 +207,9 @@ async function handlePost(request, env, ctx) {
   const ipHash = ip ? (await hmacHex(env.IP_HASH_SECRET, ip)).slice(0, 32) : null;
   const ua = String(request.headers.get('User-Agent') || '').slice(0, 400);
   const os = parseOS(ua);
+  const lang = String(request.headers.get('Accept-Language') || '').slice(0, 100);
+  const tzRaw = String(data.tz || '');
+  const tz = /^[A-Za-z0-9_+\/-]{1,60}$/.test(tzRaw) ? tzRaw : '';
 
   const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash IN (?1, ?2)')
     .bind(authorHash || '-', ipHash || '-').all();
@@ -216,11 +218,12 @@ async function handlePost(request, env, ctx) {
   const { status, verdict } = await screen(env, body);
   const createdAt = Math.floor(Date.now() / 1000);
   const inserted = await env.DB.prepare(
-    'INSERT INTO comments (page, author_hash, body, status, created_at, ip_hash, ai_verdict, ip, ua, os) ' +
-    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) RETURNING id'
-  ).bind(page, authorHash, body, status, createdAt, ipHash, verdict, ip || null, ua || null, os || null).first();
+    'INSERT INTO comments (page, author_hash, body, status, created_at, ip_hash, ai_verdict, ip, ua, os, tz, lang) ' +
+    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id'
+  ).bind(page, authorHash, body, status, createdAt, ipHash, verdict, ip || null, ua || null, os || null,
+    tz || null, lang || null).first();
 
-  const comment = { id: inserted.id, page, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os };
+  const comment = { id: inserted.id, page, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os, tz, lang };
   ctx.waitUntil(notify(env, comment));
 
   return json({ ok: true, status, comment: { id: comment.id, author_hash: authorHash, body, created_at: createdAt } }, 200);
@@ -252,6 +255,43 @@ async function handleSelfDelete(request, env) {
   return json({ ok: true }, 200);
 }
 
+function xmlEscape(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/* RSS 2.0 feed of a page's live comments, so anyone can follow a thread
+   with a feed reader and nobody has to hand this site an email address. */
+async function handleFeed(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return new Response('Too many requests.', { status: 429 });
+  const page = normalizePage(url.searchParams.get('page'));
+  if (!page) return new Response('Unknown page.', { status: 400 });
+  const rows = await env.DB.prepare(
+    "SELECT id, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id DESC LIMIT 50"
+  ).bind(page).all();
+  const items = rows.results.map(function (c) {
+    const name = c.author_hash ? displayName(c.author_hash) : 'Anonymous';
+    const link = SITE + page + '#comment-' + c.id;
+    return '<item><title>' + xmlEscape(name + ' on ' + page) + '</title>' +
+      '<link>' + xmlEscape(link) + '</link>' +
+      '<guid isPermaLink="true">' + xmlEscape(link) + '</guid>' +
+      '<pubDate>' + new Date(c.created_at * 1000).toUTCString() + '</pubDate>' +
+      '<description>' + xmlEscape(c.body) + '</description></item>';
+  }).join('');
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<rss version="2.0"><channel>' +
+    '<title>' + xmlEscape('Comments on ' + page + ' - merecatholicity.com') + '</title>' +
+    '<link>' + xmlEscape(SITE + page) + '</link>' +
+    '<description>' + xmlEscape('Reader comments on ' + page) + '</description>' +
+    items + '</channel></rss>';
+  return new Response(xml, {
+    status: 200,
+    headers: { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'public, max-age=300' },
+  });
+}
+
 /* Admin-only view of the logged metadata. The public GET never carries
    these fields; this endpoint demands a key hashing into ADMIN_HASHES. */
 async function handleMeta(request, env) {
@@ -269,7 +309,7 @@ async function handleMeta(request, env) {
   if (!page || !key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
   const rows = await env.DB.prepare(
-    'SELECT id, status, ai_verdict, ip, ua, os FROM comments WHERE page = ?1 ORDER BY id LIMIT 500'
+    'SELECT id, status, ai_verdict, ip, ua, os, tz, lang FROM comments WHERE page = ?1 ORDER BY id LIMIT 500'
   ).bind(page).all();
   return json({ ok: true, meta: rows.results }, 200);
 }
@@ -328,6 +368,7 @@ export default {
     if (path === '/api/comments' && request.method === 'POST') return handlePost(request, env, ctx);
     if (path === '/api/comments/delete' && request.method === 'POST') return handleSelfDelete(request, env);
     if (path === '/api/comments/meta' && request.method === 'POST') return handleMeta(request, env);
+    if (path === '/api/comments/feed' && request.method === 'GET') return handleFeed(request, env, url);
     if (path === '/api/comments/mod' && request.method === 'GET') return handleMod(request, env, url);
     return json({ ok: false, error: 'Not found.' }, 404);
   },

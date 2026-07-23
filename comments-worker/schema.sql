@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS comments (
   ai_verdict  TEXT,
   ip          TEXT,
   ua          TEXT,
-  os          TEXT
+  os          TEXT,
+  tz          TEXT,
+  lang        TEXT
 );
 CREATE INDEX IF NOT EXISTS comments_page_idx ON comments(page, status, id);
 

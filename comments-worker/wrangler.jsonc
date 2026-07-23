@@ -38,6 +38,12 @@
     // Public fingerprints (SHA-256 of the commenter key, comma-separated) of
     // the site owners. A delete signed by a key hashing to one of these works
     // on any comment. The hash is safe to publish, the power is in the key.
-    "ADMIN_HASHES": "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6,c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03"
+    "ADMIN_HASHES": "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6,c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03",
+    // Who gets the notification email for every comment, comma-separated.
+    // Sends to verified destination addresses are free on every plan, so each
+    // address here MUST first be verified under Email Routing, dashboard:
+    // Email > Email Routing > Destination addresses (Cloudflare mails the
+    // person a confirmation). Then add it here and redeploy.
+    "NOTIFY_EMAILS": "adam.schaefers@icloud.com"
   }
 }
