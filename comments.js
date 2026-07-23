@@ -122,9 +122,9 @@
   var CATS = [
     ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific.'],
     ['news', 'News', 'News of the Church and of the world.'],
-    ['theology', 'Theology', 'Historical, biblical, systematic, covenant, all of it.'],
+    ['theology', 'Theology', 'Hermeneutics, apologetics, doctrine. All of it lands here.'],
     ['philosophy', 'Philosophy', 'Does this board really exist.'],
-    ['history', 'History', 'What happened, when, and to whom.'],
+    ['history', 'History', 'World, church, and national history. All of it.'],
     ['rc', 'Roman Catholicism', 'In-house talk for Roman Catholics.'],
     ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
     ['prot', 'Protestantism', 'In-house talk for Protestants.'],
