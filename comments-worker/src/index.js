@@ -477,8 +477,8 @@ async function handleBoardIndex(request, env, url) {
   /* One pass: per room, window counts plus the newest post whose thread
      is still live, its title borrowed from the thread. */
   const rows = await env.DB.prepare(
-    'SELECT page, author_hash, nick, created_at, title, topic_id, topics, posts FROM (' +
-    '  SELECT c.page, c.author_hash, pr.nick AS nick, c.created_at, ' +
+    'SELECT page, author_hash, nick, created_at, title, post_id, topic_id, topics, posts FROM (' +
+    '  SELECT c.page, c.author_hash, pr.nick AS nick, c.created_at, c.id AS post_id, ' +
     '         COALESCE(c.title, p.title) AS title, ' +
     '         COALESCE(c.parent_id, c.id) AS topic_id, ' +
     '         COUNT(CASE WHEN c.parent_id IS NULL THEN 1 END) OVER (PARTITION BY c.page) AS topics, ' +
@@ -496,7 +496,7 @@ async function handleBoardIndex(request, env, url) {
       topics: r.topics,
       posts: r.posts,
       last: r.created_at,
-      latest: { topic_id: r.topic_id, title: r.title, author_hash: r.author_hash, nick: r.nick, created_at: r.created_at },
+      latest: { topic_id: r.topic_id, id: r.post_id, title: r.title, author_hash: r.author_hash, nick: r.nick, created_at: r.created_at },
     };
   });
   return json({ ok: true, cats }, 200, cacheHeader(url));

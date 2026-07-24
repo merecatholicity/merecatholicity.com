@@ -978,6 +978,27 @@
     loadTurnstile();
   }
 
+  /* A row of page links, dropped at both the top and the bottom of every
+     paginated view so the buttons are never a scroll away. Null for one page.
+     hrefFor(i) gives each page its URL. Call it twice for two live bars. */
+  function pageBar(total, per, curPage, hrefFor) {
+    var pages = Math.ceil(total / per);
+    if (pages <= 1) return null;
+    var bar = el('p', 'board-pages');
+    bar.appendChild(document.createTextNode('Pages: '));
+    for (var i = 1; i <= pages; i++) {
+      if (i === curPage) {
+        bar.appendChild(el('strong', null, String(i)));
+      } else {
+        var pl = el('a', null, String(i));
+        pl.href = hrefFor(i);
+        bar.appendChild(pl);
+      }
+      if (i < pages) bar.appendChild(document.createTextNode(' '));
+    }
+    return bar;
+  }
+
   function viewIndex() {
     document.title = 'Catholicity Board | Mere Catholicity';
     /* A muted word on how the house works, for the newcomer who lands here. */
@@ -1044,7 +1065,9 @@
             var line = el('div', 'board-latest');
             var t = String(c.latest.title);
             var a = el('a', null, t.length > 42 ? t.slice(0, 42) + '…' : t);
-            a.href = 'community.html?topic=' + c.latest.topic_id;
+            /* Jump straight to that most-recent post, not the top of the thread. */
+            a.href = 'community.html?topic=' + c.latest.topic_id +
+              (c.latest.id ? '#comment-' + c.latest.id : '');
             line.appendChild(a);
             line.appendChild(document.createTextNode(' · '));
             line.appendChild(authorNode(c.latest.author_hash, c.latest.nick, false));
@@ -1139,22 +1162,11 @@
           row.appendChild(tstat);
           list.appendChild(row);
         });
-        var pages = Math.ceil(d.total / d.per);
-        if (pages > 1) {
-          var bar = el('p', 'board-pages');
-          bar.appendChild(document.createTextNode('Pages: '));
-          for (var i = 1; i <= pages; i++) {
-            if (i === d.page) {
-              bar.appendChild(el('strong', null, String(i)));
-            } else {
-              var pl = el('a', null, String(i));
-              pl.href = 'community.html?cat=' + key + '&p=' + i;
-              bar.appendChild(pl);
-            }
-            if (i < pages) bar.appendChild(document.createTextNode(' '));
-          }
-          section.insertBefore(bar, section.querySelector('.comment-form'));
-        }
+        function catHref(i) { return 'community.html?cat=' + key + '&p=' + i; }
+        var topBar = pageBar(d.total, d.per, d.page, catHref);
+        if (topBar) section.insertBefore(topBar, list);
+        var botBar = pageBar(d.total, d.per, d.page, catHref);
+        if (botBar) section.insertBefore(botBar, section.querySelector('.comment-form'));
       })
       .catch(function () {
         list.textContent = '';
@@ -1186,22 +1198,11 @@
         section.appendChild(list);
         if (d.page === 1) list.appendChild(commentNode(d.topic, false));
         d.replies.forEach(function (c) { list.appendChild(commentNode(c, false)); });
-        var totalPages = Math.ceil(d.total / d.per);
-        if (totalPages > 1) {
-          var bar = el('p', 'board-pages');
-          bar.appendChild(document.createTextNode('Pages: '));
-          for (var i = 1; i <= totalPages; i++) {
-            if (i === d.page) {
-              bar.appendChild(el('strong', null, String(i)));
-            } else {
-              var pl = el('a', null, String(i));
-              pl.href = 'community.html?topic=' + id + '&p=' + i;
-              bar.appendChild(pl);
-            }
-            if (i < totalPages) bar.appendChild(document.createTextNode(' '));
-          }
-          section.appendChild(bar);
-        }
+        function topicHref(i) { return 'community.html?topic=' + id + '&p=' + i; }
+        var topBar = pageBar(d.total, d.per, d.page, topicHref);
+        if (topBar) section.insertBefore(topBar, list);
+        var botBar = pageBar(d.total, d.per, d.page, topicHref);
+        if (botBar) section.appendChild(botBar);
         section.appendChild(el('p', 'comments-status', ''));
         if (d.topic.locked) {
           section.appendChild(el('p', 'comments-status', 'This topic is locked. No new replies.'));
@@ -1218,10 +1219,24 @@
           var status = section.querySelector('.form-status');
           if (!body.trim()) { section.querySelector('.comment-text').focus(); return; }
           boardPost({ topic: id, body: body }, function (d2) {
-            list.appendChild(commentNode(d2.comment, d2.status === 'pending'));
             section.querySelector('.comment-text').value = '';
-            status.textContent = d2.status === 'pending'
-              ? 'Held for review. It will appear once approved.' : 'Posted.';
+            if (d2.status === 'pending') {
+              status.textContent = 'Held for review. It will appear once approved.';
+              return;
+            }
+            /* A new reply belongs at the end of the last page. Show it inline
+               only when that is the page on screen; otherwise jump to it so it
+               is never dropped in the middle of an earlier page. */
+            var replyPage = Math.ceil((d.total + 1) / d.per);
+            if (replyPage === d.page) {
+              d.total += 1;
+              var node = commentNode(d2.comment, false);
+              list.appendChild(node);
+              status.textContent = 'Posted.';
+              node.scrollIntoView();
+            } else {
+              location.href = 'community.html?topic=' + id + '&p=' + replyPage + '#comment-' + d2.comment.id;
+            }
           });
         });
         armBoardForm();
@@ -1830,21 +1845,11 @@
             t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + fmtDate(t.last_at)));
           list.appendChild(row);
         });
-        var pages = Math.ceil(d.total / d.per);
-        if (pages > 1) {
-          var bar = el('p', 'board-pages');
-          bar.appendChild(document.createTextNode('Pages: '));
-          for (var i = 1; i <= pages; i++) {
-            if (i === d.page) bar.appendChild(el('strong', null, String(i)));
-            else {
-              var pl = el('a', null, String(i));
-              pl.href = 'community.html?inbox=1&p=' + i;
-              bar.appendChild(pl);
-            }
-            if (i < pages) bar.appendChild(document.createTextNode(' '));
-          }
-          section.appendChild(bar);
-        }
+        function inboxHref(i) { return 'community.html?inbox=1&p=' + i; }
+        var topBar = pageBar(d.total, d.per, d.page, inboxHref);
+        if (topBar) section.insertBefore(topBar, list);
+        var botBar = pageBar(d.total, d.per, d.page, inboxHref);
+        if (botBar) section.appendChild(botBar);
       })
       .catch(function () {
         list.textContent = '';
@@ -1910,21 +1915,12 @@
           list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
         }
         d.messages.forEach(function (m) { list.appendChild(dmMsgNode(m, shortName)); });
-        var totalPages = Math.ceil(d.total / d.per);
-        if (totalPages > 1) {
-          var bar = el('p', 'board-pages');
-          bar.appendChild(document.createTextNode('Pages: '));
-          for (var i = 1; i <= totalPages; i++) {
-            if (i === d.page) bar.appendChild(el('strong', null, String(i)));
-            else {
-              var pl = el('a', null, String(i));
-              pl.href = 'community.html?dm=' + other + '&p=' + i;
-              bar.appendChild(pl);
-            }
-            if (i < totalPages) bar.appendChild(document.createTextNode(' '));
-          }
-          section.appendChild(bar);
-        }
+        var dmPages = Math.max(1, Math.ceil(d.total / d.per));
+        function dmHref(i) { return 'community.html?dm=' + other + '&p=' + i; }
+        var topBar = pageBar(d.total, d.per, d.page, dmHref);
+        if (topBar) section.insertBefore(topBar, list);
+        var botBar = pageBar(d.total, d.per, d.page, dmHref);
+        if (botBar) section.appendChild(botBar);
         var form = el('div', 'comment-form');
         var ta = el('textarea', 'comment-text');
         ta.maxLength = 4000;
@@ -1957,9 +1953,19 @@
           }).then(function (d2) {
             if (blockedOut(d2)) return;
             if (!d2.ok) throw new Error(d2.error || 'The message could not be sent.');
-            list.appendChild(dmMsgNode({ sender_hash: state.myHash, body: body, created_at: d2.created_at }, shortName));
             ta.value = '';
-            status.textContent = 'Sent.';
+            /* Newest message lands at the bottom of the last page. Show it
+               inline when that page is on screen; else jump to it. */
+            var msgPage = Math.ceil((d.total + 1) / d.per);
+            if (msgPage === d.page) {
+              d.total += 1;
+              var node = dmMsgNode({ sender_hash: state.myHash, body: body, created_at: d2.created_at }, shortName);
+              list.appendChild(node);
+              status.textContent = 'Sent.';
+              node.scrollIntoView();
+            } else {
+              location.href = 'community.html?dm=' + other + '&p=' + msgPage;
+            }
           }).catch(function (err) {
             status.textContent = err.message || 'Network error. Try again in a moment.';
           }).finally(function () {
@@ -1981,6 +1987,11 @@
           }).catch(function () {});
         }));
         section.appendChild(blockLine);
+        /* Open a conversation at its newest word: on the last page, bring the
+           final message into view, above the composer. */
+        if (d.messages.length && d.page >= dmPages && list.lastChild) {
+          list.lastChild.scrollIntoView();
+        }
       })
       .catch(function () {
         crumb([['Catholicity Board', 'community.html'], ['Messages']]);
