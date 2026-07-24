@@ -19,7 +19,7 @@ const PAGES = [
    titled comment with no parent, a reply is a comment whose parent is the
    topic. Everything else, identity, screening, limits, moderation, is the
    one pipeline all comments share. Keys must match CATS in comments.js. */
-const BOARD_CATS = ['pub', 'news', 'theology', 'philosophy', 'history', 'indoeuropean', 'rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot', 'offtopic'];
+const BOARD_CATS = ['pub', 'news', 'offtopic', 'theology', 'philosophy', 'history', 'indoeuropean', 'rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot'];
 
 function boardKey(raw) {
   const m = /^board:([a-z]+)$/.exec(String(raw || ''));
