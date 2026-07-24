@@ -627,6 +627,7 @@ a.comment-date:hover { text-decoration: underline; }
 .comment:target { background: #f9f3e6; outline: 2px solid var(--rule); outline-offset: 4px; }
 .comment-meta { font-size: 0.78rem; color: #999; overflow-wrap: anywhere; margin-top: 0.3em; }
 .comment-meta summary { cursor: pointer; color: #b09a7a; }
+.profile .comment-meta { margin-top: 1.2rem; border-top: 1px solid var(--rule); padding-top: 0.6rem; }
 .comments-title .comments-rss {
   font-size: 0.65em;
   font-weight: normal;

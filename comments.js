@@ -525,6 +525,37 @@
   /* Admin only. Fetches the logged IP, OS, and agent for each comment and
      writes them under the comments. The server refuses non-admin keys, so
      for everyone else this function returns without a trace. */
+  /* Build the admin user-fingerprint drawer from one meta row and the
+     identity->IPs map. Identical whether it hangs under a comment or on a
+     profile, so both surfaces carry the very same controls. */
+  function buildFingerprint(m, identities) {
+    var details = el('details', 'comment-meta');
+    details.appendChild(el('summary', null, 'user-fingerprint'));
+    details.appendChild(el('div', null,
+      (m.ip ? (m.ip.indexOf(':') !== -1 ? 'IPv6 ' : 'IPv4 ') + m.ip : 'ip?') +
+      (m.os ? ' · ' + m.os : '') + (m.tz ? ' · ' + m.tz : '') +
+      (m.lang ? ' · ' + m.lang : '')));
+    if (m.ua) details.appendChild(el('div', null, m.ua));
+    /* Trusted authors skip the AI screen. The line states the standing fact
+       and offers the reversal, and flipping it updates every fingerprint of
+       the same author on the page. The author never sees any of this. */
+    if (m.author_hash) {
+      var line = el('div', 'trust-line');
+      line.setAttribute('data-hash', m.author_hash);
+      renderTrustLine(line, m.author_hash, !!m.trusted);
+      details.appendChild(line);
+      details.appendChild(modLockLine(m.author_hash, !!m.locked));
+      var ips = (identities && identities[m.author_hash]) || [];
+      if (!ips.length && m.ip) ips = [{ ip_display: m.ip, ip_key: m.ip,
+        family: m.ip.indexOf(':') !== -1 ? 6 : 4, source: 'seen', banned: !!m.ipbanned }];
+      details.appendChild(modIpBlock(ips));
+      wireRdns(details, ips);
+      details.appendChild(modDeleteUserLine(m.author_hash));
+      details.appendChild(modHelpNote());
+    }
+    return details;
+  }
+
   function annotateMeta(pageKey) {
     if (!state.key || ADMIN_HASHES.indexOf(state.myHash) === -1) return;
     fetch(API + '/meta', {
@@ -536,33 +567,25 @@
       d.meta.forEach(function (m) {
         var node = document.getElementById('comment-' + m.id);
         if (!node || node.querySelector('.comment-meta')) return;
-        var details = el('details', 'comment-meta');
-        details.appendChild(el('summary', null, 'user-fingerprint'));
-        details.appendChild(el('div', null,
-          (m.ip ? (m.ip.indexOf(':') !== -1 ? 'IPv6 ' : 'IPv4 ') + m.ip : 'ip?') +
-          (m.os ? ' · ' + m.os : '') + (m.tz ? ' · ' + m.tz : '') +
-          (m.lang ? ' · ' + m.lang : '')));
-        if (m.ua) details.appendChild(el('div', null, m.ua));
-        /* Trusted authors skip the AI screen. The line states the standing
-           fact and offers the reversal, and flipping it updates every
-           fingerprint of the same author on the page. The author never
-           sees any of this. */
-        if (m.author_hash) {
-          var line = el('div', 'trust-line');
-          line.setAttribute('data-hash', m.author_hash);
-          renderTrustLine(line, m.author_hash, !!m.trusted);
-          details.appendChild(line);
-          details.appendChild(modLockLine(m.author_hash, !!m.locked));
-          var ips = (d.identities && d.identities[m.author_hash]) || [];
-          if (!ips.length && m.ip) ips = [{ ip_display: m.ip, ip_key: m.ip,
-            family: m.ip.indexOf(':') !== -1 ? 6 : 4, source: 'seen', banned: !!m.ipbanned }];
-          details.appendChild(modIpBlock(ips));
-          wireRdns(details, ips);
-          details.appendChild(modDeleteUserLine(m.author_hash));
-          details.appendChild(modHelpNote());
-        }
-        node.appendChild(details);
+        node.appendChild(buildFingerprint(m, d.identities));
       });
+    }).catch(function () {});
+  }
+
+  /* The same drawer on a profile, keyed by the identity's hash rather than a
+     comment id, so an admin viewing anyone's profile gets every control the
+     post drawer has: trust, lock, per-IP ban and ban-all, delete. Admin-only,
+     here and at the server. */
+  function annotateProfileMeta(hash, card) {
+    if (!state.key || ADMIN_HASHES.indexOf(state.myHash) === -1) return;
+    if (card.querySelector('.comment-meta')) return;
+    fetch(API + '/meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash: hash, key: state.key }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok || !d.meta || !d.meta.length || card.querySelector('.comment-meta')) return;
+      card.appendChild(buildFingerprint(d.meta[0], d.identities));
     }).catch(function () {});
   }
 
@@ -1756,6 +1779,9 @@
       });
       card.appendChild(dmBtn);
     }
+    /* Admins get the very same user-fingerprint drawer here as on a post,
+       driven by this identity's hash. Everyone else sees nothing. */
+    annotateProfileMeta(p.hash, card);
   }
 
   /* The edit form. Every save is re-screened by the server; a flagged save is
