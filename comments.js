@@ -170,17 +170,17 @@
   var CATS = [
     ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific.'],
     ['news', 'News', 'News of the Church and of the world.'],
+    ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
     ['theology', 'Theology', 'All genres. Anything without a room of its own.'],
     ['philosophy', 'Philosophy', 'Does this board really exist.'],
     ['history', 'History', 'World, church, and national history. All of it.'],
+    ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
     ['rc', 'Roman Catholic', 'In-house talk for Roman Catholics.'],
     ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
     ['lutheran', 'Confessional Lutheran', 'In-house talk for confessional Lutherans.'],
     ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
     ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Reformed Baptists are welcome to coexist here too.'],
     ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
-    ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
-    ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
   ];
 
   /* A description with an optional trailing link, built as nodes so the
@@ -1022,11 +1022,16 @@
 
   function viewIndex() {
     document.title = 'Catholicity Board | Mere Catholicity';
-    /* A muted word on how the house works, for the newcomer who lands here. */
-    var intro = el('p', 'board-intro');
-    intro.appendChild(document.createTextNode(
-      'A board for exploring what it means to be merely catholic. Call us first-millennium catholics, paleo-orthodox, Vincentians, or conservative ecumenists. The position is ecumenical because the Church is bigger than any one communion, and conservative because we receive and preserve the faith as it was handed down to us, and do not innovate upon it. Confess the Nicene Creed and you are welcome, from any communion. And if you are a seeker or you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation.'));
-    section.appendChild(intro);
+    /* A muted word on who we are, for the newcomer who lands here. */
+    [
+      'A board for exploring what it means to be merely catholic.',
+      'If you hold the Nicene Creed you are welcome. Or if you are a seeker, or if you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation.',
+      'This is not a forum for debating non-Christian religions, cults or the occult, whether atheism, gnosticism, Mormonism, Jehovahism, Islam, Judaism, Hinduism, Buddhism, etc. Though comparative religion discussion is welcome from a Christian perspective.'
+    ].forEach(function (text) {
+      var p = el('p', 'board-intro');
+      p.appendChild(el('small', null, text));
+      section.appendChild(p);
+    });
     /* The identity drawer lives on the front page too, so a reader can
        create, show, or swap a key before ever entering a room. */
     section.appendChild(el('div', 'comment-identity'));
