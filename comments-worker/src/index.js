@@ -195,7 +195,13 @@ async function modLink(env, id, act) {
 }
 
 async function notify(env, comment) {
-  const name = comment.author_hash ? displayName(comment.author_hash) : 'Anonymous';
+  let nick = null;
+  if (comment.author_hash) {
+    const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(comment.author_hash).first();
+    nick = prof && prof.nick ? prof.nick : null;
+  }
+  const assigned = comment.author_hash ? displayName(comment.author_hash) : 'Anonymous';
+  const name = nick ? nick + ' (' + assigned + ')' : assigned;
   const lines = [
     'Page: ' + (comment.page.indexOf('board:') === 0 ? comment.page : SITE + comment.page),
     ...(comment.title ? ['Topic: ' + comment.title] : []),
@@ -247,7 +253,9 @@ async function handleGet(request, env, url) {
   const page = normalizePage(url.searchParams.get('page'));
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   const rows = await env.DB.prepare(
-    "SELECT id, author_hash, body, created_at, edited_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id LIMIT 500"
+    'SELECT c.id, c.author_hash, pr.nick, pr.signature, c.body, c.created_at, c.edited_at ' +
+    'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
+    "WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id LIMIT 500"
   ).bind(page).all();
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: rows.results }, 200,
     cacheHeader(url));
@@ -339,7 +347,11 @@ async function handlePost(request, env, ctx) {
   const comment = { id: inserted.id, page, parent_id: parentId, title, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os, tz, lang };
   ctx.waitUntil(notify(env, comment));
 
-  return json({ ok: true, status, comment: { id: comment.id, title, author_hash: authorHash, body, created_at: createdAt } }, 200);
+  /* Carry the poster's own nick and signature back so their fresh comment
+     renders with them at once, before any cache refresh. */
+  const prof = authorHash ? await env.DB.prepare('SELECT nick, signature FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
+  return json({ ok: true, status, comment: { id: comment.id, title, author_hash: authorHash,
+    nick: prof && prof.nick || null, signature: prof && prof.signature || null, body, created_at: createdAt } }, 200);
 }
 
 async function handleSelfDelete(request, env) {
@@ -392,20 +404,22 @@ async function handleFeed(request, env, url) {
     if (!topicRow || !boardKey(topicRow.page)) return new Response('No such topic.', { status: 404 });
     page = topicRow.page;
     const rows = await env.DB.prepare(
-      "SELECT id, parent_id, title, author_hash, body, created_at FROM comments " +
-      "WHERE (id = ?1 OR parent_id = ?1) AND status = 'live' ORDER BY id DESC LIMIT 50"
+      "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
+      "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+      "WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' ORDER BY c.id DESC LIMIT 50"
     ).bind(topicParam).all();
     results = rows.results;
   } else {
     page = cat ? boardKey('board:' + cat) : normalizePage(url.searchParams.get('page'));
     if (!page) return new Response('Unknown page.', { status: 400 });
     const rows = await env.DB.prepare(
-      "SELECT id, parent_id, title, author_hash, body, created_at FROM comments WHERE page = ?1 AND status = 'live' ORDER BY id DESC LIMIT 50"
+      "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
+      "LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id DESC LIMIT 50"
     ).bind(page).all();
     results = rows.results;
   }
   const items = results.map(function (c) {
-    const name = c.author_hash ? displayName(c.author_hash) : 'Anonymous';
+    const name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
     const link = viewLink(page, c.id, c.parent_id);
     const itemTitle = c.title ? c.title
       : topicRow ? name + ' re: ' + topicRow.title
@@ -509,14 +523,15 @@ async function handleBoardIndex(request, env, url) {
   /* One pass: per room, window counts plus the newest post whose thread
      is still live, its title borrowed from the thread. */
   const rows = await env.DB.prepare(
-    'SELECT page, author_hash, created_at, title, topic_id, topics, posts FROM (' +
-    '  SELECT c.page, c.author_hash, c.created_at, ' +
+    'SELECT page, author_hash, nick, created_at, title, topic_id, topics, posts FROM (' +
+    '  SELECT c.page, c.author_hash, pr.nick AS nick, c.created_at, ' +
     '         COALESCE(c.title, p.title) AS title, ' +
     '         COALESCE(c.parent_id, c.id) AS topic_id, ' +
     '         COUNT(CASE WHEN c.parent_id IS NULL THEN 1 END) OVER (PARTITION BY c.page) AS topics, ' +
     '         COUNT(*) OVER (PARTITION BY c.page) AS posts, ' +
     '         ROW_NUMBER() OVER (PARTITION BY c.page ORDER BY c.id DESC) AS rn ' +
     '  FROM comments c LEFT JOIN comments p ON p.id = c.parent_id ' +
+    '         LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "  WHERE c.page LIKE 'board:%' AND c.status = 'live' " +
     "    AND (c.parent_id IS NULL OR p.status = 'live')" +
     ') WHERE rn = 1'
@@ -527,7 +542,7 @@ async function handleBoardIndex(request, env, url) {
       topics: r.topics,
       posts: r.posts,
       last: r.created_at,
-      latest: { topic_id: r.topic_id, title: r.title, author_hash: r.author_hash, created_at: r.created_at },
+      latest: { topic_id: r.topic_id, title: r.title, author_hash: r.author_hash, nick: r.nick, created_at: r.created_at },
     };
   });
   return json({ ok: true, cats }, 200, cacheHeader(url));
@@ -547,9 +562,10 @@ async function handleBoardCat(request, env, url) {
     "SELECT COUNT(*) AS n FROM comments WHERE page = ?1 AND parent_id IS NULL AND status = 'live'"
   ).bind(page).first();
   const rows = await env.DB.prepare(
-    'SELECT id, title, author_hash, created_at, locked, ' +
-    'COALESCE(replies, 0) AS replies, COALESCE(last_at, created_at) AS last ' +
-    "FROM comments WHERE page = ?1 AND parent_id IS NULL AND status = 'live' " +
+    'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, ' +
+    'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last ' +
+    'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
+    "WHERE c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live' " +
     'ORDER BY last DESC LIMIT ?2 OFFSET ?3'
   ).bind(page, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
   return json({ ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE }, 200, cacheHeader(url));
@@ -563,8 +579,9 @@ async function handleTopicView(request, env, url) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT id, page, title, author_hash, body, created_at, edited_at, locked, replies FROM comments " +
-    "WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, c.body, c.created_at, c.edited_at, c.locked, c.replies " +
+    "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+    "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
   ).bind(id).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   /* Twenty replies a page. A permalink arrives with find=<reply id> and
@@ -578,14 +595,15 @@ async function handleTopicView(request, env, url) {
     p = Math.floor(pos.n / TOPICS_PER_PAGE) + 1;
   }
   const replies = await env.DB.prepare(
-    "SELECT id, author_hash, body, created_at, edited_at FROM comments " +
-    "WHERE parent_id = ?1 AND status = 'live' ORDER BY id LIMIT ?2 OFFSET ?3"
+    "SELECT c.id, c.author_hash, pr.nick, pr.signature, c.body, c.created_at, c.edited_at FROM comments c " +
+    "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+    "WHERE c.parent_id = ?1 AND c.status = 'live' ORDER BY c.id LIMIT ?2 OFFSET ?3"
   ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
   return json({
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0 },
+    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0 },
     replies: replies.results,
     total: topic.replies || 0,
     page: p,
@@ -667,19 +685,128 @@ async function handleAudit(request, env) {
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
   const pages = await env.DB.prepare(
-    "SELECT c.page, c.author_hash, c.created_at, c.status FROM comments c " +
+    "SELECT c.page, c.author_hash, pr.nick, c.created_at, c.status FROM comments c " +
+    "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.page NOT LIKE 'board:%' AND c.status != 'deleted' AND c.id = (" +
     "  SELECT MAX(id) FROM comments c2 WHERE c2.page = c.page AND c2.status != 'deleted') " +
     "ORDER BY c.created_at DESC"
   ).all();
   const topics = await env.DB.prepare(
-    "SELECT t.page, t.title, c.author_hash, c.created_at, c.status " +
+    "SELECT t.page, t.title, c.author_hash, pr.nick, c.created_at, c.status " +
     "FROM comments c JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
+    "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.page LIKE 'board:%' AND c.status != 'deleted' AND t.status != 'deleted' AND c.id = (" +
     "  SELECT MAX(c2.id) FROM comments c2 WHERE COALESCE(c2.parent_id, c2.id) = t.id AND c2.status != 'deleted') " +
     "ORDER BY c.created_at DESC"
   ).all();
   return json({ ok: true, pages: pages.results, topics: topics.results }, 200);
+}
+
+const MAX_NICK = 40;
+const MAX_BIO = 500;
+const MAX_SIG = 200;
+
+/* Public read of a profile: the custom fields plus the assigned pseudonym,
+   never any private fingerprint or trust/ban state. Missing profile still
+   answers, with null fields, so any hash resolves to at least its name. */
+async function handleProfileGet(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const hash = String(url.searchParams.get('hash') || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const row = await env.DB.prepare('SELECT nick, bio, signature FROM profiles WHERE hash = ?1').bind(hash).first();
+  return json({
+    ok: true,
+    profile: {
+      hash: hash,
+      nick: row ? (row.nick || null) : null,
+      bio: row ? (row.bio || null) : null,
+      signature: row ? (row.signature || null) : null,
+      assigned: displayName(hash),
+      admin: isAdminHash(env, hash),
+    },
+  }, 200, cacheHeader(url));
+}
+
+/* One profile field, normalized like a comment body: CRLF folded, trimmed,
+   control characters (bar newline and tab) refused. Empty becomes null,
+   which clears the field and falls the name back to the assigned pseudonym. */
+function cleanField(raw, max) {
+  const v = String(raw || '').replace(/\r\n?/g, '\n').trim();
+  if (v.length > max) return { error: true };
+  if (CONTROL_RE.test(v)) return { error: true };
+  return { value: v || null };
+}
+
+/* Owner-writable profile: the key must hash to the profile's own hash, so a
+   profile is only ever edited by its holder. The three fields are screened as
+   one blob and rejected outright when flagged (a profile has no pending
+   state); an unscreenable blob is allowed, being low-risk and admin-clearable. */
+async function handleProfileSave(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'An identity is required.' }, 400);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many changes at once. Wait a minute and try again.' }, 429);
+  /* Same Turnstile gate as posting: a profile is public text a bot could
+     otherwise write with a self-made key and no challenge. */
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const nick = cleanField(data.nick, MAX_NICK);
+  const bio = cleanField(data.bio, MAX_BIO);
+  const signature = cleanField(data.signature, MAX_SIG);
+  if (nick.error || bio.error || signature.error) {
+    return json({ ok: false, error: 'That profile is too long or has stray characters.' }, 400);
+  }
+  const authorHash = await sha256hex(key);
+  const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash = ?1').bind(authorHash).first();
+  if (banned) return json({ ok: false, error: 'Editing is not available.' }, 403);
+  const blob = [nick.value, bio.value, signature.value].filter(Boolean).join('\n');
+  if (blob) {
+    const { status, verdict } = await screen(env, blob, await isTrusted(env, authorHash));
+    if (status !== 'live' && verdict !== 'ai-error') {
+      return json({ ok: false, error: 'That text was flagged. Please revise it.' }, 400);
+    }
+  }
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(
+    'INSERT INTO profiles (hash, nick, bio, signature, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5) ' +
+    'ON CONFLICT(hash) DO UPDATE SET nick = ?2, bio = ?3, signature = ?4, updated_at = ?5'
+  ).bind(authorHash, nick.value, bio.value, signature.value, now).run();
+  return json({
+    ok: true,
+    profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
+      assigned: displayName(authorHash), admin: isAdminHash(env, authorHash) },
+  }, 200);
+}
+
+/* Admin-only: wipe an abusive profile back to the assigned pseudonym without
+   banning the author. Bans still only stop posting. */
+async function handleProfileClear(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const hash = String(data.hash || '');
+  if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  await env.DB.prepare('UPDATE profiles SET nick = NULL, bio = NULL, signature = NULL, updated_at = ?2 WHERE hash = ?1')
+    .bind(hash, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true }, 200);
 }
 
 const MOD_HEADERS = {
@@ -816,6 +943,9 @@ export default {
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
       if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
+      if (path === '/api/comments/profile' && request.method === 'GET') return await handleProfileGet(request, env, url);
+      if (path === '/api/comments/profile' && request.method === 'POST') return await handleProfileSave(request, env);
+      if (path === '/api/comments/profile/clear' && request.method === 'POST') return await handleProfileClear(request, env);
       if (path === '/api/comments/mod' && request.method === 'GET') return await handleModConfirm(request, env, url);
       if (path === '/api/comments/mod' && request.method === 'POST') return await handleMod(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);

@@ -34,3 +34,17 @@ CREATE TABLE IF NOT EXISTS trusted (
   hash       TEXT PRIMARY KEY,
   created_at INTEGER NOT NULL
 );
+
+-- Optional profile layer over the pseudonymous identity. The hash is the same
+-- author_hash used everywhere else; a custom nick, when set, becomes the
+-- primary display name while the assigned pseudonym stays the authoritative
+-- identifier. Signature, when set, is appended under the author's posts.
+CREATE TABLE IF NOT EXISTS profiles (
+  hash       TEXT PRIMARY KEY,
+  nick       TEXT,
+  bio        TEXT,
+  signature  TEXT,
+  avatar     TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER
+);
