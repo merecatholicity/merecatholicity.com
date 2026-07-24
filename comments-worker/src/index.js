@@ -19,7 +19,7 @@ const PAGES = [
    titled comment with no parent, a reply is a comment whose parent is the
    topic. Everything else, identity, screening, limits, moderation, is the
    one pipeline all comments share. Keys must match CATS in comments.js. */
-const BOARD_CATS = ['pub', 'news', 'theology', 'philosophy', 'history', 'rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot', 'indoeuropean', 'offtopic'];
+const BOARD_CATS = ['pub', 'news', 'theology', 'philosophy', 'history', 'indoeuropean', 'rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot', 'offtopic'];
 
 function boardKey(raw) {
   const m = /^board:([a-z]+)$/.exec(String(raw || ''));
@@ -300,7 +300,7 @@ async function handlePost(request, env, ctx) {
   /* Carry the poster's own nick and signature back so their fresh comment
      renders with them at once, before any cache refresh. */
   const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
-  return json({ ok: true, status, comment: { id: comment.id, title, author_hash: authorHash,
+  return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
     nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
     body, created_at: createdAt } }, 200);
 }
