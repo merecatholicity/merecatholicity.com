@@ -1085,13 +1085,14 @@
           if (c.latest && c.latest.title) {
             var line = el('div', 'board-latest');
             var t = String(c.latest.title);
-            var a = el('a', null, t.length > 42 ? t.slice(0, 42) + '…' : t);
-            /* Jump straight to that most-recent post, not the top of the thread. */
+            /* Title and last poster together as one plain anchor jumping to
+               that most-recent post, never to a profile or the thread top. */
+            var titleText = t.length > 42 ? t.slice(0, 42) + '…' : t;
+            var who = c.latest.author_hash ? (c.latest.nick || displayName(c.latest.author_hash)) : 'Anonymous';
+            var a = el('a', null, titleText + ' · ' + who);
             a.href = 'community.html?topic=' + c.latest.topic_id +
               (c.latest.id ? '#comment-' + c.latest.id : '');
             line.appendChild(a);
-            line.appendChild(document.createTextNode(' · '));
-            line.appendChild(authorNode(c.latest.author_hash, c.latest.nick, false));
             line.appendChild(document.createTextNode(' · ' + fmtDate(c.latest.created_at)));
             cell.appendChild(line);
           }
@@ -1186,7 +1187,12 @@
           }
           row.appendChild(left);
           var tstat = el('div', 'board-stats');
-          tstat.appendChild(authorNode(t.author_hash, t.nick, false));
+          /* The last poster's name jumps to the newest post in the thread,
+             not to a profile. */
+          var who = t.author_hash ? (t.nick || displayName(t.author_hash)) : 'Anonymous';
+          var wholink = el('a', null, who);
+          wholink.href = 'community.html?topic=' + t.id + '#comment-' + (t.last_id || t.id);
+          tstat.appendChild(wholink);
           tstat.appendChild(document.createTextNode(' · ' +
             t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDate(t.last)));
           row.appendChild(tstat);
@@ -1206,7 +1212,9 @@
 
   function viewTopic(id) {
     var qs = new URLSearchParams(location.search);
-    var pNum = Math.max(1, Math.floor(Number(qs.get('p')) || 0));
+    /* Zero when no explicit page, so a bare #comment-N link takes the find
+       branch and the server resolves which page that comment lives on. */
+    var pNum = Math.floor(Number(qs.get('p')) || 0);
     var hashMatch = /^#comment-(\d+)$/.exec(location.hash);
     var extra = pNum ? '&p=' + pNum : (hashMatch ? '&find=' + hashMatch[1] : '');
     fetchRetry(API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), [1000, 3000])
@@ -1294,7 +1302,7 @@
       return;
     }
     section.appendChild(el('p', 'board-intro',
-      'An at-a-glance jump to recent activity. The last two weeks of comments, on the site pages and the book as well as in the forums, newest first. Click any line to open the exact comment. Held comments waiting on you are in the queue just below.'));
+      'An at-a-glance way to keep tabs on the board. First the review queue: comments the automated screen flagged and held back from publishing, waiting for you to approve or delete each one. Then the last two weeks of activity across the site pages, the book, and the forums, newest first, every line a link straight to that exact comment.'));
     renderPending();
     var status = el('p', 'comments-status', 'Loading activity...');
     section.appendChild(status);
@@ -1355,6 +1363,7 @@
   function renderPending() {
     var head = el('h3', 'board-form-head', 'Pending review');
     section.appendChild(head);
+    section.appendChild(el('p', 'board-intro', 'Comments the automated screen flagged and held back from publishing. Approve one to publish it, or delete it to discard. An empty list means nothing is waiting on you.'));
     var box = el('div', 'board-topics');
     box.appendChild(el('p', 'comments-status', 'Loading held comments...'));
     section.appendChild(box);
