@@ -692,3 +692,29 @@ a.trust-toggle:hover { text-decoration: underline; }
 .board-pages a { margin-right: 0.4em; }
 .board-pages strong { margin-right: 0.4em; color: var(--ink); }
 .trust-line { margin-top: 0.25em; }
+
+/* Profiles. Author names link to a profile; a custom nick shows first with the
+   assigned pseudonym muted beneath it, and a signature rides under each post. */
+.comment-author { display: inline-block; vertical-align: top; }
+a.comment-author-link { color: var(--maroon); font-weight: bold; text-decoration: none; }
+a.comment-author-link:hover { text-decoration: underline; }
+a.comment-author-sub { display: block; margin-top: -0.1em; color: #999; font-weight: normal; font-size: 0.78rem; text-decoration: none; }
+a.comment-author-sub:hover { text-decoration: underline; }
+.comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: #777; font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
+.profile { max-width: 34rem; margin: 1rem 0; }
+.profile-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: #faf6ee; display: flex; align-items: center; justify-content: center; }
+.profile-avatar-soon { color: #b09a7a; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.profile-names { min-width: 0; }
+.profile-name { font-weight: bold; color: var(--maroon); font-size: 1.2rem; overflow-wrap: anywhere; }
+.profile-assigned { color: #999; font-size: 0.85rem; }
+.profile-empty { color: #999; font-style: italic; }
+.profile-bio { white-space: pre-wrap; overflow-wrap: break-word; color: var(--ink); margin-top: 0; }
+label.profile-label { display: block; margin: 0.9rem 0 0.25rem; font-size: 0.9rem; color: #444; }
+h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: #444; }
+.profile .comment-text, .profile .key-input {
+  width: 100%; padding: 0.5em 0.7em; font: inherit; color: var(--ink);
+  background: #fff; border: 1px solid var(--rule); border-radius: 6px;
+}
+.profile textarea.comment-text { resize: vertical; }
+.profile .comment-text:focus, .profile .key-input:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }

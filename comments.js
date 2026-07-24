@@ -55,6 +55,29 @@
     return node;
   }
 
+  function profileHref(hash) {
+    return 'community.html?profile=' + hash;
+  }
+
+  /* An author's visible name: the custom nick when set, the assigned pseudonym
+     otherwise, always a link to the profile. Anonymous authors have no profile
+     and stay plain text. With a nick set, the assigned name rides along as a
+     muted, equally-clickable line (withSub), so the authoritative identifier
+     is never lost. Text goes through el()/textContent, never innerHTML. */
+  function authorNode(hash, nick, withSub) {
+    if (!hash) return el('span', 'comment-author', 'Anonymous');
+    var wrap = el('span', 'comment-author');
+    var primary = el('a', 'comment-author-link', nick || displayName(hash));
+    primary.href = profileHref(hash);
+    wrap.appendChild(primary);
+    if (withSub && nick) {
+      var sub = el('a', 'comment-author-sub', displayName(hash));
+      sub.href = profileHref(hash);
+      wrap.appendChild(sub);
+    }
+    return wrap;
+  }
+
   function browserTz() {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; }
   }
@@ -155,6 +178,7 @@
   var state = {
     key: getKey(),
     myHash: '',
+    myNick: '',
     started: false,
     widgetId: null,
     tokenWait: null,
@@ -219,8 +243,7 @@
     article.setAttribute('itemscope', '');
     article.setAttribute('itemtype', 'https://schema.org/Comment');
     var head = el('div', 'comment-head');
-    var author = el('span', 'comment-author',
-      c.author_hash ? displayName(c.author_hash) : 'Anonymous');
+    var author = authorNode(c.author_hash, c.nick, true);
     author.setAttribute('itemprop', 'author');
     head.appendChild(author);
     /* The house speaks under its own colors. */
@@ -268,6 +291,7 @@
     var body = el('div', 'comment-body', c.body);
     body.setAttribute('itemprop', 'text');
     article.appendChild(body);
+    if (c.signature) article.appendChild(el('div', 'comment-sig', c.signature));
     if (pending) {
       article.appendChild(el('p', 'comment-note',
         'Held for review. It will appear here once approved.'));
@@ -454,8 +478,12 @@
     var line = el('p', 'identity-line');
     if (state.key && state.myHash) {
       line.appendChild(document.createTextNode('Commenting as '));
-      line.appendChild(el('strong', null, displayName(state.myHash)))
+      line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)))
       line.appendChild(document.createTextNode('. '));
+      var viewProfileLink = el('a', 'identity-action', 'View profile');
+      viewProfileLink.href = profileHref(state.myHash);
+      line.appendChild(viewProfileLink);
+      line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('Show my key', showKeyBox));
       line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('Logout', function () {
@@ -491,6 +519,9 @@
   function showAgreeBox() {
     var box = section.querySelector('.key-box');
     box.textContent = '';
+    box.appendChild(el('p', 'key-note',
+      'Membership is open to North America, Europe, Russia, Israel, Korea, Japan, and Oceania. ' +
+      'Elsewhere it is declined, for security, spam, relevance, and quality.'));
     var label = el('label', 'agree-row');
     var check = el('input');
     check.type = 'checkbox';
@@ -638,7 +669,7 @@
     var row = section.querySelector('.comment-buttons');
     row.textContent = '';
     if (state.key && state.myHash) {
-      var keyed = el('button', 'btn btn-send', 'Post as ' + displayName(state.myHash).split(' ')[0]);
+      var keyed = el('button', 'btn btn-send', 'Post as ' + (state.myNick || displayName(state.myHash)).split(' ')[0]);
       keyed.type = 'button';
       keyed.addEventListener('click', function () { post(true); });
       row.appendChild(keyed);
@@ -718,7 +749,7 @@
     if (!row) return;
     row.textContent = '';
     var keyed = state.key && state.myHash;
-    var label = keyed ? labelBase + ' as ' + displayName(state.myHash).split(' ')[0] : labelBase;
+    var label = keyed ? labelBase + ' as ' + (state.myNick || displayName(state.myHash)).split(' ')[0] : labelBase;
     var button = el('button', 'btn btn-send', label);
     button.type = 'button';
     if (keyed || state.anonAllowed) {
@@ -823,9 +854,9 @@
             var a = el('a', null, t.length > 42 ? t.slice(0, 42) + '…' : t);
             a.href = 'community.html?topic=' + c.latest.topic_id;
             line.appendChild(a);
-            line.appendChild(document.createTextNode(' · ' +
-              (c.latest.author_hash ? displayName(c.latest.author_hash) : 'Anonymous') +
-              ' · ' + fmtDate(c.latest.created_at)));
+            line.appendChild(document.createTextNode(' · '));
+            line.appendChild(authorNode(c.latest.author_hash, c.latest.nick, false));
+            line.appendChild(document.createTextNode(' · ' + fmtDate(c.latest.created_at)));
             cell.appendChild(line);
           }
         });
@@ -909,9 +940,11 @@
             left.appendChild(admin);
           }
           row.appendChild(left);
-          row.appendChild(el('div', 'board-stats',
-            (t.author_hash ? displayName(t.author_hash) : 'Anonymous') + ' · ' +
+          var tstat = el('div', 'board-stats');
+          tstat.appendChild(authorNode(t.author_hash, t.nick, false));
+          tstat.appendChild(document.createTextNode(' · ' +
             t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDate(t.last)));
+          row.appendChild(tstat);
           list.appendChild(row);
         });
         var pages = Math.ceil(d.total / d.per);
@@ -1037,10 +1070,11 @@
         function row(label, r) {
           var line = el('div', 'board-topic');
           line.appendChild(el('span', 'audit-where', label));
-          line.appendChild(el('div', 'board-stats',
-            (r.author_hash ? displayName(r.author_hash) : 'Anonymous') +
-            ' · ' + fmtDateTime(r.created_at) +
+          var rstat = el('div', 'board-stats');
+          rstat.appendChild(authorNode(r.author_hash, r.nick, false));
+          rstat.appendChild(document.createTextNode(' · ' + fmtDateTime(r.created_at) +
             (r.status === 'pending' ? ' · pending' : '')));
+          line.appendChild(rstat);
           return line;
         }
         section.appendChild(el('h3', 'board-form-head', 'Site pages'));
@@ -1063,6 +1097,148 @@
       });
   }
 
+  /* Load the signed-in reader's own nick once, so their name reads the same
+     to them as to everyone else (the identity line, the post buttons). Purely
+     cosmetic: it only refreshes label text, never the login state. */
+  function loadMyProfile() {
+    if (!state.myHash) return;
+    fetch(API + '/profile?hash=' + state.myHash + '&fresh=1')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok || !d.profile) return;
+        state.myNick = d.profile.nick || '';
+        if (section.querySelector('.comment-identity')) renderIdentity();
+      })
+      .catch(function () {});
+  }
+
+  /* A profile view. Your own is read/write; everyone else's is read-only. It
+     is reached from the View-profile link and from every clickable username. */
+  function viewProfile(hash) {
+    document.title = 'Profile | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Profile']]);
+    if (!/^[0-9a-f]{64}$/.test(String(hash))) {
+      section.appendChild(el('p', 'comments-status', 'No such profile.'));
+      return;
+    }
+    var editable = !!state.key && hash === state.myHash;
+    var card = el('div', 'profile');
+    section.appendChild(card);
+    var status = el('p', 'comments-status', 'Loading profile...');
+    section.appendChild(status);
+    /* Editing is a write, so it gets the same Turnstile gate as posting. The
+       slot lives outside the card so it survives the read/edit toggle. */
+    if (editable) {
+      section.appendChild(el('div', 'ts-slot'));
+      loadTurnstile();
+    }
+    fetchRetry(API + '/profile?hash=' + hash + freshParam('&'), freshOpts(), [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        status.remove();
+        renderProfile(card, d.profile, editable);
+      })
+      .catch(function () {
+        status.textContent = 'The profile could not be loaded. Check your connection and reload the page.';
+      });
+  }
+
+  /* Read view: an avatar placeholder, the primary name (nick or assigned) with
+     the assigned pseudonym muted beneath when a nick is set, then bio and
+     signature. The owner gets an Edit button that swaps in the form. */
+  function renderProfile(card, p, editable) {
+    card.textContent = '';
+    var headRow = el('div', 'profile-head');
+    var avatar = el('div', 'profile-avatar');
+    avatar.appendChild(el('span', 'profile-avatar-soon', 'soon'));
+    headRow.appendChild(avatar);
+    var names = el('div', 'profile-names');
+    names.appendChild(el('div', 'profile-name', p.nick || p.assigned));
+    if (p.nick) names.appendChild(el('div', 'profile-assigned', p.assigned));
+    if (p.admin) names.appendChild(el('span', 'comment-admin', '(admin)'));
+    headRow.appendChild(names);
+    card.appendChild(headRow);
+    if (p.bio) {
+      card.appendChild(el('h3', 'profile-label', 'Bio'));
+      card.appendChild(el('p', 'profile-bio', p.bio));
+    } else if (!editable) {
+      card.appendChild(el('p', 'profile-bio profile-empty', 'No bio yet.'));
+    }
+    if (p.signature) {
+      card.appendChild(el('h3', 'profile-label', 'Signature'));
+      card.appendChild(el('div', 'comment-sig', p.signature));
+    }
+    if (editable) {
+      var edit = el('button', 'btn btn-send', 'Edit profile');
+      edit.type = 'button';
+      edit.addEventListener('click', function () { editProfile(card, p); });
+      card.appendChild(edit);
+    }
+  }
+
+  /* The edit form. Every save is re-screened by the server; a flagged save is
+     refused with its reason and the fields survive so nothing is retyped. */
+  function editProfile(card, p) {
+    card.textContent = '';
+    card.appendChild(el('p', 'key-note',
+      'Your assigned name ' + p.assigned + ' always stays as your identifier. ' +
+      'A custom nickname simply shows first.'));
+    card.appendChild(el('label', 'profile-label', 'Nickname'));
+    var nickIn = el('input', 'key-input');
+    nickIn.type = 'text';
+    nickIn.maxLength = 40;
+    nickIn.placeholder = p.assigned;
+    nickIn.value = p.nick || '';
+    card.appendChild(nickIn);
+    card.appendChild(el('label', 'profile-label', 'Bio'));
+    var bioIn = el('textarea', 'comment-text');
+    bioIn.maxLength = 500;
+    bioIn.rows = 4;
+    bioIn.value = p.bio || '';
+    card.appendChild(bioIn);
+    card.appendChild(el('label', 'profile-label', 'Signature'));
+    var sigIn = el('textarea', 'comment-text');
+    sigIn.maxLength = 200;
+    sigIn.rows = 2;
+    sigIn.value = p.signature || '';
+    card.appendChild(sigIn);
+    card.appendChild(el('p', 'profile-empty', 'Avatar upload is coming soon.'));
+    var row = el('div', 'comment-buttons');
+    var save = el('button', 'btn btn-send', 'Save');
+    save.type = 'button';
+    row.appendChild(save);
+    card.appendChild(row);
+    var note = el('p', 'form-status');
+    card.appendChild(note);
+    card.appendChild(identityAction('Cancel', function () { renderProfile(card, p, true); }));
+    save.addEventListener('click', function () {
+      save.disabled = true;
+      note.textContent = 'Verifying...';
+      getToken().then(function (token) {
+        note.textContent = 'Saving...';
+        return fetchRetry(API + '/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, nick: nickIn.value, bio: bioIn.value, signature: sigIn.value, token: token }),
+        }, [1500], function () { note.textContent = 'Network hiccup, retrying...'; })
+          .then(function (r) { return r.json(); });
+      })
+        .then(function (d) {
+          if (!d.ok) throw new Error(d.error || 'Could not save.');
+          stampFresh();
+          state.myNick = d.profile.nick || '';
+          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+          renderProfile(card, d.profile, true);
+        })
+        .catch(function (err) {
+          note.textContent = err.message || 'Network error. Try again in a moment.';
+          save.disabled = false;
+          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+        });
+    });
+  }
+
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
     /* Resolve the identity before any view renders, or a keyed visitor
@@ -1070,7 +1246,9 @@
     var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
     ready.then(function (h) {
       state.myHash = h;
+      loadMyProfile();
       var params = new URLSearchParams(location.search);
+      if (params.get('profile')) return viewProfile(params.get('profile'));
       if (params.get('audit')) return viewAudit();
       var topic = Number(params.get('topic'));
       if (Number.isInteger(topic) && topic > 0) return viewTopic(topic);
@@ -1135,6 +1313,7 @@
       renderIdentity();
       renderButtons();
       load();
+      loadMyProfile();
     });
 
     /* Re-render the buttons whenever identity changes. Cheapest hook: watch
