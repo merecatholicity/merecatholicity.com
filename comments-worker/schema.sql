@@ -54,17 +54,21 @@ CREATE TABLE IF NOT EXISTS dm_threads (
 CREATE INDEX IF NOT EXISTS dm_threads_a_idx ON dm_threads(a_hash, last_at);
 CREATE INDEX IF NOT EXISTS dm_threads_b_idx ON dm_threads(b_hash, last_at);
 
+-- held = 1 is the shadow hold: a message sent while its sender stood blocked
+-- by the recipient. The sender sees it as delivered in their own view; the
+-- recipient never does, until an unblock releases it with its original time.
 CREATE TABLE IF NOT EXISTS dms (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   thread_id   INTEGER NOT NULL,
   sender_hash TEXT NOT NULL,
   body        TEXT NOT NULL,
-  created_at  INTEGER NOT NULL
+  created_at  INTEGER NOT NULL,
+  held        INTEGER
 );
 CREATE INDEX IF NOT EXISTS dms_thread_idx ON dms(thread_id, id);
 
--- A block stops the blocked party's sends to the owner, with a generic error
--- that never confirms the block exists.
+-- A block silently holds the blocked party's future messages to the owner.
+-- The blocked party is never told; their sends read as delivered to them.
 CREATE TABLE IF NOT EXISTS dm_blocks (
   owner_hash   TEXT NOT NULL,
   blocked_hash TEXT NOT NULL,

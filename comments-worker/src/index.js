@@ -827,14 +827,22 @@ function dmPair(h1, h2) {
   return h1 < h2 ? [h1, h2] : [h2, h1];
 }
 
-/* A constant SQL fragment; the caller binds the viewer's hash as ?1. */
-function dmUnreadCond() {
-  return "(last_sender != ?1 AND ((a_hash = ?1 AND (a_read_at IS NULL OR last_at > a_read_at)) " +
-    "OR (b_hash = ?1 AND (b_read_at IS NULL OR last_at > b_read_at))))";
-}
+/* Visibility is per viewer: everyone sees the unheld, and a sender always
+   sees their own words, held or not. ?1 must be bound to the viewer's hash
+   wherever this fragment appears. */
+const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1)";
+
+/* Unread, per viewer: an unheld message from someone else, newer than my
+   read stamp. Held messages can never trip the recipient's badge. */
+const DM_UNREAD_EXISTS =
+  'EXISTS(SELECT 1 FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
+  'AND m.sender_hash != ?1 ' +
+  'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0))';
 
 /* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
-   recipient refuses the send with a generic message that confirms nothing. */
+   recipient does NOT refuse the send: the message is stored held, reads as
+   delivered to its sender, and stays invisible to the recipient until an
+   unblock releases it. The blocked party is never told. */
 async function handleDmSend(request, env) {
   let data;
   try {
@@ -856,27 +864,37 @@ async function handleDmSend(request, env) {
   if (me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
   const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash = ?1').bind(me).first();
   if (banned) return json({ ok: false, error: 'Messaging is not available.' }, 403);
-  const blocked = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
+  const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
     .bind(to, me).first();
-  if (blocked) return json({ ok: false, error: 'The message could not be sent.' }, 400);
+  const held = blockRow ? 1 : 0;
   if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
   const [a, b] = dmPair(me, to);
   const now = Math.floor(Date.now() / 1000);
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
-  const thread = await env.DB.prepare(
-    'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
-    'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
-  ).bind(a, b, now, me).first();
+  /* A held send must leave the recipient's world untouched: the thread's
+     last-word fields stay as they were, so nothing bumps, nothing rings. */
+  const thread = held
+    ? await env.DB.prepare(
+        'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
+        'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = last_at RETURNING id'
+      ).bind(a, b, now, me).first()
+    : await env.DB.prepare(
+        'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
+        'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
+      ).bind(a, b, now, me).first();
   const msg = await env.DB.prepare(
-    'INSERT INTO dms (thread_id, sender_hash, body, created_at) VALUES (?1, ?2, ?3, ?4) RETURNING id'
-  ).bind(thread.id, me, body, now).first();
-  /* Recomputed, never incremented, and the sender's own stamp rides along:
-     what you just said is already read by you. */
-  await env.DB.prepare(
-    'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1), ' + myReadCol + ' = ?2 WHERE id = ?1'
-  ).bind(thread.id, now).run();
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id'
+  ).bind(thread.id, me, body, now, held).first();
+  if (!held) {
+    /* Recomputed, never incremented, over the visible words alone, and the
+       sender's own stamp rides along: what you just said is read by you. */
+    await env.DB.prepare(
+      'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
+      myReadCol + ' = ?2 WHERE id = ?1'
+    ).bind(thread.id, now).run();
+  }
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
 }
 
@@ -897,18 +915,22 @@ async function handleDmThreads(request, env) {
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
-  const rows = await env.DB.prepare(
-    'SELECT t.id, t.last_at, t.msgs, ' +
+  /* Everything per viewer: counts and last-activity over the words this
+     reader may see, and a thread whose every word is held reads as absent. */
+  const inner =
+    'SELECT t.id, ' +
     'CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END AS other_hash, ' +
     'pr.nick, pr.avatar, ' +
-    'CASE WHEN ' + dmUnreadCond() + ' THEN 1 ELSE 0 END AS unread ' +
+    '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ') AS msgs, ' +
+    '(SELECT MAX(m.created_at) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ') AS last_at, ' +
+    'CASE WHEN ' + DM_UNREAD_EXISTS + ' THEN 1 ELSE 0 END AS unread ' +
     'FROM dm_threads t LEFT JOIN profiles pr ON pr.hash = CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END ' +
-    'WHERE t.a_hash = ?1 OR t.b_hash = ?1 ' +
-    'ORDER BY t.last_at DESC LIMIT ?2 OFFSET ?3'
+    'WHERE t.a_hash = ?1 OR t.b_hash = ?1';
+  const rows = await env.DB.prepare(
+    'SELECT * FROM (' + inner + ') WHERE msgs > 0 ORDER BY last_at DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
   const totals = await env.DB.prepare(
-    'SELECT COUNT(*) AS n, SUM(CASE WHEN ' + dmUnreadCond() + ' THEN 1 ELSE 0 END) AS unread ' +
-    'FROM dm_threads WHERE a_hash = ?1 OR b_hash = ?1'
+    'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'
   ).bind(me).first();
   return json({ ok: true, threads: rows.results, total: totals.n || 0,
     unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE }, 200);
@@ -944,18 +966,26 @@ async function handleDmThread(request, env) {
     return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
   }
-  const total = thread.msgs || 0;
+  /* The total and the pages are the viewer's own: held words count for
+     their sender and for nobody else. */
+  const totRow = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS
+  ).bind(me, thread.id).first();
+  const total = totRow.n || 0;
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
-    'SELECT id, sender_hash, body, created_at FROM dms WHERE thread_id = ?1 ORDER BY id LIMIT ?2 OFFSET ?3'
-  ).bind(thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
+    'SELECT m.id, m.sender_hash, m.body, m.created_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
+    ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
+  ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
-  const myReadAt = me === a ? thread.a_read_at : thread.b_read_at;
-  if (thread.last_sender !== me && (myReadAt == null || thread.last_at > myReadAt)) {
-    await env.DB.prepare('UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?1')
-      .bind(thread.id, Math.floor(Date.now() / 1000)).run();
-  }
+  /* One conditional write: only when a visible word from the other side is
+     newer than my stamp. Held words never trigger it. */
+  await env.DB.prepare(
+    'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?3 AND EXISTS(' +
+    'SELECT 1 FROM dms m WHERE m.thread_id = ?3 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
+    'AND m.created_at > COALESCE(' + myReadCol + ', 0))'
+  ).bind(me, Math.floor(Date.now() / 1000), thread.id).run();
   return json({ ok: true, thread_id: thread.id,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
     messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
@@ -977,7 +1007,7 @@ async function handleDmUnread(request, env) {
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   const row = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM dm_threads WHERE (a_hash = ?1 OR b_hash = ?1) AND ' + dmUnreadCond()
+    'SELECT COUNT(*) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1) AND ' + DM_UNREAD_EXISTS
   ).bind(me).first();
   return json({ ok: true, unread: row.n || 0 }, 200);
 }
@@ -1001,6 +1031,34 @@ async function handleDmBlock(request, env) {
     await env.DB.prepare('INSERT OR IGNORE INTO dm_blocks (owner_hash, blocked_hash, created_at) VALUES (?1, ?2, ?3)')
       .bind(me, hash, Math.floor(Date.now() / 1000)).run();
   } else {
+    /* Unblocking delivers the flood: every word held during the block is
+       released with its original timestamp, and the thread's last-word
+       fields catch up so the inbox and the badge finally ring. */
+    const [a, b] = dmPair(me, hash);
+    const t = await env.DB.prepare('SELECT id FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2').bind(a, b).first();
+    if (t) {
+      const mn = await env.DB.prepare(
+        'SELECT MIN(created_at) AS mn FROM dms WHERE thread_id = ?1 AND sender_hash = ?2 AND COALESCE(held, 0) = 1'
+      ).bind(t.id, hash).first();
+      await env.DB.prepare(
+        'UPDATE dms SET held = 0 WHERE thread_id = ?1 AND sender_hash = ?2 AND COALESCE(held, 0) = 1'
+      ).bind(t.id, hash).run();
+      /* The released words keep their original times, which may sit behind
+         my read stamp; wind the stamp back so the delivery still rings. */
+      if (mn && mn.mn != null) {
+        const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
+        await env.DB.prepare(
+          'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?1 AND ' + myReadCol + ' IS NOT NULL AND ' + myReadCol + ' >= ?2'
+        ).bind(t.id, mn.mn - 1).run();
+      }
+      await env.DB.prepare(
+        'UPDATE dm_threads SET ' +
+        'msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
+        'last_at = COALESCE((SELECT MAX(created_at) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), last_at), ' +
+        'last_sender = COALESCE((SELECT sender_hash FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0 ORDER BY id DESC LIMIT 1), last_sender) ' +
+        'WHERE id = ?1'
+      ).bind(t.id).run();
+    }
     await env.DB.prepare('DELETE FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(me, hash).run();
   }
   return json({ ok: true, blocked: !!data.blocked }, 200);

@@ -1690,7 +1690,7 @@
         var blockLine = el('p', 'board-audit-link');
         blockLine.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
           var blocking = !d.blocked;
-          if (blocking && !confirm('Block this member? Their future messages to you will not arrive.')) return;
+          if (blocking && !confirm('Block this member? Their future messages will be held out of your sight, and they will never be told. Unblocking delivers everything they wrote meanwhile.')) return;
           fetch(API + '/dm/block', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
