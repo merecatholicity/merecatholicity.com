@@ -231,7 +231,7 @@
     ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific. New here? ', 'Introduce yourself and say hello', 'community.html?topic=37'],
     ['news', 'News', 'News of the Church and of the world.'],
     ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
-    ['theology', 'Theology', 'All genres. Anything without a room of its own.'],
+    ['theology', 'Theology', 'All genres. Systematic and Dogmatic, Biblical and Exegetical, Historical and Patristic, Philosophical and Natural, etc.'],
     ['philosophy', 'Philosophy', 'Does this board really exist.'],
     ['history', 'History', 'World, church, and national history. All of it.'],
     ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
