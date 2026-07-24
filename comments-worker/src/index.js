@@ -517,7 +517,8 @@ async function handleBoardCat(request, env, url) {
   ).bind(page).first();
   const rows = await env.DB.prepare(
     'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, ' +
-    'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last ' +
+    'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last, ' +
+    "(SELECT MAX(m.id) FROM comments m WHERE (m.id = c.id OR m.parent_id = c.id) AND m.status = 'live') AS last_id " +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "WHERE c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live' " +
     'ORDER BY last DESC LIMIT ?2 OFFSET ?3'
