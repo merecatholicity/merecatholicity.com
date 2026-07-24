@@ -816,6 +816,212 @@ async function handleProfileClear(request, env) {
   return json({ ok: true }, 200);
 }
 
+/* ---- Direct messages. Strictly 1v1, private to the two keys involved: every
+   read is a POST carrying the key, nothing is cacheable, and no admin door
+   exists. A thread is unread for me when its last word is someone else's and
+   newer than my read stamp. ---- */
+
+const DM_PER_PAGE = 20;
+
+function dmPair(h1, h2) {
+  return h1 < h2 ? [h1, h2] : [h2, h1];
+}
+
+/* A constant SQL fragment; the caller binds the viewer's hash as ?1. */
+function dmUnreadCond() {
+  return "(last_sender != ?1 AND ((a_hash = ?1 AND (a_read_at IS NULL OR last_at > a_read_at)) " +
+    "OR (b_hash = ?1 AND (b_read_at IS NULL OR last_at > b_read_at))))";
+}
+
+/* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
+   recipient refuses the send with a generic message that confirms nothing. */
+async function handleDmSend(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many messages at once. Wait a minute and try again.' }, 429);
+  const key = String(data.key || '');
+  const to = String(data.to || '');
+  if (!key || !/^[0-9a-f]{64}$/.test(to)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
+  if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
+  if (body.length > MAX_BODY) return json({ ok: false, error: 'The message is too long.' }, 400);
+  if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
+  const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash = ?1').bind(me).first();
+  if (banned) return json({ ok: false, error: 'Messaging is not available.' }, 403);
+  const blocked = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
+    .bind(to, me).first();
+  if (blocked) return json({ ok: false, error: 'The message could not be sent.' }, 400);
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const [a, b] = dmPair(me, to);
+  const now = Math.floor(Date.now() / 1000);
+  const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
+  const thread = await env.DB.prepare(
+    'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
+    'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
+  ).bind(a, b, now, me).first();
+  const msg = await env.DB.prepare(
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at) VALUES (?1, ?2, ?3, ?4) RETURNING id'
+  ).bind(thread.id, me, body, now).first();
+  /* Recomputed, never incremented, and the sender's own stamp rides along:
+     what you just said is already read by you. */
+  await env.DB.prepare(
+    'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1), ' + myReadCol + ' = ?2 WHERE id = ?1'
+  ).bind(thread.id, now).run();
+  return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
+}
+
+/* Inbox: my threads by newest activity, the other party resolved with their
+   nick and avatar, and the total unread count riding along so one call feeds
+   both the list and the badge. */
+async function handleDmThreads(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  const rows = await env.DB.prepare(
+    'SELECT t.id, t.last_at, t.msgs, ' +
+    'CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END AS other_hash, ' +
+    'pr.nick, pr.avatar, ' +
+    'CASE WHEN ' + dmUnreadCond() + ' THEN 1 ELSE 0 END AS unread ' +
+    'FROM dm_threads t LEFT JOIN profiles pr ON pr.hash = CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END ' +
+    'WHERE t.a_hash = ?1 OR t.b_hash = ?1 ' +
+    'ORDER BY t.last_at DESC LIMIT ?2 OFFSET ?3'
+  ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
+  const totals = await env.DB.prepare(
+    'SELECT COUNT(*) AS n, SUM(CASE WHEN ' + dmUnreadCond() + ' THEN 1 ELSE 0 END) AS unread ' +
+    'FROM dm_threads WHERE a_hash = ?1 OR b_hash = ?1'
+  ).bind(me).first();
+  return json({ ok: true, threads: rows.results, total: totals.n || 0,
+    unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE }, 200);
+}
+
+/* One conversation, paged by twenty like everything else, defaulting to the
+   LAST page so it opens at its newest words. Opening marks it read with at
+   most one write, none when nothing was unread. */
+async function handleDmThread(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const other = String(data.with || '');
+  if (!key || !/^[0-9a-f]{64}$/.test(other)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  const [a, b] = dmPair(me, other);
+  const thread = await env.DB.prepare(
+    'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
+  ).bind(a, b).first();
+  const prof = await env.DB.prepare('SELECT nick, avatar FROM profiles WHERE hash = ?1').bind(other).first();
+  const iBlocked = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
+    .bind(me, other).first();
+  if (!thread) {
+    /* No words yet: an empty room, ready for the first message. */
+    return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
+      messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
+  }
+  const total = thread.msgs || 0;
+  const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
+  const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  const msgs = await env.DB.prepare(
+    'SELECT id, sender_hash, body, created_at FROM dms WHERE thread_id = ?1 ORDER BY id LIMIT ?2 OFFSET ?3'
+  ).bind(thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
+  const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
+  const myReadAt = me === a ? thread.a_read_at : thread.b_read_at;
+  if (thread.last_sender !== me && (myReadAt == null || thread.last_at > myReadAt)) {
+    await env.DB.prepare('UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?1')
+      .bind(thread.id, Math.floor(Date.now() / 1000)).run();
+  }
+  return json({ ok: true, thread_id: thread.id,
+    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
+    messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
+}
+
+/* The badge count: unread threads, one indexed COUNT. The client asks at most
+   once per ninety seconds, so this stays cheap on every side. */
+async function handleDmUnread(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const row = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM dm_threads WHERE (a_hash = ?1 OR b_hash = ?1) AND ' + dmUnreadCond()
+  ).bind(me).first();
+  return json({ ok: true, unread: row.n || 0 }, 200);
+}
+
+/* Block and unblock, owner-side only. */
+async function handleDmBlock(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const hash = String(data.hash || '');
+  if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (data.blocked) {
+    await env.DB.prepare('INSERT OR IGNORE INTO dm_blocks (owner_hash, blocked_hash, created_at) VALUES (?1, ?2, ?3)')
+      .bind(me, hash, Math.floor(Date.now() / 1000)).run();
+  } else {
+    await env.DB.prepare('DELETE FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(me, hash).run();
+  }
+  return json({ ok: true, blocked: !!data.blocked }, 200);
+}
+
+/* The autocomplete corpus: every hash that has ever appeared publicly, with
+   its nick when one is set. Assigned names are derived client-side from the
+   hash, so they are not sent. Public-by-construction data, cacheable. */
+async function handleDmDirectory(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const rows = await env.DB.prepare(
+    'SELECT u.hash, pr.nick FROM (' +
+    "  SELECT DISTINCT author_hash AS hash FROM comments WHERE author_hash IS NOT NULL AND status != 'deleted' " +
+    '  UNION SELECT hash FROM profiles' +
+    ') u LEFT JOIN profiles pr ON pr.hash = u.hash LIMIT 2000'
+  ).all();
+  return json({ ok: true, users: rows.results }, 200, cacheHeader(url));
+}
+
 /* ---- Avatars. One 400x400 raster image per identity, stored in R2 under
    avatars/<hash>, so an upload overwrites the old file and storage stays
    pruned by construction. The server trusts nothing from the client: bytes
@@ -1229,6 +1435,12 @@ export default {
       if (path === '/api/comments/profile' && request.method === 'POST') return await handleProfileSave(request, env);
       if (path === '/api/comments/profile/clear' && request.method === 'POST') return await handleProfileClear(request, env);
       if (path === '/api/comments/backup' && request.method === 'POST') return await handleBackup(request, env);
+      if (path === '/api/comments/dm/send' && request.method === 'POST') return await handleDmSend(request, env);
+      if (path === '/api/comments/dm/threads' && request.method === 'POST') return await handleDmThreads(request, env);
+      if (path === '/api/comments/dm/thread' && request.method === 'POST') return await handleDmThread(request, env);
+      if (path === '/api/comments/dm/unread' && request.method === 'POST') return await handleDmUnread(request, env);
+      if (path === '/api/comments/dm/block' && request.method === 'POST') return await handleDmBlock(request, env);
+      if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);
       if (path === '/api/comments/avatar/delete' && request.method === 'POST') return await handleAvatarDelete(request, env);

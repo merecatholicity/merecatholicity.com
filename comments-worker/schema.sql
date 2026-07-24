@@ -35,6 +35,43 @@ CREATE TABLE IF NOT EXISTS trusted (
   created_at INTEGER NOT NULL
 );
 
+-- Direct messages: strictly 1v1, the pair stored in canonical order (a_hash is
+-- the lexicographically lower of the two) so one UNIQUE row holds each pair.
+-- last_sender keeps your own message from ever reading as unread to you, and
+-- the per-side read_at stamps carry the unread state without a per-message flag.
+CREATE TABLE IF NOT EXISTS dm_threads (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  a_hash      TEXT NOT NULL,
+  b_hash      TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  last_at     INTEGER NOT NULL,
+  last_sender TEXT NOT NULL,
+  msgs        INTEGER NOT NULL DEFAULT 0,
+  a_read_at   INTEGER,
+  b_read_at   INTEGER,
+  UNIQUE(a_hash, b_hash)
+);
+CREATE INDEX IF NOT EXISTS dm_threads_a_idx ON dm_threads(a_hash, last_at);
+CREATE INDEX IF NOT EXISTS dm_threads_b_idx ON dm_threads(b_hash, last_at);
+
+CREATE TABLE IF NOT EXISTS dms (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  thread_id   INTEGER NOT NULL,
+  sender_hash TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS dms_thread_idx ON dms(thread_id, id);
+
+-- A block stops the blocked party's sends to the owner, with a generic error
+-- that never confirms the block exists.
+CREATE TABLE IF NOT EXISTS dm_blocks (
+  owner_hash   TEXT NOT NULL,
+  blocked_hash TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (owner_hash, blocked_hash)
+);
+
 -- Optional profile layer over the pseudonymous identity. The hash is the same
 -- author_hash used everywhere else; a custom nick, when set, becomes the
 -- primary display name while the assigned pseudonym stays the authoritative
