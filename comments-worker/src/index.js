@@ -253,7 +253,7 @@ async function handleGet(request, env, url) {
   const page = normalizePage(url.searchParams.get('page'));
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   const rows = await env.DB.prepare(
-    'SELECT c.id, c.author_hash, pr.nick, pr.signature, c.body, c.created_at, c.edited_at ' +
+    'SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at ' +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id LIMIT 500"
   ).bind(page).all();
@@ -349,9 +349,10 @@ async function handlePost(request, env, ctx) {
 
   /* Carry the poster's own nick and signature back so their fresh comment
      renders with them at once, before any cache refresh. */
-  const prof = authorHash ? await env.DB.prepare('SELECT nick, signature FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
+  const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
   return json({ ok: true, status, comment: { id: comment.id, title, author_hash: authorHash,
-    nick: prof && prof.nick || null, signature: prof && prof.signature || null, body, created_at: createdAt } }, 200);
+    nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
+    body, created_at: createdAt } }, 200);
 }
 
 async function handleSelfDelete(request, env) {
@@ -579,7 +580,7 @@ async function handleTopicView(request, env, url) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, c.body, c.created_at, c.edited_at, c.locked, c.replies " +
+    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at, c.locked, c.replies " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
   ).bind(id).first();
@@ -595,7 +596,7 @@ async function handleTopicView(request, env, url) {
     p = Math.floor(pos.n / TOPICS_PER_PAGE) + 1;
   }
   const replies = await env.DB.prepare(
-    "SELECT c.id, c.author_hash, pr.nick, pr.signature, c.body, c.created_at, c.edited_at FROM comments c " +
+    "SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at FROM comments c " +
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.parent_id = ?1 AND c.status = 'live' ORDER BY c.id LIMIT ?2 OFFSET ?3"
   ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
@@ -603,7 +604,7 @@ async function handleTopicView(request, env, url) {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0 },
+    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0 },
     replies: replies.results,
     total: topic.replies || 0,
     page: p,
