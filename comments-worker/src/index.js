@@ -1049,7 +1049,25 @@ async function runBackup(env) {
       pruned++;
     }
   }
-  const result = { key, sqlBytes: sql.length, gzBytes: gz.length, kept: list.objects.length - pruned, pruned };
+  /* Mirror the avatar objects too, so all state rides in one bucket. Capped
+     well under the free plan's per-invocation subrequest budget; the cap is
+     logged when hit, never silent. Old mirror entries are left in place,
+     which for a backup is a feature. */
+  let avatarsMirrored = 0, avatarsSkipped = 0;
+  if (env.AVATARS) {
+    const avs = await env.AVATARS.list({ prefix: 'avatars/' });
+    const MIRROR_CAP = 15;
+    for (const o of avs.objects.slice(0, MIRROR_CAP)) {
+      const obj = await env.AVATARS.get(o.key);
+      if (!obj) continue;
+      await env.BACKUPS.put('avatars-mirror/' + o.key.slice(8),
+        await obj.arrayBuffer(), { httpMetadata: obj.httpMetadata });
+      avatarsMirrored++;
+    }
+    avatarsSkipped = Math.max(0, avs.objects.length - MIRROR_CAP);
+    if (avatarsSkipped) console.log(JSON.stringify({ event: 'backup_avatar_cap', skipped: avatarsSkipped }));
+  }
+  const result = { key, sqlBytes: sql.length, gzBytes: gz.length, kept: list.objects.length - pruned, pruned, avatarsMirrored, avatarsSkipped };
   console.log(JSON.stringify({ event: 'backup', ...result }));
   return result;
 }
