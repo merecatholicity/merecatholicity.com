@@ -263,6 +263,13 @@
     if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) {
       head.appendChild(el('span', 'comment-admin', '(admin)'));
     }
+    /* A door to a private word with the author, for keyed readers only. */
+    if (c.author_hash && state.myHash && c.author_hash !== state.myHash) {
+      var dm = el('a', 'comment-dm', 'DM');
+      dm.href = 'community.html?dm=' + c.author_hash;
+      dm.title = 'Send a direct message';
+      head.appendChild(dm);
+    }
     /* The date doubles as the comment's shareable permalink. */
     var date = el('a', 'comment-date', fmtDate(c.created_at));
     date.href = '#comment-' + c.id;
@@ -483,10 +490,40 @@
     line.appendChild(a);
   }
 
+  /* ---- Unread badge. One localStorage-cached count, refreshed from the
+     server at most every ninety seconds, so idle page turns cost nothing.
+     Inbox and thread responses refresh the cache for free. ---- */
+
+  var DM_CACHE = 'mc-dm-unread';
+
+  function dmCacheGet() {
+    try { return JSON.parse(localStorage.getItem(DM_CACHE)) || null; } catch (e) { return null; }
+  }
+  function dmCacheSet(n) {
+    try { localStorage.setItem(DM_CACHE, JSON.stringify({ n: n, at: Date.now() })) } catch (e) {}
+    renderIdentity();
+  }
+
+  function dmUnreadCheck() {
+    if (!state.key) return;
+    var c = dmCacheGet();
+    if (c && Date.now() - c.at < 90000) return;
+    /* Stamp first, so parallel page loads inside the window stay quiet. */
+    try { localStorage.setItem(DM_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
+    fetch(API + '/dm/unread', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) dmCacheSet(d.unread);
+    }).catch(function () {});
+  }
+
   /* ---- Identity UI ---- */
 
   function renderIdentity() {
     var box = section.querySelector('.comment-identity');
+    if (!box) return;
     box.textContent = '';
     var line = el('p', 'identity-line');
     if (state.key && state.myHash) {
@@ -496,6 +533,12 @@
       var viewProfileLink = el('a', 'identity-action', 'View profile');
       viewProfileLink.href = profileHref(state.myHash);
       line.appendChild(viewProfileLink);
+      line.appendChild(document.createTextNode(' · '));
+      var inboxLink = el('a', 'identity-action', 'Inbox');
+      inboxLink.href = 'community.html?inbox=1';
+      line.appendChild(inboxLink);
+      var dmc = dmCacheGet();
+      if (dmc && dmc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + dmc.n + ')'));
       line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('Show my key', showKeyBox));
       line.appendChild(document.createTextNode(' · '));
@@ -1194,6 +1237,13 @@
       edit.type = 'button';
       edit.addEventListener('click', function () { editProfile(card, p); });
       card.appendChild(edit);
+    } else if (state.key && state.myHash && p.hash !== state.myHash) {
+      var dmBtn = el('button', 'btn btn-send', 'Send a DM');
+      dmBtn.type = 'button';
+      dmBtn.addEventListener('click', function () {
+        location.href = 'community.html?dm=' + p.hash;
+      });
+      card.appendChild(dmBtn);
     }
   }
 
@@ -1354,6 +1404,305 @@
     });
   }
 
+  /* ---- Direct messages ---- */
+
+  function dmLabel(hash, nick) {
+    var assigned = displayName(hash);
+    return nick ? nick + ' (' + assigned + ')' : assigned;
+  }
+
+  /* Fuzzy score of one candidate string against the lowercased query:
+     whole-prefix beats word-prefix beats substring beats subsequence. */
+  function dmScore(q, name) {
+    if (!name) return 0;
+    var n = String(name).toLowerCase();
+    if (n.indexOf(q) === 0) return 100;
+    var words = n.split(/[\s-]+/);
+    for (var i = 0; i < words.length; i++) if (words[i].indexOf(q) === 0) return 80;
+    if (n.indexOf(q) !== -1) return 60;
+    var j = 0;
+    for (var k = 0; k < n.length && j < q.length; k++) if (n[k] === q[j]) j++;
+    return j === q.length ? 30 : 0;
+  }
+
+  /* The Send-a-DM box with autocomplete. The member directory is fetched
+     once per session at the third character; every keystroke after that is
+     scored locally and costs no request. */
+  function dmSearchBox() {
+    var box = el('div', 'key-box dm-search');
+    box.hidden = false;
+    box.appendChild(el('p', 'key-note', 'Send a DM. Type a nickname or an assigned name, then pick from the suggestions.'));
+    var row = el('div', 'key-row');
+    var input = el('input', 'key-input');
+    input.type = 'text';
+    input.placeholder = 'e.g. Constant-Almond, or a nickname';
+    row.appendChild(input);
+    box.appendChild(row);
+    var sug = el('div', 'dm-suggest');
+    sug.hidden = true;
+    box.appendChild(sug);
+    var note = el('p', 'form-status');
+    box.appendChild(note);
+    var dir = null;
+    var loading = false;
+    var current = [];
+    var sel = 0;
+    var timer = null;
+    function ensureDir(cb) {
+      if (dir) return cb();
+      if (loading) return;
+      loading = true;
+      fetch(API + '/dm/directory' + freshParam('?'))
+        .then(function (r) { return r.json(); })
+        .then(function (d) { loading = false; if (d.ok) { dir = d.users; cb(); } })
+        .catch(function () { loading = false; note.textContent = 'The member list could not be loaded.'; });
+    }
+    function renderSug() {
+      sug.textContent = '';
+      if (!current.length) { sug.hidden = true; return; }
+      current.forEach(function (u, i) {
+        var r = el('div', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''), dmLabel(u.hash, u.nick));
+        r.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          location.href = 'community.html?dm=' + u.hash;
+        });
+        sug.appendChild(r);
+      });
+      sug.hidden = false;
+    }
+    function suggest() {
+      var q = input.value.trim().toLowerCase();
+      if (q.length < 3) { current = []; renderSug(); return; }
+      ensureDir(function () {
+        current = dir
+          .filter(function (u) { return u.hash !== state.myHash; })
+          .map(function (u) {
+            var s = Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash)));
+            return { u: u, s: s, label: dmLabel(u.hash, u.nick) };
+          })
+          .filter(function (x) { return x.s > 0; })
+          .sort(function (x, y) { return y.s - x.s || (x.label < y.label ? -1 : 1); })
+          .slice(0, 8)
+          .map(function (x) { return x.u; });
+        sel = 0;
+        note.textContent = current.length ? '' : 'No member matches that. Pick from the suggestions.';
+        renderSug();
+      });
+    }
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(suggest, 150);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (sug.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, current.length - 1); renderSug(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); renderSug(); }
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (current[sel]) location.href = 'community.html?dm=' + current[sel].hash;
+      } else if (e.key === 'Escape') { current = []; renderSug(); }
+    });
+    input.addEventListener('blur', function () {
+      setTimeout(function () { current = []; renderSug(); }, 200);
+    });
+    return box;
+  }
+
+  function viewInbox() {
+    document.title = 'Inbox | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Inbox']]);
+    if (!state.key) {
+      section.appendChild(el('p', 'comments-status', 'Messages need an identity. Create one on the board front page.'));
+      return;
+    }
+    section.appendChild(dmSearchBox());
+    var list = el('div', 'board-topics');
+    list.textContent = 'Loading messages...';
+    section.appendChild(list);
+    var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
+    fetchRetry(API + '/dm/threads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, p: pageNum }),
+    }, [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        dmCacheSet(d.unread_total);
+        list.textContent = '';
+        if (!d.threads.length) {
+          list.appendChild(el('p', 'comments-status', 'No messages yet. Find a member above, or press DM on any post.'));
+          return;
+        }
+        d.threads.forEach(function (t) {
+          var row = el('div', 'board-topic');
+          var left = el('div', 'board-topic-left');
+          var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmLabel(t.other_hash, t.nick));
+          a.href = 'community.html?dm=' + t.other_hash;
+          left.appendChild(a);
+          if (t.unread) left.appendChild(el('span', 'dm-unread', ' ● new'));
+          row.appendChild(left);
+          row.appendChild(el('div', 'board-stats',
+            t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + fmtDate(t.last_at)));
+          list.appendChild(row);
+        });
+        var pages = Math.ceil(d.total / d.per);
+        if (pages > 1) {
+          var bar = el('p', 'board-pages');
+          bar.appendChild(document.createTextNode('Pages: '));
+          for (var i = 1; i <= pages; i++) {
+            if (i === d.page) bar.appendChild(el('strong', null, String(i)));
+            else {
+              var pl = el('a', null, String(i));
+              pl.href = 'community.html?inbox=1&p=' + i;
+              bar.appendChild(pl);
+            }
+            if (i < pages) bar.appendChild(document.createTextNode(' '));
+          }
+          section.appendChild(bar);
+        }
+      })
+      .catch(function () {
+        list.textContent = '';
+        list.appendChild(el('p', 'comments-status', 'The inbox could not be loaded. Check your connection and reload the page.'));
+      });
+  }
+
+  function dmMsgNode(m, otherLabel) {
+    var mine = m.sender_hash === state.myHash;
+    var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
+    var head = el('div', 'comment-head');
+    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
+    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    node.appendChild(head);
+    node.appendChild(el('div', 'comment-body', m.body));
+    return node;
+  }
+
+  function viewDm(other) {
+    if (!/^[0-9a-f]{64}$/.test(String(other))) {
+      crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+      section.appendChild(el('p', 'comments-status', 'No such member.'));
+      return;
+    }
+    if (!state.key) {
+      crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+      section.appendChild(el('p', 'comments-status', 'Messages need an identity. Create one on the board front page.'));
+      return;
+    }
+    if (other === state.myHash) {
+      crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+      section.appendChild(el('p', 'comments-status', 'That would be a soliloquy. Pick another member.'));
+      return;
+    }
+    var qs = new URLSearchParams(location.search);
+    var pNum = Math.floor(Number(qs.get('p')) || 0);
+    var payload = { key: state.key, with: other };
+    if (pNum > 0) payload.p = pNum;
+    fetchRetry(API + '/dm/thread', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }, [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        var label = dmLabel(other, d.other.nick);
+        var shortName = d.other.nick || displayName(other);
+        document.title = shortName + ' | Inbox';
+        crumb([['Catholicity Board', 'community.html'], ['Inbox', 'community.html?inbox=1'], [shortName]]);
+        var headEl = el('h2', 'board-topic-head');
+        var nameLink = el('a', null, label);
+        nameLink.href = profileHref(other);
+        headEl.appendChild(nameLink);
+        section.appendChild(headEl);
+        /* Opening marked it read on the server; make the badge tell the
+           same story on the next paint. */
+        try { localStorage.removeItem(DM_CACHE); } catch (e) {}
+        dmUnreadCheck();
+        var list = el('div', 'comments-list');
+        section.appendChild(list);
+        if (!d.messages.length) {
+          list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
+        }
+        d.messages.forEach(function (m) { list.appendChild(dmMsgNode(m, shortName)); });
+        var totalPages = Math.ceil(d.total / d.per);
+        if (totalPages > 1) {
+          var bar = el('p', 'board-pages');
+          bar.appendChild(document.createTextNode('Pages: '));
+          for (var i = 1; i <= totalPages; i++) {
+            if (i === d.page) bar.appendChild(el('strong', null, String(i)));
+            else {
+              var pl = el('a', null, String(i));
+              pl.href = 'community.html?dm=' + other + '&p=' + i;
+              bar.appendChild(pl);
+            }
+            if (i < totalPages) bar.appendChild(document.createTextNode(' '));
+          }
+          section.appendChild(bar);
+        }
+        var form = el('div', 'comment-form');
+        var ta = el('textarea', 'comment-text');
+        ta.maxLength = 4000;
+        ta.rows = 3;
+        ta.placeholder = 'Write your message.';
+        form.appendChild(ta);
+        form.appendChild(el('div', 'ts-slot'));
+        var btnRow = el('div', 'comment-buttons');
+        var send = el('button', 'btn btn-send', 'Send');
+        send.type = 'button';
+        btnRow.appendChild(send);
+        form.appendChild(btnRow);
+        var status = el('p', 'form-status');
+        form.appendChild(status);
+        section.appendChild(form);
+        loadTurnstile();
+        send.addEventListener('click', function () {
+          var body = ta.value.replace(/\s+$/, '');
+          if (!body.trim()) { ta.focus(); return; }
+          send.disabled = true;
+          status.textContent = 'Verifying...';
+          getToken().then(function (token) {
+            status.textContent = 'Sending...';
+            return fetchRetry(API + '/dm/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, to: other, body: body, token: token }),
+            }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
+              .then(function (r) { return r.json(); });
+          }).then(function (d2) {
+            if (!d2.ok) throw new Error(d2.error || 'The message could not be sent.');
+            list.appendChild(dmMsgNode({ sender_hash: state.myHash, body: body, created_at: d2.created_at }, shortName));
+            ta.value = '';
+            status.textContent = 'Sent.';
+          }).catch(function (err) {
+            status.textContent = err.message || 'Network error. Try again in a moment.';
+          }).finally(function () {
+            send.disabled = false;
+            if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+          });
+        });
+        /* The quiet exit: block stops their future messages to you. */
+        var blockLine = el('p', 'board-audit-link');
+        blockLine.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
+          var blocking = !d.blocked;
+          if (blocking && !confirm('Block this member? Their future messages to you will not arrive.')) return;
+          fetch(API + '/dm/block', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, hash: other, blocked: blocking }),
+          }).then(function (r) { return r.json(); }).then(function (d3) {
+            if (d3.ok) location.reload();
+          }).catch(function () {});
+        }));
+        section.appendChild(blockLine);
+      })
+      .catch(function () {
+        crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+        section.appendChild(el('p', 'comments-status', 'The conversation could not be loaded. Check your connection and reload the page.'));
+      });
+  }
+
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
     /* Resolve the identity before any view renders, or a keyed visitor
@@ -1362,7 +1711,10 @@
     ready.then(function (h) {
       state.myHash = h;
       loadMyProfile();
+      dmUnreadCheck();
       var params = new URLSearchParams(location.search);
+      if (params.get('inbox')) return viewInbox();
+      if (params.get('dm')) return viewDm(params.get('dm'));
       if (params.get('profile')) return viewProfile(params.get('profile'));
       if (params.get('audit')) return viewAudit();
       var topic = Number(params.get('topic'));
@@ -1429,6 +1781,7 @@
       renderButtons();
       load();
       loadMyProfile();
+      dmUnreadCheck();
     });
 
     /* Re-render the buttons whenever identity changes. Cheapest hook: watch

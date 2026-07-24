@@ -720,3 +720,16 @@ h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: #444; }
 }
 .profile textarea.comment-text { resize: vertical; }
 .profile .comment-text:focus, .profile .key-input:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+
+/* Direct messages */
+a.comment-dm { color: #8a6d3b; margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
+a.comment-dm:hover { text-decoration: underline; color: var(--maroon); }
+.dm-unread { color: var(--maroon); font-weight: bold; }
+.dm-search { position: relative; }
+.dm-suggest { position: absolute; left: 0.9em; right: 0.9em; background: #fff; border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 5; }
+.dm-suggest-row { padding: 0.45em 0.7em; cursor: pointer; font-size: 0.95rem; }
+.dm-suggest-row:hover, .dm-suggest-sel { background: #f9f3e6; color: var(--maroon); }
+.dm-msg { border-top: 1px solid var(--rule); padding: 0.7em 0.6em 0.5em; }
+.dm-msg:first-child { border-top: 0; }
+.dm-mine { background: #faf6ee; border-radius: 6px; }
+.dm-msg .comment-body { margin-top: 0.25em; }
