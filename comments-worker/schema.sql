@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   bio        TEXT,
   signature  TEXT,
   avatar     TEXT,
+  faith      TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER
 );
