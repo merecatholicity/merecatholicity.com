@@ -66,6 +66,11 @@ resources/docs-src/bor.txt
 comments-worker/.wrangler/
 comments-worker/.dev.vars
 comments-backup.sql
+# Database dumps NEVER belong in the repo — backups live in R2. Belt and
+# suspenders against a stray `git add -A` grabbing an export.
+comments-worker/backups/
+backups/
+*.sql.gz
 
 .dev.vars*
 !.dev.vars.example
