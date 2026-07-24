@@ -1234,9 +1234,11 @@
     avPick.accept = '.jpg,.jpeg,image/jpeg';
     avRow.appendChild(avPick);
     card.appendChild(avRow);
+    card.appendChild(el('p', 'profile-empty',
+      'JPEG only. Cropped square to 400 by 400 pixels, 500 KB at most.'));
     var avNote = el('p', 'profile-empty', p.avatar
       ? 'Choosing a new image replaces the current avatar.'
-      : 'A JPEG image. It will be cropped square, 400 by 400.');
+      : '');
     card.appendChild(avNote);
     if (p.avatar) {
       var avPrev = el('div', 'profile-avatar');
