@@ -147,6 +147,149 @@ async function isTrusted(env, hash) {
   return !!row;
 }
 
+/* ---- IP normalization. A dual-stack user carries both an IPv4 and an IPv6
+   address, and their IPv6 interface identifier rotates daily (SLAAC privacy
+   extensions) while the /64 the ISP delegates stays fixed. So we ban and match
+   on a normalized key: the v4 address as-is, or the v6 /64 prefix. ---- */
+
+function ipFamily(ip) {
+  const s = String(ip || '');
+  if (s.indexOf(':') !== -1) return 6;
+  if (s.indexOf('.') !== -1) return 4;
+  return 0;
+}
+
+/* The eight hextets of a v6 address, each padded to four nibbles, or null. */
+function ipv6Groups(ip) {
+  let s = String(ip || '').trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/%.*$/, '');
+  if (s.indexOf(':') === -1) return null;
+  const dbl = s.indexOf('::');
+  let head, tail;
+  if (dbl !== -1) {
+    head = s.slice(0, dbl) ? s.slice(0, dbl).split(':') : [];
+    tail = s.slice(dbl + 2) ? s.slice(dbl + 2).split(':') : [];
+  } else {
+    head = s.split(':');
+    tail = [];
+  }
+  const fill = 8 - head.length - tail.length;
+  if (fill < 0) return null;
+  const groups = head.concat(Array(fill).fill('0'), tail);
+  if (groups.length !== 8) return null;
+  for (const g of groups) if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+  return groups.map((g) => g.padStart(4, '0'));
+}
+
+/* Canonical /64 prefix, e.g. 2605:59ca:39db:4308::/64, or null. */
+function ipv6Prefix64(ip) {
+  const g = ipv6Groups(ip);
+  if (!g) return null;
+  return g.slice(0, 4).map((h) => h.replace(/^0+(?=.)/, '')).join(':') + '::/64';
+}
+
+/* All 32 nibbles of a v6 address with no separators, for the .ip6.arpa name. */
+function ipv6Full(ip) {
+  const g = ipv6Groups(ip);
+  return g ? g.join('') : null;
+}
+
+/* The value stored in and matched against ip_bans: v4 verbatim, v6 as /64. */
+function ipKey(ip) {
+  const fam = ipFamily(ip);
+  if (fam === 4) return String(ip).trim();
+  if (fam === 6) return ipv6Prefix64(ip) || String(ip).trim();
+  return String(ip || '').trim();
+}
+
+/* Turn an admin-supplied string into a ban key: a raw address is normalized,
+   an already-stored v6 /64 key passes through so unbanning it still matches. */
+function toBanKey(s) {
+  s = String(s || '').trim();
+  if (looksLikeIp(s)) return ipKey(s);
+  if (/^[0-9a-f:]+::\/64$/i.test(s)) return s.toLowerCase();
+  return null;
+}
+
+/* Carrier-grade NAT (100.64.0.0/10) is shared by many customers, so a v4 ban
+   there can hit innocents; the drawer flags it before the admin commits. */
+function isSharedV4(ip) {
+  const m = /^(\d{1,3})\.(\d{1,3})\./.exec(String(ip || ''));
+  if (!m) return false;
+  return +m[1] === 100 && +m[2] >= 64 && +m[2] <= 127;
+}
+
+/* The reverse-DNS query name for an address, or null. */
+function reverseDnsName(ip) {
+  const fam = ipFamily(ip);
+  if (fam === 4) {
+    const p = String(ip).trim().split('.');
+    if (p.length !== 4) return null;
+    return p.reverse().join('.') + '.in-addr.arpa';
+  }
+  if (fam === 6) {
+    const full = ipv6Full(ip);
+    if (!full) return null;
+    return full.split('').reverse().join('.') + '.ip6.arpa';
+  }
+  return null;
+}
+
+/* Reverse-DNS one address via Cloudflare DoH JSON. Best-effort: the PTR
+   hostname without its trailing dot, or null on any failure or timeout. */
+async function ptrLookup(ip) {
+  const name = reverseDnsName(ip);
+  if (!name) return null;
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 1500);
+  try {
+    const r = await fetch('https://cloudflare-dns.com/dns-query?type=PTR&name=' + encodeURIComponent(name),
+      { headers: { accept: 'application/dns-json' }, signal: ctl.signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const ans = j && j.Answer && j.Answer.find((a) => a.type === 12);
+    return ans && ans.data ? String(ans.data).replace(/\.$/, '') : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/* Record the IPs tied to a posting identity: the verified connection address
+   (source 'seen', unspoofable) and, when the browser reached a single-family
+   echo, the opposite-family address it reported (source 'claimed'). Stored
+   under the normalized key so a ban on any one closes every door. Best-effort:
+   a failure here must never break a post that already succeeded. */
+async function recordIps(env, hash, connIp, data) {
+  if (!hash) return;
+  const now = Math.floor(Date.now() / 1000);
+  const connFam = ipFamily(connIp);
+  const list = [];
+  if (connFam) list.push({ ip: connIp, source: 'seen' });
+  for (const claimed of [data && data.ipv4, data && data.ipv6]) {
+    const c = String(claimed || '').trim();
+    if (!c || !looksLikeIp(c)) continue;
+    const fam = ipFamily(c);
+    if (fam !== 4 && fam !== 6) continue;
+    if (connFam && fam === connFam) continue; /* accept only the other family */
+    list.push({ ip: c, source: 'claimed' });
+  }
+  for (const item of list) {
+    const key = ipKey(item.ip);
+    if (!key) continue;
+    try {
+      await env.DB.prepare(
+        'INSERT INTO identity_ips (hash, ip_key, ip_display, family, source, first_seen, last_seen) ' +
+        'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6) ' +
+        'ON CONFLICT(hash, ip_key) DO UPDATE SET last_seen = ?6, ip_display = ?3, ' +
+        "source = CASE WHEN identity_ips.source = 'seen' OR excluded.source = 'seen' THEN 'seen' ELSE identity_ips.source END"
+      ).bind(hash, key, item.ip, ipFamily(item.ip), item.source, now).run();
+    } catch (e) {
+      /* swallow: the log must not fail the post */
+    }
+  }
+}
+
 /* The one gate every keyed write passes through: a locked identity, a banned
    IP, or a legacy ban. Returns null when clear, else the reason a keyed
    endpoint hands back as {blocked}. Public reads never call this, so cached
@@ -156,7 +299,7 @@ async function blockedReason(env, hash, ip) {
     "SELECT 'locked' AS r FROM locks WHERE hash = ?1 " +
     "UNION ALL SELECT 'ipban' FROM ip_bans WHERE ip = ?2 " +
     "UNION ALL SELECT 'banned' FROM bans WHERE hash = ?1 LIMIT 1"
-  ).bind(hash || '-', ip || '-').first();
+  ).bind(hash || '-', ipKey(ip) || '-').first();
   return row ? row.r : null;
 }
 
@@ -304,6 +447,11 @@ async function handlePost(request, env, ctx) {
     tz || null, lang || null).first();
 
   if (boardKey(page)) await refreshTopicStats(env, parentId || inserted.id);
+
+  /* Log the IPs behind this identity for the fingerprint drawer and paired
+     bans: the verified connection address, and the other-family address the
+     client reported. Best-effort, and never alters the reply. */
+  await recordIps(env, authorHash, ip, data);
 
   /* The faith the member declared at signup rides along with every post; the
      first one to carry it fills the profile, and a later post never overwrites
@@ -486,7 +634,39 @@ async function handleMeta(request, env) {
     'LEFT JOIN ip_bans ib ON ib.ip = c.ip ' +
     'WHERE c.page = ?1 ORDER BY c.id LIMIT 500'
   ).bind(page).all();
-  return json({ ok: true, meta: rows.results }, 200);
+  const list = rows.results;
+
+  /* ip_bans now stores v6 as a /64 the raw c.ip will not equal, so recompute
+     each comment's banned flag against the normalized key. */
+  const commentKeys = [...new Set(list.map((r) => ipKey(r.ip)).filter(Boolean))];
+  const bannedSet = new Set();
+  if (commentKeys.length) {
+    const ph = commentKeys.map((_, i) => '?' + (i + 1)).join(',');
+    const b = await env.DB.prepare('SELECT ip FROM ip_bans WHERE ip IN (' + ph + ')').bind(...commentKeys).all();
+    for (const x of b.results) bannedSet.add(x.ip);
+  }
+  for (const r of list) r.ipbanned = bannedSet.has(ipKey(r.ip)) ? 1 : 0;
+
+  /* Every IP tied to each identity on the page, each with its ban state, so the
+     drawer can show and ban both families of a dual-stack user together. */
+  const hashes = [...new Set(list.map((r) => r.author_hash).filter(Boolean))];
+  const identities = {};
+  if (hashes.length) {
+    const ph = hashes.map((_, i) => '?' + (i + 1)).join(',');
+    const ipRows = await env.DB.prepare(
+      'SELECT ii.hash, ii.ip_key, ii.ip_display, ii.family, ii.source, ' +
+      'CASE WHEN ib.ip IS NULL THEN 0 ELSE 1 END AS banned ' +
+      'FROM identity_ips ii LEFT JOIN ip_bans ib ON ib.ip = ii.ip_key ' +
+      'WHERE ii.hash IN (' + ph + ') ORDER BY ii.family, ii.last_seen DESC'
+    ).bind(...hashes).all();
+    for (const r of ipRows.results) {
+      (identities[r.hash] = identities[r.hash] || []).push({
+        ip_display: r.ip_display, ip_key: r.ip_key, family: r.family,
+        source: r.source, banned: r.banned,
+      });
+    }
+  }
+  return json({ ok: true, meta: list, identities }, 200);
 }
 
 /* The board index: per-category topic and post counts with last activity. */
@@ -1403,7 +1583,11 @@ function looksLikeIp(s) {
   return /^[0-9a-fA-F:.]{3,45}$/.test(s) && (s.indexOf('.') !== -1 || s.indexOf(':') !== -1);
 }
 
-/* Ban or unban a raw IP (v4 or v6). */
+/* Ban or unban IPs. Accepts a single `ip` (the manual list page) or an `ips`
+   array (ban-all from the fingerprint drawer). Each is normalized to its ban
+   key: a v4 address verbatim, a v6 address to its /64 prefix, so one row holds
+   a whole rotating /64 and banning an identity's addresses shuts both families
+   at once. */
 async function handleIpBan(request, env) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -1411,16 +1595,38 @@ async function handleIpBan(request, env) {
   const { success } = await env.READ_LIMIT.limit({ key: cip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const ip = String(data.ip || '').trim();
-  if (!looksLikeIp(ip)) return json({ ok: false, error: 'That is not a valid IP address.' }, 400);
+  const raw = Array.isArray(data.ips) ? data.ips : [data.ip];
+  const keys = [...new Set(raw.map(toBanKey).filter(Boolean))];
+  if (!keys.length) return json({ ok: false, error: 'That is not a valid IP address.' }, 400);
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
-  if (data.banned) {
-    await env.DB.prepare('INSERT OR IGNORE INTO ip_bans (ip, created_at) VALUES (?1, ?2)')
-      .bind(ip, Math.floor(Date.now() / 1000)).run();
-  } else {
-    await env.DB.prepare('DELETE FROM ip_bans WHERE ip = ?1').bind(ip).run();
+  const now = Math.floor(Date.now() / 1000);
+  for (const k of keys) {
+    if (data.banned) {
+      await env.DB.prepare('INSERT OR IGNORE INTO ip_bans (ip, created_at) VALUES (?1, ?2)').bind(k, now).run();
+    } else {
+      await env.DB.prepare('DELETE FROM ip_bans WHERE ip = ?1').bind(k).run();
+    }
   }
-  return json({ ok: true, banned: !!data.banned }, 200);
+  return json({ ok: true, banned: !!data.banned, keys }, 200);
+}
+
+/* Lazy, admin-only reverse-DNS for the IPs of one fingerprint, fetched when a
+   drawer opens. Kept off the bulk meta path and the poster's write path; a
+   handful of DoH lookups per call, well under the free-tier subrequest cap. */
+async function handleRdns(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const ips = Array.isArray(data.ips) ? data.ips.slice(0, 8) : [];
+  const rdns = {};
+  await Promise.all(ips.map(async (raw) => {
+    const s = String(raw || '').trim();
+    if (looksLikeIp(s)) rdns[s] = await ptrLookup(s);
+  }));
+  return json({ ok: true, rdns }, 200);
 }
 
 /* The banned-IP list for the admin page. */
@@ -1508,6 +1714,7 @@ export default {
       if (path === '/api/comments/deleteuser' && request.method === 'POST') return await handleDeleteUser(request, env);
       if (path === '/api/comments/ipban' && request.method === 'POST') return await handleIpBan(request, env);
       if (path === '/api/comments/ipbans' && request.method === 'POST') return await handleIpBans(request, env);
+      if (path === '/api/comments/rdns' && request.method === 'POST') return await handleRdns(request, env);
       if (path === '/api/comments/approve' && request.method === 'POST') return await handleApprove(request, env);
       if (path === '/api/comments/pending' && request.method === 'POST') return await handlePending(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);

@@ -43,12 +43,32 @@ CREATE TABLE IF NOT EXISTS locks (
   created_at INTEGER NOT NULL
 );
 
--- Banned raw IPs (v4 or v6, the same string the fingerprint shows). Enforced by
--- the worker for logged-in/keyed requests only, never for cached anonymous reads.
+-- Banned IP keys, normalized: a v4 address verbatim, a v6 address as its /64
+-- prefix (e.g. 2605:59ca:39db:4308::/64), because a client's v6 interface id
+-- rotates daily while the delegated /64 does not. Enforced by the worker for
+-- logged-in/keyed requests only, never for cached anonymous reads.
 CREATE TABLE IF NOT EXISTS ip_bans (
   ip         TEXT PRIMARY KEY,
   created_at INTEGER NOT NULL
 );
+
+-- Every IP seen behind a posting identity, so the fingerprint drawer can show
+-- and ban both families of a dual-stack user at once. source 'seen' is the
+-- verified CF-Connecting-IP (unspoofable); 'claimed' is the other-family
+-- address the browser reported from a single-family echo at post time. ip_key
+-- is the normalized ban unit (matches ip_bans.ip); ip_display is a real
+-- address actually seen, for the admin to read.
+CREATE TABLE IF NOT EXISTS identity_ips (
+  hash       TEXT NOT NULL,
+  ip_key     TEXT NOT NULL,
+  ip_display TEXT NOT NULL,
+  family     INTEGER NOT NULL,
+  source     TEXT NOT NULL CHECK (source IN ('seen','claimed')),
+  first_seen INTEGER NOT NULL,
+  last_seen  INTEGER NOT NULL,
+  PRIMARY KEY (hash, ip_key)
+);
+CREATE INDEX IF NOT EXISTS identity_ips_hash_idx ON identity_ips(hash);
 
 -- Direct messages: strictly 1v1, the pair stored in canonical order (a_hash is
 -- the lexicographically lower of the two) so one UNIQUE row holds each pair.
