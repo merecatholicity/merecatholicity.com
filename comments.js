@@ -1168,6 +1168,15 @@
           title.href = 'community.html?topic=' + t.id;
           left.appendChild(title);
           if (t.locked) left.appendChild(el('span', 'board-locked', '(locked)'));
+          /* Jump straight into a page of this thread. Replies paginate 20 to a
+             page (the server's TOPICS_PER_PAGE); the bar hides below two. */
+          var tPager = pageBar(t.replies, 20, 0, function (i) {
+            return 'community.html?topic=' + t.id + '&p=' + i;
+          });
+          if (tPager) {
+            tPager.className = 'board-pages topic-pages';
+            left.appendChild(tPager);
+          }
           if (isAdmin()) {
             var admin = el('span', 'board-admin-links');
             admin.appendChild(modLinkEl(t.id, t.locked ? 'unlock' : 'lock', t.locked ? '(unlock)' : '(lock)'));

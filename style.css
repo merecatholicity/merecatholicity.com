@@ -749,3 +749,5 @@ a.trust-toggle.danger { color: #b3261e; }
 .audit-row .board-topic-title { font-weight: normal; }
 .audit-snippet { color: #777; font-size: 0.85rem; overflow-wrap: anywhere; margin-top: 0.1em; }
 a.body-link { color: var(--maroon); overflow-wrap: anywhere; }
+.topic-pages { margin: 0.15em 0 0; font-size: 0.8rem; color: #888; }
+.topic-pages a { margin-right: 0.35em; }
