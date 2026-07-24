@@ -232,7 +232,7 @@
     ['news', 'News', 'News of the Church and of the world.'],
     ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
     ['theology', 'Theology', 'All genres. Systematic and Dogmatic, Biblical and Exegetical, Historical and Patristic, Philosophical and Natural, etc.'],
-    ['philosophy', 'Philosophy', 'Does this board really exist.'],
+    ['philosophy', 'Philosophy', 'From Plato and Aristotle to Kant and Wittgenstein.'],
     ['history', 'History', 'World, church, and national history. All of it.'],
     ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
     ['rc', 'Roman Catholic', 'In-house talk for Roman Catholics.'],
