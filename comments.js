@@ -1282,8 +1282,9 @@
         var w = img.naturalWidth * scale;
         var h = img.naturalHeight * scale;
         c.getContext('2d').drawImage(img, (400 - w) / 2, (400 - h) / 2, w, h);
-        /* WebP first; browsers without a WebP encoder fall back to PNG, and a
-           PNG photograph can overrun the cap, so JPEG is the second try. */
+        /* JPEG, so the stored bytes decode cleanly for both the AI vision
+           screen and every browser; a lower-quality second pass is the net
+           for the rare frame that overruns the cap. */
         var send = function (blob) {
           if (!blob || blob.size > 500 * 1024) {
             avNote.textContent = 'The image could not be brought under 500 KB. Try another.';
@@ -1291,7 +1292,7 @@
           }
           avNote.textContent = 'Verifying...';
           getToken().then(function (token) {
-            avNote.textContent = 'Uploading...';
+            avNote.textContent = 'Checking image...';
             var fd = new FormData();
             fd.append('key', state.key);
             fd.append('token', token);
@@ -1311,8 +1312,8 @@
         };
         c.toBlob(function (blob) {
           if (blob && blob.size <= 500 * 1024) return send(blob);
-          c.toBlob(send, 'image/jpeg', 0.85);
-        }, 'image/webp', 0.9);
+          c.toBlob(send, 'image/jpeg', 0.7);
+        }, 'image/jpeg', 0.85);
       };
       img.src = url;
     });
