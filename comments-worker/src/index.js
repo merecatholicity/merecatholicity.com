@@ -715,7 +715,7 @@ async function handleProfileGet(request, env, url) {
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const hash = String(url.searchParams.get('hash') || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT nick, bio, signature FROM profiles WHERE hash = ?1').bind(hash).first();
+  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar FROM profiles WHERE hash = ?1').bind(hash).first();
   return json({
     ok: true,
     profile: {
@@ -723,6 +723,7 @@ async function handleProfileGet(request, env, url) {
       nick: row ? (row.nick || null) : null,
       bio: row ? (row.bio || null) : null,
       signature: row ? (row.signature || null) : null,
+      avatar: row ? (row.avatar || null) : null,
       assigned: displayName(hash),
       admin: isAdminHash(env, hash),
     },
@@ -781,9 +782,13 @@ async function handleProfileSave(request, env) {
     'INSERT INTO profiles (hash, nick, bio, signature, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5) ' +
     'ON CONFLICT(hash) DO UPDATE SET nick = ?2, bio = ?3, signature = ?4, updated_at = ?5'
   ).bind(authorHash, nick.value, bio.value, signature.value, now).run();
+  /* The text upsert leaves the avatar column alone; return its standing value
+     so the client's re-render keeps the picture. */
+  const av = await env.DB.prepare('SELECT avatar FROM profiles WHERE hash = ?1').bind(authorHash).first();
   return json({
     ok: true,
     profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
+      avatar: av && av.avatar || null,
       assigned: displayName(authorHash), admin: isAdminHash(env, authorHash) },
   }, 200);
 }
@@ -804,9 +809,238 @@ async function handleProfileClear(request, env) {
   const hash = String(data.hash || '');
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
-  await env.DB.prepare('UPDATE profiles SET nick = NULL, bio = NULL, signature = NULL, updated_at = ?2 WHERE hash = ?1')
+  if (env.AVATARS) await env.AVATARS.delete('avatars/' + hash);
+  await env.DB.prepare('UPDATE profiles SET nick = NULL, bio = NULL, signature = NULL, avatar = NULL, updated_at = ?2 WHERE hash = ?1')
     .bind(hash, Math.floor(Date.now() / 1000)).run();
   return json({ ok: true }, 200);
+}
+
+/* ---- Avatars. One 400x400 raster image per identity, stored in R2 under
+   avatars/<hash>, so an upload overwrites the old file and storage stays
+   pruned by construction. The server trusts nothing from the client: bytes
+   are sniffed for PNG/JPEG/WebP magic (never SVG, which can carry script),
+   dimensions are read from the image header itself, and the stored
+   content-type is the sniffed one. ---- */
+
+const MAX_AVATAR_BYTES = 500 * 1024;
+const AVATAR_SIZE = 400;
+
+function be16(b, i) { return (b[i] << 8) | b[i + 1]; }
+
+/* Returns {mime, width, height} or null. Only the three raster formats a
+   browser canvas emits are recognized; everything else is refused. */
+function sniffImage(b) {
+  if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47 &&
+      b[4] === 0x0D && b[5] === 0x0A && b[6] === 0x1A && b[7] === 0x0A) {
+    return { mime: 'image/png',
+      width: (b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) >>> 0,
+      height: (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) >>> 0 };
+  }
+  if (b.length > 4 && b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) {
+    let i = 2;
+    while (i + 9 < b.length) {
+      if (b[i] !== 0xFF) return null;
+      const marker = b[i + 1];
+      if (marker === 0xFF) { i++; continue; }
+      if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+        return { mime: 'image/jpeg', width: be16(b, i + 7), height: be16(b, i + 5) };
+      }
+      if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD7)) { i += 2; continue; }
+      i += 2 + be16(b, i + 2);
+    }
+    return null;
+  }
+  if (b.length > 30 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+      b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+    const tag = String.fromCharCode(b[12], b[13], b[14], b[15]);
+    if (tag === 'VP8 ' && b[23] === 0x9D && b[24] === 0x01 && b[25] === 0x2A) {
+      return { mime: 'image/webp', width: (b[26] | (b[27] << 8)) & 0x3FFF, height: (b[28] | (b[29] << 8)) & 0x3FFF };
+    }
+    if (tag === 'VP8L' && b[20] === 0x2F) {
+      const bits = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24);
+      return { mime: 'image/webp', width: (bits & 0x3FFF) + 1, height: ((bits >> 14) & 0x3FFF) + 1 };
+    }
+    if (tag === 'VP8X') {
+      return { mime: 'image/webp',
+        width: ((b[24] | (b[25] << 8) | (b[26] << 16)) + 1),
+        height: ((b[27] | (b[28] << 8) | (b[29] << 16)) + 1) };
+    }
+  }
+  return null;
+}
+
+/* Owner-only upload, multipart. The same gates as posting: rate limit, key,
+   ban, Turnstile. The write is a fixed-key overwrite, so the previous avatar
+   is replaced in the same act and no orphan objects can accumulate. */
+async function handleAvatarUpload(request, env) {
+  if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Wait a minute and try again.' }, 429);
+  const declared = Number(request.headers.get('Content-Length'));
+  if (Number.isFinite(declared) && declared > MAX_AVATAR_BYTES + 8192) {
+    return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
+  }
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const key = String(form.get('key') || '');
+  if (!key) return json({ ok: false, error: 'An identity is required.' }, 400);
+  const authorHash = await sha256hex(key);
+  const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash = ?1').bind(authorHash).first();
+  if (banned) return json({ ok: false, error: 'Editing is not available.' }, 403);
+  if (!(await verifyTurnstile(env, String(form.get('token') || ''), ip))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const file = form.get('avatar');
+  if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: 'No image arrived.' }, 400);
+  if (file.size > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.length > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
+  const img = sniffImage(bytes);
+  if (!img) return json({ ok: false, error: 'Not a usable image. PNG, JPEG, or WebP only.' }, 400);
+  if (img.width !== AVATAR_SIZE || img.height !== AVATAR_SIZE) {
+    return json({ ok: false, error: 'The avatar must be exactly 400 by 400 pixels.' }, 400);
+  }
+  await env.AVATARS.put('avatars/' + authorHash, bytes, { httpMetadata: { contentType: img.mime } });
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(
+    'INSERT INTO profiles (hash, avatar, created_at, updated_at) VALUES (?1, ?2, ?3, ?3) ' +
+    'ON CONFLICT(hash) DO UPDATE SET avatar = ?2, updated_at = ?3'
+  ).bind(authorHash, String(now), now).run();
+  return json({ ok: true, avatar: String(now) }, 200);
+}
+
+/* Owner removes their own avatar: the object is deleted and the profile flag
+   cleared. Same gates as self-deleting a comment. */
+async function handleAvatarDelete(request, env) {
+  if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const authorHash = await sha256hex(key);
+  await env.AVATARS.delete('avatars/' + authorHash);
+  await env.DB.prepare('UPDATE profiles SET avatar = NULL, updated_at = ?2 WHERE hash = ?1')
+    .bind(authorHash, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true }, 200);
+}
+
+/* Public read. Served with the content-type sniffed at upload, nosniff, and
+   a deny-all CSP, so the bytes can never run as anything. Long browser cache;
+   the URL carries the upload stamp as a cache-buster, so a new avatar is a
+   new URL. No rate limiter: one page can hold many authors. */
+async function handleAvatarGet(request, env, url) {
+  if (!env.AVATARS) return new Response('No avatar.', { status: 404 });
+  const hash = String(url.searchParams.get('hash') || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return new Response('Bad request.', { status: 400 });
+  const obj = await env.AVATARS.get('avatars/' + hash);
+  if (!obj) return new Response('No avatar.', { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });
+  return new Response(obj.body, {
+    status: 200,
+    headers: {
+      'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=86400',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'",
+    },
+  });
+}
+
+/* ---- Backups. A monthly cron dumps the whole database to one SQL file,
+   gzips it, and drops it in the BACKUPS R2 bucket, keeping ninety days.
+   Restore: download, gunzip, then
+   deno run -A npm:wrangler d1 execute merecatholicity-comments --remote --file backup.sql ---- */
+
+function sqlLit(v) {
+  if (v === null || v === undefined) return 'NULL';
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
+  return "'" + String(v).replace(/'/g, "''") + "'";
+}
+
+/* A restorable dump: every user table's CREATE (as IF NOT EXISTS) and rows,
+   then the indexes. Explicit ids in the INSERTs carry the AUTOINCREMENT
+   sequence along on their own. */
+async function dumpDatabase(env) {
+  const master = await env.DB.prepare(
+    "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL " +
+    "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type = 'index', name"
+  ).all();
+  const parts = ['-- merecatholicity-comments backup ' + new Date().toISOString()];
+  for (const m of master.results) {
+    if (m.type === 'table') {
+      parts.push(m.sql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ') + ';');
+      const rows = await env.DB.prepare('SELECT * FROM "' + m.name + '"').all();
+      const rs = rows.results;
+      if (!rs.length) continue;
+      const cols = Object.keys(rs[0]);
+      const colList = cols.map((c) => '"' + c + '"').join(', ');
+      for (let i = 0; i < rs.length; i += 50) {
+        const values = rs.slice(i, i + 50)
+          .map((r) => '(' + cols.map((c) => sqlLit(r[c])).join(', ') + ')').join(',\n');
+        parts.push('INSERT INTO "' + m.name + '" (' + colList + ') VALUES\n' + values + ';');
+      }
+    } else if (m.type === 'index') {
+      parts.push(m.sql.replace(/^CREATE INDEX\s+/i, 'CREATE INDEX IF NOT EXISTS ') + ';');
+    }
+  }
+  return parts.join('\n');
+}
+
+async function gzipBytes(text) {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+const BACKUP_KEEP_DAYS = 90;
+
+async function runBackup(env) {
+  if (!env.BACKUPS) return { error: 'BACKUPS bucket not bound; enable R2 and redeploy.' };
+  const sql = await dumpDatabase(env);
+  const gz = await gzipBytes(sql);
+  const key = 'backups/comments-' + new Date().toISOString().slice(0, 10) + '.sql.gz';
+  await env.BACKUPS.put(key, gz, { httpMetadata: { contentType: 'application/gzip' } });
+  const list = await env.BACKUPS.list({ prefix: 'backups/' });
+  const cutoff = Date.now() - BACKUP_KEEP_DAYS * 86400 * 1000;
+  let pruned = 0;
+  for (const obj of list.objects) {
+    if (obj.key !== key && obj.uploaded.getTime() < cutoff) {
+      await env.BACKUPS.delete(obj.key);
+      pruned++;
+    }
+  }
+  const result = { key, sqlBytes: sql.length, gzBytes: gz.length, kept: list.objects.length - pruned, pruned };
+  console.log(JSON.stringify({ event: 'backup', ...result }));
+  return result;
+}
+
+/* Admin-only manual run of the same backup the cron performs, so the path
+   can be exercised any day, not only on the first of the month. */
+async function handleBackup(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  const result = await runBackup(env);
+  return json({ ok: true, backup: result }, 200);
 }
 
 const MOD_HEADERS = {
@@ -946,6 +1180,10 @@ export default {
       if (path === '/api/comments/profile' && request.method === 'GET') return await handleProfileGet(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'POST') return await handleProfileSave(request, env);
       if (path === '/api/comments/profile/clear' && request.method === 'POST') return await handleProfileClear(request, env);
+      if (path === '/api/comments/backup' && request.method === 'POST') return await handleBackup(request, env);
+      if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
+      if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);
+      if (path === '/api/comments/avatar/delete' && request.method === 'POST') return await handleAvatarDelete(request, env);
       if (path === '/api/comments/mod' && request.method === 'GET') return await handleModConfirm(request, env, url);
       if (path === '/api/comments/mod' && request.method === 'POST') return await handleMod(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);
@@ -953,5 +1191,9 @@ export default {
       console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));
       return json({ ok: false, error: 'Server hiccup. Please try again shortly.' }, 500);
     }
+  },
+  /* Monthly cron (1st, 00:00 UTC): back the database up to R2. */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runBackup(env));
   },
 };

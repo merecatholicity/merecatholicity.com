@@ -1151,7 +1151,14 @@
     card.textContent = '';
     var headRow = el('div', 'profile-head');
     var avatar = el('div', 'profile-avatar');
-    avatar.appendChild(el('span', 'profile-avatar-soon', 'soon'));
+    if (p.avatar) {
+      var img = el('img');
+      img.src = API + '/avatar?hash=' + p.hash + '&v=' + encodeURIComponent(p.avatar);
+      img.alt = '';
+      img.width = 72;
+      img.height = 72;
+      avatar.appendChild(img);
+    }
     headRow.appendChild(avatar);
     var names = el('div', 'profile-names');
     names.appendChild(el('div', 'profile-name', p.nick || p.assigned));
@@ -1184,26 +1191,112 @@
     card.appendChild(el('p', 'key-note',
       'Your assigned name ' + p.assigned + ' always stays as your identifier. ' +
       'A custom nickname simply shows first.'));
-    card.appendChild(el('label', 'profile-label', 'Nickname'));
+    card.appendChild(el('label', 'profile-label', 'Nickname (up to 40 characters)'));
     var nickIn = el('input', 'key-input');
     nickIn.type = 'text';
     nickIn.maxLength = 40;
     nickIn.placeholder = p.assigned;
     nickIn.value = p.nick || '';
     card.appendChild(nickIn);
-    card.appendChild(el('label', 'profile-label', 'Bio'));
+    card.appendChild(el('label', 'profile-label', 'Bio (up to 500 characters)'));
     var bioIn = el('textarea', 'comment-text');
     bioIn.maxLength = 500;
     bioIn.rows = 4;
     bioIn.value = p.bio || '';
     card.appendChild(bioIn);
-    card.appendChild(el('label', 'profile-label', 'Signature'));
+    card.appendChild(el('label', 'profile-label', 'Signature (up to 200 characters)'));
     var sigIn = el('textarea', 'comment-text');
     sigIn.maxLength = 200;
     sigIn.rows = 2;
     sigIn.value = p.signature || '';
     card.appendChild(sigIn);
-    card.appendChild(el('p', 'profile-empty', 'Avatar upload is coming soon.'));
+
+    /* Avatar. Any picked image is center-cropped to 400x400 on a canvas, so
+       what leaves the browser already matches what the server demands. The
+       server re-checks bytes, format, and dimensions regardless. */
+    card.appendChild(el('label', 'profile-label', 'Avatar'));
+    var avRow = el('div', 'key-row');
+    var avPick = el('input');
+    avPick.type = 'file';
+    avPick.accept = 'image/png,image/jpeg,image/webp';
+    avRow.appendChild(avPick);
+    card.appendChild(avRow);
+    var avNote = el('p', 'profile-empty', p.avatar
+      ? 'Choosing a new image replaces the current avatar.'
+      : 'PNG, JPEG, or WebP. It will be cropped square, 400 by 400.');
+    card.appendChild(avNote);
+    if (p.avatar) {
+      var avDel = el('a', 'identity-action', 'Remove avatar');
+      avDel.href = '#';
+      avDel.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (!confirm('Remove your avatar?')) return;
+        fetchRetry(API + '/avatar/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key }),
+        }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
+          if (!d.ok) throw new Error(d.error || 'Could not remove it.');
+          stampFresh();
+          p.avatar = null;
+          editProfile(card, p);
+        }).catch(function (err) { avNote.textContent = err.message; });
+      });
+      card.appendChild(avDel);
+    }
+    avPick.addEventListener('change', function () {
+      var file = avPick.files && avPick.files[0];
+      if (!file) return;
+      avNote.textContent = 'Preparing image...';
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        avNote.textContent = 'That file is not a usable image.';
+      };
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var c = document.createElement('canvas');
+        c.width = 400;
+        c.height = 400;
+        var scale = Math.max(400 / img.naturalWidth, 400 / img.naturalHeight);
+        var w = img.naturalWidth * scale;
+        var h = img.naturalHeight * scale;
+        c.getContext('2d').drawImage(img, (400 - w) / 2, (400 - h) / 2, w, h);
+        /* WebP first; browsers without a WebP encoder fall back to PNG, and a
+           PNG photograph can overrun the cap, so JPEG is the second try. */
+        var send = function (blob) {
+          if (!blob || blob.size > 500 * 1024) {
+            avNote.textContent = 'The image could not be brought under 500 KB. Try another.';
+            return;
+          }
+          avNote.textContent = 'Verifying...';
+          getToken().then(function (token) {
+            avNote.textContent = 'Uploading...';
+            var fd = new FormData();
+            fd.append('key', state.key);
+            fd.append('token', token);
+            fd.append('avatar', blob, 'avatar');
+            return fetchRetry(API + '/avatar', { method: 'POST', body: fd }, [1500])
+              .then(function (r) { return r.json(); });
+          }).then(function (d) {
+            if (!d.ok) throw new Error(d.error || 'Could not upload the avatar.');
+            stampFresh();
+            p.avatar = d.avatar;
+            if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+            editProfile(card, p);
+          }).catch(function (err) {
+            avNote.textContent = err.message || 'Network error. Try again in a moment.';
+            if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+          });
+        };
+        c.toBlob(function (blob) {
+          if (blob && blob.size <= 500 * 1024) return send(blob);
+          c.toBlob(send, 'image/jpeg', 0.85);
+        }, 'image/webp', 0.9);
+      };
+      img.src = url;
+    });
     var row = el('div', 'comment-buttons');
     var save = el('button', 'btn btn-send', 'Save');
     save.type = 'button';
