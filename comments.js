@@ -168,7 +168,7 @@
 
   /* Keys must match BOARD_CATS in the worker. */
   var CATS = [
-    ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific.'],
+    ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific. New here? ', 'Introduce yourself and say hello', 'community.html?topic=37'],
     ['news', 'News', 'News of the Church and of the world.'],
     ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
     ['theology', 'Theology', 'All genres. Anything without a room of its own.'],
