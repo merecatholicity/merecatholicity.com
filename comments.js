@@ -143,6 +143,33 @@
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; }
   }
 
+  /* A dual-stack browser reaches us on only one address family, so the other
+     stays invisible to the server. So we ask two single-family echoes (run by
+     Cloudflare, CORS-open) what address each family sees and send them along,
+     so a ban can later close both doors. Best-effort and time-boxed: if an echo
+     is slow or down we simply lack that family and the post proceeds anyway. */
+  function collectAltIps() {
+    ['ipv4', 'ipv6'].forEach(function (fam) {
+      var ctl = ('AbortController' in window) ? new AbortController() : null;
+      var timer = ctl ? setTimeout(function () { ctl.abort(); }, 2000) : null;
+      fetch('https://' + fam + '.icanhazip.com', ctl ? { signal: ctl.signal } : {})
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (txt) {
+          var ip = String(txt || '').trim();
+          if (ip && ip.length <= 45 && /^[0-9a-fA-F:.]+$/.test(ip)) state.altIps[fam] = ip;
+        })
+        .catch(function () {})
+        .finally(function () { if (timer) clearTimeout(timer); });
+    });
+  }
+
+  /* Carrier-grade NAT (100.64.0.0/10) is shared by many customers, so the
+     drawer warns before an admin bans such a v4. */
+  function isSharedV4Client(ip) {
+    var m = /^(\d{1,3})\.(\d{1,3})\./.exec(ip || '');
+    return !!m && +m[1] === 100 && +m[2] >= 64 && +m[2] <= 127;
+  }
+
   /* Bounded retries for network failures only. An HTTP response of any
      status is final: the server spoke, retrying could only double an
      action. A rejected fetch means nothing arrived, so a short backoff
@@ -244,7 +271,12 @@
     widgetId: null,
     tokenWait: null,
     anonAllowed: false,
+    altIps: { ipv4: '', ipv6: '' },
   };
+
+  /* Reverse-DNS results, cached per address across drawers so a fingerprint
+     opened twice never looks the same IP up twice. */
+  var rdnsCache = {};
 
   /* ---- Turnstile. Loaded lazily, challenge run only at post time so the
      token cannot expire while a long comment is being written. ---- */
@@ -524,7 +556,11 @@
           renderTrustLine(line, m.author_hash, !!m.trusted);
           details.appendChild(line);
           details.appendChild(modLockLine(m.author_hash, !!m.locked));
-          if (m.ip) details.appendChild(modIpLine(m.ip, !!m.ipbanned));
+          var ips = (d.identities && d.identities[m.author_hash]) || [];
+          if (!ips.length && m.ip) ips = [{ ip_display: m.ip, ip_key: m.ip,
+            family: m.ip.indexOf(':') !== -1 ? 6 : 4, source: 'seen', banned: !!m.ipbanned }];
+          details.appendChild(modIpBlock(ips));
+          wireRdns(details, ips);
           details.appendChild(modDeleteUserLine(m.author_hash));
           details.appendChild(modHelpNote());
         }
@@ -579,24 +615,102 @@
     return line;
   }
 
-  function modIpLine(ip, banned) {
+  /* The IP block in a fingerprint: every address known for this identity, each
+     bannable on its own, and a ban-all that shuts both families of a dual-stack
+     user in one act. A v4 that looks like carrier-grade NAT is flagged, since it
+     may be shared by many people. */
+  function modIpBlock(rows) {
+    var wrap = el('div', 'ip-block');
+    if (!rows.length) {
+      wrap.appendChild(el('div', 'trust-line', 'No IP on record.'));
+      return wrap;
+    }
+    if (rows.length > 1) {
+      var allBanned = rows.every(function (r) { return r.banned; });
+      var head = el('div', 'trust-line');
+      head.appendChild(document.createTextNode('Known IPs (' + rows.length + '). '));
+      var all = el('a', 'trust-toggle', allBanned ? '(unban all)' : '(ban all IPs)');
+      all.href = '#';
+      all.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (!allBanned && !confirm(banAllPrompt(rows))) return;
+        ipbanRequest(rows.map(function (r) { return r.ip_key; }), !allBanned);
+      });
+      head.appendChild(all);
+      wrap.appendChild(head);
+    }
+    rows.forEach(function (r) { wrap.appendChild(ipRow(r)); });
+    return wrap;
+  }
+
+  function ipRow(r) {
     var line = el('div', 'trust-line');
-    line.appendChild(document.createTextNode((banned ? 'IP banned. ' : 'IP not banned. ') + ip + ' '));
-    var a = el('a', 'trust-toggle', banned ? '(unban this IP)' : '(ban this IP)');
+    line.appendChild(document.createTextNode((r.banned ? 'Banned. ' : 'Not banned. ') +
+      (r.family === 6 ? 'IPv6 ' : 'IPv4 ') + r.ip_display +
+      (r.source === 'claimed' ? ' · claimed' : '') + ' '));
+    var rd = el('span', 'ip-rdns');
+    rd.setAttribute('data-ip', r.ip_display);
+    if (rdnsCache[r.ip_display]) rd.textContent = rdnsCache[r.ip_display] + ' ';
+    line.appendChild(rd);
+    var a = el('a', 'trust-toggle', r.banned ? '(unban)' : '(ban)');
     a.href = '#';
     a.addEventListener('click', function (e) {
       e.preventDefault();
-      if (!banned && !confirm('Ban this IP address (' + ip + ')? Logged-in users from it will be blocked and sent to the terms page.')) return;
-      fetch(API + '/ipban', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, ip: ip, banned: !banned }),
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        if (d.ok) location.reload();
-      }).catch(function () {});
+      if (!r.banned && !confirm('Ban ' + r.ip_display + '?' +
+        (isSharedV4Client(r.ip_display) ? ' This looks like carrier-grade NAT, shared by many users; banning it may block innocents.' : '') +
+        '\n\nLogged-in users from it will be blocked and sent to the terms page.')) return;
+      ipbanRequest([r.ip_key], !r.banned);
     });
     line.appendChild(a);
     return line;
+  }
+
+  function banAllPrompt(rows) {
+    var shared = rows.filter(function (r) { return isSharedV4Client(r.ip_display); });
+    return 'Ban all ' + rows.length + ' IPs for this identity?\n\n' +
+      rows.map(function (r) { return (r.family === 6 ? 'IPv6 ' : 'IPv4 ') + r.ip_display; }).join('\n') +
+      (shared.length ? '\n\nWARNING: ' + shared.map(function (r) { return r.ip_display; }).join(', ') +
+        ' looks like carrier-grade NAT (shared by many users); banning may block innocents.' : '') +
+      '\n\nLogged-in users from any of them will be blocked and sent to the terms page.';
+  }
+
+  function ipbanRequest(keys, banned) {
+    fetch(API + '/ipban', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, ips: keys, banned: banned }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.ok) location.reload();
+    }).catch(function () {});
+  }
+
+  /* Reverse-DNS the identity's addresses the first time its drawer opens, then
+     fill every matching row. Admin-only and lazy, so the bulk fingerprint fetch
+     and the poster's own path never pay for it. */
+  function wireRdns(details, rows) {
+    if (!rows.length) return;
+    details.addEventListener('toggle', function () {
+      if (!details.open || details.__rdnsDone) return;
+      details.__rdnsDone = true;
+      var want = rows.map(function (r) { return r.ip_display; })
+        .filter(function (ip) { return !(ip in rdnsCache); });
+      if (!want.length) return fillRdns(details);
+      fetch(API + '/rdns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, ips: want }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok && d.rdns) Object.keys(d.rdns).forEach(function (ip) { rdnsCache[ip] = d.rdns[ip] || ''; });
+        fillRdns(details);
+      }).catch(function () {});
+    });
+  }
+
+  function fillRdns(details) {
+    details.querySelectorAll('.ip-rdns').forEach(function (span) {
+      var host = rdnsCache[span.getAttribute('data-ip')];
+      if (host) span.textContent = host + ' ';
+    });
   }
 
   function modHelpNote() {
@@ -844,6 +958,7 @@
   /* ---- Posting ---- */
 
   function post(asKeyed) {
+    collectAltIps();
     var textarea = section.querySelector('.comment-text');
     var status = section.querySelector('.form-status');
     var body = textarea.value.replace(/\s+$/, '');
@@ -864,6 +979,8 @@
           website: section.querySelector('.hp').value,
           tz: browserTz(),
           faith: getFaith(),
+          ipv4: state.altIps.ipv4 || '',
+          ipv6: state.altIps.ipv6 || '',
         }),
       }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
         .then(function (r) { return r.json(); });
@@ -983,6 +1100,7 @@
   }
 
   function boardPost(payload, onSuccess) {
+    collectAltIps();
     var status = section.querySelector('.form-status');
     var buttons = section.querySelectorAll('.comment-buttons button');
     buttons.forEach(function (b) { b.disabled = true; });
@@ -994,6 +1112,8 @@
       payload.website = section.querySelector('.hp').value;
       payload.tz = browserTz();
       payload.faith = getFaith();
+      payload.ipv4 = state.altIps.ipv4 || '';
+      payload.ipv6 = state.altIps.ipv6 || '';
       return fetchRetry(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2096,6 +2216,7 @@
 
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
+    collectAltIps();
     /* Resolve the identity before any view renders, or a keyed visitor
        reads as anonymous and the owner's own links never appear. */
     var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
@@ -2121,6 +2242,7 @@
   function start() {
     if (state.started) return;
     state.started = true;
+    collectAltIps();
 
     /* Tell search engines this block is visitor content: keep it out of
        snippets, and never let it read as the site's own words. */
