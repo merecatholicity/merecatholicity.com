@@ -1226,6 +1226,12 @@
       : 'PNG, JPEG, or WebP. It will be cropped square, 400 by 400.');
     card.appendChild(avNote);
     if (p.avatar) {
+      var avPrev = el('div', 'profile-avatar');
+      var avPrevImg = el('img');
+      avPrevImg.src = API + '/avatar?hash=' + p.hash + '&v=' + encodeURIComponent(p.avatar);
+      avPrevImg.alt = '';
+      avPrev.appendChild(avPrevImg);
+      card.appendChild(avPrev);
       var avDel = el('a', 'identity-action', 'Remove avatar');
       avDel.href = '#';
       avDel.addEventListener('click', function (e) {
