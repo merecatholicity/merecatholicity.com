@@ -847,6 +847,45 @@ async function handleModerate(request, env) {
   return json({ ok: true, locked: locked }, 200);
 }
 
+/* Admin-only: move a whole thread to another category, then DM the original
+   poster an automated notice with a link to its new home. The topic row and
+   every reply row carry their own page, so all move together. */
+async function handleMove(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const adminHash = await sha256hex(key);
+  if (!isAdminHash(env, adminHash)) return json({ ok: false, error: 'No.' }, 403);
+  const newPage = boardKey('board:' + String(data.cat || ''));
+  if (!newPage) return json({ ok: false, error: 'Unknown category.' }, 400);
+  const topic = await env.DB.prepare(
+    "SELECT id, page, title, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status != 'deleted'"
+  ).bind(id).first();
+  if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  if (topic.page === newPage) return json({ ok: false, error: 'It is already in that category.' }, 400);
+  await env.DB.prepare('UPDATE comments SET page = ?1 WHERE id = ?2 OR parent_id = ?2').bind(newPage, id).run();
+  /* Notify the poster, unless the mover is the poster or the topic is anonymous.
+     The display name is admin-supplied (untrusted text, so scrubbed and capped);
+     the move itself keyed on the validated category. */
+  let notified = false;
+  if (topic.author_hash && topic.author_hash !== adminHash) {
+    const name = String(data.catName || newPage.slice(6)).replace(CONTROL_RE, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    const link = SITE + '/community.html?topic=' + id;
+    const body = ('Your topic "' + topic.title + '" was moved to ' + name + '. You can read it here: ' + link).slice(0, MAX_BODY);
+    try { notified = await sendSystemDm(env, adminHash, topic.author_hash, body); } catch { notified = false; }
+  }
+  return json({ ok: true, moved: true, notified }, 200);
+}
+
 /* Admin-only trust toggle. A trusted author's posts skip the AI screen.
    The flag lives by fingerprint and its holder never learns it exists. */
 async function handleTrust(request, env) {
@@ -1046,7 +1085,12 @@ const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1)";
 const DM_UNREAD_EXISTS =
   'EXISTS(SELECT 1 FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
   'AND m.sender_hash != ?1 ' +
-  'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0))';
+  'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0) ' +
+  'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0))';
+
+/* A side that deleted the conversation sees only words newer than its clear
+   stamp. ?1 is the viewer; t must be the thread row in scope. */
+const DM_CLEARED = 'm.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0)';
 
 /* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
    recipient does NOT refuse the send: the message is stored held, reads as
@@ -1107,6 +1151,30 @@ async function handleDmSend(request, env) {
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
 }
 
+/* Deliver a message from one identity to another with no gate — for automated,
+   system-authored notices (e.g. a topic-move notification). Always unheld, so a
+   moderation notice reaches its target regardless of blocks, and it post-dates
+   any clear stamp so a fresh-started thread resurfaces to carry it. Returns
+   whether it delivered. */
+async function sendSystemDm(env, fromHash, toHash, body) {
+  if (!fromHash || !toHash || fromHash === toHash || !body) return false;
+  const [a, b] = dmPair(fromHash, toHash);
+  const now = Math.floor(Date.now() / 1000);
+  const senderReadCol = fromHash === a ? 'a_read_at' : 'b_read_at';
+  const thread = await env.DB.prepare(
+    'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
+    'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
+  ).bind(a, b, now, fromHash).first();
+  await env.DB.prepare(
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held) VALUES (?1, ?2, ?3, ?4, 0)'
+  ).bind(thread.id, fromHash, body, now).run();
+  await env.DB.prepare(
+    'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
+    senderReadCol + ' = ?2 WHERE id = ?1'
+  ).bind(thread.id, now).run();
+  return true;
+}
+
 /* Inbox: my threads by newest activity, the other party resolved with their
    nick and avatar, and the total unread count riding along so one call feeds
    both the list and the badge. */
@@ -1130,8 +1198,8 @@ async function handleDmThreads(request, env) {
     'SELECT t.id, ' +
     'CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END AS other_hash, ' +
     'pr.nick, pr.avatar, ' +
-    '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ') AS msgs, ' +
-    '(SELECT MAX(m.created_at) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ') AS last_at, ' +
+    '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ') AS msgs, ' +
+    '(SELECT MAX(m.created_at) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ') AS last_at, ' +
     'CASE WHEN ' + DM_UNREAD_EXISTS + ' THEN 1 ELSE 0 END AS unread ' +
     'FROM dm_threads t LEFT JOIN profiles pr ON pr.hash = CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END ' +
     'WHERE t.a_hash = ?1 OR t.b_hash = ?1';
@@ -1165,7 +1233,7 @@ async function handleDmThread(request, env) {
   if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const [a, b] = dmPair(me, other);
   const thread = await env.DB.prepare(
-    'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
+    'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at, a_cleared_at, b_cleared_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
   ).bind(a, b).first();
   const prof = await env.DB.prepare('SELECT nick, avatar FROM profiles WHERE hash = ?1').bind(other).first();
   const iBlocked = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
@@ -1175,26 +1243,28 @@ async function handleDmThread(request, env) {
     return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
   }
-  /* The total and the pages are the viewer's own: held words count for
-     their sender and for nobody else. */
+  /* The total and the pages are the viewer's own: held words count for their
+     sender and for nobody else, and a side that deleted the thread sees only
+     what arrived after its own clear stamp (a fresh start). */
+  const myCleared = (me === a ? thread.a_cleared_at : thread.b_cleared_at) || 0;
   const totRow = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS
-  ).bind(me, thread.id).first();
+    'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND m.created_at > ?3'
+  ).bind(me, thread.id, myCleared).first();
   const total = totRow.n || 0;
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
     'SELECT m.id, m.sender_hash, m.body, m.created_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
-    ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
-  ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
+    ' AND m.created_at > ?5 ORDER BY m.id LIMIT ?3 OFFSET ?4'
+  ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
   /* One conditional write: only when a visible word from the other side is
-     newer than my stamp. Held words never trigger it. */
+     newer than my stamp. Held and cleared words never trigger it. */
   await env.DB.prepare(
     'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?3 AND EXISTS(' +
     'SELECT 1 FROM dms m WHERE m.thread_id = ?3 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
-    'AND m.created_at > COALESCE(' + myReadCol + ', 0))'
-  ).bind(me, Math.floor(Date.now() / 1000), thread.id).run();
+    'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
+  ).bind(me, Math.floor(Date.now() / 1000), thread.id, myCleared).run();
   return json({ ok: true, thread_id: thread.id,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
     messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
@@ -1275,6 +1345,53 @@ async function handleDmBlock(request, env) {
     await env.DB.prepare('DELETE FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(me, hash).run();
   }
   return json({ ok: true, blocked: !!data.blocked }, 200);
+}
+
+/* Delete a conversation from my side: a fresh start. My clear stamp hides every
+   earlier word from me while the other keeps their copy; when both sides have
+   cleared and no word outlives the earlier clear, the thread and all its words
+   are purged so nothing persists. Keyed, not admin — you delete your own. */
+async function handleDmDelete(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const other = String(data.with || '');
+  if (!key || !/^[0-9a-f]{64}$/.test(other)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const [a, b] = dmPair(me, other);
+  const thread = await env.DB.prepare(
+    'SELECT id, a_cleared_at, b_cleared_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
+  ).bind(a, b).first();
+  if (!thread) return json({ ok: true, purged: false }, 200);
+  const now = Math.floor(Date.now() / 1000);
+  const myCol = me === a ? 'a_cleared_at' : 'b_cleared_at';
+  await env.DB.prepare('UPDATE dm_threads SET ' + myCol + ' = ?1 WHERE id = ?2').bind(now, thread.id).run();
+  /* Purge when both sides have cleared and no word outlives the earlier clear,
+     so neither side can still see anything. Held words count too, erring toward
+     never destroying a word its sender might still see. */
+  const aC = me === a ? now : (thread.a_cleared_at || 0);
+  const bC = me === b ? now : (thread.b_cleared_at || 0);
+  let purged = false;
+  if (aC && bC) {
+    const surv = await env.DB.prepare('SELECT COUNT(*) AS n FROM dms WHERE thread_id = ?1 AND created_at > ?2')
+      .bind(thread.id, Math.min(aC, bC)).first();
+    if (!surv.n) {
+      await env.DB.prepare('DELETE FROM dms WHERE thread_id = ?1').bind(thread.id).run();
+      await env.DB.prepare('DELETE FROM dm_threads WHERE id = ?1').bind(thread.id).run();
+      purged = true;
+    }
+  }
+  return json({ ok: true, purged }, 200);
 }
 
 /* The autocomplete corpus: every hash that has ever appeared publicly, with
@@ -1742,6 +1859,7 @@ export default {
       if (path === '/api/comments/audit' && request.method === 'POST') return await handleAudit(request, env);
       if (path === '/api/comments/trust' && request.method === 'POST') return await handleTrust(request, env);
       if (path === '/api/comments/moderate' && request.method === 'POST') return await handleModerate(request, env);
+      if (path === '/api/comments/move' && request.method === 'POST') return await handleMove(request, env);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
@@ -1755,6 +1873,7 @@ export default {
       if (path === '/api/comments/dm/thread' && request.method === 'POST') return await handleDmThread(request, env);
       if (path === '/api/comments/dm/unread' && request.method === 'POST') return await handleDmUnread(request, env);
       if (path === '/api/comments/dm/block' && request.method === 'POST') return await handleDmBlock(request, env);
+      if (path === '/api/comments/dm/delete' && request.method === 'POST') return await handleDmDelete(request, env);
       if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);

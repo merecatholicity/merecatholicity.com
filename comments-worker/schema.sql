@@ -74,16 +74,22 @@ CREATE INDEX IF NOT EXISTS identity_ips_hash_idx ON identity_ips(hash);
 -- the lexicographically lower of the two) so one UNIQUE row holds each pair.
 -- last_sender keeps your own message from ever reading as unread to you, and
 -- the per-side read_at stamps carry the unread state without a per-message flag.
+-- a_cleared_at/b_cleared_at are the per-side "delete conversation" stamps: that
+-- side sees only messages newer than its stamp (a fresh start), and when both
+-- are set with no message past them the whole thread is purged. NULL = never
+-- cleared = full history, so every preexisting thread is untouched.
 CREATE TABLE IF NOT EXISTS dm_threads (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  a_hash      TEXT NOT NULL,
-  b_hash      TEXT NOT NULL,
-  created_at  INTEGER NOT NULL,
-  last_at     INTEGER NOT NULL,
-  last_sender TEXT NOT NULL,
-  msgs        INTEGER NOT NULL DEFAULT 0,
-  a_read_at   INTEGER,
-  b_read_at   INTEGER,
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  a_hash       TEXT NOT NULL,
+  b_hash       TEXT NOT NULL,
+  created_at   INTEGER NOT NULL,
+  last_at      INTEGER NOT NULL,
+  last_sender  TEXT NOT NULL,
+  msgs         INTEGER NOT NULL DEFAULT 0,
+  a_read_at    INTEGER,
+  b_read_at    INTEGER,
+  a_cleared_at INTEGER,
+  b_cleared_at INTEGER,
   UNIQUE(a_hash, b_hash)
 );
 CREATE INDEX IF NOT EXISTS dm_threads_a_idx ON dm_threads(a_hash, last_at);
