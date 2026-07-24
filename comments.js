@@ -1231,12 +1231,12 @@
     var avRow = el('div', 'key-row');
     var avPick = el('input');
     avPick.type = 'file';
-    avPick.accept = 'image/png,image/jpeg,image/webp';
+    avPick.accept = '.jpg,.jpeg,image/jpeg';
     avRow.appendChild(avPick);
     card.appendChild(avRow);
     var avNote = el('p', 'profile-empty', p.avatar
       ? 'Choosing a new image replaces the current avatar.'
-      : 'PNG, JPEG, or WebP. It will be cropped square, 400 by 400.');
+      : 'A JPEG image. It will be cropped square, 400 by 400.');
     card.appendChild(avNote);
     if (p.avatar) {
       var avPrev = el('div', 'profile-avatar');

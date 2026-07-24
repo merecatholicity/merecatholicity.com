@@ -924,8 +924,11 @@ async function handleAvatarUpload(request, env) {
   if (file.size > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (bytes.length > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
+  /* JPEG alone is stored, whatever any client claims or an old cached
+     client sends. The canvas step upstream re-encodes every source to JPEG,
+     so an honest upload always passes; everything else is refused here. */
   const img = sniffImage(bytes);
-  if (!img) return json({ ok: false, error: 'Not a usable image. PNG, JPEG, or WebP only.' }, 400);
+  if (!img || img.mime !== 'image/jpeg') return json({ ok: false, error: 'Avatars must be JPEG.' }, 400);
   if (img.width !== AVATAR_SIZE || img.height !== AVATAR_SIZE) {
     return json({ ok: false, error: 'The avatar must be exactly 400 by 400 pixels.' }, 400);
   }
