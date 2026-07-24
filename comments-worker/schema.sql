@@ -35,6 +35,20 @@ CREATE TABLE IF NOT EXISTS trusted (
   created_at INTEGER NOT NULL
 );
 
+-- Locked identities: a reversible account disable. A locked hash is logged out
+-- and refused every keyed interaction until unlocked.
+CREATE TABLE IF NOT EXISTS locks (
+  hash       TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL
+);
+
+-- Banned raw IPs (v4 or v6, the same string the fingerprint shows). Enforced by
+-- the worker for logged-in/keyed requests only, never for cached anonymous reads.
+CREATE TABLE IF NOT EXISTS ip_bans (
+  ip         TEXT PRIMARY KEY,
+  created_at INTEGER NOT NULL
+);
+
 -- Direct messages: strictly 1v1, the pair stored in canonical order (a_hash is
 -- the lexicographically lower of the two) so one UNIQUE row holds each pair.
 -- last_sender keeps your own message from ever reading as unread to you, and

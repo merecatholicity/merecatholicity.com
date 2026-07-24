@@ -154,6 +154,23 @@ async function isTrusted(env, hash) {
   return !!row;
 }
 
+/* The one gate every keyed write passes through: a locked identity, a banned
+   IP, or a legacy ban. Returns null when clear, else the reason a keyed
+   endpoint hands back as {blocked}. Public reads never call this, so cached
+   and anonymous browsing is untouched. */
+async function blockedReason(env, hash, ip) {
+  const row = await env.DB.prepare(
+    "SELECT 'locked' AS r FROM locks WHERE hash = ?1 " +
+    "UNION ALL SELECT 'ipban' FROM ip_bans WHERE ip = ?2 " +
+    "UNION ALL SELECT 'banned' FROM bans WHERE hash = ?1 LIMIT 1"
+  ).bind(hash || '-', ip || '-').first();
+  return row ? row.r : null;
+}
+
+function blockedJson(reason) {
+  return json({ ok: false, blocked: reason, error: 'Interaction is not available.' }, 403);
+}
+
 /* Returns {status, verdict}. Anything unscreenable is held pending: the
    failure mode must be a delay for the poster, never a silent publish.
    A trusted author skips the screen entirely, though hold-all, the
@@ -187,13 +204,6 @@ function viewLink(page, id, parentId) {
   return SITE + page + '#comment-' + id;
 }
 
-const MOD_LINK_TTL = 30 * 86400; // 30 days
-async function modLink(env, id, act) {
-  const exp = Math.floor(Date.now() / 1000) + MOD_LINK_TTL;
-  const sig = await hmacHex(env.ADMIN_SECRET, id + '|' + act + '|' + exp);
-  return SITE + '/api/comments/mod?id=' + id + '&act=' + act + '&exp=' + exp + '&sig=' + sig;
-}
-
 async function notify(env, comment) {
   let nick = null;
   if (comment.author_hash) {
@@ -219,11 +229,8 @@ async function notify(env, comment) {
     'Locale:  ' + (comment.tz || 'tz unknown') + ' · ' + (comment.lang || 'lang unknown'),
   ];
   if (comment.status === 'pending') {
-    lines.push('Held for review (' + comment.ai_verdict + ').');
-    lines.push('Approve: ' + (await modLink(env, comment.id, 'approve')));
+    lines.push('Held for review (' + comment.ai_verdict + '). Approve or delete it from the board audit.');
   }
-  lines.push('Delete:  ' + (await modLink(env, comment.id, 'delete')));
-  lines.push('Ban:     ' + (await modLink(env, comment.id, 'ban')));
   const kind = comment.edited
     ? (comment.status === 'pending' ? 'edit held for review on ' : 'comment edited on ')
     : (comment.status === 'pending' ? 'comment held for review on ' : 'new comment on ');
@@ -328,9 +335,8 @@ async function handlePost(request, env, ctx) {
   const tzRaw = String(data.tz || '');
   const tz = /^[A-Za-z0-9_+\/-]{1,60}$/.test(tzRaw) ? tzRaw : '';
 
-  const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash IN (?1, ?2)')
-    .bind(authorHash || '-', ipHash || '-').all();
-  if (banned.results.length) return json({ ok: false, error: 'Posting is not available.' }, 403);
+  const gate = await blockedReason(env, authorHash, ip);
+  if (gate) return blockedJson(gate);
 
   /* A topic's title is screened with its body, one judgment for the pair. */
   const { status, verdict } = await screen(env, title ? title + '\n\n' + body : body,
@@ -369,6 +375,8 @@ async function handleSelfDelete(request, env) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const authorHash = await sha256hex(key);
+  const gate = await blockedReason(env, authorHash, ip);
+  if (gate) return blockedJson(gate);
   const isAdmin = isAdminHash(env, authorHash);
   const row = isAdmin
     ? await env.DB.prepare(
@@ -473,6 +481,8 @@ async function handleEdit(request, env, ctx) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
   const authorHash = await sha256hex(key);
+  const gate = await blockedReason(env, authorHash, ip);
+  if (gate) return blockedJson(gate);
   const row = await env.DB.prepare(
     "SELECT page, parent_id, title, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
   ).bind(id, authorHash).first();
@@ -509,8 +519,12 @@ async function handleMeta(request, env) {
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
   const rows = await env.DB.prepare(
     'SELECT c.id, c.status, c.ai_verdict, c.ip, c.ua, c.os, c.tz, c.lang, c.author_hash, ' +
-    'CASE WHEN t.hash IS NULL THEN 0 ELSE 1 END AS trusted ' +
+    'CASE WHEN t.hash IS NULL THEN 0 ELSE 1 END AS trusted, ' +
+    'CASE WHEN lk.hash IS NULL THEN 0 ELSE 1 END AS locked, ' +
+    'CASE WHEN ib.ip IS NULL THEN 0 ELSE 1 END AS ipbanned ' +
     'FROM comments c LEFT JOIN trusted t ON t.hash = c.author_hash ' +
+    'LEFT JOIN locks lk ON lk.hash = c.author_hash ' +
+    'LEFT JOIN ip_bans ib ON ib.ip = c.ip ' +
     'WHERE c.page = ?1 ORDER BY c.id LIMIT 500'
   ).bind(page).all();
   return json({ ok: true, meta: rows.results }, 200);
@@ -769,8 +783,8 @@ async function handleProfileSave(request, env) {
     return json({ ok: false, error: 'That profile is too long or has stray characters.' }, 400);
   }
   const authorHash = await sha256hex(key);
-  const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash = ?1').bind(authorHash).first();
-  if (banned) return json({ ok: false, error: 'Editing is not available.' }, 403);
+  const gate = await blockedReason(env, authorHash, ip);
+  if (gate) return blockedJson(gate);
   const blob = [nick.value, bio.value, signature.value].filter(Boolean).join('\n');
   if (blob) {
     const { status, verdict } = await screen(env, blob, await isTrusted(env, authorHash));
@@ -862,8 +876,8 @@ async function handleDmSend(request, env) {
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   if (me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
-  const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash = ?1').bind(me).first();
-  if (banned) return json({ ok: false, error: 'Messaging is not available.' }, 403);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
   const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
     .bind(to, me).first();
   const held = blockRow ? 1 : 0;
@@ -1006,6 +1020,10 @@ async function handleDmUnread(request, env) {
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
+  /* The reliable catch for a logged-in reader: this poll fires on every keyed
+     page load, so a lock or IP ban logs them out on their next page turn. */
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
   const row = await env.DB.prepare(
     'SELECT COUNT(*) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1) AND ' + DM_UNREAD_EXISTS
   ).bind(me).first();
@@ -1178,8 +1196,8 @@ async function handleAvatarUpload(request, env) {
   const key = String(form.get('key') || '');
   if (!key) return json({ ok: false, error: 'An identity is required.' }, 400);
   const authorHash = await sha256hex(key);
-  const banned = await env.DB.prepare('SELECT hash FROM bans WHERE hash = ?1').bind(authorHash).first();
-  if (banned) return json({ ok: false, error: 'Editing is not available.' }, 403);
+  const gate = await blockedReason(env, authorHash, ip);
+  if (gate) return blockedJson(gate);
   if (!(await verifyTurnstile(env, String(form.get('token') || ''), ip))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
@@ -1355,116 +1373,129 @@ async function handleBackup(request, env) {
   return json({ ok: true, backup: result }, 200);
 }
 
-const MOD_HEADERS = {
-  'Content-Type': 'text/html; charset=utf-8',
-  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'no-referrer',
-};
+/* ---- In-platform moderation. Every control demands a key hashing into
+   ADMIN_HASHES; the old signed email links are gone entirely. ---- */
 
-function modPage(text, status) {
-  return new Response(
-    '<!doctype html><meta charset="utf-8"><title>merecatholicity.com comments</title>' +
-    '<body style="font-family: Georgia, serif; max-width: 36rem; margin: 4rem auto; color: #222;"><p>' + text + '</p>',
-    { status: status, headers: MOD_HEADERS }
-  );
+async function requireAdmin(env, key) {
+  return !!key && isAdminHash(env, await sha256hex(key));
 }
 
-/* The page a moderation link lands on. The signed action is carried out only
-   when this form is POSTed, so a mail scanner or link prefetcher that merely
-   GETs the URL changes nothing. */
-function modConfirmPage(id, act, exp, sig) {
-  const verb = act === 'approve' ? 'Approve' : act === 'delete' ? 'Delete' : 'Ban the author of';
-  const label = verb + ' comment ' + id;
-  return new Response(
-    '<!doctype html><meta charset="utf-8"><title>merecatholicity.com comments</title>' +
-    '<body style="font-family: Georgia, serif; max-width: 36rem; margin: 4rem auto; color: #222;">' +
-    '<p>' + label + '?</p>' +
-    '<form method="POST" action="/api/comments/mod">' +
-    '<input type="hidden" name="id" value="' + id + '">' +
-    '<input type="hidden" name="act" value="' + xmlEscape(act) + '">' +
-    '<input type="hidden" name="exp" value="' + exp + '">' +
-    '<input type="hidden" name="sig" value="' + xmlEscape(sig) + '">' +
-    '<button type="submit" style="font: inherit; padding: .5rem 1rem; cursor: pointer;">' + label + '</button>' +
-    '</form>',
-    { status: 200, headers: MOD_HEADERS }
-  );
-}
-
-/* Returns 'ok' | 'bad' | 'sig' | 'expired'. The signature covers the expiry,
-   so neither the action nor its deadline can be tampered with. */
-async function modVerify(env, id, act, exp, sig) {
-  if (!Number.isInteger(id) || id < 1 || !['approve', 'delete', 'ban'].includes(act)) return 'bad';
-  if (!Number.isInteger(exp) || exp < 1) return 'bad';
-  const expected = await hmacHex(env.ADMIN_SECRET, id + '|' + act + '|' + exp);
-  if (!timingSafeEqual(sig, expected)) return 'sig';
-  if (Math.floor(Date.now() / 1000) >= exp) return 'expired';
-  return 'ok';
-}
-
-function modReject(v) {
-  if (v === 'sig') return modPage('Bad signature.', 403);
-  if (v === 'expired') return modPage('This link has expired. Moderate from the board instead.', 403);
-  return modPage('Bad request.', 400);
-}
-
-/* GET renders the confirmation form only, mutating nothing. */
-async function handleModConfirm(request, env, url) {
+/* Lock or unlock an identity: a reversible disable that logs the holder out
+   and refuses every keyed interaction until reversed. */
+async function handleLock(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return modPage('Too many requests. Slow down.', 429);
-  const id = Number(url.searchParams.get('id'));
-  const act = String(url.searchParams.get('act') || '');
-  const exp = Number(url.searchParams.get('exp'));
-  const sig = String(url.searchParams.get('sig') || '');
-  const v = await modVerify(env, id, act, exp, sig);
-  if (v !== 'ok') return modReject(v);
-  return modConfirmPage(id, act, exp, sig);
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const hash = String(data.hash || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  if (data.locked) {
+    await env.DB.prepare('INSERT OR IGNORE INTO locks (hash, created_at) VALUES (?1, ?2)')
+      .bind(hash, Math.floor(Date.now() / 1000)).run();
+  } else {
+    await env.DB.prepare('DELETE FROM locks WHERE hash = ?1').bind(hash).run();
+  }
+  return json({ ok: true, locked: !!data.locked }, 200);
 }
 
-/* POST carries out the signed action, re-checking signature and expiry. */
-async function handleMod(request, env) {
+/* Delete a user and all their public posts: comments go to 'deleted', the
+   profile and avatar are removed, and the identity is locked so the same key
+   cannot post again. Private DMs are left untouched. */
+async function handleDeleteUser(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const hash = String(data.hash || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  const affected = await env.DB.prepare(
+    "SELECT DISTINCT COALESCE(parent_id, id) AS topic FROM comments " +
+    "WHERE author_hash = ?1 AND page LIKE 'board:%' AND status != 'deleted'"
+  ).bind(hash).all();
+  await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE author_hash = ?1 AND status != 'deleted'")
+    .bind(hash).run();
+  await env.DB.prepare('DELETE FROM profiles WHERE hash = ?1').bind(hash).run();
+  if (env.AVATARS) await env.AVATARS.delete('avatars/' + hash);
+  await env.DB.prepare('INSERT OR IGNORE INTO locks (hash, created_at) VALUES (?1, ?2)')
+    .bind(hash, Math.floor(Date.now() / 1000)).run();
+  for (const r of affected.results) await refreshTopicStats(env, r.topic);
+  return json({ ok: true }, 200);
+}
+
+function looksLikeIp(s) {
+  return /^[0-9a-fA-F:.]{3,45}$/.test(s) && (s.indexOf('.') !== -1 || s.indexOf(':') !== -1);
+}
+
+/* Ban or unban a raw IP (v4 or v6). */
+async function handleIpBan(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const cip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: cip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const ip = String(data.ip || '').trim();
+  if (!looksLikeIp(ip)) return json({ ok: false, error: 'That is not a valid IP address.' }, 400);
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  if (data.banned) {
+    await env.DB.prepare('INSERT OR IGNORE INTO ip_bans (ip, created_at) VALUES (?1, ?2)')
+      .bind(ip, Math.floor(Date.now() / 1000)).run();
+  } else {
+    await env.DB.prepare('DELETE FROM ip_bans WHERE ip = ?1').bind(ip).run();
+  }
+  return json({ ok: true, banned: !!data.banned }, 200);
+}
+
+/* The banned-IP list for the admin page. */
+async function handleIpBans(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return modPage('Too many requests. Slow down.', 429);
-  let form;
-  try {
-    form = await request.formData();
-  } catch {
-    return modPage('Bad request.', 400);
-  }
-  const id = Number(form.get('id'));
-  const act = String(form.get('act') || '');
-  const exp = Number(form.get('exp'));
-  const sig = String(form.get('sig') || '');
-  const v = await modVerify(env, id, act, exp, sig);
-  if (v !== 'ok') return modReject(v);
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const rows = await env.DB.prepare('SELECT ip, created_at FROM ip_bans ORDER BY created_at DESC LIMIT 1000').all();
+  return json({ ok: true, ips: rows.results }, 200);
+}
 
-  if (act === 'approve') {
-    const row = await env.DB.prepare(
-      "UPDATE comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING page, parent_id"
-    ).bind(id).first();
-    if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
-    return modPage(row ? 'Comment ' + id + ' approved and live.' : 'Nothing to approve. Already handled.', 200);
-  }
-  if (act === 'delete') {
-    const row = await env.DB.prepare(
-      "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted' RETURNING page, parent_id"
-    ).bind(id).first();
-    if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
-    return modPage(row ? 'Comment ' + id + ' deleted.' : 'Already deleted.', 200);
-  }
-  /* Ban the keyed author when there is one, the IP hash otherwise, and
-     take the comment down in the same act. */
-  const comment = await env.DB.prepare('SELECT author_hash, ip_hash, page, parent_id FROM comments WHERE id = ?1').bind(id).first();
-  if (!comment) return modPage('No such comment.', 404);
-  const hash = comment.author_hash || comment.ip_hash;
-  if (!hash) return modPage('Nothing to ban on this comment.', 200);
-  await env.DB.prepare('INSERT OR IGNORE INTO bans (hash, kind, created_at) VALUES (?1, ?2, ?3)')
-    .bind(hash, comment.author_hash ? 'author' : 'ip', Math.floor(Date.now() / 1000)).run();
-  await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
-  if (boardKey(comment.page)) await refreshTopicStats(env, comment.parent_id || id);
-  return modPage('Banned ' + (comment.author_hash ? 'author' : 'IP') + ' of comment ' + id + ' and deleted it.', 200);
+/* Approve a held comment: the in-platform replacement for the old email link. */
+async function handleApprove(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  const row = await env.DB.prepare(
+    "UPDATE comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING page, parent_id"
+  ).bind(id).first();
+  if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
+  return json({ ok: true, approved: !!row }, 200);
+}
+
+/* The pending-review queue: every held comment, newest first. */
+async function handlePending(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const rows = await env.DB.prepare(
+    "SELECT c.id, c.page, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at, c.ai_verdict " +
+    "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+    "WHERE c.status = 'pending' ORDER BY c.id DESC LIMIT 200"
+  ).all();
+  return json({ ok: true, pending: rows.results }, 200);
 }
 
 export default {
@@ -1502,8 +1533,12 @@ export default {
       if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);
       if (path === '/api/comments/avatar/delete' && request.method === 'POST') return await handleAvatarDelete(request, env);
-      if (path === '/api/comments/mod' && request.method === 'GET') return await handleModConfirm(request, env, url);
-      if (path === '/api/comments/mod' && request.method === 'POST') return await handleMod(request, env);
+      if (path === '/api/comments/lock' && request.method === 'POST') return await handleLock(request, env);
+      if (path === '/api/comments/deleteuser' && request.method === 'POST') return await handleDeleteUser(request, env);
+      if (path === '/api/comments/ipban' && request.method === 'POST') return await handleIpBan(request, env);
+      if (path === '/api/comments/ipbans' && request.method === 'POST') return await handleIpBans(request, env);
+      if (path === '/api/comments/approve' && request.method === 'POST') return await handleApprove(request, env);
+      if (path === '/api/comments/pending' && request.method === 'POST') return await handlePending(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);
     } catch (err) {
       console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));
