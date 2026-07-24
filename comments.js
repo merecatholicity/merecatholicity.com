@@ -1233,7 +1233,6 @@
     /* Admins alone see the door to the audit. The server would refuse
        anyone else anyway, so hiding it is courtesy, not the lock. */
     var auditSlot = el('p', 'board-audit-link');
-    section.appendChild(auditSlot);
     function ensureAuditLink() {
       auditSlot.textContent = '';
       if (!isAdmin()) return;
@@ -1263,6 +1262,9 @@
       wrap.appendChild(row);
     });
     section.appendChild(wrap);
+    /* The admin doors sit at the foot of the room list, right-aligned and out
+       of the reader's path, after the last room and before the footer rule. */
+    section.appendChild(auditSlot);
     fetchRetry(API + '/board' + freshParam('?'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -1371,15 +1373,6 @@
             tPager.className = 'board-pages topic-pages';
             left.appendChild(tPager);
           }
-          if (isAdmin()) {
-            var admin = el('span', 'board-admin-links');
-            admin.appendChild(modLinkEl(t.id, t.sticky ? 'unsticky' : 'sticky', t.sticky ? '(unsticky)' : '(sticky)'));
-            admin.appendChild(document.createTextNode(' '));
-            admin.appendChild(modLinkEl(t.id, t.locked ? 'unlock' : 'lock', t.locked ? '(unlock)' : '(lock)'));
-            admin.appendChild(document.createTextNode(' '));
-            admin.appendChild(modLinkEl(t.id, 'delete', '(delete)'));
-            left.appendChild(admin);
-          }
           row.appendChild(left);
           var tstat = el('div', 'board-stats');
           /* The last poster's name jumps to the newest post in the thread,
@@ -1391,6 +1384,17 @@
           tstat.appendChild(document.createTextNode(' · ' +
             t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDateTime(t.last)));
           row.appendChild(tstat);
+          /* Admin controls ride the bottom-right corner of the row, well clear
+             of the title, pager, and author links, against fat-finger taps. */
+          if (isAdmin()) {
+            var admin = el('span', 'board-admin-links board-admin-corner');
+            admin.appendChild(modLinkEl(t.id, t.sticky ? 'unsticky' : 'sticky', t.sticky ? '(unsticky)' : '(sticky)'));
+            admin.appendChild(document.createTextNode(' '));
+            admin.appendChild(modLinkEl(t.id, t.locked ? 'unlock' : 'lock', t.locked ? '(unlock)' : '(lock)'));
+            admin.appendChild(document.createTextNode(' '));
+            admin.appendChild(modLinkEl(t.id, 'delete', '(delete)'));
+            row.appendChild(admin);
+          }
           list.appendChild(row);
         });
         function catHref(i) { return 'community.html?cat=' + key + '&p=' + i; }

@@ -664,7 +664,18 @@ a.board-topic-title { color: var(--ink); text-decoration: none; font-weight: bol
 a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
 .board-topics .comments-status { padding: 0.65em 0.9em; margin: 0; }
 .board-form-head { margin-bottom: 0.3em; }
-.board-topic-head { overflow-wrap: anywhere; }
+.board-topic-head { overflow-wrap: anywhere; display: flex; align-items: baseline; flex-wrap: wrap; }
+.board-topic-head .comments-rss {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: normal;
+  text-decoration: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.15em 0.55em;
+  color: #8a6d3b;
+}
+.board-topic-head .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
 .board-title {
   width: 100%;
   padding: 0.5em 0.7em;
@@ -687,7 +698,7 @@ section.board { max-width: 40rem; }
 .board-stats a { color: var(--maroon); text-decoration: none; }
 .board-stats a:hover { text-decoration: underline; }
 section.board .comment-identity { margin-bottom: 0.4rem; }
-.board-audit-link { margin: 0.2rem 0 0; font-size: 0.9rem; }
+.board-audit-link { margin: 0.6rem 0 0; font-size: 0.9rem; text-align: right; }
 .audit-where { overflow-wrap: anywhere; font-size: 0.95rem; }
 .comment-admin { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
 a.trust-toggle { color: #8a6d3b; font-size: 0.85em; text-decoration: none; display: inline-block; margin-top: 0.2em; }
@@ -695,6 +706,12 @@ a.trust-toggle:hover { text-decoration: underline; }
 .board-locked { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.5em; }
 .board-sticky { color: var(--maroon); font-weight: bold; font-size: 0.8em; margin-left: 0.5em; }
 .board-admin-links { display: block; margin-top: 0.1em; }
+/* On a category row the admin controls drop to a full-width line and hug the
+   bottom-right corner, clear of the title, pager, and author links so a stray
+   tap cannot sticky, lock, or delete. */
+.board-topic { flex-wrap: wrap; }
+.board-admin-corner { flex-basis: 100%; text-align: right; margin-top: 0.35em; }
+@media (max-width: 600px) { .board-admin-corner { flex-basis: auto; } }
 .board-topic-left { min-width: 0; }
 .board-pages { color: #666; }
 .board-pages a { margin-right: 0.4em; }
