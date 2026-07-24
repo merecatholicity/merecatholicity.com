@@ -870,9 +870,32 @@ function sniffImage(b) {
   return null;
 }
 
+/* Best-effort image moderation, the visual counterpart to the Llama Guard
+   text screen. Returns true to allow, false to reject. Fails OPEN on an AI
+   error: a throttled or broken model must not block every avatar, and the
+   owner still sees and can clear any that slip through. Not a guarantee, and
+   never a substitute for CSAM hash-scanning, which is a separate control. */
+async function screenImage(env, bytes) {
+  try {
+    const result = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
+      image: [...bytes],
+      prompt: 'You are moderating a profile avatar. Does this image contain nudity, ' +
+        'sexual or pornographic content, or graphic violence or gore? Answer with only ' +
+        'one word: unsafe if it does, otherwise safe.',
+      max_tokens: 16,
+    });
+    const text = String(result && result.description != null ? result.description : '').toLowerCase();
+    return text.indexOf('unsafe') === -1;
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'avatar_ai_failed', error: String(err) }));
+    return true;
+  }
+}
+
 /* Owner-only upload, multipart. The same gates as posting: rate limit, key,
-   ban, Turnstile. The write is a fixed-key overwrite, so the previous avatar
-   is replaced in the same act and no orphan objects can accumulate. */
+   ban, Turnstile, and an AI vision screen. The write is a fixed-key overwrite,
+   so the previous avatar is replaced in the same act and no orphan objects
+   can accumulate. */
 async function handleAvatarUpload(request, env) {
   if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -905,6 +928,9 @@ async function handleAvatarUpload(request, env) {
   if (!img) return json({ ok: false, error: 'Not a usable image. PNG, JPEG, or WebP only.' }, 400);
   if (img.width !== AVATAR_SIZE || img.height !== AVATAR_SIZE) {
     return json({ ok: false, error: 'The avatar must be exactly 400 by 400 pixels.' }, 400);
+  }
+  if (!(await screenImage(env, bytes))) {
+    return json({ ok: false, error: 'That image was flagged and cannot be used as an avatar. Please choose another.' }, 400);
   }
   await env.AVATARS.put('avatars/' + authorHash, bytes, { httpMetadata: { contentType: img.mime } });
   const now = Math.floor(Date.now() / 1000);
