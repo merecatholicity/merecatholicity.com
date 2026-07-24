@@ -712,6 +712,8 @@ a.trust-toggle:hover { text-decoration: underline; }
 .board-topic { flex-wrap: wrap; }
 .board-admin-corner { flex-basis: 100%; text-align: right; margin-top: 0.35em; }
 @media (max-width: 600px) { .board-admin-corner { flex-basis: auto; } }
+.board-move { font: inherit; font-size: 0.82em; color: #8a6d3b; background: #fff; border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.25em; vertical-align: middle; max-width: 11rem; }
+.board-move:hover { border-color: var(--maroon); }
 .board-topic-left { min-width: 0; }
 .board-pages { color: #666; }
 .board-pages a { margin-right: 0.4em; }

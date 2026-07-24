@@ -1217,7 +1217,7 @@
     [
       'A board for exploring what it means to be merely catholic.',
       'If you hold the Nicene Creed you are welcome. Or if you are a seeker, or if you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation.',
-      'This is not a forum for debating non-Christian religions, cults or the occult, whether atheism, gnosticism, Mormonism, Jehovahism, Islam, Judaism, Hinduism, Buddhism, etc. Though comparative religion discussion is welcome from a Christian perspective.'
+      'This is not a forum for debating non-Christian religions, or atheism / agnosticism. Comparative religion discussion is welcome from a Christian perspective.'
     ].forEach(function (text) {
       var p = el('p', 'board-intro');
       p.appendChild(el('small', null, text));
@@ -1388,6 +1388,32 @@
              of the title, pager, and author links, against fat-finger taps. */
           if (isAdmin()) {
             var admin = el('span', 'board-admin-links board-admin-corner');
+            /* A Move dropdown lists every category with the current one greyed;
+               picking one confirms, moves the whole thread, and DMs the poster. */
+            var moveSel = el('select', 'board-move');
+            var movePh = el('option', null, 'Move'); movePh.value = ''; moveSel.appendChild(movePh);
+            CATS.forEach(function (c) {
+              var o = el('option', null, c[1]); o.value = c[0];
+              if (c[0] === key) o.disabled = true;
+              moveSel.appendChild(o);
+            });
+            moveSel.addEventListener('change', (function (topic) {
+              return function () {
+                var target = moveSel.value;
+                if (!target) return;
+                var name = catByKey(target)[1];
+                if (!confirm('Move "' + topic.title + '" to ' + name + '? The original poster will be notified by DM.')) { moveSel.value = ''; return; }
+                fetch(API + '/move', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: state.key, id: topic.id, cat: target, catName: name }),
+                }).then(function (r) { return r.json(); }).then(function (d) {
+                  if (d.ok) { stampFresh(); location.reload(); } else moveSel.value = '';
+                }).catch(function () { moveSel.value = ''; });
+              };
+            })(t));
+            admin.appendChild(moveSel);
+            admin.appendChild(document.createTextNode(' '));
             admin.appendChild(modLinkEl(t.id, t.sticky ? 'unsticky' : 'sticky', t.sticky ? '(unsticky)' : '(sticky)'));
             admin.appendChild(document.createTextNode(' '));
             admin.appendChild(modLinkEl(t.id, t.locked ? 'unlock' : 'lock', t.locked ? '(unlock)' : '(lock)'));
@@ -2181,6 +2207,24 @@
           row.appendChild(left);
           row.appendChild(el('div', 'board-stats',
             t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + fmtDateTime(t.last_at)));
+          /* A quiet Delete in the corner: clears my side, keeps the other's. */
+          var delWrap = el('div', 'board-admin-corner');
+          var del = el('a', 'trust-toggle', 'Delete');
+          del.href = '#';
+          del.addEventListener('click', (function (other, rowEl) {
+            return function (e) {
+              e.preventDefault();
+              if (!confirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.')) return;
+              fetch(API + '/dm/delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, with: other }),
+              }).then(function (r) { return r.json(); }).then(function (d2) {
+                if (d2.ok) { rowEl.remove(); try { localStorage.removeItem(DM_CACHE); } catch (e2) {} dmUnreadCheck(); }
+              }).catch(function () {});
+            };
+          })(t.other_hash, row));
+          delWrap.appendChild(del);
+          row.appendChild(delWrap);
           list.appendChild(row);
         });
         function inboxHref(i) { return 'community.html?inbox=1&p=' + i; }
@@ -2322,6 +2366,17 @@
             body: JSON.stringify({ key: state.key, hash: other, blocked: blocking }),
           }).then(function (r) { return r.json(); }).then(function (d3) {
             if (d3.ok) location.reload();
+          }).catch(function () {});
+        }));
+        blockLine.appendChild(document.createTextNode(' · '));
+        blockLine.appendChild(identityAction('Delete conversation', function () {
+          if (!confirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.')) return;
+          fetch(API + '/dm/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, with: other }),
+          }).then(function (r) { return r.json(); }).then(function (d3) {
+            if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} location.href = 'community.html?inbox=1'; }
           }).catch(function () {});
         }));
         section.appendChild(blockLine);
