@@ -3,8 +3,7 @@
    so there is nothing here to leak. Turnstile gates every write, the
    rate-limit binding throttles by IP, and Llama Guard screens the text
    (flagged or unscreenable comments are held pending, never dropped).
-   Secrets: TURNSTILE_SECRET, ADMIN_SECRET (signs the moderation links in
-   notification emails), IP_HASH_SECRET (bans match on an HMAC of the IP). */
+   The only secret is TURNSTILE_SECRET, the Turnstile server key. */
 
 const PAGES = [
   '/book.html',
@@ -57,19 +56,6 @@ const enc = new TextEncoder();
 async function sha256hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', enc.encode(text));
   return [...new Uint8Array(digest)].map((x) => x.toString(16).padStart(2, '0')).join('');
-}
-
-async function hmacHex(secret, text) {
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(text));
-  return [...new Uint8Array(sig)].map((x) => x.toString(16).padStart(2, '0')).join('');
-}
-
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
 }
 
 /* Same-origin API. A cross-origin browser POST always carries an Origin, so
@@ -290,7 +276,6 @@ async function handlePost(request, env, ctx) {
 
   const key = String(data.key || '');
   const authorHash = key ? await sha256hex(key) : null;
-  const ipHash = ip ? (await hmacHex(env.IP_HASH_SECRET, ip)).slice(0, 32) : null;
   const ua = String(request.headers.get('User-Agent') || '').slice(0, 400);
   const os = parseOS(ua);
   const lang = String(request.headers.get('Accept-Language') || '').slice(0, 100);
@@ -305,9 +290,9 @@ async function handlePost(request, env, ctx) {
     await isTrusted(env, authorHash));
   const createdAt = Math.floor(Date.now() / 1000);
   const inserted = await env.DB.prepare(
-    'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ip_hash, ai_verdict, ip, ua, os, tz, lang) ' +
-    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14) RETURNING id'
-  ).bind(page, parentId, title, authorHash, body, status, createdAt, ipHash, verdict, ip || null, ua || null, os || null,
+    'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ai_verdict, ip, ua, os, tz, lang) ' +
+    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) RETURNING id'
+  ).bind(page, parentId, title, authorHash, body, status, createdAt, verdict, ip || null, ua || null, os || null,
     tz || null, lang || null).first();
 
   if (boardKey(page)) await refreshTopicStats(env, parentId || inserted.id);
