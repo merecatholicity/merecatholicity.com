@@ -979,23 +979,44 @@
   }
 
   /* A row of page links, dropped at both the top and the bottom of every
-     paginated view so the buttons are never a scroll away. Null for one page.
-     hrefFor(i) gives each page its URL. Call it twice for two live bars. */
+     paginated view so the buttons are never a scroll away. Condensed when the
+     count is high: always the first three and the last, plus the current page
+     and its neighbours, an ellipsis spanning any wider gap, and a single
+     hidden page shown outright rather than dotted over (so "1 2 3 … 25", but
+     "1 2 3 4 5" when only five). Null below two pages. Call it twice for two
+     live bars; hrefFor(i) gives each page its URL. */
   function pageBar(total, per, curPage, hrefFor) {
     var pages = Math.ceil(total / per);
     if (pages <= 1) return null;
+    var show = {};
+    [1, 2, 3, curPage - 1, curPage, curPage + 1, pages].forEach(function (n) {
+      if (n >= 1 && n <= pages) show[n] = true;
+    });
+    var nums = Object.keys(show).map(Number).sort(function (a, b) { return a - b; });
     var bar = el('p', 'board-pages');
     bar.appendChild(document.createTextNode('Pages: '));
-    for (var i = 1; i <= pages; i++) {
-      if (i === curPage) {
-        bar.appendChild(el('strong', null, String(i)));
-      } else {
-        var pl = el('a', null, String(i));
-        pl.href = hrefFor(i);
-        bar.appendChild(pl);
-      }
-      if (i < pages) bar.appendChild(document.createTextNode(' '));
+    function link(n) {
+      if (n === curPage) return el('strong', null, String(n));
+      var a = el('a', null, String(n));
+      a.href = hrefFor(n);
+      return a;
     }
+    var prev = 0;
+    nums.forEach(function (n) {
+      if (prev) {
+        if (n - prev === 2) {
+          bar.appendChild(document.createTextNode(' '));
+          bar.appendChild(link(prev + 1));
+          bar.appendChild(document.createTextNode(' '));
+        } else if (n - prev > 2) {
+          bar.appendChild(document.createTextNode(' … '));
+        } else {
+          bar.appendChild(document.createTextNode(' '));
+        }
+      }
+      bar.appendChild(link(n));
+      prev = n;
+    });
     return bar;
   }
 
