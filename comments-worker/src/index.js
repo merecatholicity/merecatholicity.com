@@ -29,6 +29,14 @@ function boardKey(raw) {
 const SITE = 'https://merecatholicity.com';
 const MAX_BODY = 4000;
 const MAX_TITLE = 120;
+/* The faith declaration every member picks at signup: one of three, stored as
+   a short code, its display wording owned by the client. Kept in step with the
+   FAITH map in comments.js. */
+const FAITHS = ['nicene', 'indo-european', 'seeker'];
+function cleanFaith(raw) {
+  const v = String(raw || '').trim();
+  return FAITHS.includes(v) ? v : null;
+}
 const CONTROL_RE = /[\u0000-\u0008\u000B-\u001F\u007F]/;
 
 /* Must stay identical to the lists in comments.js, or the name in the
@@ -208,7 +216,7 @@ async function handleGet(request, env, url) {
   const page = normalizePage(url.searchParams.get('page'));
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   const rows = await env.DB.prepare(
-    'SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at ' +
+    'SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at ' +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id LIMIT 500"
   ).bind(page).all();
@@ -297,11 +305,23 @@ async function handlePost(request, env, ctx) {
 
   if (boardKey(page)) await refreshTopicStats(env, parentId || inserted.id);
 
-  /* Carry the poster's own nick and signature back so their fresh comment
-     renders with them at once, before any cache refresh. */
-  const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
+  /* The faith the member declared at signup rides along with every post; the
+     first one to carry it fills the profile, and a later post never overwrites
+     a value the member has since edited (COALESCE keeps the standing value). */
+  const faith = cleanFaith(data.faith);
+  if (authorHash && faith) {
+    await env.DB.prepare(
+      'INSERT INTO profiles (hash, faith, created_at, updated_at) VALUES (?1, ?2, ?3, ?3) ' +
+      'ON CONFLICT(hash) DO UPDATE SET faith = COALESCE(faith, ?2)'
+    ).bind(authorHash, faith, createdAt).run();
+  }
+
+  /* Carry the poster's own nick, signature, and faith back so their fresh
+     comment renders with them at once, before any cache refresh. */
+  const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
   return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
     nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
+    faith: prof && prof.faith || null,
     body, created_at: createdAt } }, 200);
 }
 
@@ -534,7 +554,7 @@ async function handleTopicView(request, env, url) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at, c.locked, c.sticky, c.replies " +
+    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, c.replies " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
   ).bind(id).first();
@@ -550,7 +570,7 @@ async function handleTopicView(request, env, url) {
     p = Math.floor(pos.n / TOPICS_PER_PAGE) + 1;
   }
   const replies = await env.DB.prepare(
-    "SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at FROM comments c " +
+    "SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at FROM comments c " +
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.parent_id = ?1 AND c.status = 'live' ORDER BY c.id LIMIT ?2 OFFSET ?3"
   ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
@@ -558,7 +578,7 @@ async function handleTopicView(request, env, url) {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0 },
+    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0 },
     replies: replies.results,
     total: topic.replies || 0,
     page: p,
@@ -679,7 +699,7 @@ async function handleProfileGet(request, env, url) {
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const hash = String(url.searchParams.get('hash') || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar FROM profiles WHERE hash = ?1').bind(hash).first();
+  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(hash).first();
   return json({
     ok: true,
     profile: {
@@ -688,6 +708,7 @@ async function handleProfileGet(request, env, url) {
       bio: row ? (row.bio || null) : null,
       signature: row ? (row.signature || null) : null,
       avatar: row ? (row.avatar || null) : null,
+      faith: row ? (row.faith || null) : null,
       assigned: displayName(hash),
       admin: isAdminHash(env, hash),
     },
@@ -741,18 +762,19 @@ async function handleProfileSave(request, env) {
       return json({ ok: false, error: 'That text was flagged. Please revise it.' }, 400);
     }
   }
+  const faith = cleanFaith(data.faith);
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
-    'INSERT INTO profiles (hash, nick, bio, signature, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?5) ' +
-    'ON CONFLICT(hash) DO UPDATE SET nick = ?2, bio = ?3, signature = ?4, updated_at = ?5'
-  ).bind(authorHash, nick.value, bio.value, signature.value, now).run();
-  /* The text upsert leaves the avatar column alone; return its standing value
-     so the client's re-render keeps the picture. */
-  const av = await env.DB.prepare('SELECT avatar FROM profiles WHERE hash = ?1').bind(authorHash).first();
+    'INSERT INTO profiles (hash, nick, bio, signature, faith, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6) ' +
+    'ON CONFLICT(hash) DO UPDATE SET nick = ?2, bio = ?3, signature = ?4, faith = COALESCE(?5, faith), updated_at = ?6'
+  ).bind(authorHash, nick.value, bio.value, signature.value, faith, now).run();
+  /* The text upsert leaves the avatar and faith columns as they stand when not
+     given; read them back so the client's re-render keeps both. */
+  const av = await env.DB.prepare('SELECT avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash).first();
   return json({
     ok: true,
     profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
-      avatar: av && av.avatar || null,
+      avatar: av && av.avatar || null, faith: av && av.faith || null,
       assigned: displayName(authorHash), admin: isAdminHash(env, authorHash) },
   }, 200);
 }

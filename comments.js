@@ -15,6 +15,12 @@
   var API = '/api/comments';
   var SITEKEY = '0x4AAAAAAD8IYH9_xQ0HE0yB';
   var STORAGE = 'mc-comment-key';
+  /* The faith declaration a member picks at signup and may change in their
+     profile. Codes are stored; these are the words shown. Kept identical to
+     the FAITHS list in comments-worker/src/index.js. */
+  var FAITH = { nicene: 'Nicene', 'indo-european': 'pre-Christian Indo European', seeker: 'Seeker' };
+  var FAITH_ORDER = ['nicene', 'indo-european', 'seeker'];
+  var FAITH_STORE = 'mc-faith';
   /* Fingerprints of the site owners' identities. Holding a key that hashes
      to one of these shows delete links on every comment, and the server
      honors those deletes. Publishing the hash reveals nothing usable, the
@@ -89,7 +95,7 @@
      and stay plain text. With a nick set, the assigned name rides along as a
      muted, equally-clickable line (withSub), so the authoritative identifier
      is never lost. Text goes through el()/textContent, never innerHTML. */
-  function authorNode(hash, nick, withSub) {
+  function authorNode(hash, nick, withSub, faith) {
     if (!hash) return el('span', 'comment-author', 'Anonymous');
     var wrap = el('span', 'comment-author');
     var primary = el('a', 'comment-author-link', nick || displayName(hash));
@@ -100,6 +106,36 @@
       sub.href = profileHref(hash);
       wrap.appendChild(sub);
     }
+    /* The faith declaration sits under the name on every post. */
+    if (faith && FAITH[faith]) wrap.appendChild(el('span', 'comment-faith', FAITH[faith]));
+    return wrap;
+  }
+
+  /* The member's declared faith lives in localStorage from signup and rides
+     along with each post; the profile edit is the authoritative changer. */
+  function getFaith() {
+    try { var v = localStorage.getItem(FAITH_STORE); return FAITH[v] ? v : ''; } catch (e) { return ''; }
+  }
+  function setFaith(code) {
+    try { if (FAITH[code]) localStorage.setItem(FAITH_STORE, code); } catch (e) {}
+  }
+  /* The "I hold to:" radio group, one row per faith, used at signup and in the
+     profile editor. onChange fires with the chosen code. */
+  function faithRadios(current, onChange) {
+    var wrap = el('div', 'faith-radios');
+    wrap.appendChild(el('div', 'faith-legend', 'I hold to:'));
+    FAITH_ORDER.forEach(function (code) {
+      var lab = el('label', 'faith-option');
+      var r = el('input');
+      r.type = 'radio';
+      r.name = 'mc-faith-choice';
+      r.value = code;
+      if (code === current) r.checked = true;
+      r.addEventListener('change', function () { if (r.checked && onChange) onChange(code); });
+      lab.appendChild(r);
+      lab.appendChild(document.createTextNode(' ' + FAITH[code]));
+      wrap.appendChild(lab);
+    });
     return wrap;
   }
 
@@ -281,7 +317,7 @@
       avLink.appendChild(av);
       head.appendChild(avLink);
     }
-    var author = authorNode(c.author_hash, c.nick, true);
+    var author = authorNode(c.author_hash, c.nick, true, c.faith);
     author.setAttribute('itemprop', 'author');
     head.appendChild(author);
     /* The house speaks under its own colors. */
@@ -695,6 +731,10 @@
     box.appendChild(el('p', 'key-note',
       'Membership is open to North America, Europe, Russia, Israel, Korea, Japan, and Oceania. ' +
       'Elsewhere it is declined, for security, spam, relevance, and quality.'));
+    /* A faith declaration is required to join: one of the three welcomed here.
+       It is kept in the browser and shown on your posts and profile. */
+    var chosenFaith = getFaith() || '';
+    box.appendChild(faithRadios(chosenFaith, function (code) { chosenFaith = code; refresh(); }));
     var label = el('label', 'agree-row');
     var check = el('input');
     check.type = 'checkbox';
@@ -709,10 +749,12 @@
     var create = el('button', 'btn btn-send key-copy', 'Create');
     create.type = 'button';
     create.disabled = true;
-    check.addEventListener('change', function () { create.disabled = !check.checked; });
+    function refresh() { create.disabled = !(check.checked && chosenFaith); }
+    check.addEventListener('change', refresh);
     create.addEventListener('click', function () {
-      if (!check.checked) return;
+      if (!check.checked || !chosenFaith) return;
       try { localStorage.setItem('mc-agreed-at', String(Date.now())); } catch (e) {}
+      setFaith(chosenFaith);
       var key = makeKey();
       setKey(key);
       state.key = key;
@@ -821,6 +863,7 @@
           key: asKeyed ? state.key : '',
           website: section.querySelector('.hp').value,
           tz: browserTz(),
+          faith: getFaith(),
         }),
       }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
         .then(function (r) { return r.json(); });
@@ -950,6 +993,7 @@
       payload.key = state.key || '';
       payload.website = section.querySelector('.hp').value;
       payload.tz = browserTz();
+      payload.faith = getFaith();
       return fetchRetry(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1559,6 +1603,10 @@
     names.appendChild(el('div', 'profile-name', p.nick || p.assigned));
     if (p.nick) names.appendChild(el('div', 'profile-assigned', p.assigned));
     if (p.admin) names.appendChild(el('span', 'comment-admin', '(admin)'));
+    /* The faith declaration. For one's own profile it falls back to the local
+       choice before the first post has carried it to the server. */
+    var faithCode = p.faith || (p.hash === state.myHash ? getFaith() : '');
+    if (faithCode && FAITH[faithCode]) names.appendChild(el('div', 'profile-faith', 'I hold to: ' + FAITH[faithCode]));
     headRow.appendChild(names);
     card.appendChild(headRow);
     if (p.bio) {
@@ -1593,6 +1641,8 @@
     card.appendChild(el('p', 'key-note',
       'Your assigned name ' + p.assigned + ' always stays as your identifier. ' +
       'A custom nickname simply shows first.'));
+    var chosenFaith = p.faith || (p.hash === state.myHash ? getFaith() : '') || '';
+    card.appendChild(faithRadios(chosenFaith, function (code) { chosenFaith = code; }));
     card.appendChild(el('label', 'profile-label', 'Nickname (up to 40 characters)'));
     var nickIn = el('input', 'key-input');
     nickIn.type = 'text';
@@ -1724,7 +1774,7 @@
         return fetchRetry(API + '/profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, nick: nickIn.value, bio: bioIn.value, signature: sigIn.value, token: token }),
+          body: JSON.stringify({ key: state.key, nick: nickIn.value, bio: bioIn.value, signature: sigIn.value, faith: chosenFaith, token: token }),
         }, [1500], function () { note.textContent = 'Network hiccup, retrying...'; })
           .then(function (r) { return r.json(); });
       })
@@ -1732,6 +1782,7 @@
           if (!d.ok) throw new Error(d.error || 'Could not save.');
           stampFresh();
           state.myNick = d.profile.nick || '';
+          if (d.profile.faith) setFaith(d.profile.faith);
           if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
           renderProfile(card, d.profile, true);
         })

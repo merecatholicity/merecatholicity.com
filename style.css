@@ -640,6 +640,9 @@ a.comment-date:hover { text-decoration: underline; }
 }
 .comments-title .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
 .agree-row { display: block; font-size: 0.95rem; color: #444; margin-bottom: 0.6em; cursor: pointer; }
+.faith-radios { margin: 0.2rem 0 0.7rem; }
+.faith-legend { font-size: 0.95rem; color: #444; margin-bottom: 0.25em; }
+.faith-option { display: block; font-size: 0.95rem; color: #444; margin: 0.15em 0; cursor: pointer; }
 a.comment-edit { color: #666; margin-left: 0.9em; font-size: 0.85em; }
 .comment-edited { color: #999; margin-left: 0.6em; font-size: 0.8em; font-style: italic; }
 .comment-editor { margin-top: 0.4em; }
@@ -704,6 +707,7 @@ a.comment-author-link { color: var(--maroon); font-weight: bold; text-decoration
 a.comment-author-link:hover { text-decoration: underline; }
 a.comment-author-sub { display: block; margin-top: -0.1em; color: #999; font-weight: normal; font-size: 0.78rem; text-decoration: none; }
 a.comment-author-sub:hover { text-decoration: underline; }
+.comment-faith { display: block; margin-top: 0.05em; color: var(--maroon); font-weight: normal; font-size: 0.72rem; opacity: 0.9; }
 .comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: #777; font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
 .comment-avatar-link { display: inline-block; vertical-align: top; margin-right: 0.5em; }
 .comment-avatar { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--rule); display: block; margin: 0; }
@@ -714,6 +718,7 @@ a.comment-author-sub:hover { text-decoration: underline; }
 .profile-names { min-width: 0; }
 .profile-name { font-weight: bold; color: var(--maroon); font-size: 1.2rem; overflow-wrap: anywhere; }
 .profile-assigned { color: #999; font-size: 0.85rem; }
+.profile-faith { color: var(--maroon); font-size: 0.9rem; margin-top: 0.2rem; }
 .profile-empty { color: #999; font-style: italic; }
 .profile-bio { white-space: pre-wrap; overflow-wrap: break-word; color: var(--ink); margin-top: 0; }
 label.profile-label { display: block; margin: 0.9rem 0 0.25rem; font-size: 0.9rem; color: #444; }
