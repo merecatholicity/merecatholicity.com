@@ -794,7 +794,11 @@
       line.appendChild(document.createTextNode('Commenting as '));
       line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)))
       line.appendChild(document.createTextNode('. '));
-      var viewProfileLink = el('a', 'identity-action', 'View profile');
+      var usersLink = el('a', 'identity-action', 'User List');
+      usersLink.href = 'community.html?users=1';
+      line.appendChild(usersLink);
+      line.appendChild(document.createTextNode(' · '));
+      var viewProfileLink = el('a', 'identity-action', 'View My Profile');
       viewProfileLink.href = profileHref(state.myHash);
       line.appendChild(viewProfileLink);
       line.appendChild(document.createTextNode(' · '));
@@ -1146,7 +1150,7 @@
      hidden page shown outright rather than dotted over (so "1 2 3 … 25", but
      "1 2 3 4 5" when only five). Null below two pages. Call it twice for two
      live bars; hrefFor(i) gives each page its URL. */
-  function pageBar(total, per, curPage, hrefFor) {
+  function pageBar(total, per, curPage, hrefFor, onGo) {
     var pages = Math.ceil(total / per);
     if (pages <= 1) return null;
     var show = {};
@@ -1159,7 +1163,10 @@
     function link(n) {
       if (n === curPage) return el('strong', null, String(n));
       var a = el('a', null, String(n));
-      a.href = hrefFor(n);
+      /* onGo turns the page in place (member list); otherwise the number is a
+         plain link the server resolves. */
+      if (onGo) { a.href = '#'; a.addEventListener('click', function (e) { e.preventDefault(); onGo(n); }); }
+      else a.href = hrefFor(n);
       return a;
     }
     var prev = 0;
@@ -2019,6 +2026,95 @@
     return box;
   }
 
+  /* The member directory: everyone on the board, newest join first, searchable
+     by nickname or assigned name across the whole roster (the full list rides
+     in on one cached fetch, so a search narrows every page and the pager turns
+     in place). Twenty to a page, click a name to open the profile. */
+  function viewUsers() {
+    document.title = 'Members | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Members']]);
+    section.appendChild(el('p', 'board-intro',
+      'Everyone on the board, newest first. Search by nickname or assigned name to find who is who, then open a profile.'));
+    var searchRow = el('div', 'key-row');
+    var search = el('input', 'key-input');
+    search.type = 'text';
+    search.placeholder = 'Search members by name...';
+    searchRow.appendChild(search);
+    section.appendChild(searchRow);
+    var count = el('p', 'comments-status', 'Loading members...');
+    section.appendChild(count);
+    var list = el('div', 'user-list');
+    section.appendChild(list);
+    var pagerHost = el('div');
+    section.appendChild(pagerHost);
+
+    var roster = null;
+    var st = { q: '', page: 1 };
+    var PER = 20;
+
+    /* Empty query keeps the server's newest-first order; a query filters the
+       whole roster and ranks by match, both on nickname and assigned name. */
+    function visible() {
+      if (!st.q) return roster;
+      var q = st.q.toLowerCase();
+      return roster
+        .map(function (u) { return { u: u, s: Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash))) }; })
+        .filter(function (x) { return x.s > 0; })
+        .sort(function (x, y) { return y.s - x.s; })
+        .map(function (x) { return x.u; });
+    }
+
+    function draw() {
+      var items = visible();
+      var total = items.length;
+      var pages = Math.max(1, Math.ceil(total / PER));
+      if (st.page > pages) st.page = pages;
+      list.textContent = '';
+      if (!total) {
+        count.textContent = st.q ? 'No member matches that.' : 'No members yet.';
+      } else {
+        count.textContent = st.q
+          ? total + (total === 1 ? ' match' : ' matches')
+          : total + (total === 1 ? ' member' : ' members');
+        items.slice((st.page - 1) * PER, st.page * PER).forEach(function (u) {
+          var row = el('a', 'user-row');
+          row.href = profileHref(u.hash);
+          var names = el('span', 'user-names');
+          if (u.nick) {
+            names.appendChild(el('span', 'user-nick', u.nick));
+            names.appendChild(el('span', 'user-assigned', displayName(u.hash)));
+          } else {
+            names.appendChild(el('span', 'user-nick', displayName(u.hash)));
+          }
+          row.appendChild(names);
+          row.appendChild(el('span', 'user-go', 'profile →'));
+          list.appendChild(row);
+        });
+      }
+      pagerHost.textContent = '';
+      var bar = pageBar(total, PER, st.page, null, function (n) { st.page = n; draw(); window.scrollTo(0, 0); });
+      if (bar) pagerHost.appendChild(bar);
+    }
+
+    var timer = null;
+    search.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { st.q = search.value.trim(); st.page = 1; draw(); }, 120);
+    });
+
+    fetchRetry(API + '/dm/directory' + freshParam('?'), freshOpts(), [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        roster = d.users || [];
+        st.page = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
+        draw();
+      })
+      .catch(function () {
+        count.textContent = 'The member list could not be loaded. Check your connection and reload the page.';
+      });
+  }
+
   function viewInbox() {
     document.title = 'Inbox | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Inbox']]);
@@ -2224,6 +2320,7 @@
       var params = new URLSearchParams(location.search);
       if (params.get('ipbans')) return viewIpBans();
       if (params.get('inbox')) return viewInbox();
+      if (params.get('users')) return viewUsers();
       if (params.get('dm')) return viewDm(params.get('dm'));
       if (params.get('profile')) return viewProfile(params.get('profile'));
       if (params.get('audit')) return viewAudit();

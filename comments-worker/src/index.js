@@ -1240,11 +1240,16 @@ async function handleDmDirectory(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  /* Each member with the moment they first appeared (earliest live comment or
+     profile creation), newest first, so the member list leads with the latest
+     to join. The DM autocomplete ignores the order and the extra column. */
   const rows = await env.DB.prepare(
-    'SELECT u.hash, pr.nick FROM (' +
-    "  SELECT DISTINCT author_hash AS hash FROM comments WHERE author_hash IS NOT NULL AND status != 'deleted' " +
-    '  UNION SELECT hash FROM profiles' +
-    ') u LEFT JOIN profiles pr ON pr.hash = u.hash LIMIT 2000'
+    'SELECT u.hash, u.joined, pr.nick FROM (' +
+    '  SELECT hash, MIN(joined) AS joined FROM (' +
+    "    SELECT author_hash AS hash, MIN(created_at) AS joined FROM comments WHERE author_hash IS NOT NULL AND status != 'deleted' GROUP BY author_hash " +
+    '    UNION ALL SELECT hash, created_at AS joined FROM profiles' +
+    '  ) GROUP BY hash' +
+    ') u LEFT JOIN profiles pr ON pr.hash = u.hash ORDER BY u.joined DESC LIMIT 2000'
   ).all();
   return json({ ok: true, users: rows.results }, 200, cacheHeader(url));
 }

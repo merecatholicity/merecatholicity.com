@@ -698,6 +698,13 @@ a.trust-toggle:hover { text-decoration: underline; }
 .board-pages { color: #666; }
 .board-pages a { margin-right: 0.4em; }
 .board-pages strong { margin-right: 0.4em; color: var(--ink); }
+.user-list { margin: 0.5rem 0 1rem; }
+a.user-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.5em 0.2em; border-bottom: 1px solid var(--rule); text-decoration: none; }
+a.user-row:hover { background: #f9f3e6; }
+.user-names { min-width: 0; }
+.user-nick { font-weight: bold; color: var(--maroon); overflow-wrap: anywhere; }
+.user-assigned { color: #999; font-size: 0.85rem; margin-left: 0.5em; }
+.user-go { color: #999; font-size: 0.85rem; white-space: nowrap; }
 .trust-line { margin-top: 0.25em; }
 
 /* Profiles. Author names link to a profile; a custom nick shows first with the
