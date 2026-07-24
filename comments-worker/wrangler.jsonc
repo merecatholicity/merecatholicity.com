@@ -32,7 +32,6 @@
     { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
     { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 15, "period": 60 } }
   ],
-  "send_email": [{ "name": "EMAIL" }],
   "vars": {
     // "ai": Llama Guard screens each comment, clean ones publish instantly,
     // flagged ones are held pending. "hold-all": everything held pending.
@@ -46,12 +45,9 @@
     // the site owners. A delete signed by a key hashing to one of these works
     // on any comment. The hash is safe to publish, the power is in the key.
     "ADMIN_HASHES": "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6,c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03",
-    // Who gets the notification email for every comment, comma-separated.
-    // Sends to verified destination addresses are free on every plan, so each
-    // address here MUST first be verified under Email Routing, dashboard:
-    // Email > Email Routing > Destination addresses (Cloudflare mails the
-    // person a confirmation). Then add it here and redeploy.
-    "NOTIFY_EMAILS": "adam.schaefers@icloud.com",
+    // Comment email notifications were retired in favor of RSS + the Activity
+    // Audit page, so there is no notification recipient and no send_email
+    // binding here anymore.
     // Turnstile tokens are accepted only when solved on one of these hosts
     // (comma-separated), a check layered on top of the sitekey's own domain
     // lock. Leave unset in local dev so the always-pass test key still works.

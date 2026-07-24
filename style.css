@@ -743,3 +743,9 @@ a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
 a.trust-toggle.danger { color: #b3261e; }
 .pending-row { flex-direction: column; align-items: stretch; gap: 0.35rem; }
 .pending-body { white-space: pre-wrap; overflow-wrap: break-word; color: #444; font-size: 0.9rem; border-left: 2px solid var(--rule); padding-left: 0.6em; }
+.mod-help { margin: 0.9em 0 0.2em; color: #777; font-size: 0.82rem; line-height: 1.45; border-top: 1px solid var(--rule); padding-top: 0.5em; }
+.audit-scroll { max-height: 26rem; overflow-y: auto; border: 1px solid var(--rule); border-radius: 6px; margin: 0.4rem 0 1rem; }
+.audit-scroll .board-topics { border: 0; margin: 0; }
+.audit-row .board-topic-title { font-weight: normal; }
+.audit-snippet { color: #777; font-size: 0.85rem; overflow-wrap: anywhere; margin-top: 0.1em; }
+a.body-link { color: var(--maroon); overflow-wrap: anywhere; }

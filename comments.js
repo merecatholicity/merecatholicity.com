@@ -55,6 +55,31 @@
     return node;
   }
 
+  /* Only links to merecatholicity.com itself are trusted. Everything else,
+     including any other http(s) address, stays inert text. */
+  var TRUSTED_LINK = /https:\/\/(?:www\.)?merecatholicity\.com(?:\/[^\s<>"']*)?/gi;
+
+  /* Render a body as text with only trusted, same-site links made clickable.
+     Built entirely from text nodes and anchors whose href is the matched
+     merecatholicity.com URL, so no markup is ever interpreted, nothing loads
+     from another host, and no offsite link becomes clickable. Use this in
+     place of a plain textContent wherever a user body is shown. */
+  function fillBody(node, text) {
+    node.textContent = '';
+    var s = String(text == null ? '' : text);
+    var last = 0, m;
+    TRUSTED_LINK.lastIndex = 0;
+    while ((m = TRUSTED_LINK.exec(s))) {
+      if (m.index > last) node.appendChild(document.createTextNode(s.slice(last, m.index)));
+      var a = el('a', 'body-link', m[0]);
+      a.href = m[0];
+      node.appendChild(a);
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) node.appendChild(document.createTextNode(s.slice(last)));
+    return node;
+  }
+
   function profileHref(hash) {
     return 'community.html?profile=' + hash;
   }
@@ -308,10 +333,10 @@
       head.appendChild(del);
     }
     article.appendChild(head);
-    var body = el('div', 'comment-body', c.body);
+    var body = fillBody(el('div', 'comment-body'), c.body);
     body.setAttribute('itemprop', 'text');
     article.appendChild(body);
-    if (c.signature) article.appendChild(el('div', 'comment-sig', c.signature));
+    if (c.signature) article.appendChild(fillBody(el('div', 'comment-sig'), c.signature));
     if (pending) {
       article.appendChild(el('p', 'comment-note',
         'Held for review. It will appear here once approved.'));
@@ -362,7 +387,7 @@
           c.body = newBody;
           c.edited_at = d.edited_at;
           editor.remove();
-          bodyDiv.textContent = newBody;
+          fillBody(bodyDiv, newBody);
           bodyDiv.hidden = false;
           var head = article.querySelector('.comment-head');
           if (!head.querySelector('.comment-edited')) {
@@ -465,6 +490,7 @@
           details.appendChild(modLockLine(m.author_hash, !!m.locked));
           if (m.ip) details.appendChild(modIpLine(m.ip, !!m.ipbanned));
           details.appendChild(modDeleteUserLine(m.author_hash));
+          details.appendChild(modHelpNote());
         }
         node.appendChild(details);
       });
@@ -535,6 +561,11 @@
     });
     line.appendChild(a);
     return line;
+  }
+
+  function modHelpNote() {
+    return el('p', 'mod-help',
+      'Handling a troublesome user: an identity is only a key in a browser, so a locked or deleted one can be remade in a click. To actually keep someone out, ban the IP first, while it still shows above, then lock or delete the identity. IP bans reach signed-in users only, never anonymous cached reading, and a determined person can switch networks. Lean on bans sparingly, and reserve deletion for the worst.');
   }
 
   function modDeleteUserLine(hash) {
@@ -949,6 +980,15 @@
 
   function viewIndex() {
     document.title = 'Catholicity Board | Mere Catholicity';
+    /* A muted word on how the house works, for the newcomer who lands here. */
+    var intro = el('p', 'board-intro');
+    intro.appendChild(document.createTextNode(
+      'An open forum on the old anonymous model. No real name, no email, no sign-up: one click mints an identity that lives only in your browser, and that key is the whole account. Speak plainly and argue hard, within the '));
+    var t = el('a', null, 'terms');
+    t.href = 'terms.html';
+    intro.appendChild(t);
+    intro.appendChild(document.createTextNode('. Minimal intrusion, maximal speech.'));
+    section.appendChild(intro);
     /* The identity drawer lives on the front page too, so a reader can
        create, show, or swap a key before ever entering a room. */
     section.appendChild(el('div', 'comment-identity'));
@@ -1208,6 +1248,8 @@
       section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
       return;
     }
+    section.appendChild(el('p', 'board-intro',
+      'An at-a-glance jump to recent activity. The last two weeks of comments, on the site pages and the book as well as in the forums, newest first. Click any line to open the exact comment. Held comments waiting on you are in the queue just below.'));
     renderPending();
     var status = el('p', 'comments-status', 'Loading activity...');
     section.appendChild(status);
@@ -1220,9 +1262,15 @@
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
         status.remove();
-        function row(label, r) {
-          var line = el('div', 'board-topic');
-          line.appendChild(el('span', 'audit-where', label));
+        var days = d.days || 14;
+        function auditRow(linkUrl, where, r) {
+          var line = el('div', 'board-topic audit-row');
+          var left = el('div', 'board-topic-left');
+          var a = el('a', 'board-topic-title', where);
+          a.href = linkUrl;
+          left.appendChild(a);
+          if (r.snippet) left.appendChild(el('div', 'audit-snippet', r.snippet));
+          line.appendChild(left);
           var rstat = el('div', 'board-stats');
           rstat.appendChild(authorNode(r.author_hash, r.nick, false));
           rstat.appendChild(document.createTextNode(' · ' + fmtDateTime(r.created_at) +
@@ -1230,19 +1278,26 @@
           line.appendChild(rstat);
           return line;
         }
-        section.appendChild(el('h3', 'board-form-head', 'Site pages'));
+        section.appendChild(el('h3', 'board-form-head', 'Site pages and the book · last ' + days + ' days'));
+        var pagesScroll = el('div', 'audit-scroll');
         var pages = el('div', 'board-topics');
-        if (!d.pages.length) pages.appendChild(el('p', 'comments-status', 'No comments anywhere yet.'));
-        d.pages.forEach(function (r) { pages.appendChild(row(r.page, r)); });
-        section.appendChild(pages);
-        section.appendChild(el('h3', 'board-form-head', 'Board topics'));
+        if (!d.pages.length) pages.appendChild(el('p', 'comments-status', 'No recent comments.'));
+        d.pages.forEach(function (r) {
+          pages.appendChild(auditRow(r.page + '#comment-' + r.id, r.page, r));
+        });
+        pagesScroll.appendChild(pages);
+        section.appendChild(pagesScroll);
+        section.appendChild(el('h3', 'board-form-head', 'Forums · last ' + days + ' days'));
+        var topicsScroll = el('div', 'audit-scroll');
         var topics = el('div', 'board-topics');
-        if (!d.topics.length) topics.appendChild(el('p', 'comments-status', 'No topics yet.'));
+        if (!d.topics.length) topics.appendChild(el('p', 'comments-status', 'No recent forum posts.'));
         d.topics.forEach(function (r) {
           var cat = catByKey(String(r.page).slice(6));
-          topics.appendChild(row((cat ? cat[1] : r.page) + ' › ' + r.title, r));
+          var where = (cat ? cat[1] : r.page) + (r.title ? ' › ' + r.title : '');
+          topics.appendChild(auditRow('community.html?topic=' + r.topic_id + '#comment-' + r.id, where, r));
         });
-        section.appendChild(topics);
+        topicsScroll.appendChild(topics);
+        section.appendChild(topicsScroll);
       })
       .catch(function (err) {
         status.textContent = err.message === 'No.' ? 'This page is for the admins.'
@@ -1804,7 +1859,7 @@
     head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
     head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
     node.appendChild(head);
-    node.appendChild(el('div', 'comment-body', m.body));
+    node.appendChild(fillBody(el('div', 'comment-body'), m.body));
     return node;
   }
 
