@@ -516,12 +516,12 @@ async function handleBoardCat(request, env, url) {
     "SELECT COUNT(*) AS n FROM comments WHERE page = ?1 AND parent_id IS NULL AND status = 'live'"
   ).bind(page).first();
   const rows = await env.DB.prepare(
-    'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, ' +
+    'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, c.sticky, ' +
     'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last, ' +
     "(SELECT MAX(m.id) FROM comments m WHERE (m.id = c.id OR m.parent_id = c.id) AND m.status = 'live') AS last_id " +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "WHERE c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live' " +
-    'ORDER BY last DESC LIMIT ?2 OFFSET ?3'
+    'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?2 OFFSET ?3'
   ).bind(page, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
   return json({ ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE }, 200, cacheHeader(url));
 }
@@ -534,7 +534,7 @@ async function handleTopicView(request, env, url) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at, c.locked, c.replies " +
+    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, c.body, c.created_at, c.edited_at, c.locked, c.sticky, c.replies " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
   ).bind(id).first();
@@ -558,7 +558,7 @@ async function handleTopicView(request, env, url) {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0 },
+    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0 },
     replies: replies.results,
     total: topic.replies || 0,
     page: p,
@@ -581,7 +581,7 @@ async function handleModerate(request, env) {
   const key = String(data.key || '');
   const id = Number(data.id);
   const act = String(data.act || '');
-  if (!key || !Number.isInteger(id) || id < 1 || !['lock', 'unlock', 'delete'].includes(act)) {
+  if (!key || !Number.isInteger(id) || id < 1 || !['lock', 'unlock', 'delete', 'sticky', 'unsticky'].includes(act)) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
@@ -592,6 +592,11 @@ async function handleModerate(request, env) {
   if (act === 'delete') {
     await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
     return json({ ok: true, deleted: true }, 200);
+  }
+  if (act === 'sticky' || act === 'unsticky') {
+    const sticky = act === 'sticky' ? 1 : 0;
+    await env.DB.prepare('UPDATE comments SET sticky = ?1 WHERE id = ?2').bind(sticky, id).run();
+    return json({ ok: true, sticky: sticky }, 200);
   }
   const locked = act === 'lock' ? 1 : 0;
   await env.DB.prepare('UPDATE comments SET locked = ?1 WHERE id = ?2').bind(locked, id).run();

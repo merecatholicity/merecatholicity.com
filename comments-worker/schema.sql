@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS comments (
   tz          TEXT,
   lang        TEXT,
   locked      INTEGER,
+  sticky      INTEGER,
   replies     INTEGER,
   last_at     INTEGER
 );
