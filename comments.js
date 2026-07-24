@@ -462,6 +462,9 @@
           line.setAttribute('data-hash', m.author_hash);
           renderTrustLine(line, m.author_hash, !!m.trusted);
           details.appendChild(line);
+          details.appendChild(modLockLine(m.author_hash, !!m.locked));
+          if (m.ip) details.appendChild(modIpLine(m.ip, !!m.ipbanned));
+          details.appendChild(modDeleteUserLine(m.author_hash));
         }
         node.appendChild(details);
       });
@@ -490,6 +493,70 @@
     line.appendChild(a);
   }
 
+  /* Admin moderation controls, all inside the user-fingerprint dropdown and
+     each guarded by a plain confirm() that reads the same on phone or desktop.
+     A reload after each so the page returns true. */
+
+  function modLockLine(hash, locked) {
+    var line = el('div', 'trust-line');
+    line.appendChild(document.createTextNode(locked ? 'Locked. ' : 'Unlocked. '));
+    var a = el('a', 'trust-toggle', locked ? '(toggle-unlocked)' : '(toggle-locked)');
+    a.href = '#';
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!locked && !confirm('Lock this identity? They will be logged out and unable to interact until you unlock them.')) return;
+      fetch(API + '/lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, hash: hash, locked: !locked }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) location.reload();
+      }).catch(function () {});
+    });
+    line.appendChild(a);
+    return line;
+  }
+
+  function modIpLine(ip, banned) {
+    var line = el('div', 'trust-line');
+    line.appendChild(document.createTextNode((banned ? 'IP banned. ' : 'IP not banned. ') + ip + ' '));
+    var a = el('a', 'trust-toggle', banned ? '(unban this IP)' : '(ban this IP)');
+    a.href = '#';
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!banned && !confirm('Ban this IP address (' + ip + ')? Logged-in users from it will be blocked and sent to the terms page.')) return;
+      fetch(API + '/ipban', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, ip: ip, banned: !banned }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) location.reload();
+      }).catch(function () {});
+    });
+    line.appendChild(a);
+    return line;
+  }
+
+  function modDeleteUserLine(hash) {
+    var line = el('div', 'trust-line');
+    var a = el('a', 'trust-toggle danger', 'Delete user and all posts');
+    a.href = '#';
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!confirm('DELETE THIS USER? This permanently deletes ALL of their posts, their profile, and their avatar, and locks the identity so they cannot post again. This cannot be undone. Continue?')) return;
+      if (!confirm('Are you sure? There is no undo.')) return;
+      fetch(API + '/deleteuser', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, hash: hash }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) location.reload();
+      }).catch(function () {});
+    });
+    line.appendChild(a);
+    return line;
+  }
+
   /* ---- Unread badge. One localStorage-cached count, refreshed from the
      server at most every ninety seconds, so idle page turns cost nothing.
      Inbox and thread responses refresh the cache for free. ---- */
@@ -515,8 +582,27 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key }),
     }).then(function (r) { return r.json(); }).then(function (d) {
+      if (blockedOut(d)) return;
       if (d.ok) dmCacheSet(d.unread);
     }).catch(function () {});
+  }
+
+  /* A locked identity or a banned network, discovered on any keyed call:
+     forget the key, raise a message that outlives the redirect, and land on
+     the terms page. This is what "logged out and cannot come back" looks like. */
+  function blockedOut(d) {
+    if (!d || !d.blocked) return false;
+    try {
+      localStorage.setItem('mc-flash', d.blocked === 'ipban'
+        ? 'Your network is banned from merecatholicity.com for violating the terms and conditions.'
+        : 'This identity has been locked by the moderators for violating the terms and conditions.');
+    } catch (e) {}
+    clearKey();
+    state.key = '';
+    state.myHash = '';
+    try { localStorage.removeItem(DM_CACHE); } catch (e) {}
+    location.href = 'terms.html';
+    return true;
   }
 
   /* ---- Identity UI ---- */
@@ -656,6 +742,9 @@
       if (key.length < 16) { input.focus(); return; }
       setKey(key);
       state.key = key;
+      /* Fresh login must be re-checked against lock/ban at once, not ride a
+         stale badge cache. */
+      try { localStorage.removeItem(DM_CACHE); } catch (e) {}
       /* On the board the cleanest login is the og one: reload, and the
          current view returns with the right name, buttons, and links. */
       if (BOARD) { location.reload(); return; }
@@ -664,6 +753,7 @@
         hideKeyBox();
         renderIdentity();
         load();
+        dmUnreadCheck();
       });
     });
     row.appendChild(use);
@@ -704,6 +794,7 @@
       }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
         .then(function (r) { return r.json(); });
     }).then(function (d) {
+      if (blockedOut(d)) return;
       if (!d.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
       var list = section.querySelector('.comments-list');
       list.appendChild(commentNode(d.comment, d.status === 'pending'));
@@ -835,6 +926,7 @@
       }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
         .then(function (r) { return r.json(); });
     }).then(function (d) {
+      if (blockedOut(d)) return;
       if (!d.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
       stampFresh();
       status.textContent = '';
@@ -874,6 +966,10 @@
       var a = el('a', 'identity-action', 'Activity audit');
       a.href = 'community.html?audit=1';
       auditSlot.appendChild(a);
+      auditSlot.appendChild(document.createTextNode(' · '));
+      var ib = el('a', 'identity-action', 'IP ban list');
+      ib.href = 'community.html?ipbans=1';
+      auditSlot.appendChild(ib);
     }
     ensureAuditLink();
     new MutationObserver(ensureAuditLink)
@@ -1112,6 +1208,7 @@
       section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
       return;
     }
+    renderPending();
     var status = el('p', 'comments-status', 'Loading activity...');
     section.appendChild(status);
     fetchRetry(API + '/audit', {
@@ -1151,6 +1248,134 @@
         status.textContent = err.message === 'No.' ? 'This page is for the admins.'
           : 'The audit could not be loaded. Check your connection and reload the page.';
       });
+  }
+
+  /* The pending-review queue: the in-platform replacement for the old email
+     approve link. Each held comment gets Approve and Delete, right here. */
+  function renderPending() {
+    var head = el('h3', 'board-form-head', 'Pending review');
+    section.appendChild(head);
+    var box = el('div', 'board-topics');
+    box.appendChild(el('p', 'comments-status', 'Loading held comments...'));
+    section.appendChild(box);
+    fetchRetry(API + '/pending', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }),
+    }, [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        box.textContent = '';
+        if (!d.pending.length) { box.appendChild(el('p', 'comments-status', 'Nothing held. All clear.')); return; }
+        d.pending.forEach(function (c) {
+          var row = el('div', 'board-topic pending-row');
+          var left = el('div', 'board-topic-left');
+          var where = c.page.indexOf('board:') === 0
+            ? ((catByKey(c.page.slice(6)) || [])[1] || c.page) + (c.title ? ' › ' + c.title : '')
+            : c.page;
+          var whereEl = el('div', 'audit-where');
+          whereEl.appendChild(authorNode(c.author_hash, c.nick, false));
+          whereEl.appendChild(document.createTextNode(' · ' + where + ' · ' + fmtDateTime(c.created_at) +
+            (c.ai_verdict ? ' · ' + c.ai_verdict : '')));
+          left.appendChild(whereEl);
+          left.appendChild(el('div', 'pending-body', c.body));
+          row.appendChild(left);
+          var acts = el('div', 'board-admin-links');
+          var app = el('a', 'trust-toggle', '(approve)');
+          app.href = '#';
+          app.addEventListener('click', function (e) {
+            e.preventDefault();
+            fetch(API + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, id: c.id }) })
+              .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+          });
+          var del = el('a', 'trust-toggle danger', '(delete)');
+          del.href = '#';
+          del.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!confirm('Delete this held comment?')) return;
+            fetch(API + '/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, id: c.id }) })
+              .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+          });
+          acts.appendChild(app);
+          acts.appendChild(document.createTextNode(' '));
+          acts.appendChild(del);
+          row.appendChild(acts);
+          box.appendChild(row);
+        });
+      })
+      .catch(function () { box.textContent = ''; box.appendChild(el('p', 'comments-status', 'The pending queue could not be loaded.')); });
+  }
+
+  /* The admin IP-ban list: add or remove IPv4/IPv6 entries by hand, beside the
+     one-click bans from the fingerprint dropdown. */
+  function viewIpBans() {
+    document.title = 'IP ban list | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['IP ban list']]);
+    if (!isAdmin()) {
+      section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
+      return;
+    }
+    var addBox = el('div', 'key-box');
+    addBox.hidden = false;
+    addBox.appendChild(el('p', 'key-note', 'Ban an IP by hand. IPv4 or IPv6, exactly as it appears in a fingerprint.'));
+    var row = el('div', 'key-row');
+    var input = el('input', 'key-input');
+    input.type = 'text';
+    input.placeholder = 'e.g. 203.0.113.7 or 2001:db8::1';
+    row.appendChild(input);
+    var addBtn = el('button', 'btn btn-send', 'Ban IP');
+    addBtn.type = 'button';
+    row.appendChild(addBtn);
+    addBox.appendChild(row);
+    var addNote = el('p', 'form-status');
+    addBox.appendChild(addNote);
+    section.appendChild(addBox);
+    var list = el('div', 'board-topics');
+    list.textContent = 'Loading...';
+    section.appendChild(list);
+    function ipValid(s) {
+      return /^[0-9a-fA-F:.]{3,45}$/.test(s) && (s.indexOf('.') !== -1 || s.indexOf(':') !== -1);
+    }
+    function load() {
+      fetchRetry(API + '/ipbans', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }) }, [1000, 3000])
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error(d.error || 'failed');
+          list.textContent = '';
+          if (!d.ips.length) { list.appendChild(el('p', 'comments-status', 'No IPs banned.')); return; }
+          d.ips.forEach(function (b) {
+            var r = el('div', 'board-topic');
+            r.appendChild(el('span', 'audit-where', b.ip));
+            var rm = el('a', 'trust-toggle', '(remove)');
+            rm.href = '#';
+            rm.addEventListener('click', function (e) {
+              e.preventDefault();
+              fetch(API + '/ipban', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, ip: b.ip, banned: false }) })
+                .then(function (x) { return x.json(); }).then(function (x) { if (x.ok) load(); }).catch(function () {});
+            });
+            r.appendChild(rm);
+            list.appendChild(r);
+          });
+        })
+        .catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'The list could not be loaded.')); });
+    }
+    addBtn.addEventListener('click', function () {
+      var ip = input.value.trim();
+      if (!ipValid(ip)) { addNote.textContent = 'That is not a valid IPv4 or IPv6 address.'; return; }
+      addNote.textContent = 'Banning...';
+      fetch(API + '/ipban', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, ip: ip, banned: true }) })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          if (!d.ok) { addNote.textContent = d.error || 'Could not ban that IP.'; return; }
+          input.value = ''; addNote.textContent = ''; load();
+        }).catch(function () { addNote.textContent = 'Network error. Try again.'; });
+    });
+    load();
   }
 
   /* Load the signed-in reader's own nick once, so their name reads the same
@@ -1675,6 +1900,7 @@
             }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
               .then(function (r) { return r.json(); });
           }).then(function (d2) {
+            if (blockedOut(d2)) return;
             if (!d2.ok) throw new Error(d2.error || 'The message could not be sent.');
             list.appendChild(dmMsgNode({ sender_hash: state.myHash, body: body, created_at: d2.created_at }, shortName));
             ta.value = '';
@@ -1717,6 +1943,7 @@
       loadMyProfile();
       dmUnreadCheck();
       var params = new URLSearchParams(location.search);
+      if (params.get('ipbans')) return viewIpBans();
       if (params.get('inbox')) return viewInbox();
       if (params.get('dm')) return viewDm(params.get('dm'));
       if (params.get('profile')) return viewProfile(params.get('profile'));

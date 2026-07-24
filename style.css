@@ -735,3 +735,11 @@ a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
 .dm-msg:first-child { border-top: 0; }
 .dm-mine { background: #faf6ee; border-radius: 6px; }
 .dm-msg .comment-body { margin-top: 0.25em; }
+
+/* Moderation: the non-fading ban/lock banner, the danger-red controls, and the
+   pending-review rows. */
+.mc-flash { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: #7a1f1f; color: #fff; padding: 0.85em 2.6em 0.85em 1em; font-size: 0.95rem; text-align: center; box-shadow: 0 1px 6px rgba(0,0,0,0.3); }
+.mc-flash-x { position: absolute; right: 0.5em; top: 50%; transform: translateY(-50%); background: none; border: 0; color: #fff; font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 0.3em; }
+a.trust-toggle.danger { color: #b3261e; }
+.pending-row { flex-direction: column; align-items: stretch; gap: 0.35rem; }
+.pending-body { white-space: pre-wrap; overflow-wrap: break-word; color: #444; font-size: 0.9rem; border-left: 2px solid var(--rule); padding-left: 0.6em; }
