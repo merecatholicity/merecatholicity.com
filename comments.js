@@ -187,14 +187,11 @@
     return attempt(0);
   }
 
-  function fmtDate(epoch) {
-    return new Date(epoch * 1000).toLocaleDateString('en-US',
-      { year: 'numeric', month: 'long', day: 'numeric' });
-  }
-
+  /* Timestamps are stored as UTC epochs; toLocaleString renders them in each
+     reader's own timezone, date and time together. */
   function fmtDateTime(epoch) {
     return new Date(epoch * 1000).toLocaleString('en-US',
-      { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
   function isAdmin() {
@@ -358,13 +355,13 @@
     }
     /* A door to a private word with the author, for keyed readers only. */
     if (c.author_hash && state.myHash && c.author_hash !== state.myHash) {
-      var dm = el('a', 'comment-dm', 'DM');
+      var dm = el('a', 'comment-dm', 'Direct Message');
       dm.href = 'community.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
       head.appendChild(dm);
     }
     /* The date doubles as the comment's shareable permalink. */
-    var date = el('a', 'comment-date', fmtDate(c.created_at));
+    var date = el('a', 'comment-date', fmtDateTime(c.created_at));
     date.href = '#comment-' + c.id;
     head.appendChild(date);
     if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
@@ -1258,7 +1255,7 @@
             a.href = 'community.html?topic=' + c.latest.topic_id +
               (c.latest.id ? '#comment-' + c.latest.id : '');
             line.appendChild(a);
-            line.appendChild(document.createTextNode(' · ' + fmtDate(c.latest.created_at)));
+            line.appendChild(document.createTextNode(' · ' + fmtDateTime(c.latest.created_at)));
             cell.appendChild(line);
           }
         });
@@ -1362,7 +1359,7 @@
           wholink.href = 'community.html?topic=' + t.id + '#comment-' + (t.last_id || t.id);
           tstat.appendChild(wholink);
           tstat.appendChild(document.createTextNode(' · ' +
-            t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDate(t.last)));
+            t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDateTime(t.last)));
           row.appendChild(tstat);
           list.appendChild(row);
         });
@@ -1745,7 +1742,7 @@
       edit.addEventListener('click', function () { editProfile(card, p); });
       card.appendChild(edit);
     } else if (state.key && state.myHash && p.hash !== state.myHash) {
-      var dmBtn = el('button', 'btn btn-send', 'Send a DM');
+      var dmBtn = el('button', 'btn btn-send', 'Send a Direct Message');
       dmBtn.type = 'button';
       dmBtn.addEventListener('click', function () {
         location.href = 'community.html?dm=' + p.hash;
@@ -1941,7 +1938,7 @@
   function dmSearchBox() {
     var box = el('div', 'key-box dm-search');
     box.hidden = false;
-    box.appendChild(el('p', 'key-note', 'Send a DM. Type a nickname or an assigned name, then click the member below to open the conversation.'));
+    box.appendChild(el('p', 'key-note', 'Send a direct message. Type a nickname or an assigned name, then click the member below to open the conversation.'));
     var row = el('div', 'key-row');
     var input = el('input', 'key-input');
     input.type = 'text';
@@ -2045,7 +2042,7 @@
         dmCacheSet(d.unread_total);
         list.textContent = '';
         if (!d.threads.length) {
-          list.appendChild(el('p', 'comments-status', 'No messages yet. Find a member above, or press DM on any post.'));
+          list.appendChild(el('p', 'comments-status', 'No messages yet. Find a member above, or press Direct Message on any post.'));
           return;
         }
         d.threads.forEach(function (t) {
@@ -2057,7 +2054,7 @@
           if (t.unread) left.appendChild(el('span', 'dm-unread', ' ● new'));
           row.appendChild(left);
           row.appendChild(el('div', 'board-stats',
-            t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + fmtDate(t.last_at)));
+            t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + fmtDateTime(t.last_at)));
           list.appendChild(row);
         });
         function inboxHref(i) { return 'community.html?inbox=1&p=' + i; }
