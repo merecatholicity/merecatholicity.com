@@ -243,6 +243,19 @@
     article.setAttribute('itemscope', '');
     article.setAttribute('itemtype', 'https://schema.org/Comment');
     var head = el('div', 'comment-head');
+    /* A poster with an avatar wears it here; without one, the head is as it
+       always was. The link makes the picture a second door to the profile. */
+    if (c.avatar && c.author_hash) {
+      var avLink = el('a', 'comment-avatar-link');
+      avLink.href = profileHref(c.author_hash);
+      var av = el('img', 'comment-avatar');
+      av.src = API + '/avatar?hash=' + c.author_hash + '&v=' + encodeURIComponent(c.avatar);
+      av.alt = '';
+      av.width = 32;
+      av.height = 32;
+      avLink.appendChild(av);
+      head.appendChild(avLink);
+    }
     var author = authorNode(c.author_hash, c.nick, true);
     author.setAttribute('itemprop', 'author');
     head.appendChild(author);

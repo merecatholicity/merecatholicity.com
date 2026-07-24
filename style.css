@@ -701,6 +701,8 @@ a.comment-author-link:hover { text-decoration: underline; }
 a.comment-author-sub { display: block; margin-top: -0.1em; color: #999; font-weight: normal; font-size: 0.78rem; text-decoration: none; }
 a.comment-author-sub:hover { text-decoration: underline; }
 .comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: #777; font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
+.comment-avatar-link { display: inline-block; vertical-align: top; margin-right: 0.5em; }
+.comment-avatar { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--rule); display: block; margin: 0; }
 .profile { max-width: 34rem; margin: 1rem 0; }
 .profile-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
 .profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: #faf6ee; display: flex; align-items: center; justify-content: center; overflow: hidden; }
