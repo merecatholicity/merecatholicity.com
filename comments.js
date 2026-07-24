@@ -1431,7 +1431,7 @@
   function dmSearchBox() {
     var box = el('div', 'key-box dm-search');
     box.hidden = false;
-    box.appendChild(el('p', 'key-note', 'Send a DM. Type a nickname or an assigned name, then pick from the suggestions.'));
+    box.appendChild(el('p', 'key-note', 'Send a DM. Type a nickname or an assigned name, then click the member below to open the conversation.'));
     var row = el('div', 'key-row');
     var input = el('input', 'key-input');
     input.type = 'text';
@@ -1461,7 +1461,11 @@
       sug.textContent = '';
       if (!current.length) { sug.hidden = true; return; }
       current.forEach(function (u, i) {
-        var r = el('div', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''), dmLabel(u.hash, u.nick));
+        var r = el('a', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
+        r.href = 'community.html?dm=' + u.hash;
+        r.title = 'Open the conversation';
+        r.appendChild(el('span', null, dmLabel(u.hash, u.nick)));
+        r.appendChild(el('span', 'dm-suggest-go', 'message →'));
         r.addEventListener('mousedown', function (e) {
           e.preventDefault();
           location.href = 'community.html?dm=' + u.hash;

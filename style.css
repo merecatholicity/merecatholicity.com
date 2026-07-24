@@ -727,8 +727,10 @@ a.comment-dm:hover { text-decoration: underline; color: var(--maroon); }
 .dm-unread { color: var(--maroon); font-weight: bold; }
 .dm-search { position: relative; }
 .dm-suggest { position: absolute; left: 0.9em; right: 0.9em; background: #fff; border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 5; }
-.dm-suggest-row { padding: 0.45em 0.7em; cursor: pointer; font-size: 0.95rem; }
-.dm-suggest-row:hover, .dm-suggest-sel { background: #f9f3e6; color: var(--maroon); }
+a.dm-suggest-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; padding: 0.45em 0.7em; cursor: pointer; font-size: 0.95rem; color: var(--maroon); text-decoration: none; }
+a.dm-suggest-row:hover, .dm-suggest-sel { background: #f9f3e6; }
+a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
+.dm-suggest-go { color: #8a6d3b; font-size: 0.85em; white-space: nowrap; }
 .dm-msg { border-top: 1px solid var(--rule); padding: 0.7em 0.6em 0.5em; }
 .dm-msg:first-child { border-top: 0; }
 .dm-mine { background: #faf6ee; border-radius: 6px; }
