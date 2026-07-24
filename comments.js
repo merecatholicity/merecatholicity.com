@@ -1025,11 +1025,7 @@
     /* A muted word on how the house works, for the newcomer who lands here. */
     var intro = el('p', 'board-intro');
     intro.appendChild(document.createTextNode(
-      'An open forum on the old anonymous model. No real name, no email, no sign-up: one click mints an identity that lives only in your browser, and that key is the whole account. Speak plainly and argue hard, within the '));
-    var t = el('a', null, 'terms');
-    t.href = 'terms.html';
-    intro.appendChild(t);
-    intro.appendChild(document.createTextNode('. Minimal intrusion, maximal speech.'));
+      'A board for exploring what it means to be merely catholic. Call us first-millennium catholics, paleo-orthodox, Vincentians, or conservative ecumenists. The position is ecumenical because the Church is bigger than any one communion, and conservative because we receive and preserve the faith as it was handed down to us, and do not innovate upon it. Confess the Nicene Creed and you are welcome, from any communion. And if you are a seeker or you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation.'));
     section.appendChild(intro);
     /* The identity drawer lives on the front page too, so a reader can
        create, show, or swap a key before ever entering a room. */
@@ -1168,6 +1164,7 @@
           var title = el('a', 'board-topic-title', t.title);
           title.href = 'community.html?topic=' + t.id;
           left.appendChild(title);
+          if (t.sticky) left.appendChild(el('span', 'board-sticky', '(sticky)'));
           if (t.locked) left.appendChild(el('span', 'board-locked', '(locked)'));
           /* Jump straight into a page of this thread. Replies paginate 20 to a
              page (the server's TOPICS_PER_PAGE); the bar hides below two. */
@@ -1180,6 +1177,8 @@
           }
           if (isAdmin()) {
             var admin = el('span', 'board-admin-links');
+            admin.appendChild(modLinkEl(t.id, t.sticky ? 'unsticky' : 'sticky', t.sticky ? '(unsticky)' : '(sticky)'));
+            admin.appendChild(document.createTextNode(' '));
             admin.appendChild(modLinkEl(t.id, t.locked ? 'unlock' : 'lock', t.locked ? '(unlock)' : '(lock)'));
             admin.appendChild(document.createTextNode(' '));
             admin.appendChild(modLinkEl(t.id, 'delete', '(delete)'));
@@ -1226,6 +1225,7 @@
         document.title = d.topic.title + ' | Catholicity Board';
         crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
         var headEl = el('h2', 'board-topic-head', d.topic.title);
+        if (d.topic.sticky) headEl.appendChild(el('span', 'board-sticky', '(sticky)'));
         if (d.topic.locked) headEl.appendChild(el('span', 'board-locked', '(locked)'));
         var topicRss = el('a', 'comments-rss', 'RSS');
         topicRss.href = API + '/feed?topic=' + d.topic.id;
