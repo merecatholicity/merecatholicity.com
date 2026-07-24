@@ -27,7 +27,6 @@ function boardKey(raw) {
   return m && BOARD_CATS.includes(m[1]) ? raw : null;
 }
 
-const FROM = { email: 'comments@merecatholicity.com', name: 'merecatholicity.com comments' };
 const SITE = 'https://merecatholicity.com';
 const MAX_BODY = 4000;
 const MAX_TITLE = 120;
@@ -204,46 +203,9 @@ function viewLink(page, id, parentId) {
   return SITE + page + '#comment-' + id;
 }
 
-async function notify(env, comment) {
-  let nick = null;
-  if (comment.author_hash) {
-    const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(comment.author_hash).first();
-    nick = prof && prof.nick ? prof.nick : null;
-  }
-  const assigned = comment.author_hash ? displayName(comment.author_hash) : 'Anonymous';
-  const name = nick ? nick + ' (' + assigned + ')' : assigned;
-  const lines = [
-    'Page: ' + (comment.page.indexOf('board:') === 0 ? comment.page : SITE + comment.page),
-    ...(comment.title ? ['Topic: ' + comment.title] : []),
-    'From: ' + name,
-    'Status: ' + comment.status,
-    '',
-    comment.body,
-    '',
-    'View:    ' + viewLink(comment.page, comment.id, comment.parent_id) +
-      (comment.status === 'pending' ? ' (after approval)' : ''),
-    'IP:      ' + (comment.ip
-      ? (comment.ip.includes(':') ? 'IPv6 ' : 'IPv4 ') + comment.ip
-      : 'unknown') + (comment.os ? ' · ' + comment.os : ''),
-    'Agent:   ' + (comment.ua || 'unknown'),
-    'Locale:  ' + (comment.tz || 'tz unknown') + ' · ' + (comment.lang || 'lang unknown'),
-  ];
-  if (comment.status === 'pending') {
-    lines.push('Held for review (' + comment.ai_verdict + '). Approve or delete it from the board audit.');
-  }
-  const kind = comment.edited
-    ? (comment.status === 'pending' ? 'edit held for review on ' : 'comment edited on ')
-    : (comment.status === 'pending' ? 'comment held for review on ' : 'new comment on ');
-  const subject = 'merecatholicity.com: ' + kind + comment.page;
-  const recipients = (env.NOTIFY_EMAILS || '').split(',').map((a) => a.trim()).filter(Boolean);
-  for (const to of recipients) {
-    try {
-      await env.EMAIL.send({ to, from: FROM, subject, text: lines.join('\n') + '\n' });
-    } catch (err) {
-      console.log(JSON.stringify({ event: 'notify_failed', to, error: String(err) }));
-    }
-  }
-}
+/* Comment email notifications were retired: the owner watches recent activity
+   through the RSS feeds and the Activity Audit page instead. viewLink stays,
+   the RSS builder still uses it. */
 
 /* Two browser-cache profiles on the read endpoints. Keyed visitors ask
    for the fresh one with ?fresh=1 and live as they always have. Anonymous
@@ -349,9 +311,6 @@ async function handlePost(request, env, ctx) {
     tz || null, lang || null).first();
 
   if (boardKey(page)) await refreshTopicStats(env, parentId || inserted.id);
-
-  const comment = { id: inserted.id, page, parent_id: parentId, title, author_hash: authorHash, body, status, created_at: createdAt, ai_verdict: verdict, ip, ua, os, tz, lang };
-  ctx.waitUntil(notify(env, comment));
 
   /* Carry the poster's own nick and signature back so their fresh comment
      renders with them at once, before any cache refresh. */
@@ -493,11 +452,6 @@ async function handleEdit(request, env, ctx) {
     'UPDATE comments SET body = ?1, status = ?2, ai_verdict = ?3, edited_at = ?4 WHERE id = ?5'
   ).bind(body, status, verdict, editedAt, id).run();
   if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
-  const comment = { id, page: row.page, parent_id: row.parent_id, title: row.title,
-    author_hash: authorHash, body, status,
-    created_at: row.created_at, ai_verdict: verdict, edited: true,
-    ip: row.ip, ua: row.ua, os: row.os, tz: row.tz, lang: row.lang };
-  ctx.waitUntil(notify(env, comment));
   return json({ ok: true, status, edited_at: editedAt }, 200);
 }
 
@@ -699,22 +653,26 @@ async function handleAudit(request, env) {
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  /* Two weeks of activity in each of the two worlds, newest first, each row
+     carrying what the client needs to build a jump link straight to it. A
+     generous cap the client shows through a scroll box, so the admin sees the
+     latest at a glance and reaches the rest by scrolling. */
+  const since = Math.floor(Date.now() / 1000) - 14 * 86400;
   const pages = await env.DB.prepare(
-    "SELECT c.page, c.author_hash, pr.nick, c.created_at, c.status FROM comments c " +
-    "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
-    "WHERE c.page NOT LIKE 'board:%' AND c.status != 'deleted' AND c.id = (" +
-    "  SELECT MAX(id) FROM comments c2 WHERE c2.page = c.page AND c2.status != 'deleted') " +
-    "ORDER BY c.created_at DESC"
-  ).all();
+    "SELECT c.id, c.page, c.author_hash, pr.nick, c.created_at, c.status, substr(c.body, 1, 160) AS snippet " +
+    "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+    "WHERE c.page NOT LIKE 'board:%' AND c.status != 'deleted' AND c.created_at > ?1 " +
+    "ORDER BY c.id DESC LIMIT 300"
+  ).bind(since).all();
   const topics = await env.DB.prepare(
-    "SELECT t.page, t.title, c.author_hash, pr.nick, c.created_at, c.status " +
-    "FROM comments c JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
-    "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
-    "WHERE c.page LIKE 'board:%' AND c.status != 'deleted' AND t.status != 'deleted' AND c.id = (" +
-    "  SELECT MAX(c2.id) FROM comments c2 WHERE COALESCE(c2.parent_id, c2.id) = t.id AND c2.status != 'deleted') " +
-    "ORDER BY c.created_at DESC"
-  ).all();
-  return json({ ok: true, pages: pages.results, topics: topics.results }, 200);
+    "SELECT c.id, c.page, c.author_hash, pr.nick, c.created_at, c.status, substr(c.body, 1, 160) AS snippet, " +
+    "COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
+    "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+    "LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
+    "WHERE c.page LIKE 'board:%' AND c.status != 'deleted' AND c.created_at > ?1 " +
+    "ORDER BY c.id DESC LIMIT 300"
+  ).bind(since).all();
+  return json({ ok: true, pages: pages.results, topics: topics.results, days: 14 }, 200);
 }
 
 const MAX_NICK = 40;

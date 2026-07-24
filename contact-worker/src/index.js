@@ -1,10 +1,10 @@
 /* Contact form handler. POST only. Verifies a Turnstile token, then emails
-   the submission to the site owner's verified destination address, which is
-   free on every Cloudflare plan. The Turnstile secret lives in a Worker
-   secret named TURNSTILE_SECRET, never in this repository. */
+   the submission to the owner's verified destination address, which is free on
+   every Cloudflare plan. Both secrets, TURNSTILE_SECRET and CONTACT_TO (the
+   recipient address, kept out of this public repository), live as Worker
+   secrets set with `wrangler secret put`. */
 
 const ALLOWED_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];
-const TO = 'adam.schaefers@icloud.com';
 const FROM = { email: 'contact-form@merecatholicity.com', name: 'merecatholicity.com contact form' };
 
 function corsHeaders(request) {
@@ -81,8 +81,13 @@ export default {
       return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403, request);
     }
 
+    const to = String(env.CONTACT_TO || '').trim();
+    if (!to) {
+      console.log(JSON.stringify({ event: 'contact_to_unset' }));
+      return json({ ok: false, error: 'Could not deliver the message. Please try again later.' }, 502, request);
+    }
     const send = {
-      to: TO,
+      to: to,
       from: FROM,
       subject: 'merecatholicity.com: message from ' + (name || 'anonymous'),
       text:
