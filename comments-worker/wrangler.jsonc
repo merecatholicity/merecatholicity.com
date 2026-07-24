@@ -23,13 +23,11 @@
   "ai": { "binding": "AI" },
   // Monthly database backup: dump -> gzip -> R2, keep 90 days. Free tier.
   // Avatars: one 400x400 image per identity, fixed key = overwrite = pruned.
-  // COMMENTED UNTIL R2 IS ENABLED on the account (dashboard: R2 -> Enable).
-  // Then uncomment, create both buckets (wrangler r2 bucket create), redeploy.
-  // "r2_buckets": [
-  //   { "binding": "BACKUPS", "bucket_name": "merecatholicity-backups" },
-  //   { "binding": "AVATARS", "bucket_name": "merecatholicity-avatars" }
-  // ],
-  // "triggers": { "crons": ["0 0 1 * *"] },
+  "r2_buckets": [
+    { "binding": "BACKUPS", "bucket_name": "merecatholicity-backups" },
+    { "binding": "AVATARS", "bucket_name": "merecatholicity-avatars" }
+  ],
+  "triggers": { "crons": ["0 0 1 * *"] },
   "ratelimits": [
     { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
     { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 15, "period": 60 } }
