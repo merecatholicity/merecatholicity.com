@@ -610,6 +610,45 @@ async function handleEdit(request, env, ctx) {
 
 /* Admin-only view of the logged metadata. The public GET never carries
    these fields; this endpoint demands a key hashing into ADMIN_HASHES. */
+/* The user-fingerprint for a single identity (the profile drawer): the latest
+   post's captured header, the identity-level trust and lock flags, and every
+   known IP with its ban state. Same shape as one per-comment meta row so the
+   client builds the identical drawer. */
+async function metaForHash(env, hash) {
+  const last = await env.DB.prepare(
+    'SELECT id, ip, ua, os, tz, lang FROM comments WHERE author_hash = ?1 ORDER BY id DESC LIMIT 1'
+  ).bind(hash).first();
+  const flags = await env.DB.prepare(
+    'SELECT (SELECT 1 FROM trusted WHERE hash = ?1) AS trusted, ' +
+    '(SELECT 1 FROM locks WHERE hash = ?1) AS locked'
+  ).bind(hash).first();
+  const ipRows = await env.DB.prepare(
+    'SELECT ii.ip_key, ii.ip_display, ii.family, ii.source, ' +
+    'CASE WHEN ib.ip IS NULL THEN 0 ELSE 1 END AS banned ' +
+    'FROM identity_ips ii LEFT JOIN ip_bans ib ON ib.ip = ii.ip_key ' +
+    'WHERE ii.hash = ?1 ORDER BY ii.family, ii.last_seen DESC'
+  ).bind(hash).all();
+  const identities = {};
+  identities[hash] = ipRows.results.map((r) => ({
+    ip_display: r.ip_display, ip_key: r.ip_key, family: r.family, source: r.source, banned: r.banned,
+  }));
+  let ipbanned = 0;
+  if (last && last.ip) {
+    const b = await env.DB.prepare('SELECT 1 FROM ip_bans WHERE ip = ?1').bind(ipKey(last.ip)).first();
+    ipbanned = b ? 1 : 0;
+  }
+  const row = {
+    id: last ? last.id : null,
+    ip: last ? last.ip : null, ua: last ? last.ua : null,
+    os: last ? last.os : null, tz: last ? last.tz : null, lang: last ? last.lang : null,
+    author_hash: hash,
+    trusted: flags && flags.trusted ? 1 : 0,
+    locked: flags && flags.locked ? 1 : 0,
+    ipbanned,
+  };
+  return json({ ok: true, meta: [row], identities }, 200);
+}
+
 async function handleMeta(request, env) {
   let data;
   try {
@@ -620,10 +659,15 @@ async function handleMeta(request, env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const page = normalizePage(data.page) || boardKey(data.page);
   const key = String(data.key || '');
-  if (!page || !key) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  /* A profile asks by identity hash, a page by page name. Same drawer either
+     way, so both return { meta: [...], identities: {...} }. */
+  const hashParam = String(data.hash || '');
+  if (/^[0-9a-f]{64}$/.test(hashParam)) return await metaForHash(env, hashParam);
+  const page = normalizePage(data.page) || boardKey(data.page);
+  if (!page) return json({ ok: false, error: 'Bad request.' }, 400);
   const rows = await env.DB.prepare(
     'SELECT c.id, c.status, c.ai_verdict, c.ip, c.ua, c.os, c.tz, c.lang, c.author_hash, ' +
     'CASE WHEN t.hash IS NULL THEN 0 ELSE 1 END AS trusted, ' +
