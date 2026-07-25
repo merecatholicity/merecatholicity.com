@@ -57,7 +57,9 @@ CREATE TABLE IF NOT EXISTS ip_bans (
 -- verified CF-Connecting-IP (unspoofable); 'claimed' is the other-family
 -- address the browser reported from a single-family echo at post time. ip_key
 -- is the normalized ban unit (matches ip_bans.ip); ip_display is a real
--- address actually seen, for the admin to read.
+-- address actually seen, for the admin to read. Not a ledger: the drawer shows
+-- only rows seen inside IP_SHOW_DAYS (14), the monthly cron deletes rows idle
+-- past IP_KEEP_DAYS (30), and banned keys are exempt from both.
 CREATE TABLE IF NOT EXISTS identity_ips (
   hash       TEXT NOT NULL,
   ip_key     TEXT NOT NULL,
