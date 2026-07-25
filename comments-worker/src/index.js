@@ -29,6 +29,11 @@ function boardKey(raw) {
 const SITE = 'https://merecatholicity.com';
 const MAX_BODY = 4000;
 const MAX_TITLE = 120;
+/* Known-IPs retention: the fingerprint drawer shows addresses seen inside
+   IP_SHOW_DAYS, and the monthly cron deletes rows idle past IP_KEEP_DAYS.
+   Banned keys are exempt from both, so a standing ban never loses its row. */
+const IP_SHOW_DAYS = 14;
+const IP_KEEP_DAYS = 30;
 /* The faith declaration every member picks at signup: one of three, stored as
    a short code, its display wording owned by the client. Kept in step with the
    FAITH map in comments.js. */
@@ -622,12 +627,14 @@ async function metaForHash(env, hash) {
     'SELECT (SELECT 1 FROM trusted WHERE hash = ?1) AS trusted, ' +
     '(SELECT 1 FROM locks WHERE hash = ?1) AS locked'
   ).bind(hash).first();
+  /* Only the recent window shows, banned keys always. */
   const ipRows = await env.DB.prepare(
     'SELECT ii.ip_key, ii.ip_display, ii.family, ii.source, ' +
     'CASE WHEN ib.ip IS NULL THEN 0 ELSE 1 END AS banned ' +
     'FROM identity_ips ii LEFT JOIN ip_bans ib ON ib.ip = ii.ip_key ' +
-    'WHERE ii.hash = ?1 ORDER BY ii.family, ii.last_seen DESC'
-  ).bind(hash).all();
+    'WHERE ii.hash = ?1 AND (ii.last_seen >= ?2 OR ib.ip IS NOT NULL) ' +
+    'ORDER BY ii.family, ii.last_seen DESC'
+  ).bind(hash, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all();
   const identities = {};
   identities[hash] = ipRows.results.map((r) => ({
     ip_display: r.ip_display, ip_key: r.ip_key, family: r.family, source: r.source, banned: r.banned,
@@ -697,12 +704,15 @@ async function handleMeta(request, env) {
   const identities = {};
   if (hashes.length) {
     const ph = hashes.map((_, i) => '?' + (i + 1)).join(',');
+    /* Only the recent window shows, banned keys always. */
+    const cutoffPh = '?' + (hashes.length + 1);
     const ipRows = await env.DB.prepare(
       'SELECT ii.hash, ii.ip_key, ii.ip_display, ii.family, ii.source, ' +
       'CASE WHEN ib.ip IS NULL THEN 0 ELSE 1 END AS banned ' +
       'FROM identity_ips ii LEFT JOIN ip_bans ib ON ib.ip = ii.ip_key ' +
-      'WHERE ii.hash IN (' + ph + ') ORDER BY ii.family, ii.last_seen DESC'
-    ).bind(...hashes).all();
+      'WHERE ii.hash IN (' + ph + ') AND (ii.last_seen >= ' + cutoffPh + ' OR ib.ip IS NOT NULL) ' +
+      'ORDER BY ii.family, ii.last_seen DESC'
+    ).bind(...hashes, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all();
     for (const r of ipRows.results) {
       (identities[r.hash] = identities[r.hash] || []).push({
         ip_display: r.ip_display, ip_key: r.ip_key, family: r.family,
@@ -1633,6 +1643,22 @@ async function gzipBytes(text) {
 
 const BACKUP_KEEP_DAYS = 90;
 
+/* The Known-IPs history is not a ledger: rows idle past IP_KEEP_DAYS go, and
+   banned keys stay whatever their age so a standing ban keeps its handle in
+   the drawer. One statement, once a month, riding the backup cron. */
+async function pruneIdentityIps(env) {
+  const cutoff = Math.floor(Date.now() / 1000) - IP_KEEP_DAYS * 86400;
+  try {
+    const r = await env.DB.prepare(
+      'DELETE FROM identity_ips WHERE last_seen < ?1 AND ip_key NOT IN (SELECT ip FROM ip_bans)'
+    ).bind(cutoff).run();
+    console.log(JSON.stringify({ event: 'ip_prune', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    /* A failed prune must never stop the backup behind it. */
+    console.log(JSON.stringify({ event: 'ip_prune_failed', error: String(e) }));
+  }
+}
+
 async function runBackup(env) {
   if (!env.BACKUPS) return { error: 'BACKUPS bucket not bound; enable R2 and redeploy.' };
   const sql = await dumpDatabase(env);
@@ -1891,8 +1917,10 @@ export default {
       return json({ ok: false, error: 'Server hiccup. Please try again shortly.' }, 500);
     }
   },
-  /* Monthly cron (1st, 00:00 UTC): back the database up to R2. */
+  /* Monthly cron (1st, 00:00 UTC): prune the idle Known-IPs rows, then back
+     the database up to R2, so the dump reflects the pruned table (the prior
+     month's backup, kept ninety days, still holds what was just removed). */
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(runBackup(env));
+    ctx.waitUntil(pruneIdentityIps(env).then(() => runBackup(env)));
   },
 };
