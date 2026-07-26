@@ -641,6 +641,22 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .md-btn.md-b { font-weight: 700; }
 .md-btn.md-i { font-style: italic; }
 .md-legend { margin: 0.35em 0 0; color: #666; font-size: 0.95rem; overflow-wrap: anywhere; }
+/* Off-site link warning page (away.html). */
+.away { max-width: 34rem; margin: 2.5rem auto; text-align: center; }
+.away-head { font-size: 1.4rem; margin: 0 0 0.6em; border-bottom: none; }
+.away-note { color: #444; margin: 0 0 0.4em; }
+.away-url {
+  word-break: break-all;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95rem;
+  color: var(--maroon);
+  background: rgba(139, 26, 26, 0.05);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.6em 0.8em;
+  margin: 0 0 1.2em;
+}
+.away-actions { display: flex; gap: 0.8em; flex-wrap: wrap; justify-content: center; }
 .comment-buttons { display: flex; gap: 0.6em; flex-wrap: wrap; margin: 0.8em 0 0.3em; }
 section.comments .btn { min-width: 0; }
 .btn-anon { background: transparent; border-color: var(--maroon); color: var(--maroon); font: inherit; cursor: pointer; }

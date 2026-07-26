@@ -63,11 +63,12 @@
 
   /* Inline markup, parsed left-to-right in one pass and built ONLY from
      createElement + text nodes (never innerHTML), so nothing a user writes can
-     inject markup. Precedence: **bold**, then *italic*, then a same-site link
-     written [text](url) or as a bare URL. Only merecatholicity.com targets are
-     ever clickable; every offsite or non-https address, and any stray marker,
-     stays inert text. No images, ever. */
-  var INLINE_MD = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https:\/\/(?:www\.)?merecatholicity\.com[^\s<>"')]*)\)|https:\/\/(?:www\.)?merecatholicity\.com(?:\/[^\s<>"']*)?/gi;
+     inject markup. Precedence: **bold**, then *italic*, then a link written
+     [text](url) or as a bare URL. Only http(s) URLs are ever linkified, so
+     javascript: and data: (and any stray marker) stay inert text; a same-site
+     link goes straight through, an off-site one is routed via the away.html
+     warning page (see appendRich). No images, ever. */
+  var INLINE_MD = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+/gi;
 
   /* Append rich inline text to a node: the marked spans above become <strong>,
      <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
@@ -91,8 +92,17 @@
         appendRich(em, m[2]);
         target.appendChild(em);
       } else {
+        var url = m[3] !== undefined ? m[4] : m[0];
         var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]);
-        a.href = m[3] !== undefined ? m[4] : m[0];
+        if (/^https?:\/\/(?:www\.)?merecatholicity\.com(?:[\/?#]|$)/i.test(url)) {
+          a.href = url;
+        } else {
+          /* Off-site: link to our own warning page, which names the destination
+             and requires a click. rel keeps referrer/opener from leaking and
+             tells crawlers we gate outbound clicks. */
+          a.href = 'away.html?url=' + encodeURIComponent(url);
+          a.rel = 'nofollow ugc noopener';
+        }
         target.appendChild(a);
       }
       last = m.index + m[0].length;
