@@ -216,10 +216,11 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 CREATE INDEX IF NOT EXISTS reports_comment_idx ON reports(comment_id);
 
--- Admins added through the admin console. The permanent owners live in the
--- ADMIN_HASHES env var (never in this table, never removable from the UI); this
--- table holds only the ones granted at runtime. isAdminHash() checks env first,
--- then here.
+-- The admin roster, the single source of truth for who is an admin. Every row is
+-- an equal admin, each removable from the console (owners included). The
+-- ADMIN_HASHES env var is only a bootstrap: it seeds this table on first use and
+-- re-enables its hashes if the table is ever emptied, so the board can never lock
+-- itself out. isAdminHash() reads this table; env counts only while it is empty.
 CREATE TABLE IF NOT EXISTS admins (
   hash       TEXT PRIMARY KEY,
   added_by   TEXT,
