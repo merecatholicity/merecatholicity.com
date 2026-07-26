@@ -7,6 +7,71 @@
   --maroon-dark: #6d1414;
   --rule: #b9a58c;
   --faint: #757068;
+  /* Themeable surfaces and muted inks. Light values are the site's originals, so
+     light mode is unchanged; the dark theme below overrides them. */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --cream: #f9f3e6;
+  --cream-2: #faf6ee;
+  --brown: #8a6d3b;
+  --muted: #444444;
+  --muted-b: #555555;
+  --muted-c: #666666;
+  --muted-d: #777777;
+  --faintest: #999999;
+  --ink-soft: #333333;
+  --grade-y: #2f6b2f;
+  --grade-o: #6d4b8b;
+  --glass: rgba(255, 255, 255, 0.97);
+}
+
+/* Dark theme. Applied when the reader has chosen dark (data-theme on <html>, set
+   by nav.js from a cookie) and, before the script runs or with JS off, when the
+   OS prefers dark and no light choice is stored. A warm near-black to keep the
+   parchment character rather than a cold black. */
+:root[data-theme="dark"] {
+  --bg: #17140f;
+  --surface: #211c15;
+  --ink: #e8e2d4;
+  --rule: #4b4234;
+  --faint: #a99b85;
+  --maroon: #e39191;
+  --maroon-dark: #f0a6a6;
+  --cream: #2b2318;
+  --cream-2: #251f16;
+  --brown: #cba06a;
+  --muted: #cabfad;
+  --muted-b: #beb3a0;
+  --muted-c: #ab9e88;
+  --muted-d: #9c8f7b;
+  --faintest: #8a7d69;
+  --ink-soft: #cdbfa8;
+  --grade-y: #77c07b;
+  --grade-o: #b98ed6;
+  --glass: rgba(28, 24, 17, 0.97);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17140f;
+    --surface: #211c15;
+    --ink: #e8e2d4;
+    --rule: #4b4234;
+    --faint: #a99b85;
+    --maroon: #e39191;
+    --maroon-dark: #f0a6a6;
+    --cream: #2b2318;
+    --cream-2: #251f16;
+    --brown: #cba06a;
+    --muted: #cabfad;
+    --muted-b: #beb3a0;
+    --muted-c: #ab9e88;
+    --muted-d: #9c8f7b;
+    --faintest: #8a7d69;
+    --ink-soft: #cdbfa8;
+    --grade-y: #77c07b;
+    --grade-o: #b98ed6;
+    --glass: rgba(28, 24, 17, 0.97);
+  }
 }
 
 * { box-sizing: border-box; }
@@ -18,7 +83,7 @@ html { overflow-y: scroll; overflow-x: hidden; }
 body {
   font-family: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
   color: var(--ink);
-  background: #ffffff;
+  background: var(--bg);
   max-width: 46rem;
   margin: 0 auto;
   padding: 1.25rem 1rem 3rem;
@@ -103,7 +168,7 @@ nav.site .sub-back { display: none; }
     transform: translate(-0.4rem, 0);
     padding: 1.8rem 2.4rem;
     font-size: 1.05rem;
-    background: rgba(255, 255, 255, 0.97);
+    background: var(--glass);
     backdrop-filter: blur(3px);
     -webkit-backdrop-filter: blur(3px);
     border: none;
@@ -183,7 +248,7 @@ nav.site .sub-back { display: none; }
     top: calc(5rem + env(safe-area-inset-top, 0px));
     margin: 0;
     padding: 0.7rem 0.6rem;
-    background: rgba(255, 255, 255, 0.97);
+    background: var(--glass);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     border-radius: 12px;
@@ -386,7 +451,7 @@ form.contact input[type="text"], form.contact input[type="email"], form.contact 
   padding: 0.5em 0.7em;
   font: inherit;
   color: var(--ink);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 6px;
 }
@@ -421,7 +486,7 @@ nav.site .here { color: var(--faint); }
    .creedbox in the pandoc book edition. */
 .creed, .creedbox {
   background: #d1e7dd;
-  border: 1px dashed #333;
+  border: 1px dashed var(--ink-soft);
   border-radius: 3px;
   padding: 1rem 1.4rem;
   margin: 1rem auto 1.5rem;
@@ -444,7 +509,7 @@ nav.site .here { color: var(--faint); }
   margin-top: 1em;
 }
 /* The Nicene Creed on the credo page: plain ground, dashed frame */
-.creed.nicene { background: #fff; }
+.creed.nicene { background: var(--surface); }
 
 /* Topic list on the credo page */
 .credo-toc { list-style: none; padding: 0; margin: 1.2rem auto 1.5rem; max-width: 36rem; }
@@ -466,8 +531,8 @@ blockquote.pullquote {
   width: 46%;
   margin: 0.4rem 0 1rem 1.6rem;
   padding: 1rem 1.2rem;
-  border: 1px dashed #333;
-  border-left: 1px dashed #333;
+  border: 1px dashed var(--ink-soft);
+  border-left: 1px dashed var(--ink-soft);
   font-family: 'Hoefler Text', Baskerville, 'Times New Roman', serif;
   font-style: italic;
   font-size: 0.95rem;
@@ -510,12 +575,12 @@ table.reception {
   background: rgba(139, 26, 26, 0.05);
 }
 .reception td { text-align: center; font-weight: bold; font-family: Georgia, serif; font-size: 1.2rem; line-height: 1.1; }
-.reception td.y { color: #2f6b2f; }
+.reception td.y { color: var(--grade-y); }
 .reception td.n { color: var(--maroon); font-weight: normal; }
-.reception td.q { color: #6f6f6f; }
+.reception td.q { color: var(--muted-c); }
 .table-note {
   font-size: 0.95rem;
-  color: #55504a;
+  color: var(--faint);
   line-height: 1.5;
   margin: 0.7em 0;
   padding-left: 0.9em;
@@ -550,8 +615,8 @@ table.reception {
   letter-spacing: 0.06em;
 }
 .legend { font-size: 0.98rem; }
-.legend .y { color: #2f6b2f; font-weight: bold; }
-.legend .q { color: #6f6f6f; font-weight: bold; }
+.legend .y { color: var(--grade-y); font-weight: bold; }
+.legend .q { color: var(--muted-c); font-weight: bold; }
 .legend .n { color: var(--maroon); }
 .legend-grid { display: flex; gap: 1.8rem; margin: 1.5em 0; align-items: flex-start; }
 .legend-grid > .legend { flex: 1 1 0; margin: 0; }
@@ -559,8 +624,8 @@ table.reception {
 /* Comparison variant: text cells, not marks. */
 .reception.compare td { font-size: 0.98rem; font-weight: normal; text-align: left; font-family: inherit; }
 /* The circle: nothing bound at all. A quiet plum, distinct from every judgment color. */
-.reception td.o { color: #6d4b8b; font-weight: normal; }
-.legend .o { color: #6d4b8b; font-weight: bold; }
+.reception td.o { color: var(--grade-o); font-weight: normal; }
+.legend .o { color: var(--grade-o); font-weight: bold; }
 
 .objections td { vertical-align: top; font-size: 1.05rem; line-height: 1.55; }
 .objections td:first-child { width: 34%; }
@@ -585,8 +650,8 @@ section.comments { max-width: 34rem; margin: 3rem auto 1.5rem; }
 .comment { border-top: 1px solid var(--rule); padding: 0.9em 0 0.4em; }
 .comment-head { font-size: 0.92rem; }
 .comment-author { font-weight: bold; color: var(--maroon); }
-.comment-date { color: #666; margin-left: 0.7em; font-size: 0.9em; }
-a.comment-delete { color: #666; margin-left: 0.9em; font-size: 0.85em; }
+.comment-date { color: var(--muted-c); margin-left: 0.7em; font-size: 0.9em; }
+a.comment-delete { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; }
 .comment-body { white-space: pre-wrap; overflow-wrap: break-word; margin-top: 0.35em; }
 /* A quoted excerpt inside a comment body: runs of ">"-prefixed lines that
    fillBody turns into a blockquote. Overrides the article blockquote look. */
@@ -595,12 +660,12 @@ blockquote.comment-quote {
   padding: 0.15em 0.8em;
   border-left: 3px solid var(--maroon);
   background: rgba(139, 26, 26, 0.05);
-  color: #555;
+  color: var(--muted-b);
   font-style: normal;
   white-space: pre-wrap;
   overflow-wrap: break-word;
 }
-a.comment-quote-link { color: #666; margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
+a.comment-quote-link { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
 a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 /* Inline and list markdown fillBody renders inside a body or signature. */
 .comment-body strong, .comment-sig strong { font-weight: 700; }
@@ -608,15 +673,15 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .comment-body ul.comment-list, .comment-sig ul.comment-list { margin: 0.4em 0; padding-left: 1.5em; }
 .comment-body ul.comment-list li, .comment-sig ul.comment-list li { margin: 0.15em 0; white-space: normal; }
 .comment-pending { opacity: 0.75; }
-.comment-note { font-style: italic; color: #666; font-size: 0.9rem; }
-.comments-status, .form-status { color: #666; font-size: 0.95rem; min-height: 1.3em; }
+.comment-note { font-style: italic; color: var(--muted-c); font-size: 0.9rem; }
+.comments-status, .form-status { color: var(--muted-c); font-size: 0.95rem; min-height: 1.3em; }
 .comment-form { margin-top: 1.6rem; }
 .comment-form .comment-text {
   width: 100%;
   padding: 0.5em 0.7em;
   font: inherit;
   color: var(--ink);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 6px;
   resize: vertical;
@@ -632,7 +697,7 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
   line-height: 1;
   padding: 0.35em 0.6em;
   color: var(--maroon);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 4px;
   cursor: pointer;
@@ -640,11 +705,11 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .md-btn:hover { border-color: var(--maroon); background: rgba(139, 26, 26, 0.06); }
 .md-btn.md-b { font-weight: 700; }
 .md-btn.md-i { font-style: italic; }
-.md-legend { margin: 0.35em 0 0; color: #666; font-size: 0.95rem; overflow-wrap: anywhere; }
+.md-legend { margin: 0.35em 0 0; color: var(--muted-c); font-size: 0.95rem; overflow-wrap: anywhere; }
 /* Off-site link warning page (away.html). */
 .away { max-width: 34rem; margin: 2.5rem auto; text-align: center; }
 .away-head { font-size: 1.4rem; margin: 0 0 0.6em; border-bottom: none; }
-.away-note { color: #444; margin: 0 0 0.4em; }
+.away-note { color: var(--muted); margin: 0 0 0.4em; }
 .away-url {
   word-break: break-all;
   font-family: 'Courier New', monospace;
@@ -662,10 +727,10 @@ section.comments .btn { min-width: 0; }
 .btn-anon { background: transparent; border-color: var(--maroon); color: var(--maroon); font: inherit; cursor: pointer; }
 .btn-anon:hover { background: var(--maroon); color: #fff; }
 .btn-anon:disabled { opacity: 0.6; cursor: default; }
-.identity-line { font-size: 0.95rem; color: #444; }
+.identity-line { font-size: 0.95rem; color: var(--muted); }
 a.identity-action { color: var(--maroon); }
 .key-box { border: 1px solid var(--rule); border-radius: 6px; padding: 0.8em 0.9em; margin: 0.8em 0; font-size: 0.95rem; }
-.key-note { margin-top: 0; color: #444; font-size: 0.9rem; }
+.key-note { margin-top: 0; color: var(--muted); font-size: 0.9rem; }
 .key-row { display: flex; gap: 0.5em; margin-bottom: 0.5em; }
 .key-input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.85rem; padding: 0.4em 0.6em; border: 1px solid var(--rule); border-radius: 6px; }
 @media print {
@@ -676,8 +741,8 @@ a.identity-action { color: var(--maroon); }
    comment is tinted so an arriving reader sees which one was meant. */
 a.comment-date { text-decoration: none; }
 a.comment-date:hover { text-decoration: underline; }
-.comment:target { background: #f9f3e6; outline: 2px solid var(--rule); outline-offset: 4px; }
-.comment-meta { font-size: 0.78rem; color: #999; overflow-wrap: anywhere; margin-top: 0.3em; }
+.comment:target { background: var(--cream); outline: 2px solid var(--rule); outline-offset: 4px; }
+.comment-meta { font-size: 0.78rem; color: var(--faintest); overflow-wrap: anywhere; margin-top: 0.3em; }
 .comment-meta summary { cursor: pointer; color: #b09a7a; }
 .profile .comment-meta { margin-top: 1.2rem; border-top: 1px solid var(--rule); padding-top: 0.6rem; }
 .comments-title .comments-rss {
@@ -689,29 +754,29 @@ a.comment-date:hover { text-decoration: underline; }
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 0.1em 0.5em;
-  color: #8a6d3b;
+  color: var(--brown);
 }
 .comments-title .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
-.agree-row { display: block; font-size: 0.95rem; color: #444; margin-bottom: 0.6em; cursor: pointer; }
+.agree-row { display: block; font-size: 0.95rem; color: var(--muted); margin-bottom: 0.6em; cursor: pointer; }
 .faith-radios { margin: 0.2rem 0 0.7rem; }
-.faith-legend { font-size: 0.95rem; color: #444; margin-bottom: 0.25em; }
-.faith-option { display: block; font-size: 0.95rem; color: #444; margin: 0.15em 0; cursor: pointer; }
-a.comment-edit { color: #666; margin-left: 0.9em; font-size: 0.85em; }
-.comment-edited { color: #999; margin-left: 0.6em; font-size: 0.8em; font-style: italic; }
+.faith-legend { font-size: 0.95rem; color: var(--muted); margin-bottom: 0.25em; }
+.faith-option { display: block; font-size: 0.95rem; color: var(--muted); margin: 0.15em 0; cursor: pointer; }
+a.comment-edit { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; }
+.comment-edited { color: var(--faintest); margin-left: 0.6em; font-size: 0.8em; font-style: italic; }
 .comment-editor { margin-top: 0.4em; }
 
 /* The Catholicity Board */
 section.comments.board { margin-top: 1rem; }
-.board-intro { color: #666; margin: 0.4em 0; }
-.board-crumb { color: #666; font-size: 0.95rem; }
+.board-intro { color: var(--muted-c); margin: 0.4em 0; }
+.board-crumb { color: var(--muted-c); font-size: 0.95rem; }
 .board-crumb a { color: var(--maroon); }
 .board-cats, .board-topics { border: 1px solid var(--rule); border-radius: 6px; margin: 1rem 0; }
 .board-cat, .board-topic { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.65em 0.9em; border-top: 1px solid var(--rule); }
 .board-cat:first-child, .board-topic:first-child { border-top: 0; }
 a.board-cat-name { font-weight: bold; color: var(--maroon); text-decoration: none; }
 a.board-cat-name:hover { text-decoration: underline; }
-.board-cat-desc { color: #555; font-size: 0.92rem; }
-.board-stats { color: #777; font-size: 0.85rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
+.board-cat-desc { color: var(--muted-b); font-size: 0.92rem; }
+.board-stats { color: var(--muted-d); font-size: 0.85rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
 a.board-topic-title { color: var(--ink); text-decoration: none; font-weight: bold; overflow-wrap: anywhere; }
 a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
 .board-topics .comments-status { padding: 0.65em 0.9em; margin: 0; }
@@ -725,7 +790,7 @@ a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
   border: 1px solid var(--rule);
   border-radius: 4px;
   padding: 0.15em 0.55em;
-  color: #8a6d3b;
+  color: var(--brown);
 }
 .board-topic-head .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
 .board-title {
@@ -733,7 +798,7 @@ a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
   padding: 0.5em 0.7em;
   font: inherit;
   color: var(--ink);
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: 6px;
   margin-bottom: 0.6em;
@@ -758,10 +823,10 @@ section.board { max-width: 52rem; }
 section.board .comment-identity { margin-bottom: 0.4rem; }
 .board-audit-link { margin: 0.6rem 0 0; font-size: 0.9rem; text-align: right; }
 .audit-where { overflow-wrap: anywhere; font-size: 0.95rem; }
-.comment-admin { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
-a.trust-toggle { color: #8a6d3b; font-size: 0.85em; text-decoration: none; display: inline-block; margin-top: 0.2em; }
+.comment-admin { color: var(--faintest); font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
+a.trust-toggle { color: var(--brown); font-size: 0.85em; text-decoration: none; display: inline-block; margin-top: 0.2em; }
 a.trust-toggle:hover { text-decoration: underline; }
-.board-locked { color: #999; font-style: italic; font-size: 0.8em; margin-left: 0.5em; }
+.board-locked { color: var(--faintest); font-style: italic; font-size: 0.8em; margin-left: 0.5em; }
 .board-sticky { color: var(--maroon); font-weight: bold; font-size: 0.8em; margin-left: 0.5em; }
 .board-admin-links { display: block; margin-top: 0.1em; }
 /* On a category row the admin controls drop to a full-width line and hug the
@@ -770,19 +835,19 @@ a.trust-toggle:hover { text-decoration: underline; }
 .board-topic { flex-wrap: wrap; }
 .board-admin-corner { flex-basis: 100%; text-align: right; margin-top: 0.35em; }
 @media (max-width: 600px) { .board-admin-corner { flex-basis: auto; } }
-.board-move { font: inherit; font-size: 0.82em; color: #8a6d3b; background: #fff; border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.25em; vertical-align: middle; max-width: 11rem; }
+.board-move { font: inherit; font-size: 0.82em; color: var(--brown); background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.25em; vertical-align: middle; max-width: 11rem; }
 .board-move:hover { border-color: var(--maroon); }
 .board-topic-left { min-width: 0; }
-.board-pages { color: #666; }
+.board-pages { color: var(--muted-c); }
 .board-pages a { margin-right: 0.4em; }
 .board-pages strong { margin-right: 0.4em; color: var(--ink); }
 .user-list { margin: 0.5rem 0 1rem; }
 a.user-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.5em 0.2em; border-bottom: 1px solid var(--rule); text-decoration: none; }
-a.user-row:hover { background: #f9f3e6; }
+a.user-row:hover { background: var(--cream); }
 .user-names { min-width: 0; }
 .user-nick { font-weight: bold; color: var(--maroon); overflow-wrap: anywhere; }
-.user-assigned { color: #999; font-size: 0.85rem; margin-left: 0.5em; }
-.user-go { color: #999; font-size: 0.85rem; white-space: nowrap; }
+.user-assigned { color: var(--faintest); font-size: 0.85rem; margin-left: 0.5em; }
+.user-go { color: var(--faintest); font-size: 0.85rem; white-space: nowrap; }
 .trust-line { margin-top: 0.25em; }
 
 /* Profiles. Author names link to a profile; a custom nick shows first with the
@@ -790,44 +855,44 @@ a.user-row:hover { background: #f9f3e6; }
 .comment-author { display: inline-block; vertical-align: top; }
 a.comment-author-link { color: var(--maroon); font-weight: bold; text-decoration: none; }
 a.comment-author-link:hover { text-decoration: underline; }
-a.comment-author-sub { display: block; margin-top: -0.1em; color: #999; font-weight: normal; font-size: 0.78rem; text-decoration: none; }
+a.comment-author-sub { display: block; margin-top: -0.1em; color: var(--faintest); font-weight: normal; font-size: 0.78rem; text-decoration: none; }
 a.comment-author-sub:hover { text-decoration: underline; }
 .comment-faith { display: block; margin-top: 0.05em; color: var(--maroon); font-weight: normal; font-size: 0.72rem; opacity: 0.9; }
-.comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: #777; font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
+.comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: var(--muted-d); font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
 .comment-avatar-link { display: inline-block; vertical-align: top; margin-right: 0.5em; }
 .comment-avatar { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--rule); display: block; margin: 0; }
 .profile { max-width: 34rem; margin: 1rem 0; }
 .profile-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-.profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: #faf6ee; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--cream-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .profile-avatar img { width: 100%; height: 100%; object-fit: cover; margin: 0; display: block; }
 .profile-names { min-width: 0; }
 .profile-name { font-weight: bold; color: var(--maroon); font-size: 1.2rem; overflow-wrap: anywhere; }
-.profile-assigned { color: #999; font-size: 0.85rem; }
+.profile-assigned { color: var(--faintest); font-size: 0.85rem; }
 .profile-faith { color: var(--maroon); font-size: 0.9rem; margin-top: 0.2rem; }
-.profile-empty { color: #999; font-style: italic; }
+.profile-empty { color: var(--faintest); font-style: italic; }
 .profile-bio { white-space: pre-wrap; overflow-wrap: break-word; color: var(--ink); margin-top: 0; }
-label.profile-label { display: block; margin: 0.9rem 0 0.25rem; font-size: 0.9rem; color: #444; }
-h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: #444; }
+label.profile-label { display: block; margin: 0.9rem 0 0.25rem; font-size: 0.9rem; color: var(--muted); }
+h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted); }
 .profile .comment-text, .profile .key-input {
   width: 100%; padding: 0.5em 0.7em; font: inherit; color: var(--ink);
-  background: #fff; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
 }
 .profile textarea.comment-text { resize: vertical; }
 .profile .comment-text:focus, .profile .key-input:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
 
 /* Direct messages */
-a.comment-dm { color: #8a6d3b; margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
+a.comment-dm { color: var(--brown); margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
 a.comment-dm:hover { text-decoration: underline; color: var(--maroon); }
 .dm-unread { color: var(--maroon); font-weight: bold; }
 .dm-search { position: relative; }
-.dm-suggest { position: absolute; left: 0.9em; right: 0.9em; background: #fff; border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 5; }
+.dm-suggest { position: absolute; left: 0.9em; right: 0.9em; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 5; }
 a.dm-suggest-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; padding: 0.45em 0.7em; cursor: pointer; font-size: 0.95rem; color: var(--maroon); text-decoration: none; }
-a.dm-suggest-row:hover, .dm-suggest-sel { background: #f9f3e6; }
+a.dm-suggest-row:hover, .dm-suggest-sel { background: var(--cream); }
 a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
-.dm-suggest-go { color: #8a6d3b; font-size: 0.85em; white-space: nowrap; }
+.dm-suggest-go { color: var(--brown); font-size: 0.85em; white-space: nowrap; }
 .dm-msg { border-top: 1px solid var(--rule); padding: 0.7em 0.6em 0.5em; }
 .dm-msg:first-child { border-top: 0; }
-.dm-mine { background: #faf6ee; border-radius: 6px; }
+.dm-mine { background: var(--cream-2); border-radius: 6px; }
 .dm-msg .comment-body { margin-top: 0.25em; }
 
 /* Moderation: the non-fading ban/lock banner, the danger-red controls, and the
@@ -836,12 +901,71 @@ a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
 .mc-flash-x { position: absolute; right: 0.5em; top: 50%; transform: translateY(-50%); background: none; border: 0; color: #fff; font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 0.3em; }
 a.trust-toggle.danger { color: #b3261e; }
 .pending-row { flex-direction: column; align-items: stretch; gap: 0.35rem; }
-.pending-body { white-space: pre-wrap; overflow-wrap: break-word; color: #444; font-size: 0.9rem; border-left: 2px solid var(--rule); padding-left: 0.6em; }
-.mod-help { margin: 0.9em 0 0.2em; color: #777; font-size: 0.82rem; line-height: 1.45; border-top: 1px solid var(--rule); padding-top: 0.5em; }
+.pending-body { white-space: pre-wrap; overflow-wrap: break-word; color: var(--muted); font-size: 0.9rem; border-left: 2px solid var(--rule); padding-left: 0.6em; }
+.mod-help { margin: 0.9em 0 0.2em; color: var(--muted-d); font-size: 0.82rem; line-height: 1.45; border-top: 1px solid var(--rule); padding-top: 0.5em; }
 .audit-scroll { max-height: 26rem; overflow-y: auto; border: 1px solid var(--rule); border-radius: 6px; margin: 0.4rem 0 1rem; }
 .audit-scroll .board-topics { border: 0; margin: 0; }
 .audit-row .board-topic-title { font-weight: normal; }
-.audit-snippet { color: #777; font-size: 0.85rem; overflow-wrap: anywhere; margin-top: 0.1em; }
+.audit-snippet { color: var(--muted-d); font-size: 0.85rem; overflow-wrap: anywhere; margin-top: 0.1em; }
 a.body-link { color: var(--maroon); overflow-wrap: anywhere; }
-.topic-pages { margin: 0.15em 0 0; font-size: 0.8rem; color: #888; }
+.topic-pages { margin: 0.15em 0 0; font-size: 0.8rem; color: var(--faintest); }
 .topic-pages a { margin-right: 0.35em; }
+
+/* Light/dark toggle. A slider in the top-right corner, in normal flow (absolute,
+   not fixed) so it scrolls off the page with everything else. nav.js builds it
+   and flips :root[data-theme]; the knob slides to the moon in dark. */
+.theme-toggle {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  background: none;
+  border: 0;
+  padding: 0.15rem;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+  -webkit-tap-highlight-color: transparent;
+}
+.theme-toggle .theme-label { display: none; }
+@media (min-width: 601px) { .theme-toggle .theme-label { display: inline; } }
+.theme-switch {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  transition: background 0.2s ease;
+}
+.theme-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+:root[data-theme="dark"] .theme-knob { transform: translateX(20px); }
+/* On phones the fixed hamburger owns the top-right corner, so the toggle sits
+   just left of it and still scrolls away. */
+@media (max-width: 600px) { .theme-toggle { top: 1.15rem; right: 4.9rem; } }
+
+/* A couple of dark-mode surface touches for panels that carried their own light
+   backgrounds. */
+:root[data-theme="dark"] .comment-meta summary { color: var(--brown); }

@@ -1,3 +1,61 @@
+/* Light/dark theme: a reader's choice, saved in a year-long cookie, defaulting
+   to the operating system's preference when nothing is saved. The stylesheet
+   already answers prefers-color-scheme before any script runs, so a system-dark
+   reader sees dark from first paint; this only records and re-applies an explicit
+   choice, and builds the corner toggle. data-theme goes on <html>. */
+(function () {
+  function readCookie() {
+    var m = document.cookie.match(/(?:^|;\s*)mc-theme=(light|dark)\b/);
+    return m ? m[1] : '';
+  }
+  function systemDark() {
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+  function effective() {
+    return readCookie() || (systemDark() ? 'dark' : 'light');
+  }
+  function apply(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+  /* Apply as soon as the (deferred) script runs, so an explicit choice takes
+     hold before the reader interacts. */
+  apply(effective());
+
+  function build() {
+    if (!document.body || document.querySelector('.theme-toggle')) return;
+    var btn = document.createElement('button');
+    btn.className = 'theme-toggle';
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Switch between light and dark');
+    btn.title = 'Light / dark';
+    var label = document.createElement('span');
+    label.className = 'theme-label';
+    var sw = document.createElement('span');
+    sw.className = 'theme-switch';
+    var knob = document.createElement('span');
+    knob.className = 'theme-knob';
+    sw.appendChild(knob);
+    btn.appendChild(label);
+    btn.appendChild(sw);
+    function reflect() {
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      knob.textContent = dark ? '☽' : '☀';
+      label.textContent = dark ? 'Dark' : 'Light';
+      btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    }
+    reflect();
+    btn.addEventListener('click', function () {
+      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      apply(next);
+      document.cookie = 'mc-theme=' + next + ';path=/;max-age=31536000;samesite=lax';
+      reflect();
+    });
+    document.body.insertBefore(btn, document.body.firstChild);
+  }
+  if (document.body) build();
+  else document.addEventListener('DOMContentLoaded', build);
+})();
+
 /* Site menu: WAI-ARIA disclosure navigation, start-menu style on desktop.
    Panels cascade right by default and flip left or slide up when the window
    runs out of room, at any nesting depth. JS owns all open state so click,
