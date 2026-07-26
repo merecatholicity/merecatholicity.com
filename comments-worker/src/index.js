@@ -846,6 +846,80 @@ async function handleBoardCat(request, env, url) {
   return json({ ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE }, 200, cacheHeader(url));
 }
 
+const SEARCH_PER_PAGE = 20;
+
+/* Turn a user query into a safe FTS5 MATCH: pull out "quoted phrases" and bare
+   words, double any embedded quote, and wrap every token in quotes so each is a
+   literal term or phrase — no FTS5 operator (- * : ^ NEAR AND OR NOT parentheses)
+   can be injected. A bare word matches as a stemmed term; a quoted run matches as
+   an adjacency phrase. Capped at ten tokens; empty when nothing usable is left. */
+function buildMatch(q) {
+  const tokens = [];
+  const re = /"([^"]*)"|(\S+)/g;
+  let m;
+  while ((m = re.exec(String(q || ''))) && tokens.length < 10) {
+    const raw = (m[1] !== undefined ? m[1] : m[2]).trim();
+    if (raw) tokens.push('"' + raw.replace(/"/g, '""') + '"');
+  }
+  return tokens.join(' ');
+}
+
+/* Full-text search over the FORUM only. Live board rows are filtered in at query
+   time, so the FTS index can simply mirror all of comments. Narrows by category
+   and by author, ranks by relevance (bm25) or recency, marks matched terms with
+   control characters for the client to highlight, and is cacheable like every
+   public read. An unknown category or malformed author is dropped, not errored,
+   so a stray filter never blanks the results. */
+async function handleSearch(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const qRaw = String(url.searchParams.get('q') || '');
+  const match = buildMatch(qRaw);
+  const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
+  const per = SEARCH_PER_PAGE;
+  const empty = { ok: true, items: [], total: 0, page: p, per, q: qRaw };
+  if (!match) return json(empty, 200, cacheHeader(url));
+
+  const catPage = boardKey('board:' + (url.searchParams.get('cat') || ''));
+  const authorRaw = String(url.searchParams.get('author') || '');
+  const author = /^[0-9a-f]{64}$/.test(authorRaw) ? authorRaw : null;
+  const order = url.searchParams.get('sort') === 'new' ? 'c.id DESC' : 'bm25(comments_fts)';
+
+  const filters = [];
+  const binds = [match];
+  if (catPage) { binds.push(catPage); filters.push('AND c.page = ?' + binds.length); }
+  if (author) { binds.push(author); filters.push('AND c.author_hash = ?' + binds.length); }
+  const where =
+    "WHERE comments_fts MATCH ?1 AND c.page LIKE 'board:%' AND c.status = 'live' " +
+    "AND (c.parent_id IS NULL OR pt.status = 'live') " + filters.join(' ');
+
+  try {
+    const rows = await env.DB.prepare(
+      'SELECT c.id AS comment_id, COALESCE(c.parent_id, c.id) AS topic_id, ' +
+      'COALESCE(c.title, pt.title) AS title, c.author_hash, pr.nick, c.page, c.created_at, ' +
+      "snippet(comments_fts, -1, char(2), char(3), '…', 15) AS snip " +
+      'FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid ' +
+      'LEFT JOIN comments pt ON pt.id = c.parent_id ' +
+      'LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
+      where + ' ORDER BY ' + order + ' LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
+    ).bind(...binds, per, (p - 1) * per).all();
+    const totalRow = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid ' +
+      'LEFT JOIN comments pt ON pt.id = c.parent_id ' + where
+    ).bind(...binds).first();
+    const items = (rows.results || []).map((r) => ({
+      comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
+      author_hash: r.author_hash, nick: r.nick, cat: String(r.page).slice(6),
+      created_at: r.created_at, snip: r.snip,
+    }));
+    return json({ ok: true, items, total: (totalRow && totalRow.n) || 0, page: p, per, q: qRaw }, 200, cacheHeader(url));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'search_failed', error: String(e) }));
+    return json(empty, 200, cacheHeader(url));
+  }
+}
+
 /* One topic with its live replies in order. */
 async function handleTopicView(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -1761,7 +1835,9 @@ async function handleAvatarGet(request, env, url) {
 /* ---- Backups. A monthly cron dumps the whole database to one SQL file,
    gzips it, and drops it in the BACKUPS R2 bucket, keeping ninety days.
    Restore: download, gunzip, then
-   deno run -A npm:wrangler d1 execute merecatholicity-comments --remote --file backup.sql ---- */
+   deno run -A npm:wrangler d1 execute merecatholicity-comments --remote --file backup.sql
+   The dump carries the search index's virtual table and triggers and rebuilds
+   it from the restored rows, so the one file brings search back on its own. ---- */
 
 function sqlLit(v) {
   if (v === null || v === undefined) return 'NULL';
@@ -1775,7 +1851,8 @@ function sqlLit(v) {
 async function dumpDatabase(env) {
   const master = await env.DB.prepare(
     "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL " +
-    "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY type = 'index', name"
+    "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'comments_fts%' " +
+    "ORDER BY type = 'index', name"
   ).all();
   const parts = ['-- merecatholicity-comments backup ' + new Date().toISOString()];
   for (const m of master.results) {
@@ -1795,6 +1872,17 @@ async function dumpDatabase(env) {
       parts.push(m.sql.replace(/^CREATE INDEX\s+/i, 'CREATE INDEX IF NOT EXISTS ') + ';');
     }
   }
+  /* The search index is derived data — its shadow tables are excluded above.
+     Instead emit its virtual table and triggers and a rebuild, so restoring
+     this one file brings search back from the restored comments, no extra step. */
+  const fts = await env.DB.prepare(
+    "SELECT sql FROM sqlite_master WHERE (name = 'comments_fts' OR (type = 'trigger' AND tbl_name = 'comments')) " +
+    "AND sql IS NOT NULL ORDER BY type = 'trigger', name"
+  ).all();
+  for (const f of fts.results) {
+    parts.push(f.sql.replace(/^CREATE (VIRTUAL TABLE|TRIGGER)\s+/i, 'CREATE $1 IF NOT EXISTS ') + ';');
+  }
+  if (fts.results.length) parts.push("INSERT INTO comments_fts(comments_fts) VALUES('rebuild');");
   return parts.join('\n');
 }
 
@@ -2136,6 +2224,7 @@ export default {
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
       if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
+      if (path === '/api/comments/search' && request.method === 'GET') return await handleSearch(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'GET') return await handleProfileGet(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'POST') return await handleProfileSave(request, env);
       if (path === '/api/comments/profile/clear' && request.method === 'POST') return await handleProfileClear(request, env);

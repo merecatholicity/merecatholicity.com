@@ -161,3 +161,26 @@ CREATE TABLE IF NOT EXISTS watches (
   PRIMARY KEY (hash, topic_id)
 );
 CREATE INDEX IF NOT EXISTS watches_topic_idx ON watches(topic_id);
+
+-- Full-text search over forum posts. An external-content FTS5 index over the
+-- comments table's title/body: it stores only the search index, reading the
+-- text back from comments by rowid, and the three triggers keep it in lockstep
+-- with every insert, edit, and delete. porter stemming lets "conclude" find
+-- "concluded"; unicode61 folds diacritics. The index mirrors ALL comments;
+-- restricting to live forum rows is done at query time (handleSearch), so no
+-- conditional triggers are needed. After creating this on an existing database,
+-- run once to index the rows that predate the triggers:
+--   INSERT INTO comments_fts(comments_fts) VALUES('rebuild');
+CREATE VIRTUAL TABLE IF NOT EXISTS comments_fts USING fts5(
+  title, body, content='comments', content_rowid='id', tokenize='porter unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS comments_ai AFTER INSERT ON comments BEGIN
+  INSERT INTO comments_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+END;
+CREATE TRIGGER IF NOT EXISTS comments_ad AFTER DELETE ON comments BEGIN
+  INSERT INTO comments_fts(comments_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+END;
+CREATE TRIGGER IF NOT EXISTS comments_au AFTER UPDATE ON comments BEGIN
+  INSERT INTO comments_fts(comments_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
+  INSERT INTO comments_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
+END;
