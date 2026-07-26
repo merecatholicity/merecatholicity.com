@@ -28,6 +28,29 @@
   var ADMIN_HASHES = ['d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6',
     'c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03'];
 
+  /* Custom emoji: image packs a member can drop into a post as :shortcode:. The
+     body stores only the plain-text code; the renderer swaps a KNOWN code for a
+     same-origin <img> from this whitelist, and an unknown :code: stays literal
+     text, so nothing a user writes ever becomes an arbitrary image source. */
+  var EMOJI_PACKS = {
+    memes: [['cry','emoji/memes/cry.webp'],['pogging','emoji/memes/pogging.webp'],['bonk','emoji/memes/bonk.webp'],['catkiss','emoji/memes/catkiss.webp'],['crythumbsup','emoji/memes/crythumbsup.webp'],['catjam','emoji/memes/catjam.webp'],['megareverse-1','emoji/memes/megareverse-1.webp'],['shrug','emoji/memes/shrug.webp'],['kekw','emoji/memes/kekw.webp'],['boohoo','emoji/memes/boohoo.webp'],['laughing-hard','emoji/memes/laughing-hard.webp'],['bruh','emoji/memes/bruh.webp'],['pepecringe','emoji/memes/pepecringe.webp'],['kitty-happy','emoji/memes/kitty-happy.webp'],['catsneeze','emoji/memes/catsneeze.webp'],['cutecatstare','emoji/memes/cutecatstare.webp'],['catsmile','emoji/memes/catsmile.webp'],['catstare','emoji/memes/catstare.webp'],['cat-laughing','emoji/memes/cat-laughing.webp'],['soldjacat','emoji/memes/soldjacat.webp'],['crycat','emoji/memes/crycat.webp'],['bingus-shush','emoji/memes/bingus-shush.webp'],['huhcat','emoji/memes/huhcat.webp'],['catno','emoji/memes/catno.webp'],['seriously','emoji/memes/seriously.webp'],['cat-sleep','emoji/memes/cat-sleep.webp'],['crisiscat','emoji/memes/crisiscat.webp'],['huhcat-2','emoji/memes/huhcat-2.webp'],['cat-kiss','emoji/memes/cat-kiss.webp'],['catfunny','emoji/memes/catfunny.webp'],['happy','emoji/memes/happy.webp'],['laughing-cat','emoji/memes/laughing-cat.webp'],['kitty-sad','emoji/memes/kitty-sad.webp']],
+    pepe: [['pepecross','emoji/pepe/pepecross.webp'],['pepetyping','emoji/pepe/pepetyping.webp'],['pepeheart','emoji/pepe/pepeheart.webp'],['pepelaugh','emoji/pepe/pepelaugh.webp'],['pepeperfect','emoji/pepe/pepeperfect.webp'],['strongpepe','emoji/pepe/strongpepe.webp'],['pepebanger','emoji/pepe/pepebanger.webp'],['pepeclap','emoji/pepe/pepeclap.webp'],['pepetorchfire','emoji/pepe/pepetorchfire.webp'],['pepeblink','emoji/pepe/pepeblink.webp'],['pepeuwu','emoji/pepe/pepeuwu.webp'],['pepeokay','emoji/pepe/pepeokay.webp'],['pepepug','emoji/pepe/pepepug.webp'],['kingpepe','emoji/pepe/kingpepe.webp'],['kingpepe-2','emoji/pepe/kingpepe-2.webp'],['nou','emoji/pepe/nou.webp'],['peperain','emoji/pepe/peperain.webp'],['peperich','emoji/pepe/peperich.webp'],['pepehacker','emoji/pepe/pepehacker.webp'],['pepeclap-2','emoji/pepe/pepeclap-2.webp'],['pepe-blushy','emoji/pepe/pepe-blushy.webp'],['pepe-sad','emoji/pepe/pepe-sad.webp'],['pepehug','emoji/pepe/pepehug.webp'],['pepe-hehe','emoji/pepe/pepe-hehe.webp'],['pepes','emoji/pepe/pepes.webp'],['sleepypepe','emoji/pepe/sleepypepe.webp'],['pepohappy','emoji/pepe/pepohappy.webp']]
+  };
+  var CUSTOM_EMOJI = {};
+  Object.keys(EMOJI_PACKS).forEach(function (k) {
+    EMOJI_PACKS[k].forEach(function (e) { CUSTOM_EMOJI[e[0]] = e[1]; });
+  });
+  /* Tab 1 of the picker: the common Unicode emoji, inserted as characters and
+     stored as UTF-8 like any other text. Split on spaces (no emoji holds one). */
+  var STANDARD_EMOJI = ('😀 😃 😄 😁 😆 😅 😂 🤣 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😗 😚 😙 😋 😛 😜 🤪 😝 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🤧 🥵 🥶 🥴 😵 🤯 🤠 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 💩 🤡 👻 👽 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾 👋 🤚 ✋ 🖖 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👍 👎 ✊ 👊 🤛 🤜 👏 🙌 👐 🤲 🙏 🤝 💪 🖕 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 💕 💞 💓 💗 💖 💘 💝 💯 💢 💥 💫 💦 💨 💬 💭 💤 🔥 ⭐ 🌟 ✨ ⚡ 💧 🌈 ☀️ 🎉 🎊 🎁 🏆 🥇 🎯 ✅ ❌ ⭕ ❗ ❓ ⚠️ 🔔 💡 🔑 🔒 🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🦆 🦉 🐺 🐗 🐴 🦄 🐝 🐛 🦋 🐌 🐢 🐍 🐙 🦀 🐟 🐬 🐳 🍎 🍌 🍉 🍇 🍓 🍒 🍑 🍍 🥝 🍅 🥑 🌽 🍄 🍞 🧀 🍔 🍟 🍕 🌭 🌮 🍿 🍩 🍪 🎂 🍰 🍫 🍬 🍭 🍺 🍻 🥂 🍷 ☕ 🍵').split(' ');
+  /* Named standard emoji: the subset reachable by a :shortcode:, so the : helper
+     and manual typing resolve common names (:fire:, :joy:) to a character, the
+     same path custom pack codes take. name/char pairs, char never holding a
+     space. A :code: matches a custom image first, then a name here, else stays
+     literal text. */
+  var NAMED_EMOJI = {};
+  ('smile 😄 smiley 😃 grin 😁 laughing 😆 joy 😂 rofl 🤣 sweat_smile 😅 slight_smile 🙂 upside_down 🙃 wink 😉 blush 😊 innocent 😇 heart_eyes 😍 star_struck 🤩 kissing_heart 😘 yum 😋 stuck_out_tongue 😛 zany 🤪 thinking 🤔 shush 🤫 hand_over_mouth 🤭 neutral 😐 expressionless 😑 no_mouth 😶 smirk 😏 unamused 😒 rolling_eyes 🙄 relieved 😌 pensive 😔 sleepy 😪 sleeping 😴 mask 😷 nauseated 🤢 vomiting 🤮 sneeze 🤧 hot 🥵 cold 🥶 dizzy_face 😵 exploding_head 🤯 cowboy 🤠 partying 🥳 sunglasses 😎 nerd 🤓 monocle 🧐 confused 😕 worried 😟 frowning 🙁 open_mouth 😮 astonished 😲 flushed 😳 pleading 🥺 fearful 😨 cold_sweat 😰 cry 😢 sob 😭 scream 😱 confounded 😖 disappointed 😞 weary 😩 tired 😫 yawn 🥱 triumph 😤 rage 😡 angry 😠 cursing 🤬 smiling_imp 😈 imp 👿 skull 💀 poop 💩 clown 🤡 ghost 👻 alien 👽 robot 🤖 wave 👋 ok_hand 👌 v ✌️ crossed_fingers 🤞 love_you 🤟 call_me 🤙 point_up ☝️ thumbsup 👍 thumbsdown 👎 fist ✊ punch 👊 clap 👏 raised_hands 🙌 pray 🙏 handshake 🤝 muscle 💪 middle_finger 🖕 heart ❤️ orange_heart 🧡 yellow_heart 💛 green_heart 💚 blue_heart 💙 purple_heart 💜 black_heart 🖤 broken_heart 💔 two_hearts 💕 sparkling_heart 💖 100 💯 anger 💢 boom 💥 sweat_drops 💦 dash 💨 fire 🔥 star ⭐ star2 🌟 sparkles ✨ zap ⚡ rainbow 🌈 sunny ☀️ tada 🎉 confetti 🎊 gift 🎁 trophy 🏆 dart 🎯 white_check_mark ✅ x ❌ o ⭕ exclamation ❗ question ❓ warning ⚠️ bell 🔔 bulb 💡 key 🔑 lock 🔒 dog 🐶 cat 🐱 mouse 🐭 hamster 🐹 rabbit 🐰 fox 🦊 bear 🐻 panda 🐼 koala 🐨 tiger 🐯 lion 🦁 cow 🐮 pig 🐷 frog 🐸 monkey 🐵 chicken 🐔 penguin 🐧 bird 🐦 unicorn 🦄 bee 🐝 butterfly 🦋 snail 🐌 turtle 🐢 snake 🐍 octopus 🐙 whale 🐳 apple 🍎 banana 🍌 watermelon 🍉 grapes 🍇 strawberry 🍓 cherries 🍒 peach 🍑 avocado 🥑 corn 🌽 mushroom 🍄 bread 🍞 cheese 🧀 hamburger 🍔 fries 🍟 pizza 🍕 hotdog 🌭 taco 🌮 popcorn 🍿 doughnut 🍩 cookie 🍪 cake 🍰 chocolate 🍫 candy 🍬 lollipop 🍭 beer 🍺 beers 🍻 wine 🍷 coffee ☕ tea 🍵').trim().split(/\s+/).forEach(function (tok, i, a) { if (i % 2 === 0) NAMED_EMOJI[tok] = a[i + 1]; });
+
   /* Must stay identical to the lists in comments-worker/src/index.js. */
   var ADJ = ['Patient','Quiet','Steadfast','Humble','Gentle','Sober','Watchful','Earnest',
     'Merry','Plain','Hidden','Upright','Ancient','Early','Golden','Green',
@@ -64,11 +87,14 @@
   /* Inline markup, parsed left-to-right in one pass and built ONLY from
      createElement + text nodes (never innerHTML), so nothing a user writes can
      inject markup. Precedence: **bold**, then *italic*, then a link written
-     [text](url) or as a bare URL. Only http(s) URLs are ever linkified, so
-     javascript: and data: (and any stray marker) stay inert text; a same-site
-     link goes straight through, an off-site one is routed via the away.html
-     warning page (see appendRich). No images, ever. */
-  var INLINE_MD = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+/gi;
+     [text](url) or as a bare URL, then a :shortcode: emoji. Only http(s) URLs
+     are ever linkified, so javascript: and data: (and any stray marker) stay
+     inert text; a same-site link goes straight through, an off-site one is
+     routed via the away.html warning page (see appendRich). The ONLY images are
+     :shortcode: emoji resolved against a fixed whitelist to a same-origin path
+     (CUSTOM_EMOJI); an unknown :token: stays literal text, so a body can never
+     name an arbitrary image source. */
+  var INLINE_MD = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+|:([a-z0-9_+-]{1,40}):/gi;
 
   /* Append rich inline text to a node: the marked spans above become <strong>,
      <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
@@ -91,6 +117,8 @@
         var em = el('em');
         appendRich(em, m[2]);
         target.appendChild(em);
+      } else if (m[5] !== undefined) {
+        target.appendChild(emojiToken(m[5], m[0]));
       } else {
         var url = m[3] !== undefined ? m[4] : m[0];
         var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]);
@@ -524,7 +552,251 @@
     return btn;
   }
 
-  /* Wrap a compose textarea with a button row above and a syntax legend below,
+  /* ================= Emoji =================================================
+     Standard Unicode emoji insert and store as plain characters; the pack emoji
+     (memes/pepe) insert and store as :code:, and only a code on the CUSTOM_EMOJI
+     whitelist ever becomes a same-origin <img> (an unknown :token: stays text).
+     The full standard set, with search keywords and grouped for browsing, is
+     fetched once from emoji/emoji-data.json on first use, so ~1900 emoji never
+     ride the initial page load. Three ways in: the picker button's tabbed panel,
+     the : autocomplete while typing (both desktop and mobile), and hand-typed
+     :shortcode:. ======================================================== */
+
+  /* One :code: -> a node: a whitelisted pack image, a named-emoji character, or
+     the literal text when neither is known. Called by appendRich. */
+  function emojiToken(code, raw) {
+    var c = code.toLowerCase();
+    if (CUSTOM_EMOJI[c]) return emojiImg(CUSTOM_EMOJI[c], c);
+    if (NAMED_EMOJI[c]) return document.createTextNode(NAMED_EMOJI[c]);
+    return document.createTextNode(raw);
+  }
+  function emojiImg(path, code) {
+    ensureEmojiStyles();
+    var img = el('img', 'mc-emoji');
+    img.src = path;
+    img.alt = ':' + code + ':';
+    img.title = ':' + code + ':';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    return img;
+  }
+
+  var emojiData = null, emojiDataPromise = null;
+  function loadEmojiData() {
+    if (emojiDataPromise) return emojiDataPromise;
+    emojiDataPromise = fetch('emoji/emoji-data.json').then(function (r) { return r.json(); })
+      .then(function (d) {
+        var flat = [];
+        (d.groups || []).forEach(function (g) { g.e.forEach(function (e) { flat.push({ c: e[0], a: e[1], k: e[2] }); }); });
+        emojiData = { groups: d.groups || [], flat: flat };
+        return emojiData;
+      })
+      .catch(function () { emojiData = { groups: [], flat: [] }; return emojiData; });
+    return emojiDataPromise;
+  }
+  function prefetchEmoji() { loadEmojiData(); }
+
+  /* One ranked search across pack codes and the standard set (the full lazy set
+     when it is loaded, else the small inline NAMED_EMOJI). Prefix hits rank above
+     substring hits. Returns items the picker and the : list both render. */
+  function emojiSearch(q, limit) {
+    q = String(q).toLowerCase();
+    if (!q) return [];
+    var pre = [], sub = [], seen = {};
+    Object.keys(EMOJI_PACKS).forEach(function (pk) {
+      EMOJI_PACKS[pk].forEach(function (e) {
+        var i = e[0].indexOf(q);
+        if (i === 0) pre.push({ kind: 'img', code: e[0], path: e[1] });
+        else if (i > 0) sub.push({ kind: 'img', code: e[0], path: e[1] });
+      });
+    });
+    if (emojiData && emojiData.flat.length) {
+      emojiData.flat.forEach(function (e) {
+        if (e.a.indexOf(q) === 0 || (' ' + e.k).indexOf(' ' + q) > -1) pre.push({ kind: 'char', char: e.c, label: e.a });
+        else if (e.k.indexOf(q) > -1) sub.push({ kind: 'char', char: e.c, label: e.a });
+      });
+    } else {
+      Object.keys(NAMED_EMOJI).forEach(function (n) {
+        var i = n.indexOf(q);
+        if (i === 0) pre.push({ kind: 'char', char: NAMED_EMOJI[n], label: n });
+        else if (i > 0) sub.push({ kind: 'char', char: NAMED_EMOJI[n], label: n });
+      });
+    }
+    var out = [];
+    pre.concat(sub).forEach(function (it) {
+      var key = it.kind === 'img' ? 'i' + it.code : 'c' + it.char;
+      if (seen[key] || out.length >= limit) return;
+      seen[key] = 1; out.push(it);
+    });
+    return out;
+  }
+
+  function insertAtCaret(ta, text) {
+    var s = ta.value, a = ta.selectionStart, b = ta.selectionEnd;
+    ta.value = s.slice(0, a) + text + s.slice(b);
+    var np = a + text.length;
+    try { ta.setSelectionRange(np, np); } catch (e) {}
+    afterEdit(ta);
+  }
+  function insertEmojiItem(ta, it) {
+    insertAtCaret(ta, it.kind === 'img' ? ':' + it.code + ':' : it.char);
+  }
+
+  /* The : autocomplete, the sibling of attachMentions: an @ picks a member, a :
+     picks an emoji. Triggered by ":" plus a code start at the caret; Enter/Tab or
+     tap inserts. Works the same on desktop and mobile. */
+  function attachEmoji(textarea) {
+    if (!textarea || textarea.dataset.emojiac) return;
+    textarea.dataset.emojiac = '1';
+    var sug = el('div', 'mention-suggest emoji-suggest');
+    sug.hidden = true;
+    textarea.parentNode.insertBefore(sug, textarea.nextSibling);
+    var current = [], sel = 0, at = -1, timer = null;
+    function render() {
+      sug.textContent = '';
+      if (!current.length) { sug.hidden = true; return; }
+      current.forEach(function (it, i) {
+        var r = el('a', 'dm-suggest-row emoji-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
+        r.href = '#';
+        var g = el('span', 'emoji-suggest-glyph');
+        if (it.kind === 'img') g.appendChild(emojiImg(it.path, it.code)); else g.textContent = it.char;
+        r.appendChild(g);
+        r.appendChild(el('span', null, ':' + (it.kind === 'img' ? it.code : it.label) + ':'));
+        r.addEventListener('mousedown', function (e) { e.preventDefault(); pick(it); });
+        sug.appendChild(r);
+      });
+      sug.hidden = false;
+    }
+    function scan() {
+      var caret = textarea.selectionStart;
+      var m = /(^|\s):([a-z0-9][a-z0-9_+-]{0,39})$/i.exec(textarea.value.slice(0, caret));
+      if (!m) { current = []; at = -1; sug.hidden = true; return; }
+      at = caret - m[2].length - 1;
+      var q = m[2].toLowerCase();
+      current = emojiSearch(q, 30); sel = 0; render();
+      if (!emojiData) loadEmojiData().then(function () { if (at > -1) { current = emojiSearch(q, 30); render(); } });
+    }
+    function pick(it) {
+      if (at < 0) return;
+      var caret = textarea.selectionStart, v = textarea.value;
+      var ins = it.kind === 'img' ? ':' + it.code + ':' : it.char;
+      textarea.value = v.slice(0, at) + ins + ' ' + v.slice(caret);
+      var np = at + ins.length + 1;
+      try { textarea.setSelectionRange(np, np); } catch (e) {}
+      current = []; at = -1; sug.hidden = true; afterEdit(textarea);
+    }
+    textarea.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(scan, 100); });
+    textarea.addEventListener('keydown', function (e) {
+      if (sug.hidden || !current.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, current.length - 1); render(); scrollSel(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); render(); scrollSel(); }
+      else if (e.key === 'Enter' || e.key === 'Tab') { if (current[sel]) { e.preventDefault(); pick(current[sel]); } }
+      else if (e.key === 'Escape') { current = []; sug.hidden = true; }
+    });
+    function scrollSel() { var s = sug.querySelector('.dm-suggest-sel'); if (s && s.scrollIntoView) s.scrollIntoView({ block: 'nearest' }); }
+    textarea.addEventListener('blur', function () { setTimeout(function () { sug.hidden = true; }, 200); });
+  }
+
+  /* The picker panel: a search box that narrows across everything, then tabs for
+     the standard set (grouped, scrolling) and each pack. On touch the search
+     focuses on open, so a tap behaves like typing ":". Kept short with an inner
+     scroll so it never swallows the screen. */
+  function buildEmojiPanel(textarea) {
+    ensureEmojiStyles();
+    var panel = el('div', 'emoji-panel');
+    panel.hidden = true;
+    var search = el('input', 'emoji-search');
+    search.type = 'search'; search.placeholder = 'Search emoji...';
+    var srow = el('div', 'emoji-search-row'); srow.appendChild(search); panel.appendChild(srow);
+    var tabs = el('div', 'emoji-tabs'), body = el('div', 'emoji-body');
+    var TABS = [['standard', 'Emoji'], ['memes', 'Memes'], ['pepe', 'Pepe']];
+    var active = 'standard', tabBtns = {};
+    TABS.forEach(function (t) {
+      var b = el('button', 'emoji-tab', t[1]); b.type = 'button';
+      b.addEventListener('click', function () { active = t[0]; search.value = ''; mark(); draw(); });
+      tabBtns[t[0]] = b; tabs.appendChild(b);
+    });
+    panel.appendChild(tabs); panel.appendChild(body);
+    function mark() { TABS.forEach(function (t) { tabBtns[t[0]].className = 'emoji-tab' + (t[0] === active ? ' emoji-tab-on' : ''); }); }
+    function put(it) { insertEmojiItem(textarea, it); textarea.focus(); }
+    function cellChar(ch, label) {
+      var b = el('button', 'emoji-cell'); b.type = 'button'; b.textContent = ch; b.title = ':' + label + ':';
+      b.addEventListener('click', function () { put({ kind: 'char', char: ch }); });
+      return b;
+    }
+    function cellImg(code, path) {
+      var b = el('button', 'emoji-cell'); b.type = 'button'; b.title = ':' + code + ':';
+      b.appendChild(emojiImg(path, code));
+      b.addEventListener('click', function () { put({ kind: 'img', code: code }); });
+      return b;
+    }
+    function gridImgs(pairs) { var g = el('div', 'emoji-grid'); pairs.forEach(function (e) { g.appendChild(cellImg(e[0], e[1])); }); return g; }
+    function draw() {
+      body.textContent = '';
+      var q = search.value.trim();
+      if (q) {
+        var res = emojiSearch(q, 250);
+        if (!res.length) { body.appendChild(el('p', 'emoji-empty', 'No matches.')); return; }
+        var g = el('div', 'emoji-grid');
+        res.forEach(function (it) { g.appendChild(it.kind === 'img' ? cellImg(it.code, it.path) : cellChar(it.char, it.label)); });
+        body.appendChild(g);
+        return;
+      }
+      if (active === 'memes') { body.appendChild(gridImgs(EMOJI_PACKS.memes)); return; }
+      if (active === 'pepe') { body.appendChild(gridImgs(EMOJI_PACKS.pepe)); return; }
+      if (emojiData && emojiData.groups.length) {
+        emojiData.groups.forEach(function (grp) {
+          body.appendChild(el('div', 'emoji-group-head', grp.g));
+          var g = el('div', 'emoji-grid');
+          grp.e.forEach(function (e) { g.appendChild(cellChar(e[0], e[1])); });
+          body.appendChild(g);
+        });
+      } else {
+        var g2 = el('div', 'emoji-grid');
+        STANDARD_EMOJI.forEach(function (ch) { g2.appendChild(cellChar(ch, ch)); });
+        body.appendChild(g2);
+        loadEmojiData().then(function () { if (active === 'standard' && !search.value.trim() && !panel.hidden) draw(); });
+      }
+    }
+    search.addEventListener('input', draw);
+    panel.openPanel = function () {
+      panel.hidden = false; mark(); draw(); loadEmojiData();
+      try { if (window.matchMedia && window.matchMedia('(hover: none)').matches) search.focus(); } catch (e) {}
+    };
+    panel.closePanel = function () { panel.hidden = true; };
+    panel.toggle = function () { if (panel.hidden) panel.openPanel(); else panel.closePanel(); };
+    return panel;
+  }
+
+  /* Inject the emoji styles once, matched to the site palette, rather than touch
+     the shared stylesheet. The inner scroll keeps the panel and : list compact. */
+  function ensureEmojiStyles() {
+    if (document.getElementById('mc-emoji-css')) return;
+    var css = '' +
+      '.mc-emoji{height:1.35em;width:auto;vertical-align:-0.28em;margin:0 .04em}' +
+      '.emoji-suggest{max-height:15em;overflow-y:auto}' +
+      'a.emoji-suggest-row{align-items:center}' +
+      '.emoji-suggest-glyph{display:inline-flex;align-items:center;justify-content:center;min-width:1.6em;font-size:1.15rem}' +
+      '.emoji-suggest-glyph .mc-emoji{height:1.4em}' +
+      '.emoji-panel{margin:.45em 0 0;border:1px solid var(--rule);border-radius:8px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden}' +
+      '.emoji-search-row{padding:.5em;border-bottom:1px solid var(--rule)}' +
+      '.emoji-search{width:100%;box-sizing:border-box;padding:.4em .6em;border:1px solid var(--rule);border-radius:6px;font:inherit}' +
+      '.emoji-tabs{display:flex;gap:.3em;flex-wrap:wrap;padding:.45em .5em 0}' +
+      '.emoji-tab{font:inherit;font-size:.92rem;padding:.25em .8em;border:1px solid var(--rule);border-bottom:none;border-radius:6px 6px 0 0;background:#f7f1e3;color:var(--faint);cursor:pointer}' +
+      '.emoji-tab-on{background:#fff;color:var(--maroon);font-weight:600}' +
+      '.emoji-body{max-height:15em;overflow-y:auto;padding:.4em .5em .6em}' +
+      '.emoji-group-head{position:sticky;top:0;background:#fff;color:var(--faint);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;padding:.4em .15em .2em}' +
+      '.emoji-grid{display:flex;flex-wrap:wrap;gap:.1em}' +
+      '.emoji-cell{width:2em;height:2em;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;border-radius:6px;cursor:pointer;font-size:1.25rem;line-height:1;padding:0}' +
+      '.emoji-cell:hover{background:#f9f3e6}' +
+      '.emoji-cell .mc-emoji{height:1.5em}' +
+      '.emoji-empty{color:var(--faint);padding:.5em;margin:0}' +
+      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}}';
+    var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
+    document.head.appendChild(st);
+  }
+
+  /* Wrap a compose textarea with a button row above,
      returning the wrapper to mount where the textarea would have gone. The
      textarea itself is unchanged, so .comment-text lookups still resolve. */
   function mdEditor(textarea) {
@@ -535,10 +807,13 @@
     bar.appendChild(mdButton('” Quote', 'Blockquote  > line', null, function () { linePrefix(textarea, '> '); }));
     bar.appendChild(mdButton('• List', 'Bulleted list  - item', null, function () { linePrefix(textarea, '- '); }));
     bar.appendChild(mdButton('Link', 'Link  [text](url) — merecatholicity.com only', null, function () { insertLink(textarea); }));
+    var panel = buildEmojiPanel(textarea);
+    bar.appendChild(mdButton('😊 Emoji', 'Insert an emoji', 'md-emoji', function () { panel.toggle(); }));
     wrap.appendChild(bar);
     wrap.appendChild(textarea);
-    wrap.appendChild(el('p', 'md-legend',
-      'Markdown: **bold** · *italic* · > quote · - list · [text](merecatholicity.com/…)'));
+    wrap.appendChild(panel);
+    attachEmoji(textarea);
+    textarea.addEventListener('focus', prefetchEmoji, { once: true });
     return wrap;
   }
 
