@@ -1055,7 +1055,8 @@
     if (state.key && state.myHash) {
       line.appendChild(document.createTextNode('Commenting as '));
       line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)))
-      line.appendChild(document.createTextNode('. '));
+      line.appendChild(document.createTextNode('.'));
+      line.appendChild(el('br'));
       var usersLink = el('a', 'identity-action', 'User List');
       usersLink.href = 'community.html?users=1';
       line.appendChild(usersLink);
