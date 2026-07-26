@@ -1060,6 +1060,10 @@
       usersLink.href = 'community.html?users=1';
       line.appendChild(usersLink);
       line.appendChild(document.createTextNode(' · '));
+      var searchLink = el('a', 'identity-action', 'Search');
+      searchLink.href = 'community.html?q=';
+      line.appendChild(searchLink);
+      line.appendChild(document.createTextNode(' · '));
       var viewProfileLink = el('a', 'identity-action', 'View My Profile');
       viewProfileLink.href = profileHref(state.myHash);
       line.appendChild(viewProfileLink);
@@ -1493,6 +1497,7 @@
     ensureAuditLink();
     new MutationObserver(ensureAuditLink)
       .observe(section.querySelector('.comment-identity'), { childList: true });
+    section.appendChild(indexSearchBox());
     var wrap = el('div', 'board-cats');
     var stats = {};
     CATS.forEach(function (cat) {
@@ -2817,6 +2822,211 @@
       });
   }
 
+  /* A search snippet arrives with matched terms wrapped in STX/ETX control
+     characters (which a body can never contain). Split on them and mark the odd
+     segments — built from text and <mark> nodes alone, never innerHTML. */
+  function searchSnippet(snip) {
+    var wrap = el('div', 'board-intro');
+    String(snip == null ? '' : snip).split(/[\u0002\u0003]/).forEach(function (seg, i) {
+      if (!seg) return;
+      if (i % 2 === 1) wrap.appendChild(el('mark', null, seg));
+      else wrap.appendChild(document.createTextNode(seg));
+    });
+    return wrap;
+  }
+
+  /* The "filter by author" field: the same directory and fuzzy scorer as the
+     @-mention picker and DM search, but standalone — a pick fixes one author
+     hash for the search, and editing the field clears it. Returns { hash, set }. */
+  function attachAuthorPicker(input) {
+    var chosen = '', chosenText = '';
+    var sug = el('div', 'mention-suggest');
+    sug.hidden = true;
+    input.parentNode.insertBefore(sug, input.nextSibling);
+    var current = [], sel = 0, timer = null;
+    function render() {
+      sug.textContent = '';
+      if (!current.length) { sug.hidden = true; return; }
+      current.forEach(function (u, i) {
+        var r = el('a', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
+        r.href = '#';
+        r.appendChild(el('span', null, dmLabel(u.hash, u.nick)));
+        r.appendChild(el('span', 'dm-suggest-go', 'filter'));
+        r.addEventListener('mousedown', function (e) { e.preventDefault(); pick(u); });
+        sug.appendChild(r);
+      });
+      sug.hidden = false;
+    }
+    function pick(u) {
+      chosen = u.hash;
+      chosenText = '@' + (u.nick || displayName(u.hash));
+      input.value = chosenText;
+      current = []; sug.hidden = true;
+    }
+    function scan() {
+      if (input.value !== chosenText) chosen = '';
+      var q = input.value.trim().replace(/^@/, '').toLowerCase();
+      if (q.length < 1) { current = []; sug.hidden = true; return; }
+      ensureMentionDir(function () {
+        current = mentionDir
+          .filter(function (u) { return u.hash !== state.myHash; })
+          .map(function (u) { return { u: u, s: Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash))), label: dmLabel(u.hash, u.nick) }; })
+          .filter(function (x) { return x.s > 0; })
+          .sort(function (x, y) { return y.s - x.s || (x.label < y.label ? -1 : 1); })
+          .slice(0, 8).map(function (x) { return x.u; });
+        sel = 0; render();
+      });
+    }
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(scan, 120); });
+    input.addEventListener('keydown', function (e) {
+      if (sug.hidden || !current.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, current.length - 1); render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); render(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (current[sel]) pick(current[sel]); }
+      else if (e.key === 'Escape') { current = []; sug.hidden = true; }
+    });
+    input.addEventListener('blur', function () { setTimeout(function () { sug.hidden = true; }, 200); });
+    return {
+      hash: function () { return chosen; },
+      set: function (hash, label) { chosen = hash; chosenText = '@' + label; input.value = chosenText; },
+    };
+  }
+
+  /* The compact search box on the board index: one query field to the results. */
+  function indexSearchBox() {
+    var form = el('form', 'board-search');
+    var row = el('div', 'key-row');
+    var input = el('input', 'key-input');
+    input.type = 'search';
+    input.placeholder = 'Search the board...';
+    row.appendChild(input);
+    var btn = el('button', 'btn btn-send', 'Search');
+    btn.type = 'submit';
+    row.appendChild(btn);
+    form.appendChild(row);
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      location.href = 'community.html?q=' + encodeURIComponent(input.value.trim());
+    });
+    return form;
+  }
+
+  /* Full-text search over the forum, driven entirely by the URL so a result set
+     is shareable and pages in place. A query field (quotes for an exact phrase),
+     a category filter, an @-author filter, and a relevance/recency sort; each hit
+     shows the thread title, a highlighted snippet, author, category, and date, and
+     links to the exact post. */
+  function viewSearch() {
+    var qs = new URLSearchParams(location.search);
+    var q = qs.get('q') || '';
+    var cat0 = qs.get('cat') || '';
+    var author0 = qs.get('author') || '';
+    var sort0 = qs.get('sort') || '';
+    document.title = 'Search | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Search']]);
+
+    var form = el('form', 'board-search');
+    var row1 = el('div', 'key-row');
+    var qInput = el('input', 'key-input');
+    qInput.type = 'search';
+    qInput.value = q;
+    qInput.placeholder = 'Search the board... "quotes" for an exact phrase';
+    row1.appendChild(qInput);
+    var goBtn = el('button', 'btn btn-send', 'Search');
+    goBtn.type = 'submit';
+    row1.appendChild(goBtn);
+    form.appendChild(row1);
+
+    var row2 = el('div', 'key-row');
+    var catSel = el('select', 'board-move');
+    var allOpt = el('option', null, 'All categories'); allOpt.value = '';
+    catSel.appendChild(allOpt);
+    CATS.forEach(function (c) {
+      var o = el('option', null, c[1]); o.value = c[0];
+      if (c[0] === cat0) o.selected = true;
+      catSel.appendChild(o);
+    });
+    row2.appendChild(catSel);
+    var authorInput = el('input', 'key-input');
+    authorInput.type = 'text';
+    authorInput.placeholder = '@author (optional)';
+    row2.appendChild(authorInput);
+    var sortSel = el('select', 'board-move');
+    [['', 'Most relevant'], ['new', 'Newest first']].forEach(function (s) {
+      var o = el('option', null, s[1]); o.value = s[0];
+      if (s[0] === sort0) o.selected = true;
+      sortSel.appendChild(o);
+    });
+    row2.appendChild(sortSel);
+    form.appendChild(row2);
+    section.appendChild(form);
+
+    var authorPicker = attachAuthorPicker(authorInput);
+    if (/^[0-9a-f]{64}$/.test(author0)) authorPicker.set(author0, displayName(author0));
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var u = 'community.html?q=' + encodeURIComponent(qInput.value.trim());
+      if (catSel.value) u += '&cat=' + catSel.value;
+      if (authorPicker.hash()) u += '&author=' + authorPicker.hash();
+      if (sortSel.value) u += '&sort=' + sortSel.value;
+      location.href = u;
+    });
+
+    var count = el('p', 'comments-status', '');
+    section.appendChild(count);
+    var list = el('div', 'board-topics');
+    section.appendChild(list);
+    if (!q.trim()) { count.textContent = 'Type a search above. Put "quotes" around an exact phrase.'; return; }
+
+    count.textContent = 'Searching...';
+    var page = Math.max(1, Math.floor(Number(qs.get('p')) || 1));
+    function apiUrl(pg) {
+      var u = API + '/search?q=' + encodeURIComponent(q);
+      if (cat0) u += '&cat=' + encodeURIComponent(cat0);
+      if (author0) u += '&author=' + encodeURIComponent(author0);
+      if (sort0) u += '&sort=' + encodeURIComponent(sort0);
+      return u + '&p=' + pg;
+    }
+    function pageHref(i) {
+      var u = 'community.html?q=' + encodeURIComponent(q);
+      if (cat0) u += '&cat=' + encodeURIComponent(cat0);
+      if (author0) u += '&author=' + encodeURIComponent(author0);
+      if (sort0) u += '&sort=' + encodeURIComponent(sort0);
+      return u + '&p=' + i;
+    }
+    fetchRetry(apiUrl(page) + freshParam('&'), freshOpts(), [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        list.textContent = '';
+        if (!d.items.length) { count.textContent = 'Nothing found for that search.'; return; }
+        count.textContent = d.total + (d.total === 1 ? ' result.' : ' results.');
+        d.items.forEach(function (it) {
+          var rowEl = el('div', 'board-topic');
+          var left = el('div', 'board-topic-left');
+          var a = el('a', 'board-topic-title', it.title || 'a thread');
+          a.href = 'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id;
+          left.appendChild(a);
+          if (it.snip) left.appendChild(searchSnippet(it.snip));
+          rowEl.appendChild(left);
+          var who = it.nick || (it.author_hash ? displayName(it.author_hash) : 'Anonymous');
+          var ce = catByKey(it.cat);
+          rowEl.appendChild(el('div', 'board-stats', who + ' · ' + (ce ? ce[1] : it.cat) + ' · ' + fmtDateTime(it.created_at)));
+          list.appendChild(rowEl);
+        });
+        var top = pageBar(d.total, d.per, d.page, pageHref);
+        if (top) section.insertBefore(top, list);
+        var bot = pageBar(d.total, d.per, d.page, pageHref);
+        if (bot) section.appendChild(bot);
+      })
+      .catch(function () {
+        count.textContent = '';
+        list.textContent = '';
+        list.appendChild(el('p', 'comments-status', 'Search could not be run. Check your connection and reload the page.'));
+      });
+  }
+
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
     collectAltIps();
@@ -2833,6 +3043,7 @@
       if (params.get('notifications')) return viewNotifications();
       if (params.get('inbox')) return viewInbox();
       if (params.get('users')) return viewUsers();
+      if (params.get('q') !== null) return viewSearch();
       if (params.get('dm')) return viewDm(params.get('dm'));
       if (params.get('profile')) return viewProfile(params.get('profile'));
       if (params.get('audit')) return viewAudit();
