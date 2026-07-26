@@ -61,22 +61,24 @@
     return node;
   }
 
-  /* Only links to merecatholicity.com itself are trusted. Everything else,
-     including any other http(s) address, stays inert text. */
-  var TRUSTED_LINK = /https:\/\/(?:www\.)?merecatholicity\.com(?:\/[^\s<>"']*)?/gi;
+  /* A trusted same-site link, written either as [text](url) with its own anchor
+     text or as a bare URL. Only merecatholicity.com targets are ever made
+     clickable; any offsite or non-https address stays inert text. */
+  var TRUSTED_LINK = /\[([^\]\n]+)\]\((https:\/\/(?:www\.)?merecatholicity\.com[^\s<>"')]*)\)|https:\/\/(?:www\.)?merecatholicity\.com(?:\/[^\s<>"']*)?/gi;
 
   /* Append text to a node with only trusted, same-site links made clickable:
-     the matched merecatholicity.com URL becomes an anchor, everything else a
-     plain text node, so no markup is ever interpreted and no offsite link
-     becomes clickable. Shared by the body renderer and each quoted line. */
+     a [text](url) becomes an anchor labelled by its text, a bare merecatholicity
+     URL an anchor labelled by itself, everything else a plain text node — so no
+     markup is ever interpreted and no offsite link becomes clickable. Shared by
+     the body renderer and each quoted line. */
   function appendLinked(target, str) {
     var s = String(str == null ? '' : str);
     var last = 0, m;
     TRUSTED_LINK.lastIndex = 0;
     while ((m = TRUSTED_LINK.exec(s))) {
       if (m.index > last) target.appendChild(document.createTextNode(s.slice(last, m.index)));
-      var a = el('a', 'body-link', m[0]);
-      a.href = m[0];
+      var a = el('a', 'body-link', m[1] !== undefined ? m[1] : m[0]);
+      a.href = m[1] !== undefined ? m[2] : m[0];
       target.appendChild(a);
       last = m.index + m[0].length;
     }
@@ -399,10 +401,13 @@
   function quoteInto(c, excerpt, url) {
     var ta = section.querySelector('.comment-form .comment-text');
     if (!ta) return;
-    var name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
+    var name = (c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous'))
+      .replace(/[\[\]()\r\n]/g, '');
     var quoted = String(excerpt == null ? '' : excerpt).split('\n')
       .map(function (ln) { return '> ' + ln; }).join('\n');
-    var block = '> ' + name + ' wrote, ' + url + '\n' + quoted + '\n\n';
+    /* The attribution is the clickable permalink: its text reads "Name wrote:"
+       and its href is the post, so the reader jumps without a raw URL on show. */
+    var block = '> [' + name + ' wrote:](' + url + ')\n' + quoted + '\n\n';
     var existing = ta.value;
     var sep = !existing ? '' : (/\n\n$/.test(existing) ? '' : (/\n$/.test(existing) ? '\n' : '\n\n'));
     var addition = sep + block;
