@@ -105,21 +105,40 @@ function parseOS(ua) {
   return ua ? 'Other' : '';
 }
 
-/* The owner set, from the ADMIN_HASHES env var: permanent admins that seed the
-   platform and can never be removed through the admin console, so the board can
-   never lock itself out of moderation. */
+/* The bootstrap owners, from the ADMIN_HASHES env var. They are only a SEED: the
+   admins table is filled from them the first time the console is opened, and they
+   re-enable themselves if the table is ever emptied (a fresh or wiped DB), so the
+   board can never be permanently locked out. Once the table holds anyone, it is
+   the sole authority and every admin is an equal, removable row, owners included. */
 function rootAdmins(env) {
-  return (env.ADMIN_HASHES || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return (env.ADMIN_HASHES || '').split(',').map((s) => s.trim()).filter((h) => /^[0-9a-f]{64}$/.test(h));
 }
 
-/* Admin status is data-driven: an env owner, or anyone in the admins table
-   (added and removed from the admin console). Async, since the table is a DB
-   read; an owner short-circuits before that read. */
+/* Admin status is membership in the admins table. The env owners count only
+   while the table is still empty (bootstrap), so a live board is governed
+   entirely by the table and no admin is privileged over another. */
 async function isAdminHash(env, hash) {
   if (!hash) return false;
-  if (rootAdmins(env).includes(hash)) return true;
   const row = await env.DB.prepare('SELECT 1 AS a FROM admins WHERE hash = ?1').bind(hash).first();
-  return !!row;
+  if (row) return true;
+  if (rootAdmins(env).includes(hash)) {
+    const any = await env.DB.prepare('SELECT 1 AS a FROM admins LIMIT 1').first();
+    return !any;
+  }
+  return false;
+}
+
+/* Fill the table from the env owners the first time the console needs it, so
+   they show as ordinary, removable rows rather than a hidden privileged set. A
+   no-op once anyone is in the table (including after owners are removed). */
+async function ensureAdminsSeeded(env) {
+  const any = await env.DB.prepare('SELECT 1 AS a FROM admins LIMIT 1').first();
+  if (any) return;
+  const now = Math.floor(Date.now() / 1000);
+  for (const h of rootAdmins(env)) {
+    await env.DB.prepare('INSERT OR IGNORE INTO admins (hash, added_by, created_at) VALUES (?1, ?2, ?3)')
+      .bind(h, 'seed', now).run();
+  }
 }
 
 function normalizePage(raw) {
@@ -2455,9 +2474,9 @@ async function handlePending(request, env) {
   return json({ ok: true, pending: rows.results }, 200);
 }
 
-/* The admin roster for the admin console: the env owners first (marked, never
-   removable here), then everyone added to the admins table, each carried with
-   the name they post under so the console reads in people, not hashes. */
+/* The admin roster for the console: every admin, equal, each removable, carried
+   with the name they post under so the list reads in people, not hashes. Seeded
+   from the env owners on first view so they appear as ordinary rows. */
 async function handleAdmins(request, env) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -2465,19 +2484,9 @@ async function handleAdmins(request, env) {
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
-  const list = [];
-  const seen = new Set();
-  for (const h of rootAdmins(env)) {
-    if (!/^[0-9a-f]{64}$/.test(h) || seen.has(h)) continue;
-    list.push({ hash: h, root: true, created_at: null });
-    seen.add(h);
-  }
-  const dyn = await env.DB.prepare('SELECT hash, created_at FROM admins ORDER BY created_at DESC').all();
-  for (const r of (dyn.results || [])) {
-    if (seen.has(r.hash)) continue;
-    list.push({ hash: r.hash, root: false, created_at: r.created_at });
-    seen.add(r.hash);
-  }
+  await ensureAdminsSeeded(env);
+  const dyn = await env.DB.prepare('SELECT hash, created_at FROM admins ORDER BY created_at, hash').all();
+  const list = (dyn.results || []).map((r) => ({ hash: r.hash, created_at: r.created_at }));
   /* Resolve each admin's chosen nick in one query; the assigned pseudonym is
      pure from the hash, so it fills the rest. */
   if (list.length) {
@@ -2491,9 +2500,11 @@ async function handleAdmins(request, env) {
   return json({ ok: true, admins: list }, 200);
 }
 
-/* Grant or revoke admin. Admin-only, so an existing admin promotes a member
-   (picked by @-mention in the console) or drops one. An owner (env) is never
-   removed here and never needs adding; both are no-ops that report success. */
+/* Grant or revoke admin. Every admin is equal: any admin may promote a member
+   (picked by @-mention in the console) or drop any admin, owners and themselves
+   included. The one guard is a rule about count, not about who — the last admin
+   cannot be removed, so the board is never left with none, an irreversible
+   lockout. Add another first, then step down. */
 async function handleAdmin(request, env) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -2505,14 +2516,18 @@ async function handleAdmin(request, env) {
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = key ? await sha256hex(key) : '';
   if (!(await isAdminHash(env, me))) return json({ ok: false, error: 'No.' }, 403);
+  await ensureAdminsSeeded(env);
   if (data.admin) {
-    if (rootAdmins(env).includes(hash)) return json({ ok: true, admin: true }, 200);
     await env.DB.prepare('INSERT OR IGNORE INTO admins (hash, added_by, created_at) VALUES (?1, ?2, ?3)')
       .bind(hash, me, Math.floor(Date.now() / 1000)).run();
     return json({ ok: true, admin: true }, 200);
   }
-  if (rootAdmins(env).includes(hash)) {
-    return json({ ok: false, error: 'That is an owner account and cannot be removed here.' }, 400);
+  const present = await env.DB.prepare('SELECT 1 AS a FROM admins WHERE hash = ?1').bind(hash).first();
+  if (present) {
+    const cnt = await env.DB.prepare('SELECT COUNT(*) AS n FROM admins').first();
+    if (cnt && cnt.n <= 1) {
+      return json({ ok: false, error: 'This is the last admin. Add another before removing this one.' }, 400);
+    }
   }
   await env.DB.prepare('DELETE FROM admins WHERE hash = ?1').bind(hash).run();
   return json({ ok: true, admin: false }, 200);

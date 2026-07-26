@@ -324,11 +324,15 @@
       { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
-  /* An owner is known from the built-in list at once; a runtime-granted admin is
-     learned from their own profile fetch (state.myAdmin), which re-renders the
-     board once it lands. */
+  /* Admin status comes from the server (state.myAdmin, off your own profile).
+     Before that profile has loaded the built-in list is only a hint, so a known
+     admin's controls are not withheld for a beat; once it loads the server is
+     the sole authority, so an admin removed elsewhere loses the controls here
+     too. The board re-renders when the answer changes (see loadMyProfile). */
   function isAdmin() {
-    return !!state.key && (ADMIN_HASHES.indexOf(state.myHash) !== -1 || state.myAdmin);
+    if (!state.key) return false;
+    if (state.profileLoaded) return state.myAdmin;
+    return state.myAdmin || ADMIN_HASHES.indexOf(state.myHash) !== -1;
   }
 
   /* Callbacks waiting on the reader's own profile fetch, so a view that renders
@@ -2342,7 +2346,7 @@
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Add / Remove Admins']]);
     if (adminGate(viewAdmins)) return;
     section.appendChild(el('p', 'board-intro',
-      'An admin can moderate every post, manage IP bans, and manage this list. Owners are fixed in the site configuration and cannot be removed here.'));
+      'An admin can moderate every post, manage IP bans, and manage this list. All admins are equal: any admin can add or remove any other, yourself included. The board keeps at least one admin, so the last one cannot be removed until another is added.'));
     var addBox = el('div', 'key-box');
     addBox.hidden = false;
     addBox.appendChild(el('p', 'key-note', 'Add an admin. Type @ and a name to find a member, then pick them.'));
@@ -2372,25 +2376,26 @@
           if (!d.admins.length) { list.appendChild(el('p', 'comments-status', 'No admins.')); return; }
           d.admins.forEach(function (a) {
             var r = el('div', 'board-topic');
-            var who = el('a', 'board-topic-title', a.nick || a.assigned);
+            var mine = a.hash === state.myHash;
+            var who = el('a', 'board-topic-title', (a.nick || a.assigned) + (mine ? ' (you)' : ''));
             who.href = profileHref(a.hash);
             r.appendChild(who);
-            if (a.root) {
-              r.appendChild(el('span', 'board-stats', 'owner'));
-            } else {
-              var rm = el('a', 'trust-toggle', '(remove)');
-              rm.href = '#';
-              rm.addEventListener('click', function (e) {
-                e.preventDefault();
-                if (!confirm('Remove admin powers from ' + (a.nick || a.assigned) + '?')) return;
-                fetch(API + '/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ key: state.key, hash: a.hash, admin: false }) })
-                  .then(function (x) { return x.json(); })
-                  .then(function (x) { if (x.ok) load(); else { addNote.textContent = x.error || 'Could not remove.'; } })
-                  .catch(function () { addNote.textContent = 'Network error. Try again.'; });
-              });
-              r.appendChild(rm);
-            }
+            var rm = el('a', 'trust-toggle', '(remove)');
+            rm.href = '#';
+            rm.addEventListener('click', function (e) {
+              e.preventDefault();
+              if (!confirm(mine
+                ? 'Remove your own admin powers? You will lose admin access here.'
+                : 'Remove admin powers from ' + (a.nick || a.assigned) + '?')) return;
+              fetch(API + '/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, hash: a.hash, admin: false }) })
+                .then(function (x) { return x.json(); })
+                /* Removing yourself ends your access, so leave for the board as a
+                   plain member rather than reload a list you can no longer see. */
+                .then(function (x) { if (x.ok) { if (mine) { location.href = 'community.html'; } else { load(); } } else { addNote.textContent = x.error || 'Could not remove.'; } })
+                .catch(function () { addNote.textContent = 'Network error. Try again.'; });
+            });
+            r.appendChild(rm);
             list.appendChild(r);
           });
         })
@@ -2715,18 +2720,19 @@
     fetch(API + '/profile?hash=' + state.myHash + '&fresh=1')
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d.ok || !d.profile) return;
-        state.myNick = d.profile.nick || '';
-        /* Learn admin status from the server. A runtime-granted admin is not in
-           the built-in owner list, so until this lands isAdmin() reads false and
-           no admin controls draw. When it flips true, re-render the whole board
-           once so the controls appear (owners already rendered, so they skip it);
-           that redraw covers any waiting view, so drop the waiters. Otherwise
-           refresh the identity line and let any waiting admin view redraw. */
+        /* Learn admin status from the server, the sole authority. Compare the
+           effective answer against the pre-load hint: if it changed (an admin
+           granted or revoked elsewhere), re-render the whole board once so the
+           controls appear or vanish, and that redraw covers any waiting view so
+           drop the waiters. Otherwise refresh the identity line and let a
+           waiting admin view redraw itself. */
         var wasAdmin = isAdmin();
-        state.myAdmin = !!d.profile.admin;
+        if (d && d.ok && d.profile) {
+          state.myNick = d.profile.nick || '';
+          state.myAdmin = !!d.profile.admin;
+        }
         state.profileLoaded = true;
-        if (BOARD && isAdmin() && !wasAdmin) { profileWaiters = []; route(); return; }
+        if (BOARD && isAdmin() !== wasAdmin) { profileWaiters = []; route(); return; }
         if (section.querySelector('.comment-identity')) renderIdentity();
         flushProfileWaiters();
       })
