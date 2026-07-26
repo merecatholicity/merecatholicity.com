@@ -1,7 +1,7 @@
 # Resources build tasks. Public-domain texts kept as LaTeX docs of our own.
 # Outputs land in the site root so GitHub Pages serves them.
 
-.PHONY: all pdf html body schaff-html schaff-fetch catena-html
+.PHONY: all pdf html body schaff-html schaff-fetch catena-html summa-html
 
 all: pdf html
 
@@ -26,6 +26,15 @@ schaff-fetch:
 	    || { echo "FAILED $$id"; rm -f $$id.xml; }; \
 	done
 
+# The Summa's CCEL HTML source tree is git-ignored; re-fetch and unpack it so
+# 'make body' can regenerate summatheologica2tex.py's output.
+.PHONY: summa-fetch
+summa-fetch:
+	[ -d summa-src ] && echo "have summa-src" || { \
+	  curl -fsS -o /tmp/smt_html.zip "https://www.ccel.org/a/aquinas/summa/smt_html.zip" \
+	  && mkdir -p /tmp/smt && (cd /tmp/smt && unzip -oq /tmp/smt_html.zip) \
+	  && mv /tmp/smt/summa summa-src && echo "fetched summa-src"; }
+
 # Regenerate the LaTeX bodies from the preserved sources.
 body:
 	python thml2tex.py
@@ -37,6 +46,8 @@ body:
 	python schaff.py
 	python dr2tex.py
 	python catena2tex.py
+	python kjv2tex.py
+	python summatheologica2tex.py
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
 # byte-identical, so git only churns when the text really changes.
@@ -79,10 +90,16 @@ WORKS = \
   cassian-prayer=Conferences_on_Prayer.pdf \
   benedict-rule=Rule_of_St_Benedict.pdf \
   douay-rheims=Douay-Rheims_Bible.pdf \
+  kjv=King_James_Bible.pdf \
   catena-matthew=Catena_Aurea_Matthew.pdf \
   catena-mark=Catena_Aurea_Mark.pdf \
   catena-luke=Catena_Aurea_Luke.pdf \
-  catena-john=Catena_Aurea_John.pdf
+  catena-john=Catena_Aurea_John.pdf \
+  summa-fp=Summa_Theologica_1_First_Part.pdf \
+  summa-fs=Summa_Theologica_2_First_Part_of_the_Second_Part.pdf \
+  summa-ss=Summa_Theologica_3_Second_Part_of_the_Second_Part.pdf \
+  summa-tp=Summa_Theologica_4_Third_Part.pdf \
+  summa-xp=Summa_Theologica_5_Supplement.pdf
 
 work_name = $(firstword $(subst =, ,$(1)))
 work_out  = $(lastword  $(subst =, ,$(1)))
@@ -202,8 +219,46 @@ html:
 	    -o ../douay-rheims.html
 	rm douay-rheims-body-html.tex
 	@echo "built douay-rheims.html"
+	sed -e 's/\\xchapter{/\\section*{/g' \
+	    -e 's/\\xsection{/\\subsection*{/g' \
+	    -e 's/\\xsubsection{/\\paragraph{/g' \
+	    -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
+	    kjv-body.tex > kjv-body-html.tex
+	sed -e 's/{kjv-body.tex}/{kjv-body-html.tex}/' \
+	    kjv.tex | \
+	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
+	    --metadata title="The Holy Bible, King James Version" \
+	    --css=style.css -B ../nav.html -A ../footer.html \
+	    -o ../kjv.html
+	rm kjv-body-html.tex
+	@echo "built kjv.html"
+	$(MAKE) summa-html
 	$(MAKE) catena-html
 	$(MAKE) schaff-html
+
+# The Summa Theologica, five parts. Standard division-macro seds; a big TOC
+# of treatises and questions, so toc-depth 2.
+summa-html:
+	for s in fp:"The First Part" fs:"The First Part of the Second Part" \
+	         ss:"The Second Part of the Second Part" tp:"The Third Part" \
+	         xp:"The Supplement"; do \
+	  n=$${s%%:*}; t=$${s#*:}; \
+	  sed -e 's/\\xchapter{/\\section*{/g' \
+	      -e 's/\\xsection{/\\subsection*{/g' \
+	      -e 's/\\xsubsection{/\\paragraph{/g' \
+	      -e 's/\\textgreek{/{/g' \
+	      -e 's/\\texthebrew{/{/g' \
+	      -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
+	      summa-$$n-body.tex > summa-$$n-body-html.tex; \
+	  sed -e "s/{summa-$$n-body.tex}/{summa-$$n-body-html.tex}/" \
+	      summa-$$n.tex | \
+	  pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
+	      --metadata title="Summa Theologica -- $$t" \
+	      --css=style.css -B ../nav.html -A ../footer.html \
+	      -o ../summa-$$n.html; \
+	  rm summa-$$n-body-html.tex; \
+	  echo "built summa-$$n.html"; \
+	done
 
 # Aquinas' Catena Aurea, the four Gospels. Its macros (\cachapter, \caref,
 # \calemma, \cafather) become pandoc-friendly inline markup; \cafather{X}

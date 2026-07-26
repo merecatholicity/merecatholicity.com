@@ -59,10 +59,20 @@ resources/scranton.pdf
 resources/cassian-prayer.pdf
 resources/benedict-rule.pdf
 resources/douay-rheims.pdf
+resources/kjv.pdf
 resources/catena-matthew.pdf
 resources/catena-mark.pdf
 resources/catena-luke.pdf
 resources/catena-john.pdf
+# Summa: the 22 MB CCEL source tree and per-part intermediate PDFs are
+# reproducible (summa-fetch + make body + make pdf); the committed
+# summa-*-body.tex/summa-*.tex and the root PDFs are what ships.
+resources/summa-src/
+resources/summa-fp.pdf
+resources/summa-fs.pdf
+resources/summa-ss.pdf
+resources/summa-tp.pdf
+resources/summa-xp.pdf
 resources/npnf104.xml
 resources/ignatius.pdf
 resources/irenaeus3.pdf
