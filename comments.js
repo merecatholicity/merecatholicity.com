@@ -324,8 +324,22 @@
       { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
+  /* An owner is known from the built-in list at once; a runtime-granted admin is
+     learned from their own profile fetch (state.myAdmin), which re-renders the
+     board once it lands. */
   function isAdmin() {
-    return !!state.key && ADMIN_HASHES.indexOf(state.myHash) !== -1;
+    return !!state.key && (ADMIN_HASHES.indexOf(state.myHash) !== -1 || state.myAdmin);
+  }
+
+  /* Guard for an admin-only view. Owners pass at once; a runtime admin's status
+     may still be loading, so show a neutral wait rather than a false "not for
+     you" that would flash before loadMyProfile re-renders. Returns true when the
+     caller should stop. */
+  function adminGate() {
+    if (isAdmin()) return false;
+    section.appendChild(el('p', 'comments-status',
+      state.profileLoaded ? 'This page is for the admins.' : 'Loading...'));
+    return true;
   }
 
   function sha256hex(text) {
@@ -394,6 +408,8 @@
     key: getKey(),
     myHash: '',
     myNick: '',
+    myAdmin: false,
+    profileLoaded: false,
     started: false,
     widgetId: null,
     tokenWait: null,
@@ -1031,7 +1047,7 @@
       });
       head.appendChild(ed);
     }
-    if (state.myHash && (c.author_hash === state.myHash || ADMIN_HASHES.indexOf(state.myHash) !== -1)) {
+    if (state.myHash && (c.author_hash === state.myHash || isAdmin())) {
       var del = el('a', 'comment-delete', 'delete');
       del.href = '#';
       del.addEventListener('click', function (e) {
@@ -1214,7 +1230,7 @@
   }
 
   function annotateMeta(pageKey) {
-    if (!state.key || ADMIN_HASHES.indexOf(state.myHash) === -1) return;
+    if (!isAdmin()) return;
     fetch(API + '/meta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1234,7 +1250,7 @@
      post drawer has: trust, lock, per-IP ban and ban-all, delete. Admin-only,
      here and at the server. */
   function annotateProfileMeta(hash, card) {
-    if (!state.key || ADMIN_HASHES.indexOf(state.myHash) === -1) return;
+    if (!isAdmin()) return;
     if (card.querySelector('.comment-meta')) return;
     fetch(API + '/meta', {
       method: 'POST',
@@ -1522,8 +1538,8 @@
       var searchLink = el('a', 'identity-action', 'Search');
       searchLink.href = 'community.html?q=';
       line.appendChild(searchLink);
-      line.appendChild(el('br'));
-      /* Second line: who you are, then the account actions. */
+      line.appendChild(document.createTextNode(' · '));
+      /* Same line now: who you are, then the account actions, after the nav. */
       line.appendChild(document.createTextNode('Logged in as '));
       line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)));
       line.appendChild(document.createTextNode('. '));
@@ -1910,16 +1926,13 @@
 
   function viewIndex() {
     document.title = 'Catholicity Board | Mere Catholicity';
-    /* A muted word on who we are, for the newcomer who lands here. */
-    [
-      'A board for exploring what it means to be merely catholic.',
-      'If you hold the Nicene Creed you are welcome. Or if you are a seeker, or if you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation.',
-      'This is not a forum for debating non-Christian religions, or atheism / agnosticism. Comparative religion discussion is welcome from a Christian perspective.'
-    ].forEach(function (text) {
-      var p = el('p', 'board-intro');
-      p.appendChild(el('small', null, text));
-      section.appendChild(p);
-    });
+    /* A muted word on who we are, for the newcomer who lands here. One paragraph. */
+    var introP = el('p', 'board-intro');
+    introP.appendChild(el('small', null,
+      'A board for exploring what it means to be merely catholic. ' +
+      'If you hold the Nicene Creed you are welcome. Or if you are a seeker, or if you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation. ' +
+      'This is not a forum for debating non-Christian religions, or atheism / agnosticism. Comparative religion discussion is welcome from a Christian perspective.'));
+    section.appendChild(introP);
     /* The identity drawer lives on the front page too, so a reader can
        create, show, or swap a key before ever entering a room. */
     section.appendChild(el('div', 'comment-identity'));
@@ -1927,19 +1940,16 @@
     keyBox.hidden = true;
     section.appendChild(keyBox);
     renderIdentity();
-    /* Admins alone see the door to the audit. The server would refuse
-       anyone else anyway, so hiding it is courtesy, not the lock. */
+    /* Admins alone see the door to the console. The server would refuse anyone
+       else anyway, so hiding it is courtesy, not the lock. One link now, to a
+       page that gathers the audit, the IP bans, and the admin roster. */
     var auditSlot = el('p', 'board-audit-link');
     function ensureAuditLink() {
       auditSlot.textContent = '';
       if (!isAdmin()) return;
-      var a = el('a', 'identity-action', 'Activity audit');
-      a.href = 'community.html?audit=1';
+      var a = el('a', 'identity-action', 'Administrative options');
+      a.href = 'community.html?admin=1';
       auditSlot.appendChild(a);
-      auditSlot.appendChild(document.createTextNode(' · '));
-      var ib = el('a', 'identity-action', 'IP ban list');
-      ib.href = 'community.html?ipbans=1';
-      auditSlot.appendChild(ib);
     }
     ensureAuditLink();
     new MutationObserver(ensureAuditLink)
@@ -2289,13 +2299,114 @@
      review queue, and recent activity — each row governable in place, so an
      admin never has to leave to act. The in-context controls on the board stay;
      this is the one place that gathers everything waiting on a moderator. */
+  /* The admin hub: one door from the board that gathers the three admin pages,
+     so a member of staff picks a task rather than hunting scattered links. */
+  function viewAdminHome() {
+    document.title = 'Administrative options | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options']]);
+    if (adminGate()) return;
+    section.appendChild(el('p', 'board-intro',
+      'Everything that governs the board sits behind these doors. Each is admin-only, here and at the server.'));
+    var wrap = el('div', 'board-cats');
+    [
+      ['Activity audit', 'community.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
+      ['IP ban list', 'community.html?ipbans=1', 'Every banned address, added and removed by hand.'],
+      ['Add / Remove Admins', 'community.html?admins=1', 'Grant a member admin powers, or take them back.']
+    ].forEach(function (opt) {
+      var row = el('div', 'board-cat');
+      var left = el('div', 'board-cat-left');
+      var name = el('a', 'board-cat-name', opt[0]);
+      name.href = opt[1];
+      left.appendChild(name);
+      left.appendChild(el('div', 'board-cat-desc', opt[2]));
+      row.appendChild(left);
+      wrap.appendChild(row);
+    });
+    section.appendChild(wrap);
+  }
+
+  /* Add or remove admins. Owners (set in the worker config) show as permanent;
+     everyone else carries a (remove). Adding is by the same @-mention picker as
+     the rest of the site: type a name, pick a member, add. */
+  function viewAdmins() {
+    document.title = 'Add / Remove Admins | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Add / Remove Admins']]);
+    if (adminGate()) return;
+    section.appendChild(el('p', 'board-intro',
+      'An admin can moderate every post, manage IP bans, and manage this list. Owners are fixed in the site configuration and cannot be removed here.'));
+    var addBox = el('div', 'key-box');
+    addBox.hidden = false;
+    addBox.appendChild(el('p', 'key-note', 'Add an admin. Type @ and a name to find a member, then pick them.'));
+    var row = el('div', 'key-row');
+    var input = el('input', 'key-input');
+    input.type = 'text';
+    input.placeholder = '@name';
+    row.appendChild(input);
+    var addBtn = el('button', 'btn btn-send', 'Add admin');
+    addBtn.type = 'button';
+    row.appendChild(addBtn);
+    addBox.appendChild(row);
+    var addNote = el('p', 'form-status');
+    addBox.appendChild(addNote);
+    section.appendChild(addBox);
+    var picker = attachAuthorPicker(input, 'admin');
+    var list = el('div', 'board-topics');
+    list.textContent = 'Loading...';
+    section.appendChild(list);
+    function load() {
+      fetchRetry(API + '/admins', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }) }, [1000, 3000])
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error(d.error || 'failed');
+          list.textContent = '';
+          if (!d.admins.length) { list.appendChild(el('p', 'comments-status', 'No admins.')); return; }
+          d.admins.forEach(function (a) {
+            var r = el('div', 'board-topic');
+            var who = el('a', 'board-topic-title', a.nick || a.assigned);
+            who.href = profileHref(a.hash);
+            r.appendChild(who);
+            if (a.root) {
+              r.appendChild(el('span', 'board-stats', 'owner'));
+            } else {
+              var rm = el('a', 'trust-toggle', '(remove)');
+              rm.href = '#';
+              rm.addEventListener('click', function (e) {
+                e.preventDefault();
+                if (!confirm('Remove admin powers from ' + (a.nick || a.assigned) + '?')) return;
+                fetch(API + '/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: state.key, hash: a.hash, admin: false }) })
+                  .then(function (x) { return x.json(); })
+                  .then(function (x) { if (x.ok) load(); else { addNote.textContent = x.error || 'Could not remove.'; } })
+                  .catch(function () { addNote.textContent = 'Network error. Try again.'; });
+              });
+              r.appendChild(rm);
+            }
+            list.appendChild(r);
+          });
+        })
+        .catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'The list could not be loaded.')); });
+    }
+    addBtn.addEventListener('click', function () {
+      var hash = picker.hash();
+      if (!/^[0-9a-f]{64}$/.test(hash)) { addNote.textContent = 'Type @ and pick a member from the list first.'; return; }
+      addNote.textContent = 'Adding...';
+      fetch(API + '/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, hash: hash, admin: true }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) { addNote.textContent = d.error || 'Could not add that admin.'; return; }
+          input.value = ''; addNote.textContent = 'Added.'; load();
+        })
+        .catch(function () { addNote.textContent = 'Network error. Try again.'; });
+    });
+    load();
+  }
+
   function viewAudit() {
     document.title = 'Activity audit | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Activity audit']]);
-    if (!isAdmin()) {
-      section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
-      return;
-    }
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Activity audit']]);
+    if (adminGate()) return;
     section.appendChild(el('p', 'board-intro',
       'The moderation console. Reported posts first, flagged by members and still live until you rule on them. Then the review queue the automated screen held back. Then the last two weeks of activity across the site pages, the book, and the forums, newest first, every line a link to that exact comment and actionable from here.'));
     /* A running tally at the top, so the work waiting on you is plain before you scroll. */
@@ -2525,11 +2636,8 @@
      one-click bans from the fingerprint dropdown. */
   function viewIpBans() {
     document.title = 'IP ban list | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['IP ban list']]);
-    if (!isAdmin()) {
-      section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
-      return;
-    }
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['IP ban list']]);
+    if (adminGate()) return;
     var addBox = el('div', 'key-box');
     addBox.hidden = false;
     addBox.appendChild(el('p', 'key-note', 'Ban an IP by hand. IPv4 or IPv6, exactly as it appears in a fingerprint.'));
@@ -2600,9 +2708,18 @@
       .then(function (d) {
         if (!d.ok || !d.profile) return;
         state.myNick = d.profile.nick || '';
+        /* Learn admin status from the server. A runtime-granted admin is not in
+           the built-in owner list, so until this lands isAdmin() reads false and
+           no admin controls draw. When it flips true, re-render the whole board
+           once so the controls appear (owners already rendered, so they skip
+           it); other pages just refresh the identity line. */
+        var wasAdmin = isAdmin();
+        state.myAdmin = !!d.profile.admin;
+        state.profileLoaded = true;
+        if (BOARD && isAdmin() && !wasAdmin) { route(); return; }
         if (section.querySelector('.comment-identity')) renderIdentity();
       })
-      .catch(function () {});
+      .catch(function () { state.profileLoaded = true; });
   }
 
   /* A profile view. Your own is read/write; everyone else's is read-only. It
@@ -3566,7 +3683,7 @@
   /* The "filter by author" field: the same directory and fuzzy scorer as the
      @-mention picker and DM search, but standalone — a pick fixes one author
      hash for the search, and editing the field clears it. Returns { hash, set }. */
-  function attachAuthorPicker(input) {
+  function attachAuthorPicker(input, actionLabel) {
     var chosen = '', chosenText = '';
     var sug = el('div', 'mention-suggest');
     sug.hidden = true;
@@ -3579,7 +3696,7 @@
         var r = el('a', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
         r.href = '#';
         r.appendChild(el('span', null, dmLabel(u.hash, u.nick)));
-        r.appendChild(el('span', 'dm-suggest-go', 'filter'));
+        r.appendChild(el('span', 'dm-suggest-go', actionLabel || 'filter'));
         r.addEventListener('mousedown', function (e) { e.preventDefault(); pick(u); });
         sug.appendChild(r);
       });
@@ -3763,6 +3880,28 @@
       });
   }
 
+  /* Dispatch the board to the view its query string names. Clears the section
+     first so it can be called again to re-render in place (loadMyProfile does
+     this once a runtime admin's status arrives, to reveal the admin controls). */
+  function route() {
+    section.textContent = '';
+    var params = new URLSearchParams(location.search);
+    if (params.get('ipbans')) return viewIpBans();
+    if (params.get('admins')) return viewAdmins();
+    if (params.get('admin')) return viewAdminHome();
+    if (params.get('notifications')) return viewNotifications();
+    if (params.get('inbox')) return viewInbox();
+    if (params.get('users')) return viewUsers();
+    if (params.get('q') !== null) return viewSearch();
+    if (params.get('dm')) return viewDm(params.get('dm'));
+    if (params.get('profile')) return viewProfile(params.get('profile'));
+    if (params.get('audit')) return viewAudit();
+    var topic = Number(params.get('topic'));
+    if (Number.isInteger(topic) && topic > 0) return viewTopic(topic);
+    if (params.get('cat')) return viewCat(params.get('cat'));
+    viewIndex();
+  }
+
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
     collectAltIps();
@@ -3774,19 +3913,7 @@
       loadMyProfile();
       dmUnreadCheck();
       notifUnreadCheck();
-      var params = new URLSearchParams(location.search);
-      if (params.get('ipbans')) return viewIpBans();
-      if (params.get('notifications')) return viewNotifications();
-      if (params.get('inbox')) return viewInbox();
-      if (params.get('users')) return viewUsers();
-      if (params.get('q') !== null) return viewSearch();
-      if (params.get('dm')) return viewDm(params.get('dm'));
-      if (params.get('profile')) return viewProfile(params.get('profile'));
-      if (params.get('audit')) return viewAudit();
-      var topic = Number(params.get('topic'));
-      if (Number.isInteger(topic) && topic > 0) return viewTopic(topic);
-      if (params.get('cat')) return viewCat(params.get('cat'));
-      viewIndex();
+      route();
     });
   }
 

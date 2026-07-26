@@ -215,3 +215,13 @@ CREATE TABLE IF NOT EXISTS reports (
   UNIQUE(comment_id, reporter_hash)
 );
 CREATE INDEX IF NOT EXISTS reports_comment_idx ON reports(comment_id);
+
+-- Admins added through the admin console. The permanent owners live in the
+-- ADMIN_HASHES env var (never in this table, never removable from the UI); this
+-- table holds only the ones granted at runtime. isAdminHash() checks env first,
+-- then here.
+CREATE TABLE IF NOT EXISTS admins (
+  hash       TEXT PRIMARY KEY,
+  added_by   TEXT,
+  created_at INTEGER NOT NULL
+);
