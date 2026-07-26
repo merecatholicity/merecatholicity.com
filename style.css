@@ -640,7 +640,7 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .md-btn:hover { border-color: var(--maroon); background: rgba(139, 26, 26, 0.06); }
 .md-btn.md-b { font-weight: 700; }
 .md-btn.md-i { font-style: italic; }
-.md-legend { margin: 0.35em 0 0; color: var(--faint); font-size: 0.8rem; overflow-wrap: anywhere; }
+.md-legend { margin: 0.35em 0 0; color: #666; font-size: 0.95rem; overflow-wrap: anywhere; }
 .comment-buttons { display: flex; gap: 0.6em; flex-wrap: wrap; margin: 0.8em 0 0.3em; }
 section.comments .btn { min-width: 0; }
 .btn-anon { background: transparent; border-color: var(--maroon); color: var(--maroon); font: inherit; cursor: pointer; }
