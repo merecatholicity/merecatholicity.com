@@ -1413,25 +1413,8 @@
     box.textContent = '';
     var line = el('p', 'identity-line');
     if (state.key && state.myHash) {
-      /* First line: who you are, then the account actions. */
-      line.appendChild(document.createTextNode('Logged in as '));
-      line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)));
-      line.appendChild(document.createTextNode('. '));
-      line.appendChild(identityAction('Show my key', showKeyBox));
-      line.appendChild(document.createTextNode(' · '));
-      line.appendChild(identityAction('Logout', function () {
-        if (!confirm('Log out and forget this identity here? Unless you saved your key, there is no way back to this name.')) return;
-        clearKey();
-        state.key = '';
-        state.myHash = '';
-        if (BOARD) { location.reload(); return; }
-        hideKeyBox();
-        renderIdentity();
-        load();
-      }));
-      line.appendChild(el('br'));
-      /* Second line: where to go, grouped — your activity (the two badge
-         feeds), then people (you, then the roster), then search over it all. */
+      /* First line: where to go, grouped — your activity (the two badge feeds),
+         then people (you, then the roster), then search over it all. */
       var notifLink = el('a', 'identity-action', 'Notifications');
       notifLink.href = 'community.html?notifications=1';
       line.appendChild(notifLink);
@@ -1455,6 +1438,23 @@
       var searchLink = el('a', 'identity-action', 'Search');
       searchLink.href = 'community.html?q=';
       line.appendChild(searchLink);
+      line.appendChild(el('br'));
+      /* Second line: who you are, then the account actions. */
+      line.appendChild(document.createTextNode('Logged in as '));
+      line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)));
+      line.appendChild(document.createTextNode('. '));
+      line.appendChild(identityAction('Show my key', showKeyBox));
+      line.appendChild(document.createTextNode(' · '));
+      line.appendChild(identityAction('Logout', function () {
+        if (!confirm('Log out and forget this identity here? Unless you saved your key, there is no way back to this name.')) return;
+        clearKey();
+        state.key = '';
+        state.myHash = '';
+        if (BOARD) { location.reload(); return; }
+        hideKeyBox();
+        renderIdentity();
+        load();
+      }));
     } else {
       line.appendChild(document.createTextNode(state.anonAllowed
         ? 'Commenting anonymously. '

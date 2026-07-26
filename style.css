@@ -739,7 +739,13 @@ a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
   margin-bottom: 0.6em;
 }
 .board-title:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
-section.board { max-width: 40rem; }
+/* The board tracks the site's widening desktop container instead of sitting in a
+   cramped 40rem column: it fills the body up to the 992px step, then holds a
+   comfortable reading measure so long discussion posts have room without the line
+   length running away on the widest monitors. */
+section.board { max-width: 52rem; }
+@media (min-width: 992px)  { section.board { max-width: 60rem; } }
+@media (min-width: 1200px) { section.board { max-width: 66rem; } }
 @media (max-width: 600px) {
   .board-cat, .board-topic { flex-direction: column; gap: 0.15rem; }
   .board-stats { text-align: left; white-space: normal; }
