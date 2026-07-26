@@ -21,6 +21,24 @@
   var FAITH = { nicene: 'Nicene', 'indo-european': 'pre-Christian Indo European', seeker: 'Seeker' };
   var FAITH_ORDER = ['nicene', 'indo-european', 'seeker'];
   var FAITH_STORE = 'mc-faith';
+
+  /* The scriptorium rank ladder: a member's standing by total live forum posts.
+     Thresholds ascend; rankFor returns the highest one reached. The count itself
+     rides each post and the profile from the worker (postCountsFor). */
+  var RANKS = [
+    [0, 'Novice'], [10, 'Apprentice'], [50, 'Scriptorium Hand'], [100, 'Copyist'],
+    [250, 'Scribe'], [500, 'Illuminator'], [1000, 'Master Scribe'],
+    [2500, 'Keeper of Scrolls'], [5000, 'Treasury of Wisdom']
+  ];
+  function rankFor(n) {
+    n = Number(n) || 0;
+    var name = RANKS[0][1];
+    for (var i = 0; i < RANKS.length; i++) { if (n >= RANKS[i][0]) name = RANKS[i][1]; }
+    return name;
+  }
+  function rankLine(posts) {
+    return rankFor(posts) + ' · ' + posts + (posts === 1 ? ' post' : ' posts');
+  }
   /* Fingerprints of the site owners' identities. Holding a key that hashes
      to one of these shows delete links on every comment, and the server
      honors those deletes. Publishing the hash reveals nothing usable, the
@@ -187,7 +205,7 @@
      and stay plain text. With a nick set, the assigned name rides along as a
      muted, equally-clickable line (withSub), so the authoritative identifier
      is never lost. Text goes through el()/textContent, never innerHTML. */
-  function authorNode(hash, nick, withSub, faith) {
+  function authorNode(hash, nick, withSub, faith, posts) {
     if (!hash) return el('span', 'comment-author', 'Anonymous');
     var wrap = el('span', 'comment-author');
     var primary = el('a', 'comment-author-link', nick || displayName(hash));
@@ -200,6 +218,9 @@
     }
     /* The faith declaration sits under the name on every post. */
     if (faith && FAITH[faith]) wrap.appendChild(el('span', 'comment-faith', FAITH[faith]));
+    /* The rank and post count sit under that, when the caller has the count (a
+       post or comment). Reuses the muted faith-line styling. */
+    if (posts != null) wrap.appendChild(el('span', 'comment-faith comment-rank', rankLine(Number(posts) || 0)));
     return wrap;
   }
 
@@ -853,7 +874,7 @@
       avLink.appendChild(av);
       head.appendChild(avLink);
     }
-    var author = authorNode(c.author_hash, c.nick, true, c.faith);
+    var author = authorNode(c.author_hash, c.nick, true, c.faith, c.posts);
     author.setAttribute('itemprop', 'author');
     head.appendChild(author);
     /* The house speaks under its own colors. */
@@ -2609,6 +2630,8 @@
        choice before the first post has carried it to the server. */
     var faithCode = p.faith || (p.hash === state.myHash ? getFaith() : '');
     if (faithCode && FAITH[faithCode]) names.appendChild(el('div', 'profile-faith', 'I hold to: ' + FAITH[faithCode]));
+    /* Standing on the board: the total post count and the rank it earns. */
+    if (p.posts != null) names.appendChild(el('div', 'profile-faith profile-rank', rankLine(Number(p.posts) || 0)));
     headRow.appendChild(names);
     card.appendChild(headRow);
     if (p.bio) {

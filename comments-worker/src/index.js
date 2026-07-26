@@ -376,7 +376,9 @@ async function handleGet(request, env, url) {
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id LIMIT 500"
   ).bind(page).all();
-  return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: rows.results }, 200,
+  const counts = await postCountsFor(env, (rows.results || []).map((r) => r.author_hash));
+  const comments = (rows.results || []).map((r) => Object.assign({}, r, { posts: counts[r.author_hash] || 0 }));
+  return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
 }
 
@@ -461,7 +463,22 @@ async function handlePost(request, env, ctx) {
   ).bind(page, parentId, title, authorHash, body, status, createdAt, verdict, ip || null, ua || null, os || null,
     tz || null, lang || null).first();
 
-  if (boardKey(page)) await refreshTopicStats(env, parentId || inserted.id);
+  if (boardKey(page)) {
+    const topicId = parentId || inserted.id;
+    await refreshTopicStats(env, topicId);
+    /* A poster has by definition seen their own post, so advance their read
+       stamp to it. Only a live post raises the thread's last_at, so only a live
+       post can read back as "new since last visit" to its own author; without
+       this, returning to the board index counts your own reply as one unread.
+       read_at = createdAt (which is the thread's new last_at) suppresses only
+       this post — a strictly later reply by anyone else still reads as new. */
+    if (authorHash && status === 'live') {
+      await env.DB.prepare(
+        'INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, ?2, ?3) ' +
+        'ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?3'
+      ).bind(authorHash, topicId, createdAt).run();
+    }
+  }
 
   /* Notifications ride the board only: the author quietly watches the thread,
      @mentions and (for a reply) the topic author and every watcher are told.
@@ -877,6 +894,26 @@ async function handleAuthorPosts(request, env, url) {
   return json({ ok: true, items, total: (total && total.n) || 0, page: p, per }, 200, cacheHeader(url));
 }
 
+/* A member's live-forum post count (topics always, replies only under a live
+   topic) for a batch of hashes at once — the same definition handleAuthorPosts
+   totals, so the profile figure and the per-post badge always agree. One grouped
+   query for every distinct author on a page drives the rank shown by each post. */
+async function postCountsFor(env, hashes) {
+  const uniq = [...new Set((hashes || []).filter((h) => /^[0-9a-f]{64}$/.test(h)))];
+  const out = {};
+  if (!uniq.length) return out;
+  const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
+  const rows = await env.DB.prepare(
+    'SELECT c.author_hash AS h, COUNT(*) AS n FROM comments c ' +
+    'LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' +
+    'WHERE c.author_hash IN (' + ph + ") AND c.page LIKE 'board:%' AND c.status = 'live' " +
+    "AND (c.parent_id IS NULL OR t.status = 'live') GROUP BY c.author_hash"
+  ).bind(...uniq).all();
+  uniq.forEach((h) => { out[h] = 0; });
+  (rows.results || []).forEach((r) => { out[r.h] = r.n; });
+  return out;
+}
+
 const SEARCH_PER_PAGE = 20;
 
 /* Turn a user query into a safe FTS5 MATCH: pull out "quoted phrases" and bare
@@ -979,12 +1016,15 @@ async function handleTopicView(request, env, url) {
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.parent_id = ?1 AND c.status = 'live' ORDER BY c.id LIMIT ?2 OFFSET ?3"
   ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
+  /* Each post carries its author's total forum-post count, for the rank the
+     client shows under the name. One grouped query for every author on the page. */
+  const counts = await postCountsFor(env, [topic.author_hash].concat((replies.results || []).map((r) => r.author_hash)));
   return json({
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0 },
-    replies: replies.results,
+    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, posts: counts[topic.author_hash] || 0 },
+    replies: (replies.results || []).map((r) => Object.assign({}, r, { posts: counts[r.author_hash] || 0 })),
     total: topic.replies || 0,
     page: p,
     per: TOPICS_PER_PAGE,
@@ -1156,6 +1196,7 @@ async function handleProfileGet(request, env, url) {
   const hash = String(url.searchParams.get('hash') || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(hash).first();
+  const counts = await postCountsFor(env, [hash]);
   return json({
     ok: true,
     profile: {
@@ -1165,6 +1206,7 @@ async function handleProfileGet(request, env, url) {
       signature: row ? (row.signature || null) : null,
       avatar: row ? (row.avatar || null) : null,
       faith: row ? (row.faith || null) : null,
+      posts: counts[hash] || 0,
       assigned: displayName(hash),
       admin: isAdminHash(env, hash),
     },

@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS bans (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS comments_parent_idx ON comments(parent_id, status, id);
+-- Author-scoped lookups: the post-history list and the per-member post count
+-- (the rank ladder) both filter live board posts by author_hash.
+CREATE INDEX IF NOT EXISTS comments_author_idx ON comments(author_hash, page, status);
 
 CREATE TABLE IF NOT EXISTS trusted (
   hash       TEXT PRIMARY KEY,
