@@ -133,3 +133,31 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at INTEGER NOT NULL,
   updated_at INTEGER
 );
+
+-- In-app notifications: one row per event for one recipient. kind 'reply' is a
+-- new reply in a thread the recipient watches; 'mention' is an @mention. The
+-- read watermark is a single stamp (read_at NULL = unread), same idiom as the
+-- DM read stamps; opening the notifications list stamps them all read. topic_id
+-- is the thread to open, comment_id the exact post to jump to.
+CREATE TABLE IF NOT EXISTS notifications (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  recipient_hash TEXT NOT NULL,
+  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention')),
+  topic_id       INTEGER NOT NULL,
+  comment_id     INTEGER NOT NULL,
+  actor_hash     TEXT,
+  created_at     INTEGER NOT NULL,
+  read_at        INTEGER
+);
+CREATE INDEX IF NOT EXISTS notifications_recipient_idx ON notifications(recipient_hash, id);
+
+-- Threads a member follows. A member auto-watches any thread they post in (topic
+-- or reply) and may Watch/Unwatch by hand; every reply fans a 'reply'
+-- notification to each watcher but the replier. One row per (member, thread).
+CREATE TABLE IF NOT EXISTS watches (
+  hash       TEXT NOT NULL,
+  topic_id   INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, topic_id)
+);
+CREATE INDEX IF NOT EXISTS watches_topic_idx ON watches(topic_id);

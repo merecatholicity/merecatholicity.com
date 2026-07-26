@@ -61,25 +61,40 @@
     return node;
   }
 
-  /* A trusted same-site link, written either as [text](url) with its own anchor
-     text or as a bare URL. Only merecatholicity.com targets are ever made
-     clickable; any offsite or non-https address stays inert text. */
-  var TRUSTED_LINK = /\[([^\]\n]+)\]\((https:\/\/(?:www\.)?merecatholicity\.com[^\s<>"')]*)\)|https:\/\/(?:www\.)?merecatholicity\.com(?:\/[^\s<>"']*)?/gi;
+  /* Inline markup, parsed left-to-right in one pass and built ONLY from
+     createElement + text nodes (never innerHTML), so nothing a user writes can
+     inject markup. Precedence: **bold**, then *italic*, then a same-site link
+     written [text](url) or as a bare URL. Only merecatholicity.com targets are
+     ever clickable; every offsite or non-https address, and any stray marker,
+     stays inert text. No images, ever. */
+  var INLINE_MD = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https:\/\/(?:www\.)?merecatholicity\.com[^\s<>"')]*)\)|https:\/\/(?:www\.)?merecatholicity\.com(?:\/[^\s<>"']*)?/gi;
 
-  /* Append text to a node with only trusted, same-site links made clickable:
-     a [text](url) becomes an anchor labelled by its text, a bare merecatholicity
-     URL an anchor labelled by itself, everything else a plain text node — so no
-     markup is ever interpreted and no offsite link becomes clickable. Shared by
-     the body renderer and each quoted line. */
-  function appendLinked(target, str) {
+  /* Append rich inline text to a node: the marked spans above become <strong>,
+     <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
+     (a link inside bold works) by recursing on the strictly-shorter inner text.
+     Shared by the body renderer and each quoted/list line. */
+  function appendRich(target, str) {
     var s = String(str == null ? '' : str);
+    /* A fresh matcher per call: appendRich recurses into emphasis, and a single
+       shared global regex's lastIndex would be clobbered by the inner call. */
+    var re = new RegExp(INLINE_MD.source, 'gi');
     var last = 0, m;
-    TRUSTED_LINK.lastIndex = 0;
-    while ((m = TRUSTED_LINK.exec(s))) {
+    while ((m = re.exec(s))) {
+      if (m[0].length === 0) { re.lastIndex++; continue; }
       if (m.index > last) target.appendChild(document.createTextNode(s.slice(last, m.index)));
-      var a = el('a', 'body-link', m[1] !== undefined ? m[1] : m[0]);
-      a.href = m[1] !== undefined ? m[2] : m[0];
-      target.appendChild(a);
+      if (m[1] !== undefined) {
+        var strong = el('strong');
+        appendRich(strong, m[1]);
+        target.appendChild(strong);
+      } else if (m[2] !== undefined) {
+        var em = el('em');
+        appendRich(em, m[2]);
+        target.appendChild(em);
+      } else {
+        var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]);
+        a.href = m[3] !== undefined ? m[4] : m[0];
+        target.appendChild(a);
+      }
       last = m.index + m[0].length;
     }
     if (last < s.length) target.appendChild(document.createTextNode(s.slice(last)));
@@ -102,15 +117,24 @@
           i++;
         }
         var bq = el('blockquote', 'comment-quote');
-        appendLinked(bq, quoted.join('\n'));
+        appendRich(bq, quoted.join('\n'));
         node.appendChild(bq);
+      } else if (/^[-*] /.test(lines[i])) {
+        var ul = el('ul', 'comment-list');
+        while (i < lines.length && /^[-*] /.test(lines[i])) {
+          var li = el('li');
+          appendRich(li, lines[i].replace(/^[-*] +/, ''));
+          ul.appendChild(li);
+          i++;
+        }
+        node.appendChild(ul);
       } else {
         var plain = [];
-        while (i < lines.length && !/^>/.test(lines[i])) {
+        while (i < lines.length && !/^>/.test(lines[i]) && !/^[-*] /.test(lines[i])) {
           plain.push(lines[i]);
           i++;
         }
-        appendLinked(node, plain.join('\n'));
+        appendRich(node, plain.join('\n'));
       }
     }
     return node;
@@ -420,6 +444,77 @@
     ta.scrollIntoView({ block: 'center' });
   }
 
+  /* ---- Markdown compose toolbar. The box stays a single plain-text textarea
+     holding the markdown source; these buttons only edit that source at the
+     caret or around the selection, and fillBody renders it on show. ---- */
+
+  function afterEdit(ta) {
+    ta.focus();
+    try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+  }
+
+  /* Wrap the selection, or, with nothing selected, drop the markers and put the
+     caret between them: WORD -> **WORD**, and | -> **|**. */
+  function wrapSel(ta, before, after) {
+    var s = ta.value, a = ta.selectionStart, b = ta.selectionEnd, sel = s.slice(a, b);
+    if (sel) {
+      ta.value = s.slice(0, a) + before + sel + after + s.slice(b);
+      try { ta.setSelectionRange(a + before.length, a + before.length + sel.length); } catch (e) {}
+    } else {
+      ta.value = s.slice(0, a) + before + after + s.slice(a);
+      var caret = a + before.length;
+      try { ta.setSelectionRange(caret, caret); } catch (e) {}
+    }
+    afterEdit(ta);
+  }
+
+  /* Prefix every line the selection touches (or the caret's own line). */
+  function linePrefix(ta, prefix) {
+    var s = ta.value, a = ta.selectionStart, b = ta.selectionEnd;
+    var start = s.lastIndexOf('\n', a - 1) + 1;
+    var end = s.indexOf('\n', b); if (end === -1) end = s.length;
+    var block = s.slice(start, end).split('\n').map(function (ln) { return prefix + ln; }).join('\n');
+    ta.value = s.slice(0, start) + block + s.slice(end);
+    try { ta.setSelectionRange(start, start + block.length); } catch (e) {}
+    afterEdit(ta);
+  }
+
+  /* Insert a same-site link template, caret landing in the URL to complete. */
+  function insertLink(ta) {
+    var s = ta.value, a = ta.selectionStart, b = ta.selectionEnd, sel = s.slice(a, b) || 'text';
+    var url = 'https://merecatholicity.com/';
+    ta.value = s.slice(0, a) + '[' + sel + '](' + url + ')' + s.slice(b);
+    var urlStart = a + sel.length + 3;
+    try { ta.setSelectionRange(urlStart, urlStart + url.length); } catch (e) {}
+    afterEdit(ta);
+  }
+
+  function mdButton(label, title, cls, handler) {
+    var btn = el('button', 'md-btn' + (cls ? ' ' + cls : ''), label);
+    btn.type = 'button';
+    btn.title = title;
+    btn.addEventListener('click', function (e) { e.preventDefault(); handler(); });
+    return btn;
+  }
+
+  /* Wrap a compose textarea with a button row above and a syntax legend below,
+     returning the wrapper to mount where the textarea would have gone. The
+     textarea itself is unchanged, so .comment-text lookups still resolve. */
+  function mdEditor(textarea) {
+    var wrap = el('div', 'md-editor');
+    var bar = el('div', 'md-toolbar');
+    bar.appendChild(mdButton('B', 'Bold  **text**', 'md-b', function () { wrapSel(textarea, '**', '**'); }));
+    bar.appendChild(mdButton('I', 'Italic  *text*', 'md-i', function () { wrapSel(textarea, '*', '*'); }));
+    bar.appendChild(mdButton('” Quote', 'Blockquote  > line', null, function () { linePrefix(textarea, '> '); }));
+    bar.appendChild(mdButton('• List', 'Bulleted list  - item', null, function () { linePrefix(textarea, '- '); }));
+    bar.appendChild(mdButton('Link', 'Link  [text](url) — merecatholicity.com only', null, function () { insertLink(textarea); }));
+    wrap.appendChild(bar);
+    wrap.appendChild(textarea);
+    wrap.appendChild(el('p', 'md-legend',
+      'Markdown: **bold** · *italic* · > quote · - list · [text](merecatholicity.com/…)'));
+    return wrap;
+  }
+
   function commentNode(c, pending, quoteCtx) {
     var article = el('article', 'comment' + (pending ? ' comment-pending' : ''));
     article.id = 'comment-' + c.id;
@@ -531,7 +626,7 @@
     ta.maxLength = 4000;
     ta.rows = 4;
     ta.value = c.body;
-    editor.appendChild(ta);
+    editor.appendChild(mdEditor(ta));
     var row = el('div', 'comment-buttons');
     var save = el('button', 'btn btn-send key-copy', 'Save');
     save.type = 'button';
@@ -1198,7 +1293,7 @@
     textarea.maxLength = 4000;
     textarea.rows = 5;
     textarea.placeholder = 'Say what you want to say.';
-    form.appendChild(textarea);
+    form.appendChild(mdEditor(textarea));
     var hp = el('input', 'hp');
     hp.type = 'text';
     hp.name = 'website';
@@ -2416,7 +2511,7 @@
         ta.maxLength = 4000;
         ta.rows = 3;
         ta.placeholder = 'Write your message.';
-        form.appendChild(ta);
+        form.appendChild(mdEditor(ta));
         form.appendChild(el('div', 'ts-slot'));
         var btnRow = el('div', 'comment-buttons');
         var send = el('button', 'btn btn-send', 'Send');
@@ -2562,7 +2657,7 @@
     textarea.maxLength = 4000;
     textarea.rows = 5;
     textarea.placeholder = 'Say what you want to say.';
-    form.appendChild(textarea);
+    form.appendChild(mdEditor(textarea));
     var hp = el('input', 'hp');
     hp.type = 'text';
     hp.name = 'website';

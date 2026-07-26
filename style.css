@@ -602,6 +602,11 @@ blockquote.comment-quote {
 }
 a.comment-quote-link { color: #666; margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
 a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
+/* Inline and list markdown fillBody renders inside a body or signature. */
+.comment-body strong, .comment-sig strong { font-weight: 700; }
+.comment-body em, .comment-sig em { font-style: italic; }
+.comment-body ul.comment-list, .comment-sig ul.comment-list { margin: 0.4em 0; padding-left: 1.5em; }
+.comment-body ul.comment-list li, .comment-sig ul.comment-list li { margin: 0.15em 0; white-space: normal; }
 .comment-pending { opacity: 0.75; }
 .comment-note { font-style: italic; color: #666; font-size: 0.9rem; }
 .comments-status, .form-status { color: #666; font-size: 0.95rem; min-height: 1.3em; }
@@ -619,6 +624,23 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .comment-form .comment-text:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
 .comment-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .comment-form .ts-slot { margin: 0.6em 0; }
+/* Markdown compose: a button row above the plain-text box, a legend below. */
+.md-toolbar { display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0 0 0.45em; }
+.md-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0.35em 0.6em;
+  color: var(--maroon);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.md-btn:hover { border-color: var(--maroon); background: rgba(139, 26, 26, 0.06); }
+.md-btn.md-b { font-weight: 700; }
+.md-btn.md-i { font-style: italic; }
+.md-legend { margin: 0.35em 0 0; color: var(--faint); font-size: 0.8rem; overflow-wrap: anywhere; }
 .comment-buttons { display: flex; gap: 0.6em; flex-wrap: wrap; margin: 0.8em 0 0.3em; }
 section.comments .btn { min-width: 0; }
 .btn-anon { background: transparent; border-color: var(--maroon); color: var(--maroon); font: inherit; cursor: pointer; }
