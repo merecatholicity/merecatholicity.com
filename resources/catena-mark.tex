@@ -1,0 +1,84 @@
+% St. Thomas Aquinas, Catena Aurea (the Golden Chain), on the
+% Gospel of St. Mark. Oxford translation, 1841, from the fisheaters PDF
+% (catena-src/xaquinas-mark.pdf), rebuilt as our own LaTeX by
+% catena2tex.py; this file owns the preamble, macros, and front matter.
+% GENERATED -- edit catena2tex.py, not this file. Public domain.
+\documentclass[11pt,letterpaper]{article}
+\ifdefined\pdfsuppressptexinfo\pdfsuppressptexinfo=-1 \fi
+\ifdefined\pdftrailerid\pdftrailerid{}\fi
+\usepackage[margin=1in]{geometry}
+% The Catena quotes Greek (and a little Hebrew); with texlive-langgreek the
+% LGR path sets it, without it the build still succeeds.
+\IfFileExists{textalpha.sty}{%
+  \usepackage[LGR,T1]{fontenc}%
+  \usepackage[utf8]{inputenc}%
+  \usepackage{textalpha}%
+}{%
+  \usepackage[T1]{fontenc}%
+  \usepackage[utf8]{inputenc}%
+}
+\ifdefined\ensuregreek
+  \newcommand{\textgreek}[1]{\ensuregreek{#1}}
+\else
+  \newcommand{\textgreek}[1]{\emph{[Greek]}}
+\fi
+\newcommand{\texthebrew}[1]{{\emph{[Hebrew]}}}
+\usepackage{mathpazo}
+\usepackage{textcomp}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{needspace}
+\usepackage[colorlinks=true,linkcolor=ink,urlcolor=maroon,citecolor=ink,filecolor=ink]{hyperref}
+\urlstyle{same}
+\hypersetup{pdftitle={Catena Aurea on St. Mark},pdfauthor={St. Thomas Aquinas}}
+\linespread{1.06}
+\setlength{\emergencystretch}{1.5em}
+
+\definecolor{ink}{HTML}{2A2521}
+\definecolor{heading}{HTML}{8C4A32}
+\definecolor{subhead}{HTML}{6E5642}
+\definecolor{accent}{HTML}{B0894C}
+\definecolor{maroon}{HTML}{7B2E2E}
+
+% Chapters (and the preface): new page, TOC section level.
+\newcommand{\cachapter}[1]{%
+  \clearpage\phantomsection\addcontentsline{toc}{section}{#1}%
+  {\normalfont\fontsize{15}{18}\selectfont\bfseries\color{heading}%
+   \raggedright #1\par}%
+  \vspace{2pt}{\color{accent}\hrule height 1pt}\medskip}
+
+% The verse reference standing at the head of a lemma, run in before it.
+\newcommand{\caref}[1]{\par\medskip\needspace{3\baselineskip}%
+  {\bfseries\color{accent}#1\quad}}
+
+% The Gospel text being commented on: set apart in bold.
+\newcommand{\calemma}[1]{{\bfseries\color{ink}#1}\par\smallskip}
+
+% A Father's name opening his comment, in small capitals.
+\newcommand{\cafather}[1]{\par{\scshape\color{subhead}#1.}~}
+
+\begin{document}
+\color{ink}
+
+\begin{titlepage}
+\centering
+\vspace*{4em}
+{\LARGE\bfseries\color{heading} Catena Aurea\par}
+\vspace{1em}
+{\large The Golden Chain\par}
+\vspace{2em}
+{\Large\color{subhead} A Commentary on the Gospel of St. Mark\par}
+\vspace{2.5em}
+{\itshape\color{subhead} Gathered out of the works of the Fathers by
+St. Thomas Aquinas.\par}
+\vfill
+{\small From the Oxford translation of 1841 (John Henry Parker). The
+translation is in the public domain.\par}
+\vspace{2em}
+\end{titlepage}
+
+\tableofcontents
+
+\input{catena-mark-body.tex}
+
+\end{document}
