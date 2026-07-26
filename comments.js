@@ -991,6 +991,31 @@
     }).catch(function () {});
   }
 
+  /* The notification badge rides the same one-count, ninety-second-cached
+     mechanism as the DM badge: a reply in a watched thread or an @mention. */
+  var NOTIF_CACHE = 'mc-notif-unread';
+  function notifCacheGet() {
+    try { return JSON.parse(localStorage.getItem(NOTIF_CACHE)) || null; } catch (e) { return null; }
+  }
+  function notifCacheSet(n) {
+    try { localStorage.setItem(NOTIF_CACHE, JSON.stringify({ n: n, at: Date.now() })) } catch (e) {}
+    renderIdentity();
+  }
+  function notifUnreadCheck() {
+    if (!state.key) return;
+    var c = notifCacheGet();
+    if (c && Date.now() - c.at < 90000) return;
+    try { localStorage.setItem(NOTIF_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
+    fetch(API + '/notifications/unread', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }),
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (blockedOut(d)) return;
+      if (d.ok) notifCacheSet(d.unread);
+    }).catch(function () {});
+  }
+
   /* A locked identity or a banned network, discovered on any keyed call:
      forget the key, raise a message that outlives the redirect, and land on
      the terms page. This is what "logged out and cannot come back" looks like. */
@@ -1005,6 +1030,7 @@
     state.key = '';
     state.myHash = '';
     try { localStorage.removeItem(DM_CACHE); } catch (e) {}
+    try { localStorage.removeItem(NOTIF_CACHE); } catch (e) {}
     location.href = 'terms.html';
     return true;
   }
@@ -1033,6 +1059,12 @@
       line.appendChild(inboxLink);
       var dmc = dmCacheGet();
       if (dmc && dmc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + dmc.n + ')'));
+      line.appendChild(document.createTextNode(' · '));
+      var notifLink = el('a', 'identity-action', 'Notifications');
+      notifLink.href = 'community.html?notifications=1';
+      line.appendChild(notifLink);
+      var nc = notifCacheGet();
+      if (nc && nc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + nc.n + ')'));
       line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('Show my key', showKeyBox));
       line.appendChild(document.createTextNode(' · '));
@@ -1339,6 +1371,7 @@
       payload.website = section.querySelector('.hp').value;
       payload.tz = browserTz();
       payload.faith = getFaith();
+      payload.mentions = collectMentions(payload.body || '');
       payload.ipv4 = state.altIps.ipv4 || '';
       payload.ipv6 = state.altIps.ipv6 || '';
       return fetchRetry(API, {
@@ -1550,6 +1583,7 @@
       });
     });
     armBoardForm();
+    attachMentions(section.querySelector('.comment-form .comment-text'));
     fetchRetry(API + '/board/cat?cat=' + key + '&p=' + pageNum + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -1661,6 +1695,11 @@
         topicRss.title = 'Follow this topic with a feed reader';
         headEl.appendChild(topicRss);
         section.appendChild(headEl);
+        if (state.key) {
+          var wctrl = el('p', 'board-intro');
+          wctrl.appendChild(watchToggle(d.topic.id));
+          section.appendChild(wctrl);
+        }
         var list = el('div', 'comments-list');
         section.appendChild(list);
         if (d.page === 1) list.appendChild(commentNode(d.topic, false, { topicId: id }));
@@ -1707,6 +1746,7 @@
           });
         });
         armBoardForm();
+        attachMentions(section.querySelector('.comment-form .comment-text'));
         if (/^#comment-\d+$/.test(location.hash)) {
           var target = document.getElementById(location.hash.slice(1));
           if (target) target.scrollIntoView();
@@ -2285,6 +2325,95 @@
     return box;
   }
 
+  /* @mentions in the reply box. The very same directory and fuzzy scorer as the
+     Send-a-DM search, but triggered by an "@" token at the caret: a pick inserts
+     "@Name" and remembers that member's hash, and boardPost carries the hashes
+     whose token still stands in the body. Picking is the only source of truth,
+     since a pseudonym cannot be reversed to a hash. */
+  var mentionDir = null, mentionDirLoading = false;
+  var pendingMentions = [];
+  function ensureMentionDir(cb) {
+    if (mentionDir) return cb();
+    if (mentionDirLoading) return;
+    mentionDirLoading = true;
+    fetch(API + '/dm/directory' + freshParam('?'))
+      .then(function (r) { return r.json(); })
+      .then(function (d) { mentionDirLoading = false; if (d.ok) { mentionDir = d.users; cb(); } })
+      .catch(function () { mentionDirLoading = false; });
+  }
+  function collectMentions(text) {
+    var out = [];
+    for (var i = 0; i < pendingMentions.length; i++) {
+      var m = pendingMentions[i];
+      if (text.indexOf(m.token) > -1 && out.indexOf(m.hash) === -1) out.push(m.hash);
+    }
+    return out;
+  }
+  function attachMentions(textarea) {
+    if (!textarea || textarea.dataset.mentions) return;
+    textarea.dataset.mentions = '1';
+    pendingMentions = [];
+    /* A plain static container (not the absolute .dm-suggest) so the list flows
+       right below the box; its rows carry the shared suggestion styling. */
+    var sug = el('div', 'mention-suggest');
+    sug.hidden = true;
+    textarea.parentNode.insertBefore(sug, textarea.nextSibling);
+    var current = [], sel = 0, at = -1, timer = null;
+    function scan() {
+      var caret = textarea.selectionStart;
+      var m = /(^|\s)@([^\s@]{1,30})$/.exec(textarea.value.slice(0, caret));
+      if (!m) { current = []; at = -1; sug.hidden = true; return; }
+      at = caret - m[2].length - 1;
+      var q = m[2].toLowerCase();
+      ensureMentionDir(function () {
+        current = mentionDir
+          .filter(function (u) { return u.hash !== state.myHash; })
+          .map(function (u) { return { u: u, s: Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash))), label: dmLabel(u.hash, u.nick) }; })
+          .filter(function (x) { return x.s > 0; })
+          .sort(function (x, y) { return y.s - x.s || (x.label < y.label ? -1 : 1); })
+          .slice(0, 8).map(function (x) { return x.u; });
+        sel = 0;
+        render();
+      });
+    }
+    function render() {
+      sug.textContent = '';
+      if (!current.length) { sug.hidden = true; return; }
+      current.forEach(function (u, i) {
+        var r = el('a', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
+        r.href = '#';
+        r.appendChild(el('span', null, dmLabel(u.hash, u.nick)));
+        r.appendChild(el('span', 'dm-suggest-go', 'mention'));
+        r.addEventListener('mousedown', function (e) { e.preventDefault(); pick(u); });
+        sug.appendChild(r);
+      });
+      sug.hidden = false;
+    }
+    function pick(u) {
+      if (at < 0) return;
+      var caret = textarea.selectionStart;
+      var token = '@' + (u.nick || displayName(u.hash));
+      var v = textarea.value;
+      textarea.value = v.slice(0, at) + token + ' ' + v.slice(caret);
+      var np = at + token.length + 1;
+      try { textarea.setSelectionRange(np, np); } catch (e) {}
+      if (!pendingMentions.some(function (m) { return m.hash === u.hash && m.token === token; })) {
+        pendingMentions.push({ hash: u.hash, token: token });
+      }
+      current = []; at = -1; sug.hidden = true;
+      textarea.focus();
+    }
+    textarea.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(scan, 120); });
+    textarea.addEventListener('keydown', function (e) {
+      if (sug.hidden || !current.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, current.length - 1); render(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); render(); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (current[sel]) pick(current[sel]); }
+      else if (e.key === 'Escape') { current = []; sug.hidden = true; }
+    });
+    textarea.addEventListener('blur', function () { setTimeout(function () { sug.hidden = true; }, 200); });
+  }
+
   /* The member directory: everyone on the board, newest join first, searchable
      by nickname or assigned name across the whole roster (the full list rides
      in on one cached fetch, so a search narrows every page and the pager turns
@@ -2440,6 +2569,89 @@
         list.textContent = '';
         list.appendChild(el('p', 'comments-status', 'The inbox could not be loaded. Check your connection and reload the page.'));
       });
+  }
+
+  /* The notification list. Opening it is reading it: the server marks every row
+     read and the badge clears. Each row says who did what in which thread and
+     links to the exact post, riding the same find-pagination jump as any
+     permalink. Newest first, twenty to a page. */
+  function viewNotifications() {
+    document.title = 'Notifications | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Notifications']]);
+    if (!state.key) {
+      section.appendChild(el('p', 'comments-status', 'Notifications need an identity. Create one on the board front page.'));
+      return;
+    }
+    var list = el('div', 'board-topics');
+    list.textContent = 'Loading notifications...';
+    section.appendChild(list);
+    var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
+    fetchRetry(API + '/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, p: pageNum }),
+    }, [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (blockedOut(d)) return;
+        if (!d.ok) throw new Error(d.error || 'failed');
+        /* Reading the list clears it on the server; make the badge tell the truth. */
+        fetch(API + '/notifications/read', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key }),
+        }).then(function () { try { localStorage.removeItem(NOTIF_CACHE); } catch (e) {} notifUnreadCheck(); }).catch(function () {});
+        list.textContent = '';
+        if (!d.items.length) {
+          list.appendChild(el('p', 'comments-status', 'No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.'));
+          return;
+        }
+        d.items.forEach(function (it) {
+          var row = el('div', 'board-topic');
+          var left = el('div', 'board-topic-left');
+          var who = it.actor_nick || (it.actor_hash ? displayName(it.actor_hash) : 'Someone');
+          var verb = it.kind === 'mention' ? ' mentioned you in ' : ' replied in ';
+          var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), who + verb + (it.topic_title || 'a thread'));
+          a.href = 'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id;
+          left.appendChild(a);
+          if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
+          if (it.snippet) left.appendChild(el('div', 'board-intro', it.snippet));
+          row.appendChild(left);
+          row.appendChild(el('div', 'board-stats', fmtDateTime(it.created_at)));
+          list.appendChild(row);
+        });
+        function notifHref(i) { return 'community.html?notifications=1&p=' + i; }
+        var topBar = pageBar(d.total, d.per, d.page, notifHref);
+        if (topBar) section.insertBefore(topBar, list);
+        var botBar = pageBar(d.total, d.per, d.page, notifHref);
+        if (botBar) section.appendChild(botBar);
+      })
+      .catch(function () {
+        list.textContent = '';
+        list.appendChild(el('p', 'comments-status', 'Notifications could not be loaded. Check your connection and reload the page.'));
+      });
+  }
+
+  /* The manual Watch/Unwatch control in a topic header. Posting already watches
+     a thread; this lets a reader follow one they have not answered, or stop
+     following one they have. Its label reflects the current state, read once. */
+  function watchToggle(topicId) {
+    var a = el('a', 'trust-toggle board-watch', 'Watch');
+    a.href = '#';
+    a.title = 'Get a notification when someone replies here';
+    function setLabel(w) { a.textContent = w ? 'Unwatch' : 'Watch'; a.setAttribute('data-w', w ? '1' : '0'); }
+    function call(act) {
+      return fetch(API + '/watch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, topic: topicId, act: act }),
+      }).then(function (r) { return r.json(); });
+    }
+    call('status').then(function (d) { if (blockedOut(d)) return; if (d.ok) setLabel(d.watching); }).catch(function () {});
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      call(a.getAttribute('data-w') === '1' ? 'unwatch' : 'watch')
+        .then(function (d) { if (blockedOut(d)) return; if (d.ok) setLabel(d.watching); }).catch(function () {});
+    });
+    return a;
   }
 
   function dmMsgNode(m, otherLabel) {
@@ -2605,8 +2817,10 @@
       state.myHash = h;
       loadMyProfile();
       dmUnreadCheck();
+      notifUnreadCheck();
       var params = new URLSearchParams(location.search);
       if (params.get('ipbans')) return viewIpBans();
+      if (params.get('notifications')) return viewNotifications();
       if (params.get('inbox')) return viewInbox();
       if (params.get('users')) return viewUsers();
       if (params.get('dm')) return viewDm(params.get('dm'));
@@ -2678,6 +2892,7 @@
       load();
       loadMyProfile();
       dmUnreadCheck();
+      notifUnreadCheck();
     });
 
     /* Re-render the buttons whenever identity changes. Cheapest hook: watch

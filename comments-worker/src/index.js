@@ -38,6 +38,10 @@ const IP_KEEP_DAYS = 30;
    monthly cron hard-removes any older than DELETED_KEEP_DAYS. The prior
    month's backup, kept ninety days, still holds anything just removed. */
 const DELETED_KEEP_DAYS = 30;
+/* Read notifications are swept from the store after this many days; the badge
+   and list only ever care about the recent and the unread. */
+const NOTIFICATIONS_KEEP_DAYS = 30;
+const NOTIF_PER_PAGE = 20;
 /* The faith declaration every member picks at signup: one of three, stored as
    a short code, its display wording owned by the client. Kept in step with the
    FAITH map in comments.js. */
@@ -398,16 +402,18 @@ async function handlePost(request, env, ctx) {
   let page = null;
   let parentId = null;
   let title = null;
+  let topicAuthorHash = null;
   if (data.topic != null) {
     const topicId = Number(data.topic);
     if (!Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
     const topic = await env.DB.prepare(
-      "SELECT id, page, locked FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+      "SELECT id, page, locked, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
     ).bind(topicId).first();
     if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
     if (topic.locked) return json({ ok: false, error: 'This topic is locked.' }, 403);
     page = topic.page;
     parentId = topic.id;
+    topicAuthorHash = topic.author_hash;
   } else if (data.cat != null) {
     page = boardKey('board:' + String(data.cat));
     if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
@@ -457,6 +463,20 @@ async function handlePost(request, env, ctx) {
 
   if (boardKey(page)) await refreshTopicStats(env, parentId || inserted.id);
 
+  /* Notifications ride the board only: the author quietly watches the thread,
+     @mentions and (for a reply) the topic author and every watcher are told.
+     Deferred so a wide fan-out never delays the poster's response. */
+  if (boardKey(page)) {
+    ctx.waitUntil(deliverNotifications(env, {
+      authorHash, status,
+      topicId: parentId || inserted.id,
+      commentId: inserted.id,
+      isReply: parentId != null,
+      topicAuthorHash,
+      mentions: data.mentions,
+    }).catch((e) => console.log(JSON.stringify({ event: 'notify_failed', error: String(e) }))));
+  }
+
   /* Log the IPs behind this identity for the fingerprint drawer and paired
      bans: the verified connection address, and the other-family address the
      client reported. Best-effort, and never alters the reply. */
@@ -480,6 +500,48 @@ async function handlePost(request, env, ctx) {
     nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
     faith: prof && prof.faith || null,
     body, created_at: createdAt } }, 200);
+}
+
+/* Fan notifications out from a fresh board post. The author always comes to
+   watch the thread (even a held post, so approval finds them already subscribed).
+   Only a live post tells anyone: each validated @mention gets a 'mention', and a
+   reply gives the topic author and every watcher a 'reply', minus the replier and
+   anyone already mentioned so no one is told twice for one post. One batch write. */
+async function deliverNotifications(env, o) {
+  const now = Math.floor(Date.now() / 1000);
+  const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
+  const stmts = [];
+
+  if (o.authorHash) {
+    stmts.push(env.DB.prepare('INSERT OR IGNORE INTO watches (hash, topic_id, created_at) VALUES (?1, ?2, ?3)')
+      .bind(o.authorHash, o.topicId, now));
+  }
+
+  if (o.status === 'live') {
+    const mentions = [];
+    if (Array.isArray(o.mentions)) {
+      for (const m of o.mentions) {
+        const h = String(m || '').toLowerCase();
+        if (/^[0-9a-f]{64}$/.test(h) && h !== o.authorHash && mentions.indexOf(h) === -1) mentions.push(h);
+        if (mentions.length >= 10) break;
+      }
+    }
+    for (const h of mentions) stmts.push(env.DB.prepare(NOTIF).bind(h, 'mention', o.topicId, o.commentId, o.authorHash, now));
+
+    if (o.isReply) {
+      const skip = new Set(mentions);
+      if (o.authorHash) skip.add(o.authorHash);
+      const recips = new Set();
+      if (o.topicAuthorHash) recips.add(o.topicAuthorHash);
+      const rows = await env.DB.prepare('SELECT hash FROM watches WHERE topic_id = ?1').bind(o.topicId).all();
+      for (const r of (rows.results || [])) recips.add(r.hash);
+      for (const h of recips) {
+        if (h && !skip.has(h)) stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now));
+      }
+    }
+  }
+
+  if (stmts.length) await env.DB.batch(stmts);
 }
 
 async function handleSelfDelete(request, env) {
@@ -1309,6 +1371,102 @@ async function handleDmUnread(request, env) {
   return json({ ok: true, unread: row.n || 0 }, 200);
 }
 
+/* The notification badge count: unread rows for this reader, one indexed COUNT.
+   Like the DM poll it fires at most once per ninety seconds and doubles as the
+   logout trip for a locked or banned identity. */
+async function handleNotifUnread(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const row = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
+  ).bind(me).first();
+  return json({ ok: true, unread: row.n || 0 }, 200);
+}
+
+/* The notification list, newest first, paged by twenty. Each row carries the
+   thread title, a snippet of the post, and the actor's nick so the client can
+   render "X replied/mentioned you in <title>" and jump to the exact comment. */
+async function handleNotifList(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  const rows = await env.DB.prepare(
+    'SELECT n.id, n.kind, n.topic_id, n.comment_id, n.actor_hash, n.created_at, n.read_at, ' +
+    't.title AS topic_title, pr.nick AS actor_nick, substr(c.body, 1, 140) AS snippet ' +
+    'FROM notifications n ' +
+    'LEFT JOIN comments t ON t.id = n.topic_id ' +
+    'LEFT JOIN comments c ON c.id = n.comment_id ' +
+    'LEFT JOIN profiles pr ON pr.hash = n.actor_hash ' +
+    'WHERE n.recipient_hash = ?1 ORDER BY n.id DESC LIMIT ?2 OFFSET ?3'
+  ).bind(me, NOTIF_PER_PAGE, (p - 1) * NOTIF_PER_PAGE).all();
+  const totals = await env.DB.prepare(
+    'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END), 0) AS unread ' +
+    'FROM notifications WHERE recipient_hash = ?1'
+  ).bind(me).first();
+  return json({ ok: true, items: rows.results, total: totals.n || 0,
+    unread_total: totals.unread || 0, page: p, per: NOTIF_PER_PAGE }, 200);
+}
+
+/* Opening the list marks everything read, the notifications analogue of opening
+   a DM thread. One write; the badge clears on the client's next poll. */
+async function handleNotifRead(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  await env.DB.prepare(
+    'UPDATE notifications SET read_at = ?2 WHERE recipient_hash = ?1 AND read_at IS NULL'
+  ).bind(me, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true }, 200);
+}
+
+/* Watch, unwatch, or read the state of a thread. Posting a reply auto-watches;
+   this is the manual toggle in the topic header. 'status' is a cheap read, so it
+   rides READ_LIMIT; the mutations ride the stricter write limit. */
+async function handleWatch(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  const topicId = Number(data.topic);
+  const act = String(data.act || 'status');
+  if (!key || !Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const limiter = act === 'status' ? env.READ_LIMIT : env.POST_LIMIT;
+  const { success } = await limiter.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  if (act === 'watch') {
+    await env.DB.prepare('INSERT OR IGNORE INTO watches (hash, topic_id, created_at) VALUES (?1, ?2, ?3)')
+      .bind(me, topicId, Math.floor(Date.now() / 1000)).run();
+  } else if (act === 'unwatch') {
+    await env.DB.prepare('DELETE FROM watches WHERE hash = ?1 AND topic_id = ?2').bind(me, topicId).run();
+  }
+  const row = await env.DB.prepare('SELECT 1 AS w FROM watches WHERE hash = ?1 AND topic_id = ?2').bind(me, topicId).first();
+  return json({ ok: true, watching: row ? 1 : 0 }, 200);
+}
+
 /* Block and unblock, owner-side only. */
 async function handleDmBlock(request, env) {
   let data;
@@ -1715,6 +1873,38 @@ async function sweepDms(env) {
   }
 }
 
+/* Clear read notifications older than their window, then sweep dead weight: a
+   notification whose post is gone, and a watch on a vanished thread. Unread
+   notifications are kept however old, since the reader has not seen them yet.
+   Each statement is guarded so one failure never stops the backup behind it. */
+async function pruneNotifications(env) {
+  const cutoff = Math.floor(Date.now() / 1000) - NOTIFICATIONS_KEEP_DAYS * 86400;
+  try {
+    const r = await env.DB.prepare(
+      'DELETE FROM notifications WHERE read_at IS NOT NULL AND created_at < ?1'
+    ).bind(cutoff).run();
+    console.log(JSON.stringify({ event: 'notif_prune', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'notif_prune_failed', error: String(e) }));
+  }
+  try {
+    const r = await env.DB.prepare(
+      'DELETE FROM notifications WHERE comment_id NOT IN (SELECT id FROM comments)'
+    ).run();
+    console.log(JSON.stringify({ event: 'notif_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'notif_orphan_sweep_failed', error: String(e) }));
+  }
+  try {
+    const r = await env.DB.prepare(
+      'DELETE FROM watches WHERE topic_id NOT IN (SELECT id FROM comments WHERE parent_id IS NULL)'
+    ).run();
+    console.log(JSON.stringify({ event: 'watch_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'watch_orphan_sweep_failed', error: String(e) }));
+  }
+}
+
 async function runBackup(env) {
   if (!env.BACKUPS) return { error: 'BACKUPS bucket not bound; enable R2 and redeploy.' };
   const sql = await dumpDatabase(env);
@@ -1957,6 +2147,10 @@ export default {
       if (path === '/api/comments/dm/block' && request.method === 'POST') return await handleDmBlock(request, env);
       if (path === '/api/comments/dm/delete' && request.method === 'POST') return await handleDmDelete(request, env);
       if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);
+      if (path === '/api/comments/notifications/unread' && request.method === 'POST') return await handleNotifUnread(request, env);
+      if (path === '/api/comments/notifications/read' && request.method === 'POST') return await handleNotifRead(request, env);
+      if (path === '/api/comments/notifications' && request.method === 'POST') return await handleNotifList(request, env);
+      if (path === '/api/comments/watch' && request.method === 'POST') return await handleWatch(request, env);
       if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);
       if (path === '/api/comments/avatar/delete' && request.method === 'POST') return await handleAvatarDelete(request, env);
@@ -1975,14 +2169,15 @@ export default {
   },
   /* Monthly cron (1st, 00:00 UTC): prune the idle Known-IPs rows, clear
      soft-deleted comments past their window and the replies they orphaned,
-     sweep stray DM rows, then back the database up to R2 so the dump reflects
-     the cleaned state (the prior month's backup, kept ninety days, still holds
-     what was just removed). */
+     sweep stray DM rows, clear read notifications and their dead weight, then
+     back the database up to R2 so the dump reflects the cleaned state (the prior
+     month's backup, kept ninety days, still holds what was just removed). */
   async scheduled(event, env, ctx) {
     ctx.waitUntil(
       pruneIdentityIps(env)
         .then(() => pruneComments(env))
         .then(() => sweepDms(env))
+        .then(() => pruneNotifications(env))
         .then(() => runBackup(env))
     );
   },
