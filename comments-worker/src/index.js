@@ -105,8 +105,21 @@ function parseOS(ua) {
   return ua ? 'Other' : '';
 }
 
-function isAdminHash(env, hash) {
-  return (env.ADMIN_HASHES || '').split(',').includes(hash);
+/* The owner set, from the ADMIN_HASHES env var: permanent admins that seed the
+   platform and can never be removed through the admin console, so the board can
+   never lock itself out of moderation. */
+function rootAdmins(env) {
+  return (env.ADMIN_HASHES || '').split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/* Admin status is data-driven: an env owner, or anyone in the admins table
+   (added and removed from the admin console). Async, since the table is a DB
+   read; an owner short-circuits before that read. */
+async function isAdminHash(env, hash) {
+  if (!hash) return false;
+  if (rootAdmins(env).includes(hash)) return true;
+  const row = await env.DB.prepare('SELECT 1 AS a FROM admins WHERE hash = ?1').bind(hash).first();
+  return !!row;
 }
 
 function normalizePage(raw) {
@@ -577,7 +590,7 @@ async function handleSelfDelete(request, env) {
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
-  const isAdmin = isAdminHash(env, authorHash);
+  const isAdmin = await isAdminHash(env, authorHash);
   const row = isAdmin
     ? await env.DB.prepare(
         "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted' RETURNING page, parent_id"
@@ -751,7 +764,7 @@ async function handleMeta(request, env) {
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   /* A profile asks by identity hash, a page by page name. Same drawer either
      way, so both return { meta: [...], identities: {...} }. */
   const hashParam = String(data.hash || '');
@@ -1049,7 +1062,7 @@ async function handleModerate(request, env) {
   if (!key || !Number.isInteger(id) || id < 1 || !['lock', 'unlock', 'delete', 'sticky', 'unsticky'].includes(act)) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
-  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   const topic = await env.DB.prepare(
     "SELECT id, page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status != 'deleted'"
   ).bind(id).first();
@@ -1085,7 +1098,7 @@ async function handleMove(request, env) {
   const id = Number(data.id);
   if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const adminHash = await sha256hex(key);
-  if (!isAdminHash(env, adminHash)) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await isAdminHash(env, adminHash))) return json({ ok: false, error: 'No.' }, 403);
   const newPage = boardKey('board:' + String(data.cat || ''));
   if (!newPage) return json({ ok: false, error: 'Unknown category.' }, 400);
   const topic = await env.DB.prepare(
@@ -1122,7 +1135,7 @@ async function handleTrust(request, env) {
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (data.trusted) {
     await env.DB.prepare('INSERT OR IGNORE INTO trusted (hash, created_at) VALUES (?1, ?2)')
       .bind(hash, Math.floor(Date.now() / 1000)).run();
@@ -1147,7 +1160,7 @@ async function handleAudit(request, env) {
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   /* Two weeks of activity in each of the two worlds, newest first, each row
      carrying what the client needs to build a jump link straight to it. A
      generous cap the client shows through a scroll box, so the admin sees the
@@ -1208,7 +1221,7 @@ async function handleProfileGet(request, env, url) {
       faith: row ? (row.faith || null) : null,
       posts: counts[hash] || 0,
       assigned: displayName(hash),
-      admin: isAdminHash(env, hash),
+      admin: await isAdminHash(env, hash),
     },
   }, 200, cacheHeader(url));
 }
@@ -1273,7 +1286,7 @@ async function handleProfileSave(request, env) {
     ok: true,
     profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
       avatar: av && av.avatar || null, faith: av && av.faith || null,
-      assigned: displayName(authorHash), admin: isAdminHash(env, authorHash) },
+      assigned: displayName(authorHash), admin: await isAdminHash(env, authorHash) },
   }, 200);
 }
 
@@ -1292,7 +1305,7 @@ async function handleProfileClear(request, env) {
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (env.AVATARS) await env.AVATARS.delete('avatars/' + hash);
   await env.DB.prepare('UPDATE profiles SET nick = NULL, bio = NULL, signature = NULL, avatar = NULL, updated_at = ?2 WHERE hash = ?1')
     .bind(hash, Math.floor(Date.now() / 1000)).run();
@@ -2244,7 +2257,7 @@ async function handleBackup(request, env) {
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  if (!isAdminHash(env, await sha256hex(key))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   const result = await runBackup(env);
   return json({ ok: true, backup: result }, 200);
 }
@@ -2253,7 +2266,7 @@ async function handleBackup(request, env) {
    ADMIN_HASHES; the old signed email links are gone entirely. ---- */
 
 async function requireAdmin(env, key) {
-  return !!key && isAdminHash(env, await sha256hex(key));
+  return !!key && (await isAdminHash(env, await sha256hex(key)));
 }
 
 /* Lock or unlock an identity: a reversible disable that logs the holder out
@@ -2442,6 +2455,69 @@ async function handlePending(request, env) {
   return json({ ok: true, pending: rows.results }, 200);
 }
 
+/* The admin roster for the admin console: the env owners first (marked, never
+   removable here), then everyone added to the admins table, each carried with
+   the name they post under so the console reads in people, not hashes. */
+async function handleAdmins(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const list = [];
+  const seen = new Set();
+  for (const h of rootAdmins(env)) {
+    if (!/^[0-9a-f]{64}$/.test(h) || seen.has(h)) continue;
+    list.push({ hash: h, root: true, created_at: null });
+    seen.add(h);
+  }
+  const dyn = await env.DB.prepare('SELECT hash, created_at FROM admins ORDER BY created_at DESC').all();
+  for (const r of (dyn.results || [])) {
+    if (seen.has(r.hash)) continue;
+    list.push({ hash: r.hash, root: false, created_at: r.created_at });
+    seen.add(r.hash);
+  }
+  /* Resolve each admin's chosen nick in one query; the assigned pseudonym is
+     pure from the hash, so it fills the rest. */
+  if (list.length) {
+    const ph = list.map((_, i) => '?' + (i + 1)).join(',');
+    const rows = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')')
+      .bind(...list.map((a) => a.hash)).all();
+    const nick = {};
+    for (const r of (rows.results || [])) nick[r.hash] = r.nick;
+    for (const a of list) { a.nick = nick[a.hash] || null; a.assigned = displayName(a.hash); }
+  }
+  return json({ ok: true, admins: list }, 200);
+}
+
+/* Grant or revoke admin. Admin-only, so an existing admin promotes a member
+   (picked by @-mention in the console) or drops one. An owner (env) is never
+   removed here and never needs adding; both are no-ops that report success. */
+async function handleAdmin(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const hash = String(data.hash || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = key ? await sha256hex(key) : '';
+  if (!(await isAdminHash(env, me))) return json({ ok: false, error: 'No.' }, 403);
+  if (data.admin) {
+    if (rootAdmins(env).includes(hash)) return json({ ok: true, admin: true }, 200);
+    await env.DB.prepare('INSERT OR IGNORE INTO admins (hash, added_by, created_at) VALUES (?1, ?2, ?3)')
+      .bind(hash, me, Math.floor(Date.now() / 1000)).run();
+    return json({ ok: true, admin: true }, 200);
+  }
+  if (rootAdmins(env).includes(hash)) {
+    return json({ ok: false, error: 'That is an owner account and cannot be removed here.' }, 400);
+  }
+  await env.DB.prepare('DELETE FROM admins WHERE hash = ?1').bind(hash).run();
+  return json({ ok: true, admin: false }, 200);
+}
+
 export default {
   async fetch(request, env, ctx) {
     try {
@@ -2498,6 +2574,8 @@ export default {
       if (path === '/api/comments/pending' && request.method === 'POST') return await handlePending(request, env);
       if (path === '/api/comments/report' && request.method === 'POST') return await handleReport(request, env);
       if (path === '/api/comments/report/dismiss' && request.method === 'POST') return await handleReportDismiss(request, env);
+      if (path === '/api/comments/admins' && request.method === 'POST') return await handleAdmins(request, env);
+      if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);
     } catch (err) {
       console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));
