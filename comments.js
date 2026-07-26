@@ -65,24 +65,52 @@
      including any other http(s) address, stays inert text. */
   var TRUSTED_LINK = /https:\/\/(?:www\.)?merecatholicity\.com(?:\/[^\s<>"']*)?/gi;
 
-  /* Render a body as text with only trusted, same-site links made clickable.
-     Built entirely from text nodes and anchors whose href is the matched
-     merecatholicity.com URL, so no markup is ever interpreted, nothing loads
-     from another host, and no offsite link becomes clickable. Use this in
-     place of a plain textContent wherever a user body is shown. */
-  function fillBody(node, text) {
-    node.textContent = '';
-    var s = String(text == null ? '' : text);
+  /* Append text to a node with only trusted, same-site links made clickable:
+     the matched merecatholicity.com URL becomes an anchor, everything else a
+     plain text node, so no markup is ever interpreted and no offsite link
+     becomes clickable. Shared by the body renderer and each quoted line. */
+  function appendLinked(target, str) {
+    var s = String(str == null ? '' : str);
     var last = 0, m;
     TRUSTED_LINK.lastIndex = 0;
     while ((m = TRUSTED_LINK.exec(s))) {
-      if (m.index > last) node.appendChild(document.createTextNode(s.slice(last, m.index)));
+      if (m.index > last) target.appendChild(document.createTextNode(s.slice(last, m.index)));
       var a = el('a', 'body-link', m[0]);
       a.href = m[0];
-      node.appendChild(a);
+      target.appendChild(a);
       last = m.index + m[0].length;
     }
-    if (last < s.length) node.appendChild(document.createTextNode(s.slice(last)));
+    if (last < s.length) target.appendChild(document.createTextNode(s.slice(last)));
+  }
+
+  /* Render a body as text (trusted links clickable), with runs of lines that
+     begin with ">" drawn as a blockquote — the quoting convention the Quote
+     button writes and anyone may type by hand. Built entirely from text nodes
+     and anchors, never innerHTML, so a body can never inject markup. Use this
+     in place of a plain textContent wherever a user body is shown. */
+  function fillBody(node, text) {
+    node.textContent = '';
+    var lines = String(text == null ? '' : text).split('\n');
+    var i = 0;
+    while (i < lines.length) {
+      if (/^>/.test(lines[i])) {
+        var quoted = [];
+        while (i < lines.length && /^>/.test(lines[i])) {
+          quoted.push(lines[i].replace(/^>\s?/, ''));
+          i++;
+        }
+        var bq = el('blockquote', 'comment-quote');
+        appendLinked(bq, quoted.join('\n'));
+        node.appendChild(bq);
+      } else {
+        var plain = [];
+        while (i < lines.length && !/^>/.test(lines[i])) {
+          plain.push(lines[i]);
+          i++;
+        }
+        appendLinked(node, plain.join('\n'));
+      }
+    }
     return node;
   }
 
@@ -325,7 +353,69 @@
 
   /* ---- Rendering ---- */
 
-  function commentNode(c, pending) {
+  /* The reader's current selection, kept only when it lies inside this post's
+     body — read on mousedown, before the Quote click can collapse it. Empty
+     when there is no in-post selection, so quoteInto falls back to the whole
+     post. */
+  var quotedSelection = '';
+  function selectionInPost(c) {
+    try {
+      var sel = window.getSelection && window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return '';
+      var post = document.getElementById('comment-' + c.id);
+      var bodyEl = post && post.querySelector('.comment-body');
+      if (!bodyEl) return '';
+      if (!bodyEl.contains(sel.getRangeAt(0).commonAncestorContainer)) return '';
+      return sel.toString().replace(/^\s+|\s+$/g, '').slice(0, 1000);
+    } catch (e) { return ''; }
+  }
+
+  /* A short, clean excerpt: trimmed, cut on a word boundary near n, an ellipsis
+     when shortened. Internal newlines are kept so a multi-line quote stays one. */
+  function truncate(s, n) {
+    s = String(s == null ? '' : s).replace(/^\s+|\s+$/g, '');
+    if (s.length <= n) return s;
+    var cut = s.slice(0, n);
+    var sp = cut.lastIndexOf(' ');
+    if (sp > n * 0.6) cut = cut.slice(0, sp);
+    return cut.replace(/\s+$/, '') + '…';
+  }
+
+  /* The absolute permalink to a post, in the one form the autolink trusts and
+     the board's find-logic resolves to the right page: a board post keys off
+     its topic root, a site-page comment off its page path. */
+  function permalinkFor(c, ctx) {
+    var origin = 'https://merecatholicity.com';
+    if (ctx && ctx.topicId) {
+      return origin + '/community.html?topic=' + ctx.topicId + '#comment-' + c.id;
+    }
+    return origin + ((ctx && ctx.page) || pagePath()) + '#comment-' + c.id;
+  }
+
+  /* Drop a quote of post c into the reply composer: an attribution line with
+     the permalink, then the excerpt, every line ">"-prefixed so it renders as
+     one blockquote. Quotes append, so several can stack for a point-by-point
+     reply, and never push the body past its 4000-char cap. */
+  function quoteInto(c, excerpt, url) {
+    var ta = section.querySelector('.comment-form .comment-text');
+    if (!ta) return;
+    var name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
+    var quoted = String(excerpt == null ? '' : excerpt).split('\n')
+      .map(function (ln) { return '> ' + ln; }).join('\n');
+    var block = '> ' + name + ' wrote, ' + url + '\n' + quoted + '\n\n';
+    var existing = ta.value;
+    var sep = !existing ? '' : (/\n\n$/.test(existing) ? '' : (/\n$/.test(existing) ? '\n' : '\n\n'));
+    var addition = sep + block;
+    var room = 4000 - existing.length;
+    if (room <= 0) { ta.focus(); return; }
+    if (addition.length > room) addition = addition.slice(0, room);
+    ta.value = existing + addition;
+    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
+    ta.focus();
+    ta.scrollIntoView({ block: 'center' });
+  }
+
+  function commentNode(c, pending, quoteCtx) {
     var article = el('article', 'comment' + (pending ? ' comment-pending' : ''));
     article.id = 'comment-' + c.id;
     /* Machine-readable notice that this is a visitor's comment, not the
@@ -364,6 +454,19 @@
     var date = el('a', 'comment-date', fmtDateTime(c.created_at));
     date.href = '#comment-' + c.id;
     head.appendChild(date);
+    /* Anyone may quote any post into the reply box, so unlike edit/delete this
+       is ungated. The selection is grabbed on mousedown, before the click can
+       clear it; with none, the whole post (trimmed) is quoted. */
+    var quote = el('a', 'comment-quote-link', 'quote');
+    quote.href = '#';
+    quote.addEventListener('mousedown', function () { quotedSelection = selectionInPost(c); });
+    quote.addEventListener('click', function (e) {
+      e.preventDefault();
+      var excerpt = quotedSelection || truncate(c.body, 400);
+      quotedSelection = '';
+      quoteInto(c, excerpt, permalinkFor(c, quoteCtx));
+    });
+    head.appendChild(quote);
     if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
     if (c.author_hash && c.author_hash === state.myHash) {
       var ed = el('a', 'comment-edit', 'edit');
@@ -505,7 +608,7 @@
         state.anonAllowed = !!d.anon;
         renderIdentity();
         list.textContent = '';
-        d.comments.forEach(function (c) { list.appendChild(commentNode(c, false)); });
+        d.comments.forEach(function (c) { list.appendChild(commentNode(c, false, { page: pagePath() })); });
         section.querySelector('.comments-title-text').textContent =
           d.comments.length ? 'Comments (' + d.comments.length + ')' : 'Comments';
         setStatus(d.comments.length ? '' : 'No comments yet. Yours can be the first.');
@@ -1012,7 +1115,7 @@
       if (blockedOut(d)) return;
       if (!d.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
       var list = section.querySelector('.comments-list');
-      list.appendChild(commentNode(d.comment, d.status === 'pending'));
+      list.appendChild(commentNode(d.comment, d.status === 'pending', { page: pagePath() }));
       try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
       textarea.value = '';
       setStatus('');
@@ -1460,8 +1563,8 @@
         section.appendChild(headEl);
         var list = el('div', 'comments-list');
         section.appendChild(list);
-        if (d.page === 1) list.appendChild(commentNode(d.topic, false));
-        d.replies.forEach(function (c) { list.appendChild(commentNode(c, false)); });
+        if (d.page === 1) list.appendChild(commentNode(d.topic, false, { topicId: id }));
+        d.replies.forEach(function (c) { list.appendChild(commentNode(c, false, { topicId: id })); });
         function topicHref(i) { return 'community.html?topic=' + id + '&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, topicHref);
         if (topBar) section.insertBefore(topBar, list);
@@ -1494,7 +1597,7 @@
             var replyPage = Math.ceil((d.total + 1) / d.per);
             if (replyPage === d.page) {
               d.total += 1;
-              var node = commentNode(d2.comment, false);
+              var node = commentNode(d2.comment, false, { topicId: id });
               list.appendChild(node);
               status.textContent = 'Posted.';
               node.scrollIntoView();

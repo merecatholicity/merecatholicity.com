@@ -588,6 +588,20 @@ section.comments { max-width: 34rem; margin: 3rem auto 1.5rem; }
 .comment-date { color: #666; margin-left: 0.7em; font-size: 0.9em; }
 a.comment-delete { color: #666; margin-left: 0.9em; font-size: 0.85em; }
 .comment-body { white-space: pre-wrap; overflow-wrap: break-word; margin-top: 0.35em; }
+/* A quoted excerpt inside a comment body: runs of ">"-prefixed lines that
+   fillBody turns into a blockquote. Overrides the article blockquote look. */
+blockquote.comment-quote {
+  margin: 0.5em 0;
+  padding: 0.15em 0.8em;
+  border-left: 3px solid var(--maroon);
+  background: rgba(139, 26, 26, 0.05);
+  color: #555;
+  font-style: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+a.comment-quote-link { color: #666; margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
+a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .comment-pending { opacity: 0.75; }
 .comment-note { font-style: italic; color: #666; font-size: 0.9rem; }
 .comments-status, .form-status { color: #666; font-size: 0.95rem; min-height: 1.3em; }
