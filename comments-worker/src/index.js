@@ -1572,6 +1572,104 @@ async function handleWatch(request, env) {
   return json({ ok: true, watching: row ? 1 : 0 }, 200);
 }
 
+/* Board read state ("new since last visit"). A thread reads as new when its
+   last activity is newer than the reader's read stamp for it, or than the floor
+   (the topic_id=0 row) when they have never opened it. */
+async function boardFloor(env, me) {
+  const row = await env.DB.prepare('SELECT read_at FROM thread_reads WHERE hash = ?1 AND topic_id = 0').bind(me).first();
+  return row ? row.read_at : null;
+}
+
+/* Unread summary for the board index. On a reader's first-ever call the floor is
+   set to now, so nothing before this visit reads as new (start-all-read). */
+async function handleBoardUnread(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  let floor = await boardFloor(env, me);
+  if (floor === null) {
+    floor = Math.floor(Date.now() / 1000);
+    try { await env.DB.prepare('INSERT OR IGNORE INTO thread_reads (hash, topic_id, read_at) VALUES (?1, 0, ?2)').bind(me, floor).run(); } catch (e) {}
+  }
+  const rows = await env.DB.prepare(
+    'SELECT c.page AS page, COUNT(*) AS n FROM comments c ' +
+    'LEFT JOIN thread_reads tr ON tr.hash = ?1 AND tr.topic_id = c.id ' +
+    "WHERE c.parent_id IS NULL AND c.status = 'live' AND c.page LIKE 'board:%' " +
+    'AND COALESCE(c.last_at, c.created_at) > COALESCE(tr.read_at, ?2) GROUP BY c.page'
+  ).bind(me, floor).all();
+  const byCat = {};
+  let total = 0;
+  for (const r of (rows.results || [])) { byCat[String(r.page).slice(6)] = r.n; total += r.n; }
+  return json({ ok: true, total, byCat }, 200);
+}
+
+/* The unread topic ids in one category, so the listing can mark them "new". */
+async function handleBoardReads(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const catPage = boardKey('board:' + String(data.cat || ''));
+  if (!key || !catPage) return json({ ok: true, unread: [] }, 200);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const floor = (await boardFloor(env, me)) || 0;
+  const rows = await env.DB.prepare(
+    'SELECT c.id FROM comments c LEFT JOIN thread_reads tr ON tr.hash = ?1 AND tr.topic_id = c.id ' +
+    "WHERE c.page = ?2 AND c.parent_id IS NULL AND c.status = 'live' " +
+    'AND COALESCE(c.last_at, c.created_at) > COALESCE(tr.read_at, ?3)'
+  ).bind(me, catPage, floor).all();
+  return json({ ok: true, unread: (rows.results || []).map((r) => r.id) }, 200);
+}
+
+/* Mark one thread read — fired on opening a topic. */
+async function handleBoardRead(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const topicId = Number(data.topic);
+  if (!key || !Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  await env.DB.prepare(
+    'INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, ?2, ?3) ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?3'
+  ).bind(me, topicId, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true }, 200);
+}
+
+/* Mark everything read: raise the floor to now and drop the per-thread rows it
+   now subsumes, so the table stays lean. */
+async function handleBoardReadAll(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare('INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, 0, ?2) ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?2').bind(me, now).run();
+  await env.DB.prepare('DELETE FROM thread_reads WHERE hash = ?1 AND topic_id != 0 AND read_at <= ?2').bind(me, now).run();
+  return json({ ok: true }, 200);
+}
+
 /* Block and unblock, owner-side only. */
 async function handleDmBlock(request, env) {
   let data;
@@ -2022,6 +2120,15 @@ async function pruneNotifications(env) {
   } catch (e) {
     console.log(JSON.stringify({ event: 'watch_orphan_sweep_failed', error: String(e) }));
   }
+  /* Board read stamps for vanished threads (the floor row, topic_id 0, is kept). */
+  try {
+    const r = await env.DB.prepare(
+      'DELETE FROM thread_reads WHERE topic_id != 0 AND topic_id NOT IN (SELECT id FROM comments WHERE parent_id IS NULL)'
+    ).run();
+    console.log(JSON.stringify({ event: 'thread_reads_sweep', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'thread_reads_sweep_failed', error: String(e) }));
+  }
 }
 
 async function runBackup(env) {
@@ -2272,6 +2379,10 @@ export default {
       if (path === '/api/comments/notifications/read' && request.method === 'POST') return await handleNotifRead(request, env);
       if (path === '/api/comments/notifications' && request.method === 'POST') return await handleNotifList(request, env);
       if (path === '/api/comments/watch' && request.method === 'POST') return await handleWatch(request, env);
+      if (path === '/api/comments/board/unread' && request.method === 'POST') return await handleBoardUnread(request, env);
+      if (path === '/api/comments/board/reads' && request.method === 'POST') return await handleBoardReads(request, env);
+      if (path === '/api/comments/board/read' && request.method === 'POST') return await handleBoardRead(request, env);
+      if (path === '/api/comments/board/read-all' && request.method === 'POST') return await handleBoardReadAll(request, env);
       if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);
       if (path === '/api/comments/avatar/delete' && request.method === 'POST') return await handleAvatarDelete(request, env);
