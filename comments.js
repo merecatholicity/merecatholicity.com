@@ -2067,6 +2067,50 @@
   /* Read view: an avatar placeholder, the primary name (nick or assigned) with
      the assigned pseudonym muted beneath when a nick is set, then bio and
      signature. The owner gets an Edit button that swaps in the form. */
+  /* The "recent posts" list on a profile: a member's own live forum posts,
+     newest first, each linking to the exact post, paged in place. */
+  function renderProfilePosts(card, hash) {
+    var wrap = el('div', 'profile-posts');
+    card.appendChild(el('h3', 'profile-label', 'Recent posts'));
+    card.appendChild(wrap);
+    var list = el('div', 'board-topics');
+    list.textContent = 'Loading...';
+    wrap.appendChild(list);
+    var pagerHost = el('div');
+    wrap.appendChild(pagerHost);
+    var st = { page: 1 };
+    function draw() {
+      list.textContent = 'Loading...';
+      pagerHost.textContent = '';
+      fetchRetry(API + '/board/author?hash=' + hash + '&p=' + st.page + freshParam('&'), freshOpts(), [1000, 3000])
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error('failed');
+          list.textContent = '';
+          if (!d.items.length) {
+            list.appendChild(el('p', 'comments-status', st.page > 1 ? 'No more posts.' : 'No forum posts yet.'));
+            return;
+          }
+          d.items.forEach(function (it) {
+            var row = el('div', 'board-topic');
+            var left = el('div', 'board-topic-left');
+            var a = el('a', 'board-topic-title', it.title || 'a thread');
+            a.href = 'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id;
+            left.appendChild(a);
+            if (it.snippet) left.appendChild(el('div', 'board-intro', it.snippet));
+            row.appendChild(left);
+            var ce = catByKey(it.cat);
+            row.appendChild(el('div', 'board-stats', (ce ? ce[1] : it.cat) + ' · ' + fmtDateTime(it.created_at)));
+            list.appendChild(row);
+          });
+          var bar = pageBar(d.total, d.per, d.page, null, function (n) { st.page = n; draw(); window.scrollTo(0, 0); });
+          if (bar) pagerHost.appendChild(bar);
+        })
+        .catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'Recent posts could not be loaded.')); });
+    }
+    draw();
+  }
+
   function renderProfile(card, p, editable) {
     card.textContent = '';
     var headRow = el('div', 'profile-head');
@@ -2120,6 +2164,8 @@
       });
       card.appendChild(muteBtn);
     }
+    /* A member's own recent forum posts, so a reader can follow a thinker. */
+    renderProfilePosts(card, p.hash);
     /* Admins get the very same user-fingerprint drawer here as on a post,
        driven by this identity's hash. Everyone else sees nothing. */
     annotateProfileMeta(p.hash, card);
