@@ -183,6 +183,23 @@
   function setFaith(code) {
     try { if (FAITH[code]) localStorage.setItem(FAITH_STORE, code); } catch (e) {}
   }
+
+  /* Mute is self-moderation for a pseudonymous room: a purely local list of
+     hashes whose posts collapse for you alone. No server, orthogonal to the DM
+     block (which holds their messages to you) — this only hides their forum
+     posts, on this browser. */
+  var MUTED_STORE = 'mc-muted';
+  function getMuted() {
+    try { var a = JSON.parse(localStorage.getItem(MUTED_STORE)); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  function isMuted(hash) { return !!hash && getMuted().indexOf(hash) !== -1; }
+  function toggleMute(hash) {
+    if (!hash) return false;
+    var a = getMuted(), i = a.indexOf(hash);
+    if (i === -1) a.push(hash); else a.splice(i, 1);
+    try { localStorage.setItem(MUTED_STORE, JSON.stringify(a)); } catch (e) {}
+    return i === -1;
+  }
   /* The "I hold to:" radio group, one row per faith, used at signup and in the
      profile editor. onChange fires with the chosen code. */
   function faithRadios(current, onChange) {
@@ -525,7 +542,22 @@
     return wrap;
   }
 
-  function commentNode(c, pending, quoteCtx) {
+  function commentNode(c, pending, quoteCtx, reveal) {
+    /* A muted member's post shows only a slim line until you choose to see it. */
+    if (!reveal && c.author_hash && c.author_hash !== state.myHash && isMuted(c.author_hash)) {
+      var ph = el('div', 'board-intro comment-muted');
+      ph.id = 'comment-' + c.id;
+      ph.appendChild(document.createTextNode('A muted member posted here. '));
+      var show = el('a', 'comment-quote-link', 'show');
+      show.href = '#';
+      show.addEventListener('click', function (e) {
+        e.preventDefault();
+        var full = commentNode(c, pending, quoteCtx, true);
+        if (ph.parentNode) ph.parentNode.replaceChild(full, ph);
+      });
+      ph.appendChild(show);
+      return ph;
+    }
     var article = el('article', 'comment' + (pending ? ' comment-pending' : ''));
     article.id = 'comment-' + c.id;
     /* Machine-readable notice that this is a visitor's comment, not the
@@ -559,6 +591,17 @@
       dm.href = 'community.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
       head.appendChild(dm);
+      /* Mute this member's posts for yourself. Reloading re-renders the view so
+         the mute takes at once, everywhere they appear. */
+      var muteLink = el('a', 'comment-quote-link', isMuted(c.author_hash) ? 'unmute' : 'mute');
+      muteLink.href = '#';
+      muteLink.title = 'Hide this member’s posts, for you only';
+      muteLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        toggleMute(c.author_hash);
+        location.reload();
+      });
+      head.appendChild(muteLink);
     }
     /* The date doubles as the comment's shareable permalink. */
     var date = el('a', 'comment-date', fmtDateTime(c.created_at));
@@ -2069,6 +2112,13 @@
         location.href = 'community.html?dm=' + p.hash;
       });
       card.appendChild(dmBtn);
+      var muteBtn = el('button', 'btn btn-anon', isMuted(p.hash) ? 'Unmute this member' : 'Mute this member');
+      muteBtn.type = 'button';
+      muteBtn.addEventListener('click', function () {
+        toggleMute(p.hash);
+        muteBtn.textContent = isMuted(p.hash) ? 'Unmute this member' : 'Mute this member';
+      });
+      card.appendChild(muteBtn);
     }
     /* Admins get the very same user-fingerprint drawer here as on a post,
        driven by this identity's hash. Everyone else sees nothing. */
