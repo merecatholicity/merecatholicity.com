@@ -331,14 +331,23 @@
     return !!state.key && (ADMIN_HASHES.indexOf(state.myHash) !== -1 || state.myAdmin);
   }
 
-  /* Guard for an admin-only view. Owners pass at once; a runtime admin's status
-     may still be loading, so show a neutral wait rather than a false "not for
-     you" that would flash before loadMyProfile re-renders. Returns true when the
+  /* Callbacks waiting on the reader's own profile fetch, so a view that renders
+     before admin status is known can redraw once it lands. */
+  var profileWaiters = [];
+
+  /* Guard for an admin-only view. Owners pass at once. If we cannot yet tell (a
+     key is present but its profile has not loaded), show a neutral wait and
+     redraw when it does, rather than flash a false "not for you". With no key,
+     or once the profile is in, the answer is certain. Returns true when the
      caller should stop. */
-  function adminGate() {
+  function adminGate(rerender) {
     if (isAdmin()) return false;
-    section.appendChild(el('p', 'comments-status',
-      state.profileLoaded ? 'This page is for the admins.' : 'Loading...'));
+    if (!state.key || state.profileLoaded) {
+      section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
+      return true;
+    }
+    section.appendChild(el('p', 'comments-status', 'Loading...'));
+    if (rerender) profileWaiters.push(function () { section.textContent = ''; rerender(); });
     return true;
   }
 
@@ -2304,7 +2313,7 @@
   function viewAdminHome() {
     document.title = 'Administrative options | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options']]);
-    if (adminGate()) return;
+    if (adminGate(viewAdminHome)) return;
     section.appendChild(el('p', 'board-intro',
       'Everything that governs the board sits behind these doors. Each is admin-only, here and at the server.'));
     var wrap = el('div', 'board-cats');
@@ -2331,7 +2340,7 @@
   function viewAdmins() {
     document.title = 'Add / Remove Admins | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Add / Remove Admins']]);
-    if (adminGate()) return;
+    if (adminGate(viewAdmins)) return;
     section.appendChild(el('p', 'board-intro',
       'An admin can moderate every post, manage IP bans, and manage this list. Owners are fixed in the site configuration and cannot be removed here.'));
     var addBox = el('div', 'key-box');
@@ -2406,7 +2415,7 @@
   function viewAudit() {
     document.title = 'Activity audit | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Activity audit']]);
-    if (adminGate()) return;
+    if (adminGate(viewAudit)) return;
     section.appendChild(el('p', 'board-intro',
       'The moderation console. Reported posts first, flagged by members and still live until you rule on them. Then the review queue the automated screen held back. Then the last two weeks of activity across the site pages, the book, and the forums, newest first, every line a link to that exact comment and actionable from here.'));
     /* A running tally at the top, so the work waiting on you is plain before you scroll. */
@@ -2637,7 +2646,7 @@
   function viewIpBans() {
     document.title = 'IP ban list | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['IP ban list']]);
-    if (adminGate()) return;
+    if (adminGate(viewIpBans)) return;
     var addBox = el('div', 'key-box');
     addBox.hidden = false;
     addBox.appendChild(el('p', 'key-note', 'Ban an IP by hand. IPv4 or IPv6, exactly as it appears in a fingerprint.'));
@@ -2711,15 +2720,23 @@
         /* Learn admin status from the server. A runtime-granted admin is not in
            the built-in owner list, so until this lands isAdmin() reads false and
            no admin controls draw. When it flips true, re-render the whole board
-           once so the controls appear (owners already rendered, so they skip
-           it); other pages just refresh the identity line. */
+           once so the controls appear (owners already rendered, so they skip it);
+           that redraw covers any waiting view, so drop the waiters. Otherwise
+           refresh the identity line and let any waiting admin view redraw. */
         var wasAdmin = isAdmin();
         state.myAdmin = !!d.profile.admin;
         state.profileLoaded = true;
-        if (BOARD && isAdmin() && !wasAdmin) { route(); return; }
+        if (BOARD && isAdmin() && !wasAdmin) { profileWaiters = []; route(); return; }
         if (section.querySelector('.comment-identity')) renderIdentity();
+        flushProfileWaiters();
       })
-      .catch(function () { state.profileLoaded = true; });
+      .catch(function () { state.profileLoaded = true; flushProfileWaiters(); });
+  }
+
+  function flushProfileWaiters() {
+    var ws = profileWaiters;
+    profileWaiters = [];
+    ws.forEach(function (cb) { cb(); });
   }
 
   /* A profile view. Your own is read/write; everyone else's is read-only. It
