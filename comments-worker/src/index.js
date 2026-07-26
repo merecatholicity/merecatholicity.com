@@ -34,6 +34,10 @@ const MAX_TITLE = 120;
    Banned keys are exempt from both, so a standing ban never loses its row. */
 const IP_SHOW_DAYS = 14;
 const IP_KEEP_DAYS = 30;
+/* Soft-deleted comments vanish from view at once but linger as rows; the
+   monthly cron hard-removes any older than DELETED_KEEP_DAYS. The prior
+   month's backup, kept ninety days, still holds anything just removed. */
+const DELETED_KEEP_DAYS = 30;
 /* The faith declaration every member picks at signup: one of three, stored as
    a short code, its display wording owned by the client. Kept in step with the
    FAITH map in comments.js. */
@@ -1659,6 +1663,58 @@ async function pruneIdentityIps(env) {
   }
 }
 
+/* Comments are only ever soft-deleted by the request paths, never physically
+   removed, so the monthly cron clears the deleted rows once past their window,
+   then sweeps the live replies stranded when a topic was deleted (topic delete
+   does not cascade to its replies). Pending rows are left for the admin queue,
+   and each statement is guarded so a failure can't stop the backup behind it. */
+async function pruneComments(env) {
+  const cutoff = Math.floor(Date.now() / 1000) - DELETED_KEEP_DAYS * 86400;
+  try {
+    const r = await env.DB.prepare(
+      "DELETE FROM comments WHERE status = 'deleted' AND created_at < ?1"
+    ).bind(cutoff).run();
+    console.log(JSON.stringify({ event: 'comment_prune', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'comment_prune_failed', error: String(e) }));
+  }
+  /* A live reply whose parent no longer exists is invisible everywhere but
+     immortal; clear those the deleted-comment prune above just orphaned, plus
+     any left by an earlier topic delete. Scoped to live so a pending reply
+     under a removed topic still waits on the admin. */
+  try {
+    const r = await env.DB.prepare(
+      "DELETE FROM comments WHERE status = 'live' AND parent_id IS NOT NULL AND parent_id NOT IN (SELECT id FROM comments)"
+    ).run();
+    console.log(JSON.stringify({ event: 'orphan_prune', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'orphan_prune_failed', error: String(e) }));
+  }
+}
+
+/* A defensive tidy of direct-message state: messages whose thread is gone and
+   threads left with no messages. handleDmDelete purges in two statements, so a
+   crash between them could strand one side; this catches that drift. Held
+   messages and deleted-identity threads are deliberately left whole. */
+async function sweepDms(env) {
+  try {
+    const r = await env.DB.prepare(
+      'DELETE FROM dms WHERE thread_id NOT IN (SELECT id FROM dm_threads)'
+    ).run();
+    console.log(JSON.stringify({ event: 'dm_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'dm_orphan_sweep_failed', error: String(e) }));
+  }
+  try {
+    const r = await env.DB.prepare(
+      'DELETE FROM dm_threads WHERE id NOT IN (SELECT DISTINCT thread_id FROM dms)'
+    ).run();
+    console.log(JSON.stringify({ event: 'dm_empty_sweep', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'dm_empty_sweep_failed', error: String(e) }));
+  }
+}
+
 async function runBackup(env) {
   if (!env.BACKUPS) return { error: 'BACKUPS bucket not bound; enable R2 and redeploy.' };
   const sql = await dumpDatabase(env);
@@ -1917,10 +1973,17 @@ export default {
       return json({ ok: false, error: 'Server hiccup. Please try again shortly.' }, 500);
     }
   },
-  /* Monthly cron (1st, 00:00 UTC): prune the idle Known-IPs rows, then back
-     the database up to R2, so the dump reflects the pruned table (the prior
-     month's backup, kept ninety days, still holds what was just removed). */
+  /* Monthly cron (1st, 00:00 UTC): prune the idle Known-IPs rows, clear
+     soft-deleted comments past their window and the replies they orphaned,
+     sweep stray DM rows, then back the database up to R2 so the dump reflects
+     the cleaned state (the prior month's backup, kept ninety days, still holds
+     what was just removed). */
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(pruneIdentityIps(env).then(() => runBackup(env)));
+    ctx.waitUntil(
+      pruneIdentityIps(env)
+        .then(() => pruneComments(env))
+        .then(() => sweepDms(env))
+        .then(() => runBackup(env))
+    );
   },
 };
