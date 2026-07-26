@@ -617,6 +617,20 @@
   }
   function prefetchEmoji() { loadEmojiData(); }
 
+  /* Avatar presets: the ready-made gallery art, grouped into packs by a
+     generated manifest and fetched once on first use, so a profile view never
+     pays for it. The images themselves are same-origin static files, drawn
+     into the avatar canvas exactly like an uploaded photo. */
+  var avatarPresetsPromise = null;
+  function loadAvatarPresets() {
+    if (avatarPresetsPromise) return avatarPresetsPromise;
+    avatarPresetsPromise = fetch('avatars/presets/index.json')
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+      .then(function (d) { return (d && d.packs) || []; })
+      .catch(function (e) { avatarPresetsPromise = null; throw e; });
+    return avatarPresetsPromise;
+  }
+
   /* One ranked search across pack codes and the standard set (the full lazy set
      when it is loaded, else the small inline NAMED_EMOJI). Prefix hits rank above
      substring hits. Returns items the picker and the : list both render. */
@@ -789,6 +803,70 @@
     return panel;
   }
 
+  /* The avatar preset gallery: the same panel chrome as the emoji picker (search
+     box, pack tabs, inner-scrolling grid), but each tile is a bigger image on the
+     parchment tile so it previews the avatar it will become. onPick(path, name)
+     fires with the chosen image. The manifest loads lazily on first open. */
+  function buildAvatarGallery(onPick) {
+    ensureEmojiStyles();
+    var panel = el('div', 'emoji-panel av-panel');
+    panel.hidden = true;
+    var search = el('input', 'emoji-search');
+    search.type = 'search'; search.placeholder = 'Search avatars...';
+    var srow = el('div', 'emoji-search-row'); srow.appendChild(search); panel.appendChild(srow);
+    var tabs = el('div', 'emoji-tabs'), body = el('div', 'emoji-body av-body');
+    panel.appendChild(tabs); panel.appendChild(body);
+    var packs = null, active = null, tabBtns = {};
+    function tile(name, path) {
+      var b = el('button', 'emoji-cell av-cell'); b.type = 'button'; b.title = name;
+      var im = el('img'); im.src = path; im.alt = name; im.loading = 'lazy';
+      b.appendChild(im);
+      b.addEventListener('click', function () { onPick(path, name); });
+      return b;
+    }
+    function grid(items) { var g = el('div', 'emoji-grid av-grid'); items.forEach(function (it) { g.appendChild(tile(it[0], it[1])); }); return g; }
+    function mark() { if (packs) packs.forEach(function (p) { tabBtns[p.slug].className = 'emoji-tab' + (p.slug === active ? ' emoji-tab-on' : ''); }); }
+    function draw() {
+      body.textContent = '';
+      if (!packs) { body.appendChild(el('p', 'emoji-empty', 'Loading gallery...')); return; }
+      var q = search.value.trim().toLowerCase();
+      if (q) {
+        var res = [];
+        packs.forEach(function (p) { p.items.forEach(function (it) { if (it[0].indexOf(q) !== -1) res.push(it); }); });
+        if (!res.length) { body.appendChild(el('p', 'emoji-empty', 'No matches.')); return; }
+        body.appendChild(grid(res.slice(0, 300)));
+        return;
+      }
+      var pack = null;
+      packs.forEach(function (p) { if (p.slug === active) pack = p; });
+      if (pack) body.appendChild(grid(pack.items));
+    }
+    function build() {
+      tabs.textContent = '';
+      packs.forEach(function (p) {
+        var b = el('button', 'emoji-tab', p.label); b.type = 'button';
+        b.addEventListener('click', function () { active = p.slug; search.value = ''; mark(); draw(); });
+        tabBtns[p.slug] = b; tabs.appendChild(b);
+      });
+      if (!active && packs.length) active = packs[0].slug;
+      mark(); draw();
+    }
+    search.addEventListener('input', draw);
+    panel.openPanel = function () {
+      panel.hidden = false;
+      if (packs) { mark(); draw(); }
+      else {
+        draw();
+        loadAvatarPresets().then(function (pk) { packs = pk; build(); })
+          .catch(function () { body.textContent = ''; body.appendChild(el('p', 'emoji-empty', 'The gallery could not be loaded. Try again in a moment.')); });
+      }
+      try { if (window.matchMedia && window.matchMedia('(hover: none)').matches) search.focus(); } catch (e) {}
+    };
+    panel.closePanel = function () { panel.hidden = true; };
+    panel.toggle = function () { if (panel.hidden) panel.openPanel(); else panel.closePanel(); };
+    return panel;
+  }
+
   /* Inject the emoji styles once, matched to the site palette, rather than touch
      the shared stylesheet. The inner scroll keeps the panel and : list compact. */
   function ensureEmojiStyles() {
@@ -812,7 +890,13 @@
       '.emoji-cell:hover{background:#f9f3e6}' +
       '.emoji-cell .mc-emoji{height:1.5em}' +
       '.emoji-empty{color:var(--faint);padding:.5em;margin:0}' +
-      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}}';
+      '.av-body{max-height:17em}' +
+      '.av-grid{gap:.35em}' +
+      '.av-cell{width:3em;height:3em;padding:2px;border:1px solid var(--rule);background:#faf6ee;border-radius:8px}' +
+      '.av-cell:hover{background:#f2e7d0;border-color:var(--maroon)}' +
+      '.av-cell img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;margin:0}' +
+      '.btn-gallery{display:inline-block;margin:.15em 0 .1em}' +
+      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}}';
     var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
     document.head.appendChild(st);
   }
@@ -2700,21 +2784,120 @@
     sigIn.value = p.signature || '';
     card.appendChild(sigIn);
 
-    /* Avatar. Any picked image is center-cropped to 400x400 on a canvas, so
-       what leaves the browser already matches what the server demands. The
-       server re-checks bytes, format, and dimensions regardless. */
+    /* Avatar. Two ways to set one: upload your own JPEG, or pick a ready-made
+       from the gallery. Both end in the same canvas step that hands the server
+       the exact 400x400 JPEG it demands; the server re-checks bytes, format,
+       dimensions, and content regardless of which path produced them. */
     card.appendChild(el('label', 'profile-label', 'Avatar'));
+    var avNote = el('p', 'profile-empty', '');
+
+    /* The shared tail: a loaded image is rasterized to a 400x400 JPEG and pushed
+       through the same upload posting is gated on. 'cover' fills the square with
+       a photo; 'contain' fits a preset whole onto the parchment tile so its
+       transparent edges read as the tile rather than as black. */
+    function pushAvatar(img, mode) {
+      var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      if (!iw || !ih) { avNote.textContent = 'That image could not be read. Try another.'; return; }
+      var c = document.createElement('canvas');
+      c.width = 400;
+      c.height = 400;
+      var ctx = c.getContext('2d');
+      if (mode === 'contain') {
+        ctx.fillStyle = '#faf6ee';
+        ctx.fillRect(0, 0, 400, 400);
+        var box = 400 * 0.82;
+        var s = Math.min(box / iw, box / ih);
+        var cw = iw * s, ch = ih * s;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, (400 - cw) / 2, (400 - ch) / 2, cw, ch);
+      } else {
+        var scale = Math.max(400 / iw, 400 / ih);
+        var w = iw * scale, h = ih * scale;
+        ctx.drawImage(img, (400 - w) / 2, (400 - h) / 2, w, h);
+      }
+      /* JPEG, so the stored bytes decode cleanly for both the AI vision screen
+         and every browser; a lower-quality second pass is the net for the rare
+         frame that overruns the cap. */
+      var send = function (blob) {
+        if (!blob || blob.size > 500 * 1024) {
+          avNote.textContent = 'The image could not be brought under 500 KB. Try another.';
+          return;
+        }
+        avNote.textContent = 'Verifying...';
+        getToken().then(function (token) {
+          avNote.textContent = 'Checking image...';
+          var fd = new FormData();
+          fd.append('key', state.key);
+          fd.append('token', token);
+          fd.append('avatar', blob, 'avatar');
+          return fetchRetry(API + '/avatar', { method: 'POST', body: fd }, [1500])
+            .then(function (r) { return r.json(); });
+        }).then(function (d) {
+          if (!d.ok) throw new Error(d.error || 'Could not upload the avatar.');
+          stampFresh();
+          p.avatar = d.avatar;
+          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+          editProfile(card, p);
+        }).catch(function (err) {
+          avNote.textContent = err.message || 'Network error. Try again in a moment.';
+          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+        });
+      };
+      c.toBlob(function (blob) {
+        if (blob && blob.size <= 500 * 1024) return send(blob);
+        c.toBlob(send, 'image/jpeg', 0.7);
+      }, 'image/jpeg', 0.85);
+    }
+
+    /* Path one: upload a file. */
     var avRow = el('div', 'key-row');
     var avPick = el('input');
     avPick.type = 'file';
     avPick.accept = '.jpg,.jpeg,image/jpeg';
     avRow.appendChild(avPick);
     card.appendChild(avRow);
+    avPick.addEventListener('change', function () {
+      var file = avPick.files && avPick.files[0];
+      if (!file) return;
+      avNote.textContent = 'Preparing image...';
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        avNote.textContent = 'That file is not a usable image.';
+      };
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        pushAvatar(img, 'cover');
+      };
+      img.src = url;
+    });
+
+    /* Path two: the preset gallery, revealed by a toggle so it never crowds the
+       form until asked for. A pick loads that same-origin image (canvas stays
+       untainted) and runs the shared tail in 'contain' mode. */
+    var galBtn = el('button', 'btn btn-anon btn-gallery', 'Choose from the gallery');
+    galBtn.type = 'button';
+    var gallery = buildAvatarGallery(function (path) {
+      gallery.closePanel();
+      galBtn.textContent = 'Choose from the gallery';
+      avNote.textContent = 'Preparing image...';
+      var pim = new Image();
+      pim.onerror = function () { avNote.textContent = 'That gallery image could not be loaded. Try another.'; };
+      pim.onload = function () { pushAvatar(pim, 'contain'); };
+      pim.src = path;
+    });
+    galBtn.addEventListener('click', function () {
+      gallery.toggle();
+      galBtn.textContent = gallery.hidden ? 'Choose from the gallery' : 'Hide the gallery';
+    });
+    card.appendChild(galBtn);
+    card.appendChild(gallery);
+
     card.appendChild(el('p', 'profile-empty',
-      'JPEG only. Cropped square to 400 by 400 pixels, 500 KB at most.'));
-    var avNote = el('p', 'profile-empty', p.avatar
-      ? 'Choosing a new image replaces the current avatar.'
-      : '');
+      'Upload a JPEG (cropped square to 400 by 400 pixels, 500 KB at most) or pick a ready-made from the gallery. ' +
+      (p.avatar ? 'Either choice replaces your current avatar.' : '')));
     card.appendChild(avNote);
     if (p.avatar) {
       var avPrev = el('div', 'profile-avatar');
@@ -2741,60 +2924,6 @@
       });
       card.appendChild(avDel);
     }
-    avPick.addEventListener('change', function () {
-      var file = avPick.files && avPick.files[0];
-      if (!file) return;
-      avNote.textContent = 'Preparing image...';
-      var url = URL.createObjectURL(file);
-      var img = new Image();
-      img.onerror = function () {
-        URL.revokeObjectURL(url);
-        avNote.textContent = 'That file is not a usable image.';
-      };
-      img.onload = function () {
-        URL.revokeObjectURL(url);
-        var c = document.createElement('canvas');
-        c.width = 400;
-        c.height = 400;
-        var scale = Math.max(400 / img.naturalWidth, 400 / img.naturalHeight);
-        var w = img.naturalWidth * scale;
-        var h = img.naturalHeight * scale;
-        c.getContext('2d').drawImage(img, (400 - w) / 2, (400 - h) / 2, w, h);
-        /* JPEG, so the stored bytes decode cleanly for both the AI vision
-           screen and every browser; a lower-quality second pass is the net
-           for the rare frame that overruns the cap. */
-        var send = function (blob) {
-          if (!blob || blob.size > 500 * 1024) {
-            avNote.textContent = 'The image could not be brought under 500 KB. Try another.';
-            return;
-          }
-          avNote.textContent = 'Verifying...';
-          getToken().then(function (token) {
-            avNote.textContent = 'Checking image...';
-            var fd = new FormData();
-            fd.append('key', state.key);
-            fd.append('token', token);
-            fd.append('avatar', blob, 'avatar');
-            return fetchRetry(API + '/avatar', { method: 'POST', body: fd }, [1500])
-              .then(function (r) { return r.json(); });
-          }).then(function (d) {
-            if (!d.ok) throw new Error(d.error || 'Could not upload the avatar.');
-            stampFresh();
-            p.avatar = d.avatar;
-            if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
-            editProfile(card, p);
-          }).catch(function (err) {
-            avNote.textContent = err.message || 'Network error. Try again in a moment.';
-            if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
-          });
-        };
-        c.toBlob(function (blob) {
-          if (blob && blob.size <= 500 * 1024) return send(blob);
-          c.toBlob(send, 'image/jpeg', 0.7);
-        }, 'image/jpeg', 0.85);
-      };
-      img.src = url;
-    });
     var row = el('div', 'comment-buttons');
     var save = el('button', 'btn btn-send', 'Save');
     save.type = 'button';
