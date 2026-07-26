@@ -1,7 +1,7 @@
 # Resources build tasks. Public-domain texts kept as LaTeX docs of our own.
 # Outputs land in the site root so GitHub Pages serves them.
 
-.PHONY: all pdf html body schaff-html schaff-fetch
+.PHONY: all pdf html body schaff-html schaff-fetch catena-html
 
 all: pdf html
 
@@ -36,6 +36,7 @@ body:
 	python ccel2tex.py
 	python schaff.py
 	python dr2tex.py
+	python catena2tex.py
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
 # byte-identical, so git only churns when the text really changes.
@@ -77,7 +78,11 @@ WORKS = \
   scranton=Declaration_of_Scranton.pdf \
   cassian-prayer=Conferences_on_Prayer.pdf \
   benedict-rule=Rule_of_St_Benedict.pdf \
-  douay-rheims=Douay-Rheims_Bible.pdf
+  douay-rheims=Douay-Rheims_Bible.pdf \
+  catena-matthew=Catena_Aurea_Matthew.pdf \
+  catena-mark=Catena_Aurea_Mark.pdf \
+  catena-luke=Catena_Aurea_Luke.pdf \
+  catena-john=Catena_Aurea_John.pdf
 
 work_name = $(firstword $(subst =, ,$(1)))
 work_out  = $(lastword  $(subst =, ,$(1)))
@@ -197,7 +202,32 @@ html:
 	    -o ../douay-rheims.html
 	rm douay-rheims-body-html.tex
 	@echo "built douay-rheims.html"
+	$(MAKE) catena-html
 	$(MAKE) schaff-html
+
+# Aquinas' Catena Aurea, the four Gospels. Its macros (\cachapter, \caref,
+# \calemma, \cafather) become pandoc-friendly inline markup; \cafather{X}
+# carries the trailing period into the bold attribution.
+catena-html:
+	for g in matthew:"St. Matthew" mark:"St. Mark" luke:"St. Luke" john:"St. John"; do \
+	  n=$${g%%:*}; t=$${g#*:}; \
+	  sed -e 's/\\cachapter{/\\section*{/g' \
+	      -e 's/\\cafather{\([^}]*\)}/\\textbf{\1.}/g' \
+	      -e 's/\\caref{/\\textbf{/g' \
+	      -e 's/\\calemma{/\\textbf{/g' \
+	      -e 's/\\textgreek{/{/g' \
+	      -e 's/\\texthebrew{/{/g' \
+	      -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
+	      catena-$$n-body.tex > catena-$$n-body-html.tex; \
+	  sed -e "s/{catena-$$n-body.tex}/{catena-$$n-body-html.tex}/" \
+	      catena-$$n.tex | \
+	  pandoc -f latex -t html5 --standalone --toc --toc-depth=1 \
+	      --metadata title="Catena Aurea on $$t" \
+	      --css=style.css -B ../nav.html -A ../footer.html \
+	      -o ../catena-$$n.html; \
+	  rm catena-$$n-body-html.tex; \
+	  echo "built catena-$$n.html"; \
+	done
 
 # The 36 Schaff volumes, same preprocessing and pandoc invocation as the
 # curated works above, driven by SCHAFF_HTML (from schaff.mk). Kept as its
