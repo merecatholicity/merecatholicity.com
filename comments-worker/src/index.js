@@ -1121,13 +1121,25 @@ async function handleAudit(request, env) {
   ).bind(since).all();
   const topics = await env.DB.prepare(
     "SELECT c.id, c.page, c.author_hash, pr.nick, c.created_at, c.status, substr(c.body, 1, 160) AS snippet, " +
-    "COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
+    "c.locked, c.sticky, COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
     "WHERE c.page LIKE 'board:%' AND c.status != 'deleted' AND c.created_at > ?1 " +
     "ORDER BY c.id DESC LIMIT 300"
   ).bind(since).all();
-  return json({ ok: true, pages: pages.results, topics: topics.results, days: 14 }, 200);
+  /* Community reports, one row per reported post: how many reported it, the
+     reasons given, and enough to jump to it and act. A reported post stays live
+     until an admin decides. Highest count and most recent first. */
+  const reports = await env.DB.prepare(
+    "SELECT r.comment_id AS id, COUNT(*) AS report_count, GROUP_CONCAT(r.reason, ' | ') AS reasons, " +
+    "MAX(r.created_at) AS last_reported, c.page, c.author_hash, pr.nick, c.status, " +
+    "substr(c.body, 1, 160) AS snippet, c.locked, c.sticky, COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
+    "FROM reports r JOIN comments c ON c.id = r.comment_id " +
+    "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+    "LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
+    "WHERE c.status != 'deleted' GROUP BY r.comment_id ORDER BY report_count DESC, last_reported DESC LIMIT 200"
+  ).all();
+  return json({ ok: true, reports: reports.results, pages: pages.results, topics: topics.results, days: 14 }, 200);
 }
 
 const MAX_NICK = 40;
@@ -2129,6 +2141,13 @@ async function pruneNotifications(env) {
   } catch (e) {
     console.log(JSON.stringify({ event: 'thread_reads_sweep_failed', error: String(e) }));
   }
+  /* Reports whose post is gone (hard-deleted). */
+  try {
+    const r = await env.DB.prepare('DELETE FROM reports WHERE comment_id NOT IN (SELECT id FROM comments)').run();
+    console.log(JSON.stringify({ event: 'reports_sweep', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'reports_sweep_failed', error: String(e) }));
+  }
 }
 
 async function runBackup(env) {
@@ -2305,6 +2324,48 @@ async function handleIpBans(request, env) {
   return json({ ok: true, ips: rows.results }, 200);
 }
 
+/* A member reports a post to the moderators. The post stays live; the report
+   only surfaces it in the Activity audit's Reported queue. One report per member
+   per post (INSERT OR IGNORE against the UNIQUE), so no brigade can inflate a
+   count or hide anything. An optional short reason rides along. */
+async function handleReport(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many reports at once. Wait a minute.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const target = await env.DB.prepare("SELECT 1 AS ok FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+  if (!target) return json({ ok: false, error: 'No such post.' }, 404);
+  let reason = String(data.reason || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (CONTROL_RE.test(reason)) reason = '';
+  await env.DB.prepare(
+    'INSERT OR IGNORE INTO reports (comment_id, reporter_hash, reason, created_at) VALUES (?1, ?2, ?3, ?4)'
+  ).bind(id, me, reason || null, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true }, 200);
+}
+
+/* An admin dismisses a post's reports, clearing it from the Reported queue while
+   leaving the post itself alone. */
+async function handleReportDismiss(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  await env.DB.prepare('DELETE FROM reports WHERE comment_id = ?1').bind(id).run();
+  return json({ ok: true }, 200);
+}
+
 /* Approve a held comment: the in-platform replacement for the old email link. */
 async function handleApprove(request, env) {
   let data;
@@ -2393,6 +2454,8 @@ export default {
       if (path === '/api/comments/rdns' && request.method === 'POST') return await handleRdns(request, env);
       if (path === '/api/comments/approve' && request.method === 'POST') return await handleApprove(request, env);
       if (path === '/api/comments/pending' && request.method === 'POST') return await handlePending(request, env);
+      if (path === '/api/comments/report' && request.method === 'POST') return await handleReport(request, env);
+      if (path === '/api/comments/report/dismiss' && request.method === 'POST') return await handleReportDismiss(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);
     } catch (err) {
       console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));

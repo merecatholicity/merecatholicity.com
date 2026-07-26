@@ -198,3 +198,17 @@ CREATE TABLE IF NOT EXISTS thread_reads (
   PRIMARY KEY (hash, topic_id)
 );
 CREATE INDEX IF NOT EXISTS thread_reads_hash_idx ON thread_reads(hash);
+
+-- Community reports of a post: one per member per post (UNIQUE). A report never
+-- hides the post; it only surfaces it, with its count and reasons, in the
+-- Activity audit's Reported queue for an admin to dismiss or delete. Orphan rows
+-- (the reported comment gone) are swept by the monthly cron.
+CREATE TABLE IF NOT EXISTS reports (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  comment_id    INTEGER NOT NULL,
+  reporter_hash TEXT NOT NULL,
+  reason        TEXT,
+  created_at    INTEGER NOT NULL,
+  UNIQUE(comment_id, reporter_hash)
+);
+CREATE INDEX IF NOT EXISTS reports_comment_idx ON reports(comment_id);
