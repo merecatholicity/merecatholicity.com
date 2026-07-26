@@ -32,6 +32,7 @@ for page in sorted(glob.glob("*.html")):
                            "javascript:")):
             continue
         base, _, frag = url.partition("#")
+        base = base.partition("?")[0]   # a cache-busting ?v=NN is not part of the on-disk path
         if base:
             refs[urllib.parse.unquote(base)].add(page)
         if frag:
