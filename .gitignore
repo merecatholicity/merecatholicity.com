@@ -13,11 +13,19 @@ bishop-presbyter.aux
 bishop-presbyter.log
 bishop-presbyter.out
 bishop-presbyter.pdf
-resources/npnf211.*
+resources/npnf211.txt
 resources/*.aux
 resources/*.log
 resources/*.out
 resources/*.toc
+# The complete Schaff corpus: the raw CCEL source XML and the per-volume
+# intermediate PDFs are reproducible (fetch + `make body` + `make pdf`), so
+# keep them out of git. What ships is the committed <id>-body.tex/<id>.tex and
+# the published root PDFs (Ante-Nicene_Fathers_Vol_*.pdf, Nicene_and_*.pdf).
+resources/anf*.xml
+resources/npnf*.xml
+resources/anf*.pdf
+resources/npnf*.pdf
 resources/commonitory.pdf
 resources/development.pdf
 resources/consulting.pdf
