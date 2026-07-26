@@ -602,6 +602,27 @@
         location.reload();
       });
       head.appendChild(muteLink);
+      /* Members flag a post for the moderators; admins act directly and don't
+         see this. Reporting never hides the post — it only queues it for review. */
+      if (!isAdmin()) {
+        var reportLink = el('a', 'comment-quote-link', 'report');
+        reportLink.href = '#';
+        reportLink.title = 'Report this post to the moderators';
+        reportLink.addEventListener('click', function (e) {
+          e.preventDefault();
+          var reason = prompt('Report this post to the moderators.\nOptionally, a short reason:');
+          if (reason === null) return;
+          fetch(API + '/report', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, id: c.id, reason: reason }),
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (blockedOut(d)) return;
+            reportLink.textContent = d.ok ? 'reported' : 'report';
+            reportLink.title = d.ok ? 'Reported to the moderators. Thank you.' : (d.error || 'Could not report.');
+          }).catch(function () {});
+        });
+        head.appendChild(reportLink);
+      }
     }
     /* The date doubles as the comment's shareable permalink. */
     var date = el('a', 'comment-date', fmtDateTime(c.created_at));
@@ -1645,6 +1666,42 @@
     return a;
   }
 
+  /* The full admin corner for one topic: a Move dropdown plus sticky, lock, and
+     delete. Shared by the category listing and the moderation console, so a topic
+     is governed the same way wherever it shows. `curCat` is the topic's own
+     category key, greyed in the Move list. Every act reloads the view on success. */
+  function topicAdminCorner(topic, curCat) {
+    var admin = el('span', 'board-admin-links board-admin-corner');
+    var moveSel = el('select', 'board-move');
+    var movePh = el('option', null, 'Move'); movePh.value = ''; moveSel.appendChild(movePh);
+    CATS.forEach(function (c) {
+      var o = el('option', null, c[1]); o.value = c[0];
+      if (c[0] === curCat) o.disabled = true;
+      moveSel.appendChild(o);
+    });
+    moveSel.addEventListener('change', function () {
+      var target = moveSel.value;
+      if (!target) return;
+      var name = catByKey(target)[1];
+      if (!confirm('Move "' + topic.title + '" to ' + name + '? The original poster will be notified by DM.')) { moveSel.value = ''; return; }
+      fetch(API + '/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, id: topic.id, cat: target, catName: name }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (d.ok) { stampFresh(); location.reload(); } else moveSel.value = '';
+      }).catch(function () { moveSel.value = ''; });
+    });
+    admin.appendChild(moveSel);
+    admin.appendChild(document.createTextNode(' '));
+    admin.appendChild(modLinkEl(topic.id, topic.sticky ? 'unsticky' : 'sticky', topic.sticky ? '(unsticky)' : '(sticky)'));
+    admin.appendChild(document.createTextNode(' '));
+    admin.appendChild(modLinkEl(topic.id, topic.locked ? 'unlock' : 'lock', topic.locked ? '(unlock)' : '(lock)'));
+    admin.appendChild(document.createTextNode(' '));
+    admin.appendChild(modLinkEl(topic.id, 'delete', '(delete)'));
+    return admin;
+  }
+
   function viewCat(key) {
     var cat = catByKey(key);
     if (!cat) return viewIndex();
@@ -1720,41 +1777,7 @@
           row.appendChild(tstat);
           /* Admin controls ride the bottom-right corner of the row, well clear
              of the title, pager, and author links, against fat-finger taps. */
-          if (isAdmin()) {
-            var admin = el('span', 'board-admin-links board-admin-corner');
-            /* A Move dropdown lists every category with the current one greyed;
-               picking one confirms, moves the whole thread, and DMs the poster. */
-            var moveSel = el('select', 'board-move');
-            var movePh = el('option', null, 'Move'); movePh.value = ''; moveSel.appendChild(movePh);
-            CATS.forEach(function (c) {
-              var o = el('option', null, c[1]); o.value = c[0];
-              if (c[0] === key) o.disabled = true;
-              moveSel.appendChild(o);
-            });
-            moveSel.addEventListener('change', (function (topic) {
-              return function () {
-                var target = moveSel.value;
-                if (!target) return;
-                var name = catByKey(target)[1];
-                if (!confirm('Move "' + topic.title + '" to ' + name + '? The original poster will be notified by DM.')) { moveSel.value = ''; return; }
-                fetch(API + '/move', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ key: state.key, id: topic.id, cat: target, catName: name }),
-                }).then(function (r) { return r.json(); }).then(function (d) {
-                  if (d.ok) { stampFresh(); location.reload(); } else moveSel.value = '';
-                }).catch(function () { moveSel.value = ''; });
-              };
-            })(t));
-            admin.appendChild(moveSel);
-            admin.appendChild(document.createTextNode(' '));
-            admin.appendChild(modLinkEl(t.id, t.sticky ? 'unsticky' : 'sticky', t.sticky ? '(unsticky)' : '(sticky)'));
-            admin.appendChild(document.createTextNode(' '));
-            admin.appendChild(modLinkEl(t.id, t.locked ? 'unlock' : 'lock', t.locked ? '(unlock)' : '(lock)'));
-            admin.appendChild(document.createTextNode(' '));
-            admin.appendChild(modLinkEl(t.id, 'delete', '(delete)'));
-            row.appendChild(admin);
-          }
+          if (isAdmin()) row.appendChild(topicAdminCorner(t, key));
           list.appendChild(row);
         });
         /* Mark the threads new since your last visit — a separate keyed call so
@@ -1881,6 +1904,10 @@
 
   /* The audit: one line per commented page and per board topic, the last
      poster and the moment, pending marked. A quick answer to what is new. */
+  /* The moderation console. Three actionable sections — reported posts, the
+     review queue, and recent activity — each row governable in place, so an
+     admin never has to leave to act. The in-context controls on the board stay;
+     this is the one place that gathers everything waiting on a moderator. */
   function viewAudit() {
     document.title = 'Activity audit | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Activity audit']]);
@@ -1889,8 +1916,90 @@
       return;
     }
     section.appendChild(el('p', 'board-intro',
-      'An at-a-glance way to keep tabs on the board. First the review queue: comments the automated screen flagged and held back from publishing, waiting for you to approve or delete each one. Then the last two weeks of activity across the site pages, the book, and the forums, newest first, every line a link straight to that exact comment.'));
-    renderPending();
+      'The moderation console. Reported posts first, flagged by members and still live until you rule on them. Then the review queue the automated screen held back. Then the last two weeks of activity across the site pages, the book, and the forums, newest first, every line a link to that exact comment and actionable from here.'));
+    /* A running tally at the top, so the work waiting on you is plain before you scroll. */
+    var summary = el('p', 'board-intro audit-summary', 'Loading the console...');
+    section.appendChild(summary);
+    var counts = { reported: null, pending: null };
+    function renderSummary() {
+      var parts = [
+        (counts.reported === null ? '…' : counts.reported) + (counts.reported === 1 ? ' report' : ' reports'),
+        (counts.pending === null ? '…' : counts.pending) + ' held for review',
+      ];
+      summary.textContent = 'Waiting on you: ' + parts.join(' · ') + '.';
+    }
+
+    /* Delete any comment (admin power on /delete). Removes its row on success. */
+    function deleteCommentLink(id, row) {
+      var a = el('a', 'trust-toggle danger', '(delete)');
+      a.href = '#';
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (!confirm('Delete this post?')) return;
+        fetch(API + '/delete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: id }),
+        }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+      });
+      return a;
+    }
+    /* A lazy admin drawer for the row's author: the same fingerprint panel as the
+       fingerprint dropdown, fetched only when opened (no /meta per row up front). */
+    function authorDrawerLink(hash, host) {
+      var a = el('a', 'trust-toggle', '(author ▾)');
+      a.href = '#';
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        annotateProfileMeta(hash, host);
+      });
+      return a;
+    }
+    /* One activity/reported row with its actions: a topic head gets the full
+       topic corner (move/sticky/lock/delete); any other post gets a plain delete.
+       Every row gets a lazy author drawer, and callers may prepend more via
+       extraActs(actsEl, rowEl). */
+    function actionRow(linkUrl, where, r, extraActs) {
+      var line = el('div', 'board-topic audit-row');
+      var left = el('div', 'board-topic-left');
+      var a = el('a', 'board-topic-title', where);
+      a.href = linkUrl;
+      left.appendChild(a);
+      if (r.snippet) left.appendChild(el('div', 'audit-snippet', r.snippet));
+      line.appendChild(left);
+      var rstat = el('div', 'board-stats');
+      rstat.appendChild(authorNode(r.author_hash, r.nick, false));
+      rstat.appendChild(document.createTextNode(' · ' + fmtDateTime(r.created_at || r.last_reported) +
+        (r.status === 'pending' ? ' · pending' : '')));
+      line.appendChild(rstat);
+      var acts = el('div', 'board-admin-links audit-acts');
+      if (extraActs) extraActs(acts, line);
+      var isForum = String(r.page).indexOf('board:') === 0;
+      var isTopic = Number(r.id) === Number(r.topic_id);
+      if (isForum && isTopic) {
+        acts.appendChild(topicAdminCorner(
+          { id: r.topic_id, title: r.title || '', sticky: r.sticky, locked: r.locked },
+          String(r.page).slice(6)));
+      } else {
+        acts.appendChild(deleteCommentLink(r.id, line));
+      }
+      acts.appendChild(document.createTextNode(' '));
+      acts.appendChild(authorDrawerLink(r.author_hash, left));
+      line.appendChild(acts);
+      return line;
+    }
+
+    /* 1. Reported (populated by the /audit response below). */
+    section.appendChild(el('h3', 'board-form-head', 'Reported'));
+    section.appendChild(el('p', 'board-intro',
+      'Posts members flagged for you. Each stays live and visible until you act. Dismiss clears the flags and leaves the post standing; Delete removes it. Most-reported first.'));
+    var reportedBox = el('div', 'board-topics');
+    reportedBox.appendChild(el('p', 'comments-status', 'Loading reports...'));
+    section.appendChild(reportedBox);
+
+    /* 2. Pending review. */
+    renderPending(function (n) { counts.pending = n; renderSummary(); });
+
+    /* 3. Recent activity. */
     var status = el('p', 'comments-status', 'Loading activity...');
     section.appendChild(status);
     fetchRetry(API + '/audit', {
@@ -1903,43 +2012,68 @@
         if (!d.ok) throw new Error(d.error || 'failed');
         status.remove();
         var days = d.days || 14;
-        function auditRow(linkUrl, where, r) {
-          var line = el('div', 'board-topic audit-row');
-          var left = el('div', 'board-topic-left');
-          var a = el('a', 'board-topic-title', where);
-          a.href = linkUrl;
-          left.appendChild(a);
-          if (r.snippet) left.appendChild(el('div', 'audit-snippet', r.snippet));
-          line.appendChild(left);
-          var rstat = el('div', 'board-stats');
-          rstat.appendChild(authorNode(r.author_hash, r.nick, false));
-          rstat.appendChild(document.createTextNode(' · ' + fmtDateTime(r.created_at) +
-            (r.status === 'pending' ? ' · pending' : '')));
-          line.appendChild(rstat);
-          return line;
+
+        reportedBox.textContent = '';
+        var reports = d.reports || [];
+        counts.reported = reports.length;
+        renderSummary();
+        if (!reports.length) {
+          reportedBox.appendChild(el('p', 'comments-status', 'No open reports. Nothing flagged.'));
         }
+        reports.forEach(function (r) {
+          var isForum = String(r.page).indexOf('board:') === 0;
+          var where = isForum
+            ? ((catByKey(String(r.page).slice(6)) || [])[1] || r.page) + (r.title ? ' › ' + r.title : '')
+            : r.page;
+          var linkUrl = isForum
+            ? 'community.html?topic=' + r.topic_id + '#comment-' + r.id
+            : r.page + '#comment-' + r.id;
+          var row = actionRow(linkUrl, where, r, function (acts, line) {
+            /* Dismiss clears this post's flags but leaves the post itself. */
+            var dis = el('a', 'trust-toggle', '(dismiss)');
+            dis.href = '#';
+            dis.addEventListener('click', function (e) {
+              e.preventDefault();
+              fetch(API + '/report/dismiss', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, id: r.id }),
+              }).then(function (x) { return x.json(); }).then(function (x) { if (x.ok) line.remove(); }).catch(function () {});
+            });
+            acts.appendChild(dis);
+            acts.appendChild(document.createTextNode(' '));
+          });
+          var meta = el('div', 'audit-report-meta');
+          meta.appendChild(el('strong', null, r.report_count + (r.report_count === 1 ? ' report' : ' reports')));
+          if (r.reasons) meta.appendChild(document.createTextNode(': ' + r.reasons));
+          row.querySelector('.board-topic-left').appendChild(meta);
+          reportedBox.appendChild(row);
+        });
+
         section.appendChild(el('h3', 'board-form-head', 'Site pages and the book · last ' + days + ' days'));
         var pagesScroll = el('div', 'audit-scroll');
-        var pages = el('div', 'board-topics');
-        if (!d.pages.length) pages.appendChild(el('p', 'comments-status', 'No recent comments.'));
+        var pagesBox = el('div', 'board-topics');
+        if (!d.pages.length) pagesBox.appendChild(el('p', 'comments-status', 'No recent comments.'));
         d.pages.forEach(function (r) {
-          pages.appendChild(auditRow(r.page + '#comment-' + r.id, r.page, r));
+          pagesBox.appendChild(actionRow(r.page + '#comment-' + r.id, r.page, r));
         });
-        pagesScroll.appendChild(pages);
+        pagesScroll.appendChild(pagesBox);
         section.appendChild(pagesScroll);
+
         section.appendChild(el('h3', 'board-form-head', 'Forums · last ' + days + ' days'));
         var topicsScroll = el('div', 'audit-scroll');
-        var topics = el('div', 'board-topics');
-        if (!d.topics.length) topics.appendChild(el('p', 'comments-status', 'No recent forum posts.'));
+        var topicsBox = el('div', 'board-topics');
+        if (!d.topics.length) topicsBox.appendChild(el('p', 'comments-status', 'No recent forum posts.'));
         d.topics.forEach(function (r) {
           var cat = catByKey(String(r.page).slice(6));
           var where = (cat ? cat[1] : r.page) + (r.title ? ' › ' + r.title : '');
-          topics.appendChild(auditRow('community.html?topic=' + r.topic_id + '#comment-' + r.id, where, r));
+          topicsBox.appendChild(actionRow('community.html?topic=' + r.topic_id + '#comment-' + r.id, where, r));
         });
-        topicsScroll.appendChild(topics);
+        topicsScroll.appendChild(topicsBox);
         section.appendChild(topicsScroll);
       })
       .catch(function (err) {
+        reportedBox.textContent = '';
+        reportedBox.appendChild(el('p', 'comments-status', 'Reports could not be loaded.'));
         status.textContent = err.message === 'No.' ? 'This page is for the admins.'
           : 'The audit could not be loaded. Check your connection and reload the page.';
       });
@@ -1947,7 +2081,7 @@
 
   /* The pending-review queue: the in-platform replacement for the old email
      approve link. Each held comment gets Approve and Delete, right here. */
-  function renderPending() {
+  function renderPending(onCount) {
     var head = el('h3', 'board-form-head', 'Pending review');
     section.appendChild(head);
     section.appendChild(el('p', 'board-intro', 'Comments the automated screen flagged and held back from publishing. Approve one to publish it, or delete it to discard. An empty list means nothing is waiting on you.'));
@@ -1963,6 +2097,7 @@
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
         box.textContent = '';
+        if (onCount) onCount(d.pending.length);
         if (!d.pending.length) { box.appendChild(el('p', 'comments-status', 'Nothing held. All clear.')); return; }
         d.pending.forEach(function (c) {
           var row = el('div', 'board-topic pending-row');
@@ -2002,7 +2137,7 @@
           box.appendChild(row);
         });
       })
-      .catch(function () { box.textContent = ''; box.appendChild(el('p', 'comments-status', 'The pending queue could not be loaded.')); });
+      .catch(function () { if (onCount) onCount(0); box.textContent = ''; box.appendChild(el('p', 'comments-status', 'The pending queue could not be loaded.')); });
   }
 
   /* The admin IP-ban list: add or remove IPv4/IPv6 entries by hand, beside the
