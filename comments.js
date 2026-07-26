@@ -1564,7 +1564,8 @@
     ensureAuditLink();
     new MutationObserver(ensureAuditLink)
       .observe(section.querySelector('.comment-identity'), { childList: true });
-    section.appendChild(indexSearchBox());
+    /* Search is a members' feature, so the box only shows once you are logged in. */
+    if (state.key && state.myHash) section.appendChild(indexSearchBox());
     var wrap = el('div', 'board-cats');
     var stats = {}, catNames = {};
     CATS.forEach(function (cat) {
@@ -3216,6 +3217,13 @@
     var sort0 = qs.get('sort') || '';
     document.title = 'Search | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Search']]);
+    /* Search is for logged-in members only. A logged-out visitor who lands on a
+       shared ?q= link is told to log in rather than shown the search UI. */
+    if (!(state.key && state.myHash)) {
+      section.appendChild(el('p', 'comments-status',
+        'Search is for logged-in members. Create an identity or paste your key above, then search the board.'));
+      return;
+    }
 
     var form = el('form', 'board-search');
     var row1 = el('div', 'key-row');
