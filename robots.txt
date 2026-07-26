@@ -1,8 +1,15 @@
-# Google may crawl everything, the forum included. Every other bot stays
-# out of the forum and its API, the worker request budget is not for
-# crawlers. The rest of the site remains open to all bots by design.
+# Google may crawl everything, the forum included, and its AI may use what
+# it fetched. Every other bot stays out of the forum and its API, the worker
+# request budget is not for crawlers. The rest of the site remains open to
+# all bots by design.
 
 User-agent: Googlebot
+Allow: /
+
+# Not a crawler, a use-permission token: this lets Google's AI (Gemini, the
+# AI Overviews in search) draw on what Googlebot already fetched, forum and
+# all. It adds no requests of its own.
+User-agent: Google-Extended
 Allow: /
 
 User-agent: *
