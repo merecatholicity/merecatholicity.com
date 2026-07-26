@@ -184,3 +184,17 @@ CREATE TRIGGER IF NOT EXISTS comments_au AFTER UPDATE ON comments BEGIN
   INSERT INTO comments_fts(comments_fts, rowid, title, body) VALUES ('delete', old.id, old.title, old.body);
   INSERT INTO comments_fts(rowid, title, body) VALUES (new.id, new.title, new.body);
 END;
+
+-- Per-user board read state for "new since last visit". One row per thread the
+-- member has read; topic_id = 0 is the "read everything up to read_at" floor,
+-- set on a member's first arrival so a newcomer sees no wall of new, and reset
+-- by "Mark all read". A thread reads as new when its last_at exceeds the reader's
+-- read_at for it (or the floor). Mirrors the watches shape and the DM read_at
+-- idiom. Orphan rows (vanished topics) are swept by the monthly cron.
+CREATE TABLE IF NOT EXISTS thread_reads (
+  hash     TEXT NOT NULL,
+  topic_id INTEGER NOT NULL,
+  read_at  INTEGER NOT NULL,
+  PRIMARY KEY (hash, topic_id)
+);
+CREATE INDEX IF NOT EXISTS thread_reads_hash_idx ON thread_reads(hash);

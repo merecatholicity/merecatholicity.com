@@ -1545,13 +1545,14 @@
       .observe(section.querySelector('.comment-identity'), { childList: true });
     section.appendChild(indexSearchBox());
     var wrap = el('div', 'board-cats');
-    var stats = {};
+    var stats = {}, catNames = {};
     CATS.forEach(function (cat) {
       var row = el('div', 'board-cat');
       var left = el('div', 'board-cat-left');
       var name = el('a', 'board-cat-name', cat[1]);
       name.href = 'community.html?cat=' + cat[0];
       left.appendChild(name);
+      catNames[cat[0]] = name;
       left.appendChild(catDescNode('div', cat));
       row.appendChild(left);
       stats[cat[0]] = el('div', 'board-stats', '—');
@@ -1562,6 +1563,39 @@
     /* The admin doors sit at the foot of the room list, right-aligned and out
        of the reader's path, after the last room and before the footer rule. */
     section.appendChild(auditSlot);
+    /* New since your last visit: a summary line above the rooms and a "(k new)"
+       beside each room's name. Keyed only, and merged onto the synchronous name
+       so the async /board stats fetch never clears it. */
+    if (state.key) {
+      var unreadHost = el('p', 'board-intro');
+      section.insertBefore(unreadHost, wrap);
+      fetch(API + '/board/unread', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }),
+      }).then(function (r) { return r.json(); }).then(function (d) {
+        if (blockedOut(d) || !d.ok) return;
+        if (d.total > 0) {
+          unreadHost.appendChild(document.createTextNode(
+            d.total + (d.total === 1 ? ' new thread since your last visit. ' : ' new threads since your last visit. ')));
+          var mark = el('a', 'identity-action', 'Mark all read');
+          mark.href = '#';
+          mark.addEventListener('click', function (e) {
+            e.preventDefault();
+            fetch(API + '/board/read-all', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key }),
+            }).then(function () { location.reload(); }).catch(function () {});
+          });
+          unreadHost.appendChild(mark);
+        }
+        if (d.byCat) {
+          CATS.forEach(function (cat) {
+            var n = d.byCat[cat[0]], nm = catNames[cat[0]];
+            if (n && nm) nm.parentNode.insertBefore(el('span', 'dm-unread', ' (' + n + ' new)'), nm.nextSibling);
+          });
+        }
+      }).catch(function () {});
+    }
     fetchRetry(API + '/board' + freshParam('?'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -1654,12 +1688,14 @@
           list.appendChild(el('p', 'comments-status', 'No topics yet. Yours can be the first.'));
           return;
         }
+        var titlesByTopic = {};
         d.topics.forEach(function (t) {
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
           var title = el('a', 'board-topic-title', t.title);
           title.href = 'community.html?topic=' + t.id;
           left.appendChild(title);
+          titlesByTopic[t.id] = title;
           if (t.sticky) left.appendChild(el('span', 'board-sticky', '(sticky)'));
           if (t.locked) left.appendChild(el('span', 'board-locked', '(locked)'));
           /* Jump straight into a page of this thread. Replies paginate 20 to a
@@ -1721,6 +1757,20 @@
           }
           list.appendChild(row);
         });
+        /* Mark the threads new since your last visit — a separate keyed call so
+           the listing itself stays public and cacheable. */
+        if (state.key) {
+          fetch(API + '/board/reads', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, cat: key }),
+          }).then(function (r) { return r.json(); }).then(function (rd) {
+            if (blockedOut(rd) || !rd.ok) return;
+            (rd.unread || []).forEach(function (id) {
+              var t = titlesByTopic[id];
+              if (t) { t.className = 'board-topic-title dm-unread'; t.parentNode.insertBefore(el('span', 'dm-unread', ' ● new'), t.nextSibling); }
+            });
+          }).catch(function () {});
+        }
         function catHref(i) { return 'community.html?cat=' + key + '&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, catHref);
         if (topBar) section.insertBefore(topBar, list);
@@ -1747,6 +1797,13 @@
         var cat = catByKey(d.cat);
         state.anonAllowed = !!d.anon;
         document.title = d.topic.title + ' | Catholicity Board';
+        /* Opening a thread marks it read for the "new since last visit" state. */
+        if (state.key) {
+          fetch(API + '/board/read', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, topic: d.topic.id }),
+          }).catch(function () {});
+        }
         crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
         var headEl = el('h2', 'board-topic-head', d.topic.title);
         if (d.topic.sticky) headEl.appendChild(el('span', 'board-sticky', '(sticky)'));
