@@ -23,6 +23,8 @@
   --grade-y: #2f6b2f;
   --grade-o: #6d4b8b;
   --glass: rgba(255, 255, 255, 0.97);
+  --creed-bg: #d1e7dd;
+  --creed-head: #0f5132;
 }
 
 /* Dark theme. Applied when the reader has chosen dark (data-theme on <html>, set
@@ -49,6 +51,8 @@
   --grade-y: #77c07b;
   --grade-o: #b98ed6;
   --glass: rgba(28, 24, 17, 0.97);
+  --creed-bg: #1d2a20;
+  --creed-head: #a6d3b2;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -71,6 +75,8 @@
     --grade-y: #77c07b;
     --grade-o: #b98ed6;
     --glass: rgba(28, 24, 17, 0.97);
+    --creed-bg: #1d2a20;
+    --creed-head: #a6d3b2;
   }
 }
 
@@ -485,7 +491,7 @@ nav.site .here { color: var(--faint); }
 /* The confession, as the PDF's parchment box. .creed on the home page,
    .creedbox in the pandoc book edition. */
 .creed, .creedbox {
-  background: #d1e7dd;
+  background: var(--creed-bg);
   border: 1px dashed var(--ink-soft);
   border-radius: 3px;
   padding: 1rem 1.4rem;
@@ -499,7 +505,7 @@ nav.site .here { color: var(--faint); }
 .creed-head {
   text-align: center;
   font-weight: bold;
-  color: #0f5132;
+  color: var(--creed-head);
   margin: 0 0 0.6em;
 }
 .creed-note {
