@@ -846,6 +846,37 @@ async function handleBoardCat(request, env, url) {
   return json({ ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE }, 200, cacheHeader(url));
 }
 
+/* A member's own recent forum posts, newest first — the "recent posts" list on a
+   profile, so a reader can follow a thinker. The same live-and-forum filter the
+   board uses, plus an author clause; a reply borrows its topic's title and links
+   to the exact post. Public and cacheable like every board read. */
+async function handleAuthorPosts(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const hash = String(url.searchParams.get('hash') || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
+  const per = 20;
+  const where =
+    "WHERE c.author_hash = ?1 AND c.page LIKE 'board:%' AND c.status = 'live' " +
+    "AND (c.parent_id IS NULL OR t.status = 'live')";
+  const total = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM comments c LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' + where
+  ).bind(hash).first();
+  const rows = await env.DB.prepare(
+    'SELECT c.id AS comment_id, COALESCE(c.parent_id, c.id) AS topic_id, ' +
+    'COALESCE(c.title, t.title) AS title, c.page, c.created_at, substr(c.body, 1, 160) AS snippet ' +
+    'FROM comments c LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' + where +
+    ' ORDER BY c.id DESC LIMIT ?2 OFFSET ?3'
+  ).bind(hash, per, (p - 1) * per).all();
+  const items = (rows.results || []).map((r) => ({
+    comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
+    cat: String(r.page).slice(6), created_at: r.created_at, snippet: r.snippet,
+  }));
+  return json({ ok: true, items, total: (total && total.n) || 0, page: p, per }, 200, cacheHeader(url));
+}
+
 const SEARCH_PER_PAGE = 20;
 
 /* Turn a user query into a safe FTS5 MATCH: pull out "quoted phrases" and bare
@@ -2223,6 +2254,7 @@ export default {
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
+      if (path === '/api/comments/board/author' && request.method === 'GET') return await handleAuthorPosts(request, env, url);
       if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
       if (path === '/api/comments/search' && request.method === 'GET') return await handleSearch(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'GET') return await handleProfileGet(request, env, url);
