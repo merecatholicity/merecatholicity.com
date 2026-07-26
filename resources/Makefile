@@ -35,6 +35,7 @@ body:
 	python summa2tex.py
 	python ccel2tex.py
 	python schaff.py
+	python dr2tex.py
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
 # byte-identical, so git only churns when the text really changes.
@@ -75,7 +76,8 @@ WORKS = \
   encyclical1848=Encyclical_of_the_Eastern_Patriarchs.pdf \
   scranton=Declaration_of_Scranton.pdf \
   cassian-prayer=Conferences_on_Prayer.pdf \
-  benedict-rule=Rule_of_St_Benedict.pdf
+  benedict-rule=Rule_of_St_Benedict.pdf \
+  douay-rheims=Douay-Rheims_Bible.pdf
 
 work_name = $(firstword $(subst =, ,$(1)))
 work_out  = $(lastword  $(subst =, ,$(1)))
@@ -180,6 +182,21 @@ html:
 	  rm $$n-body-html.tex; \
 	  echo "built $$n.html"; \
 	done
+	sed -e 's/\\xchapter{/\\section*{/g' \
+	    -e 's/\\xsection{/\\subsection*{/g' \
+	    -e 's/\\xsubsection{/\\paragraph{/g' \
+	    -e 's/\\drarg{/\\emph{/g' \
+	    -e 's/\\drnote{/\\emph{/g' \
+	    -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
+	    douay-rheims-body.tex > douay-rheims-body-html.tex
+	sed -e 's/{douay-rheims-body.tex}/{douay-rheims-body-html.tex}/' \
+	    douay-rheims.tex | \
+	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
+	    --metadata title="The Holy Bible, Douay-Rheims" \
+	    --css=style.css -B ../nav.html -A ../footer.html \
+	    -o ../douay-rheims.html
+	rm douay-rheims-body-html.tex
+	@echo "built douay-rheims.html"
 	$(MAKE) schaff-html
 
 # The 36 Schaff volumes, same preprocessing and pandoc invocation as the
