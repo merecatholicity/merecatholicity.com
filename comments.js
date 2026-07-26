@@ -1053,34 +1053,10 @@
     box.textContent = '';
     var line = el('p', 'identity-line');
     if (state.key && state.myHash) {
-      line.appendChild(document.createTextNode('Commenting as '));
-      line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)))
-      line.appendChild(document.createTextNode('.'));
-      line.appendChild(el('br'));
-      var usersLink = el('a', 'identity-action', 'User List');
-      usersLink.href = 'community.html?users=1';
-      line.appendChild(usersLink);
-      line.appendChild(document.createTextNode(' · '));
-      var searchLink = el('a', 'identity-action', 'Search');
-      searchLink.href = 'community.html?q=';
-      line.appendChild(searchLink);
-      line.appendChild(document.createTextNode(' · '));
-      var viewProfileLink = el('a', 'identity-action', 'View My Profile');
-      viewProfileLink.href = profileHref(state.myHash);
-      line.appendChild(viewProfileLink);
-      line.appendChild(document.createTextNode(' · '));
-      var inboxLink = el('a', 'identity-action', 'Inbox');
-      inboxLink.href = 'community.html?inbox=1';
-      line.appendChild(inboxLink);
-      var dmc = dmCacheGet();
-      if (dmc && dmc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + dmc.n + ')'));
-      line.appendChild(document.createTextNode(' · '));
-      var notifLink = el('a', 'identity-action', 'Notifications');
-      notifLink.href = 'community.html?notifications=1';
-      line.appendChild(notifLink);
-      var nc = notifCacheGet();
-      if (nc && nc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + nc.n + ')'));
-      line.appendChild(document.createTextNode(' · '));
+      /* First line: who you are, then the account actions. */
+      line.appendChild(document.createTextNode('Logged in as '));
+      line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)));
+      line.appendChild(document.createTextNode('. '));
       line.appendChild(identityAction('Show my key', showKeyBox));
       line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('Logout', function () {
@@ -1093,6 +1069,32 @@
         renderIdentity();
         load();
       }));
+      line.appendChild(el('br'));
+      /* Second line: where to go, grouped — your activity (the two badge
+         feeds), then people (you, then the roster), then search over it all. */
+      var notifLink = el('a', 'identity-action', 'Notifications');
+      notifLink.href = 'community.html?notifications=1';
+      line.appendChild(notifLink);
+      var nc = notifCacheGet();
+      if (nc && nc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + nc.n + ')'));
+      line.appendChild(document.createTextNode(' · '));
+      var inboxLink = el('a', 'identity-action', 'Inbox');
+      inboxLink.href = 'community.html?inbox=1';
+      line.appendChild(inboxLink);
+      var dmc = dmCacheGet();
+      if (dmc && dmc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + dmc.n + ')'));
+      line.appendChild(document.createTextNode(' · '));
+      var viewProfileLink = el('a', 'identity-action', 'View My Profile');
+      viewProfileLink.href = profileHref(state.myHash);
+      line.appendChild(viewProfileLink);
+      line.appendChild(document.createTextNode(' · '));
+      var usersLink = el('a', 'identity-action', 'User List');
+      usersLink.href = 'community.html?users=1';
+      line.appendChild(usersLink);
+      line.appendChild(document.createTextNode(' · '));
+      var searchLink = el('a', 'identity-action', 'Search');
+      searchLink.href = 'community.html?q=';
+      line.appendChild(searchLink);
     } else {
       line.appendChild(document.createTextNode(state.anonAllowed
         ? 'Commenting anonymously. '
