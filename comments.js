@@ -2869,8 +2869,9 @@
       var q = input.value.trim().replace(/^@/, '').toLowerCase();
       if (q.length < 1) { current = []; sug.hidden = true; return; }
       ensureMentionDir(function () {
+        /* Unlike the mention and DM pickers, the author filter offers you
+           yourself too — searching your own posts by author is useful. */
         current = mentionDir
-          .filter(function (u) { return u.hash !== state.myHash; })
           .map(function (u) { return { u: u, s: Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash))), label: dmLabel(u.hash, u.nick) }; })
           .filter(function (x) { return x.s > 0; })
           .sort(function (x, y) { return y.s - x.s || (x.label < y.label ? -1 : 1); })
