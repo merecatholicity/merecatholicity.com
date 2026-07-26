@@ -36,17 +36,22 @@ class Converter(HTMLParser):
     """heading_fn(div_id, title) returns the chapter heading, or None to
     skip that division entirely."""
 
-    def __init__(self, heading_fn, inner_heads=True, skip_titles=()):
+    def __init__(self, heading_fn, inner_heads=True, skip_titles=(),
+                 safe_footnotes=False):
         super().__init__(convert_charrefs=True)
         self.heading_fn = heading_fn
         self.inner_heads = inner_heads
         self.skip_titles = set(skip_titles)
+        # emit \footnote outside any open inline font group, so a note whose
+        # body carries a \par (multi-paragraph or verse footnotes) cannot end
+        # the argument of a non-\long \textsc/\textbf/\textsuperscript.
+        self.safe_footnotes = safe_footnotes
         self.suppressed = 0
         self.chapter_depth = 0
         self.out = []
         self.buf = None
         self.note_buf = None
-        self.stack = []        # inline groups needing }
+        self.stack = []        # inline groups: (opener, closer) needing closer
         self.divstack = []     # (tag, is_chapter)
         self.in_chapter = False
         self.skip_h = 0
@@ -118,7 +123,7 @@ class Converter(HTMLParser):
             return
         if tag == "sup":
             self.emit("\\textsuperscript{")
-            self.stack.append("}")
+            self.stack.append(("\\textsuperscript{", "}"))
             return
         if tag == "p":
             if self.note_buf is not None:
@@ -144,22 +149,22 @@ class Converter(HTMLParser):
             return
         if tag == "i":
             self.emit("\\emph{")
-            self.stack.append("}")
+            self.stack.append(("\\emph{", "}"))
             return
         if tag == "b":
             self.emit("\\textbf{")
-            self.stack.append("}")
+            self.stack.append(("\\textbf{", "}"))
             return
         if tag == "span":
             cls = a.get("class", "")
             if cls == "sc":
                 self.emit("\\textsc{")
-                self.stack.append("}")
+                self.stack.append(("\\textsc{", "}"))
             elif cls == "Greek":
                 self.emit("\\textgreek{")
-                self.stack.append("}")
+                self.stack.append(("\\textgreek{", "}"))
             else:
-                self.stack.append("")
+                self.stack.append(("", ""))
             return
 
     def handle_endtag(self, tag):
@@ -181,7 +186,15 @@ class Converter(HTMLParser):
         if tag == "note":
             note = "".join(self.note_buf).strip()
             self.note_buf = None
-            self.emit("\\footnote{%s}" % note)
+            fn = "\\footnote{%s}" % note
+            if self.safe_footnotes and self.stack:
+                # lift the note out of the open inline groups, then reopen
+                # them, so a \par in the note can't break a non-\long \textXX
+                closers = "".join(c for _o, c in reversed(self.stack))
+                openers = "".join(o for o, _c in self.stack)
+                self.emit(closers + fn + openers)
+            else:
+                self.emit(fn)
             return
         if tag == "p":
             if self.note_buf is not None:
@@ -204,7 +217,7 @@ class Converter(HTMLParser):
             return
         if tag in ("i", "b", "span", "sup"):
             if self.stack:
-                self.emit(self.stack.pop())
+                self.emit(self.stack.pop()[1])
             return
 
     def last_char(self):
@@ -500,36 +513,61 @@ WORKS = [
 ]
 
 
-def main():
-    for src, out, heading_fn, inner_heads, post_fn, skip_titles in WORKS:
-        conv = Converter(heading_fn, inner_heads, skip_titles)
-        with open(src, encoding="utf-8") as f:
-            conv.feed(f.read())
-        conv.flush_paragraph()
-        body = "\n\n".join(conv.out) + "\n"
-        # the transcription sometimes splits a combining accent into its
-        # own Greek span; merge abutting spans, print the inverted breve
-        # as the circumflex it stands for, then compose
-        while "}\\textgreek{" in body:
-            body = body.replace("}\\textgreek{", "")
-        body = body.replace("\u0311", "\u0342")
-        body = unicodedata.normalize("NFC", body)
-        if post_fn:
-            body = post_fn(body)
-        # Hebrew word-citations (tagged Greek in the source) cannot be
-        # set by pdflatex's LGR path; give them their own macro. The
-        # HTML build unwraps it, the PDF renders a marker.
-        body = re.sub(r"\\textgreek\{([^{}]*[\u0590-\u05FF][^{}]*)\}",
-                      "\u203a\\1\u2039", body)
-        body = re.sub(r"(?<![\u203a])([\u0590-\u05FF][\u0590-\u05FF\s]*)",
-                      "\u203a\\1\u2039", body)
-        body = body.replace("\u203a", "\\texthebrew{").replace("\u2039", "}")
-        with open(out, "w", encoding="utf-8") as f:
-            f.write(body)
+def convert_work(src, out, heading_fn, inner_heads=False, post_fn=None,
+                 skip_titles=(), safe_footnotes=False, quiet=False):
+    """Parse a CCEL ThML file to a LaTeX body and write it to `out`.
+
+    Shared by the curated WORKS table below and by schaff.py, which
+    reuses this exact normalization to render whole Schaff volumes.
+    Returns the finished body string.
+    """
+    conv = Converter(heading_fn, inner_heads, skip_titles, safe_footnotes)
+    with open(src, encoding="utf-8") as f:
+        conv.feed(f.read())
+    conv.flush_paragraph()
+    body = "\n\n".join(conv.out) + "\n"
+    # the transcription sometimes splits a combining accent into its
+    # own Greek span; merge abutting spans, print the inverted breve
+    # as the circumflex it stands for, then compose
+    while "}\\textgreek{" in body:
+        body = body.replace("}\\textgreek{", "")
+    body = body.replace("\u0311", "\u0342")
+    body = unicodedata.normalize("NFC", body)
+    # NFC has folded every real accent into a precomposed Greek letter, so
+    # the only combining marks left standing (U+0300..U+036F) are ones that
+    # did not compose: orphaned breathings, editorial ties (double tilde,
+    # diaeresis-below), a perispomeni with no base. LGR/textalpha hard-errors
+    # on those ("Unicode character not set up for use with LaTeX"), and a
+    # single one kills a whole volume of Greek. They carry no reading value
+    # once orphaned, so drop them all.
+    body = "".join(c for c in body if not 0x0300 <= ord(c) <= 0x036F)
+    if post_fn:
+        body = post_fn(body)
+    # Hebrew word-citations (tagged Greek in the source) cannot be
+    # set by pdflatex's LGR path; give them their own macro. The
+    # HTML build unwraps it, the PDF renders a marker. The sentinels
+    # must be characters the transcription can never itself contain:
+    # STX/ETX control chars, not the guillemets \u2039/\u203a, which do
+    # appear in the source Greek and were turning into stray braces.
+    _H0, _H1 = "\u0002", "\u0003"  # STX/ETX sentinels, never in source
+    body = re.sub(r"\\textgreek\{([^{}]*[\u0590-\u05FF][^{}]*)\}",
+                  _H0 + r"\1" + _H1, body)
+    body = re.sub(r"(?<![\u0002])([\u0590-\u05FF][\u0590-\u05FF\s]*)",
+                  _H0 + r"\1" + _H1, body)
+    body = body.replace(_H0, "\\texthebrew{").replace(_H1, "}")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(body)
+    if not quiet:
         print(f"wrote {out}: {body.count(chr(92) + 'xchapter{')} chapters, "
               f"{body.count(chr(92) + 'xsection{')} sections, "
               f"{body.count(chr(92) + 'xsubsection{')} subsections, "
               f"{body.count(chr(92) + 'footnote{')} footnotes")
+    return body
+
+
+def main():
+    for src, out, heading_fn, inner_heads, post_fn, skip_titles in WORKS:
+        convert_work(src, out, heading_fn, inner_heads, post_fn, skip_titles)
 
 
 if __name__ == "__main__":
