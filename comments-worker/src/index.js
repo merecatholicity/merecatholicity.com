@@ -1892,7 +1892,10 @@ async function handleDmDirectory(request, env, url) {
     '    UNION ALL SELECT hash, created_at AS joined FROM profiles' +
     '  ) GROUP BY hash' +
     ') u LEFT JOIN profiles pr ON pr.hash = u.hash ' +
-    'WHERE u.hash != ?1 ORDER BY u.joined DESC LIMIT 2000'
+    /* The librarian and its machinery identities (merecat-named, which the
+       nick guard denies to members) belong in no roster or picker. */
+    "WHERE u.hash != ?1 AND (pr.nick IS NULL OR pr.nick NOT LIKE 'merecat%') " +
+    'ORDER BY u.joined DESC LIMIT 2000'
   ).bind(MERECAT_BOT.hash).all();
   return json({ ok: true, users: rows.results }, 200, cacheHeader(url));
 }
@@ -3271,20 +3274,30 @@ async function merecatMentionReply(env, commentId) {
     return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, refuse);
   }
 
-  /* The brief: where we are, the recent conversation, the asking comment. */
+  /* The brief: where we are, the topic head in full (the title and opening
+     post ALWAYS ride, whatever the reply window drops — sometimes the whole
+     question lives in the title), the recent conversation, the asking
+     comment. */
   let where = '';
-  const talk = [];   // [hash, text] oldest first
+  let opening = '';       // the topic head, labeled, never windowed out
+  let topicTitle = '';
+  const talk = [];        // [hash, text] oldest first
   if (isBoard) {
     const topic = await env.DB.prepare(
       'SELECT id, title, author_hash, body FROM comments WHERE id = ?1').bind(topicId).first();
     topicAuthorHash = topic && topic.author_hash;
-    where = 'the forum topic “' + String((topic && topic.title) || '').slice(0, 120) +
-      '” on this site’s Catholicity Board';
-    if (topic && topic.id !== c.id) talk.push([topic.author_hash, String(topic.body || '')]);
+    topicTitle = String((topic && topic.title) || '').slice(0, MAX_TITLE);
+    where = 'the forum topic “' + topicTitle + '” on this site’s Catholicity Board';
     const replies = await env.DB.prepare(
       "SELECT author_hash, body FROM comments WHERE parent_id = ?1 AND status = 'live' AND id != ?2 " +
       'ORDER BY id DESC LIMIT 12').bind(topicId, c.id).all();
     for (const r of (replies.results || []).reverse()) talk.push([r.author_hash, String(r.body || '')]);
+    const names0 = await merecatNames(env, [topic && topic.author_hash]);
+    opening = 'TOPIC TITLE: “' + topicTitle + '” (a title often carries the question itself — treat it as part of what is asked)\n' +
+      'OPENING POST by ' + ((topic && names0[topic.author_hash]) || 'a member') + ': ' +
+      (topic && topic.id === c.id
+        ? '(the opening post is the very comment asking you, below)'
+        : String((topic && topic.body) || '').slice(0, 1200));
   } else {
     where = 'the comment thread on this site’s own page ' + String(c.page) +
       ' (that page’s text is on your shelf)';
@@ -3295,10 +3308,14 @@ async function merecatMentionReply(env, commentId) {
   }
   const names = await merecatNames(env, talk.map((t) => t[0]).concat([c.author_hash]));
   const nameOf = (h) => names[h] || (h === MERECAT_BOT.hash ? MERECAT_BOT.nick : 'a member');
-  const talkBlock = talk.map((t) => nameOf(t[0]) + ': ' + t[1].slice(0, 700)).join('\n---\n');
+  const talkBlock = (opening ? opening + '\n---\n' : '') +
+    talk.map((t) => nameOf(t[0]) + ': ' + t[1].slice(0, 700)).join('\n---\n');
 
-  const asked = String(c.body || '').replace(MERECAT_MENTION_RE, '').trim().slice(0, 2000);
-  const retrievalQ = ((c.title ? c.title + ' ' : '') + asked).slice(0, 2000) || 'this site';
+  let asked = String(c.body || '').replace(MERECAT_MENTION_RE, '').trim().slice(0, 2000);
+  /* A bare "@merecat" under a question-bearing title: the title IS the ask. */
+  if (!asked && topicTitle) asked = topicTitle;
+  const retrievalQ = ((topicTitle ? topicTitle + ' ' : '') + (c.title && c.title !== topicTitle ? c.title + ' ' : '') + asked)
+    .slice(0, 2000) || 'this site';
   const chunks = await merecatRetrieve(env, retrievalQ, cfg);
   const sources = chunks.map((cc, i) => ({
     n: i + 1, title: cc.title, heading: cc.heading,
