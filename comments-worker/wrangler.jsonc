@@ -11,14 +11,33 @@
   "observability": { "enabled": true },
   "routes": [
     { "pattern": "merecatholicity.com/api/comments*", "zone_name": "merecatholicity.com" },
-    { "pattern": "www.merecatholicity.com/api/comments*", "zone_name": "merecatholicity.com" }
+    { "pattern": "www.merecatholicity.com/api/comments*", "zone_name": "merecatholicity.com" },
+    // merecat, the librarian bot, rides this same worker so it shares the
+    // identity/auth machinery; its data lives in its own D1 DB + Vectorize
+    // index (below), decoupled from the comments store.
+    { "pattern": "merecatholicity.com/api/merecat*", "zone_name": "merecatholicity.com" },
+    { "pattern": "www.merecatholicity.com/api/merecat*", "zone_name": "merecatholicity.com" }
   ],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "merecatholicity-comments",
       "database_id": "af00d34a-c1bc-46a3-b51f-1a2fdfec3eb8"
+    },
+    {
+      // The librarian's corpus + config + usage counters. Derived data,
+      // rebuilt any time by `make librarian` — deliberately NOT mirrored by
+      // the backup cron.
+      "binding": "LIBDB",
+      "database_name": "merecat-library",
+      "database_id": "c21d00ec-55d3-4288-b462-a373315f95e7"
     }
+  ],
+  "vectorize": [
+    // Semantic index over the Tier-1 chunks only (free plan stores 5M
+    // dimensions total = ~4,880 vectors at 1024 dims; the deep shelf rides
+    // FTS5 BM25 in LIBDB instead).
+    { "binding": "MERECAT_INDEX", "index_name": "merecat-t1" }
   ],
   "ai": { "binding": "AI" },
   // Monthly database backup: dump -> gzip -> R2, keep 90 days. Free tier.

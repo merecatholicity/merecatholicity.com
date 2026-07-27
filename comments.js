@@ -1807,6 +1807,11 @@
       searchLink.href = 'community.html?q=';
       line.appendChild(searchLink);
       line.appendChild(document.createTextNode(' · '));
+      var merecatLink = el('a', 'identity-action', '🐈 merecat');
+      merecatLink.href = 'community.html?merecat=1';
+      merecatLink.title = 'Ask the librarian';
+      line.appendChild(merecatLink);
+      line.appendChild(document.createTextNode(' · '));
       /* Same line now: who you are, then the account actions, after the nav. */
       line.appendChild(document.createTextNode('Logged in as '));
       line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)));
@@ -4158,6 +4163,186 @@
       });
   }
 
+  /* ---- merecat, the librarian ----------------------------------------
+     A members-only research chat at ?merecat=1. The worker retrieves from
+     the site's own corpus and streams an answer behind a one-line JSON
+     preamble carrying the numbered sources; refusals (caps, resting,
+     blocked) come back as ordinary JSON. The reply body renders through
+     fillBody, so citations like John 6:53 autolink into the KJV reader,
+     and the sources footer is built here as plain same-site links. */
+  var MERECAT_API = '/api/merecat';
+  var merecatHistory = [];   // this visit's turns, sent back for context
+
+  function ensureMerecatStyles() {
+    if (document.getElementById('mc-merecat-css')) return;
+    var css = '' +
+      '.merecat-intro{display:flex;gap:.65rem;align-items:flex-start;border:1px solid var(--rule);background:var(--surface);border-radius:6px;padding:.7rem .9rem;margin:1rem 0}' +
+      '.merecat-cat{font-size:1.7rem;line-height:1.1}' +
+      '.merecat-intro p{margin:.15rem 0;font-size:.92rem}' +
+      '.merecat-log{margin:.8rem 0}' +
+      '.merecat-msg{border:1px solid var(--rule);border-radius:6px;padding:.55rem .8rem;margin:.55rem 0;max-width:92%}' +
+      '.merecat-msg.you{margin-left:auto;background:var(--cream)}' +
+      '.merecat-msg.cat{background:var(--surface)}' +
+      '.merecat-who{font-size:.78rem;color:var(--faint);margin-bottom:.3rem}' +
+      '.merecat-body p{margin:.45em 0}' +
+      '.merecat-body blockquote{margin:.5em 0 .5em .8em;padding-left:.6em;border-left:3px solid var(--rule);color:var(--ink-soft)}' +
+      '.merecat-wait{color:var(--faint);font-style:italic}' +
+      '.merecat-note{color:var(--maroon)}' +
+      '.merecat-srcs{margin-top:.55rem;padding-top:.45rem;border-top:1px dashed var(--rule);font-size:.84rem}' +
+      '.merecat-srcs a{display:block;margin:.15rem 0}' +
+      '.merecat-form{display:flex;gap:.5rem;align-items:flex-end;margin:.8rem 0}' +
+      '.merecat-q{flex:1;min-height:3.1em;resize:vertical;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.5rem .65rem}' +
+      '@media (max-width:620px){.merecat-msg{max-width:100%}.merecat-form{flex-direction:column;align-items:stretch}}';
+    var st = el('style');
+    st.id = 'mc-merecat-css';
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
+
+  function viewMerecat() {
+    document.title = 'merecat, the librarian | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['merecat']]);
+    /* Members only, the same strict gate as board search. */
+    if (!(state.key && state.myHash)) {
+      section.appendChild(el('p', 'comments-status',
+        'merecat, the librarian, answers logged-in members. Create an identity or paste your key above, then come ask.'));
+      return;
+    }
+    ensureMerecatStyles();
+
+    var intro = el('div', 'merecat-intro');
+    intro.appendChild(el('span', 'merecat-cat', '🐈'));
+    var ib = el('div');
+    var p1 = el('p');
+    p1.appendChild(el('strong', null, 'merecat'));
+    p1.appendChild(document.createTextNode(
+      ' is the site’s librarian. Ask a research question and it answers from the shelf itself, the book, the papers, the Fathers, the councils, and the Scriptures, linking the exact places it stands on.'));
+    ib.appendChild(p1);
+    ib.appendChild(el('p', null,
+      'It favors this site’s positions and will argue them, and it is told to give the full picture and say plainly when a question is contested. The whole community shares one free daily budget, so each member gets a handful of questions a day.'));
+    intro.appendChild(ib);
+    section.appendChild(intro);
+
+    var log = el('div', 'merecat-log');
+    section.appendChild(log);
+
+    var form = el('form', 'merecat-form');
+    var q = el('textarea', 'merecat-q');
+    q.placeholder = 'Ask the librarian… say, what do the Fathers make of John 6:53?';
+    q.setAttribute('aria-label', 'Your question');
+    form.appendChild(q);
+    var send = el('button', 'btn btn-send', 'Ask');
+    send.type = 'submit';
+    form.appendChild(send);
+    section.appendChild(form);
+
+    function bubble(who) {
+      var m = el('div', 'merecat-msg ' + (who === 'you' ? 'you' : 'cat'));
+      m.appendChild(el('div', 'merecat-who', who === 'you'
+        ? (state.myNick || displayName(state.myHash))
+        : '🐈 merecat'));
+      var body = el('div', 'merecat-body');
+      m.appendChild(body);
+      log.appendChild(m);
+      m.scrollIntoView({ block: 'nearest' });
+      return { msg: m, body: body };
+    }
+
+    function srcFooter(node, sources) {
+      if (!sources || !sources.length) return;
+      var f = el('div', 'merecat-srcs');
+      f.appendChild(el('strong', null, 'Sources: '));
+      sources.forEach(function (s) {
+        var a = el('a', 'body-link',
+          '[' + s.n + '] ' + s.title + (s.heading ? ' — ' + s.heading : ''));
+        a.href = s.url;
+        f.appendChild(a);
+      });
+      node.appendChild(f);
+    }
+
+    function ask(text) {
+      bubble('you').body.textContent = text;
+      var cat = bubble('cat');
+      cat.body.appendChild(el('span', 'merecat-wait', '…the librarian is looking…'));
+      send.disabled = true;
+      var payload = { key: state.key, q: text, history: merecatHistory.slice(-8) };
+      fetch(MERECAT_API + '/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(function (res) {
+        var ct = res.headers.get('Content-Type') || '';
+        if (ct.indexOf('application/json') !== -1) {
+          /* A refusal: rate limit, daily caps, resting, or a blocked key. */
+          return res.json().then(function (d) {
+            if (blockedOut(d)) return;
+            cat.body.textContent = '';
+            cat.body.appendChild(el('span', 'merecat-note',
+              (d.resting ? '🐈 ' : '') + (d.error || 'merecat could not answer. Try again shortly.')));
+          });
+        }
+        var reader = res.body.getReader();
+        var dec = new TextDecoder();
+        var pre = '', acc = '', sources = null;
+        function finish() {
+          acc = acc.replace(/\s+$/, '');
+          cat.body.textContent = '';
+          if (acc) {
+            fillBody(cat.body, acc);
+            merecatHistory.push({ role: 'user', content: text.slice(0, 1500) });
+            merecatHistory.push({ role: 'assistant', content: acc.slice(0, 1500) });
+            if (merecatHistory.length > 8) merecatHistory = merecatHistory.slice(-8);
+          } else {
+            cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
+          }
+          srcFooter(cat.body, sources);
+          cat.msg.scrollIntoView({ block: 'nearest' });
+        }
+        function pump() {
+          return reader.read().then(function (r) {
+            if (r.done) { finish(); return; }
+            var chunk = dec.decode(r.value, { stream: true });
+            if (sources === null) {
+              pre += chunk;
+              var cut = pre.indexOf('\n\n');
+              if (cut === -1) return pump();
+              try { sources = JSON.parse(pre.slice(0, cut)).sources || []; }
+              catch (e) { sources = []; }
+              acc = pre.slice(cut + 2);
+            } else {
+              acc += chunk;
+            }
+            if (acc) cat.body.textContent = acc;
+            return pump();
+          });
+        }
+        return pump();
+      }).catch(function () {
+        cat.body.textContent = '';
+        cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
+      }).then(function () {
+        send.disabled = false;
+        q.focus();
+      });
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var text = q.value.trim();
+      if (!text || send.disabled) return;
+      q.value = '';
+      ask(text);
+    });
+    q.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        form.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
+    });
+    q.focus();
+  }
+
   /* Dispatch the board to the view its query string names. Clears the section
      first so it can be called again to re-render in place (loadMyProfile does
      this once a runtime admin's status arrives, to reveal the admin controls). */
@@ -4167,6 +4352,7 @@
     if (params.get('ipbans')) return viewIpBans();
     if (params.get('admins')) return viewAdmins();
     if (params.get('admin')) return viewAdminHome();
+    if (params.get('merecat')) return viewMerecat();
     if (params.get('notifications')) return viewNotifications();
     if (params.get('inbox')) return viewInbox();
     if (params.get('users')) return viewUsers();

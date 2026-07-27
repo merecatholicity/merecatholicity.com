@@ -1,0 +1,244 @@
+# The librarian's manifest: every work merecat knows, one entry each.
+# Edit this file, then run `make librarian` from the repo root. Only works
+# whose source content (or entry) changed are re-pushed.
+#
+# Fields:
+#   src       path to the source file, relative to this directory
+#   url       the reader-facing page the citations link to
+#   title     how the work is named in citations
+#   tier      1 = the site's positions (vectorized, boosted, framed as ours)
+#             2 = the evidence shelf   3 = the deep corpus
+#   kind      parser: pandoc (generated pages with .unnumbered headings)
+#             hand (hand-authored site pages with semantic ids)
+#             bible (kjv.json / dr.json)   text (plain txt/md, e.g. extra/)
+#   vectorize true to also store semantic vectors (Tier 1 only — the free
+#             Vectorize plan holds ~4,880 vectors; ingest.py warns on budget)
+#
+# To add content: add an entry here (or drop a .txt/.md in extra/ and list
+# it with kind: text), then `make librarian`. To remove: delete the entry
+# and run `make librarian` — the push prunes works no longer listed.
+
+works:
+  # ---- Tier 1: the primary works, the site's voice --------------------
+  book:
+    { src: ../book.html, url: book.html, tier: 1, kind: pandoc, vectorize: true,
+      title: "Mere Catholicity (the book)" }
+  charting-communions:
+    { src: ../charting-communions.html, url: charting-communions.html, tier: 1, kind: hand, vectorize: true,
+      title: "Charting, part 1: the historic communions" }
+  free-churches:
+    { src: ../free-churches.html, url: free-churches.html, tier: 1, kind: hand, vectorize: true,
+      title: "Charting, part 2: the free churches" }
+  objections:
+    { src: ../objections.html, url: objections.html, tier: 1, kind: hand, vectorize: true,
+      title: "Charting, part 3: fifty objections" }
+  credo:
+    { src: ../credo.html, url: credo.html, tier: 1, kind: hand, vectorize: true,
+      title: "Credo: the confession of Mere Catholicity" }
+  lex-orandi:
+    { src: ../lex-orandi.html, url: lex-orandi.html, tier: 1, kind: hand, vectorize: true,
+      title: "Lex orandi, lex credendi" }
+
+  # ---- Tier 2: our other papers and site pages ------------------------
+  bishop-presbyter:
+    { src: ../bishop-presbyter.html, url: bishop-presbyter.html, tier: 2, kind: pandoc,
+      title: "The Bishop and the Presbyter" }
+  bishop-of-rome:
+    { src: ../bishop-of-rome.html, url: bishop-of-rome.html, tier: 2, kind: hand,
+      title: "The Bishop of Rome: both roads in their own voices" }
+  library:
+    { src: ../library.html, url: library.html, tier: 2, kind: hand,
+      title: "The Library (the master catalog)" }
+
+  # ---- Tier 2: the Scriptures -----------------------------------------
+  kjv:
+    { src: ../kjv.json, url: kjv.html, tier: 2, kind: bible,
+      title: "The Holy Bible, King James Version" }
+  douay-rheims:
+    { src: ../dr.json, url: douay-rheims.html, tier: 2, kind: bible,
+      title: "The Holy Bible, Douay-Rheims" }
+
+  # ---- Tier 2: the curated shelf of the Fathers -----------------------
+  commonitory:
+    { src: ../commonitory.html, url: commonitory.html, tier: 2, kind: pandoc,
+      title: "The Commonitory, by Vincent of Lerins" }
+  ignatius:
+    { src: ../ignatius.html, url: ignatius.html, tier: 2, kind: pandoc,
+      title: "The Epistles of St. Ignatius of Antioch" }
+  clement:
+    { src: ../clement.html, url: clement.html, tier: 2, kind: pandoc,
+      title: "The First Epistle of Clement to the Corinthians" }
+  justin:
+    { src: ../justin.html, url: justin.html, tier: 2, kind: pandoc,
+      title: "The First Apology of St. Justin Martyr" }
+  didache:
+    { src: ../didache.html, url: didache.html, tier: 2, kind: pandoc,
+      title: "The Didache" }
+  irenaeus3:
+    { src: ../irenaeus3.html, url: irenaeus3.html, tier: 2, kind: pandoc,
+      title: "Against Heresies, Book III, by St. Irenaeus" }
+  baptism:
+    { src: ../baptism.html, url: baptism.html, tier: 2, kind: pandoc,
+      title: "On Baptism, by Tertullian" }
+  unity:
+    { src: ../unity.html, url: unity.html, tier: 2, kind: pandoc,
+      title: "On the Unity of the Church, by St. Cyprian" }
+  cyril:
+    { src: ../cyril.html, url: cyril.html, tier: 2, kind: pandoc,
+      title: "The Catechetical Lectures of St. Cyril of Jerusalem" }
+  gregory:
+    { src: ../gregory.html, url: gregory.html, tier: 2, kind: pandoc,
+      title: "The Great Catechism of St. Gregory of Nyssa" }
+  soulres:
+    { src: ../soulres.html, url: soulres.html, tier: 2, kind: pandoc,
+      title: "On the Soul and the Resurrection, by St. Gregory of Nyssa" }
+  festal39:
+    { src: ../festal39.html, url: festal39.html, tier: 2, kind: pandoc,
+      title: "The Thirty-Ninth Festal Letter of St. Athanasius" }
+  tome:
+    { src: ../tome.html, url: tome.html, tier: 2, kind: pandoc,
+      title: "The Tome of St. Leo" }
+  enchiridion:
+    { src: ../enchiridion.html, url: enchiridion.html, tier: 2, kind: pandoc,
+      title: "The Enchiridion, by St. Augustine" }
+  onbaptism:
+    { src: ../onbaptism.html, url: onbaptism.html, tier: 2, kind: pandoc,
+      title: "On Baptism, Against the Donatists, by St. Augustine" }
+  cassian-prayer:
+    { src: ../cassian-prayer.html, url: cassian-prayer.html, tier: 2, kind: pandoc,
+      title: "The Conferences on Prayer, by St. John Cassian" }
+  benedict-rule:
+    { src: ../benedict-rule.html, url: benedict-rule.html, tier: 2, kind: pandoc,
+      title: "The Holy Rule of St. Benedict" }
+  gregory-letters:
+    { src: ../gregory-letters.html, url: gregory-letters.html, tier: 2, kind: pandoc,
+      title: "Letters of St. Gregory the Great on the Title Universal Bishop" }
+
+  # ---- Tier 2: the councils and the roads of the schism ---------------
+  councils:
+    { src: ../councils.html, url: councils.html, tier: 2, kind: pandoc,
+      title: "The Seven Ecumenical Councils" }
+  ravenna:
+    { src: ../ravenna.html, url: ravenna.html, tier: 2, kind: pandoc,
+      title: "The Ravenna Document" }
+  chieti:
+    { src: ../chieti.html, url: chieti.html, tier: 2, kind: pandoc,
+      title: "The Chieti Document" }
+  encyclical1848:
+    { src: ../encyclical1848.html, url: encyclical1848.html, tier: 2, kind: pandoc,
+      title: "Encyclical of the Eastern Patriarchs, 1848" }
+  scranton:
+    { src: ../scranton.html, url: scranton.html, tier: 2, kind: pandoc,
+      title: "The Declaration of Scranton" }
+  jddj:
+    { src: ../jddj.html, url: jddj.html, tier: 2, kind: pandoc,
+      title: "Joint Declaration on the Doctrine of Justification" }
+
+  # ---- Tier 2: Newman (grows when the expansion lands) ----------------
+  development:
+    { src: ../development.html, url: development.html, tier: 2, kind: pandoc,
+      title: "An Essay on the Development of Christian Doctrine, by Newman" }
+  consulting:
+    { src: ../consulting.html, url: consulting.html, tier: 2, kind: pandoc,
+      title: "On Consulting the Faithful in Matters of Doctrine, by Newman" }
+
+  # ---- Tier 2: the Catena Aurea ---------------------------------------
+  catena-matthew:
+    { src: ../catena-matthew.html, url: catena-matthew.html, tier: 2, kind: pandoc,
+      title: "Catena Aurea on St. Matthew" }
+  catena-mark:
+    { src: ../catena-mark.html, url: catena-mark.html, tier: 2, kind: pandoc,
+      title: "Catena Aurea on St. Mark" }
+  catena-luke:
+    { src: ../catena-luke.html, url: catena-luke.html, tier: 2, kind: pandoc,
+      title: "Catena Aurea on St. Luke" }
+  catena-john:
+    { src: ../catena-john.html, url: catena-john.html, tier: 2, kind: pandoc,
+      title: "Catena Aurea on St. John" }
+
+  # ---- Tier 2: the rule of prayer and the devotional life -------------
+  altar:
+    { src: ../altar.html, url: altar.html, tier: 2, kind: hand,
+      title: "The Altar" }
+  hours:
+    { src: ../hours.html, url: hours.html, tier: 2, kind: hand,
+      title: "The Hours" }
+  jesus-prayer:
+    { src: ../jesus-prayer.html, url: jesus-prayer.html, tier: 2, kind: hand,
+      title: "The Jesus Prayer" }
+  lectio-divina:
+    { src: ../lectio-divina.html, url: lectio-divina.html, tier: 2, kind: hand,
+      title: "Lectio Divina" }
+  confession-fasting:
+    { src: ../confession-fasting.html, url: confession-fasting.html, tier: 2, kind: hand,
+      title: "Confession and Fasting" }
+  theotokos:
+    { src: ../theotokos.html, url: theotokos.html, tier: 2, kind: hand,
+      title: "Mary the Theotokos" }
+  mary:
+    { src: ../mary.html, url: mary.html, tier: 2, kind: hand,
+      title: "Mary" }
+  rosary:
+    { src: ../rosary.html, url: rosary.html, tier: 2, kind: hand,
+      title: "The Rosary" }
+  rule-of-benedict:
+    { src: ../rule-of-benedict.html, url: rule-of-benedict.html, tier: 2, kind: hand,
+      title: "Living the Rule of St. Benedict" }
+  law:
+    { src: ../law.html, url: law.html, tier: 2, kind: pandoc,
+      title: "The Treatise on Law, by St. Thomas Aquinas" }
+
+  # ---- Tier 3: the Summa Theologica -----------------------------------
+  summa-fp:
+    { src: ../summa-fp.html, url: summa-fp.html, tier: 3, kind: pandoc,
+      title: "Summa Theologica, First Part" }
+  summa-fs:
+    { src: ../summa-fs.html, url: summa-fs.html, tier: 3, kind: pandoc,
+      title: "Summa Theologica, First Part of the Second Part" }
+  summa-ss:
+    { src: ../summa-ss.html, url: summa-ss.html, tier: 3, kind: pandoc,
+      title: "Summa Theologica, Second Part of the Second Part" }
+  summa-tp:
+    { src: ../summa-tp.html, url: summa-tp.html, tier: 3, kind: pandoc,
+      title: "Summa Theologica, Third Part" }
+  summa-xp:
+    { src: ../summa-xp.html, url: summa-xp.html, tier: 3, kind: pandoc,
+      title: "Summa Theologica, Supplement" }
+
+  # ---- Tier 3: the complete library of the Fathers (Schaff) -----------
+  anf01: { src: ../anf01.html, url: anf01.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. I" }
+  anf02: { src: ../anf02.html, url: anf02.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. II" }
+  anf03: { src: ../anf03.html, url: anf03.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. III" }
+  anf04: { src: ../anf04.html, url: anf04.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. IV" }
+  anf05: { src: ../anf05.html, url: anf05.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. V" }
+  anf06: { src: ../anf06.html, url: anf06.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. VI" }
+  anf07: { src: ../anf07.html, url: anf07.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. VII" }
+  anf08: { src: ../anf08.html, url: anf08.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. VIII" }
+  anf09: { src: ../anf09.html, url: anf09.html, tier: 3, kind: pandoc, title: "Ante-Nicene Fathers, Vol. IX" }
+  npnf101: { src: ../npnf101.html, url: npnf101.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. I (Augustine)" }
+  npnf102: { src: ../npnf102.html, url: npnf102.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. II (Augustine: City of God)" }
+  npnf103: { src: ../npnf103.html, url: npnf103.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. III (Augustine: On the Trinity)" }
+  npnf104: { src: ../npnf104.html, url: npnf104.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. IV (Augustine)" }
+  npnf105: { src: ../npnf105.html, url: npnf105.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. V (Augustine: Anti-Pelagian)" }
+  npnf106: { src: ../npnf106.html, url: npnf106.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. VI (Augustine)" }
+  npnf107: { src: ../npnf107.html, url: npnf107.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. VII (Augustine on John)" }
+  npnf108: { src: ../npnf108.html, url: npnf108.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. VIII (Augustine on the Psalms)" }
+  npnf109: { src: ../npnf109.html, url: npnf109.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. IX (Chrysostom)" }
+  npnf110: { src: ../npnf110.html, url: npnf110.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. X (Chrysostom on Matthew)" }
+  npnf111: { src: ../npnf111.html, url: npnf111.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. XI (Chrysostom on Acts and Romans)" }
+  npnf112: { src: ../npnf112.html, url: npnf112.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. XII (Chrysostom on Corinthians)" }
+  npnf113: { src: ../npnf113.html, url: npnf113.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. XIII (Chrysostom on Galatians through Philemon)" }
+  npnf114: { src: ../npnf114.html, url: npnf114.html, tier: 3, kind: pandoc, title: "NPNF Series 1, Vol. XIV (Chrysostom on John and Hebrews)" }
+  npnf201: { src: ../npnf201.html, url: npnf201.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. I (Eusebius)" }
+  npnf202: { src: ../npnf202.html, url: npnf202.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. II (Socrates and Sozomen)" }
+  npnf203: { src: ../npnf203.html, url: npnf203.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. III (Theodoret, Jerome, Rufinus)" }
+  npnf204: { src: ../npnf204.html, url: npnf204.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. IV (Athanasius)" }
+  npnf205: { src: ../npnf205.html, url: npnf205.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. V (Gregory of Nyssa)" }
+  npnf206: { src: ../npnf206.html, url: npnf206.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. VI (Jerome)" }
+  npnf207: { src: ../npnf207.html, url: npnf207.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. VII (Cyril of Jerusalem, Gregory Nazianzen)" }
+  npnf208: { src: ../npnf208.html, url: npnf208.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. VIII (Basil)" }
+  npnf209: { src: ../npnf209.html, url: npnf209.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. IX (Hilary of Poitiers, John of Damascus)" }
+  npnf210: { src: ../npnf210.html, url: npnf210.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. X (Ambrose)" }
+  npnf211: { src: ../npnf211.html, url: npnf211.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. XI (Sulpitius Severus, Vincent, Cassian)" }
+  npnf212: { src: ../npnf212.html, url: npnf212.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. XII (Leo the Great, Gregory the Great)" }
+  npnf213: { src: ../npnf213.html, url: npnf213.html, tier: 3, kind: pandoc, title: "NPNF Series 2, Vol. XIII (Gregory the Great, Ephraim, Aphrahat)" }

@@ -1,0 +1,11 @@
+# merecat's dials. Edit, then `make librarian` — no worker redeploy needed.
+# model: any Workers AI text model id. qwen3-30b-a3b-fp8 is the strongest
+#   answer-per-neuron on the free catalog (~48 neurons a question, so the
+#   10,000-neuron free day covers the global cap below with room left for
+#   the board's own moderation calls). @cf/openai/gpt-oss-120b is the tested
+#   deeper alternate at ~4x the cost per question.
+model: "@cf/qwen/qwen3-30b-a3b-fp8"
+user_daily: 10      # questions per member per UTC day
+global_daily: 150   # questions across the whole community per UTC day
+topk: 8             # retrieved chunks handed to the model
+max_tokens: 1100    # output ceiling per answer

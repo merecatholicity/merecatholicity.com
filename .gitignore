@@ -106,3 +106,4 @@ backups/
 # <Work>.pdf / <id>.html are what ships.
 resources/newman-src/
 resources/grammar.pdf
+librarian/.key
