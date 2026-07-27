@@ -327,7 +327,12 @@
   function getMuted() {
     try { var a = JSON.parse(localStorage.getItem(MUTED_STORE)); return Array.isArray(a) ? a : []; } catch (e) { return []; }
   }
-  function isMuted(hash) { return !!hash && getMuted().indexOf(hash) !== -1; }
+  /* The librarian cannot be muted: it speaks only when summoned, so a muted
+     bot would read as a broken summons (a stale stored mute is ignored too). */
+  function isMuted(hash) {
+    if (hash === MERECAT_BOT_HASH) return false;
+    return !!hash && getMuted().indexOf(hash) !== -1;
+  }
   function toggleMute(hash) {
     if (!hash) return false;
     var a = getMuted(), i = a.indexOf(hash);
@@ -3136,6 +3141,8 @@
       edit.addEventListener('click', function () { editProfile(card, p); });
       card.appendChild(edit);
     } else if (state.key && state.myHash && p.hash !== state.myHash) {
+      /* The librarian gets neither door: no DMs (it holds no inbox) and no
+         mute (it speaks only when summoned). */
       if (p.hash !== MERECAT_BOT_HASH) {
         var dmBtn = el('button', 'btn btn-send', 'Send a Direct Message');
         dmBtn.type = 'button';
@@ -3143,14 +3150,14 @@
           location.href = 'community.html?dm=' + p.hash;
         });
         card.appendChild(dmBtn);
+        var muteBtn = el('button', 'btn btn-anon', isMuted(p.hash) ? 'Unmute this member' : 'Mute this member');
+        muteBtn.type = 'button';
+        muteBtn.addEventListener('click', function () {
+          toggleMute(p.hash);
+          muteBtn.textContent = isMuted(p.hash) ? 'Unmute this member' : 'Mute this member';
+        });
+        card.appendChild(muteBtn);
       }
-      var muteBtn = el('button', 'btn btn-anon', isMuted(p.hash) ? 'Unmute this member' : 'Mute this member');
-      muteBtn.type = 'button';
-      muteBtn.addEventListener('click', function () {
-        toggleMute(p.hash);
-        muteBtn.textContent = isMuted(p.hash) ? 'Unmute this member' : 'Mute this member';
-      });
-      card.appendChild(muteBtn);
     }
     /* A member's own recent forum posts, so a reader can follow a thinker. */
     renderProfilePosts(card, p.hash);
@@ -4389,11 +4396,17 @@
       return { msg: m, body: body };
     }
 
-    function srcFooter(node, sources) {
+    /* Only the sources the answer actually cited make the footer: the model
+       reads more than it cites, the reader sees the load-bearing few. */
+    function srcFooter(node, sources, text) {
       if (!sources || !sources.length) return;
+      var cited = {};
+      String(text || '').replace(/\[(\d+)\]/g, function (m, n) { cited[Number(n)] = true; return m; });
+      var used = sources.filter(function (s) { return cited[s.n]; });
+      if (!used.length) return;
       var f = el('div', 'merecat-srcs');
       f.appendChild(el('strong', null, 'Sources: '));
-      sources.forEach(function (s) {
+      used.forEach(function (s) {
         var a = el('a', 'body-link',
           '[' + s.n + '] ' + s.title + (s.heading ? ' — ' + s.heading : ''));
         a.href = s.url;
@@ -4432,7 +4445,7 @@
           cat.body.textContent = '';
           if (acc) fillBody(cat.body, acc);
           else cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
-          srcFooter(cat.body, sources);
+          srcFooter(cat.body, sources, acc);
           cat.msg.scrollIntoView({ block: 'nearest' });
         }
         function pump() {
@@ -4512,7 +4525,7 @@
             fillBody(b.body, m.body);
             var srcs = [];
             try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
-            srcFooter(b.body, srcs);
+            srcFooter(b.body, srcs, m.body);
           }
         });
         q.focus();
@@ -4534,7 +4547,7 @@
 
     h3('What this is');
     p('merecat is a research tool for digging through this site’s Library, not an oracle. Every question runs the same way: the librarian searches the shelf, gathers the ' +
-      (d ? d.topk : 'eight') + ' most relevant passages, and hands them to a language model with standing instructions to answer from them and to cite them. Every work it cites is self-hosted here, and the whole shelf is anchored deep: every Bible verse and every father, book, chapter, section, and paragraph of the corpus has its own address, so a citation does not just name a work, it lands you very close to the exact place. The numbered links under each answer are the very passages the model was given. When the shelf does not cover a question it is instructed to say so and to label what follows as general knowledge.');
+      (d ? d.topk : 'eight') + ' most relevant passages, and hands them to a language model with standing instructions to answer from them and to cite them. Every work it cites is self-hosted here, and the whole shelf is anchored deep: every Bible verse and every father, book, chapter, section, and paragraph of the corpus has its own address, so a citation does not just name a work, it lands you very close to the exact place. The numbered links under each answer are the passages the answer actually stands on, the load-bearing two or three chosen from everything the librarian read. When the shelf does not cover a question it is instructed to say so and to label what follows as general knowledge.');
     p('The model is ' + (d ? d.model : 'an open-weights model') +
       ', running on Cloudflare Workers AI, the same service that runs this board’s own machinery. Your question is processed there and nowhere else, and the librarian can still err, which is why every answer carries its sources: check them. Treat merecat as a fast index to the shelf, not as the shelf itself.');
     p('You can also summon the librarian in public: write @merecat in a forum post or an article-page comment and it answers right there in the thread, briefed on the page, the recent conversation, and your comment. A mention spends one of your daily questions like any question here would.');

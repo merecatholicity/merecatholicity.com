@@ -2828,7 +2828,7 @@ async function handleMerecatAsk(request, env, ctx) {
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
     (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
-    '\n\nSOURCES (cite each by its bracketed number, like [3] — write the digit; these are the only citable sources this turn' +
+    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite sparingly, two or three at most, only what the answer stands on; these are the only citable sources this turn' +
     (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
     '):\n\n' + (srcBlock || '(none)') + '/no_think';
   const messages = [{ role: 'system', content: sys }];
@@ -3332,7 +3332,7 @@ async function merecatMentionReply(env, commentId) {
     '\n\nThe member ' + nameOf(c.author_hash) + ' has asked you directly, in the comment you are replying to. ' +
     'Write the single comment you will post in reply: answer what was asked, cite sources by their bracketed ' +
     'numbers like [2], stay under 250 words, no greeting and no signature.' +
-    '\n\nSOURCES (cite each by its bracketed number, like [3] — write the digit; these are the only citable sources' +
+    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite sparingly, two or three at most, only what the answer stands on; these are the only citable sources' +
     (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
     '):\n\n' + (srcBlock || '(none)') + '/no_think';
   const messages = [
@@ -3353,8 +3353,13 @@ async function merecatMentionReply(env, commentId) {
       ? String(res.choices[0].message.content || '') : ''));
   answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   if (!answer) return null;
-  if (sources.length) {
-    answer += '\n\nSources:\n' + sources.map((s) =>
+  /* The footer lists only the sources the answer actually cited — the model
+     read more, the reader sees the load-bearing few. */
+  const citedNums = new Set();
+  answer.replace(/\[(\d+)\]/g, (m, n) => { citedNums.add(Number(n)); return m; });
+  const cited = sources.filter((s) => citedNums.has(s.n));
+  if (cited.length) {
+    answer += '\n\nSources:\n' + cited.map((s) =>
       '[' + s.n + '] [' + s.title + (s.heading ? ' — ' + s.heading : '') + '](' + s.url + ')').join('\n');
   }
   const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
