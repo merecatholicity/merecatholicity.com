@@ -1751,10 +1751,22 @@ async function handleBoardRead(request, env) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  await env.DB.prepare(
-    'INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, ?2, ?3) ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?3'
-  ).bind(me, topicId, Math.floor(Date.now() / 1000)).run();
-  return json({ ok: true }, 200);
+  const now = Math.floor(Date.now() / 1000);
+  /* Reading a thread reads its notifications too — however the reader got
+     here. The reply carries the remaining unread count so the badge can
+     tell the truth on this very page load instead of a cache's old news. */
+  await env.DB.batch([
+    env.DB.prepare(
+      'INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, ?2, ?3) ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?3'
+    ).bind(me, topicId, now),
+    env.DB.prepare(
+      'UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND topic_id = ?2 AND read_at IS NULL'
+    ).bind(me, topicId, now),
+  ]);
+  const un = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
+  ).bind(me).first();
+  return json({ ok: true, notif_unread: (un && un.n) || 0 }, 200);
 }
 
 /* Mark everything read: raise the floor to now and drop the per-thread rows it
@@ -1771,9 +1783,13 @@ async function handleBoardReadAll(request, env) {
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const now = Math.floor(Date.now() / 1000);
-  await env.DB.prepare('INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, 0, ?2) ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?2').bind(me, now).run();
-  await env.DB.prepare('DELETE FROM thread_reads WHERE hash = ?1 AND topic_id != 0 AND read_at <= ?2').bind(me, now).run();
-  return json({ ok: true }, 200);
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, 0, ?2) ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?2').bind(me, now),
+    env.DB.prepare('DELETE FROM thread_reads WHERE hash = ?1 AND topic_id != 0 AND read_at <= ?2').bind(me, now),
+    /* Mark ALL read means the notifications too: caught up is caught up. */
+    env.DB.prepare('UPDATE notifications SET read_at = ?2 WHERE recipient_hash = ?1 AND read_at IS NULL').bind(me, now),
+  ]);
+  return json({ ok: true, notif_unread: 0 }, 200);
 }
 
 /* Block and unblock, owner-side only. */
