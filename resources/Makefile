@@ -22,7 +22,8 @@ SCHAFF_XML_IDS = anf01 anf02 anf03 anf04 anf05 anf06 anf07 anf08 anf09 \
   npnf101 npnf102 npnf103 npnf104 npnf105 npnf106 npnf107 npnf108 npnf109 \
   npnf110 npnf111 npnf112 npnf113 npnf114 \
   npnf201 npnf202 npnf203 npnf204 npnf205 npnf206 npnf207 npnf208 npnf209 \
-  npnf210 npnf211 npnf212 npnf213 npnf214
+  npnf210 npnf211 npnf212 npnf213 npnf214 \
+  hcc1 hcc2 hcc3 hcc4 hcc5 hcc6 hcc7 hcc8 creeds1 creeds2 creeds3
 schaff-fetch:
 	for id in $(SCHAFF_XML_IDS); do \
 	  [ -s $$id.xml ] && { echo "have $$id.xml"; continue; }; \
@@ -56,6 +57,7 @@ body:
 	python kjv-json.py
 	python dr-json.py
 	python summatheologica2tex.py
+	python gutenberg2tex.py
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
 # byte-identical, so git only churns when the text really changes.
@@ -97,6 +99,15 @@ WORKS = \
   scranton=Declaration_of_Scranton.pdf \
   cassian-prayer=Conferences_on_Prayer.pdf \
   benedict-rule=Rule_of_St_Benedict.pdf \
+  cityofgod=The_City_of_God.pdf \
+  ondoctrine=On_Christian_Doctrine.pdf \
+  confessions=Confessions_of_St_Augustine.pdf \
+  incarnation=On_the_Incarnation.pdf \
+  trent=Council_of_Trent.pdf \
+  orthodoxy=Orthodoxy.pdf \
+  heretics=Heretics.pdf \
+  everlasting=The_Everlasting_Man.pdf \
+  gibbons=Faith_of_Our_Fathers.pdf \
   douay-rheims=Douay-Rheims_Bible.pdf \
   kjv=King_James_Bible.pdf \
   catena-matthew=Catena_Aurea_Matthew.pdf \
@@ -195,7 +206,16 @@ html:
 	         scranton:1:"The Declaration of Scranton" \
 	         cassian-prayer:1:"The Conferences on Prayer, by St. John Cassian" \
 	         benedict-rule:1:"The Holy Rule of St. Benedict" \
-	         gregory-letters:1:"Letters of St. Gregory the Great on the Title Universal Bishop"; do \
+	         gregory-letters:1:"Letters of St. Gregory the Great on the Title Universal Bishop" \
+	         cityofgod:1:"The City of God" \
+	         ondoctrine:2:"On Christian Doctrine" \
+	         confessions:1:"The Confessions of St. Augustine" \
+	         incarnation:1:"On the Incarnation of the Word" \
+	         trent:1:"The Canons and Dogmatic Decrees of the Council of Trent" \
+	         orthodoxy:1:"Orthodoxy, by G. K. Chesterton" \
+	         heretics:1:"Heretics, by G. K. Chesterton" \
+	         everlasting:2:"The Everlasting Man, by G. K. Chesterton" \
+	         gibbons:1:"The Faith of Our Fathers, by James Cardinal Gibbons"; do \
 	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \

@@ -26,6 +26,19 @@ resources/anf*.xml
 resources/npnf*.xml
 resources/anf*.pdf
 resources/npnf*.pdf
+resources/hcc*.xml
+resources/creeds*.xml
+resources/hcc*.pdf
+resources/creeds*.pdf
+resources/cityofgod.pdf
+resources/ondoctrine.pdf
+resources/confessions.pdf
+resources/incarnation.pdf
+resources/trent.pdf
+resources/orthodoxy.pdf
+resources/heretics.pdf
+resources/everlasting.pdf
+resources/gibbons.pdf
 resources/commonitory.pdf
 resources/development.pdf
 resources/consulting.pdf
@@ -162,3 +175,4 @@ resources/parochial6.pdf
 resources/parochial7.pdf
 resources/parochial8.pdf
 librarian/.key
+__pycache__/
