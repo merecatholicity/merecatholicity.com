@@ -2601,7 +2601,7 @@ const MERECAT_SITE = 'https://merecatholicity.com/';
    transparency panel's grouping. */
 const MERECAT_TIER_LABEL = {
   1: 'site position', 2: 'scripture', 3: 'the Fathers',
-  4: 'councils and the schism', 5: 'deep shelf', 6: 'Newman',
+  4: 'councils, confessions, and the schism', 5: 'deep shelf', 6: 'Newman',
 };
 const MERECAT_RESTING =
   'merecat is resting. The community’s shared daily budget is spent. It resets at midnight UTC.';

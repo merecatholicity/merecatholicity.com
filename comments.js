@@ -4566,7 +4566,7 @@
     h3('What it knows');
     var pk = el('p');
     pk.appendChild(document.createTextNode(
-      'Only this site’s own published library, weighted by the owner’s ladder: the site’s works and their catechetical core first, then the King James Scriptures with the collected works of Newman entire set directly beneath them, the interpretive companion the site reads the Fathers with, then the named works of the Fathers with the Catena and the great Augustine and Athanasius singles, the seven councils and the documents of the schism, and the deep shelf beneath all, the complete Schaff library with his History of the Christian Church and Creeds of Christendom beside the Summa, Trent, and the modern apologetics of Chesterton and Gibbons. The shelf is still growing, and the librarian’s index is refreshed as new works land, so the counts below are live.' +
+      'Only this site’s own published library, weighted by the owner’s ladder: the site’s works and their catechetical core first, then the King James Scriptures with the collected works of Newman entire set directly beneath them, the interpretive companion the site reads the Fathers with, then the named works of the Fathers with the Catena, the great Augustine and Athanasius singles, St. John of Damascus, and the ancient Liturgies, then the seven councils with the documents of the schism and the confessional standards of the communions this site engages in their own words, Trent beside Westminster, Luther beside Jewel, and the deep shelf beneath all, the complete Schaff library with his History of the Christian Church and Creeds of Christendom beside the Summa, Calvin’s Institutes, Luther’s Bondage of the Will, and the modern apologetics of Chesterton and Gibbons. When the librarian steelmans Rome, Orthodoxy, the Reformation, or the free churches, it can quote their own standards, not a paraphrase. The shelf is still growing, and the librarian’s index is refreshed as new works land, so the counts below are live.' +
       (d ? ' Right now that is ' + d.chunks.toLocaleString() + ' indexed passages across ' + d.works.length + ' works. ' : ' ')));
     var libA = el('a', 'body-link', 'The Library');
     libA.href = 'library.html';
@@ -4582,7 +4582,7 @@
         2: 'The Scriptures',
         6: 'Newman, the interpretive companion',
         3: 'The named works of the Fathers',
-        4: 'The councils and the schism',
+        4: 'The councils, the confessions, and the schism',
         5: 'The deep shelf',
       };
       [1, 2, 6, 3, 4, 5].forEach(function (t) {
