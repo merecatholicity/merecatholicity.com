@@ -99,3 +99,10 @@ backups/
 !.dev.vars.example
 .env*
 !.env.example
+
+# Newman corpus: the raw NewmanReader scrape (newman-fetch) and the
+# per-work intermediate PDFs are reproducible; the committed
+# resources/<id>-body.tex, resources/<id>.tex, newman.mk and the root
+# <Work>.pdf / <id>.html are what ships.
+resources/newman-src/
+resources/grammar.pdf
