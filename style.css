@@ -968,9 +968,9 @@ a.body-link { color: var(--maroon); overflow-wrap: anywhere; }
   transition: transform 0.2s ease;
 }
 :root[data-theme="dark"] .theme-knob { transform: translateX(20px); }
-/* On phones the fixed hamburger owns the top-right corner, so the toggle sits
-   just left of it and still scrolls away. */
-@media (max-width: 600px) { .theme-toggle { top: 1.15rem; right: 4.9rem; } }
+/* On phones the fixed hamburger owns the top-right corner, so the toggle moves
+   to the top-left and still scrolls away. */
+@media (max-width: 600px) { .theme-toggle { top: 1.15rem; left: 0.85rem; right: auto; } }
 
 /* A couple of dark-mode surface touches for panels that carried their own light
    backgrounds. */
