@@ -975,3 +975,26 @@ a.body-link { color: var(--maroon); overflow-wrap: anywhere; }
 /* A couple of dark-mode surface touches for panels that carried their own light
    backgrounds. */
 :root[data-theme="dark"] .comment-meta summary { color: var(--brown); }
+
+/* Deep-link ¶ markers on the generated Scripture and Fathers pages, grafted by
+   deeplink.js onto every heading, paragraph, and verse. Hover reveals the mark
+   (kept faintly visible on touch, where there is no hover); a click copies the
+   passage's permalink. An arriving link tints its target, mirroring
+   .comment:target above. */
+.dl { position: relative; scroll-margin-top: 2rem; }
+.dl-anchor {
+  position: absolute; left: -1.05em; top: 0.12em;
+  opacity: 0; font-size: 0.82em; font-weight: normal; line-height: 1;
+  text-decoration: none; color: var(--faint);
+  transition: opacity 0.12s ease; -webkit-user-select: none; user-select: none;
+}
+.dl:hover > .dl-anchor { opacity: 0.55; }
+.dl-anchor:hover, .dl-anchor.dl-copied { opacity: 1; color: var(--maroon); }
+.dl-anchor.dl-copied::after {
+  content: "link copied"; position: absolute; left: 1.4em; top: -0.15em;
+  white-space: nowrap; font-size: 0.68rem; color: var(--maroon);
+  background: var(--cream); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 0 0.4em;
+}
+@media (hover: none) { .dl-anchor { opacity: 0.3; left: -0.9em; } }
+.dl-target { background: var(--cream); box-shadow: 0 0 0 0.35em var(--cream); border-radius: 2px; }

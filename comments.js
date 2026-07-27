@@ -112,7 +112,75 @@
      :shortcode: emoji resolved against a fixed whitelist to a same-origin path
      (CUSTOM_EMOJI); an unknown :token: stays literal text, so a body can never
      name an arbitrary image source. */
-  var INLINE_MD = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+|:([a-z0-9_+-]{1,40}):/gi;
+  /* Scripture references ("Rom 8:28-30", "John 3:16", "1 Cor 13:4") link to the
+     exact verse in our own KJV (kjv.html, where deeplink.js has stamped every
+     verse with a <slug>-<chapter>-<verse> id). A bare book name never links: a
+     chapter:verse is required. BIBLE maps every accepted spelling/abbreviation
+     to the verse-anchor slug and yields the regex fragment (book, chapter,
+     verse) spliced into INLINE_MD below. Two-letter forms that are common
+     English words (is/am/so/re) are deliberately omitted to avoid false hits. */
+  var BIBLE = (function () {
+    var spec = [
+      ['genesis', 'genesis|gen|ge|gn'], ['exodus', 'exodus|exod|exo|ex'],
+      ['leviticus', 'leviticus|lev|lv'], ['numbers', 'numbers|num|nm|nb'],
+      ['deuteronomy', 'deuteronomy|deut|deu|dt'], ['joshua', 'joshua|josh|jos|jsh'],
+      ['judges', 'judges|judg|jdg|jg'], ['ruth', 'ruth|rth|ru'],
+      ['1-samuel', '1 samuel|1samuel|1 sam|1sam|1 sa|i samuel|i sam|first samuel'],
+      ['2-samuel', '2 samuel|2samuel|2 sam|2sam|2 sa|ii samuel|ii sam|second samuel'],
+      ['1-kings', '1 kings|1kings|1 kgs|1kgs|1 ki|i kings|i kgs|first kings'],
+      ['2-kings', '2 kings|2kings|2 kgs|2kgs|2 ki|ii kings|ii kgs|second kings'],
+      ['1-chronicles', '1 chronicles|1 chron|1 chr|1chr|1 ch|i chronicles|i chron|first chronicles'],
+      ['2-chronicles', '2 chronicles|2 chron|2 chr|2chr|2 ch|ii chronicles|ii chron|second chronicles'],
+      ['ezra', 'ezra|ezr|ez'], ['nehemiah', 'nehemiah|neh|ne'],
+      ['esther', 'esther|esth|est|es'], ['job', 'job|jb'],
+      ['psalms', 'psalms|psalm|pslm|psa|ps|pss|psm'], ['proverbs', 'proverbs|prov|pro|prv|pr'],
+      ['ecclesiastes', 'ecclesiastes|eccles|eccl|ecc|ec|qoh'],
+      ['song-of-solomon', 'song of solomon|song of songs|song|sos|canticles|cant'],
+      ['isaiah', 'isaiah|isa|isai'], ['jeremiah', 'jeremiah|jer|je|jr'],
+      ['lamentations', 'lamentations|lam|la'], ['ezekiel', 'ezekiel|ezek|eze|ezk'],
+      ['daniel', 'daniel|dan|da|dn'], ['hosea', 'hosea|hos|ho'],
+      ['joel', 'joel|joe|jl'], ['amos', 'amos|amo'], ['obadiah', 'obadiah|obad|oba|ob'],
+      ['jonah', 'jonah|jon|jnh'], ['micah', 'micah|mic|mc'], ['nahum', 'nahum|nah|na'],
+      ['habakkuk', 'habakkuk|hab|hb'], ['zephaniah', 'zephaniah|zeph|zep|zp'],
+      ['haggai', 'haggai|hag|hg'], ['zechariah', 'zechariah|zech|zec|zc'],
+      ['malachi', 'malachi|mal|ml'], ['matthew', 'matthew|matt|mat|mt'],
+      ['mark', 'mark|mrk|mar|mk|mr'], ['luke', 'luke|luk|lk'],
+      ['john', 'john|jhn|joh|jn'], ['acts', 'acts|act|ac'],
+      ['romans', 'romans|rom|ro|rm'],
+      ['1-corinthians', '1 corinthians|1 cor|1cor|1 co|i corinthians|i cor|first corinthians'],
+      ['2-corinthians', '2 corinthians|2 cor|2cor|2 co|ii corinthians|ii cor|second corinthians'],
+      ['galatians', 'galatians|gal|ga'], ['ephesians', 'ephesians|ephes|eph'],
+      ['philippians', 'philippians|phil|php|pp'], ['colossians', 'colossians|col'],
+      ['1-thessalonians', '1 thessalonians|1 thess|1thess|1 thes|1 th|i thessalonians|i thess|first thessalonians'],
+      ['2-thessalonians', '2 thessalonians|2 thess|2thess|2 thes|2 th|ii thessalonians|ii thess|second thessalonians'],
+      ['1-timothy', '1 timothy|1 tim|1tim|1 ti|i timothy|i tim|first timothy'],
+      ['2-timothy', '2 timothy|2 tim|2tim|2 ti|ii timothy|ii tim|second timothy'],
+      ['titus', 'titus|tit|ti'], ['philemon', 'philemon|philem|phlm|phm|pm'],
+      ['hebrews', 'hebrews|heb|hb'], ['james', 'james|jas|jm'],
+      ['1-peter', '1 peter|1 pet|1pet|1 pe|1 pt|i peter|i pet|first peter'],
+      ['2-peter', '2 peter|2 pet|2pet|2 pe|2 pt|ii peter|ii pet|second peter'],
+      ['1-john', '1 john|1 jhn|1 jn|1jn|i john|i jn|first john'],
+      ['2-john', '2 john|2 jhn|2 jn|2jn|ii john|ii jn|second john'],
+      ['3-john', '3 john|3 jhn|3 jn|3jn|iii john|iii jn|third john'],
+      ['jude', 'jude|jud|jd'], ['revelation', 'revelation|revelations|rev|apocalypse|apoc']
+    ];
+    var map = {}, forms = [];
+    spec.forEach(function (row) {
+      row[1].split('|').forEach(function (f) {
+        f = f.trim(); if (!f) return; map[f] = row[0]; forms.push(f);
+      });
+    });
+    forms.sort(function (a, b) { return b.length - a.length; });   // longest-first
+    var alt = forms.map(function (f) {
+      return f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
+    }).join('|');
+    return { map: map, src: '(' + alt + ')\\.?[ \\t]+(\\d+):(\\d+)(?:[\\-\\u2013](\\d+))?' };
+  })();
+
+  /* The base inline grammar; the scripture group (book=6, chapter=7, verse=8) is
+     appended so a reference becomes a same-site verse link in appendRich. */
+  var INLINE_BASE = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+|:([a-z0-9_+-]{1,40}):/gi;
+  var INLINE_MD = new RegExp(INLINE_BASE.source + '|' + BIBLE.src, 'gi');
 
   /* Append rich inline text to a node: the marked spans above become <strong>,
      <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
@@ -137,6 +205,24 @@
         target.appendChild(em);
       } else if (m[5] !== undefined) {
         target.appendChild(emojiToken(m[5], m[0]));
+      } else if (m[6] !== undefined) {
+        /* A scripture reference: link to the exact verse in our KJV, or, if the
+           book isn't one we know, leave the whole thing as plain text. A range
+           (8:28-30) points at its first verse. */
+        var slug = BIBLE.map[m[6].toLowerCase().replace(/\s+/g, ' ')];
+        if (slug) {
+          var sa = el('a', 'body-link scripture-link');
+          sa.href = 'kjv.html#' + slug + '-' + m[7] + '-' + m[8];
+          /* Parts kept for the on-hover verse preview (see scriptureHover). */
+          sa.setAttribute('data-slug', slug);
+          sa.setAttribute('data-ch', m[7]);
+          sa.setAttribute('data-v1', m[8]);
+          sa.setAttribute('data-v2', m[9] || m[8]);
+          sa.appendChild(document.createTextNode(m[0]));
+          target.appendChild(sa);
+        } else {
+          target.appendChild(document.createTextNode(m[0]));
+        }
       } else {
         var url = m[3] !== undefined ? m[4] : m[0];
         var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]);
@@ -832,6 +918,158 @@
     return panel;
   }
 
+  /* The whole KJV text, fetched once and cached, only when the Scripture picker
+     is first opened — the same lazy pattern as the emoji data. */
+  var kjvData = null, kjvPromise = null;
+  function loadKjv() {
+    if (kjvPromise) return kjvPromise;
+    kjvPromise = fetch('kjv.json').then(function (r) { return r.json(); })
+      .then(function (d) { kjvData = d; return d; })
+      .catch(function () { kjvData = { books: [] }; return kjvData; });
+    return kjvPromise;
+  }
+
+  /* The Scripture picker: choose a book, chapter, and a verse (or a span of
+     verses), and drop the passage into the box as a blockquote with the
+     reference — which the renderer then autolinks back to the exact verse. */
+  function buildScripturePanel(textarea) {
+    ensureEmojiStyles();
+    var panel = el('div', 'emoji-panel scripture-panel');
+    panel.hidden = true;
+    var row = el('div', 'scripture-row');
+    var bookSel = el('select', 'scripture-sel');
+    var chapSel = el('select', 'scripture-sel scripture-sel-sm');
+    var v1Sel = el('select', 'scripture-sel scripture-sel-sm');
+    var dash = el('span', 'scripture-dash', '–');
+    var v2Sel = el('select', 'scripture-sel scripture-sel-sm');
+    row.appendChild(bookSel); row.appendChild(el('span', 'scripture-sp', ' '));
+    row.appendChild(chapSel); row.appendChild(el('span', 'scripture-colon', ':'));
+    row.appendChild(v1Sel); row.appendChild(dash); row.appendChild(v2Sel);
+    panel.appendChild(row);
+    var status = el('div', 'scripture-status', 'Loading the King James text…');
+    panel.appendChild(status);
+    var preview = el('blockquote', 'scripture-preview'); preview.hidden = true;
+    panel.appendChild(preview);
+    var insert = el('button', 'scripture-insert', 'Insert passage');
+    insert.type = 'button';
+    panel.appendChild(insert);
+
+    function opts(sel, n, label) {
+      sel.textContent = '';
+      for (var i = 1; i <= n; i++) {
+        var o = el('option'); o.value = i; o.textContent = label ? label + ' ' + i : i;
+        sel.appendChild(o);
+      }
+    }
+    function curBook() { return kjvData.books[bookSel.value ? +bookSel.value - 1 : 0]; }
+    function fillBooks() {
+      bookSel.textContent = '';
+      kjvData.books.forEach(function (b, i) {
+        var o = el('option'); o.value = i + 1; o.textContent = b.name; bookSel.appendChild(o);
+      });
+      fillChapters();
+    }
+    function fillChapters() { opts(chapSel, curBook().chapters.length, 'Chapter'); fillVerses(); }
+    function fillVerses() {
+      var ch = curBook().chapters[+chapSel.value - 1] || [];
+      opts(v1Sel, ch.length); opts(v2Sel, ch.length);
+      drawPreview();
+    }
+    function drawPreview() {
+      var a = +v1Sel.value || 1, z = +v2Sel.value || a;
+      if (z < a) { z = a; v2Sel.value = a; }
+      var ch = curBook().chapters[+chapSel.value - 1] || [], parts = [];
+      for (var v = a; v <= z; v++) if (ch[v - 1]) parts.push(ch[v - 1]);
+      fillBody(preview, parts.join(' '));
+      preview.hidden = !parts.length;
+    }
+    function passage() {
+      var b = curBook(), c = +chapSel.value, a = +v1Sel.value, z = +v2Sel.value;
+      if (z < a) z = a;
+      var ch = b.chapters[c - 1] || [], parts = [];
+      for (var v = a; v <= z; v++) if (ch[v - 1]) parts.push(ch[v - 1]);
+      var ref = b.name + ' ' + c + ':' + a + (z > a ? '-' + z : '');
+      return '> ' + parts.join(' ') + ' (' + ref + ')\n';
+    }
+    bookSel.addEventListener('change', fillChapters);
+    chapSel.addEventListener('change', fillVerses);
+    v1Sel.addEventListener('change', drawPreview);
+    v2Sel.addEventListener('change', drawPreview);
+    insert.addEventListener('click', function () {
+      insertAtCaret(textarea, passage());
+      textarea.focus();
+      panel.closePanel();
+    });
+
+    panel.openPanel = function () {
+      panel.hidden = false;
+      if (kjvData) { status.hidden = true; fillBooks(); }
+      else {
+        status.hidden = false;
+        loadKjv().then(function () {
+          if (kjvData.books.length) { status.hidden = true; fillBooks(); }
+          else status.textContent = 'Could not load the Bible text.';
+        });
+      }
+    };
+    panel.closePanel = function () { panel.hidden = true; };
+    panel.toggle = function () { if (panel.hidden) panel.openPanel(); else panel.closePanel(); };
+    return panel;
+  }
+
+  /* Hovering an autolinked reference pops the verse(s) themselves, pulled from
+     the same cached KJV text the picker uses. Desktop only — there is no hover
+     on touch, and reading the passage is a tap away on the link. A large span is
+     allowed but capped so a whole-chapter reference can't fill the screen. */
+  (function scriptureHover() {
+    try { if (!window.matchMedia || !window.matchMedia('(hover: hover)').matches) return; } catch (e) { return; }
+    var tip = null, slugMap = null, hideTimer = null, CAP = 30;
+    function bySlug(slug) {
+      if (!slugMap && kjvData) { slugMap = {}; kjvData.books.forEach(function (b) { slugMap[b.slug] = b; }); }
+      return slugMap ? slugMap[slug] : null;
+    }
+    function place(a) {
+      var r = a.getBoundingClientRect();
+      tip.style.left = Math.max(6, Math.min(r.left, window.innerWidth - tip.offsetWidth - 10)) + 'px';
+      var below = r.bottom + 8;
+      if (below + tip.offsetHeight > window.innerHeight && r.top - tip.offsetHeight - 8 > 0)
+        tip.style.top = (r.top - tip.offsetHeight - 8) + 'px';
+      else tip.style.top = below + 'px';
+    }
+    function show(a) {
+      loadKjv().then(function () {
+        var b = bySlug(a.getAttribute('data-slug')); if (!b) return;
+        var c = +a.getAttribute('data-ch'), ch = b.chapters[c - 1]; if (!ch) return;
+        var v1 = +a.getAttribute('data-v1'), v2 = +a.getAttribute('data-v2');
+        if (!tip) { tip = el('div', 'scripture-tip'); document.body.appendChild(tip); }
+        tip.textContent = '';
+        var h = el('strong', 'scripture-tip-ref', b.name + ' ' + c + ':' + v1 + (v2 > v1 ? '-' + v2 : ''));
+        tip.appendChild(h);
+        var body = el('div'), n = 0;
+        for (var v = v1; v <= v2 && n < CAP; v++, n++) {
+          if (!ch[v - 1]) continue;
+          if (v2 > v1) { var vn = el('sup', 'scripture-tip-v', v + ' '); body.appendChild(vn); }
+          body.appendChild(document.createTextNode(ch[v - 1] + ' '));
+        }
+        if (v2 - v1 + 1 > CAP) body.appendChild(document.createTextNode('…'));
+        tip.appendChild(body);
+        tip.hidden = false;
+        place(a);
+      });
+    }
+    document.addEventListener('mouseover', function (e) {
+      var a = e.target && e.target.closest && e.target.closest('a.scripture-link');
+      if (!a) return;
+      clearTimeout(hideTimer);
+      show(a);
+    });
+    document.addEventListener('mouseout', function (e) {
+      var a = e.target && e.target.closest && e.target.closest('a.scripture-link');
+      if (!a) return;
+      hideTimer = setTimeout(function () { if (tip) tip.hidden = true; }, 160);
+    });
+  })();
+
   /* The avatar preset gallery: the same panel chrome as the emoji picker (search
      box, pack tabs, inner-scrolling grid), but each tile is a bigger image on the
      parchment tile so it previews the avatar it will become. onPick(path, name)
@@ -925,7 +1163,21 @@
       '.av-cell:hover{background:#f2e7d0;border-color:var(--maroon)}' +
       '.av-cell img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;margin:0}' +
       '.btn-gallery{display:inline-block;margin:.15em 0 .1em}' +
-      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}}';
+      /* Scripture picker + autolink + hover preview */
+      '.scripture-panel{padding:.6em}' +
+      '.scripture-row{display:flex;flex-wrap:wrap;align-items:center;gap:.25em}' +
+      '.scripture-sel{font:inherit;font-size:.95rem;padding:.15em .3em;border:1px solid var(--rule);border-radius:5px;background:#faf6ee;color:var(--ink);max-width:14em}' +
+      '.scripture-sel-sm{max-width:6em}' +
+      '.scripture-colon,.scripture-dash{color:var(--faint);padding:0 .05em}' +
+      '.scripture-status{color:var(--faint);font-size:.9rem;padding:.4em 0}' +
+      '.scripture-preview{margin:.6em 0;padding:.4em .7em;border-left:3px solid var(--rule);color:var(--ink-soft);font-size:.95rem;max-height:9em;overflow:auto}' +
+      '.scripture-insert{font:inherit;cursor:pointer;margin-top:.3em;padding:.3em .8em;border:1px solid var(--maroon);border-radius:6px;background:var(--maroon);color:#faf6ee}' +
+      '.scripture-insert:hover{background:var(--maroon-dark)}' +
+      '.scripture-link{white-space:nowrap}' +
+      '.scripture-tip{position:fixed;z-index:1200;max-width:30rem;max-height:60vh;overflow:auto;background:var(--surface,#fff);color:var(--ink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 3px 14px rgba(0,0,0,.22);padding:.55em .7em;font-size:.92rem;line-height:1.5;pointer-events:none}' +
+      '.scripture-tip-ref{display:block;color:var(--maroon);margin-bottom:.25em}' +
+      '.scripture-tip-v{color:var(--faint);font-size:.72em;margin-right:.1em}' +
+      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em}}';
     var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
     document.head.appendChild(st);
   }
@@ -942,10 +1194,13 @@
     bar.appendChild(mdButton('• List', 'Bulleted list  - item', null, function () { linePrefix(textarea, '- '); }));
     bar.appendChild(mdButton('Link', 'Link  [text](url) — merecatholicity.com only', null, function () { insertLink(textarea); }));
     var panel = buildEmojiPanel(textarea);
-    bar.appendChild(mdButton('😊 Emoji', 'Insert an emoji', 'md-emoji', function () { panel.toggle(); }));
+    var scripture = buildScripturePanel(textarea);
+    bar.appendChild(mdButton('😊 Emoji', 'Insert an emoji', 'md-emoji', function () { scripture.closePanel(); panel.toggle(); }));
+    bar.appendChild(mdButton('✝ Scripture', 'Insert a Bible passage', 'md-scripture', function () { panel.closePanel(); scripture.toggle(); }));
     wrap.appendChild(bar);
     wrap.appendChild(textarea);
     wrap.appendChild(panel);
+    wrap.appendChild(scripture);
     attachEmoji(textarea);
     textarea.addEventListener('focus', prefetchEmoji, { once: true });
     return wrap;
