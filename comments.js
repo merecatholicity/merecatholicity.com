@@ -2276,7 +2276,12 @@
             fetch(API + '/board/read-all', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ key: state.key }),
-            }).then(function () { location.reload(); }).catch(function () {});
+            }).then(function () {
+              /* Caught up is caught up: the badge must not spend ninety
+                 seconds contradicting the page it reloads into. */
+              notifCacheSet(0);
+              location.reload();
+            }).catch(function () {});
           });
           unreadHost.appendChild(mark);
         }
@@ -2491,12 +2496,18 @@
         var cat = catByKey(d.cat);
         state.anonAllowed = !!d.anon;
         document.title = d.topic.title + ' | Catholicity Board';
-        /* Opening a thread marks it read for the "new since last visit" state. */
+        /* Opening a thread marks it read for the "new since last visit" state
+           AND reads its notifications — however you got here. The reply's
+           fresh unread count corrects the badge on this very page. */
         if (state.key) {
           fetch(API + '/board/read', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, topic: d.topic.id }),
-          }).catch(function () {});
+          }).then(function (r) { return r.json(); })
+            .then(function (rd) {
+              if (rd && rd.ok && typeof rd.notif_unread === 'number') notifCacheSet(rd.notif_unread);
+            })
+            .catch(function () {});
         }
         crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
         var headEl = el('h2', 'board-topic-head', d.topic.title);
