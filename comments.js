@@ -1249,8 +1249,10 @@
     if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) {
       head.appendChild(el('span', 'comment-admin', '(admin)'));
     }
-    /* A door to a private word with the author, for keyed readers only. */
-    if (c.author_hash && state.myHash && c.author_hash !== state.myHash) {
+    /* A door to a private word with the author, for keyed readers only.
+       The librarian holds no inbox: its posts carry no DM link. */
+    if (c.author_hash && state.myHash && c.author_hash !== state.myHash &&
+        c.author_hash !== MERECAT_BOT_HASH) {
       var dm = el('a', 'comment-dm', 'Direct Message');
       dm.href = 'community.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
@@ -3134,12 +3136,14 @@
       edit.addEventListener('click', function () { editProfile(card, p); });
       card.appendChild(edit);
     } else if (state.key && state.myHash && p.hash !== state.myHash) {
-      var dmBtn = el('button', 'btn btn-send', 'Send a Direct Message');
-      dmBtn.type = 'button';
-      dmBtn.addEventListener('click', function () {
-        location.href = 'community.html?dm=' + p.hash;
-      });
-      card.appendChild(dmBtn);
+      if (p.hash !== MERECAT_BOT_HASH) {
+        var dmBtn = el('button', 'btn btn-send', 'Send a Direct Message');
+        dmBtn.type = 'button';
+        dmBtn.addEventListener('click', function () {
+          location.href = 'community.html?dm=' + p.hash;
+        });
+        card.appendChild(dmBtn);
+      }
       var muteBtn = el('button', 'btn btn-anon', isMuted(p.hash) ? 'Unmute this member' : 'Mute this member');
       muteBtn.type = 'button';
       muteBtn.addEventListener('click', function () {
@@ -3515,6 +3519,13 @@
           .filter(function (x) { return x.s > 0; })
           .sort(function (x, y) { return y.s - x.s || (x.label < y.label ? -1 : 1); })
           .slice(0, 8).map(function (x) { return x.u; });
+        /* The librarian rides the same picker: type toward "merecat" and the
+           bot leads the list, labeled for what it is. Picking it inserts the
+           literal @merecat token — the server watches for the words, so no
+           hash rides in the mentions at all. */
+        if (dmScore(q, 'merecat') > 0) {
+          current = [{ bot: true, nick: 'merecat' }].concat(current).slice(0, 8);
+        }
         sel = 0;
         render();
       });
@@ -3525,8 +3536,8 @@
       current.forEach(function (u, i) {
         var r = el('a', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
         r.href = '#';
-        r.appendChild(el('span', null, dmLabel(u.hash, u.nick)));
-        r.appendChild(el('span', 'dm-suggest-go', 'mention'));
+        r.appendChild(el('span', null, u.bot ? 'merecat · AI BOT 🐈' : dmLabel(u.hash, u.nick)));
+        r.appendChild(el('span', 'dm-suggest-go', u.bot ? 'ask the librarian' : 'mention'));
         r.addEventListener('mousedown', function (e) { e.preventDefault(); pick(u); });
         sug.appendChild(r);
       });
@@ -3535,12 +3546,12 @@
     function pick(u) {
       if (at < 0) return;
       var caret = textarea.selectionStart;
-      var token = '@' + (u.nick || displayName(u.hash));
+      var token = u.bot ? '@merecat' : '@' + (u.nick || displayName(u.hash));
       var v = textarea.value;
       textarea.value = v.slice(0, at) + token + ' ' + v.slice(caret);
       var np = at + token.length + 1;
       try { textarea.setSelectionRange(np, np); } catch (e) {}
-      if (!pendingMentions.some(function (m) { return m.hash === u.hash && m.token === token; })) {
+      if (!u.bot && !pendingMentions.some(function (m) { return m.hash === u.hash && m.token === token; })) {
         pendingMentions.push({ hash: u.hash, token: token });
       }
       current = []; at = -1; sug.hidden = true;
@@ -4171,7 +4182,20 @@
      fillBody, so citations like John 6:53 autolink into the KJV reader,
      and the sources footer is built here as plain same-site links. */
   var MERECAT_API = '/api/merecat';
-  var merecatHistory = [];   // this visit's turns, sent back for context
+  /* The librarian's fixed pseudo-identity: mentionable in posts and comments
+     (type @merecat), never DMable, summoned server-side. Its hash has no
+     possible key, so nobody can post as it. */
+  var MERECAT_BOT_HASH = 'efb94d8de69dc537e2bba1facbd9db3f849f3927593488d19c07629ce35f54cc';
+
+  /* The daily counters renew at midnight UTC; say it in the reader's own
+     clock. Computed locally, shown locally, sent nowhere. */
+  function merecatResetLocal() {
+    var d = new Date();
+    var next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
+    try {
+      return next.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch (e) { return 'midnight UTC'; }
+  }
 
   function ensureMerecatStyles() {
     if (document.getElementById('mc-merecat-css')) return;
@@ -4192,8 +4216,20 @@
       '.merecat-note{color:var(--maroon)}' +
       '.merecat-srcs{margin-top:.55rem;padding-top:.45rem;border-top:1px dashed var(--rule);font-size:.84rem}' +
       '.merecat-srcs a{display:block;margin:.15rem 0}' +
-      '.merecat-form{display:flex;gap:.5rem;align-items:flex-end;margin:.8rem 0}' +
+      '.merecat-about{border:1px solid var(--rule);border-radius:6px;background:var(--surface);margin:.6rem 0;padding:.1rem .9rem}' +
+      '.merecat-about>summary{cursor:pointer;padding:.5rem 0;color:var(--maroon);font-size:.92rem}' +
+      '.merecat-about-body{padding:.1rem 0 .8rem}' +
+      '.merecat-about-body h3{margin:1em 0 .3em;font-size:1rem}' +
+      '.merecat-about-body p{margin:.4em 0;font-size:.92rem}' +
+      '.merecat-about-body ul{margin:.4em 0 .4em 1.3em;padding:0;font-size:.9rem}' +
+      '.merecat-about-body li{margin:.15em 0}' +
+      '.merecat-shelf{margin:.4em 0}' +
+      '.merecat-shelf>summary{cursor:pointer;color:var(--maroon);font-size:.9rem}' +
+      '.merecat-persona{white-space:pre-wrap;overflow-wrap:break-word;font-size:.85rem;color:var(--ink-soft);border-left:3px solid var(--rule);padding:.4em .8em;margin:.5em 0}' +
+      '.merecat-form{display:flex;gap:.5rem;align-items:flex-end;margin:.8rem 0 .2rem}' +
       '.merecat-q{flex:1;min-height:3.1em;resize:vertical;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.5rem .65rem}' +
+      '.merecat-quota{color:var(--faint);font-size:.85rem;margin:.15rem 0 .9rem}' +
+      '.merecat-quota strong{color:var(--maroon)}' +
       '@media (max-width:620px){.merecat-msg{max-width:100%}.merecat-form{flex-direction:column;align-items:stretch}}';
     var st = el('style');
     st.id = 'mc-merecat-css';
@@ -4225,6 +4261,85 @@
     intro.appendChild(ib);
     section.appendChild(intro);
 
+    /* Full disclosure, one toggle away: how the bot is assembled, what is on
+       its shelf right now, exactly how it is biased (the standing
+       instructions shown verbatim), what it remembers, and today's usage.
+       The live facts load from /about on first open. */
+    var about = el('details', 'merecat-about');
+    about.appendChild(el('summary', null,
+      'How merecat works: what it knows, how it is biased, and what it remembers'));
+    var aBody = el('div', 'merecat-about-body');
+    about.appendChild(aBody);
+    var aboutLoaded = false;
+    about.addEventListener('toggle', function () {
+      if (!about.open || aboutLoaded) return;
+      aboutLoaded = true;
+      aBody.textContent = 'Fetching the full account…';
+      fetch(MERECAT_API + '/about', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }),
+      }).then(function (r) { return r.json(); })
+        .then(function (d) { renderMerecatAbout(aBody, d && d.ok ? d : null); })
+        .catch(function () { renderMerecatAbout(aBody, null); });
+    });
+    section.appendChild(about);
+
+    /* Saved conversations, the DM idiom: each thread keeps for thirty days
+       from its last message, owner-keyed, deletable at once. Arriving with
+       ?chat=<id> reopens a thread, and a fresh question mints one whose id
+       the answer's preamble carries back. */
+    var chatId = Number(new URLSearchParams(location.search).get('chat')) || 0;
+
+    var past = el('details', 'merecat-about');
+    past.appendChild(el('summary', null, 'Past conversations (kept thirty days)'));
+    var pastBody = el('div', 'merecat-about-body');
+    past.appendChild(pastBody);
+    var pastLoaded = false;
+    past.addEventListener('toggle', function () {
+      if (!past.open || pastLoaded) return;
+      pastLoaded = true;
+      pastBody.textContent = 'Loading…';
+      fetchRetry(MERECAT_API + '/chats', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }),
+      }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
+        if (blockedOut(d)) return;
+        pastBody.textContent = '';
+        if (!d.ok || !d.chats || !d.chats.length) {
+          pastBody.appendChild(el('p', null, 'No saved conversations yet. Threads appear here as you ask, and expire thirty days after their last message.'));
+          return;
+        }
+        d.chats.forEach(function (c) {
+          var row = el('p');
+          var a = el('a', 'body-link', c.title || ('Conversation ' + c.id));
+          a.href = 'community.html?merecat=1&chat=' + c.id;
+          row.appendChild(a);
+          row.appendChild(document.createTextNode(
+            ' · ' + c.msgs + (c.msgs === 1 ? ' message · ' : ' messages · ') +
+            new Date(c.last_at * 1000).toLocaleDateString() + ' · '));
+          var del = el('a', 'body-link', 'delete');
+          del.href = '#';
+          del.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!confirm('Delete this conversation outright? There is no undo.')) return;
+            fetchRetry(MERECAT_API + '/chat/delete', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, id: c.id }),
+            }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+              if (dd.ok) {
+                row.remove();
+                if (c.id === chatId) location.href = 'community.html?merecat=1';
+              }
+            }).catch(function () {});
+          });
+          row.appendChild(del);
+          pastBody.appendChild(row);
+        });
+      }).catch(function () { pastBody.textContent = 'Could not load the list. Reopen to retry.'; });
+    });
+    section.appendChild(past);
+
     var log = el('div', 'merecat-log');
     section.appendChild(log);
 
@@ -4237,6 +4352,30 @@
     send.type = 'submit';
     form.appendChild(send);
     section.appendChild(form);
+
+    /* The quota line: always visible so a member can ration for the
+       community's sake, refreshed from /usage on open and from every
+       answer's preamble. Admins read their true count against the cap
+       they are allowed to pass. */
+    var quota = el('p', 'merecat-quota');
+    section.appendChild(quota);
+    function renderQuota(u) {
+      if (!u) return;
+      quota.textContent = '';
+      quota.appendChild(document.createTextNode('You have used '));
+      var mine = el('strong', null, u.you + ' of ' + u.cap);
+      quota.appendChild(mine);
+      quota.appendChild(document.createTextNode(
+        ' questions today' + (u.admin ? ' (admin: the cap does not stop you, your use still counts)' : '') +
+        ' · the community ' + u.today + ' of ' + u.gcap +
+        ' · counters renew at ' + merecatResetLocal() + ' your time'));
+    }
+    fetchRetry(MERECAT_API + '/usage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }),
+    }, [1000]).then(function (r) { return r.json(); })
+      .then(function (d) { if (d.ok) renderQuota(d); })
+      .catch(function () {});
 
     function bubble(who) {
       var m = el('div', 'merecat-msg ' + (who === 'you' ? 'you' : 'cat'));
@@ -4268,7 +4407,7 @@
       var cat = bubble('cat');
       cat.body.appendChild(el('span', 'merecat-wait', '…the librarian is looking…'));
       send.disabled = true;
-      var payload = { key: state.key, q: text, history: merecatHistory.slice(-8) };
+      var payload = { key: state.key, q: text, chat: chatId || 0 };
       fetch(MERECAT_API + '/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4281,7 +4420,8 @@
             if (blockedOut(d)) return;
             cat.body.textContent = '';
             cat.body.appendChild(el('span', 'merecat-note',
-              (d.resting ? '🐈 ' : '') + (d.error || 'merecat could not answer. Try again shortly.')));
+              (d.resting ? '🐈 ' : '') + (d.error || 'merecat could not answer. Try again shortly.') +
+              (d.resting || d.capped ? ' That is ' + merecatResetLocal() + ' your time.' : '')));
           });
         }
         var reader = res.body.getReader();
@@ -4290,14 +4430,8 @@
         function finish() {
           acc = acc.replace(/\s+$/, '');
           cat.body.textContent = '';
-          if (acc) {
-            fillBody(cat.body, acc);
-            merecatHistory.push({ role: 'user', content: text.slice(0, 1500) });
-            merecatHistory.push({ role: 'assistant', content: acc.slice(0, 1500) });
-            if (merecatHistory.length > 8) merecatHistory = merecatHistory.slice(-8);
-          } else {
-            cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
-          }
+          if (acc) fillBody(cat.body, acc);
+          else cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
           srcFooter(cat.body, sources);
           cat.msg.scrollIntoView({ block: 'nearest' });
         }
@@ -4309,8 +4443,18 @@
               pre += chunk;
               var cut = pre.indexOf('\n\n');
               if (cut === -1) return pump();
-              try { sources = JSON.parse(pre.slice(0, cut)).sources || []; }
-              catch (e) { sources = []; }
+              var head = {};
+              try { head = JSON.parse(pre.slice(0, cut)) || {}; } catch (e) {}
+              sources = head.sources || [];
+              /* A fresh question minted a thread: adopt its id so the next
+                 ask continues it and a reload comes back to it. */
+              if (head.chat && head.chat !== chatId) {
+                chatId = head.chat;
+                if (history.replaceState) {
+                  history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
+                }
+              }
+              if (head.used) renderQuota(head.used);
               acc = pre.slice(cut + 2);
             } else {
               acc += chunk;
@@ -4342,7 +4486,114 @@
         form.dispatchEvent(new Event('submit', { cancelable: true }));
       }
     });
-    q.focus();
+
+    /* Reopening a saved thread: replay its turns into the log, then the
+       composer continues it. A vanished or foreign id falls back to fresh. */
+    if (chatId) {
+      var loadNote = el('p', 'comments-status', 'Reopening the conversation…');
+      log.appendChild(loadNote);
+      fetchRetry(MERECAT_API + '/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, id: chatId }),
+      }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
+        if (blockedOut(d)) return;
+        loadNote.remove();
+        if (!d.ok) {
+          chatId = 0;
+          if (history.replaceState) history.replaceState(null, '', location.pathname + '?merecat=1');
+          log.appendChild(el('p', 'comments-status', 'That conversation is gone (expired or deleted). This is a fresh one.'));
+          return;
+        }
+        (d.msgs || []).forEach(function (m) {
+          var b = bubble(m.role === 'user' ? 'you' : 'cat');
+          if (m.role === 'user') {
+            b.body.textContent = m.body;
+          } else {
+            fillBody(b.body, m.body);
+            var srcs = [];
+            try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
+            srcFooter(b.body, srcs);
+          }
+        });
+        q.focus();
+      }).catch(function () {
+        loadNote.textContent = 'Could not reopen the conversation. Reload to retry.';
+      });
+    } else {
+      q.focus();
+    }
+  }
+
+  /* The transparency panel's content. Live numbers (the shelf, the counts,
+     the persona) come from /about; when that fetch fails the account still
+     renders, minus the live parts. Everything is plain createElement. */
+  function renderMerecatAbout(node, d) {
+    node.textContent = '';
+    function h3(t) { node.appendChild(el('h3', null, t)); }
+    function p(t) { node.appendChild(el('p', null, t)); }
+
+    h3('What this is');
+    p('merecat is a research tool for digging through this site’s Library, not an oracle. Every question runs the same way: the librarian searches the shelf, gathers the ' +
+      (d ? d.topk : 'eight') + ' most relevant passages, and hands them to a language model with standing instructions to answer from them and to cite them. Every work it cites is self-hosted here, and the whole shelf is anchored deep: every Bible verse and every father, book, chapter, section, and paragraph of the corpus has its own address, so a citation does not just name a work, it lands you very close to the exact place. The numbered links under each answer are the very passages the model was given. When the shelf does not cover a question it is instructed to say so and to label what follows as general knowledge.');
+    p('The model is ' + (d ? d.model : 'an open-weights model') +
+      ', running on Cloudflare Workers AI, the same service that runs this board’s own machinery. Your question is processed there and nowhere else, and the librarian can still err, which is why every answer carries its sources: check them. Treat merecat as a fast index to the shelf, not as the shelf itself.');
+    p('You can also summon the librarian in public: write @merecat in a forum post or an article-page comment and it answers right there in the thread, briefed on the page, the recent conversation, and your comment. A mention spends one of your daily questions like any question here would.');
+
+    h3('What it knows');
+    var pk = el('p');
+    pk.appendChild(document.createTextNode(
+      'Only this site’s own published library: the primary works, the credo and the rule of prayer, the curated Fathers, the seven councils and the documents of the schism, the Catena Aurea, Newman, both Bibles, the complete Schaff library of the Fathers, and the Summa Theologica.' +
+      (d ? ' Right now that is ' + d.chunks.toLocaleString() + ' indexed passages across ' + d.works.length + ' works. ' : ' ')));
+    var libA = el('a', 'body-link', 'The Library');
+    libA.href = 'library.html';
+    pk.appendChild(libA);
+    pk.appendChild(document.createTextNode(
+      ' is the human catalog of the same shelf, and it keeps growing: as works come onto the Library the librarian’s context is updated to make use of them.'));
+    node.appendChild(pk);
+    if (d && d.works && d.works.length) {
+      var shelf = el('details', 'merecat-shelf');
+      shelf.appendChild(el('summary', null, 'The full shelf, work by work'));
+      var tiers = { 1: 'Tier 1 · the site’s positions', 2: 'Tier 2 · the evidence shelf', 3: 'Tier 3 · the deep library' };
+      [1, 2, 3].forEach(function (t) {
+        var rows = d.works.filter(function (w) { return w.tier === t; });
+        if (!rows.length) return;
+        shelf.appendChild(el('p', null, tiers[t]));
+        var ul = el('ul');
+        rows.forEach(function (w) {
+          var li = el('li');
+          var a = el('a', 'body-link', w.title);
+          a.href = w.url;
+          li.appendChild(a);
+          li.appendChild(document.createTextNode(' · ' + w.chunks.toLocaleString() + ' passages'));
+          ul.appendChild(li);
+        });
+        shelf.appendChild(ul);
+      });
+      node.appendChild(shelf);
+    }
+
+    h3('How it is biased');
+    p('Deliberately, and in the open. The Tier 1 works state this site’s positions: they are searched semantically as well as by keyword, weighted upward in ranking, and named to the model as the positions of this site. The librarian is instructed to defend those positions with real arguments, to steelman Rome, Orthodoxy, the Reformation, and the free churches honestly, to distinguish what this site argues from what the record shows from what is contested, and never to manufacture a consensus that is not there. Bias here means emphasis and voice, never blinders: every tier is searched on every question.');
+    if (d && d.persona) {
+      var pd = el('details', 'merecat-shelf');
+      pd.appendChild(el('summary', null, 'The standing instructions, verbatim, as the model receives them'));
+      pd.appendChild(el('div', 'merecat-persona', d.persona));
+      node.appendChild(pd);
+    }
+
+    h3('What it remembers about you');
+    p('Your conversations are saved as threads, the way your direct messages are: each conversation is its own thread, kept for thirty days from its last message so you can leave and pick it back up, then expired and removed. Threads belong to your pseudonymous identity alone. Only your key can list, read, continue, or delete them, deletion is immediate and outright, and no admin tool for reading them exists.');
+    p('Within a thread the librarian remembers the whole conversation: the newest turns ride along word for word, and everything older is folded into a running condensed summary the thread carries, so a long conversation stays coherent without burning the community’s shared budget. The model itself learns nothing from you and keeps nothing between threads. Beyond your threads the server holds counters only, the day, your identity hash, and how many questions you have asked, so the daily caps can work. You ask under the same pseudonymous key you post with, and the server sees only its hash.');
+
+    h3('Usage');
+    p('The whole community shares one free daily budget with the board’s own moderation machinery. ' +
+      (d
+        ? 'Each member gets ' + d.user_daily + ' questions a day and the community together ' + d.global_daily +
+          '. Today you have used ' + (d.you != null ? d.you : 0) + ' of ' + d.user_daily +
+          ', and the community ' + d.today + ' of ' + d.global_daily + '.'
+        : 'Each member gets a fixed number of questions a day, and the community a larger shared total.') +
+      (d && d.admin ? ' You are an admin: the per-member cap does not stop you, though your use still counts in every tally.' : '') +
+      ' Counters renew at midnight UTC, which is ' + merecatResetLocal() + ' on your clock. When the budget is spent the librarian rests until then rather than degrade.');
   }
 
   /* Dispatch the board to the view its query string names. Clears the section

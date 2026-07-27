@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS works (
   tier       INTEGER NOT NULL DEFAULT 2,-- 1 = our positions, 2 = the shelf, 3 = deep corpus
   kind       TEXT,                      -- parser used: pandoc | hand | bible | text
   hash       TEXT,                      -- ingest content hash
+  chunks     INTEGER NOT NULL DEFAULT 0,-- stamped at ingest end, so rosters never scan
   updated_at INTEGER
 );
 
@@ -69,11 +70,44 @@ CREATE TABLE IF NOT EXISTS usage (
   out_tok INTEGER NOT NULL DEFAULT 0
 );
 
--- Per-member daily count behind the per-user cap. No question text is stored
--- anywhere: counters only.
+-- Per-member daily count behind the per-user cap. Counters only.
 CREATE TABLE IF NOT EXISTS user_usage (
   day  TEXT NOT NULL,
   hash TEXT NOT NULL,
   q    INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, hash)
 );
+
+-- Saved conversations, the DM idiom: one thread per conversation, owned by
+-- one pseudonymous hash, listable/readable/continuable/deletable by that
+-- key alone (no admin reading endpoint exists, by design). A thread expires
+-- thirty days after its last message: the owner's expired threads are
+-- pruned opportunistically when they list, and the monthly cron sweeps the
+-- rest. NOTE these two tables are the one part of this database that is
+-- NOT derived data — they are still deliberately unbacked, ephemeral by
+-- contract (the thirty-day clock is the promise).
+-- summary / summarized_to carry the thread's condensed memory: the newest
+-- turns ride each ask verbatim, everything older is folded into summary by
+-- one cheap model call after each answer (merecatFold), so a thread of any
+-- length stays coherent at a bounded per-question cost.
+CREATE TABLE IF NOT EXISTS chats (
+  id            INTEGER PRIMARY KEY,
+  hash          TEXT NOT NULL,
+  title         TEXT,
+  created_at    INTEGER NOT NULL,
+  last_at       INTEGER NOT NULL,
+  msgs          INTEGER NOT NULL DEFAULT 0,
+  summary       TEXT,
+  summarized_to INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS chats_owner_idx ON chats(hash, last_at);
+
+CREATE TABLE IF NOT EXISTS chat_msgs (
+  id         INTEGER PRIMARY KEY,
+  chat_id    INTEGER NOT NULL,
+  role       TEXT NOT NULL CHECK (role IN ('user','assistant')),
+  body       TEXT NOT NULL,
+  sources    TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_msgs_chat_idx ON chat_msgs(chat_id, id);
