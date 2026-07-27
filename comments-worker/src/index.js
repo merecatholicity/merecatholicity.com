@@ -526,6 +526,16 @@ async function handlePost(request, env, ctx) {
     }).catch((e) => console.log(JSON.stringify({ event: 'notify_failed', error: String(e) }))));
   }
 
+  /* @merecat summons the librarian to answer in the thread — live posts by a
+     real identity only (a held post that is later approved can be re-summoned
+     with the admin /api/merecat/mention lever). Deferred: the reply arrives a
+     few seconds behind the post. */
+  if (status === 'live' && authorHash && authorHash !== MERECAT_BOT.hash &&
+      MERECAT_MENTION_RE.test(body)) {
+    ctx.waitUntil(merecatMentionReply(env, inserted.id)
+      .catch((e) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e) }))));
+  }
+
   /* Log the IPs behind this identity for the fingerprint drawer and paired
      bans: the verified connection address, and the other-family address the
      client reported. Best-effort, and never alters the reply. */
@@ -561,7 +571,7 @@ async function deliverNotifications(env, o) {
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
   const stmts = [];
 
-  if (o.authorHash) {
+  if (o.authorHash && o.authorHash !== MERECAT_BOT.hash) {
     stmts.push(env.DB.prepare('INSERT OR IGNORE INTO watches (hash, topic_id, created_at) VALUES (?1, ?2, ?3)')
       .bind(o.authorHash, o.topicId, now));
   }
@@ -571,7 +581,9 @@ async function deliverNotifications(env, o) {
     if (Array.isArray(o.mentions)) {
       for (const m of o.mentions) {
         const h = String(m || '').toLowerCase();
-        if (/^[0-9a-f]{64}$/.test(h) && h !== o.authorHash && mentions.indexOf(h) === -1) mentions.push(h);
+        // the librarian holds no inbox: its hash never receives a notification
+        if (/^[0-9a-f]{64}$/.test(h) && h !== o.authorHash && h !== MERECAT_BOT.hash &&
+            mentions.indexOf(h) === -1) mentions.push(h);
         if (mentions.length >= 10) break;
       }
     }
@@ -580,6 +592,7 @@ async function deliverNotifications(env, o) {
     if (o.isReply) {
       const skip = new Set(mentions);
       if (o.authorHash) skip.add(o.authorHash);
+      skip.add(MERECAT_BOT.hash);
       const recips = new Set();
       if (o.topicAuthorHash) recips.add(o.topicAuthorHash);
       const rows = await env.DB.prepare('SELECT hash FROM watches WHERE topic_id = ?1').bind(o.topicId).all();
@@ -1282,6 +1295,10 @@ async function handleProfileSave(request, env) {
   if (nick.error || bio.error || signature.error) {
     return json({ ok: false, error: 'That profile is too long or has stray characters.' }, 400);
   }
+  /* The librarian's name is reserved, so the @-mention can never be confused. */
+  if (/merecat/i.test(String(nick.value || '').replace(/\s+/g, ''))) {
+    return json({ ok: false, error: 'That name belongs to the librarian. Pick another.' }, 400);
+  }
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
@@ -1382,6 +1399,9 @@ async function handleDmSend(request, env) {
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   if (me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
+  if (to === MERECAT_BOT.hash) {
+    return json({ ok: false, error: 'merecat is a librarian, not a correspondent. Mention @merecat in a post or comment, or visit the merecat page.' }, 400);
+  }
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
@@ -1871,8 +1891,9 @@ async function handleDmDirectory(request, env, url) {
     "    SELECT author_hash AS hash, MIN(created_at) AS joined FROM comments WHERE author_hash IS NOT NULL AND status != 'deleted' GROUP BY author_hash " +
     '    UNION ALL SELECT hash, created_at AS joined FROM profiles' +
     '  ) GROUP BY hash' +
-    ') u LEFT JOIN profiles pr ON pr.hash = u.hash ORDER BY u.joined DESC LIMIT 2000'
-  ).all();
+    ') u LEFT JOIN profiles pr ON pr.hash = u.hash ' +
+    'WHERE u.hash != ?1 ORDER BY u.joined DESC LIMIT 2000'
+  ).bind(MERECAT_BOT.hash).all();
   return json({ ok: true, users: rows.results }, 200, cacheHeader(url));
 }
 
@@ -2558,6 +2579,18 @@ const MERECAT_TIER_LABEL = { 1: 'site position', 2: 'shelf', 3: 'deep shelf' };
 const MERECAT_RESTING =
   'merecat is resting. The community’s shared daily budget is spent. It resets at midnight UTC.';
 
+/* The librarian's public face on the board: a pseudo-member that exists only
+   as this fixed hash (the preimage was random and discarded, so no key can
+   ever produce it — nobody can post as the bot). It holds no subscriptions,
+   cannot be DMed (handleDmSend refuses, the directory omits it), and is
+   summoned one way: writing @merecat in a live forum post or article-page
+   comment, which runs merecatMentionReply. */
+const MERECAT_BOT = {
+  hash: 'efb94d8de69dc537e2bba1facbd9db3f849f3927593488d19c07629ce35f54cc',
+  nick: 'merecat 🐈 AI BOT',
+};
+const MERECAT_MENTION_RE = /@merecat\b/i;
+
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
    a config push clears this isolate at once and the rest lag out the TTL. */
@@ -2730,12 +2763,22 @@ async function handleMerecatAsk(request, env, ctx) {
 
   const cfg = await merecatConfig(env);
   const day = merecatDay();
+  /* Admins are never capped — their use still counts in every tally, and the
+     page shows an over-the-line 12/10 plainly — the true wall for them is
+     the free budget itself (any Workers AI refusal reads as resting). */
+  const admin = await isAdminHash(env, me);
+  let youQ = 0;
+  let todayQ = 0;
   try {
     const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
-    if (g && g.q >= cfg.global_daily) return json({ ok: false, resting: true, error: MERECAT_RESTING }, 429);
+    todayQ = (g && g.q) || 0;
+    if (!admin && todayQ >= cfg.global_daily) {
+      return json({ ok: false, resting: true, error: MERECAT_RESTING }, 429);
+    }
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
       .bind(day, me).first();
-    if (u && u.q >= cfg.user_daily) {
+    youQ = (u && u.q) || 0;
+    if (!admin && youQ >= cfg.user_daily) {
       return json({
         ok: false, capped: true,
         error: 'You have used your ' + cfg.user_daily + ' questions for today. The counter resets at midnight UTC.',
@@ -2745,10 +2788,32 @@ async function handleMerecatAsk(request, env, ctx) {
     console.log(JSON.stringify({ event: 'merecat_caps_failed', error: String(err) }));
   }
 
+  /* The conversation thread (the DM idiom): an id continues the caller's own
+     saved thread, no id means a new thread, created once the model accepts
+     the question. The thread is the memory — the client never supplies
+     history. Context is the newest MERECAT_WINDOW turns word for word plus
+     the running condensed summary of everything older (maintained after
+     each answer by merecatFold), so a long thread stays coherent at a
+     bounded cost. */
+  let chatId = Number(data.chat) || 0;
+  let history = [];
+  let summary = '';
+  if (chatId) {
+    const own = await env.LIBDB.prepare('SELECT id, summary FROM chats WHERE id = ?1 AND hash = ?2')
+      .bind(chatId, me).first();
+    if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
+    summary = String(own.summary || '');
+    const rows = await env.LIBDB.prepare(
+      'SELECT role, body FROM chat_msgs WHERE chat_id = ?1 ORDER BY id DESC LIMIT ' + MERECAT_WINDOW
+    ).bind(chatId).all();
+    history = (rows.results || []).reverse()
+      .map((r) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
+  }
+
   const chunks = await merecatRetrieve(env, q, cfg);
 
-  // Build the prompt: persona, then the numbered sources, then a short
-  // client-kept history, then the question. The model cites by [n] only.
+  // Build the prompt: persona, the thread's condensed summary when one
+  // exists, the numbered sources, the recent turns verbatim, the question.
   const sources = chunks.map((c, i) => ({
     n: i + 1, title: c.title, heading: c.heading,
     url: MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
@@ -2759,16 +2824,12 @@ async function handleMerecatAsk(request, env, ctx) {
       (c.heading ? ' — ' + c.heading : '') + '\n' + c.text.slice(0, 1600) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
+    (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
     '\n\nSOURCES (cite each by its bracketed number, like [3] — write the digit; these are the only citable sources this turn' +
     (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
     '):\n\n' + (srcBlock || '(none)') + '/no_think';
   const messages = [{ role: 'system', content: sys }];
-  const history = Array.isArray(data.history) ? data.history.slice(-8) : [];
-  for (const h of history) {
-    if (h && (h.role === 'user' || h.role === 'assistant') && h.content) {
-      messages.push({ role: h.role, content: String(h.content).slice(0, 1500) });
-    }
-  }
+  for (const h of history) messages.push(h);
   messages.push({ role: 'user', content: q });
 
   let aiStream;
@@ -2781,10 +2842,30 @@ async function handleMerecatAsk(request, env, ctx) {
     return json({ ok: false, resting: true, error: MERECAT_RESTING }, 503);
   }
 
+  /* The model accepted the question: now the thread exists and the question
+     is on it (so an interrupted stream still leaves the thread coherent). */
+  const now = Math.floor(Date.now() / 1000);
+  if (!chatId) {
+    const ins = await env.LIBDB.prepare(
+      'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
+    ).bind(me, q.slice(0, 90), now).first();
+    chatId = ins.id;
+  }
+  await env.LIBDB.batch([
+    env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3)")
+      .bind(chatId, q, now),
+    env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+  ]);
+
   const inTokEst = Math.ceil(JSON.stringify(messages).length / 4);
+  // the quota line's fresh numbers, counting the question now being answered
+  const used = {
+    you: youQ + 1, cap: cfg.user_daily,
+    today: todayQ + 1, gcap: cfg.global_daily, admin,
+  };
   const { readable, writable } = new TransformStream();
   ctx.waitUntil(
-    merecatPump(env, aiStream, writable, sources, me, day, inTokEst)
+    merecatPump(env, cfg, aiStream, writable, sources, me, day, inTokEst, chatId, used)
       .catch((err) => console.log(JSON.stringify({ event: 'merecat_pump_failed', error: String(err) })))
   );
   return new Response(readable, {
@@ -2792,16 +2873,18 @@ async function handleMerecatAsk(request, env, ctx) {
   });
 }
 
-/* Drain the model's SSE stream into the client stream: preamble first, then
-   deltas with think spans stripped; bump the usage counters when done. */
-async function merecatPump(env, aiStream, writable, sources, me, day, inTokEst) {
+/* Drain the model's SSE stream into the client stream: preamble first (the
+   thread id and the sources), then deltas with think spans stripped. When
+   the stream ends: bump the usage counters, store the answer on the thread,
+   and fold aged turns into the thread's condensed summary. */
+async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTokEst, chatId, used) {
   const writer = writable.getWriter();
   const encode = (s) => enc.encode(s);
   const strip = merecatThinkStripper();
-  let outChars = 0;
+  let text = '';
   let usage = null;
   try {
-    await writer.write(encode(JSON.stringify({ sources }) + '\n\n'));
+    await writer.write(encode(JSON.stringify({ chat: chatId, sources, used }) + '\n\n'));
     const reader = aiStream.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -2823,19 +2906,19 @@ async function merecatPump(env, aiStream, writable, sources, me, day, inTokEst) 
           const delta = obj.response == null ? '' : String(obj.response);
           if (delta) {
             const vis = strip(delta);
-            if (vis) { outChars += vis.length; await writer.write(encode(vis)); }
+            if (vis) { text += vis; await writer.write(encode(vis)); }
           }
         } catch { /* partial or non-JSON line: skip */ }
       }
     }
     const tail = strip(null);
-    if (tail) { outChars += tail.length; await writer.write(encode(tail)); }
+    if (tail) { text += tail; await writer.write(encode(tail)); }
   } finally {
     try { await writer.close(); } catch { /* client gone */ }
   }
   const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : inTokEst;
-  const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(outChars / 4);
-  await env.LIBDB.batch([
+  const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(text.length / 4);
+  const stmts = [
     env.LIBDB.prepare(
       'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
       'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
@@ -2844,7 +2927,153 @@ async function merecatPump(env, aiStream, writable, sources, me, day, inTokEst) 
       'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
       'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
     ).bind(day, me),
+  ];
+  const answer = text.trim();
+  if (chatId && answer) {
+    const now = Math.floor(Date.now() / 1000);
+    stmts.push(env.LIBDB.prepare(
+      "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
+    ).bind(chatId, answer, JSON.stringify(sources), now));
+    stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
+      .bind(chatId, now));
+  }
+  await env.LIBDB.batch(stmts);
+  if (chatId && answer) await merecatFold(env, cfg, chatId);
+}
+
+/* Keep a long thread rememberable at a bounded cost: once turns age past
+   the verbatim window, condense them into the thread's running summary with
+   one cheap model call, made after the answer is already on its way so it
+   never adds latency. A failed fold just waits for the next turn. */
+const MERECAT_WINDOW = 10;   // newest turns sent verbatim
+const MERECAT_FOLD_MIN = 4;  // fold only when this many turns have aged out
+
+async function merecatFold(env, cfg, chatId) {
+  try {
+    const chat = await env.LIBDB.prepare(
+      'SELECT summary, summarized_to FROM chats WHERE id = ?1').bind(chatId).first();
+    if (!chat) return;
+    const all = await env.LIBDB.prepare(
+      'SELECT id, role, body FROM chat_msgs WHERE chat_id = ?1 ORDER BY id').bind(chatId).all();
+    const rows = all.results || [];
+    if (rows.length <= MERECAT_WINDOW) return;
+    const cutoff = rows[rows.length - MERECAT_WINDOW].id;
+    const aged = rows.filter((r) => r.id < cutoff && r.id > (chat.summarized_to || 0));
+    if (aged.length < MERECAT_FOLD_MIN) return;
+    const notes = aged.map((r) =>
+      (r.role === 'user' ? 'Reader: ' : 'Librarian: ') + String(r.body).slice(0, 800)).join('\n');
+    const res = await env.AI.run(cfg.model, {
+      messages: [
+        { role: 'system', content:
+          'You condense a running conversation log. Reply with only the updated summary, ' +
+          'under 220 words of plain prose, keeping the reader’s aims, the positions ' +
+          'discussed, every work or reference cited, and any open questions. /no_think' },
+        { role: 'user', content:
+          'Current summary:\n' + (chat.summary || '(none yet)') +
+          '\n\nNew turns to fold in:\n' + notes },
+      ],
+      max_tokens: 420, temperature: 0.2,
+    });
+    let s = res == null ? '' : (res.response != null ? String(res.response)
+      : (res.choices && res.choices[0] && res.choices[0].message
+        ? String(res.choices[0].message.content || '') : ''));
+    s = s.replace(/<think>[\s\S]*?<\/think>/g, '').trim().slice(0, 1600);
+    if (s) {
+      await env.LIBDB.prepare('UPDATE chats SET summary = ?2, summarized_to = ?3 WHERE id = ?1')
+        .bind(chatId, s, aged[aged.length - 1].id).run();
+    }
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_fold_failed', error: String(err) }));
+  }
+}
+
+/* The saved-thread trio, each strictly owner-keyed. Listing also prunes the
+   caller's expired threads, so the thirty-day promise is enforced the
+   moment anyone looks; the monthly cron sweeps the never-returning rest. */
+const MERECAT_CHAT_DAYS = 30;
+
+async function handleMerecatChats(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
+  await env.LIBDB.batch([
+    env.LIBDB.prepare(
+      'DELETE FROM chat_msgs WHERE chat_id IN (SELECT id FROM chats WHERE hash = ?1 AND last_at < ?2)'
+    ).bind(me, cut),
+    env.LIBDB.prepare('DELETE FROM chats WHERE hash = ?1 AND last_at < ?2').bind(me, cut),
   ]);
+  const rows = await env.LIBDB.prepare(
+    'SELECT id, title, msgs, last_at FROM chats WHERE hash = ?1 ORDER BY last_at DESC LIMIT 50'
+  ).bind(me).all();
+  return json({ ok: true, chats: rows.results || [] }, 200);
+}
+
+async function handleMerecatChat(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const chat = await env.LIBDB.prepare(
+    'SELECT id, title, msgs, created_at, last_at FROM chats WHERE id = ?1 AND hash = ?2'
+  ).bind(id, me).first();
+  if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const msgs = await env.LIBDB.prepare(
+    'SELECT role, body, sources, created_at FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
+  ).bind(id).all();
+  return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
+}
+
+async function handleMerecatChatDelete(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
+    .bind(id, me).first();
+  if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
+  await env.LIBDB.batch([
+    env.LIBDB.prepare('DELETE FROM chat_msgs WHERE chat_id = ?1').bind(id),
+    env.LIBDB.prepare('DELETE FROM chats WHERE id = ?1').bind(id),
+  ]);
+  return json({ ok: true, deleted: id }, 200);
+}
+
+/* Monthly sweep of expired threads (the opportunistic per-owner prune in
+   handleMerecatChats covers everyone who returns; this catches the rest).
+   Self-contained like every prune, so a failure never stops the backup. */
+async function pruneMerecatChats(env) {
+  try {
+    const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
+    await env.LIBDB.batch([
+      env.LIBDB.prepare(
+        'DELETE FROM chat_msgs WHERE chat_id IN (SELECT id FROM chats WHERE last_at < ?1)').bind(cut),
+      env.LIBDB.prepare('DELETE FROM chats WHERE last_at < ?1').bind(cut),
+    ]);
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_chatprune_failed', error: String(err) }));
+  }
 }
 
 /* Corpus push, admin-keyed, driven by librarian/ingest.py. A work arrives as
@@ -2931,12 +3160,281 @@ async function handleMerecatIngest(request, env) {
   }
 
   if (mode === 'end') {
-    await env.LIBDB.prepare('UPDATE works SET hash = ?2, updated_at = ?3 WHERE id = ?1')
-      .bind(id, String(work.hash || ''), Math.floor(Date.now() / 1000)).run();
+    // the chunk count stamps the works row here so roster reads never scan
+    await env.LIBDB.prepare('UPDATE works SET hash = ?2, chunks = ?3, updated_at = ?4 WHERE id = ?1')
+      .bind(id, String(work.hash || ''), Number(work.chunks) || 0, Math.floor(Date.now() / 1000)).run();
     return json({ ok: true, ended: id }, 200);
   }
 
   return json({ ok: false, error: 'Bad mode.' }, 400);
+}
+
+/* ---- @merecat in the comments and the forum ----------------------------
+   A live post containing @merecat summons the librarian to answer in the
+   thread itself. The brief is deliberately light, as the corpus already
+   holds every page's own text: where the thread lives (the page or the
+   topic), the recent conversation, and the asking comment — retrieval
+   supplies the shelf. The reply posts as a fresh comment by the bot
+   identity, and the cost lands on the mentioner's own daily count (admins
+   uncapped as everywhere). */
+
+/* The bot's whole public profile is hardcoded here (the avatar object sits in
+   R2 under its hash like anyone's): Nicene by confession, bio and signature
+   fixed, upserted on every reply so this code stays the source of truth. The
+   avatar column is left alone — it carries the upload stamp. */
+async function merecatEnsureProfile(env) {
+  const now = Math.floor(Date.now() / 1000);
+  const bio =
+    'The librarian. I keep the front desk of this site’s Library: the Scriptures in two editions, ' +
+    'the Fathers entire, the seven councils, the Summa, the Catena, and the site’s own papers, ' +
+    'every shelf anchored down to the paragraph. Mention @merecat in a post or a comment and I ' +
+    'answer in the thread, with sources you can check. I am a research tool, not a member: my ' +
+    'standing instructions, my shelf, my memory, and my limits are all published on the merecat ' +
+    'page (community.html?merecat=1). I hold the faith of the Nicene Creed and the positions of ' +
+    'this site, and I am under orders to show my work.';
+  const signature = 'Quod ubique, quod semper, quod ab omnibus. Bring your citations, I will bring mine. 🐈';
+  await env.DB.prepare(
+    'INSERT INTO profiles (hash, nick, bio, signature, faith, created_at, updated_at) ' +
+    "VALUES (?1, ?2, ?3, ?4, 'nicene', ?5, ?5) " +
+    'ON CONFLICT(hash) DO UPDATE SET nick = ?2, bio = ?3, signature = ?4, faith = \'nicene\', updated_at = ?5'
+  ).bind(MERECAT_BOT.hash, MERECAT_BOT.nick, bio, signature, now).run();
+}
+
+async function merecatNames(env, hashes) {
+  const uniq = [...new Set(hashes.filter((h) => h))];
+  const out = {};
+  if (!uniq.length) return out;
+  const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
+  const rows = await env.DB.prepare(
+    'SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')').bind(...uniq).all();
+  for (const r of rows.results || []) if (r.nick) out[r.hash] = r.nick;
+  return out;
+}
+
+/* Post the bot's comment: a reply under the topic on the board, a flat (or
+   same-parent) comment on an article page. Board replies bump the topic and
+   fan out notifications like anyone's reply, so the asker hears back. */
+async function merecatInsertComment(env, src, isBoard, topicId, topicAuthorHash, body) {
+  await merecatEnsureProfile(env);
+  const now = Math.floor(Date.now() / 1000);
+  const parent = isBoard ? topicId : (src.parent_id || null);
+  const ins = await env.DB.prepare(
+    'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ai_verdict) ' +
+    "VALUES (?1, ?2, NULL, ?3, ?4, 'live', ?5, 'merecat') RETURNING id"
+  ).bind(src.page, parent, MERECAT_BOT.hash, body, now).first();
+  if (isBoard) {
+    await refreshTopicStats(env, topicId);
+    await deliverNotifications(env, {
+      authorHash: MERECAT_BOT.hash, status: 'live', topicId, commentId: ins.id,
+      isReply: true, topicAuthorHash, mentions: [],
+    }).catch((e) => console.log(JSON.stringify({ event: 'merecat_reply_notify_failed', error: String(e) })));
+  }
+  return ins.id;
+}
+
+async function merecatMentionReply(env, commentId) {
+  const c = await env.DB.prepare(
+    "SELECT id, page, parent_id, title, author_hash, body FROM comments WHERE id = ?1 AND status = 'live'"
+  ).bind(commentId).first();
+  if (!c || !c.author_hash || c.author_hash === MERECAT_BOT.hash) return null;
+  if (!MERECAT_MENTION_RE.test(String(c.body || ''))) return null;
+  const cfg = await merecatConfig(env);
+  const day = merecatDay();
+  const admin = await isAdminHash(env, c.author_hash);
+  const isBoard = !!boardKey(c.page);
+  const topicId = c.parent_id || c.id;
+
+  /* The mention spends the mentioner's own questions. At a cap the bot still
+     answers the summons, with the no-cost resting note, so a mention is
+     never silently ignored. */
+  let refuse = null;
+  const seeWhen = ' Mention me again after it renews, or open [the merecat page](' +
+    MERECAT_SITE + 'community.html?merecat=1) to see the renewal time on your own clock.';
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  if (!admin && g && g.q >= cfg.global_daily) {
+    refuse = 'merecat is resting. The community’s shared daily budget is spent.' + seeWhen;
+  }
+  if (!refuse && !admin) {
+    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+      .bind(day, c.author_hash).first();
+    if (u && u.q >= cfg.user_daily) {
+      refuse = 'You have used your ' + cfg.user_daily + ' merecat questions for today.' + seeWhen;
+    }
+  }
+
+  let topicAuthorHash = null;
+  if (refuse) {
+    if (isBoard) {
+      const t = await env.DB.prepare('SELECT author_hash FROM comments WHERE id = ?1').bind(topicId).first();
+      topicAuthorHash = t && t.author_hash;
+    }
+    return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, refuse);
+  }
+
+  /* The brief: where we are, the recent conversation, the asking comment. */
+  let where = '';
+  const talk = [];   // [hash, text] oldest first
+  if (isBoard) {
+    const topic = await env.DB.prepare(
+      'SELECT id, title, author_hash, body FROM comments WHERE id = ?1').bind(topicId).first();
+    topicAuthorHash = topic && topic.author_hash;
+    where = 'the forum topic “' + String((topic && topic.title) || '').slice(0, 120) +
+      '” on this site’s Catholicity Board';
+    if (topic && topic.id !== c.id) talk.push([topic.author_hash, String(topic.body || '')]);
+    const replies = await env.DB.prepare(
+      "SELECT author_hash, body FROM comments WHERE parent_id = ?1 AND status = 'live' AND id != ?2 " +
+      'ORDER BY id DESC LIMIT 12').bind(topicId, c.id).all();
+    for (const r of (replies.results || []).reverse()) talk.push([r.author_hash, String(r.body || '')]);
+  } else {
+    where = 'the comment thread on this site’s own page ' + String(c.page) +
+      ' (that page’s text is on your shelf)';
+    const recent = await env.DB.prepare(
+      "SELECT author_hash, body FROM comments WHERE page = ?1 AND status = 'live' AND id != ?2 " +
+      'ORDER BY id DESC LIMIT 10').bind(c.page, c.id).all();
+    for (const r of (recent.results || []).reverse()) talk.push([r.author_hash, String(r.body || '')]);
+  }
+  const names = await merecatNames(env, talk.map((t) => t[0]).concat([c.author_hash]));
+  const nameOf = (h) => names[h] || (h === MERECAT_BOT.hash ? MERECAT_BOT.nick : 'a member');
+  const talkBlock = talk.map((t) => nameOf(t[0]) + ': ' + t[1].slice(0, 700)).join('\n---\n');
+
+  const asked = String(c.body || '').replace(MERECAT_MENTION_RE, '').trim().slice(0, 2000);
+  const retrievalQ = ((c.title ? c.title + ' ' : '') + asked).slice(0, 2000) || 'this site';
+  const chunks = await merecatRetrieve(env, retrievalQ, cfg);
+  const sources = chunks.map((cc, i) => ({
+    n: i + 1, title: cc.title, heading: cc.heading,
+    url: MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
+  }));
+  let srcBlock = '';
+  chunks.forEach((cc, i) => {
+    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + cc.title +
+      (cc.heading ? ' — ' + cc.heading : '') + '\n' + cc.text.slice(0, 1600) + '\n\n';
+  });
+  const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
+    '\n\nYou were mentioned by name inside ' + where + '. The recent conversation, oldest first:\n\n' +
+    (talkBlock || '(the thread starts with the comment below)') +
+    '\n\nThe member ' + nameOf(c.author_hash) + ' has asked you directly, in the comment you are replying to. ' +
+    'Write the single comment you will post in reply: answer what was asked, cite sources by their bracketed ' +
+    'numbers like [2], stay under 250 words, no greeting and no signature.' +
+    '\n\nSOURCES (cite each by its bracketed number, like [3] — write the digit; these are the only citable sources' +
+    (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
+    '):\n\n' + (srcBlock || '(none)') + '/no_think';
+  const messages = [
+    { role: 'system', content: sys },
+    { role: 'user', content: asked || 'Please weigh in on this thread.' },
+  ];
+
+  let res;
+  try {
+    res = await env.AI.run(cfg.model, { messages, max_tokens: 900, temperature: 0.35 });
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_mention_ai_failed', error: String(err) }));
+    return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
+      MERECAT_RESTING + ' Mention me again then.');
+  }
+  let answer = res == null ? '' : (res.response != null ? String(res.response)
+    : (res.choices && res.choices[0] && res.choices[0].message
+      ? String(res.choices[0].message.content || '') : ''));
+  answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  if (!answer) return null;
+  if (sources.length) {
+    answer += '\n\nSources:\n' + sources.map((s) =>
+      '[' + s.n + '] [' + s.title + (s.heading ? ' — ' + s.heading : '') + '](' + s.url + ')').join('\n');
+  }
+  const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
+
+  const inTok = Math.ceil(JSON.stringify(messages).length / 4);
+  const outTok = Math.ceil(answer.length / 4);
+  await env.LIBDB.batch([
+    env.LIBDB.prepare(
+      'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
+      'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
+    ).bind(day, inTok, outTok),
+    env.LIBDB.prepare(
+      'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
+      'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
+    ).bind(day, c.author_hash),
+  ]);
+  return replyId;
+}
+
+/* Admin lever: run the mention pipeline on any existing comment — the
+   manual re-summon for a post that was held and approved later, and the
+   test hook. */
+async function handleMerecatMention(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const id = Number(data.id);
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const replied = await merecatMentionReply(env, id);
+  return json({ ok: true, replied: replied || null }, 200);
+}
+
+/* The quota line's feed: a few tiny reads so the page can always show
+   "you have used N of M today" the moment it opens (the ask preamble keeps
+   it fresh afterward). Admins read their true count against the same cap
+   they are allowed to exceed. */
+async function handleMerecatUsage(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const cfg = await merecatConfig(env);
+  const day = merecatDay();
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+    .bind(day, me).first();
+  return json({
+    ok: true,
+    you: (u && u.q) || 0, cap: cfg.user_daily,
+    today: (g && g.q) || 0, gcap: cfg.global_daily,
+    admin: await isAdminHash(env, me),
+  }, 200);
+}
+
+/* Full disclosure for the merecat page's "How merecat works" panel: the
+   model id, the caps, the persona verbatim, the whole shelf with per-work
+   chunk counts, today's community usage, and the asker's own count when a
+   key rides along. Everything here is public site content or the reader's
+   own number — no per-question data exists to disclose, since the server
+   keeps counters only. */
+async function handleMerecatAbout(request, env) {
+  let data = {};
+  try { data = await request.json(); } catch { /* key is optional */ }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const cfg = await merecatConfig(env);
+  const day = merecatDay();
+  // per-work counts live on the works row (stamped at ingest end) so this
+  // stays a 91-row read, not a scan of the whole chunk store
+  const works = await env.LIBDB.prepare(
+    'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title'
+  ).all();
+  const list = works.results || [];
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const out = {
+    ok: true,
+    model: cfg.model, topk: cfg.topk,
+    user_daily: cfg.user_daily, global_daily: cfg.global_daily,
+    persona: cfg.persona,
+    chunks: list.reduce((n, w) => n + (w.chunks || 0), 0),
+    works: list,
+    today: (g && g.q) || 0,
+  };
+  const key = String(data.key || '');
+  if (key) {
+    const me = await sha256hex(key);
+    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+      .bind(day, me).first();
+    out.you = (u && u.q) || 0;
+    out.admin = await isAdminHash(env, me);
+  }
+  return json(out, 200);
 }
 
 /* Works roster + content hashes, so ingest.py can skip unchanged works. */
@@ -2945,8 +3443,7 @@ async function handleMerecatWorks(request, env) {
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const rows = await env.LIBDB.prepare(
-    'SELECT w.id, w.title, w.tier, w.kind, w.hash, COUNT(c.id) AS chunks ' +
-    'FROM works w LEFT JOIN chunks c ON c.work_id = w.id GROUP BY w.id ORDER BY w.tier, w.id'
+    'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id'
   ).all();
   return json({ ok: true, works: rows.results || [] }, 200);
 }
@@ -3046,6 +3543,12 @@ export default {
       if (path === '/api/comments/admins' && request.method === 'POST') return await handleAdmins(request, env);
       if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
       if (path === '/api/merecat/ask' && request.method === 'POST') return await handleMerecatAsk(request, env, ctx);
+      if (path === '/api/merecat/about' && request.method === 'POST') return await handleMerecatAbout(request, env);
+      if (path === '/api/merecat/usage' && request.method === 'POST') return await handleMerecatUsage(request, env);
+      if (path === '/api/merecat/mention' && request.method === 'POST') return await handleMerecatMention(request, env);
+      if (path === '/api/merecat/chats' && request.method === 'POST') return await handleMerecatChats(request, env);
+      if (path === '/api/merecat/chat' && request.method === 'POST') return await handleMerecatChat(request, env);
+      if (path === '/api/merecat/chat/delete' && request.method === 'POST') return await handleMerecatChatDelete(request, env);
       if (path === '/api/merecat/ingest' && request.method === 'POST') return await handleMerecatIngest(request, env);
       if (path === '/api/merecat/works' && request.method === 'POST') return await handleMerecatWorks(request, env);
       if (path === '/api/merecat/config' && request.method === 'POST') return await handleMerecatConfigSet(request, env);
@@ -3067,6 +3570,7 @@ export default {
         .then(() => pruneComments(env))
         .then(() => sweepDms(env))
         .then(() => pruneNotifications(env))
+        .then(() => pruneMerecatChats(env))
         .then(() => runBackup(env))
     );
   },

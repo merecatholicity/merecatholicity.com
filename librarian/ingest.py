@@ -444,7 +444,7 @@ def push_work(api, key, wid, entry, chunks, chash):
         print(f"    {min(i + batch, len(chunks))}/{len(chunks)}", flush=True)
         time.sleep(0.3)
     post(api, "/ingest", {"key": key, "mode": "end",
-                          "work": {"id": wid, "hash": chash}})
+                          "work": {"id": wid, "hash": chash, "chunks": len(chunks)}})
 
 
 def main():
