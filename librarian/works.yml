@@ -164,6 +164,13 @@ works:
     { src: ../ondoctrine.html, url: ondoctrine.html, tier: 3, kind: pandoc,
       title: "On Christian Doctrine, by St. Augustine" }
 
+  damascus:
+    { src: ../damascus.html, url: damascus.html, tier: 3, kind: pandoc,
+      title: "An Exact Exposition of the Orthodox Faith, by St. John of Damascus" }
+  liturgies:
+    { src: ../liturgies.html, url: liturgies.html, tier: 3, kind: pandoc,
+      title: "The Early Liturgies of St. James, St. Mark, and the Holy Apostles" }
+
 
   # ---- Band 4: the councils, and the roads of the schism --------------
   councils:
@@ -187,6 +194,16 @@ works:
   bishop-of-rome:
     { src: ../bishop-of-rome.html, url: bishop-of-rome.html, tier: 4, kind: hand,
       title: "The Bishop of Rome, both roads in their own voices" }
+  westminster:
+    { src: ../westminster.html, url: westminster.html, tier: 4, kind: pandoc,
+      title: "The Westminster Confession of Faith, with the Shorter Catechism" }
+  luther-primary:
+    { src: ../luther-primary.html, url: luther-primary.html, tier: 4, kind: pandoc,
+      title: "The Ninety-Five Theses, with Concerning Christian Liberty, by Martin Luther" }
+  jewel:
+    { src: ../jewel.html, url: jewel.html, tier: 4, kind: pandoc,
+      title: "An Apology of the Church of England, by John Jewel" }
+
 
   # ---- Band 5: the deep shelf, for digging ----------------------------
   summa-fp:
@@ -312,6 +329,15 @@ works:
   npnf213:
     { src: ../npnf213.html, url: npnf213.html, tier: 5, kind: pandoc,
       title: "NPNF Series 2, Vol. 13 (Gregory the Great, Ephraim Syrus, Aphrahat)" }
+  institutes:
+    { src: ../institutes.html, url: institutes.html, tier: 5, kind: pandoc,
+      title: "Institutes of the Christian Religion, by John Calvin" }
+  bondage:
+    { src: ../bondage.html, url: bondage.html, tier: 5, kind: pandoc,
+      title: "The Bondage of the Will, by Martin Luther" }
+  luther-galatians:
+    { src: ../luther-galatians.html, url: luther-galatians.html, tier: 5, kind: pandoc,
+      title: "Commentary on the Epistle to the Galatians, by Martin Luther" }
 
   # ---- Band 5 addendum: Schaff's History, the Creeds, and Trent ------
   hcc1:
@@ -348,7 +374,7 @@ works:
     { src: ../creeds3.html, url: creeds3.html, tier: 5, kind: pandoc,
       title: "Vol. III. The Evangelical Protestant Creeds, with Translations" }
   trent:
-    { src: ../trent.html, url: trent.html, tier: 5, kind: pandoc,
+    { src: ../trent.html, url: trent.html, tier: 4, kind: pandoc,
       title: "The Canons and Dogmatic Decrees of the Council of Trent" }
 
   # ---- Band 5 addendum: the modern apologetics shelf (promote at will) --
