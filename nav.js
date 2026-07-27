@@ -200,3 +200,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   });
 });
+
+/* Deep-link anchors for the generated Scripture and Fathers pages. Loaded from
+   here so it reaches every page (all of which already carry nav.js) without
+   rebuilding any of them; the script itself no-ops on the hand-authored pages. */
+(function () {
+  var s = document.createElement('script');
+  s.src = 'deeplink.js?v=1';
+  document.head.appendChild(s);
+})();
