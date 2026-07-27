@@ -4184,8 +4184,10 @@
       '.merecat-msg.you{margin-left:auto;background:var(--cream)}' +
       '.merecat-msg.cat{background:var(--surface)}' +
       '.merecat-who{font-size:.78rem;color:var(--faint);margin-bottom:.3rem}' +
-      '.merecat-body p{margin:.45em 0}' +
-      '.merecat-body blockquote{margin:.5em 0 .5em .8em;padding-left:.6em;border-left:3px solid var(--rule);color:var(--ink-soft)}' +
+      /* fillBody leaves raw newlines in place, the board renders them with
+         pre-wrap (.comment-body does the same), so the bot's paragraphs need it too */
+      '.merecat-body{white-space:pre-wrap;overflow-wrap:break-word}' +
+      '.merecat-body blockquote{margin:.5em 0 .5em .8em;padding-left:.6em;border-left:3px solid var(--rule);color:var(--ink-soft);white-space:normal}' +
       '.merecat-wait{color:var(--faint);font-style:italic}' +
       '.merecat-note{color:var(--maroon)}' +
       '.merecat-srcs{margin-top:.55rem;padding-top:.45rem;border-top:1px dashed var(--rule);font-size:.84rem}' +
