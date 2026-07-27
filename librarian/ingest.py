@@ -513,7 +513,14 @@ def main():
     post(args.api, "/config", {"key": key, "persona": persona, "config": cfg})
     print("config + persona pushed")
 
-    server = {w["id"]: w for w in post(args.api, "/works", {"key": key})["works"]}
+    roster = post(args.api, "/works", {"key": key})
+    server = {w["id"]: w for w in roster["works"]}
+    # early warning on D1's 500 MB per-database cap: the database runs about
+    # 2.1x the stored text (search index and btrees); past ~450 MB projected,
+    # split bands 5-6 into a second database (the designed relief valve)
+    db_mb = roster.get("text_bytes", 0) * 2.09 / 1e6
+    print(f"database projection: ~{db_mb:.0f} MB of 500"
+          + ("  << NEARING THE CAP: time to split the deep shelf" if db_mb > 450 else ""))
 
     # Prune works that left the manifest (only on unfiltered runs, so a
     # --only/--tiers pass never mistakes filtering for removal).

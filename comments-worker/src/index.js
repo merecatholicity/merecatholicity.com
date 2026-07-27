@@ -3508,7 +3508,11 @@ async function handleMerecatWorks(request, env) {
   const rows = await env.LIBDB.prepare(
     'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id'
   ).all();
-  return json({ ok: true, works: rows.results || [] }, 200);
+  // stored text volume, so the daily ingest can project database size
+  // against D1's 500 MB free cap and warn before the wall
+  const tb = await env.LIBDB.prepare(
+    "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
+  return json({ ok: true, works: rows.results || [], text_bytes: (tb && tb.b) || 0 }, 200);
 }
 
 /* Persona / model / caps push from librarian/config.yml + persona.md. */
