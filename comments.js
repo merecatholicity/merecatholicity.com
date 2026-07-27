@@ -1364,7 +1364,7 @@
     var editor = el('div', 'comment-editor');
     var ta = el('textarea', 'comment-text');
     ta.maxLength = 4000;
-    ta.rows = 4;
+    ta.rows = 5;
     ta.value = c.body;
     editor.appendChild(mdEditor(ta));
     var row = el('div', 'comment-buttons');

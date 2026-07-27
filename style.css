@@ -682,7 +682,8 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .comment-note { font-style: italic; color: var(--muted-c); font-size: 0.9rem; }
 .comments-status, .form-status { color: var(--muted-c); font-size: 0.95rem; min-height: 1.3em; }
 .comment-form { margin-top: 1.6rem; }
-.comment-form .comment-text {
+.comment-form .comment-text,
+.comment-editor .comment-text {
   width: 100%;
   padding: 0.5em 0.7em;
   font: inherit;
@@ -692,7 +693,8 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
   border-radius: 6px;
   resize: vertical;
 }
-.comment-form .comment-text:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+.comment-form .comment-text:focus,
+.comment-editor .comment-text:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
 .comment-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .comment-form .ts-slot { margin: 0.6em 0; }
 /* Markdown compose: a button row above the plain-text box, a legend below. */
