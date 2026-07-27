@@ -2533,6 +2533,460 @@ async function handleAdmin(request, env) {
   return json({ ok: true, admin: false }, 200);
 }
 
+/* ============================== merecat ==================================
+   The librarian bot: members-only RAG over the site corpus. The corpus lives
+   in LIBDB (chunks + an FTS5 index over all of it) with a Vectorize index
+   (MERECAT_INDEX) holding semantic vectors for the Tier-1 works only — the
+   free plan stores ~4,880 vectors at 1024 dims, so the deep shelf rides BM25.
+   Retrieval is hybrid: embed the question (bge-m3), query Vectorize, BM25 the
+   whole corpus with tier-weighted rank, rerank the merged pool
+   (bge-reranker-base), and hand the top chunks to the chat model with the
+   persona from config. Answers stream back as plain text behind a one-line
+   JSON preamble carrying the numbered sources. Questions are never stored —
+   usage tables hold counters only. All of LIBDB is derived data rebuilt by
+   librarian/ingest.py, which is why the backup cron ignores it. */
+
+const MERECAT_DEFAULTS = {
+  model: '@cf/qwen/qwen3-30b-a3b-fp8',
+  user_daily: 10,     // questions per member per UTC day
+  global_daily: 150,  // questions across the community per UTC day
+  topk: 8,            // chunks handed to the model
+  max_tokens: 1100,
+};
+const MERECAT_SITE = 'https://merecatholicity.com/';
+const MERECAT_TIER_LABEL = { 1: 'site position', 2: 'shelf', 3: 'deep shelf' };
+const MERECAT_RESTING =
+  'merecat is resting. The community’s shared daily budget is spent. It resets at midnight UTC.';
+
+/* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
+   the bot's behavior with no redeploy. Cached per isolate for five minutes;
+   a config push clears this isolate at once and the rest lag out the TTL. */
+let merecatConfigCache = { at: 0, cfg: null };
+
+async function merecatConfig(env) {
+  if (merecatConfigCache.cfg && Date.now() - merecatConfigCache.at < 300000) {
+    return merecatConfigCache.cfg;
+  }
+  const cfg = { ...MERECAT_DEFAULTS, persona: '' };
+  try {
+    const { results } = await env.LIBDB.prepare('SELECT k, v FROM config').all();
+    for (const r of results || []) {
+      if (r.k === 'persona') cfg.persona = String(r.v);
+      else if (r.k === 'model') cfg.model = String(r.v);
+      else if (r.k in MERECAT_DEFAULTS) cfg[r.k] = Number(r.v) || MERECAT_DEFAULTS[r.k];
+    }
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_config_failed', error: String(err) }));
+  }
+  merecatConfigCache = { at: Date.now(), cfg };
+  return cfg;
+}
+
+function merecatDay() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/* Strip <think>...</think> spans from a token stream, across chunk borders.
+   qwen3 is a reasoning model with no documented off switch on Workers AI, so
+   the persona carries /no_think and this filter guarantees no reasoning ever
+   reaches the client either way. Holds back a small tail in case a tag is
+   split between deltas; flush(null) drains it. */
+function merecatThinkStripper() {
+  let carry = '';
+  let inThink = false;
+  let started = false; // trim leading whitespace once, after any think block
+  return function feed(delta) {
+    if (delta != null) carry += delta;
+    let out = '';
+    for (;;) {
+      if (inThink) {
+        const close = carry.indexOf('</think>');
+        if (close === -1) { carry = carry.slice(-8); break; }
+        carry = carry.slice(close + 8);
+        inThink = false;
+        continue;
+      }
+      const open = carry.indexOf('<think>');
+      if (open !== -1) {
+        out += carry.slice(0, open);
+        carry = carry.slice(open + 7);
+        inThink = true;
+        continue;
+      }
+      if (delta == null) { out += carry; carry = ''; }
+      else { out += carry.slice(0, Math.max(0, carry.length - 7)); carry = carry.slice(-7); }
+      break;
+    }
+    if (!started && out) { out = out.replace(/^\s+/, ''); if (out) started = true; }
+    return out;
+  };
+}
+
+/* Hybrid retrieval: returns up to cfg.topk chunks, each
+   { cid, title, url, anchor, heading, tier, text }. Every leg fails soft so a
+   broken index degrades the answer instead of killing it. */
+async function merecatRetrieve(env, q, cfg) {
+  const pool = new Map(); // cid -> chunk row stub
+  const add = (r, sem) => {
+    if (!r || !r.cid || pool.has(r.cid)) return;
+    pool.set(r.cid, { cid: r.cid, work: r.work_id, title: r.title, url: r.url,
+      anchor: r.anchor || '', heading: r.heading || '', tier: r.tier || 2,
+      text: r.text || '', sem: !!sem });
+  };
+
+  // Semantic leg: Tier-1 vectors.
+  let semIds = [];
+  try {
+    const emb = await env.AI.run('@cf/baai/bge-m3', { text: [q] });
+    const vec = emb && emb.data && emb.data[0];
+    if (vec) {
+      const res = await env.MERECAT_INDEX.query(vec, { topK: 8, returnMetadata: 'none' });
+      semIds = (res && res.matches ? res.matches : []).map((m) => m.id);
+    }
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_semantic_failed', error: String(err) }));
+  }
+  if (semIds.length) {
+    try {
+      const ph = semIds.map((_, i) => '?' + (i + 1)).join(',');
+      const rows = await env.LIBDB.prepare(
+        'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
+        'FROM chunks c JOIN works w ON w.id = c.work_id WHERE c.cid IN (' + ph + ')'
+      ).bind(...semIds).all();
+      const byCid = {};
+      for (const r of rows.results || []) byCid[r.cid] = r;
+      for (const cid of semIds) add(byCid[cid], true); // keep Vectorize's order
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_semfetch_failed', error: String(err) }));
+    }
+  }
+
+  // BM25 leg: the whole corpus, rank boosted toward the primary works.
+  // bm25() is negative-better, so multiplying by a >1 weight boosts a tier.
+  const match = buildMatch(q);
+  if (match) {
+    try {
+      const rows = await env.LIBDB.prepare(
+        'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
+        'FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid ' +
+        'JOIN works w ON w.id = c.work_id WHERE chunks_fts MATCH ?1 ' +
+        'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.25 ELSE 1.0 END) ' +
+        'LIMIT 25'
+      ).bind(match).all();
+      for (const r of rows.results || []) add(r, false);
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_fts_failed', error: String(err) }));
+    }
+  }
+
+  let candidates = [...pool.values()];
+  if (!candidates.length) return [];
+
+  // Rerank the merged pool against the question; fall back to merge order
+  // (semantic hits first) if the reranker misbehaves.
+  if (candidates.length > cfg.topk) {
+    try {
+      const contexts = candidates.map((c) => ({
+        text: (c.heading ? c.heading + ': ' : '') + c.text.slice(0, 1500),
+      }));
+      const rr = await env.AI.run('@cf/baai/bge-reranker-base', { query: q, contexts });
+      const scored = (rr && rr.response ? rr.response : [])
+        .filter((s) => s && Number.isInteger(s.id) && candidates[s.id])
+        .sort((a, b) => b.score - a.score);
+      if (scored.length) {
+        const seen = new Set();
+        const ranked = [];
+        for (const s of scored) {
+          if (seen.has(s.id)) continue;
+          seen.add(s.id);
+          ranked.push(candidates[s.id]);
+        }
+        candidates = ranked;
+      }
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_rerank_failed', error: String(err) }));
+      candidates.sort((a, b) => (b.sem ? 1 : 0) - (a.sem ? 1 : 0));
+    }
+  }
+  return candidates.slice(0, cfg.topk);
+}
+
+/* The librarian answers. Auth is the board's own (any identity key, the
+   blocked gate, per-IP throttle) plus two daily caps guarding the shared
+   Workers AI budget. Refusals are JSON; an answer is a text/plain stream:
+   one JSON line {sources:[...]}, a blank line, then the tokens. */
+async function handleMerecatAsk(request, env, ctx) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many questions at once. Wait a minute.' }, 429);
+  const key = String(data.key || '');
+  let q = String(data.q || '').trim().slice(0, 2000);
+  if (!key || !q) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+
+  const cfg = await merecatConfig(env);
+  const day = merecatDay();
+  try {
+    const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+    if (g && g.q >= cfg.global_daily) return json({ ok: false, resting: true, error: MERECAT_RESTING }, 429);
+    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+      .bind(day, me).first();
+    if (u && u.q >= cfg.user_daily) {
+      return json({
+        ok: false, capped: true,
+        error: 'You have used your ' + cfg.user_daily + ' questions for today. The counter resets at midnight UTC.',
+      }, 429);
+    }
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_caps_failed', error: String(err) }));
+  }
+
+  const chunks = await merecatRetrieve(env, q, cfg);
+
+  // Build the prompt: persona, then the numbered sources, then a short
+  // client-kept history, then the question. The model cites by [n] only.
+  const sources = chunks.map((c, i) => ({
+    n: i + 1, title: c.title, heading: c.heading,
+    url: MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
+  }));
+  let srcBlock = '';
+  chunks.forEach((c, i) => {
+    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + c.title +
+      (c.heading ? ' — ' + c.heading : '') + '\n' + c.text.slice(0, 1600) + '\n\n';
+  });
+  const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
+    '\n\nSOURCES (cite each by its bracketed number, like [3] — write the digit; these are the only citable sources this turn' +
+    (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
+    '):\n\n' + (srcBlock || '(none)') + '/no_think';
+  const messages = [{ role: 'system', content: sys }];
+  const history = Array.isArray(data.history) ? data.history.slice(-8) : [];
+  for (const h of history) {
+    if (h && (h.role === 'user' || h.role === 'assistant') && h.content) {
+      messages.push({ role: h.role, content: String(h.content).slice(0, 1500) });
+    }
+  }
+  messages.push({ role: 'user', content: q });
+
+  let aiStream;
+  try {
+    aiStream = await env.AI.run(cfg.model, {
+      messages, stream: true, max_tokens: cfg.max_tokens, temperature: 0.35,
+    });
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_ai_failed', error: String(err) }));
+    return json({ ok: false, resting: true, error: MERECAT_RESTING }, 503);
+  }
+
+  const inTokEst = Math.ceil(JSON.stringify(messages).length / 4);
+  const { readable, writable } = new TransformStream();
+  ctx.waitUntil(
+    merecatPump(env, aiStream, writable, sources, me, day, inTokEst)
+      .catch((err) => console.log(JSON.stringify({ event: 'merecat_pump_failed', error: String(err) })))
+  );
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+/* Drain the model's SSE stream into the client stream: preamble first, then
+   deltas with think spans stripped; bump the usage counters when done. */
+async function merecatPump(env, aiStream, writable, sources, me, day, inTokEst) {
+  const writer = writable.getWriter();
+  const encode = (s) => enc.encode(s);
+  const strip = merecatThinkStripper();
+  let outChars = 0;
+  let usage = null;
+  try {
+    await writer.write(encode(JSON.stringify({ sources }) + '\n\n'));
+    const reader = aiStream.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const obj = JSON.parse(payload);
+          if (obj.usage) usage = obj.usage;
+          // a purely numeric token arrives as a JSON number, not a string —
+          // coerce, or years and [n] citation digits vanish from answers
+          const delta = obj.response == null ? '' : String(obj.response);
+          if (delta) {
+            const vis = strip(delta);
+            if (vis) { outChars += vis.length; await writer.write(encode(vis)); }
+          }
+        } catch { /* partial or non-JSON line: skip */ }
+      }
+    }
+    const tail = strip(null);
+    if (tail) { outChars += tail.length; await writer.write(encode(tail)); }
+  } finally {
+    try { await writer.close(); } catch { /* client gone */ }
+  }
+  const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : inTokEst;
+  const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(outChars / 4);
+  await env.LIBDB.batch([
+    env.LIBDB.prepare(
+      'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
+      'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
+    ).bind(day, inTok, outTok),
+    env.LIBDB.prepare(
+      'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
+      'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
+    ).bind(day, me),
+  ]);
+}
+
+/* Corpus push, admin-keyed, driven by librarian/ingest.py. A work arrives as
+   begin (upsert the works row, clear its old chunks and vectors), one or more
+   append batches (rows, and vectors for Tier-1 works), then end (stamp the
+   content hash — the completeness marker an interrupted push never reaches,
+   so the next run redoes that work). mode delete removes a work outright. */
+async function handleMerecatIngest(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const mode = String(data.mode || '');
+  const work = data.work || {};
+  const id = String(work.id || '');
+  if (!id || !/^[a-z0-9-]{1,40}$/.test(id)) return json({ ok: false, error: 'Bad work id.' }, 400);
+
+  if (mode === 'begin' || mode === 'delete') {
+    // Clear the work's vectors (only Tier-1 works ever have them) and rows.
+    try {
+      const olds = await env.LIBDB.prepare('SELECT cid FROM chunks WHERE work_id = ?1').bind(id).all();
+      const cids = (olds.results || []).map((r) => r.cid);
+      for (let i = 0; i < cids.length; i += 1000) {
+        try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 1000)); }
+        catch (err) { console.log(JSON.stringify({ event: 'merecat_vecdel_failed', error: String(err) })); }
+      }
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_clear_failed', error: String(err) }));
+    }
+    await env.LIBDB.prepare('DELETE FROM chunks WHERE work_id = ?1').bind(id).run();
+    if (mode === 'delete') {
+      await env.LIBDB.prepare('DELETE FROM works WHERE id = ?1').bind(id).run();
+      return json({ ok: true, deleted: id }, 200);
+    }
+    await env.LIBDB.prepare(
+      'INSERT INTO works (id, title, url, tier, kind, hash, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6) ' +
+      'ON CONFLICT(id) DO UPDATE SET title = ?2, url = ?3, tier = ?4, kind = ?5, hash = NULL, updated_at = ?6'
+    ).bind(id, String(work.title || id), String(work.url || ''),
+      Math.min(3, Math.max(1, Number(work.tier) || 2)), String(work.kind || ''),
+      Math.floor(Date.now() / 1000)).run();
+    return json({ ok: true, began: id }, 200);
+  }
+
+  if (mode === 'append') {
+    const rows = Array.isArray(data.chunks) ? data.chunks : [];
+    if (!rows.length || rows.length > 480) return json({ ok: false, error: 'Bad batch size.' }, 400);
+    // Multi-row inserts: 6 params a row, 16 rows a statement, well inside
+    // D1's 100-bound-params and 50-queries-per-invocation limits.
+    const stmts = [];
+    for (let i = 0; i < rows.length; i += 16) {
+      const slice = rows.slice(i, i + 16);
+      const values = slice.map(() => '(?, ?, ?, ?, ?, ?)').join(',');
+      const binds = [];
+      for (const r of slice) {
+        binds.push(String(r.cid || ''), id, Number(r.seq) || 0,
+          String(r.heading || ''), String(r.anchor || ''), String(r.text || ''));
+      }
+      stmts.push(env.LIBDB.prepare(
+        'INSERT OR REPLACE INTO chunks (cid, work_id, seq, heading, anchor, text) VALUES ' + values
+      ).bind(...binds));
+    }
+    await env.LIBDB.batch(stmts);
+    let vectored = 0;
+    if (data.vectorize) {
+      const meta = { title: String(work.title || id), url: String(work.url || ''), tier: Number(work.tier) || 1 };
+      for (let i = 0; i < rows.length; i += 90) {
+        const slice = rows.slice(i, i + 90);
+        const emb = await env.AI.run('@cf/baai/bge-m3', {
+          text: slice.map((r) => (r.heading ? r.heading + ': ' : '') + String(r.text || '').slice(0, 1800)),
+        });
+        const vecs = (emb && emb.data) || [];
+        const upserts = [];
+        for (let j = 0; j < slice.length; j++) {
+          if (!vecs[j]) continue;
+          upserts.push({
+            id: String(slice[j].cid), values: vecs[j],
+            metadata: { work: id, title: meta.title, tier: meta.tier,
+              url: meta.url + (slice[j].anchor ? '#' + slice[j].anchor : '') },
+          });
+        }
+        if (upserts.length) { await env.MERECAT_INDEX.upsert(upserts); vectored += upserts.length; }
+      }
+    }
+    return json({ ok: true, inserted: rows.length, vectored }, 200);
+  }
+
+  if (mode === 'end') {
+    await env.LIBDB.prepare('UPDATE works SET hash = ?2, updated_at = ?3 WHERE id = ?1')
+      .bind(id, String(work.hash || ''), Math.floor(Date.now() / 1000)).run();
+    return json({ ok: true, ended: id }, 200);
+  }
+
+  return json({ ok: false, error: 'Bad mode.' }, 400);
+}
+
+/* Works roster + content hashes, so ingest.py can skip unchanged works. */
+async function handleMerecatWorks(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const rows = await env.LIBDB.prepare(
+    'SELECT w.id, w.title, w.tier, w.kind, w.hash, COUNT(c.id) AS chunks ' +
+    'FROM works w LEFT JOIN chunks c ON c.work_id = w.id GROUP BY w.id ORDER BY w.tier, w.id'
+  ).all();
+  return json({ ok: true, works: rows.results || [] }, 200);
+}
+
+/* Persona / model / caps push from librarian/config.yml + persona.md. */
+async function handleMerecatConfigSet(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const stmts = [];
+  const put = (k, v) => stmts.push(env.LIBDB.prepare(
+    'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
+  if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
+  const cfg = data.config || {};
+  for (const k of ['model', 'user_daily', 'global_daily', 'topk', 'max_tokens']) {
+    if (cfg[k] != null) put(k, cfg[k]);
+  }
+  if (!stmts.length) return json({ ok: false, error: 'Nothing to set.' }, 400);
+  await env.LIBDB.batch(stmts);
+  merecatConfigCache = { at: 0, cfg: null }; // this isolate refreshes now; others lag out the 5-min TTL
+  return json({ ok: true, set: stmts.length }, 200);
+}
+
+/* Usage counters for the admin: the last fourteen days, questions and rough
+   token spend, distinct askers per day. Counters only — no question text. */
+async function handleMerecatStats(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const use = await env.LIBDB.prepare(
+    'SELECT day, q, in_tok, out_tok FROM usage ORDER BY day DESC LIMIT 14').all();
+  const users = await env.LIBDB.prepare(
+    'SELECT day, COUNT(*) AS users FROM user_usage GROUP BY day ORDER BY day DESC LIMIT 14').all();
+  const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chunks').first();
+  const byDay = {};
+  for (const r of users.results || []) byDay[r.day] = r.users;
+  const days = (use.results || []).map((r) => ({ ...r, users: byDay[r.day] || 0 }));
+  return json({ ok: true, days, chunks: (total && total.n) || 0 }, 200);
+}
+
 export default {
   async fetch(request, env, ctx) {
     try {
@@ -2591,6 +3045,11 @@ export default {
       if (path === '/api/comments/report/dismiss' && request.method === 'POST') return await handleReportDismiss(request, env);
       if (path === '/api/comments/admins' && request.method === 'POST') return await handleAdmins(request, env);
       if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
+      if (path === '/api/merecat/ask' && request.method === 'POST') return await handleMerecatAsk(request, env, ctx);
+      if (path === '/api/merecat/ingest' && request.method === 'POST') return await handleMerecatIngest(request, env);
+      if (path === '/api/merecat/works' && request.method === 'POST') return await handleMerecatWorks(request, env);
+      if (path === '/api/merecat/config' && request.method === 'POST') return await handleMerecatConfigSet(request, env);
+      if (path === '/api/merecat/stats' && request.method === 'POST') return await handleMerecatStats(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);
     } catch (err) {
       console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));

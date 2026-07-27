@@ -106,3 +106,10 @@ serve:
 comments-backup:
 	cd comments-worker && deno run -A npm:wrangler d1 export merecatholicity-comments --remote --output ../comments-backup.sql
 	@echo "exported comments-backup.sql (kept out of git)"
+
+# Rebuild and push everything merecat (the librarian bot) knows: the corpus
+# chunks, the persona, and the config, all from librarian/. Incremental, so
+# it is cheap to run after any content edit; see librarian/README.md.
+.PHONY: librarian
+librarian:
+	cd librarian && python ingest.py --push
