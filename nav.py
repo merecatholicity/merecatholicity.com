@@ -11,7 +11,7 @@ import sys
 
 import yaml
 
-PAGES = ["index.html", "resources.html", "library.html", "contact.html", "logos.html",
+PAGES = ["index.html", "resources.html", "library.html", "kjv.html", "douay-rheims.html", "contact.html", "logos.html",
          "credo.html", "lex-orandi.html", "altar.html", "hours.html",
          "jesus-prayer.html", "lectio-divina.html",
          "confession-fasting.html", "theotokos.html",

@@ -101,12 +101,14 @@ def main():
     p._flush()
     assert len(p.books) == 66, "expected 66 books, got %d" % len(p.books)
     out = []
-    for (name, slug), chapmap in zip(BOOKS, p.books):
+    for i, ((name, slug), chapmap) in enumerate(zip(BOOKS, p.books)):
         chapters = []
         for c in range(1, max(chapmap) + 1):
             vmap = chapmap.get(c, {})
             chapters.append([vmap.get(v, "") for v in range(1, (max(vmap) if vmap else 0) + 1)])
-        out.append({"name": name, "slug": slug, "chapters": chapters})
+        # first 39 books are the Old Testament, the rest the New
+        out.append({"name": name, "slug": slug,
+                    "t": "ot" if i < 39 else "nt", "chapters": chapters})
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump({"books": out}, f, ensure_ascii=False, separators=(",", ":"))
     nv = sum(len(c) for b in out for c in b["chapters"])
