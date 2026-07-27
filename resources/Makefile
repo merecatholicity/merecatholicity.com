@@ -108,6 +108,14 @@ WORKS = \
   heretics=Heretics.pdf \
   everlasting=The_Everlasting_Man.pdf \
   gibbons=Faith_of_Our_Fathers.pdf \
+  damascus=Exposition_of_the_Orthodox_Faith.pdf \
+  liturgies=The_Early_Liturgies.pdf \
+  westminster=Westminster_Confession.pdf \
+  institutes=Institutes_of_the_Christian_Religion.pdf \
+  bondage=The_Bondage_of_the_Will.pdf \
+  luther-galatians=Commentary_on_Galatians.pdf \
+  luther-primary=Ninety-Five_Theses.pdf \
+  jewel=Apology_of_the_Church_of_England.pdf \
   douay-rheims=Douay-Rheims_Bible.pdf \
   kjv=King_James_Bible.pdf \
   catena-matthew=Catena_Aurea_Matthew.pdf \
@@ -215,7 +223,15 @@ html:
 	         orthodoxy:1:"Orthodoxy, by G. K. Chesterton" \
 	         heretics:1:"Heretics, by G. K. Chesterton" \
 	         everlasting:2:"The Everlasting Man, by G. K. Chesterton" \
-	         gibbons:1:"The Faith of Our Fathers, by James Cardinal Gibbons"; do \
+	         gibbons:1:"The Faith of Our Fathers, by James Cardinal Gibbons" \
+	         damascus:2:"An Exact Exposition of the Orthodox Faith, by St. John of Damascus" \
+	         liturgies:1:"The Early Liturgies" \
+	         westminster:2:"The Westminster Confession of Faith" \
+	         institutes:2:"Institutes of the Christian Religion, by John Calvin" \
+	         bondage:1:"The Bondage of the Will, by Martin Luther" \
+	         luther-galatians:1:"Commentary on the Epistle to the Galatians, by Martin Luther" \
+	         luther-primary:1:"The Ninety-Five Theses, with Concerning Christian Liberty" \
+	         jewel:1:"An Apology of the Church of England, by John Jewel"; do \
 	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \

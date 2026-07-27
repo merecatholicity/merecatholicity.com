@@ -2617,7 +2617,7 @@ const MERECAT_BOT = {
   nick: 'merecat 🐈 AI BOT',
 };
 const MERECAT_MENTION_RE = /@merecat\b/i;
-const MERECAT_RV = 4;   // retrieval build: bump when retrieval logic changes
+const MERECAT_RV = 5;   // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -2735,11 +2735,13 @@ function merecatPhrases(q) {
    broken index degrades the answer instead of killing it. */
 async function merecatRetrieve(env, q, cfg) {
   const pool = new Map(); // cid -> chunk row stub
-  const add = (r, sem) => {
-    if (!r || !r.cid || pool.has(r.cid)) return;
+  const add = (r, sem, phr) => {
+    if (!r || !r.cid) return;
+    const had = pool.get(r.cid);
+    if (had) { if (phr) had.phr = true; return; }
     pool.set(r.cid, { cid: r.cid, work: r.work_id, title: r.title, url: r.url,
       anchor: r.anchor || '', heading: r.heading || '', tier: r.tier || 2,
-      text: r.text || '', sem: !!sem });
+      text: r.text || '', sem: !!sem, phr: !!phr });
   };
 
   // Semantic leg: Tier-1 vectors.
@@ -2795,7 +2797,7 @@ async function merecatRetrieve(env, q, cfg) {
       if (phr) {
         const hits = await env.LIBDB.prepare(SEL +
           'ORDER BY bm25(chunks_fts) LIMIT 8').bind(phr).all();
-        for (const r of hits.results || []) add(r, false);
+        for (const r of hits.results || []) add(r, false, true);
       }
     } catch (err) {
       console.log(JSON.stringify({ event: 'merecat_fts_failed', error: String(err) }));
@@ -2831,7 +2833,17 @@ async function merecatRetrieve(env, q, cfg) {
       candidates.sort((a, b) => (b.sem ? 1 : 0) - (a.sem ? 1 : 0));
     }
   }
-  return candidates.slice(0, cfg.topk);
+  /* A phrase hit matched the question's own words verbatim — stronger
+     evidence than a rerank score computed on a window that can miss the
+     match — so the best couple of phrase hits always keep a seat. */
+  const chosen = candidates.slice(0, cfg.topk);
+  const owed = candidates.filter((c) => c.phr && chosen.indexOf(c) === -1).slice(0, 2);
+  for (const p of owed) {
+    for (let i = chosen.length - 1; i >= 0; i--) {
+      if (!chosen[i].phr) { chosen[i] = p; break; }
+    }
+  }
+  return chosen;
 }
 
 /* The librarian answers. Auth is the board's own (any identity key, the
@@ -2911,7 +2923,7 @@ async function handleMerecatAsk(request, env, ctx) {
   let srcBlock = '';
   chunks.forEach((c, i) => {
     srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + c.title +
-      (c.heading ? ' — ' + c.heading : '') + '\n' + c.text.slice(0, 1600) + '\n\n';
+      (c.heading ? ' — ' + c.heading : '') + '\n' + c.text.slice(0, 2800) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
     (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
@@ -3428,7 +3440,7 @@ async function merecatMentionReply(env, commentId) {
   let srcBlock = '';
   chunks.forEach((cc, i) => {
     srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + cc.title +
-      (cc.heading ? ' — ' + cc.heading : '') + '\n' + cc.text.slice(0, 1600) + '\n\n';
+      (cc.heading ? ' — ' + cc.heading : '') + '\n' + cc.text.slice(0, 2800) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
     '\n\nYou were mentioned by name inside ' + where + '. The recent conversation, oldest first:\n\n' +

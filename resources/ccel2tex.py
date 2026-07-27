@@ -614,6 +614,135 @@ def trent_heading(div_id, title):
     return None
 
 
+def make_damascus_heading():
+    """An Exact Exposition of the Orthodox Faith (npnf209): the Prologue
+    and the four Books as chapters; their chapters become sections."""
+    inside = _tops_tracker("iii")
+
+    def heading(div_id, title):
+        if not inside(div_id):
+            return None
+        title = re.sub(r"\s+", " ", title).strip()
+        if div_id == "iii.iii":
+            return title                 # Prologue
+        if div_id == "iii.iv":
+            return None                  # container: promote the Books
+        if re.fullmatch(r"iii\.iv\.[ivxlc]+", div_id):
+            return title
+        return None
+
+    return heading
+
+
+def make_liturgies_heading():
+    """The Early Liturgies division of ANF VII: the introductory notice,
+    the three liturgies, and the elucidations as chapters."""
+    inside = _tops_tracker("xii")
+
+    def heading(div_id, title):
+        if not inside(div_id):
+            return None
+        if re.fullmatch(r"xii\.[ivxlc]+", div_id):
+            return re.sub(r"\s+", " ", title).strip()
+        return None
+
+    return heading
+
+
+def make_westminster_heading():
+    """The Westminster Confession (with the American amendments as
+    printed by Schaff) and the Shorter Catechism, from creeds3. Each is
+    one flat division whose chapter heads are inline h3/h4 (converted
+    with inner_heads=True); the facsimile plates are furniture."""
+    inside = _tops_tracker("iv")
+
+    def heading(div_id, title):
+        if not inside(div_id):
+            return None
+        title = re.sub(r"\s+", " ", title).strip()
+        if div_id == "iv.xvii.ii":
+            return "The Westminster Confession of Faith, A.D. 1647"
+        if div_id == "iv.xviii":
+            return "The Westminster Shorter Catechism, A.D. 1647"
+        return None
+
+    return heading
+
+
+def westminster_post(body):
+    """The Confession is set as one English|Latin parallel table whose
+    chapter heads are table rows: linearized they arrive as the run
+    "Chapter N. / Cap. N. / <English title> / <Latin title>". Promote
+    each to a section heading carrying the English title, drop the Latin
+    half and the print-furniture subtitles, then the shared symbol map."""
+    from schaff import volume_post
+    # Ch. XXXII's title is split across two \emph runs by an American-
+    # edition footnote; rejoin it by hand before the general pattern
+    body = re.sub(
+        r"Chapter XXXII\.\n\nCap\. XXXII\.\n\n"
+        r"\\emph\{Of the State of Men\}"
+        r"(\\footnote\{(?:[^{}]|\{[^{}]*\})*\})"
+        r"\\emph\{ after Death, and of the Resurrection of the Dead\}\.\n\n"
+        r"[^\n]+\n\n",
+        lambda m: ("\\xsection{Chapter XXXII. Of the State of Men after "
+                   "Death, and of the Resurrection of the Dead}%s\n\n"
+                   % m.group(1)),
+        body)
+
+    def chap(m):
+        title = (m.group(2) or m.group(3) or "").strip().rstrip(".")
+        return ("\\xsection{Chapter %s. %s}%s\n\n"
+                % (m.group(1), title, m.group(4) or ""))
+    body = re.sub(
+        r"Chapter ([IVXLC]+)\.\n\n"
+        r"Cap\. [IVXLC]+\.\n\n"
+        r"(?:\\emph\{([^\n{}]+?)\.?\}|([^\n{}\\][^\n{}]*?))\.?"
+        r"((?:\\footnote\{(?:[^{}]|\{[^{}]*\})*\})?)\n\n"
+        r"[^\n]+\n\n",
+        chap, body)
+    body = re.sub(r"\\xsection\{THE WESTMINSTER [^}]*\}\n*", "", body)
+    body = re.sub(r"\\xsection\{C\\textsc\{onfessio[^\n]*\n*", "", body)
+    body = re.sub(r"\\xsection\{Catechismus [^}]*\}\n*", "", body)
+    return volume_post(body)
+
+
+_SMALL_WORDS = {"a", "an", "and", "as", "at", "but", "by", "for", "in",
+                "of", "on", "or", "the", "to", "with"}
+
+
+def _titlecase(t):
+    words = t.lower().split()
+    out = []
+    for i, w in enumerate(words):
+        out.append(w if w in _SMALL_WORDS and i > 0 else w.capitalize())
+    return " ".join(out)
+
+
+def institutes_post(body):
+    """Two transcription fossils: one Greek word set in the legacy
+    Symbol-font private-use range (Tertullian's oikonomias, quoted in a
+    footnote), and a French où whose grave arrived as a small tilde."""
+    from schaff import volume_post
+    body = body.replace(
+        ""
+        "", "\\textgreek{οἰκονομίας}")
+    body = body.replace("o˜", "où").replace("˜",
+                                                 "\\textasciitilde{}")
+    return volume_post(body)
+
+
+def calvin_heading(div_id, title):
+    """The Institutes: the four Books (all-caps in the source, restored
+    to title case), the prefatory material, and the Aphorisms."""
+    title = re.sub(r"\s+", " ", title).strip().rstrip(",")
+    if not title or title.lower() == "title page" or \
+            re.search(r"\bindex(es)?\b", title, re.I):
+        return None
+    if title.isupper():
+        title = _titlecase(title)
+    return title
+
+
 # --- Chesterton (CCEL ThML editions) -----------------------------------
 
 ORTHODOXY_TITLES = {
@@ -672,6 +801,20 @@ EXTRA_WORKS = [
          heading_fn=lambda: chesterton_heading),
     dict(src="everlasting-thml.xml", out="everlasting-body.tex",
          heading_fn=lambda: chesterton_heading),
+    dict(src="npnf209.xml", out="damascus-body.tex",
+         heading_fn=make_damascus_heading, safe_footnotes=True),
+    dict(src="anf07.xml", out="liturgies-body.tex",
+         heading_fn=make_liturgies_heading, safe_footnotes=True),
+    dict(src="creeds3.xml", out="westminster-body.tex",
+         heading_fn=make_westminster_heading, safe_footnotes=True,
+         table_cells=True, inner_heads=True, post_fn=westminster_post),
+    dict(src="institutes-thml.xml", out="institutes-body.tex",
+         heading_fn=lambda: calvin_heading, safe_footnotes=True,
+         post_fn=institutes_post),
+    dict(src="bondage-thml.xml", out="bondage-body.tex",
+         heading_fn=lambda: chesterton_heading, safe_footnotes=True),
+    dict(src="luther-galatians-thml.xml", out="luther-galatians-body.tex",
+         heading_fn=lambda: chesterton_heading, safe_footnotes=True),
 ]
 
 
