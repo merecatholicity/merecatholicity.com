@@ -2,7 +2,115 @@
 # The Newman corpus: id=Output.pdf and id:tocdepth:"HTML title".
 
 NEWMAN_PDFS = \
-  grammar=Grammar_of_Assent.pdf
+  arians=The_Arians_of_the_Fourth_Century.pdf \
+  tracts-times=Tracts_for_the_Times.pdf \
+  british-critic=Essays_from_the_British_Critic.pdf \
+  viamedia1=Via_Media_Vol_1.pdf \
+  viamedia2=Via_Media_Vol_2.pdf \
+  justification=Lectures_on_Justification.pdf \
+  english-saints=Lives_of_the_English_Saints.pdf \
+  miracles=Essays_on_Miracles.pdf \
+  oxford-sermons=Oxford_University_Sermons.pdf \
+  subjects=Sermons_on_Subjects_of_the_Day.pdf \
+  loss-and-gain=Loss_and_Gain.pdf \
+  faith-prejudice=Faith_and_Prejudice.pdf \
+  discourses=Discourses_to_Mixed_Congregations.pdf \
+  anglicans1=Difficulties_of_Anglicans_Vol_1.pdf \
+  present-position=Present_Position_of_Catholics.pdf \
+  idea=The_Idea_of_a_University.pdf \
+  grammar=Grammar_of_Assent.pdf \
+  cathedra=Cathedra_Sempiterna.pdf \
+  callista=Callista.pdf \
+  apologia=Apologia_Pro_Vita_Sua.pdf \
+  pusey=Letter_to_Pusey.pdf \
+  gerontius=The_Dream_of_Gerontius.pdf \
+  occasions=Sermons_on_Various_Occasions.pdf \
+  norfolk=Letter_to_the_Duke_of_Norfolk.pdf \
+  five-letters=Five_Letters.pdf \
+  sermon-notes=Sermon_Notes.pdf \
+  meditations=Meditations_and_Devotions.pdf \
+  athanasius1=Select_Treatises_of_Athanasius_Vol_1.pdf \
+  athanasius2=Select_Treatises_of_Athanasius_Vol_2.pdf \
+  inspiration=On_the_Inspiration_of_Scripture.pdf \
+  religious-error=Development_of_Religious_Error.pdf \
+  arguments=Discussions_and_Arguments.pdf \
+  essays1=Essays_Critical_and_Historical_Vol_1.pdf \
+  essays2=Essays_Critical_and_Historical_Vol_2.pdf \
+  historical1=Historical_Sketches_Vol_1.pdf \
+  historical2=Historical_Sketches_Vol_2.pdf \
+  historical3=Historical_Sketches_Vol_3.pdf \
+  addresses=Addresses_to_Cardinal_Newman.pdf \
+  athanasius-tracts=Historical_Tracts_of_Athanasius.pdf \
+  froude-remains=Froudes_Remains.pdf \
+  hymni=Hymni_Ecclesiae.pdf \
+  library-fathers=Library_of_the_Fathers.pdf \
+  church-empires=The_Church_and_the_Empires.pdf \
+  russian-church=Notes_on_the_Russian_Church.pdf \
+  sayings=Sayings_of_Cardinal_Newman.pdf \
+  tracts-theological=Tracts_Theological_and_Ecclesiastical.pdf \
+  verses=Verses_on_Various_Occasions.pdf \
+  parochial1=Parochial_and_Plain_Sermons_Vol_1.pdf \
+  parochial2=Parochial_and_Plain_Sermons_Vol_2.pdf \
+  parochial3=Parochial_and_Plain_Sermons_Vol_3.pdf \
+  parochial4=Parochial_and_Plain_Sermons_Vol_4.pdf \
+  parochial5=Parochial_and_Plain_Sermons_Vol_5.pdf \
+  parochial6=Parochial_and_Plain_Sermons_Vol_6.pdf \
+  parochial7=Parochial_and_Plain_Sermons_Vol_7.pdf \
+  parochial8=Parochial_and_Plain_Sermons_Vol_8.pdf
 
 NEWMAN_HTML = \
-  grammar:2:"An Essay in Aid of a Grammar of Assent"
+  arians:2:"The Arians of the Fourth Century" \
+  tracts-times:2:"Tracts for the Times" \
+  british-critic:2:"Essays from the British Critic" \
+  viamedia1:2:"The Via Media, Volume 1: The Prophetical Office of the Church" \
+  viamedia2:2:"The Via Media, Volume 2" \
+  justification:2:"Lectures on the Doctrine of Justification" \
+  english-saints:2:"Lives of the English Saints" \
+  miracles:2:"Two Essays on Biblical and on Ecclesiastical Miracles" \
+  oxford-sermons:2:"Fifteen Sermons Preached before the University of Oxford" \
+  subjects:2:"Sermons Bearing on Subjects of the Day" \
+  loss-and-gain:2:"Loss and Gain: The Story of a Convert" \
+  faith-prejudice:2:"Faith and Prejudice, and Other Sermons" \
+  discourses:2:"Discourses to Mixed Congregations" \
+  anglicans1:2:"Certain Difficulties Felt by Anglicans in Catholic Teaching, Volume 1" \
+  present-position:2:"The Present Position of Catholics in England" \
+  idea:2:"The Idea of a University" \
+  grammar:2:"An Essay in Aid of a Grammar of Assent" \
+  cathedra:2:"Cathedra Sempiterna" \
+  callista:2:"Callista: A Tale of the Third Century" \
+  apologia:2:"Apologia Pro Vita Sua" \
+  pusey:2:"A Letter to the Rev. E. B. Pusey on his Recent Eirenicon" \
+  gerontius:2:"The Dream of Gerontius" \
+  occasions:2:"Sermons Preached on Various Occasions" \
+  norfolk:2:"A Letter to the Duke of Norfolk" \
+  five-letters:2:"Five Letters" \
+  sermon-notes:2:"Sermon Notes" \
+  meditations:2:"Meditations and Devotions" \
+  athanasius1:2:"Select Treatises of St. Athanasius, Volume 1" \
+  athanasius2:2:"Select Treatises of St. Athanasius, Volume 2" \
+  inspiration:2:"On the Inspiration of Scripture" \
+  religious-error:2:"The Development of Religious Error" \
+  arguments:2:"Discussions and Arguments on Various Subjects" \
+  essays1:2:"Essays Critical and Historical, Volume 1" \
+  essays2:2:"Essays Critical and Historical, Volume 2" \
+  historical1:2:"Historical Sketches, Volume 1" \
+  historical2:2:"Historical Sketches, Volume 2" \
+  historical3:2:"Historical Sketches, Volume 3" \
+  addresses:2:"Addresses to Cardinal Newman with His Replies" \
+  athanasius-tracts:2:"Historical Tracts of St. Athanasius" \
+  froude-remains:2:"Froude's Remains" \
+  hymni:2:"Hymni Ecclesiae" \
+  library-fathers:2:"The Library of the Fathers" \
+  church-empires:2:"The Church and the Empires" \
+  russian-church:2:"Notes of a Visit to the Russian Church" \
+  sayings:2:"Sayings of Cardinal Newman" \
+  tracts-theological:2:"Tracts Theological and Ecclesiastical" \
+  verses:2:"Verses on Various Occasions" \
+  parochial1:2:"Parochial and Plain Sermons, Volume 1" \
+  parochial2:2:"Parochial and Plain Sermons, Volume 2" \
+  parochial3:2:"Parochial and Plain Sermons, Volume 3" \
+  parochial4:2:"Parochial and Plain Sermons, Volume 4" \
+  parochial5:2:"Parochial and Plain Sermons, Volume 5" \
+  parochial6:2:"Parochial and Plain Sermons, Volume 6" \
+  parochial7:2:"Parochial and Plain Sermons, Volume 7" \
+  parochial8:2:"Parochial and Plain Sermons, Volume 8"
