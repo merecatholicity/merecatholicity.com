@@ -37,7 +37,18 @@ SCHAFF_PDFS = \
   npnf210=Nicene_and_Post-Nicene_Fathers_Series_2_Vol_10.pdf \
   npnf211=Nicene_and_Post-Nicene_Fathers_Series_2_Vol_11.pdf \
   npnf212=Nicene_and_Post-Nicene_Fathers_Series_2_Vol_12.pdf \
-  npnf213=Nicene_and_Post-Nicene_Fathers_Series_2_Vol_13.pdf
+  npnf213=Nicene_and_Post-Nicene_Fathers_Series_2_Vol_13.pdf \
+  hcc1=History_of_the_Christian_Church_Vol_1.pdf \
+  hcc2=History_of_the_Christian_Church_Vol_2.pdf \
+  hcc3=History_of_the_Christian_Church_Vol_3.pdf \
+  hcc4=History_of_the_Christian_Church_Vol_4.pdf \
+  hcc5=History_of_the_Christian_Church_Vol_5.pdf \
+  hcc6=History_of_the_Christian_Church_Vol_6.pdf \
+  hcc7=History_of_the_Christian_Church_Vol_7.pdf \
+  hcc8=History_of_the_Christian_Church_Vol_8.pdf \
+  creeds1=Creeds_of_Christendom_Vol_1.pdf \
+  creeds2=Creeds_of_Christendom_Vol_2.pdf \
+  creeds3=Creeds_of_Christendom_Vol_3.pdf
 
 SCHAFF_HTML = \
   anf01:2:"Ante-Nicene Fathers, Vol. I: The Apostolic Fathers with Justin Martyr and Irenæus" \
@@ -75,4 +86,15 @@ SCHAFF_HTML = \
   npnf210:2:"Nicene and Post-Nicene Fathers, Second Series, Vol. X: Ambrose: Select Works and Letters" \
   npnf211:2:"Nicene and Post-Nicene Fathers, Second Series, Vol. XI: Sulpitius Severus, Vincent of Lérins, and John Cassian" \
   npnf212:2:"Nicene and Post-Nicene Fathers, Second Series, Vol. XII: Leo the Great and Gregory the Great" \
-  npnf213:2:"Nicene and Post-Nicene Fathers, Second Series, Vol. XIII: Gregory the Great (Part II), Ephraim Syrus, and Aphrahat"
+  npnf213:2:"Nicene and Post-Nicene Fathers, Second Series, Vol. XIII: Gregory the Great (Part II), Ephraim Syrus, and Aphrahat" \
+  hcc1:2:"History of the Christian Church, Vol. I: Apostolic Christianity, A.D. 1–100" \
+  hcc2:2:"History of the Christian Church, Vol. II: Ante-Nicene Christianity, A.D. 100–325" \
+  hcc3:2:"History of the Christian Church, Vol. III: Nicene and Post-Nicene Christianity, A.D. 311–600" \
+  hcc4:2:"History of the Christian Church, Vol. IV: Mediaeval Christianity, A.D. 590–1073" \
+  hcc5:2:"History of the Christian Church, Vol. V: The Middle Ages, A.D. 1049–1294" \
+  hcc6:2:"History of the Christian Church, Vol. VI: The Middle Ages, A.D. 1294–1517" \
+  hcc7:2:"History of the Christian Church, Vol. VII: Modern Christianity: The German Reformation" \
+  hcc8:2:"History of the Christian Church, Vol. VIII: Modern Christianity: The Swiss Reformation" \
+  creeds1:2:"The Creeds of Christendom, Vol. I: The History of Creeds" \
+  creeds2:2:"The Creeds of Christendom, Vol. II: The Greek and Latin Creeds, with Translations" \
+  creeds3:2:"The Creeds of Christendom, Vol. III: The Evangelical Protestant Creeds, with Translations"

@@ -69,6 +69,16 @@ _SYMBOLS = {
     "‚": ",",                           # low-9 quote: LGR lacks \quotesinglbase
     "‹": "",                            # stray single guillemets in Greek words
     "›": "",                            # (LGR lacks \guilsingl*); transcription noise
+    # math-variant Greek letterforms (the Creeds transcription uses them
+    # for ordinary letters); LGR text mode cannot set the symbol forms
+    "ϰ": "κ", "ϑ": "θ", "ϕ": "φ", "ϱ": "ρ", "ϖ": "π", "ϵ": "ε",
+    "ỉ": "ἰ",                           # mis-encoded iota + smooth breathing
+    "": "",                       # broken CCEL private-use glyph
+
+    # modifier-letter stand-ins: the keraia of Greek numerals (μεʹ) is
+    # typed ' in LGR, which sets the proper glyph; the rest are strays
+    "ʹ": "'", "͵": ",", "˙": "·", "ˆ": "\\textasciicircum{}",
+    "ˡ": "\\textsuperscript{l}",
 }
 # Coptic letters (U+03E2..U+03EF) sit in the Greek block but LGR/textalpha
 # cannot set them; they appear only as rare manuscript sigla, so drop them.
@@ -81,10 +91,17 @@ def volume_post(body):
     return _COPTIC.sub("", body)
 
 
-def make_volume_heading():
+def make_volume_heading(deep=False):
     """A fresh heading function per volume: keep every division as a
     chapter unless it is furniture, excluding whole index/table subtrees
-    by div-id prefix."""
+    by div-id prefix.
+
+    `deep` handles the volumes whose chapters live one level down (the
+    History and the Creeds put a single container div1 over the whole
+    text): a top-level division is never itself a chapter -- its heading
+    is dropped and its children are promoted, the Converter's normal
+    behaviour for a skipped division -- unless it is an index/table
+    subtree, which is excluded outright."""
     excluded = []
 
     def heading(div_id, title):
@@ -95,6 +112,8 @@ def make_volume_heading():
             return None
         if _exclude_subtree(title):
             excluded.append(div_id)
+            return None
+        if deep and "." not in div_id:
             return None
         if _skip_self(title):
             return None
@@ -111,6 +130,23 @@ def make_volume_heading():
 ANTE = "ante"
 NPNF1 = "npnf1"
 NPNF2 = "npnf2"
+HCC = "hcc"
+CREEDS = "creeds"
+
+# Volumes whose chapters live at div2 under a single container div1
+# (converted with make_volume_heading(deep=True)), and volumes that set
+# parallel texts in tables (converted with table_cells=True).
+DEEP_IDS = {"hcc1", "hcc2", "hcc3", "hcc4", "hcc5", "hcc6", "hcc7", "hcc8",
+            "creeds2", "creeds3"}
+TABLE_IDS = {"hcc1", "hcc2", "hcc3", "hcc4", "hcc5", "hcc6", "hcc7", "hcc8",
+             "creeds1", "creeds2", "creeds3"}
+
+# Per-volume author line where it differs from the series editor: David
+# Schley Schaff completed his father's History (vols. V and VI).
+AUTHOR_OVERRIDES = {
+    "hcc5": "By David Schley Schaff",
+    "hcc6": "By David Schley Schaff",
+}
 
 VOLUMES = [
     # Ante-Nicene Fathers -------------------------------------------------
@@ -237,32 +273,86 @@ VOLUMES = [
      "Ephraim the Syrian and Aphrahat the Persian sage."),
     # NPNF Second Series Vol. 14 = the Seven Ecumenical Councils, already
     # published as councils.html; not rebuilt here.
+    # History of the Christian Church --------------------------------------
+    ("hcc1", HCC, 1, "Apostolic Christianity, A.D. 1–100",
+     "The preparation for Christianity, Jesus Christ, and the apostolic "
+     "age: St. Peter, St. Paul, and St. John."),
+    ("hcc2", HCC, 2, "Ante-Nicene Christianity, A.D. 100–325",
+     "The Church under persecution: the martyrs, the apologists, worship "
+     "and discipline, and the rise of the Catholic tradition."),
+    ("hcc3", HCC, 3, "Nicene and Post-Nicene Christianity, A.D. 311–600",
+     "From Constantine to Gregory the Great: the councils, the Arian "
+     "conflict, monasticism, and the Fathers of East and West."),
+    ("hcc4", HCC, 4, "Mediaeval Christianity, A.D. 590–1073",
+     "The conversion of the northern nations, Charlemagne, the separation "
+     "of East and West, and the papacy to Hildebrand."),
+    ("hcc5", HCC, 5, "The Middle Ages, A.D. 1049–1294",
+     "Hildebrand to Boniface VIII: the crusades, the monastic orders, "
+     "scholasticism, and the papacy at its height."),
+    ("hcc6", HCC, 6, "The Middle Ages, A.D. 1294–1517",
+     "The decline of the papacy, the exile and the schism, the reforming "
+     "councils, Wyclif and Hus, on the eve of the Reformation."),
+    ("hcc7", HCC, 7, "Modern Christianity: The German Reformation",
+     "Luther and the Reformation in Germany to the Peace of Augsburg."),
+    ("hcc8", HCC, 8, "Modern Christianity: The Swiss Reformation",
+     "Zwingli and Calvin, and the Reformation in Switzerland."),
+    # The Creeds of Christendom --------------------------------------------
+    ("creeds1", CREEDS, 1, "The History of Creeds",
+     "The history of the ecumenical creeds and of the confessions of the "
+     "Greek, Latin, and evangelical churches."),
+    ("creeds2", CREEDS, 2, "The Greek and Latin Creeds, with Translations",
+     "The Scripture confessions, the ante-Nicene rules of faith, the "
+     "ecumenical symbols, and the Roman and Eastern standards, from the "
+     "Apostles' Creed through Trent to the Vatican decrees."),
+    ("creeds3", CREEDS, 3, "The Evangelical Protestant Creeds, "
+     "with Translations",
+     "The confessions of the Lutheran and Reformed churches, the "
+     "Anglican articles, and the modern evangelical declarations."),
 ]
 
-# series display name, editor byline, and years for the source note
+# series display name, editor byline, source for the title-page note,
+# and the noun of its public-domain line ("translation" for the Fathers
+# translations, "text" for Schaff's own works)
 SERIES = {
     ANTE: ("Ante-Nicene Fathers",
            "Ante-Nicene Fathers",
            "Edited by Alexander Roberts and James Donaldson; American "
            "reprint arranged by A. Cleveland Coxe",
            "The Ante-Nicene Fathers: Translations of the Writings of the "
-           "Fathers down to A.D. 325"),
+           "Fathers down to A.D. 325",
+           "translation"),
     NPNF1: ("Nicene and Post-Nicene Fathers, First Series",
             "Nicene \\& Post-Nicene Fathers, First Series",
             "Edited by Philip Schaff",
             "A Select Library of the Nicene and Post-Nicene Fathers of the "
-            "Christian Church, First Series"),
+            "Christian Church, First Series",
+            "translation"),
     NPNF2: ("Nicene and Post-Nicene Fathers, Second Series",
             "Nicene \\& Post-Nicene Fathers, Second Series",
             "Edited by Philip Schaff and Henry Wace",
             "A Select Library of the Nicene and Post-Nicene Fathers of the "
-            "Christian Church, Second Series"),
+            "Christian Church, Second Series",
+            "translation"),
+    HCC: ("History of the Christian Church",
+          "History of the Christian Church",
+          "By Philip Schaff",
+          "History of the Christian Church",
+          "text"),
+    CREEDS: ("The Creeds of Christendom",
+             "The Creeds of Christendom",
+             "By Philip Schaff",
+             "The Creeds of Christendom, with a History and Critical Notes",
+             "text"),
 }
 
 
 def pdf_name(series, vol):
     if series == ANTE:
         return f"Ante-Nicene_Fathers_Vol_{vol}.pdf"
+    if series == HCC:
+        return f"History_of_the_Christian_Church_Vol_{vol}.pdf"
+    if series == CREEDS:
+        return f"Creeds_of_Christendom_Vol_{vol}.pdf"
     n = "1" if series == NPNF1 else "2"
     return f"Nicene_and_Post-Nicene_Fathers_Series_{n}_Vol_{vol}.pdf"
 
@@ -356,7 +446,7 @@ WRAPPER = r"""% @@SERIESLINE@@, Volume @@ROMAN@@: @@TITLE@@.
 \vspace{3em}
 {@@EDITOR@@.\par}
 \vfill
-{\small From \emph{@@SOURCE@@}, Volume @@ROMAN@@. The translation is in
+{\small From \emph{@@SOURCE@@}, Volume @@ROMAN@@. The @@NOUN@@ is in
 the public domain.\par}
 \vspace{2em}
 \end{titlepage}
@@ -370,7 +460,8 @@ the public domain.\par}
 
 
 def write_wrapper(vid, series, vol, title, contents):
-    disp, _mkname, editor, source = SERIES[series]
+    disp, _mkname, editor, source, noun = SERIES[series]
+    editor = AUTHOR_OVERRIDES.get(vid, editor)
     text = WRAPPER
     subs = {
         "@@ID@@": vid,
@@ -381,6 +472,7 @@ def write_wrapper(vid, series, vol, title, contents):
         "@@CONTENTS@@": _tex(contents),
         "@@EDITOR@@": _tex(editor),
         "@@SOURCE@@": _tex(source),
+        "@@NOUN@@": noun,
     }
     for k, v in subs.items():
         text = text.replace(k, v)
@@ -420,10 +512,12 @@ def main():
         if only and vid not in only:
             continue
         stats = convert_work(f"{vid}.xml", f"{vid}-body.tex",
-                             make_volume_heading(), inner_heads=False,
+                             make_volume_heading(deep=vid in DEEP_IDS),
+                             inner_heads=False,
                              post_fn=volume_post,
                              skip_titles=("Contents", "Contents."),
-                             safe_footnotes=True, quiet=True)
+                             safe_footnotes=True, quiet=True,
+                             table_cells=vid in TABLE_IDS)
         write_wrapper(vid, series, vol, title, contents)
         ch = stats.count("\\xchapter{")
         se = stats.count("\\xsection{")

@@ -386,6 +386,27 @@ def build(entry):
     return chunks, bad
 
 
+def audit_library(manifest):
+    """The shelf audit: warn when library.html offers a work this manifest
+    lacks, so the daily push always names what the bot is still missing."""
+    try:
+        src = open(os.path.join(HERE, "..", "library.html"), encoding="utf-8").read()
+    except OSError:
+        return
+    hrefs = set(re.findall(r'<a href="([a-z0-9-]+\.html)">Read online', src))
+    # a work may ingest from a different source than the page it cites
+    # (the KJV chunks from kjv.json but the shelf links kjv.html), so both count
+    have = {os.path.basename(e["src"]) for e in manifest.values()}
+    have |= {os.path.basename(e["url"]) for e in manifest.values()}
+    ignored = {"douay-rheims.html"}   # deliberately excluded: the KJV serves
+    missing = sorted(hrefs - have - ignored)
+    if missing:
+        print(f"\nNOTE: library.html lists {len(missing)} work(s) absent from works.yml:")
+        for h in missing:
+            print("  " + h)
+        print("Add an entry for each (or exclude deliberately) so the shelf and the bot stay in step.")
+
+
 def content_hash(entry):
     h = hashlib.sha256()
     h.update(PARSER_VERSION.encode())
@@ -464,8 +485,12 @@ def main():
               if (not only or wid in only) and (not tiers or e["tier"] in tiers)}
 
     if not args.push:
-        total, vec_total = 0, 0
+        total, vec_total, waiting = 0, 0, 0
         for wid, entry in picked.items():
+            if not os.path.exists(os.path.join(HERE, entry["src"])):
+                waiting += 1
+                print(f"{wid:22} t{entry['tier']} waiting (source not yet built)")
+                continue
             chunks, bad = build(entry)
             total += len(chunks)
             if entry.get("vectorize"):
@@ -474,9 +499,11 @@ def main():
             print(f"{wid:22} t{entry['tier']} {entry['kind']:6} "
                   f"{len(chunks):6} chunks{flag}")
         print(f"\n{total} chunks total, {vec_total} vectorized "
-              f"(budget {VEC_BUDGET})")
+              f"(budget {VEC_BUDGET})"
+              + (f", {waiting} work(s) waiting on their build" if waiting else ""))
         if vec_total > VEC_BUDGET:
             print("WARNING: over the free Vectorize budget")
+        audit_library(manifest)
         return
 
     key = admin_key()
@@ -499,7 +526,11 @@ def main():
     vec_total = sum(server[w]["chunks"] for w in server
                     if w in manifest and manifest[w].get("vectorize"))
     spent = 0
+    waiting = 0
     for wid, entry in picked.items():
+        if not os.path.exists(os.path.join(HERE, entry["src"])):
+            waiting += 1
+            continue          # not built yet: a later daily run picks it up
         chash = content_hash(entry)
         if server.get(wid, {}).get("hash") == chash:
             continue
@@ -515,7 +546,9 @@ def main():
         push_work(args.api, key, wid, entry, chunks, chash)
         spent += est
         print(f"{wid}: pushed {len(chunks)} chunks")
-    print(f"done ({spent} est. rows written)")
+    print(f"done ({spent} est. rows written"
+          + (f", {waiting} work(s) waiting on their build" if waiting else "") + ")")
+    audit_library(manifest)
 
 
 if __name__ == "__main__":

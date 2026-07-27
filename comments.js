@@ -4566,7 +4566,7 @@
     h3('What it knows');
     var pk = el('p');
     pk.appendChild(document.createTextNode(
-      'Only this site’s own published library: the primary works, the credo and the rule of prayer, the curated Fathers, the seven councils and the documents of the schism, the Catena Aurea, Newman, both Bibles, the complete Schaff library of the Fathers, and the Summa Theologica.' +
+      'Only this site’s own published library, weighted in six bands: the site’s works and their catechetical core first, then the King James Scriptures, the named works of the Fathers and the Catena, the seven councils and the documents of the schism, the deep Schaff and Summa sets, and the collected works of Newman, whom the site engages heavily and reads through the book’s own lens.' +
       (d ? ' Right now that is ' + d.chunks.toLocaleString() + ' indexed passages across ' + d.works.length + ' works. ' : ' ')));
     var libA = el('a', 'body-link', 'The Library');
     libA.href = 'library.html';
@@ -4577,8 +4577,15 @@
     if (d && d.works && d.works.length) {
       var shelf = el('details', 'merecat-shelf');
       shelf.appendChild(el('summary', null, 'The full shelf, work by work'));
-      var tiers = { 1: 'Tier 1 · the site’s positions', 2: 'Tier 2 · the evidence shelf', 3: 'Tier 3 · the deep library' };
-      [1, 2, 3].forEach(function (t) {
+      var tiers = {
+        1: 'Band 1 · the site’s voice and its catechetical core',
+        2: 'Band 2 · the Scriptures',
+        3: 'Band 3 · the named works of the Fathers',
+        4: 'Band 4 · the councils and the schism',
+        5: 'Band 5 · the deep shelf',
+        6: 'Band 6 · Newman',
+      };
+      [1, 2, 3, 4, 5, 6].forEach(function (t) {
         var rows = d.works.filter(function (w) { return w.tier === t; });
         if (!rows.length) return;
         shelf.appendChild(el('p', null, tiers[t]));

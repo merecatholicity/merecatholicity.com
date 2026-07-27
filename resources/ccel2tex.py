@@ -37,7 +37,7 @@ class Converter(HTMLParser):
     skip that division entirely."""
 
     def __init__(self, heading_fn, inner_heads=True, skip_titles=(),
-                 safe_footnotes=False):
+                 safe_footnotes=False, table_cells=False):
         super().__init__(convert_charrefs=True)
         self.heading_fn = heading_fn
         self.inner_heads = inner_heads
@@ -46,11 +46,18 @@ class Converter(HTMLParser):
         # body carries a \par (multi-paragraph or verse footnotes) cannot end
         # the argument of a non-\long \textsc/\textbf/\textsuperscript.
         self.safe_footnotes = safe_footnotes
+        # treat each table cell as a paragraph. The creeds/history volumes
+        # set parallel texts (Greek/Latin | English) in <table> rows whose
+        # cells often hold bare text with no <p>; without this, that text
+        # lands outside any open buffer and is dropped. Off by default so
+        # the older curated bodies stay byte-stable.
+        self.table_cells = table_cells
         self.suppressed = 0
         self.chapter_depth = 0
         self.out = []
         self.buf = None
         self.note_buf = None
+        self.note_depth = 0    # creeds3 mis-nests a <note> inside a <note>
         self.stack = []        # inline groups: (opener, closer) needing closer
         self.divstack = []     # (tag, is_chapter)
         self.in_chapter = False
@@ -119,7 +126,12 @@ class Converter(HTMLParser):
         if not self.in_chapter or self.suppressed:
             return
         if tag == "note":
-            self.note_buf = []
+            # a mis-nested inner note is flattened into the outer footnote
+            self.note_depth += 1
+            if self.note_depth == 1:
+                self.note_buf = []
+            else:
+                self.note_buf.append(" ")
             return
         if tag == "sup":
             self.emit("\\textsuperscript{")
@@ -166,6 +178,11 @@ class Converter(HTMLParser):
             else:
                 self.stack.append(("", ""))
             return
+        if tag in ("td", "th") and self.table_cells:
+            if self.note_buf is None:
+                self.flush_paragraph()
+                self.buf = []
+            return
 
     def handle_endtag(self, tag):
         if tag in ("div1", "div2", "div3", "div4"):
@@ -184,6 +201,12 @@ class Converter(HTMLParser):
                 self.skip_h -= 1
             return
         if tag == "note":
+            if self.note_depth > 1:      # closing a flattened inner note
+                self.note_depth -= 1
+                return
+            if self.note_depth == 0:     # stray close, no note open
+                return
+            self.note_depth = 0
             note = "".join(self.note_buf).strip()
             self.note_buf = None
             fn = "\\footnote{%s}" % note
@@ -214,6 +237,10 @@ class Converter(HTMLParser):
         if tag == "blockquote":
             self.flush_paragraph()
             self.out.append("\\end{quote}")
+            return
+        if tag in ("td", "th") and self.table_cells:
+            if self.note_buf is None:
+                self.flush_paragraph()
             return
         if tag in ("i", "b", "span", "sup"):
             if self.stack:
@@ -482,6 +509,172 @@ def benedict_heading(div_id, title):
     return title
 
 
+# --- extractions from the whole Schaff/CCEL volumes -------------------
+#
+# These pull one work out of a volume file (npnf101.xml, npnf102.xml,
+# npnf204.xml, creeds2.xml). The Converter consults the heading function
+# for every division not inside a kept chapter, so each function must
+# answer for the *whole* volume: activate under the work's own top
+# division and return None everywhere else. A couple of transcription
+# quirks force position over id: some book divisions carry glitched ids
+# with no volume prefix (Confessions Books I-II are "I_1"/"II_1", On
+# Christian Doctrine Book IV is "IV_1"), so the functions track which
+# top-level division they are under as the ids stream past in document
+# order.
+
+def _tops_tracker(active_top):
+    """Returns (fn) -> bool: whether the consulted id is inside
+    `active_top`, tracking top-level ids (no dot) as they pass."""
+    state = {"in": False}
+
+    def inside(div_id):
+        if "." not in div_id and re.fullmatch(r"[ivxlc]+", div_id):
+            state["in"] = (div_id == active_top)
+            return False               # the top division itself
+        return state["in"]
+
+    return inside
+
+
+def make_cityofgod_heading():
+    inside = _tops_tracker("iv")
+    n = {"book": 0}
+
+    def heading(div_id, title):
+        if not inside(div_id):
+            return None
+        title = re.sub(r"\s+", " ", title).strip()
+        if div_id == "iv.i":            # Translator's Preface
+            return title
+        n["book"] += 1
+        return "Book %s. %s" % (ROMANS[n["book"] - 1], title)
+
+    return heading
+
+
+def make_ondoctrine_heading():
+    inside = _tops_tracker("v")
+
+    def heading(div_id, title):
+        # Book IV carries a glitched id with no volume prefix
+        if not inside(div_id) and div_id != "IV_1":
+            return None
+        title = re.sub(r"\s+", " ", title).strip()
+        if "contents" in title.lower():
+            return None
+        if div_id == "v.iv":            # Book I, titled by its argument
+            return "Book I. " + title
+        return title
+
+    return heading
+
+
+def make_confessions_heading():
+    inside = _tops_tracker("vi")
+    n = {"book": 0}
+
+    def heading(div_id, title):
+        # Books I and II carry glitched ids with no volume prefix
+        if not inside(div_id) and div_id not in ("I_1", "II_1"):
+            return None
+        title = re.sub(r"\s+", " ", title).strip()
+        if div_id in ("vi.i", "vi.ii"):  # translator's front matter
+            return title
+        n["book"] += 1
+        return "Book %s. %s" % (ROMANS[n["book"] - 1], title)
+
+    return heading
+
+
+def make_incarnation_heading():
+    inside = _tops_tracker("vii")
+    n = {"sec": 0}
+
+    def heading(div_id, title):
+        if not inside(div_id):
+            return None
+        title = re.sub(r"\s+", " ", title).strip()
+        if div_id == "vii.i":
+            return title                 # the editor's introduction
+        if div_id == "vii.ii":
+            return None                  # container: promote its sections
+        n["sec"] += 1
+        return "§ %d. %s" % (n["sec"], title)
+
+    return heading
+
+
+def trent_heading(div_id, title):
+    """The dogmatic canons and decrees of Trent (creeds2), session by
+    session, with the Profession of the Tridentine Faith appended."""
+    if re.fullmatch(r"v\.i\.i\.[ivxlc]+", div_id):
+        return re.sub(r"\s+", " ", title).strip()
+    if div_id == "v.i.ii":
+        return re.sub(r"\s+", " ", title).strip()
+    return None
+
+
+# --- Chesterton (CCEL ThML editions) -----------------------------------
+
+ORTHODOXY_TITLES = {
+    "iv": "I. Introduction in Defence of Everything Else",
+    "v": "II. The Maniac",
+    "vi": "III. The Suicide of Thought",
+    "vii": "IV. The Ethics of Elfland",
+    "viii": "V. The Flag of the World",
+    "ix": "VI. The Paradoxes of Christianity",
+    "x": "VII. The Eternal Revolution",
+    "xi": "VIII. The Romance of Orthodoxy",
+    "xii": "IX. Authority and the Adventurer",
+}
+
+
+def orthodoxy_heading(div_id, title):
+    """The chapter divisions are titled with bare roman numerals; restore
+    the book's own chapter titles."""
+    if div_id in ORTHODOXY_TITLES:
+        return ORTHODOXY_TITLES[div_id]
+    if div_id == "ii":
+        return "Preface"
+    return None
+
+
+def chesterton_heading(div_id, title):
+    """Heretics and The Everlasting Man carry real division titles; keep
+    everything except the title page and indexes."""
+    title = re.sub(r"\s+", " ", title).strip()
+    if not title or title.lower() in ("title page",) or \
+            re.search(r"\bindex(es)?\b", title, re.I):
+        return None
+    if title.isupper():                  # "PREPATORY NOTE" (sic)
+        title = title.title().replace("Prepatory", "Prefatory")
+    return title
+
+
+# Extractions and whole ThML books added with the library expansion.
+# kwargs go straight to convert_work; heading factories are re-called
+# per run so their counters reset.
+EXTRA_WORKS = [
+    dict(src="npnf102.xml", out="cityofgod-body.tex",
+         heading_fn=make_cityofgod_heading, safe_footnotes=True),
+    dict(src="npnf102.xml", out="ondoctrine-body.tex",
+         heading_fn=make_ondoctrine_heading, safe_footnotes=True),
+    dict(src="npnf101.xml", out="confessions-body.tex",
+         heading_fn=make_confessions_heading, safe_footnotes=True),
+    dict(src="npnf204.xml", out="incarnation-body.tex",
+         heading_fn=make_incarnation_heading, safe_footnotes=True),
+    dict(src="creeds2.xml", out="trent-body.tex",
+         heading_fn=lambda: trent_heading, safe_footnotes=True,
+         table_cells=True),
+    dict(src="orthodoxy-thml.xml", out="orthodoxy-body.tex",
+         heading_fn=lambda: orthodoxy_heading),
+    dict(src="heretics-thml.xml", out="heretics-body.tex",
+         heading_fn=lambda: chesterton_heading),
+    dict(src="everlasting-thml.xml", out="everlasting-body.tex",
+         heading_fn=lambda: chesterton_heading),
+]
+
+
 # (src, out, heading_fn, inner_heads, post_fn, skip_titles)
 WORKS = [
     ("cyril-thml.xml", "cyril-body.tex", cyril_heading, True, cyril_post, ()),
@@ -514,14 +707,16 @@ WORKS = [
 
 
 def convert_work(src, out, heading_fn, inner_heads=False, post_fn=None,
-                 skip_titles=(), safe_footnotes=False, quiet=False):
+                 skip_titles=(), safe_footnotes=False, quiet=False,
+                 table_cells=False):
     """Parse a CCEL ThML file to a LaTeX body and write it to `out`.
 
     Shared by the curated WORKS table below and by schaff.py, which
     reuses this exact normalization to render whole Schaff volumes.
     Returns the finished body string.
     """
-    conv = Converter(heading_fn, inner_heads, skip_titles, safe_footnotes)
+    conv = Converter(heading_fn, inner_heads, skip_titles, safe_footnotes,
+                     table_cells)
     with open(src, encoding="utf-8") as f:
         conv.feed(f.read())
     conv.flush_paragraph()
@@ -550,9 +745,13 @@ def convert_work(src, out, heading_fn, inner_heads=False, post_fn=None,
     # STX/ETX control chars, not the guillemets \u2039/\u203a, which do
     # appear in the source Greek and were turning into stray braces.
     _H0, _H1 = "\u0002", "\u0003"  # STX/ETX sentinels, never in source
-    body = re.sub(r"\\textgreek\{([^{}]*[\u0590-\u05FF][^{}]*)\}",
+    # the class includes the Hebrew presentation forms (U+FB1D-FB4F):
+    # the History quotes pointed Hebrew with the alternative ayin
+    # U+FB20, which must ride inside the wrap or inputenc dies on it
+    _HEB = "\\u0590-\\u05FF\\uFB1D-\\uFB4F"
+    body = re.sub(r"\\textgreek\{([^{}]*[" + _HEB + r"][^{}]*)\}",
                   _H0 + r"\1" + _H1, body)
-    body = re.sub(r"(?<![\u0002])([\u0590-\u05FF][\u0590-\u05FF\s]*)",
+    body = re.sub(r"(?<![\u0002])([" + _HEB + r"][" + _HEB + r"\s]*)",
                   _H0 + r"\1" + _H1, body)
     body = body.replace(_H0, "\\texthebrew{").replace(_H1, "}")
     with open(out, "w", encoding="utf-8") as f:
@@ -568,6 +767,12 @@ def convert_work(src, out, heading_fn, inner_heads=False, post_fn=None,
 def main():
     for src, out, heading_fn, inner_heads, post_fn, skip_titles in WORKS:
         convert_work(src, out, heading_fn, inner_heads, post_fn, skip_titles)
+    from schaff import volume_post  # lazy: schaff imports this module
+    for w in EXTRA_WORKS:
+        kw = dict(w)
+        kw["heading_fn"] = kw["heading_fn"]()   # fresh closure per run
+        kw.setdefault("post_fn", volume_post)   # same symbol repertoire
+        convert_work(**kw)
 
 
 if __name__ == "__main__":
