@@ -47,6 +47,7 @@ body:
 	python dr2tex.py
 	python catena2tex.py
 	python kjv2tex.py
+	python kjv-json.py
 	python summatheologica2tex.py
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
@@ -228,7 +229,7 @@ html:
 	    kjv.tex | \
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	    --metadata title="The Holy Bible, King James Version" \
-	    --css=style.css -B ../nav.html -A ../footer.html \
+	    --css=style.css -B ../nav.html -A ../kjv-tail.html \
 	    -o ../kjv.html
 	rm kjv-body-html.tex
 	@echo "built kjv.html"
