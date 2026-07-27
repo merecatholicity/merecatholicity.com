@@ -429,12 +429,16 @@ def admin_key():
     return key
 
 
-def post(api, path, body, tries=3):
+def post(api, path, body, tries=6):
     # the zone's bot protection challenges the default python-urllib agent
-    # (curl passes), so wear a plain tool UA
+    # (curl passes), so wear a plain tool UA. Ask nicely: on any refusal or
+    # hiccup, back off with growing patience (up to two minutes) before
+    # giving up — transient throttles pass if we stop knocking for a while,
+    # and a genuinely failed run just resumes on the next invocation.
     req = urllib.request.Request(api + path, data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": "curl/8.14.1"})
+    waits = [3, 9, 27, 60, 120]
     for i in range(tries):
         try:
             with urllib.request.urlopen(req, timeout=300) as r:
@@ -445,8 +449,8 @@ def post(api, path, body, tries=3):
         except Exception as e:
             if i == tries - 1:
                 raise
-            print(f"    retry {i + 1}: {e}", flush=True)
-            time.sleep(3 * (i + 1))
+            print(f"    retry {i + 1} in {waits[i]}s: {e}", flush=True)
+            time.sleep(waits[i])
 
 
 def push_work(api, key, wid, entry, chunks, chash):

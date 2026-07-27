@@ -2617,6 +2617,7 @@ const MERECAT_BOT = {
   nick: 'merecat 🐈 AI BOT',
 };
 const MERECAT_MENTION_RE = /@merecat\b/i;
+const MERECAT_RV = 4;   // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -2682,6 +2683,53 @@ function merecatThinkStripper() {
   };
 }
 
+/* A question is not a search string. The forum's buildMatch ANDs its first
+   ten tokens — right for terse searches, fatal for natural questions, whose
+   opening tokens are mostly filler: the AND then demands words like "where"
+   and "newman" of texts that never say them, and the informative tail is
+   truncated away. So merecat translates a question itself: drop the filler,
+   keep up to sixteen informative tokens (user-quoted phrases preserved),
+   and join with OR so bm25 ranks by how much of the MEANING a chunk
+   matches. Every token is double-quoted, so no FTS5 operator can ride in. */
+const MERECAT_STOP = new Set(('a about all an and any are as at be been but by can could did do does for from had has have ' +
+  'he her his how i if in into is it its just like me my no not of on one or our out over say says said she should so some ' +
+  'than that the their them then there these they this to under up us was we were what when where which who why will with ' +
+  'would you your').split(' '));
+
+function merecatMatch(q) {
+  const out = [];
+  const seen = new Set();
+  const re = /"([^"]*)"|([A-Za-z0-9À-ɏ'’]+)/g;
+  let m;
+  while ((m = re.exec(String(q || ''))) && out.length < 16) {
+    if (m[1] !== undefined) {
+      const p = m[1].trim();
+      if (p) out.push('"' + p.replace(/"/g, '""') + '"');
+      continue;
+    }
+    const w = m[2].toLowerCase().replace(/[’']/g, '');
+    if (w.length < 2 || MERECAT_STOP.has(w) || seen.has(w)) continue;
+    seen.add(w);
+    out.push('"' + w.replace(/"/g, '""') + '"');
+  }
+  return out.join(' OR ');
+}
+
+/* The phrase leg: when a question carries a quotation, its own word runs
+   are the strongest possible scent — a text that IS the quote nails a
+   six-word phrase that texts merely discussing it rarely reproduce. Slide
+   windows over the question's tokens (stopwords kept, phrases need them)
+   and offer the longest few as FTS phrase alternatives. */
+function merecatPhrases(q) {
+  const words = String(q || '').match(/[A-Za-z0-9À-ɏ'’]+/g) || [];
+  if (words.length < 6) return '';
+  const phrases = [];
+  for (let i = 0; i + 6 <= words.length && phrases.length < 4; i += 4) {
+    phrases.push('"' + words.slice(i, i + 6).join(' ').replace(/"/g, '""') + '"');
+  }
+  return phrases.join(' OR ');
+}
+
 /* Hybrid retrieval: returns up to cfg.topk chunks, each
    { cid, title, url, anchor, heading, tier, text }. Every leg fails soft so a
    broken index degrades the answer instead of killing it. */
@@ -2721,21 +2769,34 @@ async function merecatRetrieve(env, q, cfg) {
     }
   }
 
-  // BM25 leg: the whole corpus, rank boosted toward the primary works.
-  // bm25() is negative-better, so multiplying by a >1 weight boosts a tier.
-  const match = buildMatch(q);
+  // BM25 legs: one tier-weighted toward the primary works (the owner's
+  // ladder), and one on raw relevance alone — so a verbatim hit deep on the
+  // shelf can never be crowded out of the pool by boosted works that merely
+  // quote the same words. The reranker judges the merged pool afterward.
+  const match = merecatMatch(q);
   if (match) {
+    const SEL =
+      'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
+      'FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid ' +
+      'JOIN works w ON w.id = c.work_id WHERE chunks_fts MATCH ?1 ';
     try {
-      const rows = await env.LIBDB.prepare(
-        'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
-        'FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid ' +
-        'JOIN works w ON w.id = c.work_id WHERE chunks_fts MATCH ?1 ' +
-        // bm25 is negative-better, so a bigger multiplier boosts a band;
-        // Newman (6) sits above the raw deep shelf (5) by the owner's ladder
-        'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 6 THEN 1.1 ELSE 1.0 END) ' +
-        'LIMIT 25'
-      ).bind(match).all();
-      for (const r of rows.results || []) add(r, false);
+      // bm25 is negative-better, so a bigger multiplier boosts a band. The
+      // owner's ladder: site core, then the Scriptures with Newman just
+      // beneath them (the interpretive companion the Fathers are read
+      // with), then the named Fathers, the councils, the deep shelf.
+      const weighted = await env.LIBDB.prepare(SEL +
+        'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 ELSE 1.0 END) ' +
+        'LIMIT 18').bind(match).all();
+      for (const r of weighted.results || []) add(r, false);
+      const raw = await env.LIBDB.prepare(SEL +
+        'ORDER BY bm25(chunks_fts) LIMIT 12').bind(match).all();
+      for (const r of raw.results || []) add(r, false);
+      const phr = merecatPhrases(q);
+      if (phr) {
+        const hits = await env.LIBDB.prepare(SEL +
+          'ORDER BY bm25(chunks_fts) LIMIT 8').bind(phr).all();
+        for (const r of hits.results || []) add(r, false);
+      }
     } catch (err) {
       console.log(JSON.stringify({ event: 'merecat_fts_failed', error: String(err) }));
     }
@@ -2913,7 +2974,9 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
   let text = '';
   let usage = null;
   try {
-    await writer.write(encode(JSON.stringify({ chat: chatId, sources, used }) + '\n\n'));
+    // rv marks the retrieval build that answered, so a live test can prove
+    // which deployed code served it (isolates lag deploys by minutes)
+    await writer.write(encode(JSON.stringify({ chat: chatId, sources, used, rv: MERECAT_RV }) + '\n\n'));
     const reader = aiStream.getReader();
     const dec = new TextDecoder();
     let buf = '';

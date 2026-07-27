@@ -4566,7 +4566,7 @@
     h3('What it knows');
     var pk = el('p');
     pk.appendChild(document.createTextNode(
-      'Only this site’s own published library, weighted in six bands: the site’s works and their catechetical core first, then the King James Scriptures, the named works of the Fathers with the Catena and the great Augustine and Athanasius singles, the seven councils and the documents of the schism, the deep shelf of the complete Schaff library with his History of the Christian Church and Creeds of Christendom beside the Summa, Trent, and the modern apologetics of Chesterton and Gibbons, and the collected works of Newman entire, whom the site engages heavily and reads through the book’s own lens. The shelf is still growing, and the librarian’s index is refreshed as new works land, so the counts below are live.' +
+      'Only this site’s own published library, weighted by the owner’s ladder: the site’s works and their catechetical core first, then the King James Scriptures with the collected works of Newman entire set directly beneath them, the interpretive companion the site reads the Fathers with, then the named works of the Fathers with the Catena and the great Augustine and Athanasius singles, the seven councils and the documents of the schism, and the deep shelf beneath all, the complete Schaff library with his History of the Christian Church and Creeds of Christendom beside the Summa, Trent, and the modern apologetics of Chesterton and Gibbons. The shelf is still growing, and the librarian’s index is refreshed as new works land, so the counts below are live.' +
       (d ? ' Right now that is ' + d.chunks.toLocaleString() + ' indexed passages across ' + d.works.length + ' works. ' : ' ')));
     var libA = el('a', 'body-link', 'The Library');
     libA.href = 'library.html';
@@ -4578,14 +4578,14 @@
       var shelf = el('details', 'merecat-shelf');
       shelf.appendChild(el('summary', null, 'The full shelf, work by work'));
       var tiers = {
-        1: 'Band 1 · the site’s voice and its catechetical core',
-        2: 'Band 2 · the Scriptures',
-        3: 'Band 3 · the named works of the Fathers',
-        4: 'Band 4 · the councils and the schism',
-        5: 'Band 5 · the deep shelf',
-        6: 'Band 6 · Newman',
+        1: 'The site’s voice and its catechetical core',
+        2: 'The Scriptures',
+        6: 'Newman, the interpretive companion',
+        3: 'The named works of the Fathers',
+        4: 'The councils and the schism',
+        5: 'The deep shelf',
       };
-      [1, 2, 3, 4, 5, 6].forEach(function (t) {
+      [1, 2, 6, 3, 4, 5].forEach(function (t) {
         var rows = d.works.filter(function (w) { return w.tier === t; });
         if (!rows.length) return;
         shelf.appendChild(el('p', null, tiers[t]));
@@ -4604,7 +4604,7 @@
     }
 
     h3('How it is biased');
-    p('Deliberately, in the open, and by the site owner’s own ladder. Six weight bands order the shelf, from the site’s own works and their catechetical core at the top, through the Scriptures, the Fathers, and the councils, down to the deep sets, with Newman set deliberately above the raw deep shelf because the site engages him heavily. The top band is searched semantically as well as by keyword, weighted highest, and named to the model as the positions of this site.');
+    p('Deliberately, in the open, and by the site owner’s own ladder. The shelf is weighted from the site’s own works and their catechetical core at the top, then the Scriptures with Newman set directly beneath them as the interpretive companion the Fathers are read with, then the named works of the Fathers, the councils and the documents of the schism, and the deep sets beneath all. The top band is searched semantically as well as by keyword, weighted highest, and named to the model as the positions of this site.');
     p('Above the weights sits the lens. The librarian is instructed to read everything through this site’s confession and its long conversation with Newman: to treat him as the site’s friend in both his ages, to follow his notes of development with the book’s own added tests laid over them, and to follow the book’s model of authority where the two part ways. It is instructed to defend the site’s positions with real arguments, to steelman Rome, Orthodoxy, the Reformation, and the free churches honestly, to distinguish what this site argues from what the record shows from what is contested, and never to manufacture a consensus that is not there. Bias here means emphasis and voice, never blinders: every band is searched on every question.');
     if (d && d.persona) {
       var pd = el('details', 'merecat-shelf');
