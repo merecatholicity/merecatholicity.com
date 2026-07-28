@@ -2602,7 +2602,8 @@
     [
       ['Activity audit', 'community.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
       ['IP ban list', 'community.html?ipbans=1', 'Every banned address, added and removed by hand.'],
-      ['Add / Remove Admins', 'community.html?admins=1', 'Grant a member admin powers, or take them back.']
+      ['Add / Remove Admins', 'community.html?admins=1', 'Grant a member admin powers, or take them back.'],
+      ['merecat administration', 'community.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.']
     ].forEach(function (opt) {
       var row = el('div', 'board-cat');
       var left = el('div', 'board-cat-left');
@@ -4380,13 +4381,20 @@
     function renderQuota(u) {
       if (!u) return;
       quota.textContent = '';
-      quota.appendChild(document.createTextNode('You have used '));
-      var mine = el('strong', null, u.you + ' of ' + u.cap);
-      quota.appendChild(mine);
-      quota.appendChild(document.createTextNode(
-        ' questions today' + (u.admin ? ' (admin: the cap does not stop you, your use still counts)' : '') +
-        ' · the community ' + u.today + ' of ' + u.gcap +
-        ' · counters renew at ' + merecatResetLocal() + ' your time'));
+      if (u.cap_on) {
+        quota.appendChild(document.createTextNode('You have used '));
+        quota.appendChild(el('strong', null, u.you + ' of ' + u.cap));
+        quota.appendChild(document.createTextNode(
+          ' questions today' + (u.admin ? ' (admin: the cap does not stop you, your use still counts)' : '') +
+          ' · the community ' + u.today + ' of ' + u.gcap +
+          ' · counters renew at ' + merecatResetLocal() + ' your time'));
+      } else {
+        quota.appendChild(document.createTextNode('The community has used '));
+        quota.appendChild(el('strong', null, u.today + ' of ' + u.gcap));
+        quota.appendChild(document.createTextNode(
+          ' shared questions today · you have asked ' + u.you +
+          ' · counters renew at ' + merecatResetLocal() + ' your time'));
+      }
     }
     fetchRetry(MERECAT_API + '/usage', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4575,6 +4583,72 @@
     }
   }
 
+  /* The librarian's administration page: one dial for now, the per-member
+     daily cap, on or off and how many. Off means members draw freely until
+     the community's shared daily budget answers for everyone. Saved through
+     the admin-keyed /config, the same door the make-librarian push uses;
+     other edge isolates pick a change up within about five minutes. */
+  function viewMerecatAdmin() {
+    document.title = 'merecat administration | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat']]);
+    if (adminGate(viewMerecatAdmin)) return;
+    ensureMerecatStyles();
+    var box = el('div', 'merecat-about');
+    box.setAttribute('open', '');
+    var body = el('div', 'merecat-about-body');
+    box.appendChild(body);
+    section.appendChild(box);
+    body.textContent = 'Loading the librarian’s dials…';
+    fetchRetry(MERECAT_API + '/about', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }),
+    }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.ok) throw new Error(d.error || 'failed');
+      body.textContent = '';
+      body.appendChild(el('h3', null, 'Usage today'));
+      body.appendChild(el('p', null,
+        'The community has used ' + d.today + ' of its ' + d.global_daily +
+        ' shared questions. Counters renew at ' + merecatResetLocal() + ' your time.'));
+      body.appendChild(el('h3', null, 'The per-member daily cap'));
+      var row = el('p');
+      var chk = el('input'); chk.type = 'checkbox'; chk.id = 'mc-cap-on';
+      chk.checked = !!d.user_cap_on;
+      row.appendChild(chk);
+      var lbl = el('label', null, ' Limit each member to ');
+      lbl.htmlFor = 'mc-cap-on';
+      row.appendChild(lbl);
+      var num = el('input', 'key-input'); num.type = 'number'; num.min = '1'; num.max = '500';
+      num.value = d.user_daily; num.style.width = '5em';
+      row.appendChild(num);
+      row.appendChild(document.createTextNode(' questions per day. Unchecked, members draw freely until the community budget is spent. Admins are never capped either way.'));
+      body.appendChild(row);
+      var save = el('button', 'btn btn-send', 'Save');
+      save.type = 'button';
+      var note = el('p', 'comments-status', '');
+      save.addEventListener('click', function () {
+        var n = Math.max(1, Math.min(500, Math.floor(Number(num.value) || 10)));
+        num.value = n;
+        save.disabled = true;
+        note.textContent = 'Saving…';
+        fetchRetry(MERECAT_API + '/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, config: { user_cap_on: chk.checked ? 1 : 0, user_daily: n } }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+          note.textContent = dd.ok
+            ? 'Saved. The change reaches every corner of the edge within about five minutes.'
+            : (dd.error || 'Could not save.');
+        }).catch(function () { note.textContent = 'Could not save. Try again.'; })
+          .then(function () { save.disabled = false; });
+      });
+      body.appendChild(save);
+      body.appendChild(note);
+      body.appendChild(el('p', 'comments-status',
+        'Note: caps changed here also govern @merecat mentions in threads. The librarian’s open-book panel updates itself to match.'));
+    }).catch(function () {
+      body.textContent = 'Could not load the dials. Reload to retry.';
+    });
+  }
+
   /* The transparency panel's content. Live numbers (the shelf, the counts,
      the persona) come from /about; when that fetch fails the account still
      renders, minus the live parts. Everything is plain createElement. */
@@ -4647,10 +4721,14 @@
     h3('Usage');
     p('The whole community shares one free daily budget with the board’s own moderation machinery. ' +
       (d
-        ? 'Each member gets ' + d.user_daily + ' questions a day and the community together ' + d.global_daily +
-          '. Today you have used ' + (d.you != null ? d.you : 0) + ' of ' + d.user_daily +
-          ', and the community ' + d.today + ' of ' + d.global_daily + '.'
-        : 'Each member gets a fixed number of questions a day, and the community a larger shared total.') +
+        ? (d.user_cap_on
+          ? 'Each member gets ' + d.user_daily + ' questions a day and the community together ' + d.global_daily +
+            '. Today you have used ' + (d.you != null ? d.you : 0) + ' of ' + d.user_daily +
+            ', and the community ' + d.today + ' of ' + d.global_daily + '.'
+          : 'Members draw freely on the community\u2019s shared budget of ' + d.global_daily +
+            ' questions a day. Today the community has used ' + d.today + ' of ' + d.global_daily +
+            (d.you != null ? ', of which you asked ' + d.you : '') + '.')
+        : 'Members share one community budget of questions a day.') +
       (d && d.admin ? ' You are an admin: the per-member cap does not stop you, though your use still counts in every tally.' : '') +
       ' Counters renew at midnight UTC, which is ' + merecatResetLocal() + ' on your clock. When the budget is spent the librarian rests until then rather than degrade.');
   }
@@ -4664,6 +4742,7 @@
     if (params.get('ipbans')) return viewIpBans();
     if (params.get('admins')) return viewAdmins();
     if (params.get('admin')) return viewAdminHome();
+    if (params.get('merecatadmin')) return viewMerecatAdmin();
     if (params.get('merecat')) return viewMerecat();
     if (params.get('notifications')) return viewNotifications();
     if (params.get('inbox')) return viewInbox();
