@@ -4724,11 +4724,16 @@
       var f = el('div', 'merecat-srcs');
       f.appendChild(el('strong', null, 'Sources: '));
       sources.forEach(function (s) {
-        var a = el('a', 'body-link',
-          '[' + s.n + '] ' + s.title + (s.heading ? ' — ' + s.heading : ''));
-        a.href = s.url;
-        scriptureDecor(a, s.url);
-        f.appendChild(a);
+        var t = '[' + s.n + '] ' + s.title + (s.heading ? ' — ' + s.heading : '');
+        if (s.url) {
+          var a = el('a', 'body-link', t);
+          a.href = s.url;
+          scriptureDecor(a, s.url);
+          f.appendChild(a);
+        } else {
+          /* the private shelf: a title is the whole citation */
+          f.appendChild(el('span', 'merecat-src-plain', t));
+        }
       });
       node.appendChild(f);
     }

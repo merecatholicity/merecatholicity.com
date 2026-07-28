@@ -447,6 +447,88 @@ works:
     { src: ../gibbons.html, url: gibbons.html, tier: 5, kind: pandoc,
       title: "The Faith of Our Fathers, by James Cardinal Gibbons" }
 
+
+  # ---- Band 8: the worldview shelf. Private (librarian/private/, never
+  # committed or hosted, url-less so citations carry no link), weighted
+  # between the councils and the deep shelf: traditional Catholic writing
+  # that forms the bot's outlook on the world, history, other religions,
+  # the social order, philosophy, and science. The book corrects its papal
+  # maximalism (explicitly papal-maximalist items were pulled entirely);
+  # by the owner's word these works are NOT listed on the transparency
+  # panel, and the /about roster omits url-less works for that reason. ----
+  fisheaters-liturgical-year:
+    { src: private/worldview/fisheaters-liturgical-year.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Customs of the Liturgical Year (Fish Eaters)" }
+  fisheaters-liturgy-sacraments:
+    { src: private/worldview/fisheaters-liturgy-sacraments.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Liturgy and the Sacraments (Fish Eaters)" }
+  fisheaters-morality-social:
+    { src: private/worldview/fisheaters-morality-social.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Morality and the Social Order (Fish Eaters)" }
+  fisheaters-astronomy-zodiac:
+    { src: private/worldview/fisheaters-astronomy-zodiac.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Christian Astronomy and the Zodiac (Fish Eaters)" }
+  fisheaters-jewish-question:
+    { src: private/worldview/fisheaters-jewish-question.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Jewish Question, a traditional Catholic reader (Fish Eaters)" }
+  fisheaters-crusades:
+    { src: private/worldview/fisheaters-crusades.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Crusades (Fish Eaters)" }
+  fisheaters-inquisition:
+    { src: private/worldview/fisheaters-inquisition.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Spanish Inquisition (Fish Eaters)" }
+  fisheaters-solafide:
+    { src: private/worldview/fisheaters-solafide.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "On Sola Fide (Fish Eaters)" }
+  fisheaters-solascriptura:
+    { src: private/worldview/fisheaters-solascriptura.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "On Sola Scriptura (Fish Eaters)" }
+  fahey-mystical-body:
+    { src: private/worldview/fahey-mystical-body.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Mystical Body of Christ in the Modern World, by Fr. Denis Fahey" }
+  fahey-kingship-naturalism:
+    { src: private/worldview/fahey-kingship-naturalism.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Kingship of Christ and Organized Naturalism, by Fr. Denis Fahey" }
+  fahey-kingship-jewish:
+    { src: private/worldview/fahey-kingship-jewish.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Kingship of Christ and the Conversion of the Jewish Nation, by Fr. Denis Fahey" }
+  fahey-money-manip:
+    { src: private/worldview/fahey-money-manip.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Money Manipulation and Social Order, by Fr. Denis Fahey" }
+  fahey-rulers-russ:
+    { src: private/worldview/fahey-rulers-russ.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Rulers of Russia, by Fr. Denis Fahey" }
+  fahey-secret-societies:
+    { src: private/worldview/fahey-secret-societies.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Secret Societies and the Kingship of Christ, by Fr. Denis Fahey" }
+  copleston-history-philosophy:
+    { src: private/worldview/copleston-history-philosophy.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "A History of Philosophy, by Frederick Copleston, S.J." }
+  ripperger-mental-health:
+    { src: private/worldview/ripperger-mental-health.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Introduction to the Science of Mental Health, by Fr. Chad Ripperger" }
+  wsmith-cosmos-transcendence:
+    { src: private/worldview/wsmith-cosmos-transcendence.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Cosmos and Transcendence, by Wolfgang Smith" }
+  wsmith-quantum-enigma:
+    { src: private/worldview/wsmith-quantum-enigma.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "The Quantum Enigma, by Wolfgang Smith" }
+  wsmith-science-myth:
+    { src: private/worldview/wsmith-science-myth.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Science and Myth, by Wolfgang Smith" }
+  wsmith-hawking:
+    { src: private/worldview/wsmith-hawking.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Response to Stephen Hawking's Physics-as-Philosophy, by Wolfgang Smith" }
+  woods-built-western-civ:
+    { src: private/worldview/woods-built-western-civ.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "How the Catholic Church Built Western Civilization, by Thomas E. Woods" }
+  marshall-aquinas-50:
+    { src: private/worldview/marshall-aquinas-50.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Thomas Aquinas in 50 Pages, by Taylor Marshall" }
+  adler-aristotle:
+    { src: private/worldview/adler-aristotle.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Aristotle for Everybody, by Mortimer J. Adler (summary)" }
+
   # ---- Band 7: the Roman world, for background — the very bottom of
   # the totem (weight 0.9), stored in the deep room (merecat-library-deep) --
   annals:
