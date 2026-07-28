@@ -528,13 +528,20 @@ def main():
         return
 
     key = admin_key()
-    # Config + persona ride every push (idempotent, cheap).
-    persona = open(os.path.join(HERE, "persona.md"), encoding="utf-8").read()
-    cfg = yaml.safe_load(open(os.path.join(HERE, "config.yml")))
-    post(args.api, "/config", {"key": key, "persona": persona, "config": cfg})
-    print("config + persona pushed")
-
     roster = post(args.api, "/works", {"key": key})
+    # The dials ride every push. The persona rides only when persona.md
+    # itself changed since its last push, so an on-the-fly edit made in the
+    # merecat administration page stands until the FILE is next touched.
+    persona = open(os.path.join(HERE, "persona.md"), encoding="utf-8").read()
+    pfh = hashlib.sha256(persona.encode()).hexdigest()
+    cfg = yaml.safe_load(open(os.path.join(HERE, "config.yml")))
+    body = {"key": key, "config": cfg}
+    if pfh != roster.get("persona_file_hash"):
+        body["persona"] = persona
+        body["config"] = dict(cfg, persona_file_hash=pfh)
+        print("persona.md changed: pushing it (this overwrites any dashboard edit)")
+    post(args.api, "/config", body)
+    print("config pushed" + ("" if "persona" in body else " (persona left as it stands on the server)"))
     server = {w["id"]: w for w in roster["works"]}
     # early warning on D1's 500 MB per-database cap: the database runs about
     # 2.1x the stored text (search index and btrees); past ~450 MB projected,

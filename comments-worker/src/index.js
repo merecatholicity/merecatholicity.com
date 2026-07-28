@@ -2619,7 +2619,7 @@ const MERECAT_BOT = {
   nick: 'merecat 🐈 AI BOT',
 };
 const MERECAT_MENTION_RE = /@merecat\b/i;
-const MERECAT_RV = 5;   // retrieval build: bump when retrieval logic changes
+const MERECAT_RV = 7;   // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -2725,10 +2725,14 @@ function merecatMatch(q) {
    and offer the longest few as FTS phrase alternatives. */
 function merecatPhrases(q) {
   const words = String(q || '').match(/[A-Za-z0-9À-ɏ'’]+/g) || [];
-  if (words.length < 6) return '';
+  if (words.length < 5) return '';
   const phrases = [];
-  for (let i = 0; i + 6 <= words.length && phrases.length < 4; i += 4) {
-    phrases.push('"' + words.slice(i, i + 6).join(' ').replace(/"/g, '""') + '"');
+  // EVERY contiguous five-gram, stride one: any strided comb leaves gaps
+  // (a stride-three comb twice straddled "the souls of the just" and the
+  // primary text went unfound). A quotation of five words or more in the
+  // question is thereby guaranteed one exact-phrase alternative.
+  for (let i = 0; i + 5 <= words.length && phrases.length < 20; i += 1) {
+    phrases.push('"' + words.slice(i, i + 5).join(' ').replace(/"/g, '""') + '"');
   }
   return phrases.join(' OR ');
 }
@@ -2798,8 +2802,11 @@ async function merecatRetrieve(env, q, cfg) {
       for (const r of raw.results || []) add(r, false);
       const phr = merecatPhrases(q);
       if (phr) {
+        // a deep LIMIT: bm25 ranks heavy quoters of a phrase above the text
+        // that says it once, so the primary source can sit well down this
+        // list — the reranker and the guaranteed phrase seats sort it out
         const hits = await env.LIBDB.prepare(SEL +
-          'ORDER BY bm25(chunks_fts) LIMIT 8').bind(phr).all();
+          'ORDER BY bm25(chunks_fts) LIMIT 20').bind(phr).all();
         for (const r of hits.results || []) add(r, false, true);
       }
     } catch (err) {
@@ -3604,7 +3611,10 @@ async function handleMerecatWorks(request, env) {
   // against D1's 500 MB free cap and warn before the wall
   const tb = await env.LIBDB.prepare(
     "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
-  return json({ ok: true, works: rows.results || [], text_bytes: (tb && tb.b) || 0 }, 200);
+  const pfh = await env.LIBDB.prepare(
+    "SELECT v FROM config WHERE k = 'persona_file_hash'").first();
+  return json({ ok: true, works: rows.results || [], text_bytes: (tb && tb.b) || 0,
+    persona_file_hash: (pfh && pfh.v) || '' }, 200);
 }
 
 /* Persona / model / caps push from librarian/config.yml + persona.md. */
@@ -3617,7 +3627,7 @@ async function handleMerecatConfigSet(request, env) {
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
   if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
-  for (const k of ['model', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens']) {
+  for (const k of ['model', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
     if (cfg[k] != null) put(k, cfg[k]);
   }
   if (!stmts.length) return json({ ok: false, error: 'Nothing to set.' }, 400);

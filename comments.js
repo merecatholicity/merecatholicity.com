@@ -4248,6 +4248,7 @@
       '.merecat-form{display:flex;gap:.5rem;align-items:flex-end;margin:.8rem 0 .2rem}' +
       '.merecat-q{flex:1;min-height:3.1em;resize:vertical;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.5rem .65rem}' +
       '.merecat-quota{color:var(--faint);font-size:.85rem;margin:.15rem 0 .9rem}' +
+      '.merecat-persona-edit{width:100%;min-height:26em;font:inherit;font-size:.9rem;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.6rem .7rem;margin:.4rem 0;resize:vertical;white-space:pre-wrap}' +
       '.merecat-quota strong{color:var(--maroon)}' +
       '@media (max-width:620px){.merecat-msg{max-width:100%}.merecat-form{flex-direction:column;align-items:stretch}}';
     var st = el('style');
@@ -4644,6 +4645,39 @@
       body.appendChild(note);
       body.appendChild(el('p', 'comments-status',
         'Note: caps changed here also govern @merecat mentions in threads. The librarian’s open-book panel updates itself to match.'));
+
+      /* The standing instructions, live-editable: what is saved here IS the
+         system prompt, for every answer, within about five minutes. It
+         stands until librarian/persona.md in the repo is itself next
+         edited, whose push then takes over (the daily ingest pushes the
+         file only when the file changed). */
+      body.appendChild(el('h3', null, 'The standing instructions, verbatim, as the model receives them'));
+      body.appendChild(el('p', null,
+        'Edit and save, and the librarian answers under the new instructions within about five minutes, everywhere at once. A save here stands until librarian/persona.md in the repo is next edited, whose push then replaces it. The open-book panel always shows whatever stands.'));
+      var pTa = el('textarea', 'merecat-persona-edit');
+      pTa.value = d.persona || '';
+      body.appendChild(pTa);
+      var pSave = el('button', 'btn btn-send', 'Save the instructions');
+      pSave.type = 'button';
+      var pNote = el('p', 'comments-status', '');
+      pSave.addEventListener('click', function () {
+        var text = pTa.value.trim();
+        if (!text) { pNote.textContent = 'The instructions cannot be empty.'; return; }
+        if (text.length < 200 && !confirm('These instructions are very short. Replace the librarian’s whole standing instructions with them?')) return;
+        pSave.disabled = true;
+        pNote.textContent = 'Saving…';
+        fetchRetry(MERECAT_API + '/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, persona: text }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+          pNote.textContent = dd.ok
+            ? 'Saved. The librarian answers under these instructions within about five minutes.'
+            : (dd.error || 'Could not save.');
+        }).catch(function () { pNote.textContent = 'Could not save. Try again.'; })
+          .then(function () { pSave.disabled = false; });
+      });
+      body.appendChild(pSave);
+      body.appendChild(pNote);
     }).catch(function () {
       body.textContent = 'Could not load the dials. Reload to retry.';
     });
