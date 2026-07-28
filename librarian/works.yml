@@ -448,6 +448,50 @@ works:
       title: "The Faith of Our Fathers, by James Cardinal Gibbons" }
 
 
+
+  # ---- Band 9: the scholars' shelf. Private like band 8 (url-less, never
+  # committed, absent from the transparency roster), weighted 1.3 between
+  # the Fathers and the councils: the site's modern research authorities.
+  # Wright is the prioritized lens on Paul, justification, Trent-and-Luther,
+  # Sanders, Second Temple Judaism, and the Roman world, and the fierce
+  # first authority on resurrection apologetics; Fitzmyer the exegetical
+  # fallback; Beale settles the last things (amillennial partial preterism);
+  # Hahn, Pitre, and Marshall are side voices, their papal maximalism not
+  # defended. ----
+  wright-resurrection:
+    { src: private/scholars/wright-resurrection.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "The Resurrection of the Son of God, by N. T. Wright (Christian Origins, vol. 3)" }
+  wright-jesus-victory:
+    { src: private/scholars/wright-jesus-victory.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "Jesus and the Victory of God, by N. T. Wright (Christian Origins, vol. 2)" }
+  wright-paul-faithfulness:
+    { src: private/scholars/wright-paul-faithfulness.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "Paul and the Faithfulness of God, by N. T. Wright (Christian Origins, vol. 4)" }
+  sanders-paul:
+    { src: private/scholars/sanders-paul.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "Paul and Palestinian Judaism, by E. P. Sanders" }
+  fitzmyer-romans:
+    { src: private/scholars/fitzmyer-romans.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "Romans, by Joseph A. Fitzmyer (Anchor Yale Bible 33)" }
+  beale-revelation:
+    { src: private/scholars/beale-revelation.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "The Book of Revelation (NIGTC), by G. K. Beale" }
+  hahn-kinship:
+    { src: private/scholars/hahn-kinship.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "Kinship by Covenant, by Scott W. Hahn" }
+  pitre-covenant-jew:
+    { src: private/scholars/pitre-covenant-jew.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "Paul, a New Covenant Jew, by Brant Pitre, John A. Kincaid, and Michael P. Barber" }
+  marshall-crucified-rabbi:
+    { src: private/scholars/marshall-crucified-rabbi.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "The Crucified Rabbi, by Taylor Marshall" }
+  marshall-paul:
+    { src: private/scholars/marshall-paul.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "A Catholic Perspective on Paul, by Taylor Marshall" }
+  marshall-eternal-city:
+    { src: private/scholars/marshall-eternal-city.txt, url: "", tier: 9, kind: text, store: deep,
+      title: "The Eternal City: Rome and the Origins of Catholic Christianity, by Taylor Marshall" }
+
   # ---- Band 8: the worldview shelf. Private (librarian/private/, never
   # committed or hosted, url-less so citations carry no link), weighted
   # between the councils and the deep shelf: traditional Catholic writing

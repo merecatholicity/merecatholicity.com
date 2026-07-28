@@ -2603,7 +2603,7 @@ const MERECAT_SITE = 'https://merecatholicity.com/';
 const MERECAT_TIER_LABEL = {
   1: 'site position', 2: 'scripture', 3: 'the Fathers',
   4: 'councils, confessions, and the schism', 5: 'deep shelf', 6: 'Newman',
-  7: 'the Roman world', 8: 'the worldview shelf',
+  7: 'the Roman world', 8: 'the worldview shelf', 9: "the scholars' shelf",
 };
 const MERECAT_RESTING =
   'merecat is resting. The community’s shared daily budget is spent. It resets at midnight UTC.';
@@ -2627,7 +2627,7 @@ function merecatMentioned(body) {
     .filter((l) => !/^\s*>/.test(l)).join('\n');
   return MERECAT_MENTION_RE.test(unquoted);
 }
-const MERECAT_RV = 10;  // retrieval build: bump when retrieval logic changes
+const MERECAT_RV = 11;  // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -2944,7 +2944,7 @@ async function merecatRetrieve(env, q, cfg) {
         // beneath them, the named Fathers, the councils, the deep shelf,
         // and the Roman world at the very bottom of the totem.
         const weighted = await db.prepare(SEL +
-          'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 8 THEN 1.15 WHEN 7 THEN 0.9 ELSE 1.0 END) ' +
+          'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 9 THEN 1.3 WHEN 8 THEN 1.15 WHEN 7 THEN 0.9 ELSE 1.0 END) ' +
           'LIMIT 18').bind(match).all();
         for (const r of weighted.results || []) add(r, false);
         const raw = await db.prepare(SEL +
