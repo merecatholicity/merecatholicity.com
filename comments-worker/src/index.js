@@ -3586,12 +3586,12 @@ async function merecatMentionReply(env, commentId) {
   let refuse = null;
   const seeWhen = ' Mention me again after it renews, or open [the merecat page](' +
     MERECAT_SITE + 'community.html?merecat=1) to see the renewal time on your own clock.';
-  const g = await LIB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   if (!admin && g && g.q >= cfg.global_daily) {
     refuse = 'merecat is resting. The community’s shared daily budget is spent.' + seeWhen;
   }
   if (!refuse && !admin && cfg.user_cap_on) {
-    const u = await LIB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
       .bind(day, c.author_hash).first();
     if (u && u.q >= cfg.user_daily) {
       refuse = 'You have used your ' + cfg.user_daily + ' merecat questions for today.' + seeWhen;
@@ -3691,12 +3691,12 @@ async function merecatMentionReply(env, commentId) {
 
   const inTok = Math.ceil(JSON.stringify(messages).length / 4);
   const outTok = Math.ceil(answer.length / 4);
-  await LIB.batch([
-    LIB.prepare(
+  await env.LIBDB.batch([
+    env.LIBDB.prepare(
       'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
       'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
     ).bind(day, inTok, outTok),
-    LIB.prepare(
+    env.LIBDB.prepare(
       'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
       'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
     ).bind(day, c.author_hash),
@@ -3795,7 +3795,7 @@ async function handleMerecatUsage(request, env) {
   const me = await sha256hex(key);
   const cfg = await merecatConfig(env);
   const day = merecatDay();
-  const g = await LIB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   const u = await LIB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
     .bind(day, me).first();
   return json({
