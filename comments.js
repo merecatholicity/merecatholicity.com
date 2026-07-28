@@ -4532,7 +4532,12 @@
     var p1 = el('p');
     p1.appendChild(el('strong', null, 'merecat'));
     p1.appendChild(document.createTextNode(
-      ' is the Mere Catholicity community\u2019s own dedicated AI assistant, the librarian of the whole shelf: well versed, with real expertise, in the whole of this site and everything its Library carries, the book and the papers, the Scriptures, the Fathers one by one and in the complete Schaff library, the seven councils and the confessions of every communion, the Summa and the Catena, the history of the Church, the Second Temple world of Josephus and Philo, the Roman empire and the classics, and the rule of prayer, and beyond the shelf itself the questions that surround it, Paul and justification, the resurrection, the last things, the moral and social order, philosophy in the school of Aristotle and St. Thomas, and the meeting of faith and science. It engages Orthodox, Roman Catholic, and Protestant questions alike with ease, from a merely catholic perspective, and all of it is read through one lens: John Henry Newman\u2019s account of the development of doctrine, with the implications our book draws from it and the three further tests it adds.'));
+      ' is the community\u2019s AI librarian, trained to be well-versed within the exact contents of our '));
+    var libLink = el('a', 'body-link', 'Library page');
+    libLink.href = 'library.html';
+    p1.appendChild(libLink);
+    p1.appendChild(document.createTextNode(
+      '. It answers Orthodox, Roman Catholic, and Protestant questions alike from a merely catholic ground.'));
     ib.appendChild(p1);
     intro.appendChild(ib);
     section.appendChild(intro);
