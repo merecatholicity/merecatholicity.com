@@ -3813,11 +3813,15 @@ async function handleMerecatUsage(request, env) {
    own number — no per-question data exists to disclose, since the server
    keeps counters only. */
 async function handleMerecatAbout(request, env) {
+  /* Admin-only since the public transparency panel retired (2026-07-28):
+     this returns the persona verbatim and the whole roster, and the owner
+     wills neither public. The administration page is the one consumer. */
   let data = {};
-  try { data = await request.json(); } catch { /* key is optional */ }
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const cfg = await merecatConfig(env);
   const day = merecatDay();
   // per-work counts live on the works row (stamped at ingest end) so this
