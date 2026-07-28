@@ -3469,14 +3469,28 @@ async function merecatMentionReply(env, commentId) {
       ? String(res.choices[0].message.content || '') : ''));
   answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   if (!answer) return null;
-  /* The footer lists only the sources the answer actually cited — the model
-     read more, the reader sees the load-bearing few. */
-  const citedNums = new Set();
-  answer.replace(/\[(\d+)\]/g, (m, n) => { citedNums.add(Number(n)); return m; });
-  const cited = sources.filter((s) => citedNums.has(s.n));
-  if (cited.length) {
+  /* The footer lists only the sources the answer actually cited, renumbered
+     with the body's markers to a clean 1..k in order of first appearance —
+     the model read its full list, the reader gets a tidy one. Labels are
+     bracket-sanitized: a heading like "[The Contemporary Review]" nested in
+     [text](url) breaks the markdown link and prints raw. */
+  const firstAt = new Map();
+  answer.replace(/\[(\d+)\]/g, (m, n, at) => {
+    const num = Number(n);
+    if (sources.some((s) => s.n === num) && !firstAt.has(num)) firstAt.set(num, at);
+    return m;
+  });
+  const order = [...firstAt.keys()].sort((a, b) => firstAt.get(a) - firstAt.get(b));
+  const renum = new Map(order.map((n, i) => [n, i + 1]));
+  if (renum.size) {
+    answer = answer.replace(/\[(\d+)\]/g, (m, n) =>
+      renum.has(Number(n)) ? '[' + renum.get(Number(n)) + ']' : m);
+    const cited = sources.filter((s) => renum.has(s.n))
+      .sort((a, b) => renum.get(a.n) - renum.get(b.n));
+    const label = (s) => (s.title + (s.heading ? ' — ' + s.heading : ''))
+      .replace(/\[/g, '(').replace(/\]/g, ')');
     answer += '\n\nSources:\n' + cited.map((s) =>
-      '[' + s.n + '] [' + s.title + (s.heading ? ' — ' + s.heading : '') + '](' + s.url + ')').join('\n');
+      '[' + renum.get(s.n) + '] [' + label(s) + '](' + s.url + ')').join('\n');
   }
   const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
 

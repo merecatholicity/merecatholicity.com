@@ -4407,17 +4407,39 @@
       return { msg: m, body: body };
     }
 
-    /* Only the sources the answer actually cited make the footer: the model
-       reads more than it cites, the reader sees the load-bearing few. */
-    function srcFooter(node, sources, text) {
+    /* Only the sources the answer actually cited make the footer, and the
+       body's [n] markers renumber with it to a clean 1..k in order of first
+       appearance — the model reads its full list, the reader gets a tidy
+       one. The same helper runs at stream-finish and at thread-reopen, so a
+       saved conversation reads back exactly as it streamed. */
+    function citeRenumber(text, sources) {
+      text = String(text || '');
+      if (!sources || !sources.length) return { text: text, sources: [] };
+      var firstAt = {};
+      text.replace(/\[(\d+)\]/g, function (m, n, at) {
+        var num = Number(n);
+        var known = sources.some(function (s) { return s.n === num; });
+        if (known && firstAt[num] === undefined) firstAt[num] = at;
+        return m;
+      });
+      var order = Object.keys(firstAt).map(Number).sort(function (a, b) { return firstAt[a] - firstAt[b]; });
+      if (!order.length) return { text: text, sources: [] };
+      var renum = {};
+      order.forEach(function (n, i) { renum[n] = i + 1; });
+      var out = text.replace(/\[(\d+)\]/g, function (m, n) {
+        return renum[Number(n)] ? '[' + renum[Number(n)] + ']' : m;
+      });
+      var used = sources.filter(function (s) { return renum[s.n]; })
+        .map(function (s) { return { n: renum[s.n], title: s.title, heading: s.heading, url: s.url }; })
+        .sort(function (a, b) { return a.n - b.n; });
+      return { text: out, sources: used };
+    }
+
+    function srcFooter(node, sources) {
       if (!sources || !sources.length) return;
-      var cited = {};
-      String(text || '').replace(/\[(\d+)\]/g, function (m, n) { cited[Number(n)] = true; return m; });
-      var used = sources.filter(function (s) { return cited[s.n]; });
-      if (!used.length) return;
       var f = el('div', 'merecat-srcs');
       f.appendChild(el('strong', null, 'Sources: '));
-      used.forEach(function (s) {
+      sources.forEach(function (s) {
         var a = el('a', 'body-link',
           '[' + s.n + '] ' + s.title + (s.heading ? ' — ' + s.heading : ''));
         a.href = s.url;
@@ -4454,9 +4476,13 @@
         function finish() {
           acc = acc.replace(/\s+$/, '');
           cat.body.textContent = '';
-          if (acc) fillBody(cat.body, acc);
-          else cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
-          srcFooter(cat.body, sources, acc);
+          if (acc) {
+            var rr = citeRenumber(acc, sources);
+            fillBody(cat.body, rr.text);
+            srcFooter(cat.body, rr.sources);
+          } else {
+            cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
+          }
           cat.msg.scrollIntoView({ block: 'nearest' });
         }
         function pump() {
@@ -4533,10 +4559,11 @@
           if (m.role === 'user') {
             b.body.textContent = m.body;
           } else {
-            fillBody(b.body, m.body);
             var srcs = [];
             try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
-            srcFooter(b.body, srcs, m.body);
+            var rr = citeRenumber(m.body, srcs);
+            fillBody(b.body, rr.text);
+            srcFooter(b.body, rr.sources);
           }
         });
         q.focus();
