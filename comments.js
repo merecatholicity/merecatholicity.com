@@ -4258,14 +4258,11 @@
   }
 
   function viewMerecat() {
-    document.title = 'merecat, the librarian | Catholicity Board';
+    document.title = 'Ask Merecat AI | Mere Catholicity';
     crumb([['Catholicity Board', 'community.html'], ['merecat']]);
-    /* Members only, the same strict gate as board search. */
-    if (!(state.key && state.myHash)) {
-      section.appendChild(el('p', 'comments-status',
-        'merecat, the librarian, answers logged-in members. Create an identity or paste your key above, then come ask.'));
-      return;
-    }
+    /* The page is open to everyone; asking needs a free identity, made in
+       one click right above the question box. */
+    var loggedIn = !!(state.key && state.myHash);
     ensureMerecatStyles();
 
     var intro = el('div', 'merecat-intro');
@@ -4274,10 +4271,10 @@
     var p1 = el('p');
     p1.appendChild(el('strong', null, 'merecat'));
     p1.appendChild(document.createTextNode(
-      ' is the site’s librarian. Ask a research question and it answers from the shelf itself, the book, the papers, the Fathers, the councils, and the Scriptures, linking the exact places it stands on.'));
+      ' is the Mere Catholicity community’s own dedicated AI assistant, the librarian of the whole shelf. Ask a real research question and it answers from the Library itself, the book, the papers, the Fathers, the councils, the Scriptures, and Newman entire, citing the exact paragraphs it stands on.'));
     ib.appendChild(p1);
     ib.appendChild(el('p', null,
-      'It favors this site’s positions and will argue them, and it is told to give the full picture and say plainly when a question is contested. The whole community shares one free daily budget, so each member gets a handful of questions a day.'));
+      'Every answer carries its sources as links you can check. The whole community shares one free daily budget, shown beneath the question box.'));
     intro.appendChild(ib);
     section.appendChild(intro);
 
@@ -4312,6 +4309,7 @@
     var chatId = Number(new URLSearchParams(location.search).get('chat')) || 0;
 
     var past = el('details', 'merecat-about');
+    if (!loggedIn) past.hidden = true;
     past.appendChild(el('summary', null, 'Past conversations (kept thirty days)'));
     var pastBody = el('div', 'merecat-about-body');
     past.appendChild(pastBody);
@@ -4363,6 +4361,25 @@
     var log = el('div', 'merecat-log');
     section.appendChild(log);
 
+    /* The visitor's door, exactly where the eye lands before asking: the
+       board's own identity drawer, one click, no email, no signup forms. */
+    if (!loggedIn) {
+      var join = el('div', 'merecat-intro');
+      var jb = el('div');
+      var jp = el('p');
+      jp.appendChild(el('strong', null, 'Asking takes one click. '));
+      jp.appendChild(document.createTextNode(
+        'Create a free identity, no email and no forms, and the question box below opens. '));
+      jb.appendChild(jp);
+      join.appendChild(jb);
+      section.appendChild(join);
+      section.appendChild(el('div', 'comment-identity'));
+      var mkKeyBox = el('div', 'key-box');
+      mkKeyBox.hidden = true;
+      section.appendChild(mkKeyBox);
+      renderIdentity();
+    }
+
     var form = el('form', 'merecat-form');
     var q = el('textarea', 'merecat-q');
     q.placeholder = 'Ask the librarian… say, what do the Fathers make of John 6:53?';
@@ -4372,6 +4389,11 @@
     send.type = 'submit';
     form.appendChild(send);
     section.appendChild(form);
+    if (!loggedIn) {
+      q.disabled = true;
+      send.disabled = true;
+      q.placeholder = 'Create your free identity above, and ask away…';
+    }
 
     /* The quota line: always visible so a member can ration for the
        community's sake, refreshed from /usage on open and from every
@@ -4397,12 +4419,14 @@
           ' · counters renew at ' + merecatResetLocal() + ' your time'));
       }
     }
-    fetchRetry(MERECAT_API + '/usage', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key }),
-    }, [1000]).then(function (r) { return r.json(); })
-      .then(function (d) { if (d.ok) renderQuota(d); })
-      .catch(function () {});
+    if (loggedIn) {
+      fetchRetry(MERECAT_API + '/usage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }),
+      }, [1000]).then(function (r) { return r.json(); })
+        .then(function (d) { if (d.ok) renderQuota(d); })
+        .catch(function () {});
+    }
 
     function bubble(who) {
       var m = el('div', 'merecat-msg ' + (who === 'you' ? 'you' : 'cat'));
@@ -4442,6 +4466,43 @@
         .map(function (s) { return { n: renum[s.n], title: s.title, heading: s.heading, url: s.url }; })
         .sort(function (a, b) { return a.n - b.n; });
       return { text: out, sources: used };
+    }
+
+    /* Forward one answer to a public topic: the owner's choice alone. The
+       post goes up under the librarian's name, marked forwarded-by, so bot
+       words never wear a member's face. */
+    function attachForward(bubbleMsg, msgSel) {
+      if (!state.key) return;
+      var whoDiv = bubbleMsg.querySelector('.merecat-who');
+      if (!whoDiv) return;
+      whoDiv.appendChild(document.createTextNode(' · '));
+      var f = el('a', 'identity-action', 'forward to the board');
+      f.href = '#';
+      f.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (!chatId) return;
+        var t = prompt('Forward this answer publicly into which topic? Paste the topic link, or just its number:');
+        if (!t) return;
+        var m = /(?:topic=)?(\d+)/.exec(t.trim());
+        if (!m) { alert('Could not read a topic number from that.'); return; }
+        var topicId = Number(m[1]);
+        if (!confirm('Post this answer publicly to topic #' + topicId + ', under the librarian\u2019s name, marked as forwarded by you?')) return;
+        f.textContent = 'forwarding\u2026';
+        fetchRetry(MERECAT_API + '/forward', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, chat: chatId, msg: msgSel, topic: topicId }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) {
+            var v = el('a', 'identity-action', 'forwarded \u2713 view it');
+            v.href = 'community.html?topic=' + d.topic + '#comment-' + d.id;
+            whoDiv.replaceChild(v, f);
+          } else {
+            f.textContent = d.error || 'forward failed';
+            setTimeout(function () { f.textContent = 'forward to the board'; }, 3000);
+          }
+        }).catch(function () { f.textContent = 'forward to the board'; alert('Network hiccup. Try again.'); });
+      });
+      whoDiv.appendChild(f);
     }
 
     function srcFooter(node, sources) {
@@ -4489,6 +4550,7 @@
             var rr = citeRenumber(acc, sources);
             fillBody(cat.body, rr.text);
             srcFooter(cat.body, rr.sources);
+            attachForward(cat.msg, 'last');
           } else {
             cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
           }
@@ -4548,7 +4610,7 @@
 
     /* Reopening a saved thread: replay its turns into the log, then the
        composer continues it. A vanished or foreign id falls back to fresh. */
-    if (chatId) {
+    if (chatId && loggedIn) {
       var loadNote = el('p', 'comments-status', 'Reopening the conversation…');
       log.appendChild(loadNote);
       fetchRetry(MERECAT_API + '/chat', {
@@ -4573,6 +4635,7 @@
             var rr = citeRenumber(m.body, srcs);
             fillBody(b.body, rr.text);
             srcFooter(b.body, rr.sources);
+            if (m.id) attachForward(b.msg, m.id);
           }
         });
         q.focus();
@@ -4750,7 +4813,7 @@
     }
 
     h3('What it remembers about you');
-    p('Your conversations are saved as threads, the way your direct messages are: each conversation is its own thread, kept for thirty days from its last message so you can leave and pick it back up, then expired and removed. Threads belong to your pseudonymous identity alone. Only your key can list, read, continue, or delete them, deletion is immediate and outright, and no admin tool for reading them exists.');
+    p('Your conversations are saved as threads, the way your direct messages are: each conversation is its own thread, kept for thirty days from its last message so you can leave and pick it back up, then expired and removed. Threads belong to your pseudonymous identity alone. Only your key can list, read, continue, or delete them, deletion is immediate and outright, and no admin tool for reading them exists. You can forward any single answer to a public topic on the board, where it posts under the librarian\u2019s own name marked as forwarded by you, so nothing you ask goes public except by your own hand.');
     p('Within a thread the librarian remembers the whole conversation: the newest turns ride along word for word, and everything older is folded into a running condensed summary the thread carries, so a long conversation stays coherent without burning the community’s shared budget. The model itself learns nothing from you and keeps nothing between threads. Beyond your threads the server holds counters only, the day, your identity hash, and how many questions you have asked, so the daily caps can work. You ask under the same pseudonymous key you post with, and the server sees only its hash.');
 
     h3('Usage');
