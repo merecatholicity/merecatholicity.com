@@ -271,14 +271,16 @@ def split_long(text):
     return parts
 
 
-def pack(paras):
+def pack(paras, target=None):
     """Greedy-pack (anchor, text) paragraphs into chunks under HARD_MAX words.
-    Returns [(anchor_of_first_para, text)]."""
+    Returns [(anchor_of_first_para, text)]. A work may override the chunk
+    size (works.yml chunk_words) — coarser chunks spend fewer vectors."""
+    tgt = target or TARGET
     out, cur, n = [], [], 0
     for anchor, text in paras:
         for piece in split_long(text) if words(text) > HARD_MAX else [text]:
             w = words(piece)
-            if cur and n + w > TARGET and n >= TARGET // 2:
+            if cur and n + w > tgt and n >= tgt // 2:
                 out.append((cur[0][0], " ".join(t for _, t in cur)))
                 cur, n = [], 0
             cur.append((anchor, piece))
@@ -393,7 +395,7 @@ def scrub_text(src):
     return re.sub(r"[ \t]{2,}", " ", src)
 
 
-def build_text(path, title):
+def build_text(path, title, chunk_words=None):
     """Plain txt/md. Lines opening with #, ## or ### become the heading
     breadcrumb for what follows, so a whole book chunks chapter-labeled."""
     src = scrub_text(open(path, encoding="utf-8", errors="replace").read())
@@ -402,7 +404,7 @@ def build_text(path, title):
     section = []
 
     def close():
-        for a, t in pack([("", p) for p in section]):
+        for a, t in pack([("", p) for p in section], chunk_words):
             chunks.append({"heading": heading, "anchor": a, "text": t})
         section.clear()
 
@@ -434,7 +436,7 @@ def build(entry):
     elif kind == "bible-dr-proto":
         chunks, valid = build_bible(path, proto=True)
     elif kind == "text":
-        chunks, valid = build_text(path, entry["title"])
+        chunks, valid = build_text(path, entry["title"], entry.get("chunk_words"))
     else:
         sys.exit(f"unknown kind {kind!r}")
     bad = []
@@ -574,11 +576,8 @@ def main():
         audit_library(manifest)
         return
 
-    for wid, entry in manifest.items():
-        if entry.get("vectorize") and str(entry.get("store", "")):
-            sys.exit(f"{wid}: vectorize with a store flag — the semantic leg "
-                     "reads chunks from room one only, so a vectorized work "
-                     "must stay out of the deep room")
+    # vectorize may ride any room since the semantic leg hydrates across
+    # all three databases (RV 15); the only wall is the vector budget below.
 
     key = admin_key()
     roster = post(args.api, "/works", {"key": key})

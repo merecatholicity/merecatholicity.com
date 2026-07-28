@@ -8,13 +8,12 @@
 #
 # Fields: src (source file), url (page citations link to), title, kind
 # (pandoc | hand | bible | bible-deutero | bible-dr-proto | text),
-# vectorize (band-1 only; ~4,880-vector free budget, warned on), store
+# vectorize (any room, ~4,880-vector free budget shared and warned on;
+# chunk_words coarsens a work's chunks to spend fewer vectors), store
 # ("deep" sends the work to the second database, merecat-library-deep —
 # retrieval reads both rooms as one and the weights ride the tier either
-# way, so deep is purely a space decision; NEVER combine vectorize with
-# store: deep, the semantic leg reads chunks from room one only and
-# ingest refuses the pair), and tier — the seven weight bands of the
-# shelf, in ladder order (not tier-number order):
+# way, so deep is purely a space decision), and tier — the weight bands
+# of the shelf, in ladder order (not tier-number order):
 #   1  the site's works and its catechetical core (vectorized, top boost)
 #   2  the Scriptures (the KJV and the Deuterocanon from the DR)
 #   6  Newman entire (directly beneath the Scriptures; the persona
@@ -532,7 +531,10 @@ works:
 
   # ---- Band 8: the worldview shelf. Private (librarian/private/, never
   # committed or hosted, url-less so citations carry no link), weighted
-  # 1.55 on its own second rung just beneath the site's voice (the owner's
+  # 1.55 on its own second rung just beneath the site's voice, with the
+  # POLITICAL-THEOLOGICAL CORE VECTORIZED (the Faheys, the Jewish question,
+  # morality-social, the apologetics singles, and the Indo-European research
+  # at coarser chunk_words: 1000 to fit the ~4,880-vector free budget) (the owner's
   # settled 2026-07-29 ruling; the weight lives in the worker CASE, not
   # here): traditional Catholic writing
   # that forms the bot's outlook on the world, history, other religions,
@@ -547,46 +549,46 @@ works:
     { src: private/worldview/fisheaters-liturgy-sacraments.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Liturgy and the Sacraments (Fish Eaters)" }
   fisheaters-morality-social:
-    { src: private/worldview/fisheaters-morality-social.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fisheaters-morality-social.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "Morality and the Social Order (Fish Eaters)" }
   fisheaters-astronomy-zodiac:
     { src: private/worldview/fisheaters-astronomy-zodiac.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Christian Astronomy and the Zodiac (Fish Eaters)" }
   fisheaters-jewish-question:
-    { src: private/worldview/fisheaters-jewish-question.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fisheaters-jewish-question.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Jewish Question, a traditional Catholic reader (Fish Eaters)" }
   fisheaters-crusades:
-    { src: private/worldview/fisheaters-crusades.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fisheaters-crusades.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Crusades (Fish Eaters)" }
   fisheaters-inquisition:
-    { src: private/worldview/fisheaters-inquisition.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fisheaters-inquisition.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Spanish Inquisition (Fish Eaters)" }
   fisheaters-solafide:
-    { src: private/worldview/fisheaters-solafide.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fisheaters-solafide.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "On Sola Fide (Fish Eaters)" }
   fisheaters-solascriptura:
-    { src: private/worldview/fisheaters-solascriptura.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fisheaters-solascriptura.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "On Sola Scriptura (Fish Eaters)" }
   indo-european-research:
-    { src: private/worldview/indo-european-research.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/indo-european-research.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true, chunk_words: 1000,
       title: "Misc indo european catholic christianity research" }
   fahey-mystical-body:
-    { src: private/worldview/fahey-mystical-body.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fahey-mystical-body.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Mystical Body of Christ in the Modern World, by Fr. Denis Fahey" }
   fahey-kingship-naturalism:
-    { src: private/worldview/fahey-kingship-naturalism.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fahey-kingship-naturalism.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Kingship of Christ and Organized Naturalism, by Fr. Denis Fahey" }
   fahey-kingship-jewish:
-    { src: private/worldview/fahey-kingship-jewish.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fahey-kingship-jewish.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Kingship of Christ and the Conversion of the Jewish Nation, by Fr. Denis Fahey" }
   fahey-money-manip:
-    { src: private/worldview/fahey-money-manip.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fahey-money-manip.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "Money Manipulation and Social Order, by Fr. Denis Fahey" }
   fahey-rulers-russ:
-    { src: private/worldview/fahey-rulers-russ.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fahey-rulers-russ.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Rulers of Russia, by Fr. Denis Fahey" }
   fahey-secret-societies:
-    { src: private/worldview/fahey-secret-societies.txt, url: "", tier: 8, kind: text, store: deep2,
+    { src: private/worldview/fahey-secret-societies.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "Secret Societies and the Kingship of Christ, by Fr. Denis Fahey" }
   copleston-history-philosophy:
     { src: private/worldview/copleston-history-philosophy.txt, url: "", tier: 8, kind: text, store: deep2,

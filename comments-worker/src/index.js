@@ -2627,7 +2627,7 @@ function merecatMentioned(body) {
     .filter((l) => !/^\s*>/.test(l)).join('\n');
   return MERECAT_MENTION_RE.test(unquoted);
 }
-const MERECAT_RV = 14;  // retrieval build: bump when retrieval logic changes
+const MERECAT_RV = 15;  // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -2921,18 +2921,23 @@ async function merecatRetrieve(env, q, cfg) {
     console.log(JSON.stringify({ event: 'merecat_semantic_failed', error: String(err) }));
   }
   if (semIds.length) {
-    try {
-      const ph = semIds.map((_, i) => '?' + (i + 1)).join(',');
-      const rows = await env.LIBDB.prepare(
-        'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
-        'FROM chunks c JOIN works w ON w.id = c.work_id WHERE c.cid IN (' + ph + ')'
-      ).bind(...semIds).all();
-      const byCid = {};
-      for (const r of rows.results || []) byCid[r.cid] = r;
-      for (const cid of semIds) add(byCid[cid], true); // keep Vectorize's order
-    } catch (err) {
-      console.log(JSON.stringify({ event: 'merecat_semfetch_failed', error: String(err) }));
+    // hydrate matches from whichever room holds them: vectorized works may
+    // live in any database (the worldview core rides deep2)
+    const byCid = {};
+    const ph = semIds.map((_, i) => '?' + (i + 1)).join(',');
+    for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
+      if (!db) continue;
+      try {
+        const rows = await db.prepare(
+          'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
+          'FROM chunks c JOIN works w ON w.id = c.work_id WHERE c.cid IN (' + ph + ')'
+        ).bind(...semIds).all();
+        for (const r of rows.results || []) byCid[r.cid] = r;
+      } catch (err) {
+        console.log(JSON.stringify({ event: 'merecat_semfetch_failed', error: String(err) }));
+      }
     }
+    for (const cid of semIds) add(byCid[cid], true); // keep Vectorize's order
   }
 
   // BM25 legs: one tier-weighted toward the primary works (the owner's
@@ -3418,7 +3423,7 @@ async function handleMerecatIngest(request, env) {
       'INSERT INTO works (id, title, url, tier, kind, hash, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6) ' +
       'ON CONFLICT(id) DO UPDATE SET title = ?2, url = ?3, tier = ?4, kind = ?5, hash = NULL, updated_at = ?6'
     ).bind(id, String(work.title || id), String(work.url || ''),
-      Math.min(7, Math.max(1, Number(work.tier) || 3)), String(work.kind || ''),
+      Math.min(9, Math.max(1, Number(work.tier) || 3)), String(work.kind || ''),
       Math.floor(Date.now() / 1000)).run();
     return json({ ok: true, began: id }, 200);
   }
