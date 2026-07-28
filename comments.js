@@ -189,7 +189,11 @@
     a.setAttribute('data-slug', m[1]);
     a.setAttribute('data-ch', m[2]);
     a.setAttribute('data-v1', m[3]);
-    a.setAttribute('data-v2', m[3]);
+    /* A range written in the link's own text ("1 Cor 6:9-10") previews whole,
+       as a plainly written reference would; the URL carries only the first
+       verse. The text's range must start at the URL's verse or the URL wins. */
+    var r = /:(\d+)\s*[-\u2013]\s*(\d+)\s*$/.exec(a.textContent || '');
+    a.setAttribute('data-v2', (r && r[1] === m[3]) ? r[2] : m[3]);
   }
 
   /* The base inline grammar; the scripture group (book=6, chapter=7, verse=8) is
