@@ -88,6 +88,12 @@ works:
       title: "The Deuterocanon (Apocrypha), from the Douay-Rheims" }
 
   # ---- Band 3: the named works of the Fathers, and the Catena ---------
+  # The rest of the Douay-Rheims, band 5 by design: the KJV (band 2) stays
+  # the quoting Scripture, but a DR-specific question finds Challoner's text
+  # directly. Exact complement of the apocrypha entry above, deep room.
+  douay-rheims:
+    { src: ../dr.json, url: douay-rheims.html, tier: 5, kind: bible-dr-proto, store: deep,
+      title: "The Holy Bible, Douay-Rheims Version (Challoner revision)" }
   commonitory:
     { src: ../commonitory.html, url: commonitory.html, tier: 3, kind: pandoc,
       title: "The Commonitory, by Vincent of Lerins" }

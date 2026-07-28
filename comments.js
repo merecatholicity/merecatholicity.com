@@ -621,6 +621,9 @@
   function quoteInto(c, excerpt, url) {
     var ta = section.querySelector('.comment-form .comment-text');
     if (!ta) return;
+    /* Quoting while previewing swaps back to the editor, so the quote is
+       seen to land. */
+    if (ta.mcPreview && ta.mcPreview.active) ta.mcPreview.off();
     var name = (c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous'))
       .replace(/[\[\]()\r\n]/g, '');
     var quoted = String(excerpt == null ? '' : excerpt).split('\n')
@@ -636,7 +639,7 @@
     if (addition.length > room) addition = addition.slice(0, room);
     ta.value = existing + addition;
     try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
-    ta.focus();
+    afterEdit(ta);
     ta.scrollIntoView({ block: 'center' });
   }
 
@@ -1182,15 +1185,104 @@
       '.scripture-tip{position:fixed;z-index:1200;max-width:30rem;max-height:60vh;overflow:auto;background:var(--surface,#fff);color:var(--ink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 3px 14px rgba(0,0,0,.22);padding:.55em .7em;font-size:.92rem;line-height:1.5;pointer-events:none}' +
       '.scripture-tip-ref{display:block;color:var(--maroon);margin-bottom:.25em}' +
       '.scripture-tip-v{color:var(--faint);font-size:.72em;margin-right:.1em}' +
+      /* Post preview: the composer swaps for the rendered body */
+      '.md-editor.md-previewing>:not(.md-preview){display:none}' +
+      '.md-preview{border:1px dashed var(--rule);border-radius:8px;padding:.55em .8em;min-height:5em}' +
+      '.md-preview-title{font-weight:700}' +
+      '.md-preview-empty{color:var(--faint);margin:0}' +
+      '.btn-preview{background:transparent;border-color:var(--maroon);color:var(--maroon);font:inherit;cursor:pointer}' +
+      '.btn-preview:hover{background:var(--maroon);color:#fff}' +
+      '.btn-preview:disabled{opacity:.6;cursor:default}' +
       '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em}}';
     var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
     document.head.appendChild(st);
   }
 
+  /* ---- Drafts. Whatever you type is kept in this browser's localStorage as
+     you type it, one slot per composer: this page's comment box, each board
+     category's new-topic form, each topic's reply box, each DM thread, each
+     post being edited. A crashed browser or a dead phone costs nothing, come
+     back and the words are where you left them. A slot is cleared when its
+     post lands (or its edit is cancelled), and any slot untouched for thirty
+     days is swept on the next visit. Purely client-side, the server never
+     sees a draft. ---- */
+  var DRAFT_NS = 'mc-draft:';
+  var DRAFT_KEEP_MS = 30 * 86400 * 1000;
+
+  function draftRead(ctx) {
+    try {
+      var d = JSON.parse(localStorage.getItem(DRAFT_NS + ctx));
+      return d && typeof d.body === 'string' ? d : null;
+    } catch (e) { return null; }
+  }
+
+  function draftClear(ctx) {
+    try { localStorage.removeItem(DRAFT_NS + ctx); } catch (e) {}
+  }
+
+  (function pruneDrafts() {
+    try {
+      var cut = Date.now() - DRAFT_KEEP_MS;
+      var dead = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(DRAFT_NS) !== 0) continue;
+        var d = null;
+        try { d = JSON.parse(localStorage.getItem(k)); } catch (e2) {}
+        if (!d || !(d.at > cut)) dead.push(k);
+      }
+      dead.forEach(function (k2) { localStorage.removeItem(k2); });
+    } catch (e) {}
+  })();
+
+  /* Wire a composer to its slot: restore on build, save as it changes (the
+     toolbar, pickers, and quote button all dispatch input like typing does),
+     flush when the tab is hidden or torn down. A successful post calls
+     ta.mcDraftDone(), which clears the slot and holds further saves until the
+     next real keystroke, so a teardown flush on the way to a redirect can
+     never resurrect what was just posted. With overwrite set (editing an
+     existing post), a differing draft wins over the prefilled body. */
+  function attachDraft(ta, ctx, titleInput, overwrite) {
+    var muted = false;
+    var timer = null;
+    var d = draftRead(ctx);
+    if (d) {
+      if (d.body && (overwrite ? d.body !== ta.value : !ta.value)) ta.value = d.body;
+      if (titleInput && d.title && !titleInput.value) titleInput.value = d.title;
+    }
+    function save() {
+      if (muted || !ta.isConnected) return;
+      var body = ta.value;
+      var title = titleInput ? titleInput.value : '';
+      try {
+        if (!body.trim() && !title.trim()) localStorage.removeItem(DRAFT_NS + ctx);
+        else localStorage.setItem(DRAFT_NS + ctx,
+          JSON.stringify({ body: body, title: title || undefined, at: Date.now() }));
+      } catch (e) {}
+    }
+    function later() { muted = false; clearTimeout(timer); timer = setTimeout(save, 400); }
+    ta.addEventListener('input', later);
+    ta.addEventListener('blur', save);
+    if (titleInput) {
+      titleInput.addEventListener('input', later);
+      titleInput.addEventListener('blur', save);
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') save();
+    });
+    addEventListener('pagehide', save);
+    ta.mcDraftDone = function () {
+      muted = true;
+      clearTimeout(timer);
+      draftClear(ctx);
+    };
+  }
+
   /* Wrap a compose textarea with a button row above,
      returning the wrapper to mount where the textarea would have gone. The
-     textarea itself is unchanged, so .comment-text lookups still resolve. */
-  function mdEditor(textarea) {
+     textarea itself is unchanged, so .comment-text lookups still resolve.
+     A topic form passes its title input too, so the preview can wear it. */
+  function mdEditor(textarea, titleInput) {
     var wrap = el('div', 'md-editor');
     var bar = el('div', 'md-toolbar');
     bar.appendChild(mdButton('B', 'Bold  **text**', 'md-b', function () { wrapSel(textarea, '**', '**'); }));
@@ -1206,9 +1298,62 @@
     wrap.appendChild(textarea);
     wrap.appendChild(panel);
     wrap.appendChild(scripture);
+    /* Preview rides the composer: the whole editor swaps for the post as it
+       will render, drawn by the same fillBody that draws every published
+       comment, and one click swaps back. The state lives on the textarea
+       because button rows are rebuilt whenever identity changes, so any
+       button made by previewButton binds here and is relabeled in place.
+       The value is untouched, posting works from either side. */
+    var pvBox = null;
+    var pvBtns = [];
+    textarea.mcPreview = {
+      active: false,
+      bind: function (btn) {
+        pvBtns.push(btn);
+        btn.textContent = this.active ? 'Edit' : 'Preview';
+      },
+      toggle: function () { this.set(!this.active); },
+      off: function () { this.set(false); },
+      set: function (on) {
+        if (on === this.active) return;
+        this.active = on;
+        if (on) {
+          panel.closePanel();
+          scripture.closePanel();
+          pvBox = el('div', 'comment-body md-preview');
+          if (textarea.value.trim()) fillBody(pvBox, textarea.value);
+          else pvBox.appendChild(el('p', 'md-preview-empty', 'Nothing to preview yet.'));
+          var t = titleInput ? titleInput.value.replace(/\s+/g, ' ').trim() : '';
+          if (t) pvBox.insertBefore(el('p', 'md-preview-title', t), pvBox.firstChild);
+          wrap.appendChild(pvBox);
+          wrap.classList.add('md-previewing');
+        } else {
+          if (pvBox) pvBox.remove();
+          pvBox = null;
+          wrap.classList.remove('md-previewing');
+          textarea.focus();
+        }
+        if (titleInput) titleInput.style.display = on ? 'none' : '';
+        pvBtns = pvBtns.filter(function (b) { return b.isConnected; });
+        pvBtns.forEach(function (b) { b.textContent = on ? 'Edit' : 'Preview'; });
+      }
+    };
     attachEmoji(textarea);
     textarea.addEventListener('focus', prefetchEmoji, { once: true });
     return wrap;
+  }
+
+  /* The Preview and back-to-Edit toggle that sits beside every Post button.
+     Rows rebuild when identity changes, so the label reads the live state
+     and bind keeps whichever button currently stands relabeled. */
+  function previewButton(ta) {
+    if (!ta || !ta.mcPreview) return null;
+    var btn = el('button', 'btn btn-preview', 'Preview');
+    btn.type = 'button';
+    btn.title = 'Read the post as it will look';
+    btn.addEventListener('click', function () { ta.mcPreview.toggle(); });
+    ta.mcPreview.bind(btn);
+    return btn;
   }
 
   function commentNode(c, pending, quoteCtx, reveal) {
@@ -1975,10 +2120,16 @@
 
   function post(asKeyed) {
     collectAltIps();
-    var textarea = section.querySelector('.comment-text');
+    /* Scoped to the form: an open edit box in the list also wears
+       .comment-text, and the first match must not win. */
+    var textarea = section.querySelector('.comment-form .comment-text');
     var status = section.querySelector('.form-status');
     var body = textarea.value.replace(/\s+$/, '');
-    if (!body.trim()) { textarea.focus(); return; }
+    if (!body.trim()) {
+      if (textarea.mcPreview) textarea.mcPreview.off();
+      textarea.focus();
+      return;
+    }
     var buttons = section.querySelectorAll('.comment-buttons button');
     buttons.forEach(function (b) { b.disabled = true; });
     status.textContent = 'Verifying...';
@@ -2007,6 +2158,8 @@
       list.appendChild(commentNode(d.comment, d.status === 'pending', { page: pagePath() }));
       try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
       textarea.value = '';
+      if (textarea.mcDraftDone) textarea.mcDraftDone();
+      if (textarea.mcPreview) textarea.mcPreview.off();
       setStatus('');
       status.textContent = d.status === 'pending'
         ? 'Held for review. It will appear once approved.'
@@ -4764,7 +4917,7 @@
     h3('What it knows');
     var pk = el('p');
     pk.appendChild(document.createTextNode(
-      'Only this site’s own published library, weighted by the owner’s ladder: the site’s works and their catechetical core first, then the King James Scriptures with the Deuterocanon carried from the Douay-Rheims, and the collected works of Newman entire set directly beneath them, the interpretive companion the site reads the Fathers with, then the named works of the Fathers with the Catena, the great Augustine and Athanasius singles, St. John of Damascus, and the ancient Liturgies, then the seven councils with the documents of the schism and the confessional standards of the communions this site engages in their own words, Trent beside Westminster, Luther beside Jewel, the Book of Concord entire, the Books of Common Prayer of 1559, 1662, and 1928 with the Thirty-Nine Articles, Guettée’s case against the papal claims, the Eastern Patriarchs’ replies to Rome of 1848 and 1895, and the Anglican orders controversy in both its voices, Apostolicae Curae beside Saepius Officio, and the deep shelf beneath all, the complete Schaff library with his History of the Christian Church and Creeds of Christendom beside the Summa, Hooker’s Laws of Ecclesiastical Polity, Calvin’s Institutes, Luther’s Bondage of the Will, Keble and Andrewes for the devotional life, the modern apologetics of Chesterton and Gibbons, and beneath everything, weighted at the very bottom and kept in a second database of its own, the Roman world for background: Gibbon entire in Bury’s edition, Cassius Dio, Tacitus, Suetonius, Ammianus, Zosimus, and Bury’s Later Roman Empire. When the librarian steelmans Rome, Orthodoxy, the Reformation, or the free churches, it can quote their own standards, not a paraphrase. A few works on the shelf are under copyright and are not hosted here: the librarian knows them, quotes them briefly with attribution, and their citation links go to where the book can be bought. The shelf is still growing, and the librarian’s index is refreshed as new works land, so the counts below are live.' +
+      'Only this site’s own published library, weighted by the owner’s ladder: the site’s works and their catechetical core first, then the King James Scriptures with the Deuterocanon carried from the Douay-Rheims, and the collected works of Newman entire set directly beneath them, the interpretive companion the site reads the Fathers with, then the named works of the Fathers with the Catena, the great Augustine and Athanasius singles, St. John of Damascus, and the ancient Liturgies, then the seven councils with the documents of the schism and the confessional standards of the communions this site engages in their own words, Trent beside Westminster, Luther beside Jewel, the Book of Concord entire, the Books of Common Prayer of 1559, 1662, and 1928 with the Thirty-Nine Articles, Guettée’s case against the papal claims, the Eastern Patriarchs’ replies to Rome of 1848 and 1895, and the Anglican orders controversy in both its voices, Apostolicae Curae beside Saepius Officio, and the deep shelf beneath all, the complete Schaff library with his History of the Christian Church and Creeds of Christendom beside the Summa, the whole Douay-Rheims for the Vulgate tradition’s rendering, Hooker’s Laws of Ecclesiastical Polity, Calvin’s Institutes, Luther’s Bondage of the Will, Keble and Andrewes for the devotional life, the modern apologetics of Chesterton and Gibbons, and beneath everything, weighted at the very bottom and kept in a second database of its own, the Roman world for background: Gibbon entire in Bury’s edition, Cassius Dio, Tacitus, Suetonius, Ammianus, Zosimus, and Bury’s Later Roman Empire. When the librarian steelmans Rome, Orthodoxy, the Reformation, or the free churches, it can quote their own standards, not a paraphrase. A few works on the shelf are under copyright and are not hosted here: the librarian knows them, quotes them briefly with attribution, and their citation links go to where the book can be bought. The shelf is still growing, and the librarian’s index is refreshed as new works land, so the counts below are live.' +
       (d ? ' Right now that is ' + d.chunks.toLocaleString() + ' indexed passages across ' + d.works.length + ' works. ' : ' ')));
     var libA = el('a', 'body-link', 'The Library');
     libA.href = 'library.html';
