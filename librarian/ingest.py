@@ -558,8 +558,8 @@ def main():
         return
 
     for wid, entry in manifest.items():
-        if entry.get("vectorize") and str(entry.get("store", "")) == "deep":
-            sys.exit(f"{wid}: vectorize with store: deep — the semantic leg "
+        if entry.get("vectorize") and str(entry.get("store", "")):
+            sys.exit(f"{wid}: vectorize with a store flag — the semantic leg "
                      "reads chunks from room one only, so a vectorized work "
                      "must stay out of the deep room")
 
@@ -585,9 +585,12 @@ def main():
     # full room recovers as soon as the works move out
     db_mb = roster.get("text_bytes", 0) * 2.09 / 1e6
     deep_mb = roster.get("text_bytes_deep", 0) * 2.09 / 1e6
-    print(f"database projection: room one ~{db_mb:.0f} MB of 500, deep room ~{deep_mb:.0f} MB of 500"
+    deep2_mb = roster.get("text_bytes_deep2", 0) * 2.09 / 1e6
+    print(f"database projection: room one ~{db_mb:.0f} MB, deep ~{deep_mb:.0f} MB, "
+          f"deep2 ~{deep2_mb:.0f} MB (caps 500 each)"
           + ("  << ROOM ONE NEARING ITS CAP" if db_mb > 450 else "")
-          + ("  << DEEP ROOM NEARING ITS CAP" if deep_mb > 450 else ""))
+          + ("  << DEEP ROOM NEARING ITS CAP" if deep_mb > 450 else "")
+          + ("  << DEEP2 NEARING ITS CAP" if deep2_mb > 450 else ""))
 
     # Prune works that left the manifest (only on unfiltered runs, so a
     # --only/--tiers pass never mistakes filtering for removal).

@@ -35,10 +35,18 @@
     {
       // The deep room: bottom-band corpora (the Roman world and whatever
       // outgrows the first database). Same schema, same derived-data rules;
-      // retrieval searches both rooms and merges, weights riding each work.
+      // retrieval searches all rooms and merges, weights riding each work.
       "binding": "LIBDB2",
       "database_name": "merecat-library-deep",
       "database_id": "a75f874a-7922-426c-be74-c479f268006e"
+    },
+    {
+      // The third room, opened when the deep room hit its 500 MB wall:
+      // the Latin & Greek classics and the Indo-European shelf live here
+      // (works.yml `store: deep2`). Same schema, same derived-data rules.
+      "binding": "LIBDB3",
+      "database_name": "merecat-library-deep2",
+      "database_id": "98e30c6d-dacf-4c6b-8417-ee6ad176c9a2"
     }
   ],
   "vectorize": [
