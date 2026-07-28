@@ -1090,10 +1090,16 @@
         }
       }
       tip.style.left = Math.max(6, Math.min(r.left, window.innerWidth - tip.offsetWidth - 10)) + 'px';
+      /* Below the fragment if it fits, above if not, and always clamped into
+         the viewport: a tall tip near the top edge once fled off-screen. The
+         tip scrolls internally and ignores the pointer, so overlap is safe. */
       var below = r.bottom + 8;
-      if (below + tip.offsetHeight > window.innerHeight && r.top - tip.offsetHeight - 8 > 0)
-        tip.style.top = (r.top - tip.offsetHeight - 8) + 'px';
-      else tip.style.top = below + 'px';
+      var top = below;
+      if (below + tip.offsetHeight > window.innerHeight) {
+        var above = r.top - tip.offsetHeight - 8;
+        top = above > 6 ? above : Math.max(6, window.innerHeight - tip.offsetHeight - 6);
+      }
+      tip.style.top = top + 'px';
     }
     function show(a, ex, ey) {
       var dr = a.getAttribute('data-bible') === 'dr';
