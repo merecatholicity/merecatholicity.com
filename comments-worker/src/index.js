@@ -3737,14 +3737,14 @@ async function handleMerecatForward(request, env) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const own = await LIB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
+  const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
     .bind(chatId, me).first();
   if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
   const msg = data.msg === 'last'
-    ? await LIB.prepare(
+    ? await env.LIBDB.prepare(
         "SELECT id, body, sources FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' ORDER BY id DESC LIMIT 1"
       ).bind(chatId).first()
-    : await LIB.prepare(
+    : await env.LIBDB.prepare(
         "SELECT id, body, sources FROM chat_msgs WHERE id = ?1 AND chat_id = ?2 AND role = 'assistant'"
       ).bind(Number(data.msg), chatId).first();
   if (!msg) return json({ ok: false, error: 'No such answer in that conversation.' }, 404);
@@ -3754,7 +3754,7 @@ async function handleMerecatForward(request, env) {
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   if (topic.locked) return json({ ok: false, error: 'That topic is locked.' }, 403);
 
-  const q = await LIB.prepare(
+  const q = await env.LIBDB.prepare(
     "SELECT body FROM chat_msgs WHERE chat_id = ?1 AND role = 'user' AND id < ?2 ORDER BY id DESC LIMIT 1"
   ).bind(chatId, msg.id).first();
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(me).first();
@@ -3796,7 +3796,7 @@ async function handleMerecatUsage(request, env) {
   const cfg = await merecatConfig(env);
   const day = merecatDay();
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
-  const u = await LIB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+  const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
     .bind(day, me).first();
   return json({
     ok: true,

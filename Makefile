@@ -9,7 +9,17 @@ build: pdf html logos publish check
 # Fail loudly if any page links at a file or anchor that does not exist.
 # Runs at the end of 'build' and 'html' so a missing output (a PDF stanza
 # added but never built, a typo'd href) can never ship silently again.
-check:
+# Static guard over the hand-maintained JS (worker + client): an undefined
+# identifier once shipped in the worker and silenced @merecat mentions for
+# days. eslint no-undef catches that class; deno runs it with no npm setup.
+jscheck:
+	deno run -A npm:eslint comments-worker/src/index.js comments.js nav.js deeplink.js flash.js contact.js bible-reader.js
+
+# The only sanctioned way to deploy the comments worker: the guard runs first.
+worker-deploy: jscheck
+	cd comments-worker && deno run -A npm:wrangler deploy
+
+check: jscheck
 	python linkcheck.py
 
 pdf:
