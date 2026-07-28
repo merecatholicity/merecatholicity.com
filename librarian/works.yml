@@ -497,37 +497,37 @@ works:
   # Hahn, Pitre, and Marshall are side voices, their papal maximalism not
   # defended. ----
   wright-resurrection:
-    { src: private/scholars/wright-resurrection.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/wright-resurrection.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "The Resurrection of the Son of God, by N. T. Wright (Christian Origins, vol. 3)" }
   wright-jesus-victory:
-    { src: private/scholars/wright-jesus-victory.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/wright-jesus-victory.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "Jesus and the Victory of God, by N. T. Wright (Christian Origins, vol. 2)" }
   wright-paul-faithfulness:
-    { src: private/scholars/wright-paul-faithfulness.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/wright-paul-faithfulness.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "Paul and the Faithfulness of God, by N. T. Wright (Christian Origins, vol. 4)" }
   sanders-paul:
-    { src: private/scholars/sanders-paul.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/sanders-paul.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "Paul and Palestinian Judaism, by E. P. Sanders" }
   fitzmyer-romans:
-    { src: private/scholars/fitzmyer-romans.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/fitzmyer-romans.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "Romans, by Joseph A. Fitzmyer (Anchor Yale Bible 33)" }
   beale-revelation:
-    { src: private/scholars/beale-revelation.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/beale-revelation.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "The Book of Revelation (NIGTC), by G. K. Beale" }
   hahn-kinship:
-    { src: private/scholars/hahn-kinship.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/hahn-kinship.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "Kinship by Covenant, by Scott W. Hahn" }
   pitre-covenant-jew:
-    { src: private/scholars/pitre-covenant-jew.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/pitre-covenant-jew.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "Paul, a New Covenant Jew, by Brant Pitre, John A. Kincaid, and Michael P. Barber" }
   marshall-crucified-rabbi:
-    { src: private/scholars/marshall-crucified-rabbi.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/marshall-crucified-rabbi.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "The Crucified Rabbi, by Taylor Marshall" }
   marshall-paul:
-    { src: private/scholars/marshall-paul.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/marshall-paul.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "A Catholic Perspective on Paul, by Taylor Marshall" }
   marshall-eternal-city:
-    { src: private/scholars/marshall-eternal-city.txt, url: "", tier: 9, kind: text, store: deep,
+    { src: private/scholars/marshall-eternal-city.txt, url: "", tier: 9, kind: text, store: deep2,
       title: "The Eternal City: Rome and the Origins of Catholic Christianity, by Taylor Marshall" }
 
   # ---- Band 8: the worldview shelf. Private (librarian/private/, never
@@ -539,79 +539,79 @@ works:
   # by the owner's word these works are NOT listed on the transparency
   # panel, and the /about roster omits url-less works for that reason. ----
   fisheaters-liturgical-year:
-    { src: private/worldview/fisheaters-liturgical-year.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-liturgical-year.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Customs of the Liturgical Year (Fish Eaters)" }
   fisheaters-liturgy-sacraments:
-    { src: private/worldview/fisheaters-liturgy-sacraments.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-liturgy-sacraments.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Liturgy and the Sacraments (Fish Eaters)" }
   fisheaters-morality-social:
-    { src: private/worldview/fisheaters-morality-social.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-morality-social.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Morality and the Social Order (Fish Eaters)" }
   fisheaters-astronomy-zodiac:
-    { src: private/worldview/fisheaters-astronomy-zodiac.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-astronomy-zodiac.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Christian Astronomy and the Zodiac (Fish Eaters)" }
   fisheaters-jewish-question:
-    { src: private/worldview/fisheaters-jewish-question.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-jewish-question.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Jewish Question, a traditional Catholic reader (Fish Eaters)" }
   fisheaters-crusades:
-    { src: private/worldview/fisheaters-crusades.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-crusades.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Crusades (Fish Eaters)" }
   fisheaters-inquisition:
-    { src: private/worldview/fisheaters-inquisition.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-inquisition.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Spanish Inquisition (Fish Eaters)" }
   fisheaters-solafide:
-    { src: private/worldview/fisheaters-solafide.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-solafide.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "On Sola Fide (Fish Eaters)" }
   fisheaters-solascriptura:
-    { src: private/worldview/fisheaters-solascriptura.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fisheaters-solascriptura.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "On Sola Scriptura (Fish Eaters)" }
   indo-european-research:
-    { src: private/worldview/indo-european-research.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/indo-european-research.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Misc indo european catholic christianity research" }
   fahey-mystical-body:
-    { src: private/worldview/fahey-mystical-body.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fahey-mystical-body.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Mystical Body of Christ in the Modern World, by Fr. Denis Fahey" }
   fahey-kingship-naturalism:
-    { src: private/worldview/fahey-kingship-naturalism.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fahey-kingship-naturalism.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Kingship of Christ and Organized Naturalism, by Fr. Denis Fahey" }
   fahey-kingship-jewish:
-    { src: private/worldview/fahey-kingship-jewish.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fahey-kingship-jewish.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Kingship of Christ and the Conversion of the Jewish Nation, by Fr. Denis Fahey" }
   fahey-money-manip:
-    { src: private/worldview/fahey-money-manip.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fahey-money-manip.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Money Manipulation and Social Order, by Fr. Denis Fahey" }
   fahey-rulers-russ:
-    { src: private/worldview/fahey-rulers-russ.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fahey-rulers-russ.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Rulers of Russia, by Fr. Denis Fahey" }
   fahey-secret-societies:
-    { src: private/worldview/fahey-secret-societies.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/fahey-secret-societies.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Secret Societies and the Kingship of Christ, by Fr. Denis Fahey" }
   copleston-history-philosophy:
-    { src: private/worldview/copleston-history-philosophy.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/copleston-history-philosophy.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "A History of Philosophy, by Frederick Copleston, S.J." }
   ripperger-mental-health:
-    { src: private/worldview/ripperger-mental-health.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/ripperger-mental-health.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Introduction to the Science of Mental Health, by Fr. Chad Ripperger" }
   wsmith-cosmos-transcendence:
-    { src: private/worldview/wsmith-cosmos-transcendence.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/wsmith-cosmos-transcendence.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Cosmos and Transcendence, by Wolfgang Smith" }
   wsmith-quantum-enigma:
-    { src: private/worldview/wsmith-quantum-enigma.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/wsmith-quantum-enigma.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "The Quantum Enigma, by Wolfgang Smith" }
   wsmith-science-myth:
-    { src: private/worldview/wsmith-science-myth.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/wsmith-science-myth.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Science and Myth, by Wolfgang Smith" }
   wsmith-hawking:
-    { src: private/worldview/wsmith-hawking.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/wsmith-hawking.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Response to Stephen Hawking's Physics-as-Philosophy, by Wolfgang Smith" }
   woods-built-western-civ:
-    { src: private/worldview/woods-built-western-civ.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/woods-built-western-civ.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "How the Catholic Church Built Western Civilization, by Thomas E. Woods" }
   marshall-aquinas-50:
-    { src: private/worldview/marshall-aquinas-50.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/marshall-aquinas-50.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Thomas Aquinas in 50 Pages, by Taylor Marshall" }
   adler-aristotle:
-    { src: private/worldview/adler-aristotle.txt, url: "", tier: 8, kind: text, store: deep,
+    { src: private/worldview/adler-aristotle.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Aristotle for Everybody, by Mortimer J. Adler (summary)" }
 
   # ---- Band 7: the Roman world, for background — the very bottom of
