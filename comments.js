@@ -1517,20 +1517,31 @@
     ta.rows = 5;
     ta.value = c.body;
     editor.appendChild(mdEditor(ta));
+    /* An edit keeps a draft too, keyed to the comment, and a saved draft that
+       differs from the live body wins over the prefill: the crashed half-edit
+       is the newer work. */
+    attachDraft(ta, 'edit:' + c.id, null, true);
     var row = el('div', 'comment-buttons');
     var save = el('button', 'btn btn-send key-copy', 'Save');
     save.type = 'button';
     row.appendChild(save);
+    var pv = previewButton(ta);
+    if (pv) row.appendChild(pv);
     editor.appendChild(row);
     var note = el('div', 'comment-note');
     editor.appendChild(note);
     editor.appendChild(identityAction('Cancel', function () {
+      if (ta.mcDraftDone) ta.mcDraftDone();
       editor.remove();
       bodyDiv.hidden = false;
     }));
     save.addEventListener('click', function () {
       var newBody = ta.value.replace(/\s+$/, '');
-      if (!newBody.trim()) { ta.focus(); return; }
+      if (!newBody.trim()) {
+        if (ta.mcPreview) ta.mcPreview.off();
+        ta.focus();
+        return;
+      }
       save.disabled = true;
       note.textContent = 'Saving...';
       fetchRetry(API + '/edit', {
@@ -1544,6 +1555,7 @@
           try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
           c.body = newBody;
           c.edited_at = d.edited_at;
+          if (ta.mcDraftDone) ta.mcDraftDone();
           editor.remove();
           fillBody(bodyDiv, newBody);
           bodyDiv.hidden = false;
@@ -2197,6 +2209,8 @@
       }
       row.appendChild(button);
     }
+    var pv = previewButton(section.querySelector('.comment-form .comment-text'));
+    if (pv) row.appendChild(pv);
   }
 
   /* ---- The Catholicity Board ---- */
@@ -2224,8 +2238,9 @@
     var keyBox = el('div', 'key-box');
     keyBox.hidden = true;
     form.appendChild(keyBox);
+    var title = null;
     if (withTitle) {
-      var title = el('input', 'board-title');
+      title = el('input', 'board-title');
       title.type = 'text';
       title.maxLength = 120;
       title.placeholder = 'Topic title';
@@ -2235,7 +2250,7 @@
     textarea.maxLength = 4000;
     textarea.rows = 5;
     textarea.placeholder = 'Say what you want to say.';
-    form.appendChild(mdEditor(textarea));
+    form.appendChild(mdEditor(textarea, title));
     var hp = el('input', 'hp');
     hp.type = 'text';
     hp.name = 'website';
@@ -2266,6 +2281,8 @@
       button.title = 'Create an identity first. One click, above the box.';
     }
     row.appendChild(button);
+    var pv = previewButton(section.querySelector('.comment-form .comment-text'));
+    if (pv) row.appendChild(pv);
   }
 
   function boardPost(payload, onSuccess) {
@@ -2548,16 +2565,21 @@
     section.appendChild(list);
     buildBoardForm(true, 'Start a topic');
     boardButtons('Post topic', function () {
-      var title = section.querySelector('.board-title').value.replace(/\s+/g, ' ').trim();
-      var body = section.querySelector('.comment-text').value.replace(/\s+$/, '');
+      var ta = section.querySelector('.comment-form .comment-text');
+      var titleBox = section.querySelector('.comment-form .board-title');
+      var title = titleBox.value.replace(/\s+/g, ' ').trim();
+      var body = ta.value.replace(/\s+$/, '');
       var status = section.querySelector('.form-status');
-      if (title.length < 3) { section.querySelector('.board-title').focus(); return; }
-      if (!body.trim()) { section.querySelector('.comment-text').focus(); return; }
+      if (ta.mcPreview && (title.length < 3 || !body.trim())) ta.mcPreview.off();
+      if (title.length < 3) { titleBox.focus(); return; }
+      if (!body.trim()) { ta.focus(); return; }
       boardPost({ cat: key, title: title, body: body }, function (d) {
+        if (ta.mcDraftDone) ta.mcDraftDone();
         if (d.status === 'pending') {
           status.textContent = 'Held for review. It will appear once approved.';
-          section.querySelector('.board-title').value = '';
-          section.querySelector('.comment-text').value = '';
+          titleBox.value = '';
+          ta.value = '';
+          if (ta.mcPreview) ta.mcPreview.off();
         } else {
           location.href = 'community.html?topic=' + d.comment.id;
         }
@@ -2565,6 +2587,8 @@
     });
     armBoardForm();
     attachMentions(section.querySelector('.comment-form .comment-text'));
+    attachDraft(section.querySelector('.comment-form .comment-text'), 'topic:' + key,
+      section.querySelector('.comment-form .board-title'));
     fetchRetry(API + '/board/cat?cat=' + key + '&p=' + pageNum + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -2697,11 +2721,18 @@
         }
         buildBoardForm(false, 'Reply');
         boardButtons('Reply', function () {
-          var body = section.querySelector('.comment-text').value.replace(/\s+$/, '');
+          var ta = section.querySelector('.comment-form .comment-text');
+          var body = ta.value.replace(/\s+$/, '');
           var status = section.querySelector('.form-status');
-          if (!body.trim()) { section.querySelector('.comment-text').focus(); return; }
+          if (!body.trim()) {
+            if (ta.mcPreview) ta.mcPreview.off();
+            ta.focus();
+            return;
+          }
           boardPost({ topic: id, body: body }, function (d2) {
-            section.querySelector('.comment-text').value = '';
+            ta.value = '';
+            if (ta.mcDraftDone) ta.mcDraftDone();
+            if (ta.mcPreview) ta.mcPreview.off();
             if (d2.status === 'pending') {
               status.textContent = 'Held for review. It will appear once approved.';
               return;
@@ -2723,6 +2754,7 @@
         });
         armBoardForm();
         attachMentions(section.querySelector('.comment-form .comment-text'));
+        attachDraft(section.querySelector('.comment-form .comment-text'), 'reply:' + id);
         if (/^#comment-\d+$/.test(location.hash)) {
           var target = document.getElementById(location.hash.slice(1));
           if (target) target.scrollIntoView();
@@ -3727,7 +3759,7 @@
         pendingMentions.push({ hash: u.hash, token: token });
       }
       current = []; at = -1; sug.hidden = true;
-      textarea.focus();
+      afterEdit(textarea);
     }
     textarea.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(scan, 120); });
     textarea.addEventListener('keydown', function (e) {
@@ -4050,11 +4082,14 @@
         ta.rows = 3;
         ta.placeholder = 'Write your message.';
         form.appendChild(mdEditor(ta));
+        attachDraft(ta, 'dm:' + other);
         form.appendChild(el('div', 'ts-slot'));
         var btnRow = el('div', 'comment-buttons');
         var send = el('button', 'btn btn-send', 'Send');
         send.type = 'button';
         btnRow.appendChild(send);
+        var pv = previewButton(ta);
+        if (pv) btnRow.appendChild(pv);
         form.appendChild(btnRow);
         var status = el('p', 'form-status');
         form.appendChild(status);
@@ -4062,7 +4097,11 @@
         loadTurnstile();
         send.addEventListener('click', function () {
           var body = ta.value.replace(/\s+$/, '');
-          if (!body.trim()) { ta.focus(); return; }
+          if (!body.trim()) {
+            if (ta.mcPreview) ta.mcPreview.off();
+            ta.focus();
+            return;
+          }
           send.disabled = true;
           status.textContent = 'Verifying...';
           getToken().then(function (token) {
@@ -4077,6 +4116,8 @@
             if (blockedOut(d2)) return;
             if (!d2.ok) throw new Error(d2.error || 'The message could not be sent.');
             ta.value = '';
+            if (ta.mcDraftDone) ta.mcDraftDone();
+            if (ta.mcPreview) ta.mcPreview.off();
             /* Newest message lands at the bottom of the last page. Show it
                inline when that page is on screen; else jump to it. */
             var msgPage = Math.ceil((d.total + 1) / d.per);
@@ -5062,6 +5103,7 @@
     textarea.rows = 5;
     textarea.placeholder = 'Say what you want to say.';
     form.appendChild(mdEditor(textarea));
+    attachDraft(textarea, 'page:' + pagePath());
     var hp = el('input', 'hp');
     hp.type = 'text';
     hp.name = 'website';
