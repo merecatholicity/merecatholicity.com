@@ -565,6 +565,9 @@ works:
   fisheaters-solascriptura:
     { src: private/worldview/fisheaters-solascriptura.txt, url: "", tier: 8, kind: text, store: deep,
       title: "On Sola Scriptura (Fish Eaters)" }
+  indo-european-research:
+    { src: private/worldview/indo-european-research.txt, url: "", tier: 8, kind: text, store: deep,
+      title: "Misc indo european catholic christianity research" }
   fahey-mystical-body:
     { src: private/worldview/fahey-mystical-body.txt, url: "", tier: 8, kind: text, store: deep,
       title: "The Mystical Body of Christ in the Modern World, by Fr. Denis Fahey" }
