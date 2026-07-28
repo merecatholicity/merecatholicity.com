@@ -5005,7 +5005,7 @@
         7: 'The Roman world, for background',
       };
       [1, 2, 6, 3, 4, 5, 7].forEach(function (t) {
-        var rows = d.works.filter(function (w) { return w.tier === t; });
+        var rows = d.works.filter(function (w) { return w.tier === t && w.url; });
         if (!rows.length) return;
         shelf.appendChild(el('p', null, tiers[t]));
         var ul = el('ul');
@@ -5019,6 +5019,21 @@
         });
         shelf.appendChild(ul);
       });
+      /* The private shelves: known to the librarian, not served on the site,
+         so a plain title is the whole entry. Scholars first, then worldview. */
+      var priv = d.works.filter(function (w) { return !w.url; });
+      if (priv.length) {
+        shelf.appendChild(el('p', null, 'Additional works available to merecat that are not served in our Library:'));
+        priv.sort(function (a, b) {
+          if (a.tier !== b.tier) return a.tier === 9 ? -1 : b.tier === 9 ? 1 : a.tier - b.tier;
+          return a.title < b.title ? -1 : 1;
+        });
+        var pul = el('ul');
+        priv.forEach(function (w) {
+          pul.appendChild(el('li', null, w.title + ' · ' + (w.chunks || 0).toLocaleString() + ' passages'));
+        });
+        shelf.appendChild(pul);
+      }
       node.appendChild(shelf);
     }
 

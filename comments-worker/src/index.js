@@ -3825,15 +3825,16 @@ async function handleMerecatAbout(request, env) {
   const works = await env.LIBDB.prepare(
     'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title'
   ).all();
-  // url-less works are the private shelf: present in retrieval, absent from
-  // the public roster by the owner's standing word
-  const list = (works.results || []).filter((w) => w.url);
+  // url-less works are the private shelves; the panel lists them under an
+  // "additional works" heading with no links (the owner's standing word,
+  // reversed 2026-07-28 from the earlier omission rule)
+  const list = works.results || [];
   for (const db of [env.LIBDB2, env.LIBDB3]) {
     if (!db) continue;
     try {
       const deep = await db.prepare(
         'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title').all();
-      for (const r of deep.results || []) if (r.url) list.push(r);
+      for (const r of deep.results || []) list.push(r);
     } catch (err) {
       console.log(JSON.stringify({ event: 'merecat_about2_failed', error: String(err) }));
     }
