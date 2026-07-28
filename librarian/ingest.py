@@ -346,16 +346,23 @@ DEUTERO_BOOKS = {"tobias", "judith", "wisdom", "ecclesiasticus", "baruch",
 DEUTERO_CHAPTERS = {"daniel": {3, 13, 14}, "esther": set(range(10, 17))}
 
 
-def build_bible(path, deutero=False):
+def build_bible(path, deutero=False, proto=False):
+    # deutero: only the books/chapters the KJV lacks. proto: the exact
+    # complement, so the two DR works are disjoint and union to the whole.
     data = json.load(open(path, encoding="utf-8"))
     chunks = []
     for book in data["books"]:
         if deutero and book["slug"] not in DEUTERO_BOOKS \
                 and book["slug"] not in DEUTERO_CHAPTERS:
             continue
+        if proto and book["slug"] in DEUTERO_BOOKS:
+            continue
         only = DEUTERO_CHAPTERS.get(book["slug"]) if deutero else None
+        skip = DEUTERO_CHAPTERS.get(book["slug"]) if proto else None
         for ci, verses in enumerate(book["chapters"], 1):
             if only is not None and ci not in only:
+                continue
+            if skip is not None and ci in skip:
                 continue
             paras = []
             for vi, text in enumerate(verses, 1):
@@ -407,6 +414,8 @@ def build(entry):
         chunks, valid = build_bible(path)
     elif kind == "bible-deutero":
         chunks, valid = build_bible(path, deutero=True)
+    elif kind == "bible-dr-proto":
+        chunks, valid = build_bible(path, proto=True)
     elif kind == "text":
         chunks, valid = build_text(path, entry["title"])
     else:
@@ -435,8 +444,7 @@ def audit_library(manifest):
     # (the KJV chunks from kjv.json but the shelf links kjv.html), so both count
     have = {os.path.basename(e["src"]) for e in manifest.values()}
     have |= {os.path.basename(e["url"]) for e in manifest.values()}
-    ignored = {"douay-rheims.html"}   # deliberately excluded: the KJV serves
-    missing = sorted(hrefs - have - ignored)
+    missing = sorted(hrefs - have)
     if missing:
         print(f"\nNOTE: library.html lists {len(missing)} work(s) absent from works.yml:")
         for h in missing:
