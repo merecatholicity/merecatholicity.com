@@ -39,10 +39,12 @@ catalog; `config.yml` explains the trade if you want a bigger one.
 
 Works you cannot host still become part of the librarian's knowledge:
 
-1. Put the text as plain `.txt` or `.md` into `librarian/private/` — the
-   directory is git-ignored and never served, so the text exists only on
-   your machine and inside the retrieval database, where it surfaces as
-   brief quoted excerpts with attribution. Lines starting `#`, `##`, or
+1. Put the text as plain `.txt` or `.md` into `librarian/private/` — a
+   submodule of the PRIVATE repo `merecatholicity/private-shelf`, never
+   served and never carried by the public repo (which records only a
+   commit pointer), so the text lives in your private repo and inside the
+   retrieval database, where it surfaces as brief quoted excerpts with
+   attribution. Commit and push inside `librarian/private/` after adding. Lines starting `#`, `##`, or
    `###` become chapter labels for better retrieval.
 2. Add a works.yml entry whose `url` is the purchase link:
 
