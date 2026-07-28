@@ -4492,29 +4492,6 @@
     intro.appendChild(ib);
     section.appendChild(intro);
 
-    /* Full disclosure, one toggle away: how the bot is assembled, what is on
-       its shelf right now, exactly how it is biased (the standing
-       instructions shown verbatim), what it remembers, and today's usage.
-       The live facts load from /about on first open. */
-    var about = el('details', 'merecat-about');
-    about.appendChild(el('summary', null,
-      'How merecat works: what it knows, how it is biased, and what it remembers'));
-    var aBody = el('div', 'merecat-about-body');
-    about.appendChild(aBody);
-    var aboutLoaded = false;
-    about.addEventListener('toggle', function () {
-      if (!about.open || aboutLoaded) return;
-      aboutLoaded = true;
-      aBody.textContent = 'Fetching the full account…';
-      fetch(MERECAT_API + '/about', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key }),
-      }).then(function (r) { return r.json(); })
-        .then(function (d) { renderMerecatAbout(aBody, d && d.ok ? d : null); })
-        .catch(function () { renderMerecatAbout(aBody, null); });
-    });
-    section.appendChild(about);
 
     /* Saved conversations, the DM idiom: each thread keeps for thirty days
        from its last message, owner-keyed, deletable at once. Arriving with
@@ -4969,106 +4946,6 @@
   /* The transparency panel's content. Live numbers (the shelf, the counts,
      the persona) come from /about; when that fetch fails the account still
      renders, minus the live parts. Everything is plain createElement. */
-  function renderMerecatAbout(node, d) {
-    node.textContent = '';
-    function h3(t) { node.appendChild(el('h3', null, t)); }
-    function p(t) { node.appendChild(el('p', null, t)); }
-
-    h3('What this is');
-    p('merecat is a research tool for digging through this site’s Library, not an oracle. Every question runs the same way: the librarian searches the shelf, gathers the ' +
-      (d ? d.topk : 'eight') + ' most relevant passages, and hands them to a language model with standing instructions to answer from them and to cite them. Every work it cites is self-hosted here, and the whole shelf is anchored deep: every Bible verse and every father, book, chapter, section, and paragraph of the corpus has its own address, so a citation does not just name a work, it lands you very close to the exact place. The numbered links under each answer are the passages the answer actually stands on, few for a simple question and as many as a broad one genuinely needs, chosen from everything the librarian read. When the shelf does not cover a question it is instructed to say so and to label what follows as general knowledge.');
-    p('The model is ' + (d ? d.model : 'an open-weights model') +
-      ', running on Cloudflare Workers AI, the same service that runs this board’s own machinery. Your question is processed there and nowhere else, and the librarian can still err, which is why every answer carries its sources: check them. Treat merecat as a fast index to the shelf, not as the shelf itself.');
-    p('You can also summon the librarian in public: write @merecat in a forum post or an article-page comment and it answers right there in the thread, briefed on the page, the recent conversation, and your comment. A mention spends one of your daily questions like any question here would.');
-
-    h3('What it knows');
-    var pk = el('p');
-    pk.appendChild(document.createTextNode(
-      'Only this site’s own published library, weighted by the owner’s ladder: the site’s works and their catechetical core first, then the King James Scriptures with the Deuterocanon carried from the Douay-Rheims, and the collected works of Newman entire set directly beneath them, the interpretive companion the site reads the Fathers with, then the named works of the Fathers with the Catena, the great Augustine and Athanasius singles, St. John of Damascus, and the ancient Liturgies, then the seven councils with the documents of the schism and the confessional standards of the communions this site engages in their own words, Trent beside Westminster, Luther beside Jewel, the Book of Concord entire, the Books of Common Prayer of 1559, 1662, and 1928 with the Thirty-Nine Articles, Guettée’s case against the papal claims, the Eastern Patriarchs’ replies to Rome of 1848 and 1895, and the Anglican orders controversy in both its voices, Apostolicae Curae beside Saepius Officio, and the deep shelf beneath all, the complete Schaff library with his History of the Christian Church and Creeds of Christendom beside the Summa, the whole Douay-Rheims for the Vulgate tradition’s rendering, Hooker’s Laws of Ecclesiastical Polity, Calvin’s Institutes, Luther’s Bondage of the Will, Keble and Andrewes for the devotional life, the modern apologetics of Chesterton and Gibbons, and beneath everything, weighted at the very bottom and kept in a second database of its own, the Roman world for background: Gibbon entire in Bury’s edition, Cassius Dio, Tacitus, Suetonius, Ammianus, Zosimus, and Bury’s Later Roman Empire, with the Latin and Greek classics and the Indo-European inheritance beside them in a room of their own, Homer to Boethius through Herodotus, Thucydides, Plato, Aristotle, Cicero, Virgil, and the Stoics, with the Rig Veda, the Eddas, and Beowulf behind them. Above that bottom shelf stands the Second Temple, Josephus and Philo entire with Enoch, Jubilees, and the Testaments of the Twelve Patriarchs, the Judaism the New Testament speaks into, heard in its own books. When the librarian steelmans Rome, Orthodoxy, the Reformation, or the free churches, it can quote their own standards, not a paraphrase. A few works on the shelf are under copyright and are not hosted here: the librarian knows them, quotes them briefly with attribution, and where a purchase link exists it rides the citation. Two whole shelves are private in this way and listed at the end of the full roster below: a worldview shelf of traditional Catholic writing that forms the librarian’s outlook on history, other religions, the moral and social order, philosophy, and science, and a scholars’ shelf of modern research authorities on Paul, Second Temple Judaism, Romans, and the Book of Revelation. The shelf is still growing, and the librarian’s index is refreshed as new works land, so the counts below are live.' +
-      (d ? ' Right now that is ' + d.chunks.toLocaleString() + ' indexed passages across ' + d.works.length + ' works. ' : ' ')));
-    var libA = el('a', 'body-link', 'The Library');
-    libA.href = 'library.html';
-    pk.appendChild(libA);
-    pk.appendChild(document.createTextNode(
-      ' is the human catalog of the same shelf, and it keeps growing: as works come onto the Library the librarian’s context is updated to make use of them.'));
-    node.appendChild(pk);
-    if (d && d.works && d.works.length) {
-      var shelf = el('details', 'merecat-shelf');
-      shelf.appendChild(el('summary', null, 'The full shelf, work by work'));
-      var tiers = {
-        1: 'The site’s voice and its catechetical core',
-        2: 'The Scriptures',
-        6: 'Newman, the interpretive companion',
-        3: 'The named works of the Fathers',
-        4: 'The councils, the confessions, and the schism',
-        5: 'The deep shelf',
-        7: 'The Roman world, for background',
-      };
-      [1, 2, 6, 3, 4, 5, 7].forEach(function (t) {
-        var rows = d.works.filter(function (w) { return w.tier === t && w.url; });
-        if (!rows.length) return;
-        shelf.appendChild(el('p', null, tiers[t]));
-        var ul = el('ul');
-        rows.forEach(function (w) {
-          var li = el('li');
-          var a = el('a', 'body-link', w.title);
-          a.href = w.url;
-          li.appendChild(a);
-          li.appendChild(document.createTextNode(' · ' + w.chunks.toLocaleString() + ' passages'));
-          ul.appendChild(li);
-        });
-        shelf.appendChild(ul);
-      });
-      /* The private shelves: known to the librarian, not served on the site,
-         so a plain title is the whole entry. Scholars first, then worldview. */
-      var priv = d.works.filter(function (w) { return !w.url; });
-      if (priv.length) {
-        shelf.appendChild(el('p', null, 'Additional works available to merecat that are not served in our Library:'));
-        priv.sort(function (a, b) {
-          if (a.tier !== b.tier) return a.tier === 9 ? -1 : b.tier === 9 ? 1 : a.tier - b.tier;
-          return a.title < b.title ? -1 : 1;
-        });
-        var pul = el('ul');
-        priv.forEach(function (w) {
-          pul.appendChild(el('li', null, w.title + ' · ' + (w.chunks || 0).toLocaleString() + ' passages'));
-        });
-        shelf.appendChild(pul);
-      }
-      node.appendChild(shelf);
-    }
-
-    h3('How it is biased');
-    p('Deliberately, in the open, and by the site owner’s own ladder. The shelf is weighted from the site’s own works and their catechetical core at the top, then the Scriptures with Newman set directly beneath them as the interpretive companion the Fathers are read with, then the scholars’ shelf of modern research authorities, then the named works of the Fathers, the councils and the confessions and the documents of the schism, then the worldview shelf that forms the librarian’s outlook on the world around the faith, then the deep sets with the Second Temple sources among them, and at the very bottom the Roman world and the classics, background by design. The top band is searched semantically as well as by keyword, weighted highest, and named to the model as the positions of this site.');
-    p('Above the weights sits the lens. The librarian is instructed to read everything through this site’s confession and its long conversation with Newman: to treat him as the site’s friend in both his ages, to follow his notes of development with the book’s own added tests laid over them, and to follow the book’s model of authority where the two part ways. It is instructed to defend the site’s positions with real arguments, to steelman Rome, Orthodoxy, the Reformation, and the free churches honestly, to distinguish what this site argues from what the record shows from what is contested, and never to manufacture a consensus that is not there. Three further standing instructions shape it. It reads the world through the worldview shelf, traditional Catholic writing on history, other religions, the social order, and philosophy in the school of Aristotle and St. Thomas, with the book’s first-millennium model of authority correcting that shelf’s Roman maximalism wherever it appears. It reads Paul with N. T. Wright as its prioritized lens, holding with this site that the New Perspective is compatible with a Tridentine account of justification and that a reconciliation of Trent and Luther through Wright’s account is a live research hope, and it takes Wright as its first authority when apologetics turns to the resurrection. And it settles the last things in the voice of G. K. Beale and Augustine’s City of God: amillennial partial preterism, with Josephus’ Wars of the Jews brought alongside as the eyewitness record, hyper preterism and premillennialism argued against, and postmillennialism tolerated as a respectable neighbor. Bias here means emphasis and voice, never blinders: every band is searched on every question.');
-    if (d && d.persona) {
-      var pd = el('details', 'merecat-shelf');
-      pd.appendChild(el('summary', null, 'The standing instructions, verbatim, as the model receives them'));
-      pd.appendChild(el('div', 'merecat-persona', d.persona));
-      node.appendChild(pd);
-    }
-
-    h3('What it remembers about you');
-    p('Your conversations are saved as threads, the way your direct messages are: each conversation is its own thread, kept for thirty days from its last message so you can leave and pick it back up, then expired and removed. Threads belong to your pseudonymous identity alone. Only your key can list, read, continue, or delete them, deletion is immediate and outright, and no admin tool for reading them exists. You can forward any single answer to a public topic on the board, where it posts under the librarian\u2019s own name marked as forwarded by you, so nothing you ask goes public except by your own hand.');
-    p('Within a thread the librarian remembers the whole conversation: the newest turns ride along word for word, and everything older is folded into a running condensed summary the thread carries, so a long conversation stays coherent without burning the community’s shared budget. The model itself learns nothing from you and keeps nothing between threads. Beyond your threads the server holds counters only, the day, your identity hash, and how many questions you have asked, so the daily caps can work. You ask under the same pseudonymous key you post with, and the server sees only its hash.');
-
-    h3('Usage');
-    p('The whole community shares one free daily budget with the board’s own moderation machinery. ' +
-      (d
-        ? (d.user_cap_on
-          ? 'Each member gets ' + d.user_daily + ' questions a day and the community together ' + d.global_daily +
-            '. Today you have used ' + (d.you != null ? d.you : 0) + ' of ' + d.user_daily +
-            ', and the community ' + d.today + ' of ' + d.global_daily + '.'
-          : 'Members draw freely on the community\u2019s shared budget of ' + d.global_daily +
-            ' questions a day. Today the community has used ' + d.today + ' of ' + d.global_daily +
-            (d.you != null ? ', of which you asked ' + d.you : '') + '.')
-        : 'Members share one community budget of questions a day.') +
-      (d && d.admin ? ' You are an admin: the per-member cap does not stop you, though your use still counts in every tally.' : '') +
-      ' Counters renew at midnight UTC, which is ' + merecatResetLocal() + ' on your clock. When the budget is spent the librarian rests until then rather than degrade.');
-  }
-
-  /* Dispatch the board to the view its query string names. Clears the section
-     first so it can be called again to re-render in place (loadMyProfile does
-     this once a runtime admin's status arrives, to reveal the admin controls). */
   function route() {
     section.textContent = '';
     var params = new URLSearchParams(location.search);
