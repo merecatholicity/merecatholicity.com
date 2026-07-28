@@ -1073,15 +1073,29 @@
       }
       return maps[which] ? maps[which][slug] : null;
     }
-    function place(a) {
+    function place(a, ex, ey) {
+      /* A reference that wraps across lines has a union box spanning the
+         whole paragraph width, and a tip placed from it lands far from the
+         cursor (in the narrow merecat bubbles this happened constantly and
+         read as "no tooltip"). Place from the line fragment actually under
+         the pointer, first fragment as the fallback. */
       var r = a.getBoundingClientRect();
+      var rs = a.getClientRects();
+      if (rs && rs.length) {
+        r = rs[0];
+        if (ey != null) {
+          for (var i = 0; i < rs.length; i++) {
+            if (ey >= rs[i].top - 2 && ey <= rs[i].bottom + 2) { r = rs[i]; break; }
+          }
+        }
+      }
       tip.style.left = Math.max(6, Math.min(r.left, window.innerWidth - tip.offsetWidth - 10)) + 'px';
       var below = r.bottom + 8;
       if (below + tip.offsetHeight > window.innerHeight && r.top - tip.offsetHeight - 8 > 0)
         tip.style.top = (r.top - tip.offsetHeight - 8) + 'px';
       else tip.style.top = below + 'px';
     }
-    function show(a) {
+    function show(a, ex, ey) {
       var dr = a.getAttribute('data-bible') === 'dr';
       (dr ? loadDr() : loadKjv()).then(function () {
         var b = bySlug(dr ? 'dr' : 'kjv', dr ? drData : kjvData, a.getAttribute('data-slug')); if (!b) return;
@@ -1100,14 +1114,14 @@
         if (v2 - v1 + 1 > CAP) body.appendChild(document.createTextNode('…'));
         tip.appendChild(body);
         tip.hidden = false;
-        place(a);
+        place(a, ex, ey);
       });
     }
     document.addEventListener('mouseover', function (e) {
       var a = e.target && e.target.closest && e.target.closest('a.scripture-link');
       if (!a) return;
       clearTimeout(hideTimer);
-      show(a);
+      show(a, e.clientX, e.clientY);
     });
     document.addEventListener('mouseout', function (e) {
       var a = e.target && e.target.closest && e.target.closest('a.scripture-link');
