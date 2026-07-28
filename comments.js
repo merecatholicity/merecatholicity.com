@@ -1101,7 +1101,16 @@
         var b = bySlug(dr ? 'dr' : 'kjv', dr ? drData : kjvData, a.getAttribute('data-slug')); if (!b) return;
         var c = +a.getAttribute('data-ch'), ch = b.chapters[c - 1]; if (!ch) return;
         var v1 = +a.getAttribute('data-v1'), v2 = +a.getAttribute('data-v2');
-        if (!tip) { tip = el('div', 'scripture-tip'); document.body.appendChild(tip); }
+        if (!tip) {
+          /* The tip's CSS rides ensureEmojiStyles, which composer views call
+             and the merecat chat does not: without it the tip is an unstyled
+             static div at the end of the body, invisible below the fold —
+             the whole "no tooltip in the chat" mystery. Idempotent, so call
+             it here and the hover owns its own dress in every view. */
+          ensureEmojiStyles();
+          tip = el('div', 'scripture-tip');
+          document.body.appendChild(tip);
+        }
         tip.textContent = '';
         var h = el('strong', 'scripture-tip-ref', b.name + ' ' + c + ':' + v1 + (v2 > v1 ? '-' + v2 : ''));
         tip.appendChild(h);
