@@ -513,6 +513,118 @@ works:
     { src: ../gibbon12.html, url: gibbon12.html, tier: 7, kind: pandoc, store: deep,
       title: "The Decline and Fall of the Roman Empire, Vol. 12" }
 
+  # ---- Band 7 continued: the Latin & Greek classics and the
+  # Indo-European shelf (2026-07-27 wave) — same bottom-of-the-totem
+  # weight, deep room ------------------------------------------------
+  iliad:
+    { src: ../iliad.html, url: iliad.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Iliad, by Homer" }
+  odyssey:
+    { src: ../odyssey.html, url: odyssey.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Odyssey, by Homer" }
+  hesiod:
+    { src: ../hesiod.html, url: hesiod.html, tier: 7, kind: pandoc, store: deep,
+      title: "Hesiod, the Homeric Hymns, and Homerica" }
+  herodotus:
+    { src: ../herodotus.html, url: herodotus.html, tier: 7, kind: pandoc, store: deep,
+      title: "The History of Herodotus" }
+  thucydides:
+    { src: ../thucydides.html, url: thucydides.html, tier: 7, kind: pandoc, store: deep,
+      title: "The History of the Peloponnesian War, by Thucydides" }
+  republic:
+    { src: ../republic.html, url: republic.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Republic, by Plato" }
+  timaeus:
+    { src: ../timaeus.html, url: timaeus.html, tier: 7, kind: pandoc, store: deep,
+      title: "Timaeus, by Plato" }
+  ethics:
+    { src: ../ethics.html, url: ethics.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Nicomachean Ethics of Aristotle" }
+  politics:
+    { src: ../politics.html, url: politics.html, tier: 7, kind: pandoc, store: deep,
+      title: "Politics: A Treatise on Government, by Aristotle" }
+  metaphysics:
+    { src: ../metaphysics.html, url: metaphysics.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Metaphysics of Aristotle" }
+  polybius:
+    { src: ../polybius.html, url: polybius.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Histories of Polybius" }
+  livy1:
+    { src: ../livy1.html, url: livy1.html, tier: 7, kind: pandoc, store: deep,
+      title: "The History of Rome, Vol. 1: Books I–VIII, by Livy" }
+  livy2:
+    { src: ../livy2.html, url: livy2.html, tier: 7, kind: pandoc, store: deep,
+      title: "The History of Rome, Vol. 2: Books IX–XXVI, by Livy" }
+  livy3:
+    { src: ../livy3.html, url: livy3.html, tier: 7, kind: pandoc, store: deep,
+      title: "The History of Rome, Vol. 3: Books XXVII–XXXVI, by Livy" }
+  livy4:
+    { src: ../livy4.html, url: livy4.html, tier: 7, kind: pandoc, store: deep,
+      title: "The History of Rome, Vol. 4: Books XXXVII to the End, by Livy" }
+  caesar:
+    { src: ../caesar.html, url: caesar.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Commentaries of Julius Caesar" }
+  sallust:
+    { src: ../sallust.html, url: sallust.html, tier: 7, kind: pandoc, store: deep,
+      title: "Conspiracy of Catiline and the Jugurthine War, by Sallust" }
+  plutarch:
+    { src: ../plutarch.html, url: plutarch.html, tier: 7, kind: pandoc, store: deep,
+      title: "Plutarch's Lives" }
+  cicero:
+    { src: ../cicero.html, url: cicero.html, tier: 7, kind: pandoc, store: deep,
+      title: "Cicero: Tusculan Disputations, On the Nature of the Gods, and On the Commonwealth" }
+  cicero-div:
+    { src: ../cicero-div.html, url: cicero-div.html, tier: 7, kind: pandoc, store: deep,
+      title: "On Divination, by Cicero" }
+  lucretius:
+    { src: ../lucretius.html, url: lucretius.html, tier: 7, kind: pandoc, store: deep,
+      title: "On the Nature of Things, by Lucretius" }
+  aeneid:
+    { src: ../aeneid.html, url: aeneid.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Aeneid of Virgil" }
+  metam:
+    { src: ../metam.html, url: metam.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Metamorphoses of Ovid" }
+  seneca:
+    { src: ../seneca.html, url: seneca.html, tier: 7, kind: pandoc, store: deep,
+      title: "Moral Letters to Lucilius, by Seneca" }
+  epictetus:
+    { src: ../epictetus.html, url: epictetus.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Discourses of Epictetus, with the Manual and Fragments" }
+  marcus:
+    { src: ../marcus.html, url: marcus.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Meditations of Marcus Aurelius" }
+  pliny:
+    { src: ../pliny.html, url: pliny.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Letters of Pliny the Younger" }
+  lucian:
+    { src: ../lucian.html, url: lucian.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Works of Lucian of Samosata" }
+  julian:
+    { src: ../julian.html, url: julian.html, tier: 7, kind: pandoc, store: deep,
+      title: "Against the Galileans, by Julian the Apostate" }
+  apuleius:
+    { src: ../apuleius.html, url: apuleius.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Golden Asse, by Apuleius" }
+  boethius:
+    { src: ../boethius.html, url: boethius.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Consolation of Philosophy, by Boethius" }
+  agricola:
+    { src: ../agricola.html, url: agricola.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Agricola and Germania, by Tacitus" }
+  eddas:
+    { src: ../eddas.html, url: eddas.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Elder Eddas and the Younger Eddas" }
+  rigveda:
+    { src: ../rigveda.html, url: rigveda.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Hymns of the Rigveda" }
+  beowulf:
+    { src: ../beowulf.html, url: beowulf.html, tier: 7, kind: pandoc, store: deep,
+      title: "Beowulf" }
+  frazer:
+    { src: ../frazer.html, url: frazer.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Golden Bough, by J. G. Frazer" }
+
   # ---- Band 6: Newman entire (harvested from library.html) ------------
   oxford-sermons:
     { src: ../oxford-sermons.html, url: oxford-sermons.html, tier: 6, kind: pandoc,

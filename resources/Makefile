@@ -65,6 +65,21 @@ body:
 	python rome2tex.py
 	python gibbon2tex.py
 	python thayer2tex.py
+	python classics2tex.py
+	python stj2tex.py
+
+# Re-download the git-ignored classics source trees (Wikisource, the
+# tertullian.org Julian, LacusCurtius de Divinatione); the PG flat
+# sources are committed like the other curated works.
+.PHONY: classics-fetch
+classics-fetch:
+	python classics2tex.py fetch
+
+# The Second Temple shelf's git-ignored source trees (the Yonge Philo from
+# earlychristianwritings.com, the Charles Jubilees from sacred-texts.com);
+# fetch commands are documented in stj2tex.py's header. The PG flat
+# sources (Josephus, Enoch, Phaedo) are committed like the other curated
+# works.
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
 # byte-identical, so git only churns when the text really changes.
@@ -166,7 +181,54 @@ WORKS = \
   summa-fs=Summa_Theologica_2_First_Part_of_the_Second_Part.pdf \
   summa-ss=Summa_Theologica_3_Second_Part_of_the_Second_Part.pdf \
   summa-tp=Summa_Theologica_4_Third_Part.pdf \
-  summa-xp=Summa_Theologica_5_Supplement.pdf
+  summa-xp=Summa_Theologica_5_Supplement.pdf \
+  iliad=The_Iliad.pdf \
+  odyssey=The_Odyssey.pdf \
+  hesiod=Hesiod_and_the_Homeric_Hymns.pdf \
+  herodotus=The_History_of_Herodotus.pdf \
+  thucydides=The_Peloponnesian_War.pdf \
+  republic=The_Republic_of_Plato.pdf \
+  timaeus=Timaeus.pdf \
+  ethics=Nicomachean_Ethics.pdf \
+  politics=Politics_A_Treatise_on_Government.pdf \
+  metaphysics=Metaphysics_of_Aristotle.pdf \
+  livy1=History_of_Rome_Livy_Vol_1.pdf \
+  livy2=History_of_Rome_Livy_Vol_2.pdf \
+  livy3=History_of_Rome_Livy_Vol_3.pdf \
+  livy4=History_of_Rome_Livy_Vol_4.pdf \
+  polybius=The_Histories_of_Polybius.pdf \
+  caesar=Commentaries_of_Caesar.pdf \
+  sallust=Catiline_and_Jugurtha.pdf \
+  plutarch=Plutarchs_Lives.pdf \
+  cicero=Tusculan_Disputations_and_Other_Treatises.pdf \
+  cicero-div=On_Divination.pdf \
+  lucretius=On_the_Nature_of_Things.pdf \
+  aeneid=The_Aeneid.pdf \
+  metam=Metamorphoses_of_Ovid.pdf \
+  seneca=Moral_Letters_to_Lucilius.pdf \
+  epictetus=Discourses_of_Epictetus.pdf \
+  marcus=Meditations_of_Marcus_Aurelius.pdf \
+  pliny=Letters_of_Pliny.pdf \
+  lucian=Works_of_Lucian.pdf \
+  julian=Against_the_Galileans.pdf \
+  apuleius=The_Golden_Ass.pdf \
+  boethius=Consolation_of_Philosophy.pdf \
+  agricola=Agricola_and_Germania.pdf \
+  eddas=The_Eddas.pdf \
+  rigveda=The_Rig_Veda.pdf \
+  beowulf=Beowulf.pdf \
+  frazer=The_Golden_Bough.pdf \
+  antiquities=Antiquities_of_the_Jews.pdf \
+  wars=The_Wars_of_the_Jews.pdf \
+  josephus-minor=Josephus_Life_and_Minor_Works.pdf \
+  philo1=The_Works_of_Philo_Vol_1.pdf \
+  philo2=The_Works_of_Philo_Vol_2.pdf \
+  philo3=The_Works_of_Philo_Vol_3.pdf \
+  philo4=The_Works_of_Philo_Vol_4.pdf \
+  enoch=The_Book_of_Enoch.pdf \
+  jubilees=The_Book_of_Jubilees.pdf \
+  testaments=Testaments_of_the_Twelve_Patriarchs.pdf \
+  phaedo=Phaedo.pdf
 
 work_name = $(firstword $(subst =, ,$(1)))
 work_out  = $(lastword  $(subst =, ,$(1)))
@@ -304,7 +366,54 @@ html:
 	         gibbon9:1:"The Decline and Fall of the Roman Empire, Vol. 9" \
 	         gibbon10:1:"The Decline and Fall of the Roman Empire, Vol. 10" \
 	         gibbon11:1:"The Decline and Fall of the Roman Empire, Vol. 11" \
-	         gibbon12:1:"The Decline and Fall of the Roman Empire, Vol. 12"; do \
+	         gibbon12:1:"The Decline and Fall of the Roman Empire, Vol. 12" \
+	         iliad:1:"The Iliad, by Homer" \
+	         odyssey:1:"The Odyssey, by Homer" \
+	         hesiod:1:"Hesiod, the Homeric Hymns, and Homerica" \
+	         herodotus:1:"The History of Herodotus" \
+	         thucydides:2:"The History of the Peloponnesian War, by Thucydides" \
+	         republic:1:"The Republic, by Plato" \
+	         timaeus:1:"Timaeus, by Plato" \
+	         ethics:1:"The Nicomachean Ethics of Aristotle" \
+	         politics:1:"Politics: A Treatise on Government, by Aristotle" \
+	         metaphysics:1:"The Metaphysics of Aristotle" \
+	         livy1:1:"The History of Rome, Vol. 1, by Livy" \
+	         livy2:1:"The History of Rome, Vol. 2, by Livy" \
+	         livy3:1:"The History of Rome, Vol. 3, by Livy" \
+	         livy4:1:"The History of Rome, Vol. 4, by Livy" \
+	         polybius:1:"The Histories of Polybius" \
+	         caesar:1:"The Commentaries of Julius Caesar" \
+	         sallust:1:"Conspiracy of Catiline and the Jugurthine War, by Sallust" \
+	         plutarch:1:"Plutarch's Lives" \
+	         cicero:2:"Cicero: Tusculan Disputations, On the Nature of the Gods, and On the Commonwealth" \
+	         cicero-div:1:"On Divination, by Cicero" \
+	         lucretius:1:"On the Nature of Things, by Lucretius" \
+	         aeneid:1:"The Aeneid of Virgil" \
+	         metam:1:"The Metamorphoses of Ovid" \
+	         seneca:2:"Moral Letters to Lucilius, by Seneca" \
+	         epictetus:2:"The Discourses of Epictetus, with the Manual and Fragments" \
+	         marcus:1:"The Meditations of Marcus Aurelius" \
+	         pliny:2:"The Letters of Pliny the Younger" \
+	         lucian:1:"The Works of Lucian of Samosata" \
+	         julian:1:"Against the Galileans, by Julian the Apostate" \
+	         apuleius:1:"The Golden Asse, by Apuleius" \
+	         boethius:1:"The Consolation of Philosophy, by Boethius" \
+	         agricola:1:"The Agricola and Germania, by Tacitus" \
+	         eddas:1:"The Elder Eddas and the Younger Eddas" \
+	         rigveda:1:"The Hymns of the Rigveda" \
+	         beowulf:1:"Beowulf" \
+	         frazer:1:"The Golden Bough, by J. G. Frazer" \
+	         antiquities:1:"The Antiquities of the Jews, by Flavius Josephus" \
+	         wars:1:"The Wars of the Jews, by Flavius Josephus" \
+	         josephus-minor:1:"The Life of Flavius Josephus, with Against Apion" \
+	         philo1:1:"The Works of Philo Judaeus, Vol. 1: The Allegorical Commentary" \
+	         philo2:1:"The Works of Philo Judaeus, Vol. 2: The Exposition of the Law" \
+	         philo3:1:"The Works of Philo Judaeus, Vol. 3: Philosophical and Historical Treatises" \
+	         philo4:1:"The Works of Philo Judaeus, Vol. 4: Questions on Genesis, with the Fragments" \
+	         enoch:1:"The Book of Enoch" \
+	         jubilees:2:"The Book of Jubilees" \
+	         testaments:1:"The Testaments of the Twelve Patriarchs" \
+	         phaedo:1:"Phaedo, by Plato"; do \
 	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \

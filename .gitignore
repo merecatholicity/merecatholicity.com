@@ -228,3 +228,57 @@ resources/parochial8.pdf
 librarian/.key
 __pycache__/
 librarian/private/
+# the classics shelf: git-ignored remote source trees (re-fetch with
+# `python classics2tex.py fetch`) and per-work intermediate PDFs; the
+# committed *-src.html flat files, bodies, wrappers, and the published
+# root PDFs are what ships
+resources/classics-src/
+resources/philo-src/
+resources/jubilees-src/
+resources/antiquities.pdf
+resources/wars.pdf
+resources/josephus-minor.pdf
+resources/philo1.pdf
+resources/philo2.pdf
+resources/philo3.pdf
+resources/philo4.pdf
+resources/enoch.pdf
+resources/jubilees.pdf
+resources/testaments.pdf
+resources/phaedo.pdf
+resources/iliad.pdf
+resources/odyssey.pdf
+resources/hesiod.pdf
+resources/herodotus.pdf
+resources/thucydides.pdf
+resources/republic.pdf
+resources/timaeus.pdf
+resources/ethics.pdf
+resources/politics.pdf
+resources/metaphysics.pdf
+resources/livy1.pdf
+resources/livy2.pdf
+resources/livy3.pdf
+resources/livy4.pdf
+resources/polybius.pdf
+resources/caesar.pdf
+resources/sallust.pdf
+resources/plutarch.pdf
+resources/cicero.pdf
+resources/cicero-div.pdf
+resources/lucretius.pdf
+resources/aeneid.pdf
+resources/metam.pdf
+resources/seneca.pdf
+resources/epictetus.pdf
+resources/marcus.pdf
+resources/pliny.pdf
+resources/lucian.pdf
+resources/julian.pdf
+resources/apuleius.pdf
+resources/boethius.pdf
+resources/agricola.pdf
+resources/eddas.pdf
+resources/rigveda.pdf
+resources/beowulf.pdf
+resources/frazer.pdf
