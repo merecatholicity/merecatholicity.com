@@ -531,7 +531,7 @@ async function handlePost(request, env, ctx) {
      with the admin /api/merecat/mention lever). Deferred: the reply arrives a
      few seconds behind the post. */
   if (status === 'live' && authorHash && authorHash !== MERECAT_BOT.hash &&
-      MERECAT_MENTION_RE.test(body)) {
+      merecatMentioned(body)) {
     ctx.waitUntil(merecatMentionReply(env, inserted.id)
       .catch((e) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e) }))));
   }
@@ -2619,7 +2619,15 @@ const MERECAT_BOT = {
   nick: 'merecat 🐈 AI BOT',
 };
 const MERECAT_MENTION_RE = /@merecat\b/i;
-const MERECAT_RV = 7;   // retrieval build: bump when retrieval logic changes
+/* A mention inside a quoted line is someone else's words: quoting a summons
+   must not resummon (nor charge the quoter a question). Only unquoted text
+   can call the librarian. */
+function merecatMentioned(body) {
+  const unquoted = String(body || '').split('\n')
+    .filter((l) => !/^\s*>/.test(l)).join('\n');
+  return MERECAT_MENTION_RE.test(unquoted);
+}
+const MERECAT_RV = 8;   // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -2788,29 +2796,35 @@ async function merecatRetrieve(env, q, cfg) {
       'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
       'FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid ' +
       'JOIN works w ON w.id = c.work_id WHERE chunks_fts MATCH ?1 ';
-    try {
-      // bm25 is negative-better, so a bigger multiplier boosts a band. The
-      // owner's ladder: site core, then the Scriptures with Newman just
-      // beneath them (the interpretive companion the Fathers are read
-      // with), then the named Fathers, the councils, the deep shelf.
-      const weighted = await env.LIBDB.prepare(SEL +
-        'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 7 THEN 0.9 ELSE 1.0 END) ' +
-        'LIMIT 18').bind(match).all();
-      for (const r of weighted.results || []) add(r, false);
-      const raw = await env.LIBDB.prepare(SEL +
-        'ORDER BY bm25(chunks_fts) LIMIT 12').bind(match).all();
-      for (const r of raw.results || []) add(r, false);
-      const phr = merecatPhrases(q);
-      if (phr) {
-        // a deep LIMIT: bm25 ranks heavy quoters of a phrase above the text
-        // that says it once, so the primary source can sit well down this
-        // list — the reranker and the guaranteed phrase seats sort it out
-        const hits = await env.LIBDB.prepare(SEL +
-          'ORDER BY bm25(chunks_fts) LIMIT 20').bind(phr).all();
-        for (const r of hits.results || []) add(r, false, true);
+    const phr = merecatPhrases(q);
+    // both rooms, same legs: a chunk carries its band wherever it lives, so
+    // the ladder weights identically across databases, and the reranker
+    // judges the merged pool blind to which shelf a page came from
+    for (const db of [env.LIBDB, env.LIBDB2]) {
+      if (!db) continue;
+      try {
+        // bm25 is negative-better, so a bigger multiplier boosts a band. The
+        // owner's ladder: site core, then the Scriptures with Newman just
+        // beneath them, the named Fathers, the councils, the deep shelf,
+        // and the Roman world at the very bottom of the totem.
+        const weighted = await db.prepare(SEL +
+          'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 7 THEN 0.9 ELSE 1.0 END) ' +
+          'LIMIT 18').bind(match).all();
+        for (const r of weighted.results || []) add(r, false);
+        const raw = await db.prepare(SEL +
+          'ORDER BY bm25(chunks_fts) LIMIT 12').bind(match).all();
+        for (const r of raw.results || []) add(r, false);
+        if (phr) {
+          // a deep LIMIT: bm25 ranks heavy quoters of a phrase above the
+          // text that says it once — the reranker and the guaranteed
+          // phrase seats sort the pool out
+          const hits = await db.prepare(SEL +
+            'ORDER BY bm25(chunks_fts) LIMIT 20').bind(phr).all();
+          for (const r of hits.results || []) add(r, false, true);
+        }
+      } catch (err) {
+        console.log(JSON.stringify({ event: 'merecat_fts_failed', error: String(err) }));
       }
-    } catch (err) {
-      console.log(JSON.stringify({ event: 'merecat_fts_failed', error: String(err) }));
     }
   }
 
@@ -3203,11 +3217,13 @@ async function handleMerecatIngest(request, env) {
   const work = data.work || {};
   const id = String(work.id || '');
   if (!id || !/^[a-z0-9-]{1,40}$/.test(id)) return json({ ok: false, error: 'Bad work id.' }, 400);
+  // which room: works.yml store: deep -> LIBDB2, else the first database
+  const LIB = (String(data.store || work.store || '') === 'deep' && env.LIBDB2) ? env.LIBDB2 : env.LIBDB;
 
   if (mode === 'begin' || mode === 'delete') {
     // Clear the work's vectors (only Tier-1 works ever have them) and rows.
     try {
-      const olds = await env.LIBDB.prepare('SELECT cid FROM chunks WHERE work_id = ?1').bind(id).all();
+      const olds = await LIB.prepare('SELECT cid FROM chunks WHERE work_id = ?1').bind(id).all();
       const cids = (olds.results || []).map((r) => r.cid);
       for (let i = 0; i < cids.length; i += 1000) {
         try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 1000)); }
@@ -3216,12 +3232,23 @@ async function handleMerecatIngest(request, env) {
     } catch (err) {
       console.log(JSON.stringify({ event: 'merecat_clear_failed', error: String(err) }));
     }
-    await env.LIBDB.prepare('DELETE FROM chunks WHERE work_id = ?1').bind(id).run();
+    await LIB.prepare('DELETE FROM chunks WHERE work_id = ?1').bind(id).run();
     if (mode === 'delete') {
-      await env.LIBDB.prepare('DELETE FROM works WHERE id = ?1').bind(id).run();
+      for (const db of [env.LIBDB, env.LIBDB2]) {
+        if (!db || db === LIB) continue;
+        try {
+          await db.batch([
+            db.prepare('DELETE FROM chunks WHERE work_id = ?1').bind(id),
+            db.prepare('DELETE FROM works WHERE id = ?1').bind(id),
+          ]);
+        } catch (err) {
+          console.log(JSON.stringify({ event: 'merecat_delete_other_failed', error: String(err) }));
+        }
+      }
+      await LIB.prepare('DELETE FROM works WHERE id = ?1').bind(id).run();
       return json({ ok: true, deleted: id }, 200);
     }
-    await env.LIBDB.prepare(
+    await LIB.prepare(
       'INSERT INTO works (id, title, url, tier, kind, hash, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6) ' +
       'ON CONFLICT(id) DO UPDATE SET title = ?2, url = ?3, tier = ?4, kind = ?5, hash = NULL, updated_at = ?6'
     ).bind(id, String(work.title || id), String(work.url || ''),
@@ -3244,11 +3271,11 @@ async function handleMerecatIngest(request, env) {
         binds.push(String(r.cid || ''), id, Number(r.seq) || 0,
           String(r.heading || ''), String(r.anchor || ''), String(r.text || ''));
       }
-      stmts.push(env.LIBDB.prepare(
+      stmts.push(LIB.prepare(
         'INSERT OR REPLACE INTO chunks (cid, work_id, seq, heading, anchor, text) VALUES ' + values
       ).bind(...binds));
     }
-    await env.LIBDB.batch(stmts);
+    await LIB.batch(stmts);
     let vectored = 0;
     if (data.vectorize) {
       const meta = { title: String(work.title || id), url: String(work.url || ''), tier: Number(work.tier) || 1 };
@@ -3290,7 +3317,7 @@ async function handleMerecatIngest(request, env) {
 
   if (mode === 'end') {
     // the chunk count stamps the works row here so roster reads never scan
-    await env.LIBDB.prepare('UPDATE works SET hash = ?2, chunks = ?3, updated_at = ?4 WHERE id = ?1')
+    await LIB.prepare('UPDATE works SET hash = ?2, chunks = ?3, updated_at = ?4 WHERE id = ?1')
       .bind(id, String(work.hash || ''), Number(work.chunks) || 0, Math.floor(Date.now() / 1000)).run();
     return json({ ok: true, ended: id }, 200);
   }
@@ -3393,7 +3420,7 @@ async function merecatMentionReply(env, commentId) {
     "SELECT id, page, parent_id, title, author_hash, body FROM comments WHERE id = ?1 AND status = 'live'"
   ).bind(commentId).first();
   if (!c || !c.author_hash || c.author_hash === MERECAT_BOT.hash) return null;
-  if (!MERECAT_MENTION_RE.test(String(c.body || ''))) return null;
+  if (!merecatMentioned(c.body)) return null;
   const cfg = await merecatConfig(env);
   const day = merecatDay();
   const admin = await isAdminHash(env, c.author_hash);
@@ -3406,12 +3433,12 @@ async function merecatMentionReply(env, commentId) {
   let refuse = null;
   const seeWhen = ' Mention me again after it renews, or open [the merecat page](' +
     MERECAT_SITE + 'community.html?merecat=1) to see the renewal time on your own clock.';
-  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const g = await LIB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   if (!admin && g && g.q >= cfg.global_daily) {
     refuse = 'merecat is resting. The community’s shared daily budget is spent.' + seeWhen;
   }
   if (!refuse && !admin && cfg.user_cap_on) {
-    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+    const u = await LIB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
       .bind(day, c.author_hash).first();
     if (u && u.q >= cfg.user_daily) {
       refuse = 'You have used your ' + cfg.user_daily + ' merecat questions for today.' + seeWhen;
@@ -3511,12 +3538,12 @@ async function merecatMentionReply(env, commentId) {
 
   const inTok = Math.ceil(JSON.stringify(messages).length / 4);
   const outTok = Math.ceil(answer.length / 4);
-  await env.LIBDB.batch([
-    env.LIBDB.prepare(
+  await LIB.batch([
+    LIB.prepare(
       'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
       'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
     ).bind(day, inTok, outTok),
-    env.LIBDB.prepare(
+    LIB.prepare(
       'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
       'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
     ).bind(day, c.author_hash),
@@ -3557,14 +3584,14 @@ async function handleMerecatForward(request, env) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
+  const own = await LIB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
     .bind(chatId, me).first();
   if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
   const msg = data.msg === 'last'
-    ? await env.LIBDB.prepare(
+    ? await LIB.prepare(
         "SELECT id, body, sources FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' ORDER BY id DESC LIMIT 1"
       ).bind(chatId).first()
-    : await env.LIBDB.prepare(
+    : await LIB.prepare(
         "SELECT id, body, sources FROM chat_msgs WHERE id = ?1 AND chat_id = ?2 AND role = 'assistant'"
       ).bind(Number(data.msg), chatId).first();
   if (!msg) return json({ ok: false, error: 'No such answer in that conversation.' }, 404);
@@ -3574,7 +3601,7 @@ async function handleMerecatForward(request, env) {
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   if (topic.locked) return json({ ok: false, error: 'That topic is locked.' }, 403);
 
-  const q = await env.LIBDB.prepare(
+  const q = await LIB.prepare(
     "SELECT body FROM chat_msgs WHERE chat_id = ?1 AND role = 'user' AND id < ?2 ORDER BY id DESC LIMIT 1"
   ).bind(chatId, msg.id).first();
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(me).first();
@@ -3615,8 +3642,8 @@ async function handleMerecatUsage(request, env) {
   const me = await sha256hex(key);
   const cfg = await merecatConfig(env);
   const day = merecatDay();
-  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
-  const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
+  const g = await LIB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const u = await LIB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
     .bind(day, me).first();
   return json({
     ok: true,
@@ -3646,6 +3673,15 @@ async function handleMerecatAbout(request, env) {
     'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title'
   ).all();
   const list = works.results || [];
+  if (env.LIBDB2) {
+    try {
+      const deep = await env.LIBDB2.prepare(
+        'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title').all();
+      for (const r of deep.results || []) list.push(r);
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_about2_failed', error: String(err) }));
+    }
+  }
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   const out = {
     ok: true,
@@ -3672,16 +3708,29 @@ async function handleMerecatWorks(request, env) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const works = [];
+  let tb1 = 0, tb2 = 0;
   const rows = await env.LIBDB.prepare(
-    'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id'
-  ).all();
-  // stored text volume, so the daily ingest can project database size
-  // against D1's 500 MB free cap and warn before the wall
-  const tb = await env.LIBDB.prepare(
+    'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all();
+  for (const r of rows.results || []) works.push(r);
+  const t1 = await env.LIBDB.prepare(
     "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
+  tb1 = (t1 && t1.b) || 0;
+  if (env.LIBDB2) {
+    try {
+      const rows2 = await env.LIBDB2.prepare(
+        'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all();
+      for (const r of rows2.results || []) works.push(r);
+      const t2 = await env.LIBDB2.prepare(
+        "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
+      tb2 = (t2 && t2.b) || 0;
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_works2_failed', error: String(err) }));
+    }
+  }
   const pfh = await env.LIBDB.prepare(
     "SELECT v FROM config WHERE k = 'persona_file_hash'").first();
-  return json({ ok: true, works: rows.results || [], text_bytes: (tb && tb.b) || 0,
+  return json({ ok: true, works, text_bytes: tb1, text_bytes_deep: tb2,
     persona_file_hash: (pfh && pfh.v) || '' }, 200);
 }
 
@@ -3715,10 +3764,17 @@ async function handleMerecatStats(request, env) {
   const users = await env.LIBDB.prepare(
     'SELECT day, COUNT(*) AS users FROM user_usage GROUP BY day ORDER BY day DESC LIMIT 14').all();
   const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chunks').first();
+  let deepN = 0;
+  if (env.LIBDB2) {
+    try {
+      const d2 = await env.LIBDB2.prepare('SELECT COUNT(*) AS n FROM chunks').first();
+      deepN = (d2 && d2.n) || 0;
+    } catch { /* the first room still reports */ }
+  }
   const byDay = {};
   for (const r of users.results || []) byDay[r.day] = r.users;
   const days = (use.results || []).map((r) => ({ ...r, users: byDay[r.day] || 0 }));
-  return json({ ok: true, days, chunks: (total && total.n) || 0 }, 200);
+  return json({ ok: true, days, chunks: ((total && total.n) || 0) + deepN }, 200);
 }
 
 export default {

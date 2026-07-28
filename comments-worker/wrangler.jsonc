@@ -31,6 +31,14 @@
       "binding": "LIBDB",
       "database_name": "merecat-library",
       "database_id": "c21d00ec-55d3-4288-b462-a373315f95e7"
+    },
+    {
+      // The deep room: bottom-band corpora (the Roman world and whatever
+      // outgrows the first database). Same schema, same derived-data rules;
+      // retrieval searches both rooms and merges, weights riding each work.
+      "binding": "LIBDB2",
+      "database_name": "merecat-library-deep",
+      "database_id": "a75f874a-7922-426c-be74-c479f268006e"
     }
   ],
   "vectorize": [
