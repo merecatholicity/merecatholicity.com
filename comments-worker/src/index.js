@@ -2627,7 +2627,7 @@ function merecatMentioned(body) {
     .filter((l) => !/^\s*>/.test(l)).join('\n');
   return MERECAT_MENTION_RE.test(unquoted);
 }
-const MERECAT_RV = 11;  // retrieval build: bump when retrieval logic changes
+const MERECAT_RV = 12;  // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -2851,7 +2851,7 @@ async function merecatVerseSeats(env, q, add) {
     jobs.push({ slug, ch: +m[2], v: +m[3] });
   }
   if (!jobs.length) return;
-  for (const db of [env.LIBDB, env.LIBDB2]) {
+  for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
     if (!db) continue;
     for (const j of jobs) {
       for (const s of new Set([j.slug, MERECAT_KJV2DR[j.slug] || j.slug])) {
@@ -2936,7 +2936,7 @@ async function merecatRetrieve(env, q, cfg) {
     // both rooms, same legs: a chunk carries its band wherever it lives, so
     // the ladder weights identically across databases, and the reranker
     // judges the merged pool blind to which shelf a page came from
-    for (const db of [env.LIBDB, env.LIBDB2]) {
+    for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
       if (!db) continue;
       try {
         // bm25 is negative-better, so a bigger multiplier boosts a band. The
@@ -3357,8 +3357,10 @@ async function handleMerecatIngest(request, env) {
   const work = data.work || {};
   const id = String(work.id || '');
   if (!id || !/^[a-z0-9-]{1,40}$/.test(id)) return json({ ok: false, error: 'Bad work id.' }, 400);
-  // which room: works.yml store: deep -> LIBDB2, else the first database
-  const LIB = (String(data.store || work.store || '') === 'deep' && env.LIBDB2) ? env.LIBDB2 : env.LIBDB;
+  // which room: works.yml store: deep -> LIBDB2, deep2 -> LIBDB3, else room one
+  const st = String(data.store || work.store || '');
+  const LIB = (st === 'deep2' && env.LIBDB3) ? env.LIBDB3
+    : (st === 'deep' && env.LIBDB2) ? env.LIBDB2 : env.LIBDB;
 
   if (mode === 'begin' || mode === 'delete') {
     /* Sweep BOTH rooms, not just the target: when a work's store flag flips
@@ -3368,7 +3370,7 @@ async function handleMerecatIngest(request, env) {
        ingest re-push the work on every run. Vectors are cleared over the
        union of both rooms' cids (only Tier-1 works ever have them). */
     const cidset = new Set();
-    for (const db of [env.LIBDB, env.LIBDB2]) {
+    for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
       if (!db) continue;
       try {
         const olds = await db.prepare('SELECT cid FROM chunks WHERE work_id = ?1').bind(id).all();
@@ -3382,7 +3384,7 @@ async function handleMerecatIngest(request, env) {
       try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 1000)); }
       catch (err) { console.log(JSON.stringify({ event: 'merecat_vecdel_failed', error: String(err) })); }
     }
-    for (const db of [env.LIBDB, env.LIBDB2]) {
+    for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
       if (!db) continue;
       try {
         if (db === LIB && mode !== 'delete') {
@@ -3826,9 +3828,10 @@ async function handleMerecatAbout(request, env) {
   // url-less works are the private shelf: present in retrieval, absent from
   // the public roster by the owner's standing word
   const list = (works.results || []).filter((w) => w.url);
-  if (env.LIBDB2) {
+  for (const db of [env.LIBDB2, env.LIBDB3]) {
+    if (!db) continue;
     try {
-      const deep = await env.LIBDB2.prepare(
+      const deep = await db.prepare(
         'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title').all();
       for (const r of deep.results || []) if (r.url) list.push(r);
     } catch (err) {
@@ -3869,21 +3872,23 @@ async function handleMerecatWorks(request, env) {
   const t1 = await env.LIBDB.prepare(
     "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
   tb1 = (t1 && t1.b) || 0;
-  if (env.LIBDB2) {
+  let tb3 = 0;
+  for (const [db, tag] of [[env.LIBDB2, 2], [env.LIBDB3, 3]]) {
+    if (!db) continue;
     try {
-      const rows2 = await env.LIBDB2.prepare(
+      const rows2 = await db.prepare(
         'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all();
       for (const r of rows2.results || []) works.push(r);
-      const t2 = await env.LIBDB2.prepare(
+      const t2 = await db.prepare(
         "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
-      tb2 = (t2 && t2.b) || 0;
+      if (tag === 2) tb2 = (t2 && t2.b) || 0; else tb3 = (t2 && t2.b) || 0;
     } catch (err) {
-      console.log(JSON.stringify({ event: 'merecat_works2_failed', error: String(err) }));
+      console.log(JSON.stringify({ event: 'merecat_works' + tag + '_failed', error: String(err) }));
     }
   }
   const pfh = await env.LIBDB.prepare(
     "SELECT v FROM config WHERE k = 'persona_file_hash'").first();
-  return json({ ok: true, works, text_bytes: tb1, text_bytes_deep: tb2,
+  return json({ ok: true, works, text_bytes: tb1, text_bytes_deep: tb2, text_bytes_deep2: tb3,
     persona_file_hash: (pfh && pfh.v) || '' }, 200);
 }
 
@@ -3918,10 +3923,11 @@ async function handleMerecatStats(request, env) {
     'SELECT day, COUNT(*) AS users FROM user_usage GROUP BY day ORDER BY day DESC LIMIT 14').all();
   const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chunks').first();
   let deepN = 0;
-  if (env.LIBDB2) {
+  for (const db of [env.LIBDB2, env.LIBDB3]) {
+    if (!db) continue;
     try {
-      const d2 = await env.LIBDB2.prepare('SELECT COUNT(*) AS n FROM chunks').first();
-      deepN = (d2 && d2.n) || 0;
+      const d2 = await db.prepare('SELECT COUNT(*) AS n FROM chunks').first();
+      deepN += (d2 && d2.n) || 0;
     } catch { /* the first room still reports */ }
   }
   const byDay = {};
