@@ -35,6 +35,27 @@ the change up within five minutes).
 The default model is the strongest answer-per-neuron on the free Workers AI
 catalog; `config.yml` explains the trade if you want a bigger one.
 
+## Copyrighted works (the private shelf)
+
+Works you cannot host still become part of the librarian's knowledge:
+
+1. Put the text as plain `.txt` or `.md` into `librarian/private/` — the
+   directory is git-ignored and never served, so the text exists only on
+   your machine and inside the retrieval database, where it surfaces as
+   brief quoted excerpts with attribution. Lines starting `#`, `##`, or
+   `###` become chapter labels for better retrieval.
+2. Add a works.yml entry whose `url` is the purchase link:
+
+       wright-hope:
+         { src: private/surprised-by-hope.txt, url: "https://www.amazon.com/dp/0061551821",
+           tier: 5, kind: text,
+           title: "Surprised by Hope, by N. T. Wright (HarperOne, 2008)" }
+
+3. `make librarian`. Citations then read like any essay's, `[n] Surprised
+   by Hope, by N. T. Wright`, linking to where the book can be bought, and
+   the persona keeps quotations brief. On machines without the private
+   files the push just skips them with a note.
+
 ## Tiers: how importance works
 
 - **Tier 1** — the primary works: the book, the three Charting papers, the

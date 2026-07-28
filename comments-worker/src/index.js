@@ -2928,7 +2928,7 @@ async function handleMerecatAsk(request, env, ctx) {
   // exists, the numbered sources, the recent turns verbatim, the question.
   const sources = chunks.map((c, i) => ({
     n: i + 1, title: c.title, heading: c.heading,
-    url: MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
+    url: /^https?:\/\//.test(c.url) ? c.url : MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
   }));
   let srcBlock = '';
   chunks.forEach((c, i) => {
@@ -3472,7 +3472,7 @@ async function merecatMentionReply(env, commentId) {
   const chunks = await merecatRetrieve(env, retrievalQ, cfg);
   const sources = chunks.map((cc, i) => ({
     n: i + 1, title: cc.title, heading: cc.heading,
-    url: MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
+    url: /^https?:\/\//.test(cc.url) ? cc.url : MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
   }));
   let srcBlock = '';
   chunks.forEach((cc, i) => {

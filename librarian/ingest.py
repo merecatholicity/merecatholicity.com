@@ -370,10 +370,30 @@ def build_bible(path, deutero=False):
 
 
 def build_text(path, title):
+    """Plain txt/md. Lines opening with #, ## or ### become the heading
+    breadcrumb for what follows, so a whole book chunks chapter-labeled."""
     src = open(path, encoding="utf-8", errors="replace").read()
-    paras = [("", norm(p)) for p in re.split(r"\n\s*\n", src) if norm(p)]
-    return [{"heading": title[:140], "anchor": a, "text": t}
-            for a, t in pack(paras)], None
+    chunks = []
+    heading = title[:140]
+    section = []
+
+    def close():
+        for a, t in pack([("", p) for p in section]):
+            chunks.append({"heading": heading, "anchor": a, "text": t})
+        section.clear()
+
+    for block in re.split(r"\n\s*\n", src):
+        block = norm(block)
+        if not block:
+            continue
+        m = re.match(r"#{1,3}\s+(.*)", block)
+        if m:
+            close()
+            heading = (title + " > " + m.group(1))[:140]
+            continue
+        section.append(block)
+    close()
+    return chunks, None
 
 
 def build(entry):
