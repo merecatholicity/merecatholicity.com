@@ -3147,7 +3147,7 @@ async function handleMerecatChat(request, env) {
   ).bind(id, me).first();
   if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
   const msgs = await env.LIBDB.prepare(
-    'SELECT role, body, sources, created_at FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
+    'SELECT id, role, body, sources, created_at FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
   ).bind(id).all();
   return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
 }
@@ -3361,6 +3361,33 @@ async function merecatInsertComment(env, src, isBoard, topicId, topicAuthorHash,
   return ins.id;
 }
 
+/* Finish an answer for public posting: renumber the body's [n] markers and
+   the cited-only footer to a clean 1..k in order of first appearance, with
+   footer labels bracket-sanitized (a heading like "[The Contemporary
+   Review]" nested in [text](url) breaks the markdown link and prints raw).
+   Shared by @merecat thread replies and forwarded chat answers. */
+function merecatFinishAnswer(answer, sources) {
+  const firstAt = new Map();
+  answer.replace(/\[(\d+)\]/g, (m, n, at) => {
+    const num = Number(n);
+    if (sources.some((s) => s.n === num) && !firstAt.has(num)) firstAt.set(num, at);
+    return m;
+  });
+  const order = [...firstAt.keys()].sort((a, b) => firstAt.get(a) - firstAt.get(b));
+  const renum = new Map(order.map((n, i) => [n, i + 1]));
+  if (renum.size) {
+    answer = answer.replace(/\[(\d+)\]/g, (m, n) =>
+      renum.has(Number(n)) ? '[' + renum.get(Number(n)) + ']' : m);
+    const cited = sources.filter((s) => renum.has(s.n))
+      .sort((a, b) => renum.get(a.n) - renum.get(b.n));
+    const label = (s) => (s.title + (s.heading ? ' — ' + s.heading : ''))
+      .replace(/\[/g, '(').replace(/\]/g, ')');
+    answer += '\n\nSources:\n' + cited.map((s) =>
+      '[' + renum.get(s.n) + '] [' + label(s) + '](' + s.url + ')').join('\n');
+  }
+  return answer;
+}
+
 async function merecatMentionReply(env, commentId) {
   const c = await env.DB.prepare(
     "SELECT id, page, parent_id, title, author_hash, body FROM comments WHERE id = ?1 AND status = 'live'"
@@ -3479,29 +3506,7 @@ async function merecatMentionReply(env, commentId) {
       ? String(res.choices[0].message.content || '') : ''));
   answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   if (!answer) return null;
-  /* The footer lists only the sources the answer actually cited, renumbered
-     with the body's markers to a clean 1..k in order of first appearance —
-     the model read its full list, the reader gets a tidy one. Labels are
-     bracket-sanitized: a heading like "[The Contemporary Review]" nested in
-     [text](url) breaks the markdown link and prints raw. */
-  const firstAt = new Map();
-  answer.replace(/\[(\d+)\]/g, (m, n, at) => {
-    const num = Number(n);
-    if (sources.some((s) => s.n === num) && !firstAt.has(num)) firstAt.set(num, at);
-    return m;
-  });
-  const order = [...firstAt.keys()].sort((a, b) => firstAt.get(a) - firstAt.get(b));
-  const renum = new Map(order.map((n, i) => [n, i + 1]));
-  if (renum.size) {
-    answer = answer.replace(/\[(\d+)\]/g, (m, n) =>
-      renum.has(Number(n)) ? '[' + renum.get(Number(n)) + ']' : m);
-    const cited = sources.filter((s) => renum.has(s.n))
-      .sort((a, b) => renum.get(a.n) - renum.get(b.n));
-    const label = (s) => (s.title + (s.heading ? ' — ' + s.heading : ''))
-      .replace(/\[/g, '(').replace(/\]/g, ')');
-    answer += '\n\nSources:\n' + cited.map((s) =>
-      '[' + renum.get(s.n) + '] [' + label(s) + '](' + s.url + ')').join('\n');
-  }
+  answer = merecatFinishAnswer(answer, sources);
   const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
 
   const inTok = Math.ceil(JSON.stringify(messages).length / 4);
@@ -3530,6 +3535,69 @@ async function handleMerecatMention(request, env) {
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const replied = await merecatMentionReply(env, id);
   return json({ ok: true, replied: replied || null }, 200);
+}
+
+/* Forward one private answer to a public topic, by the thread's owner and
+   nobody else. The post goes up under the librarian's own name, marked as
+   forwarded by the member, with the question quoted and the cited-sources
+   footer rebuilt — bot words stay under the bot's name, and nothing private
+   goes public except by the owner's hand. */
+async function handleMerecatForward(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const chatId = Number(data.chat);
+  const topicId = Number(data.topic);
+  if (!key || !Number.isInteger(chatId) || chatId < 1 || !Number.isInteger(topicId) || topicId < 1) {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
+    .bind(chatId, me).first();
+  if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const msg = data.msg === 'last'
+    ? await env.LIBDB.prepare(
+        "SELECT id, body, sources FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' ORDER BY id DESC LIMIT 1"
+      ).bind(chatId).first()
+    : await env.LIBDB.prepare(
+        "SELECT id, body, sources FROM chat_msgs WHERE id = ?1 AND chat_id = ?2 AND role = 'assistant'"
+      ).bind(Number(data.msg), chatId).first();
+  if (!msg) return json({ ok: false, error: 'No such answer in that conversation.' }, 404);
+  const topic = await env.DB.prepare(
+    "SELECT id, page, locked, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+  ).bind(topicId).first();
+  if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  if (topic.locked) return json({ ok: false, error: 'That topic is locked.' }, 403);
+
+  const q = await env.LIBDB.prepare(
+    "SELECT body FROM chat_msgs WHERE chat_id = ?1 AND role = 'user' AND id < ?2 ORDER BY id DESC LIMIT 1"
+  ).bind(chatId, msg.id).first();
+  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(me).first();
+  const who = (prof && prof.nick) || 'a member';
+  let srcs = [];
+  try { srcs = JSON.parse(msg.sources || '[]'); } catch { /* footer just stays off */ }
+  let finished = merecatFinishAnswer(String(msg.body || ''), srcs);
+  const head = 'Forwarded from the librarian\u2019s desk by ' + who + '.' +
+    (q && q.body ? '\n\n> ' + String(q.body).replace(/\s+/g, ' ').slice(0, 300) : '') + '\n\n';
+  // fit the board's body cap, trimming the answer, never the footer
+  const room = MAX_BODY - head.length;
+  if (finished.length > room) {
+    const cut = finished.lastIndexOf('\n\nSources:\n');
+    if (cut !== -1 && cut < room - 40) {
+      const footer = finished.slice(cut);
+      finished = finished.slice(0, room - footer.length - 6).trimEnd() + ' [\u2026]' + footer;
+    } else {
+      finished = finished.slice(0, room - 6).trimEnd() + ' [\u2026]';
+    }
+  }
+  const replyId = await merecatInsertComment(env, { page: topic.page, parent_id: null },
+    true, topicId, topic.author_hash, head + finished);
+  return json({ ok: true, id: replyId, topic: topicId }, 200);
 }
 
 /* The quota line's feed: a few tiny reads so the page can always show
@@ -3714,6 +3782,7 @@ export default {
       if (path === '/api/merecat/ask' && request.method === 'POST') return await handleMerecatAsk(request, env, ctx);
       if (path === '/api/merecat/about' && request.method === 'POST') return await handleMerecatAbout(request, env);
       if (path === '/api/merecat/usage' && request.method === 'POST') return await handleMerecatUsage(request, env);
+      if (path === '/api/merecat/forward' && request.method === 'POST') return await handleMerecatForward(request, env);
       if (path === '/api/merecat/mention' && request.method === 'POST') return await handleMerecatMention(request, env);
       if (path === '/api/merecat/chats' && request.method === 'POST') return await handleMerecatChats(request, env);
       if (path === '/api/merecat/chat' && request.method === 'POST') return await handleMerecatChat(request, env);
