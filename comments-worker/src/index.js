@@ -2881,6 +2881,19 @@ async function merecatVerseSeats(env, q, add) {
   }
 }
 
+/* Converted shelf texts can carry residual HTML tags and entities; labels
+   and prompt windows must read as plain text wherever they surface (the
+   footer, the board, the model's own eyes) — including sources stored in
+   old chats before the ingest-side scrub existed. */
+function merecatScrub(t, keepNl) {
+  let x = String(t || '').replace(/<\/?[a-zA-Z][^>]{0,300}?>/g, ' ')
+    .replace(/&#x([0-9a-fA-F]{1,6});/g, (m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch { return ' '; } })
+    .replace(/&#(\d{1,7});/g, (m, n) => { try { return String.fromCodePoint(+n); } catch { return ' '; } })
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, ' ');
+  return (keepNl ? x.replace(/[ \t]{2,}/g, ' ') : x.replace(/\s+/g, ' ')).trim();
+}
+
 /* Hybrid retrieval: returns up to cfg.topk chunks, each
    { cid, title, url, anchor, heading, tier, text }. Every leg fails soft so a
    broken index degrades the answer instead of killing it. */
@@ -3081,13 +3094,13 @@ async function handleMerecatAsk(request, env, ctx) {
   // Build the prompt: persona, the thread's condensed summary when one
   // exists, the numbered sources, the recent turns verbatim, the question.
   const sources = chunks.map((c, i) => ({
-    n: i + 1, title: c.title, heading: c.heading,
+    n: i + 1, title: merecatScrub(c.title), heading: merecatScrub(c.heading),
     url: !c.url ? '' : /^https?:\/\//.test(c.url) ? c.url : MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
   }));
   let srcBlock = '';
   chunks.forEach((c, i) => {
-    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + c.title +
-      (c.heading ? ' — ' + c.heading : '') + '\n' + c.text.slice(0, 2800) + '\n\n';
+    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + merecatScrub(c.title) +
+      (c.heading ? ' — ' + merecatScrub(c.heading) : '') + '\n' + merecatScrub(c.text.slice(0, 2800), true) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
     (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
@@ -3560,7 +3573,7 @@ function merecatFinishAnswer(answer, sources) {
       renum.has(Number(n)) ? '[' + renum.get(Number(n)) + ']' : m);
     const cited = sources.filter((s) => renum.has(s.n))
       .sort((a, b) => renum.get(a.n) - renum.get(b.n));
-    const label = (s) => (s.title + (s.heading ? ' — ' + s.heading : ''))
+    const label = (s) => merecatScrub(s.title + (s.heading ? ' — ' + s.heading : ''))
       .replace(/\[/g, '(').replace(/\]/g, ')');
     answer += '\n\nSources:\n' + cited.map((s) =>
       '[' + renum.get(s.n) + '] ' + (s.url ? '[' + label(s) + '](' + s.url + ')' : label(s))).join('\n');
@@ -3651,13 +3664,13 @@ async function merecatMentionReply(env, commentId) {
     .slice(0, 2000) || 'this site';
   const chunks = await merecatRetrieve(env, retrievalQ, cfg);
   const sources = chunks.map((cc, i) => ({
-    n: i + 1, title: cc.title, heading: cc.heading,
+    n: i + 1, title: merecatScrub(cc.title), heading: merecatScrub(cc.heading),
     url: !cc.url ? '' : /^https?:\/\//.test(cc.url) ? cc.url : MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
   }));
   let srcBlock = '';
   chunks.forEach((cc, i) => {
-    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + cc.title +
-      (cc.heading ? ' — ' + cc.heading : '') + '\n' + cc.text.slice(0, 2800) + '\n\n';
+    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
+      (cc.heading ? ' — ' + merecatScrub(cc.heading) : '') + '\n' + merecatScrub(cc.text.slice(0, 2800), true) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
     '\n\nYou were mentioned by name inside ' + where + '. The recent conversation, oldest first:\n\n' +
