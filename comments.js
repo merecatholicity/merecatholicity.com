@@ -4726,12 +4726,17 @@
       whoDiv.appendChild(f);
     }
 
+    function mcScrubLabel(t) {
+      return String(t || '').replace(/<\/?[a-zA-Z][^>]{0,300}?>/g, ' ')
+        .replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+    }
     function srcFooter(node, sources) {
       if (!sources || !sources.length) return;
       var f = el('div', 'merecat-srcs');
       f.appendChild(el('strong', null, 'Sources: '));
       sources.forEach(function (s) {
-        var t = '[' + s.n + '] ' + s.title + (s.heading ? ' — ' + s.heading : '');
+        var t = '[' + s.n + '] ' + mcScrubLabel(s.title) + (s.heading ? ' — ' + mcScrubLabel(s.heading) : '');
         if (s.url) {
           var a = el('a', 'body-link', t);
           a.href = s.url;

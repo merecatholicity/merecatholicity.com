@@ -26,6 +26,7 @@ THIS WALK MUST MIRROR deeplink.js; change them together. Bible anchors come
 straight from kjv.json/dr.json the way bible-reader.js resolves them.
 """
 import argparse
+import html
 import hashlib
 import json
 import os
@@ -376,10 +377,26 @@ def build_bible(path, deutero=False, proto=False):
     return chunks, None                # anchors valid by construction
 
 
+TAG_RE = re.compile(r"</?[a-zA-Z][^>\n]{0,300}?>")
+B64_RE = re.compile(r"[A-Za-z0-9+/=]{80,}")
+
+
+def scrub_text(src):
+    """Converted books (epub/mobi via pandoc, or files supplied pre-made)
+    can carry raw HTML tags, character entities, and base64 image debris.
+    Chunks are plain text by contract: strip it all here so headings and
+    bodies never show markup in a sources footer or a prompt window."""
+    src = TAG_RE.sub(" ", src)
+    src = B64_RE.sub(" ", src)
+    src = html.unescape(html.unescape(src))
+    src = src.replace("\u00a0", " ")
+    return re.sub(r"[ \t]{2,}", " ", src)
+
+
 def build_text(path, title):
     """Plain txt/md. Lines opening with #, ## or ### become the heading
     breadcrumb for what follows, so a whole book chunks chapter-labeled."""
-    src = open(path, encoding="utf-8", errors="replace").read()
+    src = scrub_text(open(path, encoding="utf-8", errors="replace").read())
     chunks = []
     heading = title[:140]
     section = []
