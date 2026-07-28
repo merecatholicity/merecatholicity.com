@@ -4489,6 +4489,8 @@
     ib.appendChild(p1);
     ib.appendChild(el('p', null,
       'It is one of the first dedicated Christian AIs in existence, and it is built on a different idea: not an oracle that guesses, but a librarian with a library, grounded in the vast resources this site hosts, every answer carrying its sources as links you can check. The whole community shares one free daily budget, shown beneath the question box.'));
+    ib.appendChild(el('p', null,
+      'It is well versed, with real expertise, in the whole of this site and everything its Library carries: the book and the papers, the Scriptures, the Fathers one by one and in the complete Schaff library, the seven councils and the confessions of every communion, the Summa and the Catena, the history of the Church, the Second Temple world of Josephus and Philo, the Roman empire and the classics, and the rule of prayer, and beyond the shelf itself the questions that surround it, Paul and justification, the resurrection, the last things, the moral and social order, philosophy in the school of Aristotle and St. Thomas, and the meeting of faith and science. All of it is read through one lens: John Henry Newman\u2019s account of the development of doctrine, with the implications our book draws from it and the three further tests it adds. If it touches this site or its shelf, merecat can talk with you about it.'));
     intro.appendChild(ib);
     section.appendChild(intro);
 
