@@ -449,6 +449,44 @@ works:
 
 
 
+
+  # ---- Band 5 addendum: the Second Temple, the world of the New
+  # Testament (2026-07-28 wave) — primary sources at the deep-shelf
+  # reference weight, third room. Josephus was weighed for a higher band
+  # and kept at 5: on Second Temple questions these works dominate the
+  # pool by content, not boost, and the persona carries the emphasis
+  # (Wars = the partial-preterism eyewitness, Wright their interpreter).
+  antiquities:
+    { src: ../antiquities.html, url: antiquities.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Antiquities of the Jews, by Flavius Josephus" }
+  wars:
+    { src: ../wars.html, url: wars.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Wars of the Jews, by Flavius Josephus" }
+  josephus-minor:
+    { src: ../josephus-minor.html, url: josephus-minor.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Life of Flavius Josephus, with Against Apion and the Discourse on Hades" }
+  philo1:
+    { src: ../philo1.html, url: philo1.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Works of Philo Judaeus, Vol. 1: On the Creation, and the Allegorical Commentary" }
+  philo2:
+    { src: ../philo2.html, url: philo2.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Works of Philo Judaeus, Vol. 2: The Exposition of the Law" }
+  philo3:
+    { src: ../philo3.html, url: philo3.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Works of Philo Judaeus, Vol. 3: The Philosophical and Historical Treatises" }
+  philo4:
+    { src: ../philo4.html, url: philo4.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Works of Philo Judaeus, Vol. 4: Questions and Answers on Genesis, with the Fragments" }
+  enoch:
+    { src: ../enoch.html, url: enoch.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Book of Enoch, translated by R. H. Charles" }
+  jubilees:
+    { src: ../jubilees.html, url: jubilees.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Book of Jubilees, translated by R. H. Charles" }
+  testaments:
+    { src: ../testaments.html, url: testaments.html, tier: 5, kind: pandoc, store: deep2,
+      title: "The Testaments of the Twelve Patriarchs" }
+
   # ---- Band 9: the scholars' shelf. Private like band 8 (url-less, never
   # committed, absent from the transparency roster), weighted 1.3 between
   # the Fathers and the councils: the site's modern research authorities.
@@ -662,6 +700,9 @@ works:
   republic:
     { src: ../republic.html, url: republic.html, tier: 7, kind: pandoc, store: deep2,
       title: "The Republic, by Plato" }
+  phaedo:
+    { src: ../phaedo.html, url: phaedo.html, tier: 7, kind: pandoc, store: deep2,
+      title: "Phaedo, by Plato" }
   timaeus:
     { src: ../timaeus.html, url: timaeus.html, tier: 7, kind: pandoc, store: deep2,
       title: "Timaeus, by Plato" }
