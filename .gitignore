@@ -227,9 +227,11 @@ resources/parochial7.pdf
 resources/parochial8.pdf
 librarian/.key
 __pycache__/
-# librarian/private is a SUBMODULE pointing at the PRIVATE repo
-# merecatholicity/private-shelf: the parent records only a commit sha,
-# never the texts. Do not re-ignore it, and never flip that repo public.
+# librarian/private is an INDEPENDENT nested git repo pushed to the
+# PRIVATE repo merecatholicity/private-shelf (never as a submodule: the
+# Pages Jekyll builder cannot fetch private submodules and the site
+# build fails). Ignored here; restore with a second clone into this path.
+librarian/private/
 # the classics shelf: git-ignored remote source trees (re-fetch with
 # `python classics2tex.py fetch`) and per-work intermediate PDFs; the
 # committed *-src.html flat files, bodies, wrappers, and the published
