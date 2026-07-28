@@ -177,6 +177,21 @@
     return { map: map, src: '(' + alt + ')\\.?[ \\t]+(\\d+):(\\d+)(?:[\\-\\u2013](\\d+))?' };
   })();
 
+  /* Any anchor whose href lands on a KJV verse gets the hover-preview data,
+     however the anchor was born: a plain written reference, a markdown link
+     (merecat writes those), or a sources-footer entry. The slug is greedy, so
+     1-corinthians-6-9 splits book/chapter/verse correctly; a chapter-only
+     hash (no verse) stays undecorated since there is nothing to preview. */
+  function scriptureDecor(a, url) {
+    var m = /(?:^|\/)kjv\.html#([a-z0-9-]+)-(\d+)-(\d+)$/.exec(String(url || ''));
+    if (!m) return;
+    a.className += ' scripture-link';
+    a.setAttribute('data-slug', m[1]);
+    a.setAttribute('data-ch', m[2]);
+    a.setAttribute('data-v1', m[3]);
+    a.setAttribute('data-v2', m[3]);
+  }
+
   /* The base inline grammar; the scripture group (book=6, chapter=7, verse=8) is
      appended so a reference becomes a same-site verse link in appendRich. */
   var INLINE_BASE = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+|:([a-z0-9_+-]{1,40}):/gi;
@@ -228,6 +243,7 @@
         var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]);
         if (/^https?:\/\/(?:www\.)?merecatholicity\.com(?:[\/?#]|$)/i.test(url)) {
           a.href = url;
+          scriptureDecor(a, url);
         } else {
           /* Off-site: link to our own warning page, which names the destination
              and requires a click. rel keeps referrer/opener from leaking and
@@ -4707,6 +4723,7 @@
         var a = el('a', 'body-link',
           '[' + s.n + '] ' + s.title + (s.heading ? ' — ' + s.heading : ''));
         a.href = s.url;
+        scriptureDecor(a, s.url);
         f.appendChild(a);
       });
       node.appendChild(f);
