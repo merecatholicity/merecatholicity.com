@@ -227,3 +227,4 @@ resources/parochial7.pdf
 resources/parochial8.pdf
 librarian/.key
 __pycache__/
+librarian/private/
