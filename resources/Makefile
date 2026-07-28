@@ -64,6 +64,7 @@ body:
 	python hooker2tex.py
 	python rome2tex.py
 	python gibbon2tex.py
+	python thayer2tex.py
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
 # byte-identical, so git only churns when the text really changes.
@@ -139,6 +140,10 @@ WORKS = \
   suetonius=The_Twelve_Caesars.pdf \
   ammianus=Ammianus_Marcellinus.pdf \
   zosimus=The_New_History_of_Zosimus.pdf \
+  dio1=Roman_History_Dio_Vol_1.pdf \
+  dio2=Roman_History_Dio_Vol_2.pdf \
+  dio3=Roman_History_Dio_Vol_3.pdf \
+  burlat=History_of_the_Later_Roman_Empire.pdf \
   gibbon1=Decline_and_Fall_Vol_1.pdf \
   gibbon2=Decline_and_Fall_Vol_2.pdf \
   gibbon3=Decline_and_Fall_Vol_3.pdf \
@@ -284,6 +289,10 @@ html:
 	         suetonius:1:"The Lives of the Twelve Caesars, by Suetonius" \
 	         ammianus:1:"The Roman History of Ammianus Marcellinus" \
 	         zosimus:1:"The New History, by Count Zosimus" \
+	         dio1:1:"Roman History, Vol. 1: The Fragments, by Cassius Dio" \
+	         dio2:1:"Roman History, Vol. 2: Books XXXVI-LX, by Cassius Dio" \
+	         dio3:1:"Roman History, Vol. 3: The Epitomes, by Cassius Dio" \
+	         burlat:1:"History of the Later Roman Empire, by J. B. Bury" \
 	         gibbon1:1:"The Decline and Fall of the Roman Empire, Vol. 1" \
 	         gibbon2:1:"The Decline and Fall of the Roman Empire, Vol. 2" \
 	         gibbon3:1:"The Decline and Fall of the Roman Empire, Vol. 3" \
