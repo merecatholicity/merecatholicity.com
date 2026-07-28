@@ -337,11 +337,26 @@ def build_hand(path):
     return chunks, set(ID_RE.findall(src))
 
 
-def build_bible(path):
+# The books of the Catholic canon the King James set lacks, plus the Greek
+# chapters of Daniel (the Song of the Three, Susanna, Bel) and the additions
+# to Esther — carried from the Douay-Rheims so the bot's Scripture band holds
+# the whole canon while the full DR stays excluded as redundant.
+DEUTERO_BOOKS = {"tobias", "judith", "wisdom", "ecclesiasticus", "baruch",
+                 "1-machabees", "2-machabees"}
+DEUTERO_CHAPTERS = {"daniel": {3, 13, 14}, "esther": set(range(10, 17))}
+
+
+def build_bible(path, deutero=False):
     data = json.load(open(path, encoding="utf-8"))
     chunks = []
     for book in data["books"]:
+        if deutero and book["slug"] not in DEUTERO_BOOKS \
+                and book["slug"] not in DEUTERO_CHAPTERS:
+            continue
+        only = DEUTERO_CHAPTERS.get(book["slug"]) if deutero else None
         for ci, verses in enumerate(book["chapters"], 1):
+            if only is not None and ci not in only:
+                continue
             paras = []
             for vi, text in enumerate(verses, 1):
                 if not text:
@@ -370,6 +385,8 @@ def build(entry):
         chunks, valid = build_hand(path)
     elif kind == "bible":
         chunks, valid = build_bible(path)
+    elif kind == "bible-deutero":
+        chunks, valid = build_bible(path, deutero=True)
     elif kind == "text":
         chunks, valid = build_text(path, entry["title"])
     else:

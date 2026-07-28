@@ -76,10 +76,16 @@ works:
     { src: ../enchiridion.html, url: enchiridion.html, tier: 1, kind: pandoc, vectorize: true,
       title: "The Enchiridion, by St. Augustine" }
 
-  # ---- Band 2: the Scriptures (KJV; the DR is deliberately absent) ----
+  # ---- Band 2: the Scriptures. The KJV whole; the full Douay-Rheims
+  # stays excluded as redundant, but the Deuterocanon the KJV lacks is
+  # carried from it (whole books + the Greek Daniel and Esther additions),
+  # anchored into the DR reader. ----
   kjv:
     { src: ../kjv.json, url: kjv.html, tier: 2, kind: bible,
       title: "The Holy Bible, King James Version" }
+  apocrypha:
+    { src: ../dr.json, url: douay-rheims.html, tier: 2, kind: bible-deutero,
+      title: "The Deuterocanon (Apocrypha), from the Douay-Rheims" }
 
   # ---- Band 3: the named works of the Fathers, and the Catena ---------
   commonitory:
