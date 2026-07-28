@@ -4274,7 +4274,7 @@
       ' is the Mere Catholicity community’s own dedicated AI assistant, the librarian of the whole shelf. Ask a real research question and it answers from the Library itself, the book, the papers, the Fathers, the councils, the Scriptures, and Newman entire, citing the exact paragraphs it stands on.'));
     ib.appendChild(p1);
     ib.appendChild(el('p', null,
-      'Every answer carries its sources as links you can check. The whole community shares one free daily budget, shown beneath the question box.'));
+      'It is one of the first dedicated Christian AIs in existence, and it is built on a different idea: not an oracle that guesses, but a librarian with a library, grounded in the vast resources this site hosts, every answer carrying its sources as links you can check. The whole community shares one free daily budget, shown beneath the question box.'));
     intro.appendChild(ib);
     section.appendChild(intro);
 
