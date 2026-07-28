@@ -97,6 +97,9 @@ WORKS = \
   jddj=Joint_Declaration_on_Justification.pdf \
   encyclical1848=Encyclical_of_the_Eastern_Patriarchs.pdf \
   scranton=Declaration_of_Scranton.pdf \
+  encyclical1895=Encyclical_of_1895.pdf \
+  apostolicae=Apostolicae_Curae.pdf \
+  saepius=Saepius_Officio.pdf \
   cassian-prayer=Conferences_on_Prayer.pdf \
   benedict-rule=Rule_of_St_Benedict.pdf \
   cityofgod=The_City_of_God.pdf \
@@ -212,6 +215,9 @@ html:
 	         jddj:2:"Joint Declaration on the Doctrine of Justification" \
 	         encyclical1848:1:"Encyclical of the Eastern Patriarchs, 1848" \
 	         scranton:1:"The Declaration of Scranton" \
+	         encyclical1895:1:"Patriarchal and Synodical Encyclical of 1895" \
+	         apostolicae:1:"Apostolicae Curae, by Pope Leo XIII" \
+	         saepius:1:"Saepius Officio, the Answer of the Archbishops of England" \
 	         cassian-prayer:1:"The Conferences on Prayer, by St. John Cassian" \
 	         benedict-rule:1:"The Holy Rule of St. Benedict" \
 	         gregory-letters:1:"Letters of St. Gregory the Great on the Title Universal Bishop" \
@@ -236,6 +242,8 @@ html:
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \
 	      -e 's/\\xsubsection{/\\paragraph{/g' \
+	      -e 's/\\section{/\\section*{/g' \
+	      -e 's/\\subsection{/\\subsection*{/g' \
 	      -e 's/\\textgreek{/{/g' \
 	      -e 's/\\texthebrew{/{/g' \
 	      $$n-body.tex > $$n-body-html.tex; \
