@@ -185,6 +185,15 @@ works:
   encyclical1848:
     { src: ../encyclical1848.html, url: encyclical1848.html, tier: 4, kind: pandoc,
       title: "Encyclical of the Eastern Patriarchs, 1848" }
+  encyclical1895:
+    { src: ../encyclical1895.html, url: encyclical1895.html, tier: 4, kind: pandoc,
+      title: "Patriarchal and Synodical Encyclical of 1895, the reply to Leo XIII" }
+  apostolicae:
+    { src: ../apostolicae.html, url: apostolicae.html, tier: 4, kind: pandoc,
+      title: "Apostolicae Curae, by Pope Leo XIII, 1896" }
+  saepius:
+    { src: ../saepius.html, url: saepius.html, tier: 4, kind: pandoc,
+      title: "Saepius Officio, the Answer of the Archbishops of England, 1897" }
   scranton:
     { src: ../scranton.html, url: scranton.html, tier: 4, kind: pandoc,
       title: "The Declaration of Scranton" }
