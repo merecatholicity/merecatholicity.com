@@ -227,7 +227,9 @@ resources/parochial7.pdf
 resources/parochial8.pdf
 librarian/.key
 __pycache__/
-librarian/private/
+# librarian/private is a SUBMODULE pointing at the PRIVATE repo
+# merecatholicity/private-shelf: the parent records only a commit sha,
+# never the texts. Do not re-ignore it, and never flip that repo public.
 # the classics shelf: git-ignored remote source trees (re-fetch with
 # `python classics2tex.py fetch`) and per-work intermediate PDFs; the
 # committed *-src.html flat files, bodies, wrappers, and the published
