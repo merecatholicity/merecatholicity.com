@@ -241,127 +241,127 @@ works:
 
   # ---- Band 5: the deep shelf, for digging ----------------------------
   summa-fp:
-    { src: ../summa-fp.html, url: summa-fp.html, tier: 5, kind: pandoc,
+    { src: ../summa-fp.html, url: summa-fp.html, tier: 5, kind: pandoc, store: deep,
       title: "Summa Theologica, First Part" }
   summa-fs:
-    { src: ../summa-fs.html, url: summa-fs.html, tier: 5, kind: pandoc,
+    { src: ../summa-fs.html, url: summa-fs.html, tier: 5, kind: pandoc, store: deep,
       title: "Summa Theologica, First Part of the Second Part" }
   summa-ss:
-    { src: ../summa-ss.html, url: summa-ss.html, tier: 5, kind: pandoc,
+    { src: ../summa-ss.html, url: summa-ss.html, tier: 5, kind: pandoc, store: deep,
       title: "Summa Theologica, Second Part of the Second Part" }
   summa-tp:
-    { src: ../summa-tp.html, url: summa-tp.html, tier: 5, kind: pandoc,
+    { src: ../summa-tp.html, url: summa-tp.html, tier: 5, kind: pandoc, store: deep,
       title: "Summa Theologica, Third Part" }
   summa-xp:
-    { src: ../summa-xp.html, url: summa-xp.html, tier: 5, kind: pandoc,
+    { src: ../summa-xp.html, url: summa-xp.html, tier: 5, kind: pandoc, store: deep,
       title: "Summa Theologica, Supplement" }
   anf01:
-    { src: ../anf01.html, url: anf01.html, tier: 5, kind: pandoc,
+    { src: ../anf01.html, url: anf01.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 1 (The Apostolic Fathers with Justin Martyr and Irenaeus)" }
   anf02:
-    { src: ../anf02.html, url: anf02.html, tier: 5, kind: pandoc,
+    { src: ../anf02.html, url: anf02.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 2 (Fathers of the Second Century)" }
   anf03:
-    { src: ../anf03.html, url: anf03.html, tier: 5, kind: pandoc,
+    { src: ../anf03.html, url: anf03.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 3 (Latin Christianity: Its Founder, Tertullian)" }
   anf04:
-    { src: ../anf04.html, url: anf04.html, tier: 5, kind: pandoc,
+    { src: ../anf04.html, url: anf04.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 4 (Fathers of the Third Century)" }
   anf05:
-    { src: ../anf05.html, url: anf05.html, tier: 5, kind: pandoc,
+    { src: ../anf05.html, url: anf05.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 5 (Fathers of the Third Century)" }
   anf06:
-    { src: ../anf06.html, url: anf06.html, tier: 5, kind: pandoc,
+    { src: ../anf06.html, url: anf06.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 6 (Fathers of the Third Century)" }
   anf07:
-    { src: ../anf07.html, url: anf07.html, tier: 5, kind: pandoc,
+    { src: ../anf07.html, url: anf07.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 7 (Fathers of the Third and Fourth Centuries)" }
   anf08:
-    { src: ../anf08.html, url: anf08.html, tier: 5, kind: pandoc,
+    { src: ../anf08.html, url: anf08.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 8 (The Twelve Patriarchs, Excerpts and Epistles, and the Ancient Remains)" }
   anf09:
-    { src: ../anf09.html, url: anf09.html, tier: 5, kind: pandoc,
+    { src: ../anf09.html, url: anf09.html, tier: 5, kind: pandoc, store: deep,
       title: "Ante-Nicene Fathers, Vol. 9 (Recently Discovered Additions, with Origen's Commentaries)" }
   npnf101:
-    { src: ../npnf101.html, url: npnf101.html, tier: 5, kind: pandoc,
+    { src: ../npnf101.html, url: npnf101.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 1 (Augustine: Prolegomena, Confessions, Letters)" }
   npnf102:
-    { src: ../npnf102.html, url: npnf102.html, tier: 5, kind: pandoc,
+    { src: ../npnf102.html, url: npnf102.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 2 (Augustine: City of God, On Christian Doctrine)" }
   npnf103:
-    { src: ../npnf103.html, url: npnf103.html, tier: 5, kind: pandoc,
+    { src: ../npnf103.html, url: npnf103.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 3 (Augustine: On the Trinity, Doctrinal and Moral Treatises)" }
   npnf104:
-    { src: ../npnf104.html, url: npnf104.html, tier: 5, kind: pandoc,
+    { src: ../npnf104.html, url: npnf104.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 4 (Augustine: Anti-Manichaean and Anti-Donatist)" }
   npnf105:
-    { src: ../npnf105.html, url: npnf105.html, tier: 5, kind: pandoc,
+    { src: ../npnf105.html, url: npnf105.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 5 (Augustine: Anti-Pelagian Writings)" }
   npnf106:
-    { src: ../npnf106.html, url: npnf106.html, tier: 5, kind: pandoc,
+    { src: ../npnf106.html, url: npnf106.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 6 (Augustine: Sermon on the Mount, Harmony, Homilies)" }
   npnf107:
-    { src: ../npnf107.html, url: npnf107.html, tier: 5, kind: pandoc,
+    { src: ../npnf107.html, url: npnf107.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 7 (Augustine: Homilies on John and First John, Soliloquies)" }
   npnf108:
-    { src: ../npnf108.html, url: npnf108.html, tier: 5, kind: pandoc,
+    { src: ../npnf108.html, url: npnf108.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 8 (Augustine: Expositions on the Psalms)" }
   npnf109:
-    { src: ../npnf109.html, url: npnf109.html, tier: 5, kind: pandoc,
+    { src: ../npnf109.html, url: npnf109.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 9 (Chrysostom: Priesthood, Treatises, Homilies, Statues)" }
   npnf110:
-    { src: ../npnf110.html, url: npnf110.html, tier: 5, kind: pandoc,
+    { src: ../npnf110.html, url: npnf110.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 10 (Chrysostom: Homilies on Matthew)" }
   npnf111:
-    { src: ../npnf111.html, url: npnf111.html, tier: 5, kind: pandoc,
+    { src: ../npnf111.html, url: npnf111.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 11 (Chrysostom: Homilies on Acts and Romans)" }
   npnf112:
-    { src: ../npnf112.html, url: npnf112.html, tier: 5, kind: pandoc,
+    { src: ../npnf112.html, url: npnf112.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 12 (Chrysostom: Homilies on Corinthians)" }
   npnf113:
-    { src: ../npnf113.html, url: npnf113.html, tier: 5, kind: pandoc,
+    { src: ../npnf113.html, url: npnf113.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 13 (Chrysostom: Homilies on Galatians through Philemon)" }
   npnf114:
-    { src: ../npnf114.html, url: npnf114.html, tier: 5, kind: pandoc,
+    { src: ../npnf114.html, url: npnf114.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 1, Vol. 14 (Chrysostom: Homilies on John and Hebrews)" }
   npnf201:
-    { src: ../npnf201.html, url: npnf201.html, tier: 5, kind: pandoc,
+    { src: ../npnf201.html, url: npnf201.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 1 (Eusebius: Church History, Life of Constantine)" }
   npnf202:
-    { src: ../npnf202.html, url: npnf202.html, tier: 5, kind: pandoc,
+    { src: ../npnf202.html, url: npnf202.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 2 (Socrates and Sozomen: Ecclesiastical Histories)" }
   npnf203:
-    { src: ../npnf203.html, url: npnf203.html, tier: 5, kind: pandoc,
+    { src: ../npnf203.html, url: npnf203.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 3 (Theodoret, Jerome and Gennadius, Rufinus)" }
   npnf204:
-    { src: ../npnf204.html, url: npnf204.html, tier: 5, kind: pandoc,
+    { src: ../npnf204.html, url: npnf204.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 4 (Athanasius: Select Works and Letters)" }
   npnf205:
-    { src: ../npnf205.html, url: npnf205.html, tier: 5, kind: pandoc,
+    { src: ../npnf205.html, url: npnf205.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 5 (Gregory of Nyssa: Dogmatic Treatises, Writings, Letters)" }
   npnf206:
-    { src: ../npnf206.html, url: npnf206.html, tier: 5, kind: pandoc,
+    { src: ../npnf206.html, url: npnf206.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 6 (Jerome: Letters and Select Works)" }
   npnf207:
-    { src: ../npnf207.html, url: npnf207.html, tier: 5, kind: pandoc,
+    { src: ../npnf207.html, url: npnf207.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 7 (Cyril of Jerusalem and Gregory Nazianzen)" }
   npnf208:
-    { src: ../npnf208.html, url: npnf208.html, tier: 5, kind: pandoc,
+    { src: ../npnf208.html, url: npnf208.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 8 (Basil: Letters and Select Works)" }
   npnf209:
-    { src: ../npnf209.html, url: npnf209.html, tier: 5, kind: pandoc,
+    { src: ../npnf209.html, url: npnf209.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 9 (Hilary of Poitiers, and John of Damascus)" }
   npnf210:
-    { src: ../npnf210.html, url: npnf210.html, tier: 5, kind: pandoc,
+    { src: ../npnf210.html, url: npnf210.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 10 (Ambrose: Select Works and Letters)" }
   npnf211:
-    { src: ../npnf211.html, url: npnf211.html, tier: 5, kind: pandoc,
+    { src: ../npnf211.html, url: npnf211.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 11 (Sulpitius Severus, Vincent of Lerins, John Cassian)" }
   npnf212:
-    { src: ../npnf212.html, url: npnf212.html, tier: 5, kind: pandoc,
+    { src: ../npnf212.html, url: npnf212.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 12 (Leo the Great and Gregory the Great)" }
   npnf213:
-    { src: ../npnf213.html, url: npnf213.html, tier: 5, kind: pandoc,
+    { src: ../npnf213.html, url: npnf213.html, tier: 5, kind: pandoc, store: deep,
       title: "NPNF Series 2, Vol. 13 (Gregory the Great, Ephraim Syrus, Aphrahat)" }
   institutes:
     { src: ../institutes.html, url: institutes.html, tier: 5, kind: pandoc,
@@ -384,37 +384,37 @@ works:
 
   # ---- Band 5 addendum: Schaff's History, the Creeds, and Trent ------
   hcc1:
-    { src: ../hcc1.html, url: hcc1.html, tier: 5, kind: pandoc,
+    { src: ../hcc1.html, url: hcc1.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. I. Apostolic Christianity, A.D. 1–100" }
   hcc2:
-    { src: ../hcc2.html, url: hcc2.html, tier: 5, kind: pandoc,
+    { src: ../hcc2.html, url: hcc2.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. II. Ante-Nicene Christianity, A.D. 100–325" }
   hcc3:
-    { src: ../hcc3.html, url: hcc3.html, tier: 5, kind: pandoc,
+    { src: ../hcc3.html, url: hcc3.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. III. Nicene and Post-Nicene Christianity, A.D. 311–600" }
   hcc4:
-    { src: ../hcc4.html, url: hcc4.html, tier: 5, kind: pandoc,
+    { src: ../hcc4.html, url: hcc4.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. IV. Mediaeval Christianity, A.D. 590–1073" }
   hcc5:
-    { src: ../hcc5.html, url: hcc5.html, tier: 5, kind: pandoc,
+    { src: ../hcc5.html, url: hcc5.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. V. The Middle Ages, A.D. 1049–1294" }
   hcc6:
-    { src: ../hcc6.html, url: hcc6.html, tier: 5, kind: pandoc,
+    { src: ../hcc6.html, url: hcc6.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. VI. The Middle Ages, A.D. 1294–1517" }
   hcc7:
-    { src: ../hcc7.html, url: hcc7.html, tier: 5, kind: pandoc,
+    { src: ../hcc7.html, url: hcc7.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. VII. Modern Christianity: The German Reformation" }
   hcc8:
-    { src: ../hcc8.html, url: hcc8.html, tier: 5, kind: pandoc,
+    { src: ../hcc8.html, url: hcc8.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. VIII. Modern Christianity: The Swiss Reformation" }
   creeds1:
-    { src: ../creeds1.html, url: creeds1.html, tier: 5, kind: pandoc,
+    { src: ../creeds1.html, url: creeds1.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. I. The History of Creeds" }
   creeds2:
-    { src: ../creeds2.html, url: creeds2.html, tier: 5, kind: pandoc,
+    { src: ../creeds2.html, url: creeds2.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. II. The Greek and Latin Creeds, with Translations" }
   creeds3:
-    { src: ../creeds3.html, url: creeds3.html, tier: 5, kind: pandoc,
+    { src: ../creeds3.html, url: creeds3.html, tier: 5, kind: pandoc, store: deep,
       title: "Vol. III. The Evangelical Protestant Creeds, with Translations" }
   trent:
     { src: ../trent.html, url: trent.html, tier: 4, kind: pandoc,
@@ -433,6 +433,72 @@ works:
   gibbons:
     { src: ../gibbons.html, url: gibbons.html, tier: 5, kind: pandoc,
       title: "The Faith of Our Fathers, by James Cardinal Gibbons" }
+
+  # ---- Band 7: the Roman world, for background — the very bottom of
+  # the totem (weight 0.9), stored in the deep room (merecat-library-deep) --
+  annals:
+    { src: ../annals.html, url: annals.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Annals, by Tacitus" }
+  histories:
+    { src: ../histories.html, url: histories.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Histories, by Tacitus" }
+  suetonius:
+    { src: ../suetonius.html, url: suetonius.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Lives of the Twelve Caesars, by Suetonius" }
+  ammianus:
+    { src: ../ammianus.html, url: ammianus.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Roman History of Ammianus Marcellinus" }
+  zosimus:
+    { src: ../zosimus.html, url: zosimus.html, tier: 7, kind: pandoc, store: deep,
+      title: "The New History, by Count Zosimus" }
+  dio1:
+    { src: ../dio1.html, url: dio1.html, tier: 7, kind: pandoc, store: deep,
+      title: "Roman History, Vol. 1: The Fragments, by Cassius Dio" }
+  dio2:
+    { src: ../dio2.html, url: dio2.html, tier: 7, kind: pandoc, store: deep,
+      title: "Roman History, Vol. 2: Books XXXVI–LX, by Cassius Dio" }
+  dio3:
+    { src: ../dio3.html, url: dio3.html, tier: 7, kind: pandoc, store: deep,
+      title: "Roman History, Vol. 3: The Epitomes, by Cassius Dio" }
+  burlat:
+    { src: ../burlat.html, url: burlat.html, tier: 7, kind: pandoc, store: deep,
+      title: "History of the Later Roman Empire, by J. B. Bury" }
+  gibbon1:
+    { src: ../gibbon1.html, url: gibbon1.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 1" }
+  gibbon2:
+    { src: ../gibbon2.html, url: gibbon2.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 2" }
+  gibbon3:
+    { src: ../gibbon3.html, url: gibbon3.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 3" }
+  gibbon4:
+    { src: ../gibbon4.html, url: gibbon4.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 4" }
+  gibbon5:
+    { src: ../gibbon5.html, url: gibbon5.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 5" }
+  gibbon6:
+    { src: ../gibbon6.html, url: gibbon6.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 6" }
+  gibbon7:
+    { src: ../gibbon7.html, url: gibbon7.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 7" }
+  gibbon8:
+    { src: ../gibbon8.html, url: gibbon8.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 8" }
+  gibbon9:
+    { src: ../gibbon9.html, url: gibbon9.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 9" }
+  gibbon10:
+    { src: ../gibbon10.html, url: gibbon10.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 10" }
+  gibbon11:
+    { src: ../gibbon11.html, url: gibbon11.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 11" }
+  gibbon12:
+    { src: ../gibbon12.html, url: gibbon12.html, tier: 7, kind: pandoc, store: deep,
+      title: "The Decline and Fall of the Roman Empire, Vol. 12" }
 
   # ---- Band 6: Newman entire (harvested from library.html) ------------
   oxford-sermons:

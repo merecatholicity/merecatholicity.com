@@ -444,13 +444,14 @@ def audit_library(manifest):
         print("Add an entry for each (or exclude deliberately) so the shelf and the bot stay in step.")
 
 
-def content_hash(entry):
+def content_hash(entry, chunks):
+    """Hash the PARSED CHUNKS, not the file bytes: a nav or footer edit
+    rewrites every built page's bytes without changing a single chunk, and
+    byte-hashing once turned one menu line into a full-corpus re-ingest."""
     h = hashlib.sha256()
     h.update(PARSER_VERSION.encode())
     h.update(json.dumps(entry, sort_keys=True).encode())
-    with open(os.path.join(HERE, entry["src"]), "rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            h.update(block)
+    h.update(json.dumps(chunks, sort_keys=True).encode())
     return h.hexdigest()
 
 
@@ -492,9 +493,10 @@ def post(api, path, body, tries=6):
 
 def push_work(api, key, wid, entry, chunks, chash):
     vec = bool(entry.get("vectorize"))
+    store = entry.get("store", "")
     workmeta = {"id": wid, "title": entry["title"], "url": entry["url"],
                 "tier": entry["tier"], "kind": entry["kind"]}
-    post(api, "/ingest", {"key": key, "mode": "begin", "work": workmeta})
+    post(api, "/ingest", {"key": key, "mode": "begin", "work": workmeta, "store": store})
     # modest bodies: the free plan's per-request CPU allowance is small, and
     # JSON parsing is the ingest endpoint's main CPU cost
     batch = 100 if vec else 250
@@ -502,11 +504,11 @@ def push_work(api, key, wid, entry, chunks, chash):
         rows = [{"cid": f"{wid}#{i + j}", "seq": i + j, **c}
                 for j, c in enumerate(chunks[i:i + batch])]
         post(api, "/ingest", {"key": key, "mode": "append", "work": workmeta,
-                              "chunks": rows, "vectorize": vec})
+                              "chunks": rows, "vectorize": vec, "store": store})
         print(f"    {min(i + batch, len(chunks))}/{len(chunks)}", flush=True)
         time.sleep(0.3)
     post(api, "/ingest", {"key": key, "mode": "end",
-                          "work": {"id": wid, "hash": chash, "chunks": len(chunks)}})
+                          "work": {"id": wid, "hash": chash, "chunks": len(chunks)}, "store": store})
 
 
 def main():
@@ -567,8 +569,10 @@ def main():
     # 2.1x the stored text (search index and btrees); past ~450 MB projected,
     # split bands 5-6 into a second database (the designed relief valve)
     db_mb = roster.get("text_bytes", 0) * 2.09 / 1e6
-    print(f"database projection: ~{db_mb:.0f} MB of 500"
-          + ("  << NEARING THE CAP: time to split the deep shelf" if db_mb > 450 else ""))
+    deep_mb = roster.get("text_bytes_deep", 0) * 2.09 / 1e6
+    print(f"database projection: room one ~{db_mb:.0f} MB of 500, deep room ~{deep_mb:.0f} MB of 500"
+          + ("  << ROOM ONE NEARING ITS CAP" if db_mb > 450 else "")
+          + ("  << DEEP ROOM NEARING ITS CAP" if deep_mb > 450 else ""))
 
     # Prune works that left the manifest (only on unfiltered runs, so a
     # --only/--tiers pass never mistakes filtering for removal).
@@ -586,13 +590,13 @@ def main():
         if not os.path.exists(os.path.join(HERE, entry["src"])):
             waiting += 1
             continue          # not built yet: a later daily run picks it up
-        chash = content_hash(entry)
-        if server.get(wid, {}).get("hash") == chash:
-            continue
-        print(f"{wid}: building...", flush=True)
         chunks, bad = build(entry)
         if bad:
             sys.exit(f"{wid}: {len(bad)} bad anchors, first: {bad[:5]}")
+        chash = content_hash(entry, chunks)
+        if server.get(wid, {}).get("hash") == chash:
+            continue
+        print(f"{wid}: pushing...", flush=True)
         est = len(chunks) * 5          # row + FTS shadow writes, roughly
         if spent + est > args.budget_rows:
             print(f"stopping before {wid}: {est} est. rows would pass the "
