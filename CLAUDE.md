@@ -26,7 +26,9 @@ Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` so rebuilds are byte-identic
 - `make publish` — KDP paperback PDF (same `confession.tex`, `\PAPERBACK` flag, separate jobname).
 - `make logos` — Logos/Verbum `.docx`.
 - `make menu` — regenerate all site navigation from `nav.yml`, then rebuild html.
-- `make check` — `python linkcheck.py`; verifies every internal href/src and `#fragment` on the site resolves. This is the only automated test.
+- `make check` — `make jscheck` then `python linkcheck.py`; verifies every internal href/src and `#fragment` on the site resolves.
+- `make jscheck` — eslint (via deno, no npm setup) over the comments worker and every hand-maintained client script, `no-undef`/`no-dupe-keys`/`no-unreachable` as errors, globals whitelisted in `eslint.config.js`. Born of a postmortem: an undefined `LIB` identifier shipped in the worker's mention, forward, and usage paths and silenced @merecat mentions for days while `/ask` kept working — the crash threw before the model was called, invisible without `wrangler tail`. Neither `deno check` nor `deno lint` catches this class in plain JS; eslint's no-undef does, and on its first run it found five more live instances beyond the one that was reported. **Run it after ANY hand edit to worker or client JS.**
+- `make worker-deploy` — the only sanctioned way to deploy the comments worker: `jscheck` first, then wrangler. Never deploy the worker directly.
 - `make chart-pdfs` — print chart pages to PDF with headless `/usr/bin/chromium` (note: `~/bin/chromium` is an emacs wrapper, not a browser).
 - `make serve` — local server on port 8000.
 - `make comments-backup` — export the live D1 comments DB to `comments-backup.sql` (kept out of git).
