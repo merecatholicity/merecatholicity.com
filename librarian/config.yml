@@ -5,7 +5,9 @@
 #   the board's own moderation calls). @cf/openai/gpt-oss-120b is the tested
 #   deeper alternate at ~4x the cost per question.
 model: "@cf/qwen/qwen3-30b-a3b-fp8"
-user_daily: 10      # questions per member per UTC day
+user_cap_on: 0      # per-member cap switch: 0 = off, members draw freely on the
+                    # community budget (the merecat admin page flips this live)
+user_daily: 10      # questions per member per UTC day, when the switch is on
 global_daily: 150   # questions across the whole community per UTC day
 topk: 8             # retrieved chunks handed to the model
 max_tokens: 1100    # output ceiling per answer

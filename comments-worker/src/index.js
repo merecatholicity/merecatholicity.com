@@ -2588,7 +2588,8 @@ async function handleAdmin(request, env) {
 
 const MERECAT_DEFAULTS = {
   model: '@cf/qwen/qwen3-30b-a3b-fp8',
-  user_daily: 10,     // questions per member per UTC day
+  user_cap_on: 0,     // per-member daily cap: 0 = off (community budget is the only wall)
+  user_daily: 10,     // questions per member per UTC day, when the cap is on
   global_daily: 150,  // questions across the community per UTC day
   topk: 8,            // chunks handed to the model
   max_tokens: 1100,
@@ -2634,6 +2635,7 @@ async function merecatConfig(env) {
     for (const r of results || []) {
       if (r.k === 'persona') cfg.persona = String(r.v);
       else if (r.k === 'model') cfg.model = String(r.v);
+      else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
       else if (r.k in MERECAT_DEFAULTS) cfg[r.k] = Number(r.v) || MERECAT_DEFAULTS[r.k];
     }
   } catch (err) {
@@ -2880,7 +2882,7 @@ async function handleMerecatAsk(request, env, ctx) {
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
       .bind(day, me).first();
     youQ = (u && u.q) || 0;
-    if (!admin && youQ >= cfg.user_daily) {
+    if (!admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
       return json({
         ok: false, capped: true,
         error: 'You have used your ' + cfg.user_daily + ' questions for today. The counter resets at midnight UTC.',
@@ -2962,7 +2964,7 @@ async function handleMerecatAsk(request, env, ctx) {
   const inTokEst = Math.ceil(JSON.stringify(messages).length / 4);
   // the quota line's fresh numbers, counting the question now being answered
   const used = {
-    you: youQ + 1, cap: cfg.user_daily,
+    you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
     today: todayQ + 1, gcap: cfg.global_daily, admin,
   };
   const { readable, writable } = new TransformStream();
@@ -3373,7 +3375,7 @@ async function merecatMentionReply(env, commentId) {
   if (!admin && g && g.q >= cfg.global_daily) {
     refuse = 'merecat is resting. The community’s shared daily budget is spent.' + seeWhen;
   }
-  if (!refuse && !admin) {
+  if (!refuse && !admin && cfg.user_cap_on) {
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
       .bind(day, c.author_hash).first();
     if (u && u.q >= cfg.user_daily) {
@@ -3542,7 +3544,7 @@ async function handleMerecatUsage(request, env) {
     .bind(day, me).first();
   return json({
     ok: true,
-    you: (u && u.q) || 0, cap: cfg.user_daily,
+    you: (u && u.q) || 0, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
     today: (g && g.q) || 0, gcap: cfg.global_daily,
     admin: await isAdminHash(env, me),
   }, 200);
@@ -3572,7 +3574,7 @@ async function handleMerecatAbout(request, env) {
   const out = {
     ok: true,
     model: cfg.model, topk: cfg.topk,
-    user_daily: cfg.user_daily, global_daily: cfg.global_daily,
+    user_daily: cfg.user_daily, user_cap_on: cfg.user_cap_on, global_daily: cfg.global_daily,
     persona: cfg.persona,
     chunks: list.reduce((n, w) => n + (w.chunks || 0), 0),
     works: list,
@@ -3614,7 +3616,7 @@ async function handleMerecatConfigSet(request, env) {
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
   if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
-  for (const k of ['model', 'user_daily', 'global_daily', 'topk', 'max_tokens']) {
+  for (const k of ['model', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens']) {
     if (cfg[k] != null) put(k, cfg[k]);
   }
   if (!stmts.length) return json({ ok: false, error: 'Nothing to set.' }, 400);
