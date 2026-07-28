@@ -184,8 +184,14 @@
      hash (no verse) stays undecorated since there is nothing to preview. */
   function scriptureDecor(a, url) {
     var m = /(?:^|\/)kjv\.html#([a-z0-9-]+)-(\d+)-(\d+)$/.exec(String(url || ''));
+    var dr = null;
+    if (!m) {
+      dr = /(?:^|\/)douay-rheims\.html#([a-z0-9-]+)-(\d+)-(\d+)$/.exec(String(url || ''));
+      m = dr;
+    }
     if (!m) return;
     a.className += ' scripture-link';
+    if (dr) a.setAttribute('data-bible', 'dr');
     a.setAttribute('data-slug', m[1]);
     a.setAttribute('data-ch', m[2]);
     a.setAttribute('data-v1', m[3]);
@@ -956,6 +962,14 @@
       .catch(function () { kjvData = { books: [] }; return kjvData; });
     return kjvPromise;
   }
+  var drData = null, drPromise = null;
+  function loadDr() {
+    if (drPromise) return drPromise;
+    drPromise = fetch('dr.json').then(function (r) { return r.json(); })
+      .then(function (d) { drData = d; return d; })
+      .catch(function () { drData = { books: [] }; return drData; });
+    return drPromise;
+  }
 
   /* The Scripture picker: choose a book, chapter, and a verse (or a span of
      verses), and drop the passage into the box as a blockquote with the
@@ -1051,10 +1065,13 @@
      allowed but capped so a whole-chapter reference can't fill the screen. */
   (function scriptureHover() {
     try { if (!window.matchMedia || !window.matchMedia('(hover: hover)').matches) return; } catch (e) { return; }
-    var tip = null, slugMap = null, hideTimer = null, CAP = 30;
-    function bySlug(slug) {
-      if (!slugMap && kjvData) { slugMap = {}; kjvData.books.forEach(function (b) { slugMap[b.slug] = b; }); }
-      return slugMap ? slugMap[slug] : null;
+    var tip = null, maps = {}, hideTimer = null, CAP = 30;
+    function bySlug(which, data, slug) {
+      if (!maps[which] && data) {
+        maps[which] = {};
+        data.books.forEach(function (b) { maps[which][b.slug] = b; });
+      }
+      return maps[which] ? maps[which][slug] : null;
     }
     function place(a) {
       var r = a.getBoundingClientRect();
@@ -1065,8 +1082,9 @@
       else tip.style.top = below + 'px';
     }
     function show(a) {
-      loadKjv().then(function () {
-        var b = bySlug(a.getAttribute('data-slug')); if (!b) return;
+      var dr = a.getAttribute('data-bible') === 'dr';
+      (dr ? loadDr() : loadKjv()).then(function () {
+        var b = bySlug(dr ? 'dr' : 'kjv', dr ? drData : kjvData, a.getAttribute('data-slug')); if (!b) return;
         var c = +a.getAttribute('data-ch'), ch = b.chapters[c - 1]; if (!ch) return;
         var v1 = +a.getAttribute('data-v1'), v2 = +a.getAttribute('data-v2');
         if (!tip) { tip = el('div', 'scripture-tip'); document.body.appendChild(tip); }
