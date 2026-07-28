@@ -1,0 +1,2759 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE ThML PUBLIC 
+    "-//CCEL/DTD Theological Markup Language//EN"
+    "http://www.ccel.org/dtd/ThML10.dtd">
+<?xml-stylesheet type="text/xml"
+    href="http://www.ccel.org/ss/thml.html.xsl" ?>
+<?xml-stylesheet type="text/xsl"
+    href="http://www.ccel.org/ss/thml.html.xsl" ?>
+    
+<!-- Copyright Christian Classics Ethereal Library -->
+<ThML>
+<ThML.head>
+
+<generalInfo>
+  <description />
+  <pubHistory />
+  <comments />
+</generalInfo>
+
+<printSourceInfo>
+  <published>Leeds: James Nichols, 1817</published>
+</printSourceInfo>
+
+<electronicEdInfo>
+  <publisherID>ccel</publisherID>
+  <authorID>hooker</authorID>
+  <bookID>reform2</bookID>
+  <workID>reform2</workID>
+  <bkgID>church_defended_the_reformation_of_the_laws_and_orders_ecclesiastical_in_the_church_of_england_volume_2_(hooker)</bkgID>
+  <version>1.0</version>
+  <editorialComments />
+  <revisionHistory />
+  <status />
+
+  <DC>
+    <DC.Title>The Church Defended: the reformation of the laws and orders ecclesiastical in the Church of England: Volume 2</DC.Title>
+    <DC.Title sub="short">The Church Defended Vol. 2</DC.Title>
+    <DC.Creator sub="Author" scheme="short-form">Richard Hooker</DC.Creator>
+    <DC.Creator sub="Author" scheme="file-as">Hooker, Richard (c. 1554-1500)</DC.Creator>
+     
+    <DC.Publisher>Grand Rapids, MI: Christian Classics Ethereal Library</DC.Publisher>
+    <DC.Subject scheme="LCCN" />
+    <DC.Subject scheme="ccel">All; Images Only;</DC.Subject>
+    <DC.Contributor sub="Digitizer" />
+    <DC.Date sub="Created">2007-05-02</DC.Date>
+    <DC.Type>Text.Monograph</DC.Type>
+    <DC.Format scheme="IMT">text/html</DC.Format>
+    <DC.Identifier scheme="URL">/ccel/hooker/reform2.html</DC.Identifier>
+    <DC.Identifier scheme="ISBN" />
+    <DC.Source />
+    <DC.Source scheme="URL" />
+    <DC.Language scheme="ISO639-3">eng</DC.Language>
+    <DC.Rights>Public Domain</DC.Rights>
+  </DC>
+
+</electronicEdInfo>
+</ThML.head>
+
+<ThML.body>
+
+<div1 title="The Church Defended: the reformation of the laws and orders ecclesiastical in the Church of England: Volume 2" progress="18.55%" prev="toc" next="i.i" id="i">
+
+<div2 title="Book V: Dedication" progress="18.63%" prev="i" next="i.ii" id="i.i">
+<pb n="1" href="/ccel/hooker/reform2/png/0001=1.htm" id="i.i-Page_1" />
+<p id="i.i-p1"><img alt="Image of page 1" src="/ccel/hooker/reform2/png/0001=1.png" id="i.i-p1.1" /></p>
+
+<pb n="2" href="/ccel/hooker/reform2/png/0002=2.htm" id="i.i-Page_2" />
+<p id="i.i-p2"><img alt="Image of page 2" src="/ccel/hooker/reform2/png/0002=2.png" id="i.i-p2.1" /></p>
+
+<pb n="3" href="/ccel/hooker/reform2/png/0003=3.htm" id="i.i-Page_3" />
+<p id="i.i-p3"><img alt="Image of page 3" src="/ccel/hooker/reform2/png/0003=3.png" id="i.i-p3.1" /></p>
+
+<pb n="4" href="/ccel/hooker/reform2/png/0004=4.htm" id="i.i-Page_4" />
+<p id="i.i-p4"><img alt="Image of page 4" src="/ccel/hooker/reform2/png/0004=4.png" id="i.i-p4.1" /></p>
+
+<pb n="5" href="/ccel/hooker/reform2/png/0005=5.htm" id="i.i-Page_5" />
+<p id="i.i-p5"><img alt="Image of page 5" src="/ccel/hooker/reform2/png/0005=5.png" id="i.i-p5.1" /></p>
+
+<pb n="6" href="/ccel/hooker/reform2/png/0006=6.htm" id="i.i-Page_6" />
+<p id="i.i-p6"><img alt="Image of page 6" src="/ccel/hooker/reform2/png/0006=6.png" id="i.i-p6.1" /></p>
+
+<pb n="7" href="/ccel/hooker/reform2/png/0007=7.htm" id="i.i-Page_7" />
+<p id="i.i-p7"><img alt="Image of page 7" src="/ccel/hooker/reform2/png/0007=7.png" id="i.i-p7.1" /></p>
+
+<pb n="8" href="/ccel/hooker/reform2/png/0008=8.htm" id="i.i-Page_8" />
+<p id="i.i-p8"><img alt="Image of page 8" src="/ccel/hooker/reform2/png/0008=8.png" id="i.i-p8.1" /></p>
+
+<pb n="9" href="/ccel/hooker/reform2/png/0009=9.htm" id="i.i-Page_9" />
+<p id="i.i-p9"><img alt="Image of page 9" src="/ccel/hooker/reform2/png/0009=9.png" id="i.i-p9.1" /></p>
+
+<pb n="10" href="/ccel/hooker/reform2/png/0010=10.htm" id="i.i-Page_10" />
+<p id="i.i-p10"><img alt="Image of page 10" src="/ccel/hooker/reform2/png/0010=10.png" id="i.i-p10.1" /></p>
+</div2>
+
+<div2 title="Table of Contents" progress="19.85%" prev="i.i" next="i.iii" id="i.ii">
+<pb n="11" href="/ccel/hooker/reform2/png/0011=11.htm" id="i.ii-Page_11" />
+<p id="i.ii-p1"><img alt="Image of page 11" src="/ccel/hooker/reform2/png/0011=11.png" id="i.ii-p1.1" /></p>
+
+<pb n="12" href="/ccel/hooker/reform2/png/0012=12.htm" id="i.ii-Page_12" />
+<p id="i.ii-p2"><img alt="Image of page 12" src="/ccel/hooker/reform2/png/0012=12.png" id="i.ii-p2.1" /></p>
+
+<pb n="13" href="/ccel/hooker/reform2/png/0013=13.htm" id="i.ii-Page_13" />
+<p id="i.ii-p3"><img alt="Image of page 13" src="/ccel/hooker/reform2/png/0013=13.png" id="i.ii-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter i: True religion is the root of all ture Virtutes..." progress="20.28%" prev="i.ii" next="i.iv" id="i.iii">
+<pb n="14" href="/ccel/hooker/reform2/png/0014=14.htm" id="i.iii-Page_14" />
+<p id="i.iii-p1"><img alt="Image of page 14" src="/ccel/hooker/reform2/png/0014=14.png" id="i.iii-p1.1" /></p>
+
+<pb n="15" href="/ccel/hooker/reform2/png/0015=15.htm" id="i.iii-Page_15" />
+<p id="i.iii-p2"><img alt="Image of page 15" src="/ccel/hooker/reform2/png/0015=15.png" id="i.iii-p2.1" /></p>
+
+<pb n="16" href="/ccel/hooker/reform2/png/0016=16.htm" id="i.iii-Page_16" />
+<p id="i.iii-p3"><img alt="Image of page 16" src="/ccel/hooker/reform2/png/0016=16.png" id="i.iii-p3.1" /></p>
+
+<pb n="17" href="/ccel/hooker/reform2/png/0017=17.htm" id="i.iii-Page_17" />
+<p id="i.iii-p4"><img alt="Image of page 17" src="/ccel/hooker/reform2/png/0017=17.png" id="i.iii-p4.1" /></p>
+
+<pb n="18" href="/ccel/hooker/reform2/png/0018=18.htm" id="i.iii-Page_18" />
+<p id="i.iii-p5"><img alt="Image of page 18" src="/ccel/hooker/reform2/png/0018=18.png" id="i.iii-p5.1" /></p>
+</div2>
+
+<div2 title="chapter ii: The most extreme opposite true religion..." progress="20.93%" prev="i.iii" next="i.v" id="i.iv">
+<pb n="19" href="/ccel/hooker/reform2/png/0019=19.htm" id="i.iv-Page_19" />
+<p id="i.iv-p1"><img alt="Image of page 19" src="/ccel/hooker/reform2/png/0019=19.png" id="i.iv-p1.1" /></p>
+
+<pb n="20" href="/ccel/hooker/reform2/png/0020=20.htm" id="i.iv-Page_20" />
+<p id="i.iv-p2"><img alt="Image of page 20" src="/ccel/hooker/reform2/png/0020=20.png" id="i.iv-p2.1" /></p>
+
+<pb n="21" href="/ccel/hooker/reform2/png/0021=21.htm" id="i.iv-Page_21" />
+<p id="i.iv-p3"><img alt="Image of page 21" src="/ccel/hooker/reform2/png/0021=21.png" id="i.iv-p3.1" /></p>
+
+<pb n="22" href="/ccel/hooker/reform2/png/0022=22.htm" id="i.iv-Page_22" />
+<p id="i.iv-p4"><img alt="Image of page 22" src="/ccel/hooker/reform2/png/0022=22.png" id="i.iv-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter iii: Of Superstition, and the root thereof, either misguided zeal..." progress="21.46%" prev="i.iv" next="i.vi" id="i.v">
+<pb n="23" href="/ccel/hooker/reform2/png/0023=23.htm" id="i.v-Page_23" />
+<p id="i.v-p1"><img alt="Image of page 23" src="/ccel/hooker/reform2/png/0023=23.png" id="i.v-p1.1" /></p>
+
+<pb n="24" href="/ccel/hooker/reform2/png/0024=24.htm" id="i.v-Page_24" />
+<p id="i.v-p2"><img alt="Image of page 24" src="/ccel/hooker/reform2/png/0024=24.png" id="i.v-p2.1" /></p>
+
+<pb n="25" href="/ccel/hooker/reform2/png/0025=25.htm" id="i.v-Page_25" />
+<p id="i.v-p3"><img alt="Image of page 25" src="/ccel/hooker/reform2/png/0025=25.png" id="i.v-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter iv: Of the redress of superstition in God's Church, and concerning the question of this Book" progress="21.89%" prev="i.v" next="i.vii" id="i.vi">
+<pb n="26" href="/ccel/hooker/reform2/png/0026=26.htm" id="i.vi-Page_26" />
+<p id="i.vi-p1"><img alt="Image of page 26" src="/ccel/hooker/reform2/png/0026=26.png" id="i.vi-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter v: Four general propositions demanding that which may reasonably be granted" progress="22.08%" prev="i.vi" next="i.viii" id="i.vii">
+
+<pb n="27" href="/ccel/hooker/reform2/png/0027=27.htm" id="i.vii-Page_27" />
+<p id="i.vii-p1"><img alt="Image of page 27" src="/ccel/hooker/reform2/png/0027=27.png" id="i.vii-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter vi: The first proposition touching judgment what things are convenient in the outward public ordering of church affairs" progress="22.31%" prev="i.vii" next="i.ix" id="i.viii">
+<pb n="28" href="/ccel/hooker/reform2/png/0028=28.htm" id="i.viii-Page_28" />
+<p id="i.viii-p1"><img alt="Image of page 28" src="/ccel/hooker/reform2/png/0028=28.png" id="i.viii-p1.1" /></p>
+
+<pb n="29" href="/ccel/hooker/reform2/png/0029=29.htm" id="i.viii-Page_29" />
+<p id="i.viii-p2"><img alt="Image of page 29" src="/ccel/hooker/reform2/png/0029=29.png" id="i.viii-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter vii: The second proposition" progress="22.61%" prev="i.viii" next="i.x" id="i.ix">
+<pb n="30" href="/ccel/hooker/reform2/png/0030=30.htm" id="i.ix-Page_30" />
+<p id="i.ix-p1"><img alt="Image of page 30" src="/ccel/hooker/reform2/png/0030=30.png" id="i.ix-p1.1" /></p>
+
+<pb n="31" href="/ccel/hooker/reform2/png/0031=31.htm" id="i.ix-Page_31" />
+<p id="i.ix-p2"><img alt="Image of page 31" src="/ccel/hooker/reform2/png/0031=31.png" id="i.ix-p2.1" /></p>
+
+<pb n="32" href="/ccel/hooker/reform2/png/0032=32.htm" id="i.ix-Page_32" />
+<p id="i.ix-p3"><img alt="Image of page 32" src="/ccel/hooker/reform2/png/0032=32.png" id="i.ix-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter viii: The third proposition" progress="23.04%" prev="i.ix" next="i.xi" id="i.x">
+<pb n="33" href="/ccel/hooker/reform2/png/0033=33.htm" id="i.x-Page_33" />
+<p id="i.x-p1"><img alt="Image of page 33" src="/ccel/hooker/reform2/png/0033=33.png" id="i.x-p1.1" /></p>
+
+<pb n="34" href="/ccel/hooker/reform2/png/0034=34.htm" id="i.x-Page_34" />
+<p id="i.x-p2"><img alt="Image of page 34" src="/ccel/hooker/reform2/png/0034=34.png" id="i.x-p2.1" /></p>
+
+<pb n="35" href="/ccel/hooker/reform2/png/0035=35.htm" id="i.x-Page_35" />
+<p id="i.x-p3"><img alt="Image of page 35" src="/ccel/hooker/reform2/png/0035=35.png" id="i.x-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter ix: The fourth proposition" progress="23.46%" prev="i.x" next="i.xii" id="i.xi">
+<pb n="36" href="/ccel/hooker/reform2/png/0036=36.htm" id="i.xi-Page_36" />
+<p id="i.xi-p1"><img alt="Image of page 36" src="/ccel/hooker/reform2/png/0036=36.png" id="i.xi-p1.1" /></p>
+
+<pb n="37" href="/ccel/hooker/reform2/png/0037=37.htm" id="i.xi-Page_37" />
+<p id="i.xi-p2"><img alt="Image of page 37" src="/ccel/hooker/reform2/png/0037=37.png" id="i.xi-p2.1" /></p>
+
+<pb n="38" href="/ccel/hooker/reform2/png/0038=38.htm" id="i.xi-Page_38" />
+<p id="i.xi-p3"><img alt="Image of page 38" src="/ccel/hooker/reform2/png/0038=38.png" id="i.xi-p3.1" /></p>
+
+<pb n="39" href="/ccel/hooker/reform2/png/0039=39.htm" id="i.xi-Page_39" />
+<p id="i.xi-p4"><img alt="Image of page 39" src="/ccel/hooker/reform2/png/0039=39.png" id="i.xi-p4.1" /></p>
+
+<pb n="40" href="/ccel/hooker/reform2/png/0040=40.htm" id="i.xi-Page_40" />
+<p id="i.xi-p5"><img alt="Image of page 40" src="/ccel/hooker/reform2/png/0040=40.png" id="i.xi-p5.1" /></p>
+</div2>
+
+<div2 title="Chapter x: The rule of men's private spirits not safe in these cases to be followed" progress="24.11%" prev="i.xi" next="i.xiii" id="i.xii">
+<pb n="41" href="/ccel/hooker/reform2/png/0041=41.htm" id="i.xii-Page_41" />
+<p id="i.xii-p1"><img alt="Image of page 41" src="/ccel/hooker/reform2/png/0041=41.png" id="i.xii-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xi: Place for the public service of God" progress="24.30%" prev="i.xii" next="i.xiv" id="i.xiii">
+<pb n="42" href="/ccel/hooker/reform2/png/0042=42.htm" id="i.xiii-Page_42" />
+<p id="i.xiii-p1"><img alt="Image of page 42" src="/ccel/hooker/reform2/png/0042=42.png" id="i.xiii-p1.1" /></p>
+
+<pb n="43" href="/ccel/hooker/reform2/png/0043=43.htm" id="i.xiii-Page_43" />
+<p id="i.xiii-p2"><img alt="Image of page 43" src="/ccel/hooker/reform2/png/0043=43.png" id="i.xiii-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter xii: The solemnity of erecting churches condemned by Bar..." progress="24.61%" prev="i.xiii" next="i.xv" id="i.xiv">
+<pb n="44" href="/ccel/hooker/reform2/png/0044=44.htm" id="i.xiv-Page_44" />
+<p id="i.xiv-p1"><img alt="Image of page 44" src="/ccel/hooker/reform2/png/0044=44.png" id="i.xiv-p1.1" /></p>
+
+<pb n="45" href="/ccel/hooker/reform2/png/0045=45.htm" id="i.xiv-Page_45" />
+<p id="i.xiv-p2"><img alt="Image of page 45" src="/ccel/hooker/reform2/png/0045=45.png" id="i.xiv-p2.1" /></p>
+
+<pb n="46" href="/ccel/hooker/reform2/png/0046=46.htm" id="i.xiv-Page_46" />
+<p id="i.xiv-p3"><img alt="Image of page 46" src="/ccel/hooker/reform2/png/0046=46.png" id="i.xiv-p3.1" /></p>
+
+<pb n="47" href="/ccel/hooker/reform2/png/0047=47.htm" id="i.xiv-Page_47" />
+<p id="i.xiv-p4"><img alt="Image of page 47" src="/ccel/hooker/reform2/png/0047=47.png" id="i.xiv-p4.1" /></p>
+
+<pb n="48" href="/ccel/hooker/reform2/png/0048=48.htm" id="i.xiv-Page_48" />
+<p id="i.xiv-p5"><img alt="Image of page 48" src="/ccel/hooker/reform2/png/0048=48.png" id="i.xiv-p5.1" /></p>
+</div2>
+
+<div2 title="Chapter xiii: Of the names whereby we distinguish our churches" progress="25.26%" prev="i.xiv" next="i.xvi" id="i.xv">
+
+<pb n="49" href="/ccel/hooker/reform2/png/0049=49.htm" id="i.xv-Page_49" />
+<p id="i.xv-p1"><img alt="Image of page 49" src="/ccel/hooker/reform2/png/0049=49.png" id="i.xv-p1.1" /></p>
+
+<pb n="50" href="/ccel/hooker/reform2/png/0050=50.htm" id="i.xv-Page_50" />
+<p id="i.xv-p2"><img alt="Image of page 50" src="/ccel/hooker/reform2/png/0050=50.png" id="i.xv-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter xiv: Of the fasion of our churches" progress="25.60%" prev="i.xv" next="i.xvii" id="i.xvi">
+<pb n="51" href="/ccel/hooker/reform2/png/0051=51.htm" id="i.xvi-Page_51" />
+<p id="i.xvi-p1"><img alt="Image of page 51" src="/ccel/hooker/reform2/png/0051=51.png" id="i.xvi-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xv: The sumptuousness of churches" progress="25.80%" prev="i.xvi" next="i.xviii" id="i.xvii">
+<pb n="52" href="/ccel/hooker/reform2/png/0052=52.htm" id="i.xvii-Page_52" />
+<p id="i.xvii-p1"><img alt="Image of page 52" src="/ccel/hooker/reform2/png/0052=52.png" id="i.xvii-p1.1" /></p>
+
+<pb n="53" href="/ccel/hooker/reform2/png/0053=53.htm" id="i.xvii-Page_53" />
+<p id="i.xvii-p2"><img alt="Image of page 53" src="/ccel/hooker/reform2/png/0053=53.png" id="i.xvii-p2.1" /></p>
+
+<pb n="54" href="/ccel/hooker/reform2/png/0054=54.htm" id="i.xvii-Page_54" />
+<p id="i.xvii-p3"><img alt="Image of page 54" src="/ccel/hooker/reform2/png/0054=54.png" id="i.xvii-p3.1" /></p>
+
+<pb n="55" href="/ccel/hooker/reform2/png/0055=55.htm" id="i.xvii-Page_55" />
+<p id="i.xvii-p4"><img alt="Image of page 55" src="/ccel/hooker/reform2/png/0055=55.png" id="i.xvii-p4.1" /></p>
+
+<pb n="56" href="/ccel/hooker/reform2/png/0056=56.htm" id="i.xvii-Page_56" />
+<p id="i.xvii-p5"><img alt="Image of page 56" src="/ccel/hooker/reform2/png/0056=56.png" id="i.xvii-p5.1" /></p>
+</div2>
+
+<div2 title="Chapter xvi: What holiness and virtue we ascribe to the Church more than other places" progress="26.45%" prev="i.xvii" next="i.xix" id="i.xviii">
+<pb n="57" href="/ccel/hooker/reform2/png/0057=57.htm" id="i.xviii-Page_57" />
+<p id="i.xviii-p1"><img alt="Image of page 57" src="/ccel/hooker/reform2/png/0057=57.png" id="i.xviii-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xvii: Their pretence that would have Churches utterly razed" progress="26.64%" prev="i.xviii" next="i.xx" id="i.xix">
+
+<pb n="58" href="/ccel/hooker/reform2/png/0058=58.htm" id="i.xix-Page_58" />
+<p id="i.xix-p1"><img alt="Image of page 58" src="/ccel/hooker/reform2/png/0058=58.png" id="i.xix-p1.1" /></p>
+
+<pb n="59" href="/ccel/hooker/reform2/png/0059=59.htm" id="i.xix-Page_59" />
+<p id="i.xix-p2"><img alt="Image of page 59" src="/ccel/hooker/reform2/png/0059=59.png" id="i.xix-p2.1" /></p>
+
+<pb n="60" href="/ccel/hooker/reform2/png/0060=60.htm" id="i.xix-Page_60" />
+<p id="i.xix-p3"><img alt="Image of page 60" src="/ccel/hooker/reform2/png/0060=60.png" id="i.xix-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xviii: Of public teaching or preaching, and the first kind thereof of catechising" progress="27.10%" prev="i.xix" next="i.xxi" id="i.xx">
+
+<pb n="61" href="/ccel/hooker/reform2/png/0061=61.htm" id="i.xx-Page_61" />
+<p id="i.xx-p1"><img alt="Image of page 61" src="/ccel/hooker/reform2/png/0061=61.png" id="i.xx-p1.1" /></p>
+
+<pb n="62" href="/ccel/hooker/reform2/png/0062=62.htm" id="i.xx-Page_62" />
+<p id="i.xx-p2"><img alt="Image of page 62" src="/ccel/hooker/reform2/png/0062=62.png" id="i.xx-p2.1" /></p>
+
+<pb n="63" href="/ccel/hooker/reform2/png/0063=63.htm" id="i.xx-Page_63" />
+<p id="i.xx-p3"><img alt="Image of page 63" src="/ccel/hooker/reform2/png/0063=63.png" id="i.xx-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xix: Of preaching by reading publicly the books of the holdy Scripture..." progress="27.56%" prev="i.xx" next="i.xxii" id="i.xxi">
+
+<pb n="64" href="/ccel/hooker/reform2/png/0064=64.htm" id="i.xxi-Page_64" />
+<p id="i.xxi-p1"><img alt="Image of page 64" src="/ccel/hooker/reform2/png/0064=64.png" id="i.xxi-p1.1" /></p>
+
+<pb n="65" href="/ccel/hooker/reform2/png/0065=65.htm" id="i.xxi-Page_65" />
+<p id="i.xxi-p2"><img alt="Image of page 65" src="/ccel/hooker/reform2/png/0065=65.png" id="i.xxi-p2.1" /></p>
+
+<pb n="66" href="/ccel/hooker/reform2/png/0066=66.htm" id="i.xxi-Page_66" />
+<p id="i.xxi-p3"><img alt="Image of page 66" src="/ccel/hooker/reform2/png/0066=66.png" id="i.xxi-p3.1" /></p>
+
+<pb n="67" href="/ccel/hooker/reform2/png/0067=67.htm" id="i.xxi-Page_67" />
+<p id="i.xxi-p4"><img alt="Image of page 67" src="/ccel/hooker/reform2/png/0067=67.png" id="i.xxi-p4.1" /></p>
+
+<pb n="68" href="/ccel/hooker/reform2/png/0068=68.htm" id="i.xxi-Page_68" />
+<p id="i.xxi-p5"><img alt="Image of page 68" src="/ccel/hooker/reform2/png/0068=68.png" id="i.xxi-p5.1" /></p>
+</div2>
+
+<div2 title="Chapter xx:Of preaching by the public" progress="28.25%" prev="i.xxi" next="i.xxiii" id="i.xxii">
+<pb n="69" href="/ccel/hooker/reform2/png/0069=69.htm" id="i.xxii-Page_69" />
+<p id="i.xxii-p1"><img alt="Image of page 69" src="/ccel/hooker/reform2/png/0069=69.png" id="i.xxii-p1.1" /></p>
+
+<pb n="70" href="/ccel/hooker/reform2/png/0070=70.htm" id="i.xxii-Page_70" />
+<p id="i.xxii-p2"><img alt="Image of page 70" src="/ccel/hooker/reform2/png/0070=70.png" id="i.xxii-p2.1" /></p>
+
+<pb n="71" href="/ccel/hooker/reform2/png/0071=71.htm" id="i.xxii-Page_71" />
+<p id="i.xxii-p3"><img alt="Image of page 71" src="/ccel/hooker/reform2/png/0071=71.png" id="i.xxii-p3.1" /></p>
+
+<pb n="72" href="/ccel/hooker/reform2/png/0072=72.htm" id="i.xxii-Page_72" />
+<p id="i.xxii-p4"><img alt="Image of page 72" src="/ccel/hooker/reform2/png/0072=72.png" id="i.xxii-p4.1" /></p>
+
+<pb n="73" href="/ccel/hooker/reform2/png/0073=73.htm" id="i.xxii-Page_73" />
+<p id="i.xxii-p5"><img alt="Image of page 73" src="/ccel/hooker/reform2/png/0073=73.png" id="i.xxii-p5.1" /></p>
+
+<pb n="74" href="/ccel/hooker/reform2/png/0074=74.htm" id="i.xxii-Page_74" />
+<p id="i.xxii-p6"><img alt="Image of page 74" src="/ccel/hooker/reform2/png/0074=74.png" id="i.xxii-p6.1" /></p>
+
+<pb n="75" href="/ccel/hooker/reform2/png/0075=75.htm" id="i.xxii-Page_75" />
+<p id="i.xxii-p7"><img alt="Image of page 75" src="/ccel/hooker/reform2/png/0075=75.png" id="i.xxii-p7.1" /></p>
+
+<pb n="76" href="/ccel/hooker/reform2/png/0076=76.htm" id="i.xxii-Page_76" />
+<p id="i.xxii-p8"><img alt="Image of page 76" src="/ccel/hooker/reform2/png/0076=76.png" id="i.xxii-p8.1" /></p>
+
+<pb n="77" href="/ccel/hooker/reform2/png/0077=77.htm" id="i.xxii-Page_77" />
+<p id="i.xxii-p9"><img alt="Image of page 77" src="/ccel/hooker/reform2/png/0077=77.png" id="i.xxii-p9.1" /></p>
+
+<pb n="78" href="/ccel/hooker/reform2/png/0078=78.htm" id="i.xxii-Page_78" />
+<p id="i.xxii-p10"><img alt="Image of page 78" src="/ccel/hooker/reform2/png/0078=78.png" id="i.xxii-p10.1" /></p>
+
+<pb n="79" href="/ccel/hooker/reform2/png/0079=79.htm" id="i.xxii-Page_79" />
+<p id="i.xxii-p11"><img alt="Image of page 79" src="/ccel/hooker/reform2/png/0079=79.png" id="i.xxii-p11.1" /></p>
+
+<pb n="80" href="/ccel/hooker/reform2/png/0080=80.htm" id="i.xxii-Page_80" />
+<p id="i.xxii-p12"><img alt="Image of page 80" src="/ccel/hooker/reform2/png/0080=80.png" id="i.xxii-p12.1" /></p>
+
+<pb n="81" href="/ccel/hooker/reform2/png/0081=81.htm" id="i.xxii-Page_81" />
+<p id="i.xxii-p13"><img alt="Image of page 81" src="/ccel/hooker/reform2/png/0081=81.png" id="i.xxii-p13.1" /></p>
+
+<pb n="82" href="/ccel/hooker/reform2/png/0082=82.htm" id="i.xxii-Page_82" />
+<p id="i.xxii-p14"><img alt="Image of page 82" src="/ccel/hooker/reform2/png/0082=82.png" id="i.xxii-p14.1" /></p>
+
+<pb n="83" href="/ccel/hooker/reform2/png/0083=83.htm" id="i.xxii-Page_83" />
+<p id="i.xxii-p15"><img alt="Image of page 83" src="/ccel/hooker/reform2/png/0083=83.png" id="i.xxii-p15.1" /></p>
+</div2>
+
+<div2 title="Chapter xxi: Of preaching by sermons..." progress="30.05%" prev="i.xxii" next="i.xxiv" id="i.xxiii">
+<pb n="84" href="/ccel/hooker/reform2/png/0084=84.htm" id="i.xxiii-Page_84" />
+<p id="i.xxiii-p1"><img alt="Image of page 84" src="/ccel/hooker/reform2/png/0084=84.png" id="i.xxiii-p1.1" /></p>
+
+<pb n="85" href="/ccel/hooker/reform2/png/0085=85.htm" id="i.xxiii-Page_85" />
+<p id="i.xxiii-p2"><img alt="Image of page 85" src="/ccel/hooker/reform2/png/0085=85.png" id="i.xxiii-p2.1" /></p>
+
+<pb n="86" href="/ccel/hooker/reform2/png/0086=86.htm" id="i.xxiii-Page_86" />
+<p id="i.xxiii-p3"><img alt="Image of page 86" src="/ccel/hooker/reform2/png/0086=86.png" id="i.xxiii-p3.1" /></p>
+
+<pb n="87" href="/ccel/hooker/reform2/png/0087=87.htm" id="i.xxiii-Page_87" />
+<p id="i.xxiii-p4"><img alt="Image of page 87" src="/ccel/hooker/reform2/png/0087=87.png" id="i.xxiii-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter xx: What they attribute to sermons only, and what we to reading also" progress="30.59%" prev="i.xxiii" next="i.xxv" id="i.xxiv">
+<pb n="88" href="/ccel/hooker/reform2/png/0088=88.htm" id="i.xxiv-Page_88" />
+<p id="i.xxiv-p1"><img alt="Image of page 88" src="/ccel/hooker/reform2/png/0088=88.png" id="i.xxiv-p1.1" /></p>
+
+<pb n="89" href="/ccel/hooker/reform2/png/0089=89.htm" id="i.xxiv-Page_89" />
+<p id="i.xxiv-p2"><img alt="Image of page 89" src="/ccel/hooker/reform2/png/0089=89.png" id="i.xxiv-p2.1" /></p>
+
+<pb n="90" href="/ccel/hooker/reform2/png/0090=90.htm" id="i.xxiv-Page_90" />
+<p id="i.xxiv-p3"><img alt="Image of page 90" src="/ccel/hooker/reform2/png/0090=90.png" id="i.xxiv-p3.1" /></p>
+
+<pb n="91" href="/ccel/hooker/reform2/png/0091=91.htm" id="i.xxiv-Page_91" />
+<p id="i.xxiv-p4"><img alt="Image of page 91" src="/ccel/hooker/reform2/png/0091=91.png" id="i.xxiv-p4.1" /></p>
+
+<pb n="92" href="/ccel/hooker/reform2/png/0092=92.htm" id="i.xxiv-Page_92" />
+<p id="i.xxiv-p5"><img alt="Image of page 92" src="/ccel/hooker/reform2/png/0092=92.png" id="i.xxiv-p5.1" /></p>
+
+<pb n="93" href="/ccel/hooker/reform2/png/0093=93.htm" id="i.xxiv-Page_93" />
+<p id="i.xxiv-p6"><img alt="Image of page 93" src="/ccel/hooker/reform2/png/0093=93.png" id="i.xxiv-p6.1" /></p>
+
+<pb n="94" href="/ccel/hooker/reform2/png/0094=94.htm" id="i.xxiv-Page_94" />
+<p id="i.xxiv-p7"><img alt="Image of page 94" src="/ccel/hooker/reform2/png/0094=94.png" id="i.xxiv-p7.1" /></p>
+
+<pb n="95" href="/ccel/hooker/reform2/png/0095=95.htm" id="i.xxiv-Page_95" />
+<p id="i.xxiv-p8"><img alt="Image of page 95" src="/ccel/hooker/reform2/png/0095=95.png" id="i.xxiv-p8.1" /></p>
+
+<pb n="96" href="/ccel/hooker/reform2/png/0096=96.htm" id="i.xxiv-Page_96" />
+<p id="i.xxiv-p9"><img alt="Image of page 96" src="/ccel/hooker/reform2/png/0096=96.png" id="i.xxiv-p9.1" /></p>
+
+<pb n="97" href="/ccel/hooker/reform2/png/0097=97.htm" id="i.xxiv-Page_97" />
+<p id="i.xxiv-p10"><img alt="Image of page 97" src="/ccel/hooker/reform2/png/0097=97.png" id="i.xxiv-p10.1" /></p>
+
+<pb n="98" href="/ccel/hooker/reform2/png/0098=98.htm" id="i.xxiv-Page_98" />
+<p id="i.xxiv-p11"><img alt="Image of page 98" src="/ccel/hooker/reform2/png/0098=98.png" id="i.xxiv-p11.1" /></p>
+
+<pb n="99" href="/ccel/hooker/reform2/png/0099=99.htm" id="i.xxiv-Page_99" />
+<p id="i.xxiv-p12"><img alt="Image of page 99" src="/ccel/hooker/reform2/png/0099=99.png" id="i.xxiv-p12.1" /></p>
+
+<pb n="100" href="/ccel/hooker/reform2/png/0100=100.htm" id="i.xxiv-Page_100" />
+<p id="i.xxiv-p13"><img alt="Image of page 100" src="/ccel/hooker/reform2/png/0100=100.png" id="i.xxiv-p13.1" /></p>
+
+<pb n="101" href="/ccel/hooker/reform2/png/0101=101.htm" id="i.xxiv-Page_101" />
+<p id="i.xxiv-p14"><img alt="Image of page 101" src="/ccel/hooker/reform2/png/0101=101.png" id="i.xxiv-p14.1" /></p>
+
+<pb n="102" href="/ccel/hooker/reform2/png/0102=102.htm" id="i.xxiv-Page_102" />
+<p id="i.xxiv-p15"><img alt="Image of page 102" src="/ccel/hooker/reform2/png/0102=102.png" id="i.xxiv-p15.1" /></p>
+
+<pb n="103" href="/ccel/hooker/reform2/png/0103=103.htm" id="i.xxiv-Page_103" />
+<p id="i.xxiv-p16"><img alt="Image of page 103" src="/ccel/hooker/reform2/png/0103=103.png" id="i.xxiv-p16.1" /></p>
+
+<pb n="104" href="/ccel/hooker/reform2/png/0104=104.htm" id="i.xxiv-Page_104" />
+<p id="i.xxiv-p17"><img alt="Image of page 104" src="/ccel/hooker/reform2/png/0104=104.png" id="i.xxiv-p17.1" /></p>
+
+<pb n="105" href="/ccel/hooker/reform2/png/0105=105.htm" id="i.xxiv-Page_105" />
+<p id="i.xxiv-p18"><img alt="Image of page 105" src="/ccel/hooker/reform2/png/0105=105.png" id="i.xxiv-p18.1" /></p>
+
+<pb n="106" href="/ccel/hooker/reform2/png/0106=106.htm" id="i.xxiv-Page_106" />
+<p id="i.xxiv-p19"><img alt="Image of page 106" src="/ccel/hooker/reform2/png/0106=106.png" id="i.xxiv-p19.1" /></p>
+
+<pb n="107" href="/ccel/hooker/reform2/png/0107=107.htm" id="i.xxiv-Page_107" />
+<p id="i.xxiv-p20"><img alt="Image of page 107" src="/ccel/hooker/reform2/png/0107=107.png" id="i.xxiv-p20.1" /></p>
+
+<pb n="108" href="/ccel/hooker/reform2/png/0108=108.htm" id="i.xxiv-Page_108" />
+<p id="i.xxiv-p21"><img alt="Image of page 108" src="/ccel/hooker/reform2/png/0108=108.png" id="i.xxiv-p21.1" /></p>
+
+<pb n="109" href="/ccel/hooker/reform2/png/0109=109.htm" id="i.xxiv-Page_109" />
+<p id="i.xxiv-p22"><img alt="Image of page 109" src="/ccel/hooker/reform2/png/0109=109.png" id="i.xxiv-p22.1" /></p>
+
+<pb n="110" href="/ccel/hooker/reform2/png/0110=110.htm" id="i.xxiv-Page_110" />
+<p id="i.xxiv-p23"><img alt="Image of page 110" src="/ccel/hooker/reform2/png/0110=110.png" id="i.xxiv-p23.1" /></p>
+
+<pb n="111" href="/ccel/hooker/reform2/png/0111=111.htm" id="i.xxiv-Page_111" />
+<p id="i.xxiv-p24"><img alt="Image of page 111" src="/ccel/hooker/reform2/png/0111=111.png" id="i.xxiv-p24.1" /></p>
+
+<pb n="112" href="/ccel/hooker/reform2/png/0112=112.htm" id="i.xxiv-Page_112" />
+<p id="i.xxiv-p25"><img alt="Image of page 112" src="/ccel/hooker/reform2/png/0112=112.png" id="i.xxiv-p25.1" /></p>
+
+<pb n="113" href="/ccel/hooker/reform2/png/0113=113.htm" id="i.xxiv-Page_113" />
+<p id="i.xxiv-p26"><img alt="Image of page 113" src="/ccel/hooker/reform2/png/0113=113.png" id="i.xxiv-p26.1" /></p>
+
+<pb n="114" href="/ccel/hooker/reform2/png/0114=114.htm" id="i.xxiv-Page_114" />
+<p id="i.xxiv-p27"><img alt="Image of page 114" src="/ccel/hooker/reform2/png/0114=114.png" id="i.xxiv-p27.1" /></p>
+</div2>
+
+<div2 title="Chapter xxiii: Of prayer" progress="33.77%" prev="i.xxiv" next="i.xxvi" id="i.xxv">
+<pb n="115" href="/ccel/hooker/reform2/png/0115=115.htm" id="i.xxv-Page_115" />
+<p id="i.xxv-p1"><img alt="Image of page 115" src="/ccel/hooker/reform2/png/0115=115.png" id="i.xxv-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xxiv: Of public prayer" progress="33.96%" prev="i.xxv" next="i.xxvii" id="i.xxvi">
+<pb n="116" href="/ccel/hooker/reform2/png/0116=116.htm" id="i.xxvi-Page_116" />
+<p id="i.xxvi-p1"><img alt="Image of page 116" src="/ccel/hooker/reform2/png/0116=116.png" id="i.xxvi-p1.1" /></p>
+
+<pb n="117" href="/ccel/hooker/reform2/png/0117=117.htm" id="i.xxvi-Page_117" />
+<p id="i.xxvi-p2"><img alt="Image of page 117" src="/ccel/hooker/reform2/png/0117=117.png" id="i.xxvi-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter xxv Of the Form of common Prayer" progress="34.27%" prev="i.xxvi" next="i.xxviii" id="i.xxvii">
+<pb n="118" href="/ccel/hooker/reform2/png/0118=118.htm" id="i.xxvii-Page_118" />
+<p id="i.xxvii-p1"><img alt="Image of page 118" src="/ccel/hooker/reform2/png/0118=118.png" id="i.xxvii-p1.1" /></p>
+
+<pb n="119" href="/ccel/hooker/reform2/png/0119=119.htm" id="i.xxvii-Page_119" />
+<p id="i.xxvii-p2"><img alt="Image of page 119" src="/ccel/hooker/reform2/png/0119=119.png" id="i.xxvii-p2.1" /></p>
+
+<pb n="120" href="/ccel/hooker/reform2/png/0120=120.htm" id="i.xxvii-Page_120" />
+<p id="i.xxvii-p3"><img alt="Image of page 120" src="/ccel/hooker/reform2/png/0120=120.png" id="i.xxvii-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xxvi: Form of Common Prayer" progress="34.69%" prev="i.xxvii" next="i.xxix" id="i.xxviii">
+
+<pb n="121" href="/ccel/hooker/reform2/png/0121=121.htm" id="i.xxviii-Page_121" />
+<p id="i.xxviii-p1"><img alt="Image of page 121" src="/ccel/hooker/reform2/png/0121=121.png" id="i.xxviii-p1.1" /></p>
+
+<pb n="122" href="/ccel/hooker/reform2/png/0122=122.htm" id="i.xxviii-Page_122" />
+<p id="i.xxviii-p2"><img alt="Image of page 122" src="/ccel/hooker/reform2/png/0122=122.png" id="i.xxviii-p2.1" /></p>
+
+<pb n="123" href="/ccel/hooker/reform2/png/0123=123.htm" id="i.xxviii-Page_123" />
+<p id="i.xxviii-p3"><img alt="Image of page 123" src="/ccel/hooker/reform2/png/0123=123.png" id="i.xxviii-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xxvii: Of them who allow a set of Common Prayer, yet allow not ours" progress="35.15%" prev="i.xxviii" next="i.xxx" id="i.xxix">
+
+<pb n="124" href="/ccel/hooker/reform2/png/0124=124.htm" id="i.xxix-Page_124" />
+<p id="i.xxix-p1"><img alt="Image of page 124" src="/ccel/hooker/reform2/png/0124=124.png" id="i.xxix-p1.1" /></p>
+
+<pb n="125" href="/ccel/hooker/reform2/png/0125=125.htm" id="i.xxix-Page_125" />
+<p id="i.xxix-p2"><img alt="Image of page 125" src="/ccel/hooker/reform2/png/0125=125.png" id="i.xxix-p2.1" /></p>
+
+<pb n="126" href="/ccel/hooker/reform2/png/0126=126.htm" id="i.xxix-Page_126" />
+<p id="i.xxix-p3"><img alt="Image of page 126" src="/ccel/hooker/reform2/png/0126=126.png" id="i.xxix-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xxviii: The Form of our Liturgy too near the Papists..." progress="35.61%" prev="i.xxix" next="i.xxxi" id="i.xxx">
+
+<pb n="127" href="/ccel/hooker/reform2/png/0127=127.htm" id="i.xxx-Page_127" />
+<p id="i.xxx-p1"><img alt="Image of page 127" src="/ccel/hooker/reform2/png/0127=127.png" id="i.xxx-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xxix: Attire belonging to the service of God" progress="35.84%" prev="i.xxx" next="i.xxxii" id="i.xxxi">
+
+<pb n="128" href="/ccel/hooker/reform2/png/0128=128.htm" id="i.xxxi-Page_128" />
+<p id="i.xxxi-p1"><img alt="Image of page 128" src="/ccel/hooker/reform2/png/0128=128.png" id="i.xxxi-p1.1" /></p>
+
+<pb n="129" href="/ccel/hooker/reform2/png/0129=129.htm" id="i.xxxi-Page_129" />
+<p id="i.xxxi-p2"><img alt="Image of page 129" src="/ccel/hooker/reform2/png/0129=129.png" id="i.xxxi-p2.1" /></p>
+
+<pb n="130" href="/ccel/hooker/reform2/png/0130=130.htm" id="i.xxxi-Page_130" />
+<p id="i.xxxi-p3"><img alt="Image of page 130" src="/ccel/hooker/reform2/png/0130=130.png" id="i.xxxi-p3.1" /></p>
+
+<pb n="131" href="/ccel/hooker/reform2/png/0131=131.htm" id="i.xxxi-Page_131" />
+<p id="i.xxxi-p4"><img alt="Image of page 131" src="/ccel/hooker/reform2/png/0131=131.png" id="i.xxxi-p4.1" /></p>
+
+<pb n="132" href="/ccel/hooker/reform2/png/0132=132.htm" id="i.xxxi-Page_132" />
+<p id="i.xxxi-p5"><img alt="Image of page 132" src="/ccel/hooker/reform2/png/0132=132.png" id="i.xxxi-p5.1" /></p>
+
+<pb n="133" href="/ccel/hooker/reform2/png/0133=133.htm" id="i.xxxi-Page_133" />
+<p id="i.xxxi-p6"><img alt="Image of page 133" src="/ccel/hooker/reform2/png/0133=133.png" id="i.xxxi-p6.1" /></p>
+
+<pb n="134" href="/ccel/hooker/reform2/png/0134=134.htm" id="i.xxxi-Page_134" />
+<p id="i.xxxi-p7"><img alt="Image of page 134" src="/ccel/hooker/reform2/png/0134=134.png" id="i.xxxi-p7.1" /></p>
+
+<pb n="135" href="/ccel/hooker/reform2/png/0135=135.htm" id="i.xxxi-Page_135" />
+<p id="i.xxxi-p8"><img alt="Image of page 135" src="/ccel/hooker/reform2/png/0135=135.png" id="i.xxxi-p8.1" /></p>
+
+<pb n="136" href="/ccel/hooker/reform2/png/0136=136.htm" id="i.xxxi-Page_136" />
+<p id="i.xxxi-p9"><img alt="Image of page 136" src="/ccel/hooker/reform2/png/0136=136.png" id="i.xxxi-p9.1" /></p>
+
+<pb n="137" href="/ccel/hooker/reform2/png/0137=137.htm" id="i.xxxi-Page_137" />
+<p id="i.xxxi-p10"><img alt="Image of page 137" src="/ccel/hooker/reform2/png/0137=137.png" id="i.xxxi-p10.1" /></p>
+</div2>
+
+<div2 title="Chapter xxx: Of Gesture in praying..." progress="37.10%" prev="i.xxxi" next="i.xxxiii" id="i.xxxii">
+<pb n="138" href="/ccel/hooker/reform2/png/0138=138.htm" id="i.xxxii-Page_138" />
+<p id="i.xxxii-p1"><img alt="Image of page 138" src="/ccel/hooker/reform2/png/0138=138.png" id="i.xxxii-p1.1" /></p>
+
+<pb n="139" href="/ccel/hooker/reform2/png/0139=139.htm" id="i.xxxii-Page_139" />
+<p id="i.xxxii-p2"><img alt="Image of page 139" src="/ccel/hooker/reform2/png/0139=139.png" id="i.xxxii-p2.1" /></p>
+
+<pb n="140" href="/ccel/hooker/reform2/png/0140=140.htm" id="i.xxxii-Page_140" />
+<p id="i.xxxii-p3"><img alt="Image of page 140" src="/ccel/hooker/reform2/png/0140=140.png" id="i.xxxii-p3.1" /></p>
+
+<pb n="141" href="/ccel/hooker/reform2/png/0141=141.htm" id="i.xxxii-Page_141" />
+<p id="i.xxxii-p4"><img alt="Image of page 141" src="/ccel/hooker/reform2/png/0141=141.png" id="i.xxxii-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxi: Easiness of praying after our form" progress="37.64%" prev="i.xxxii" next="i.xxxiv" id="i.xxxiii">
+
+<pb n="142" href="/ccel/hooker/reform2/png/0142=142.htm" id="i.xxxiii-Page_142" />
+<p id="i.xxxiii-p1"><img alt="Image of page 142" src="/ccel/hooker/reform2/png/0142=142.png" id="i.xxxiii-p1.1" /></p>
+
+<pb n="143" href="/ccel/hooker/reform2/png/0143=143.htm" id="i.xxxiii-Page_143" />
+<p id="i.xxxiii-p2"><img alt="Image of page 143" src="/ccel/hooker/reform2/png/0143=143.png" id="i.xxxiii-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxii: The length of our service" progress="37.98%" prev="i.xxxiii" next="i.xxxv" id="i.xxxiv">
+
+<pb n="144" href="/ccel/hooker/reform2/png/0144=144.htm" id="i.xxxiv-Page_144" />
+<p id="i.xxxiv-p1"><img alt="Image of page 144" src="/ccel/hooker/reform2/png/0144=144.png" id="i.xxxiv-p1.1" /></p>
+
+<pb n="145" href="/ccel/hooker/reform2/png/0145=145.htm" id="i.xxxiv-Page_145" />
+<p id="i.xxxiv-p2"><img alt="Image of page 145" src="/ccel/hooker/reform2/png/0145=145.png" id="i.xxxiv-p2.1" /></p>
+
+<pb n="146" href="/ccel/hooker/reform2/png/0146=146.htm" id="i.xxxiv-Page_146" />
+<p id="i.xxxiv-p3"><img alt="Image of page 146" src="/ccel/hooker/reform2/png/0146=146.png" id="i.xxxiv-p3.1" /></p>
+
+<pb n="147" href="/ccel/hooker/reform2/png/0147=147.htm" id="i.xxxiv-Page_147" />
+<p id="i.xxxiv-p4"><img alt="Image of page 147" src="/ccel/hooker/reform2/png/0147=147.png" id="i.xxxiv-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxiii: Instead of such prayers as the primitive Churches have used..." progress="38.56%" prev="i.xxxiv" next="i.xxxvi" id="i.xxxv">
+
+<pb n="148" href="/ccel/hooker/reform2/png/0148=148.htm" id="i.xxxv-Page_148" />
+<p id="i.xxxv-p1"><img alt="Image of page 148" src="/ccel/hooker/reform2/png/0148=148.png" id="i.xxxv-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxiv: Lesson intermingled with our prayers" progress="38.79%" prev="i.xxxv" next="i.xxxvii" id="i.xxxvi">
+
+<pb n="149" href="/ccel/hooker/reform2/png/0149=149.htm" id="i.xxxvi-Page_149" />
+<p id="i.xxxvi-p1"><img alt="Image of page 149" src="/ccel/hooker/reform2/png/0149=149.png" id="i.xxxvi-p1.1" /></p>
+
+<pb n="150" href="/ccel/hooker/reform2/png/0150=150.htm" id="i.xxxvi-Page_150" />
+<p id="i.xxxvi-p2"><img alt="Image of page 150" src="/ccel/hooker/reform2/png/0150=150.png" id="i.xxxvi-p2.1" /></p>
+
+<pb n="151" href="/ccel/hooker/reform2/png/0151=151.htm" id="i.xxxvi-Page_151" />
+<p id="i.xxxvi-p3"><img alt="Image of page 151" src="/ccel/hooker/reform2/png/0151=151.png" id="i.xxxvi-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxv: The number of our prayers for earthly things..." progress="39.25%" prev="i.xxxvi" next="i.xxxviii" id="i.xxxvii">
+
+<pb n="152" href="/ccel/hooker/reform2/png/0152=152.htm" id="i.xxxvii-Page_152" />
+<p id="i.xxxvii-p1"><img alt="Image of page 152" src="/ccel/hooker/reform2/png/0152=152.png" id="i.xxxvii-p1.1" /></p>
+
+<pb n="153" href="/ccel/hooker/reform2/png/0153=153.htm" id="i.xxxvii-Page_153" />
+<p id="i.xxxvii-p2"><img alt="Image of page 153" src="/ccel/hooker/reform2/png/0153=153.png" id="i.xxxvii-p2.1" /></p>
+
+<pb n="154" href="/ccel/hooker/reform2/png/0154=154.htm" id="i.xxxvii-Page_154" />
+<p id="i.xxxvii-p3"><img alt="Image of page 154" src="/ccel/hooker/reform2/png/0154=154.png" id="i.xxxvii-p3.1" /></p>
+
+<pb n="155" href="/ccel/hooker/reform2/png/0155=155.htm" id="i.xxxvii-Page_155" />
+<p id="i.xxxvii-p4"><img alt="Image of page 155" src="/ccel/hooker/reform2/png/0155=155.png" id="i.xxxvii-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxvi: The people's saying after the Minister" progress="39.82%" prev="i.xxxvii" next="i.xxxix" id="i.xxxviii">
+
+<pb n="156" href="/ccel/hooker/reform2/png/0156=156.htm" id="i.xxxviii-Page_156" />
+<p id="i.xxxviii-p1"><img alt="Image of page 156" src="/ccel/hooker/reform2/png/0156=156.png" id="i.xxxviii-p1.1" /></p>
+
+<pb n="157" href="/ccel/hooker/reform2/png/0157=157.htm" id="i.xxxviii-Page_157" />
+<p id="i.xxxviii-p2"><img alt="Image of page 157" src="/ccel/hooker/reform2/png/0157=157.png" id="i.xxxviii-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxvii: Our manner of reading the Psalms..." progress="40.17%" prev="i.xxxviii" next="i.xl" id="i.xxxix">
+
+<pb n="158" href="/ccel/hooker/reform2/png/0158=158.htm" id="i.xxxix-Page_158" />
+<p id="i.xxxix-p1"><img alt="Image of page 158" src="/ccel/hooker/reform2/png/0158=158.png" id="i.xxxix-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxviii: Of Music with Psalms" progress="40.40%" prev="i.xxxix" next="i.xli" id="i.xl">
+
+<pb n="159" href="/ccel/hooker/reform2/png/0159=159.htm" id="i.xl-Page_159" />
+<p id="i.xl-p1"><img alt="Image of page 159" src="/ccel/hooker/reform2/png/0159=159.png" id="i.xl-p1.1" /></p>
+
+<pb n="160" href="/ccel/hooker/reform2/png/0160=160.htm" id="i.xl-Page_160" />
+<p id="i.xl-p2"><img alt="Image of page 160" src="/ccel/hooker/reform2/png/0160=160.png" id="i.xl-p2.1" /></p>
+
+<pb n="161" href="/ccel/hooker/reform2/png/0161=161.htm" id="i.xl-Page_161" />
+<p id="i.xl-p3"><img alt="Image of page 161" src="/ccel/hooker/reform2/png/0161=161.png" id="i.xl-p3.1" /></p>
+
+<pb n="162" href="/ccel/hooker/reform2/png/0162=162.htm" id="i.xl-Page_162" />
+<p id="i.xl-p4"><img alt="Image of page 162" src="/ccel/hooker/reform2/png/0162=162.png" id="i.xl-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter xxxix: Of singing or saying Psalms and other parts of Common Prayer..." progress="40.97%" prev="i.xl" next="i.xlii" id="i.xli">
+
+<pb n="163" href="/ccel/hooker/reform2/png/0163=163.htm" id="i.xli-Page_163" />
+<p id="i.xli-p1"><img alt="Image of page 163" src="/ccel/hooker/reform2/png/0163=163.png" id="i.xli-p1.1" /></p>
+
+<pb n="164" href="/ccel/hooker/reform2/png/0164=164.htm" id="i.xli-Page_164" />
+<p id="i.xli-p2"><img alt="Image of page 164" src="/ccel/hooker/reform2/png/0164=164.png" id="i.xli-p2.1" /></p>
+
+<pb n="165" href="/ccel/hooker/reform2/png/0165=165.htm" id="i.xli-Page_165" />
+<p id="i.xli-p3"><img alt="Image of page 165" src="/ccel/hooker/reform2/png/0165=165.png" id="i.xli-p3.1" /></p>
+
+<pb n="166" href="/ccel/hooker/reform2/png/0166=166.htm" id="i.xli-Page_166" />
+<p id="i.xli-p4"><img alt="Image of page 166" src="/ccel/hooker/reform2/png/0166=166.png" id="i.xli-p4.1" /></p>
+
+<pb n="167" href="/ccel/hooker/reform2/png/0167=167.htm" id="i.xli-Page_167" />
+<p id="i.xli-p5"><img alt="Image of page 167" src="/ccel/hooker/reform2/png/0167=167.png" id="i.xli-p5.1" /></p>
+</div2>
+
+<div2 title="Chapter xl: Of Magnificat, Benedictus, and Nunc Dimittis" progress="41.66%" prev="i.xli" next="i.xliii" id="i.xlii">
+
+<pb n="168" href="/ccel/hooker/reform2/png/0168=168.htm" id="i.xlii-Page_168" />
+<p id="i.xlii-p1"><img alt="Image of page 168" src="/ccel/hooker/reform2/png/0168=168.png" id="i.xlii-p1.1" /></p>
+
+<pb n="169" href="/ccel/hooker/reform2/png/0169=169.htm" id="i.xlii-Page_169" />
+<p id="i.xlii-p2"><img alt="Image of page 169" src="/ccel/hooker/reform2/png/0169=169.png" id="i.xlii-p2.1" /></p>
+
+<pb n="170" href="/ccel/hooker/reform2/png/0170=170.htm" id="i.xlii-Page_170" />
+<p id="i.xlii-p3"><img alt="Image of page 170" src="/ccel/hooker/reform2/png/0170=170.png" id="i.xlii-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xli: Of the Litany" progress="42.12%" prev="i.xlii" next="i.xliv" id="i.xliii">
+
+<pb n="171" href="/ccel/hooker/reform2/png/0171=171.htm" id="i.xliii-Page_171" />
+<p id="i.xliii-p1"><img alt="Image of page 171" src="/ccel/hooker/reform2/png/0171=171.png" id="i.xliii-p1.1" /></p>
+
+<pb n="172" href="/ccel/hooker/reform2/png/0172=172.htm" id="i.xliii-Page_172" />
+<p id="i.xliii-p2"><img alt="Image of page 172" src="/ccel/hooker/reform2/png/0172=172.png" id="i.xliii-p2.1" /></p>
+
+<pb n="173" href="/ccel/hooker/reform2/png/0173=173.htm" id="i.xliii-Page_173" />
+<p id="i.xliii-p3"><img alt="Image of page 173" src="/ccel/hooker/reform2/png/0173=173.png" id="i.xliii-p3.1" /></p>
+
+<pb n="174" href="/ccel/hooker/reform2/png/0174=174.htm" id="i.xliii-Page_174" />
+<p id="i.xliii-p4"><img alt="Image of page 174" src="/ccel/hooker/reform2/png/0174=174.png" id="i.xliii-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter xlii: Of Athanasius' Creed and Gloria Patri" progress="42.70%" prev="i.xliii" next="i.xlv" id="i.xliv">
+
+<pb n="175" href="/ccel/hooker/reform2/png/0175=175.htm" id="i.xliv-Page_175" />
+<p id="i.xliv-p1"><img alt="Image of page 175" src="/ccel/hooker/reform2/png/0175=175.png" id="i.xliv-p1.1" /></p>
+
+<pb n="176" href="/ccel/hooker/reform2/png/0176=176.htm" id="i.xliv-Page_176" />
+<p id="i.xliv-p2"><img alt="Image of page 176" src="/ccel/hooker/reform2/png/0176=176.png" id="i.xliv-p2.1" /></p>
+
+<pb n="177" href="/ccel/hooker/reform2/png/0177=177.htm" id="i.xliv-Page_177" />
+<p id="i.xliv-p3"><img alt="Image of page 177" src="/ccel/hooker/reform2/png/0177=177.png" id="i.xliv-p3.1" /></p>
+
+<pb n="178" href="/ccel/hooker/reform2/png/0178=178.htm" id="i.xliv-Page_178" />
+<p id="i.xliv-p4"><img alt="Image of page 178" src="/ccel/hooker/reform2/png/0178=178.png" id="i.xliv-p4.1" /></p>
+
+<pb n="179" href="/ccel/hooker/reform2/png/0179=179.htm" id="i.xliv-Page_179" />
+<p id="i.xliv-p5"><img alt="Image of page 179" src="/ccel/hooker/reform2/png/0179=179.png" id="i.xliv-p5.1" /></p>
+
+<pb n="180" href="/ccel/hooker/reform2/png/0180=180.htm" id="i.xliv-Page_180" />
+<p id="i.xliv-p6"><img alt="Image of page 180" src="/ccel/hooker/reform2/png/0180=180.png" id="i.xliv-p6.1" /></p>
+
+<pb n="181" href="/ccel/hooker/reform2/png/0181=181.htm" id="i.xliv-Page_181" />
+<p id="i.xliv-p7"><img alt="Image of page 181" src="/ccel/hooker/reform2/png/0181=181.png" id="i.xliv-p7.1" /></p>
+
+<pb n="182" href="/ccel/hooker/reform2/png/0182=182.htm" id="i.xliv-Page_182" />
+<p id="i.xliv-p8"><img alt="Image of page 182" src="/ccel/hooker/reform2/png/0182=182.png" id="i.xliv-p8.1" /></p>
+
+<pb n="183" href="/ccel/hooker/reform2/png/0183=183.htm" id="i.xliv-Page_183" />
+<p id="i.xliv-p9"><img alt="Image of page 183" src="/ccel/hooker/reform2/png/0183=183.png" id="i.xliv-p9.1" /></p>
+
+<pb n="184" href="/ccel/hooker/reform2/png/0184=184.htm" id="i.xliv-Page_184" />
+<p id="i.xliv-p10"><img alt="Image of page 184" src="/ccel/hooker/reform2/png/0184=184.png" id="i.xliv-p10.1" /></p>
+
+<pb n="185" href="/ccel/hooker/reform2/png/0185=185.htm" id="i.xliv-Page_185" />
+<p id="i.xliv-p11"><img alt="Image of page 185" src="/ccel/hooker/reform2/png/0185=185.png" id="i.xliv-p11.1" /></p>
+
+<pb n="186" href="/ccel/hooker/reform2/png/0186=186.htm" id="i.xliv-Page_186" />
+<p id="i.xliv-p12"><img alt="Image of page 186" src="/ccel/hooker/reform2/png/0186=186.png" id="i.xliv-p12.1" /></p>
+
+<pb n="187" href="/ccel/hooker/reform2/png/0187=187.htm" id="i.xliv-Page_187" />
+<p id="i.xliv-p13"><img alt="Image of page 187" src="/ccel/hooker/reform2/png/0187=187.png" id="i.xliv-p13.1" /></p>
+
+<pb n="188" href="/ccel/hooker/reform2/png/0188=188.htm" id="i.xliv-Page_188" />
+<p id="i.xliv-p14"><img alt="Image of page 188" src="/ccel/hooker/reform2/png/0188=188.png" id="i.xliv-p14.1" /></p>
+</div2>
+
+<div2 title="Chapter xliii: Our want of particular thanksgiving" progress="44.42%" prev="i.xliv" next="i.xlvi" id="i.xlv">
+
+<pb n="189" href="/ccel/hooker/reform2/png/0189=189.htm" id="i.xlv-Page_189" />
+<p id="i.xlv-p1"><img alt="Image of page 189" src="/ccel/hooker/reform2/png/0189=189.png" id="i.xlv-p1.1" /></p>
+
+<pb n="190" href="/ccel/hooker/reform2/png/0190=190.htm" id="i.xlv-Page_190" />
+<p id="i.xlv-p2"><img alt="Image of page 190" src="/ccel/hooker/reform2/png/0190=190.png" id="i.xlv-p2.1" /></p>
+
+<pb n="191" href="/ccel/hooker/reform2/png/0191=191.htm" id="i.xlv-Page_191" />
+<p id="i.xlv-p3"><img alt="Image of page 191" src="/ccel/hooker/reform2/png/0191=191.png" id="i.xlv-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xliv: In some things the Matter of our Prayer as they affirm, unsound" progress="44.88%" prev="i.xlv" next="i.xlvii" id="i.xlvi">
+
+<pb n="192" href="/ccel/hooker/reform2/png/0192=192.htm" id="i.xlvi-Page_192" />
+<p id="i.xlvi-p1"><img alt="Image of page 192" src="/ccel/hooker/reform2/png/0192=192.png" id="i.xlvi-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter xlv: When thou hadst overcome the sharpness of death..." progress="45.11%" prev="i.xlvi" next="i.xlviii" id="i.xlvii">
+
+<pb n="193" href="/ccel/hooker/reform2/png/0193=193.htm" id="i.xlvii-Page_193" />
+<p id="i.xlvii-p1"><img alt="Image of page 193" src="/ccel/hooker/reform2/png/0193=193.png" id="i.xlvii-p1.1" /></p>
+
+<pb n="194" href="/ccel/hooker/reform2/png/0194=194.htm" id="i.xlvii-Page_194" />
+<p id="i.xlvii-p2"><img alt="Image of page 194" src="/ccel/hooker/reform2/png/0194=194.png" id="i.xlvii-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter xlvi: Touching prayer for deliverance from sudden death" progress="45.46%" prev="i.xlvii" next="i.xlix" id="i.xlviii">
+
+<pb n="195" href="/ccel/hooker/reform2/png/0195=195.htm" id="i.xlviii-Page_195" />
+<p id="i.xlviii-p1"><img alt="Image of page 195" src="/ccel/hooker/reform2/png/0195=195.png" id="i.xlviii-p1.1" /></p>
+
+<pb n="196" href="/ccel/hooker/reform2/png/0196=196.htm" id="i.xlviii-Page_196" />
+<p id="i.xlviii-p2"><img alt="Image of page 196" src="/ccel/hooker/reform2/png/0196=196.png" id="i.xlviii-p2.1" /></p>
+
+<pb n="197" href="/ccel/hooker/reform2/png/0197=197.htm" id="i.xlviii-Page_197" />
+<p id="i.xlviii-p3"><img alt="Image of page 197" src="/ccel/hooker/reform2/png/0197=197.png" id="i.xlviii-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter xlvii: Prayer that those things which we for our unworthiness dare not ask God..." progress="45.92%" prev="i.xlviii" next="i.l" id="i.xlix">
+
+<pb n="198" href="/ccel/hooker/reform2/png/0198=198.htm" id="i.xlix-Page_198" />
+<p id="i.xlix-p1"><img alt="Image of page 198" src="/ccel/hooker/reform2/png/0198=198.png" id="i.xlix-p1.1" /></p>
+
+<pb n="199" href="/ccel/hooker/reform2/png/0199=199.htm" id="i.xlix-Page_199" />
+<p id="i.xlix-p2"><img alt="Image of page 199" src="/ccel/hooker/reform2/png/0199=199.png" id="i.xlix-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter xlviii: Prayer to be evermore delivered from all adversity" progress="46.26%" prev="i.xlix" next="i.li" id="i.l">
+
+<pb n="200" href="/ccel/hooker/reform2/png/0200=200.htm" id="i.l-Page_200" />
+<p id="i.l-p1"><img alt="Image of page 200" src="/ccel/hooker/reform2/png/0200=200.png" id="i.l-p1.1" /></p>
+
+<pb n="201" href="/ccel/hooker/reform2/png/0201=201.htm" id="i.l-Page_201" />
+<p id="i.l-p2"><img alt="Image of page 201" src="/ccel/hooker/reform2/png/0201=201.png" id="i.l-p2.1" /></p>
+
+<pb n="202" href="/ccel/hooker/reform2/png/0202=202.htm" id="i.l-Page_202" />
+<p id="i.l-p3"><img alt="Image of page 202" src="/ccel/hooker/reform2/png/0202=202.png" id="i.l-p3.1" /></p>
+
+<pb n="203" href="/ccel/hooker/reform2/png/0203=203.htm" id="i.l-Page_203" />
+<p id="i.l-p4"><img alt="Image of page 203" src="/ccel/hooker/reform2/png/0203=203.png" id="i.l-p4.1" /></p>
+
+<pb n="204" href="/ccel/hooker/reform2/png/0204=204.htm" id="i.l-Page_204" />
+<p id="i.l-p5"><img alt="Image of page 204" src="/ccel/hooker/reform2/png/0204=204.png" id="i.l-p5.1" /></p>
+
+<pb n="205" href="/ccel/hooker/reform2/png/0205=205.htm" id="i.l-Page_205" />
+<p id="i.l-p6"><img alt="Image of page 205" src="/ccel/hooker/reform2/png/0205=205.png" id="i.l-p6.1" /></p>
+
+<pb n="206" href="/ccel/hooker/reform2/png/0206=206.htm" id="i.l-Page_206" />
+<p id="i.l-p7"><img alt="Image of page 206" src="/ccel/hooker/reform2/png/0206=206.png" id="i.l-p7.1" /></p>
+
+<pb n="207" href="/ccel/hooker/reform2/png/0207=207.htm" id="i.l-Page_207" />
+<p id="i.l-p8"><img alt="Image of page 207" src="/ccel/hooker/reform2/png/0207=207.png" id="i.l-p8.1" /></p>
+
+<pb n="208" href="/ccel/hooker/reform2/png/0208=208.htm" id="i.l-Page_208" />
+<p id="i.l-p9"><img alt="Image of page 208" src="/ccel/hooker/reform2/png/0208=208.png" id="i.l-p9.1" /></p>
+
+<pb n="209" href="/ccel/hooker/reform2/png/0209=209.htm" id="i.l-Page_209" />
+<p id="i.l-p10"><img alt="Image of page 209" src="/ccel/hooker/reform2/png/0209=209.png" id="i.l-p10.1" /></p>
+
+<pb n="210" href="/ccel/hooker/reform2/png/0210=210.htm" id="i.l-Page_210" />
+<p id="i.l-p11"><img alt="Image of page 210" src="/ccel/hooker/reform2/png/0210=210.png" id="i.l-p11.1" /></p>
+
+<pb n="211" href="/ccel/hooker/reform2/png/0211=211.htm" id="i.l-Page_211" />
+<p id="i.l-p12"><img alt="Image of page 211" src="/ccel/hooker/reform2/png/0211=211.png" id="i.l-p12.1" /></p>
+</div2>
+
+<div2 title="Chapter xlix: Prayer that all men may find mercy..." progress="47.76%" prev="i.l" next="i.lii" id="i.li">
+
+<pb n="212" href="/ccel/hooker/reform2/png/0212=212.htm" id="i.li-Page_212" />
+<p id="i.li-p1"><img alt="Image of page 212" src="/ccel/hooker/reform2/png/0212=212.png" id="i.li-p1.1" /></p>
+
+<pb n="213" href="/ccel/hooker/reform2/png/0213=213.htm" id="i.li-Page_213" />
+<p id="i.li-p2"><img alt="Image of page 213" src="/ccel/hooker/reform2/png/0213=213.png" id="i.li-p2.1" /></p>
+
+<pb n="214" href="/ccel/hooker/reform2/png/0214=214.htm" id="i.li-Page_214" />
+<p id="i.li-p3"><img alt="Image of page 214" src="/ccel/hooker/reform2/png/0214=214.png" id="i.li-p3.1" /></p>
+
+<pb n="215" href="/ccel/hooker/reform2/png/0215=215.htm" id="i.li-Page_215" />
+<p id="i.li-p4"><img alt="Image of page 215" src="/ccel/hooker/reform2/png/0215=215.png" id="i.li-p4.1" /></p>
+
+<pb n="216" href="/ccel/hooker/reform2/png/0216=216.htm" id="i.li-Page_216" />
+<p id="i.li-p5"><img alt="Image of page 216" src="/ccel/hooker/reform2/png/0216=216.png" id="i.li-p5.1" /></p>
+
+<pb n="217" href="/ccel/hooker/reform2/png/0217=217.htm" id="i.li-Page_217" />
+<p id="i.li-p6"><img alt="Image of page 217" src="/ccel/hooker/reform2/png/0217=217.png" id="i.li-p6.1" /></p>
+
+<pb n="218" href="/ccel/hooker/reform2/png/0218=218.htm" id="i.li-Page_218" />
+<p id="i.li-p7"><img alt="Image of page 218" src="/ccel/hooker/reform2/png/0218=218.png" id="i.li-p7.1" /></p>
+</div2>
+
+<div2 title="Chapter l: Of the name, the author, and the force of sacraments..." progress="48.68%" prev="i.li" next="i.liii" id="i.lii">
+
+<pb n="219" href="/ccel/hooker/reform2/png/0219=219.htm" id="i.lii-Page_219" />
+<p id="i.lii-p1"><img alt="Image of page 219" src="/ccel/hooker/reform2/png/0219=219.png" id="i.lii-p1.1" /></p>
+</div2>
+
+<div2 title="Chapter li: That God is in Christ..." progress="48.91%" prev="i.lii" next="i.liv" id="i.liii">
+
+<pb n="220" href="/ccel/hooker/reform2/png/0220=220.htm" id="i.liii-Page_220" />
+<p id="i.liii-p1"><img alt="Image of page 220" src="/ccel/hooker/reform2/png/0220=220.png" id="i.liii-p1.1" /></p>
+
+<pb n="221" href="/ccel/hooker/reform2/png/0221=221.htm" id="i.liii-Page_221" />
+<p id="i.liii-p2"><img alt="Image of page 221" src="/ccel/hooker/reform2/png/0221=221.png" id="i.liii-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter lii: The misinterpretations which heresy hath made..." progress="49.25%" prev="i.liii" next="i.lv" id="i.liv">
+
+<pb n="222" href="/ccel/hooker/reform2/png/0222=222.htm" id="i.liv-Page_222" />
+<p id="i.liv-p1"><img alt="Image of page 222" src="/ccel/hooker/reform2/png/0222=222.png" id="i.liv-p1.1" /></p>
+
+<pb n="223" href="/ccel/hooker/reform2/png/0223=223.htm" id="i.liv-Page_223" />
+<p id="i.liv-p2"><img alt="Image of page 223" src="/ccel/hooker/reform2/png/0223=223.png" id="i.liv-p2.1" /></p>
+
+<pb n="224" href="/ccel/hooker/reform2/png/0224=224.htm" id="i.liv-Page_224" />
+<p id="i.liv-p3"><img alt="Image of page 224" src="/ccel/hooker/reform2/png/0224=224.png" id="i.liv-p3.1" /></p>
+
+<pb n="225" href="/ccel/hooker/reform2/png/0225=225.htm" id="i.liv-Page_225" />
+<p id="i.liv-p4"><img alt="Image of page 225" src="/ccel/hooker/reform2/png/0225=225.png" id="i.liv-p4.1" /></p>
+
+<pb n="226" href="/ccel/hooker/reform2/png/0226=226.htm" id="i.liv-Page_226" />
+<p id="i.liv-p5"><img alt="Image of page 226" src="/ccel/hooker/reform2/png/0226=226.png" id="i.liv-p5.1" /></p>
+</div2>
+
+<div2 title="Chapter liii: That by the union of the one with the other nature in Christ..." progress="49.94%" prev="i.liv" next="i.lvi" id="i.lv">
+
+<pb n="227" href="/ccel/hooker/reform2/png/0227=227.htm" id="i.lv-Page_227" />
+<p id="i.lv-p1"><img alt="Image of page 227" src="/ccel/hooker/reform2/png/0227=227.png" id="i.lv-p1.1" /></p>
+
+<pb n="228" href="/ccel/hooker/reform2/png/0228=228.htm" id="i.lv-Page_228" />
+<p id="i.lv-p2"><img alt="Image of page 228" src="/ccel/hooker/reform2/png/0228=228.png" id="i.lv-p2.1" /></p>
+
+<pb n="229" href="/ccel/hooker/reform2/png/0229=229.htm" id="i.lv-Page_229" />
+<p id="i.lv-p3"><img alt="Image of page 229" src="/ccel/hooker/reform2/png/0229=229.png" id="i.lv-p3.1" /></p>
+
+<pb n="230" href="/ccel/hooker/reform2/png/0230=230.htm" id="i.lv-Page_230" />
+<p id="i.lv-p4"><img alt="Image of page 230" src="/ccel/hooker/reform2/png/0230=230.png" id="i.lv-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter liv: What Christ hasth obtained according to the flesh" progress="50.52%" prev="i.lv" next="i.lvii" id="i.lvi">
+
+<pb n="231" href="/ccel/hooker/reform2/png/0231=231.htm" id="i.lvi-Page_231" />
+<p id="i.lvi-p1"><img alt="Image of page 231" src="/ccel/hooker/reform2/png/0231=231.png" id="i.lvi-p1.1" /></p>
+
+<pb n="232" href="/ccel/hooker/reform2/png/0232=232.htm" id="i.lvi-Page_232" />
+<p id="i.lvi-p2"><img alt="Image of page 232" src="/ccel/hooker/reform2/png/0232=232.png" id="i.lvi-p2.1" /></p>
+
+<pb n="233" href="/ccel/hooker/reform2/png/0233=233.htm" id="i.lvi-Page_233" />
+<p id="i.lvi-p3"><img alt="Image of page 233" src="/ccel/hooker/reform2/png/0233=233.png" id="i.lvi-p3.1" /></p>
+
+<pb n="234" href="/ccel/hooker/reform2/png/0234=234.htm" id="i.lvi-Page_234" />
+<p id="i.lvi-p4"><img alt="Image of page 234" src="/ccel/hooker/reform2/png/0234=234.png" id="i.lvi-p4.1" /></p>
+
+<pb n="235" href="/ccel/hooker/reform2/png/0235=235.htm" id="i.lvi-Page_235" />
+<p id="i.lvi-p5"><img alt="Image of page 235" src="/ccel/hooker/reform2/png/0235=235.png" id="i.lvi-p5.1" /></p>
+
+<pb n="236" href="/ccel/hooker/reform2/png/0236=236.htm" id="i.lvi-Page_236" />
+<p id="i.lvi-p6"><img alt="Image of page 236" src="/ccel/hooker/reform2/png/0236=236.png" id="i.lvi-p6.1" /></p>
+
+<pb n="237" href="/ccel/hooker/reform2/png/0237=237.htm" id="i.lvi-Page_237" />
+<p id="i.lvi-p7"><img alt="Image of page 237" src="/ccel/hooker/reform2/png/0237=237.png" id="i.lvi-p7.1" /></p>
+</div2>
+
+<div2 title="Chapter lv: Of the personal presence of Christ..." progress="51.44%" prev="i.lvi" next="i.lviii" id="i.lvii">
+
+<pb n="238" href="/ccel/hooker/reform2/png/0238=238.htm" id="i.lvii-Page_238" />
+<p id="i.lvii-p1"><img alt="Image of page 238" src="/ccel/hooker/reform2/png/0238=238.png" id="i.lvii-p1.1" /></p>
+
+<pb n="239" href="/ccel/hooker/reform2/png/0239=239.htm" id="i.lvii-Page_239" />
+<p id="i.lvii-p2"><img alt="Image of page 239" src="/ccel/hooker/reform2/png/0239=239.png" id="i.lvii-p2.1" /></p>
+
+<pb n="240" href="/ccel/hooker/reform2/png/0240=240.htm" id="i.lvii-Page_240" />
+<p id="i.lvii-p3"><img alt="Image of page 240" src="/ccel/hooker/reform2/png/0240=240.png" id="i.lvii-p3.1" /></p>
+
+<pb n="241" href="/ccel/hooker/reform2/png/0241=241.htm" id="i.lvii-Page_241" />
+<p id="i.lvii-p4"><img alt="Image of page 241" src="/ccel/hooker/reform2/png/0241=241.png" id="i.lvii-p4.1" /></p>
+
+<pb n="242" href="/ccel/hooker/reform2/png/0242=242.htm" id="i.lvii-Page_242" />
+<p id="i.lvii-p5"><img alt="Image of page 242" src="/ccel/hooker/reform2/png/0242=242.png" id="i.lvii-p5.1" /></p>
+
+<pb n="243" href="/ccel/hooker/reform2/png/0243=243.htm" id="i.lvii-Page_243" />
+<p id="i.lvii-p6"><img alt="Image of page 243" src="/ccel/hooker/reform2/png/0243=243.png" id="i.lvii-p6.1" /></p>
+
+<pb n="244" href="/ccel/hooker/reform2/png/0244=244.htm" id="i.lvii-Page_244" />
+<p id="i.lvii-p7"><img alt="Image of page 244" src="/ccel/hooker/reform2/png/0244=244.png" id="i.lvii-p7.1" /></p>
+</div2>
+
+<div2 title="Chapter lvi: the union of mutual participation which is between Christ and the Church of Christ..." progress="52.36%" prev="i.lvii" next="i.lix" id="i.lviii">
+
+<pb n="245" href="/ccel/hooker/reform2/png/0245=245.htm" id="i.lviii-Page_245" />
+<p id="i.lviii-p1"><img alt="Image of page 245" src="/ccel/hooker/reform2/png/0245=245.png" id="i.lviii-p1.1" /></p>
+
+<pb n="246" href="/ccel/hooker/reform2/png/0246=246.htm" id="i.lviii-Page_246" />
+<p id="i.lviii-p2"><img alt="Image of page 246" src="/ccel/hooker/reform2/png/0246=246.png" id="i.lviii-p2.1" /></p>
+
+<pb n="247" href="/ccel/hooker/reform2/png/0247=247.htm" id="i.lviii-Page_247" />
+<p id="i.lviii-p3"><img alt="Image of page 247" src="/ccel/hooker/reform2/png/0247=247.png" id="i.lviii-p3.1" /></p>
+
+<pb n="248" href="/ccel/hooker/reform2/png/0248=248.htm" id="i.lviii-Page_248" />
+<p id="i.lviii-p4"><img alt="Image of page 248" src="/ccel/hooker/reform2/png/0248=248.png" id="i.lviii-p4.1" /></p>
+
+<pb n="249" href="/ccel/hooker/reform2/png/0249=249.htm" id="i.lviii-Page_249" />
+<p id="i.lviii-p5"><img alt="Image of page 249" src="/ccel/hooker/reform2/png/0249=249.png" id="i.lviii-p5.1" /></p>
+
+<pb n="250" href="/ccel/hooker/reform2/png/0250=250.htm" id="i.lviii-Page_250" />
+<p id="i.lviii-p6"><img alt="Image of page 250" src="/ccel/hooker/reform2/png/0250=250.png" id="i.lviii-p6.1" /></p>
+
+<pb n="251" href="/ccel/hooker/reform2/png/0251=251.htm" id="i.lviii-Page_251" />
+<p id="i.lviii-p7"><img alt="Image of page 251" src="/ccel/hooker/reform2/png/0251=251.png" id="i.lviii-p7.1" /></p>
+
+<pb n="252" href="/ccel/hooker/reform2/png/0252=252.htm" id="i.lviii-Page_252" />
+<p id="i.lviii-p8"><img alt="Image of page 252" src="/ccel/hooker/reform2/png/0252=252.png" id="i.lviii-p8.1" /></p>
+
+<pb n="253" href="/ccel/hooker/reform2/png/0253=253.htm" id="i.lviii-Page_253" />
+<p id="i.lviii-p9"><img alt="Image of page 253" src="/ccel/hooker/reform2/png/0253=253.png" id="i.lviii-p9.1" /></p>
+
+<pb n="254" href="/ccel/hooker/reform2/png/0254=254.htm" id="i.lviii-Page_254" />
+<p id="i.lviii-p10"><img alt="Image of page 254" src="/ccel/hooker/reform2/png/0254=254.png" id="i.lviii-p10.1" /></p>
+</div2>
+
+<div2 title="Chapter lvii: The necessity of Sacraments..." progress="53.62%" prev="i.lviii" next="i.lx" id="i.lix">
+
+<pb n="255" href="/ccel/hooker/reform2/png/0255=255.htm" id="i.lix-Page_255" />
+<p id="i.lix-p1"><img alt="Image of page 255" src="/ccel/hooker/reform2/png/0255=255.png" id="i.lix-p1.1" /></p>
+
+<pb n="256" href="/ccel/hooker/reform2/png/0256=256.htm" id="i.lix-Page_256" />
+<p id="i.lix-p2"><img alt="Image of page 256" src="/ccel/hooker/reform2/png/0256=256.png" id="i.lix-p2.1" /></p>
+
+<pb n="257" href="/ccel/hooker/reform2/png/0257=257.htm" id="i.lix-Page_257" />
+<p id="i.lix-p3"><img alt="Image of page 257" src="/ccel/hooker/reform2/png/0257=257.png" id="i.lix-p3.1" /></p>
+
+<pb n="258" href="/ccel/hooker/reform2/png/0258=258.htm" id="i.lix-Page_258" />
+<p id="i.lix-p4"><img alt="Image of page 258" src="/ccel/hooker/reform2/png/0258=258.png" id="i.lix-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter lviii: The substance of Baptism..." progress="54.20%" prev="i.lix" next="i.lxi" id="i.lx">
+
+<pb n="259" href="/ccel/hooker/reform2/png/0259=259.htm" id="i.lx-Page_259" />
+<p id="i.lx-p1"><img alt="Image of page 259" src="/ccel/hooker/reform2/png/0259=259.png" id="i.lx-p1.1" /></p>
+
+<pb n="260" href="/ccel/hooker/reform2/png/0260=260.htm" id="i.lx-Page_260" />
+<p id="i.lx-p2"><img alt="Image of page 260" src="/ccel/hooker/reform2/png/0260=260.png" id="i.lx-p2.1" /></p>
+
+<pb n="261" href="/ccel/hooker/reform2/png/0261=261.htm" id="i.lx-Page_261" />
+<p id="i.lx-p3"><img alt="Image of page 261" src="/ccel/hooker/reform2/png/0261=261.png" id="i.lx-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter lix: The ground in Scripture..." progress="54.66%" prev="i.lx" next="i.lxii" id="i.lxi">
+
+<pb n="262" href="/ccel/hooker/reform2/png/0262=262.htm" id="i.lxi-Page_262" />
+<p id="i.lxi-p1"><img alt="Image of page 262" src="/ccel/hooker/reform2/png/0262=262.png" id="i.lxi-p1.1" /></p>
+
+<pb n="263" href="/ccel/hooker/reform2/png/0263=263.htm" id="i.lxi-Page_263" />
+<p id="i.lxi-p2"><img alt="Image of page 263" src="/ccel/hooker/reform2/png/0263=263.png" id="i.lxi-p2.1" /></p>
+</div2>
+
+<div2 title="Chapter lx: What kind of necessity in outward baptism..." progress="55.00%" prev="i.lxi" next="i.lxiii" id="i.lxii">
+
+<pb n="264" href="/ccel/hooker/reform2/png/0264=264.htm" id="i.lxii-Page_264" />
+<p id="i.lxii-p1"><img alt="Image of page 264" src="/ccel/hooker/reform2/png/0264=264.png" id="i.lxii-p1.1" /></p>
+
+<pb n="265" href="/ccel/hooker/reform2/png/0265=265.htm" id="i.lxii-Page_265" />
+<p id="i.lxii-p2"><img alt="Image of page 265" src="/ccel/hooker/reform2/png/0265=265.png" id="i.lxii-p2.1" /></p>
+
+<pb n="266" href="/ccel/hooker/reform2/png/0266=266.htm" id="i.lxii-Page_266" />
+<p id="i.lxii-p3"><img alt="Image of page 266" src="/ccel/hooker/reform2/png/0266=266.png" id="i.lxii-p3.1" /></p>
+
+<pb n="267" href="/ccel/hooker/reform2/png/0267=267.htm" id="i.lxii-Page_267" />
+<p id="i.lxii-p4"><img alt="Image of page 267" src="/ccel/hooker/reform2/png/0267=267.png" id="i.lxii-p4.1" /></p>
+
+<pb n="268" href="/ccel/hooker/reform2/png/0268=268.htm" id="i.lxii-Page_268" />
+<p id="i.lxii-p5"><img alt="Image of page 268" src="/ccel/hooker/reform2/png/0268=268.png" id="i.lxii-p5.1" /></p>
+
+<pb n="269" href="/ccel/hooker/reform2/png/0269=269.htm" id="i.lxii-Page_269" />
+<p id="i.lxii-p6"><img alt="Image of page 269" src="/ccel/hooker/reform2/png/0269=269.png" id="i.lxii-p6.1" /></p>
+
+<pb n="270" href="/ccel/hooker/reform2/png/0270=270.htm" id="i.lxii-Page_270" />
+<p id="i.lxii-p7"><img alt="Image of page 270" src="/ccel/hooker/reform2/png/0270=270.png" id="i.lxii-p7.1" /></p>
+
+<pb n="271" href="/ccel/hooker/reform2/png/0271=271.htm" id="i.lxii-Page_271" />
+<p id="i.lxii-p8"><img alt="Image of page 271" src="/ccel/hooker/reform2/png/0271=271.png" id="i.lxii-p8.1" /></p>
+
+<pb n="272" href="/ccel/hooker/reform2/png/0272=272.htm" id="i.lxii-Page_272" />
+<p id="i.lxii-p9"><img alt="Image of page 272" src="/ccel/hooker/reform2/png/0272=272.png" id="i.lxii-p9.1" /></p>
+</div2>
+
+<div2 title="Chapter lxi: What things in baptism" progress="56.15%" prev="i.lxii" next="i.lxiv" id="i.lxiii">
+
+<pb n="273" href="/ccel/hooker/reform2/png/0273=273.htm" id="i.lxiii-Page_273" />
+<p id="i.lxiii-p1"><img alt="Image of page 273" src="/ccel/hooker/reform2/png/0273=273.png" id="i.lxiii-p1.1" /></p>
+
+<pb n="274" href="/ccel/hooker/reform2/png/0274=274.htm" id="i.lxiii-Page_274" />
+<p id="i.lxiii-p2"><img alt="Image of page 274" src="/ccel/hooker/reform2/png/0274=274.png" id="i.lxiii-p2.1" /></p>
+
+<pb n="275" href="/ccel/hooker/reform2/png/0275=275.htm" id="i.lxiii-Page_275" />
+<p id="i.lxiii-p3"><img alt="Image of page 275" src="/ccel/hooker/reform2/png/0275=275.png" id="i.lxiii-p3.1" /></p>
+
+<pb n="276" href="/ccel/hooker/reform2/png/0276=276.htm" id="i.lxiii-Page_276" />
+<p id="i.lxiii-p4"><img alt="Image of page 276" src="/ccel/hooker/reform2/png/0276=276.png" id="i.lxiii-p4.1" /></p>
+
+<pb n="277" href="/ccel/hooker/reform2/png/0277=277.htm" id="i.lxiii-Page_277" />
+<p id="i.lxiii-p5"><img alt="Image of page 277" src="/ccel/hooker/reform2/png/0277=277.png" id="i.lxiii-p5.1" /></p>
+
+<pb n="278" href="/ccel/hooker/reform2/png/0278=278.htm" id="i.lxiii-Page_278" />
+<p id="i.lxiii-p6"><img alt="Image of page 278" src="/ccel/hooker/reform2/png/0278=278.png" id="i.lxiii-p6.1" /></p>
+
+<pb n="279" href="/ccel/hooker/reform2/png/0279=279.htm" id="i.lxiii-Page_279" />
+<p id="i.lxiii-p7"><img alt="Image of page 279" src="/ccel/hooker/reform2/png/0279=279.png" id="i.lxiii-p7.1" /></p>
+</div2>
+
+<div2 title="Chapter lxii: Whether baptism by women" progress="57.07%" prev="i.lxiii" next="i.lxv" id="i.lxiv">
+
+<pb n="280" href="/ccel/hooker/reform2/png/0280=280.htm" id="i.lxiv-Page_280" />
+<p id="i.lxiv-p1"><img alt="Image of page 280" src="/ccel/hooker/reform2/png/0280=280.png" id="i.lxiv-p1.1" /></p>
+
+<pb n="281" href="/ccel/hooker/reform2/png/0281=281.htm" id="i.lxiv-Page_281" />
+<p id="i.lxiv-p2"><img alt="Image of page 281" src="/ccel/hooker/reform2/png/0281=281.png" id="i.lxiv-p2.1" /></p>
+
+<pb n="282" href="/ccel/hooker/reform2/png/0282=282.htm" id="i.lxiv-Page_282" />
+<p id="i.lxiv-p3"><img alt="Image of page 282" src="/ccel/hooker/reform2/png/0282=282.png" id="i.lxiv-p3.1" /></p>
+
+<pb n="283" href="/ccel/hooker/reform2/png/0283=283.htm" id="i.lxiv-Page_283" />
+<p id="i.lxiv-p4"><img alt="Image of page 283" src="/ccel/hooker/reform2/png/0283=283.png" id="i.lxiv-p4.1" /></p>
+
+<pb n="284" href="/ccel/hooker/reform2/png/0284=284.htm" id="i.lxiv-Page_284" />
+<p id="i.lxiv-p5"><img alt="Image of page 284" src="/ccel/hooker/reform2/png/0284=284.png" id="i.lxiv-p5.1" /></p>
+
+<pb n="285" href="/ccel/hooker/reform2/png/0285=285.htm" id="i.lxiv-Page_285" />
+<p id="i.lxiv-p6"><img alt="Image of page 285" src="/ccel/hooker/reform2/png/0285=285.png" id="i.lxiv-p6.1" /></p>
+
+<pb n="286" href="/ccel/hooker/reform2/png/0286=286.htm" id="i.lxiv-Page_286" />
+<p id="i.lxiv-p7"><img alt="Image of page 286" src="/ccel/hooker/reform2/png/0286=286.png" id="i.lxiv-p7.1" /></p>
+
+<pb n="287" href="/ccel/hooker/reform2/png/0287=287.htm" id="i.lxiv-Page_287" />
+<p id="i.lxiv-p8"><img alt="Image of page 287" src="/ccel/hooker/reform2/png/0287=287.png" id="i.lxiv-p8.1" /></p>
+
+<pb n="288" href="/ccel/hooker/reform2/png/0288=288.htm" id="i.lxiv-Page_288" />
+<p id="i.lxiv-p9"><img alt="Image of page 288" src="/ccel/hooker/reform2/png/0288=288.png" id="i.lxiv-p9.1" /></p>
+
+<pb n="289" href="/ccel/hooker/reform2/png/0289=289.htm" id="i.lxiv-Page_289" />
+<p id="i.lxiv-p10"><img alt="Image of page 289" src="/ccel/hooker/reform2/png/0289=289.png" id="i.lxiv-p10.1" /></p>
+
+<pb n="290" href="/ccel/hooker/reform2/png/0290=290.htm" id="i.lxiv-Page_290" />
+<p id="i.lxiv-p11"><img alt="Image of page 290" src="/ccel/hooker/reform2/png/0290=290.png" id="i.lxiv-p11.1" /></p>
+
+<pb n="291" href="/ccel/hooker/reform2/png/0291=291.htm" id="i.lxiv-Page_291" />
+<p id="i.lxiv-p12"><img alt="Image of page 291" src="/ccel/hooker/reform2/png/0291=291.png" id="i.lxiv-p12.1" /></p>
+
+<pb n="292" href="/ccel/hooker/reform2/png/0292=292.htm" id="i.lxiv-Page_292" />
+<p id="i.lxiv-p13"><img alt="Image of page 292" src="/ccel/hooker/reform2/png/0292=292.png" id="i.lxiv-p13.1" /></p>
+
+<pb n="293" href="/ccel/hooker/reform2/png/0293=293.htm" id="i.lxiv-Page_293" />
+<p id="i.lxiv-p14"><img alt="Image of page 293" src="/ccel/hooker/reform2/png/0293=293.png" id="i.lxiv-p14.1" /></p>
+
+<pb n="294" href="/ccel/hooker/reform2/png/0294=294.htm" id="i.lxiv-Page_294" />
+<p id="i.lxiv-p15"><img alt="Image of page 294" src="/ccel/hooker/reform2/png/0294=294.png" id="i.lxiv-p15.1" /></p>
+
+<pb n="295" href="/ccel/hooker/reform2/png/0295=295.htm" id="i.lxiv-Page_295" />
+<p id="i.lxiv-p16"><img alt="Image of page 295" src="/ccel/hooker/reform2/png/0295=295.png" id="i.lxiv-p16.1" /></p>
+
+<pb n="296" href="/ccel/hooker/reform2/png/0296=296.htm" id="i.lxiv-Page_296" />
+<p id="i.lxiv-p17"><img alt="Image of page 296" src="/ccel/hooker/reform2/png/0296=296.png" id="i.lxiv-p17.1" /></p>
+
+<pb n="297" href="/ccel/hooker/reform2/png/0297=297.htm" id="i.lxiv-Page_297" />
+<p id="i.lxiv-p18"><img alt="Image of page 297" src="/ccel/hooker/reform2/png/0297=297.png" id="i.lxiv-p18.1" /></p>
+
+<pb n="298" href="/ccel/hooker/reform2/png/0298=298.htm" id="i.lxiv-Page_298" />
+<p id="i.lxiv-p19"><img alt="Image of page 298" src="/ccel/hooker/reform2/png/0298=298.png" id="i.lxiv-p19.1" /></p>
+
+<pb n="299" href="/ccel/hooker/reform2/png/0299=299.htm" id="i.lxiv-Page_299" />
+<p id="i.lxiv-p20"><img alt="Image of page 299" src="/ccel/hooker/reform2/png/0299=299.png" id="i.lxiv-p20.1" /></p>
+
+<pb n="300" href="/ccel/hooker/reform2/png/0300=300.htm" id="i.lxiv-Page_300" />
+<p id="i.lxiv-p21"><img alt="Image of page 300" src="/ccel/hooker/reform2/png/0300=300.png" id="i.lxiv-p21.1" /></p>
+
+<pb n="301" href="/ccel/hooker/reform2/png/0301=301.htm" id="i.lxiv-Page_301" />
+<p id="i.lxiv-p22"><img alt="Image of page 301" src="/ccel/hooker/reform2/png/0301=301.png" id="i.lxiv-p22.1" /></p>
+
+<pb n="302" href="/ccel/hooker/reform2/png/0302=302.htm" id="i.lxiv-Page_302" />
+<p id="i.lxiv-p23"><img alt="Image of page 302" src="/ccel/hooker/reform2/png/0302=302.png" id="i.lxiv-p23.1" /></p>
+
+<pb n="303" href="/ccel/hooker/reform2/png/0303=303.htm" id="i.lxiv-Page_303" />
+<p id="i.lxiv-p24"><img alt="Image of page 303" src="/ccel/hooker/reform2/png/0303=303.png" id="i.lxiv-p24.1" /></p>
+</div2>
+
+<div2 title="Chapter lxiii: Interrogatories in Baptism..." progress="59.95%" prev="i.lxiv" next="i.lxvi" id="i.lxv">
+
+<pb n="304" href="/ccel/hooker/reform2/png/0304=304.htm" id="i.lxv-Page_304" />
+<p id="i.lxv-p1"><img alt="Image of page 304" src="/ccel/hooker/reform2/png/0304=304.png" id="i.lxv-p1.1" /></p>
+
+<pb n="305" href="/ccel/hooker/reform2/png/0305=305.htm" id="i.lxv-Page_305" />
+<p id="i.lxv-p2"><img alt="Image of page 305" src="/ccel/hooker/reform2/png/0305=305.png" id="i.lxv-p2.1" /></p>
+
+<pb n="306" href="/ccel/hooker/reform2/png/0306=306.htm" id="i.lxv-Page_306" />
+<p id="i.lxv-p3"><img alt="Image of page 306" src="/ccel/hooker/reform2/png/0306=306.png" id="i.lxv-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter lxiv: Interrogatories proposed unto infants in baptism..." progress="60.41%" prev="i.lxv" next="i.lxvii" id="i.lxvi">
+
+<pb n="307" href="/ccel/hooker/reform2/png/0307=307.htm" id="i.lxvi-Page_307" />
+<p id="i.lxvi-p1"><img alt="Image of page 307" src="/ccel/hooker/reform2/png/0307=307.png" id="i.lxvi-p1.1" /></p>
+
+<pb n="308" href="/ccel/hooker/reform2/png/0308=308.htm" id="i.lxvi-Page_308" />
+<p id="i.lxvi-p2"><img alt="Image of page 308" src="/ccel/hooker/reform2/png/0308=308.png" id="i.lxvi-p2.1" /></p>
+
+<pb n="309" href="/ccel/hooker/reform2/png/0309=309.htm" id="i.lxvi-Page_309" />
+<p id="i.lxvi-p3"><img alt="Image of page 309" src="/ccel/hooker/reform2/png/0309=309.png" id="i.lxvi-p3.1" /></p>
+
+<pb n="310" href="/ccel/hooker/reform2/png/0310=310.htm" id="i.lxvi-Page_310" />
+<p id="i.lxvi-p4"><img alt="Image of page 310" src="/ccel/hooker/reform2/png/0310=310.png" id="i.lxvi-p4.1" /></p>
+
+<pb n="311" href="/ccel/hooker/reform2/png/0311=311.htm" id="i.lxvi-Page_311" />
+<p id="i.lxvi-p5"><img alt="Image of page 311" src="/ccel/hooker/reform2/png/0311=311.png" id="i.lxvi-p5.1" /></p>
+
+<pb n="312" href="/ccel/hooker/reform2/png/0312=312.htm" id="i.lxvi-Page_312" />
+<p id="i.lxvi-p6"><img alt="Image of page 312" src="/ccel/hooker/reform2/png/0312=312.png" id="i.lxvi-p6.1" /></p>
+
+<pb n="313" href="/ccel/hooker/reform2/png/0313=313.htm" id="i.lxvi-Page_313" />
+<p id="i.lxvi-p7"><img alt="Image of page 313" src="/ccel/hooker/reform2/png/0313=313.png" id="i.lxvi-p7.1" /></p>
+
+<pb n="314" href="/ccel/hooker/reform2/png/0314=314.htm" id="i.lxvi-Page_314" />
+<p id="i.lxvi-p8"><img alt="Image of page 314" src="/ccel/hooker/reform2/png/0314=314.png" id="i.lxvi-p8.1" /></p>
+
+<pb n="315" href="/ccel/hooker/reform2/png/0315=315.htm" id="i.lxvi-Page_315" />
+<p id="i.lxvi-p9"><img alt="Image of page 315" src="/ccel/hooker/reform2/png/0315=315.png" id="i.lxvi-p9.1" /></p>
+
+<pb n="316" href="/ccel/hooker/reform2/png/0316=316.htm" id="i.lxvi-Page_316" />
+<p id="i.lxvi-p10"><img alt="Image of page 316" src="/ccel/hooker/reform2/png/0316=316.png" id="i.lxvi-p10.1" /></p>
+</div2>
+
+<div2 title="Chapter lxv: Of the Cross in Baptism" progress="61.67%" prev="i.lxvi" next="i.lxviii" id="i.lxvii">
+
+<pb n="317" href="/ccel/hooker/reform2/png/0317=317.htm" id="i.lxvii-Page_317" />
+<p id="i.lxvii-p1"><img alt="Image of page 317" src="/ccel/hooker/reform2/png/0317=317.png" id="i.lxvii-p1.1" /></p>
+
+<pb n="318" href="/ccel/hooker/reform2/png/0318=318.htm" id="i.lxvii-Page_318" />
+<p id="i.lxvii-p2"><img alt="Image of page 318" src="/ccel/hooker/reform2/png/0318=318.png" id="i.lxvii-p2.1" /></p>
+
+<pb n="319" href="/ccel/hooker/reform2/png/0319=319.htm" id="i.lxvii-Page_319" />
+<p id="i.lxvii-p3"><img alt="Image of page 319" src="/ccel/hooker/reform2/png/0319=319.png" id="i.lxvii-p3.1" /></p>
+
+<pb n="320" href="/ccel/hooker/reform2/png/0320=320.htm" id="i.lxvii-Page_320" />
+<p id="i.lxvii-p4"><img alt="Image of page 320" src="/ccel/hooker/reform2/png/0320=320.png" id="i.lxvii-p4.1" /></p>
+
+<pb n="321" href="/ccel/hooker/reform2/png/0321=321.htm" id="i.lxvii-Page_321" />
+<p id="i.lxvii-p5"><img alt="Image of page 321" src="/ccel/hooker/reform2/png/0321=321.png" id="i.lxvii-p5.1" /></p>
+
+<pb n="322" href="/ccel/hooker/reform2/png/0322=322.htm" id="i.lxvii-Page_322" />
+<p id="i.lxvii-p6"><img alt="Image of page 322" src="/ccel/hooker/reform2/png/0322=322.png" id="i.lxvii-p6.1" /></p>
+
+<pb n="323" href="/ccel/hooker/reform2/png/0323=323.htm" id="i.lxvii-Page_323" />
+<p id="i.lxvii-p7"><img alt="Image of page 323" src="/ccel/hooker/reform2/png/0323=323.png" id="i.lxvii-p7.1" /></p>
+
+<pb n="324" href="/ccel/hooker/reform2/png/0324=324.htm" id="i.lxvii-Page_324" />
+<p id="i.lxvii-p8"><img alt="Image of page 324" src="/ccel/hooker/reform2/png/0324=324.png" id="i.lxvii-p8.1" /></p>
+
+<pb n="325" href="/ccel/hooker/reform2/png/0325=325.htm" id="i.lxvii-Page_325" />
+<p id="i.lxvii-p9"><img alt="Image of page 325" src="/ccel/hooker/reform2/png/0325=325.png" id="i.lxvii-p9.1" /></p>
+
+<pb n="326" href="/ccel/hooker/reform2/png/0326=326.htm" id="i.lxvii-Page_326" />
+<p id="i.lxvii-p10"><img alt="Image of page 326" src="/ccel/hooker/reform2/png/0326=326.png" id="i.lxvii-p10.1" /></p>
+
+<pb n="327" href="/ccel/hooker/reform2/png/0327=327.htm" id="i.lxvii-Page_327" />
+<p id="i.lxvii-p11"><img alt="Image of page 327" src="/ccel/hooker/reform2/png/0327=327.png" id="i.lxvii-p11.1" /></p>
+
+<pb n="328" href="/ccel/hooker/reform2/png/0328=328.htm" id="i.lxvii-Page_328" />
+<p id="i.lxvii-p12"><img alt="Image of page 328" src="/ccel/hooker/reform2/png/0328=328.png" id="i.lxvii-p12.1" /></p>
+
+<pb n="329" href="/ccel/hooker/reform2/png/0329=329.htm" id="i.lxvii-Page_329" />
+<p id="i.lxvii-p13"><img alt="Image of page 329" src="/ccel/hooker/reform2/png/0329=329.png" id="i.lxvii-p13.1" /></p>
+
+<pb n="330" href="/ccel/hooker/reform2/png/0330=330.htm" id="i.lxvii-Page_330" />
+<p id="i.lxvii-p14"><img alt="Image of page 330" src="/ccel/hooker/reform2/png/0330=330.png" id="i.lxvii-p14.1" /></p>
+
+<pb n="331" href="/ccel/hooker/reform2/png/0331=331.htm" id="i.lxvii-Page_331" />
+<p id="i.lxvii-p15"><img alt="Image of page 331" src="/ccel/hooker/reform2/png/0331=331.png" id="i.lxvii-p15.1" /></p>
+
+<pb n="332" href="/ccel/hooker/reform2/png/0332=332.htm" id="i.lxvii-Page_332" />
+<p id="i.lxvii-p16"><img alt="Image of page 332" src="/ccel/hooker/reform2/png/0332=332.png" id="i.lxvii-p16.1" /></p>
+
+<pb n="333" href="/ccel/hooker/reform2/png/0333=333.htm" id="i.lxvii-Page_333" />
+<p id="i.lxvii-p17"><img alt="Image of page 333" src="/ccel/hooker/reform2/png/0333=333.png" id="i.lxvii-p17.1" /></p>
+
+<pb n="334" href="/ccel/hooker/reform2/png/0334=334.htm" id="i.lxvii-Page_334" />
+<p id="i.lxvii-p18"><img alt="Image of page 334" src="/ccel/hooker/reform2/png/0334=334.png" id="i.lxvii-p18.1" /></p>
+
+<pb n="335" href="/ccel/hooker/reform2/png/0335=335.htm" id="i.lxvii-Page_335" />
+<p id="i.lxvii-p19"><img alt="Image of page 335" src="/ccel/hooker/reform2/png/0335=335.png" id="i.lxvii-p19.1" /></p>
+
+<pb n="336" href="/ccel/hooker/reform2/png/0336=336.htm" id="i.lxvii-Page_336" />
+<p id="i.lxvii-p20"><img alt="Image of page 336" src="/ccel/hooker/reform2/png/0336=336.png" id="i.lxvii-p20.1" /></p>
+</div2>
+
+<div2 title="Chapter lxvi: Of Confirmation after Baptism" progress="64.09%" prev="i.lxvii" next="i.lxix" id="i.lxviii">
+
+<pb n="337" href="/ccel/hooker/reform2/png/0337=337.htm" id="i.lxviii-Page_337" />
+<p id="i.lxviii-p1"><img alt="Image of page 337" src="/ccel/hooker/reform2/png/0337=337.png" id="i.lxviii-p1.1" /></p>
+
+<pb n="338" href="/ccel/hooker/reform2/png/0338=338.htm" id="i.lxviii-Page_338" />
+<p id="i.lxviii-p2"><img alt="Image of page 338" src="/ccel/hooker/reform2/png/0338=338.png" id="i.lxviii-p2.1" /></p>
+
+<pb n="339" href="/ccel/hooker/reform2/png/0339=339.htm" id="i.lxviii-Page_339" />
+<p id="i.lxviii-p3"><img alt="Image of page 339" src="/ccel/hooker/reform2/png/0339=339.png" id="i.lxviii-p3.1" /></p>
+
+<pb n="340" href="/ccel/hooker/reform2/png/0340=340.htm" id="i.lxviii-Page_340" />
+<p id="i.lxviii-p4"><img alt="Image of page 340" src="/ccel/hooker/reform2/png/0340=340.png" id="i.lxviii-p4.1" /></p>
+
+<pb n="341" href="/ccel/hooker/reform2/png/0341=341.htm" id="i.lxviii-Page_341" />
+<p id="i.lxviii-p5"><img alt="Image of page 341" src="/ccel/hooker/reform2/png/0341=341.png" id="i.lxviii-p5.1" /></p>
+
+<pb n="342" href="/ccel/hooker/reform2/png/0342=342.htm" id="i.lxviii-Page_342" />
+<p id="i.lxviii-p6"><img alt="Image of page 342" src="/ccel/hooker/reform2/png/0342=342.png" id="i.lxviii-p6.1" /></p>
+
+<pb n="343" href="/ccel/hooker/reform2/png/0343=343.htm" id="i.lxviii-Page_343" />
+<p id="i.lxviii-p7"><img alt="Image of page 343" src="/ccel/hooker/reform2/png/0343=343.png" id="i.lxviii-p7.1" /></p>
+
+<pb n="344" href="/ccel/hooker/reform2/png/0344=344.htm" id="i.lxviii-Page_344" />
+<p id="i.lxviii-p8"><img alt="Image of page 344" src="/ccel/hooker/reform2/png/0344=344.png" id="i.lxviii-p8.1" /></p>
+
+<pb n="345" href="/ccel/hooker/reform2/png/0345=345.htm" id="i.lxviii-Page_345" />
+<p id="i.lxviii-p9"><img alt="Image of page 345" src="/ccel/hooker/reform2/png/0345=345.png" id="i.lxviii-p9.1" /></p>
+
+<pb n="346" href="/ccel/hooker/reform2/png/0346=346.htm" id="i.lxviii-Page_346" />
+<p id="i.lxviii-p10"><img alt="Image of page 346" src="/ccel/hooker/reform2/png/0346=346.png" id="i.lxviii-p10.1" /></p>
+
+<pb n="347" href="/ccel/hooker/reform2/png/0347=347.htm" id="i.lxviii-Page_347" />
+<p id="i.lxviii-p11"><img alt="Image of page 347" src="/ccel/hooker/reform2/png/0347=347.png" id="i.lxviii-p11.1" /></p>
+</div2>
+
+<div2 title="Chapter lxvii: Of the Sacrament of the Body and Blood of Christ" progress="65.47%" prev="i.lxviii" next="i.lxx" id="i.lxix">
+
+<pb n="348" href="/ccel/hooker/reform2/png/0348=348.htm" id="i.lxix-Page_348" />
+<p id="i.lxix-p1"><img alt="Image of page 348" src="/ccel/hooker/reform2/png/0348=348.png" id="i.lxix-p1.1" /></p>
+
+<pb n="349" href="/ccel/hooker/reform2/png/0349=349.htm" id="i.lxix-Page_349" />
+<p id="i.lxix-p2"><img alt="Image of page 349" src="/ccel/hooker/reform2/png/0349=349.png" id="i.lxix-p2.1" /></p>
+
+<pb n="350" href="/ccel/hooker/reform2/png/0350=350.htm" id="i.lxix-Page_350" />
+<p id="i.lxix-p3"><img alt="Image of page 350" src="/ccel/hooker/reform2/png/0350=350.png" id="i.lxix-p3.1" /></p>
+
+<pb n="351" href="/ccel/hooker/reform2/png/0351=351.htm" id="i.lxix-Page_351" />
+<p id="i.lxix-p4"><img alt="Image of page 351" src="/ccel/hooker/reform2/png/0351=351.png" id="i.lxix-p4.1" /></p>
+
+<pb n="352" href="/ccel/hooker/reform2/png/0352=352.htm" id="i.lxix-Page_352" />
+<p id="i.lxix-p5"><img alt="Image of page 352" src="/ccel/hooker/reform2/png/0352=352.png" id="i.lxix-p5.1" /></p>
+
+<pb n="353" href="/ccel/hooker/reform2/png/0353=353.htm" id="i.lxix-Page_353" />
+<p id="i.lxix-p6"><img alt="Image of page 353" src="/ccel/hooker/reform2/png/0353=353.png" id="i.lxix-p6.1" /></p>
+
+<pb n="354" href="/ccel/hooker/reform2/png/0354=354.htm" id="i.lxix-Page_354" />
+<p id="i.lxix-p7"><img alt="Image of page 354" src="/ccel/hooker/reform2/png/0354=354.png" id="i.lxix-p7.1" /></p>
+
+<pb n="355" href="/ccel/hooker/reform2/png/0355=355.htm" id="i.lxix-Page_355" />
+<p id="i.lxix-p8"><img alt="Image of page 355" src="/ccel/hooker/reform2/png/0355=355.png" id="i.lxix-p8.1" /></p>
+
+<pb n="356" href="/ccel/hooker/reform2/png/0356=356.htm" id="i.lxix-Page_356" />
+<p id="i.lxix-p9"><img alt="Image of page 356" src="/ccel/hooker/reform2/png/0356=356.png" id="i.lxix-p9.1" /></p>
+
+<pb n="357" href="/ccel/hooker/reform2/png/0357=357.htm" id="i.lxix-Page_357" />
+<p id="i.lxix-p10"><img alt="Image of page 357" src="/ccel/hooker/reform2/png/0357=357.png" id="i.lxix-p10.1" /></p>
+
+<pb n="358" href="/ccel/hooker/reform2/png/0358=358.htm" id="i.lxix-Page_358" />
+<p id="i.lxix-p11"><img alt="Image of page 358" src="/ccel/hooker/reform2/png/0358=358.png" id="i.lxix-p11.1" /></p>
+
+<pb n="359" href="/ccel/hooker/reform2/png/0359=359.htm" id="i.lxix-Page_359" />
+<p id="i.lxix-p12"><img alt="Image of page 359" src="/ccel/hooker/reform2/png/0359=359.png" id="i.lxix-p12.1" /></p>
+
+<pb n="360" href="/ccel/hooker/reform2/png/0360=360.htm" id="i.lxix-Page_360" />
+<p id="i.lxix-p13"><img alt="Image of page 360" src="/ccel/hooker/reform2/png/0360=360.png" id="i.lxix-p13.1" /></p>
+
+<pb n="361" href="/ccel/hooker/reform2/png/0361=361.htm" id="i.lxix-Page_361" />
+<p id="i.lxix-p14"><img alt="Image of page 361" src="/ccel/hooker/reform2/png/0361=361.png" id="i.lxix-p14.1" /></p>
+</div2>
+
+<div2 title="Chapter lxviii: Of faults noted in the Form of administering the Holy Communion" progress="67.19%" prev="i.lxix" next="i.lxxi" id="i.lxx">
+
+<pb n="362" href="/ccel/hooker/reform2/png/0362=362.htm" id="i.lxx-Page_362" />
+<p id="i.lxx-p1"><img alt="Image of page 362" src="/ccel/hooker/reform2/png/0362=362.png" id="i.lxx-p1.1" /></p>
+
+<pb n="363" href="/ccel/hooker/reform2/png/0363=363.htm" id="i.lxx-Page_363" />
+<p id="i.lxx-p2"><img alt="Image of page 363" src="/ccel/hooker/reform2/png/0363=363.png" id="i.lxx-p2.1" /></p>
+
+<pb n="364" href="/ccel/hooker/reform2/png/0364=364.htm" id="i.lxx-Page_364" />
+<p id="i.lxx-p3"><img alt="Image of page 364" src="/ccel/hooker/reform2/png/0364=364.png" id="i.lxx-p3.1" /></p>
+
+<pb n="365" href="/ccel/hooker/reform2/png/0365=365.htm" id="i.lxx-Page_365" />
+<p id="i.lxx-p4"><img alt="Image of page 365" src="/ccel/hooker/reform2/png/0365=365.png" id="i.lxx-p4.1" /></p>
+
+<pb n="366" href="/ccel/hooker/reform2/png/0366=366.htm" id="i.lxx-Page_366" />
+<p id="i.lxx-p5"><img alt="Image of page 366" src="/ccel/hooker/reform2/png/0366=366.png" id="i.lxx-p5.1" /></p>
+
+<pb n="367" href="/ccel/hooker/reform2/png/0367=367.htm" id="i.lxx-Page_367" />
+<p id="i.lxx-p6"><img alt="Image of page 367" src="/ccel/hooker/reform2/png/0367=367.png" id="i.lxx-p6.1" /></p>
+
+<pb n="368" href="/ccel/hooker/reform2/png/0368=368.htm" id="i.lxx-Page_368" />
+<p id="i.lxx-p7"><img alt="Image of page 368" src="/ccel/hooker/reform2/png/0368=368.png" id="i.lxx-p7.1" /></p>
+
+<pb n="369" href="/ccel/hooker/reform2/png/0369=369.htm" id="i.lxx-Page_369" />
+<p id="i.lxx-p8"><img alt="Image of page 369" src="/ccel/hooker/reform2/png/0369=369.png" id="i.lxx-p8.1" /></p>
+
+<pb n="370" href="/ccel/hooker/reform2/png/0370=370.htm" id="i.lxx-Page_370" />
+<p id="i.lxx-p9"><img alt="Image of page 370" src="/ccel/hooker/reform2/png/0370=370.png" id="i.lxx-p9.1" /></p>
+
+<pb n="371" href="/ccel/hooker/reform2/png/0371=371.htm" id="i.lxx-Page_371" />
+<p id="i.lxx-p10"><img alt="Image of page 371" src="/ccel/hooker/reform2/png/0371=371.png" id="i.lxx-p10.1" /></p>
+
+<pb n="372" href="/ccel/hooker/reform2/png/0372=372.htm" id="i.lxx-Page_372" />
+<p id="i.lxx-p11"><img alt="Image of page 372" src="/ccel/hooker/reform2/png/0372=372.png" id="i.lxx-p11.1" /></p>
+
+<pb n="373" href="/ccel/hooker/reform2/png/0373=373.htm" id="i.lxx-Page_373" />
+<p id="i.lxx-p12"><img alt="Image of page 373" src="/ccel/hooker/reform2/png/0373=373.png" id="i.lxx-p12.1" /></p>
+
+<pb n="374" href="/ccel/hooker/reform2/png/0374=374.htm" id="i.lxx-Page_374" />
+<p id="i.lxx-p13"><img alt="Image of page 374" src="/ccel/hooker/reform2/png/0374=374.png" id="i.lxx-p13.1" /></p>
+
+<pb n="375" href="/ccel/hooker/reform2/png/0375=375.htm" id="i.lxx-Page_375" />
+<p id="i.lxx-p14"><img alt="Image of page 375" src="/ccel/hooker/reform2/png/0375=375.png" id="i.lxx-p14.1" /></p>
+
+<pb n="376" href="/ccel/hooker/reform2/png/0376=376.htm" id="i.lxx-Page_376" />
+<p id="i.lxx-p15"><img alt="Image of page 376" src="/ccel/hooker/reform2/png/0376=376.png" id="i.lxx-p15.1" /></p>
+
+<pb n="377" href="/ccel/hooker/reform2/png/0377=377.htm" id="i.lxx-Page_377" />
+<p id="i.lxx-p16"><img alt="Image of page 377" src="/ccel/hooker/reform2/png/0377=377.png" id="i.lxx-p16.1" /></p>
+
+<pb n="378" href="/ccel/hooker/reform2/png/0378=378.htm" id="i.lxx-Page_378" />
+<p id="i.lxx-p17"><img alt="Image of page 378" src="/ccel/hooker/reform2/png/0378=378.png" id="i.lxx-p17.1" /></p>
+
+<pb n="379" href="/ccel/hooker/reform2/png/0379=379.htm" id="i.lxx-Page_379" />
+<p id="i.lxx-p18"><img alt="Image of page 379" src="/ccel/hooker/reform2/png/0379=379.png" id="i.lxx-p18.1" /></p>
+
+<pb n="380" href="/ccel/hooker/reform2/png/0380=380.htm" id="i.lxx-Page_380" />
+<p id="i.lxx-p19"><img alt="Image of page 380" src="/ccel/hooker/reform2/png/0380=380.png" id="i.lxx-p19.1" /></p>
+</div2>
+
+<div2 title="Chapter lxix: Of festival days and the natureal causes of their convenient institution" progress="69.49%" prev="i.lxx" next="i.lxxii" id="i.lxxi">
+
+<pb n="381" href="/ccel/hooker/reform2/png/0381=381.htm" id="i.lxxi-Page_381" />
+<p id="i.lxxi-p1"><img alt="Image of page 381" src="/ccel/hooker/reform2/png/0381=381.png" id="i.lxxi-p1.1" /></p>
+
+<pb n="382" href="/ccel/hooker/reform2/png/0382=382.htm" id="i.lxxi-Page_382" />
+<p id="i.lxxi-p2"><img alt="Image of page 382" src="/ccel/hooker/reform2/png/0382=382.png" id="i.lxxi-p2.1" /></p>
+
+<pb n="383" href="/ccel/hooker/reform2/png/0383=383.htm" id="i.lxxi-Page_383" />
+<p id="i.lxxi-p3"><img alt="Image of page 383" src="/ccel/hooker/reform2/png/0383=383.png" id="i.lxxi-p3.1" /></p>
+</div2>
+
+<div2 title="Chapter lxx: The manner of celebrating festival days" progress="69.95%" prev="i.lxxi" next="i.lxxiii" id="i.lxxii">
+
+<pb n="384" href="/ccel/hooker/reform2/png/0384=384.htm" id="i.lxxii-Page_384" />
+<p id="i.lxxii-p1"><img alt="Image of page 384" src="/ccel/hooker/reform2/png/0384=384.png" id="i.lxxii-p1.1" /></p>
+
+<pb n="385" href="/ccel/hooker/reform2/png/0385=385.htm" id="i.lxxii-Page_385" />
+<p id="i.lxxii-p2"><img alt="Image of page 385" src="/ccel/hooker/reform2/png/0385=385.png" id="i.lxxii-p2.1" /></p>
+
+<pb n="386" href="/ccel/hooker/reform2/png/0386=386.htm" id="i.lxxii-Page_386" />
+<p id="i.lxxii-p3"><img alt="Image of page 386" src="/ccel/hooker/reform2/png/0386=386.png" id="i.lxxii-p3.1" /></p>
+
+<pb n="387" href="/ccel/hooker/reform2/png/0387=387.htm" id="i.lxxii-Page_387" />
+<p id="i.lxxii-p4"><img alt="Image of page 387" src="/ccel/hooker/reform2/png/0387=387.png" id="i.lxxii-p4.1" /></p>
+
+<pb n="388" href="/ccel/hooker/reform2/png/0388=388.htm" id="i.lxxii-Page_388" />
+<p id="i.lxxii-p5"><img alt="Image of page 388" src="/ccel/hooker/reform2/png/0388=388.png" id="i.lxxii-p5.1" /></p>
+
+<pb n="389" href="/ccel/hooker/reform2/png/0389=389.htm" id="i.lxxii-Page_389" />
+<p id="i.lxxii-p6"><img alt="Image of page 389" src="/ccel/hooker/reform2/png/0389=389.png" id="i.lxxii-p6.1" /></p>
+
+<pb n="390" href="/ccel/hooker/reform2/png/0390=390.htm" id="i.lxxii-Page_390" />
+<p id="i.lxxii-p7"><img alt="Image of page 390" src="/ccel/hooker/reform2/png/0390=390.png" id="i.lxxii-p7.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxi: Exceptions against our keeping of other festival days besides the sabboth" progress="70.87%" prev="i.lxxii" next="i.lxxiv" id="i.lxxiii">
+
+<pb n="391" href="/ccel/hooker/reform2/png/0391=391.htm" id="i.lxxiii-Page_391" />
+<p id="i.lxxiii-p1"><img alt="Image of page 391" src="/ccel/hooker/reform2/png/0391=391.png" id="i.lxxiii-p1.1" /></p>
+
+<pb n="392" href="/ccel/hooker/reform2/png/0392=392.htm" id="i.lxxiii-Page_392" />
+<p id="i.lxxiii-p2"><img alt="Image of page 392" src="/ccel/hooker/reform2/png/0392=392.png" id="i.lxxiii-p2.1" /></p>
+
+<pb n="393" href="/ccel/hooker/reform2/png/0393=393.htm" id="i.lxxiii-Page_393" />
+<p id="i.lxxiii-p3"><img alt="Image of page 393" src="/ccel/hooker/reform2/png/0393=393.png" id="i.lxxiii-p3.1" /></p>
+
+<pb n="394" href="/ccel/hooker/reform2/png/0394=394.htm" id="i.lxxiii-Page_394" />
+<p id="i.lxxiii-p4"><img alt="Image of page 394" src="/ccel/hooker/reform2/png/0394=394.png" id="i.lxxiii-p4.1" /></p>
+
+<pb n="395" href="/ccel/hooker/reform2/png/0395=395.htm" id="i.lxxiii-Page_395" />
+<p id="i.lxxiii-p5"><img alt="Image of page 395" src="/ccel/hooker/reform2/png/0395=395.png" id="i.lxxiii-p5.1" /></p>
+
+<pb n="396" href="/ccel/hooker/reform2/png/0396=396.htm" id="i.lxxiii-Page_396" />
+<p id="i.lxxiii-p6"><img alt="Image of page 396" src="/ccel/hooker/reform2/png/0396=396.png" id="i.lxxiii-p6.1" /></p>
+
+<pb n="397" href="/ccel/hooker/reform2/png/0397=397.htm" id="i.lxxiii-Page_397" />
+<p id="i.lxxiii-p7"><img alt="Image of page 397" src="/ccel/hooker/reform2/png/0397=397.png" id="i.lxxiii-p7.1" /></p>
+
+<pb n="398" href="/ccel/hooker/reform2/png/0398=398.htm" id="i.lxxiii-Page_398" />
+<p id="i.lxxiii-p8"><img alt="Image of page 398" src="/ccel/hooker/reform2/png/0398=398.png" id="i.lxxiii-p8.1" /></p>
+
+<pb n="399" href="/ccel/hooker/reform2/png/0399=399.htm" id="i.lxxiii-Page_399" />
+<p id="i.lxxiii-p9"><img alt="Image of page 399" src="/ccel/hooker/reform2/png/0399=399.png" id="i.lxxiii-p9.1" /></p>
+
+<pb n="400" href="/ccel/hooker/reform2/png/0400=400.htm" id="i.lxxiii-Page_400" />
+<p id="i.lxxiii-p10"><img alt="Image of page 400" src="/ccel/hooker/reform2/png/0400=400.png" id="i.lxxiii-p10.1" /></p>
+
+<pb n="401" href="/ccel/hooker/reform2/png/0401=401.htm" id="i.lxxiii-Page_401" />
+<p id="i.lxxiii-p11"><img alt="Image of page 401" src="/ccel/hooker/reform2/png/0401=401.png" id="i.lxxiii-p11.1" /></p>
+
+<pb n="402" href="/ccel/hooker/reform2/png/0402=402.htm" id="i.lxxiii-Page_402" />
+<p id="i.lxxiii-p12"><img alt="Image of page 402" src="/ccel/hooker/reform2/png/0402=402.png" id="i.lxxiii-p12.1" /></p>
+
+<pb n="403" href="/ccel/hooker/reform2/png/0403=403.htm" id="i.lxxiii-Page_403" />
+<p id="i.lxxiii-p13"><img alt="Image of page 403" src="/ccel/hooker/reform2/png/0403=403.png" id="i.lxxiii-p13.1" /></p>
+
+<pb n="404" href="/ccel/hooker/reform2/png/0404=404.htm" id="i.lxxiii-Page_404" />
+<p id="i.lxxiii-p14"><img alt="Image of page 404" src="/ccel/hooker/reform2/png/0404=404.png" id="i.lxxiii-p14.1" /></p>
+
+<pb n="405" href="/ccel/hooker/reform2/png/0405=405.htm" id="i.lxxiii-Page_405" />
+<p id="i.lxxiii-p15"><img alt="Image of page 405" src="/ccel/hooker/reform2/png/0405=405.png" id="i.lxxiii-p15.1" /></p>
+
+<pb n="406" href="/ccel/hooker/reform2/png/0406=406.htm" id="i.lxxiii-Page_406" />
+<p id="i.lxxiii-p16"><img alt="Image of page 406" src="/ccel/hooker/reform2/png/0406=406.png" id="i.lxxiii-p16.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxii: Of days appointed as well for ordinary, as for extraordinary Fasts in the Church of God" progress="72.82%" prev="i.lxxiii" next="i.lxxv" id="i.lxxiv">
+
+<pb n="407" href="/ccel/hooker/reform2/png/0407=407.htm" id="i.lxxiv-Page_407" />
+<p id="i.lxxiv-p1"><img alt="Image of page 407" src="/ccel/hooker/reform2/png/0407=407.png" id="i.lxxiv-p1.1" /></p>
+
+<pb n="408" href="/ccel/hooker/reform2/png/0408=408.htm" id="i.lxxiv-Page_408" />
+<p id="i.lxxiv-p2"><img alt="Image of page 408" src="/ccel/hooker/reform2/png/0408=408.png" id="i.lxxiv-p2.1" /></p>
+
+<pb n="409" href="/ccel/hooker/reform2/png/0409=409.htm" id="i.lxxiv-Page_409" />
+<p id="i.lxxiv-p3"><img alt="Image of page 409" src="/ccel/hooker/reform2/png/0409=409.png" id="i.lxxiv-p3.1" /></p>
+
+<pb n="410" href="/ccel/hooker/reform2/png/0410=410.htm" id="i.lxxiv-Page_410" />
+<p id="i.lxxiv-p4"><img alt="Image of page 410" src="/ccel/hooker/reform2/png/0410=410.png" id="i.lxxiv-p4.1" /></p>
+
+<pb n="411" href="/ccel/hooker/reform2/png/0411=411.htm" id="i.lxxiv-Page_411" />
+<p id="i.lxxiv-p5"><img alt="Image of page 411" src="/ccel/hooker/reform2/png/0411=411.png" id="i.lxxiv-p5.1" /></p>
+
+<pb n="412" href="/ccel/hooker/reform2/png/0412=412.htm" id="i.lxxiv-Page_412" />
+<p id="i.lxxiv-p6"><img alt="Image of page 412" src="/ccel/hooker/reform2/png/0412=412.png" id="i.lxxiv-p6.1" /></p>
+
+<pb n="413" href="/ccel/hooker/reform2/png/0413=413.htm" id="i.lxxiv-Page_413" />
+<p id="i.lxxiv-p7"><img alt="Image of page 413" src="/ccel/hooker/reform2/png/0413=413.png" id="i.lxxiv-p7.1" /></p>
+
+<pb n="414" href="/ccel/hooker/reform2/png/0414=414.htm" id="i.lxxiv-Page_414" />
+<p id="i.lxxiv-p8"><img alt="Image of page 414" src="/ccel/hooker/reform2/png/0414=414.png" id="i.lxxiv-p8.1" /></p>
+
+<pb n="415" href="/ccel/hooker/reform2/png/0415=415.htm" id="i.lxxiv-Page_415" />
+<p id="i.lxxiv-p9"><img alt="Image of page 415" src="/ccel/hooker/reform2/png/0415=415.png" id="i.lxxiv-p9.1" /></p>
+
+<pb n="416" href="/ccel/hooker/reform2/png/0416=416.htm" id="i.lxxiv-Page_416" />
+<p id="i.lxxiv-p10"><img alt="Image of page 416" src="/ccel/hooker/reform2/png/0416=416.png" id="i.lxxiv-p10.1" /></p>
+
+<pb n="417" href="/ccel/hooker/reform2/png/0417=417.htm" id="i.lxxiv-Page_417" />
+<p id="i.lxxiv-p11"><img alt="Image of page 417" src="/ccel/hooker/reform2/png/0417=417.png" id="i.lxxiv-p11.1" /></p>
+
+<pb n="418" href="/ccel/hooker/reform2/png/0418=418.htm" id="i.lxxiv-Page_418" />
+<p id="i.lxxiv-p12"><img alt="Image of page 418" src="/ccel/hooker/reform2/png/0418=418.png" id="i.lxxiv-p12.1" /></p>
+
+<pb n="419" href="/ccel/hooker/reform2/png/0419=419.htm" id="i.lxxiv-Page_419" />
+<p id="i.lxxiv-p13"><img alt="Image of page 419" src="/ccel/hooker/reform2/png/0419=419.png" id="i.lxxiv-p13.1" /></p>
+
+<pb n="420" href="/ccel/hooker/reform2/png/0420=420.htm" id="i.lxxiv-Page_420" />
+<p id="i.lxxiv-p14"><img alt="Image of page 420" src="/ccel/hooker/reform2/png/0420=420.png" id="i.lxxiv-p14.1" /></p>
+
+<pb n="421" href="/ccel/hooker/reform2/png/0421=421.htm" id="i.lxxiv-Page_421" />
+<p id="i.lxxiv-p15"><img alt="Image of page 421" src="/ccel/hooker/reform2/png/0421=421.png" id="i.lxxiv-p15.1" /></p>
+
+<pb n="422" href="/ccel/hooker/reform2/png/0422=422.htm" id="i.lxxiv-Page_422" />
+<p id="i.lxxiv-p16"><img alt="Image of page 422" src="/ccel/hooker/reform2/png/0422=422.png" id="i.lxxiv-p16.1" /></p>
+
+<pb n="423" href="/ccel/hooker/reform2/png/0423=423.htm" id="i.lxxiv-Page_423" />
+<p id="i.lxxiv-p17"><img alt="Image of page 423" src="/ccel/hooker/reform2/png/0423=423.png" id="i.lxxiv-p17.1" /></p>
+
+<pb n="424" href="/ccel/hooker/reform2/png/0424=424.htm" id="i.lxxiv-Page_424" />
+<p id="i.lxxiv-p18"><img alt="Image of page 424" src="/ccel/hooker/reform2/png/0424=424.png" id="i.lxxiv-p18.1" /></p>
+
+<pb n="425" href="/ccel/hooker/reform2/png/0425=425.htm" id="i.lxxiv-Page_425" />
+<p id="i.lxxiv-p19"><img alt="Image of page 425" src="/ccel/hooker/reform2/png/0425=425.png" id="i.lxxiv-p19.1" /></p>
+
+<pb n="426" href="/ccel/hooker/reform2/png/0426=426.htm" id="i.lxxiv-Page_426" />
+<p id="i.lxxiv-p20"><img alt="Image of page 426" src="/ccel/hooker/reform2/png/0426=426.png" id="i.lxxiv-p20.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxiii: The celebration of Martimony" progress="75.24%" prev="i.lxxiv" next="i.lxxvi" id="i.lxxv">
+
+<pb n="427" href="/ccel/hooker/reform2/png/0427=427.htm" id="i.lxxv-Page_427" />
+<p id="i.lxxv-p1"><img alt="Image of page 427" src="/ccel/hooker/reform2/png/0427=427.png" id="i.lxxv-p1.1" /></p>
+
+<pb n="428" href="/ccel/hooker/reform2/png/0428=428.htm" id="i.lxxv-Page_428" />
+<p id="i.lxxv-p2"><img alt="Image of page 428" src="/ccel/hooker/reform2/png/0428=428.png" id="i.lxxv-p2.1" /></p>
+
+<pb n="429" href="/ccel/hooker/reform2/png/0429=429.htm" id="i.lxxv-Page_429" />
+<p id="i.lxxv-p3"><img alt="Image of page 429" src="/ccel/hooker/reform2/png/0429=429.png" id="i.lxxv-p3.1" /></p>
+
+<pb n="430" href="/ccel/hooker/reform2/png/0430=430.htm" id="i.lxxv-Page_430" />
+<p id="i.lxxv-p4"><img alt="Image of page 430" src="/ccel/hooker/reform2/png/0430=430.png" id="i.lxxv-p4.1" /></p>
+
+<pb n="431" href="/ccel/hooker/reform2/png/0431=431.htm" id="i.lxxv-Page_431" />
+<p id="i.lxxv-p5"><img alt="Image of page 431" src="/ccel/hooker/reform2/png/0431=431.png" id="i.lxxv-p5.1" /></p>
+
+<pb n="432" href="/ccel/hooker/reform2/png/0432=432.htm" id="i.lxxv-Page_432" />
+<p id="i.lxxv-p6"><img alt="Image of page 432" src="/ccel/hooker/reform2/png/0432=432.png" id="i.lxxv-p6.1" /></p>
+
+<pb n="433" href="/ccel/hooker/reform2/png/0433=433.htm" id="i.lxxv-Page_433" />
+<p id="i.lxxv-p7"><img alt="Image of page 433" src="/ccel/hooker/reform2/png/0433=433.png" id="i.lxxv-p7.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxiv: Churching of women" progress="76.16%" prev="i.lxxv" next="i.lxxvii" id="i.lxxvi">
+
+<pb n="434" href="/ccel/hooker/reform2/png/0434=434.htm" id="i.lxxvi-Page_434" />
+<p id="i.lxxvi-p1"><img alt="Image of page 434" src="/ccel/hooker/reform2/png/0434=434.png" id="i.lxxvi-p1.1" /></p>
+
+<pb n="435" href="/ccel/hooker/reform2/png/0435=435.htm" id="i.lxxvi-Page_435" />
+<p id="i.lxxvi-p2"><img alt="Image of page 435" src="/ccel/hooker/reform2/png/0435=435.png" id="i.lxxvi-p2.1" /></p>
+
+<pb n="436" href="/ccel/hooker/reform2/png/0436=436.htm" id="i.lxxvi-Page_436" />
+<p id="i.lxxvi-p3"><img alt="Image of page 436" src="/ccel/hooker/reform2/png/0436=436.png" id="i.lxxvi-p3.1" /></p>
+
+<pb n="437" href="/ccel/hooker/reform2/png/0437=437.htm" id="i.lxxvi-Page_437" />
+<p id="i.lxxvi-p4"><img alt="Image of page 437" src="/ccel/hooker/reform2/png/0437=437.png" id="i.lxxvi-p4.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxv: Of the rites of Burial" progress="76.73%" prev="i.lxxvi" next="i.lxxviii" id="i.lxxvii">
+
+<pb n="438" href="/ccel/hooker/reform2/png/0438=438.htm" id="i.lxxvii-Page_438" />
+<p id="i.lxxvii-p1"><img alt="Image of page 438" src="/ccel/hooker/reform2/png/0438=438.png" id="i.lxxvii-p1.1" /></p>
+
+<pb n="439" href="/ccel/hooker/reform2/png/0439=439.htm" id="i.lxxvii-Page_439" />
+<p id="i.lxxvii-p2"><img alt="Image of page 439" src="/ccel/hooker/reform2/png/0439=439.png" id="i.lxxvii-p2.1" /></p>
+
+<pb n="440" href="/ccel/hooker/reform2/png/0440=440.htm" id="i.lxxvii-Page_440" />
+<p id="i.lxxvii-p3"><img alt="Image of page 440" src="/ccel/hooker/reform2/png/0440=440.png" id="i.lxxvii-p3.1" /></p>
+
+<pb n="441" href="/ccel/hooker/reform2/png/0441=441.htm" id="i.lxxvii-Page_441" />
+<p id="i.lxxvii-p4"><img alt="Image of page 441" src="/ccel/hooker/reform2/png/0441=441.png" id="i.lxxvii-p4.1" /></p>
+
+<pb n="442" href="/ccel/hooker/reform2/png/0442=442.htm" id="i.lxxvii-Page_442" />
+<p id="i.lxxvii-p5"><img alt="Image of page 442" src="/ccel/hooker/reform2/png/0442=442.png" id="i.lxxvii-p5.1" /></p>
+
+<pb n="443" href="/ccel/hooker/reform2/png/0443=443.htm" id="i.lxxvii-Page_443" />
+<p id="i.lxxvii-p6"><img alt="Image of page 443" src="/ccel/hooker/reform2/png/0443=443.png" id="i.lxxvii-p6.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxvi: Of the nature of that Ministry which serveth for performance of divine duties in the Church of God..." progress="77.54%" prev="i.lxxvii" next="i.lxxix" id="i.lxxviii">
+
+<pb n="444" href="/ccel/hooker/reform2/png/0444=444.htm" id="i.lxxviii-Page_444" />
+<p id="i.lxxviii-p1"><img alt="Image of page 444" src="/ccel/hooker/reform2/png/0444=444.png" id="i.lxxviii-p1.1" /></p>
+
+<pb n="445" href="/ccel/hooker/reform2/png/0445=445.htm" id="i.lxxviii-Page_445" />
+<p id="i.lxxviii-p2"><img alt="Image of page 445" src="/ccel/hooker/reform2/png/0445=445.png" id="i.lxxviii-p2.1" /></p>
+
+<pb n="446" href="/ccel/hooker/reform2/png/0446=446.htm" id="i.lxxviii-Page_446" />
+<p id="i.lxxviii-p3"><img alt="Image of page 446" src="/ccel/hooker/reform2/png/0446=446.png" id="i.lxxviii-p3.1" /></p>
+
+<pb n="447" href="/ccel/hooker/reform2/png/0447=447.htm" id="i.lxxviii-Page_447" />
+<p id="i.lxxviii-p4"><img alt="Image of page 447" src="/ccel/hooker/reform2/png/0447=447.png" id="i.lxxviii-p4.1" /></p>
+
+<pb n="448" href="/ccel/hooker/reform2/png/0448=448.htm" id="i.lxxviii-Page_448" />
+<p id="i.lxxviii-p5"><img alt="Image of page 448" src="/ccel/hooker/reform2/png/0448=448.png" id="i.lxxviii-p5.1" /></p>
+
+<pb n="449" href="/ccel/hooker/reform2/png/0449=449.htm" id="i.lxxviii-Page_449" />
+<p id="i.lxxviii-p6"><img alt="Image of page 449" src="/ccel/hooker/reform2/png/0449=449.png" id="i.lxxviii-p6.1" /></p>
+
+<pb n="450" href="/ccel/hooker/reform2/png/0450=450.htm" id="i.lxxviii-Page_450" />
+<p id="i.lxxviii-p7"><img alt="Image of page 450" src="/ccel/hooker/reform2/png/0450=450.png" id="i.lxxviii-p7.1" /></p>
+
+<pb n="451" href="/ccel/hooker/reform2/png/0451=451.htm" id="i.lxxviii-Page_451" />
+<p id="i.lxxviii-p8"><img alt="Image of page 451" src="/ccel/hooker/reform2/png/0451=451.png" id="i.lxxviii-p8.1" /></p>
+
+<pb n="452" href="/ccel/hooker/reform2/png/0452=452.htm" id="i.lxxviii-Page_452" />
+<p id="i.lxxviii-p9"><img alt="Image of page 452" src="/ccel/hooker/reform2/png/0452=452.png" id="i.lxxviii-p9.1" /></p>
+
+<pb n="453" href="/ccel/hooker/reform2/png/0453=453.htm" id="i.lxxviii-Page_453" />
+<p id="i.lxxviii-p10"><img alt="Image of page 453" src="/ccel/hooker/reform2/png/0453=453.png" id="i.lxxviii-p10.1" /></p>
+
+<pb n="454" href="/ccel/hooker/reform2/png/0454=454.htm" id="i.lxxviii-Page_454" />
+<p id="i.lxxviii-p11"><img alt="Image of page 454" src="/ccel/hooker/reform2/png/0454=454.png" id="i.lxxviii-p11.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxvii: Of power given unto men to execute that heavenly office..." progress="78.92%" prev="i.lxxviii" next="i.lxxx" id="i.lxxix">
+
+<pb n="455" href="/ccel/hooker/reform2/png/0455=455.htm" id="i.lxxix-Page_455" />
+<p id="i.lxxix-p1"><img alt="Image of page 455" src="/ccel/hooker/reform2/png/0455=455.png" id="i.lxxix-p1.1" /></p>
+
+<pb n="456" href="/ccel/hooker/reform2/png/0456=456.htm" id="i.lxxix-Page_456" />
+<p id="i.lxxix-p2"><img alt="Image of page 456" src="/ccel/hooker/reform2/png/0456=456.png" id="i.lxxix-p2.1" /></p>
+
+<pb n="457" href="/ccel/hooker/reform2/png/0457=457.htm" id="i.lxxix-Page_457" />
+<p id="i.lxxix-p3"><img alt="Image of page 457" src="/ccel/hooker/reform2/png/0457=457.png" id="i.lxxix-p3.1" /></p>
+
+<pb n="458" href="/ccel/hooker/reform2/png/0458=458.htm" id="i.lxxix-Page_458" />
+<p id="i.lxxix-p4"><img alt="Image of page 458" src="/ccel/hooker/reform2/png/0458=458.png" id="i.lxxix-p4.1" /></p>
+
+<pb n="459" href="/ccel/hooker/reform2/png/0459=459.htm" id="i.lxxix-Page_459" />
+<p id="i.lxxix-p5"><img alt="Image of page 459" src="/ccel/hooker/reform2/png/0459=459.png" id="i.lxxix-p5.1" /></p>
+
+<pb n="460" href="/ccel/hooker/reform2/png/0460=460.htm" id="i.lxxix-Page_460" />
+<p id="i.lxxix-p6"><img alt="Image of page 460" src="/ccel/hooker/reform2/png/0460=460.png" id="i.lxxix-p6.1" /></p>
+
+<pb n="461" href="/ccel/hooker/reform2/png/0461=461.htm" id="i.lxxix-Page_461" />
+<p id="i.lxxix-p7"><img alt="Image of page 461" src="/ccel/hooker/reform2/png/0461=461.png" id="i.lxxix-p7.1" /></p>
+
+<pb n="462" href="/ccel/hooker/reform2/png/0462=462.htm" id="i.lxxix-Page_462" />
+<p id="i.lxxix-p8"><img alt="Image of page 462" src="/ccel/hooker/reform2/png/0462=462.png" id="i.lxxix-p8.1" /></p>
+
+<pb n="463" href="/ccel/hooker/reform2/png/0463=463.htm" id="i.lxxix-Page_463" />
+<p id="i.lxxix-p9"><img alt="Image of page 463" src="/ccel/hooker/reform2/png/0463=463.png" id="i.lxxix-p9.1" /></p>
+
+<pb n="464" href="/ccel/hooker/reform2/png/0464=464.htm" id="i.lxxix-Page_464" />
+<p id="i.lxxix-p10"><img alt="Image of page 464" src="/ccel/hooker/reform2/png/0464=464.png" id="i.lxxix-p10.1" /></p>
+
+<pb n="465" href="/ccel/hooker/reform2/png/0465=465.htm" id="i.lxxix-Page_465" />
+<p id="i.lxxix-p11"><img alt="Image of page 465" src="/ccel/hooker/reform2/png/0465=465.png" id="i.lxxix-p11.1" /></p>
+
+<pb n="466" href="/ccel/hooker/reform2/png/0466=466.htm" id="i.lxxix-Page_466" />
+<p id="i.lxxix-p12"><img alt="Image of page 466" src="/ccel/hooker/reform2/png/0466=466.png" id="i.lxxix-p12.1" /></p>
+
+<pb n="467" href="/ccel/hooker/reform2/png/0467=467.htm" id="i.lxxix-Page_467" />
+<p id="i.lxxix-p13"><img alt="Image of page 467" src="/ccel/hooker/reform2/png/0467=467.png" id="i.lxxix-p13.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxviii: Of Degrees, whereby the power of order is distinguished; and concerning the attire of ministers" progress="80.53%" prev="i.lxxix" next="i.lxxxi" id="i.lxxx">
+
+<pb n="468" href="/ccel/hooker/reform2/png/0468=468.htm" id="i.lxxx-Page_468" />
+<p id="i.lxxx-p1"><img alt="Image of page 468" src="/ccel/hooker/reform2/png/0468=468.png" id="i.lxxx-p1.1" /></p>
+
+<pb n="469" href="/ccel/hooker/reform2/png/0469=469.htm" id="i.lxxx-Page_469" />
+<p id="i.lxxx-p2"><img alt="Image of page 469" src="/ccel/hooker/reform2/png/0469=469.png" id="i.lxxx-p2.1" /></p>
+
+<pb n="470" href="/ccel/hooker/reform2/png/0470=470.htm" id="i.lxxx-Page_470" />
+<p id="i.lxxx-p3"><img alt="Image of page 470" src="/ccel/hooker/reform2/png/0470=470.png" id="i.lxxx-p3.1" /></p>
+
+<pb n="471" href="/ccel/hooker/reform2/png/0471=471.htm" id="i.lxxx-Page_471" />
+<p id="i.lxxx-p4"><img alt="Image of page 471" src="/ccel/hooker/reform2/png/0471=471.png" id="i.lxxx-p4.1" /></p>
+
+<pb n="472" href="/ccel/hooker/reform2/png/0472=472.htm" id="i.lxxx-Page_472" />
+<p id="i.lxxx-p5"><img alt="Image of page 472" src="/ccel/hooker/reform2/png/0472=472.png" id="i.lxxx-p5.1" /></p>
+
+<pb n="473" href="/ccel/hooker/reform2/png/0473=473.htm" id="i.lxxx-Page_473" />
+<p id="i.lxxx-p6"><img alt="Image of page 473" src="/ccel/hooker/reform2/png/0473=473.png" id="i.lxxx-p6.1" /></p>
+
+<pb n="474" href="/ccel/hooker/reform2/png/0474=474.htm" id="i.lxxx-Page_474" />
+<p id="i.lxxx-p7"><img alt="Image of page 474" src="/ccel/hooker/reform2/png/0474=474.png" id="i.lxxx-p7.1" /></p>
+
+<pb n="475" href="/ccel/hooker/reform2/png/0475=475.htm" id="i.lxxx-Page_475" />
+<p id="i.lxxx-p8"><img alt="Image of page 475" src="/ccel/hooker/reform2/png/0475=475.png" id="i.lxxx-p8.1" /></p>
+
+<pb n="476" href="/ccel/hooker/reform2/png/0476=476.htm" id="i.lxxx-Page_476" />
+<p id="i.lxxx-p9"><img alt="Image of page 476" src="/ccel/hooker/reform2/png/0476=476.png" id="i.lxxx-p9.1" /></p>
+
+<pb n="477" href="/ccel/hooker/reform2/png/0477=477.htm" id="i.lxxx-Page_477" />
+<p id="i.lxxx-p10"><img alt="Image of page 477" src="/ccel/hooker/reform2/png/0477=477.png" id="i.lxxx-p10.1" /></p>
+
+<pb n="478" href="/ccel/hooker/reform2/png/0478=478.htm" id="i.lxxx-Page_478" />
+<p id="i.lxxx-p11"><img alt="Image of page 478" src="/ccel/hooker/reform2/png/0478=478.png" id="i.lxxx-p11.1" /></p>
+
+<pb n="479" href="/ccel/hooker/reform2/png/0479=479.htm" id="i.lxxx-Page_479" />
+<p id="i.lxxx-p12"><img alt="Image of page 479" src="/ccel/hooker/reform2/png/0479=479.png" id="i.lxxx-p12.1" /></p>
+
+<pb n="480" href="/ccel/hooker/reform2/png/0480=480.htm" id="i.lxxx-Page_480" />
+<p id="i.lxxx-p13"><img alt="Image of page 480" src="/ccel/hooker/reform2/png/0480=480.png" id="i.lxxx-p13.1" /></p>
+
+<pb n="481" href="/ccel/hooker/reform2/png/0481=481.htm" id="i.lxxx-Page_481" />
+<p id="i.lxxx-p14"><img alt="Image of page 481" src="/ccel/hooker/reform2/png/0481=481.png" id="i.lxxx-p14.1" /></p>
+
+<pb n="482" href="/ccel/hooker/reform2/png/0482=482.htm" id="i.lxxx-Page_482" />
+<p id="i.lxxx-p15"><img alt="Image of page 482" src="/ccel/hooker/reform2/png/0482=482.png" id="i.lxxx-p15.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxix: Of Oblations, Foundations, Endowments, Tithes, all intended for perpetuity of Relgion..." progress="82.37%" prev="i.lxxx" next="i.lxxxii" id="i.lxxxi">
+
+<pb n="483" href="/ccel/hooker/reform2/png/0483=483.htm" id="i.lxxxi-Page_483" />
+<p id="i.lxxxi-p1"><img alt="Image of page 483" src="/ccel/hooker/reform2/png/0483=483.png" id="i.lxxxi-p1.1" /></p>
+
+<pb n="484" href="/ccel/hooker/reform2/png/0484=484.htm" id="i.lxxxi-Page_484" />
+<p id="i.lxxxi-p2"><img alt="Image of page 484" src="/ccel/hooker/reform2/png/0484=484.png" id="i.lxxxi-p2.1" /></p>
+
+<pb n="485" href="/ccel/hooker/reform2/png/0485=485.htm" id="i.lxxxi-Page_485" />
+<p id="i.lxxxi-p3"><img alt="Image of page 485" src="/ccel/hooker/reform2/png/0485=485.png" id="i.lxxxi-p3.1" /></p>
+
+<pb n="486" href="/ccel/hooker/reform2/png/0486=486.htm" id="i.lxxxi-Page_486" />
+<p id="i.lxxxi-p4"><img alt="Image of page 486" src="/ccel/hooker/reform2/png/0486=486.png" id="i.lxxxi-p4.1" /></p>
+
+<pb n="487" href="/ccel/hooker/reform2/png/0487=487.htm" id="i.lxxxi-Page_487" />
+<p id="i.lxxxi-p5"><img alt="Image of page 487" src="/ccel/hooker/reform2/png/0487=487.png" id="i.lxxxi-p5.1" /></p>
+
+<pb n="488" href="/ccel/hooker/reform2/png/0488=488.htm" id="i.lxxxi-Page_488" />
+<p id="i.lxxxi-p6"><img alt="Image of page 488" src="/ccel/hooker/reform2/png/0488=488.png" id="i.lxxxi-p6.1" /></p>
+
+<pb n="489" href="/ccel/hooker/reform2/png/0489=489.htm" id="i.lxxxi-Page_489" />
+<p id="i.lxxxi-p7"><img alt="Image of page 489" src="/ccel/hooker/reform2/png/0489=489.png" id="i.lxxxi-p7.1" /></p>
+
+<pb n="490" href="/ccel/hooker/reform2/png/0490=490.htm" id="i.lxxxi-Page_490" />
+<p id="i.lxxxi-p8"><img alt="Image of page 490" src="/ccel/hooker/reform2/png/0490=490.png" id="i.lxxxi-p8.1" /></p>
+
+<pb n="491" href="/ccel/hooker/reform2/png/0491=491.htm" id="i.lxxxi-Page_491" />
+<p id="i.lxxxi-p9"><img alt="Image of page 491" src="/ccel/hooker/reform2/png/0491=491.png" id="i.lxxxi-p9.1" /></p>
+
+<pb n="492" href="/ccel/hooker/reform2/png/0492=492.htm" id="i.lxxxi-Page_492" />
+<p id="i.lxxxi-p10"><img alt="Image of page 492" src="/ccel/hooker/reform2/png/0492=492.png" id="i.lxxxi-p10.1" /></p>
+
+<pb n="493" href="/ccel/hooker/reform2/png/0493=493.htm" id="i.lxxxi-Page_493" />
+<p id="i.lxxxi-p11"><img alt="Image of page 493" src="/ccel/hooker/reform2/png/0493=493.png" id="i.lxxxi-p11.1" /></p>
+
+<pb n="494" href="/ccel/hooker/reform2/png/0494=494.htm" id="i.lxxxi-Page_494" />
+<p id="i.lxxxi-p12"><img alt="Image of page 494" src="/ccel/hooker/reform2/png/0494=494.png" id="i.lxxxi-p12.1" /></p>
+
+<pb n="495" href="/ccel/hooker/reform2/png/0495=495.htm" id="i.lxxxi-Page_495" />
+<p id="i.lxxxi-p13"><img alt="Image of page 495" src="/ccel/hooker/reform2/png/0495=495.png" id="i.lxxxi-p13.1" /></p>
+
+<pb n="496" href="/ccel/hooker/reform2/png/0496=496.htm" id="i.lxxxi-Page_496" />
+<p id="i.lxxxi-p14"><img alt="Image of page 496" src="/ccel/hooker/reform2/png/0496=496.png" id="i.lxxxi-p14.1" /></p>
+
+<pb n="497" href="/ccel/hooker/reform2/png/0497=497.htm" id="i.lxxxi-Page_497" />
+<p id="i.lxxxi-p15"><img alt="Image of page 497" src="/ccel/hooker/reform2/png/0497=497.png" id="i.lxxxi-p15.1" /></p>
+
+<pb n="498" href="/ccel/hooker/reform2/png/0498=498.htm" id="i.lxxxi-Page_498" />
+<p id="i.lxxxi-p16"><img alt="Image of page 498" src="/ccel/hooker/reform2/png/0498=498.png" id="i.lxxxi-p16.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxx: Of Ordinations lawful without Title, and without any popluar Election precedent..." progress="84.32%" prev="i.lxxxi" next="i.lxxxiii" id="i.lxxxii">
+
+<pb n="499" href="/ccel/hooker/reform2/png/0499=499.htm" id="i.lxxxii-Page_499" />
+<p id="i.lxxxii-p1"><img alt="Image of page 499" src="/ccel/hooker/reform2/png/0499=499.png" id="i.lxxxii-p1.1" /></p>
+
+<pb n="500" href="/ccel/hooker/reform2/png/0500=500.htm" id="i.lxxxii-Page_500" />
+<p id="i.lxxxii-p2"><img alt="Image of page 500" src="/ccel/hooker/reform2/png/0500=500.png" id="i.lxxxii-p2.1" /></p>
+
+<pb n="501" href="/ccel/hooker/reform2/png/0501=501.htm" id="i.lxxxii-Page_501" />
+<p id="i.lxxxii-p3"><img alt="Image of page 501" src="/ccel/hooker/reform2/png/0501=501.png" id="i.lxxxii-p3.1" /></p>
+
+<pb n="502" href="/ccel/hooker/reform2/png/0502=502.htm" id="i.lxxxii-Page_502" />
+<p id="i.lxxxii-p4"><img alt="Image of page 502" src="/ccel/hooker/reform2/png/0502=502.png" id="i.lxxxii-p4.1" /></p>
+
+<pb n="503" href="/ccel/hooker/reform2/png/0503=503.htm" id="i.lxxxii-Page_503" />
+<p id="i.lxxxii-p5"><img alt="Image of page 503" src="/ccel/hooker/reform2/png/0503=503.png" id="i.lxxxii-p5.1" /></p>
+
+<pb n="504" href="/ccel/hooker/reform2/png/0504=504.htm" id="i.lxxxii-Page_504" />
+<p id="i.lxxxii-p6"><img alt="Image of page 504" src="/ccel/hooker/reform2/png/0504=504.png" id="i.lxxxii-p6.1" /></p>
+
+<pb n="505" href="/ccel/hooker/reform2/png/0505=505.htm" id="i.lxxxii-Page_505" />
+<p id="i.lxxxii-p7"><img alt="Image of page 505" src="/ccel/hooker/reform2/png/0505=505.png" id="i.lxxxii-p7.1" /></p>
+
+<pb n="506" href="/ccel/hooker/reform2/png/0506=506.htm" id="i.lxxxii-Page_506" />
+<p id="i.lxxxii-p8"><img alt="Image of page 506" src="/ccel/hooker/reform2/png/0506=506.png" id="i.lxxxii-p8.1" /></p>
+
+<pb n="507" href="/ccel/hooker/reform2/png/0507=507.htm" id="i.lxxxii-Page_507" />
+<p id="i.lxxxii-p9"><img alt="Image of page 507" src="/ccel/hooker/reform2/png/0507=507.png" id="i.lxxxii-p9.1" /></p>
+
+<pb n="508" href="/ccel/hooker/reform2/png/0508=508.htm" id="i.lxxxii-Page_508" />
+<p id="i.lxxxii-p10"><img alt="Image of page 508" src="/ccel/hooker/reform2/png/0508=508.png" id="i.lxxxii-p10.1" /></p>
+</div2>
+
+<div2 title="Chapter lxxxi: Of Learning that should be in Ministers, thier Residence, and the number of their Livings" progress="85.59%" prev="i.lxxxii" next="i.lxxxiv" id="i.lxxxiii">
+
+<pb n="509" href="/ccel/hooker/reform2/png/0509=509.htm" id="i.lxxxiii-Page_509" />
+<p id="i.lxxxiii-p1"><img alt="Image of page 509" src="/ccel/hooker/reform2/png/0509=509.png" id="i.lxxxiii-p1.1" /></p>
+
+<pb n="510" href="/ccel/hooker/reform2/png/0510=510.htm" id="i.lxxxiii-Page_510" />
+<p id="i.lxxxiii-p2"><img alt="Image of page 510" src="/ccel/hooker/reform2/png/0510=510.png" id="i.lxxxiii-p2.1" /></p>
+
+<pb n="511" href="/ccel/hooker/reform2/png/0511=511.htm" id="i.lxxxiii-Page_511" />
+<p id="i.lxxxiii-p3"><img alt="Image of page 511" src="/ccel/hooker/reform2/png/0511=511.png" id="i.lxxxiii-p3.1" /></p>
+
+<pb n="512" href="/ccel/hooker/reform2/png/0512=512.htm" id="i.lxxxiii-Page_512" />
+<p id="i.lxxxiii-p4"><img alt="Image of page 512" src="/ccel/hooker/reform2/png/0512=512.png" id="i.lxxxiii-p4.1" /></p>
+
+<pb n="513" href="/ccel/hooker/reform2/png/0513=513.htm" id="i.lxxxiii-Page_513" />
+<p id="i.lxxxiii-p5"><img alt="Image of page 513" src="/ccel/hooker/reform2/png/0513=513.png" id="i.lxxxiii-p5.1" /></p>
+
+<pb n="514" href="/ccel/hooker/reform2/png/0514=514.htm" id="i.lxxxiii-Page_514" />
+<p id="i.lxxxiii-p6"><img alt="Image of page 514" src="/ccel/hooker/reform2/png/0514=514.png" id="i.lxxxiii-p6.1" /></p>
+
+<pb n="515" href="/ccel/hooker/reform2/png/0515=515.htm" id="i.lxxxiii-Page_515" />
+<p id="i.lxxxiii-p7"><img alt="Image of page 515" src="/ccel/hooker/reform2/png/0515=515.png" id="i.lxxxiii-p7.1" /></p>
+
+<pb n="516" href="/ccel/hooker/reform2/png/0516=516.htm" id="i.lxxxiii-Page_516" />
+<p id="i.lxxxiii-p8"><img alt="Image of page 516" src="/ccel/hooker/reform2/png/0516=516.png" id="i.lxxxiii-p8.1" /></p>
+
+<pb n="517" href="/ccel/hooker/reform2/png/0517=517.htm" id="i.lxxxiii-Page_517" />
+<p id="i.lxxxiii-p9"><img alt="Image of page 517" src="/ccel/hooker/reform2/png/0517=517.png" id="i.lxxxiii-p9.1" /></p>
+
+<pb n="518" href="/ccel/hooker/reform2/png/0518=518.htm" id="i.lxxxiii-Page_518" />
+<p id="i.lxxxiii-p10"><img alt="Image of page 518" src="/ccel/hooker/reform2/png/0518=518.png" id="i.lxxxiii-p10.1" /></p>
+
+<pb n="519" href="/ccel/hooker/reform2/png/0519=519.htm" id="i.lxxxiii-Page_519" />
+<p id="i.lxxxiii-p11"><img alt="Image of page 519" src="/ccel/hooker/reform2/png/0519=519.png" id="i.lxxxiii-p11.1" /></p>
+
+<pb n="520" href="/ccel/hooker/reform2/png/0520=520.htm" id="i.lxxxiii-Page_520" />
+<p id="i.lxxxiii-p12"><img alt="Image of page 520" src="/ccel/hooker/reform2/png/0520=520.png" id="i.lxxxiii-p12.1" /></p>
+
+<pb n="521" href="/ccel/hooker/reform2/png/0521=521.htm" id="i.lxxxiii-Page_521" />
+<p id="i.lxxxiii-p13"><img alt="Image of page 521" src="/ccel/hooker/reform2/png/0521=521.png" id="i.lxxxiii-p13.1" /></p>
+
+<pb n="522" href="/ccel/hooker/reform2/png/0522=522.htm" id="i.lxxxiii-Page_522" />
+<p id="i.lxxxiii-p14"><img alt="Image of page 522" src="/ccel/hooker/reform2/png/0522=522.png" id="i.lxxxiii-p14.1" /></p>
+
+<pb n="523" href="/ccel/hooker/reform2/png/0523=523.htm" id="i.lxxxiii-Page_523" />
+<p id="i.lxxxiii-p15"><img alt="Image of page 523" src="/ccel/hooker/reform2/png/0523=523.png" id="i.lxxxiii-p15.1" /></p>
+
+<pb n="524" href="/ccel/hooker/reform2/png/0524=524.htm" id="i.lxxxiii-Page_524" />
+<p id="i.lxxxiii-p16"><img alt="Image of page 524" src="/ccel/hooker/reform2/png/0524=524.png" id="i.lxxxiii-p16.1" /></p>
+
+<pb n="525" href="/ccel/hooker/reform2/png/0525=525.htm" id="i.lxxxiii-Page_525" />
+<p id="i.lxxxiii-p17"><img alt="Image of page 525" src="/ccel/hooker/reform2/png/0525=525.png" id="i.lxxxiii-p17.1" /></p>
+
+<pb n="526" href="/ccel/hooker/reform2/png/0526=526.htm" id="i.lxxxiii-Page_526" />
+<p id="i.lxxxiii-p18"><img alt="Image of page 526" src="/ccel/hooker/reform2/png/0526=526.png" id="i.lxxxiii-p18.1" /></p>
+
+<pb n="527" href="/ccel/hooker/reform2/png/0527=527.htm" id="i.lxxxiii-Page_527" />
+<p id="i.lxxxiii-p19"><img alt="Image of page 527" src="/ccel/hooker/reform2/png/0527=527.png" id="i.lxxxiii-p19.1" /></p>
+
+<pb n="528" href="/ccel/hooker/reform2/png/0528=528.htm" id="i.lxxxiii-Page_528" />
+<p id="i.lxxxiii-p20"><img alt="Image of page 528" src="/ccel/hooker/reform2/png/0528=528.png" id="i.lxxxiii-p20.1" /></p>
+
+<pb n="529" href="/ccel/hooker/reform2/png/0529=529.htm" id="i.lxxxiii-Page_529" />
+<p id="i.lxxxiii-p21"><img alt="Image of page 529" src="/ccel/hooker/reform2/png/0529=529.png" id="i.lxxxiii-p21.1" /></p>
+
+<pb n="530" href="/ccel/hooker/reform2/png/0530=530.htm" id="i.lxxxiii-Page_530" />
+<p id="i.lxxxiii-p22"><img alt="Image of page 530" src="/ccel/hooker/reform2/png/0530=530.png" id="i.lxxxiii-p22.1" /></p>
+
+<pb n="531" href="/ccel/hooker/reform2/png/0531=531.htm" id="i.lxxxiii-Page_531" />
+<p id="i.lxxxiii-p23"><img alt="Image of page 531" src="/ccel/hooker/reform2/png/0531=531.png" id="i.lxxxiii-p23.1" /></p>
+
+<pb n="532" href="/ccel/hooker/reform2/png/0532=532.htm" id="i.lxxxiii-Page_532" />
+<p id="i.lxxxiii-p24"><img alt="Image of page 532" src="/ccel/hooker/reform2/png/0532=532.png" id="i.lxxxiii-p24.1" /></p>
+
+<pb n="533" href="/ccel/hooker/reform2/png/0533=533.htm" id="i.lxxxiii-Page_533" />
+<p id="i.lxxxiii-p25"><img alt="Image of page 533" src="/ccel/hooker/reform2/png/0533=533.png" id="i.lxxxiii-p25.1" /></p>
+
+<pb n="534" href="/ccel/hooker/reform2/png/0534=534.htm" id="i.lxxxiii-Page_534" />
+<p id="i.lxxxiii-p26"><img alt="Image of page 534" src="/ccel/hooker/reform2/png/0534=534.png" id="i.lxxxiii-p26.1" /></p>
+
+<pb n="535" href="/ccel/hooker/reform2/png/0535=535.htm" id="i.lxxxiii-Page_535" />
+<p id="i.lxxxiii-p27"><img alt="Image of page 535" src="/ccel/hooker/reform2/png/0535=535.png" id="i.lxxxiii-p27.1" /></p>
+
+<pb n="536" href="/ccel/hooker/reform2/png/0536=536.htm" id="i.lxxxiii-Page_536" />
+<p id="i.lxxxiii-p28"><img alt="Image of page 536" src="/ccel/hooker/reform2/png/0536=536.png" id="i.lxxxiii-p28.1" /></p>
+</div2>
+
+<div2 title="Appendix I: Fragments of an Answer to the Letter of certain English Protestants" progress="88.92%" prev="i.lxxxiii" next="i.lxxxv" id="i.lxxxiv">
+
+<pb n="537" href="/ccel/hooker/reform2/png/0537=537.htm" id="i.lxxxiv-Page_537" />
+<p id="i.lxxxiv-p1"><img alt="Image of page 537" src="/ccel/hooker/reform2/png/0537=537.png" id="i.lxxxiv-p1.1" /></p>
+
+<pb n="538" href="/ccel/hooker/reform2/png/0538=538.htm" id="i.lxxxiv-Page_538" />
+<p id="i.lxxxiv-p2"><img alt="Image of page 538" src="/ccel/hooker/reform2/png/0538=538.png" id="i.lxxxiv-p2.1" /></p>
+
+<pb n="539" href="/ccel/hooker/reform2/png/0539=539.htm" id="i.lxxxiv-Page_539" />
+<p id="i.lxxxiv-p3"><img alt="Image of page 539" src="/ccel/hooker/reform2/png/0539=539.png" id="i.lxxxiv-p3.1" /></p>
+
+<pb n="540" href="/ccel/hooker/reform2/png/0540=540.htm" id="i.lxxxiv-Page_540" />
+<p id="i.lxxxiv-p4"><img alt="Image of page 540" src="/ccel/hooker/reform2/png/0540=540.png" id="i.lxxxiv-p4.1" /></p>
+
+<pb n="541" href="/ccel/hooker/reform2/png/0541=541.htm" id="i.lxxxiv-Page_541" />
+<p id="i.lxxxiv-p5"><img alt="Image of page 541" src="/ccel/hooker/reform2/png/0541=541.png" id="i.lxxxiv-p5.1" /></p>
+
+<pb n="542" href="/ccel/hooker/reform2/png/0542=542.htm" id="i.lxxxiv-Page_542" />
+<p id="i.lxxxiv-p6"><img alt="Image of page 542" src="/ccel/hooker/reform2/png/0542=542.png" id="i.lxxxiv-p6.1" /></p>
+
+<pb n="543" href="/ccel/hooker/reform2/png/0543=543.htm" id="i.lxxxiv-Page_543" />
+<p id="i.lxxxiv-p7"><img alt="Image of page 543" src="/ccel/hooker/reform2/png/0543=543.png" id="i.lxxxiv-p7.1" /></p>
+
+<pb n="544" href="/ccel/hooker/reform2/png/0544=544.htm" id="i.lxxxiv-Page_544" />
+<p id="i.lxxxiv-p8"><img alt="Image of page 544" src="/ccel/hooker/reform2/png/0544=544.png" id="i.lxxxiv-p8.1" /></p>
+
+<pb n="545" href="/ccel/hooker/reform2/png/0545=545.htm" id="i.lxxxiv-Page_545" />
+<p id="i.lxxxiv-p9"><img alt="Image of page 545" src="/ccel/hooker/reform2/png/0545=545.png" id="i.lxxxiv-p9.1" /></p>
+
+<pb n="546" href="/ccel/hooker/reform2/png/0546=546.htm" id="i.lxxxiv-Page_546" />
+<p id="i.lxxxiv-p10"><img alt="Image of page 546" src="/ccel/hooker/reform2/png/0546=546.png" id="i.lxxxiv-p10.1" /></p>
+
+<pb n="547" href="/ccel/hooker/reform2/png/0547=547.htm" id="i.lxxxiv-Page_547" />
+<p id="i.lxxxiv-p11"><img alt="Image of page 547" src="/ccel/hooker/reform2/png/0547=547.png" id="i.lxxxiv-p11.1" /></p>
+
+<pb n="548" href="/ccel/hooker/reform2/png/0548=548.htm" id="i.lxxxiv-Page_548" />
+<p id="i.lxxxiv-p12"><img alt="Image of page 548" src="/ccel/hooker/reform2/png/0548=548.png" id="i.lxxxiv-p12.1" /></p>
+
+<pb n="549" href="/ccel/hooker/reform2/png/0549=549.htm" id="i.lxxxiv-Page_549" />
+<p id="i.lxxxiv-p13"><img alt="Image of page 549" src="/ccel/hooker/reform2/png/0549=549.png" id="i.lxxxiv-p13.1" /></p>
+
+<pb n="550" href="/ccel/hooker/reform2/png/0550=550.htm" id="i.lxxxiv-Page_550" />
+<p id="i.lxxxiv-p14"><img alt="Image of page 550" src="/ccel/hooker/reform2/png/0550=550.png" id="i.lxxxiv-p14.1" /></p>
+
+<pb n="551" href="/ccel/hooker/reform2/png/0551=551.htm" id="i.lxxxiv-Page_551" />
+<p id="i.lxxxiv-p15"><img alt="Image of page 551" src="/ccel/hooker/reform2/png/0551=551.png" id="i.lxxxiv-p15.1" /></p>
+
+<pb n="552" href="/ccel/hooker/reform2/png/0552=552.htm" id="i.lxxxiv-Page_552" />
+<p id="i.lxxxiv-p16"><img alt="Image of page 552" src="/ccel/hooker/reform2/png/0552=552.png" id="i.lxxxiv-p16.1" /></p>
+
+<pb n="553" href="/ccel/hooker/reform2/png/0553=553.htm" id="i.lxxxiv-Page_553" />
+<p id="i.lxxxiv-p17"><img alt="Image of page 553" src="/ccel/hooker/reform2/png/0553=553.png" id="i.lxxxiv-p17.1" /></p>
+
+<pb n="554" href="/ccel/hooker/reform2/png/0554=554.htm" id="i.lxxxiv-Page_554" />
+<p id="i.lxxxiv-p18"><img alt="Image of page 554" src="/ccel/hooker/reform2/png/0554=554.png" id="i.lxxxiv-p18.1" /></p>
+
+<pb n="555" href="/ccel/hooker/reform2/png/0555=555.htm" id="i.lxxxiv-Page_555" />
+<p id="i.lxxxiv-p19"><img alt="Image of page 555" src="/ccel/hooker/reform2/png/0555=555.png" id="i.lxxxiv-p19.1" /></p>
+
+<pb n="556" href="/ccel/hooker/reform2/png/0556=556.htm" id="i.lxxxiv-Page_556" />
+<p id="i.lxxxiv-p20"><img alt="Image of page 556" src="/ccel/hooker/reform2/png/0556=556.png" id="i.lxxxiv-p20.1" /></p>
+
+<pb n="557" href="/ccel/hooker/reform2/png/0557=557.htm" id="i.lxxxiv-Page_557" />
+<p id="i.lxxxiv-p21"><img alt="Image of page 557" src="/ccel/hooker/reform2/png/0557=557.png" id="i.lxxxiv-p21.1" /></p>
+
+<pb n="558" href="/ccel/hooker/reform2/png/0558=558.htm" id="i.lxxxiv-Page_558" />
+<p id="i.lxxxiv-p22"><img alt="Image of page 558" src="/ccel/hooker/reform2/png/0558=558.png" id="i.lxxxiv-p22.1" /></p>
+
+<pb n="559" href="/ccel/hooker/reform2/png/0559=559.htm" id="i.lxxxiv-Page_559" />
+<p id="i.lxxxiv-p23"><img alt="Image of page 559" src="/ccel/hooker/reform2/png/0559=559.png" id="i.lxxxiv-p23.1" /></p>
+
+<pb n="560" href="/ccel/hooker/reform2/png/0560=560.htm" id="i.lxxxiv-Page_560" />
+<p id="i.lxxxiv-p24"><img alt="Image of page 560" src="/ccel/hooker/reform2/png/0560=560.png" id="i.lxxxiv-p24.1" /></p>
+
+<pb n="561" href="/ccel/hooker/reform2/png/0561=561.htm" id="i.lxxxiv-Page_561" />
+<p id="i.lxxxiv-p25"><img alt="Image of page 561" src="/ccel/hooker/reform2/png/0561=561.png" id="i.lxxxiv-p25.1" /></p>
+
+<pb n="562" href="/ccel/hooker/reform2/png/0562=562.htm" id="i.lxxxiv-Page_562" />
+<p id="i.lxxxiv-p26"><img alt="Image of page 562" src="/ccel/hooker/reform2/png/0562=562.png" id="i.lxxxiv-p26.1" /></p>
+
+<pb n="563" href="/ccel/hooker/reform2/png/0563=563.htm" id="i.lxxxiv-Page_563" />
+<p id="i.lxxxiv-p27"><img alt="Image of page 563" src="/ccel/hooker/reform2/png/0563=563.png" id="i.lxxxiv-p27.1" /></p>
+
+<pb n="564" href="/ccel/hooker/reform2/png/0564=564.htm" id="i.lxxxiv-Page_564" />
+<p id="i.lxxxiv-p28"><img alt="Image of page 564" src="/ccel/hooker/reform2/png/0564=564.png" id="i.lxxxiv-p28.1" /></p>
+
+<pb n="565" href="/ccel/hooker/reform2/png/0565=565.htm" id="i.lxxxiv-Page_565" />
+<p id="i.lxxxiv-p29"><img alt="Image of page 565" src="/ccel/hooker/reform2/png/0565=565.png" id="i.lxxxiv-p29.1" /></p>
+
+<pb n="566" href="/ccel/hooker/reform2/png/0566=566.htm" id="i.lxxxiv-Page_566" />
+<p id="i.lxxxiv-p30"><img alt="Image of page 566" src="/ccel/hooker/reform2/png/0566=566.png" id="i.lxxxiv-p30.1" /></p>
+
+<pb n="567" href="/ccel/hooker/reform2/png/0567=567.htm" id="i.lxxxiv-Page_567" />
+<p id="i.lxxxiv-p31"><img alt="Image of page 567" src="/ccel/hooker/reform2/png/0567=567.png" id="i.lxxxiv-p31.1" /></p>
+
+<pb n="568" href="/ccel/hooker/reform2/png/0568=568.htm" id="i.lxxxiv-Page_568" />
+<p id="i.lxxxiv-p32"><img alt="Image of page 568" src="/ccel/hooker/reform2/png/0568=568.png" id="i.lxxxiv-p32.1" /></p>
+
+<pb n="569" href="/ccel/hooker/reform2/png/0569=569.htm" id="i.lxxxiv-Page_569" />
+<p id="i.lxxxiv-p33"><img alt="Image of page 569" src="/ccel/hooker/reform2/png/0569=569.png" id="i.lxxxiv-p33.1" /></p>
+
+<pb n="570" href="/ccel/hooker/reform2/png/0570=570.htm" id="i.lxxxiv-Page_570" />
+<p id="i.lxxxiv-p34"><img alt="Image of page 570" src="/ccel/hooker/reform2/png/0570=570.png" id="i.lxxxiv-p34.1" /></p>
+
+<pb n="571" href="/ccel/hooker/reform2/png/0571=571.htm" id="i.lxxxiv-Page_571" />
+<p id="i.lxxxiv-p35"><img alt="Image of page 571" src="/ccel/hooker/reform2/png/0571=571.png" id="i.lxxxiv-p35.1" /></p>
+
+<pb n="572" href="/ccel/hooker/reform2/png/0572=572.htm" id="i.lxxxiv-Page_572" />
+<p id="i.lxxxiv-p36"><img alt="Image of page 572" src="/ccel/hooker/reform2/png/0572=572.png" id="i.lxxxiv-p36.1" /></p>
+
+<pb n="573" href="/ccel/hooker/reform2/png/0573=573.htm" id="i.lxxxiv-Page_573" />
+<p id="i.lxxxiv-p37"><img alt="Image of page 573" src="/ccel/hooker/reform2/png/0573=573.png" id="i.lxxxiv-p37.1" /></p>
+
+<pb n="574" href="/ccel/hooker/reform2/png/0574=574.htm" id="i.lxxxiv-Page_574" />
+<p id="i.lxxxiv-p38"><img alt="Image of page 574" src="/ccel/hooker/reform2/png/0574=574.png" id="i.lxxxiv-p38.1" /></p>
+
+<pb n="575" href="/ccel/hooker/reform2/png/0575=575.htm" id="i.lxxxiv-Page_575" />
+<p id="i.lxxxiv-p39"><img alt="Image of page 575" src="/ccel/hooker/reform2/png/0575=575.png" id="i.lxxxiv-p39.1" /></p>
+
+<pb n="576" href="/ccel/hooker/reform2/png/0576=576.htm" id="i.lxxxiv-Page_576" />
+<p id="i.lxxxiv-p40"><img alt="Image of page 576" src="/ccel/hooker/reform2/png/0576=576.png" id="i.lxxxiv-p40.1" /></p>
+
+<pb n="577" href="/ccel/hooker/reform2/png/0577=577.htm" id="i.lxxxiv-Page_577" />
+<p id="i.lxxxiv-p41"><img alt="Image of page 577" src="/ccel/hooker/reform2/png/0577=577.png" id="i.lxxxiv-p41.1" /></p>
+
+<pb n="578" href="/ccel/hooker/reform2/png/0578=578.htm" id="i.lxxxiv-Page_578" />
+<p id="i.lxxxiv-p42"><img alt="Image of page 578" src="/ccel/hooker/reform2/png/0578=578.png" id="i.lxxxiv-p42.1" /></p>
+
+<pb n="579" href="/ccel/hooker/reform2/png/0579=579.htm" id="i.lxxxiv-Page_579" />
+<p id="i.lxxxiv-p43"><img alt="Image of page 579" src="/ccel/hooker/reform2/png/0579=579.png" id="i.lxxxiv-p43.1" /></p>
+
+<pb n="580" href="/ccel/hooker/reform2/png/0580=580.htm" id="i.lxxxiv-Page_580" />
+<p id="i.lxxxiv-p44"><img alt="Image of page 580" src="/ccel/hooker/reform2/png/0580=580.png" id="i.lxxxiv-p44.1" /></p>
+
+<pb n="581" href="/ccel/hooker/reform2/png/0581=581.htm" id="i.lxxxiv-Page_581" />
+<p id="i.lxxxiv-p45"><img alt="Image of page 581" src="/ccel/hooker/reform2/png/0581=581.png" id="i.lxxxiv-p45.1" /></p>
+
+<pb n="582" href="/ccel/hooker/reform2/png/0582=582.htm" id="i.lxxxiv-Page_582" />
+<p id="i.lxxxiv-p46"><img alt="Image of page 582" src="/ccel/hooker/reform2/png/0582=582.png" id="i.lxxxiv-p46.1" /></p>
+
+<pb n="583" href="/ccel/hooker/reform2/png/0583=583.htm" id="i.lxxxiv-Page_583" />
+<p id="i.lxxxiv-p47"><img alt="Image of page 583" src="/ccel/hooker/reform2/png/0583=583.png" id="i.lxxxiv-p47.1" /></p>
+
+<pb n="584" href="/ccel/hooker/reform2/png/0584=584.htm" id="i.lxxxiv-Page_584" />
+<p id="i.lxxxiv-p48"><img alt="Image of page 584" src="/ccel/hooker/reform2/png/0584=584.png" id="i.lxxxiv-p48.1" /></p>
+
+<pb n="585" href="/ccel/hooker/reform2/png/0585=585.htm" id="i.lxxxiv-Page_585" />
+<p id="i.lxxxiv-p49"><img alt="Image of page 585" src="/ccel/hooker/reform2/png/0585=585.png" id="i.lxxxiv-p49.1" /></p>
+
+<pb n="586" href="/ccel/hooker/reform2/png/0586=586.htm" id="i.lxxxiv-Page_586" />
+<p id="i.lxxxiv-p50"><img alt="Image of page 586" src="/ccel/hooker/reform2/png/0586=586.png" id="i.lxxxiv-p50.1" /></p>
+
+<pb n="587" href="/ccel/hooker/reform2/png/0587=587.htm" id="i.lxxxiv-Page_587" />
+<p id="i.lxxxiv-p51"><img alt="Image of page 587" src="/ccel/hooker/reform2/png/0587=587.png" id="i.lxxxiv-p51.1" /></p>
+
+<pb n="588" href="/ccel/hooker/reform2/png/0588=588.htm" id="i.lxxxiv-Page_588" />
+<p id="i.lxxxiv-p52"><img alt="Image of page 588" src="/ccel/hooker/reform2/png/0588=588.png" id="i.lxxxiv-p52.1" /></p>
+
+<pb n="589" href="/ccel/hooker/reform2/png/0589=589.htm" id="i.lxxxiv-Page_589" />
+<p id="i.lxxxiv-p53"><img alt="Image of page 589" src="/ccel/hooker/reform2/png/0589=589.png" id="i.lxxxiv-p53.1" /></p>
+
+<pb n="590" href="/ccel/hooker/reform2/png/0590=590.htm" id="i.lxxxiv-Page_590" />
+<p id="i.lxxxiv-p54"><img alt="Image of page 590" src="/ccel/hooker/reform2/png/0590=590.png" id="i.lxxxiv-p54.1" /></p>
+
+<pb n="591" href="/ccel/hooker/reform2/png/0591=591.htm" id="i.lxxxiv-Page_591" />
+<p id="i.lxxxiv-p55"><img alt="Image of page 591" src="/ccel/hooker/reform2/png/0591=591.png" id="i.lxxxiv-p55.1" /></p>
+
+<pb n="592" href="/ccel/hooker/reform2/png/0592=592.htm" id="i.lxxxiv-Page_592" />
+<p id="i.lxxxiv-p56"><img alt="Image of page 592" src="/ccel/hooker/reform2/png/0592=592.png" id="i.lxxxiv-p56.1" /></p>
+
+<pb n="593" href="/ccel/hooker/reform2/png/0593=593.htm" id="i.lxxxiv-Page_593" />
+<p id="i.lxxxiv-p57"><img alt="Image of page 593" src="/ccel/hooker/reform2/png/0593=593.png" id="i.lxxxiv-p57.1" /></p>
+
+<pb n="594" href="/ccel/hooker/reform2/png/0594=594.htm" id="i.lxxxiv-Page_594" />
+<p id="i.lxxxiv-p58"><img alt="Image of page 594" src="/ccel/hooker/reform2/png/0594=594.png" id="i.lxxxiv-p58.1" /></p>
+
+<pb n="595" href="/ccel/hooker/reform2/png/0595=595.htm" id="i.lxxxiv-Page_595" />
+<p id="i.lxxxiv-p59"><img alt="Image of page 595" src="/ccel/hooker/reform2/png/0595=595.png" id="i.lxxxiv-p59.1" /></p>
+
+<pb n="596" href="/ccel/hooker/reform2/png/0596=596.htm" id="i.lxxxiv-Page_596" />
+<p id="i.lxxxiv-p60"><img alt="Image of page 596" src="/ccel/hooker/reform2/png/0596=596.png" id="i.lxxxiv-p60.1" /></p>
+
+<pb n="597" href="/ccel/hooker/reform2/png/0597=597.htm" id="i.lxxxiv-Page_597" />
+<p id="i.lxxxiv-p61"><img alt="Image of page 597" src="/ccel/hooker/reform2/png/0597=597.png" id="i.lxxxiv-p61.1" /></p>
+</div2>
+
+<div2 title="Appendix II: Concerning the New Church Discipline" progress="96.05%" prev="i.lxxxiv" next="ii" id="i.lxxxv">
+
+<pb n="598" href="/ccel/hooker/reform2/png/0598=598.htm" id="i.lxxxv-Page_598" />
+<p id="i.lxxxv-p1"><img alt="Image of page 598" src="/ccel/hooker/reform2/png/0598=598.png" id="i.lxxxv-p1.1" /></p>
+
+<pb n="599" href="/ccel/hooker/reform2/png/0599=599.htm" id="i.lxxxv-Page_599" />
+<p id="i.lxxxv-p2"><img alt="Image of page 599" src="/ccel/hooker/reform2/png/0599=599.png" id="i.lxxxv-p2.1" /></p>
+
+<pb n="600" href="/ccel/hooker/reform2/png/0600=600.htm" id="i.lxxxv-Page_600" />
+<p id="i.lxxxv-p3"><img alt="Image of page 600" src="/ccel/hooker/reform2/png/0600=600.png" id="i.lxxxv-p3.1" /></p>
+
+<pb n="601" href="/ccel/hooker/reform2/png/0601=601.htm" id="i.lxxxv-Page_601" />
+<p id="i.lxxxv-p4"><img alt="Image of page 601" src="/ccel/hooker/reform2/png/0601=601.png" id="i.lxxxv-p4.1" /></p>
+
+<pb n="602" href="/ccel/hooker/reform2/png/0602=602.htm" id="i.lxxxv-Page_602" />
+<p id="i.lxxxv-p5"><img alt="Image of page 602" src="/ccel/hooker/reform2/png/0602=602.png" id="i.lxxxv-p5.1" /></p>
+
+<pb n="603" href="/ccel/hooker/reform2/png/0603=603.htm" id="i.lxxxv-Page_603" />
+<p id="i.lxxxv-p6"><img alt="Image of page 603" src="/ccel/hooker/reform2/png/0603=603.png" id="i.lxxxv-p6.1" /></p>
+
+<pb n="604" href="/ccel/hooker/reform2/png/0604=604.htm" id="i.lxxxv-Page_604" />
+<p id="i.lxxxv-p7"><img alt="Image of page 604" src="/ccel/hooker/reform2/png/0604=604.png" id="i.lxxxv-p7.1" /></p>
+
+<pb n="605" href="/ccel/hooker/reform2/png/0605=605.htm" id="i.lxxxv-Page_605" />
+<p id="i.lxxxv-p8"><img alt="Image of page 605" src="/ccel/hooker/reform2/png/0605=605.png" id="i.lxxxv-p8.1" /></p>
+
+<pb n="606" href="/ccel/hooker/reform2/png/0606=606.htm" id="i.lxxxv-Page_606" />
+<p id="i.lxxxv-p9"><img alt="Image of page 606" src="/ccel/hooker/reform2/png/0606=606.png" id="i.lxxxv-p9.1" /></p>
+
+<pb n="607" href="/ccel/hooker/reform2/png/0607=607.htm" id="i.lxxxv-Page_607" />
+<p id="i.lxxxv-p10"><img alt="Image of page 607" src="/ccel/hooker/reform2/png/0607=607.png" id="i.lxxxv-p10.1" /></p>
+
+<pb n="608" href="/ccel/hooker/reform2/png/0608=608.htm" id="i.lxxxv-Page_608" />
+<p id="i.lxxxv-p11"><img alt="Image of page 608" src="/ccel/hooker/reform2/png/0608=608.png" id="i.lxxxv-p11.1" /></p>
+
+<pb n="609" href="/ccel/hooker/reform2/png/0609=609.htm" id="i.lxxxv-Page_609" />
+<p id="i.lxxxv-p12"><img alt="Image of page 609" src="/ccel/hooker/reform2/png/0609=609.png" id="i.lxxxv-p12.1" /></p>
+
+<pb n="610" href="/ccel/hooker/reform2/png/0610=610.htm" id="i.lxxxv-Page_610" />
+<p id="i.lxxxv-p13"><img alt="Image of page 610" src="/ccel/hooker/reform2/png/0610=610.png" id="i.lxxxv-p13.1" /></p>
+</div2>
+
+</div1>
+
+
+<div1 title="Indexes" progress="97.78%" prev="i.lxxxv" next="ii.i" id="ii">
+<h1 id="ii-p0.1">Indexes</h1>
+
+<div2 title="Index of Pages of the Print Edition" progress="98.16%" prev="ii" next="toc" id="ii.i">
+  <h2 id="ii.i-p0.1">Index of Pages of the Print Edition</h2>
+  <insertIndex type="pb" id="ii.i-p0.2" />
+
+
+
+<div class="Index">
+<p class="pages"><a class="TOC" href="#i.i-Page_1">1</a> 
+<a class="TOC" href="#i.i-Page_2">2</a> 
+<a class="TOC" href="#i.i-Page_3">3</a> 
+<a class="TOC" href="#i.i-Page_4">4</a> 
+<a class="TOC" href="#i.i-Page_5">5</a> 
+<a class="TOC" href="#i.i-Page_6">6</a> 
+<a class="TOC" href="#i.i-Page_7">7</a> 
+<a class="TOC" href="#i.i-Page_8">8</a> 
+<a class="TOC" href="#i.i-Page_9">9</a> 
+<a class="TOC" href="#i.i-Page_10">10</a> 
+<a class="TOC" href="#i.ii-Page_11">11</a> 
+<a class="TOC" href="#i.ii-Page_12">12</a> 
+<a class="TOC" href="#i.ii-Page_13">13</a> 
+<a class="TOC" href="#i.iii-Page_14">14</a> 
+<a class="TOC" href="#i.iii-Page_15">15</a> 
+<a class="TOC" href="#i.iii-Page_16">16</a> 
+<a class="TOC" href="#i.iii-Page_17">17</a> 
+<a class="TOC" href="#i.iii-Page_18">18</a> 
+<a class="TOC" href="#i.iv-Page_19">19</a> 
+<a class="TOC" href="#i.iv-Page_20">20</a> 
+<a class="TOC" href="#i.iv-Page_21">21</a> 
+<a class="TOC" href="#i.iv-Page_22">22</a> 
+<a class="TOC" href="#i.v-Page_23">23</a> 
+<a class="TOC" href="#i.v-Page_24">24</a> 
+<a class="TOC" href="#i.v-Page_25">25</a> 
+<a class="TOC" href="#i.vi-Page_26">26</a> 
+<a class="TOC" href="#i.vii-Page_27">27</a> 
+<a class="TOC" href="#i.viii-Page_28">28</a> 
+<a class="TOC" href="#i.viii-Page_29">29</a> 
+<a class="TOC" href="#i.ix-Page_30">30</a> 
+<a class="TOC" href="#i.ix-Page_31">31</a> 
+<a class="TOC" href="#i.ix-Page_32">32</a> 
+<a class="TOC" href="#i.x-Page_33">33</a> 
+<a class="TOC" href="#i.x-Page_34">34</a> 
+<a class="TOC" href="#i.x-Page_35">35</a> 
+<a class="TOC" href="#i.xi-Page_36">36</a> 
+<a class="TOC" href="#i.xi-Page_37">37</a> 
+<a class="TOC" href="#i.xi-Page_38">38</a> 
+<a class="TOC" href="#i.xi-Page_39">39</a> 
+<a class="TOC" href="#i.xi-Page_40">40</a> 
+<a class="TOC" href="#i.xii-Page_41">41</a> 
+<a class="TOC" href="#i.xiii-Page_42">42</a> 
+<a class="TOC" href="#i.xiii-Page_43">43</a> 
+<a class="TOC" href="#i.xiv-Page_44">44</a> 
+<a class="TOC" href="#i.xiv-Page_45">45</a> 
+<a class="TOC" href="#i.xiv-Page_46">46</a> 
+<a class="TOC" href="#i.xiv-Page_47">47</a> 
+<a class="TOC" href="#i.xiv-Page_48">48</a> 
+<a class="TOC" href="#i.xv-Page_49">49</a> 
+<a class="TOC" href="#i.xv-Page_50">50</a> 
+<a class="TOC" href="#i.xvi-Page_51">51</a> 
+<a class="TOC" href="#i.xvii-Page_52">52</a> 
+<a class="TOC" href="#i.xvii-Page_53">53</a> 
+<a class="TOC" href="#i.xvii-Page_54">54</a> 
+<a class="TOC" href="#i.xvii-Page_55">55</a> 
+<a class="TOC" href="#i.xvii-Page_56">56</a> 
+<a class="TOC" href="#i.xviii-Page_57">57</a> 
+<a class="TOC" href="#i.xix-Page_58">58</a> 
+<a class="TOC" href="#i.xix-Page_59">59</a> 
+<a class="TOC" href="#i.xix-Page_60">60</a> 
+<a class="TOC" href="#i.xx-Page_61">61</a> 
+<a class="TOC" href="#i.xx-Page_62">62</a> 
+<a class="TOC" href="#i.xx-Page_63">63</a> 
+<a class="TOC" href="#i.xxi-Page_64">64</a> 
+<a class="TOC" href="#i.xxi-Page_65">65</a> 
+<a class="TOC" href="#i.xxi-Page_66">66</a> 
+<a class="TOC" href="#i.xxi-Page_67">67</a> 
+<a class="TOC" href="#i.xxi-Page_68">68</a> 
+<a class="TOC" href="#i.xxii-Page_69">69</a> 
+<a class="TOC" href="#i.xxii-Page_70">70</a> 
+<a class="TOC" href="#i.xxii-Page_71">71</a> 
+<a class="TOC" href="#i.xxii-Page_72">72</a> 
+<a class="TOC" href="#i.xxii-Page_73">73</a> 
+<a class="TOC" href="#i.xxii-Page_74">74</a> 
+<a class="TOC" href="#i.xxii-Page_75">75</a> 
+<a class="TOC" href="#i.xxii-Page_76">76</a> 
+<a class="TOC" href="#i.xxii-Page_77">77</a> 
+<a class="TOC" href="#i.xxii-Page_78">78</a> 
+<a class="TOC" href="#i.xxii-Page_79">79</a> 
+<a class="TOC" href="#i.xxii-Page_80">80</a> 
+<a class="TOC" href="#i.xxii-Page_81">81</a> 
+<a class="TOC" href="#i.xxii-Page_82">82</a> 
+<a class="TOC" href="#i.xxii-Page_83">83</a> 
+<a class="TOC" href="#i.xxiii-Page_84">84</a> 
+<a class="TOC" href="#i.xxiii-Page_85">85</a> 
+<a class="TOC" href="#i.xxiii-Page_86">86</a> 
+<a class="TOC" href="#i.xxiii-Page_87">87</a> 
+<a class="TOC" href="#i.xxiv-Page_88">88</a> 
+<a class="TOC" href="#i.xxiv-Page_89">89</a> 
+<a class="TOC" href="#i.xxiv-Page_90">90</a> 
+<a class="TOC" href="#i.xxiv-Page_91">91</a> 
+<a class="TOC" href="#i.xxiv-Page_92">92</a> 
+<a class="TOC" href="#i.xxiv-Page_93">93</a> 
+<a class="TOC" href="#i.xxiv-Page_94">94</a> 
+<a class="TOC" href="#i.xxiv-Page_95">95</a> 
+<a class="TOC" href="#i.xxiv-Page_96">96</a> 
+<a class="TOC" href="#i.xxiv-Page_97">97</a> 
+<a class="TOC" href="#i.xxiv-Page_98">98</a> 
+<a class="TOC" href="#i.xxiv-Page_99">99</a> 
+<a class="TOC" href="#i.xxiv-Page_100">100</a> 
+<a class="TOC" href="#i.xxiv-Page_101">101</a> 
+<a class="TOC" href="#i.xxiv-Page_102">102</a> 
+<a class="TOC" href="#i.xxiv-Page_103">103</a> 
+<a class="TOC" href="#i.xxiv-Page_104">104</a> 
+<a class="TOC" href="#i.xxiv-Page_105">105</a> 
+<a class="TOC" href="#i.xxiv-Page_106">106</a> 
+<a class="TOC" href="#i.xxiv-Page_107">107</a> 
+<a class="TOC" href="#i.xxiv-Page_108">108</a> 
+<a class="TOC" href="#i.xxiv-Page_109">109</a> 
+<a class="TOC" href="#i.xxiv-Page_110">110</a> 
+<a class="TOC" href="#i.xxiv-Page_111">111</a> 
+<a class="TOC" href="#i.xxiv-Page_112">112</a> 
+<a class="TOC" href="#i.xxiv-Page_113">113</a> 
+<a class="TOC" href="#i.xxiv-Page_114">114</a> 
+<a class="TOC" href="#i.xxv-Page_115">115</a> 
+<a class="TOC" href="#i.xxvi-Page_116">116</a> 
+<a class="TOC" href="#i.xxvi-Page_117">117</a> 
+<a class="TOC" href="#i.xxvii-Page_118">118</a> 
+<a class="TOC" href="#i.xxvii-Page_119">119</a> 
+<a class="TOC" href="#i.xxvii-Page_120">120</a> 
+<a class="TOC" href="#i.xxviii-Page_121">121</a> 
+<a class="TOC" href="#i.xxviii-Page_122">122</a> 
+<a class="TOC" href="#i.xxviii-Page_123">123</a> 
+<a class="TOC" href="#i.xxix-Page_124">124</a> 
+<a class="TOC" href="#i.xxix-Page_125">125</a> 
+<a class="TOC" href="#i.xxix-Page_126">126</a> 
+<a class="TOC" href="#i.xxx-Page_127">127</a> 
+<a class="TOC" href="#i.xxxi-Page_128">128</a> 
+<a class="TOC" href="#i.xxxi-Page_129">129</a> 
+<a class="TOC" href="#i.xxxi-Page_130">130</a> 
+<a class="TOC" href="#i.xxxi-Page_131">131</a> 
+<a class="TOC" href="#i.xxxi-Page_132">132</a> 
+<a class="TOC" href="#i.xxxi-Page_133">133</a> 
+<a class="TOC" href="#i.xxxi-Page_134">134</a> 
+<a class="TOC" href="#i.xxxi-Page_135">135</a> 
+<a class="TOC" href="#i.xxxi-Page_136">136</a> 
+<a class="TOC" href="#i.xxxi-Page_137">137</a> 
+<a class="TOC" href="#i.xxxii-Page_138">138</a> 
+<a class="TOC" href="#i.xxxii-Page_139">139</a> 
+<a class="TOC" href="#i.xxxii-Page_140">140</a> 
+<a class="TOC" href="#i.xxxii-Page_141">141</a> 
+<a class="TOC" href="#i.xxxiii-Page_142">142</a> 
+<a class="TOC" href="#i.xxxiii-Page_143">143</a> 
+<a class="TOC" href="#i.xxxiv-Page_144">144</a> 
+<a class="TOC" href="#i.xxxiv-Page_145">145</a> 
+<a class="TOC" href="#i.xxxiv-Page_146">146</a> 
+<a class="TOC" href="#i.xxxiv-Page_147">147</a> 
+<a class="TOC" href="#i.xxxv-Page_148">148</a> 
+<a class="TOC" href="#i.xxxvi-Page_149">149</a> 
+<a class="TOC" href="#i.xxxvi-Page_150">150</a> 
+<a class="TOC" href="#i.xxxvi-Page_151">151</a> 
+<a class="TOC" href="#i.xxxvii-Page_152">152</a> 
+<a class="TOC" href="#i.xxxvii-Page_153">153</a> 
+<a class="TOC" href="#i.xxxvii-Page_154">154</a> 
+<a class="TOC" href="#i.xxxvii-Page_155">155</a> 
+<a class="TOC" href="#i.xxxviii-Page_156">156</a> 
+<a class="TOC" href="#i.xxxviii-Page_157">157</a> 
+<a class="TOC" href="#i.xxxix-Page_158">158</a> 
+<a class="TOC" href="#i.xl-Page_159">159</a> 
+<a class="TOC" href="#i.xl-Page_160">160</a> 
+<a class="TOC" href="#i.xl-Page_161">161</a> 
+<a class="TOC" href="#i.xl-Page_162">162</a> 
+<a class="TOC" href="#i.xli-Page_163">163</a> 
+<a class="TOC" href="#i.xli-Page_164">164</a> 
+<a class="TOC" href="#i.xli-Page_165">165</a> 
+<a class="TOC" href="#i.xli-Page_166">166</a> 
+<a class="TOC" href="#i.xli-Page_167">167</a> 
+<a class="TOC" href="#i.xlii-Page_168">168</a> 
+<a class="TOC" href="#i.xlii-Page_169">169</a> 
+<a class="TOC" href="#i.xlii-Page_170">170</a> 
+<a class="TOC" href="#i.xliii-Page_171">171</a> 
+<a class="TOC" href="#i.xliii-Page_172">172</a> 
+<a class="TOC" href="#i.xliii-Page_173">173</a> 
+<a class="TOC" href="#i.xliii-Page_174">174</a> 
+<a class="TOC" href="#i.xliv-Page_175">175</a> 
+<a class="TOC" href="#i.xliv-Page_176">176</a> 
+<a class="TOC" href="#i.xliv-Page_177">177</a> 
+<a class="TOC" href="#i.xliv-Page_178">178</a> 
+<a class="TOC" href="#i.xliv-Page_179">179</a> 
+<a class="TOC" href="#i.xliv-Page_180">180</a> 
+<a class="TOC" href="#i.xliv-Page_181">181</a> 
+<a class="TOC" href="#i.xliv-Page_182">182</a> 
+<a class="TOC" href="#i.xliv-Page_183">183</a> 
+<a class="TOC" href="#i.xliv-Page_184">184</a> 
+<a class="TOC" href="#i.xliv-Page_185">185</a> 
+<a class="TOC" href="#i.xliv-Page_186">186</a> 
+<a class="TOC" href="#i.xliv-Page_187">187</a> 
+<a class="TOC" href="#i.xliv-Page_188">188</a> 
+<a class="TOC" href="#i.xlv-Page_189">189</a> 
+<a class="TOC" href="#i.xlv-Page_190">190</a> 
+<a class="TOC" href="#i.xlv-Page_191">191</a> 
+<a class="TOC" href="#i.xlvi-Page_192">192</a> 
+<a class="TOC" href="#i.xlvii-Page_193">193</a> 
+<a class="TOC" href="#i.xlvii-Page_194">194</a> 
+<a class="TOC" href="#i.xlviii-Page_195">195</a> 
+<a class="TOC" href="#i.xlviii-Page_196">196</a> 
+<a class="TOC" href="#i.xlviii-Page_197">197</a> 
+<a class="TOC" href="#i.xlix-Page_198">198</a> 
+<a class="TOC" href="#i.xlix-Page_199">199</a> 
+<a class="TOC" href="#i.l-Page_200">200</a> 
+<a class="TOC" href="#i.l-Page_201">201</a> 
+<a class="TOC" href="#i.l-Page_202">202</a> 
+<a class="TOC" href="#i.l-Page_203">203</a> 
+<a class="TOC" href="#i.l-Page_204">204</a> 
+<a class="TOC" href="#i.l-Page_205">205</a> 
+<a class="TOC" href="#i.l-Page_206">206</a> 
+<a class="TOC" href="#i.l-Page_207">207</a> 
+<a class="TOC" href="#i.l-Page_208">208</a> 
+<a class="TOC" href="#i.l-Page_209">209</a> 
+<a class="TOC" href="#i.l-Page_210">210</a> 
+<a class="TOC" href="#i.l-Page_211">211</a> 
+<a class="TOC" href="#i.li-Page_212">212</a> 
+<a class="TOC" href="#i.li-Page_213">213</a> 
+<a class="TOC" href="#i.li-Page_214">214</a> 
+<a class="TOC" href="#i.li-Page_215">215</a> 
+<a class="TOC" href="#i.li-Page_216">216</a> 
+<a class="TOC" href="#i.li-Page_217">217</a> 
+<a class="TOC" href="#i.li-Page_218">218</a> 
+<a class="TOC" href="#i.lii-Page_219">219</a> 
+<a class="TOC" href="#i.liii-Page_220">220</a> 
+<a class="TOC" href="#i.liii-Page_221">221</a> 
+<a class="TOC" href="#i.liv-Page_222">222</a> 
+<a class="TOC" href="#i.liv-Page_223">223</a> 
+<a class="TOC" href="#i.liv-Page_224">224</a> 
+<a class="TOC" href="#i.liv-Page_225">225</a> 
+<a class="TOC" href="#i.liv-Page_226">226</a> 
+<a class="TOC" href="#i.lv-Page_227">227</a> 
+<a class="TOC" href="#i.lv-Page_228">228</a> 
+<a class="TOC" href="#i.lv-Page_229">229</a> 
+<a class="TOC" href="#i.lv-Page_230">230</a> 
+<a class="TOC" href="#i.lvi-Page_231">231</a> 
+<a class="TOC" href="#i.lvi-Page_232">232</a> 
+<a class="TOC" href="#i.lvi-Page_233">233</a> 
+<a class="TOC" href="#i.lvi-Page_234">234</a> 
+<a class="TOC" href="#i.lvi-Page_235">235</a> 
+<a class="TOC" href="#i.lvi-Page_236">236</a> 
+<a class="TOC" href="#i.lvi-Page_237">237</a> 
+<a class="TOC" href="#i.lvii-Page_238">238</a> 
+<a class="TOC" href="#i.lvii-Page_239">239</a> 
+<a class="TOC" href="#i.lvii-Page_240">240</a> 
+<a class="TOC" href="#i.lvii-Page_241">241</a> 
+<a class="TOC" href="#i.lvii-Page_242">242</a> 
+<a class="TOC" href="#i.lvii-Page_243">243</a> 
+<a class="TOC" href="#i.lvii-Page_244">244</a> 
+<a class="TOC" href="#i.lviii-Page_245">245</a> 
+<a class="TOC" href="#i.lviii-Page_246">246</a> 
+<a class="TOC" href="#i.lviii-Page_247">247</a> 
+<a class="TOC" href="#i.lviii-Page_248">248</a> 
+<a class="TOC" href="#i.lviii-Page_249">249</a> 
+<a class="TOC" href="#i.lviii-Page_250">250</a> 
+<a class="TOC" href="#i.lviii-Page_251">251</a> 
+<a class="TOC" href="#i.lviii-Page_252">252</a> 
+<a class="TOC" href="#i.lviii-Page_253">253</a> 
+<a class="TOC" href="#i.lviii-Page_254">254</a> 
+<a class="TOC" href="#i.lix-Page_255">255</a> 
+<a class="TOC" href="#i.lix-Page_256">256</a> 
+<a class="TOC" href="#i.lix-Page_257">257</a> 
+<a class="TOC" href="#i.lix-Page_258">258</a> 
+<a class="TOC" href="#i.lx-Page_259">259</a> 
+<a class="TOC" href="#i.lx-Page_260">260</a> 
+<a class="TOC" href="#i.lx-Page_261">261</a> 
+<a class="TOC" href="#i.lxi-Page_262">262</a> 
+<a class="TOC" href="#i.lxi-Page_263">263</a> 
+<a class="TOC" href="#i.lxii-Page_264">264</a> 
+<a class="TOC" href="#i.lxii-Page_265">265</a> 
+<a class="TOC" href="#i.lxii-Page_266">266</a> 
+<a class="TOC" href="#i.lxii-Page_267">267</a> 
+<a class="TOC" href="#i.lxii-Page_268">268</a> 
+<a class="TOC" href="#i.lxii-Page_269">269</a> 
+<a class="TOC" href="#i.lxii-Page_270">270</a> 
+<a class="TOC" href="#i.lxii-Page_271">271</a> 
+<a class="TOC" href="#i.lxii-Page_272">272</a> 
+<a class="TOC" href="#i.lxiii-Page_273">273</a> 
+<a class="TOC" href="#i.lxiii-Page_274">274</a> 
+<a class="TOC" href="#i.lxiii-Page_275">275</a> 
+<a class="TOC" href="#i.lxiii-Page_276">276</a> 
+<a class="TOC" href="#i.lxiii-Page_277">277</a> 
+<a class="TOC" href="#i.lxiii-Page_278">278</a> 
+<a class="TOC" href="#i.lxiii-Page_279">279</a> 
+<a class="TOC" href="#i.lxiv-Page_280">280</a> 
+<a class="TOC" href="#i.lxiv-Page_281">281</a> 
+<a class="TOC" href="#i.lxiv-Page_282">282</a> 
+<a class="TOC" href="#i.lxiv-Page_283">283</a> 
+<a class="TOC" href="#i.lxiv-Page_284">284</a> 
+<a class="TOC" href="#i.lxiv-Page_285">285</a> 
+<a class="TOC" href="#i.lxiv-Page_286">286</a> 
+<a class="TOC" href="#i.lxiv-Page_287">287</a> 
+<a class="TOC" href="#i.lxiv-Page_288">288</a> 
+<a class="TOC" href="#i.lxiv-Page_289">289</a> 
+<a class="TOC" href="#i.lxiv-Page_290">290</a> 
+<a class="TOC" href="#i.lxiv-Page_291">291</a> 
+<a class="TOC" href="#i.lxiv-Page_292">292</a> 
+<a class="TOC" href="#i.lxiv-Page_293">293</a> 
+<a class="TOC" href="#i.lxiv-Page_294">294</a> 
+<a class="TOC" href="#i.lxiv-Page_295">295</a> 
+<a class="TOC" href="#i.lxiv-Page_296">296</a> 
+<a class="TOC" href="#i.lxiv-Page_297">297</a> 
+<a class="TOC" href="#i.lxiv-Page_298">298</a> 
+<a class="TOC" href="#i.lxiv-Page_299">299</a> 
+<a class="TOC" href="#i.lxiv-Page_300">300</a> 
+<a class="TOC" href="#i.lxiv-Page_301">301</a> 
+<a class="TOC" href="#i.lxiv-Page_302">302</a> 
+<a class="TOC" href="#i.lxiv-Page_303">303</a> 
+<a class="TOC" href="#i.lxv-Page_304">304</a> 
+<a class="TOC" href="#i.lxv-Page_305">305</a> 
+<a class="TOC" href="#i.lxv-Page_306">306</a> 
+<a class="TOC" href="#i.lxvi-Page_307">307</a> 
+<a class="TOC" href="#i.lxvi-Page_308">308</a> 
+<a class="TOC" href="#i.lxvi-Page_309">309</a> 
+<a class="TOC" href="#i.lxvi-Page_310">310</a> 
+<a class="TOC" href="#i.lxvi-Page_311">311</a> 
+<a class="TOC" href="#i.lxvi-Page_312">312</a> 
+<a class="TOC" href="#i.lxvi-Page_313">313</a> 
+<a class="TOC" href="#i.lxvi-Page_314">314</a> 
+<a class="TOC" href="#i.lxvi-Page_315">315</a> 
+<a class="TOC" href="#i.lxvi-Page_316">316</a> 
+<a class="TOC" href="#i.lxvii-Page_317">317</a> 
+<a class="TOC" href="#i.lxvii-Page_318">318</a> 
+<a class="TOC" href="#i.lxvii-Page_319">319</a> 
+<a class="TOC" href="#i.lxvii-Page_320">320</a> 
+<a class="TOC" href="#i.lxvii-Page_321">321</a> 
+<a class="TOC" href="#i.lxvii-Page_322">322</a> 
+<a class="TOC" href="#i.lxvii-Page_323">323</a> 
+<a class="TOC" href="#i.lxvii-Page_324">324</a> 
+<a class="TOC" href="#i.lxvii-Page_325">325</a> 
+<a class="TOC" href="#i.lxvii-Page_326">326</a> 
+<a class="TOC" href="#i.lxvii-Page_327">327</a> 
+<a class="TOC" href="#i.lxvii-Page_328">328</a> 
+<a class="TOC" href="#i.lxvii-Page_329">329</a> 
+<a class="TOC" href="#i.lxvii-Page_330">330</a> 
+<a class="TOC" href="#i.lxvii-Page_331">331</a> 
+<a class="TOC" href="#i.lxvii-Page_332">332</a> 
+<a class="TOC" href="#i.lxvii-Page_333">333</a> 
+<a class="TOC" href="#i.lxvii-Page_334">334</a> 
+<a class="TOC" href="#i.lxvii-Page_335">335</a> 
+<a class="TOC" href="#i.lxvii-Page_336">336</a> 
+<a class="TOC" href="#i.lxviii-Page_337">337</a> 
+<a class="TOC" href="#i.lxviii-Page_338">338</a> 
+<a class="TOC" href="#i.lxviii-Page_339">339</a> 
+<a class="TOC" href="#i.lxviii-Page_340">340</a> 
+<a class="TOC" href="#i.lxviii-Page_341">341</a> 
+<a class="TOC" href="#i.lxviii-Page_342">342</a> 
+<a class="TOC" href="#i.lxviii-Page_343">343</a> 
+<a class="TOC" href="#i.lxviii-Page_344">344</a> 
+<a class="TOC" href="#i.lxviii-Page_345">345</a> 
+<a class="TOC" href="#i.lxviii-Page_346">346</a> 
+<a class="TOC" href="#i.lxviii-Page_347">347</a> 
+<a class="TOC" href="#i.lxix-Page_348">348</a> 
+<a class="TOC" href="#i.lxix-Page_349">349</a> 
+<a class="TOC" href="#i.lxix-Page_350">350</a> 
+<a class="TOC" href="#i.lxix-Page_351">351</a> 
+<a class="TOC" href="#i.lxix-Page_352">352</a> 
+<a class="TOC" href="#i.lxix-Page_353">353</a> 
+<a class="TOC" href="#i.lxix-Page_354">354</a> 
+<a class="TOC" href="#i.lxix-Page_355">355</a> 
+<a class="TOC" href="#i.lxix-Page_356">356</a> 
+<a class="TOC" href="#i.lxix-Page_357">357</a> 
+<a class="TOC" href="#i.lxix-Page_358">358</a> 
+<a class="TOC" href="#i.lxix-Page_359">359</a> 
+<a class="TOC" href="#i.lxix-Page_360">360</a> 
+<a class="TOC" href="#i.lxix-Page_361">361</a> 
+<a class="TOC" href="#i.lxx-Page_362">362</a> 
+<a class="TOC" href="#i.lxx-Page_363">363</a> 
+<a class="TOC" href="#i.lxx-Page_364">364</a> 
+<a class="TOC" href="#i.lxx-Page_365">365</a> 
+<a class="TOC" href="#i.lxx-Page_366">366</a> 
+<a class="TOC" href="#i.lxx-Page_367">367</a> 
+<a class="TOC" href="#i.lxx-Page_368">368</a> 
+<a class="TOC" href="#i.lxx-Page_369">369</a> 
+<a class="TOC" href="#i.lxx-Page_370">370</a> 
+<a class="TOC" href="#i.lxx-Page_371">371</a> 
+<a class="TOC" href="#i.lxx-Page_372">372</a> 
+<a class="TOC" href="#i.lxx-Page_373">373</a> 
+<a class="TOC" href="#i.lxx-Page_374">374</a> 
+<a class="TOC" href="#i.lxx-Page_375">375</a> 
+<a class="TOC" href="#i.lxx-Page_376">376</a> 
+<a class="TOC" href="#i.lxx-Page_377">377</a> 
+<a class="TOC" href="#i.lxx-Page_378">378</a> 
+<a class="TOC" href="#i.lxx-Page_379">379</a> 
+<a class="TOC" href="#i.lxx-Page_380">380</a> 
+<a class="TOC" href="#i.lxxi-Page_381">381</a> 
+<a class="TOC" href="#i.lxxi-Page_382">382</a> 
+<a class="TOC" href="#i.lxxi-Page_383">383</a> 
+<a class="TOC" href="#i.lxxii-Page_384">384</a> 
+<a class="TOC" href="#i.lxxii-Page_385">385</a> 
+<a class="TOC" href="#i.lxxii-Page_386">386</a> 
+<a class="TOC" href="#i.lxxii-Page_387">387</a> 
+<a class="TOC" href="#i.lxxii-Page_388">388</a> 
+<a class="TOC" href="#i.lxxii-Page_389">389</a> 
+<a class="TOC" href="#i.lxxii-Page_390">390</a> 
+<a class="TOC" href="#i.lxxiii-Page_391">391</a> 
+<a class="TOC" href="#i.lxxiii-Page_392">392</a> 
+<a class="TOC" href="#i.lxxiii-Page_393">393</a> 
+<a class="TOC" href="#i.lxxiii-Page_394">394</a> 
+<a class="TOC" href="#i.lxxiii-Page_395">395</a> 
+<a class="TOC" href="#i.lxxiii-Page_396">396</a> 
+<a class="TOC" href="#i.lxxiii-Page_397">397</a> 
+<a class="TOC" href="#i.lxxiii-Page_398">398</a> 
+<a class="TOC" href="#i.lxxiii-Page_399">399</a> 
+<a class="TOC" href="#i.lxxiii-Page_400">400</a> 
+<a class="TOC" href="#i.lxxiii-Page_401">401</a> 
+<a class="TOC" href="#i.lxxiii-Page_402">402</a> 
+<a class="TOC" href="#i.lxxiii-Page_403">403</a> 
+<a class="TOC" href="#i.lxxiii-Page_404">404</a> 
+<a class="TOC" href="#i.lxxiii-Page_405">405</a> 
+<a class="TOC" href="#i.lxxiii-Page_406">406</a> 
+<a class="TOC" href="#i.lxxiv-Page_407">407</a> 
+<a class="TOC" href="#i.lxxiv-Page_408">408</a> 
+<a class="TOC" href="#i.lxxiv-Page_409">409</a> 
+<a class="TOC" href="#i.lxxiv-Page_410">410</a> 
+<a class="TOC" href="#i.lxxiv-Page_411">411</a> 
+<a class="TOC" href="#i.lxxiv-Page_412">412</a> 
+<a class="TOC" href="#i.lxxiv-Page_413">413</a> 
+<a class="TOC" href="#i.lxxiv-Page_414">414</a> 
+<a class="TOC" href="#i.lxxiv-Page_415">415</a> 
+<a class="TOC" href="#i.lxxiv-Page_416">416</a> 
+<a class="TOC" href="#i.lxxiv-Page_417">417</a> 
+<a class="TOC" href="#i.lxxiv-Page_418">418</a> 
+<a class="TOC" href="#i.lxxiv-Page_419">419</a> 
+<a class="TOC" href="#i.lxxiv-Page_420">420</a> 
+<a class="TOC" href="#i.lxxiv-Page_421">421</a> 
+<a class="TOC" href="#i.lxxiv-Page_422">422</a> 
+<a class="TOC" href="#i.lxxiv-Page_423">423</a> 
+<a class="TOC" href="#i.lxxiv-Page_424">424</a> 
+<a class="TOC" href="#i.lxxiv-Page_425">425</a> 
+<a class="TOC" href="#i.lxxiv-Page_426">426</a> 
+<a class="TOC" href="#i.lxxv-Page_427">427</a> 
+<a class="TOC" href="#i.lxxv-Page_428">428</a> 
+<a class="TOC" href="#i.lxxv-Page_429">429</a> 
+<a class="TOC" href="#i.lxxv-Page_430">430</a> 
+<a class="TOC" href="#i.lxxv-Page_431">431</a> 
+<a class="TOC" href="#i.lxxv-Page_432">432</a> 
+<a class="TOC" href="#i.lxxv-Page_433">433</a> 
+<a class="TOC" href="#i.lxxvi-Page_434">434</a> 
+<a class="TOC" href="#i.lxxvi-Page_435">435</a> 
+<a class="TOC" href="#i.lxxvi-Page_436">436</a> 
+<a class="TOC" href="#i.lxxvi-Page_437">437</a> 
+<a class="TOC" href="#i.lxxvii-Page_438">438</a> 
+<a class="TOC" href="#i.lxxvii-Page_439">439</a> 
+<a class="TOC" href="#i.lxxvii-Page_440">440</a> 
+<a class="TOC" href="#i.lxxvii-Page_441">441</a> 
+<a class="TOC" href="#i.lxxvii-Page_442">442</a> 
+<a class="TOC" href="#i.lxxvii-Page_443">443</a> 
+<a class="TOC" href="#i.lxxviii-Page_444">444</a> 
+<a class="TOC" href="#i.lxxviii-Page_445">445</a> 
+<a class="TOC" href="#i.lxxviii-Page_446">446</a> 
+<a class="TOC" href="#i.lxxviii-Page_447">447</a> 
+<a class="TOC" href="#i.lxxviii-Page_448">448</a> 
+<a class="TOC" href="#i.lxxviii-Page_449">449</a> 
+<a class="TOC" href="#i.lxxviii-Page_450">450</a> 
+<a class="TOC" href="#i.lxxviii-Page_451">451</a> 
+<a class="TOC" href="#i.lxxviii-Page_452">452</a> 
+<a class="TOC" href="#i.lxxviii-Page_453">453</a> 
+<a class="TOC" href="#i.lxxviii-Page_454">454</a> 
+<a class="TOC" href="#i.lxxix-Page_455">455</a> 
+<a class="TOC" href="#i.lxxix-Page_456">456</a> 
+<a class="TOC" href="#i.lxxix-Page_457">457</a> 
+<a class="TOC" href="#i.lxxix-Page_458">458</a> 
+<a class="TOC" href="#i.lxxix-Page_459">459</a> 
+<a class="TOC" href="#i.lxxix-Page_460">460</a> 
+<a class="TOC" href="#i.lxxix-Page_461">461</a> 
+<a class="TOC" href="#i.lxxix-Page_462">462</a> 
+<a class="TOC" href="#i.lxxix-Page_463">463</a> 
+<a class="TOC" href="#i.lxxix-Page_464">464</a> 
+<a class="TOC" href="#i.lxxix-Page_465">465</a> 
+<a class="TOC" href="#i.lxxix-Page_466">466</a> 
+<a class="TOC" href="#i.lxxix-Page_467">467</a> 
+<a class="TOC" href="#i.lxxx-Page_468">468</a> 
+<a class="TOC" href="#i.lxxx-Page_469">469</a> 
+<a class="TOC" href="#i.lxxx-Page_470">470</a> 
+<a class="TOC" href="#i.lxxx-Page_471">471</a> 
+<a class="TOC" href="#i.lxxx-Page_472">472</a> 
+<a class="TOC" href="#i.lxxx-Page_473">473</a> 
+<a class="TOC" href="#i.lxxx-Page_474">474</a> 
+<a class="TOC" href="#i.lxxx-Page_475">475</a> 
+<a class="TOC" href="#i.lxxx-Page_476">476</a> 
+<a class="TOC" href="#i.lxxx-Page_477">477</a> 
+<a class="TOC" href="#i.lxxx-Page_478">478</a> 
+<a class="TOC" href="#i.lxxx-Page_479">479</a> 
+<a class="TOC" href="#i.lxxx-Page_480">480</a> 
+<a class="TOC" href="#i.lxxx-Page_481">481</a> 
+<a class="TOC" href="#i.lxxx-Page_482">482</a> 
+<a class="TOC" href="#i.lxxxi-Page_483">483</a> 
+<a class="TOC" href="#i.lxxxi-Page_484">484</a> 
+<a class="TOC" href="#i.lxxxi-Page_485">485</a> 
+<a class="TOC" href="#i.lxxxi-Page_486">486</a> 
+<a class="TOC" href="#i.lxxxi-Page_487">487</a> 
+<a class="TOC" href="#i.lxxxi-Page_488">488</a> 
+<a class="TOC" href="#i.lxxxi-Page_489">489</a> 
+<a class="TOC" href="#i.lxxxi-Page_490">490</a> 
+<a class="TOC" href="#i.lxxxi-Page_491">491</a> 
+<a class="TOC" href="#i.lxxxi-Page_492">492</a> 
+<a class="TOC" href="#i.lxxxi-Page_493">493</a> 
+<a class="TOC" href="#i.lxxxi-Page_494">494</a> 
+<a class="TOC" href="#i.lxxxi-Page_495">495</a> 
+<a class="TOC" href="#i.lxxxi-Page_496">496</a> 
+<a class="TOC" href="#i.lxxxi-Page_497">497</a> 
+<a class="TOC" href="#i.lxxxi-Page_498">498</a> 
+<a class="TOC" href="#i.lxxxii-Page_499">499</a> 
+<a class="TOC" href="#i.lxxxii-Page_500">500</a> 
+<a class="TOC" href="#i.lxxxii-Page_501">501</a> 
+<a class="TOC" href="#i.lxxxii-Page_502">502</a> 
+<a class="TOC" href="#i.lxxxii-Page_503">503</a> 
+<a class="TOC" href="#i.lxxxii-Page_504">504</a> 
+<a class="TOC" href="#i.lxxxii-Page_505">505</a> 
+<a class="TOC" href="#i.lxxxii-Page_506">506</a> 
+<a class="TOC" href="#i.lxxxii-Page_507">507</a> 
+<a class="TOC" href="#i.lxxxii-Page_508">508</a> 
+<a class="TOC" href="#i.lxxxiii-Page_509">509</a> 
+<a class="TOC" href="#i.lxxxiii-Page_510">510</a> 
+<a class="TOC" href="#i.lxxxiii-Page_511">511</a> 
+<a class="TOC" href="#i.lxxxiii-Page_512">512</a> 
+<a class="TOC" href="#i.lxxxiii-Page_513">513</a> 
+<a class="TOC" href="#i.lxxxiii-Page_514">514</a> 
+<a class="TOC" href="#i.lxxxiii-Page_515">515</a> 
+<a class="TOC" href="#i.lxxxiii-Page_516">516</a> 
+<a class="TOC" href="#i.lxxxiii-Page_517">517</a> 
+<a class="TOC" href="#i.lxxxiii-Page_518">518</a> 
+<a class="TOC" href="#i.lxxxiii-Page_519">519</a> 
+<a class="TOC" href="#i.lxxxiii-Page_520">520</a> 
+<a class="TOC" href="#i.lxxxiii-Page_521">521</a> 
+<a class="TOC" href="#i.lxxxiii-Page_522">522</a> 
+<a class="TOC" href="#i.lxxxiii-Page_523">523</a> 
+<a class="TOC" href="#i.lxxxiii-Page_524">524</a> 
+<a class="TOC" href="#i.lxxxiii-Page_525">525</a> 
+<a class="TOC" href="#i.lxxxiii-Page_526">526</a> 
+<a class="TOC" href="#i.lxxxiii-Page_527">527</a> 
+<a class="TOC" href="#i.lxxxiii-Page_528">528</a> 
+<a class="TOC" href="#i.lxxxiii-Page_529">529</a> 
+<a class="TOC" href="#i.lxxxiii-Page_530">530</a> 
+<a class="TOC" href="#i.lxxxiii-Page_531">531</a> 
+<a class="TOC" href="#i.lxxxiii-Page_532">532</a> 
+<a class="TOC" href="#i.lxxxiii-Page_533">533</a> 
+<a class="TOC" href="#i.lxxxiii-Page_534">534</a> 
+<a class="TOC" href="#i.lxxxiii-Page_535">535</a> 
+<a class="TOC" href="#i.lxxxiii-Page_536">536</a> 
+<a class="TOC" href="#i.lxxxiv-Page_537">537</a> 
+<a class="TOC" href="#i.lxxxiv-Page_538">538</a> 
+<a class="TOC" href="#i.lxxxiv-Page_539">539</a> 
+<a class="TOC" href="#i.lxxxiv-Page_540">540</a> 
+<a class="TOC" href="#i.lxxxiv-Page_541">541</a> 
+<a class="TOC" href="#i.lxxxiv-Page_542">542</a> 
+<a class="TOC" href="#i.lxxxiv-Page_543">543</a> 
+<a class="TOC" href="#i.lxxxiv-Page_544">544</a> 
+<a class="TOC" href="#i.lxxxiv-Page_545">545</a> 
+<a class="TOC" href="#i.lxxxiv-Page_546">546</a> 
+<a class="TOC" href="#i.lxxxiv-Page_547">547</a> 
+<a class="TOC" href="#i.lxxxiv-Page_548">548</a> 
+<a class="TOC" href="#i.lxxxiv-Page_549">549</a> 
+<a class="TOC" href="#i.lxxxiv-Page_550">550</a> 
+<a class="TOC" href="#i.lxxxiv-Page_551">551</a> 
+<a class="TOC" href="#i.lxxxiv-Page_552">552</a> 
+<a class="TOC" href="#i.lxxxiv-Page_553">553</a> 
+<a class="TOC" href="#i.lxxxiv-Page_554">554</a> 
+<a class="TOC" href="#i.lxxxiv-Page_555">555</a> 
+<a class="TOC" href="#i.lxxxiv-Page_556">556</a> 
+<a class="TOC" href="#i.lxxxiv-Page_557">557</a> 
+<a class="TOC" href="#i.lxxxiv-Page_558">558</a> 
+<a class="TOC" href="#i.lxxxiv-Page_559">559</a> 
+<a class="TOC" href="#i.lxxxiv-Page_560">560</a> 
+<a class="TOC" href="#i.lxxxiv-Page_561">561</a> 
+<a class="TOC" href="#i.lxxxiv-Page_562">562</a> 
+<a class="TOC" href="#i.lxxxiv-Page_563">563</a> 
+<a class="TOC" href="#i.lxxxiv-Page_564">564</a> 
+<a class="TOC" href="#i.lxxxiv-Page_565">565</a> 
+<a class="TOC" href="#i.lxxxiv-Page_566">566</a> 
+<a class="TOC" href="#i.lxxxiv-Page_567">567</a> 
+<a class="TOC" href="#i.lxxxiv-Page_568">568</a> 
+<a class="TOC" href="#i.lxxxiv-Page_569">569</a> 
+<a class="TOC" href="#i.lxxxiv-Page_570">570</a> 
+<a class="TOC" href="#i.lxxxiv-Page_571">571</a> 
+<a class="TOC" href="#i.lxxxiv-Page_572">572</a> 
+<a class="TOC" href="#i.lxxxiv-Page_573">573</a> 
+<a class="TOC" href="#i.lxxxiv-Page_574">574</a> 
+<a class="TOC" href="#i.lxxxiv-Page_575">575</a> 
+<a class="TOC" href="#i.lxxxiv-Page_576">576</a> 
+<a class="TOC" href="#i.lxxxiv-Page_577">577</a> 
+<a class="TOC" href="#i.lxxxiv-Page_578">578</a> 
+<a class="TOC" href="#i.lxxxiv-Page_579">579</a> 
+<a class="TOC" href="#i.lxxxiv-Page_580">580</a> 
+<a class="TOC" href="#i.lxxxiv-Page_581">581</a> 
+<a class="TOC" href="#i.lxxxiv-Page_582">582</a> 
+<a class="TOC" href="#i.lxxxiv-Page_583">583</a> 
+<a class="TOC" href="#i.lxxxiv-Page_584">584</a> 
+<a class="TOC" href="#i.lxxxiv-Page_585">585</a> 
+<a class="TOC" href="#i.lxxxiv-Page_586">586</a> 
+<a class="TOC" href="#i.lxxxiv-Page_587">587</a> 
+<a class="TOC" href="#i.lxxxiv-Page_588">588</a> 
+<a class="TOC" href="#i.lxxxiv-Page_589">589</a> 
+<a class="TOC" href="#i.lxxxiv-Page_590">590</a> 
+<a class="TOC" href="#i.lxxxiv-Page_591">591</a> 
+<a class="TOC" href="#i.lxxxiv-Page_592">592</a> 
+<a class="TOC" href="#i.lxxxiv-Page_593">593</a> 
+<a class="TOC" href="#i.lxxxiv-Page_594">594</a> 
+<a class="TOC" href="#i.lxxxiv-Page_595">595</a> 
+<a class="TOC" href="#i.lxxxiv-Page_596">596</a> 
+<a class="TOC" href="#i.lxxxiv-Page_597">597</a> 
+<a class="TOC" href="#i.lxxxv-Page_598">598</a> 
+<a class="TOC" href="#i.lxxxv-Page_599">599</a> 
+<a class="TOC" href="#i.lxxxv-Page_600">600</a> 
+<a class="TOC" href="#i.lxxxv-Page_601">601</a> 
+<a class="TOC" href="#i.lxxxv-Page_602">602</a> 
+<a class="TOC" href="#i.lxxxv-Page_603">603</a> 
+<a class="TOC" href="#i.lxxxv-Page_604">604</a> 
+<a class="TOC" href="#i.lxxxv-Page_605">605</a> 
+<a class="TOC" href="#i.lxxxv-Page_606">606</a> 
+<a class="TOC" href="#i.lxxxv-Page_607">607</a> 
+<a class="TOC" href="#i.lxxxv-Page_608">608</a> 
+<a class="TOC" href="#i.lxxxv-Page_609">609</a> 
+<a class="TOC" href="#i.lxxxv-Page_610">610</a> 
+</p>
+</div>
+
+
+
+</div2>
+</div1>
+
+
+
+</ThML.body>
+</ThML>

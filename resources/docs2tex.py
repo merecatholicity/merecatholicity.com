@@ -26,6 +26,17 @@ def pandoc_latex(html_frag):
     return p.stdout
 
 
+_TEX_MAP = {"\\": "\\textbackslash{}", "&": "\\&", "%": "\\%", "#": "\\#",
+            "_": "\\_", "$": "\\$", "{": "\\{", "}": "\\}",
+            "~": "\\textasciitilde{}", "^": "\\textasciicircum{}"}
+
+
+def esc_tex(s):
+    """Escape TeX specials in plain extracted text, one pass (the pandoc
+    paths escape on their own; the pdftotext path needs this)."""
+    return "".join(_TEX_MAP.get(c, c) for c in s)
+
+
 def fix_mojibake(text):
     """Undo cp1252-as-utf8 double encoding where present."""
     try:
@@ -79,8 +90,132 @@ def main():
     i = h.rfind("<p", 0, i)
     frag = h[i:]
     tex = clean(pandoc_latex(frag))
+    # the encyclical's own address line opens the text as its one heading
+    # (the deep-link client engages on pandoc's unnumbered headings)
+    tex = re.sub(r"\A\s*(?:\\emph\{)?(To All the Bishops.*?)\}?(\n\n)",
+                 lambda m: "\\subsection{" + " ".join(m.group(1).split())
+                 + "}" + m.group(2), tex, flags=re.S)
     open("encyclical1848-body.tex", "w").write(tex)
     print("wrote encyclical1848-body.tex", len(tex))
+
+    # 1895 encyclical: from the Reply heading through the endnotes
+    h = open("docs-src/encyclical1895.html", encoding="utf-8",
+             errors="replace").read()
+    i = h.find("A Reply to the Papal Encyclical")
+    i = h.rfind("<h", 0, i)
+    frag = h[i:]
+    # cut the site's trailing chrome if present
+    for endmark in ("</article", "For Further Reading", "<footer"):
+        k = frag.find(endmark, 200)
+        if k > 0:
+            frag = frag[:k]
+            break
+    tex = clean(pandoc_latex(frag))
+    open("encyclical1895-body.tex", "w").write(tex)
+    print("wrote encyclical1895-body.tex", len(tex))
+
+    # Apostolicae Curae: the article region of the papalencyclicals page
+    h = open("docs-src/apostolicae-curae.html", encoding="utf-8",
+             errors="replace").read()
+    i = h.find("<article")
+    j = h.find("</article>", i)
+    frag = h[i:j if j > 0 else len(h)]
+    # the page's own share/navigation furniture
+    frag = re.sub(r'<h\d[^>]*>\s*Post navigation.*$', '', frag, flags=re.S)
+    tex = clean(pandoc_latex(frag))
+    open("apostolicae-body.tex", "w").write(tex)
+    print("wrote apostolicae-body.tex", len(tex))
+
+    # Saepius Officio: the Project Canterbury typeset PDF, extracted with
+    # pdftotext (born-digital, so the text layer is exact). Its footnotes
+    # are set at page feet as a bare note-number paragraph followed by the
+    # note's text, numbered in one sequence through the pamphlet, with the
+    # in-text reference glued to the preceding word ("Ordinal.3"); pair
+    # them back up as real \footnotes, validated both ways. The running
+    # head, a lone trailing page number, and the colophon drop.
+    p = subprocess.run(["pdftotext", "-layout", "docs-src/saepius.pdf", "-"],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[:300]
+    notes, flow = {}, []
+    expected = 1                                 # notes run 1..43 in order
+    for page in p.stdout.split("\f"):
+        lines = [ln for ln in page.split("\n")
+                 if not re.fullmatch(
+                     r"\s*(?:Saepius Officio, 1897\.?|"
+                     r"Project Canterbury edition AD \d+\.?)\s*", ln)]
+        # the foot-notes sit at the page foot as a bare note-number line
+        # followed by the note's wrapped text, numbered in one sequence
+        # through the pamphlet; the first line that is exactly the next
+        # expected number opens the note zone
+        cut = len(lines)
+        for i, ln in enumerate(lines):
+            if ln.strip() == str(expected):
+                cut = i
+                break
+        n = None
+        for ln in lines[cut:]:
+            s = ln.strip()
+            if not s:
+                continue
+            if s == str(expected):
+                n = s
+                notes[n] = ""
+                expected += 1
+            elif n:
+                notes[n] = (notes[n] + " " + s).strip()
+        flow.append("\n".join(lines[:cut]))
+    text = "\n\n".join(flow)
+    # -layout keeps print wrapping: rejoin, then paragraphs on blank lines
+    text = re.sub(r"[ \t]+", " ", text)
+    paras = [re.sub(r"\s+", " ", b).strip()
+             for b in re.split(r"\n\s*\n", text) if b.strip()]
+    text = "\n\n".join(paras)
+    notes = {k: re.sub(r"\s+", " ", v).strip() for k, v in notes.items()}
+
+    used = []
+
+    def sae_ref(m):
+        n = m.group(2)
+        if n in notes:
+            used.append(n)
+            return m.group(1) + "\x0e" + n + "\x0f"
+        return m.group(0)
+    text = re.sub(r"([a-z\)\.,;:'’”])(\d{1,3})(?=[\s,\.\)]|$)", sae_ref, text)
+    # a few references are set off by a space ("chrism. 30 The first…");
+    # match those against the notes still unplaced, requiring a fresh
+    # sentence after so citation page-numbers cannot false-positive
+    remaining = set(notes) - set(used)
+
+    def sae_ref2(m):
+        n = m.group(2)
+        if n in remaining:
+            used.append(n)
+            remaining.discard(n)
+            return m.group(1) + "\x0e" + n + "\x0f"
+        return m.group(0)
+    text = re.sub(r"([\.;:'’”\)])\s(\d{1,2})(?=\s+[A-Z“])", sae_ref2, text)
+    unused = sorted(set(notes) - set(used), key=int)
+    if unused:
+        print("  saepius: unreferenced notes", unused)
+
+    text = re.sub(r"Project Canterbury edition AD \d+\.?", "", text)
+    text = re.sub(r"[\u0370-\u03FF\u1F00-\u1FFF][\u0370-\u03FF\u1F00-\u1FFF\s,;·\u0374\u02b9]*",
+                  lambda m: chr(16) + m.group(0) + chr(17), text)
+    tex = esc_tex(text)
+    tex = tex.replace(chr(16), "\\textgreek{").replace(chr(17), "}")
+    tex = re.sub("\x0e(\\d+)\x0f",
+                 lambda m: "\\footnote{" + esc_tex(notes[m.group(1)]) + "}",
+                 tex)
+    if unused:
+        # a reference the passes could not place: keep its note, faithful
+        # and visible, in a short block at the end
+        tail = ["\\subsection{Notes of the 1897 edition not anchored above}"]
+        tail += ["%s. %s" % (n, esc_tex(notes[n])) for n in unused]
+        tex = tex.rstrip() + "\n\n" + "\n\n".join(tail)
+    tex = re.sub(r"\n{3,}", "\n\n", tex).strip() + "\n"
+    open("saepius-body.tex", "w").write(tex)
+    print(f"wrote saepius-body.tex {len(tex)} "
+          f"({tex.count(chr(92) + 'footnote')} footnotes of {len(notes)})")
 
     # Scranton: declaration text region on the PNCC diocese page
     h = open("docs-src/scranton2.html", encoding="utf-8",
