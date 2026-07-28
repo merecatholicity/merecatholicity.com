@@ -31,6 +31,10 @@ WORKS = [
          firsts=["Dedication."], htag=1),
     dict(srcs=["jewel-src.html"], out="jewel-body.tex",
          firsts=["INTRODUCTION."], htag=2),
+    dict(srcs=["suetonius-src.html"], out="suetonius-body.tex",
+         firsts=["PREFACE"], htag=2, skips=["Index"]),
+    dict(srcs=["ammianus-src.html"], out="ammianus-body.tex",
+         firsts=["BOOK XIV"], htag=3, skips=["Index"]),
     dict(srcs=["theses-src.html", "liberty-src.html"],
          out="luther-primary-body.tex", htag=2,
          firsts=["DISPUTATION OF DOCTOR MARTIN LUTHER",
@@ -82,6 +86,7 @@ def prepare(src, first_heading, htag, key):
                  r'[^>]*>', ' ', raw)
     raw = re.sub(r'<h5[^>]*>(.*?)</h5>', r'<h4>\1</h4>', raw, flags=re.S)
     raw = re.sub(r'</?pre[^>]*>', ' ', raw)
+    raw = re.sub(r'</?(?:small|big)[^>]*>', '', raw)
 
     # the small comparative tables, linearized
     raw = re.sub(r'</td>\s*<td[^>]*>', ' — ', raw)
@@ -93,6 +98,10 @@ def prepare(src, first_heading, htag, key):
         raw = re.sub(r'<h1[^>]*>.*?</h1>', '', raw, flags=re.S)
         raw = re.sub(r'<h2([^>]*)>', r'<h1\1>', raw)
         raw = raw.replace('</h2>', '</h1>')
+    elif htag == 3:                      # chapters live at h3 (Ammianus)
+        raw = re.sub(r'<h[12][^>]*>.*?</h[12]>', '', raw, flags=re.S)
+        raw = re.sub(r'<h3([^>]*)>', r'<h1\1>', raw)
+        raw = raw.replace('</h3>', '</h1>')
 
     # h1s to SOH/STX-fenced titles that ride through the engine as plain
     # text; a bare "Chapter N." h1 merges with the title h1 after it
@@ -161,6 +170,7 @@ def convert(srcs, out, firsts, htag=1, skips=()):
     tex = re.sub(r"\\xsection\{([A-Z][A-Z .,'’-]+)\}",
                  lambda m: "\\xsection{" + _titlecase(m.group(1)) + "}", tex)
     tex = re.sub(r'\n\n(?:\\\\\s*\n)+\n?', '\n\n', tex)
+    tex = re.sub(r'(\\\\\s*)\[', r'\1{}[', tex)
     tex = re.sub(r'\n{3,}', '\n\n', tex).strip() + "\n"
 
     leftovers = sorted(set(re.findall(r'<[a-zA-Z/][^>]*>', tex)))

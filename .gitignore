@@ -47,6 +47,42 @@ resources/bondage.pdf
 resources/luther-galatians.pdf
 resources/luther-primary.pdf
 resources/jewel.pdf
+resources/articles1571.pdf
+resources/guettee.pdf
+resources/concord.pdf
+resources/bcp1559.pdf
+resources/bcp1662.pdf
+resources/bcp1928.pdf
+resources/hooker.pdf
+resources/keble-year.pdf
+resources/andrewes-devotions.pdf
+# multi-file source trees for the high-church works are reproducible
+# (fetch URLs live in each converter's header); the committed bodies,
+# wrappers, and root PDFs are what ships
+resources/hooker-src/
+resources/bcp1928-src/
+resources/bcp1662-src/
+resources/bcp1559-src/
+resources/concord-src/
+resources/gibbon-src/
+resources/thayer-src/
+resources/annals.pdf
+resources/histories.pdf
+resources/suetonius.pdf
+resources/ammianus.pdf
+resources/zosimus.pdf
+resources/gibbon1.pdf
+resources/gibbon2.pdf
+resources/gibbon3.pdf
+resources/gibbon4.pdf
+resources/gibbon5.pdf
+resources/gibbon6.pdf
+resources/gibbon7.pdf
+resources/gibbon8.pdf
+resources/gibbon9.pdf
+resources/gibbon10.pdf
+resources/gibbon11.pdf
+resources/gibbon12.pdf
 resources/encyclical1895.pdf
 resources/apostolicae.pdf
 resources/saepius.pdf

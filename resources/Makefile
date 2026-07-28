@@ -58,6 +58,12 @@ body:
 	python dr-json.py
 	python summatheologica2tex.py
 	python gutenberg2tex.py
+	python guettee2tex.py
+	python concord2tex.py
+	python bcp2tex.py
+	python hooker2tex.py
+	python rome2tex.py
+	python gibbon2tex.py
 
 # Fixed date + trailer id (set in each preamble) keep rebuilds
 # byte-identical, so git only churns when the text really changes.
@@ -119,6 +125,32 @@ WORKS = \
   luther-galatians=Commentary_on_Galatians.pdf \
   luther-primary=Ninety-Five_Theses.pdf \
   jewel=Apology_of_the_Church_of_England.pdf \
+  articles1571=Thirty-Nine_Articles.pdf \
+  guettee=The_Papacy_Guettee.pdf \
+  concord=Book_of_Concord.pdf \
+  bcp1559=Book_of_Common_Prayer_1559.pdf \
+  bcp1662=Book_of_Common_Prayer_1662.pdf \
+  bcp1928=Book_of_Common_Prayer_1928.pdf \
+  hooker=Laws_of_Ecclesiastical_Polity.pdf \
+  keble-year=The_Christian_Year.pdf \
+  andrewes-devotions=Private_Devotions_of_Lancelot_Andrewes.pdf \
+  annals=The_Annals_of_Tacitus.pdf \
+  histories=The_Histories_of_Tacitus.pdf \
+  suetonius=The_Twelve_Caesars.pdf \
+  ammianus=Ammianus_Marcellinus.pdf \
+  zosimus=The_New_History_of_Zosimus.pdf \
+  gibbon1=Decline_and_Fall_Vol_1.pdf \
+  gibbon2=Decline_and_Fall_Vol_2.pdf \
+  gibbon3=Decline_and_Fall_Vol_3.pdf \
+  gibbon4=Decline_and_Fall_Vol_4.pdf \
+  gibbon5=Decline_and_Fall_Vol_5.pdf \
+  gibbon6=Decline_and_Fall_Vol_6.pdf \
+  gibbon7=Decline_and_Fall_Vol_7.pdf \
+  gibbon8=Decline_and_Fall_Vol_8.pdf \
+  gibbon9=Decline_and_Fall_Vol_9.pdf \
+  gibbon10=Decline_and_Fall_Vol_10.pdf \
+  gibbon11=Decline_and_Fall_Vol_11.pdf \
+  gibbon12=Decline_and_Fall_Vol_12.pdf \
   douay-rheims=Douay-Rheims_Bible.pdf \
   kjv=King_James_Bible.pdf \
   catena-matthew=Catena_Aurea_Matthew.pdf \
@@ -237,7 +269,33 @@ html:
 	         bondage:1:"The Bondage of the Will, by Martin Luther" \
 	         luther-galatians:1:"Commentary on the Epistle to the Galatians, by Martin Luther" \
 	         luther-primary:1:"The Ninety-Five Theses, with Concerning Christian Liberty" \
-	         jewel:1:"An Apology of the Church of England, by John Jewel"; do \
+	         jewel:1:"An Apology of the Church of England, by John Jewel" \
+	         articles1571:2:"The Thirty-Nine Articles of Religion" \
+	         guettee:1:"The Papacy, by the Abbe Guettee" \
+	         concord:2:"The Book of Concord" \
+	         bcp1559:1:"The Book of Common Prayer, 1559" \
+	         bcp1662:1:"The Book of Common Prayer, 1662" \
+	         bcp1928:1:"The Book of Common Prayer, 1928 (American)" \
+	         hooker:1:"Of the Laws of Ecclesiastical Polity, by Richard Hooker" \
+	         keble-year:1:"The Christian Year, by John Keble" \
+	         andrewes-devotions:1:"The Private Devotions of Lancelot Andrewes" \
+	         annals:1:"The Annals, by Tacitus" \
+	         histories:1:"The Histories, by Tacitus" \
+	         suetonius:1:"The Lives of the Twelve Caesars, by Suetonius" \
+	         ammianus:1:"The Roman History of Ammianus Marcellinus" \
+	         zosimus:1:"The New History, by Count Zosimus" \
+	         gibbon1:1:"The Decline and Fall of the Roman Empire, Vol. 1" \
+	         gibbon2:1:"The Decline and Fall of the Roman Empire, Vol. 2" \
+	         gibbon3:1:"The Decline and Fall of the Roman Empire, Vol. 3" \
+	         gibbon4:1:"The Decline and Fall of the Roman Empire, Vol. 4" \
+	         gibbon5:1:"The Decline and Fall of the Roman Empire, Vol. 5" \
+	         gibbon6:1:"The Decline and Fall of the Roman Empire, Vol. 6" \
+	         gibbon7:1:"The Decline and Fall of the Roman Empire, Vol. 7" \
+	         gibbon8:1:"The Decline and Fall of the Roman Empire, Vol. 8" \
+	         gibbon9:1:"The Decline and Fall of the Roman Empire, Vol. 9" \
+	         gibbon10:1:"The Decline and Fall of the Roman Empire, Vol. 10" \
+	         gibbon11:1:"The Decline and Fall of the Roman Empire, Vol. 11" \
+	         gibbon12:1:"The Decline and Fall of the Roman Empire, Vol. 12"; do \
 	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \

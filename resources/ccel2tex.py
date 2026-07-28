@@ -37,7 +37,8 @@ class Converter(HTMLParser):
     skip that division entirely."""
 
     def __init__(self, heading_fn, inner_heads=True, skip_titles=(),
-                 safe_footnotes=False, table_cells=False):
+                 safe_footnotes=False, table_cells=False,
+                 verse_lines=False):
         super().__init__(convert_charrefs=True)
         self.heading_fn = heading_fn
         self.inner_heads = inner_heads
@@ -52,6 +53,9 @@ class Converter(HTMLParser):
         # lands outside any open buffer and is dropped. Off by default so
         # the older curated bodies stay byte-stable.
         self.table_cells = table_cells
+        # ThML verse: <l> lines joined with TeX line breaks (The
+        # Christian Year); off by default
+        self.verse_lines = verse_lines
         self.suppressed = 0
         self.chapter_depth = 0
         self.out = []
@@ -183,6 +187,10 @@ class Converter(HTMLParser):
                 self.flush_paragraph()
                 self.buf = []
             return
+        if tag == "l" and self.verse_lines:
+            if self.note_buf is None and self.buf is None:
+                self.buf = []
+            return
 
     def handle_endtag(self, tag):
         if tag in ("div1", "div2", "div3", "div4"):
@@ -241,6 +249,10 @@ class Converter(HTMLParser):
         if tag in ("td", "th") and self.table_cells:
             if self.note_buf is None:
                 self.flush_paragraph()
+            return
+        if tag == "l" and self.verse_lines:
+            if self.note_buf is None and self.buf is not None:
+                self.buf.append("\\\\\n")
             return
         if tag in ("i", "b", "span", "sup"):
             if self.stack:
@@ -649,6 +661,58 @@ def make_liturgies_heading():
     return heading
 
 
+def make_articles_heading():
+    """The Thirty-Nine Articles of Religion (creeds3, div iv.xi): one
+    flat division, English and Latin in parallel, with the American
+    revision of 1801 as printed by Schaff."""
+    inside = _tops_tracker("iv")
+
+    def heading(div_id, title):
+        if not inside(div_id):
+            return None
+        if div_id == "iv.xi":
+            return ("The Thirty-Nine Articles of Religion, A.D. 1571")
+        return None
+
+    return heading
+
+
+def articles_post(body):
+    """The Articles print three parallel columns (Latin, the 1571
+    English, the 1801 American revision), so each article arrives as a
+    triple numeral run and three title lines. Promote each to a section
+    headed by the modern-English title; the three texts follow. The
+    print-furniture headings drop; then the shared symbol map."""
+    from schaff import volume_post
+
+    def art(m):
+        n, latin, t71, t01 = m.groups()
+        return ("\\xsection{Article %s. %s}\n\n" % (n, t01.strip()))
+    body = re.sub(
+        r"([IVXL]+)\.\n\n\1\.\n\n(?:\[?[IVXL]+\.\]?\n\n)?"
+        r"(?:\\emph\{)?([^\n{}]{2,110}?)\.?\}?\n\n"
+        r"(?:\\emph\{)?([^\n{}]{2,110}?)\.?\}?\n\n"
+        r"(?:\\emph\{)?([^\n{}]{2,110}?)\.?\}?\n\n",
+        art, body)
+    # three articles are set irregularly (a numeral missing, or the
+    # English pair renumbered); key them by their unique opening lines
+    for n, title in (
+            ("XXIX", "Of the Wicked, which eat not the Body of Christ "
+                     "in the use of the Lord's Supper"),
+            ("XXXIII", "Of excommunicate Persons, how they are to be "
+                       "avoided"),
+            ("XXXVI", "Of Consecration of Bishops and Ministers")):
+        body = re.sub(
+            r"(?m)^%s\.\n\n(?:\[?[IVXL]+\.\]?\n\n)?"
+            r"(?:(?:\\emph\{)?[^\n{}]{2,110}?\.?\}?\n\n){1,3}" % n,
+            "\\\\xsection{Article %s. %s}\n\n" % (n, title),
+            body, count=1)
+    body = re.sub(r"\\xsection\{ARTICULI [^}]*\}\n*", "", body)
+    body = re.sub(r"\\xsection\{T\\textsc\{he[^\n]*\n*", "", body)
+    body = re.sub(r"\\xsection\{\\textsc\{a\.d\.[^\n]*\n*", "", body)
+    return volume_post(body)
+
+
 def make_westminster_heading():
     """The Westminster Confession (with the American amendments as
     printed by Schaff) and the Shorter Catechism, from creeds3. Each is
@@ -805,6 +869,9 @@ EXTRA_WORKS = [
          heading_fn=make_damascus_heading, safe_footnotes=True),
     dict(src="anf07.xml", out="liturgies-body.tex",
          heading_fn=make_liturgies_heading, safe_footnotes=True),
+    dict(src="creeds3.xml", out="articles1571-body.tex",
+         heading_fn=make_articles_heading, safe_footnotes=True,
+         table_cells=True, inner_heads=True, post_fn=articles_post),
     dict(src="creeds3.xml", out="westminster-body.tex",
          heading_fn=make_westminster_heading, safe_footnotes=True,
          table_cells=True, inner_heads=True, post_fn=westminster_post),
@@ -814,6 +881,11 @@ EXTRA_WORKS = [
     dict(src="bondage-thml.xml", out="bondage-body.tex",
          heading_fn=lambda: chesterton_heading, safe_footnotes=True),
     dict(src="luther-galatians-thml.xml", out="luther-galatians-body.tex",
+         heading_fn=lambda: chesterton_heading, safe_footnotes=True),
+    dict(src="keble-year-thml.xml", out="keble-year-body.tex",
+         heading_fn=lambda: chesterton_heading, safe_footnotes=True,
+         verse_lines=True),
+    dict(src="andrewes-devotions-thml.xml", out="andrewes-devotions-body.tex",
          heading_fn=lambda: chesterton_heading, safe_footnotes=True),
 ]
 
@@ -851,7 +923,7 @@ WORKS = [
 
 def convert_work(src, out, heading_fn, inner_heads=False, post_fn=None,
                  skip_titles=(), safe_footnotes=False, quiet=False,
-                 table_cells=False):
+                 table_cells=False, verse_lines=False):
     """Parse a CCEL ThML file to a LaTeX body and write it to `out`.
 
     Shared by the curated WORKS table below and by schaff.py, which
@@ -859,7 +931,7 @@ def convert_work(src, out, heading_fn, inner_heads=False, post_fn=None,
     Returns the finished body string.
     """
     conv = Converter(heading_fn, inner_heads, skip_titles, safe_footnotes,
-                     table_cells)
+                     table_cells, verse_lines)
     with open(src, encoding="utf-8") as f:
         conv.feed(f.read())
     conv.flush_paragraph()
