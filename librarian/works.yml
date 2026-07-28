@@ -213,6 +213,25 @@ works:
     { src: ../jewel.html, url: jewel.html, tier: 4, kind: pandoc,
       title: "An Apology of the Church of England, by John Jewel" }
 
+  bcp1559:
+    { src: ../bcp1559.html, url: bcp1559.html, tier: 4, kind: pandoc,
+      title: "The Book of Common Prayer, 1559, the Elizabethan book" }
+  bcp1662:
+    { src: ../bcp1662.html, url: bcp1662.html, tier: 4, kind: pandoc,
+      title: "The Book of Common Prayer, 1662" }
+  bcp1928:
+    { src: ../bcp1928.html, url: bcp1928.html, tier: 4, kind: pandoc,
+      title: "The Book of Common Prayer, 1928, American" }
+  articles1571:
+    { src: ../articles1571.html, url: articles1571.html, tier: 4, kind: pandoc,
+      title: "The Thirty-Nine Articles of Religion, 1571" }
+  concord:
+    { src: ../concord.html, url: concord.html, tier: 4, kind: pandoc,
+      title: "The Book of Concord, the Lutheran confessions entire" }
+  guettee:
+    { src: ../guettee.html, url: guettee.html, tier: 4, kind: pandoc,
+      title: "The Papacy, by Wladimir Guettee, the historic case against the claims" }
+
 
   # ---- Band 5: the deep shelf, for digging ----------------------------
   summa-fp:
@@ -347,6 +366,15 @@ works:
   luther-galatians:
     { src: ../luther-galatians.html, url: luther-galatians.html, tier: 5, kind: pandoc,
       title: "Commentary on the Epistle to the Galatians, by Martin Luther" }
+  hooker:
+    { src: ../hooker.html, url: hooker.html, tier: 5, kind: pandoc,
+      title: "Of the Laws of Ecclesiastical Polity, by Richard Hooker" }
+  keble-year:
+    { src: ../keble-year.html, url: keble-year.html, tier: 5, kind: pandoc,
+      title: "The Christian Year, by John Keble" }
+  andrewes-devotions:
+    { src: ../andrewes-devotions.html, url: andrewes-devotions.html, tier: 5, kind: pandoc,
+      title: "The Private Devotions of Lancelot Andrewes" }
 
   # ---- Band 5 addendum: Schaff's History, the Creeds, and Trent ------
   hcc1:

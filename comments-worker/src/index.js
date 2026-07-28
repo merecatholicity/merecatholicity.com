@@ -2603,6 +2603,7 @@ const MERECAT_SITE = 'https://merecatholicity.com/';
 const MERECAT_TIER_LABEL = {
   1: 'site position', 2: 'scripture', 3: 'the Fathers',
   4: 'councils, confessions, and the schism', 5: 'deep shelf', 6: 'Newman',
+  7: 'the Roman world',
 };
 const MERECAT_RESTING =
   'merecat is resting. The community’s shared daily budget is spent. It resets at midnight UTC.';
@@ -2789,7 +2790,7 @@ async function merecatRetrieve(env, q, cfg) {
       // beneath them (the interpretive companion the Fathers are read
       // with), then the named Fathers, the councils, the deep shelf.
       const weighted = await env.LIBDB.prepare(SEL +
-        'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 ELSE 1.0 END) ' +
+        'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 7 THEN 0.9 ELSE 1.0 END) ' +
         'LIMIT 18').bind(match).all();
       for (const r of weighted.results || []) add(r, false);
       const raw = await env.LIBDB.prepare(SEL +
@@ -3217,7 +3218,7 @@ async function handleMerecatIngest(request, env) {
       'INSERT INTO works (id, title, url, tier, kind, hash, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6) ' +
       'ON CONFLICT(id) DO UPDATE SET title = ?2, url = ?3, tier = ?4, kind = ?5, hash = NULL, updated_at = ?6'
     ).bind(id, String(work.title || id), String(work.url || ''),
-      Math.min(6, Math.max(1, Number(work.tier) || 3)), String(work.kind || ''),
+      Math.min(7, Math.max(1, Number(work.tier) || 3)), String(work.kind || ''),
       Math.floor(Date.now() / 1000)).run();
     return json({ ok: true, began: id }, 200);
   }
