@@ -7,17 +7,24 @@
 # manifest against library.html so nothing on the shelf goes missing here.
 #
 # Fields: src (source file), url (page citations link to), title, kind
-# (pandoc | hand | bible | text), vectorize (band-1 only; ~4,880-vector
-# free budget, warned on), and tier — the six weight bands of the shelf:
+# (pandoc | hand | bible | bible-deutero | bible-dr-proto | text),
+# vectorize (band-1 only; ~4,880-vector free budget, warned on), store
+# ("deep" sends the work to the second database, merecat-library-deep —
+# retrieval reads both rooms as one and the weights ride the tier either
+# way, so deep is purely a space decision; NEVER combine vectorize with
+# store: deep, the semantic leg reads chunks from room one only and
+# ingest refuses the pair), and tier — the seven weight bands of the
+# shelf, in ladder order (not tier-number order):
 #   1  the site's works and its catechetical core (vectorized, top boost)
-#   2  the Scriptures
+#   2  the Scriptures (the KJV and the Deuterocanon from the DR)
+#   6  Newman entire (directly beneath the Scriptures; the persona
+#      carries the site's reading of him)
 #   3  the named works of the Fathers (and the Catena)
-#   4  the seven councils and the documents of the schism
-#   5  the deep shelf: the Schaff sets and the Summa
-#   6  Newman entire (boosted above the deep shelf; the persona carries
-#      the site's reading of him)
-# The Douay-Rheims is deliberately absent: the KJV serves, and redundancy
-# costs budget.
+#   4  the seven councils, the schism documents, the confessions
+#   5  the deep shelf: the Schaff sets, the Summa, the whole Douay-Rheims,
+#      Hooker, Calvin, the apologetics
+#   7  the Roman world, the bottom of the totem (background for the
+#      classics, never atop a doctrine answer; lives in the deep room)
 
 works:
   # ---- Band 1: the site's voice and its catechetical core -------------

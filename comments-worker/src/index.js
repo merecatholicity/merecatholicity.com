@@ -3361,33 +3361,44 @@ async function handleMerecatIngest(request, env) {
   const LIB = (String(data.store || work.store || '') === 'deep' && env.LIBDB2) ? env.LIBDB2 : env.LIBDB;
 
   if (mode === 'begin' || mode === 'delete') {
-    // Clear the work's vectors (only Tier-1 works ever have them) and rows.
-    try {
-      const olds = await LIB.prepare('SELECT cid FROM chunks WHERE work_id = ?1').bind(id).all();
-      const cids = (olds.results || []).map((r) => r.cid);
-      for (let i = 0; i < cids.length; i += 1000) {
-        try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 1000)); }
-        catch (err) { console.log(JSON.stringify({ event: 'merecat_vecdel_failed', error: String(err) })); }
+    /* Sweep BOTH rooms, not just the target: when a work's store flag flips
+       rooms, the old room would otherwise keep a stale twin — same cids, so
+       the first room searched shadows the fresh text out of the retrieval
+       pool, and the /works union carries two hashes for one id, which makes
+       ingest re-push the work on every run. Vectors are cleared over the
+       union of both rooms' cids (only Tier-1 works ever have them). */
+    const cidset = new Set();
+    for (const db of [env.LIBDB, env.LIBDB2]) {
+      if (!db) continue;
+      try {
+        const olds = await db.prepare('SELECT cid FROM chunks WHERE work_id = ?1').bind(id).all();
+        for (const r of olds.results || []) cidset.add(r.cid);
+      } catch (err) {
+        console.log(JSON.stringify({ event: 'merecat_clear_failed', error: String(err) }));
       }
-    } catch (err) {
-      console.log(JSON.stringify({ event: 'merecat_clear_failed', error: String(err) }));
     }
-    await LIB.prepare('DELETE FROM chunks WHERE work_id = ?1').bind(id).run();
-    if (mode === 'delete') {
-      for (const db of [env.LIBDB, env.LIBDB2]) {
-        if (!db || db === LIB) continue;
-        try {
+    const cids = [...cidset];
+    for (let i = 0; i < cids.length; i += 1000) {
+      try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 1000)); }
+      catch (err) { console.log(JSON.stringify({ event: 'merecat_vecdel_failed', error: String(err) })); }
+    }
+    for (const db of [env.LIBDB, env.LIBDB2]) {
+      if (!db) continue;
+      try {
+        if (db === LIB && mode !== 'delete') {
+          // the target room keeps its works row for the upsert below
+          await db.prepare('DELETE FROM chunks WHERE work_id = ?1').bind(id).run();
+        } else {
           await db.batch([
             db.prepare('DELETE FROM chunks WHERE work_id = ?1').bind(id),
             db.prepare('DELETE FROM works WHERE id = ?1').bind(id),
           ]);
-        } catch (err) {
-          console.log(JSON.stringify({ event: 'merecat_delete_other_failed', error: String(err) }));
         }
+      } catch (err) {
+        console.log(JSON.stringify({ event: 'merecat_sweep_failed', error: String(err) }));
       }
-      await LIB.prepare('DELETE FROM works WHERE id = ?1').bind(id).run();
-      return json({ ok: true, deleted: id }, 200);
     }
+    if (mode === 'delete') return json({ ok: true, deleted: id }, 200);
     await LIB.prepare(
       'INSERT INTO works (id, title, url, tier, kind, hash, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6) ' +
       'ON CONFLICT(id) DO UPDATE SET title = ?2, url = ?3, tier = ?4, kind = ?5, hash = NULL, updated_at = ?6'

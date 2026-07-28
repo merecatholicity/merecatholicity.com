@@ -557,6 +557,12 @@ def main():
         audit_library(manifest)
         return
 
+    for wid, entry in manifest.items():
+        if entry.get("vectorize") and str(entry.get("store", "")) == "deep":
+            sys.exit(f"{wid}: vectorize with store: deep — the semantic leg "
+                     "reads chunks from room one only, so a vectorized work "
+                     "must stay out of the deep room")
+
     key = admin_key()
     roster = post(args.api, "/works", {"key": key})
     # The dials ride every push. The persona rides only when persona.md
@@ -575,7 +581,8 @@ def main():
     server = {w["id"]: w for w in roster["works"]}
     # early warning on D1's 500 MB per-database cap: the database runs about
     # 2.1x the stored text (search index and btrees); past ~450 MB projected,
-    # split bands 5-6 into a second database (the designed relief valve)
+    # mark more works `store: deep` — D1 reclaims file space on delete, so a
+    # full room recovers as soon as the works move out
     db_mb = roster.get("text_bytes", 0) * 2.09 / 1e6
     deep_mb = roster.get("text_bytes_deep", 0) * 2.09 / 1e6
     print(f"database projection: room one ~{db_mb:.0f} MB of 500, deep room ~{deep_mb:.0f} MB of 500"
