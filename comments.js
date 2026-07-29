@@ -4912,6 +4912,16 @@
         .catch(function () {});
     }
 
+    /* The reader's intent, read from where they stand: at (or near) the
+       page bottom means they are riding the conversation and every paint may
+       follow; scrolled up means they are READING, and nothing below may move
+       their view — the answer still paints, silently, and following resumes
+       on its own when they return to the bottom. A short page counts as
+       bottom, so opening a thread still lands on its newest message. */
+    function nearPageBottom() {
+      return (window.innerHeight + window.scrollY) >=
+        (document.documentElement.scrollHeight - 160);
+    }
     function bubble(who) {
       var m = el('div', 'merecat-msg ' + (who === 'you' ? 'you' : 'cat'));
       m.appendChild(el('div', 'merecat-who', who === 'you'
@@ -4919,8 +4929,9 @@
         : '🐈 merecat'));
       var body = el('div', 'merecat-body');
       m.appendChild(body);
+      var follow = nearPageBottom();
       log.appendChild(m);
-      m.scrollIntoView({ block: 'nearest' });
+      if (follow) m.scrollIntoView({ block: 'nearest' });
       return { msg: m, body: body };
     }
 
@@ -5152,11 +5163,12 @@
         }
         working.stop();
         if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        var follow = nearPageBottom();
         host.textContent = '';
         fillBody(host, rr.text, true);
         srcFooter(host, rr.sources);
         if (m.id) attachForward(cat.msg, m.id);
-        cat.msg.scrollIntoView({ block: 'nearest' });
+        if (follow) cat.msg.scrollIntoView({ block: 'nearest' });
         painted = true;
         if (flowResolve) flowResolve();
         return true;
@@ -5221,13 +5233,7 @@
           poll();
         });
       }
-      function followTail(node) {
-        /* keep the growing tail in view only while the reader is riding it —
-           if they scrolled away, leave them be */
-        var r = node.getBoundingClientRect();
-        var vh = window.innerHeight || document.documentElement.clientHeight;
-        if (r.bottom > vh && r.bottom - vh < 400) node.scrollIntoView({ block: 'end' });
-      }
+      function followTail(node) { node.scrollIntoView({ block: 'end' }); }
       function flowTick() {
         try {
           if (painted) {
@@ -5238,9 +5244,10 @@
           }
           var backlog = acc.length - shown;
           if (backlog > 0) {
+            var follow = nearPageBottom();
             shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
             cat.body.textContent = acc.slice(0, shown);
-            followTail(cat.msg);
+            if (follow) followTail(cat.msg);
           } else if (streamDone) {
             clearInterval(flowTimer);
             flowTimer = null;
@@ -5301,7 +5308,7 @@
           if (!acc) {
             cat.body.textContent = '';
             cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
-            cat.msg.scrollIntoView({ block: 'nearest' });
+            if (nearPageBottom()) cat.msg.scrollIntoView({ block: 'nearest' });
             return;
           }
           /* Let the reveal run to the end of the text before the final
@@ -5311,12 +5318,14 @@
           return new Promise(function (resolve) {
             flowResolve = function () {
               if (!painted && document.contains(cat.body)) {
+                var follow = nearPageBottom();
                 var rr = citeRenumber(acc, sources);
                 cat.body.textContent = '';
                 fillBody(cat.body, rr.text, true);
                 srcFooter(cat.body, rr.sources);
                 attachForward(cat.msg, 'last');
                 painted = true;
+                if (follow) cat.msg.scrollIntoView({ block: 'nearest' });
               }
               resolve();
             };
@@ -5407,7 +5416,8 @@
         busy = false;
         /* The answer is fully rendered. After a short beat so it settles, send
            the next stacked question; otherwise return focus to the box. */
-        if (askQueue.length) setTimeout(drain, 900); else q.focus();
+        if (askQueue.length) { setTimeout(drain, 900); }
+        else { try { q.focus({ preventScroll: true }); } catch (e) { q.focus(); } }
       });
     }
 
