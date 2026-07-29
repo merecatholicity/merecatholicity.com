@@ -4511,6 +4511,12 @@
       '.merecat-quota{color:var(--faint);font-size:.85rem;margin:.15rem 0 .9rem}' +
       '.merecat-persona-edit{width:100%;min-height:26em;font:inherit;font-size:.9rem;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.6rem .7rem;margin:.4rem 0;resize:vertical;white-space:pre-wrap}' +
       '.merecat-quota strong{color:var(--maroon)}' +
+      '.merecat-working{display:inline-flex;align-items:center;gap:.5em;color:var(--faint);font-style:italic}' +
+      '.merecat-working .mc-cat-work{font-style:normal;display:inline-block;font-size:1.15em;animation:mc-bob 1s ease-in-out infinite}' +
+      '.merecat-working .mc-spin{display:inline-block;width:.85em;height:.85em;border:2px solid var(--rule);border-top-color:var(--maroon);border-radius:50%;animation:mc-spin .8s linear infinite}' +
+      '.merecat-working .mc-secs{font-style:normal;font-variant-numeric:tabular-nums;color:var(--ink-soft);min-width:2.4em}' +
+      '@keyframes mc-spin{to{transform:rotate(360deg)}}' +
+      '@keyframes mc-bob{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-3px) rotate(6deg)}}' +
       '@media (max-width:620px){.merecat-msg{max-width:100%}.merecat-form{flex-direction:column;align-items:stretch}}';
     var st = el('style');
     st.id = 'mc-merecat-css';
@@ -4836,10 +4842,31 @@
       renderPending();
       ask(item.text);
     }
+    /* A live "working" indicator: a bobbing merecat, a spinner, and a seconds
+       counter that ticks up while the librarian thinks (deep reasoning can run a
+       minute or more), so the wait feels alive rather than stalled. */
+    function startWorking(body) {
+      body.textContent = '';
+      var wrap = el('div', 'merecat-working');
+      wrap.appendChild(el('span', 'mc-cat-work', '🐈'));
+      wrap.appendChild(el('span', 'mc-spin'));
+      var status = el('span', 'mc-status', 'merecat is working…');
+      var secs = el('span', 'mc-secs', '0s');
+      wrap.appendChild(status); wrap.appendChild(secs);
+      body.appendChild(wrap);
+      var start = Date.now();
+      var timer = setInterval(function () {
+        secs.textContent = Math.round((Date.now() - start) / 1000) + 's';
+      }, 250);
+      return {
+        setStatus: function (t) { status.textContent = t; },
+        stop: function () { if (timer) { clearInterval(timer); timer = null; } },
+      };
+    }
     function ask(text) {
       bubble('you').body.textContent = text;
       var cat = bubble('cat');
-      cat.body.appendChild(el('span', 'merecat-wait', '…the librarian is looking…'));
+      var working = startWorking(cat.body);
       var payload = { key: state.key, q: text, chat: chatId || 0 };
       var mode = modeSel.value || 'high';
       if (mode === 'instant') payload.instant = true; else payload.effort = mode;
@@ -4852,6 +4879,7 @@
         if (ct.indexOf('application/json') !== -1) {
           /* A refusal: rate limit, daily caps, resting, or a blocked key. */
           return res.json().then(function (d) {
+            working.stop();
             if (blockedOut(d)) return;
             cat.body.textContent = '';
             cat.body.appendChild(el('span', 'merecat-note',
@@ -4863,6 +4891,7 @@
         var dec = new TextDecoder();
         var pre = '', acc = '', sources = null;
         function finish() {
+          working.stop();
           acc = acc.replace(/\s+$/, '');
           cat.body.textContent = '';
           if (acc) {
@@ -4892,18 +4921,18 @@
                 pre = pre.slice(cut + 2);
                 if (head.queue != null && !head.sources) {
                   var waitMsg = head.queue > 0
-                    ? ('…' + head.queue + (head.queue === 1 ? ' question' : ' questions') +
-                       ' ahead of you in line for the local librarian, please wait…')
-                    : '…no one else is in line — the local librarian is answering you now…';
+                    ? (head.queue + (head.queue === 1 ? ' question' : ' questions') +
+                       ' ahead of you in line, please wait')
+                    : 'no one else is in line, answering you now';
                   var m = modeSel.value || 'high';
-                  if (m === 'high') waitMsg += ' On High reasoning this usually takes about a minute.';
-                  else if (m === 'xhigh') waitMsg += ' At Extra-high reasoning this can take a minute or two.';
-                  else if (m === 'max') waitMsg += ' At Max reasoning this can take a couple of minutes.';
-                  cat.body.textContent = '';
-                  cat.body.appendChild(el('span', 'merecat-wait', waitMsg));
+                  if (m === 'high') waitMsg += ' — on High this usually takes about a minute';
+                  else if (m === 'xhigh') waitMsg += ' — at Extra-high this can take a minute or two';
+                  else if (m === 'max') waitMsg += ' — at Max this can take a couple of minutes';
+                  working.setStatus(waitMsg);
                   continue;
                 }
                 sources = head.sources || [];
+                working.stop();
                 if (head.chat && head.chat !== chatId) {
                   chatId = head.chat;
                   if (history.replaceState) {
@@ -4924,6 +4953,7 @@
         }
         return pump();
       }).catch(function () {
+        working.stop();
         cat.body.textContent = '';
         cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
       }).then(function () {
