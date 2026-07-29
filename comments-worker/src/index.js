@@ -3055,22 +3055,23 @@ async function handleMerecatAsk(request, env, ctx) {
      the free budget itself (any Workers AI refusal reads as resting). */
   const admin = await isAdminHash(env, me);
   const instant = !!data.instant;
-  /* The daily caps guard the Cloudflare free budget. A question answered on
-     the owner's own machine spends nothing there and is never capped; an
-     instant (cloud) request is. So the caps apply only when the cloud answers. */
-  const usesCloud = cfg.backend !== 'local' || instant;
+  /* Caps, usage tallies, and the quota line are a strict-Cloudflare-mode
+     concept. In local mode the site does not rate-limit at all — an instant
+     request still reaches the cloud, but so few use it that metering it would
+     only confuse — and the reader is shown no quota line. */
+  const capsApply = cfg.backend === 'cloudflare';
   let youQ = 0;
   let todayQ = 0;
   try {
     const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
     todayQ = (g && g.q) || 0;
-    if (usesCloud && !admin && todayQ >= cfg.global_daily) {
+    if (capsApply && !admin && todayQ >= cfg.global_daily) {
       return json({ ok: false, resting: true, error: MERECAT_RESTING }, 429);
     }
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
       .bind(day, me).first();
     youQ = (u && u.q) || 0;
-    if (usesCloud && !admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
+    if (capsApply && !admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
       return json({
         ok: false, capped: true,
         error: 'You have used your ' + cfg.user_daily + ' questions for today. The counter resets at midnight UTC.',
@@ -3382,16 +3383,19 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
   }
   const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : inTokEst;
   const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(text.length / 4);
-  const stmts = [
-    env.LIBDB.prepare(
+  // Tally against the caps only in strict Cloudflare mode; local mode meters
+  // nothing (inTok/outTok/me/day go unused then).
+  const stmts = [];
+  if (cfg.backend === 'cloudflare') {
+    stmts.push(env.LIBDB.prepare(
       'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
       'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
-    ).bind(day, inTok, outTok),
-    env.LIBDB.prepare(
+    ).bind(day, inTok, outTok));
+    stmts.push(env.LIBDB.prepare(
       'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
       'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
-    ).bind(day, me),
-  ];
+    ).bind(day, me));
+  }
   const answer = text.trim();
   if (chatId && answer) {
     const now = Math.floor(Date.now() / 1000);
@@ -3401,7 +3405,7 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
     stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
       .bind(chatId, now));
   }
-  await env.LIBDB.batch(stmts);
+  if (stmts.length) await env.LIBDB.batch(stmts);
   if (chatId && answer) await merecatFold(env, cfg, chatId);
 }
 
@@ -3860,10 +3864,9 @@ async function merecatMentionReply(env, commentId) {
   const mentionEffort = cfg.mention_effort || 'high';
   let answer = '';
   let sources = [];
-  let answeredLocally = false;
   if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && mentionEffort !== 'instant') {
     const loc = await merecatLocalRead(env, { q: userMsg, context: frame, effort: mentionEffort });
-    if (loc && loc.answer) { answer = loc.answer; sources = loc.sources; answeredLocally = true; }
+    if (loc && loc.answer) { answer = loc.answer; sources = loc.sources; }
     else if (!cfg.failover) {
       return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
         'merecat is resting (the local librarian is offline). Mention me again shortly.');
@@ -3909,9 +3912,8 @@ async function merecatMentionReply(env, commentId) {
   answer = merecatFinishAnswer(answer, sources);
   const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
 
-  // A mention answered locally spends no Cloudflare budget, so it is not
-  // tallied against the caps; a cloud-answered mention is.
-  if (!answeredLocally) {
+  // Mentions are tallied against the caps only in strict Cloudflare mode.
+  if (cfg.backend === 'cloudflare') {
     const inTok = Math.ceil((frame.length + userMsg.length) / 4);
     const outTok = Math.ceil(answer.length / 4);
     await env.LIBDB.batch([
@@ -4073,6 +4075,7 @@ async function handleMerecatAbout(request, env) {
     ok: true,
     model: cfg.model, topk: cfg.topk,
     user_daily: cfg.user_daily, user_cap_on: cfg.user_cap_on, global_daily: cfg.global_daily,
+    backend: cfg.backend,
     persona: cfg.persona,
     chunks: list.reduce((n, w) => n + (w.chunks || 0), 0),
     works: list,
