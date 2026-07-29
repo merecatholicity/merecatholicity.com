@@ -313,6 +313,7 @@ class Handler(BaseHTTPRequestHandler):
             if not acquired:
                 emit(json.dumps({"sources": []}) + "\n\n")
                 emit("The local librarian is overloaded right now. Please try again shortly.")
+                emit("\x03")
                 return
             try:
                 messages, sources = build_messages(
@@ -320,6 +321,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 emit(json.dumps({"sources": []}) + "\n\n")
                 emit(f"(retrieval failed: {e})")
+                emit("\x03")
                 return
             emit(json.dumps({"sources": sources}) + "\n\n")
             try:
@@ -344,6 +346,10 @@ class Handler(BaseHTTPRequestHandler):
                     emit(note)
                 else:
                     emit("The librarian's engine faltered before the answer began. Please ask again.")
+            # The completion mark: ETX, a byte no body can carry. Its absence
+            # at the reader's end proves a truncated stream, and the client
+            # then fetches the stored whole instead of trusting half.
+            emit("\x03")
         except Exception as e:  # noqa: BLE001 — never crash the handler thread
             print(f"ask handler error: {e}", flush=True)
         finally:

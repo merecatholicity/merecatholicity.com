@@ -5070,6 +5070,12 @@
          an answer is still printing waits in the queue for the printing, and
          nothing ever cuts an answer off mid-flow. */
       var shown = 0, flowTimer = null, streamDone = false, flowResolve = null;
+      /* The completion mark: the server ends every whole answer with ETX
+         (\u0003, a byte no body can carry). A relay that dies with a CLEAN
+         close mid-answer looks exactly like a normal end — the only tell is
+         the missing mark, and on it the client shows what came and fetches
+         the stored whole instead of passing off half as finished. */
+      var complete = false;
       /* The stall watchdog. A proxied stream can die SILENTLY — no error, no
          close, reader.read() simply never resolves again — leaving the screen
          frozen mid-answer while the finished text lands on the thread anyway
@@ -5181,6 +5187,12 @@
         var dec = new TextDecoder();
         function finish() {
           working.stop();
+          if (!complete && acc) {
+            /* The stream closed without its mark: a truncated relay wearing a
+               clean ending. Show what arrived and recover the stored whole. */
+            if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+            return recover();
+          }
           acc = acc.replace(/\s+$/, '');
           if (!acc) {
             cat.body.textContent = '';
@@ -5252,6 +5264,8 @@
             } else {
               acc += chunk;
             }
+            var mk = acc.indexOf('\u0003');
+            if (mk !== -1) { complete = true; acc = acc.slice(0, mk); }
             if (acc) { working.stop(); ensureFlow(); }
             return pump();
           });
