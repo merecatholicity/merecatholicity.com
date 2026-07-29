@@ -7,8 +7,16 @@ writes them to a sqlite file (+ an FTS5 mirror for the BM25 legs) and embeds
 EVERY chunk with bge-m3 into a numpy array — the whole corpus, not the ~4,880
 that fit Cloudflare's free Vectorize budget.
 
-    python local/build_index.py            # full rebuild
+    python local/build_index.py            # full rebuild (~an hour: whole corpus)
     python local/build_index.py --limit 5  # first 5 works (smoke test)
+    python local/build_index.py --add russell-germanization   # one work, minutes
+
+--add is the incremental path for shelf additions and edits: it removes the
+named works' old rows (zeroing their vector slots so they can never rank),
+appends and embeds ONLY the new chunks, and swaps vectors.npy atomically so
+the running serve.py never reads a torn file. Restart merecat-local after,
+so the service remaps the new array. The full rebuild is only needed when
+the embed model or the chunker itself changes.
 """
 import argparse
 import json
@@ -30,10 +38,85 @@ def load_cfg():
         return yaml.safe_load(f)
 
 
+def add_works(cfg, lib, ingest, data, wids, batch):
+    """Incremental add/replace: named works only, against the live index.
+    Old rows go (their vector slots zeroed — a zero vector cosines to 0 and
+    never ranks), new chunks append with fresh rowids, only they are embedded,
+    and the array lands via an atomic rename. WAL keeps concurrent serve.py
+    readers consistent throughout; restart the service after to remap."""
+    db_path = os.path.join(data, "chunks.sqlite")
+    vec_path = os.path.join(data, "vectors.npy")
+    meta_path = os.path.join(data, "meta.json")
+    manifest = yaml.safe_load(open(os.path.join(lib, "works.yml")))["works"]
+    for wid in wids:
+        if wid not in manifest:
+            sys.exit(f"--add: {wid} is not in works.yml")
+    vecs = np.load(vec_path)          # full read; the mmap'd file stays intact
+    db = sqlite3.connect(db_path)
+    db.execute("PRAGMA journal_mode=WAL")
+
+    new_rows = []
+    for wid in wids:
+        entry = manifest[wid]
+        src = os.path.join(lib, entry["src"])
+        if not os.path.exists(src):
+            sys.exit(f"--add: source missing for {wid}: {src}")
+        chunks, bad = ingest.build(entry)
+        if bad:
+            sys.exit(f"--add: {wid} has {len(bad)} bad anchors")
+        old = [r[0] for r in db.execute(
+            "SELECT rowid FROM chunks WHERE work_id = ?", (wid,))]
+        for rid in old:
+            if rid - 1 < len(vecs):
+                vecs[rid - 1] = 0.0
+        db.execute("DELETE FROM chunks WHERE work_id = ?", (wid,))
+        for seq, c in enumerate(chunks):
+            db.execute(
+                "INSERT INTO chunks (cid,work_id,seq,tier,url,kind,heading,anchor,text,title) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (f"{wid}#{seq}", wid, seq, int(entry.get("tier", 5)),
+                 entry.get("url", ""), entry["kind"], c["heading"], c["anchor"],
+                 c["text"], entry["title"]))
+            new_rows.append(db.execute(
+                "SELECT last_insert_rowid()").fetchone()[0])
+        print(f"  {wid}: -{len(old)} +{len(chunks)} chunks", flush=True)
+    db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
+    db.commit()
+
+    top = db.execute("SELECT MAX(rowid) FROM chunks").fetchone()[0] or 0
+    if top > len(vecs):
+        vecs = np.vstack([vecs, np.zeros((top - len(vecs), vecs.shape[1]),
+                                         dtype=np.float32)])
+    rows = db.execute(
+        "SELECT rowid, heading, text FROM chunks WHERE rowid IN (%s) ORDER BY rowid"
+        % ",".join("?" * len(new_rows)), new_rows).fetchall() if new_rows else []
+    t0 = time.time()
+    for i in range(0, len(rows), batch):
+        part = rows[i:i + batch]
+        embs = llm.embed(cfg, [(h + ": " if h else "") + (t or "") for _, h, t in part])
+        arr = np.asarray(embs, dtype=np.float32)
+        norms = np.linalg.norm(arr, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        arr /= norms
+        for (rid, _, _), v in zip(part, arr):
+            vecs[rid - 1] = v
+        print(f"  embedded {min(i + batch, len(rows))}/{len(rows)}", flush=True)
+    tmp = vec_path + ".tmp.npy"
+    np.save(tmp, vecs)
+    os.replace(tmp, vec_path)
+    meta = json.load(open(meta_path))
+    meta["count"] = int(top)
+    json.dump(meta, open(meta_path, "w"), indent=1)
+    db.close()
+    print(f"added {len(rows)} chunks in {time.time()-t0:.0f}s -> {vec_path} "
+          f"(index now {top} rows). Restart merecat-local to serve it.", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="only the first N works")
     ap.add_argument("--batch", type=int, default=64, help="embed batch size")
+    ap.add_argument("--add", default="", help="comma list of work ids: incremental add/replace")
     args = ap.parse_args()
 
     cfg = load_cfg()
@@ -46,6 +129,11 @@ def main():
     db_path = os.path.join(data, "chunks.sqlite")
     vec_path = os.path.join(data, "vectors.npy")
     meta_path = os.path.join(data, "meta.json")
+
+    if args.add:
+        add_works(cfg, lib, ingest, data,
+                  [w.strip() for w in args.add.split(",") if w.strip()], args.batch)
+        return
 
     manifest = yaml.safe_load(open(os.path.join(lib, "works.yml")))["works"]
     items = list(manifest.items())
