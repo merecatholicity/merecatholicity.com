@@ -592,8 +592,12 @@ works:
       title: "Secret Societies and the Kingship of Christ, by Fr. Denis Fahey" }
   # The two smallest Faheys ceded their vectors (2026-07-28) so Russell could be
   # vectorized whole — they remain fully on the shelf via the keyword legs.
+  # Russell rides the DEEP shelf (band 5, owner's 2026-07-29 ruling, beside the
+  # Schaff History and the Second Temple sources) though his file lives in the
+  # worldview directory; he keeps his vectors, so semantic recall still finds
+  # him and his content, not a boost, carries Germanization questions.
   russell-germanization:
-    { src: private/worldview/russell-germanization.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true, chunk_words: 1000,
+    { src: private/worldview/russell-germanization.txt, url: "", tier: 5, kind: text, store: deep2, vectorize: true, chunk_words: 1000,
       title: "The Germanization of Early Medieval Christianity, by James C. Russell" }
   copleston-history-philosophy:
     { src: private/worldview/copleston-history-philosophy.txt, url: "", tier: 8, kind: text, store: deep2,
