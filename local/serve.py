@@ -18,6 +18,8 @@ import re
 import sqlite3
 import sys
 import threading
+import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
@@ -44,6 +46,38 @@ def shared_key():
 
 KEY = shared_key()
 VECTORS = np.load(VEC_PATH, mmap_mode="r")
+
+
+def store_answer(chat, answer, sources):
+    """Report the finished answer back to the worker so it lands on the thread
+    even when the reader has disconnected from the live stream. Server-to-server,
+    carrying the shared key; retried a few times so a transient blip is survived.
+    A no-op with no store_url configured or no chat id, and only ever called for
+    1-on-1 chats (mentions are stored worker-side from the fully-read stream)."""
+    url = str(CFG.get("store_url", "")).strip()
+    if not url or not chat or not answer:
+        return
+    pub = [{"n": s.get("n"), "title": s.get("title"),
+            "heading": s.get("heading"), "url": s.get("url")}
+           for s in (sources or [])]
+    body = json.dumps({"key": KEY, "chat": chat, "answer": answer,
+                       "sources": pub}).encode()
+    last = None
+    for i in range(4):
+        try:
+            req = urllib.request.Request(
+                url, data=body, method="POST",
+                headers={"Content-Type": "application/json",
+                         # Cloudflare's edge 403s the default Python-urllib UA
+                         # (ingest.py sets the same for the same reason).
+                         "User-Agent": "curl/8.14.1"})
+            with urllib.request.urlopen(req, timeout=25) as r:
+                r.read()
+            return
+        except Exception as e:  # noqa: BLE001 — best-effort, keep retrying
+            last = e
+            time.sleep(1.5 * (i + 1))
+    print(f"store_answer failed after retries: {last}", flush=True)
 
 # One GPU: a single generation at a time (_gpu), a bounded wait-queue behind
 # it (_pending, capped at QUEUE_CAP = 1 running + the rest waiting), and an
@@ -203,6 +237,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "error": "Bad request."})
         effort = str(data.get("effort", "high"))
         context = data.get("context") or ""
+        chat = data.get("chat")   # 1-on-1 thread id; present → store the answer
 
         # Queue admission: past the cap, refuse at once (with the count ahead)
         # so nothing piles onto the GPU; within it, we will wait our turn.
@@ -223,13 +258,25 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Connection", "close")
         self.end_headers()
 
+        # The reader (a browser, through the worker) may vanish mid-answer. When
+        # it does, writes fail — so emit() is best-effort and never raises: we
+        # keep generating to the end and store the answer by callback, so a
+        # thread is never left with a question and no reply.
+        client_gone = [False]
+
         def emit(s):
-            if not s:
+            if not s or client_gone[0]:
                 return
-            self.wfile.write(s if isinstance(s, bytes) else s.encode())
-            self.wfile.flush()
+            try:
+                self.wfile.write(s if isinstance(s, bytes) else s.encode())
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError, OSError):
+                client_gone[0] = True
 
         acquired = False
+        sources = []
+        parts = []
+        strip = ThinkStrip()
         try:
             # always tell the caller the line length (0 = no one ahead), so the
             # dialogue can show how busy the one GPU is, then block for it
@@ -247,19 +294,30 @@ class Handler(BaseHTTPRequestHandler):
                 emit(f"(retrieval failed: {e})")
                 return
             emit(json.dumps({"sources": sources}) + "\n\n")
-            strip = ThinkStrip()
             for kind, delta in llm.chat_stream(CFG, messages, think=True):
                 if kind != "answer":
                     continue
-                emit(strip.feed(delta))
-            emit(strip.flush())
-        except (BrokenPipeError, ConnectionResetError):
-            pass
+                vis = strip.feed(delta)
+                if vis:
+                    parts.append(vis)
+                    emit(vis)
+            tail = strip.flush()
+            if tail:
+                parts.append(tail)
+                emit(tail)
+        except Exception as e:  # noqa: BLE001 — never crash the handler thread
+            print(f"ask generation error: {e}", flush=True)
         finally:
             if acquired:
                 _gpu.release()
             with _plock:
                 _pending -= 1
+
+        # Store after releasing the GPU, so a slow callback never blocks the next
+        # in line. This is the path that outlives a reader disconnect.
+        answer = "".join(parts).strip()
+        if chat and answer:
+            store_answer(chat, answer, sources)
 
 
 def main():

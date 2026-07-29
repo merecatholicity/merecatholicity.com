@@ -32,3 +32,8 @@ data_dir: "data"                        # git-ignored derived state
 
 # the local HTTP service (serve.py) port; Tailscale Funnel points here
 serve_port: 8790
+
+# Where serve.py reports a finished 1-on-1 answer so it lands on the thread even
+# if the reader disconnected mid-stream. The worker's /store endpoint, keyed by
+# the shared local key (same secret as X-Merecat-Key). Empty disables callback.
+store_url: "https://merecatholicity.com/api/merecat/store"
