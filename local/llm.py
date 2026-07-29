@@ -69,7 +69,11 @@ def chat_stream(cfg, messages, think=False):
         "messages": messages,
         "stream": True,
         "think": bool(think),
-        "options": {"num_ctx": cfg.get("num_ctx", 16384)},
+        "options": {"num_ctx": cfg.get("num_ctx", 16384),
+                    # leave cores for the human at the desk: expert tensors
+                    # spill to CPU on this card, and unbounded threads peg
+                    # all twelve during prompt eval and generation
+                    "num_thread": int(cfg.get("num_thread", 8))},
     }
     try:
         resp = _post(cfg["ollama_url"] + "/api/chat", payload, timeout=1800)

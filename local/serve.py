@@ -188,8 +188,11 @@ def build_messages(q, history, summary, context, effort):
     block = ""
     for s in sources:
         loc = f" — {s['heading']}" if s["heading"] else ""
+        # slice each source like the cloud worker does (2,800 chars): twelve
+        # UNsliced chunks once built a ~14k-token prompt that left a deep
+        # question no room to think, and the answer came back empty
         block += (f"[{s['n']}] ({retrieve.TIER_LABEL.get(s['tier'],'shelf')}) "
-                  f"{s['title']}{loc}\n{s['text']}\n\n")
+                  f"{s['title']}{loc}\n{s['text'][:2800]}\n\n")
     sys_prompt = persona
     if summary:
         sys_prompt += "\n\nTHE CONVERSATION SO FAR, condensed:\n" + summary
@@ -346,6 +349,14 @@ class Handler(BaseHTTPRequestHandler):
                     emit(note)
                 else:
                     emit("The librarian's engine faltered before the answer began. Please ask again.")
+            if not parts:
+                # generation ended with no visible answer (reasoning ran the
+                # context dry, or the model yielded nothing): say so honestly,
+                # and store the saying so the thread is never left hanging
+                note = ("The librarian's reasoning ran past its room and no answer "
+                        "emerged. Ask again, or try a lower reasoning effort.")
+                parts.append(note)
+                emit(note)
             # The completion mark: ETX, a byte no body can carry. Its absence
             # at the reader's end proves a truncated stream, and the client
             # then fetches the stored whole instead of trusting half.
