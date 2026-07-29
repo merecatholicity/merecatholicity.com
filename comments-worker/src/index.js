@@ -3381,6 +3381,7 @@ async function merecatLocalRead(env, body) {
     if (head && head.sources) { sources = head.sources; break; }
     // else a {queue} notice — skip and keep reading
   }
+  rest = rest.replace(/\u0002/g, '');
   const mark = rest.indexOf('\u0003');
   if (mark !== -1) rest = rest.slice(0, mark);
   return { sources, answer: rest.trim() };
@@ -3598,6 +3599,12 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
     }
     const tail = strip(null);
     if (tail) { text += tail; await relay(tail); }
+    if (!text.trim()) {
+      // an empty generation says so aloud and into the thread, never silence
+      const note = 'The librarian could not draw an answer this time. Ask again shortly.';
+      text = note;
+      await relay(note);
+    }
     // the completion mark: its absence at the reader's end proves truncation
     await relay('\u0003');
   } catch (err) {
