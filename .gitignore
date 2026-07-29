@@ -227,6 +227,15 @@ resources/parochial7.pdf
 resources/parochial8.pdf
 librarian/.key
 __pycache__/
+# merecat-local: the offline GPU twin. Its CODE (local/*.py, merecat,
+# mc_config.yml, README) is tracked and reproducible; its DERIVED state is
+# not — the embedded corpus, the sqlite index, and the reranker GGUF are all
+# rebuilt from the shared sources by `python local/build_index.py`.
+local/data/
+local/models/
+# the live local prompt is private, maintained by the owner; the committed
+# persona.local.example.md is the starter a fresh clone copies to it
+local/persona.local.md
 # librarian/private is an INDEPENDENT nested git repo pushed to the
 # PRIVATE repo merecatholicity/private-shelf (never as a submodule: the
 # Pages Jekyll builder cannot fetch private submodules and the site

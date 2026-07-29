@@ -1,0 +1,31 @@
+# merecat-local dials. The offline GPU twin of the Cloudflare librarian.
+# No caps, no budget: the whole corpus is vectorized and the answers run long.
+# Edit and re-run ./merecat — build_index.py only needs re-running when the
+# sources or the embed model change.
+
+ollama_url: "http://127.0.0.1:11434"
+rerank_url: "http://127.0.0.1:8181"     # llama.cpp --reranking (CPU); optional
+
+chat_model: "qwen3:30b-a3b"             # user-chosen, quality-first (30B MoE)
+embed_model: "bge-m3"                    # 1024-dim, same as Cloudflare (parity)
+embed_dim: 1024
+num_ctx: 16384                          # generous context (CF had none to spare)
+
+# Retrieval. The whole corpus has vectors now, so the vector leg casts wide
+# and the reranker sorts it. topk up from the worker's 8 — no token budget.
+vector_topk: 48                         # candidates from the semantic leg
+pool_cap: 120                           # merged-pool ceiling before rerank
+topk: 12                                # chunks handed to the model
+rerank: true
+phrase_seats: 3                         # guaranteed verbatim-phrase/verse seats
+
+think: false                            # true = print the model's <think> span
+site: "https://merecatholicity.com/"
+
+# The LOCAL system prompt. Its own file, used verbatim, wholly separate from
+# the Cloudflare persona.md — edit it to change the local voice, no rebuild.
+persona_file: "persona.local.md"
+
+# Paths are resolved relative to this file's directory (local/).
+librarian: "../librarian"               # the shared sources + persona.md
+data_dir: "data"                        # git-ignored derived state

@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""merecat, run locally on the GPU. Same shelf, same weights and legs as the
+Cloudflare librarian, but the whole corpus is vectorized and the answer runs
+as long and as deep as the question deserves.
+
+    ./merecat "What makes a valid Eucharist, and who may rightly preside?"
+    echo "your question" | ./merecat
+    ./merecat --think --sources "How does Beale read the millennium?"
+
+Flags: --think (show the model's reasoning), --sources N (footer only, no
+answer), --k N (chunks to the model), --model NAME (override chat model).
+"""
+import argparse
+import os
+import re
+import sqlite3
+import sys
+
+import numpy as np
+import yaml
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import llm          # noqa: E402
+import retrieve     # noqa: E402
+
+
+def load_cfg():
+    with open(os.path.join(HERE, "mc_config.yml")) as f:
+        return yaml.safe_load(f)
+
+
+def load_persona(cfg):
+    """The local system prompt: the contents of persona.local.md, used as-is.
+    Wholly separate from the online bot's ../librarian/persona.md — edit that
+    file to change the local voice, no rebuild needed."""
+    path = os.path.join(HERE, cfg.get("persona_file", "persona.local.md"))
+    if not os.path.exists(path):
+        sys.exit(f"no local prompt at {path}\n"
+                 f"  copy the starter:  cp {path.rsplit('.md', 1)[0]}.example.md {path}")
+    return open(path).read().strip()
+
+
+def cite_renumber(text, sources):
+    """Renumber [n] markers to 1..k in order of first appearance and keep only
+    the sources actually cited (index.js merecatFinishAnswer)."""
+    first = {}
+    for m in re.finditer(r"\[(\d+)\]", text):
+        n = int(m.group(1))
+        if any(s["n"] == n for s in sources) and n not in first:
+            first[n] = m.start()
+    order = sorted(first, key=first.get)
+    if not order:
+        return text, []
+    renum = {n: i + 1 for i, n in enumerate(order)}
+    text = re.sub(r"\[(\d+)\]",
+                  lambda m: f"[{renum[int(m.group(1))]}]" if int(m.group(1)) in renum
+                  else m.group(0), text)
+    used = sorted(({"n": renum[s["n"]], "title": s["title"],
+                    "heading": s["heading"], "url": s["url"]}
+                   for s in sources if s["n"] in renum), key=lambda s: s["n"])
+    return text, used
+
+
+def main():
+    ap = argparse.ArgumentParser(add_help=True)
+    ap.add_argument("question", nargs="*", help="the question (or pipe via stdin)")
+    ap.add_argument("--think", action="store_true", help="show the model's reasoning")
+    ap.add_argument("--sources", action="store_true", help="print sources only, no answer")
+    ap.add_argument("--k", type=int, help="chunks handed to the model")
+    ap.add_argument("--model", help="override the chat model")
+    args = ap.parse_args()
+
+    q = " ".join(args.question).strip() or sys.stdin.read().strip()
+    if not q:
+        sys.exit("ask a question: ./merecat \"...\"  (or pipe it in)")
+
+    cfg = load_cfg()
+    if args.k:
+        cfg["topk"] = args.k
+    if args.model:
+        cfg["chat_model"] = args.model
+    think = args.think or bool(cfg.get("think"))
+
+    data = os.path.join(HERE, cfg["data_dir"])
+    db_path = os.path.join(data, "chunks.sqlite")
+    vec_path = os.path.join(data, "vectors.npy")
+    if not (os.path.exists(db_path) and os.path.exists(vec_path)):
+        sys.exit("no index yet — run:  python local/build_index.py")
+    db = sqlite3.connect(db_path)
+    vectors = np.load(vec_path, mmap_mode="r")
+
+    chunks = retrieve.retrieve(db, vectors, cfg, q)
+    sources = [{"n": i + 1, "title": c["title"], "heading": c["heading"],
+                "url": retrieve.source_url(cfg, c), "tier": c["tier"], "text": c["text"]}
+               for i, c in enumerate(chunks)]
+
+    if args.sources:
+        for s in sources:
+            loc = f" — {s['heading']}" if s["heading"] else ""
+            print(f"[{s['n']}] ({retrieve.TIER_LABEL.get(s['tier'],'shelf')}) "
+                  f"{s['title']}{loc}\n    {s['url'] or '(private, cite by title)'}")
+        return
+
+    # Prompt: the local persona (see load_persona) + the numbered SOURCES block.
+    persona = load_persona(cfg)
+    src_block = ""
+    for s in sources:
+        loc = f" — {s['heading']}" if s["heading"] else ""
+        src_block += (f"[{s['n']}] ({retrieve.TIER_LABEL.get(s['tier'],'shelf')}) "
+                      f"{s['title']}{loc}\n{s['text']}\n\n")
+    system = (persona +
+              "\n\nSOURCES (cite by bracketed number, like [3] — write the digit; "
+              "cite what carries weight; these are the only citable sources this "
+              "turn):\n\n" + (src_block or "(none)"))
+    messages = [{"role": "system", "content": system},
+                {"role": "user", "content": q}]
+
+    # Thinking streams live to stderr (visible progress on the slow part);
+    # the answer is buffered so its inline [n] markers and the footer can be
+    # renumbered together and never disagree.
+    answer, in_think, dots = "", False, 0
+    for kind, delta in llm.chat_stream(cfg, messages, think=think):
+        if kind == "think":
+            if think:
+                if not in_think:
+                    sys.stderr.write("\x1b[2m")
+                    in_think = True
+                sys.stderr.write(delta)
+            else:
+                dots += 1
+                if dots % 20 == 0:
+                    sys.stderr.write(".")
+            sys.stderr.flush()
+            continue
+        if in_think:
+            sys.stderr.write("\x1b[0m\n")
+            in_think = False
+        answer += delta
+    if dots:
+        sys.stderr.write("\n")
+
+    # Safety net: qwen3 reasons; with think off ollama omits the span, but
+    # strip any that leaks inline (mirrors the worker's merecatThinkStripper).
+    answer = re.sub(r"(?s)<think>.*?</think>", "", answer).strip()
+    text, used = cite_renumber(answer, sources)
+    print(text)
+    if used:
+        print("\nSources:")
+        for s in used:
+            loc = f" — {s['heading']}" if s["heading"] else ""
+            tail = f"  {s['url']}" if s["url"] else "  (private, cite by title)"
+            print(f"[{s['n']}] {s['title']}{loc}{tail}")
+
+
+if __name__ == "__main__":
+    main()
