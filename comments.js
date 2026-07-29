@@ -5087,46 +5087,97 @@
          and rendering it in place. The reader's manual refresh, automated. */
       var lastByteAt = Date.now(), stalled = false, watchTimer = null;
       var ctl = window.AbortController ? new AbortController() : null;
+      /* THE RECONCILER. The standing guarantee: from the moment a question is
+         sent until its answer is PAINTED, the page keeps comparing itself to
+         the server's stored truth and heals any gap — a zombie stream, a reap
+         at zero tokens, a throttled background tab, even a view re-render that
+         detached the ask's own nodes mid-flight. The reader never refreshes. */
+      var painted = false;
+      var askStartSec = Math.floor(Date.now() / 1000);
+      var reconTimer = null, visHandler = null;
+      function paintStored(m) {
+        /* Render a stored assistant row into the LIVE document. If the ask's
+           own bubble was detached by a re-render, find the current log and
+           append a fresh one there — the answer lands where eyes are. */
+        var srcs = [];
+        try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
+        var rr = citeRenumber(m.body, srcs);
+        var host = cat && cat.body && document.contains(cat.body) ? cat.body : null;
+        if (!host) {
+          var liveLog = document.querySelector('.merecat-log');
+          if (!liveLog) return false;
+          var mm = el('div', 'merecat-msg cat');
+          mm.appendChild(el('div', 'merecat-who', '🐈 merecat'));
+          host = el('div', 'merecat-body');
+          mm.appendChild(host);
+          liveLog.appendChild(mm);
+          cat = { msg: mm, body: host };
+        }
+        working.stop();
+        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        host.textContent = '';
+        fillBody(host, rr.text);
+        srcFooter(host, rr.sources);
+        if (m.id) attachForward(cat.msg, m.id);
+        cat.msg.scrollIntoView({ block: 'nearest' });
+        painted = true;
+        if (flowResolve) flowResolve();
+        return true;
+      }
+      function storedMatch(d) {
+        if (!d.ok || !d.msgs || !d.msgs.length) return null;
+        var m = d.msgs[d.msgs.length - 1];
+        if (m.role !== 'assistant') return null;
+        var prev = d.msgs.length > 1 ? d.msgs[d.msgs.length - 2] : null;
+        if (prev && prev.role === 'user' && prev.body.trim() === text.trim()) return m;
+        /* fallback: an assistant row born after this ask began is ours even
+           when the stored question text differs (server-side trims). */
+        if (m.created_at && m.created_at >= askStartSec - 5) return m;
+        return null;
+      }
+      function reconcile() {
+        if (painted || !chatId || !state.key) return Promise.resolve(false);
+        /* A LIVING stream proves itself every ≤15s (tokens or keepalives), so
+           25s of silence is a true death signal — the reconciler never races
+           or interrupts a healthy reveal, it acts only on the proven-dead. */
+        if (!stalled && Date.now() - lastByteAt < 25000) return Promise.resolve(false);
+        return fetchRetry(MERECAT_API + '/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: chatId }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+          var m = storedMatch(d);
+          if (!m) return false;
+          var ok = paintStored(m);
+          /* the page is whole; cut any zombie stream loose so the ask settles */
+          if (ok && ctl) { try { ctl.abort(); } catch (e) {} }
+          return ok;
+        }).catch(function () { return false; });
+      }
       function recover() {
+        if (painted) return;
         working.stop();
         if (!chatId) {
           cat.body.textContent = '';
           cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
           return;
         }
-        cat.body.textContent = acc;
-        var note = el('p', 'merecat-note',
-          '— the connection went quiet. Waiting for the finished answer to arrive…');
-        cat.body.appendChild(note);
+        if (document.contains(cat.body)) {
+          cat.body.textContent = acc;
+          cat.body.appendChild(el('p', 'merecat-note',
+            '— the connection went quiet. Waiting for the finished answer to arrive…'));
+        }
         var tries = 0;
         return new Promise(function (resolve) {
           function poll() {
+            if (painted) { resolve(); return; }
             tries += 1;
-            fetchRetry(MERECAT_API + '/chat', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, id: chatId }),
-            }, [2000]).then(function (r) { return r.json(); }).then(function (d) {
-              var n = d.ok && d.msgs ? d.msgs.length : 0;
-              var m = n ? d.msgs[n - 1] : null;
-              var prev = n > 1 ? d.msgs[n - 2] : null;
-              if (m && m.role === 'assistant' && prev && prev.role === 'user' &&
-                  prev.body.trim() === text.trim()) {
-                var srcs = [];
-                try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
-                var rr = citeRenumber(m.body, srcs);
-                cat.body.textContent = '';
-                fillBody(cat.body, rr.text);
-                srcFooter(cat.body, rr.sources);
-                if (m.id) attachForward(cat.msg, m.id);
-                cat.msg.scrollIntoView({ block: 'nearest' });
-                resolve();
-                return;
+            reconcile().then(function (ok) {
+              if (ok || painted) { resolve(); return; }
+              if (tries < 30) { setTimeout(poll, 12000); return; }
+              if (document.contains(cat.body)) {
+                cat.body.appendChild(el('p', 'merecat-note',
+                  '— the answer is still being written. It will be saved to this conversation; reopen it in a little while to read it.'));
               }
-              if (tries < 30) { setTimeout(poll, 12000); return; }
-              note.textContent = '— the answer is still being written. It will be saved to this conversation; reopen it in a little while to read it.';
-              resolve();
-            }).catch(function () {
-              if (tries < 30) { setTimeout(poll, 12000); return; }
               resolve();
             });
           }
@@ -5142,6 +5193,12 @@
       }
       function flowTick() {
         try {
+          if (painted) {
+            clearInterval(flowTimer);
+            flowTimer = null;
+            if (flowResolve) flowResolve();
+            return;
+          }
           var backlog = acc.length - shown;
           if (backlog > 0) {
             shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
@@ -5165,6 +5222,12 @@
           if (ctl) { try { ctl.abort(); } catch (e) {} }
         }
       }, 5000);
+      /* the standing listeners: a slow sweep the whole time an answer is owed,
+         and an instant pass the moment a backgrounded tab comes back (browser
+         timer-throttling means the sweep may not have run while hidden) */
+      reconTimer = setInterval(function () { reconcile(); }, 20000);
+      visHandler = function () { if (!document.hidden) reconcile(); };
+      document.addEventListener('visibilitychange', visHandler);
       fetch(MERECAT_API + '/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5187,6 +5250,7 @@
         var dec = new TextDecoder();
         function finish() {
           working.stop();
+          if (painted) return;
           if (!complete) {
             /* The stream closed without its mark: a truncated relay wearing a
                clean ending — with text, or with NONE (a reap during the silent
@@ -5209,11 +5273,14 @@
           ensureFlow();
           return new Promise(function (resolve) {
             flowResolve = function () {
-              var rr = citeRenumber(acc, sources);
-              cat.body.textContent = '';
-              fillBody(cat.body, rr.text);
-              srcFooter(cat.body, rr.sources);
-              attachForward(cat.msg, 'last');
+              if (!painted && document.contains(cat.body)) {
+                var rr = citeRenumber(acc, sources);
+                cat.body.textContent = '';
+                fillBody(cat.body, rr.text);
+                srcFooter(cat.body, rr.sources);
+                attachForward(cat.msg, 'last');
+                painted = true;
+              }
               resolve();
             };
           });
@@ -5278,6 +5345,7 @@
       }).catch(function () {
         working.stop();
         if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        if (painted) return;   /* the reconciler already made the page whole */
         if (stalled) {
           /* The watchdog cut a silently dead stream: fetch the finished
              answer from the thread and render it in place. */
@@ -5297,6 +5365,8 @@
         }
       }).then(function () {
         if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
+        if (reconTimer) { clearInterval(reconTimer); reconTimer = null; }
+        if (visHandler) { document.removeEventListener('visibilitychange', visHandler); visHandler = null; }
         busy = false;
         /* The answer is fully rendered. After a short beat so it settles, send
            the next stacked question; otherwise return focus to the box. */
