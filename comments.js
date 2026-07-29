@@ -4664,6 +4664,10 @@
     function renderQuota(u) {
       if (!u) return;
       if (u.backend) modeRow.hidden = (u.backend !== 'local');
+      /* Caps and the community quota belong to strict Cloudflare mode. In local
+         mode there is no rate limiting, so the quota line is hidden entirely. */
+      if (u.backend === 'local') { quota.hidden = true; quota.textContent = ''; return; }
+      quota.hidden = false;
       quota.textContent = '';
       if (u.cap_on) {
         quota.appendChild(document.createTextNode('You have used '));
@@ -5101,6 +5105,13 @@
       });
       body.appendChild(save);
       body.appendChild(note);
+      /* Caps are a strict-Cloudflare-mode concept: when Local is the active
+         backend they do not apply, so the whole setting grays out. */
+      if (d.backend === 'local') {
+        chk.disabled = true; num.disabled = true; save.disabled = true;
+        row.style.opacity = '0.5';
+        note.textContent = 'Local mode is active — these Cloudflare caps and the community quota do not apply. They govern strict Cloudflare mode only.';
+      }
       body.appendChild(el('p', 'comments-status',
         'Note: caps changed here also govern @merecat mentions in threads. The librarian’s open-book panel updates itself to match.'));
 
