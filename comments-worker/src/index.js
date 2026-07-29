@@ -19,7 +19,14 @@ const PAGES = [
    titled comment with no parent, a reply is a comment whose parent is the
    topic. Everything else, identity, screening, limits, moderation, is the
    one pipeline all comments share. Keys must match CATS in comments.js. */
-const BOARD_CATS = ['pub', 'news', 'offtopic', 'theology', 'philosophy', 'history', 'indoeuropean', 'rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot'];
+const BOARD_CATS = ['pub', 'news', 'offtopic', 'theology', 'philosophy', 'history', 'indoeuropean', 'rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot', 'adminsonly'];
+/* The back room: a category only admins can see, read, or write. Every public
+   read excludes it outright (the board index, listings, topic views, search,
+   author histories, post counts, feeds); admins reach it through the keyed
+   POST /board/admin. Writes into it demand an admin identity, notifications
+   from it reach admins alone, and a topic moved INTO it sends no courtesy DM
+   (a retraction from public view, not a move the poster can follow). */
+const ADMIN_CAT = 'board:adminsonly';
 
 function boardKey(raw) {
   const m = /^board:([a-z]+)$/.exec(String(raw || ''));
@@ -485,6 +492,12 @@ async function handlePost(request, env, ctx) {
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
 
+  /* The back room: writing anywhere in it — a topic or a reply — needs an
+     admin identity. The public can neither see it nor post into it. */
+  if (page === ADMIN_CAT && !(await isAdminHash(env, authorHash))) {
+    return json({ ok: false, error: 'That room is for admins only.' }, 403);
+  }
+
   /* A topic's title is screened with its body, one judgment for the pair. */
   const { status, verdict } = await screen(env, title ? title + '\n\n' + body : body,
     await isTrusted(env, authorHash));
@@ -517,7 +530,7 @@ async function handlePost(request, env, ctx) {
      Deferred so a wide fan-out never delays the poster's response. */
   if (boardKey(page)) {
     ctx.waitUntil(deliverNotifications(env, {
-      authorHash, status,
+      authorHash, status, page,
       topicId: parentId || inserted.id,
       commentId: inserted.id,
       isReply: parentId != null,
@@ -587,7 +600,17 @@ async function deliverNotifications(env, o) {
         if (mentions.length >= 10) break;
       }
     }
-    for (const h of mentions) stmts.push(env.DB.prepare(NOTIF).bind(h, 'mention', o.topicId, o.commentId, o.authorHash, now));
+    /* A post in the back room tells admins alone — a mentioned or watching
+       outsider must learn nothing, not even that the thread exists. */
+    let admSet = null;
+    if (o.page === ADMIN_CAT) {
+      const admRows = await env.DB.prepare('SELECT hash FROM admins').all();
+      admSet = new Set((admRows.results || []).map((r) => r.hash));
+    }
+    for (const h of mentions) {
+      if (admSet && !admSet.has(h)) continue;
+      stmts.push(env.DB.prepare(NOTIF).bind(h, 'mention', o.topicId, o.commentId, o.authorHash, now));
+    }
 
     if (o.isReply) {
       const skip = new Set(mentions);
@@ -598,6 +621,7 @@ async function deliverNotifications(env, o) {
       const rows = await env.DB.prepare('SELECT hash FROM watches WHERE topic_id = ?1').bind(o.topicId).all();
       for (const r of (rows.results || [])) recips.add(r.hash);
       for (const h of recips) {
+        if (admSet && !admSet.has(h)) continue;
         if (h && !skip.has(h)) stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now));
       }
     }
@@ -655,7 +679,9 @@ async function handleFeed(request, env, url) {
     topicRow = await env.DB.prepare(
       "SELECT id, page, title FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
     ).bind(topicParam).first();
-    if (!topicRow || !boardKey(topicRow.page)) return new Response('No such topic.', { status: 404 });
+    if (!topicRow || !boardKey(topicRow.page) || topicRow.page === ADMIN_CAT) {
+      return new Response('No such topic.', { status: 404 });
+    }
     page = topicRow.page;
     const rows = await env.DB.prepare(
       "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
@@ -665,7 +691,7 @@ async function handleFeed(request, env, url) {
     results = rows.results;
   } else {
     page = cat ? boardKey('board:' + cat) : normalizePage(url.searchParams.get('page'));
-    if (!page) return new Response('Unknown page.', { status: 400 });
+    if (!page || page === ADMIN_CAT) return new Response('Unknown page.', { status: 400 });
     const rows = await env.DB.prepare(
       "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
       "LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id DESC LIMIT 50"
@@ -868,7 +894,7 @@ async function handleBoardIndex(request, env, url) {
     '         ROW_NUMBER() OVER (PARTITION BY c.page ORDER BY c.id DESC) AS rn ' +
     '  FROM comments c LEFT JOIN comments p ON p.id = c.parent_id ' +
     '         LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
-    "  WHERE c.page LIKE 'board:%' AND c.status = 'live' " +
+    "  WHERE c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
     "    AND (c.parent_id IS NULL OR p.status = 'live')" +
     ') WHERE rn = 1'
   ).all();
@@ -893,7 +919,12 @@ async function handleBoardCat(request, env, url) {
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const page = boardKey('board:' + url.searchParams.get('cat'));
   if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
+  if (page === ADMIN_CAT) return json({ ok: false, admin_only: true, error: 'That room is for admins only.' }, 403, cacheHeader(url));
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
+  return json(await boardCatPayload(env, page, p), 200, cacheHeader(url));
+}
+
+async function boardCatPayload(env, page, p) {
   const total = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM comments WHERE page = ?1 AND parent_id IS NULL AND status = 'live'"
   ).bind(page).first();
@@ -905,7 +936,7 @@ async function handleBoardCat(request, env, url) {
     "WHERE c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live' " +
     'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?2 OFFSET ?3'
   ).bind(page, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
-  return json({ ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE }, 200, cacheHeader(url));
+  return { ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE };
 }
 
 /* A member's own recent forum posts, newest first — the "recent posts" list on a
@@ -921,7 +952,7 @@ async function handleAuthorPosts(request, env, url) {
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
   const per = 20;
   const where =
-    "WHERE c.author_hash = ?1 AND c.page LIKE 'board:%' AND c.status = 'live' " +
+    "WHERE c.author_hash = ?1 AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
     "AND (c.parent_id IS NULL OR t.status = 'live')";
   const total = await env.DB.prepare(
     'SELECT COUNT(*) AS n FROM comments c LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' + where
@@ -951,7 +982,7 @@ async function postCountsFor(env, hashes) {
   const rows = await env.DB.prepare(
     'SELECT c.author_hash AS h, COUNT(*) AS n FROM comments c ' +
     'LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' +
-    'WHERE c.author_hash IN (' + ph + ") AND c.page LIKE 'board:%' AND c.status = 'live' " +
+    'WHERE c.author_hash IN (' + ph + ") AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
     "AND (c.parent_id IS NULL OR t.status = 'live') GROUP BY c.author_hash"
   ).bind(...uniq).all();
   uniq.forEach((h) => { out[h] = 0; });
@@ -995,6 +1026,7 @@ async function handleSearch(request, env, url) {
   if (!match) return json(empty, 200, cacheHeader(url));
 
   const catPage = boardKey('board:' + (url.searchParams.get('cat') || ''));
+  if (catPage === ADMIN_CAT) return json(empty, 200, cacheHeader(url));
   const authorRaw = String(url.searchParams.get('author') || '');
   const author = /^[0-9a-f]{64}$/.test(authorRaw) ? authorRaw : null;
   const order = url.searchParams.get('sort') === 'new' ? 'c.id DESC' : 'bm25(comments_fts)';
@@ -1004,7 +1036,7 @@ async function handleSearch(request, env, url) {
   if (catPage) { binds.push(catPage); filters.push('AND c.page = ?' + binds.length); }
   if (author) { binds.push(author); filters.push('AND c.author_hash = ?' + binds.length); }
   const where =
-    "WHERE comments_fts MATCH ?1 AND c.page LIKE 'board:%' AND c.status = 'live' " +
+    "WHERE comments_fts MATCH ?1 AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
     "AND (c.parent_id IS NULL OR pt.status = 'live') " + filters.join(' ');
 
   try {
@@ -1046,11 +1078,17 @@ async function handleTopicView(request, env, url) {
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
   ).bind(id).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  if (topic.page === ADMIN_CAT) return json({ ok: false, admin_only: true, error: 'That topic is for admins only.' }, 403, cacheHeader(url));
+  return json(await topicViewPayload(env, topic, url.searchParams.get('p'), url.searchParams.get('find')), 200, cacheHeader(url));
+}
+
+async function topicViewPayload(env, topic, pRaw, findRaw) {
+  const id = topic.id;
   /* Twenty replies a page. A permalink arrives with find=<reply id> and
      one indexed count places it on the right page. */
-  let p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
-  const find = Number(url.searchParams.get('find'));
-  if (Number.isInteger(find) && find > 0 && !url.searchParams.get('p')) {
+  let p = Math.min(1000, Math.max(1, Math.floor(Number(pRaw) || 1)));
+  const find = Number(findRaw);
+  if (Number.isInteger(find) && find > 0 && !pRaw) {
     const pos = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM comments WHERE parent_id = ?1 AND status = 'live' AND id < ?2"
     ).bind(id, find).first();
@@ -1064,7 +1102,7 @@ async function handleTopicView(request, env, url) {
   /* Each post carries its author's total forum-post count, for the rank the
      client shows under the name. One grouped query for every author on the page. */
   const counts = await postCountsFor(env, [topic.author_hash].concat((replies.results || []).map((r) => r.author_hash)));
-  return json({
+  return {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
@@ -1073,7 +1111,35 @@ async function handleTopicView(request, env, url) {
     total: topic.replies || 0,
     page: p,
     per: TOPICS_PER_PAGE,
-  }, 200, cacheHeader(url));
+  };
+}
+
+/* The admins' door to the back room: the same listing and topic payloads the
+   public GETs serve, behind the admin key and never cached. Strict: it serves
+   the admins-only category and its topics alone — everything public stays on
+   the public path. */
+async function handleBoardAdmin(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await isAdminHash(env, await sha256hex(String(data.key || ''))))) {
+    return json({ ok: false, error: 'No.' }, 403);
+  }
+  if (data.id != null) {
+    const id = Number(data.id);
+    if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+    const topic = await env.DB.prepare(
+      "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, c.replies " +
+      "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+      "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
+    ).bind(id).first();
+    if (!topic || topic.page !== ADMIN_CAT) return json({ ok: false, error: 'No such topic.' }, 404);
+    return json(await topicViewPayload(env, topic, data.p, data.find), 200);
+  }
+  const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  return json(await boardCatPayload(env, ADMIN_CAT, p), 200);
 }
 
 /* Admin-only topic moderation from the page: lock and unlock close and
@@ -1143,7 +1209,7 @@ async function handleMove(request, env) {
      The display name is admin-supplied (untrusted text, so scrubbed and capped);
      the move itself keyed on the validated category. */
   let notified = false;
-  if (topic.author_hash && topic.author_hash !== adminHash) {
+  if (topic.author_hash && topic.author_hash !== adminHash && newPage !== ADMIN_CAT) {
     const name = String(data.catName || newPage.slice(6)).replace(CONTROL_RE, '').replace(/\s+/g, ' ').trim().slice(0, 60);
     const link = SITE + '/community.html?topic=' + id;
     const body = ('Your topic "' + topic.title + '" was moved to ' + name + '. You can read it here: ' + link).slice(0, MAX_BODY);
@@ -1704,10 +1770,12 @@ async function handleBoardUnread(request, env) {
     floor = Math.floor(Date.now() / 1000);
     try { await env.DB.prepare('INSERT OR IGNORE INTO thread_reads (hash, topic_id, read_at) VALUES (?1, 0, ?2)').bind(me, floor).run(); } catch (e) {}
   }
+  const adm = await isAdminHash(env, me);
   const rows = await env.DB.prepare(
     'SELECT c.page AS page, COUNT(*) AS n FROM comments c ' +
     'LEFT JOIN thread_reads tr ON tr.hash = ?1 AND tr.topic_id = c.id ' +
     "WHERE c.parent_id IS NULL AND c.status = 'live' AND c.page LIKE 'board:%' " +
+    (adm ? '' : "AND c.page != 'board:adminsonly' ") +
     'AND COALESCE(c.last_at, c.created_at) > COALESCE(tr.read_at, ?2) GROUP BY c.page'
   ).bind(me, floor).all();
   const byCat = {};
@@ -1729,6 +1797,7 @@ async function handleBoardReads(request, env) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
+  if (catPage === ADMIN_CAT && !(await isAdminHash(env, me))) return json({ ok: true, unread: [] }, 200);
   const floor = (await boardFloor(env, me)) || 0;
   const rows = await env.DB.prepare(
     'SELECT c.id FROM comments c LEFT JOIN thread_reads tr ON tr.hash = ?1 AND tr.topic_id = c.id ' +
@@ -2454,7 +2523,8 @@ async function handleReport(request, env) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const target = await env.DB.prepare("SELECT 1 AS ok FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+  const target = await env.DB.prepare("SELECT page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+  if (target && target.page === ADMIN_CAT) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!target) return json({ ok: false, error: 'No such post.' }, 404);
   let reason = String(data.reason || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   if (CONTROL_RE.test(reason)) reason = '';
@@ -4171,6 +4241,9 @@ async function handleMerecatForward(request, env) {
     "SELECT id, page, locked, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
   ).bind(topicId).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  if (topic.page === ADMIN_CAT && !(await isAdminHash(env, me))) {
+    return json({ ok: false, error: 'That topic is for admins only.' }, 403);
+  }
   if (topic.locked) return json({ ok: false, error: 'That topic is locked.' }, 403);
 
   const q = await env.LIBDB.prepare(
@@ -4386,6 +4459,7 @@ export default {
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
       if (path === '/api/comments/board/author' && request.method === 'GET') return await handleAuthorPosts(request, env, url);
       if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
+      if (path === '/api/comments/board/admin' && request.method === 'POST') return await handleBoardAdmin(request, env);
       if (path === '/api/comments/search' && request.method === 'GET') return await handleSearch(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'GET') return await handleProfileGet(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'POST') return await handleProfileSave(request, env);

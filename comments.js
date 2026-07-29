@@ -515,6 +515,9 @@
     ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
     ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Reformed Baptists are welcome to coexist here too.'],
     ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
+    /* The back room. The server refuses everyone but admins on every path;
+       hiding it here is courtesy, not the lock. */
+    ['adminsonly', 'Admins only', 'The back room, for admin talk and for topics withdrawn from public view but preserved. Visible to admins alone.'],
   ];
 
   /* A description with an optional trailing link, built as nodes so the
@@ -2462,6 +2465,8 @@
        page that gathers the audit, the IP bans, and the admin roster. */
     var auditSlot = el('p', 'board-audit-link');
     function ensureAuditLink() {
+      var ar = section.querySelector('.board-cat-admin');
+      if (ar) ar.hidden = !isAdmin();
       auditSlot.textContent = '';
       if (!isAdmin()) return;
       var a = el('a', 'identity-action', 'Administrative options');
@@ -2486,6 +2491,14 @@
       row.appendChild(left);
       stats[cat[0]] = el('div', 'board-stats', '—');
       row.appendChild(stats[cat[0]]);
+      if (cat[0] === 'adminsonly') {
+        row.className = 'board-cat board-cat-admin';
+        row.hidden = !isAdmin();
+        row.style.background = '#f4efe2';
+        row.style.border = '1px solid #cdbd93';
+        row.style.borderRadius = '4px';
+        stats[cat[0]].textContent = '🔒 admins alone';
+      }
       wrap.appendChild(row);
     });
     section.appendChild(wrap);
@@ -2626,6 +2639,7 @@
     rss.title = 'Follow this category with a feed reader';
     head.appendChild(document.createTextNode(' '));
     head.appendChild(rss);
+    if (key === 'adminsonly') rss.hidden = true;
     section.appendChild(catDescNode('p', cat));
     var list = el('div', 'board-topics');
     list.textContent = 'Loading topics...';
@@ -2656,10 +2670,22 @@
     attachMentions(section.querySelector('.comment-form .comment-text'));
     attachDraft(section.querySelector('.comment-form .comment-text'), 'topic:' + key,
       section.querySelector('.comment-form .board-title'));
-    fetchRetry(API + '/board/cat?cat=' + key + '&p=' + pageNum + freshParam('&'), freshOpts(), [1000, 3000])
+    (key === 'adminsonly'
+      ? fetchRetry(API + '/board/admin', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key || '', p: pageNum }),
+        }, [1000, 3000])
+      : fetchRetry(API + '/board/cat?cat=' + key + '&p=' + pageNum + freshParam('&'), freshOpts(), [1000, 3000]))
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d.ok) throw new Error(d.error || 'failed');
+        if (!d.ok) {
+          if (key === 'adminsonly') {
+            list.textContent = '';
+            list.appendChild(el('p', 'comments-status', 'This room is for admins alone.'));
+            return;
+          }
+          throw new Error(d.error || 'failed');
+        }
         list.textContent = '';
         if (!d.topics.length) {
           list.appendChild(el('p', 'comments-status', 'No topics yet. Yours can be the first.'));
@@ -2736,6 +2762,23 @@
     fetchRetry(API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
+        /* An admins-only topic refuses the public read; retry through the
+           keyed door and let the server judge the key. */
+        if (d && d.admin_only && state.key) {
+          return fetchRetry(API + '/board/admin', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, id: id, p: pNum || undefined,
+              find: hashMatch ? hashMatch[1] : undefined }),
+          }, [1000, 3000]).then(function (r) { return r.json(); });
+        }
+        return d;
+      })
+      .then(function (d) {
+        if (!d.ok && d.admin_only) {
+          crumb([['Catholicity Board', 'community.html'], ['Topic']]);
+          section.appendChild(el('p', 'comments-status', 'This topic is for admins alone.'));
+          return;
+        }
         if (!d.ok) throw new Error(d.error || 'failed');
         var cat = catByKey(d.cat);
         state.anonAllowed = !!d.anon;
@@ -2760,6 +2803,7 @@
         var topicRss = el('a', 'comments-rss', 'RSS');
         topicRss.href = API + '/feed?topic=' + d.topic.id;
         topicRss.title = 'Follow this topic with a feed reader';
+        if (d.cat === 'adminsonly') topicRss.hidden = true;
         headEl.appendChild(topicRss);
         section.appendChild(headEl);
         if (state.key) {
@@ -4369,6 +4413,7 @@
     var allOpt = el('option', null, 'All categories'); allOpt.value = '';
     catSel.appendChild(allOpt);
     CATS.forEach(function (c) {
+      if (c[0] === 'adminsonly') return;
       var o = el('option', null, c[1]); o.value = c[0];
       if (c[0] === cat0) o.selected = true;
       catSel.appendChild(o);
