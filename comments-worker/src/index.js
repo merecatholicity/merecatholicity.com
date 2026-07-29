@@ -2591,7 +2591,7 @@ const MERECAT_DEFAULTS = {
   user_cap_on: 0,     // per-member daily cap: 0 = off (community budget is the only wall)
   user_daily: 10,     // questions per member per UTC day, when the cap is on
   global_daily: 150,  // questions across the community per UTC day
-  topk: 8,            // chunks handed to the model
+  topk: 10,           // chunks handed to the model (the 4-8-citation rule needs headroom)
   max_tokens: 1100,
 };
 const MERECAT_SITE = 'https://merecatholicity.com/';
@@ -3171,7 +3171,7 @@ async function handleMerecatAsk(request, env, ctx) {
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
     (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
-    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite what carries weight — a few for a simple question, more when the question truly spans the shelf; these are the only citable sources this turn' +
+    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources this turn' +
     (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
     '):\n\n' + (srcBlock || '(none)') + '/no_think';
   const messages = [{ role: 'system', content: sys }];
@@ -4056,7 +4056,7 @@ async function merecatMentionReply(env, commentId) {
     });
     const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
       '\n\n' + frame +
-      '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite what carries weight — a few for a simple question, more when the question truly spans the shelf; these are the only citable sources' +
+      '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources' +
       (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
       '):\n\n' + (srcBlock || '(none)') + '/no_think';
     const messages = [
