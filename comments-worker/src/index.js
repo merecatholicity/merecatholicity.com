@@ -1767,6 +1767,9 @@ async function handleBoardUnread(request, env) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
+  /* A keyed board visit registers the member too (see the ask-side note). */
+  await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
+    .bind(me, Math.floor(Date.now() / 1000)).run();
   let floor = await boardFloor(env, me);
   if (floor === null) {
     floor = Math.floor(Date.now() / 1000);
@@ -3127,6 +3130,13 @@ async function handleMerecatAsk(request, env, ctx) {
      the free budget itself (any Workers AI refusal reads as resting). */
   const admin = await isAdminHash(env, me);
   const instant = !!data.instant;
+  /* Using the librarian registers the member: the directory is built from
+     profiles + comment authors, and an identity that only ever asked merecat
+     was invisible to the member list until this row existed (seventeen were,
+     when it was caught). INSERT OR IGNORE: a saved profile is never touched. */
+  await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
+    .bind(me, Math.floor(Date.now() / 1000)).run();
+
   /* Caps, usage tallies, and the quota line are a strict-Cloudflare-mode
      concept. In local mode the site does not rate-limit at all — an instant
      request still reaches the cloud, but so few use it that metering it would
