@@ -4949,8 +4949,12 @@
                   working.setStatus(waitMsg);
                   continue;
                 }
+                /* Sources in hand — but on the local path the model now THINKS
+                   for up to a minute before the first token, so the counter
+                   must keep ticking: stopping here froze it at ~6s while the
+                   spinner ran on. It stops when the first answer text lands. */
                 sources = head.sources || [];
-                working.stop();
+                working.setStatus('sources gathered, the librarian is reasoning…');
                 if (head.chat && head.chat !== chatId) {
                   chatId = head.chat;
                   if (history.replaceState) {
@@ -4965,7 +4969,7 @@
             } else {
               acc += chunk;
             }
-            if (acc) cat.body.textContent = acc;
+            if (acc) { working.stop(); cat.body.textContent = acc; }
             return pump();
           });
         }
