@@ -4809,10 +4809,20 @@
       if (!askQueue.length) { pendingBox.hidden = true; return; }
       pendingBox.hidden = false;
       pendingBox.appendChild(el('strong', null,
-        askQueue.length + (askQueue.length === 1 ? ' question' : ' questions') + ' queued: '));
-      pendingBox.appendChild(document.createTextNode(askQueue.map(function (it) {
-        return it.text.slice(0, 40) + (it.text.length > 40 ? '…' : '');
-      }).join(' · ')));
+        askQueue.length + (askQueue.length === 1 ? ' question' : ' questions') + ' queued (waiting to be asked): '));
+      askQueue.forEach(function (it, i) {
+        if (i) pendingBox.appendChild(document.createTextNode(' · '));
+        pendingBox.appendChild(document.createTextNode(
+          it.text.slice(0, 40) + (it.text.length > 40 ? '…' : '') + ' '));
+        var x = el('a', 'body-link', '✕');
+        x.href = '#'; x.title = 'Cancel this question';
+        x.addEventListener('click', function (e) {
+          e.preventDefault();
+          var idx = askQueue.indexOf(it);
+          if (idx !== -1) { askQueue.splice(idx, 1); renderPending(); }
+        });
+        pendingBox.appendChild(x);
+      });
     }
     function enqueue(text) {
       askQueue.push({ text: text });
@@ -4881,11 +4891,16 @@
                 try { head = JSON.parse(pre.slice(0, cut)) || {}; } catch (e) { head = {}; }
                 pre = pre.slice(cut + 2);
                 if (head.queue != null && !head.sources) {
-                  cat.body.textContent = '';
-                  cat.body.appendChild(el('span', 'merecat-wait', head.queue > 0
+                  var waitMsg = head.queue > 0
                     ? ('…' + head.queue + (head.queue === 1 ? ' question' : ' questions') +
                        ' ahead of you in line for the local librarian, please wait…')
-                    : '…no one else is in line — the local librarian is answering you now…'));
+                    : '…no one else is in line — the local librarian is answering you now…';
+                  var m = modeSel.value || 'high';
+                  if (m === 'high') waitMsg += ' On High reasoning this usually takes about a minute.';
+                  else if (m === 'xhigh') waitMsg += ' At Extra-high reasoning this can take a minute or two.';
+                  else if (m === 'max') waitMsg += ' At Max reasoning this can take a couple of minutes.';
+                  cat.body.textContent = '';
+                  cat.body.appendChild(el('span', 'merecat-wait', waitMsg));
                   continue;
                 }
                 sources = head.sources || [];
