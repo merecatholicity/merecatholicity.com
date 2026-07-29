@@ -296,9 +296,21 @@
           i++;
         }
         node.appendChild(ul);
+      } else if (/^#{1,5} /.test(lines[i])) {
+        /* A heading line: one to five #-marks then a space. Rendered as a
+           styled paragraph, not a real h-element, so a comment can never
+           pollute the page's own outline; inline markdown still applies
+           inside. Six or more marks, or no space, stays literal text. */
+        ensureEmojiStyles();
+        var hm = /^(#{1,5}) +(.*)$/.exec(lines[i]);
+        var hd = el('p', 'mc-hd mc-hd' + hm[1].length);
+        appendRich(hd, hm[2]);
+        node.appendChild(hd);
+        i++;
       } else {
         var plain = [];
-        while (i < lines.length && !/^>/.test(lines[i]) && !/^[-*] /.test(lines[i])) {
+        while (i < lines.length && !/^>/.test(lines[i]) && !/^[-*] /.test(lines[i]) &&
+               !/^#{1,5} /.test(lines[i])) {
           plain.push(lines[i]);
           i++;
         }
@@ -1217,6 +1229,16 @@
   function ensureEmojiStyles() {
     if (document.getElementById('mc-emoji-css')) return;
     var css = '' +
+      /* Markdown headings inside bodies: sized within reason for a comment —
+         # a touch larger, ### about normal, ##### slightly small — never a
+         page-title shout, and dressed in the site's maroon. */
+      '.mc-hd{font-weight:bold;color:var(--maroon,#8b1a1a);margin:0.65em 0 0.3em;line-height:1.25}' +
+      '.mc-hd:first-child{margin-top:0.1em}' +
+      '.mc-hd1{font-size:1.28em}' +
+      '.mc-hd2{font-size:1.18em}' +
+      '.mc-hd3{font-size:1.09em}' +
+      '.mc-hd4{font-size:1em}' +
+      '.mc-hd5{font-size:0.92em}' +
       '.mc-emoji{height:1.35em;width:auto;vertical-align:-0.28em;margin:0 .04em}' +
       '.emoji-suggest{max-height:15em;overflow-y:auto}' +
       'a.emoji-suggest-row{align-items:center}' +
