@@ -282,13 +282,15 @@ class Handler(BaseHTTPRequestHandler):
         # keep generating to the end and store the answer by callback, so a
         # thread is never left with a question and no reply.
         client_gone = [False]
+        wlock = threading.Lock()
 
         def emit(s):
             if not s or client_gone[0]:
                 return
             try:
-                self.wfile.write(s if isinstance(s, bytes) else s.encode())
-                self.wfile.flush()
+                with wlock:
+                    self.wfile.write(s if isinstance(s, bytes) else s.encode())
+                    self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError, OSError):
                 client_gone[0] = True
 
@@ -327,6 +329,17 @@ class Handler(BaseHTTPRequestHandler):
                 emit("\x03")
                 return
             emit(json.dumps({"sources": sources}) + "\n\n")
+            # Keepalive: a fresh model load or a deep think is minutes of TOTAL
+            # wire silence after the sources line, and an idle proxied stream is
+            # what gets reaped (it once cut a stream at zero tokens). STX every
+            # 15s keeps every leg warm; the client and the mention reader strip
+            # it, and it never touches parts or storage.
+            hb_stop = threading.Event()
+
+            def _beat():
+                while not hb_stop.wait(15):
+                    emit("\x02")
+            threading.Thread(target=_beat, daemon=True).start()
             try:
                 for kind, delta in llm.chat_stream(CFG, messages, think=True):
                     if kind != "answer":
@@ -349,10 +362,13 @@ class Handler(BaseHTTPRequestHandler):
                     emit(note)
                 else:
                     emit("The librarian's engine faltered before the answer began. Please ask again.")
-            if not parts:
+            finally:
+                hb_stop.set()
+            if not "".join(parts).strip():
                 # generation ended with no visible answer (reasoning ran the
                 # context dry, or the model yielded nothing): say so honestly,
                 # and store the saying so the thread is never left hanging
+                parts.clear()
                 note = ("The librarian's reasoning ran past its room and no answer "
                         "emerged. Ask again, or try a lower reasoning effort.")
                 parts.append(note)

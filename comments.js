@@ -5187,9 +5187,12 @@
         var dec = new TextDecoder();
         function finish() {
           working.stop();
-          if (!complete && acc) {
+          if (!complete) {
             /* The stream closed without its mark: a truncated relay wearing a
-               clean ending. Show what arrived and recover the stored whole. */
+               clean ending — with text, or with NONE (a reap during the silent
+               model-load once ended a stream at zero tokens, and requiring
+               text here sent the reader a false "nothing to say" while the
+               stored answer landed thirty seconds later). Recover either way. */
             if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
             return recover();
           }
@@ -5264,6 +5267,7 @@
             } else {
               acc += chunk;
             }
+            if (acc.indexOf('\u0002') !== -1) acc = acc.replace(/\u0002/g, '');
             var mk = acc.indexOf('\u0003');
             if (mk !== -1) { complete = true; acc = acc.slice(0, mk); }
             if (acc) { working.stop(); ensureFlow(); }
