@@ -4810,7 +4810,22 @@
     section.appendChild(pendingBox);
     var askQueue = [];
     var busy = false;
+    /* A question still waiting in the stack lives only in this page — a sent
+       question survives a refresh (the librarian stores its answer on the
+       thread), an unsent one does not. So warn on leaving only while unsent
+       questions remain, and only then (the listener also disables bfcache). */
+    var unloadGuard = null;
+    function syncUnloadGuard() {
+      if (askQueue.length && !unloadGuard) {
+        unloadGuard = function (e) { e.preventDefault(); e.returnValue = ''; };
+        window.addEventListener('beforeunload', unloadGuard);
+      } else if (!askQueue.length && unloadGuard) {
+        window.removeEventListener('beforeunload', unloadGuard);
+        unloadGuard = null;
+      }
+    }
     function renderPending() {
+      syncUnloadGuard();
       pendingBox.textContent = '';
       if (!askQueue.length) { pendingBox.hidden = true; return; }
       pendingBox.hidden = false;
@@ -4867,6 +4882,10 @@
       bubble('you').body.textContent = text;
       var cat = bubble('cat');
       var working = startWorking(cat.body);
+      /* Hoisted so the catch can tell how far the stream got: a null sources
+         means the question never confirmed; anything later means it is stored
+         server-side and the answer will reach the thread regardless. */
+      var pre = '', acc = '', sources = null;
       var payload = { key: state.key, q: text, chat: chatId || 0 };
       var mode = modeSel.value || 'high';
       if (mode === 'instant') payload.instant = true; else payload.effort = mode;
@@ -4889,7 +4908,6 @@
         }
         var reader = res.body.getReader();
         var dec = new TextDecoder();
-        var pre = '', acc = '', sources = null;
         function finish() {
           working.stop();
           acc = acc.replace(/\s+$/, '');
@@ -4954,8 +4972,17 @@
         return pump();
       }).catch(function () {
         working.stop();
-        cat.body.textContent = '';
-        cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
+        if (sources !== null) {
+          /* The stream broke mid-answer, but the question was accepted: the
+             librarian keeps writing and saves the answer to this conversation.
+             Keep whatever already streamed and say where the rest will be. */
+          cat.body.appendChild(el('p', 'merecat-note',
+            '— the connection dropped, but the librarian is still writing. The full answer ' +
+            'will be saved to this conversation; reopen it in a minute or two to read it.'));
+        } else {
+          cat.body.textContent = '';
+          cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
+        }
       }).then(function () {
         busy = false;
         /* The answer is fully rendered. After a short beat so it settles, send
