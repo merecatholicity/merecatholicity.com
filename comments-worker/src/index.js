@@ -3054,18 +3054,23 @@ async function handleMerecatAsk(request, env, ctx) {
      page shows an over-the-line 12/10 plainly — the true wall for them is
      the free budget itself (any Workers AI refusal reads as resting). */
   const admin = await isAdminHash(env, me);
+  const instant = !!data.instant;
+  /* The daily caps guard the Cloudflare free budget. A question answered on
+     the owner's own machine spends nothing there and is never capped; an
+     instant (cloud) request is. So the caps apply only when the cloud answers. */
+  const usesCloud = cfg.backend !== 'local' || instant;
   let youQ = 0;
   let todayQ = 0;
   try {
     const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
     todayQ = (g && g.q) || 0;
-    if (!admin && todayQ >= cfg.global_daily) {
+    if (usesCloud && !admin && todayQ >= cfg.global_daily) {
       return json({ ok: false, resting: true, error: MERECAT_RESTING }, 429);
     }
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
       .bind(day, me).first();
     youQ = (u && u.q) || 0;
-    if (!admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
+    if (usesCloud && !admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
       return json({
         ok: false, capped: true,
         error: 'You have used your ' + cfg.user_daily + ' questions for today. The counter resets at midnight UTC.',
@@ -3101,7 +3106,6 @@ async function handleMerecatAsk(request, env, ctx) {
   // question to this owner's machine over Tailscale Funnel. The browser
   // still talks only to this worker; the local bot answers only requests
   // carrying the shared key below.
-  const instant = !!data.instant;
   const userEffort = String(data.effort || 'medium');
   if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && !instant) {
     const r = await merecatAskLocal(env, ctx, { q, history, summary, chatId, me, day, youQ, todayQ, admin, cfg, effort: userEffort });
@@ -3162,7 +3166,7 @@ async function handleMerecatAsk(request, env, ctx) {
   // the quota line's fresh numbers, counting the question now being answered
   const used = {
     you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
-    today: todayQ + 1, gcap: cfg.global_daily, admin,
+    today: todayQ + 1, gcap: cfg.global_daily, admin, backend: cfg.backend,
   };
   const { readable, writable } = new TransformStream();
   ctx.waitUntil(
@@ -3195,8 +3199,8 @@ async function merecatAskLocal(env, ctx, p) {
     env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
   ]);
   const used = {
-    you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
-    today: todayQ + 1, gcap: cfg.global_daily, admin,
+    you: youQ, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
+    today: todayQ, gcap: cfg.global_daily, admin, backend: cfg.backend,
   };
   const { readable, writable } = new TransformStream();
   ctx.waitUntil(
@@ -3290,26 +3294,17 @@ async function merecatPumpProxy(env, localResp, writable, me, day, chatId, used)
     try { await writer.close(); } catch { /* client gone */ }
   }
   const answer = text.trim();
-  const outTok = Math.ceil(answer.length / 4);
-  const stmts = [
-    env.LIBDB.prepare(
-      'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, 0, ?2) ' +
-      'ON CONFLICT(day) DO UPDATE SET q = q + 1, out_tok = out_tok + ?2'
-    ).bind(day, outTok),
-    env.LIBDB.prepare(
-      'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
-      'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
-    ).bind(day, me),
-  ];
+  // A local answer spends no Cloudflare budget, so it is never tallied against
+  // the caps (day/me deliberately unused here); only the thread is persisted.
   if (chatId && answer) {
     const now = Math.floor(Date.now() / 1000);
-    stmts.push(env.LIBDB.prepare(
-      "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
-    ).bind(chatId, answer, JSON.stringify(sources), now));
-    stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
-      .bind(chatId, now));
+    await env.LIBDB.batch([
+      env.LIBDB.prepare(
+        "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
+      ).bind(chatId, answer, JSON.stringify(sources), now),
+      env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+    ]);
   }
-  await env.LIBDB.batch(stmts);
 }
 
 /* Backend status for the admin page: is the local librarian reachable right
@@ -3865,9 +3860,10 @@ async function merecatMentionReply(env, commentId) {
   const mentionEffort = cfg.mention_effort || 'high';
   let answer = '';
   let sources = [];
+  let answeredLocally = false;
   if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && mentionEffort !== 'instant') {
     const loc = await merecatLocalRead(env, { q: userMsg, context: frame, effort: mentionEffort });
-    if (loc && loc.answer) { answer = loc.answer; sources = loc.sources; }
+    if (loc && loc.answer) { answer = loc.answer; sources = loc.sources; answeredLocally = true; }
     else if (!cfg.failover) {
       return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
         'merecat is resting (the local librarian is offline). Mention me again shortly.');
@@ -3913,18 +3909,22 @@ async function merecatMentionReply(env, commentId) {
   answer = merecatFinishAnswer(answer, sources);
   const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
 
-  const inTok = Math.ceil((frame.length + userMsg.length) / 4);
-  const outTok = Math.ceil(answer.length / 4);
-  await env.LIBDB.batch([
-    env.LIBDB.prepare(
-      'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
-      'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
-    ).bind(day, inTok, outTok),
-    env.LIBDB.prepare(
-      'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
-      'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
-    ).bind(day, c.author_hash),
-  ]);
+  // A mention answered locally spends no Cloudflare budget, so it is not
+  // tallied against the caps; a cloud-answered mention is.
+  if (!answeredLocally) {
+    const inTok = Math.ceil((frame.length + userMsg.length) / 4);
+    const outTok = Math.ceil(answer.length / 4);
+    await env.LIBDB.batch([
+      env.LIBDB.prepare(
+        'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
+        'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
+      ).bind(day, inTok, outTok),
+      env.LIBDB.prepare(
+        'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
+        'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
+      ).bind(day, c.author_hash),
+    ]);
+  }
   return replyId;
 }
 

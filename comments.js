@@ -5078,7 +5078,7 @@
       var num = el('input', 'key-input'); num.type = 'number'; num.min = '1'; num.max = '500';
       num.value = d.user_daily; num.style.width = '5em';
       row.appendChild(num);
-      row.appendChild(document.createTextNode(' questions per day. Unchecked, members draw freely until the community budget is spent. Admins are never capped either way.'));
+      row.appendChild(document.createTextNode(' questions per day. Unchecked, members draw freely until the community budget is spent. Admins are never capped either way. These caps guard the Cloudflare budget and apply only when Cloudflare answers; questions answered by the local librarian are never capped.'));
       body.appendChild(row);
       var save = el('button', 'btn btn-send', 'Save');
       save.type = 'button';
