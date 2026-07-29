@@ -542,33 +542,15 @@ works:
   # maximalism (explicitly papal-maximalist items were pulled entirely);
   # by the owner's word these works are NOT listed on the transparency
   # panel, and the /about roster omits url-less works for that reason. ----
-  fisheaters-liturgical-year:
-    { src: private/worldview/fisheaters-liturgical-year.txt, url: "", tier: 8, kind: text, store: deep2,
-      title: "The Customs of the Liturgical Year (Fish Eaters)" }
-  fisheaters-liturgy-sacraments:
-    { src: private/worldview/fisheaters-liturgy-sacraments.txt, url: "", tier: 8, kind: text, store: deep2,
-      title: "The Liturgy and the Sacraments (Fish Eaters)" }
-  fisheaters-morality-social:
-    { src: private/worldview/fisheaters-morality-social.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
-      title: "Morality and the Social Order (Fish Eaters)" }
   fisheaters-astronomy-zodiac:
     { src: private/worldview/fisheaters-astronomy-zodiac.txt, url: "", tier: 8, kind: text, store: deep2,
       title: "Christian Astronomy and the Zodiac (Fish Eaters)" }
-  fisheaters-jewish-question:
-    { src: private/worldview/fisheaters-jewish-question.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
-      title: "The Jewish Question, a traditional Catholic reader (Fish Eaters)" }
   fisheaters-crusades:
     { src: private/worldview/fisheaters-crusades.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Crusades (Fish Eaters)" }
   fisheaters-inquisition:
     { src: private/worldview/fisheaters-inquisition.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
       title: "The Spanish Inquisition (Fish Eaters)" }
-  fisheaters-solafide:
-    { src: private/worldview/fisheaters-solafide.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
-      title: "On Sola Fide (Fish Eaters)" }
-  fisheaters-solascriptura:
-    { src: private/worldview/fisheaters-solascriptura.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true,
-      title: "On Sola Scriptura (Fish Eaters)" }
   indo-european-research:
     { src: private/worldview/indo-european-research.txt, url: "", tier: 8, kind: text, store: deep2, vectorize: true, chunk_words: 1000,
       title: "Misc indo european catholic christianity research" }

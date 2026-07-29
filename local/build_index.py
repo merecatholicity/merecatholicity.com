@@ -10,13 +10,16 @@ that fit Cloudflare's free Vectorize budget.
     python local/build_index.py            # full rebuild (~an hour: whole corpus)
     python local/build_index.py --limit 5  # first 5 works (smoke test)
     python local/build_index.py --add russell-germanization   # one work, minutes
+    python local/build_index.py --drop old-work,other-work    # removals, seconds
 
 --add is the incremental path for shelf additions and edits: it removes the
 named works' old rows (zeroing their vector slots so they can never rank),
 appends and embeds ONLY the new chunks, and swaps vectors.npy atomically so
-the running serve.py never reads a torn file. Restart merecat-local after,
-so the service remaps the new array. The full rebuild is only needed when
-the embed model or the chunker itself changes.
+the running serve.py never reads a torn file. --drop is the same surgery
+without the append, for works removed from the manifest (--add refuses ids
+the manifest no longer knows). Restart merecat-local after either, so the
+service remaps the new array. The full rebuild is only needed when the
+embed model or the chunker itself changes.
 """
 import argparse
 import json
@@ -112,11 +115,42 @@ def add_works(cfg, lib, ingest, data, wids, batch):
           f"(index now {top} rows). Restart merecat-local to serve it.", flush=True)
 
 
+def drop_works(data, wids):
+    """Incremental removal: the delete half of add_works — rows out, vector
+    slots zeroed (a zero vector cosines to 0 and never ranks), FTS rebuilt,
+    the array saved atomically. For works removed from the manifest."""
+    db_path = os.path.join(data, "chunks.sqlite")
+    vec_path = os.path.join(data, "vectors.npy")
+    vecs = np.load(vec_path)
+    db = sqlite3.connect(db_path)
+    db.execute("PRAGMA journal_mode=WAL")
+    gone = 0
+    for wid in wids:
+        old = [r[0] for r in db.execute(
+            "SELECT rowid FROM chunks WHERE work_id = ?", (wid,))]
+        for rid in old:
+            if rid - 1 < len(vecs):
+                vecs[rid - 1] = 0.0
+        db.execute("DELETE FROM chunks WHERE work_id = ?", (wid,))
+        gone += len(old)
+        print(f"  {wid}: -{len(old)} chunks", flush=True)
+    db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('rebuild')")
+    db.commit()
+    tmp = vec_path + ".tmp.npy"
+    np.save(tmp, vecs)
+    os.replace(tmp, vec_path)
+    n = db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    db.close()
+    print(f"dropped {gone} chunks ({n} live rows remain). "
+          f"Restart merecat-local to serve it.", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="only the first N works")
     ap.add_argument("--batch", type=int, default=64, help="embed batch size")
     ap.add_argument("--add", default="", help="comma list of work ids: incremental add/replace")
+    ap.add_argument("--drop", default="", help="comma list of work ids: incremental removal")
     args = ap.parse_args()
 
     cfg = load_cfg()
@@ -129,6 +163,10 @@ def main():
     db_path = os.path.join(data, "chunks.sqlite")
     vec_path = os.path.join(data, "vectors.npy")
     meta_path = os.path.join(data, "meta.json")
+
+    if args.drop:
+        drop_works(data, [w.strip() for w in args.drop.split(",") if w.strip()])
+        return
 
     if args.add:
         add_works(cfg, lib, ingest, data,
