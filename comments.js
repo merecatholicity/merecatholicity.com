@@ -4654,8 +4654,8 @@
     modeRow.appendChild(document.createTextNode('Reasoning: '));
     var modeSel = el('select', 'scripture-sel');
     MC_MODES.forEach(function (m) { var o = el('option', null, m[1]); o.value = m[0]; modeSel.appendChild(o); });
-    try { modeSel.value = localStorage.getItem('mc-merecat-mode') || 'medium'; } catch (e) {}
-    if (!modeSel.value) modeSel.value = 'medium';
+    try { modeSel.value = localStorage.getItem('mc-merecat-mode') || 'high'; } catch (e) {}
+    if (!modeSel.value) modeSel.value = 'high';
     modeSel.addEventListener('change', function () {
       try { localStorage.setItem('mc-merecat-mode', modeSel.value); } catch (e) {}
     });
@@ -4848,8 +4848,9 @@
                 if (head.queue != null && !head.sources) {
                   cat.body.textContent = '';
                   cat.body.appendChild(el('span', 'merecat-wait', head.queue > 0
-                    ? ('…the local librarian is answering ' + head.queue + ' ahead of you in line…')
-                    : '…the local librarian is thinking…'));
+                    ? ('…' + head.queue + (head.queue === 1 ? ' question' : ' questions') +
+                       ' ahead of you in line for the local librarian, please wait…')
+                    : '…no one else is in line — the local librarian is answering you now…'));
                   continue;
                 }
                 sources = head.sources || [];

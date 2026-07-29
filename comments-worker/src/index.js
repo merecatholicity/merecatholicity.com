@@ -3106,7 +3106,7 @@ async function handleMerecatAsk(request, env, ctx) {
   // question to this owner's machine over Tailscale Funnel. The browser
   // still talks only to this worker; the local bot answers only requests
   // carrying the shared key below.
-  const userEffort = String(data.effort || 'medium');
+  const userEffort = String(data.effort || 'high');
   if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && !instant) {
     const r = await merecatAskLocal(env, ctx, { q, history, summary, chatId, me, day, youQ, todayQ, admin, cfg, effort: userEffort });
     if (r) return r;
