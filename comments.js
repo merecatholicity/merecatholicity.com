@@ -211,7 +211,11 @@
      <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
      (a link inside bold works) by recursing on the strictly-shorter inner text.
      Shared by the body renderer and each quoted/list line. */
-  function appendRich(target, str) {
+  function appendRich(target, str, plain) {
+    /* plain mode — the librarian's leash: every markdown feature is consumed
+       but none applies, so the bot may write **bold** all day and the reader
+       sees only "bold". Scripture autolinks and [text](url) links stay live
+       (the sources depend on them). Humans always render in full. */
     var s = String(str == null ? '' : str);
     /* A fresh matcher per call: appendRich recurses into emphasis, and a single
        shared global regex's lastIndex would be clobbered by the inner call. */
@@ -221,13 +225,17 @@
       if (m[0].length === 0) { re.lastIndex++; continue; }
       if (m.index > last) target.appendChild(document.createTextNode(s.slice(last, m.index)));
       if (m[1] !== undefined) {
-        var strong = el('strong');
-        appendRich(strong, m[1]);
-        target.appendChild(strong);
+        if (plain) { appendRich(target, m[1], plain); } else {
+          var strong = el('strong');
+          appendRich(strong, m[1]);
+          target.appendChild(strong);
+        }
       } else if (m[2] !== undefined) {
-        var em = el('em');
-        appendRich(em, m[2]);
-        target.appendChild(em);
+        if (plain) { appendRich(target, m[2], plain); } else {
+          var em = el('em');
+          appendRich(em, m[2]);
+          target.appendChild(em);
+        }
       } else if (m[5] !== undefined) {
         target.appendChild(emojiToken(m[5], m[0]));
       } else if (m[6] !== undefined) {
@@ -273,7 +281,7 @@
      button writes and anyone may type by hand. Built entirely from text nodes
      and anchors, never innerHTML, so a body can never inject markup. Use this
      in place of a plain textContent wherever a user body is shown. */
-  function fillBody(node, text) {
+  function fillBody(node, text, plain) {
     node.textContent = '';
     var lines = String(text == null ? '' : text).split('\n');
     var i = 0;
@@ -284,37 +292,61 @@
           quoted.push(lines[i].replace(/^>\s?/, ''));
           i++;
         }
-        var bq = el('blockquote', 'comment-quote');
-        appendRich(bq, quoted.join('\n'));
-        node.appendChild(bq);
-      } else if (/^[-*] /.test(lines[i])) {
-        var ul = el('ul', 'comment-list');
-        while (i < lines.length && /^[-*] /.test(lines[i])) {
-          var li = el('li');
-          appendRich(li, lines[i].replace(/^[-*] +/, ''));
-          ul.appendChild(li);
-          i++;
+        if (plain) {
+          var qp = el('p');
+          appendRich(qp, quoted.join('\n'), plain);
+          node.appendChild(qp);
+        } else {
+          var bq = el('blockquote', 'comment-quote');
+          appendRich(bq, quoted.join('\n'));
+          node.appendChild(bq);
         }
-        node.appendChild(ul);
+      } else if (/^[-*] /.test(lines[i])) {
+        if (plain) {
+          var items = [];
+          while (i < lines.length && /^[-*] /.test(lines[i])) {
+            items.push(lines[i].replace(/^[-*] +/, ''));
+            i++;
+          }
+          var lp = el('p');
+          appendRich(lp, items.join('\n'), plain);
+          node.appendChild(lp);
+        } else {
+          var ul = el('ul', 'comment-list');
+          while (i < lines.length && /^[-*] /.test(lines[i])) {
+            var li = el('li');
+            appendRich(li, lines[i].replace(/^[-*] +/, ''));
+            ul.appendChild(li);
+            i++;
+          }
+          node.appendChild(ul);
+        }
       } else if (/^#{1,5} /.test(lines[i])) {
         /* A heading line: one to five #-marks then a space. Rendered as a
            styled paragraph, not a real h-element, so a comment can never
            pollute the page's own outline; inline markdown still applies
-           inside. Six or more marks, or no space, stays literal text. */
-        ensureEmojiStyles();
+           inside. Six or more marks, or no space, stays literal text. In
+           plain mode the marks are consumed and the text stands unstyled. */
         var hm = /^(#{1,5}) +(.*)$/.exec(lines[i]);
-        var hd = el('p', 'mc-hd mc-hd' + hm[1].length);
-        appendRich(hd, hm[2]);
-        node.appendChild(hd);
+        if (plain) {
+          var hp = el('p');
+          appendRich(hp, hm[2], plain);
+          node.appendChild(hp);
+        } else {
+          ensureEmojiStyles();
+          var hd = el('p', 'mc-hd mc-hd' + hm[1].length);
+          appendRich(hd, hm[2]);
+          node.appendChild(hd);
+        }
         i++;
       } else {
-        var plain = [];
+        var run = [];
         while (i < lines.length && !/^>/.test(lines[i]) && !/^[-*] /.test(lines[i]) &&
                !/^#{1,5} /.test(lines[i])) {
-          plain.push(lines[i]);
+          run.push(lines[i]);
           i++;
         }
-        appendRich(node, plain.join('\n'));
+        appendRich(node, run.join('\n'), plain);
       }
     }
     return node;
@@ -1583,10 +1615,12 @@
       head.appendChild(del);
     }
     article.appendChild(head);
-    var body = fillBody(el('div', 'comment-body'), c.body);
+    var body = fillBody(el('div', 'comment-body'), c.body,
+      c.author_hash === MERECAT_BOT_HASH);
     body.setAttribute('itemprop', 'text');
     article.appendChild(body);
-    if (c.signature) article.appendChild(fillBody(el('div', 'comment-sig'), c.signature));
+    if (c.signature) article.appendChild(fillBody(el('div', 'comment-sig'), c.signature,
+      c.author_hash === MERECAT_BOT_HASH));
     if (pending) {
       article.appendChild(el('p', 'comment-note',
         'Held for review. It will appear here once approved.'));
@@ -5058,7 +5092,7 @@
       };
     }
     function ask(text) {
-      bubble('you').body.textContent = text;
+      fillBody(bubble('you').body, text);
       var cat = bubble('cat');
       var working = startWorking(cat.body);
       /* Hoisted so the catch can tell how far the stream got: a null sources
@@ -5119,7 +5153,7 @@
         working.stop();
         if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
         host.textContent = '';
-        fillBody(host, rr.text);
+        fillBody(host, rr.text, true);
         srcFooter(host, rr.sources);
         if (m.id) attachForward(cat.msg, m.id);
         cat.msg.scrollIntoView({ block: 'nearest' });
@@ -5279,7 +5313,7 @@
               if (!painted && document.contains(cat.body)) {
                 var rr = citeRenumber(acc, sources);
                 cat.body.textContent = '';
-                fillBody(cat.body, rr.text);
+                fillBody(cat.body, rr.text, true);
                 srcFooter(cat.body, rr.sources);
                 attachForward(cat.msg, 'last');
                 painted = true;
@@ -5413,12 +5447,12 @@
         (d.msgs || []).forEach(function (m) {
           var b = bubble(m.role === 'user' ? 'you' : 'cat');
           if (m.role === 'user') {
-            b.body.textContent = m.body;
+            fillBody(b.body, m.body);
           } else {
             var srcs = [];
             try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
             var rr = citeRenumber(m.body, srcs);
-            fillBody(b.body, rr.text);
+            fillBody(b.body, rr.text, true);
             srcFooter(b.body, rr.sources);
             if (m.id) attachForward(b.msg, m.id);
           }
