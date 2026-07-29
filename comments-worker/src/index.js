@@ -2638,12 +2638,13 @@ async function merecatConfig(env) {
   if (merecatConfigCache.cfg && Date.now() - merecatConfigCache.at < 300000) {
     return merecatConfigCache.cfg;
   }
-  const cfg = { ...MERECAT_DEFAULTS, persona: '' };
+  const cfg = { ...MERECAT_DEFAULTS, persona: '', backend: 'cloudflare' };
   try {
     const { results } = await env.LIBDB.prepare('SELECT k, v FROM config').all();
     for (const r of results || []) {
       if (r.k === 'persona') cfg.persona = String(r.v);
       else if (r.k === 'model') cfg.model = String(r.v);
+      else if (r.k === 'backend') cfg.backend = String(r.v) === 'local' ? 'local' : 'cloudflare';
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
       else if (r.k in MERECAT_DEFAULTS) cfg[r.k] = Number(r.v) || MERECAT_DEFAULTS[r.k];
     }
@@ -3094,6 +3095,14 @@ async function handleMerecatAsk(request, env, ctx) {
       .map((r) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
   }
 
+  // Routing switch (admin-set, default cloudflare): when 'local', proxy the
+  // question to this owner's machine over Tailscale Funnel. The browser
+  // still talks only to this worker; the local bot answers only requests
+  // carrying the shared key below.
+  if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL) {
+    return await merecatAskLocal(env, ctx, { q, history, summary, chatId, me, day, youQ, todayQ, admin, cfg });
+  }
+
   const chunks = await merecatRetrieve(env, q, cfg);
 
   // Build the prompt: persona, the thread's condensed summary when one
@@ -3155,6 +3164,137 @@ async function handleMerecatAsk(request, env, ctx) {
   return new Response(readable, {
     headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
   });
+}
+
+/* Local backend: proxy the question to the owner's machine over Tailscale
+   Funnel and relay its stream. The local server does retrieval + generation
+   and returns one JSON line of sources, a blank line, then answer tokens. */
+async function merecatAskLocal(env, ctx, p) {
+  const { q, history, summary, me, day, youQ, todayQ, admin, cfg } = p;
+  let chatId = p.chatId;
+  const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
+  let localResp;
+  try {
+    localResp = await fetch(base + '/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Merecat-Key': env.MERECAT_LOCAL_KEY || '' },
+      body: JSON.stringify({ q, history, summary }),
+    });
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_local_unreachable', error: String(err) }));
+    return json({ ok: false, resting: true,
+      error: 'The local librarian is offline. Switch back to the cloud in the merecat administration page.' }, 503);
+  }
+  if (!localResp.ok || !localResp.body) {
+    return json({ ok: false, resting: true,
+      error: 'The local librarian is offline or refused. Switch back to the cloud in the merecat administration page.' }, 503);
+  }
+  // the local model accepted: the thread now exists and the question is on it
+  const now = Math.floor(Date.now() / 1000);
+  if (!chatId) {
+    const ins = await env.LIBDB.prepare(
+      'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
+    ).bind(me, q.slice(0, 90), now).first();
+    chatId = ins.id;
+  }
+  await env.LIBDB.batch([
+    env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3)")
+      .bind(chatId, q, now),
+    env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+  ]);
+  const used = {
+    you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
+    today: todayQ + 1, gcap: cfg.global_daily, admin,
+  };
+  const { readable, writable } = new TransformStream();
+  ctx.waitUntil(
+    merecatPumpProxy(env, localResp, writable, me, day, chatId, used)
+      .catch((err) => console.log(JSON.stringify({ event: 'merecat_proxy_failed', error: String(err) })))
+  );
+  return new Response(readable, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+}
+
+/* Relay the local stream: read its {sources} header line, re-emit the worker's
+   own preamble (chat id + local's sources + used + rv), then pipe the answer
+   tokens, storing the answer on the thread and counting usage at the end. */
+async function merecatPumpProxy(env, localResp, writable, me, day, chatId, used) {
+  const writer = writable.getWriter();
+  const encode = (str) => enc.encode(str);
+  let text = '';
+  let sources = [];
+  try {
+    const reader = localResp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    let headerDone = false;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      if (!headerDone) {
+        const nl = buf.indexOf('\n\n');
+        if (nl === -1) continue;
+        try { sources = JSON.parse(buf.slice(0, nl)).sources || []; } catch { sources = []; }
+        buf = buf.slice(nl + 2);
+        await writer.write(encode(JSON.stringify({ chat: chatId, sources, used, rv: MERECAT_RV, backend: 'local' }) + '\n\n'));
+        headerDone = true;
+      }
+      if (headerDone && buf) { text += buf; await writer.write(encode(buf)); buf = ''; }
+    }
+  } finally {
+    try { await writer.close(); } catch { /* client gone */ }
+  }
+  const answer = text.trim();
+  const outTok = Math.ceil(answer.length / 4);
+  const stmts = [
+    env.LIBDB.prepare(
+      'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, 0, ?2) ' +
+      'ON CONFLICT(day) DO UPDATE SET q = q + 1, out_tok = out_tok + ?2'
+    ).bind(day, outTok),
+    env.LIBDB.prepare(
+      'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
+      'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
+    ).bind(day, me),
+  ];
+  if (chatId && answer) {
+    const now = Math.floor(Date.now() / 1000);
+    stmts.push(env.LIBDB.prepare(
+      "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
+    ).bind(chatId, answer, JSON.stringify(sources), now));
+    stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
+      .bind(chatId, now));
+  }
+  await env.LIBDB.batch(stmts);
+}
+
+/* Backend status for the admin page: is the local librarian reachable right
+   now (a few quick health pings within ~1.5s), and where does the cloud stand
+   against its daily budget. Admin only. */
+async function handleMerecatBackends(request, env) {
+  let data = {};
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const cfg = await merecatConfig(env);
+  const day = merecatDay();
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const today = (g && g.q) || 0;
+  let local = { online: false };
+  const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
+  if (base) {
+    for (let i = 0; i < 3 && !local.online; i++) {
+      try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 450);
+        const r = await fetch(base + '/health', { signal: ctl.signal });
+        clearTimeout(timer);
+        if (r.ok) { const h = await r.json(); local = { online: true, chunks: h.chunks || 0, model: h.model || '' }; }
+      } catch { /* offline or slow: try again within budget */ }
+    }
+  }
+  return json({ ok: true, backend: cfg.backend, configured: !!base,
+    local, cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
 }
 
 /* Drain the model's SSE stream into the client stream: preamble first (the
@@ -3925,7 +4065,7 @@ async function handleMerecatConfigSet(request, env) {
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
   if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
-  for (const k of ['model', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
+  for (const k of ['model', 'backend', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
     if (cfg[k] != null) put(k, cfg[k]);
   }
   if (!stmts.length) return json({ ok: false, error: 'Nothing to set.' }, 400);
@@ -4019,6 +4159,7 @@ export default {
       if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
       if (path === '/api/merecat/ask' && request.method === 'POST') return await handleMerecatAsk(request, env, ctx);
       if (path === '/api/merecat/about' && request.method === 'POST') return await handleMerecatAbout(request, env);
+      if (path === '/api/merecat/backends' && request.method === 'POST') return await handleMerecatBackends(request, env);
       if (path === '/api/merecat/usage' && request.method === 'POST') return await handleMerecatUsage(request, env);
       if (path === '/api/merecat/forward' && request.method === 'POST') return await handleMerecatForward(request, env);
       if (path === '/api/merecat/mention' && request.method === 'POST') return await handleMerecatMention(request, env);

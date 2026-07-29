@@ -4904,6 +4904,64 @@
      the community's shared daily budget answers for everyone. Saved through
      the admin-keyed /config, the same door the make-librarian push uses;
      other edge isolates pick a change up within about five minutes. */
+  /* The routing switch: which librarian answers, Cloudflare (always on) or the
+     owner's local machine over Tailscale, with a live online/offline read from
+     a quick health ping the worker runs. A hardwire choice, no failover. */
+  function renderBackendSwitch(body) {
+    body.appendChild(el('h3', null, 'Which librarian answers'));
+    var wrap = el('div', 'merecat-backends');
+    wrap.appendChild(el('p', 'comments-status', 'Checking the backends…'));
+    body.appendChild(wrap);
+    function save(val) {
+      var note = el('p', 'comments-status', 'Switching…'); wrap.appendChild(note);
+      fetchRetry(MERECAT_API + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, config: { backend: val } }) }, [1000])
+        .then(function (r) { return r.json(); }).then(function (dd) {
+          note.textContent = dd.ok
+            ? ('Now routing to ' + (val === 'local' ? 'this machine (local)' : 'Cloudflare') +
+               '. Live across the edge within about five minutes.')
+            : (dd.error || 'Could not switch.');
+        }).catch(function () { note.textContent = 'Could not switch.'; });
+    }
+    function draw() {
+      fetchRetry(MERECAT_API + '/backends', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }) }, [1000])
+        .then(function (r) { return r.json(); }).then(function (b) {
+          wrap.textContent = '';
+          if (!b.ok) { wrap.appendChild(el('p', 'comments-status', 'Could not read backend status.')); return; }
+          var cf = b.cloudflare || {}, lo = b.local || {};
+          [['cloudflare', 'Cloudflare (always on)', true,
+            'online · ' + (cf.today || 0) + '/' + (cf.gcap || 0) + ' questions used today'],
+           ['local', 'This machine, over Tailscale', !!lo.online,
+            lo.online ? ('online · ' + (lo.chunks || 0).toLocaleString() + ' passages') : 'offline right now']
+          ].forEach(function (o) {
+            var row = el('label'); row.style.display = 'block'; row.style.margin = '.35em 0';
+            var radio = el('input'); radio.type = 'radio'; radio.name = 'mc-backend'; radio.value = o[0];
+            radio.checked = (b.backend === o[0]);
+            radio.addEventListener('change', function () { if (radio.checked) save(o[0]); });
+            row.appendChild(radio);
+            row.appendChild(el('strong', null, ' ' + o[1] + '  '));
+            var dot = el('span', null, o[2] ? '● ' : '○ '); dot.style.color = o[2] ? '#2e7d32' : '#b00';
+            row.appendChild(dot);
+            row.appendChild(el('span', 'comments-status', o[3]));
+            wrap.appendChild(row);
+          });
+          var rp = el('p', 'comments-status');
+          var refresh = el('a', 'body-link', 'refresh status'); refresh.href = '#';
+          refresh.addEventListener('click', function (e) {
+            e.preventDefault(); wrap.textContent = '';
+            wrap.appendChild(el('p', 'comments-status', 'Checking…')); draw();
+          });
+          rp.appendChild(refresh); wrap.appendChild(rp);
+          if (!b.configured) wrap.appendChild(el('p', 'comments-status', 'No local URL is configured on the worker yet.'));
+        }).catch(function () {
+          wrap.textContent = '';
+          wrap.appendChild(el('p', 'comments-status', 'Could not reach the status endpoint.'));
+        });
+    }
+    draw();
+  }
+
   function viewMerecatAdmin() {
     document.title = 'merecat administration | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat']]);
@@ -4921,6 +4979,7 @@
     }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) throw new Error(d.error || 'failed');
       body.textContent = '';
+      renderBackendSwitch(body);
       body.appendChild(el('h3', null, 'Usage today'));
       body.appendChild(el('p', null,
         'The community has used ' + d.today + ' of its ' + d.global_daily +

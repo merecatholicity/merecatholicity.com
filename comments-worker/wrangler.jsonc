@@ -86,6 +86,10 @@
     // Turnstile tokens are accepted only when solved on one of these hosts
     // (comma-separated), a check layered on top of the sitekey's own domain
     // lock. Leave unset in local dev so the always-pass test key still works.
-    "TURNSTILE_HOSTNAMES": "merecatholicity.com,www.merecatholicity.com"
+    "TURNSTILE_HOSTNAMES": "merecatholicity.com,www.merecatholicity.com",
+    // merecat-local backend: the Tailscale Funnel URL of the owner's
+    // machine. The shared key is the MERECAT_LOCAL_KEY secret. The routing
+    // switch (config 'backend') defaults to cloudflare; local proxies here.
+    "MERECAT_LOCAL_URL": "https://obsidian.tilapia-koi.ts.net"
   }
 }

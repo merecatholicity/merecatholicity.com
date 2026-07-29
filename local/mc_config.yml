@@ -29,3 +29,6 @@ persona_file: "persona.local.md"
 # Paths are resolved relative to this file's directory (local/).
 librarian: "../librarian"               # the shared sources + persona.md
 data_dir: "data"                        # git-ignored derived state
+
+# the local HTTP service (serve.py) port; Tailscale Funnel points here
+serve_port: 8790
