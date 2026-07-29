@@ -4794,13 +4794,44 @@
       node.appendChild(f);
     }
 
+    /* A client-side queue so the reader can stack questions on this one-on-one
+       page. Submitting while the librarian answers does not interrupt it — the
+       question waits (shown below the composer) and is sent only once the
+       current answer is fully rendered, so a stack can be left to work through
+       and returned to later. */
+    var pendingBox = el('p', 'merecat-quota');
+    pendingBox.hidden = true;
+    section.appendChild(pendingBox);
+    var askQueue = [];
+    var busy = false;
+    function renderPending() {
+      pendingBox.textContent = '';
+      if (!askQueue.length) { pendingBox.hidden = true; return; }
+      pendingBox.hidden = false;
+      pendingBox.appendChild(el('strong', null,
+        askQueue.length + (askQueue.length === 1 ? ' question' : ' questions') + ' queued: '));
+      pendingBox.appendChild(document.createTextNode(askQueue.map(function (it) {
+        return it.text.slice(0, 40) + (it.text.length > 40 ? '…' : '');
+      }).join(' · ')));
+    }
+    function enqueue(text) {
+      askQueue.push({ text: text });
+      renderPending();
+      drain();
+    }
+    function drain() {
+      if (busy || !askQueue.length) return;
+      busy = true;
+      var item = askQueue.shift();
+      renderPending();
+      ask(item.text);
+    }
     function ask(text) {
       bubble('you').body.textContent = text;
       var cat = bubble('cat');
       cat.body.appendChild(el('span', 'merecat-wait', '…the librarian is looking…'));
-      send.disabled = true;
       var payload = { key: state.key, q: text, chat: chatId || 0 };
-      var mode = modeSel.value || 'medium';
+      var mode = modeSel.value || 'high';
       if (mode === 'instant') payload.instant = true; else payload.effort = mode;
       fetch(MERECAT_API + '/ask', {
         method: 'POST',
@@ -4881,17 +4912,19 @@
         cat.body.textContent = '';
         cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
       }).then(function () {
-        send.disabled = false;
-        q.focus();
+        busy = false;
+        /* The answer is fully rendered. After a short beat so it settles, send
+           the next stacked question; otherwise return focus to the box. */
+        if (askQueue.length) setTimeout(drain, 900); else q.focus();
       });
     }
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var text = q.value.trim();
-      if (!text || send.disabled) return;
+      if (!text) return;
       q.value = '';
-      ask(text);
+      enqueue(text);
     });
     q.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
