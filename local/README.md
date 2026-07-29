@@ -150,7 +150,32 @@ outside `local/` and the two `.gitignore` lines. The disk footprint while it
 lives is ~19 GB of models (`~/.ollama`) + ~1.5 GB of index (`local/data`) +
 ~0.6 GB reranker (`local/models`).
 
-## Not yet (next step)
+## Serving to the site (Tailscale Funnel + the worker switch)
 
-Serving this over the network and defaulting to it with a Cloudflare fallback
-when the machine is offline — deferred until the local answers are judged good.
+`serve.py` (the `merecat-local` systemd service) exposes an `/ask` endpoint the
+Cloudflare worker proxies to over **Tailscale Funnel**:
+
+    tailscale funnel --bg 8790     # https://<node>.<tailnet>.ts.net -> :8790
+
+The worker holds the Funnel URL (`MERECAT_LOCAL_URL` var) and a shared key
+(`MERECAT_LOCAL_KEY` secret = `local/serve.key`). `/ask` refuses any request
+without the key, so on the open internet the local bot answers no one but the
+worker. The browser only ever talks to merecatholicity.com.
+
+**Routing is a config switch** in the merecat administration page (stored in
+LIBDB `config`, no redeploy):
+
+- **backend** `cloudflare` (default) | `local` — which librarian answers.
+- **failover** on/off — if `local`, a downed or busy machine drops silently to
+  Cloudflare. When it fails over the reader's reasoning choice does not apply.
+- **mention_effort** `instant`|`off`|`low`|`medium`|`high`(default)|`xhigh`|`max`
+  — the reasoning an @merecat mention gets; `instant` sends mentions to the cloud.
+
+**Per-reader control** (merecat page, shown only when local is active,
+remembered in `localStorage`): Instant (Cloudflare, no wait) or Local at a
+chosen depth (off … max). The chat, article-comment mentions, and forum-thread
+mentions all pass the **same context** to local that the cloud builds.
+
+**One GPU, so requests queue**: one generation at a time plus a short wait
+(`queue_cap` in `mc_config.yml`, default 3); a waiting caller is told its place
+in line, and past the cap the answer is an immediate "try again shortly".
