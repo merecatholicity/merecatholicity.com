@@ -4642,8 +4642,28 @@
        they are allowed to pass. */
     var quota = el('p', 'merecat-quota');
     section.appendChild(quota);
+
+    /* Reasoning control, shown only while the local librarian is the active
+       backend. The reader's own choice, remembered on this device. Instant
+       drops the question to Cloudflare, no wait and no deep reasoning. */
+    var MC_MODES = [['instant', 'Instant (Cloudflare, no wait)'], ['off', 'Local · thinking off'],
+      ['low', 'Local · thinking: Low'], ['medium', 'Local · thinking: Medium'],
+      ['high', 'Local · thinking: High'], ['xhigh', 'Local · thinking: Extra high'],
+      ['max', 'Local · thinking: Max']];
+    var modeRow = el('p', 'merecat-quota'); modeRow.hidden = true;
+    modeRow.appendChild(document.createTextNode('Reasoning: '));
+    var modeSel = el('select', 'scripture-sel');
+    MC_MODES.forEach(function (m) { var o = el('option', null, m[1]); o.value = m[0]; modeSel.appendChild(o); });
+    try { modeSel.value = localStorage.getItem('mc-merecat-mode') || 'medium'; } catch (e) {}
+    if (!modeSel.value) modeSel.value = 'medium';
+    modeSel.addEventListener('change', function () {
+      try { localStorage.setItem('mc-merecat-mode', modeSel.value); } catch (e) {}
+    });
+    modeRow.appendChild(modeSel);
+    section.appendChild(modeRow);
     function renderQuota(u) {
       if (!u) return;
+      if (u.backend) modeRow.hidden = (u.backend !== 'local');
       quota.textContent = '';
       if (u.cap_on) {
         quota.appendChild(document.createTextNode('You have used '));
@@ -4776,6 +4796,8 @@
       cat.body.appendChild(el('span', 'merecat-wait', '…the librarian is looking…'));
       send.disabled = true;
       var payload = { key: state.key, q: text, chat: chatId || 0 };
+      var mode = modeSel.value || 'medium';
+      if (mode === 'instant') payload.instant = true; else payload.effort = mode;
       fetch(MERECAT_API + '/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4814,21 +4836,34 @@
             var chunk = dec.decode(r.value, { stream: true });
             if (sources === null) {
               pre += chunk;
-              var cut = pre.indexOf('\n\n');
-              if (cut === -1) return pump();
-              var head = {};
-              try { head = JSON.parse(pre.slice(0, cut)) || {}; } catch (e) {}
-              sources = head.sources || [];
-              /* A fresh question minted a thread: adopt its id so the next
-                 ask continues it and a reload comes back to it. */
-              if (head.chat && head.chat !== chatId) {
-                chatId = head.chat;
-                if (history.replaceState) {
-                  history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
+              /* Consume any leading place-in-line notices, then the real
+                 preamble (chat id + sources + used). A local answer that had
+                 to queue sends {queue:N} first. */
+              while (sources === null) {
+                var cut = pre.indexOf('\n\n');
+                if (cut === -1) break;
+                var head = {};
+                try { head = JSON.parse(pre.slice(0, cut)) || {}; } catch (e) { head = {}; }
+                pre = pre.slice(cut + 2);
+                if (head.queue != null && !head.sources) {
+                  cat.body.textContent = '';
+                  cat.body.appendChild(el('span', 'merecat-wait', head.queue > 0
+                    ? ('…the local librarian is answering ' + head.queue + ' ahead of you in line…')
+                    : '…the local librarian is thinking…'));
+                  continue;
                 }
+                sources = head.sources || [];
+                if (head.chat && head.chat !== chatId) {
+                  chatId = head.chat;
+                  if (history.replaceState) {
+                    history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
+                  }
+                }
+                if (head.used) renderQuota(head.used);
+                acc = pre;
+                pre = '';
               }
-              if (head.used) renderQuota(head.used);
-              acc = pre.slice(cut + 2);
+              if (sources === null) return pump();
             } else {
               acc += chunk;
             }
@@ -4923,6 +4958,15 @@
             : (dd.error || 'Could not switch.');
         }).catch(function () { note.textContent = 'Could not switch.'; });
     }
+    function saveCfg(obj, label) {
+      var note = el('p', 'comments-status', 'Saving…'); wrap.appendChild(note);
+      fetchRetry(MERECAT_API + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, config: obj }) }, [1000])
+        .then(function (r) { return r.json(); }).then(function (dd) {
+          note.textContent = dd.ok ? (label + ' saved. Live across the edge within about five minutes.')
+            : (dd.error || 'Could not save.');
+        }).catch(function () { note.textContent = 'Could not save.'; });
+    }
     function draw() {
       fetchRetry(MERECAT_API + '/backends', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: state.key }) }, [1000])
@@ -4953,6 +4997,30 @@
             wrap.appendChild(el('p', 'comments-status', 'Checking…')); draw();
           });
           rp.appendChild(refresh); wrap.appendChild(rp);
+
+          var frow = el('p');
+          var fchk = el('input'); fchk.type = 'checkbox'; fchk.id = 'mc-failover'; fchk.checked = !!b.failover;
+          fchk.addEventListener('change', function () {
+            saveCfg({ failover: fchk.checked ? 1 : 0 }, 'Failover ' + (fchk.checked ? 'on' : 'off'));
+          });
+          frow.appendChild(fchk);
+          var flbl = el('label', null, ' Fail over to Cloudflare if the local librarian is offline');
+          flbl.htmlFor = 'mc-failover';
+          frow.appendChild(flbl);
+          wrap.appendChild(frow);
+
+          var mrow = el('p');
+          mrow.appendChild(document.createTextNode('@merecat mention reasoning: '));
+          var msel = el('select', 'scripture-sel');
+          [['instant', 'Instant (Cloudflare)'], ['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'],
+           ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']].forEach(function (o) {
+            var op = el('option', null, o[1]); op.value = o[0]; msel.appendChild(op);
+          });
+          msel.value = b.mention_effort || 'high';
+          msel.addEventListener('change', function () { saveCfg({ mention_effort: msel.value }, 'Mention reasoning'); });
+          mrow.appendChild(msel);
+          wrap.appendChild(mrow);
+
           if (!b.configured) wrap.appendChild(el('p', 'comments-status', 'No local URL is configured on the worker yet.'));
         }).catch(function () {
           wrap.textContent = '';

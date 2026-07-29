@@ -17,6 +17,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
@@ -43,6 +44,14 @@ def shared_key():
 
 KEY = shared_key()
 VECTORS = np.load(VEC_PATH, mmap_mode="r")
+
+# One GPU: a single generation at a time (_gpu), a bounded wait-queue behind
+# it (_pending, capped at QUEUE_CAP = 1 running + the rest waiting), and an
+# immediate busy past that. A waiting request is told how many are ahead.
+_gpu = threading.Semaphore(1)
+_plock = threading.Lock()
+_pending = 0
+QUEUE_CAP = int(CFG.get("queue_cap", 3))
 
 
 def _db():
@@ -104,7 +113,26 @@ class ThinkStrip:
         return r
 
 
-def build_messages(q, history, summary):
+# Reasoning depth. Ollama's think is kept ON always (so qwen3's reasoning
+# rides the separate thinking field and never leaks into the answer); the
+# depth directive genuinely lengthens or shortens how much it reasons, and
+# 'off' asks it to answer directly. True speed is the Instant→Cloudflare path.
+DEPTH = {
+    "off": "Answer directly and concisely, without extended deliberation.",
+    "low": "Think briefly before you answer.",
+    "medium": "",
+    "high": "Think carefully and thoroughly before you answer.",
+    "xhigh": "Reason at length, weighing several angles and objections, before you answer.",
+    "max": "Reason exhaustively, working through objections and counter-arguments from the sources, before you answer.",
+}
+
+
+def build_messages(q, history, summary, context, effort):
+    """Compose the prompt the same way the Cloudflare worker does, so both bots
+    see identical context. `context` is an opaque block the worker builds for
+    @merecat mentions (the thread/page brief + reply instructions); `history`
+    and `summary` carry a 1-on-1 chat thread. Local always does its own (whole
+    corpus) retrieval for the sources."""
     persona = open(PERSONA_PATH).read().strip()
     db = _db()
     chunks = retrieve.retrieve(db, VECTORS, CFG, q)
@@ -120,9 +148,14 @@ def build_messages(q, history, summary):
     sys_prompt = persona
     if summary:
         sys_prompt += "\n\nTHE CONVERSATION SO FAR, condensed:\n" + summary
+    if context:
+        sys_prompt += "\n\n" + str(context)
     sys_prompt += ("\n\nSOURCES (cite by bracketed number, like [3] — write the "
                    "digit; these are the only citable sources this turn):\n\n"
                    + (block or "(none)"))
+    d = DEPTH.get(effort, "")
+    if d:
+        sys_prompt += "\n\n" + d
     messages = [{"role": "system", "content": sys_prompt}]
     for h in (history or []):
         if h.get("role") in ("user", "assistant") and h.get("content"):
@@ -168,15 +201,21 @@ class Handler(BaseHTTPRequestHandler):
         q = str(data.get("q", "")).strip()[:2000]
         if not q:
             return self._json(400, {"ok": False, "error": "Bad request."})
-        try:
-            messages, sources = build_messages(q, data.get("history"), data.get("summary"))
-        except Exception as e:
-            return self._json(503, {"ok": False, "error": f"retrieval failed: {e}"})
+        effort = str(data.get("effort", "medium"))
+        context = data.get("context") or ""
 
-        # stream: sources line, blank line, then think-stripped answer tokens.
-        # Close-delimited (Connection: close) rather than chunked — a proxy in
-        # front (Tailscale Funnel) plus http.server keep-alive choked on manual
-        # chunked framing; body-until-EOF is simplest and robust.
+        # Queue admission: past the cap, refuse at once (with the count ahead)
+        # so nothing piles onto the GPU; within it, we will wait our turn.
+        global _pending
+        with _plock:
+            if _pending >= QUEUE_CAP:
+                return self._json(503, {"ok": False, "busy": True, "ahead": _pending,
+                    "error": "The local librarian is answering others right now. Try again in a moment."})
+            position = _pending
+            _pending += 1
+
+        # Close-delimited stream (Connection: close) — a proxy in front plus
+        # http.server keep-alive choked on manual chunked framing.
         self.close_connection = True
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -190,7 +229,23 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(s if isinstance(s, bytes) else s.encode())
             self.wfile.flush()
 
+        acquired = False
         try:
+            # tell a waiting caller its place in line, then block for the GPU
+            if position > 0:
+                emit(json.dumps({"queue": position}) + "\n\n")
+            acquired = _gpu.acquire(timeout=300)
+            if not acquired:
+                emit(json.dumps({"sources": []}) + "\n\n")
+                emit("The local librarian is overloaded right now. Please try again shortly.")
+                return
+            try:
+                messages, sources = build_messages(
+                    q, data.get("history"), data.get("summary"), context, effort)
+            except Exception as e:
+                emit(json.dumps({"sources": []}) + "\n\n")
+                emit(f"(retrieval failed: {e})")
+                return
             emit(json.dumps({"sources": sources}) + "\n\n")
             strip = ThinkStrip()
             for kind, delta in llm.chat_stream(CFG, messages, think=True):
@@ -200,6 +255,11 @@ class Handler(BaseHTTPRequestHandler):
             emit(strip.flush())
         except (BrokenPipeError, ConnectionResetError):
             pass
+        finally:
+            if acquired:
+                _gpu.release()
+            with _plock:
+                _pending -= 1
 
 
 def main():

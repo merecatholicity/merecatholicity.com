@@ -2638,13 +2638,15 @@ async function merecatConfig(env) {
   if (merecatConfigCache.cfg && Date.now() - merecatConfigCache.at < 300000) {
     return merecatConfigCache.cfg;
   }
-  const cfg = { ...MERECAT_DEFAULTS, persona: '', backend: 'cloudflare' };
+  const cfg = { ...MERECAT_DEFAULTS, persona: '', backend: 'cloudflare', failover: 0, mention_effort: 'high' };
   try {
     const { results } = await env.LIBDB.prepare('SELECT k, v FROM config').all();
     for (const r of results || []) {
       if (r.k === 'persona') cfg.persona = String(r.v);
       else if (r.k === 'model') cfg.model = String(r.v);
       else if (r.k === 'backend') cfg.backend = String(r.v) === 'local' ? 'local' : 'cloudflare';
+      else if (r.k === 'failover') cfg.failover = Number(r.v) ? 1 : 0;
+      else if (r.k === 'mention_effort') cfg.mention_effort = String(r.v);
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
       else if (r.k in MERECAT_DEFAULTS) cfg[r.k] = Number(r.v) || MERECAT_DEFAULTS[r.k];
     }
@@ -3099,8 +3101,14 @@ async function handleMerecatAsk(request, env, ctx) {
   // question to this owner's machine over Tailscale Funnel. The browser
   // still talks only to this worker; the local bot answers only requests
   // carrying the shared key below.
-  if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL) {
-    return await merecatAskLocal(env, ctx, { q, history, summary, chatId, me, day, youQ, todayQ, admin, cfg });
+  const instant = !!data.instant;
+  const userEffort = String(data.effort || 'medium');
+  if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && !instant) {
+    const r = await merecatAskLocal(env, ctx, { q, history, summary, chatId, me, day, youQ, todayQ, admin, cfg, effort: userEffort });
+    if (r) return r;
+    if (!cfg.failover) return json({ ok: false, resting: true,
+      error: 'The local librarian is offline. Switch back to the cloud in the merecat administration page, or try again shortly.' }, 503);
+    // failover on: fall through to the Cloudflare path below
   }
 
   const chunks = await merecatRetrieve(env, q, cfg);
@@ -3170,26 +3178,10 @@ async function handleMerecatAsk(request, env, ctx) {
    Funnel and relay its stream. The local server does retrieval + generation
    and returns one JSON line of sources, a blank line, then answer tokens. */
 async function merecatAskLocal(env, ctx, p) {
-  const { q, history, summary, me, day, youQ, todayQ, admin, cfg } = p;
+  const { q, history, summary, me, day, youQ, todayQ, admin, cfg, effort } = p;
   let chatId = p.chatId;
-  const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
-  let localResp;
-  try {
-    localResp = await fetch(base + '/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Merecat-Key': env.MERECAT_LOCAL_KEY || '' },
-      body: JSON.stringify({ q, history, summary }),
-    });
-  } catch (err) {
-    console.log(JSON.stringify({ event: 'merecat_local_unreachable', error: String(err) }));
-    return json({ ok: false, resting: true,
-      error: 'The local librarian is offline. Switch back to the cloud in the merecat administration page.' }, 503);
-  }
-  if (!localResp.ok || !localResp.body) {
-    return json({ ok: false, resting: true,
-      error: 'The local librarian is offline or refused. Switch back to the cloud in the merecat administration page.' }, 503);
-  }
-  // the local model accepted: the thread now exists and the question is on it
+  const localResp = await merecatLocalFetch(env, { q, history, summary, effort });
+  if (!localResp) return null;   // offline / refused / full — the caller may fail over
   const now = Math.floor(Date.now() / 1000);
   if (!chatId) {
     const ins = await env.LIBDB.prepare(
@@ -3216,6 +3208,51 @@ async function merecatAskLocal(env, ctx, p) {
   });
 }
 
+/* POST a question to the local bot over the Funnel with the shared key. Returns
+   the streaming Response, or null on any failure (offline, refused, queue full)
+   so the caller can fail over to the cloud when that is enabled. */
+async function merecatLocalFetch(env, body) {
+  const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
+  if (!base) return null;
+  try {
+    const r = await fetch(base + '/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Merecat-Key': env.MERECAT_LOCAL_KEY || '' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok || !r.body) return null;
+    return r;
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_local_unreachable', error: String(err) }));
+    return null;
+  }
+}
+
+/* Read a local answer fully — for @merecat mentions, which post a comment
+   rather than stream to a browser. Skips any leading {queue} notices, reads
+   the {sources} header, and returns { sources, answer } or null. */
+async function merecatLocalRead(env, body) {
+  const resp = await merecatLocalFetch(env, body);
+  if (!resp) return null;
+  let full = '';
+  try {
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    for (;;) { const { done, value } = await reader.read(); if (done) break; full += dec.decode(value, { stream: true }); }
+  } catch { return null; }
+  let rest = full;
+  let sources = [];
+  for (;;) {
+    const nl = rest.indexOf('\n\n');
+    if (nl === -1) break;
+    let head; try { head = JSON.parse(rest.slice(0, nl)); } catch { break; }
+    rest = rest.slice(nl + 2);
+    if (head && head.sources) { sources = head.sources; break; }
+    // else a {queue} notice — skip and keep reading
+  }
+  return { sources, answer: rest.trim() };
+}
+
 /* Relay the local stream: read its {sources} header line, re-emit the worker's
    own preamble (chat id + local's sources + used + rv), then pipe the answer
    tokens, storing the answer on the thread and counting usage at the end. */
@@ -3233,11 +3270,17 @@ async function merecatPumpProxy(env, localResp, writable, me, day, chatId, used)
       const { done, value } = await reader.read();
       if (done) break;
       buf += dec.decode(value, { stream: true });
-      if (!headerDone) {
+      while (!headerDone) {
         const nl = buf.indexOf('\n\n');
-        if (nl === -1) continue;
-        try { sources = JSON.parse(buf.slice(0, nl)).sources || []; } catch { sources = []; }
+        if (nl === -1) break;
+        let head; try { head = JSON.parse(buf.slice(0, nl)); } catch { head = null; }
         buf = buf.slice(nl + 2);
+        if (head && head.queue != null) {
+          // a place-in-line notice: relay it and keep reading for the sources
+          await writer.write(encode(JSON.stringify({ chat: chatId, queue: head.queue, backend: 'local' }) + '\n\n'));
+          continue;
+        }
+        sources = (head && head.sources) || [];
         await writer.write(encode(JSON.stringify({ chat: chatId, sources, used, rv: MERECAT_RV, backend: 'local' }) + '\n\n'));
         headerDone = true;
       }
@@ -3293,8 +3336,8 @@ async function handleMerecatBackends(request, env) {
       } catch { /* offline or slow: try again within budget */ }
     }
   }
-  return json({ ok: true, backend: cfg.backend, configured: !!base,
-    local, cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
+  return json({ ok: true, backend: cfg.backend, failover: cfg.failover, mention_effort: cfg.mention_effort,
+    configured: !!base, local, cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
 }
 
 /* Drain the model's SSE stream into the client stream: preamble first (the
@@ -3805,49 +3848,72 @@ async function merecatMentionReply(env, commentId) {
   let asked = String(c.body || '').replace(MERECAT_MENTION_RE, '').trim().slice(0, 2000);
   /* A bare "@merecat" under a question-bearing title: the title IS the ask. */
   if (!asked && topicTitle) asked = topicTitle;
-  const retrievalQ = ((topicTitle ? topicTitle + ' ' : '') + (c.title && c.title !== topicTitle ? c.title + ' ' : '') + asked)
-    .slice(0, 2000) || 'this site';
-  const chunks = await merecatRetrieve(env, retrievalQ, cfg);
-  const sources = chunks.map((cc, i) => ({
-    n: i + 1, title: merecatScrub(cc.title), heading: merecatScrub(cc.heading),
-    url: !cc.url ? '' : /^https?:\/\//.test(cc.url) ? cc.url : MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
-  }));
-  let srcBlock = '';
-  chunks.forEach((cc, i) => {
-    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
-      (cc.heading ? ' — ' + merecatScrub(cc.heading) : '') + '\n' + merecatScrub(cc.text.slice(0, 2800), true) + '\n\n';
-  });
-  const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
-    '\n\nYou were mentioned by name inside ' + where + '. The recent conversation, oldest first:\n\n' +
+  const userMsg = asked || 'Please weigh in on this thread.';
+  /* The thread/page brief, shared by both backends so the answer sees the same
+     context either way: where the mention lives, the recent conversation, and
+     the reply instructions. */
+  const frame = 'You were mentioned by name inside ' + where + '. The recent conversation, oldest first:\n\n' +
     (talkBlock || '(the thread starts with the comment below)') +
     '\n\nThe member ' + nameOf(c.author_hash) + ' has asked you directly, in the comment you are replying to. ' +
     'Write the single comment you will post in reply: answer what was asked, cite sources by their bracketed ' +
-    'numbers like [2], stay under 250 words, no greeting and no signature.' +
-    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite what carries weight — a few for a simple question, more when the question truly spans the shelf; these are the only citable sources' +
-    (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
-    '):\n\n' + (srcBlock || '(none)') + '/no_think';
-  const messages = [
-    { role: 'system', content: sys },
-    { role: 'user', content: asked || 'Please weigh in on this thread.' },
-  ];
+    'numbers like [2], stay under 250 words, no greeting and no signature.';
 
-  let res;
-  try {
-    res = await env.AI.run(cfg.model, { messages, max_tokens: 900, temperature: 0.35 });
-  } catch (err) {
-    console.log(JSON.stringify({ event: 'merecat_mention_ai_failed', error: String(err) }));
-    return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
-      MERECAT_RESTING + ' Mention me again then.');
+  /* Mention reasoning is an admin setting (default high). 'instant' routes a
+     mention to the cloud even when local is the backend; otherwise local does
+     the retrieval and generation at the chosen depth, and failover (if on)
+     drops to the cloud when local is down. */
+  const mentionEffort = cfg.mention_effort || 'high';
+  let answer = '';
+  let sources = [];
+  if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && mentionEffort !== 'instant') {
+    const loc = await merecatLocalRead(env, { q: userMsg, context: frame, effort: mentionEffort });
+    if (loc && loc.answer) { answer = loc.answer; sources = loc.sources; }
+    else if (!cfg.failover) {
+      return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
+        'merecat is resting (the local librarian is offline). Mention me again shortly.');
+    }
+    // else failover on: fall through to the cloud below
   }
-  let answer = res == null ? '' : (res.response != null ? String(res.response)
-    : (res.choices && res.choices[0] && res.choices[0].message
-      ? String(res.choices[0].message.content || '') : ''));
-  answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  if (!answer) {
+    const retrievalQ = ((topicTitle ? topicTitle + ' ' : '') + (c.title && c.title !== topicTitle ? c.title + ' ' : '') + asked)
+      .slice(0, 2000) || 'this site';
+    const chunks = await merecatRetrieve(env, retrievalQ, cfg);
+    sources = chunks.map((cc, i) => ({
+      n: i + 1, title: merecatScrub(cc.title), heading: merecatScrub(cc.heading),
+      url: !cc.url ? '' : /^https?:\/\//.test(cc.url) ? cc.url : MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
+    }));
+    let srcBlock = '';
+    chunks.forEach((cc, i) => {
+      srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
+        (cc.heading ? ' — ' + merecatScrub(cc.heading) : '') + '\n' + merecatScrub(cc.text.slice(0, 2800), true) + '\n\n';
+    });
+    const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
+      '\n\n' + frame +
+      '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite what carries weight — a few for a simple question, more when the question truly spans the shelf; these are the only citable sources' +
+      (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
+      '):\n\n' + (srcBlock || '(none)') + '/no_think';
+    const messages = [
+      { role: 'system', content: sys },
+      { role: 'user', content: userMsg },
+    ];
+    let res;
+    try {
+      res = await env.AI.run(cfg.model, { messages, max_tokens: 900, temperature: 0.35 });
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_mention_ai_failed', error: String(err) }));
+      return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
+        MERECAT_RESTING + ' Mention me again then.');
+    }
+    answer = res == null ? '' : (res.response != null ? String(res.response)
+      : (res.choices && res.choices[0] && res.choices[0].message
+        ? String(res.choices[0].message.content || '') : ''));
+    answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+  }
   if (!answer) return null;
   answer = merecatFinishAnswer(answer, sources);
   const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
 
-  const inTok = Math.ceil(JSON.stringify(messages).length / 4);
+  const inTok = Math.ceil((frame.length + userMsg.length) / 4);
   const outTok = Math.ceil(answer.length / 4);
   await env.LIBDB.batch([
     env.LIBDB.prepare(
@@ -3961,6 +4027,7 @@ async function handleMerecatUsage(request, env) {
     you: (u && u.q) || 0, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
     today: (g && g.q) || 0, gcap: cfg.global_daily,
     admin: await isAdminHash(env, me),
+    backend: cfg.backend,
   }, 200);
 }
 
@@ -4065,7 +4132,7 @@ async function handleMerecatConfigSet(request, env) {
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
   if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
-  for (const k of ['model', 'backend', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
+  for (const k of ['model', 'backend', 'failover', 'mention_effort', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
     if (cfg[k] != null) put(k, cfg[k]);
   }
   if (!stmts.length) return json({ ok: false, error: 'Nothing to set.' }, 400);
