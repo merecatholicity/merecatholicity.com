@@ -108,6 +108,9 @@ CREATE TABLE IF NOT EXISTS chat_msgs (
   role       TEXT NOT NULL CHECK (role IN ('user','assistant')),
   body       TEXT NOT NULL,
   sources    TEXT,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  answers    INTEGER              -- assistant rows: the user msg id answered.
+                                  -- The /store dedup key, so two generations in
+                                  -- flight on one thread can never drop one.
 );
 CREATE INDEX IF NOT EXISTS chat_msgs_chat_idx ON chat_msgs(chat_id, id);

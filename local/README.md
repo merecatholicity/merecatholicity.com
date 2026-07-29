@@ -190,12 +190,17 @@ in line, and past the cap the answer is an immediate "try again shortly".
 
 **An answer outlives the reader** (the disconnect contract): a page refresh
 mid-answer must never lose the reply. The worker stores the thread + question
-*before* proxying and passes the chat id down; `serve.py`'s stream writes are
-best-effort (a dead reader flips `client_gone`, generation continues to the
-end); the finished answer is then reported to the worker's keyed
-`POST /api/merecat/store` (`store_url` in `mc_config.yml`), which is
-**idempotent** (a thread already ending in an assistant reply no-ops) and
-authenticated by the same shared key. Gotcha: the callback must send a
-browser-ish `User-Agent` — Cloudflare's edge 403s Python-urllib's default
-(same trick as `ingest.py`). The cloud path has its own version of the same
-contract (see the worker: timed relay + partial flushes in `merecatPump`).
+*before* proxying and passes the chat id **and the question's msg id** down;
+`serve.py`'s stream writes are best-effort (a dead reader flips `client_gone`,
+generation continues to the end); the finished answer is then reported to the
+worker's keyed `POST /api/merecat/store` (`store_url` in `mc_config.yml`),
+**deduped per question** on the msg id (so a retry never doubles an answer,
+and two generations racing on one thread never drop one — a last-row check
+did, once). Gotchas: the callback must send a browser-ish `User-Agent` —
+Cloudflare's edge 403s Python-urllib's default (same trick as `ingest.py`) —
+and it never retries a 4xx (a deleted chat is not a transient). While waiting
+for the GPU, serve.py re-emits `{queue:N}` every 20s as a heartbeat so a long
+quiet queue wait cannot idle out the proxied stream, and a vanished reader
+with no chat to store to bails from the queue rather than burning the GPU.
+The cloud path has its own version of the same contract (see the worker:
+timed relay + partial flushes in `merecatPump`).

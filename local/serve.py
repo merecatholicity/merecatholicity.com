@@ -19,6 +19,7 @@ import sqlite3
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -48,10 +49,12 @@ KEY = shared_key()
 VECTORS = np.load(VEC_PATH, mmap_mode="r")
 
 
-def store_answer(chat, answer, sources):
+def store_answer(chat, msg, answer, sources):
     """Report the finished answer back to the worker so it lands on the thread
     even when the reader has disconnected from the live stream. Server-to-server,
     carrying the shared key; retried a few times so a transient blip is survived.
+    `msg` is the user-question msg id — the worker's dedup key, so a retry can
+    never double an answer and two generations on one thread can never drop one.
     A no-op with no store_url configured or no chat id, and only ever called for
     1-on-1 chats (mentions are stored worker-side from the fully-read stream)."""
     url = str(CFG.get("store_url", "")).strip()
@@ -60,8 +63,8 @@ def store_answer(chat, answer, sources):
     pub = [{"n": s.get("n"), "title": s.get("title"),
             "heading": s.get("heading"), "url": s.get("url")}
            for s in (sources or [])]
-    body = json.dumps({"key": KEY, "chat": chat, "answer": answer,
-                       "sources": pub}).encode()
+    body = json.dumps({"key": KEY, "chat": chat, "msg": msg or 0,
+                       "answer": answer, "sources": pub}).encode()
     last = None
     for i in range(4):
         try:
@@ -74,7 +77,15 @@ def store_answer(chat, answer, sources):
             with urllib.request.urlopen(req, timeout=25) as r:
                 r.read()
             return
-        except Exception as e:  # noqa: BLE001 — best-effort, keep retrying
+        except urllib.error.HTTPError as e:
+            # a definite server answer: 4xx never heals on retry (bad key,
+            # deleted chat) — log and stop; 5xx may be transient, keep trying
+            if e.code < 500:
+                print(f"store_answer refused ({e.code}) — not retrying", flush=True)
+                return
+            last = e
+            time.sleep(1.5 * (i + 1))
+        except Exception as e:  # noqa: BLE001 — network blip, keep retrying
             last = e
             time.sleep(1.5 * (i + 1))
     print(f"store_answer failed after retries: {last}", flush=True)
@@ -238,6 +249,7 @@ class Handler(BaseHTTPRequestHandler):
         effort = str(data.get("effort", "high"))
         context = data.get("context") or ""
         chat = data.get("chat")   # 1-on-1 thread id; present → store the answer
+        msg = data.get("msg")     # the question's msg id — the /store dedup key
 
         # Queue admission: past the cap, refuse at once (with the count ahead)
         # so nothing piles onto the GPU; within it, we will wait our turn.
@@ -278,10 +290,22 @@ class Handler(BaseHTTPRequestHandler):
         parts = []
         strip = ThinkStrip()
         try:
-            # always tell the caller the line length (0 = no one ahead), so the
-            # dialogue can show how busy the one GPU is, then block for it
+            # Tell the caller the line length (0 = no one ahead), then block for
+            # the GPU in short rounds, re-emitting the notice as a heartbeat —
+            # a deep queue can mean many silent minutes, and an idle proxied
+            # stream (worker fetch, Funnel) is what gets reaped, not a slow one.
             emit(json.dumps({"queue": position}) + "\n\n")
-            acquired = _gpu.acquire(timeout=300)
+            waited = 0
+            while waited < 900:
+                # a vanished reader with no thread to store to (a mention read
+                # whose caller died) has nowhere to deliver — free the slot
+                if client_gone[0] and not chat:
+                    return
+                acquired = _gpu.acquire(timeout=20)
+                if acquired:
+                    break
+                waited += 20
+                emit(json.dumps({"queue": position}) + "\n\n")
             if not acquired:
                 emit(json.dumps({"sources": []}) + "\n\n")
                 emit("The local librarian is overloaded right now. Please try again shortly.")
@@ -294,19 +318,30 @@ class Handler(BaseHTTPRequestHandler):
                 emit(f"(retrieval failed: {e})")
                 return
             emit(json.dumps({"sources": sources}) + "\n\n")
-            for kind, delta in llm.chat_stream(CFG, messages, think=True):
-                if kind != "answer":
-                    continue
-                vis = strip.feed(delta)
-                if vis:
-                    parts.append(vis)
-                    emit(vis)
-            tail = strip.flush()
-            if tail:
-                parts.append(tail)
-                emit(tail)
+            try:
+                for kind, delta in llm.chat_stream(CFG, messages, think=True):
+                    if kind != "answer":
+                        continue
+                    vis = strip.feed(delta)
+                    if vis:
+                        parts.append(vis)
+                        emit(vis)
+                tail = strip.flush()
+                if tail:
+                    parts.append(tail)
+                    emit(tail)
+            except Exception as e:
+                # the engine died mid-answer: disclose it on the wire and in
+                # anything stored, rather than passing off a truncation as whole
+                print(f"ask generation error: {e}", flush=True)
+                if parts:
+                    note = "\n\n*(the answer was cut short by an engine fault on the librarian's machine)*"
+                    parts.append(note)
+                    emit(note)
+                else:
+                    emit("The librarian's engine faltered before the answer began. Please ask again.")
         except Exception as e:  # noqa: BLE001 — never crash the handler thread
-            print(f"ask generation error: {e}", flush=True)
+            print(f"ask handler error: {e}", flush=True)
         finally:
             if acquired:
                 _gpu.release()
@@ -317,7 +352,7 @@ class Handler(BaseHTTPRequestHandler):
         # in line. This is the path that outlives a reader disconnect.
         answer = "".join(parts).strip()
         if chat and answer:
-            store_answer(chat, answer, sources)
+            store_answer(chat, msg, answer, sources)
 
 
 def main():
