@@ -34,7 +34,7 @@ sudo pacman -S --needed ollama-vulkan llama-cpp
 
 # 2. start ollama and pull the models
 ollama serve &                       # or: systemctl start ollama
-ollama pull qwen3:30b-a3b bge-m3
+ollama pull huihui_ai/qwen3-abliterated:30b bge-m3
 
 # 3. the reranker GGUF (CPU) — into local/models/
 curl -L -o local/models/bge-reranker-v2-m3-Q8_0.gguf \
@@ -116,7 +116,9 @@ sqlite index, and the reranker GGUF are all rebuilt from the shared sources by
 
 - **Every chunk is vectorized**, so semantic recall reaches every band, not
   just band 1 + the worldview core.
-- **Stronger models**: qwen3:30b-a3b (vs the fp8 served build), bge-reranker
+- **Stronger models**: huihui_ai/qwen3-abliterated:30b — the refusal-removed
+  (abliterated) build of the same 30B-A3B MoE, the owner's anti-censorship
+  choice (vs the stock fp8 served build in the cloud) — plus bge-reranker
   **v2**-m3 (vs `-base`), and more chunks in context (`topk` 12 vs 8).
 - **No caps, no budget, no token ceiling** — answers run long, reasoning on.
 
@@ -141,7 +143,7 @@ tailscale funnel --bg off 8790        # or: tailscale funnel reset
 # in the merecat administration page first so readers never hit a dead route.
 
 # 3. delete the pulled models (~19 GB) and the reranker GGUF
-ollama rm qwen3:30b-a3b bge-m3        # or: rm -rf ~/.ollama  (all ollama data)
+ollama rm huihui_ai/qwen3-abliterated:30b bge-m3   # or: rm -rf ~/.ollama
 rm -rf local/data local/models        # the git-ignored derived state
 
 # 4. uninstall the runtime (removes deps too; safe — nothing else needs them)

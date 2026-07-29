@@ -6,7 +6,10 @@
 ollama_url: "http://127.0.0.1:11434"
 rerank_url: "http://127.0.0.1:8181"     # llama.cpp --reranking (CPU); optional
 
-chat_model: "qwen3:30b-a3b"             # user-chosen, quality-first (30B MoE)
+# The abliterated (refusal-removed) twin of the same 30B-A3B MoE — the owner's
+# 2026-07-29 anti-censorship ruling. Same architecture, speed, and VRAM shape
+# as qwen3:30b-a3b (kept in ~/.ollama for rollback: one line here + restart).
+chat_model: "huihui_ai/qwen3-abliterated:30b"
 embed_model: "bge-m3"                    # 1024-dim, same as Cloudflare (parity)
 embed_dim: 1024
 num_ctx: 16384                          # generous context (CF had none to spare)
