@@ -4526,7 +4526,30 @@
 
   function viewMerecat() {
     document.title = 'Ask Merecat AI | Mere Catholicity';
-    crumb([['Catholicity Board', 'community.html'], ['merecat']]);
+    var crumbP = crumb([['Catholicity Board', 'community.html'], ['merecat']]);
+    /* Inside a conversation the trail grows a third step naming the thread —
+       Catholicity Board › merecat › <the question that opened it> — and
+       "merecat" becomes the way back to the main page. The tail updates as
+       the truth arrives: a placeholder from the URL, the stored title when a
+       reopened thread loads, the question itself when a fresh thread mints. */
+    function setCrumb(tail) {
+      crumbP.textContent = '';
+      var short = tail ? (tail.length > 48 ? tail.slice(0, 48) + '…' : tail) : '';
+      var parts = [['Catholicity Board', 'community.html']];
+      if (short) { parts.push(['merecat', 'community.html?merecat=1']); parts.push([short]); }
+      else parts.push(['merecat']);
+      parts.forEach(function (part, i) {
+        if (i) crumbP.appendChild(document.createTextNode(' › '));
+        if (part[1]) {
+          var a = el('a', null, part[0]);
+          a.href = part[1];
+          crumbP.appendChild(a);
+        } else {
+          crumbP.appendChild(el('span', null, part[0]));
+        }
+      });
+      document.title = (short ? short + ' | ' : '') + 'Ask Merecat AI | Mere Catholicity';
+    }
     /* The page is open to everyone; asking needs a free identity, made in
        one click right above the question box. */
     var loggedIn = !!(state.key && state.myHash);
@@ -4554,6 +4577,7 @@
        ?chat=<id> reopens a thread, and a fresh question mints one whose id
        the answer's preamble carries back. */
     var chatId = Number(new URLSearchParams(location.search).get('chat')) || 0;
+    if (chatId) setCrumb('Conversation ' + chatId);
 
     var past = el('details', 'merecat-about');
     if (!loggedIn) past.hidden = true;
@@ -5111,6 +5135,7 @@
                   if (history.replaceState) {
                     history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
                   }
+                  setCrumb(text);
                 }
                 if (head.used) renderQuota(head.used);
                 acc = pre;
@@ -5181,10 +5206,12 @@
         loadNote.remove();
         if (!d.ok) {
           chatId = 0;
+          setCrumb('');
           if (history.replaceState) history.replaceState(null, '', location.pathname + '?merecat=1');
           log.appendChild(el('p', 'comments-status', 'That conversation is gone (expired or deleted). This is a fresh one.'));
           return;
         }
+        setCrumb((d.chat && d.chat.title) || ('Conversation ' + chatId));
         (d.msgs || []).forEach(function (m) {
           var b = bubble(m.role === 'user' ? 'you' : 'cat');
           if (m.role === 'user') {
