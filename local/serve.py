@@ -201,7 +201,7 @@ class Handler(BaseHTTPRequestHandler):
         q = str(data.get("q", "")).strip()[:2000]
         if not q:
             return self._json(400, {"ok": False, "error": "Bad request."})
-        effort = str(data.get("effort", "medium"))
+        effort = str(data.get("effort", "high"))
         context = data.get("context") or ""
 
         # Queue admission: past the cap, refuse at once (with the count ahead)
@@ -231,9 +231,9 @@ class Handler(BaseHTTPRequestHandler):
 
         acquired = False
         try:
-            # tell a waiting caller its place in line, then block for the GPU
-            if position > 0:
-                emit(json.dumps({"queue": position}) + "\n\n")
+            # always tell the caller the line length (0 = no one ahead), so the
+            # dialogue can show how busy the one GPU is, then block for it
+            emit(json.dumps({"queue": position}) + "\n\n")
             acquired = _gpu.acquire(timeout=300)
             if not acquired:
                 emit(json.dumps({"sources": []}) + "\n\n")
