@@ -4939,6 +4939,63 @@
          an answer is still printing waits in the queue for the printing, and
          nothing ever cuts an answer off mid-flow. */
       var shown = 0, flowTimer = null, streamDone = false, flowResolve = null;
+      /* The stall watchdog. A proxied stream can die SILENTLY — no error, no
+         close, reader.read() simply never resolves again — leaving the screen
+         frozen mid-answer while the finished text lands on the thread anyway
+         (the /store contract). So: track the last byte's arrival, declare a
+         stall when the silence outlives what the phase allows (75s once the
+         answer is printing — tokens flow steadily then — and 10 minutes before
+         the first token, where deep reasoning and queue waits live), abort the
+         dead stream, and RECOVER by polling the thread for the stored answer
+         and rendering it in place. The reader's manual refresh, automated. */
+      var lastByteAt = Date.now(), stalled = false, watchTimer = null;
+      var ctl = window.AbortController ? new AbortController() : null;
+      function recover() {
+        working.stop();
+        if (!chatId) {
+          cat.body.textContent = '';
+          cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
+          return;
+        }
+        cat.body.textContent = acc;
+        var note = el('p', 'merecat-note',
+          '— the connection went quiet. Waiting for the finished answer to arrive…');
+        cat.body.appendChild(note);
+        var tries = 0;
+        return new Promise(function (resolve) {
+          function poll() {
+            tries += 1;
+            fetchRetry(MERECAT_API + '/chat', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, id: chatId }),
+            }, [2000]).then(function (r) { return r.json(); }).then(function (d) {
+              var n = d.ok && d.msgs ? d.msgs.length : 0;
+              var m = n ? d.msgs[n - 1] : null;
+              var prev = n > 1 ? d.msgs[n - 2] : null;
+              if (m && m.role === 'assistant' && prev && prev.role === 'user' &&
+                  prev.body.trim() === text.trim()) {
+                var srcs = [];
+                try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
+                var rr = citeRenumber(m.body, srcs);
+                cat.body.textContent = '';
+                fillBody(cat.body, rr.text);
+                srcFooter(cat.body, rr.sources);
+                if (m.id) attachForward(cat.msg, m.id);
+                cat.msg.scrollIntoView({ block: 'nearest' });
+                resolve();
+                return;
+              }
+              if (tries < 30) { setTimeout(poll, 12000); return; }
+              note.textContent = '— the answer is still being written. It will be saved to this conversation; reopen it in a little while to read it.';
+              resolve();
+            }).catch(function () {
+              if (tries < 30) { setTimeout(poll, 12000); return; }
+              resolve();
+            });
+          }
+          poll();
+        });
+      }
       function followTail(node) {
         /* keep the growing tail in view only while the reader is riding it —
            if they scrolled away, leave them be */
@@ -4947,25 +5004,35 @@
         if (r.bottom > vh && r.bottom - vh < 400) node.scrollIntoView({ block: 'end' });
       }
       function flowTick() {
-        var backlog = acc.length - shown;
-        if (backlog > 0) {
-          shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
-          cat.body.textContent = acc.slice(0, shown);
-          followTail(cat.msg);
-        } else if (streamDone) {
-          clearInterval(flowTimer);
-          flowTimer = null;
-          if (flowResolve) flowResolve();
-        }
+        try {
+          var backlog = acc.length - shown;
+          if (backlog > 0) {
+            shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
+            cat.body.textContent = acc.slice(0, shown);
+            followTail(cat.msg);
+          } else if (streamDone) {
+            clearInterval(flowTimer);
+            flowTimer = null;
+            if (flowResolve) flowResolve();
+          }
+        } catch (e) { /* a DOM hiccup must never wedge the reveal for good */ }
       }
       function ensureFlow() { if (!flowTimer) flowTimer = setInterval(flowTick, 40); }
       var payload = { key: state.key, q: text, chat: chatId || 0 };
       var mode = modeSel.value || 'high';
       if (mode === 'instant') payload.instant = true; else payload.effort = mode;
+      watchTimer = setInterval(function () {
+        var limit = (sources !== null && acc.length) ? 75000 : 600000;
+        if (Date.now() - lastByteAt > limit) {
+          stalled = true;
+          if (ctl) { try { ctl.abort(); } catch (e) {} }
+        }
+      }, 5000);
       fetch(MERECAT_API + '/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: ctl ? ctl.signal : undefined,
       }).then(function (res) {
         var ct = res.headers.get('Content-Type') || '';
         if (ct.indexOf('application/json') !== -1) {
@@ -5007,6 +5074,7 @@
         }
         function pump() {
           return reader.read().then(function (r) {
+            lastByteAt = Date.now();
             if (r.done) { return finish(); }
             var chunk = dec.decode(r.value, { stream: true });
             if (sources === null) {
@@ -5060,6 +5128,11 @@
       }).catch(function () {
         working.stop();
         if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        if (stalled) {
+          /* The watchdog cut a silently dead stream: fetch the finished
+             answer from the thread and render it in place. */
+          return recover();
+        }
         if (sources !== null) {
           /* The stream broke mid-answer, but the question was accepted: the
              librarian keeps writing and saves the answer to this conversation.
@@ -5073,6 +5146,7 @@
           cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
         }
       }).then(function () {
+        if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
         busy = false;
         /* The answer is fully rendered. After a short beat so it settles, send
            the next stacked question; otherwise return focus to the box. */
