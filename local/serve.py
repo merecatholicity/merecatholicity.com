@@ -196,7 +196,11 @@ def build_messages(q, history, summary, context, effort):
     if context:
         sys_prompt += "\n\n" + str(context)
     sys_prompt += ("\n\nSOURCES (cite by bracketed number, like [3] — write the "
-                   "digit; these are the only citable sources this turn):\n\n"
+                   "digit; cite 2-4 distinct sources for an answer of 250-500 "
+                   "words and 4-8 for 500 words and beyond, spreading them "
+                   "across every source that genuinely informed the answer "
+                   "rather than leaning on one or two; these are the only "
+                   "citable sources this turn):\n\n"
                    + (block or "(none)"))
     d = DEPTH.get(effort, "")
     if d:
