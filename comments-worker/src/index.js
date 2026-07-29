@@ -3769,7 +3769,11 @@ async function handleMerecatChatSave(request, env) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  // READ_LIMIT, not POST_LIMIT: a save is a metadata toggle, and a burst of
+  // save/unsave clicks is legitimate — the 5-writes-a-minute throttle once
+  // 429'd a retried save that the first (response-lost) attempt had already
+  // landed, which the client then swallowed in silence.
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   const id = Number(data.id);

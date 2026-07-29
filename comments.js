@@ -4629,6 +4629,17 @@
     past.appendChild(el('summary', null, 'Past conversations'));
     var pastBody = el('div', 'merecat-about-body');
     past.appendChild(pastBody);
+    /* Action feedback for the list: a failure must never pass in silence — the
+       flaky-save postmortem: a response-lost save retried into the rate limit,
+       returned a refusal, and the old handler dropped it on the floor. */
+    var actNote = el('p', 'comments-status');
+    actNote.hidden = true;
+    past.appendChild(actNote);
+    function actSay(msg) {
+      actNote.textContent = msg;
+      actNote.hidden = !msg;
+      if (msg) setTimeout(function () { actNote.hidden = true; }, 7000);
+    }
     var pastLoaded = false;
     past.addEventListener('toggle', function () {
       if (!past.open || pastLoaded) return;
@@ -4645,12 +4656,14 @@
           return;
         }
         var chats = d.chats;
-        function chatAction(c, act, body, done) {
-          fetchRetry(MERECAT_API + '/chat/' + act, {
+        /* When a response is lost the request may still have landed — ask the
+           server for the truth instead of guessing either way. */
+        function resyncChats() {
+          return fetchRetry(MERECAT_API + '/chats', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
-            if (dd.ok) done();
+            body: JSON.stringify({ key: state.key }),
+          }, [1000]).then(function (r) { return r.json(); }).then(function (d2) {
+            if (d2.ok && d2.chats) { chats = d2.chats; renderChats(); }
           }).catch(function () {});
         }
         function chatRow(c) {
@@ -4672,9 +4685,25 @@
               if (expired && !confirm('This conversation is older than thirty days. ' +
                 'Unsaving lets it expire, and it may be removed at once. Continue?')) return;
             }
-            chatAction(c, 'save', { key: state.key, id: c.id, save: c.saved ? 0 : 1 }, function () {
-              c.saved = c.saved ? 0 : 1;
-              renderChats();
+            /* Optimistic: the row moves at once; the server's answer then
+               confirms, reverts with a note, or — on a lost response — a
+               resync settles it from the server's truth. */
+            var want = c.saved ? 0 : 1;
+            c.saved = want;
+            renderChats();
+            fetchRetry(MERECAT_API + '/chat/save', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, id: c.id, save: want }),
+            }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+              if (!dd.ok) {
+                c.saved = want ? 0 : 1;
+                renderChats();
+                actSay((want ? 'Could not save: ' : 'Could not unsave: ') + (dd.error || 'try again in a moment.'));
+              }
+            }).catch(function () {
+              resyncChats().then(function () {
+                actSay('Connection hiccup — the list was refreshed from the server.');
+              });
             });
           });
           row.appendChild(sv);
@@ -4684,10 +4713,21 @@
           del.addEventListener('click', function (e) {
             e.preventDefault();
             if (!confirm('Delete this conversation outright? There is no undo.')) return;
-            chatAction(c, 'delete', { key: state.key, id: c.id }, function () {
-              chats = chats.filter(function (x) { return x !== c; });
-              renderChats();
-              if (c.id === chatId) location.href = 'community.html?merecat=1';
+            fetchRetry(MERECAT_API + '/chat/delete', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, id: c.id }),
+            }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+              if (dd.ok) {
+                chats = chats.filter(function (x) { return x !== c; });
+                renderChats();
+                if (c.id === chatId) location.href = 'community.html?merecat=1';
+              } else {
+                actSay('Could not delete: ' + (dd.error || 'try again in a moment.'));
+              }
+            }).catch(function () {
+              resyncChats().then(function () {
+                actSay('Connection hiccup — the list was refreshed from the server. Try the delete again if it still stands.');
+              });
             });
           });
           row.appendChild(del);
