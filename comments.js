@@ -4982,7 +4982,7 @@
             var row = el('label'); row.style.display = 'block'; row.style.margin = '.35em 0';
             var radio = el('input'); radio.type = 'radio'; radio.name = 'mc-backend'; radio.value = o[0];
             radio.checked = (b.backend === o[0]);
-            radio.addEventListener('change', function () { if (radio.checked) save(o[0]); });
+            radio.addEventListener('change', function () { if (radio.checked) { applyGate(o[0] === 'local'); save(o[0]); } });
             row.appendChild(radio);
             row.appendChild(el('strong', null, ' ' + o[1] + '  '));
             var dot = el('span', null, o[2] ? '● ' : '○ '); dot.style.color = o[2] ? '#2e7d32' : '#b00';
@@ -5020,6 +5020,21 @@
           msel.addEventListener('change', function () { saveCfg({ mention_effort: msel.value }, 'Mention reasoning'); });
           mrow.appendChild(msel);
           wrap.appendChild(mrow);
+
+          /* The backend is the top-level gate: on Cloudflare the site behaves
+             exactly as it always has, and the settings below (which only shape
+             the local librarian) gray out to make that plain. */
+          var gateNote = el('p', 'comments-status', '');
+          wrap.appendChild(gateNote);
+          function applyGate(isLocal) {
+            fchk.disabled = !isLocal; msel.disabled = !isLocal;
+            frow.style.opacity = isLocal ? '' : '0.45';
+            mrow.style.opacity = isLocal ? '' : '0.45';
+            gateNote.textContent = isLocal
+              ? 'Local is the active backend. The settings below apply.'
+              : 'Cloudflare is the active backend — the site behaves exactly as before, and the settings below do not apply.';
+          }
+          applyGate(b.backend === 'local');
 
           if (!b.configured) wrap.appendChild(el('p', 'comments-status', 'No local URL is configured on the worker yet.'));
         }).catch(function () {
