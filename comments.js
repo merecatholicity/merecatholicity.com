@@ -4931,6 +4931,34 @@
          means the question never confirmed; anything later means it is stored
          server-side and the answer will reach the thread regardless. */
       var pre = '', acc = '', sources = null;
+      /* The paced reveal. The network delivers the answer in bursts (and the
+         final flush lands all at once), so raw rendering snaps rather than
+         flows. Instead the text reveals at a steady adaptive pace, catching up
+         when a burst builds a backlog, and the ask does not count as finished
+         until the reveal itself has run to the end — so a question typed while
+         an answer is still printing waits in the queue for the printing, and
+         nothing ever cuts an answer off mid-flow. */
+      var shown = 0, flowTimer = null, streamDone = false, flowResolve = null;
+      function followTail(node) {
+        /* keep the growing tail in view only while the reader is riding it —
+           if they scrolled away, leave them be */
+        var r = node.getBoundingClientRect();
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        if (r.bottom > vh && r.bottom - vh < 400) node.scrollIntoView({ block: 'end' });
+      }
+      function flowTick() {
+        var backlog = acc.length - shown;
+        if (backlog > 0) {
+          shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
+          cat.body.textContent = acc.slice(0, shown);
+          followTail(cat.msg);
+        } else if (streamDone) {
+          clearInterval(flowTimer);
+          flowTimer = null;
+          if (flowResolve) flowResolve();
+        }
+      }
+      function ensureFlow() { if (!flowTimer) flowTimer = setInterval(flowTick, 40); }
       var payload = { key: state.key, q: text, chat: chatId || 0 };
       var mode = modeSel.value || 'high';
       if (mode === 'instant') payload.instant = true; else payload.effort = mode;
@@ -4956,20 +4984,30 @@
         function finish() {
           working.stop();
           acc = acc.replace(/\s+$/, '');
-          cat.body.textContent = '';
-          if (acc) {
-            var rr = citeRenumber(acc, sources);
-            fillBody(cat.body, rr.text);
-            srcFooter(cat.body, rr.sources);
-            attachForward(cat.msg, 'last');
-          } else {
+          if (!acc) {
+            cat.body.textContent = '';
             cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
+            cat.msg.scrollIntoView({ block: 'nearest' });
+            return;
           }
-          cat.msg.scrollIntoView({ block: 'nearest' });
+          /* Let the reveal run to the end of the text before the final
+             markdown render lands and the ask counts as done. */
+          streamDone = true;
+          ensureFlow();
+          return new Promise(function (resolve) {
+            flowResolve = function () {
+              var rr = citeRenumber(acc, sources);
+              cat.body.textContent = '';
+              fillBody(cat.body, rr.text);
+              srcFooter(cat.body, rr.sources);
+              attachForward(cat.msg, 'last');
+              resolve();
+            };
+          });
         }
         function pump() {
           return reader.read().then(function (r) {
-            if (r.done) { finish(); return; }
+            if (r.done) { return finish(); }
             var chunk = dec.decode(r.value, { stream: true });
             if (sources === null) {
               pre += chunk;
@@ -5014,17 +5052,19 @@
             } else {
               acc += chunk;
             }
-            if (acc) { working.stop(); cat.body.textContent = acc; }
+            if (acc) { working.stop(); ensureFlow(); }
             return pump();
           });
         }
         return pump();
       }).catch(function () {
         working.stop();
+        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
         if (sources !== null) {
           /* The stream broke mid-answer, but the question was accepted: the
              librarian keeps writing and saves the answer to this conversation.
-             Keep whatever already streamed and say where the rest will be. */
+             Show everything that arrived and say where the rest will be. */
+          cat.body.textContent = acc;
           cat.body.appendChild(el('p', 'merecat-note',
             '— the connection dropped, but the librarian is still writing. The full answer ' +
             'will be saved to this conversation; reopen it in a minute or two to read it.'));
