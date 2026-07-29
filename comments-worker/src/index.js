@@ -2070,6 +2070,47 @@ async function screenImage(env, bytes) {
    ban, Turnstile, and an AI vision screen. The write is a fixed-key overwrite,
    so the previous avatar is replaced in the same act and no orphan objects
    can accumulate. */
+/* Admin defense: edit or clean ANY member's profile in place — the middle
+   ground between doing nothing and lock/ban/delete, for removing something
+   at once while sparing the member. Admin-keyed like /moderate (no Turnstile,
+   no AI screen: the admin IS the moderator), the same field limits and the
+   librarian's reserved-name guard, empty fields clearing their columns, and
+   clear_avatar removing both the R2 object and the column. Only admins pass;
+   a regular key is refused before anything is read. */
+async function handleProfileAdminEdit(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const target = String(data.hash || '');
+  if (!key || !/^[0-9a-f]{64}$/.test(target)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
+  if (target === MERECAT_BOT.hash) return json({ ok: false, error: 'The librarian keeps its own desk.' }, 400);
+  const nick = cleanField(data.nick, MAX_NICK);
+  const bio = cleanField(data.bio, MAX_BIO);
+  const signature = cleanField(data.signature, MAX_SIG);
+  if (nick.error || bio.error || signature.error) {
+    return json({ ok: false, error: 'That profile is too long or has stray characters.' }, 400);
+  }
+  if (/merecat/i.test(String(nick.value || '').replace(/\s+/g, ''))) {
+    return json({ ok: false, error: 'That name belongs to the librarian. Pick another.' }, 400);
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const res = await env.DB.prepare(
+    'UPDATE profiles SET nick = ?2, bio = ?3, signature = ?4, updated_at = ?5 WHERE hash = ?1'
+  ).bind(target, nick.value, bio.value, signature.value, now).run();
+  if (!res.meta || !res.meta.changes) return json({ ok: false, error: 'No such member.' }, 404);
+  if (data.clear_avatar) {
+    if (env.AVATARS) await env.AVATARS.delete('avatars/' + target);
+    await env.DB.prepare('UPDATE profiles SET avatar = NULL WHERE hash = ?1').bind(target).run();
+  }
+  // a visible line in the tail, since moderation leaves no other trace
+  console.log(JSON.stringify({ event: 'admin_profile_edit', target, cleared_avatar: !!data.clear_avatar }));
+  return json({ ok: true }, 200);
+}
+
 async function handleAvatarUpload(request, env) {
   if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4493,6 +4534,7 @@ export default {
       if (path === '/api/comments/search' && request.method === 'GET') return await handleSearch(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'GET') return await handleProfileGet(request, env, url);
       if (path === '/api/comments/profile' && request.method === 'POST') return await handleProfileSave(request, env);
+      if (path === '/api/comments/profile/admin' && request.method === 'POST') return await handleProfileAdminEdit(request, env);
       if (path === '/api/comments/profile/clear' && request.method === 'POST') return await handleProfileClear(request, env);
       if (path === '/api/comments/backup' && request.method === 'POST') return await handleBackup(request, env);
       if (path === '/api/comments/dm/send' && request.method === 'POST') return await handleDmSend(request, env);

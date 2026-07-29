@@ -3405,10 +3405,70 @@
         if (!d.ok) throw new Error(d.error || 'failed');
         status.remove();
         renderProfile(card, d.profile, editable);
+        /* Admin defense: edit or clean another member's profile in place —
+           the middle ground between doing nothing and lock/ban/delete. Only
+           on profiles that are not your own; the server refuses non-admins
+           regardless, so hiding this is courtesy, not the lock. */
+        if (!editable && isAdmin()) adminProfileEditor(card, hash, d.profile || {});
       })
       .catch(function () {
         status.textContent = 'The profile could not be loaded. Check your connection and reload the page.';
       });
+  }
+
+  function adminProfileEditor(card, hash, prof) {
+    var slot = el('div', 'profile-admin-edit');
+    var open = el('a', 'identity-action', 'Edit this profile (admin)');
+    open.href = '#';
+    slot.appendChild(open);
+    card.appendChild(slot);
+    open.addEventListener('click', function (e) {
+      e.preventDefault();
+      slot.textContent = '';
+      function field(label, value, max, tag) {
+        slot.appendChild(el('div', 'profile-label', label));
+        var inp = el(tag || 'input', 'key-input');
+        if (!tag) inp.type = 'text';
+        inp.value = value || '';
+        inp.maxLength = max;
+        slot.appendChild(inp);
+        return inp;
+      }
+      var nick = field('Nickname', prof.nick, 40);
+      var bio = field('Bio', prof.bio, 1000, 'textarea');
+      var sig = field('Signature', prof.signature, 200, 'textarea');
+      var avRow = el('label', 'profile-label');
+      var avChk = el('input');
+      avChk.type = 'checkbox';
+      avRow.appendChild(avChk);
+      avRow.appendChild(document.createTextNode(' Remove their avatar'));
+      slot.appendChild(avRow);
+      var note = el('p', 'comments-status', '');
+      var save = el('button', 'btn btn-send', 'Save (admin)');
+      var cancel = el('a', 'identity-action', 'Cancel');
+      cancel.href = '#';
+      slot.appendChild(save);
+      slot.appendChild(document.createTextNode(' '));
+      slot.appendChild(cancel);
+      slot.appendChild(note);
+      cancel.addEventListener('click', function (ev) { ev.preventDefault(); location.reload(); });
+      save.addEventListener('click', function () {
+        save.disabled = true;
+        note.textContent = 'Saving…';
+        fetchRetry(API + '/profile/admin', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, hash: hash, nick: nick.value,
+            bio: bio.value, signature: sig.value, clear_avatar: avChk.checked }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) { location.reload(); return; }
+          save.disabled = false;
+          note.textContent = 'Could not save: ' + (d.error || 'try again.');
+        }).catch(function () {
+          save.disabled = false;
+          note.textContent = 'Network hiccup. Try again.';
+        });
+      });
+    });
   }
 
   /* Read view: an avatar placeholder, the primary name (nick or assigned) with
