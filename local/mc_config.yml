@@ -12,7 +12,11 @@ rerank_url: "http://127.0.0.1:8181"     # llama.cpp --reranking (CPU); optional
 chat_model: "huihui_ai/qwen3-abliterated:30b"
 embed_model: "bge-m3"                    # 1024-dim, same as Cloudflare (parity)
 embed_dim: 1024
-num_ctx: 16384                          # generous context (CF had none to spare)
+num_ctx: 20480                          # room for a bounded ~12k prompt PLUS a
+                                        # deep think and a long answer (16k once
+                                        # ran dry mid-reasoning: empty answer)
+num_thread: 8                           # of 12 cores: the desk stays usable
+                                        # while expert tensors run on CPU
 
 # Retrieval. The whole corpus has vectors now, so the vector leg casts wide
 # and the reranker sorts it. topk up from the worker's 8 — no token budget.
