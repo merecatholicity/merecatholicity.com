@@ -42,8 +42,10 @@ curl -L -o local/models/bge-reranker-v2-m3-Q8_0.gguf \
 llama-server -m local/models/bge-reranker-v2-m3-Q8_0.gguf --reranking \
   --host 127.0.0.1 --port 8181 &
 
-# 4. build the index from the shared sources (~15-20 min once)
+# 4. build the index from the shared sources (~an hour, once)
 python local/build_index.py
+#    later shelf additions are incremental — minutes, not the full rebuild:
+#    python local/build_index.py --add <work-id>   # then restart merecat-local
 
 # 5. ask
 ./local/merecat "your question"

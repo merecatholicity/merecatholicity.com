@@ -3742,8 +3742,12 @@ async function handleMerecatIngest(request, env) {
       }
     }
     const cids = [...cidset];
-    for (let i = 0; i < cids.length; i += 1000) {
-      try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 1000)); }
+    // deleteByIds has a LOW per-call id cap (a 257-id call fails outright, a
+    // 50-id call succeeds) — the old 1000-per-call batching made every sweep
+    // of a real-sized work fail silently into this catch, which is how two
+    // de-vectorized works kept their stale vectors (found 2026-07-28).
+    for (let i = 0; i < cids.length; i += 50) {
+      try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 50)); }
       catch (err) { console.log(JSON.stringify({ event: 'merecat_vecdel_failed', error: String(err) })); }
     }
     for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
