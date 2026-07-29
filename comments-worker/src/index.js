@@ -3634,14 +3634,15 @@ async function handleMerecatChats(request, env) {
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
+  // saved threads are kept permanently: the expiry sweeps pass them by
   await env.LIBDB.batch([
     env.LIBDB.prepare(
-      'DELETE FROM chat_msgs WHERE chat_id IN (SELECT id FROM chats WHERE hash = ?1 AND last_at < ?2)'
+      'DELETE FROM chat_msgs WHERE chat_id IN (SELECT id FROM chats WHERE hash = ?1 AND last_at < ?2 AND COALESCE(saved, 0) = 0)'
     ).bind(me, cut),
-    env.LIBDB.prepare('DELETE FROM chats WHERE hash = ?1 AND last_at < ?2').bind(me, cut),
+    env.LIBDB.prepare('DELETE FROM chats WHERE hash = ?1 AND last_at < ?2 AND COALESCE(saved, 0) = 0').bind(me, cut),
   ]);
   const rows = await env.LIBDB.prepare(
-    'SELECT id, title, msgs, last_at FROM chats WHERE hash = ?1 ORDER BY last_at DESC LIMIT 50'
+    'SELECT id, title, msgs, last_at, COALESCE(saved, 0) AS saved FROM chats WHERE hash = ?1 ORDER BY last_at DESC LIMIT 50'
   ).bind(me).all();
   return json({ ok: true, chats: rows.results || [] }, 200);
 }
@@ -3690,6 +3691,30 @@ async function handleMerecatChatDelete(request, env) {
   return json({ ok: true, deleted: id }, 200);
 }
 
+/* Save (or unsave) a conversation: a saved thread is exempt from the
+   thirty-day expiry — both the listing's opportunistic prune and the monthly
+   cron pass it by — until its owner unsaves or deletes it. Unsaving a thread
+   already past the cut lets the next sweep take it, which the client warns of. */
+async function handleMerecatChatSave(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const id = Number(data.id);
+  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const save = data.save ? 1 : 0;
+  const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
+    .bind(id, me).first();
+  if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
+  await env.LIBDB.prepare('UPDATE chats SET saved = ?2 WHERE id = ?1').bind(id, save).run();
+  return json({ ok: true, id, saved: save }, 200);
+}
+
 /* Monthly sweep of expired threads (the opportunistic per-owner prune in
    handleMerecatChats covers everyone who returns; this catches the rest).
    Self-contained like every prune, so a failure never stops the backup. */
@@ -3698,8 +3723,8 @@ async function pruneMerecatChats(env) {
     const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
     await env.LIBDB.batch([
       env.LIBDB.prepare(
-        'DELETE FROM chat_msgs WHERE chat_id IN (SELECT id FROM chats WHERE last_at < ?1)').bind(cut),
-      env.LIBDB.prepare('DELETE FROM chats WHERE last_at < ?1').bind(cut),
+        'DELETE FROM chat_msgs WHERE chat_id IN (SELECT id FROM chats WHERE last_at < ?1 AND COALESCE(saved, 0) = 0)').bind(cut),
+      env.LIBDB.prepare('DELETE FROM chats WHERE last_at < ?1 AND COALESCE(saved, 0) = 0').bind(cut),
     ]);
   } catch (err) {
     console.log(JSON.stringify({ event: 'merecat_chatprune_failed', error: String(err) }));
@@ -4405,6 +4430,7 @@ export default {
       if (path === '/api/merecat/chats' && request.method === 'POST') return await handleMerecatChats(request, env);
       if (path === '/api/merecat/chat' && request.method === 'POST') return await handleMerecatChat(request, env);
       if (path === '/api/merecat/chat/delete' && request.method === 'POST') return await handleMerecatChatDelete(request, env);
+      if (path === '/api/merecat/chat/save' && request.method === 'POST') return await handleMerecatChatSave(request, env);
       if (path === '/api/merecat/ingest' && request.method === 'POST') return await handleMerecatIngest(request, env);
       if (path === '/api/merecat/works' && request.method === 'POST') return await handleMerecatWorks(request, env);
       if (path === '/api/merecat/config' && request.method === 'POST') return await handleMerecatConfigSet(request, env);

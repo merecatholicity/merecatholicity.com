@@ -4557,7 +4557,7 @@
 
     var past = el('details', 'merecat-about');
     if (!loggedIn) past.hidden = true;
-    past.appendChild(el('summary', null, 'Past conversations (kept thirty days)'));
+    past.appendChild(el('summary', null, 'Past conversations'));
     var pastBody = el('div', 'merecat-about-body');
     past.appendChild(pastBody);
     var pastLoaded = false;
@@ -4570,12 +4570,21 @@
         body: JSON.stringify({ key: state.key }),
       }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
         if (blockedOut(d)) return;
-        pastBody.textContent = '';
-        if (!d.ok || !d.chats || !d.chats.length) {
-          pastBody.appendChild(el('p', null, 'No saved conversations yet. Threads appear here as you ask, and expire thirty days after their last message.'));
+        if (!d.ok || !d.chats) {
+          pastBody.textContent = '';
+          pastBody.appendChild(el('p', null, 'Could not load the list. Reopen to retry.'));
           return;
         }
-        d.chats.forEach(function (c) {
+        var chats = d.chats;
+        function chatAction(c, act, body, done) {
+          fetchRetry(MERECAT_API + '/chat/' + act, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+            if (dd.ok) done();
+          }).catch(function () {});
+        }
+        function chatRow(c) {
           var row = el('p');
           var a = el('a', 'body-link', c.title || ('Conversation ' + c.id));
           a.href = 'community.html?merecat=1&chat=' + c.id;
@@ -4583,24 +4592,60 @@
           row.appendChild(document.createTextNode(
             ' · ' + c.msgs + (c.msgs === 1 ? ' message · ' : ' messages · ') +
             new Date(c.last_at * 1000).toLocaleDateString() + ' · '));
+          var sv = el('a', 'body-link', c.saved ? 'unsave' : 'save');
+          sv.href = '#';
+          sv.title = c.saved ? 'Return this conversation to the thirty-day keeping'
+            : 'Keep this conversation permanently';
+          sv.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (c.saved) {
+              var expired = c.last_at < Math.floor(Date.now() / 1000) - 30 * 86400;
+              if (expired && !confirm('This conversation is older than thirty days. ' +
+                'Unsaving lets it expire, and it may be removed at once. Continue?')) return;
+            }
+            chatAction(c, 'save', { key: state.key, id: c.id, save: c.saved ? 0 : 1 }, function () {
+              c.saved = c.saved ? 0 : 1;
+              renderChats();
+            });
+          });
+          row.appendChild(sv);
+          row.appendChild(document.createTextNode(' · '));
           var del = el('a', 'body-link', 'delete');
           del.href = '#';
           del.addEventListener('click', function (e) {
             e.preventDefault();
             if (!confirm('Delete this conversation outright? There is no undo.')) return;
-            fetchRetry(MERECAT_API + '/chat/delete', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, id: c.id }),
-            }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
-              if (dd.ok) {
-                row.remove();
-                if (c.id === chatId) location.href = 'community.html?merecat=1';
-              }
-            }).catch(function () {});
+            chatAction(c, 'delete', { key: state.key, id: c.id }, function () {
+              chats = chats.filter(function (x) { return x !== c; });
+              renderChats();
+              if (c.id === chatId) location.href = 'community.html?merecat=1';
+            });
           });
           row.appendChild(del);
-          pastBody.appendChild(row);
-        });
+          return row;
+        }
+        function renderChats() {
+          pastBody.textContent = '';
+          if (!chats.length) {
+            pastBody.appendChild(el('p', null, 'No conversations yet. Threads appear here as you ask, and expire thirty days after their last message unless you save them.'));
+            return;
+          }
+          var saved = chats.filter(function (c) { return c.saved; });
+          var recent = chats.filter(function (c) { return !c.saved; });
+          if (saved.length) {
+            var sh = el('p');
+            sh.appendChild(el('strong', null, 'Saved conversations (kept permanently)'));
+            pastBody.appendChild(sh);
+            saved.forEach(function (c) { pastBody.appendChild(chatRow(c)); });
+          }
+          if (recent.length) {
+            var rh = el('p');
+            rh.appendChild(el('strong', null, 'Kept thirty days'));
+            pastBody.appendChild(rh);
+            recent.forEach(function (c) { pastBody.appendChild(chatRow(c)); });
+          }
+        }
+        renderChats();
       }).catch(function () { pastBody.textContent = 'Could not load the list. Reopen to retry.'; });
     });
     section.appendChild(past);

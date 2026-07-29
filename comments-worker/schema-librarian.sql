@@ -98,7 +98,9 @@ CREATE TABLE IF NOT EXISTS chats (
   last_at       INTEGER NOT NULL,
   msgs          INTEGER NOT NULL DEFAULT 0,
   summary       TEXT,
-  summarized_to INTEGER NOT NULL DEFAULT 0
+  summarized_to INTEGER NOT NULL DEFAULT 0,
+  saved         INTEGER              -- 1 = kept permanently: exempt from the
+                                     -- thirty-day expiry until unsaved/deleted
 );
 CREATE INDEX IF NOT EXISTS chats_owner_idx ON chats(hash, last_at);
 
