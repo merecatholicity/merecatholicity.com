@@ -235,6 +235,7 @@ local/data/
 local/models/
 # the live local prompt is private, maintained by the owner; the committed
 # persona.local.example.md is the starter a fresh clone copies to it
+local/serve.key
 local/persona.local.md
 # librarian/private is an INDEPENDENT nested git repo pushed to the
 # PRIVATE repo merecatholicity/private-shelf (never as a submodule: the
