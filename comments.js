@@ -529,7 +529,7 @@
     ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
     /* The back room. The server refuses everyone but admins on every path;
        hiding it here is courtesy, not the lock. */
-    ['adminsonly', 'Admins only', 'The back room, for admin talk and for topics withdrawn from public view but preserved. Visible to admins alone.'],
+    ['adminsonly', 'Admins only', 'The back room.'],
   ];
 
   /* A description with an optional trailing link, built as nodes so the
@@ -2488,7 +2488,7 @@
     var auditSlot = el('p', 'board-audit-link');
     function ensureAuditLink() {
       var ar = section.querySelector('.board-cat-admin');
-      if (ar) ar.hidden = !isAdmin();
+      if (ar) ar.style.display = isAdmin() ? '' : 'none';
       auditSlot.textContent = '';
       if (!isAdmin()) return;
       var a = el('a', 'identity-action', 'Administrative options');
@@ -2514,8 +2514,11 @@
       stats[cat[0]] = el('div', 'board-stats', '—');
       row.appendChild(stats[cat[0]]);
       if (cat[0] === 'adminsonly') {
+        /* inline display, not the hidden attribute: .board-cat's own
+           display:flex outranks [hidden]'s UA rule and once left this
+           tile showing to the whole world */
         row.className = 'board-cat board-cat-admin';
-        row.hidden = !isAdmin();
+        row.style.display = isAdmin() ? '' : 'none';
         row.style.background = '#f4efe2';
         row.style.border = '1px solid #cdbd93';
         row.style.borderRadius = '4px';
@@ -2653,6 +2656,8 @@
   function viewCat(key) {
     var cat = catByKey(key);
     if (!cat) return viewIndex();
+    /* the back room shows nothing to a keyless visitor — not even its name */
+    if (key === 'adminsonly' && !(state.key && state.myHash)) return viewIndex();
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     document.title = cat[1] + ' | Catholicity Board';
     var head = crumb([['Catholicity Board', 'community.html'], [cat[1]]]);
@@ -2702,8 +2707,9 @@
       .then(function (d) {
         if (!d.ok) {
           if (key === 'adminsonly') {
-            list.textContent = '';
-            list.appendChild(el('p', 'comments-status', 'This room is for admins alone.'));
+            /* refused: erase every trace and stand on the index instead */
+            section.textContent = '';
+            viewIndex();
             return;
           }
           throw new Error(d.error || 'failed');
@@ -2784,9 +2790,11 @@
     fetchRetry(API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        /* An admins-only topic refuses the public read; retry through the
-           keyed door and let the server judge the key. */
-        if (d && d.admin_only && state.key) {
+        /* A topic the public read cannot see might be an admins-only one —
+           the refusal is indistinguishable from a missing topic by design, so
+           a keyed reader knocks once on the keyed door and the server judges;
+           for a truly missing topic that door answers the same not-found. */
+        if (d && !d.ok && state.key) {
           return fetchRetry(API + '/board/admin', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, id: id, p: pNum || undefined,
@@ -2796,11 +2804,6 @@
         return d;
       })
       .then(function (d) {
-        if (!d.ok && d.admin_only) {
-          crumb([['Catholicity Board', 'community.html'], ['Topic']]);
-          section.appendChild(el('p', 'comments-status', 'This topic is for admins alone.'));
-          return;
-        }
         if (!d.ok) throw new Error(d.error || 'failed');
         var cat = catByKey(d.cat);
         state.anonAllowed = !!d.anon;

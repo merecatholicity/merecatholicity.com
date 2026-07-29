@@ -919,7 +919,8 @@ async function handleBoardCat(request, env, url) {
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const page = boardKey('board:' + url.searchParams.get('cat'));
   if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
-  if (page === ADMIN_CAT) return json({ ok: false, admin_only: true, error: 'That room is for admins only.' }, 403, cacheHeader(url));
+  /* answer exactly as if the category did not exist: a prober learns nothing */
+  if (page === ADMIN_CAT) return json({ ok: false, error: 'Unknown category.' }, 400, cacheHeader(url));
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
   return json(await boardCatPayload(env, page, p), 200, cacheHeader(url));
 }
@@ -1025,8 +1026,8 @@ async function handleSearch(request, env, url) {
   const empty = { ok: true, items: [], total: 0, page: p, per, q: qRaw };
   if (!match) return json(empty, 200, cacheHeader(url));
 
-  const catPage = boardKey('board:' + (url.searchParams.get('cat') || ''));
-  if (catPage === ADMIN_CAT) return json(empty, 200, cacheHeader(url));
+  let catPage = boardKey('board:' + (url.searchParams.get('cat') || ''));
+  if (catPage === ADMIN_CAT) catPage = null;
   const authorRaw = String(url.searchParams.get('author') || '');
   const author = /^[0-9a-f]{64}$/.test(authorRaw) ? authorRaw : null;
   const order = url.searchParams.get('sort') === 'new' ? 'c.id DESC' : 'bm25(comments_fts)';
@@ -1078,7 +1079,8 @@ async function handleTopicView(request, env, url) {
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
   ).bind(id).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
-  if (topic.page === ADMIN_CAT) return json({ ok: false, admin_only: true, error: 'That topic is for admins only.' }, 403, cacheHeader(url));
+  /* answer exactly as if the topic did not exist: a prober learns nothing */
+  if (topic.page === ADMIN_CAT) return json({ ok: false, error: 'No such topic.' }, 404, cacheHeader(url));
   return json(await topicViewPayload(env, topic, url.searchParams.get('p'), url.searchParams.get('find')), 200, cacheHeader(url));
 }
 
