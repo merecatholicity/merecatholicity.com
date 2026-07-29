@@ -3861,6 +3861,9 @@ async function handleMerecatIngest(request, env) {
     for (let i = 0; i < cids.length; i += 50) {
       try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 50)); }
       catch (err) { console.log(JSON.stringify({ event: 'merecat_vecdel_failed', error: String(err) })); }
+      // breathe between batches: a multi-work prune once fired ~60 calls
+      // back-to-back and the API rate-limited some sweeps into the catch
+      if (i + 50 < cids.length) await new Promise((res) => setTimeout(res, 250));
     }
     for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
       if (!db) continue;
