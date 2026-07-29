@@ -140,9 +140,11 @@ def main():
     if dots:
         sys.stderr.write("\n")
 
-    # Safety net: qwen3 reasons; with think off ollama omits the span, but
-    # strip any that leaks inline (mirrors the worker's merecatThinkStripper).
-    answer = re.sub(r"(?s)<think>.*?</think>", "", answer).strip()
+    # Strip reasoning from the printed answer: a paired <think>…</think>, and
+    # a leading reasoning block that ends in a bare </think> (qwen3 via ollama
+    # emits the close tag into content even when routed thinking is expected).
+    answer = re.sub(r"(?s)<think>.*?</think>", "", answer)
+    answer = re.sub(r"(?s)^.*?</think>\s*", "", answer).strip()
     text, used = cite_renumber(answer, sources)
     print(text)
     if used:

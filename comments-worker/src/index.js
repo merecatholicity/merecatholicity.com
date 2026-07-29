@@ -3108,12 +3108,41 @@ async function handleMerecatAsk(request, env, ctx) {
   // still talks only to this worker; the local bot answers only requests
   // carrying the shared key below.
   const userEffort = String(data.effort || 'high');
+  let userStored = false;
   if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && !instant) {
-    const r = await merecatAskLocal(env, ctx, { q, history, summary, chatId, me, day, youQ, todayQ, admin, cfg, effort: userEffort });
+    /* Record the thread and the question BEFORE proxying, and hand the chat id
+       to the local server, so it can store its answer by callback (/store) even
+       if the reader disconnects mid-generation — the stream is fragile, the
+       thread must not be. This one chat id is reused by any failover below. */
+    const nowU = Math.floor(Date.now() / 1000);
+    const freshChat = !chatId;
+    if (freshChat) {
+      const ins = await env.LIBDB.prepare(
+        'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
+      ).bind(me, q.slice(0, 90), nowU).first();
+      chatId = ins.id;
+    }
+    await env.LIBDB.batch([
+      env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3)")
+        .bind(chatId, q, nowU),
+      env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, nowU),
+    ]);
+    userStored = true;
+    const r = await merecatAskLocal(env, ctx, { q, history, summary, chatId, youQ, todayQ, admin, cfg, effort: userEffort });
     if (r) return r;
-    if (!cfg.failover) return json({ ok: false, resting: true,
-      error: 'The local librarian is offline. Switch back to the cloud in the merecat administration page, or try again shortly.' }, 503);
-    // failover on: fall through to the Cloudflare path below
+    if (!cfg.failover) {
+      // Local offline and no failover: undo a just-minted orphan thread (the
+      // client never learned its id); leave an existing thread's question be.
+      if (freshChat) {
+        await env.LIBDB.batch([
+          env.LIBDB.prepare('DELETE FROM chat_msgs WHERE chat_id = ?1').bind(chatId),
+          env.LIBDB.prepare('DELETE FROM chats WHERE id = ?1').bind(chatId),
+        ]).catch(() => {});
+      }
+      return json({ ok: false, resting: true,
+        error: 'The local librarian is offline. Switch back to the cloud in the merecat administration page, or try again shortly.' }, 503);
+    }
+    // failover on: chat id + question already stored; fall through to the cloud.
   }
 
   const chunks = await merecatRetrieve(env, q, cfg);
@@ -3149,7 +3178,8 @@ async function handleMerecatAsk(request, env, ctx) {
   }
 
   /* The model accepted the question: now the thread exists and the question
-     is on it (so an interrupted stream still leaves the thread coherent). */
+     is on it (so an interrupted stream still leaves the thread coherent). On a
+     failover from local the thread + question already exist (userStored). */
   const now = Math.floor(Date.now() / 1000);
   if (!chatId) {
     const ins = await env.LIBDB.prepare(
@@ -3157,11 +3187,13 @@ async function handleMerecatAsk(request, env, ctx) {
     ).bind(me, q.slice(0, 90), now).first();
     chatId = ins.id;
   }
-  await env.LIBDB.batch([
-    env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3)")
-      .bind(chatId, q, now),
-    env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
-  ]);
+  if (!userStored) {
+    await env.LIBDB.batch([
+      env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3)")
+        .bind(chatId, q, now),
+      env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+    ]);
+  }
 
   const inTokEst = Math.ceil(JSON.stringify(messages).length / 4);
   // the quota line's fresh numbers, counting the question now being answered
@@ -3183,29 +3215,19 @@ async function handleMerecatAsk(request, env, ctx) {
    Funnel and relay its stream. The local server does retrieval + generation
    and returns one JSON line of sources, a blank line, then answer tokens. */
 async function merecatAskLocal(env, ctx, p) {
-  const { q, history, summary, me, day, youQ, todayQ, admin, cfg, effort } = p;
-  let chatId = p.chatId;
-  const localResp = await merecatLocalFetch(env, { q, history, summary, effort });
+  const { q, history, summary, chatId, youQ, todayQ, admin, cfg, effort } = p;
+  // The thread + question are already stored by the caller, and the chat id is
+  // handed to the local server so it stores its answer by callback (/store) —
+  // that is what survives a reader disconnect. Here we only fetch and relay.
+  const localResp = await merecatLocalFetch(env, { q, history, summary, effort, chat: chatId });
   if (!localResp) return null;   // offline / refused / full — the caller may fail over
-  const now = Math.floor(Date.now() / 1000);
-  if (!chatId) {
-    const ins = await env.LIBDB.prepare(
-      'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
-    ).bind(me, q.slice(0, 90), now).first();
-    chatId = ins.id;
-  }
-  await env.LIBDB.batch([
-    env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3)")
-      .bind(chatId, q, now),
-    env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
-  ]);
   const used = {
     you: youQ, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
     today: todayQ, gcap: cfg.global_daily, admin, backend: cfg.backend,
   };
   const { readable, writable } = new TransformStream();
   ctx.waitUntil(
-    merecatPumpProxy(env, localResp, writable, me, day, chatId, used)
+    merecatPumpProxy(env, localResp, writable, chatId, used)
       .catch((err) => console.log(JSON.stringify({ event: 'merecat_proxy_failed', error: String(err) })))
   );
   return new Response(readable, {
@@ -3261,11 +3283,21 @@ async function merecatLocalRead(env, body) {
 /* Relay the local stream: read its {sources} header line, re-emit the worker's
    own preamble (chat id + local's sources + used + rv), then pipe the answer
    tokens, storing the answer on the thread and counting usage at the end. */
-async function merecatPumpProxy(env, localResp, writable, me, day, chatId, used) {
+async function merecatPumpProxy(env, localResp, writable, chatId, used) {
   const writer = writable.getWriter();
   const encode = (str) => enc.encode(str);
-  let text = '';
   let sources = [];
+  // Relay only. The local server stores the answer itself by calling /store the
+  // moment generation finishes, so a reader who refreshes mid-answer still finds
+  // it in the thread later. Writes here are best-effort: if the reader dropped
+  // we stop relaying, but the local side finishes and stores regardless.
+  let gone = false;
+  const relay = async (str) => {
+    if (gone) return;
+    const w = writer.write(encode(str)).then(() => 'ok', () => 'gone');
+    const r = await Promise.race([w, new Promise((res) => setTimeout(() => res('stall'), 4000))]);
+    if (r !== 'ok') gone = true;
+  };
   try {
     const reader = localResp.body.getReader();
     const dec = new TextDecoder();
@@ -3282,30 +3314,58 @@ async function merecatPumpProxy(env, localResp, writable, me, day, chatId, used)
         buf = buf.slice(nl + 2);
         if (head && head.queue != null) {
           // a place-in-line notice: relay it and keep reading for the sources
-          await writer.write(encode(JSON.stringify({ chat: chatId, queue: head.queue, backend: 'local' }) + '\n\n'));
+          await relay(JSON.stringify({ chat: chatId, queue: head.queue, backend: 'local' }) + '\n\n');
           continue;
         }
         sources = (head && head.sources) || [];
-        await writer.write(encode(JSON.stringify({ chat: chatId, sources, used, rv: MERECAT_RV, backend: 'local' }) + '\n\n'));
+        await relay(JSON.stringify({ chat: chatId, sources, used, rv: MERECAT_RV, backend: 'local' }) + '\n\n');
         headerDone = true;
       }
-      if (headerDone && buf) { text += buf; await writer.write(encode(buf)); buf = ''; }
+      if (headerDone && buf) { await relay(buf); buf = ''; }
     }
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_proxy_read_failed', error: String(err) }));
   } finally {
-    try { await writer.close(); } catch { /* client gone */ }
+    // closing waits for the queue to drain, which parks too when the reader
+    // is gone — abort then, which settles at once
+    try {
+      if (gone) { writer.abort().catch(() => {}); }
+      else { await Promise.race([writer.close().then(() => 0, () => 0), new Promise((res) => setTimeout(res, 2000))]); }
+    } catch { /* client gone */ }
   }
-  const answer = text.trim();
-  // A local answer spends no Cloudflare budget, so it is never tallied against
-  // the caps (day/me deliberately unused here); only the thread is persisted.
-  if (chatId && answer) {
-    const now = Math.floor(Date.now() / 1000);
-    await env.LIBDB.batch([
-      env.LIBDB.prepare(
-        "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
-      ).bind(chatId, answer, JSON.stringify(sources), now),
-      env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
-    ]);
+}
+
+/* The local server calls this when it finishes generating, to store its answer
+   on the thread — the storage path that survives a reader disconnecting from the
+   stream. Authenticated by the shared local key (server-to-server; a browser can
+   never reach it). Idempotent: if the thread already ends in an assistant reply
+   the call is a no-op, so a retried callback never doubles the answer. */
+async function handleMerecatStore(request, env) {
+  let data = {};
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!env.MERECAT_LOCAL_KEY || String(data.key || '') !== env.MERECAT_LOCAL_KEY) {
+    return json({ ok: false, error: 'No.' }, 403);
   }
+  const chatId = Number(data.chat) || 0;
+  const answer = String(data.answer || '').trim().slice(0, 20000);
+  const sources = Array.isArray(data.sources) ? data.sources.slice(0, 40) : [];
+  if (!chatId || !answer) return json({ ok: false, error: 'Bad request.' }, 400);
+  const chat = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1').bind(chatId).first();
+  if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const last = await env.LIBDB.prepare(
+    'SELECT role FROM chat_msgs WHERE chat_id = ?1 ORDER BY id DESC LIMIT 1'
+  ).bind(chatId).first();
+  if (last && last.role === 'assistant') return json({ ok: true, duplicate: true });
+  const now = Math.floor(Date.now() / 1000);
+  await env.LIBDB.batch([
+    env.LIBDB.prepare(
+      "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
+    ).bind(chatId, answer, JSON.stringify(sources), now),
+    env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+  ]);
+  const cfg = await merecatConfig(env);
+  await merecatFold(env, cfg, chatId).catch(() => {});
+  return json({ ok: true });
 }
 
 /* Backend status for the admin page: is the local librarian reachable right
@@ -3346,10 +3406,48 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
   const strip = merecatThinkStripper();
   let text = '';
   let usage = null;
+  // Relay to the client best-effort: if the reader disconnected mid-answer (a
+  // page refresh), we stop relaying but keep draining the model and still
+  // store the answer, so the thread is never left half-finished.
+  let gone = false;
+  /* Insurance for the disconnect path: the runtime's post-disconnect grace is
+     not promised to outlast a long generation, so once the reader is gone the
+     growing answer is flushed to the thread every few seconds — a kill mid-
+     generation then leaves the partial, and normal completion finishes the
+     same row. A connected reader never pays for any of this. */
+  let partialId = 0;
+  let flushedLen = 0;
+  let flushAt = 0;
+  const flushPartial = async () => {
+    if (!chatId) return;
+    const partial = text.trim();
+    if (!partial || partial.length === flushedLen) return;
+    const nowS = Math.floor(Date.now() / 1000);
+    try {
+      if (!partialId) {
+        const ins = await env.LIBDB.prepare(
+          "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4) RETURNING id"
+        ).bind(chatId, partial, JSON.stringify(sources), nowS).first();
+        partialId = ins.id;
+        await env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
+          .bind(chatId, nowS).run();
+      } else {
+        await env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1')
+          .bind(partialId, partial).run();
+      }
+      flushedLen = partial.length;
+    } catch { /* a failed flush just waits for the next */ }
+  };
+  const relay = async (str) => {
+    if (gone) return;
+    const w = writer.write(encode(str)).then(() => 'ok', () => 'gone');
+    const r = await Promise.race([w, new Promise((res) => setTimeout(() => res('stall'), 4000))]);
+    if (r !== 'ok') gone = true;
+  };
   try {
     // rv marks the retrieval build that answered, so a live test can prove
     // which deployed code served it (isolates lag deploys by minutes)
-    await writer.write(encode(JSON.stringify({ chat: chatId, sources, used, rv: MERECAT_RV }) + '\n\n'));
+    await relay(JSON.stringify({ chat: chatId, sources, used, rv: MERECAT_RV }) + '\n\n');
     const reader = aiStream.getReader();
     const dec = new TextDecoder();
     let buf = '';
@@ -3371,15 +3469,23 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
           const delta = obj.response == null ? '' : String(obj.response);
           if (delta) {
             const vis = strip(delta);
-            if (vis) { text += vis; await writer.write(encode(vis)); }
+            if (vis) { text += vis; await relay(vis); }
+            if (gone && Date.now() - flushAt > 5000) { flushAt = Date.now(); await flushPartial(); }
           }
         } catch { /* partial or non-JSON line: skip */ }
       }
     }
     const tail = strip(null);
-    if (tail) { text += tail; await writer.write(encode(tail)); }
+    if (tail) { text += tail; await relay(tail); }
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_pump_read_failed', error: String(err) }));
   } finally {
-    try { await writer.close(); } catch { /* client gone */ }
+    // closing waits for the queue to drain, which parks too when the reader
+    // is gone — abort then, which settles at once
+    try {
+      if (gone) { writer.abort().catch(() => {}); }
+      else { await Promise.race([writer.close().then(() => 0, () => 0), new Promise((res) => setTimeout(res, 2000))]); }
+    } catch { /* client gone */ }
   }
   const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : inTokEst;
   const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(text.length / 4);
@@ -3399,11 +3505,18 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
   const answer = text.trim();
   if (chatId && answer) {
     const now = Math.floor(Date.now() / 1000);
-    stmts.push(env.LIBDB.prepare(
-      "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
-    ).bind(chatId, answer, JSON.stringify(sources), now));
-    stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
-      .bind(chatId, now));
+    if (partialId) {
+      // the disconnect path already inserted the row — complete its body
+      stmts.push(env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1')
+        .bind(partialId, answer));
+      stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2 WHERE id = ?1').bind(chatId, now));
+    } else {
+      stmts.push(env.LIBDB.prepare(
+        "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at) VALUES (?1, 'assistant', ?2, ?3, ?4)"
+      ).bind(chatId, answer, JSON.stringify(sources), now));
+      stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
+        .bind(chatId, now));
+    }
   }
   if (stmts.length) await env.LIBDB.batch(stmts);
   if (chatId && answer) await merecatFold(env, cfg, chatId);
@@ -4230,6 +4343,7 @@ export default {
       if (path === '/api/merecat/ask' && request.method === 'POST') return await handleMerecatAsk(request, env, ctx);
       if (path === '/api/merecat/about' && request.method === 'POST') return await handleMerecatAbout(request, env);
       if (path === '/api/merecat/backends' && request.method === 'POST') return await handleMerecatBackends(request, env);
+      if (path === '/api/merecat/store' && request.method === 'POST') return await handleMerecatStore(request, env);
       if (path === '/api/merecat/usage' && request.method === 'POST') return await handleMerecatUsage(request, env);
       if (path === '/api/merecat/forward' && request.method === 'POST') return await handleMerecatForward(request, env);
       if (path === '/api/merecat/mention' && request.method === 'POST') return await handleMerecatMention(request, env);
