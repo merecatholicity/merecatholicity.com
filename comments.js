@@ -208,6 +208,7 @@
      1-corinthians-6-9 splits book/chapter/verse correctly; a chapter-only
      hash (no verse) stays undecorated since there is nothing to preview. */
   function scriptureDecor(a, url) {
+    if (window.mcRich) return window.mcRich.scriptureDecor(a, url);
     var m = /(?:^|\/)kjv\.html#([a-z0-9-]+)-(\d+)-(\d+)$/.exec(String(url || ''));
     var dr = null;
     if (!m) {
@@ -237,6 +238,9 @@
      (a link inside bold works) by recursing on the strictly-shorter inner text.
      Shared by the body renderer and each quoted/list line. */
   function appendRich(target, str, plain) {
+    /* Wave B3a: the living renderer is app/richtext.js when the bundle
+       stands; this body is the frozen no-bundle fallback (retires Wave F). */
+    if (window.mcRich) return window.mcRich.appendRich(target, str, plain);
     /* plain mode — the librarian's leash: every markdown feature is consumed
        but none applies, so the bot may write **bold** all day and the reader
        sees only "bold". Scripture autolinks and [text](url) links stay live
@@ -307,6 +311,7 @@
      and anchors, never innerHTML, so a body can never inject markup. Use this
      in place of a plain textContent wherever a user body is shown. */
   function fillBody(node, text, plain) {
+    if (window.mcRich) return window.mcRich.fillBody(node, text, plain);
     node.textContent = '';
     var lines = String(text == null ? '' : text).split('\n');
     var i = 0;
@@ -1173,7 +1178,7 @@
      the same cached KJV text the picker uses. Desktop only — there is no hover
      on touch, and reading the passage is a tap away on the link. A large span is
      allowed but capped so a whole-chapter reference can't fill the screen. */
-  (function scriptureHover() {
+  if (window.mcRich) { window.mcRich.initScriptureHover(bootSig); } else (function scriptureHover() {
     try { if (!window.matchMedia || !window.matchMedia('(hover: hover)').matches) return; } catch (e) { return; }
     var tip = null, maps = {}, hideTimer = null, CAP = 30;
     function bySlug(which, data, slug) {
@@ -1322,6 +1327,7 @@
   /* Inject the emoji styles once, matched to the site palette, rather than touch
      the shared stylesheet. The inner scroll keeps the panel and : list compact. */
   function ensureEmojiStyles() {
+    if (window.mcRich) return window.mcRich.ensureEmojiStyles();
     if (document.getElementById('mc-emoji-css')) return;
     var css = '' +
       /* Markdown headings inside bodies: sized within reason for a comment —

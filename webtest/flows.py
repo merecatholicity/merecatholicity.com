@@ -47,13 +47,18 @@ def api(path, body, ua='curl/8.14.1'):
 
 
 class Flow:
-    def __init__(self, port=9560, autoplay=False):
+    def __init__(self, port=9560, autoplay=False, hover=False):
         self.port = port
         args = ['--headless=new', '--no-sandbox', '--disable-gpu',
                 '--disable-dev-shm-usage', '--window-size=1280,900',
                 '--user-data-dir=/tmp/mc-flow-%d-%d' % (port, int(time.time()))]
         if autoplay:
             args.append('--autoplay-policy=no-user-gesture-required')
+        if hover:
+            # headless=new reports (hover: none) by default; desktop probes
+            # (the scripture tips) need an emulated fine pointer
+            args.append('--blink-settings=primaryHoverType=2,availableHoverTypes=2,'
+                        'primaryPointerType=4,availablePointerTypes=4')
         self.drv = subprocess.Popen(
             [os.path.join(CHROME_DIR, 'chromedriver'), '--port=%d' % port],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

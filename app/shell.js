@@ -29,6 +29,7 @@
 
 import { LitElement, html } from '../vendor/lit-all.min.js';
 import * as store from './store.js';
+import './richtext.js';
 import './views/board.js';
 
 /* The API store rides the shell (window bridge until the interiors port):
@@ -94,6 +95,11 @@ customElements.define('mc-audio-dock', McAudioDock);
   'use strict';
   if (window.__mcShell) return;   // one shell per page lifetime
   window.__mcShell = true;
+  /* The ?app=0 latch now means "no soft navigation, no dock, no SW" — the
+     MODULES (store, richtext, views) always stand, so there is exactly one
+     living render path either way. */
+  var latchOff = false;
+  try { latchOff = localStorage.getItem('mc-app') === '0'; } catch (e) { latchOff = false; }
 
   var SIZE_CAP = 2000000;         // volumes past ~2 MB take the ordinary road
   var cache = new Map();          // pathname -> html text
@@ -115,6 +121,11 @@ customElements.define('mc-audio-dock', McAudioDock);
     '.mc-dock-x{font:inherit;cursor:pointer;border:0;background:none;color:var(--faint,#8a7f6a);font-size:1.1rem}';
   document.head.appendChild(style);
 
+  if (latchOff) {
+    window.__mcShellReady = true;
+    document.dispatchEvent(new CustomEvent('mc-shell-ready'));
+    return;
+  }
   var progress = document.createElement('mc-progress');
   progress.setAttribute('data-mc-app', '');
   document.body.appendChild(progress);
