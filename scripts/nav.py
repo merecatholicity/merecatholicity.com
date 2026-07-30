@@ -6,10 +6,15 @@ expects, writes it to nav.html (used by pandoc when building book.html),
 and replaces the inline nav block in every page listed in PAGES.
 """
 import html
+import os
 import re
 import sys
 
 import yaml
+
+# nav.yml lives beside this script (in scripts/); read it relative to the
+# script's own location, not the cwd.
+NAV_YML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nav.yml")
 
 # Hand-maintained pages whose nav block nav.py still rewrites in place. Every
 # rarely-changing content page moved to the content/ pipeline (content.py owns
@@ -19,9 +24,10 @@ import yaml
 # Turnstile script the extractor can't see), the dynamic board SPA, and the
 # off-site interstitial.
 PAGES = ["index.html", "contact.html", "community.html", "away.html", "kjv.html", "douay-rheims.html"]
-# Paths here are relative to the repo root (the Makefile runs this from root as
-# `python scripts/nav.py`): nav.yml and docs/ sit at the root, the generated
-# nav fragment lives in partials/, and the PAGES are the built pages in docs/.
+# The Makefile runs this from the repo root (`python scripts/nav.py`), so these
+# paths are relative to the root: docs/ holds the built PAGES, and the generated
+# nav fragment lives in partials/. (nav.yml is the exception — see NAV_YML above,
+# read from beside this script in scripts/.)
 FRAGMENT = "partials/nav.html"
 
 TOGGLE = (
@@ -92,7 +98,7 @@ def build_nav(items):
 
 
 def main():
-    with open("nav.yml") as f:
+    with open(NAV_YML) as f:
         items = yaml.safe_load(f)
     if not isinstance(items, list):
         sys.exit("nav.yml must be a list of items")
