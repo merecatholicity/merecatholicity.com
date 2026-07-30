@@ -19,7 +19,10 @@ import re
 import sys
 import urllib.parse
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs'))
+# This script lives in scripts/; the built site to scan is docs/ off the repo
+# root (one level up). chdir there so the *.html glob and relative link
+# resolution below run against the served tree.
+os.chdir(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'docs'))
 
 refs = collections.defaultdict(set)   # target file -> referring pages
 frags = collections.defaultdict(set)  # (target file, fragment) -> referrers
