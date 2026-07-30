@@ -3648,6 +3648,12 @@ async function handleMerecatStore(request, env) {
         env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2, sources = ?3, done = 1 WHERE id = ?1')
           .bind(row.id, answer, JSON.stringify(sources)),
         env.LIBDB.prepare('UPDATE chats SET last_at = ?2 WHERE id = ?1').bind(chatId, now),
+        /* sweep stray done=0 siblings the probe-then-insert race can leave
+           (two writers, two isolates, no shared transaction — seen live as
+           chat 127's orphan): the final row is done=1 now, so this touches
+           only the strays */
+        env.LIBDB.prepare("DELETE FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 AND done = 0")
+          .bind(chatId, msgId),
       ]);
     } else if (partial) {
       await env.LIBDB.batch([
@@ -3663,6 +3669,9 @@ async function handleMerecatStore(request, env) {
           "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 1)"
         ).bind(chatId, answer, JSON.stringify(sources), now, msgId),
         env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+        // same stray-partial sweep as the complete-in-place branch above
+        env.LIBDB.prepare("DELETE FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 AND done = 0")
+          .bind(chatId, msgId),
       ]);
     }
   } else {
@@ -3937,6 +3946,13 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
       stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
         .bind(chatId, now));
     }
+    if (userMsgId) {
+      /* sweep stray done=0 siblings the two-writer race can leave — this
+         pump's final row is done=1 (or completed above), so only strays go */
+      stmts.push(env.LIBDB.prepare(
+        "DELETE FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 AND done = 0"
+      ).bind(chatId, userMsgId));
+    }
   }
   if (stmts.length) await env.LIBDB.batch(stmts);
   if (store) await merecatFold(env, cfg, chatId);
@@ -4100,6 +4116,12 @@ async function pruneMerecatChats(env) {
       env.LIBDB.prepare(
         'DELETE FROM chat_msgs WHERE chat_id IN (SELECT id FROM chats WHERE last_at < ?1 AND COALESCE(saved, 0) = 0)').bind(cut),
       env.LIBDB.prepare('DELETE FROM chats WHERE last_at < ?1 AND COALESCE(saved, 0) = 0').bind(cut),
+      /* a done=0 partial older than a day is a generation that died forever
+         (normal completion sweeps its strays; every live generation ends
+         inside minutes) — without this, a resumed thread would read it as
+         "still writing" until the thread itself expires */
+      env.LIBDB.prepare('DELETE FROM chat_msgs WHERE done = 0 AND created_at < ?1')
+        .bind(Math.floor(Date.now() / 1000) - 86400),
     ]);
   } catch (err) {
     console.log(JSON.stringify({ event: 'merecat_chatprune_failed', error: String(err) }));
