@@ -3265,7 +3265,7 @@ async function handleMerecatAsk(request, env, ctx) {
     ]);
     userMsgId = (rs && rs[0] && rs[0].results && rs[0].results[0] && rs[0].results[0].id) || 0;
     userStored = true;
-    const r = await merecatAskLocal(env, ctx, { q, history, summary, chatId, userMsgId, youQ, todayQ, admin, cfg, effort: userEffort });
+    const r = await merecatAskLocal(env, ctx, { q, history, summary, chatId, userMsgId, youQ, todayQ, admin, cfg, me, day, effort: userEffort });
     if (r instanceof Response) return r;
     if (!cfg.failover) {
       // No failover and no answer coming: undo what this ask wrote, so the
@@ -3291,27 +3291,7 @@ async function handleMerecatAsk(request, env, ctx) {
     // failover on: chat id + question already stored; fall through to the cloud.
   }
 
-  const chunks = await merecatRetrieve(env, q, cfg);
-
-  // Build the prompt: persona, the thread's condensed summary when one
-  // exists, the numbered sources, the recent turns verbatim, the question.
-  const sources = chunks.map((c, i) => ({
-    n: i + 1, title: merecatScrub(c.title), heading: merecatScrub(c.heading),
-    url: !c.url ? '' : /^https?:\/\//.test(c.url) ? c.url : MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
-  }));
-  let srcBlock = '';
-  chunks.forEach((c, i) => {
-    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + merecatScrub(c.title) +
-      (c.heading ? ' — ' + merecatScrub(c.heading) : '') + '\n' + merecatScrub(c.text.slice(0, 2800), true) + '\n\n';
-  });
-  const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
-    (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
-    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources this turn' +
-    (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
-    '):\n\n' + (srcBlock || '(none)') + '/no_think';
-  const messages = [{ role: 'system', content: sys }];
-  for (const h of history) messages.push(h);
-  messages.push({ role: 'user', content: q });
+  const { sources, messages } = await merecatPrompt(env, q, history, summary, cfg);
 
   let aiStream;
   try {
@@ -3343,10 +3323,13 @@ async function handleMerecatAsk(request, env, ctx) {
   }
 
   const inTokEst = Math.ceil(JSON.stringify(messages).length / 4);
-  // the quota line's fresh numbers, counting the question now being answered
+  // the quota line's fresh numbers, counting the question now being answered.
+  // backend names the engine answering THIS stream — reaching here means the
+  // cloud (plain cloudflare mode, the Instant bypass, or a failover), however
+  // the config reads, so a live test always learns who really served it.
   const used = {
     you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
-    today: todayQ + 1, gcap: cfg.global_daily, admin, backend: cfg.backend,
+    today: todayQ + 1, gcap: cfg.global_daily, admin, backend: 'cloudflare',
   };
   const { readable, writable } = new TransformStream();
   ctx.waitUntil(
@@ -3358,11 +3341,37 @@ async function handleMerecatAsk(request, env, ctx) {
   });
 }
 
+/* Retrieval + prompt build for the cloud model, shared by the ask's cloud
+   tail and the proxy pump's mid-flight failover, so the two can never drift:
+   persona, the thread's condensed summary when one exists, the numbered
+   sources, the recent turns verbatim, the question. */
+async function merecatPrompt(env, q, history, summary, cfg) {
+  const chunks = await merecatRetrieve(env, q, cfg);
+  const sources = chunks.map((c, i) => ({
+    n: i + 1, title: merecatScrub(c.title), heading: merecatScrub(c.heading),
+    url: !c.url ? '' : /^https?:\/\//.test(c.url) ? c.url : MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
+  }));
+  let srcBlock = '';
+  chunks.forEach((c, i) => {
+    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + merecatScrub(c.title) +
+      (c.heading ? ' — ' + merecatScrub(c.heading) : '') + '\n' + merecatScrub(c.text.slice(0, 2800), true) + '\n\n';
+  });
+  const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
+    (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
+    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources this turn' +
+    (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
+    '):\n\n' + (srcBlock || '(none)') + '/no_think';
+  const messages = [{ role: 'system', content: sys }];
+  for (const h of history) messages.push(h);
+  messages.push({ role: 'user', content: q });
+  return { sources, messages };
+}
+
 /* Local backend: proxy the question to the owner's machine over Tailscale
    Funnel and relay its stream. The local server does retrieval + generation
    and returns one JSON line of sources, a blank line, then answer tokens. */
 async function merecatAskLocal(env, ctx, p) {
-  const { q, history, summary, chatId, userMsgId, youQ, todayQ, admin, cfg, effort } = p;
+  const { q, history, summary, chatId, userMsgId, youQ, todayQ, admin, cfg, me, day, effort } = p;
   // The thread + question are already stored by the caller, and the chat id +
   // question msg id are handed to the local server so it stores its answer by
   // callback (/store) — that is what survives a reader disconnect. The msg id
@@ -3375,7 +3384,10 @@ async function merecatAskLocal(env, ctx, p) {
   };
   const { readable, writable } = new TransformStream();
   ctx.waitUntil(
-    merecatPumpProxy(env, localResp, writable, chatId, used)
+    // the failover kit rides along so a stream that dies before its preamble
+    // can be re-served by the cloud INTO this same response
+    merecatPumpProxy(env, localResp, writable, chatId, used,
+      { q, history, summary, cfg, me, day, userMsgId })
       .catch((err) => console.log(JSON.stringify({ event: 'merecat_proxy_failed', error: String(err) })))
   );
   return new Response(readable, {
@@ -3393,29 +3405,46 @@ async function merecatLocalFetch(env, body, ctl) {
   // wedged machine, not a busy one — never let it park the worker: 15s and out.
   // The timer is cleared the moment headers land so the body may stream for
   // minutes. A caller needing a whole-call deadline passes its own controller.
+  /* The Funnel leg rides Starlink, where a COLD path (relay TCP+TLS setup, a
+     satellite handoff, a lost SYN) fails fast and transiently while the
+     machine is perfectly up — so a QUICK failure retries, twice, with a
+     breath between, the failed try itself having warmed the route. A SLOW
+     failure never retries: 15s of header silence is a wedged machine (cut it
+     loose — with failover on, that is the cloud's cue), an abort is never
+     ours to retry, serve.py's own non-busy 503 is the engine speaking
+     (failover now), and busy is the truth — a full queue, not a fault. A
+     5xx from the relay itself (502/504, the road not the machine) retries
+     like a quick fault. */
   const ownCtl = ctl || new AbortController();
-  const headerTimer = setTimeout(() => { try { ownCtl.abort(); } catch { /* raced */ } }, 15000);
-  try {
-    const r = await fetch(base + '/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Merecat-Key': env.MERECAT_LOCAL_KEY || '' },
-      body: JSON.stringify(body),
-      signal: ownCtl.signal,
-    });
-    clearTimeout(headerTimer);
-    if (r.status === 503) {
-      // full queue, not a dead machine — let the caller say so honestly
-      let refuse = null;
-      try { refuse = await r.json(); } catch { /* not JSON */ }
-      if (refuse && refuse.busy) return { busy: true };
-      return null;
+  for (let attempt = 0; ; attempt++) {
+    const t0 = Date.now();
+    let retriable = false;
+    const headerTimer = setTimeout(() => { try { ownCtl.abort(); } catch { /* raced */ } }, 15000);
+    try {
+      const r = await fetch(base + '/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Merecat-Key': env.MERECAT_LOCAL_KEY || '' },
+        body: JSON.stringify(body),
+        signal: ownCtl.signal,
+      });
+      clearTimeout(headerTimer);
+      if (r.status === 503) {
+        // full queue, not a dead machine — let the caller say so honestly
+        let refuse = null;
+        try { refuse = await r.json(); } catch { /* not JSON */ }
+        if (refuse && refuse.busy) return { busy: true };
+        return null;
+      }
+      if (r.ok && r.body) return r;
+      retriable = r.status >= 500;
+      console.log(JSON.stringify({ event: 'merecat_local_unreachable', status: r.status, attempt }));
+    } catch (err) {
+      clearTimeout(headerTimer);
+      retriable = (Date.now() - t0) < 5000 && !(err && err.name === 'AbortError');
+      console.log(JSON.stringify({ event: 'merecat_local_unreachable', error: String(err), attempt }));
     }
-    if (!r.ok || !r.body) return null;
-    return r;
-  } catch (err) {
-    clearTimeout(headerTimer);
-    console.log(JSON.stringify({ event: 'merecat_local_unreachable', error: String(err) }));
-    return null;
+    if (!retriable || attempt >= 2) return null;
+    await new Promise((res) => setTimeout(res, 400 + attempt * 500));
   }
 }
 
@@ -3455,7 +3484,7 @@ async function merecatLocalRead(env, body) {
 /* Relay the local stream: read its {sources} header line, re-emit the worker's
    own preamble (chat id + local's sources + used + rv), then pipe the answer
    tokens, storing the answer on the thread and counting usage at the end. */
-async function merecatPumpProxy(env, localResp, writable, chatId, used) {
+async function merecatPumpProxy(env, localResp, writable, chatId, used, fb) {
   const writer = writable.getWriter();
   const encode = (str) => enc.encode(str);
   let sources = [];
@@ -3470,14 +3499,40 @@ async function merecatPumpProxy(env, localResp, writable, chatId, used) {
     const r = await Promise.race([w, new Promise((res) => setTimeout(() => res('stall'), 4000))]);
     if (r !== 'ok') gone = true;
   };
+  let headerDone = false;
+  let upstreamDead = false;
   try {
     const reader = localResp.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
-    let headerDone = false;
     for (;;) {
-      const { done, value } = await reader.read();
+      /* serve.py PROMISES a heartbeat every ≤20s — {queue:N} while waiting,
+         STX while generating — so 35s of byte-silence is a dead road or a
+         dead machine, never a slow one. The old unraced read parked this
+         invocation on a frozen wire while the reader sat out their own 30s
+         watchdog; the wire's death is now known HERE first, and handled. */
+      let deadTimer;
+      const step = await Promise.race([
+        reader.read().then((x) => ({ read: x }), (e) => ({ err: e })),
+        new Promise((res) => { deadTimer = setTimeout(() => res({ silent: true }), 35000); }),
+      ]);
+      clearTimeout(deadTimer);
+      if (step.silent || step.err) {
+        upstreamDead = true;
+        console.log(JSON.stringify({
+          event: step.silent ? 'merecat_proxy_upstream_silent' : 'merecat_proxy_read_failed',
+          error: step.err ? String(step.err) : '', chat: chatId,
+        }));
+        try { reader.cancel(); } catch { /* already severed */ }
+        break;
+      }
+      const { done, value } = step.read;
       if (done) break;
+      if (gone) {
+        // the reader left and the callback owns storage: free this lane now
+        try { reader.cancel(); } catch { /* already severed */ }
+        break;
+      }
       buf += dec.decode(value, { stream: true });
       while (!headerDone) {
         const nl = buf.indexOf('\n\n');
@@ -3496,15 +3551,52 @@ async function merecatPumpProxy(env, localResp, writable, chatId, used) {
       if (headerDone && buf) { await relay(buf); buf = ''; }
     }
   } catch (err) {
+    upstreamDead = true;
     console.log(JSON.stringify({ event: 'merecat_proxy_read_failed', error: String(err) }));
-  } finally {
-    // closing waits for the queue to drain, which parks too when the reader
-    // is gone — abort then, which settles at once
-    try {
-      if (gone) { writer.abort().catch(() => {}); }
-      else { await Promise.race([writer.close().then(() => 0, () => 0), new Promise((res) => setTimeout(res, 2000))]); }
-    } catch { /* client gone */ }
   }
+  /* The mid-flight hand-off: the upstream died before the reader saw any REAL
+     preamble (queue notices don't count — the client keeps parsing until
+     sources arrive), so with failover on, the cloud answers INTO THIS SAME
+     STREAM and the reader never learns the road washed out. Past the preamble
+     it is too late to switch voices mid-story: close WITHOUT the completion
+     mark instead, and the client's truncation contract recovers the stored
+     text at once (the box's partial flushes keep landing it while the box
+     lives; if the cloud answered too, the cross-writer dedup in the store
+     paths keeps the question single-answered whoever finishes first). */
+  if (upstreamDead && !headerDone && !gone && fb && fb.cfg && fb.cfg.failover) {
+    try {
+      writer.releaseLock();
+      await merecatCloudInto(env, writable, chatId, used, fb);
+      return;
+    } catch (err) {
+      console.log(JSON.stringify({ event: 'merecat_proxy_failover_failed', error: String(err) }));
+      try { writable.getWriter().close().catch(() => {}); } catch { /* locked: its holder closes it */ }
+      return;
+    }
+  }
+  // closing waits for the queue to drain, which parks too when the reader
+  // is gone — abort then, which settles at once
+  try {
+    if (gone) { writer.abort().catch(() => {}); }
+    else { await Promise.race([writer.close().then(() => 0, () => 0), new Promise((res) => setTimeout(res, 2000))]); }
+  } catch { /* client gone */ }
+}
+
+/* The cloud, mid-flight: retrieval + prompt + model INTO an already-open
+   client stream whose local upstream died before its preamble. merecatPump
+   writes the preamble (chat id, sources, used, rv) exactly as a fresh cloud
+   ask would, so the client cannot tell this answer began life as a proxy;
+   its `used.backend` says cloudflare — the truth of who answered. Local-mode
+   asks stay unmetered even here (merecatPump tallies only in strict
+   cloudflare mode), matching the pre-stream failover path. */
+async function merecatCloudInto(env, writable, chatId, used, fb) {
+  const { sources, messages } = await merecatPrompt(env, fb.q, fb.history, fb.summary, fb.cfg);
+  const aiStream = await env.AI.run(fb.cfg.model, {
+    messages, stream: true, max_tokens: fb.cfg.max_tokens, temperature: 0.35,
+  });
+  const inTokEst = Math.ceil(JSON.stringify(messages).length / 4);
+  const usedCloud = Object.assign({}, used, { backend: 'cloudflare' });
+  await merecatPump(env, fb.cfg, aiStream, writable, sources, fb.me, fb.day, inTokEst, chatId, usedCloud, fb.userMsgId);
 }
 
 /* The local server calls this when it finishes generating, to store its answer
@@ -3655,8 +3747,12 @@ async function handleMerecatAdminThread(request, env) {
 }
 
 /* Backend status for the admin page: is the local librarian reachable right
-   now (a few quick health pings within ~1.5s), and where does the cloud stand
-   against its daily budget. Admin only. */
+   now, and where does the cloud stand against its daily budget. Admin only.
+   The probe is PATIENT: a cold Funnel path over Starlink can need seconds of
+   relay TLS setup, and the old 450ms×3 read a healthy machine as offline
+   until a refresh rode the warmed route. Escalating tries — each failure
+   warms the way for the next — and the answer carries what /health knows:
+   readiness, the reranker canary, and the measured round trip. */
 async function handleMerecatBackends(request, env) {
   let data = {};
   try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
@@ -3668,14 +3764,22 @@ async function handleMerecatBackends(request, env) {
   let local = { online: false };
   const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
   if (base) {
-    for (let i = 0; i < 3 && !local.online; i++) {
+    const budgets = [1500, 3000, 5000];
+    for (let i = 0; i < budgets.length && !local.online; i++) {
+      const t0 = Date.now();
       try {
         const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), 450);
+        const timer = setTimeout(() => ctl.abort(), budgets[i]);
         const r = await fetch(base + '/health', { signal: ctl.signal });
         clearTimeout(timer);
-        if (r.ok) { const h = await r.json(); local = { online: true, chunks: h.chunks || 0, model: h.model || '' }; }
-      } catch { /* offline or slow: try again within budget */ }
+        if (r.ok) {
+          const h = await r.json();
+          local = { online: true, ms: Date.now() - t0, tries: i + 1,
+            chunks: h.chunks || 0, model: h.model || '',
+            ready: h.ready !== false, why: h.why || '',
+            rerank: typeof h.rerank === 'string' ? h.rerank : '' };
+        }
+      } catch { /* cold or cut: escalate and try again */ }
     }
   }
   return json({ ok: true, backend: cfg.backend, failover: cfg.failover, mention_effort: cfg.mention_effort,
@@ -3704,12 +3808,31 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
   let partialId = 0;
   let flushedLen = 0;
   let flushAt = 0;
+  let ceded = false;
+  /* Two writers can chase one question — this pump on a mid-flight failover,
+     and the local box's own callback still generating on the far side of a
+     dead link. The question's answer row (keyed by answers = userMsgId) is
+     the meeting point: an unfinished row is ADOPTED and completed, a
+     finished one means the other writer won and this pump stands down from
+     storing (its usage tally still counts). handleMerecatStore holds the
+     same line from the callback side, so whoever finishes first speaks and
+     the question is never answered twice. */
+  const claimRow = async () => {
+    if (!userMsgId) return true;
+    const own = await env.LIBDB.prepare(
+      "SELECT id, COALESCE(done, 1) AS fin FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1"
+    ).bind(chatId, userMsgId).first();
+    if (own && own.fin) { ceded = true; return false; }
+    if (own) partialId = own.id;
+    return true;
+  };
   const flushPartial = async () => {
-    if (!chatId) return;
+    if (!chatId || ceded) return;
     const partial = text.trim();
     if (!partial || partial.length === flushedLen) return;
     const nowS = Math.floor(Date.now() / 1000);
     try {
+      if (!partialId && !(await claimRow())) return;
       if (!partialId) {
         const ins = await env.LIBDB.prepare(
           "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 0) RETURNING id"
@@ -3797,12 +3920,15 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
     ).bind(day, me));
   }
   const answer = text.trim();
-  if (chatId && answer) {
+  let store = !!(chatId && answer);
+  if (store && !partialId) store = await claimRow().catch(() => true) && !ceded;
+  if (store) {
     const now = Math.floor(Date.now() / 1000);
     if (partialId) {
-      // the disconnect path already inserted the row — complete its body
-      stmts.push(env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2, done = 1 WHERE id = ?1')
-        .bind(partialId, answer));
+      // a partial row exists (this pump's own flushes, or an adopted one from
+      // the box's flusher) — complete it, sources included, in place
+      stmts.push(env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2, sources = ?3, done = 1 WHERE id = ?1')
+        .bind(partialId, answer, JSON.stringify(sources)));
       stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2 WHERE id = ?1').bind(chatId, now));
     } else {
       stmts.push(env.LIBDB.prepare(
@@ -3813,7 +3939,7 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
     }
   }
   if (stmts.length) await env.LIBDB.batch(stmts);
-  if (chatId && answer) await merecatFold(env, cfg, chatId);
+  if (store) await merecatFold(env, cfg, chatId);
 }
 
 /* Keep a long thread rememberable at a bounded cost: once turns age past

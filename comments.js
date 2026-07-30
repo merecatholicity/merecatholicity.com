@@ -6038,10 +6038,20 @@
           wrap.textContent = '';
           if (!b.ok) { wrap.appendChild(el('p', 'comments-status', 'Could not read backend status.')); return; }
           var cf = b.cloudflare || {}, lo = b.local || {};
+          var loLine;
+          if (!lo.online) {
+            loLine = 'offline right now — the machine, Tailscale, or the satellite link';
+          } else {
+            loLine = 'online · ' + (lo.ms != null ? lo.ms + ' ms · ' : '') +
+              (lo.chunks || 0).toLocaleString() + ' passages';
+            if (lo.tries > 1) loLine += ' · woke on try ' + lo.tries;
+            if (lo.rerank === 'degraded') loLine += ' · reranker degraded, salvage active';
+            else if (lo.rerank === 'down') loLine += ' · reranker DOWN';
+            if (lo.ready === false) loLine += ' · NOT READY: ' + (lo.why || 'engine fault — asks go to the cloud');
+          }
           [['cloudflare', 'Cloudflare (always on)', true,
             'online · ' + (cf.today || 0) + '/' + (cf.gcap || 0) + ' questions used today'],
-           ['local', 'This machine, over Tailscale', !!lo.online,
-            lo.online ? ('online · ' + (lo.chunks || 0).toLocaleString() + ' passages') : 'offline right now']
+           ['local', 'This machine, over Tailscale', !!lo.online, loLine]
           ].forEach(function (o) {
             var row = el('label'); row.style.display = 'block'; row.style.margin = '.35em 0';
             var radio = el('input'); radio.type = 'radio'; radio.name = 'mc-backend'; radio.value = o[0];
