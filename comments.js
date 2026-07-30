@@ -2906,6 +2906,7 @@
   }
 
   function viewTopic(id) {
+    if (window.mcViews && window.mcViews.topic) return window.mcViews.topic(section, window.mcKit, id);
     var qs = new URLSearchParams(location.search);
     /* Zero when no explicit page, so a bare #comment-N link takes the find
        branch and the server resolves which page that comment lives on. */
@@ -4707,6 +4708,7 @@
      shows the thread title, a highlighted snippet, author, category, and date, and
      links to the exact post. */
   function viewSearch() {
+    if (window.mcViews && window.mcViews.search) return window.mcViews.search(section, window.mcKit);
     var qs = new URLSearchParams(location.search);
     var q = qs.get('q') || '';
     var cat0 = qs.get('cat') || '';
@@ -6761,6 +6763,10 @@
       quotedSelection = '';
       quoteInto(c, excerpt, permalinkFor(c, quoteCtx));
     },
+    /* topic + search views (Wave B4/B5) */
+    commentNode: commentNode,
+    watchToggle: watchToggle, annotateMeta: annotateMeta,
+    searchSnippet: searchSnippet, attachAuthorPicker: attachAuthorPicker,
   };
 
   if (BOARD) {
