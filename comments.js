@@ -478,6 +478,43 @@
     return attempt(0);
   }
 
+  /* ---- The shared read budget: one brain over every polling limb. ----
+     Each quiet endpoint draws from a single per-IP server bucket (READ_LIMIT,
+     fifteen reads a minute). A page can keep several background polls alive at
+     once — a resume watching a thread grow, the reconciler guarding a live
+     answer, a recovery poll after a dropped stream, the two unread badges —
+     and the reader's own clicks (opening Past conversations, a thread) draw
+     from that very same bucket. Cadences tuned in isolation cannot feel one
+     another and can sum past the ceiling, throttling the reader through no
+     fault of theirs. So the pollers share one sense of pressure here: every
+     polled read is stamped in a rolling minute, a throttle felt ANYWHERE eases
+     them all at once, and a poll about to fire stretches its own gap when the
+     minute is nearly full — keeping background traffic clear of the ceiling so
+     the reader's own reads always have room to land. A page reload starts this
+     ledger empty while the server's window lives on, so the reactive ease (any
+     429, from any poller or click) is the true safety net; the ledger only
+     smooths the steady state. */
+  var READ_CEIL = 15;                 // the server bucket: reads per minute per IP
+  var readStamps = [];                // times of recent polled reads
+  var readEaseUntil = 0;              // a throttle anywhere eases every poller until here
+  function readTrim(now) { while (readStamps.length && readStamps[0] <= now - 60000) readStamps.shift(); }
+  function readMark() { var now = Date.now(); readTrim(now); readStamps.push(now); }
+  function readEase() { readEaseUntil = Date.now() + 15000; }
+  function readThrottled(d) { return !!(d && d.error && /too many|slow down/i.test(String(d.error))); }
+  /* The gap a background poll honours before its next tick: its own base
+     cadence, stretched while a throttle is easing everyone or the rolling
+     minute is within two of the ceiling, so contention slows the whole body
+     as one and the reader's reads keep their headroom. A quiet page leaves the
+     base untouched, so a lone poll stays as snappy as it was tuned to be. */
+  function readPace(base) {
+    var now = Date.now();
+    readTrim(now);
+    var gap = base;
+    if (now < readEaseUntil) gap = Math.max(gap, readEaseUntil - now, 8000);
+    if (readStamps.length >= READ_CEIL - 2) gap = Math.max(gap, 12000);
+    return gap;
+  }
+
   /* Timestamps are stored as UTC epochs; toLocaleString renders them in each
      reader's own timezone, date and time together. */
   function fmtDateTime(epoch) {
@@ -2010,12 +2047,14 @@
     if (c && Date.now() - c.at < 90000) return;
     /* Stamp first, so parallel page loads inside the window stay quiet. */
     try { localStorage.setItem(DM_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
+    readMark();
     fetch(API + '/dm/unread', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key }),
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (blockedOut(d)) return;
+      if (readThrottled(d)) readEase();
       if (d.ok) dmCacheSet(d.unread);
     }).catch(function () {});
   }
@@ -2035,12 +2074,14 @@
     var c = notifCacheGet();
     if (c && Date.now() - c.at < 90000) return;
     try { localStorage.setItem(NOTIF_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
+    readMark();
     fetch(API + '/notifications/unread', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key }),
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (blockedOut(d)) return;
+      if (readThrottled(d)) readEase();
       if (d.ok) notifCacheSet(d.unread);
     }).catch(function () {});
   }
@@ -4915,7 +4956,8 @@
       }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
         if (blockedOut(d)) return;
         if (!d.ok || !d.chats) {
-          if (/too many|slow down/i.test(String(d.error || '')) && attempt < 2) {
+          if (readThrottled(d) && attempt < 2) {
+            readEase();   /* let the background pollers stand aside while we retry */
             setTimeout(function () { loadList(attempt + 1); }, 6000);
             return;
           }
@@ -5691,13 +5733,14 @@
       var lastGrowth = Date.now();
       function poll() {
         if (finished) return;
+        readMark();
         fetchRetry(MERECAT_API + '/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: state.key, id: chatId }),
         }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
           if (finished) return;
           if (blockedOut(d)) { settle(); return; }
-          if (!d.ok) { schedule(); return; }
+          if (!d.ok) { if (readThrottled(d)) readEase(); schedule(); return; }
           var rows = d.msgs || [];
           var fin = null, part = null;
           for (var i = 0; i < rows.length; i++) {
@@ -5730,16 +5773,17 @@
           giveUp('— the librarian seems to have stopped before writing anything. Ask again when you like.');
           return;
         }
-        /* The snappy 5s cadence exists to keep a FLOWING answer live, but at
-           12/min it alone nearly fills the shared 15/60s READ_LIMIT bucket
-           (every read endpoint draws from one per-IP budget), starving
-           concurrent reads — opening Past conversations, the unread badges —
-           into 429s. While the librarian is still THINKING (no partial text
-           yet, the long reasoning/queue phase) nothing is waiting to be
-           revealed, so poll gently and leave that headroom; tighten to 5s only
-           once text is actually flowing. */
-        var delay = (busy || !acc) ? 8000 : (age > 120000 ? 10000 : 5000);
-        setTimeout(poll, delay);
+        /* The base cadence: gentle while the librarian is still THINKING (no
+           partial text yet — nothing to reveal, and this long reasoning/queue
+           phase is what once pinned the whole read budget), a live 6s once
+           text is actually flowing (the backends flush a growing answer every
+           4-5s, so 6s catches each within a breath while leaving natural
+           headroom below the ceiling), easing to 10s on a long answer. Then
+           readPace has the final say: a quiet page runs the base untouched,
+           but when the shared minute nears full or a throttle is easing every
+           poller, this gap stretches with the rest of the body. */
+        var base = (busy || !acc) ? 8000 : (age > 120000 ? 10000 : 6000);
+        setTimeout(poll, readPace(base));
       }
       function visPass() { if (!document.hidden && !finished) poll(); }
       /* a question this old with nothing finished is a generation that died
@@ -5882,10 +5926,12 @@
            25s of silence is a true death signal — the reconciler never races
            or interrupts a healthy reveal, it acts only on the proven-dead. */
         if (!stalled && Date.now() - lastByteAt < 25000) return Promise.resolve(false);
+        readMark();
         return fetchRetry(MERECAT_API + '/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: state.key, id: chatId }),
         }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+          if (readThrottled(d)) readEase();
           var m = storedMatch(d);
           if (!m) return false;
           if (m.done === 0) {
@@ -5933,7 +5979,12 @@
             tries += 1;
             reconcile().then(function (ok) {
               if (ok || painted) { resolve(); return; }
-              if (tries < 60) { setTimeout(poll, tries < 10 ? 3000 : 8000); return; }
+              /* Grab fast at first — the answer is usually already stored by
+                 the time a stall is declared, so the first tries at ~3s end it
+                 at once — then ease, and let readPace stretch every gap when
+                 the budget is contended (a resume poll may be alive too). The
+                 old flat 3s for ten tries was 20/min, over the ceiling alone. */
+              if (tries < 60) { setTimeout(poll, readPace(tries < 3 ? 3000 : (tries < 10 ? 6000 : 9000))); return; }
               clearReconnect();
               if (document.contains(cat.body)) {
                 cat.body.appendChild(el('p', 'merecat-note',
@@ -6187,6 +6238,7 @@
             log.appendChild(el('p', 'comments-status', 'That conversation is gone (expired or deleted). This is a fresh one.'));
             return;
           }
+          if (readThrottled(d)) readEase();   /* a page-hop burst tripped the budget: ease the body, retry intact */
           throw new Error(d.error || 'transient');
         }
         loadNote.remove();
