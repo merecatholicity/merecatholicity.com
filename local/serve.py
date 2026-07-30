@@ -104,6 +104,77 @@ def _db():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
 
 
+# The reranker canary: /health proves the reranker accepts a budget-sized
+# query+document pair (the 2026-07-29 failure was a server whose physical
+# batch silently couldn't). /health must answer instantly (the worker pings
+# it thrice in ~1.5s for the admin status dots), so it always serves the
+# cached verdict and refreshes it in a background thread when stale; state
+# changes are logged to the journal.
+_canary_lock = threading.Lock()
+_canary = {"at": 0.0, "state": "unchecked", "detail": "", "busy": False}
+_CANARY_TTL = 60
+
+
+def _canary_refresh():
+    state, detail = llm.rerank_canary(CFG)
+    with _canary_lock:
+        if state != _canary["state"]:
+            print(f"reranker canary: {_canary['state']} -> {state}"
+                  + (f" ({detail})" if detail else ""), flush=True)
+        _canary.update(at=time.time(), state=state, detail=detail, busy=False)
+
+
+def rerank_state(wait=False):
+    if not CFG.get("rerank", True):
+        return {"state": "disabled", "detail": ""}
+    with _canary_lock:
+        stale = time.time() - _canary["at"] >= _CANARY_TTL
+        kick = stale and not _canary["busy"]
+        if kick:
+            _canary["busy"] = True
+    if kick:
+        t = threading.Thread(target=_canary_refresh, daemon=True)
+        t.start()
+        if wait:
+            t.join(90)
+    with _canary_lock:
+        return {"state": _canary["state"], "detail": _canary["detail"]}
+
+
+# Ask preflight (the owner's ruling, 2026-07-29): a question must never enter
+# a pipeline whose retrieval is KNOWN to be crippled. If the embedder is
+# unreachable (the semantic leg dead) or the reranker is down outright (not
+# 'degraded' — that state is self-healed by the salvage layer at full
+# quality), /ask answers 503 without `busy`, which the worker reads as
+# "offline" and — with failover on — sends the question to Cloudflare, whose
+# own retrieval and reranker still stand. `rerank: false` in mc_config.yml
+# means fusion order is the deliberate design, so it never bounces.
+_ready_lock = threading.Lock()
+_ready = {"at": 0.0, "ok": True, "why": ""}
+_READY_TTL = 30
+
+
+def backend_ready():
+    with _ready_lock:
+        if time.time() - _ready["at"] < _READY_TTL:
+            return _ready["ok"], _ready["why"]
+    ok, why = True, ""
+    try:
+        llm.embed(CFG, ["canary"], timeout=8)
+    except Exception as e:  # noqa: BLE001 — any embed failure kills the leg
+        ok, why = False, f"embedder unreachable: {e}"
+    if ok:
+        rr = rerank_state()
+        if rr["state"] == "down":
+            ok, why = False, f"reranker down: {rr['detail']}"
+    with _ready_lock:
+        if (ok, why) != (_ready["ok"], _ready["why"]):
+            print("ask preflight: " + ("ready" if ok else f"degraded ({why})"),
+                  flush=True)
+        _ready.update(at=time.time(), ok=ok, why=why)
+    return ok, why
+
+
 class ThinkStrip:
     """Streaming filter that drops the model's reasoning: paired <think>…</think>
     anywhere, and a leading reasoning run that ends in a bare </think> (qwen3
@@ -234,8 +305,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
+            rr = rerank_state()
+            ready, why = backend_ready()
             self._json(200, {"ok": True, "chunks": int(VECTORS.shape[0]),
-                             "model": CFG["chat_model"]})
+                             "model": CFG["chat_model"],
+                             "rerank": rr["state"],
+                             **({"rerank_detail": rr["detail"]}
+                                if rr["detail"] else {}),
+                             "ready": ready,
+                             **({"why": why} if why else {})})
         else:
             self._json(404, {"ok": False})
 
@@ -257,6 +335,14 @@ class Handler(BaseHTTPRequestHandler):
         context = data.get("context") or ""
         chat = data.get("chat")   # 1-on-1 thread id; present → store the answer
         msg = data.get("msg")     # the question's msg id — the /store dedup key
+
+        # Preflight: retrieval known-crippled → refuse now (a non-busy 503),
+        # so the worker fails the question over to the cloud instead of
+        # letting a degraded pipeline produce a sourceless answer.
+        ready, why = backend_ready()
+        if not ready:
+            return self._json(503, {"ok": False, "degraded": True,
+                                    "error": f"local retrieval degraded ({why})"})
 
         # Queue admission: past the cap, refuse at once (with the count ahead)
         # so nothing piles onto the GPU; within it, we will wait our turn.
@@ -398,6 +484,15 @@ def main():
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"merecat-local serving on 127.0.0.1:{PORT} "
           f"({VECTORS.shape[0]} chunks, model {CFG['chat_model']})", flush=True)
+
+    def _startup_canary():
+        # Best-effort: at machine boot the reranker may still be loading;
+        # the /health canary re-checks live thereafter.
+        time.sleep(3)
+        rr = rerank_state(wait=True)
+        print("reranker at startup: " + rr["state"]
+              + (f" ({rr['detail']})" if rr["detail"] else ""), flush=True)
+    threading.Thread(target=_startup_canary, daemon=True).start()
     srv.serve_forever()
 
 
