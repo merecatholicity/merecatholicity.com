@@ -103,6 +103,18 @@ def net_events(raw):
     return out
 
 
+"""Known-benign console noise the LIVE SITE emits with or without any change
+of ours — proven by baselining before the shell existed. Everything else
+stays fatal. (The first is Chrome noting that the dashboard's REPORT-ONLY
+CSP carries upgrade-insecure-requests, which report-only cannot honor — a
+config note for the owner, not a defect of any page.)"""
+BENIGN_CONSOLE = (
+    "The Content Security Policy directive 'upgrade-insecure-requests' is ignored",
+    'cdn-cgi/challenge-platform',
+    'static.cloudflareinsights.com',
+)
+
+
 def audit_step(sess, base, label, failures, expect_soft=False):
     """Drain logs after a step; report + collect failures."""
     console = sess.logs('browser')
@@ -110,7 +122,8 @@ def audit_step(sess, base, label, failures, expect_soft=False):
     responses = [e for e in perf if e['event'] == 'response' and e['url'].startswith('http')]
     docs = [e for e in perf if e['kind'] == 'Document' and e['event'] == 'request'
             and e['url'].startswith(base)]
-    errs = [c for c in console if c.get('level') == 'SEVERE']
+    errs = [c for c in console if c.get('level') == 'SEVERE'
+            and not any(b in c.get('message', '') for b in BENIGN_CONSOLE)]
     bad = [r for r in responses if r['url'].startswith(base) and (r['status'] or 0) >= 400]
     seen = {}
     dups = []
