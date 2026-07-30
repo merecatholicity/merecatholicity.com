@@ -590,6 +590,7 @@
     try { return localStorage.getItem(STORAGE) || ''; } catch (e) { return ''; }
   }
   function setKey(key) {
+    if (window.mcStore) window.mcStore.invalidate();
     try { localStorage.setItem(STORAGE, key); } catch (e) {}
   }
   function clearKey() {
@@ -1780,6 +1781,7 @@
 
   function stampFresh() {
     try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
+    if (window.mcStore) window.mcStore.invalidate();
   }
 
   /* Keyed visitors ask the server for the short-cache profile and keep
@@ -1787,6 +1789,19 @@
      browser cache, their repeat views never reaching the worker. */
   function freshParam(sep) {
     return state.key ? sep + 'fresh=1' : '';
+  }
+
+  /* Reads route through the shell's store when it stands (in-memory TTL +
+     in-flight dedup — the free-tier budget law's second half: rapid view
+     hops render from memory instead of drawing keyed reads from the shared
+     rate bucket). Without the shell, the plain transport serves as always.
+     WRITES never come through here. */
+  function cachedJson(url, init, ttl) {
+    if (window.mcStore) {
+      return window.mcStore.fetchJson(function (u, i) { return fetchRetry(u, i, [1000, 3000]); },
+        url, init, { ttl: ttl, bypass: !!freshOpts() });
+    }
+    return fetchRetry(url, init, [1000, 3000]).then(function (r) { return r.json(); });
   }
 
   function load() {
@@ -2666,8 +2681,7 @@
         }
       }).catch(function () {});
     }
-    fetchRetry(API + '/board' + freshParam('?'), freshOpts(), [1000, 3000])
-      .then(function (r) { return r.json(); })
+    cachedJson(API + '/board' + freshParam('?'), freshOpts(), 45000)
       .then(function (d) {
         if (!d.ok) return;
         CATS.forEach(function (cat) {
@@ -2796,12 +2810,11 @@
     attachDraft(section.querySelector('.comment-form .comment-text'), 'topic:' + key,
       section.querySelector('.comment-form .board-title'));
     (key === 'adminsonly'
-      ? fetchRetry(API + '/board/admin', {
+      ? cachedJson(API + '/board/admin', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: state.key || '', p: pageNum }),
-        }, [1000, 3000])
-      : fetchRetry(API + '/board/cat?cat=' + key + '&p=' + pageNum + freshParam('&'), freshOpts(), [1000, 3000]))
-      .then(function (r) { return r.json(); })
+        }, 45000)
+      : cachedJson(API + '/board/cat?cat=' + key + '&p=' + pageNum + freshParam('&'), freshOpts(), 45000))
       .then(function (d) {
         if (!d.ok) {
           if (key === 'adminsonly') {
@@ -2855,10 +2868,10 @@
         /* Mark the threads new since your last visit — a separate keyed call so
            the listing itself stays public and cacheable. */
         if (state.key) {
-          fetch(API + '/board/reads', {
+          cachedJson(API + '/board/reads', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, cat: key }),
-          }).then(function (r) { return r.json(); }).then(function (rd) {
+          }, 45000).then(function (rd) {
             if (blockedOut(rd) || !rd.ok) return;
             (rd.unread || []).forEach(function (id) {
               var t = titlesByTopic[id];
@@ -2885,8 +2898,7 @@
     var pNum = Math.floor(Number(qs.get('p')) || 0);
     var hashMatch = /^#comment-(\d+)$/.exec(location.hash);
     var extra = pNum ? '&p=' + pNum : (hashMatch ? '&find=' + hashMatch[1] : '');
-    fetchRetry(API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), [1000, 3000])
-      .then(function (r) { return r.json(); })
+    cachedJson(API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), 30000)
       .then(function (d) {
         /* A topic the public read cannot see might be an admins-only one —
            the refusal is indistinguishable from a missing topic by design, so
@@ -3533,8 +3545,7 @@
      cosmetic: it only refreshes label text, never the login state. */
   function loadMyProfile() {
     if (!state.myHash) return;
-    fetch(API + '/profile?hash=' + state.myHash + '&fresh=1')
-      .then(function (r) { return r.json(); })
+    cachedJson(API + '/profile?hash=' + state.myHash + '&fresh=1', undefined, 180000)
       .then(function (d) {
         /* Learn admin status from the server, the sole authority. Compare the
            effective answer against the pre-load hint: if it changed (an admin
