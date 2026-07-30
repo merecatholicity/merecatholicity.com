@@ -74,20 +74,32 @@ class McTopic extends LitElement {
   /* A pushed reply for this topic: append it if it belongs on the shown page and
      is not already here (dedups the poster's own optimistic append + multi-tab). */
   _applyLive(m) {
-    if (!m || m.t !== 'new-reply' || !this.d || this.d.topic.locked) return;
-    if (String(m.topic_id) !== String(this.topicId)) return;
-    const c = m.comment;
-    if (!c || this.querySelector('#comment-' + c.id)) return;
+    if (!m || !this.d) return;
+    if (String(m.topic_id) !== String(this.topicId) &&
+        !(m.t === 'moderation' && String(m.id) === String(this.topicId))) return;
     const kit = this.kit;
     const d = this.d;
-    if (Math.ceil((d.total + 1) / d.per) !== d.page) return;   // belongs on a later page
-    const list = this.querySelector('.comments-list');
-    if (!list) return;
-    d.total += 1;
-    const node = kit.commentNode(c, false, { topicId: this.topicId });
-    list.appendChild(node);
-    node.classList.add('mc-live-new');
-    setTimeout(() => { node.classList.remove('mc-live-new'); }, 2200);
+    if (m.t === 'new-reply') {
+      if (d.topic.locked) return;
+      const c = m.comment;
+      if (!c || this.querySelector('#comment-' + c.id)) return;   // dedup own/multi-tab
+      if (Math.ceil((d.total + 1) / d.per) !== d.page) return;     // belongs on a later page
+      const list = this.querySelector('.comments-list');
+      if (!list) return;
+      d.total += 1;
+      const node = kit.commentNode(c, false, { topicId: this.topicId });
+      list.appendChild(node);
+      node.classList.add('mc-live-new');
+      setTimeout(() => { node.classList.remove('mc-live-new'); }, 2200);
+    } else if (m.t === 'moderation') {
+      if (m.act === 'delete') {
+        if (String(m.id) === String(this.topicId)) { this.err = 'No such topic.'; this.d = null; }
+        else { const node = this.querySelector('#comment-' + m.id); if (node) node.remove(); }
+      } else if (m.act === 'lock' || m.act === 'unlock') {
+        this.d = { ...d, topic: { ...d.topic, locked: m.act === 'lock' ? 1 : 0 } };
+      }
+      /* sticky/unsticky change nothing visible inside the thread */
+    }
   }
   /* On reconnect (e.g. tab returned from hidden), pull any replies missed while
      away and append the ones not already shown. */
