@@ -1551,6 +1551,9 @@
   }
 
   function commentNode(c, pending, quoteCtx, reveal) {
+    /* Ported (Wave B3b): the module builder renders when the bundle stands;
+       this body is the no-bundle fallback (retires Wave F). */
+    if (window.mcViews && window.mcViews.commentNode) return window.mcViews.commentNode(window.mcKit, c, pending, quoteCtx, reveal);
     /* A muted member's post shows only a slim line until you choose to see it. */
     if (!reveal && c.author_hash && c.author_hash !== state.myHash && isMuted(c.author_hash)) {
       var ph = el('div', 'board-intro comment-muted');
@@ -6746,6 +6749,18 @@
     attachMentions: attachMentions, attachDraft: attachDraft, boardPost: boardPost,
     stampFresh: stampFresh,
     goIndex: function () { section.textContent = ''; viewIndex(); },
+    /* the post renderer's organs (Wave B3b) */
+    fetchRetry: fetchRetry,
+    isMuted: isMuted, toggleMute: toggleMute,
+    authorNode: authorNode, profileHref: profileHref,
+    ADMIN_HASHES: ADMIN_HASHES, MERECAT_BOT_HASH: MERECAT_BOT_HASH,
+    setStatus: setStatus, startEdit: startEdit,
+    quoteGrab: function (c) { quotedSelection = selectionInPost(c); },
+    quoteTake: function (c, quoteCtx) {
+      var excerpt = quotedSelection || truncate(c.body, 400);
+      quotedSelection = '';
+      quoteInto(c, excerpt, permalinkFor(c, quoteCtx));
+    },
   };
 
   if (BOARD) {
