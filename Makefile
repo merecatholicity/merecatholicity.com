@@ -99,6 +99,15 @@ publish:
 	cp confession-paperback.pdf Mere_Catholicity_Paperback.pdf
 	@echo "built Mere_Catholicity_Paperback.pdf ($$(pdfinfo confession-paperback.pdf | awk '/^Pages/{print $$2}') pages)"
 
+# The stylesheet is modular source under styles/, concatenated in filename
+# order (the NN- prefixes fix it) into the committed style.css that every
+# page links. Plain cat is deterministic and byte-stable; style.css stays
+# unversioned (cache-TTL), so a change propagates on Cloudflare's TTL.
+.PHONY: css
+css:
+	cat styles/*.css > style.css
+	@echo "built style.css ($$(wc -l < style.css) lines from styles/)"
+
 # Build the decoupled content pages (content/*.md|*.html) into committed
 # static HTML through the one shared skeleton. Runs after nav.py so it reads
 # the freshly generated nav.html; a page under content/ is NOT in nav.py's

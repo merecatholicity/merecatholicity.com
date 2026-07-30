@@ -1,0 +1,27 @@
+/* Deep-link ¶ markers on the generated Scripture and Fathers pages, grafted by
+   deeplink.js onto every heading, paragraph, and verse. Hover reveals the mark
+   (kept faintly visible on touch, where there is no hover); a click copies the
+   passage's permalink. An arriving link tints its target, mirroring
+   .comment:target above. */
+.dl { position: relative; scroll-margin-top: 2rem; }
+/* Always visible (not hover-gated), large enough to hit without a misclick,
+   with a padded tap target extended by a matching negative margin so the
+   glyph keeps its place in the margin. Click copies the link (deeplink.js). */
+.dl-anchor {
+  position: absolute; left: -1.5em; top: -0.05em;
+  opacity: 0.5; font-size: 1.2em; font-weight: normal; line-height: 1;
+  text-decoration: none; color: var(--faint); cursor: pointer;
+  padding: 0.25em 0.4em; margin: -0.25em -0.4em;
+  transition: opacity 0.12s ease, color 0.12s ease;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+}
+.dl-anchor:hover, .dl-anchor:focus, .dl-anchor.dl-copied { opacity: 1; color: var(--maroon); }
+.dl-anchor.dl-copied::after {
+  content: "link copied"; position: absolute; left: 1.75em; top: 0.1em;
+  white-space: nowrap; font-size: 0.68rem; color: var(--maroon);
+  background: var(--cream); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 0 0.4em;
+}
+@media (hover: none) { .dl-anchor { opacity: 0.6; left: -1.35em; font-size: 1.35em; } }
+.dl-target { background: var(--cream); box-shadow: 0 0 0 0.35em var(--cream); border-radius: 2px; }
+

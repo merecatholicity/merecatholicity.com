@@ -1,0 +1,122 @@
+/* The Catholicity Board */
+section.comments.board { margin-top: 1rem; }
+.board-intro { color: var(--muted-c); margin: 0.4em 0; }
+.board-crumb { color: var(--muted-c); font-size: 0.95rem; }
+.board-crumb a { color: var(--maroon); }
+.board-cats, .board-topics { border: 1px solid var(--rule); border-radius: 6px; margin: 1rem 0; }
+.board-cat, .board-topic { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.65em 0.9em; border-top: 1px solid var(--rule); }
+.board-cat:first-child, .board-topic:first-child { border-top: 0; }
+/* The back room's tile: deliberately off-shade from its siblings, in both
+   themes (it was once inline-styled light parchment, which glared in dark). */
+.board-cat-admin { background: #f4efe2; border: 1px solid #cdbd93; border-radius: 4px; }
+:root[data-theme="dark"] .board-cat-admin { background: #2b2519; border-color: #6a5c40; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .board-cat-admin { background: #2b2519; border-color: #6a5c40; }
+}
+a.board-cat-name { font-weight: bold; color: var(--maroon); text-decoration: none; }
+a.board-cat-name:hover { text-decoration: underline; }
+.board-cat-desc { color: var(--muted-b); font-size: 0.92rem; }
+.board-stats { color: var(--muted-d); font-size: 0.85rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
+a.board-topic-title { color: var(--ink); text-decoration: none; font-weight: bold; overflow-wrap: anywhere; }
+a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
+.board-topics .comments-status { padding: 0.65em 0.9em; margin: 0; }
+.board-form-head { margin-bottom: 0.3em; }
+.board-topic-head { overflow-wrap: anywhere; display: flex; align-items: baseline; flex-wrap: wrap; }
+.board-topic-head .comments-rss {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: normal;
+  text-decoration: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.15em 0.55em;
+  color: var(--brown);
+}
+.board-topic-head .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
+.board-title {
+  width: 100%;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  margin-bottom: 0.6em;
+}
+.board-title:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+/* The board tracks the site's widening desktop container instead of sitting in a
+   cramped 40rem column: it fills the body up to the 992px step, then holds a
+   comfortable reading measure so long discussion posts have room without the line
+   length running away on the widest monitors. */
+section.board { max-width: 52rem; }
+@media (min-width: 992px)  { section.board { max-width: 60rem; } }
+@media (min-width: 1200px) { section.board { max-width: 66rem; } }
+@media (max-width: 600px) {
+  .board-cat, .board-topic { flex-direction: column; gap: 0.15rem; }
+  .board-stats { text-align: left; white-space: normal; }
+}
+.board-latest { white-space: normal; margin-top: 0.15em; max-width: 18rem; }
+.board-latest a { color: var(--maroon); text-decoration: none; }
+.board-latest a:hover { text-decoration: underline; }
+.board-stats a { color: var(--maroon); text-decoration: none; }
+.board-stats a:hover { text-decoration: underline; }
+section.board .comment-identity { margin-bottom: 0.4rem; }
+.board-audit-link { margin: 0.6rem 0 0; font-size: 0.9rem; text-align: right; }
+.audit-where { overflow-wrap: anywhere; font-size: 0.95rem; }
+.comment-admin { color: var(--faintest); font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
+a.trust-toggle { color: var(--brown); font-size: 0.85em; text-decoration: none; display: inline-block; margin-top: 0.2em; }
+a.trust-toggle:hover { text-decoration: underline; }
+.board-locked { color: var(--faintest); font-style: italic; font-size: 0.8em; margin-left: 0.5em; }
+.board-sticky { color: var(--maroon); font-weight: bold; font-size: 0.8em; margin-left: 0.5em; }
+.board-admin-links { display: block; margin-top: 0.1em; }
+/* On a category row the admin controls drop to a full-width line and hug the
+   bottom-right corner, clear of the title, pager, and author links so a stray
+   tap cannot sticky, lock, or delete. */
+.board-topic { flex-wrap: wrap; }
+.board-admin-corner { flex-basis: 100%; text-align: right; margin-top: 0.35em; }
+@media (max-width: 600px) { .board-admin-corner { flex-basis: auto; } }
+.board-move { font: inherit; font-size: 0.82em; color: var(--brown); background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.25em; vertical-align: middle; max-width: 11rem; }
+.board-move:hover { border-color: var(--maroon); }
+.board-topic-left { min-width: 0; }
+.board-pages { color: var(--muted-c); }
+.board-pages a { margin-right: 0.4em; }
+.board-pages strong { margin-right: 0.4em; color: var(--ink); }
+.user-list { margin: 0.5rem 0 1rem; }
+a.user-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.5em 0.2em; border-bottom: 1px solid var(--rule); text-decoration: none; }
+a.user-row:hover { background: var(--cream); }
+.user-names { min-width: 0; }
+.user-nick { font-weight: bold; color: var(--maroon); overflow-wrap: anywhere; }
+.user-assigned { color: var(--faintest); font-size: 0.85rem; margin-left: 0.5em; }
+.user-go { color: var(--faintest); font-size: 0.85rem; white-space: nowrap; }
+.trust-line { margin-top: 0.25em; }
+
+/* Profiles. Author names link to a profile; a custom nick shows first with the
+   assigned pseudonym muted beneath it, and a signature rides under each post. */
+.comment-author { display: inline-block; vertical-align: top; }
+a.comment-author-link { color: var(--maroon); font-weight: bold; text-decoration: none; }
+a.comment-author-link:hover { text-decoration: underline; }
+a.comment-author-sub { display: block; margin-top: -0.1em; color: var(--faintest); font-weight: normal; font-size: 0.78rem; text-decoration: none; }
+a.comment-author-sub:hover { text-decoration: underline; }
+.comment-faith { display: block; margin-top: 0.05em; color: var(--maroon); font-weight: normal; font-size: 0.72rem; opacity: 0.9; }
+.comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: var(--muted-d); font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
+.comment-avatar-link { display: inline-block; vertical-align: top; margin-right: 0.5em; }
+.comment-avatar { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--rule); display: block; margin: 0; }
+.profile { max-width: 34rem; margin: 1rem 0; }
+.profile-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--cream-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; margin: 0; display: block; }
+.profile-names { min-width: 0; }
+.profile-name { font-weight: bold; color: var(--maroon); font-size: 1.2rem; overflow-wrap: anywhere; }
+.profile-assigned { color: var(--faintest); font-size: 0.85rem; }
+.profile-faith { color: var(--maroon); font-size: 0.9rem; margin-top: 0.2rem; }
+.profile-empty { color: var(--faintest); font-style: italic; }
+.profile-bio { white-space: pre-wrap; overflow-wrap: break-word; color: var(--ink); margin-top: 0; }
+label.profile-label { display: block; margin: 0.9rem 0 0.25rem; font-size: 0.9rem; color: var(--muted); }
+h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted); }
+.profile .comment-text, .profile .key-input {
+  width: 100%; padding: 0.5em 0.7em; font: inherit; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+}
+.profile textarea.comment-text { resize: vertical; }
+.profile .comment-text:focus, .profile .key-input:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+
