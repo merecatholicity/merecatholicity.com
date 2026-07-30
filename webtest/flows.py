@@ -20,6 +20,7 @@ import os
 import signal
 import subprocess
 import time
+import urllib.error
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -77,8 +78,17 @@ class Flow:
         req = urllib.request.Request('http://127.0.0.1:%d%s' % (self.port, p),
                                      data=d, method=m,
                                      headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            return json.loads(r.read())
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            # a page-side exception is a FINDING, never a harness crash
+            try:
+                detail = json.loads(e.read()).get('value', {}).get('message', '')[:200]
+            except Exception:
+                detail = 'HTTP %d' % e.code
+            self.failures.append('webdriver: %s' % detail)
+            return {'value': None}
 
     def js(self, script):
         return self._wd('POST', '/session/%s/execute/sync' % self.sid,
