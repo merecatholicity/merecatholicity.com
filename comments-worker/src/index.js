@@ -659,7 +659,7 @@ async function deliverNotifications(env, o) {
   if (stmts.length) await env.DB.batch(stmts);
 }
 
-async function handleSelfDelete(request, env) {
+async function handleSelfDelete(request, env, ctx) {
   let data;
   try {
     data = await request.json();
@@ -685,6 +685,18 @@ async function handleSelfDelete(request, env) {
       ).bind(id, authorHash).first();
   if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
   if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
+  /* Live push of the removal (Phase 1b): a reply vanishes from its thread; a
+     whole topic drops from its category and the index. Back room stays silent. */
+  if (env.HUB && boardKey(row.page) && row.page !== ADMIN_CAT) {
+    const catKey = row.page.slice(6);
+    if (row.parent_id == null) {
+      publishLive(env, ctx, { v: 1, t: 'moderation', act: 'delete', id, topic_id: id, cat: catKey,
+        scopes: ['topic:' + id, 'cat:' + catKey, 'board:index'] });
+    } else {
+      publishLive(env, ctx, { v: 1, t: 'moderation', act: 'delete', id, topic_id: row.parent_id, cat: catKey,
+        scopes: ['topic:' + row.parent_id] });
+    }
+  }
   return json({ ok: true }, 200);
 }
 
@@ -1187,7 +1199,7 @@ async function handleBoardAdmin(request, env) {
 
 /* Admin-only topic moderation from the page: lock and unlock close and
    reopen a thread to new replies, delete takes the topic down. */
-async function handleModerate(request, env) {
+async function handleModerate(request, env, ctx) {
   let data;
   try {
     data = await request.json();
@@ -1208,24 +1220,33 @@ async function handleModerate(request, env) {
     "SELECT id, page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status != 'deleted'"
   ).bind(id).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
+  /* Live push of the moderation (Phase 1b): gated out for the back room. */
+  const catKey = topic.page.slice(6);
+  const emit = (ev) => { if (topic.page !== ADMIN_CAT) publishLive(env, ctx, ev); };
   if (act === 'delete') {
     await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
+    emit({ v: 1, t: 'moderation', act: 'delete', id, topic_id: id, cat: catKey,
+      scopes: ['topic:' + id, 'cat:' + catKey, 'board:index'] });
     return json({ ok: true, deleted: true }, 200);
   }
   if (act === 'sticky' || act === 'unsticky') {
     const sticky = act === 'sticky' ? 1 : 0;
     await env.DB.prepare('UPDATE comments SET sticky = ?1 WHERE id = ?2').bind(sticky, id).run();
+    emit({ v: 1, t: 'moderation', act, id, topic_id: id, cat: catKey, sticky,
+      scopes: ['cat:' + catKey, 'board:index'] });
     return json({ ok: true, sticky: sticky }, 200);
   }
   const locked = act === 'lock' ? 1 : 0;
   await env.DB.prepare('UPDATE comments SET locked = ?1 WHERE id = ?2').bind(locked, id).run();
+  emit({ v: 1, t: 'moderation', act, id, topic_id: id, cat: catKey, locked,
+    scopes: ['topic:' + id, 'cat:' + catKey] });
   return json({ ok: true, locked: locked }, 200);
 }
 
 /* Admin-only: move a whole thread to another category, then DM the original
    poster an automated notice with a link to its new home. The topic row and
    every reply row carry their own page, so all move together. */
-async function handleMove(request, env) {
+async function handleMove(request, env, ctx) {
   let data;
   try {
     data = await request.json();
@@ -1257,6 +1278,31 @@ async function handleMove(request, env) {
     const link = SITE + '/community.html?topic=' + id;
     const body = ('Your topic "' + topic.title + '" was moved to ' + name + '. You can read it here: ' + link).slice(0, MAX_BODY);
     try { notified = await sendSystemDm(env, adminHash, topic.author_hash, body); } catch { notified = false; }
+  }
+  /* Live push of the move (Phase 1b): it leaves its old category (and any open
+     reader of it) and appears in the new one. Moving INTO the back room emits
+     only the leaving to the public source; moving OUT emits only the arrival. */
+  if (env.HUB && topic.page !== ADMIN_CAT) {
+    const oldCat = topic.page.slice(6);
+    publishLive(env, ctx, { v: 1, t: 'moved', id, from: oldCat,
+      scopes: ['topic:' + id, 'cat:' + oldCat, 'board:index'] });
+  }
+  if (env.HUB && newPage !== ADMIN_CAT) {
+    ctx.waitUntil((async () => {
+      const c = await env.DB.prepare(
+        'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, c.sticky, c.replies, ' +
+        'COALESCE(c.last_at, c.created_at) AS last FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
+        'WHERE c.id = ?1').bind(id).first();
+      if (!c) return;
+      const lastRow = await env.DB.prepare(
+        "SELECT MAX(id) AS m FROM comments WHERE (id = ?1 OR parent_id = ?1) AND status = 'live'").bind(id).first();
+      const newCat = newPage.slice(6);
+      await env.HUB.get(env.HUB.idFromName('board')).publish({ v: 1, t: 'new-topic',
+        scopes: ['cat:' + newCat, 'board:index'], cat: newCat,
+        topic: { id: c.id, title: c.title, author_hash: c.author_hash, nick: c.nick || null,
+          created_at: c.created_at, locked: c.locked || 0, sticky: c.sticky || 0, replies: c.replies || 0,
+          last: c.last, last_id: (lastRow && lastRow.m) || c.id } });
+    })().catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
   }
   return json({ ok: true, moved: true, notified }, 200);
 }
@@ -2638,7 +2684,7 @@ async function handleReportDismiss(request, env) {
 }
 
 /* Approve a held comment: the in-platform replacement for the old email link. */
-async function handleApprove(request, env) {
+async function handleApprove(request, env, ctx) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2652,6 +2698,36 @@ async function handleApprove(request, env) {
     "UPDATE comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING page, parent_id"
   ).bind(id).first();
   if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
+  /* Live push (Phase 1b): a held post, once approved, enters the stream — the
+     one place besides handlePost where a post becomes live. Same events, so the
+     forum views merge it exactly as a fresh post. Back room stays silent. */
+  if (env.HUB && row && boardKey(row.page) && row.page !== ADMIN_CAT) {
+    ctx.waitUntil((async () => {
+      const c = await env.DB.prepare(
+        'SELECT c.id, c.page, c.parent_id, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, ' +
+        'c.body, c.created_at FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.id = ?1'
+      ).bind(id).first();
+      if (!c) return;
+      const catKey = c.page.slice(6);
+      const topicId = c.parent_id || c.id;
+      const hub = env.HUB.get(env.HUB.idFromName('board'));
+      if (c.parent_id == null) {
+        const t = await env.DB.prepare('SELECT replies, COALESCE(last_at, created_at) AS last FROM comments WHERE id = ?1').bind(c.id).first();
+        await hub.publish({ v: 1, t: 'new-topic', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+          topic: { id: c.id, title: c.title, author_hash: c.author_hash, nick: c.nick || null,
+            created_at: c.created_at, locked: 0, sticky: 0, replies: (t && t.replies) || 0,
+            last: (t && t.last) || c.created_at, last_id: c.id } });
+      } else {
+        const t = await env.DB.prepare('SELECT replies, title, COALESCE(last_at, created_at) AS last FROM comments WHERE id = ?1').bind(topicId).first();
+        await hub.publish({ v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
+          comment: { id: c.id, author_hash: c.author_hash, nick: c.nick || null, signature: c.signature || null,
+            avatar: c.avatar || null, faith: c.faith || null, body: c.body, created_at: c.created_at } });
+        await hub.publish({ v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+          topic_id: topicId, title: (t && t.title) || null, replies: (t && t.replies) || 0,
+          last: (t && t.last) || c.created_at, last_id: c.id, author_hash: c.author_hash, nick: c.nick || null });
+      }
+    })().catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+  }
   return json({ ok: true, approved: !!row }, 200);
 }
 
@@ -4914,13 +4990,13 @@ export default {
 
       if (path === '/api/comments' && request.method === 'GET') return await handleGet(request, env, url);
       if (path === '/api/comments' && request.method === 'POST') return await handlePost(request, env, ctx);
-      if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env);
+      if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env, ctx);
       if (path === '/api/comments/edit' && request.method === 'POST') return await handleEdit(request, env, ctx);
       if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
       if (path === '/api/comments/audit' && request.method === 'POST') return await handleAudit(request, env);
       if (path === '/api/comments/trust' && request.method === 'POST') return await handleTrust(request, env);
-      if (path === '/api/comments/moderate' && request.method === 'POST') return await handleModerate(request, env);
-      if (path === '/api/comments/move' && request.method === 'POST') return await handleMove(request, env);
+      if (path === '/api/comments/moderate' && request.method === 'POST') return await handleModerate(request, env, ctx);
+      if (path === '/api/comments/move' && request.method === 'POST') return await handleMove(request, env, ctx);
       if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
       if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
       if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
@@ -4956,7 +5032,7 @@ export default {
       if (path === '/api/comments/ipban' && request.method === 'POST') return await handleIpBan(request, env);
       if (path === '/api/comments/ipbans' && request.method === 'POST') return await handleIpBans(request, env);
       if (path === '/api/comments/rdns' && request.method === 'POST') return await handleRdns(request, env);
-      if (path === '/api/comments/approve' && request.method === 'POST') return await handleApprove(request, env);
+      if (path === '/api/comments/approve' && request.method === 'POST') return await handleApprove(request, env, ctx);
       if (path === '/api/comments/pending' && request.method === 'POST') return await handlePending(request, env);
       if (path === '/api/comments/report' && request.method === 'POST') return await handleReport(request, env);
       if (path === '/api/comments/report/dismiss' && request.method === 'POST') return await handleReportDismiss(request, env);

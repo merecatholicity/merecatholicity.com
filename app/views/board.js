@@ -57,10 +57,15 @@ class McBoardIndex extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._onLive) document.removeEventListener('mc-live', this._onLive);
+    if (this._refetchT) clearTimeout(this._refetchT);
     if (window.mcLive) window.mcLive.board.leave();
   }
   _applyLive(m) {
-    if (!m || !m.cat || !this.stats) return;   // loading: the initial fetch is already fresh
+    if (!m || !this.stats) return;   // loading: the initial fetch is already fresh
+    /* delete/move change counts and the latest-poster in ways not worth patching
+       by hand; they are rare (admin actions), so refetch the whole (tiny) index. */
+    if (m.t === 'moderation' || m.t === 'moved') { this._refetchStats(); return; }
+    if (!m.cat) return;
     const s = this.stats;
     if (m.t === 'new-topic') {
       const cur = s[m.cat] || { topics: 0, posts: 0 };
@@ -76,6 +81,14 @@ class McBoardIndex extends LitElement {
           title: m.title || (cur.latest && cur.latest.title) || 'a thread',
           author_hash: m.author_hash, nick: m.nick, created_at: m.last } } };
     }
+  }
+  _refetchStats() {
+    if (this._refetchT) clearTimeout(this._refetchT);
+    const kit = this.kit;
+    this._refetchT = setTimeout(() => {
+      kit.fetchRetry(kit.API + '/board?cb=' + Date.now(), {}, [1000])
+        .then((r) => r.json()).then((d) => { if (d && d.ok) this.stats = d.cats; }).catch(() => {});
+    }, 1500);
   }
   firstUpdated() {
     const kit = this.kit;
@@ -205,16 +218,28 @@ class McBoardCat extends LitElement {
     if (window.mcLive) window.mcLive.board.leave();
   }
   _applyLive(m) {
-    if (!m || m.cat !== this.catKey || this.pageNum !== 1 || !this.payload) return;
+    if (!m || !this.payload) return;
+    if (m.cat !== this.catKey && m.from !== this.catKey) return;   // for-this-category only
     const p = this.payload;
-    if (m.t === 'new-topic') {
+    if (m.t === 'new-topic' && m.cat === this.catKey) {
+      if (this.pageNum !== 1) return;                       // new topics land on page 1
       if (p.topics.some((t) => t.id === m.topic.id)) return;   // dedup (own post / multi-tab)
       this.payload = { ...p, topics: sortTopics([m.topic, ...p.topics]), total: (p.total || 0) + 1 };
-    } else if (m.t === 'topic-stats') {
+    } else if (m.t === 'topic-stats' && m.cat === this.catKey) {
       if (!p.topics.some((t) => t.id === m.topic_id)) return;   // not on this page
       const topics = p.topics.map((x) => x.id === m.topic_id
         ? { ...x, replies: m.replies, last: m.last, last_id: m.last_id, author_hash: m.author_hash, nick: m.nick }
         : x);
+      this.payload = { ...p, topics: sortTopics(topics) };
+    } else if ((m.t === 'moderation' && m.act === 'delete') || m.t === 'moved') {
+      /* a whole topic removed from, or moved out of, this category */
+      if (!p.topics.some((t) => t.id === m.id)) return;
+      this.payload = { ...p, topics: p.topics.filter((t) => t.id !== m.id), total: Math.max(0, (p.total || 1) - 1) };
+    } else if (m.t === 'moderation' && (m.act === 'lock' || m.act === 'unlock' || m.act === 'sticky' || m.act === 'unsticky')) {
+      if (!p.topics.some((t) => t.id === m.topic_id)) return;
+      const topics = p.topics.map((t) => t.id === m.topic_id
+        ? { ...t, locked: m.locked != null ? m.locked : t.locked, sticky: m.sticky != null ? m.sticky : t.sticky }
+        : t);
       this.payload = { ...p, topics: sortTopics(topics) };
     }
   }
