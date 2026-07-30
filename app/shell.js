@@ -29,6 +29,7 @@
 
 import { LitElement, html } from '../vendor/lit-all.min.js';
 import * as store from './store.js';
+import './views/board.js';
 
 /* The API store rides the shell (window bridge until the interiors port):
    in-memory TTL + in-flight dedup for the views' reads, invalidated by
@@ -330,4 +331,10 @@ customElements.define('mc-audio-dock', McAudioDock);
     if (document.querySelector('.away')) { location.reload(); return; }
     softNav(u, false);
   });
+
+  /* Tell the page clients the shell (and its registered views) stand — the
+     deferred comments.js waits for this before booting, so the Lit views
+     win the load-order race deterministically instead of by luck. */
+  window.__mcShellReady = true;
+  document.dispatchEvent(new CustomEvent('mc-shell-ready'));
 })();
