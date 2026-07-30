@@ -35,6 +35,7 @@ import './views/post.js';
 import './views/topic.js';
 import './views/member.js';
 import './views/profile.js';
+import './views/admin.js';
 
 /* The API store rides the shell (window bridge until the interiors port):
    in-memory TTL + in-flight dedup for the views' reads, invalidated by

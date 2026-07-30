@@ -3039,6 +3039,7 @@
   /* The admin hub: one door from the board that gathers the three admin pages,
      so a member of staff picks a task rather than hunting scattered links. */
   function viewAdminHome() {
+    if (window.mcViews && window.mcViews.adminHome) return window.mcViews.adminHome(section, window.mcKit);
     document.title = 'Administrative options | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options']]);
     if (adminGate(viewAdminHome)) return;
@@ -3069,6 +3070,7 @@
      short (what to teach it next). The terms disclose this review. The admin
      observes; there is no composer, no way to ask or reply, nothing to change. */
   function viewMerecatThreads() {
+    if (window.mcViews && window.mcViews.merecatThreads) return window.mcViews.merecatThreads(section, window.mcKit);
     document.title = 'merecat Q&A at a glance | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
     if (adminGate(viewMerecatThreads)) return;
@@ -3119,6 +3121,7 @@
      them, the answers as the librarian gave them (its markdown neutralised the
      same as everywhere), sources shown. No composer, no forward, no controls. */
   function viewMerecatThread(id) {
+    if (window.mcViews && window.mcViews.merecatThread) return window.mcViews.merecatThread(section, window.mcKit, id);
     document.title = 'Observing a conversation | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'],
       ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + id]]);
@@ -6780,6 +6783,9 @@
     loadTurnstile: loadTurnstile,
     dmSearchBox: dmSearchBox, dmLabel: dmLabel,
     dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck,
+    /* admin read/observe cluster (Wave C-reads 3) */
+    MERECAT_API: MERECAT_API,
+    onProfile: function (cb) { profileWaiters.push(cb); },
   };
 
   if (BOARD) {
