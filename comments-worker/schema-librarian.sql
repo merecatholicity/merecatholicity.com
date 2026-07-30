@@ -111,8 +111,14 @@ CREATE TABLE IF NOT EXISTS chat_msgs (
   body       TEXT NOT NULL,
   sources    TEXT,
   created_at INTEGER NOT NULL,
-  answers    INTEGER              -- assistant rows: the user msg id answered.
+  answers    INTEGER,             -- assistant rows: the user msg id answered.
                                   -- The /store dedup key, so two generations in
                                   -- flight on one thread can never drop one.
+  done       INTEGER              -- assistant rows: NULL/1 = finished answer;
+                                  -- 0 = a partial flush still being written
+                                  -- (mid-generation insurance both backends
+                                  -- write so a reconnecting reader can pick
+                                  -- up the growing text; the final store
+                                  -- completes the same row with done = 1).
 );
 CREATE INDEX IF NOT EXISTS chat_msgs_chat_idx ON chat_msgs(chat_id, id);
