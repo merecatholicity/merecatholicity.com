@@ -3590,6 +3590,7 @@
   /* A profile view. Your own is read/write; everyone else's is read-only. It
      is reached from the View-profile link and from every clickable username. */
   function viewProfile(hash) {
+    if (window.mcViews && window.mcViews.profile) return window.mcViews.profile(section, window.mcKit, hash);
     document.title = 'Profile | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Profile']]);
     if (!/^[0-9a-f]{64}$/.test(String(hash))) {
@@ -4301,6 +4302,7 @@
   }
 
   function viewInbox() {
+    if (window.mcViews && window.mcViews.inbox) return window.mcViews.inbox(section, window.mcKit);
     document.title = 'Inbox | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Inbox']]);
     if (!state.key) {
@@ -6772,6 +6774,12 @@
     /* member read views (Wave C-reads) */
     dmScore: dmScore,
     notifClear: function () { try { localStorage.removeItem(NOTIF_CACHE); } catch (e) {} notifUnreadCheck(); },
+    /* profile + inbox read views (Wave C-reads 2) */
+    el: el,
+    renderProfile: renderProfile, adminProfileEditor: adminProfileEditor,
+    loadTurnstile: loadTurnstile,
+    dmSearchBox: dmSearchBox, dmLabel: dmLabel,
+    dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck,
   };
 
   if (BOARD) {
