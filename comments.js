@@ -4910,9 +4910,26 @@
     form.appendChild(send);
     section.appendChild(form);
     if (!loggedIn) {
+      var askPlaceholder = q.placeholder;
       q.disabled = true;
       send.disabled = true;
       q.placeholder = 'Create your free identity above, and ask away…';
+      /* Creating an identity here must open the box at once, with no manual
+         refresh. renderIdentity() repaints .comment-identity on create, so
+         watch it (the same self-healing hook armBoardForm and the article
+         composer use) and lift the gate the instant a key exists. */
+      var mkIdBox = section.querySelector('.comment-identity');
+      if (mkIdBox) {
+        new MutationObserver(function () {
+          if (!(state.key && state.myHash)) return;
+          q.disabled = false;
+          send.disabled = false;
+          q.placeholder = askPlaceholder;
+          if (typeof past !== 'undefined' && past) past.hidden = false;
+          if (typeof join !== 'undefined' && join && join.parentNode) join.remove();
+          q.focus();
+        }).observe(mkIdBox, { childList: true });
+      }
     }
 
     /* The quota line: always visible so a member can ration for the
