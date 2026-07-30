@@ -5,6 +5,8 @@
    it under script-src 'self'. */
 (function () {
   'use strict';
+  function boot() {
+  if (document.querySelector('.mc-flash')) return;
   var msg;
   try { msg = localStorage.getItem('mc-flash'); } catch (e) { return; }
   if (!msg) return;
@@ -26,4 +28,7 @@
   function show() { document.body.appendChild(bar); }
   if (document.body) show();
   else document.addEventListener('DOMContentLoaded', show);
+  }
+  window.mcFlashBoot = boot;
+  boot();
 })();

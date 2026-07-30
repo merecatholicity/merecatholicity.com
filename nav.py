@@ -93,12 +93,17 @@ def main():
     if not isinstance(items, list):
         sys.exit("nav.yml must be a list of items")
     nav = build_nav(items)
+    # The app shell's content region opens right after the nav block on every
+    # page (the includes and the block rewrite both carry it); the footer
+    # includes and each hand page close it. nav.html is GENERATED — this line
+    # is the single source of the <main> open.
+    nav = nav.rstrip("\n") + "\n<main>\n"
 
     with open(FRAGMENT, "w") as f:
         f.write(nav)
     print("wrote", FRAGMENT)
 
-    block = re.compile(r'<nav class="site">.*?<script defer src="nav\.js"></script>', re.S)
+    block = re.compile(r'<nav class="site">.*?<script defer src="nav\.js"></script>(?:\s*<main>)?', re.S)
     for page in PAGES:
         with open(page) as f:
             src = f.read()

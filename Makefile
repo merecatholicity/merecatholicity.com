@@ -13,7 +13,7 @@ build: pdf html logos publish check
 # identifier once shipped in the worker and silenced @merecat mentions for
 # days. eslint no-undef catches that class; deno runs it with no npm setup.
 jscheck:
-	deno run -A npm:eslint comments-worker/src/index.js comments.js nav.js deeplink.js flash.js contact.js bible-reader.js away.js index.js 'app/**/*.js'
+	deno run -A npm:eslint comments-worker/src/index.js comments.js nav.js deeplink.js flash.js contact.js bible-reader.js away.js index.js sw.js 'app/**/*.js'
 
 # The app shell bundle: Lit (vendored under vendor/, no npm anywhere) plus
 # the app/ modules, esbuild pinned for byte-stable output, committed like

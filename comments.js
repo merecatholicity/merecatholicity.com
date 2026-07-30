@@ -12,6 +12,31 @@
 (function () {
   'use strict';
 
+  /* SWAP-AWARENESS (the app shell, 2026-07-30). The whole client is one
+     boot function — booting is exactly what a page load always did, so the
+     shell can tear a page down and boot the next with reload parity and
+     zero behavioral drift. Teardown = bump the epoch (every long-lived
+     poller checks stale() and stands down), abort the boot's global
+     listeners (all registered with this boot's signal), and abort any
+     in-flight ask streams (the merecat disconnect contract makes that
+     SAFE: the question is stored server-side, partials keep flushing, and
+     re-entering the thread resumes — a soft swap away is a refresh). */
+  var MC_EPOCH = 0;
+  var mcDown = null;
+  function mcBoot() {
+  if (mcDown) { try { mcDown(); } catch (e) { /* half-torn is still torn */ } mcDown = null; }
+  var epoch = ++MC_EPOCH;
+  var bootCtl = new AbortController();
+  var bootSig = bootCtl.signal;
+  var liveStreams = [];
+  function stale() { return epoch !== MC_EPOCH; }
+  mcDown = function () {
+    MC_EPOCH++;
+    try { bootCtl.abort(); } catch (e) { /* already */ }
+    liveStreams.forEach(function (c) { try { c.abort(); } catch (e) { /* already */ } });
+    liveStreams.length = 0;
+  };
+
   var API = '/api/comments';
   var SITEKEY = '0x4AAAAAAD8IYH9_xQ0HE0yB';
   var STORAGE = 'mc-comment-key';
@@ -1221,12 +1246,12 @@
       if (!a) return;
       clearTimeout(hideTimer);
       show(a, e.clientX, e.clientY);
-    });
+    }, { signal: bootSig });
     document.addEventListener('mouseout', function (e) {
       var a = e.target && e.target.closest && e.target.closest('a.scripture-link');
       if (!a) return;
       hideTimer = setTimeout(function () { if (tip) tip.hidden = true; }, 160);
-    });
+    }, { signal: bootSig });
   })();
 
   /* The avatar preset gallery: the same panel chrome as the emoji picker (search
@@ -1431,8 +1456,8 @@
     }
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'hidden') save();
-    });
-    addEventListener('pagehide', save);
+    }, { signal: bootSig });
+    addEventListener('pagehide', save, { signal: bootSig });
     ta.mcDraftDone = function () {
       muted = true;
       clearTimeout(timer);
@@ -5532,7 +5557,7 @@
     function syncUnloadGuard() {
       if (askQueue.length && !unloadGuard) {
         unloadGuard = function (e) { e.preventDefault(); e.returnValue = ''; };
-        window.addEventListener('beforeunload', unloadGuard);
+        window.addEventListener('beforeunload', unloadGuard, { signal: bootSig });
       } else if (!askQueue.length && unloadGuard) {
         window.removeEventListener('beforeunload', unloadGuard);
         unloadGuard = null;
@@ -5565,6 +5590,7 @@
       drain();
     }
     function drain() {
+      if (stale()) return;
       if (busy || !askQueue.length) return;
       busy = true;
       var item = askQueue.shift();
@@ -5627,10 +5653,10 @@
         if (y > touchY + 8) follow = false;   /* finger down = view up */
         touchY = y;
       }
-      window.addEventListener('scroll', onScroll, { passive: true });
-      window.addEventListener('wheel', onWheel, { passive: true });
-      window.addEventListener('touchstart', onTouchStart, { passive: true });
-      window.addEventListener('touchmove', onTouchMove, { passive: true });
+      window.addEventListener('scroll', onScroll, { passive: true, signal: bootSig });
+      window.addEventListener('wheel', onWheel, { passive: true, signal: bootSig });
+      window.addEventListener('touchstart', onTouchStart, { passive: true, signal: bootSig });
+      window.addEventListener('touchmove', onTouchMove, { passive: true, signal: bootSig });
       return {
         bottom: function () { if (follow) window.scrollTo(0, document.documentElement.scrollHeight); },
         stop: function () {
@@ -5732,7 +5758,7 @@
       var born = Date.now();
       var lastGrowth = Date.now();
       function poll() {
-        if (finished) return;
+        if (finished || stale()) return;
         readMark();
         fetchRetry(MERECAT_API + '/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -5759,7 +5785,7 @@
         }).catch(function () { schedule(); });
       }
       function schedule() {
-        if (finished) return;
+        if (finished || stale()) return;
         var age = Date.now() - born;
         if (age > 35 * 60000) {
           giveUp('— the answer never finished. Ask again when you like.');
@@ -5800,7 +5826,7 @@
         working = startWorking(cat.body, startMs);
         working.setStatus('merecat is still working on this…');
       }
-      document.addEventListener('visibilitychange', visPass);
+      document.addEventListener('visibilitychange', visPass, { signal: bootSig });
       poll();
     }
     function ask(text) {
@@ -5868,6 +5894,7 @@
          and rendering it in place. The reader's manual refresh, automated. */
       var lastByteAt = Date.now(), stalled = false, watchTimer = null;
       var ctl = window.AbortController ? new AbortController() : null;
+      if (ctl) liveStreams.push(ctl);
       /* the sticky follow-along grip (stickyFollow above, shared with resume) */
       var sticky = stickyFollow();
       var followBottom = sticky.bottom;
@@ -5921,6 +5948,7 @@
         return null;
       }
       function reconcile() {
+        if (stale()) { if (reconTimer) { clearInterval(reconTimer); reconTimer = null; } return Promise.resolve(false); }
         if (painted || !chatId || !state.key) return Promise.resolve(false);
         /* A LIVING stream proves itself every ≤15s (tokens or keepalives), so
            25s of silence is a true death signal — the reconciler never races
@@ -5975,7 +6003,7 @@
         var tries = 0;
         return new Promise(function (resolve) {
           function poll() {
-            if (painted) { resolve(); return; }
+            if (painted || stale()) { resolve(); return; }
             tries += 1;
             reconcile().then(function (ok) {
               if (ok || painted) { resolve(); return; }
@@ -5998,6 +6026,7 @@
       }
       function flowTick() {
         try {
+          if (stale()) { clearInterval(flowTimer); flowTimer = null; if (flowResolve) flowResolve(); return; }
           if (painted) {
             clearInterval(flowTimer);
             flowTimer = null;
@@ -6021,6 +6050,7 @@
       var mode = modeSel.value || 'high';
       if (mode === 'instant') payload.instant = true; else payload.effort = mode;
       watchTimer = setInterval(function () {
+        if (stale()) { clearInterval(watchTimer); watchTimer = null; return; }
         /* The stream contract guarantees a heartbeat every ≤20s (STX during
            generation, {queue:N} while waiting), so silence is a fast, honest
            death signal: 30s once the answer is printing, 45s before the
@@ -6040,7 +6070,7 @@
          timer-throttling means the sweep may not have run while hidden) */
       reconTimer = setInterval(function () { reconcile(); }, 20000);
       visHandler = function () { if (!document.hidden) reconcile(); };
-      document.addEventListener('visibilitychange', visHandler);
+      document.addEventListener('visibilitychange', visHandler, { signal: bootSig });
       fetch(MERECAT_API + '/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -6280,7 +6310,7 @@
         q.focus();
       }).catch(function () {
         reopenTries += 1;
-        if (reopenTries < 5) {
+        if (!stale() && reopenTries < 5) {
           loadNote.textContent = 'Reopening the conversation… (takes a moment)';
           setTimeout(reopenGo, 6000);
         } else {
@@ -6335,7 +6365,7 @@
         }).catch(function () {
           /* one quiet retry — the notice is a courtesy, but a courtesy
              eaten by a rate limit deserves its second chance */
-          if (!noticeTried) { noticeTried = true; setTimeout(noticeGo, 8000); }
+          if (!stale() && !noticeTried) { noticeTried = true; setTimeout(noticeGo, 8000); }
         });
         };
         noticeGo();
@@ -6693,4 +6723,14 @@
   } else {
     start();
   }
+  }   /* end of mcBoot */
+
+  /* The shell's doors: boot on arriving at a swapped-in page that mounts
+     the client, tear down on leaving one. Booting directly also covers the
+     ordinary hard load below. */
+  window.mcCommentsBoot = mcBoot;
+  window.mcCommentsTeardown = function () {
+    if (mcDown) { var d = mcDown; mcDown = null; try { d(); } catch (e) { /* torn */ } }
+  };
+  mcBoot();
 })();

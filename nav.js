@@ -210,17 +210,18 @@ document.addEventListener('DOMContentLoaded', function () {
   document.head.appendChild(s);
 })();
 
-/* The app shell (Lit soft-navigation), behind a trial flag: ?app=1 arms it
-   for this browser (sticky in localStorage so hard landings keep it),
-   ?app=0 disarms. Off by default while the shell earns its keep — when it
-   becomes the standing experience this gate widens to everyone. */
+/* The app shell (Lit soft-navigation) — THE DEFAULT since 2026-07-30:
+   every reader gets soft navigation, the persistent audio dock, and the
+   installable face. ?app=0 is the standing opt-out latch (sticky per
+   browser), ?app=1 the way back in; with storage blocked the site simply
+   stays a website. */
 (function () {
   try {
-    if (/[?&]app=0\b/.test(location.search)) localStorage.removeItem('mc-app');
-    else if (/[?&]app=1\b/.test(location.search)) localStorage.setItem('mc-app', '1');
-    if (localStorage.getItem('mc-app') === '1') {
+    if (/[?&]app=0\b/.test(location.search)) localStorage.setItem('mc-app', '0');
+    else if (/[?&]app=1\b/.test(location.search)) localStorage.removeItem('mc-app');
+    if (localStorage.getItem('mc-app') !== '0') {
       var s = document.createElement('script');
-      s.src = 'app.js?v=1';
+      s.src = 'app.js?v=2';
       s.defer = true;
       document.head.appendChild(s);
     }

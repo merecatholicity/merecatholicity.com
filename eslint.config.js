@@ -37,6 +37,15 @@ export default [
     languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: browserGlobals },
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },
+  // The service worker: its own global set.
+  {
+    files: ['sw.js'],
+    languageOptions: {
+      ecmaVersion: 2023, sourceType: 'script',
+      globals: { self: 'readonly', caches: 'readonly', fetch: 'readonly', URL: 'readonly', Promise: 'readonly', console: 'readonly', Response: 'readonly' },
+    },
+    rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
+  },
   // The app shell and its Lit components: ES modules, bundled by `make bundle`
   // into the committed app.js (which is generated output, never linted).
   {
