@@ -76,14 +76,30 @@ def build_page(slug, source_path, nav_block, footer_block):
     head += ('<link rel="icon" href="favicon.ico">\n'
              '<link rel="stylesheet" href="style.css">\n</head>\n<body>\n')
 
-    parts = [head, nav_block, '\n']
-    parts.append('<h1 class="home-title">' + title + '</h1>\n')
-    if fm.get('canon'):
-        parts.append('<p class="canon">' + fm['canon'] + '</p>\n')
+    parts = [head, nav_block]
+    # A MARKDOWN source is pure prose: the template supplies the page's title
+    # chrome (the home-title h1 and the optional canon epigraph). An HTML
+    # source is a COMPLETE verbatim body that already carries its own h1/canon
+    # (the dense doctrinal pages) — the template injects nothing into it, so it
+    # renders byte-for-byte as authored. nav_block ends with "<main>\n", so a
+    # single leading "\n" gives one blank line before the content either way.
+    if not is_html:
+        parts.append('\n<h1 class="home-title">' + title + '</h1>\n')
+        if fm.get('canon'):
+            parts.append('<p class="canon">' + fm['canon'] + '</p>\n')
     parts.append('\n' + body_html + '\n')
     if fm.get('comments'):
         parts.append('\n<section class="comments" data-comments></section>\n'
                      '<script defer src="comments.js?v=' + str(COMMENTS_V) + '"></script>\n')
+    # extra per-page scripts (a page's own light JS: flash.js, index.js,
+    # bible-reader.js, contact.js…). A string or a list of srcs; each becomes
+    # a deferred include just before </main>, exactly as the hand pages carried.
+    scripts = fm.get('scripts')
+    if scripts:
+        if isinstance(scripts, str):
+            scripts = [scripts]
+        for src in scripts:
+            parts.append('<script defer src="' + src + '"></script>\n')
     parts.append(footer_block + '</body>\n</html>\n')
     return ''.join(parts)
 

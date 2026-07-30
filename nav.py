@@ -11,13 +11,14 @@ import sys
 
 import yaml
 
-PAGES = ["index.html", "resources.html", "library.html", "kjv.html", "douay-rheims.html", "contact.html", "logos.html",
-         "credo.html", "lex-orandi.html", "altar.html",
-         "jesus-prayer.html", "lectio-divina.html",
-         "confession-fasting.html", "theotokos.html",
-         "rule-of-benedict.html", "mary.html", "rosary.html", "about.html", "bishop-of-rome.html",
-         "free-churches.html", "objections.html", "charting-communions.html", "terms.html", "community.html",
-         "away.html"]
+# Hand-maintained pages whose nav block nav.py still rewrites in place. Every
+# rarely-changing content page moved to the content/ pipeline (content.py owns
+# its whole page, nav included, read from the generated nav.html) and left this
+# list. What remains are the pages content.py deliberately does NOT own: the
+# home page (its <head> carries og/twitter meta), the contact form (an async
+# Turnstile script the extractor can't see), the dynamic board SPA, and the
+# off-site interstitial.
+PAGES = ["index.html", "contact.html", "community.html", "away.html", "kjv.html", "douay-rheims.html"]
 FRAGMENT = "nav.html"
 
 TOGGLE = (
