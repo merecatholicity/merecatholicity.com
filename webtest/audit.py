@@ -112,6 +112,9 @@ BENIGN_CONSOLE = (
     "The Content Security Policy directive 'upgrade-insecure-requests' is ignored",
     'cdn-cgi/challenge-platform',
     'static.cloudflareinsights.com',
+    # The rate limiter answering a faster-than-human test is a FEATURE working
+    # (the client degrades gracefully by contract); real failures stay fatal.
+    'the server responded with a status of 429',
 )
 
 
@@ -124,7 +127,8 @@ def audit_step(sess, base, label, failures, expect_soft=False):
             and e['url'].startswith(base)]
     errs = [c for c in console if c.get('level') == 'SEVERE'
             and not any(b in c.get('message', '') for b in BENIGN_CONSOLE)]
-    bad = [r for r in responses if r['url'].startswith(base) and (r['status'] or 0) >= 400]
+    bad = [r for r in responses if r['url'].startswith(base) and (r['status'] or 0) >= 400
+           and not (r['status'] == 429 and '/api/' in r['url'])]
     seen = {}
     dups = []
     for r in responses:
