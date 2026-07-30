@@ -5593,6 +5593,45 @@
          and rendering it in place. The reader's manual refresh, automated. */
       var lastByteAt = Date.now(), stalled = false, watchTimer = null;
       var ctl = window.AbortController ? new AbortController() : null;
+      /* Follow-along: stick to the PAGE bottom while the answer prints, if
+         the reader was there when it began or comes back mid-print; any
+         deliberate upward scroll releases the grip until they return. The
+         old per-tick sample scrolled the BUBBLE's end into view — but the
+         composer and footer sit below the bubble, so from the true bottom
+         that call yanked the view UP off the floor and the very next sample
+         read "not at bottom" and gave up: following was impossible by
+         construction. The flag is sticky (page growth fires no scroll
+         events, so only the reader's own movement changes it): reaching
+         the bottom arms it, wheel-up or a downward finger-drag disarms at
+         once, and a position drop past the near-bottom band disarms too
+         (keys and scrollbar); the iOS rubber-band settle stays armed since
+         it never leaves that band. */
+      var follow = nearPageBottom();
+      var followY = window.scrollY;
+      var touchY = 0;
+      function followScroll() {
+        var y = window.scrollY;
+        if (y > followY + 2 && nearPageBottom()) follow = true;
+        else if (y < followY - 2 && !nearPageBottom()) follow = false;
+        followY = y;
+      }
+      function followWheel(e) { if (e.deltaY < 0) follow = false; }
+      function followTouchStart(e) {
+        if (e.touches && e.touches.length) touchY = e.touches[0].clientY;
+      }
+      function followTouchMove(e) {
+        if (!(e.touches && e.touches.length)) return;
+        var y = e.touches[0].clientY;
+        if (y > touchY + 8) follow = false;   /* finger down = view up */
+        touchY = y;
+      }
+      function followBottom() {
+        if (follow) window.scrollTo(0, document.documentElement.scrollHeight);
+      }
+      window.addEventListener('scroll', followScroll, { passive: true });
+      window.addEventListener('wheel', followWheel, { passive: true });
+      window.addEventListener('touchstart', followTouchStart, { passive: true });
+      window.addEventListener('touchmove', followTouchMove, { passive: true });
       /* THE RECONCILER. The standing guarantee: from the moment a question is
          sent until its answer is PAINTED, the page keeps comparing itself to
          the server's stored truth and heals any gap — a zombie stream, a reap
@@ -5622,12 +5661,11 @@
         working.stop();
         clearReconnect();
         if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
-        var follow = nearPageBottom();
         host.textContent = '';
         fillBody(host, rr.text, true);
         srcFooter(host, rr.sources);
         if (m.id) attachForward(cat.msg, m.id);
-        if (follow) cat.msg.scrollIntoView({ block: 'nearest' });
+        followBottom();
         painted = true;
         if (flowResolve) flowResolve();
         return true;
@@ -5712,7 +5750,6 @@
           poll();
         });
       }
-      function followTail(node) { node.scrollIntoView({ block: 'end' }); }
       function flowTick() {
         try {
           if (painted) {
@@ -5723,10 +5760,9 @@
           }
           var backlog = acc.length - shown;
           if (backlog > 0) {
-            var follow = nearPageBottom();
             shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
             cat.body.textContent = acc.slice(0, shown);
-            if (follow) followTail(cat.msg);
+            followBottom();
           } else if (streamDone) {
             clearInterval(flowTimer);
             flowTimer = null;
@@ -5795,7 +5831,7 @@
           if (!acc) {
             cat.body.textContent = '';
             cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
-            if (nearPageBottom()) cat.msg.scrollIntoView({ block: 'nearest' });
+            followBottom();
             return;
           }
           /* Let the reveal run to the end of the text before the final
@@ -5805,14 +5841,13 @@
           return new Promise(function (resolve) {
             flowResolve = function () {
               if (!painted && document.contains(cat.body)) {
-                var follow = nearPageBottom();
                 var rr = citeRenumber(acc, sources);
                 cat.body.textContent = '';
                 fillBody(cat.body, rr.text, true);
                 srcFooter(cat.body, rr.sources);
                 attachForward(cat.msg, 'last');
                 painted = true;
-                if (follow) cat.msg.scrollIntoView({ block: 'nearest' });
+                followBottom();
               }
               resolve();
             };
@@ -5895,6 +5930,10 @@
         if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
         if (reconTimer) { clearInterval(reconTimer); reconTimer = null; }
         if (visHandler) { document.removeEventListener('visibilitychange', visHandler); visHandler = null; }
+        window.removeEventListener('scroll', followScroll);
+        window.removeEventListener('wheel', followWheel);
+        window.removeEventListener('touchstart', followTouchStart);
+        window.removeEventListener('touchmove', followTouchMove);
         clearReconnect();
         busy = false;
         /* The answer is fully rendered. After a short beat so it settles, send
