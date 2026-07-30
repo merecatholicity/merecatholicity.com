@@ -4950,6 +4950,238 @@ export class BoardHub extends DurableObject {
   }
 }
 
+/* ---- merecat as a state machine (Phase 2): the ChatRoom Durable Object ----
+   One instance per conversation (getByName('chat:'+id)). It OWNS the generation
+   and is the single D1 writer for its thread, so the disconnect contract is
+   structural: it keeps generating whether or not a reader is attached, persists
+   the growing answer to chat_msgs (done=0 → done=1), and on (re)connect replays
+   the current state + answer-so-far via a `hello` frame — which replaces the
+   whole polling resume/reconcile/recover machinery. States: idle → thinking →
+   streaming → done | error. (This increment drives the cloud model; the local
+   box + failover land next, reusing merecatLocalFetch/merecatCloudInto.) Auth is
+   the member's key in the auth frame (same trust as the HTTP path's POST body),
+   never in the URL. Reuses merecatConfig/merecatPrompt/merecatThinkStripper/
+   merecatFold verbatim. Runs alongside the HTTP /ask path until proven. */
+export class ChatRoom extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.phase = 'idle';
+    this.chatId = 0;
+    this.gen = null;   // in-flight: { userMsgId, answer, sources, used, startedAtMs, backend }
+    this.ctx.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair(JSON.stringify({ t: 'ping' }), JSON.stringify({ t: 'pong' })));
+  }
+
+  #emit(obj) {
+    const s = JSON.stringify(obj);
+    for (const ws of this.ctx.getWebSockets()) { try { ws.send(s); } catch { /* dropped */ } }
+  }
+
+  async fetch(request) {
+    if (request.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
+    const cid = Number(new URL(request.url).searchParams.get('chat')) || 0;
+    const pair = new WebSocketPair();
+    this.ctx.acceptWebSocket(pair[1], ['v1']);
+    pair[1].serializeAttachment({ auth: false, chatId: cid });
+    return new Response(null, { status: 101, webSocket: pair[0] });
+  }
+
+  async webSocketMessage(ws, msg) {
+    let m;
+    try { m = JSON.parse(typeof msg === 'string' ? msg : ''); } catch { return; }
+    if (!m) return;
+    if (m.t === 'auth') return this.#auth(ws, m);
+    if (m.t === 'ask') return this.#ask(ws, m);
+  }
+
+  webSocketError(ws, err) { console.log(JSON.stringify({ event: 'chat_ws_error', error: String(err) })); }
+  /* A closing reader does NOT stop the generation — that is the whole point. */
+
+  #hello(ws) {
+    const g = this.gen;
+    ws.send(JSON.stringify({ t: 'hello', chatId: this.chatId, phase: this.phase,
+      answer: (g && g.answer) || '', sources: (g && g.sources) || [], used: (g && g.used) || null,
+      startedAtMs: (g && g.startedAtMs) || 0, backend: (g && g.backend) || 'cloudflare' }));
+  }
+
+  async #auth(ws, m) {
+    const key = String(m.key || '');
+    if (!key) { ws.send('{"t":"state","phase":"error","error":"Missing key."}'); return; }
+    const me = await sha256hex(key);
+    const a = ws.deserializeAttachment() || {};
+    const cid = a.chatId || Number(m.chat) || 0;
+    if (cid) {
+      const own = await this.env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2').bind(cid, me).first();
+      if (!own) { ws.send('{"t":"state","phase":"error","error":"No such conversation."}'); return; }
+      this.chatId = cid;
+    }
+    const admin = await isAdminHash(this.env, me);
+    ws.serializeAttachment({ auth: true, me, admin, chatId: cid });
+    this.#hello(ws);
+  }
+
+  async #ask(ws, m) {
+    const a = ws.deserializeAttachment() || {};
+    if (!a.auth) { ws.send('{"t":"state","phase":"error","error":"Authenticate first."}'); return; }
+    if (this.phase === 'thinking' || this.phase === 'streaming' || this.phase === 'queued') {
+      ws.send('{"t":"state","phase":"busy"}'); return;   // single-flight per conversation
+    }
+    const q = String(m.q || '').trim().slice(0, 2000);
+    if (!q) return;
+    const me = a.me;
+    const admin = !!a.admin;
+    const gate = await blockedReason(this.env, me, '');
+    if (gate) { ws.send('{"t":"state","phase":"error","error":"blocked"}'); return; }
+    const cfg = await merecatConfig(this.env);
+    const day = merecatDay();
+    const capsApply = cfg.backend === 'cloudflare';
+    let youQ = 0; let todayQ = 0;
+    try {
+      const g = await this.env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+      todayQ = (g && g.q) || 0;
+      if (capsApply && !admin && todayQ >= cfg.global_daily) {
+        ws.send(JSON.stringify({ t: 'state', phase: 'error', resting: true, error: MERECAT_RESTING })); return;
+      }
+      const u = await this.env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first();
+      youQ = (u && u.q) || 0;
+      if (capsApply && !admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
+        ws.send(JSON.stringify({ t: 'state', phase: 'error', capped: true,
+          error: 'You have used your ' + cfg.user_daily + ' questions for today. The counter resets at midnight UTC.' }));
+        return;
+      }
+    } catch (err) { console.log(JSON.stringify({ event: 'chat_caps_failed', error: String(err) })); }
+
+    /* Mint the thread + question row BEFORE generating (the thread must outlive a
+       fragile stream). A fresh conversation gets its id here and rides the first
+       frame back so the client adopts ?chat=<id> at once. */
+    const now = Math.floor(Date.now() / 1000);
+    let history = []; let summary = '';
+    if (!this.chatId) {
+      const ins = await this.env.LIBDB.prepare(
+        'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
+      ).bind(me, q.slice(0, 90), now).first();
+      this.chatId = ins.id;
+    } else {
+      const own = await this.env.LIBDB.prepare('SELECT summary FROM chats WHERE id = ?1').bind(this.chatId).first();
+      summary = String((own && own.summary) || '');
+      const rows = await this.env.LIBDB.prepare(
+        'SELECT role, body FROM chat_msgs WHERE chat_id = ?1 AND COALESCE(done, 1) = 1 ORDER BY id DESC LIMIT ' + MERECAT_WINDOW
+      ).bind(this.chatId).all();
+      history = (rows.results || []).reverse().map((r) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
+    }
+    const urs = await this.env.LIBDB.batch([
+      this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3) RETURNING id").bind(this.chatId, q, now),
+      this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, now),
+    ]);
+    const userMsgId = (urs && urs[0] && urs[0].results && urs[0].results[0] && urs[0].results[0].id) || 0;
+
+    const used = { you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
+      today: todayQ + 1, gcap: cfg.global_daily, admin, backend: 'cloudflare' };
+    this.gen = { userMsgId, answer: '', sources: [], used, startedAtMs: Date.now(), backend: 'cloudflare' };
+    this.phase = 'thinking';
+    this.#emit({ t: 'state', phase: 'thinking', chatId: this.chatId, used });
+    this.ctx.storage.setAlarm(Date.now() + 30000);   // keep-alive through silent gaps
+    this.#generate(q, history, summary, cfg, me, day).catch((err) => {
+      console.log(JSON.stringify({ event: 'chat_generate_failed', error: String(err) }));
+      this.phase = 'error';
+      this.#emit({ t: 'state', phase: 'error', resting: true, error: MERECAT_RESTING });
+    });
+  }
+
+  async #generate(q, history, summary, cfg, me, day) {
+    const { sources, messages } = await merecatPrompt(this.env, q, history, summary, cfg);
+    this.gen.sources = sources;
+    this.#emit({ t: 'meta', sources, used: this.gen.used, rv: MERECAT_RV, backend: 'cloudflare', chatId: this.chatId });
+    const aiStream = await this.env.AI.run(cfg.model, { messages, stream: true, max_tokens: cfg.max_tokens, temperature: 0.35 });
+    const strip = merecatThinkStripper();
+    const reader = aiStream.getReader();
+    const dec = new TextDecoder();
+    let buf = ''; let usage = null; let started = false;
+    let batch = ''; let lastSend = 0; let lastPersist = 0;
+    const sendBatch = () => { if (batch) { this.#emit({ t: 'tokens', d: batch }); batch = ''; lastSend = Date.now(); } };
+    const persist = async () => {
+      const body = this.gen.answer.trim();
+      if (!body) return;
+      lastPersist = Date.now();
+      try {
+        if (!this.gen.userMsgId) return;
+        const row = await this.env.LIBDB.prepare(
+          "SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1"
+        ).bind(this.chatId, this.gen.userMsgId).first();
+        if (row) {
+          await this.env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1').bind(row.id, body).run();
+        } else {
+          await this.env.LIBDB.prepare(
+            "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 0)"
+          ).bind(this.chatId, body, JSON.stringify(sources), Math.floor(Date.now() / 1000), this.gen.userMsgId).run();
+          await this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, Math.floor(Date.now() / 1000)).run();
+        }
+      } catch { /* a failed flush just waits for the next */ }
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const obj = JSON.parse(payload);
+          if (obj.usage) usage = obj.usage;
+          const delta = obj.response == null ? '' : String(obj.response);
+          if (delta) {
+            const vis = strip(delta);
+            if (vis) {
+              if (!started) { started = true; this.phase = 'streaming'; this.#emit({ t: 'state', phase: 'streaming' }); }
+              this.gen.answer += vis; batch += vis;
+              if (Date.now() - lastSend > 60) sendBatch();
+              if (Date.now() - lastPersist > 6000) await persist();
+            }
+          }
+        } catch { /* partial/non-JSON line */ }
+      }
+    }
+    const tail = strip(null);
+    if (tail) { this.gen.answer += tail; batch += tail; }
+    sendBatch();
+    if (!this.gen.answer.trim()) this.gen.answer = 'The librarian could not draw an answer this time. Ask again shortly.';
+
+    /* Finalize: one authoritative write (done=1), tally, fold, then idle. */
+    const answer = this.gen.answer.trim();
+    const nowS = Math.floor(Date.now() / 1000);
+    const stmts = [];
+    if (cfg.backend === 'cloudflare') {
+      const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : Math.ceil(JSON.stringify(messages).length / 4);
+      const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(answer.length / 4);
+      stmts.push(this.env.LIBDB.prepare('INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3').bind(day, inTok, outTok));
+      stmts.push(this.env.LIBDB.prepare('INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ON CONFLICT(day, hash) DO UPDATE SET q = q + 1').bind(day, me));
+    }
+    const existing = this.gen.userMsgId ? await this.env.LIBDB.prepare("SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1").bind(this.chatId, this.gen.userMsgId).first() : null;
+    if (existing) {
+      stmts.push(this.env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2, sources = ?3, done = 1 WHERE id = ?1').bind(existing.id, answer, JSON.stringify(sources)));
+      stmts.push(this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2 WHERE id = ?1').bind(this.chatId, nowS));
+    } else {
+      stmts.push(this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 1)").bind(this.chatId, answer, JSON.stringify(sources), nowS, this.gen.userMsgId || null));
+      stmts.push(this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, nowS));
+    }
+    await this.env.LIBDB.batch(stmts);
+    this.phase = 'done';
+    this.#emit({ t: 'state', phase: 'done', chatId: this.chatId });
+    try { await merecatFold(this.env, cfg, this.chatId); } catch { /* fold waits for next turn */ }
+  }
+
+  async alarm() {
+    /* Keep the object alive through silent generation gaps (it idle-evicts at
+       ~70-140s); clear once done/error so it hibernates at zero cost. */
+    if (this.phase === 'thinking' || this.phase === 'streaming' || this.phase === 'queued') {
+      this.ctx.storage.setAlarm(Date.now() + 30000);
+    }
+  }
+}
+
 /* The WebSocket upgrade endpoint. NOT gated by READ_LIMIT — a connection is not
    a poll; a dedicated CONNECT_LIMIT bucket absorbs reconnect storms without
    starving normal reads. env-guarded so a deploy without the binding just 503s. */
@@ -4969,6 +5201,62 @@ function publishLive(env, ctx, event) {
   ctx.waitUntil(
     env.HUB.get(env.HUB.idFromName('board')).publish(event)
       .catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+}
+
+/* merecat over WebSockets (Phase 2). ask-init mints (or verifies) the
+   conversation and returns its id BEFORE the socket opens, so the client adopts
+   ?chat=<id> at once and dials the ChatRoom instance that matches the id (the DO
+   name = 'chat:'+id, so a reconnect always reaches the same generator). */
+async function handleMerecatAskInit(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many questions at once. Wait a minute.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
+    .bind(me, Math.floor(Date.now() / 1000)).run();
+  let chatId = Number(data.chat) || 0;
+  if (chatId) {
+    const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2').bind(chatId, me).first();
+    if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
+  } else {
+    const title = String(data.q || '').replace(/\s+/g, ' ').trim().slice(0, 90) || 'New conversation';
+    const now = Math.floor(Date.now() / 1000);
+    const ins = await env.LIBDB.prepare(
+      'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
+    ).bind(me, title, now).first();
+    chatId = ins.id;
+  }
+  const cfg = await merecatConfig(env);
+  const day = merecatDay();
+  const admin = await isAdminHash(env, me);
+  let youQ = 0; let todayQ = 0;
+  try {
+    const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+    todayQ = (g && g.q) || 0;
+    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first();
+    youQ = (u && u.q) || 0;
+  } catch { /* preview only */ }
+  return json({ ok: true, chatId, backend: cfg.backend,
+    used: { you: youQ, cap: cfg.user_daily, cap_on: cfg.user_cap_on, today: todayQ, gcap: cfg.global_daily, admin } }, 200);
+}
+
+/* The merecat WebSocket upgrade → the per-conversation ChatRoom (getByName by id
+   so it is the same instance the ask-init minted). Not READ_LIMIT-gated. */
+async function handleMerecatLive(request, env) {
+  if (!originOk(request)) return new Response('bad origin', { status: 403 });
+  if (!env.CHAT) return new Response('unavailable', { status: 503 });
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.CONNECT_LIMIT.limit({ key: ip });
+  if (!success) return new Response('slow down', { status: 429 });
+  const cid = Number(new URL(request.url).searchParams.get('chat')) || 0;
+  if (!cid) return new Response('need a conversation id (call ask-init first)', { status: 400 });
+  return env.CHAT.get(env.CHAT.idFromName('chat:' + cid)).fetch(request);
 }
 
 export default {
@@ -5039,6 +5327,9 @@ export default {
       if (path === '/api/comments/admins' && request.method === 'POST') return await handleAdmins(request, env);
       if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
       if (path === '/api/merecat/ask' && request.method === 'POST') return await handleMerecatAsk(request, env, ctx);
+      if (path === '/api/merecat/ask-init' && request.method === 'POST') return await handleMerecatAskInit(request, env);
+      if (path === '/api/merecat/live' && request.method === 'GET' &&
+          request.headers.get('Upgrade') === 'websocket') return await handleMerecatLive(request, env);
       if (path === '/api/merecat/about' && request.method === 'POST') return await handleMerecatAbout(request, env);
       if (path === '/api/merecat/backends' && request.method === 'POST') return await handleMerecatBackends(request, env);
       if (path === '/api/merecat/store' && request.method === 'POST') return await handleMerecatStore(request, env);
