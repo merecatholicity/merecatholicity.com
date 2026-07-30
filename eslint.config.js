@@ -11,6 +11,7 @@ const workerGlobals = {
   setTimeout: 'readonly', clearTimeout: 'readonly', atob: 'readonly', btoa: 'readonly',
   AbortController: 'readonly', structuredClone: 'readonly', Blob: 'readonly',
   URLSearchParams: 'readonly', CompressionStream: 'readonly',
+  WebSocketPair: 'readonly', WebSocketRequestResponsePair: 'readonly', WebSocket: 'readonly',
 };
 const browserGlobals = {
   window: 'readonly', document: 'readonly', location: 'readonly', history: 'readonly',
@@ -25,6 +26,7 @@ const browserGlobals = {
   turnstile: 'readonly', Blob: 'readonly', AbortController: 'readonly', CustomEvent: 'readonly',
   atob: 'readonly', btoa: 'readonly', scrollTo: 'readonly', innerWidth: 'readonly', innerHeight: 'readonly',
   Audio: 'readonly', Event: 'readonly', addEventListener: 'readonly',
+  WebSocket: 'readonly', removeEventListener: 'readonly',
 };
 export default [
   {

@@ -56,6 +56,18 @@
     { "binding": "MERECAT_INDEX", "index_name": "merecat-t1" }
   ],
   "ai": { "binding": "AI" },
+  // Live updates: the board hub Durable Object fans new posts to browsers over
+  // hibernatable WebSockets (free tier; idle sockets cost zero duration). SQLite
+  // backing is required on the free plan even though the hub keeps no stored
+  // state (connections are the state).
+  "durable_objects": {
+    "bindings": [
+      { "name": "HUB", "class_name": "BoardHub" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["BoardHub"] }
+  ],
   // Monthly database backup: dump -> gzip -> R2, keep 90 days. Free tier.
   // Avatars: one 400x400 image per identity, fixed key = overwrite = pruned.
   "r2_buckets": [
@@ -65,7 +77,10 @@
   "triggers": { "crons": ["0 0 1 * *"] },
   "ratelimits": [
     { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
-    { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 15, "period": 60 } }
+    { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 15, "period": 60 } },
+    // WebSocket connect throttle (its own bucket, NOT shared with READ_LIMIT) so
+    // a reconnect storm can never starve normal reads.
+    { "name": "CONNECT_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } }
   ],
   "vars": {
     // "ai": Llama Guard screens each comment, clean ones publish instantly,

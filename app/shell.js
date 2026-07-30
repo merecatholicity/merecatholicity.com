@@ -30,6 +30,7 @@
 import { LitElement, html } from '../vendor/lit-all.min.js';
 import * as store from './store.js';
 import * as api from './api.js';
+import { installLive } from './live.js';
 import './richtext.js';
 import './views/board.js';
 import './views/post.js';
@@ -253,6 +254,10 @@ customElements.define('mc-audio-dock', McAudioDock);
     claim: function (ctx) { dock.claim(ctx); },
     release: function () { dock.release(); },
   };
+
+  /* Live updates: the shell-owned WebSocket to the board hub (window.mcLive).
+     Forum views subscribe on mount; idle tabs close it and reopen on return. */
+  installLive();
 
   /* PWA: the installable face. The worker caches only the small shell
      assets; documents and the API always ride the network. */

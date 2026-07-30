@@ -5,6 +5,8 @@
    (flagged or unscreenable comments are held pending, never dropped).
    The only secret is TURNSTILE_SECRET, the Turnstile server key. */
 
+import { DurableObject } from 'cloudflare:workers';
+
 const PAGES = [
   '/book.html',
   '/charting-communions.html',
@@ -568,6 +570,33 @@ async function handlePost(request, env, ctx) {
   /* Carry the poster's own nick, signature, and faith back so their fresh
      comment renders with them at once, before any cache refresh. */
   const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
+
+  /* Live push: broadcast the fresh post to everyone watching this scope over the
+     BoardHub socket. Gated to live PUBLIC board posts (the back room never crosses
+     the wire); deferred + env-guarded so it never delays or breaks the post. */
+  if (env.HUB && status === 'live' && boardKey(page) && page !== ADMIN_CAT) {
+    const catKey = page.slice(6);
+    const topicId = parentId || inserted.id;
+    const nick = prof && prof.nick || null;
+    ctx.waitUntil((async () => {
+      const hub = env.HUB.get(env.HUB.idFromName('board'));
+      if (parentId == null) {
+        await hub.publish({ v: 1, t: 'new-topic', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+          topic: { id: inserted.id, title, author_hash: authorHash, nick, created_at: createdAt,
+            locked: 0, sticky: 0, replies: 0, last: createdAt, last_id: inserted.id } });
+      } else {
+        const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
+        await hub.publish({ v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
+          comment: { id: inserted.id, author_hash: authorHash, nick,
+            signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
+            faith: prof && prof.faith || null, body, created_at: createdAt } });
+        await hub.publish({ v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+          topic_id: topicId, title: (stat && stat.title) || null, replies: (stat && stat.replies) || 0,
+          last: createdAt, last_id: inserted.id, author_hash: authorHash, nick });
+      }
+    })().catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+  }
+
   return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
     nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
     faith: prof && prof.faith || null,
@@ -4765,6 +4794,107 @@ async function handleMerecatStats(request, env) {
   return json({ ok: true, days, chunks: ((total && total.n) || 0) + deepN }, 200);
 }
 
+/* ---- Live updates over WebSockets (Phase 1) ----
+   The BoardHub is ONE global Durable Object (getByName('board')) that fans a
+   fresh board post out to every browser watching the affected scope, over a
+   hibernatable WebSocket. Connections are the only state: each socket's
+   subscriptions live in its serializeAttachment (survives hibernation), so the
+   object uses no ctx.storage and NO timers (either would block hibernation and
+   start billing idle duration). The socket is READ-ONLY — it carries {t:'sub'}
+   up and broadcast events down; every write stays on the authenticated,
+   Turnstile-gated, rate-limited HTTP path. The back room never crosses the wire
+   (sanitizeScopes refuses cat:adminsonly; the worker emits nothing for it). */
+
+/* A subscription scope is one of 'board:index', 'cat:<key>' (never the back
+   room), or 'topic:<positive int>'. Anything else is dropped; at most 4 kept. */
+function sanitizeScopes(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const s of raw) {
+    if (typeof s !== 'string' || out.length >= 4) continue;
+    if (s === 'board:index') { out.push(s); continue; }
+    if (s.startsWith('cat:')) {
+      const k = s.slice(4);
+      if (k !== 'adminsonly' && BOARD_CATS.includes(k)) out.push(s);
+      continue;
+    }
+    if (/^topic:[1-9][0-9]*$/.test(s)) out.push(s);
+  }
+  return out;
+}
+
+export class BoardHub extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    /* The client's {t:'ping'} is answered {t:'pong'} by the runtime without
+       waking the object, so a hibernating socket stays warm at zero cost. */
+    this.ctx.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair(JSON.stringify({ t: 'ping' }), JSON.stringify({ t: 'pong' })));
+  }
+
+  async fetch(request) {
+    if (request.headers.get('Upgrade') !== 'websocket') {
+      return new Response('expected websocket', { status: 426 });
+    }
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    this.ctx.acceptWebSocket(server, ['v1']);   // hibernation-eligible; one static tag
+    server.serializeAttachment({ subs: [], n: 0 });
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async webSocketMessage(ws, msg) {
+    let m;
+    try { m = JSON.parse(typeof msg === 'string' ? msg : ''); } catch { return; }
+    if (!m || m.t !== 'sub') return;   // a stray {t:'ping'} is handled by the auto-responder
+    const subs = sanitizeScopes(m.scope);
+    let a;
+    try { a = ws.deserializeAttachment(); } catch { a = null; }
+    const n = ((a && a.n) || 0) + 1;
+    if (n > 500) { try { ws.close(1008, 'too many'); } catch { /* gone */ } return; }
+    ws.serializeAttachment({ subs, n });
+  }
+
+  webSocketError(ws, err) {
+    console.log(JSON.stringify({ event: 'hub_ws_error', error: String(err) }));
+  }
+
+  /* RPC, called by the worker on every live public board mutation. */
+  async publish(event) {
+    if (!event || !Array.isArray(event.scopes)) return;
+    const payload = JSON.stringify(event);
+    for (const ws of this.ctx.getWebSockets()) {
+      let a;
+      try { a = ws.deserializeAttachment(); } catch { a = null; }
+      if (a && Array.isArray(a.subs) && a.subs.some((s) => event.scopes.includes(s))) {
+        try { ws.send(payload); } catch { /* a dropped socket; the close handler cleans up */ }
+      }
+    }
+  }
+}
+
+/* The WebSocket upgrade endpoint. NOT gated by READ_LIMIT — a connection is not
+   a poll; a dedicated CONNECT_LIMIT bucket absorbs reconnect storms without
+   starving normal reads. env-guarded so a deploy without the binding just 503s. */
+async function handleLive(request, env) {
+  if (!originOk(request)) return new Response('bad origin', { status: 403 });
+  if (!env.HUB) return new Response('unavailable', { status: 503 });
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.CONNECT_LIMIT.limit({ key: ip });
+  if (!success) return new Response('slow down', { status: 429 });
+  return env.HUB.get(env.HUB.idFromName('board')).fetch(request);
+}
+
+/* Fire-and-forget a live event to the board hub. env-guarded (a no-op when the
+   DO is unbound) and deferred via waitUntil so it never delays or breaks a post. */
+function publishLive(env, ctx, event) {
+  if (!env.HUB) return;
+  ctx.waitUntil(
+    env.HUB.get(env.HUB.idFromName('board')).publish(event)
+      .catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+}
+
 export default {
   async fetch(request, env, ctx) {
     try {
@@ -4773,6 +4903,13 @@ export default {
 
       if (request.method === 'POST' && !originOk(request)) {
         return json({ ok: false, error: 'Bad origin.' }, 403);
+      }
+
+      /* Live updates: the WebSocket upgrade to the board hub (a GET, so it never
+         hits the POST origin guard above; handleLive does its own origin check). */
+      if (path === '/api/comments/live' && request.method === 'GET' &&
+          request.headers.get('Upgrade') === 'websocket') {
+        return await handleLive(request, env);
       }
 
       if (path === '/api/comments' && request.method === 'GET') return await handleGet(request, env, url);

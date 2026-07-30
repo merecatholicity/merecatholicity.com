@@ -7,8 +7,15 @@
    verbatim machinery untouched. Registration: window.mcViews.* — the old
    view functions delegate here when present, one revertible line each. */
 
-import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
+import { LitElement, html, nothing, repeat } from '../../vendor/lit-all.min.js';
 import { pagerTpl } from './util.js';
+
+/* Category ordering must match the server's ORDER BY: stickies first, then by
+   last-activity descending. Used when live events reshuffle the listing. */
+function sortTopics(arr) {
+  return arr.slice().sort((a, b) =>
+    (Number(b.sticky || 0) - Number(a.sticky || 0)) || (Number(b.last || 0) - Number(a.last || 0)));
+}
 
 class McBoardIndex extends LitElement {
   static properties = {
@@ -41,6 +48,33 @@ class McBoardIndex extends LitElement {
         this.unreadTotal = d.total || 0;
         this.byCat = d.byCat || null;
       }).catch(() => {});
+    }
+    /* Live: the per-category latest-poster / counts update as posts happen. */
+    if (window.mcLive) window.mcLive.board.sub(['board:index']);
+    this._onLive = (ev) => this._applyLive(ev.detail);
+    document.addEventListener('mc-live', this._onLive);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._onLive) document.removeEventListener('mc-live', this._onLive);
+    if (window.mcLive) window.mcLive.board.leave();
+  }
+  _applyLive(m) {
+    if (!m || !m.cat || !this.stats) return;   // loading: the initial fetch is already fresh
+    const s = this.stats;
+    if (m.t === 'new-topic') {
+      const cur = s[m.cat] || { topics: 0, posts: 0 };
+      this.stats = { ...s, [m.cat]: { ...cur, topics: (cur.topics || 0) + 1, posts: (cur.posts || 0) + 1,
+        last: m.topic.last,
+        latest: { topic_id: m.topic.id, id: m.topic.id, title: m.topic.title,
+          author_hash: m.topic.author_hash, nick: m.topic.nick, created_at: m.topic.created_at } } };
+    } else if (m.t === 'topic-stats') {
+      const cur = s[m.cat];
+      if (!cur) return;
+      this.stats = { ...s, [m.cat]: { ...cur, posts: (cur.posts || 0) + 1, last: m.last,
+        latest: { topic_id: m.topic_id, id: m.last_id,
+          title: m.title || (cur.latest && cur.latest.title) || 'a thread',
+          author_hash: m.author_hash, nick: m.nick, created_at: m.last } } };
     }
   }
   firstUpdated() {
@@ -159,6 +193,30 @@ class McBoardCat extends LitElement {
         }
       })
       .catch(() => { this.err = 'Could not load the topics. Reload to retry.'; });
+    /* Live: new topics appear and rows re-sort as posts happen (page 1 only —
+       new activity always lands on the first page). The back room isn't broadcast. */
+    if (window.mcLive && this.catKey !== 'adminsonly') window.mcLive.board.sub(['cat:' + this.catKey]);
+    this._onLive = (ev) => this._applyLive(ev.detail);
+    document.addEventListener('mc-live', this._onLive);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._onLive) document.removeEventListener('mc-live', this._onLive);
+    if (window.mcLive) window.mcLive.board.leave();
+  }
+  _applyLive(m) {
+    if (!m || m.cat !== this.catKey || this.pageNum !== 1 || !this.payload) return;
+    const p = this.payload;
+    if (m.t === 'new-topic') {
+      if (p.topics.some((t) => t.id === m.topic.id)) return;   // dedup (own post / multi-tab)
+      this.payload = { ...p, topics: sortTopics([m.topic, ...p.topics]), total: (p.total || 0) + 1 };
+    } else if (m.t === 'topic-stats') {
+      if (!p.topics.some((t) => t.id === m.topic_id)) return;   // not on this page
+      const topics = p.topics.map((x) => x.id === m.topic_id
+        ? { ...x, replies: m.replies, last: m.last, last_id: m.last_id, author_hash: m.author_hash, nick: m.nick }
+        : x);
+      this.payload = { ...p, topics: sortTopics(topics) };
+    }
   }
   firstUpdated() {
     /* the composer below the listing is Wave C's machinery — mounted through
@@ -238,7 +296,7 @@ class McBoardCat extends LitElement {
         : !this.payload ? html`<p class="comments-status">Loading topics...</p>`
         : this.payload.topics.length === 0
           ? html`<p class="comments-status">No topics yet. Yours can be the first.</p>`
-          : this.payload.topics.map((t) => this.topicRow(t))}
+          : repeat(this.payload.topics, (t) => t.id, (t) => this.topicRow(t))}
       </div>
       ${this.payload ? pagerTpl(this.payload.total, this.payload.per, this.payload.page, hrefFor) : nothing}
     `;
