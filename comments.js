@@ -5704,7 +5704,11 @@
           giveUp('— the answer never finished. Ask again when you like.');
           return;
         }
-        if (!acc && Date.now() - lastGrowth > 5 * 60000) {
+        /* twenty minutes, not five: a deep queue plus long reasoning writes
+           NOTHING for many minutes while very much alive (partials begin
+           only with answer tokens) — this horizon may only catch the truly
+           dead, never a slow thinker */
+        if (!acc && Date.now() - lastGrowth > 20 * 60000) {
           giveUp('— the librarian seems to have stopped before writing anything. Ask again when you like.');
           return;
         }
@@ -5730,6 +5734,10 @@
       poll();
     }
     function ask(text) {
+      /* The reader is IN this conversation from the moment they ask: the
+         trail names the question at once (the URL follows on the stream's
+         first line, as soon as the server has minted the thread's id). */
+      if (!chatId) setCrumb(text);
       fillBody(bubble('you').body, text);
       var cat = bubble('cat');
       var working = startWorking(cat.body);
@@ -6031,6 +6039,17 @@
                 try { head = JSON.parse(pre.slice(0, cut)) || {}; } catch (e) { head = {}; }
                 pre = pre.slice(cut + 2);
                 if (head.queue != null && !head.sources) {
+                  /* The FIRST line already names the thread (the local path
+                     mints it before proxying): adopt it into the URL at
+                     once, so a refresh during the queue wait or the long
+                     reasoning lands back HERE and resumes — not on a bare
+                     page that forgot the question ever existed. */
+                  if (head.chat && head.chat !== chatId) {
+                    chatId = head.chat;
+                    if (history.replaceState) {
+                      history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
+                    }
+                  }
                   var waitMsg = head.queue > 0
                     ? (head.queue + (head.queue === 1 ? ' question' : ' questions') +
                        ' ahead of you in line, please wait')
@@ -6173,6 +6192,45 @@
         loadNote.textContent = 'Could not reopen the conversation. Reload to retry.';
       });
     } else {
+      /* A bare open while a question still cooks somewhere? The rare refresh
+         that beat the stream's first line loses the thread from the URL — so
+         look once at the newest conversation, and when its tail is an
+         unanswered question only minutes old, offer the way back in. A link,
+         never a redirect: the reader may genuinely want a fresh start, and
+         one click keeps that choice theirs. */
+      if (loggedIn && state.key) {
+        fetchRetry(MERECAT_API + '/chats', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+          if (!d.ok || !d.chats || !d.chats.length) return;
+          var newest = d.chats[0];
+          if (!newest || newest.last_at < Math.floor(Date.now() / 1000) - 600) return;
+          return fetchRetry(MERECAT_API + '/chat', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, id: newest.id }),
+          }, [1000]).then(function (r2) { return r2.json(); }).then(function (t) {
+            if (!t.ok || !t.msgs || !t.msgs.length) return;
+            var rows = t.msgs;
+            var lastUser = null;
+            for (var i = rows.length - 1; i >= 0; i--) {
+              if (rows[i].role === 'user') { lastUser = rows[i]; break; }
+            }
+            if (!lastUser) return;
+            for (var j = 0; j < rows.length; j++) {
+              var m = rows[j];
+              if (m.id > lastUser.id && m.role === 'assistant' && m.done !== 0) return;
+            }
+            var note = el('p', 'merecat-quota');
+            note.appendChild(document.createTextNode('🐈 The librarian is still working on your last question — '));
+            var back = el('a', 'body-link', 'rejoin it');
+            back.href = 'community.html?merecat=1&chat=' + newest.id;
+            note.appendChild(back);
+            note.appendChild(document.createTextNode('.'));
+            log.insertBefore(note, log.firstChild);
+          });
+        }).catch(function () {});
+      }
       q.focus();
     }
   }
