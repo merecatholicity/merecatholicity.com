@@ -90,6 +90,29 @@ def store_answer(chat, msg, answer, sources):
             time.sleep(1.5 * (i + 1))
     print(f"store_answer failed after retries: {last}", flush=True)
 
+
+def flush_partial(chat, msg, answer):
+    """One best-effort POST of the GROWING answer to /store with partial:true
+    (the reconnect contract, 2026-07-29). The worker inserts the row once
+    (done = 0), grows it by UPDATE, and the final store_answer completes the
+    same row — so a reader who lost the stream polls the thread and keeps
+    painting live text instead of waiting out the whole generation. Never
+    retried: the next flush carries a longer snapshot anyway."""
+    url = str(CFG.get("store_url", "")).strip()
+    if not url or not chat or not msg or not answer:
+        return
+    body = json.dumps({"key": KEY, "chat": chat, "msg": msg,
+                       "answer": answer, "partial": True}).encode()
+    try:
+        req = urllib.request.Request(
+            url, data=body, method="POST",
+            headers={"Content-Type": "application/json",
+                     "User-Agent": "curl/8.14.1"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            r.read()
+    except Exception:  # noqa: BLE001 — best-effort by design
+        pass
+
 # One GPU: a single generation at a time (_gpu), a bounded wait-queue behind
 # it (_pending, capped at QUEUE_CAP = 1 running + the rest waiting), and an
 # immediate busy past that. A waiting request is told how many are ahead.
@@ -426,6 +449,21 @@ class Handler(BaseHTTPRequestHandler):
                 while not hb_stop.wait(15):
                     emit("\x02")
             threading.Thread(target=_beat, daemon=True).start()
+            # The partial flusher: every few seconds the answer-so-far goes to
+            # /store (partial:true), so a reader whose stream died reconnects
+            # to GROWING text by polling the thread. 1-on-1 chats only —
+            # mentions have no thread row to grow.
+            fl_stop = threading.Event()
+
+            def _flusher():
+                sent = 0
+                while not fl_stop.wait(4):
+                    snap = "".join(parts).strip()
+                    if len(snap) > sent:
+                        sent = len(snap)
+                        flush_partial(chat, msg, snap)
+            if chat and msg:
+                threading.Thread(target=_flusher, daemon=True).start()
             try:
                 for kind, delta in llm.chat_stream(CFG, messages, think=True):
                     if kind != "answer":
@@ -450,6 +488,7 @@ class Handler(BaseHTTPRequestHandler):
                     emit("The librarian's engine faltered before the answer began. Please ask again.")
             finally:
                 hb_stop.set()
+                fl_stop.set()
             if not "".join(parts).strip():
                 # generation ended with no visible answer (reasoning ran the
                 # context dry, or the model yielded nothing): say so honestly,

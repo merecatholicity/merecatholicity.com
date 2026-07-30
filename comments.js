@@ -1276,34 +1276,35 @@
       'a.emoji-suggest-row{align-items:center}' +
       '.emoji-suggest-glyph{display:inline-flex;align-items:center;justify-content:center;min-width:1.6em;font-size:1.15rem}' +
       '.emoji-suggest-glyph .mc-emoji{height:1.4em}' +
-      '.emoji-panel{margin:.45em 0 0;border:1px solid var(--rule);border-radius:8px;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden}' +
+      '.emoji-panel{margin:.45em 0 0;border:1px solid var(--rule);border-radius:8px;background:var(--surface,#fff);box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden}' +
       '.emoji-search-row{padding:.5em;border-bottom:1px solid var(--rule)}' +
-      '.emoji-search{width:100%;box-sizing:border-box;padding:.4em .6em;border:1px solid var(--rule);border-radius:6px;font:inherit}' +
+      '.emoji-search{width:100%;box-sizing:border-box;padding:.4em .6em;border:1px solid var(--rule);border-radius:6px;font:inherit;background:var(--surface,#fff);color:var(--ink,#1a1a1a)}' +
+      '.emoji-search:focus,.scripture-sel:focus{outline:1px solid var(--maroon);border-color:var(--maroon)}' +
       '.emoji-tabs{display:flex;gap:.3em;flex-wrap:wrap;padding:.45em .5em 0}' +
-      '.emoji-tab{font:inherit;font-size:.92rem;padding:.25em .8em;border:1px solid var(--rule);border-bottom:none;border-radius:6px 6px 0 0;background:#f7f1e3;color:var(--faint);cursor:pointer}' +
-      '.emoji-tab-on{background:#fff;color:var(--maroon);font-weight:600}' +
+      '.emoji-tab{font:inherit;font-size:.92rem;padding:.25em .8em;border:1px solid var(--rule);border-bottom:none;border-radius:6px 6px 0 0;background:var(--cream,#f7f1e3);color:var(--faint);cursor:pointer}' +
+      '.emoji-tab-on{background:var(--surface,#fff);color:var(--maroon);font-weight:600}' +
       '.emoji-body{max-height:15em;overflow-y:auto;padding:.4em .5em .6em}' +
-      '.emoji-group-head{position:sticky;top:0;background:#fff;color:var(--faint);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;padding:.4em .15em .2em}' +
+      '.emoji-group-head{position:sticky;top:0;background:var(--surface,#fff);color:var(--faint);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;padding:.4em .15em .2em}' +
       '.emoji-grid{display:flex;flex-wrap:wrap;gap:.1em}' +
       '.emoji-cell{width:2em;height:2em;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;border-radius:6px;cursor:pointer;font-size:1.25rem;line-height:1;padding:0}' +
-      '.emoji-cell:hover{background:#f9f3e6}' +
+      '.emoji-cell:hover{background:var(--cream,#f9f3e6)}' +
       '.emoji-cell .mc-emoji{height:1.5em}' +
       '.emoji-empty{color:var(--faint);padding:.5em;margin:0}' +
       '.av-body{max-height:17em}' +
       '.av-grid{gap:.35em}' +
-      '.av-cell{width:3em;height:3em;padding:2px;border:1px solid var(--rule);background:#faf6ee;border-radius:8px}' +
-      '.av-cell:hover{background:#f2e7d0;border-color:var(--maroon)}' +
+      '.av-cell{width:3em;height:3em;padding:2px;border:1px solid var(--rule);background:var(--cream-2,#faf6ee);border-radius:8px}' +
+      '.av-cell:hover{background:var(--cream,#f2e7d0);border-color:var(--maroon)}' +
       '.av-cell img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;margin:0}' +
       '.btn-gallery{display:inline-block;margin:.15em 0 .1em}' +
       /* Scripture picker + autolink + hover preview */
       '.scripture-panel{padding:.6em}' +
       '.scripture-row{display:flex;flex-wrap:wrap;align-items:center;gap:.25em}' +
-      '.scripture-sel{font:inherit;font-size:.95rem;padding:.15em .3em;border:1px solid var(--rule);border-radius:5px;background:#faf6ee;color:var(--ink);max-width:14em}' +
+      '.scripture-sel{font:inherit;font-size:.95rem;padding:.15em .3em;border:1px solid var(--rule);border-radius:5px;background:var(--cream-2,#faf6ee);color:var(--ink);max-width:14em}' +
       '.scripture-sel-sm{max-width:6em}' +
       '.scripture-colon,.scripture-dash{color:var(--faint);padding:0 .05em}' +
       '.scripture-status{color:var(--faint);font-size:.9rem;padding:.4em 0}' +
       '.scripture-preview{margin:.6em 0;padding:.4em .7em;border-left:3px solid var(--rule);color:var(--ink-soft);font-size:.95rem;max-height:9em;overflow:auto}' +
-      '.scripture-insert{font:inherit;cursor:pointer;margin-top:.3em;padding:.3em .8em;border:1px solid var(--maroon);border-radius:6px;background:var(--maroon);color:#faf6ee}' +
+      '.scripture-insert{font:inherit;cursor:pointer;margin-top:.3em;padding:.3em .8em;border:1px solid var(--maroon);border-radius:6px;background:var(--maroon);color:var(--bg,#faf6ee)}' +
       '.scripture-insert:hover{background:var(--maroon-dark)}' +
       '.scripture-link{white-space:nowrap}' +
       '.scripture-tip{position:fixed;z-index:1200;max-width:30rem;max-height:60vh;overflow:auto;background:var(--surface,#fff);color:var(--ink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 3px 14px rgba(0,0,0,.22);padding:.55em .7em;font-size:.92rem;line-height:1.5;pointer-events:none}' +
@@ -1315,7 +1316,7 @@
       '.md-preview-title{font-weight:700}' +
       '.md-preview-empty{color:var(--faint);margin:0}' +
       '.btn-preview{background:transparent;border-color:var(--maroon);color:var(--maroon);font:inherit;cursor:pointer}' +
-      '.btn-preview:hover{background:var(--maroon);color:#fff}' +
+      '.btn-preview:hover{background:var(--maroon);color:var(--bg,#fff)}' +
       '.btn-preview:disabled{opacity:.6;cursor:default}' +
       '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em}}';
     var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
@@ -2553,9 +2554,6 @@
            tile showing to the whole world */
         row.className = 'board-cat board-cat-admin';
         row.style.display = isAdmin() ? '' : 'none';
-        row.style.background = '#f4efe2';
-        row.style.border = '1px solid #cdbd93';
-        row.style.borderRadius = '4px';
         stats[cat[0]].textContent = '🔒 admins alone';
       }
       wrap.appendChild(row);
@@ -4790,8 +4788,10 @@
       '.merecat-persona{white-space:pre-wrap;overflow-wrap:break-word;font-size:.85rem;color:var(--ink-soft);border-left:3px solid var(--rule);padding:.4em .8em;margin:.5em 0}' +
       '.merecat-form{display:flex;gap:.5rem;align-items:flex-end;margin:.8rem 0 .2rem}' +
       '.merecat-q{flex:1;min-height:3.1em;resize:vertical;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.5rem .65rem}' +
+      '.merecat-q:focus{outline:1px solid var(--maroon);border-color:var(--maroon)}' +
       '.merecat-quota{color:var(--faint);font-size:.85rem;margin:.15rem 0 .9rem}' +
       '.merecat-persona-edit{width:100%;min-height:26em;font:inherit;font-size:.9rem;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.6rem .7rem;margin:.4rem 0;resize:vertical;white-space:pre-wrap}' +
+      '.merecat-persona-edit:focus{outline:1px solid var(--maroon);border-color:var(--maroon)}' +
       '.merecat-quota strong{color:var(--maroon)}' +
       '.merecat-working{display:inline-flex;align-items:center;gap:.5em;color:var(--faint);font-style:italic}' +
       '.merecat-working .mc-cat-work{font-style:normal;display:inline-block;font-size:1.15em;animation:mc-bob 1s ease-in-out infinite}' +
@@ -4799,7 +4799,27 @@
       '.merecat-working .mc-secs{font-style:normal;font-variant-numeric:tabular-nums;color:var(--ink-soft);min-width:2.4em}' +
       '@keyframes mc-spin{to{transform:rotate(360deg)}}' +
       '@keyframes mc-bob{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-3px) rotate(6deg)}}' +
-      '@media (max-width:620px){.merecat-msg{max-width:100%}.merecat-form{flex-direction:column;align-items:stretch}}';
+      /* the forward drill-down: category, then topic, then confirm */
+      '.mc-fwd{margin:.45rem 0 .3rem;border:1px solid var(--rule);border-radius:6px;background:var(--cream);padding:.55rem .65rem;font-size:.9rem;color:var(--ink)}' +
+      '.mc-fwd-head{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem}' +
+      '.mc-fwd-crumb{margin:.3rem 0 .1rem;font-size:.85rem;color:var(--ink-soft)}' +
+      /* 16px floor so a phone never zoom-jumps into the box */
+      '.mc-fwd input{width:100%;box-sizing:border-box;font:inherit;font-size:max(16px,.95rem);color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:4px;padding:.45rem .55rem;margin:.3rem 0 .4rem}' +
+      '.mc-fwd input:focus{outline:1px solid var(--maroon);border-color:var(--maroon)}' +
+      '.mc-fwd-list{max-height:min(45vh,19rem);overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--rule);border-radius:4px;background:var(--surface)}' +
+      '.mc-fwd-row{display:block;width:100%;text-align:left;font:inherit;font-size:.9rem;color:var(--ink);background:none;border:0;border-bottom:1px solid var(--rule);padding:.55rem .6rem;cursor:pointer}' +
+      '.mc-fwd-row:last-child{border-bottom:0}' +
+      '.mc-fwd-row:hover,.mc-fwd-row:focus{background:var(--cream)}' +
+      '.mc-fwd-meta{color:var(--faint);font-size:.82rem}' +
+      '.mc-fwd-locked{opacity:.55;cursor:default}' +
+      '.mc-fwd-locked:hover{background:none}' +
+      '.mc-fwd-more{color:var(--maroon)}' +
+      '.mc-fwd-empty{padding:.55rem .6rem;color:var(--faint)}' +
+      '.mc-fwd-note{color:var(--maroon);font-size:.85rem;margin:.25rem 0 0}' +
+      '.mc-fwd-sure{margin:.35rem 0 .5rem}' +
+      '.mc-fwd-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}' +
+      '.mc-fwd-go{font:inherit;font-size:.9rem;padding:.4rem .9rem;cursor:pointer}' +
+      '@media (max-width:620px){.merecat-msg{max-width:100%}.merecat-form{flex-direction:column;align-items:stretch}.mc-fwd-list{max-height:50vh}}';
     var st = el('style');
     st.id = 'mc-merecat-css';
     st.textContent = css;
@@ -5170,31 +5190,244 @@
       whoDiv.appendChild(document.createTextNode(' · '));
       var f = el('a', 'identity-action', 'forward to the board');
       f.href = '#';
+      var open = null;
       f.addEventListener('click', function (e) {
         e.preventDefault();
         if (!chatId) return;
-        var t = prompt('Forward this answer publicly into which topic? Paste the topic link, or just its number:');
-        if (!t) return;
-        var m = /(?:topic=)?(\d+)/.exec(t.trim());
-        if (!m) { alert('Could not read a topic number from that.'); return; }
-        var topicId = Number(m[1]);
-        if (!confirm('Post this answer publicly to topic #' + topicId + ', under the librarian\u2019s name, marked as forwarded by you?')) return;
-        f.textContent = 'forwarding\u2026';
-        fetchRetry(MERECAT_API + '/forward', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, chat: chatId, msg: msgSel, topic: topicId }),
-        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.ok) {
-            var v = el('a', 'identity-action', 'forwarded \u2713 view it');
-            v.href = 'community.html?topic=' + d.topic + '#comment-' + d.id;
-            whoDiv.replaceChild(v, f);
-          } else {
-            f.textContent = d.error || 'forward failed';
-            setTimeout(function () { f.textContent = 'forward to the board'; }, 3000);
-          }
-        }).catch(function () { f.textContent = 'forward to the board'; alert('Network hiccup. Try again.'); });
+        if (open && open.isConnected) { open.remove(); open = null; return; }
+        open = forwardPicker(whoDiv, f, msgSel);
+        /* right under the name row, above the answer text */
+        whoDiv.parentNode.insertBefore(open, whoDiv.nextSibling);
       });
       whoDiv.appendChild(f);
+    }
+
+    /* The destination drill-down: category first (only rooms this member may
+       post into \u2014 the back room is offered to admins alone, and the server
+       enforces regardless), then the topic, then one confirm. The topic step
+       narrows SERVER-side as you type (title words against the live listing,
+       debounced), so a two-topic room and a two-thousand-topic room both
+       cost one twenty-row page \u2014 the client never pulls the whole list. */
+    function forwardPicker(whoDiv, f, msgSel) {
+      var panel = el('div', 'mc-fwd');
+      var pickedCat = null;      /* CATS row once a category is chosen */
+      var pickedTopic = null;    /* {id, title} once a topic is chosen */
+      var seq = 0;               /* newest request owns the list */
+      var lastQ = '', lastP = 1;
+      var debounce = null;
+      var deskTop = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+
+      var head = el('div', 'mc-fwd-head');
+      head.appendChild(el('strong', null, 'Forward to the board'));
+      var close = el('a', 'identity-action', 'cancel');
+      close.href = '#';
+      close.addEventListener('click', function (e) { e.preventDefault(); panel.remove(); });
+      head.appendChild(close);
+      panel.appendChild(head);
+
+      var crumbLine = el('div', 'mc-fwd-crumb');
+      panel.appendChild(crumbLine);
+      var input = el('input');
+      input.type = 'search';
+      panel.appendChild(input);
+      var listBox = el('div', 'mc-fwd-list');
+      panel.appendChild(listBox);
+      var confirmBox = el('div', 'mc-fwd-confirm');
+      confirmBox.hidden = true;
+      panel.appendChild(confirmBox);
+      var note = el('div', 'mc-fwd-note');
+      panel.appendChild(note);
+
+      function allowedCats() {
+        return CATS.filter(function (c) { return c[0] !== 'adminsonly' || isAdmin(); });
+      }
+      function stepCats() {
+        pickedCat = null; pickedTopic = null;
+        crumbLine.textContent = 'Pick a category:';
+        input.value = '';
+        input.placeholder = 'type to narrow the categories\u2026';
+        input.hidden = false;
+        listBox.hidden = false;
+        confirmBox.hidden = true;
+        note.textContent = '';
+        renderCats('');
+        if (deskTop) input.focus();
+      }
+      function renderCats(q) {
+        var ql = q.replace(/\s+/g, ' ').trim().toLowerCase();
+        listBox.textContent = '';
+        var shown = allowedCats().filter(function (c) {
+          return !ql || c[1].toLowerCase().indexOf(ql) !== -1 || c[0].indexOf(ql) !== -1;
+        });
+        if (!shown.length) {
+          listBox.appendChild(el('div', 'mc-fwd-empty', 'No category matches.'));
+          return;
+        }
+        shown.forEach(function (c) {
+          var b = el('button', 'mc-fwd-row');
+          b.type = 'button';
+          b.appendChild(el('strong', null, c[1]));
+          if (c[0] === 'adminsonly') b.appendChild(el('span', 'mc-fwd-meta', ' \u00b7 the back room'));
+          b.addEventListener('click', function () { pickedCat = c; stepTopics(); });
+          listBox.appendChild(b);
+        });
+      }
+
+      function stepTopics() {
+        pickedTopic = null;
+        crumbLine.textContent = '';
+        var back = el('a', 'identity-action', '\u2039 categories');
+        back.href = '#';
+        back.addEventListener('click', function (e) { e.preventDefault(); stepCats(); });
+        crumbLine.appendChild(back);
+        crumbLine.appendChild(document.createTextNode(' \u00b7 ' + pickedCat[1] + ' \u2014 pick the topic:'));
+        input.value = '';
+        input.placeholder = 'scroll, or type to narrow the topics\u2026';
+        input.hidden = false;
+        listBox.hidden = false;
+        confirmBox.hidden = true;
+        note.textContent = '';
+        lastQ = ''; lastP = 1;
+        loadTopics('', 1, false);
+        if (deskTop) input.focus();
+      }
+      function fetchTopics(q, p) {
+        return (pickedCat[0] === 'adminsonly'
+          ? fetchRetry(API + '/board/admin', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key || '', p: p, q: q }),
+            }, [1000])
+          : fetchRetry(API + '/board/cat?cat=' + pickedCat[0] + '&p=' + p +
+              (q ? '&q=' + encodeURIComponent(q) : '') + freshParam('&'), freshOpts(), [1000]))
+          .then(function (r) { return r.json(); });
+      }
+      function loadTopics(q, p, append) {
+        var mySeq = ++seq;
+        if (!append) {
+          listBox.textContent = '';
+          listBox.appendChild(el('div', 'mc-fwd-empty', 'Loading\u2026'));
+        }
+        fetchTopics(q, p).then(function (d) {
+          if (mySeq !== seq) return;
+          if (!d.ok) throw new Error(d.error || 'failed');
+          if (append) {
+            var oldMore = listBox.querySelector('.mc-fwd-more');
+            if (oldMore) oldMore.remove();
+          } else {
+            listBox.textContent = '';
+          }
+          lastQ = q; lastP = p;
+          if (!d.topics.length && p === 1) {
+            listBox.appendChild(el('div', 'mc-fwd-empty',
+              q ? 'No topic matches.' : 'No topics here yet.'));
+            return;
+          }
+          d.topics.forEach(function (t) {
+            var b = el('button', 'mc-fwd-row' + (t.locked ? ' mc-fwd-locked' : ''));
+            b.type = 'button';
+            b.appendChild(el('strong', null, t.title));
+            b.appendChild(el('span', 'mc-fwd-meta', ' \u00b7 ' +
+              t.replies + (t.replies === 1 ? ' reply' : ' replies') +
+              (t.sticky ? ' \u00b7 sticky' : '') + (t.locked ? ' \u00b7 locked' : '')));
+            if (t.locked) b.disabled = true;
+            else {
+              b.addEventListener('click', function () {
+                pickedTopic = { id: t.id, title: t.title };
+                stepConfirm();
+              });
+            }
+            listBox.appendChild(b);
+          });
+          var left = d.total - d.page * d.per;
+          if (left > 0) {
+            var more = el('button', 'mc-fwd-row mc-fwd-more',
+              'show more (' + left + ' more)');
+            more.type = 'button';
+            more.addEventListener('click', function () {
+              more.disabled = true;
+              more.textContent = 'loading\u2026';
+              loadTopics(lastQ, lastP + 1, true);
+            });
+            listBox.appendChild(more);
+          }
+        }).catch(function () {
+          if (mySeq !== seq) return;
+          if (!append) listBox.textContent = '';
+          var oldMore = listBox.querySelector('.mc-fwd-more');
+          if (oldMore) oldMore.remove();
+          listBox.appendChild(el('div', 'mc-fwd-empty', 'Could not load the topics. Type to retry.'));
+        });
+      }
+      /* nearing the bottom pulls the next page by itself; the button stays
+         as the visible affordance and the double-fire guard */
+      listBox.addEventListener('scroll', function () {
+        if (listBox.scrollTop + listBox.clientHeight < listBox.scrollHeight - 60) return;
+        var more = listBox.querySelector('.mc-fwd-more');
+        if (more && !more.disabled) more.click();
+      });
+
+      input.addEventListener('input', function () {
+        if (!pickedCat) { renderCats(input.value); return; }
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(function () {
+          var q = input.value.replace(/\s+/g, ' ').trim();
+          if (q === lastQ) return;
+          loadTopics(q, 1, false);
+        }, 300);
+      });
+
+      function stepConfirm() {
+        input.hidden = true;
+        listBox.hidden = true;
+        note.textContent = '';
+        confirmBox.textContent = '';
+        confirmBox.hidden = false;
+        confirmBox.appendChild(el('p', 'mc-fwd-sure',
+          (pickedCat[0] === 'adminsonly'
+            ? 'Post this answer into the admins-only back room, to \u201c' + pickedTopic.title + '\u201d'
+            : 'Post this answer publicly to \u201c' + pickedTopic.title + '\u201d in ' + pickedCat[1]) +
+          ', under the librarian\u2019s name, marked as forwarded by you?'));
+        var go = el('button', 'mc-fwd-go', 'Forward it');
+        go.type = 'button';
+        go.addEventListener('click', function () {
+          go.disabled = true;
+          note.textContent = 'forwarding\u2026';
+          fetchRetry(MERECAT_API + '/forward', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, chat: chatId, msg: msgSel, topic: pickedTopic.id }),
+          }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) {
+              var v = el('a', 'identity-action', 'forwarded \u2713 view it');
+              v.href = 'community.html?topic=' + d.topic + '#comment-' + d.id;
+              whoDiv.replaceChild(v, f);
+              panel.remove();
+            } else {
+              go.disabled = false;
+              note.textContent = d.error || 'Forward failed.';
+            }
+          }).catch(function () {
+            go.disabled = false;
+            note.textContent = 'Network hiccup. Try again.';
+          });
+        });
+        var back = el('a', 'identity-action', 'back to the topics');
+        back.href = '#';
+        back.addEventListener('click', function (e) {
+          e.preventDefault();
+          pickedTopic = null;
+          confirmBox.hidden = true;
+          input.hidden = false;
+          listBox.hidden = false;
+          note.textContent = '';
+        });
+        var row = el('div', 'mc-fwd-actions');
+        row.appendChild(go);
+        row.appendChild(back);
+        confirmBox.appendChild(row);
+      }
+
+      stepCats();
+      return panel;
     }
 
     function mcScrubLabel(t) {
@@ -5303,6 +5536,34 @@
       fillBody(bubble('you').body, text);
       var cat = bubble('cat');
       var working = startWorking(cat.body);
+      /* The reconnect chrome: when a stream dies it must FEEL like a hiccup,
+         not a failure — the cat keeps bobbing, the spinner keeps spinning,
+         and the status says reconnecting. It lives on cat.msg (outside
+         cat.body) so the paced reveal's textContent writes never wipe it. */
+      var reconRow = null, reconTick = null;
+      function showReconnect(statusText) {
+        if (painted || !cat || !cat.msg || !document.contains(cat.msg)) return;
+        if (reconRow) {
+          var st = reconRow.querySelector('.mc-status');
+          if (st) st.textContent = statusText;
+          return;
+        }
+        reconRow = el('div', 'merecat-working');
+        reconRow.appendChild(el('span', 'mc-cat-work', '🐈'));
+        reconRow.appendChild(el('span', 'mc-spin'));
+        reconRow.appendChild(el('span', 'mc-status', statusText));
+        var secs = el('span', 'mc-secs', '');
+        reconRow.appendChild(secs);
+        var t0 = Date.now();
+        reconTick = setInterval(function () {
+          secs.textContent = Math.round((Date.now() - t0) / 1000) + 's';
+        }, 500);
+        cat.msg.appendChild(reconRow);
+      }
+      function clearReconnect() {
+        if (reconTick) { clearInterval(reconTick); reconTick = null; }
+        if (reconRow) { try { reconRow.remove(); } catch (e) {} reconRow = null; }
+      }
       /* Hoisted so the catch can tell how far the stream got: a null sources
          means the question never confirmed; anything later means it is stored
          server-side and the answer will reach the thread regardless. */
@@ -5359,6 +5620,7 @@
           cat = { msg: mm, body: host };
         }
         working.stop();
+        clearReconnect();
         if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
         var follow = nearPageBottom();
         host.textContent = '';
@@ -5393,6 +5655,21 @@
         }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
           var m = storedMatch(d);
           if (!m) return false;
+          if (m.done === 0) {
+            /* The librarian is STILL WRITING: both backends now flush the
+               growing answer to the thread every few seconds (done = 0 until
+               the final store), so a dead stream reconnects to live text —
+               adopt whatever grew, keep revealing, keep polling. The ask
+               finishes only when the completed row (done = 1) paints. */
+            if (ctl) { try { ctl.abort(); } catch (e) {} }
+            if (m.body && m.body.length > acc.length) {
+              acc = m.body;
+              working.stop();
+              ensureFlow();
+            }
+            showReconnect('connection hiccup — reconnected, the librarian is still writing…');
+            return false;
+          }
           var ok = paintStored(m);
           /* the page is whole; cut any zombie stream loose so the ask settles */
           if (ok && ctl) { try { ctl.abort(); } catch (e) {} }
@@ -5407,10 +5684,14 @@
           cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
           return;
         }
+        /* Reconnect, don't resign: keep whatever printed, keep the cat
+           spinning, and poll the thread — fast at first (the answer is often
+           already stored by the time a stall is declared), then patiently
+           while the librarian finishes writing. Partial flushes mean each
+           poll can pick up GROWING text, so the reveal keeps flowing. */
         if (document.contains(cat.body)) {
-          cat.body.textContent = acc;
-          cat.body.appendChild(el('p', 'merecat-note',
-            '— the connection went quiet. Waiting for the finished answer to arrive…'));
+          if (!acc) cat.body.textContent = '';
+          showReconnect('connection hiccup — reconnecting to the librarian…');
         }
         var tries = 0;
         return new Promise(function (resolve) {
@@ -5419,10 +5700,11 @@
             tries += 1;
             reconcile().then(function (ok) {
               if (ok || painted) { resolve(); return; }
-              if (tries < 30) { setTimeout(poll, 12000); return; }
+              if (tries < 60) { setTimeout(poll, tries < 10 ? 3000 : 8000); return; }
+              clearReconnect();
               if (document.contains(cat.body)) {
                 cat.body.appendChild(el('p', 'merecat-note',
-                  '— the answer is still being written. It will be saved to this conversation; reopen it in a little while to read it.'));
+                  '— the connection could not be restored, but the librarian keeps writing regardless: the finished answer is saved to this conversation. Reopen it in a little while to read it.'));
               }
               resolve();
             });
@@ -5457,7 +5739,15 @@
       var mode = modeSel.value || 'high';
       if (mode === 'instant') payload.instant = true; else payload.effort = mode;
       watchTimer = setInterval(function () {
-        var limit = (sources !== null && acc.length) ? 75000 : 600000;
+        /* The stream contract guarantees a heartbeat every ≤20s (STX during
+           generation, {queue:N} while waiting), so silence is a fast, honest
+           death signal: 30s once the answer is printing, 45s before the
+           first token (covers cloud first-token latency; local is heartbeat-
+           covered throughout). The old 75s/10min made a dead stream feel
+           like a broken site — detection now costs seconds, and a false
+           positive merely switches to the polling path, which paints the
+           same growing text the stream would have. */
+        var limit = (sources !== null && acc.length) ? 30000 : 45000;
         if (Date.now() - lastByteAt > limit) {
           stalled = true;
           if (ctl) { try { ctl.abort(); } catch (e) {} }
@@ -5589,27 +5879,23 @@
         working.stop();
         if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
         if (painted) return;   /* the reconciler already made the page whole */
-        if (stalled) {
-          /* The watchdog cut a silently dead stream: fetch the finished
-             answer from the thread and render it in place. */
+        if (stalled || sources !== null) {
+          /* A silently dead stream the watchdog cut, or a hard break
+             mid-answer: either way the question is stored server-side and
+             the librarian keeps writing — so RECONNECT (poll the thread,
+             pick up the growing text, paint the finish) instead of leaving
+             a farewell note. The old behavior printed "reopen it in a
+             minute or two" and stopped listening; refreshing the page was
+             genuinely faster, which is exactly backwards. */
           return recover();
         }
-        if (sources !== null) {
-          /* The stream broke mid-answer, but the question was accepted: the
-             librarian keeps writing and saves the answer to this conversation.
-             Show everything that arrived and say where the rest will be. */
-          cat.body.textContent = acc;
-          cat.body.appendChild(el('p', 'merecat-note',
-            '— the connection dropped, but the librarian is still writing. The full answer ' +
-            'will be saved to this conversation; reopen it in a minute or two to read it.'));
-        } else {
-          cat.body.textContent = '';
-          cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
-        }
+        cat.body.textContent = '';
+        cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
       }).then(function () {
         if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
         if (reconTimer) { clearInterval(reconTimer); reconTimer = null; }
         if (visHandler) { document.removeEventListener('visibilitychange', visHandler); visHandler = null; }
+        clearReconnect();
         busy = false;
         /* The answer is fully rendered. After a short beat so it settles, send
            the next stacked question; otherwise return focus to the box. */

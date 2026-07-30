@@ -922,21 +922,33 @@ async function handleBoardCat(request, env, url) {
   /* answer exactly as if the category did not exist: a prober learns nothing */
   if (page === ADMIN_CAT) return json({ ok: false, error: 'Unknown category.' }, 400, cacheHeader(url));
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
-  return json(await boardCatPayload(env, page, p), 200, cacheHeader(url));
+  return json(await boardCatPayload(env, page, p, url.searchParams.get('q')), 200, cacheHeader(url));
 }
 
-async function boardCatPayload(env, page, p) {
+async function boardCatPayload(env, page, p, q) {
+  /* Optional title narrowing (the merecat forward picker's type-to-narrow):
+     up to five typed words, each a case-insensitive substring of the topic
+     title, ANDed in any order. The LIKE walk covers only this category's
+     topic rows, so a two-topic room and a two-thousand-topic room both
+     answer as one twenty-row page — a client never pulls the whole list. */
+  const toks = String(q || '').slice(0, 120).split(/\s+/).filter(Boolean).slice(0, 5);
+  let where = "c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live'";
+  const binds = [page];
+  for (const t of toks) {
+    binds.push('%' + t.replace(/[\\%_]/g, '\\$&') + '%');
+    where += ' AND c.title LIKE ?' + binds.length + " ESCAPE '\\'";
+  }
   const total = await env.DB.prepare(
-    "SELECT COUNT(*) AS n FROM comments WHERE page = ?1 AND parent_id IS NULL AND status = 'live'"
-  ).bind(page).first();
+    'SELECT COUNT(*) AS n FROM comments c WHERE ' + where
+  ).bind(...binds).first();
   const rows = await env.DB.prepare(
     'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, c.sticky, ' +
     'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last, ' +
     "(SELECT MAX(m.id) FROM comments m WHERE (m.id = c.id OR m.parent_id = c.id) AND m.status = 'live') AS last_id " +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
-    "WHERE c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live' " +
-    'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?2 OFFSET ?3'
-  ).bind(page, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
+    'WHERE ' + where + ' ' +
+    'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
+  ).bind(...binds, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
   return { ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE };
 }
 
@@ -1141,7 +1153,7 @@ async function handleBoardAdmin(request, env) {
     return json(await topicViewPayload(env, topic, data.p, data.find), 200);
   }
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
-  return json(await boardCatPayload(env, ADMIN_CAT, p), 200);
+  return json(await boardCatPayload(env, ADMIN_CAT, p, data.q), 200);
 }
 
 /* Admin-only topic moderation from the page: lock and unlock close and
@@ -3220,7 +3232,7 @@ async function handleMerecatAsk(request, env, ctx) {
     if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
     summary = String(own.summary || '');
     const rows = await env.LIBDB.prepare(
-      'SELECT role, body FROM chat_msgs WHERE chat_id = ?1 ORDER BY id DESC LIMIT ' + MERECAT_WINDOW
+      'SELECT role, body FROM chat_msgs WHERE chat_id = ?1 AND COALESCE(done, 1) = 1 ORDER BY id DESC LIMIT ' + MERECAT_WINDOW
     ).bind(chatId).all();
     history = (rows.results || []).reverse()
       .map((r) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
@@ -3509,6 +3521,7 @@ async function handleMerecatStore(request, env) {
   const chatId = Number(data.chat) || 0;
   const answer = String(data.answer || '').trim().slice(0, 20000);
   const sources = Array.isArray(data.sources) ? data.sources.slice(0, 40) : [];
+  const partial = !!data.partial;
   if (!chatId || !answer) return json({ ok: false, error: 'Bad request.' }, 400);
   const chat = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1').bind(chatId).first();
   if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
@@ -3518,26 +3531,63 @@ async function handleMerecatStore(request, env) {
      drop the second answer outright. `msg` is the user msg id this generation
      answers; a retry of the same generation matches it and no-ops, a different
      question's answer never does. The tail check remains only for a legacy
-     serve.py that sends no msg. */
+     serve.py that sends no msg.
+     PARTIAL FLUSHES (2026-07-29, the reconnect contract): serve.py now also
+     posts the GROWING answer every few seconds with partial:true — the row is
+     inserted once with done = 0, grown by UPDATE, and the final store
+     completes that same row (body + sources + done = 1). A reconnecting
+     reader polls /chat and keeps painting the growing text instead of
+     staring at a dead stream; done = 0 rows are excluded from prompt history
+     and folding, and the client never renders them as a finished answer. */
   const msgId = Number(data.msg) || 0;
+  const now = Math.floor(Date.now() / 1000);
   if (msgId) {
-    const dup = await env.LIBDB.prepare(
-      "SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1"
+    const row = await env.LIBDB.prepare(
+      "SELECT id, COALESCE(done, 1) AS fin FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1"
     ).bind(chatId, msgId).first();
-    if (dup) return json({ ok: true, duplicate: true });
+    if (row && row.fin) return json({ ok: true, duplicate: true });
+    if (row) {
+      if (partial) {
+        await env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1')
+          .bind(row.id, answer).run();
+        return json({ ok: true, partial: true });
+      }
+      await env.LIBDB.batch([
+        env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2, sources = ?3, done = 1 WHERE id = ?1')
+          .bind(row.id, answer, JSON.stringify(sources)),
+        env.LIBDB.prepare('UPDATE chats SET last_at = ?2 WHERE id = ?1').bind(chatId, now),
+      ]);
+    } else if (partial) {
+      await env.LIBDB.batch([
+        env.LIBDB.prepare(
+          "INSERT INTO chat_msgs (chat_id, role, body, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, 0)"
+        ).bind(chatId, answer, now, msgId),
+        env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+      ]);
+      return json({ ok: true, partial: true });
+    } else {
+      await env.LIBDB.batch([
+        env.LIBDB.prepare(
+          "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 1)"
+        ).bind(chatId, answer, JSON.stringify(sources), now, msgId),
+        env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+      ]);
+    }
   } else {
+    /* legacy serve.py without a msg id: whole answers only — a partial has no
+       key to grow under, so it is acknowledged and dropped. */
+    if (partial) return json({ ok: true, partial: true });
     const last = await env.LIBDB.prepare(
       'SELECT role FROM chat_msgs WHERE chat_id = ?1 ORDER BY id DESC LIMIT 1'
     ).bind(chatId).first();
     if (last && last.role === 'assistant') return json({ ok: true, duplicate: true });
+    await env.LIBDB.batch([
+      env.LIBDB.prepare(
+        "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, NULL, 1)"
+      ).bind(chatId, answer, JSON.stringify(sources), now),
+      env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
+    ]);
   }
-  const now = Math.floor(Date.now() / 1000);
-  await env.LIBDB.batch([
-    env.LIBDB.prepare(
-      "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5)"
-    ).bind(chatId, answer, JSON.stringify(sources), now, msgId || null),
-    env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(chatId, now),
-  ]);
   const cfg = await merecatConfig(env);
   await merecatFold(env, cfg, chatId).catch(() => {});
   return json({ ok: true });
@@ -3597,7 +3647,7 @@ async function handleMerecatAdminThread(request, env) {
   ).bind(id, cut).first();
   if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
   const msgs = await env.LIBDB.prepare(
-    'SELECT id, role, body, sources, created_at FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
+    'SELECT id, role, body, sources, created_at, COALESCE(done, 1) AS done FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
   ).bind(id).all();
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(chat.hash).first();
   chat.nick = (prof && prof.nick) || null;
@@ -3662,7 +3712,7 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
     try {
       if (!partialId) {
         const ins = await env.LIBDB.prepare(
-          "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5) RETURNING id"
+          "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 0) RETURNING id"
         ).bind(chatId, partial, JSON.stringify(sources), nowS, userMsgId || null).first();
         partialId = ins.id;
         await env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
@@ -3751,12 +3801,12 @@ async function merecatPump(env, cfg, aiStream, writable, sources, me, day, inTok
     const now = Math.floor(Date.now() / 1000);
     if (partialId) {
       // the disconnect path already inserted the row — complete its body
-      stmts.push(env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1')
+      stmts.push(env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2, done = 1 WHERE id = ?1')
         .bind(partialId, answer));
       stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2 WHERE id = ?1').bind(chatId, now));
     } else {
       stmts.push(env.LIBDB.prepare(
-        "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5)"
+        "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 1)"
       ).bind(chatId, answer, JSON.stringify(sources), now, userMsgId || null));
       stmts.push(env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1')
         .bind(chatId, now));
@@ -3779,7 +3829,7 @@ async function merecatFold(env, cfg, chatId) {
       'SELECT summary, summarized_to FROM chats WHERE id = ?1').bind(chatId).first();
     if (!chat) return;
     const all = await env.LIBDB.prepare(
-      'SELECT id, role, body FROM chat_msgs WHERE chat_id = ?1 ORDER BY id').bind(chatId).all();
+      'SELECT id, role, body FROM chat_msgs WHERE chat_id = ?1 AND COALESCE(done, 1) = 1 ORDER BY id').bind(chatId).all();
     const rows = all.results || [];
     if (rows.length <= MERECAT_WINDOW) return;
     const cutoff = rows[rows.length - MERECAT_WINDOW].id;
@@ -3859,7 +3909,7 @@ async function handleMerecatChat(request, env) {
   ).bind(id, me).first();
   if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
   const msgs = await env.LIBDB.prepare(
-    'SELECT id, role, body, sources, created_at FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
+    'SELECT id, role, body, sources, created_at, COALESCE(done, 1) AS done FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
   ).bind(id).all();
   return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
 }
