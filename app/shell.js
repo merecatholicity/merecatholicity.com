@@ -29,6 +29,7 @@
 
 import { LitElement, html } from '../vendor/lit-all.min.js';
 import * as store from './store.js';
+import * as api from './api.js';
 import './richtext.js';
 import './views/board.js';
 import './views/post.js';
@@ -41,6 +42,28 @@ import './views/admin.js';
    in-memory TTL + in-flight dedup for the views' reads, invalidated by
    writes and identity changes. See app/store.js. */
 window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, metrics: store.metrics };
+
+/* The headless-API client SDK (app/api.js) rides the shell too — the single
+   documented seam (comments-worker/API.md) new features call. Transport +
+   identity + fresh-read policy are wired from the board client (window.mcKit)
+   once it boots, so api.js reuses the proven fetchRetry/key/freshOpts. */
+window.mcApi = api;
+document.addEventListener('mc-shell-ready', function wireApi() {
+  var tryWire = function () {
+    var k = window.mcKit;
+    if (!k) return false;
+    api.configure({
+      tx: function (url, init) { return k.fetchRetry(url, init, [1000, 3000]); },
+      key: function () { return k.state.key || ''; },
+      fresh: function () { return !!k.freshOpts(); },
+    });
+    return true;
+  };
+  if (!tryWire()) {
+    var t = setInterval(function () { if (tryWire()) clearInterval(t); }, 500);
+    setTimeout(function () { clearInterval(t); }, 8000);
+  }
+});
 
 /* A thin top progress bar while a page is on its way. Light DOM so
    style.css and the theme own it. */
