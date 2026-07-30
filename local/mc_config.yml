@@ -24,6 +24,14 @@ vector_topk: 48                         # candidates from the semantic leg
 pool_cap: 120                           # merged-pool ceiling before rerank
 topk: 12                                # chunks handed to the model
 rerank: true
+rerank_pair_budget: 1400                # max query+document tokens per rerank
+                                        # pair, enforced token-exactly before
+                                        # send (llm.py trims; the server's
+                                        # physical batch is 2048 — keep this
+                                        # comfortably below it). One 703-token
+                                        # Greek-dense pair over the old 512
+                                        # batch once killed whole reranks
+                                        # (2026-07-29): see README.
 phrase_seats: 3                         # guaranteed verbatim-phrase/verse seats
 
 think: false                            # true = print the model's <think> span

@@ -40,7 +40,13 @@ ollama pull huihui_ai/qwen3-abliterated:30b bge-m3
 curl -L -o local/models/bge-reranker-v2-m3-Q8_0.gguf \
   https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/main/bge-reranker-v2-m3-Q8_0.gguf
 llama-server -m local/models/bge-reranker-v2-m3-Q8_0.gguf --reranking \
-  --host 127.0.0.1 --port 8181 &
+  --host 127.0.0.1 --port 8181 --ctx-size 8192 -b 2048 -ub 2048 &
+#   -b/-ub 2048 are LOAD-BEARING: the default physical batch is 512, and a
+#   single query+document pair past it (Greek-dense chunks tokenize ~2x per
+#   char) errors the WHOLE /rerank batch — llama.cpp cancels every task,
+#   retrieval silently falls back to fusion order, and the bot answers
+#   "my resources do not address this" from a junk pool (2026-07-29
+#   postmortem: three questions in a row, one 703-token chunk).
 
 # 4. build the index from the shared sources (~an hour, once)
 python local/build_index.py
@@ -55,6 +61,49 @@ If the reranker server is not running, retrieval still works — it falls back
 to reciprocal-rank fusion over the legs. Everything is tunable in
 `mc_config.yml` (models, topk, context window, weight-related dials).
 
+## Retrieval robustness (the 2026-07-29 postmortem, hardened)
+
+The incident: three questions in a row answered "my resources do not address
+this" because ONE retrieved chunk tokenized past the reranker's 512-token
+physical batch, llama.cpp failed the WHOLE /rerank request, and the silent
+fusion fallback surfaced junk. Nothing was down; it was data-dependent and
+invisible. Four layers now stand between a fat chunk and a bad answer:
+
+1. **Prevent** — the reranker runs with `-b 2048 -ub 2048`, and `llm.rerank`
+   trims every query/document to `rerank_pair_budget` (mc_config.yml, 1400)
+   token-exactly via the server's own `/tokenize` (a conservative estimate
+   when that is unavailable) before anything is sent.
+2. **Heal** — a refused batch is binary-split until the offender is isolated
+   (`_salvage`), the offender retried at half/quarter/eighth length; at
+   worst ONE document loses its score, never the rerank. Proven against a
+   deliberately crippled 512-batch clone: full scores, relevant doc first.
+3. **Detect** — `/health` carries `rerank: ok|degraded|down` from a cached
+   background canary that scores a budget-sized pair end-to-end (it would
+   have caught the misconfiguration the moment it existed), plus
+   `ready: true|false` with a `why`. Every degradation prints to the
+   journal (`journalctl -u merecat-local`).
+4. **Bounce** — `/ask` preflights the embedder and reranker (`backend_ready`,
+   cached 30s); if either is truly DOWN it refuses with a non-busy 503,
+   which the worker turns into a **Cloudflare failover** when `failover=1`
+   (the owner's ruling: a known-crippled pipeline never answers members —
+   the cloud's own retrieval and reranker still stand). `rerank: false` in
+   mc_config.yml means fusion is deliberate and never bounces; a "degraded"
+   canary keeps answering locally because salvage restores full quality.
+
+Regression suites (run after touching the reranker, its flags, or llm.py —
+the first launches its own crippled clone on :8199):
+
+```sh
+python3 local/tests/test_rerank_robust.py
+python3 local/tests/test_preflight.py
+```
+
+The cloud path was audited the same day: Workers AI's `bge-reranker-base`
+**silently truncates** oversized contexts (verified empirically — a
+900-token context scores fine), so this failure class cannot occur there,
+and its rerank already falls back to semantic-first order under a logged
+`merecat_rerank_failed` event.
+
 ## Services and lifecycle
 
 The stack runs as **three systemd units** (`/etc/systemd/system/`), all
@@ -64,8 +113,10 @@ The stack runs as **three systemd units** (`/etc/systemd/system/`), all
   user** with `HOME` set, so it reads the models pulled into `~/.ollama`. (The
   package's own `ollama.service` stays disabled — it runs as the `ollama`
   system user, which looks in a *different* models directory.)
-- `merecat-reranker.service` — `llama-server --reranking` on :8181. Optional;
-  if it is down, retrieval falls back to reciprocal-rank fusion.
+- `merecat-reranker.service` — `llama-server --reranking` on :8181 with
+  `--ctx-size 8192 -b 2048 -ub 2048` (the batch flags are load-bearing — see
+  the setup note above). Optional; if it is down, retrieval falls back to
+  reciprocal-rank fusion, and `llm.py` logs the fallback to the journal.
 - `merecat-local.service` — `serve.py` on :8790 (the site-facing service;
   `After=` the other two). Restart it after editing `serve.py` or
   `mc_config.yml`: `sudo systemctl restart merecat-local`. Editing
