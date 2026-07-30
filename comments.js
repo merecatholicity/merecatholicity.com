@@ -2958,7 +2958,8 @@
       ['Activity audit', 'community.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
       ['IP ban list', 'community.html?ipbans=1', 'Every banned address, added and removed by hand.'],
       ['Add / Remove Admins', 'community.html?admins=1', 'Grant a member admin powers, or take them back.'],
-      ['merecat administration', 'community.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.']
+      ['merecat administration', 'community.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
+      ['merecat Q&A at a glance', 'community.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
     ].forEach(function (opt) {
       var row = el('div', 'board-cat');
       var left = el('div', 'board-cat-left');
@@ -2970,6 +2971,123 @@
       wrap.appendChild(row);
     });
     section.appendChild(wrap);
+  }
+
+  /* merecat Q&A at a glance: an admin-only, READ-ONLY window on how members use
+     the librarian, so the site can see what it is asked and where it falls
+     short (what to teach it next). The terms disclose this review. The admin
+     observes; there is no composer, no way to ask or reply, nothing to change. */
+  function viewMerecatThreads() {
+    document.title = 'merecat Q&A at a glance | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
+    if (adminGate(viewMerecatThreads)) return;
+    section.appendChild(el('p', 'board-intro',
+      'Every question put to the librarian, newest first, read-only. Open one to observe the whole exchange. This is for improving the service, not participating; you cannot ask or reply here.'));
+    var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
+    var list = el('div', 'board-topics');
+    list.textContent = 'Loading…';
+    section.appendChild(list);
+    var pagerHost = el('div');
+    section.appendChild(pagerHost);
+    fetchRetry(MERECAT_API + '/admin/threads', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, p: pageNum }),
+    }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
+      if (blockedOut(d)) return;
+      if (!d.ok) { list.textContent = d.error === 'No.' ? 'This is for admins alone.' : 'Could not load.'; return; }
+      list.textContent = '';
+      if (!d.threads.length) { list.appendChild(el('p', 'comments-status', 'No conversations yet.')); return; }
+      d.threads.forEach(function (t) {
+        var row = el('div', 'board-topic');
+        var left = el('div', 'board-topic-left');
+        var title = el('a', 'board-topic-title', t.title || ('Conversation ' + t.id));
+        title.href = 'community.html?merecatthread=' + t.id;
+        left.appendChild(title);
+        if (t.saved) left.appendChild(el('span', 'board-sticky', ' (saved)'));
+        var who = el('div', 'board-cat-desc');
+        who.appendChild(document.createTextNode('asked by '));
+        var wl = el('a', 'body-link', t.nick || displayName(t.hash));
+        wl.href = profileHref(t.hash);
+        who.appendChild(wl);
+        left.appendChild(who);
+        row.appendChild(left);
+        var stat = el('div', 'board-stats');
+        var q = Math.max(0, Math.ceil((t.msgs || 0) / 2));
+        stat.textContent = q + (q === 1 ? ' question · ' : ' questions · ') + fmtDateTime(t.last_at);
+        row.appendChild(stat);
+        list.appendChild(row);
+      });
+      var pager = pageBar(d.total, d.per, d.page, function (i) {
+        return 'community.html?merecatthreads=1&p=' + i;
+      });
+      if (pager) pagerHost.appendChild(pager);
+    }).catch(function () { list.textContent = 'Could not load the list. Reload to retry.'; });
+  }
+
+  /* One conversation, observed. Read-only: the questions as the member wrote
+     them, the answers as the librarian gave them (its markdown neutralised the
+     same as everywhere), sources shown. No composer, no forward, no controls. */
+  function viewMerecatThread(id) {
+    document.title = 'Observing a conversation | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'],
+      ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + id]]);
+    if (adminGate(function () { viewMerecatThread(id); })) return;
+    if (!Number.isInteger(id) || id < 1) { section.appendChild(el('p', 'comments-status', 'No such conversation.')); return; }
+    var note = el('p', 'board-intro', 'Observing only. You cannot ask or reply in this conversation.');
+    section.appendChild(note);
+    var log = el('div', 'merecat-log');
+    section.appendChild(log);
+    var status = el('p', 'comments-status', 'Loading…');
+    section.appendChild(status);
+    fetchRetry(MERECAT_API + '/admin/thread', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, id: id }),
+    }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
+      if (blockedOut(d)) return;
+      status.remove();
+      if (!d.ok) { section.appendChild(el('p', 'comments-status', d.error === 'No.' ? 'This is for admins alone.' : 'That conversation is gone.')); return; }
+      var who = d.chat.nick || displayName(d.chat.hash);
+      var head = el('p', 'board-intro');
+      head.appendChild(document.createTextNode('Conversation with '));
+      var wl = el('a', 'body-link', who);
+      wl.href = profileHref(d.chat.hash);
+      head.appendChild(wl);
+      head.appendChild(document.createTextNode('. Started ' + fmtDateTime(d.chat.created_at) + '.'));
+      log.appendChild(head);
+      (d.msgs || []).forEach(function (m) {
+        var msg = el('div', 'merecat-msg ' + (m.role === 'user' ? 'you' : 'cat'));
+        msg.appendChild(el('div', 'merecat-who', m.role === 'user' ? who : '🐈 merecat'));
+        var body = el('div', 'merecat-body');
+        msg.appendChild(body);
+        if (m.role === 'user') {
+          fillBody(body, m.body);
+        } else {
+          /* The stored answer verbatim (markdown neutralised, as the reader saw
+             it), then a plain sources list. Self-contained, so this admin view
+             leans on no helper scoped inside the live chat. */
+          fillBody(body, m.body, true);
+          var srcs = [];
+          try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
+          if (srcs.length) {
+            var ft = el('p', 'merecat-note');
+            ft.appendChild(el('strong', null, 'Sources: '));
+            srcs.forEach(function (sc, i) {
+              if (i) ft.appendChild(document.createTextNode(' · '));
+              var label = '[' + (sc.n || (i + 1)) + '] ' + (sc.title || '');
+              if (sc.url) {
+                var a = el('a', 'body-link', label);
+                a.href = sc.url;
+                ft.appendChild(a);
+              } else {
+                ft.appendChild(el('span', null, label));
+              }
+            });
+            body.appendChild(ft);
+          }
+        }
+        log.appendChild(msg);
+      });
+    }).catch(function () { status.textContent = 'Could not load the conversation. Reload to retry.'; });
   }
 
   /* Add or remove admins. Owners (set in the worker config) show as permanent;
@@ -4730,7 +4848,9 @@
     libLink.href = 'library.html';
     p1.appendChild(libLink);
     p1.appendChild(document.createTextNode(
-      '. It answers Orthodox, Roman Catholic, and Protestant questions alike from a merely catholic ground.'));
+      '. It answers Orthodox, Roman Catholic, and Protestant questions alike from a merely catholic ground. ' +
+      'It is a specialized AI trained in theology, philosophy, and history, among kindred fields. ' +
+      'Stray too far from the Library’s resources, though, and the quality of its answers will degrade substantially.'));
     ib.appendChild(p1);
     intro.appendChild(ib);
     section.appendChild(intro);
@@ -5776,6 +5896,8 @@
     if (params.get('admins')) return viewAdmins();
     if (params.get('admin')) return viewAdminHome();
     if (params.get('merecatadmin')) return viewMerecatAdmin();
+    if (params.get('merecatthread')) return viewMerecatThread(Number(params.get('merecatthread')));
+    if (params.get('merecatthreads') !== null) return viewMerecatThreads();
     if (params.get('merecat')) return viewMerecat();
     if (params.get('notifications')) return viewNotifications();
     if (params.get('inbox')) return viewInbox();

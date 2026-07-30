@@ -3543,6 +3543,60 @@ async function handleMerecatStore(request, env) {
   return json({ ok: true });
 }
 
+/* ---- Admin observation of merecat Q&A (2026-07-29). The terms disclose that
+   questions may be reviewed for the improvement of the service; these two
+   admin-keyed, READ-ONLY endpoints let an admin observe how members use the
+   librarian (to guide what to teach it next) WITHOUT participating. They only
+   ever SELECT — no prune, no write, nothing touched. This deliberately adds
+   the admin-read path the design once withheld, now that the terms allow it. */
+async function handleMerecatAdminThreads(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const per = 30;
+  const pg = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chats').first();
+  const rows = await env.LIBDB.prepare(
+    'SELECT id, hash, title, COALESCE(msgs, 0) AS msgs, created_at, last_at, COALESCE(saved, 0) AS saved ' +
+    'FROM chats ORDER BY last_at DESC LIMIT ?1 OFFSET ?2'
+  ).bind(per, (pg - 1) * per).all();
+  const threads = rows.results || [];
+  /* Nicks live in the comments DB, not LIBDB — resolve them in one batch. */
+  const hashes = [...new Set(threads.map((t) => t.hash).filter(Boolean))];
+  const nicks = {};
+  if (hashes.length) {
+    const ph = hashes.map((_, i) => '?' + (i + 1)).join(',');
+    const prof = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')').bind(...hashes).all();
+    for (const r of (prof.results || [])) nicks[r.hash] = r.nick;
+  }
+  for (const t of threads) t.nick = nicks[t.hash] || null;
+  return json({ ok: true, threads, total: (total && total.n) || 0, page: pg, per }, 200);
+}
+
+async function handleMerecatAdminThread(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const id = Number(data.id);
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const chat = await env.LIBDB.prepare(
+    'SELECT id, hash, title, COALESCE(msgs, 0) AS msgs, created_at, last_at, COALESCE(saved, 0) AS saved FROM chats WHERE id = ?1'
+  ).bind(id).first();
+  if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const msgs = await env.LIBDB.prepare(
+    'SELECT id, role, body, sources, created_at FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
+  ).bind(id).all();
+  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(chat.hash).first();
+  chat.nick = (prof && prof.nick) || null;
+  return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
+}
+
 /* Backend status for the admin page: is the local librarian reachable right
    now (a few quick health pings within ~1.5s), and where does the cloud stand
    against its daily budget. Admin only. */
@@ -4576,6 +4630,8 @@ export default {
       if (path === '/api/merecat/chats' && request.method === 'POST') return await handleMerecatChats(request, env);
       if (path === '/api/merecat/chat' && request.method === 'POST') return await handleMerecatChat(request, env);
       if (path === '/api/merecat/chat/delete' && request.method === 'POST') return await handleMerecatChatDelete(request, env);
+      if (path === '/api/merecat/admin/threads' && request.method === 'POST') return await handleMerecatAdminThreads(request, env);
+      if (path === '/api/merecat/admin/thread' && request.method === 'POST') return await handleMerecatAdminThread(request, env);
       if (path === '/api/merecat/chat/save' && request.method === 'POST') return await handleMerecatChatSave(request, env);
       if (path === '/api/merecat/ingest' && request.method === 'POST') return await handleMerecatIngest(request, env);
       if (path === '/api/merecat/works' && request.method === 'POST') return await handleMerecatWorks(request, env);
