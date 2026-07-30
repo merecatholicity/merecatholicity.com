@@ -28,6 +28,12 @@
    instant at zero requests. */
 
 import { LitElement, html } from '../vendor/lit-all.min.js';
+import * as store from './store.js';
+
+/* The API store rides the shell (window bridge until the interiors port):
+   in-memory TTL + in-flight dedup for the views' reads, invalidated by
+   writes and identity changes. See app/store.js. */
+window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, metrics: store.metrics };
 
 /* A thin top progress bar while a page is on its way. Light DOM so
    style.css and the theme own it. */
