@@ -40,7 +40,7 @@ def main():
         # --- notifications ---
         f.goto('community.html?notifications=1')
         f.wait("!!document.querySelector('mc-notifications')", timeout=20)
-        f.wait("(document.querySelector('mc-notifications .comments-status')||{}).textContent.length>0 || document.querySelectorAll('mc-notifications .board-topic').length>0", timeout=20)
+        f.wait("((document.querySelector('mc-notifications .comments-status')||{}).textContent||'').length>0 || document.querySelectorAll('mc-notifications .board-topic').length>0", timeout=20)
         time.sleep(1)
         nt = json.loads(f.js1("""var n=document.querySelector('mc-notifications');
           var rows=n.querySelectorAll('.board-topic');
