@@ -62,11 +62,15 @@
   // state (connections are the state).
   "durable_objects": {
     "bindings": [
-      { "name": "HUB", "class_name": "BoardHub" }
+      { "name": "HUB", "class_name": "BoardHub" },
+      // merecat as a state machine: one ChatRoom per conversation owns the
+      // generation and is the single D1 writer for its thread (Phase 2).
+      { "name": "CHAT", "class_name": "ChatRoom" }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["BoardHub"] }
+    { "tag": "v1", "new_sqlite_classes": ["BoardHub"] },
+    { "tag": "v2", "new_sqlite_classes": ["ChatRoom"] }
   ],
   // Monthly database backup: dump -> gzip -> R2, keep 90 days. Free tier.
   // Avatars: one 400x400 image per identity, fixed key = overwrite = pruned.
