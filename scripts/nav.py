@@ -19,7 +19,10 @@ import yaml
 # Turnstile script the extractor can't see), the dynamic board SPA, and the
 # off-site interstitial.
 PAGES = ["index.html", "contact.html", "community.html", "away.html", "kjv.html", "douay-rheims.html"]
-FRAGMENT = "nav.html"
+# Paths here are relative to the repo root (the Makefile runs this from root as
+# `python scripts/nav.py`): nav.yml and docs/ sit at the root, the generated
+# nav fragment lives in partials/, and the PAGES are the built pages in docs/.
+FRAGMENT = "partials/nav.html"
 
 TOGGLE = (
     '<button class="nav-toggle" aria-expanded="false" aria-controls="nav-list">'

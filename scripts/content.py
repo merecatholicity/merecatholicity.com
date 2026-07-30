@@ -25,7 +25,9 @@ import sys
 
 import yaml
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+# This script lives in scripts/, so the repo root is one level up. Sources
+# (content/, the partials/) and the built site (docs/) hang off the repo root.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT_DIR = os.path.join(ROOT, 'content')
 # Keep in step with the comments.js cache-bust bump (the wordlists-style
 # discipline): a content page with comments carries this exact include.
@@ -106,8 +108,8 @@ def build_page(slug, source_path, nav_block, footer_block):
 
 def main():
     only = set(sys.argv[1:])   # optional: build just these slugs
-    nav_block = open(os.path.join(ROOT, 'nav.html'), encoding='utf-8').read()
-    footer_block = open(os.path.join(ROOT, 'footer.html'), encoding='utf-8').read()
+    nav_block = open(os.path.join(ROOT, 'partials', 'nav.html'), encoding='utf-8').read()
+    footer_block = open(os.path.join(ROOT, 'partials', 'footer.html'), encoding='utf-8').read()
     if not os.path.isdir(CONTENT_DIR):
         print('no content/ dir yet; nothing to build')
         return

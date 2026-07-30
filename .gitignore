@@ -1,298 +1,54 @@
+# Repo-wide ignores. Per-directory build churn is scoped to that directory's own
+# .gitignore (see resources/.gitignore for the whole converted-corpus build).
+
 CONTEXT_DUMP.txt
-confession*.aux
-confession*.log
-confession*.out
-confession*.toc
-confession.pdf
-confession-paperback.pdf
-memorandum.aux
-memorandum.log
-memorandum.out
-memorandum.pdf
-bishop-presbyter.aux
-bishop-presbyter.log
-bishop-presbyter.out
-bishop-presbyter.pdf
-resources/npnf211.txt
-resources/*.aux
-resources/*.log
-resources/*.out
-resources/*.toc
-# The complete Schaff corpus: the raw CCEL source XML and the per-volume
-# intermediate PDFs are reproducible (fetch + `make body` + `make pdf`), so
-# keep them out of git. What ships is the committed <id>-body.tex/<id>.tex and
-# the published root PDFs (Ante-Nicene_Fathers_Vol_*.pdf, Nicene_and_*.pdf).
-resources/anf*.xml
-resources/npnf*.xml
-resources/anf*.pdf
-resources/npnf*.pdf
-resources/hcc*.xml
-resources/creeds*.xml
-resources/hcc*.pdf
-resources/creeds*.pdf
-resources/cityofgod.pdf
-resources/ondoctrine.pdf
-resources/confessions.pdf
-resources/incarnation.pdf
-resources/trent.pdf
-resources/orthodoxy.pdf
-resources/heretics.pdf
-resources/everlasting.pdf
-resources/gibbons.pdf
-resources/damascus.pdf
-resources/liturgies.pdf
-resources/westminster.pdf
-resources/institutes.pdf
-resources/bondage.pdf
-resources/luther-galatians.pdf
-resources/luther-primary.pdf
-resources/jewel.pdf
-resources/articles1571.pdf
-resources/guettee.pdf
-resources/concord.pdf
-resources/bcp1559.pdf
-resources/bcp1662.pdf
-resources/bcp1928.pdf
-resources/hooker.pdf
-resources/keble-year.pdf
-resources/andrewes-devotions.pdf
-# multi-file source trees for the high-church works are reproducible
-# (fetch URLs live in each converter's header); the committed bodies,
-# wrappers, and root PDFs are what ships
-resources/hooker-src/
-resources/bcp1928-src/
-resources/bcp1662-src/
-resources/bcp1559-src/
-resources/concord-src/
-resources/gibbon-src/
-resources/thayer-src/
-resources/annals.pdf
-resources/histories.pdf
-resources/suetonius.pdf
-resources/ammianus.pdf
-resources/zosimus.pdf
-resources/gibbon1.pdf
-resources/gibbon2.pdf
-resources/gibbon3.pdf
-resources/gibbon4.pdf
-resources/gibbon5.pdf
-resources/gibbon6.pdf
-resources/gibbon7.pdf
-resources/gibbon8.pdf
-resources/gibbon9.pdf
-resources/gibbon10.pdf
-resources/gibbon11.pdf
-resources/gibbon12.pdf
-resources/dio1.pdf
-resources/dio2.pdf
-resources/dio3.pdf
-resources/burlat.pdf
-resources/encyclical1895.pdf
-resources/apostolicae.pdf
-resources/saepius.pdf
-resources/commonitory.pdf
-resources/development.pdf
-resources/consulting.pdf
-resources/law.pdf
-resources/cyril.pdf
-resources/gregory.pdf
-resources/enchiridion.pdf
-resources/npnf205.xml
-resources/npnf207.xml
-resources/npnf214.xml
-resources/npnf212.xml
-resources/anf01.xml
-resources/anf03.xml
-resources/anf05.xml
-resources/councils.pdf
-resources/cbuild.log
-resources/npnf204.xml
-resources/anf07.xml
-resources/clement.pdf
-resources/justin.pdf
-resources/didache.pdf
-resources/festal39.pdf
-resources/gregory-letters.pdf
-resources/soulres.pdf
-resources/onbaptism.pdf
-resources/ravenna.pdf
-resources/chieti.pdf
-resources/jddj.pdf
-resources/encyclical1848.pdf
-resources/scranton.pdf
-resources/cassian-prayer.pdf
-resources/benedict-rule.pdf
-resources/douay-rheims.pdf
-resources/kjv.pdf
-resources/catena-matthew.pdf
-resources/catena-mark.pdf
-resources/catena-luke.pdf
-resources/catena-john.pdf
-# Summa: the 22 MB CCEL source tree and per-part intermediate PDFs are
-# reproducible (summa-fetch + make body + make pdf); the committed
-# summa-*-body.tex/summa-*.tex and the root PDFs are what ships.
-resources/summa-src/
-resources/summa-fp.pdf
-resources/summa-fs.pdf
-resources/summa-ss.pdf
-resources/summa-tp.pdf
-resources/summa-xp.pdf
-resources/npnf104.xml
-resources/ignatius.pdf
-resources/irenaeus3.pdf
-resources/baptism.pdf
-resources/unity.pdf
-resources/tome.pdf
-resources/build.log
-resources/dbuild.log
+
+# The book/paper LaTeX build runs in book/ (the Makefile cd's there) and writes
+# its intermediates beside the sources; only the final PDFs/docx are copied up
+# into the served tree at docs/. Keep the intermediates and the temp html-tex
+# out of git. The book/*.tex sources and build-confession.sh stay tracked.
+book/*.aux
+book/*.log
+book/*.out
+book/*.toc
+book/*.pdf
+book/*.dvi
+book/memorandum-body-html.tex
+
+# Cloudflare Worker local state and secrets — never in git.
 .wrangler/
 contact-worker/.wrangler/
 contact-worker/node_modules/
-resources/__pycache__/
-resources/docs-src/bor.txt
 comments-worker/.wrangler/
 comments-worker/.dev.vars
-comments-backup.sql
-# Database dumps NEVER belong in the repo — backups live in R2. Belt and
-# suspenders against a stray `git add -A` grabbing an export.
-comments-worker/backups/
-backups/
-*.sql.gz
-
 .dev.vars*
 !.dev.vars.example
 .env*
 !.env.example
 
-# Newman corpus: the raw NewmanReader scrape (newman-fetch) and the
-# per-work intermediate PDFs are reproducible; the committed
-# resources/<id>-body.tex, resources/<id>.tex, newman.mk and the root
-# <Work>.pdf / <id>.html are what ships.
-resources/newman-src/
-# (generated per-work intermediate PDFs)
-resources/arians.pdf
-resources/tracts-times.pdf
-resources/british-critic.pdf
-resources/viamedia1.pdf
-resources/viamedia2.pdf
-resources/justification.pdf
-resources/english-saints.pdf
-resources/miracles.pdf
-resources/oxford-sermons.pdf
-resources/subjects.pdf
-resources/loss-and-gain.pdf
-resources/faith-prejudice.pdf
-resources/discourses.pdf
-resources/anglicans1.pdf
-resources/present-position.pdf
-resources/idea.pdf
-resources/grammar.pdf
-resources/cathedra.pdf
-resources/callista.pdf
-resources/apologia.pdf
-resources/pusey.pdf
-resources/gerontius.pdf
-resources/occasions.pdf
-resources/norfolk.pdf
-resources/five-letters.pdf
-resources/sermon-notes.pdf
-resources/meditations.pdf
-resources/athanasius1.pdf
-resources/athanasius2.pdf
-resources/inspiration.pdf
-resources/religious-error.pdf
-resources/arguments.pdf
-resources/essays1.pdf
-resources/essays2.pdf
-resources/historical1.pdf
-resources/historical2.pdf
-resources/historical3.pdf
-resources/addresses.pdf
-resources/athanasius-tracts.pdf
-resources/froude-remains.pdf
-resources/hymni.pdf
-resources/library-fathers.pdf
-resources/church-empires.pdf
-resources/russian-church.pdf
-resources/sayings.pdf
-resources/tracts-theological.pdf
-resources/verses.pdf
-resources/parochial1.pdf
-resources/parochial2.pdf
-resources/parochial3.pdf
-resources/parochial4.pdf
-resources/parochial5.pdf
-resources/parochial6.pdf
-resources/parochial7.pdf
-resources/parochial8.pdf
-librarian/.key
+# Database dumps NEVER belong in the repo — backups live in R2. Belt and
+# suspenders against a stray `git add -A` grabbing an export.
+comments-backup.sql
+comments-worker/backups/
+backups/
+*.sql.gz
+
+# Python bytecode anywhere (scripts/, resources/, …).
 __pycache__/
-# merecat-local: the offline GPU twin. Its CODE (local/*.py, merecat,
-# mc_config.yml, README) is tracked and reproducible; its DERIVED state is
-# not — the embedded corpus, the sqlite index, and the reranker GGUF are all
-# rebuilt from the shared sources by `python local/build_index.py`.
+
+# librarian secrets and the private shelf. librarian/private is an INDEPENDENT
+# nested git repo pushed to the PRIVATE repo merecatholicity/private-shelf
+# (never a submodule: the Pages Jekyll builder cannot fetch private submodules).
+# Ignored here; restore with a second clone into this path.
+librarian/.key
+librarian/private/
+
+# merecat-local: the offline GPU twin. Its CODE (local/*.py, mc_config.yml,
+# README, the systemd units) is tracked; its DERIVED state is not — the embedded
+# corpus, the sqlite index, and the reranker GGUF are rebuilt by
+# `python local/build_index.py`. The live local prompt and key are private;
+# the committed persona.local.example.md is the starter a fresh clone copies.
 local/data/
 local/models/
-# the live local prompt is private, maintained by the owner; the committed
-# persona.local.example.md is the starter a fresh clone copies to it
 local/serve.key
 local/persona.local.md
-# librarian/private is an INDEPENDENT nested git repo pushed to the
-# PRIVATE repo merecatholicity/private-shelf (never as a submodule: the
-# Pages Jekyll builder cannot fetch private submodules and the site
-# build fails). Ignored here; restore with a second clone into this path.
-librarian/private/
-# the classics shelf: git-ignored remote source trees (re-fetch with
-# `python classics2tex.py fetch`) and per-work intermediate PDFs; the
-# committed *-src.html flat files, bodies, wrappers, and the published
-# root PDFs are what ships
-resources/classics-src/
-resources/philo-src/
-resources/jubilees-src/
-resources/antiquities.pdf
-resources/wars.pdf
-resources/josephus-minor.pdf
-resources/philo1.pdf
-resources/philo2.pdf
-resources/philo3.pdf
-resources/philo4.pdf
-resources/enoch.pdf
-resources/jubilees.pdf
-resources/testaments.pdf
-resources/phaedo.pdf
-resources/iliad.pdf
-resources/odyssey.pdf
-resources/hesiod.pdf
-resources/herodotus.pdf
-resources/thucydides.pdf
-resources/republic.pdf
-resources/timaeus.pdf
-resources/ethics.pdf
-resources/politics.pdf
-resources/metaphysics.pdf
-resources/livy1.pdf
-resources/livy2.pdf
-resources/livy3.pdf
-resources/livy4.pdf
-resources/polybius.pdf
-resources/caesar.pdf
-resources/sallust.pdf
-resources/plutarch.pdf
-resources/cicero.pdf
-resources/cicero-div.pdf
-resources/lucretius.pdf
-resources/aeneid.pdf
-resources/metam.pdf
-resources/seneca.pdf
-resources/epictetus.pdf
-resources/marcus.pdf
-resources/pliny.pdf
-resources/lucian.pdf
-resources/julian.pdf
-resources/apuleius.pdf
-resources/boethius.pdf
-resources/agricola.pdf
-resources/eddas.pdf
-resources/rigveda.pdf
-resources/beowulf.pdf
-resources/frazer.pdf

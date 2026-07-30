@@ -30,12 +30,13 @@
 \usepackage{needspace}
 \usepackage{longtable}
 \usepackage{graphicx}
-% cover.jpg is a SERVED asset living in docs/ (the Pages root), but pdflatex
-% runs at the repo root. graphicspath lets \includegraphics{cover.jpg} find it
-% there, while pandoc still emits a bare <img src="cover.jpg"> that resolves
-% correctly from docs/ (the served root). Do not inline the docs/ path into
-% \includegraphics: pandoc would carry it into the HTML and break the link.
-\graphicspath{{docs/}}
+% cover.jpg is a SERVED asset living in docs/ (the Pages root). This source
+% lives in book/, and every pdflatex/pandoc run happens from book/ (the build
+% cd's there), so graphicspath points up-and-over to ../docs/ to find it, while
+% pandoc still emits a bare <img src="cover.jpg"> that resolves from docs/ (the
+% served root). Do not inline the path into \includegraphics: pandoc would
+% carry it into the HTML and break the link.
+\graphicspath{{../docs/}}
 \usepackage{array}
 \ifdefined\PAPERBACK
 % Links are dead ink on paper. No boxes, no color.

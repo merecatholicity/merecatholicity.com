@@ -259,7 +259,7 @@ html:
 	    commonitory.tex | \
 	pandoc -f latex -t html5 --standalone --toc \
 	    --metadata title="The Commonitory of Vincent of Lérins" \
-	    --css=style.css -B ../nav.html -A ../footer.html \
+	    --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/commonitory.html
 	rm commonitory-body-html.tex
 	@echo "built commonitory.html"
@@ -271,14 +271,14 @@ html:
 	    development.tex | \
 	pandoc -f latex -t html5 --standalone --toc \
 	    --metadata title="An Essay on the Development of Christian Doctrine" \
-	    --css=style.css -B ../nav.html -A ../footer.html \
+	    --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/development.html
 	rm development-body-html.tex
 	@echo "built development.html"
 	sed -e 's/\\hrule height [0-9.]*pt//g' consulting.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="On Consulting the Faithful in Matters of Doctrine" \
-	    --css=style.css -B ../nav.html -A ../footer.html \
+	    --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/consulting.html
 	@echo "built consulting.html"
 	sed -e 's/\\lawpart{/\\section*{/g' \
@@ -290,7 +290,7 @@ html:
 	    law.tex | \
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	    --metadata title="The Treatise on Law" \
-	    --css=style.css -B ../nav.html -A ../footer.html \
+	    --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/law.html
 	rm law-body-html.tex
 	@echo "built law.html"
@@ -427,7 +427,7 @@ html:
 	      -e 's/\\hrule height [0-9.]*pt//g' $$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
-	      --css=style.css -B ../nav.html -A ../footer.html \
+	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	      -o ../docs/$$n.html; \
 	  rm $$n-body-html.tex; \
 	  echo "built $$n.html"; \
@@ -455,7 +455,7 @@ summa-html:
 	      summa-$$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	      --metadata title="Summa Theologica -- $$t" \
-	      --css=style.css -B ../nav.html -A ../footer.html \
+	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	      -o ../docs/summa-$$n.html; \
 	  rm summa-$$n-body-html.tex; \
 	  echo "built summa-$$n.html"; \
@@ -479,7 +479,7 @@ catena-html:
 	      catena-$$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=1 \
 	      --metadata title="Catena Aurea on $$t" \
-	      --css=style.css -B ../nav.html -A ../footer.html \
+	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	      -o ../docs/catena-$$n.html; \
 	  rm catena-$$n-body-html.tex; \
 	  echo "built catena-$$n.html"; \
@@ -502,7 +502,7 @@ schaff-html:
 	      -e 's/\\hrule height [0-9.]*pt//g' $$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
-	      --css=style.css -B ../nav.html -A ../footer.html \
+	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	      -o ../docs/$$n.html; \
 	  rm $$n-body-html.tex; \
 	  echo "built $$n.html"; \
@@ -525,7 +525,7 @@ newman-html:
 	      -e 's/\\hrule height [0-9.]*pt//g' $$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
-	      --css=style.css -B ../nav.html -A ../footer.html \
+	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	      -o ../docs/$$n.html; \
 	  rm $$n-body-html.tex; \
 	  echo "built $$n.html"; \

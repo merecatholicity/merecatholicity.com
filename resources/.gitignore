@@ -1,0 +1,45 @@
+# resources/.gitignore — everything generated or fetched under resources/ is
+# reproducible and stays out of git. What SHIPS and stays tracked: the
+# *-body.tex bodies and *.tex wrappers, the *2tex.py converters, the *.mk
+# includes, the Makefile, and the committed flat SOURCES (*-src.html, *.htm,
+# the curated *-thml.xml, and the docs-src/ and catena-src/ trees including
+# their source PDFs). The published root PDFs now live in ../docs/. Rebuild
+# the rest: the *-fetch targets, then `make body` and `make pdf`.
+
+# LaTeX + Python intermediates (anywhere under resources/)
+*.aux
+*.log
+*.out
+*.toc
+__pycache__/
+npnf211.txt
+docs-src/bor.txt
+
+# Every TOP-LEVEL intermediate PDF. The leading slash anchors this to
+# resources/ itself, so subdirectory SOURCE pdfs (catena-src/*.pdf,
+# docs-src/*.pdf) are NOT matched and stay tracked.
+/*.pdf
+
+# The complete Schaff corpus: the raw CCEL volume XML (re-fetch with
+# `make schaff-fetch`) is reproducible. These volume-id patterns do not touch
+# the curated *-thml.xml sources, which are tracked.
+anf*.xml
+npnf*.xml
+hcc*.xml
+creeds*.xml
+
+# Multi-file remote source trees for the high-church, Roman, Newman, Summa,
+# Second-Temple, and classics waves — reproducible (fetch URLs live in each
+# converter's header, e.g. `python classics2tex.py fetch`).
+hooker-src/
+bcp1559-src/
+bcp1662-src/
+bcp1928-src/
+concord-src/
+gibbon-src/
+thayer-src/
+summa-src/
+newman-src/
+classics-src/
+philo-src/
+jubilees-src/
