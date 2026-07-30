@@ -55,6 +55,11 @@ def main():
         f.wait("document.querySelectorAll('.board-admin-corner').length > 0", timeout=15)
         corners = f.js1("return document.querySelectorAll('.board-admin-corner select.board-move').length;")
         checks.append(('admin: corners with Move on rows', (corners or 0) >= 1))
+        f.goto('community.html')
+        f.wait("(function(){var b=document.querySelector('.board-cat-admin');return b && getComputedStyle(b).display!=='none'})()", timeout=15)
+        time.sleep(45)   # let the read-rate window breathe: a 429 on the keyed
+                         # door bounces to index BY DESIGN (parity with the old
+                         # view); the test must walk at an honest pace here
         f.drain()
         f.click('a[href="community.html?cat=adminsonly"]')
         f.wait("!!document.querySelector('mc-board-cat')")
