@@ -84,35 +84,113 @@ customElements.define('mc-progress', McProgress);
 const dockAudio = new Audio();
 dockAudio.preload = 'none';
 
+/* The dock is a FULL mini-player. The reader hands it a context (the whole
+   book table + audio base + reader page + current position), so once the
+   reader page is swapped away the dock can still step chapters, auto-advance,
+   label itself, and link back to the exact chapter in the reader — all on its
+   own. It is draggable anywhere over the app (position persisted). */
 class McAudioDock extends LitElement {
-  static properties = { label: { type: String }, playing: { type: Boolean }, shown: { type: Boolean } };
+  static properties = {
+    label: { type: String }, playing: { type: Boolean }, shown: { type: Boolean },
+    href: { type: String }, canStep: { type: Boolean }, pos: { state: true },
+  };
   constructor() {
     super();
-    this.label = '';
-    this.playing = false;
-    this.shown = false;
-    this.claimed = false;
+    this.label = ''; this.playing = false; this.shown = false;
+    this.href = ''; this.canStep = false; this.claimed = false;
+    this.ctx = null;    // { books:[{slug,name,chapters}], audioBase, page, reader, b, c }
+    this.pos = null;    // dragged {left,top}, or null for the default corner
+    try { var p = localStorage.getItem('mc-dock-pos'); if (p) this.pos = JSON.parse(p); } catch (e) { /* no storage */ }
     dockAudio.addEventListener('play', () => this.sync());
     dockAudio.addEventListener('pause', () => this.sync());
-    dockAudio.addEventListener('ended', () => this.sync());
+    dockAudio.addEventListener('ended', () => this.onEnded());
   }
   createRenderRoot() { return this; }
   sync() {
     this.playing = !dockAudio.paused;
-    this.shown = !this.claimed && this.playing;
-    /* once paused while unclaimed, the bar lingers so it can be resumed;
-       the ✕ is the way to dismiss it */
-    if (!this.claimed && !this.playing && !dockAudio.src) this.shown = false;
+    /* show when the reader is gone and there is sound (playing, or paused with
+       a chapter still loaded so it can be resumed). The ✕ is the way to dismiss. */
+    this.shown = !this.claimed && (this.playing || (!!dockAudio.src && !!this.ctx));
+    var c = this.ctx;
+    this.canStep = !!(c && c.books && c.books.length);
+    if (c && c.books && c.books[c.b]) {
+      var bk = c.books[c.b];
+      this.label = '♪ ' + (c.reader ? c.reader + ' — ' : '') + bk.name + ' ' + c.c;
+      this.href = (c.page || 'kjv.html') + '#' + bk.slug + '-' + c.c;
+    }
   }
+  /* the reader calls this on every chapter it opens */
+  claim(ctx) {
+    if (ctx && typeof ctx === 'object') this.ctx = Object.assign(this.ctx || {}, ctx);
+    this.claimed = true;
+    this.sync();
+  }
+  release() { this.claimed = false; this.sync(); }
   toggle() { if (dockAudio.paused) dockAudio.play().catch(() => {}); else dockAudio.pause(); }
-  dismiss() { dockAudio.pause(); this.shown = false; }
+  dismiss() {
+    dockAudio.pause();
+    try { dockAudio.removeAttribute('src'); dockAudio.load(); } catch (e) { /* fine */ }
+    this.shown = false;
+  }
+  skip(d) {
+    try { dockAudio.currentTime = Math.max(0, Math.min(dockAudio.duration || Infinity, (dockAudio.currentTime || 0) + d)); } catch (e) { /* not seekable yet */ }
+  }
+  /* step chapters, crossing book boundaries, entirely from ctx (no reader needed) */
+  step(dir) {
+    var c = this.ctx;
+    if (!c || !c.books || !c.books.length) return;
+    var b = c.b, ch = (c.c || 1) + dir;
+    if (ch < 1) { if (b > 0) { b -= 1; ch = c.books[b].chapters; } else return; }
+    else if (ch > c.books[b].chapters) { if (b < c.books.length - 1) { b += 1; ch = 1; } else return; }
+    c.b = b; c.c = ch;
+    dockAudio.src = c.audioBase + '/' + c.books[b].slug + '/' + ch + '.mp3';
+    dockAudio.play().catch(() => {});
+    this.sync();
+  }
+  onEnded() {
+    if (!this.claimed && this.ctx && this.ctx.books) this.step(1);   // the reader advances when it is present
+    else this.sync();
+  }
+  startDrag(e) {
+    if (e.target.closest('button, a')) return;   // let the controls take their own clicks
+    var box = this.querySelector('.mc-dock');
+    if (!box) return;
+    var r = box.getBoundingClientRect();
+    var offX = e.clientX - r.left, offY = e.clientY - r.top, w = r.width, h = r.height;
+    var self = this;
+    function move(ev) {
+      self.pos = {
+        left: Math.max(4, Math.min(window.innerWidth - w - 4, ev.clientX - offX)),
+        top: Math.max(4, Math.min(window.innerHeight - h - 4, ev.clientY - offY)),
+      };
+    }
+    function up() {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      try { localStorage.setItem('mc-dock-pos', JSON.stringify(self.pos)); } catch (x) { /* no storage */ }
+    }
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+    e.preventDefault();
+  }
   render() {
     if (!this.shown) return html``;
-    return html`<div class="mc-dock">
-      <button type="button" class="mc-dock-play" @click=${this.toggle}
-        title="Play / pause">${this.playing ? '❙❙' : '▶'}</button>
-      <span class="mc-dock-label">${this.label}</span>
-      <button type="button" class="mc-dock-x" @click=${this.dismiss}
+    var p = this.pos;
+    var style = p ? ('left:' + Math.min(p.left, window.innerWidth - 60) + 'px;top:'
+      + Math.min(p.top, window.innerHeight - 30) + 'px;right:auto;bottom:auto') : '';
+    return html`<div class="mc-dock" style=${style} @pointerdown=${(e) => this.startDrag(e)}>
+      <button type="button" class="mc-dock-btn" @click=${() => this.step(-1)} ?disabled=${!this.canStep}
+        title="Previous chapter" aria-label="Previous chapter">⏮</button>
+      <button type="button" class="mc-dock-btn" @click=${() => this.skip(-10)}
+        title="Back 10 seconds" aria-label="Back 10 seconds">«10</button>
+      <button type="button" class="mc-dock-play" @click=${() => this.toggle()}
+        title="Play / pause" aria-label="Play / pause">${this.playing ? '❙❙' : '▶'}</button>
+      <button type="button" class="mc-dock-btn" @click=${() => this.skip(10)}
+        title="Forward 10 seconds" aria-label="Forward 10 seconds">10»</button>
+      <button type="button" class="mc-dock-btn" @click=${() => this.step(1)} ?disabled=${!this.canStep}
+        title="Next chapter" aria-label="Next chapter">⏭</button>
+      <a class="mc-dock-label" href=${this.href || '#'} title="Open this chapter in the reader">${this.label}</a>
+      <button type="button" class="mc-dock-x" @click=${() => this.dismiss()}
         title="Stop listening" aria-label="Stop listening">×</button>
     </div>`;
   }
@@ -140,13 +218,20 @@ customElements.define('mc-audio-dock', McAudioDock);
     'background:var(--maroon,#8b1a1a);z-index:9999;opacity:0;' +
     'transition:width .3s ease,opacity .3s ease}' +
     '.mc-progress-bar.on{opacity:1;width:70%;transition:width 8s cubic-bezier(.1,.7,.1,1),opacity .2s ease}' +
-    '.mc-dock{position:fixed;right:12px;bottom:12px;z-index:9998;display:flex;align-items:center;gap:.5rem;' +
+    '.mc-dock{position:fixed;right:12px;bottom:12px;z-index:9998;display:flex;align-items:center;gap:.3rem;' +
     'background:var(--surface,#fffdf7);border:1px solid var(--rule,#d9cfb8);border-radius:8px;' +
-    'padding:.45rem .6rem;box-shadow:0 2px 10px rgba(0,0,0,.15);max-width:min(88vw,26rem)}' +
+    'padding:.4rem .5rem;box-shadow:0 2px 10px rgba(0,0,0,.15);max-width:min(94vw,34rem);' +
+    'cursor:grab;touch-action:none;user-select:none}' +
+    '.mc-dock:active{cursor:grabbing}' +
+    '.mc-dock-btn{font:inherit;cursor:pointer;border:1px solid var(--rule,#d9cfb8);background:none;' +
+    'color:var(--maroon,#8b1a1a);border-radius:6px;padding:.2rem .3rem;line-height:1;white-space:nowrap;font-size:.8rem}' +
+    '.mc-dock-btn[disabled]{opacity:.4;cursor:default}' +
     '.mc-dock-play{font:inherit;cursor:pointer;border:1px solid var(--rule,#d9cfb8);background:none;' +
-    'color:var(--maroon,#8b1a1a);border-radius:50%;width:2.1rem;height:2.1rem;line-height:1}' +
-    '.mc-dock-label{font-size:.85rem;color:var(--ink,#1a1a1a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-    '.mc-dock-x{font:inherit;cursor:pointer;border:0;background:none;color:var(--faint,#8a7f6a);font-size:1.1rem}';
+    'color:var(--maroon,#8b1a1a);border-radius:50%;width:2rem;height:2rem;line-height:1;flex:none}' +
+    '.mc-dock-label{font-size:.85rem;color:var(--maroon,#8b1a1a);text-decoration:none;white-space:nowrap;' +
+    'overflow:hidden;text-overflow:ellipsis;max-width:11rem}' +
+    '.mc-dock-label:hover{text-decoration:underline}' +
+    '.mc-dock-x{font:inherit;cursor:pointer;border:0;background:none;color:var(--faint,#8a7f6a);font-size:1.1rem;flex:none}';
   document.head.appendChild(style);
 
   if (latchOff) {
@@ -163,8 +248,10 @@ customElements.define('mc-audio-dock', McAudioDock);
   document.body.appendChild(dock);
   window.mcAudioDock = {
     audio: dockAudio,
-    claim: function (label) { dock.label = label || dock.label; dock.claimed = true; dock.sync(); },
-    release: function () { dock.claimed = false; dock.sync(); },
+    /* ctx = { books:[{slug,name,chapters}], audioBase, page, reader, b, c } —
+       enough for the dock to step chapters and link back on its own. */
+    claim: function (ctx) { dock.claim(ctx); },
+    release: function () { dock.release(); },
   };
 
   /* PWA: the installable face. The worker caches only the small shell
