@@ -33,8 +33,18 @@ export default [
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },
   {
-    files: ['comments.js', 'nav.js', 'deeplink.js', 'flash.js', 'contact.js', 'kjv-audio.js', 'bible-reader.js'],
+    files: ['comments.js', 'nav.js', 'deeplink.js', 'flash.js', 'contact.js', 'bible-reader.js', 'away.js', 'index.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: browserGlobals },
+    rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
+  },
+  // The app shell and its Lit components: ES modules, bundled by `make bundle`
+  // into the committed app.js (which is generated output, never linted).
+  {
+    files: ['app/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2023, sourceType: 'module',
+      globals: { ...browserGlobals, customElements: 'readonly', DOMParser: 'readonly', Map: 'readonly', Promise: 'readonly' },
+    },
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },
 ];
