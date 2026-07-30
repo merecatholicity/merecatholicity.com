@@ -1,0 +1,101 @@
+/* Mere Catholicity — site style in the idiom of the old scholarly readers:
+   white ground, black serif text, deep maroon accents, thin rules. */
+
+:root {
+  color-scheme: light;
+  --ink: #1a1a1a;
+  --maroon: #8b1a1a;
+  --maroon-dark: #6d1414;
+  --rule: #b9a58c;
+  --faint: #757068;
+  /* Themeable surfaces and muted inks. Light values are the site's originals, so
+     light mode is unchanged; the dark theme below overrides them. */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --cream: #f9f3e6;
+  --cream-2: #faf6ee;
+  --brown: #8a6d3b;
+  --muted: #444444;
+  --muted-b: #555555;
+  --muted-c: #666666;
+  --muted-d: #777777;
+  --faintest: #999999;
+  --ink-soft: #333333;
+  --grade-y: #2f6b2f;
+  --grade-o: #6d4b8b;
+  --glass: rgba(255, 255, 255, 0.97);
+  --creed-bg: #d1e7dd;
+  --creed-head: #0f5132;
+}
+
+/* Dark theme. Applied when the reader has chosen dark (data-theme on <html>, set
+   by nav.js from a cookie) and, before the script runs or with JS off, when the
+   OS prefers dark and no light choice is stored. A warm near-black to keep the
+   parchment character rather than a cold black. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #17140f;
+  --surface: #211c15;
+  --ink: #e8e2d4;
+  --rule: #4b4234;
+  --faint: #a99b85;
+  --maroon: #e39191;
+  --maroon-dark: #f0a6a6;
+  --cream: #2b2318;
+  --cream-2: #251f16;
+  --brown: #cba06a;
+  --muted: #cabfad;
+  --muted-b: #beb3a0;
+  --muted-c: #ab9e88;
+  --muted-d: #9c8f7b;
+  --faintest: #8a7d69;
+  --ink-soft: #cdbfa8;
+  --grade-y: #77c07b;
+  --grade-o: #b98ed6;
+  --glass: rgba(28, 24, 17, 0.97);
+  --creed-bg: #1d2a20;
+  --creed-head: #a6d3b2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #17140f;
+    --surface: #211c15;
+    --ink: #e8e2d4;
+    --rule: #4b4234;
+    --faint: #a99b85;
+    --maroon: #e39191;
+    --maroon-dark: #f0a6a6;
+    --cream: #2b2318;
+    --cream-2: #251f16;
+    --brown: #cba06a;
+    --muted: #cabfad;
+    --muted-b: #beb3a0;
+    --muted-c: #ab9e88;
+    --muted-d: #9c8f7b;
+    --faintest: #8a7d69;
+    --ink-soft: #cdbfa8;
+    --grade-y: #77c07b;
+    --grade-o: #b98ed6;
+    --glass: rgba(28, 24, 17, 0.97);
+    --creed-bg: #1d2a20;
+    --creed-head: #a6d3b2;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Reserve the scrollbar's width from first paint, so the centered column
+   never shifts when the bar appears mid-load. */
+html { overflow-y: scroll; overflow-x: hidden; }
+
+body {
+  font-family: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
+  color: var(--ink);
+  background: var(--bg);
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+  line-height: 1.55;
+  font-size: 1.05rem;
+}
