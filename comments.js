@@ -6139,19 +6139,31 @@
     if (chatId && loggedIn) {
       var loadNote = el('p', 'comments-status', 'Reopening the conversation…');
       log.appendChild(loadNote);
+      var reopenTries = 0;
+      var reopenGo = function () {
       fetchRetry(MERECAT_API + '/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: state.key, id: chatId }),
       }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
         if (blockedOut(d)) return;
-        loadNote.remove();
         if (!d.ok) {
-          chatId = 0;
-          setCrumb('');
-          if (history.replaceState) history.replaceState(null, '', location.pathname + '?merecat=1');
-          log.appendChild(el('p', 'comments-status', 'That conversation is gone (expired or deleted). This is a fresh one.'));
-          return;
+          /* Only the server's own word makes a thread GONE — a rate-limit
+             429 or any passing refusal must never masquerade as deletion
+             and strip the thread from the URL (the v140 live test caught
+             exactly that: a burst of page-hops hit READ_LIMIT and a living
+             conversation was declared gone). Transient troubles retry,
+             the address intact. */
+          if (/no such conversation/i.test(String(d.error || ''))) {
+            loadNote.remove();
+            chatId = 0;
+            setCrumb('');
+            if (history.replaceState) history.replaceState(null, '', location.pathname + '?merecat=1');
+            log.appendChild(el('p', 'comments-status', 'That conversation is gone (expired or deleted). This is a fresh one.'));
+            return;
+          }
+          throw new Error(d.error || 'transient');
         }
+        loadNote.remove();
         setCrumb((d.chat && d.chat.title) || ('Conversation ' + chatId));
         var rows = d.msgs || [];
         /* The tail decides whether this thread is at rest or ALIVE: find the
@@ -6189,8 +6201,16 @@
         if (lastUser && !tailDone) resumeAsk(lastUser, tailPartial);
         q.focus();
       }).catch(function () {
-        loadNote.textContent = 'Could not reopen the conversation. Reload to retry.';
+        reopenTries += 1;
+        if (reopenTries < 5) {
+          loadNote.textContent = 'Reopening the conversation… (takes a moment)';
+          setTimeout(reopenGo, 6000);
+        } else {
+          loadNote.textContent = 'Could not reopen the conversation. Reload to retry.';
+        }
       });
+      };
+      reopenGo();
     } else {
       /* A bare open while a question still cooks somewhere? The rare refresh
          that beat the stream's first line loses the thread from the URL — so
@@ -6199,18 +6219,23 @@
          never a redirect: the reader may genuinely want a fresh start, and
          one click keeps that choice theirs. */
       if (loggedIn && state.key) {
+        var noticeTried = false;
+        var noticeGo = function () {
         fetchRetry(MERECAT_API + '/chats', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: state.key }),
         }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
-          if (!d.ok || !d.chats || !d.chats.length) return;
+          if (blockedOut(d)) return;
+          if (!d.ok) throw new Error('transient');
+          if (!d.chats || !d.chats.length) return;
           var newest = d.chats[0];
           if (!newest || newest.last_at < Math.floor(Date.now() / 1000) - 600) return;
           return fetchRetry(MERECAT_API + '/chat', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, id: newest.id }),
           }, [1000]).then(function (r2) { return r2.json(); }).then(function (t) {
-            if (!t.ok || !t.msgs || !t.msgs.length) return;
+            if (!t.ok) throw new Error('transient');
+            if (!t.msgs || !t.msgs.length) return;
             var rows = t.msgs;
             var lastUser = null;
             for (var i = rows.length - 1; i >= 0; i--) {
@@ -6229,7 +6254,13 @@
             note.appendChild(document.createTextNode('.'));
             log.insertBefore(note, log.firstChild);
           });
-        }).catch(function () {});
+        }).catch(function () {
+          /* one quiet retry — the notice is a courtesy, but a courtesy
+             eaten by a rate limit deserves its second chance */
+          if (!noticeTried) { noticeTried = true; setTimeout(noticeGo, 8000); }
+        });
+        };
+        noticeGo();
       }
       q.focus();
     }
