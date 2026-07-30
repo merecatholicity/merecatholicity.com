@@ -5075,9 +5075,12 @@ export class ChatRoom extends DurableObject {
     ]);
     const userMsgId = (urs && urs[0] && urs[0].results && urs[0].results[0] && urs[0].results[0].id) || 0;
 
+    const useLocal = cfg.backend === 'local' && this.env.MERECAT_LOCAL_URL && !m.instant;
+    const backend0 = useLocal ? 'local' : 'cloudflare';
     const used = { you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
-      today: todayQ + 1, gcap: cfg.global_daily, admin, backend: 'cloudflare' };
-    this.gen = { userMsgId, answer: '', sources: [], used, startedAtMs: Date.now(), backend: 'cloudflare' };
+      today: todayQ + 1, gcap: cfg.global_daily, admin, backend: backend0 };
+    this.gen = { userMsgId, answer: '', sources: [], used, startedAtMs: Date.now(),
+      backend: backend0, effort: String(m.effort || 'high'), instant: !!m.instant };
     this.phase = 'thinking';
     this.#emit({ t: 'state', phase: 'thinking', chatId: this.chatId, used });
     this.ctx.storage.setAlarm(Date.now() + 30000);   // keep-alive through silent gaps
@@ -5089,72 +5092,99 @@ export class ChatRoom extends DurableObject {
   }
 
   async #generate(q, history, summary, cfg, me, day) {
-    const { sources, messages } = await merecatPrompt(this.env, q, history, summary, cfg);
-    this.gen.sources = sources;
-    this.#emit({ t: 'meta', sources, used: this.gen.used, rv: MERECAT_RV, backend: 'cloudflare', chatId: this.chatId });
-    const aiStream = await this.env.AI.run(cfg.model, { messages, stream: true, max_tokens: cfg.max_tokens, temperature: 0.35 });
-    const strip = merecatThinkStripper();
-    const reader = aiStream.getReader();
-    const dec = new TextDecoder();
-    let buf = ''; let usage = null; let started = false;
+    /* Shared token sink: batch to the socket (~60ms) and persist the growing
+       answer to D1 (done=0) every few seconds. The DO is the SOLE writer — the
+       local box is called WITHOUT chat/msg, so serve.py streams only and never
+       /stores, which removes the old two-writer race entirely. */
     let batch = ''; let lastSend = 0; let lastPersist = 0;
+    let sources = [];
     const sendBatch = () => { if (batch) { this.#emit({ t: 'tokens', d: batch }); batch = ''; lastSend = Date.now(); } };
     const persist = async () => {
       const body = this.gen.answer.trim();
-      if (!body) return;
+      if (!body || !this.gen.userMsgId) return;
       lastPersist = Date.now();
       try {
-        if (!this.gen.userMsgId) return;
-        const row = await this.env.LIBDB.prepare(
-          "SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1"
-        ).bind(this.chatId, this.gen.userMsgId).first();
-        if (row) {
-          await this.env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1').bind(row.id, body).run();
-        } else {
-          await this.env.LIBDB.prepare(
-            "INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 0)"
-          ).bind(this.chatId, body, JSON.stringify(sources), Math.floor(Date.now() / 1000), this.gen.userMsgId).run();
-          await this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, Math.floor(Date.now() / 1000)).run();
+        const row = await this.env.LIBDB.prepare("SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1").bind(this.chatId, this.gen.userMsgId).first();
+        if (row) { await this.env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1').bind(row.id, body).run(); }
+        else {
+          const t = Math.floor(Date.now() / 1000);
+          await this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 0)").bind(this.chatId, body, JSON.stringify(sources), t, this.gen.userMsgId).run();
+          await this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, t).run();
         }
       } catch { /* a failed flush just waits for the next */ }
     };
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const payload = line.slice(6).trim();
-        if (payload === '[DONE]') continue;
-        try {
-          const obj = JSON.parse(payload);
-          if (obj.usage) usage = obj.usage;
-          const delta = obj.response == null ? '' : String(obj.response);
-          if (delta) {
-            const vis = strip(delta);
-            if (vis) {
-              if (!started) { started = true; this.phase = 'streaming'; this.#emit({ t: 'state', phase: 'streaming' }); }
-              this.gen.answer += vis; batch += vis;
-              if (Date.now() - lastSend > 60) sendBatch();
-              if (Date.now() - lastPersist > 6000) await persist();
-            }
-          }
-        } catch { /* partial/non-JSON line */ }
+    const onToken = async (vis) => {
+      if (this.phase !== 'streaming') { this.phase = 'streaming'; this.#emit({ t: 'state', phase: 'streaming' }); }
+      this.gen.answer += vis; batch += vis;
+      if (Date.now() - lastSend > 60) sendBatch();
+      if (Date.now() - lastPersist > 6000) await persist();
+    };
+
+    let usage = null;
+    let backend = this.gen.backend;   // 'local' or 'cloudflare' (decided in #ask)
+
+    /* LOCAL: relay serve.py's stream. A pre-preamble death (or offline/busy)
+       with failover on falls through to the cloud INTO the same generation. */
+    if (backend === 'local') {
+      let failover = false;
+      const resp = await merecatLocalFetch(this.env, { q, history, summary, effort: this.gen.effort || 'high' });
+      if (!resp || resp.busy) {
+        if (cfg.failover) failover = true;
+        else {
+          this.phase = 'error';
+          this.#emit({ t: 'state', phase: 'error', resting: true,
+            error: (resp && resp.busy) ? 'The local librarian is answering others right now. Try again in a moment.' : MERECAT_RESTING });
+          this.gen = null; return;
+        }
+      } else {
+        const r = await this.#relayLocal(resp, onToken, (s) => {
+          sources = s; this.gen.sources = s;
+          this.#emit({ t: 'meta', sources: s, used: this.gen.used, rv: MERECAT_RV, backend: 'local', chatId: this.chatId });
+        });
+        if (r.failover && cfg.failover) failover = true;
+        /* r.ok, or a post-preamble death: keep whatever streamed */
       }
+      if (failover) { backend = 'cloudflare'; this.gen.backend = 'cloudflare'; this.gen.used.backend = 'cloudflare'; sources = []; this.gen.answer = ''; }
     }
-    const tail = strip(null);
-    if (tail) { this.gen.answer += tail; batch += tail; }
+
+    /* CLOUD: a fresh cloud ask, or a failover into the same generation. */
+    if (backend === 'cloudflare') {
+      const built = await merecatPrompt(this.env, q, history, summary, cfg);
+      sources = built.sources; this.gen.sources = sources;
+      this.gen._msgLen = JSON.stringify(built.messages).length;
+      this.#emit({ t: 'meta', sources, used: this.gen.used, rv: MERECAT_RV, backend: 'cloudflare', chatId: this.chatId });
+      const aiStream = await this.env.AI.run(cfg.model, { messages: built.messages, stream: true, max_tokens: cfg.max_tokens, temperature: 0.35 });
+      const strip = merecatThinkStripper();
+      const reader = aiStream.getReader(); const dec = new TextDecoder(); let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n'); buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') continue;
+          try {
+            const obj = JSON.parse(payload);
+            if (obj.usage) usage = obj.usage;
+            const delta = obj.response == null ? '' : String(obj.response);
+            if (delta) { const vis = strip(delta); if (vis) await onToken(vis); }
+          } catch { /* partial/non-JSON line */ }
+        }
+      }
+      const tail = strip(null); if (tail) await onToken(tail);
+    }
+
     sendBatch();
     if (!this.gen.answer.trim()) this.gen.answer = 'The librarian could not draw an answer this time. Ask again shortly.';
 
-    /* Finalize: one authoritative write (done=1), tally, fold, then idle. */
+    /* Finalize: one authoritative write (done=1), tally (cloud only), fold. */
     const answer = this.gen.answer.trim();
     const nowS = Math.floor(Date.now() / 1000);
     const stmts = [];
-    if (cfg.backend === 'cloudflare') {
-      const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : Math.ceil(JSON.stringify(messages).length / 4);
+    if (backend === 'cloudflare') {
+      const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : Math.ceil((this.gen._msgLen || answer.length) / 4);
       const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(answer.length / 4);
       stmts.push(this.env.LIBDB.prepare('INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3').bind(day, inTok, outTok));
       stmts.push(this.env.LIBDB.prepare('INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ON CONFLICT(day, hash) DO UPDATE SET q = q + 1').bind(day, me));
@@ -5171,6 +5201,45 @@ export class ChatRoom extends DurableObject {
     this.phase = 'done';
     this.#emit({ t: 'state', phase: 'done', chatId: this.chatId });
     try { await merecatFold(this.env, cfg, this.chatId); } catch { /* fold waits for next turn */ }
+  }
+
+  /* Relay serve.py's stream to the socket: {queue} → state:queued, {sources} →
+     onMeta, answer bytes → onToken (STX heartbeats stripped, ETX = clean end).
+     Returns {ok} once the preamble was seen (finished or died after it — keep
+     what streamed), or {failover} if it died before the preamble. */
+  async #relayLocal(resp, onToken, onMeta) {
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = ''; let headerDone = false;
+    for (;;) {
+      let deadTimer;
+      const step = await Promise.race([
+        reader.read().then((x) => ({ read: x }), (e) => ({ err: e })),
+        new Promise((res) => { deadTimer = setTimeout(() => res({ silent: true }), 35000); }),
+      ]);
+      clearTimeout(deadTimer);
+      if (step.silent || step.err) { try { reader.cancel(); } catch { /* severed */ } return headerDone ? { ok: true } : { failover: true }; }
+      const { done, value } = step.read;
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      while (!headerDone) {
+        const nl = buf.indexOf('\n\n'); if (nl === -1) break;
+        let head; try { head = JSON.parse(buf.slice(0, nl)); } catch { head = null; }
+        buf = buf.slice(nl + 2);
+        if (head && head.queue != null) { this.phase = 'queued'; this.#emit({ t: 'state', phase: 'queued', place: head.queue, backend: 'local' }); continue; }
+        onMeta((head && head.sources) || []);
+        headerDone = true;
+      }
+      if (headerDone && buf) {
+        const clean = buf.replace(/\u0002/g, '');
+        const etx = clean.indexOf('\u0003');
+        const vis = etx === -1 ? clean : clean.slice(0, etx);
+        buf = '';
+        if (vis) await onToken(vis);
+        if (etx !== -1) { try { reader.cancel(); } catch { /* done */ } return { ok: true }; }
+      }
+    }
+    return headerDone ? { ok: true } : { failover: true };
   }
 
   async alarm() {
