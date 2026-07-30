@@ -4849,8 +4849,8 @@
     p1.appendChild(libLink);
     p1.appendChild(document.createTextNode(
       '. It answers Orthodox, Roman Catholic, and Protestant questions alike from a merely catholic ground. ' +
-      'It is a specialized AI trained in theology, philosophy, and history, among kindred fields. ' +
-      'Stray too far from the Library’s resources, though, and the quality of its answers will degrade substantially.'));
+      'merecat specializes in theology and the contents of our Library. ' +
+      'Anything off-topic will be of a substantially lower quality.'));
     ib.appendChild(p1);
     intro.appendChild(ib);
     section.appendChild(intro);
