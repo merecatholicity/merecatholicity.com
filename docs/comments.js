@@ -5732,9 +5732,14 @@
        replays again) — no polling. If the DO is idle (the generation finished
        between the reopen read and the socket, or it truly died), ONE /chat read
        settles which: paint the finished answer, or show the partial with a
-       note. Falls back to the HTTP resumeAsk when there is no WebSocket. */
+       note. On a browser with no WebSocket it shows a note to reopen later. */
     function resumeWs(userRow, partialRow) {
-      if (!window.WebSocket || !window.mcLive || !window.mcLive.chat) return false;
+      if (!window.WebSocket || !window.mcLive || !window.mcLive.chat) {
+        var cno = bubble('cat');
+        cno.body.appendChild(el('span', 'merecat-note',
+          'The librarian is still finishing this answer, but this browser blocked the live connection. Reopen the conversation shortly to read it.'));
+        return;
+      }
       var cat = bubble('cat');
       var sticky = stickyFollow();
       var startMs = (Number(userRow.created_at) * 1000) || Date.now();
@@ -5825,154 +5830,6 @@
       liveChat = handle;
       return true;
     }
-    function resumeAsk(userRow, partialRow) {
-      var cat = bubble('cat');
-      var sticky = stickyFollow();
-      var startMs = (Number(userRow.created_at) * 1000) || Date.now();
-      var acc = '';
-      var shown = 0;
-      var flowTimer = null;
-      var finished = false;
-      var working = null;
-      var recon = null, reconTick = null;
-      function clearChrome() {
-        if (working) { working.stop(); working = null; }
-        if (reconTick) { clearInterval(reconTick); reconTick = null; }
-        if (recon) { try { recon.remove(); } catch (e) {} recon = null; }
-      }
-      function settle() {
-        finished = true;
-        clearChrome();
-        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
-        document.removeEventListener('visibilitychange', visPass);
-        sticky.stop();
-      }
-      /* before any text: the working chrome inside the bubble; once text
-         flows, the reveal owns the bubble and the status rides a
-         reconnect-style row under it, both counting the question's clock */
-      function flowRow(statusText) {
-        if (working) { working.stop(); working = null; }
-        if (recon) {
-          var st = recon.querySelector('.mc-status');
-          if (st) st.textContent = statusText;
-          return;
-        }
-        recon = el('div', 'merecat-working');
-        recon.appendChild(el('span', 'mc-cat-work', '🐈'));
-        recon.appendChild(el('span', 'mc-spin'));
-        recon.appendChild(el('span', 'mc-status', statusText));
-        var secs = el('span', 'mc-secs', '');
-        recon.appendChild(secs);
-        reconTick = setInterval(function () {
-          secs.textContent = Math.round((Date.now() - startMs) / 1000) + 's';
-        }, 500);
-        cat.msg.appendChild(recon);
-      }
-      function tick() {
-        var backlog = acc.length - shown;
-        if (backlog > 0) {
-          shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
-          cat.body.textContent = acc.slice(0, shown);
-          sticky.bottom();
-        }
-      }
-      function adopt(text) {
-        if (text.length <= acc.length) return;
-        acc = text;
-        flowRow('the librarian is still writing…');
-        if (!flowTimer) flowTimer = setInterval(tick, 40);
-      }
-      function finishRow(m) {
-        var srcs = [];
-        try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
-        var rr = citeRenumber(m.body, srcs);
-        settle();
-        cat.body.textContent = '';
-        fillBody(cat.body, rr.text, true);
-        srcFooter(cat.body, rr.sources);
-        if (m.id) attachForward(cat.msg, m.id);
-        sticky.bottom();
-      }
-      function giveUp(note) {
-        settle();
-        /* the reveal may be mid-flight: show everything we have, then the note */
-        cat.body.textContent = acc || '';
-        cat.body.appendChild(el('p', 'merecat-note', note));
-      }
-      var born = Date.now();
-      var lastGrowth = Date.now();
-      function poll() {
-        if (finished || stale()) return;
-        readMark();
-        fetchRetry(MERECAT_API + '/chat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, id: chatId }),
-        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
-          if (finished) return;
-          if (blockedOut(d)) { settle(); return; }
-          if (!d.ok) { if (readThrottled(d)) readEase(); schedule(); return; }
-          var rows = d.msgs || [];
-          var fin = null, part = null;
-          for (var i = 0; i < rows.length; i++) {
-            var m = rows[i];
-            if (m.id <= userRow.id) continue;
-            if (m.role === 'user') break;   /* a newer question: the tail is no longer ours */
-            if (m.done === 0) part = m;
-            else { fin = m; break; }
-          }
-          if (fin) { finishRow(fin); return; }
-          if (part && part.body && String(part.body).length > acc.length) {
-            lastGrowth = Date.now();
-            adopt(String(part.body));
-          }
-          schedule();
-        }).catch(function () { schedule(); });
-      }
-      function schedule() {
-        if (finished || stale()) return;
-        var age = Date.now() - born;
-        if (age > 35 * 60000) {
-          giveUp('— the answer never finished. Ask again when you like.');
-          return;
-        }
-        /* twenty minutes, not five: a deep queue plus long reasoning writes
-           NOTHING for many minutes while very much alive (partials begin
-           only with answer tokens) — this horizon may only catch the truly
-           dead, never a slow thinker */
-        if (!acc && Date.now() - lastGrowth > 20 * 60000) {
-          giveUp('— the librarian seems to have stopped before writing anything. Ask again when you like.');
-          return;
-        }
-        /* The base cadence: gentle while the librarian is still THINKING (no
-           partial text yet — nothing to reveal, and this long reasoning/queue
-           phase is what once pinned the whole read budget), a live 6s once
-           text is actually flowing (the backends flush a growing answer every
-           4-5s, so 6s catches each within a breath while leaving natural
-           headroom below the ceiling), easing to 10s on a long answer. Then
-           readPace has the final say: a quiet page runs the base untouched,
-           but when the shared minute nears full or a throttle is easing every
-           poller, this gap stretches with the rest of the body. */
-        var base = (busy || !acc) ? 8000 : (age > 120000 ? 10000 : 6000);
-        setTimeout(poll, readPace(base));
-      }
-      function visPass() { if (!document.hidden && !finished) poll(); }
-      /* a question this old with nothing finished is a generation that died
-         (both engines finish inside minutes; the queue caps at fifteen) —
-         say so plainly instead of spinning forever */
-      if (Date.now() - startMs > 30 * 60000) {
-        if (partialRow && partialRow.body) cat.body.textContent = String(partialRow.body);
-        acc = (partialRow && partialRow.body) ? String(partialRow.body) : '';
-        giveUp('— this answer never finished. Ask again when you like.');
-        return;
-      }
-      if (partialRow && partialRow.body) adopt(String(partialRow.body));
-      else {
-        working = startWorking(cat.body, startMs);
-        working.setStatus('merecat is still working on this…');
-      }
-      document.addEventListener('visibilitychange', visPass, { signal: bootSig });
-      poll();
-    }
     /* THE WEBSOCKET ASK (primary). merecat's generation is a state machine in
        a per-conversation Durable Object (ChatRoom): ask-init mints/verifies the
        thread and adopts its id into the URL BEFORE we connect (so a refresh
@@ -5982,8 +5839,8 @@
        reconnects and the DO's `hello` replays the phase and the answer-so-far,
        which IS the resume (no polling, no reconcile/recover). The paced reveal,
        sticky follow, citations, and forward are shared with the reopen path.
-       If the browser has no WebSocket or the live channel cannot be reached,
-       we fall back to the HTTP ask() below, which still works end to end. */
+       A browser with no WebSocket, or a live channel that never answers, gets a
+       plain note — the librarian is a WebSocket service now, no HTTP fallback. */
     function askWs(text) {
       var youB = bubble('you');
       fillBody(youB.body, text);
@@ -6049,16 +5906,15 @@
          proven HTTP path. Remove the two bubbles we drew so ask() can add its
          own without a duplicate pair; chatId (already minted by ask-init) is
          preserved, so the HTTP /ask simply continues the same thread. */
-      function fallBackHttp() {
+      function giveUpLive(msg) {
         if (fellBack || painted || settled) return;
         fellBack = true;
         if (openTimer) { clearTimeout(openTimer); openTimer = null; }
         if (handle) { try { handle.close(); } catch (e) {} if (liveChat === handle) liveChat = null; handle = null; }
-        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
-        working.stop(); sticky.stop();
-        try { youB.msg.remove(); } catch (e) {}
-        try { cat.msg.remove(); } catch (e) {}
-        ask(text);   /* HTTP path owns busy and the queue from here */
+        working.stop();
+        cat.body.textContent = '';
+        cat.body.appendChild(el('span', 'merecat-note', msg));
+        endTurn();
       }
       function onFrame(m) {
         if (settled || fellBack || !m) return;
@@ -6110,11 +5966,11 @@
       }
 
       if (!window.WebSocket || !window.mcLive || !window.mcLive.chat) {
-        fellBack = true;
-        working.stop(); sticky.stop();
-        try { youB.msg.remove(); } catch (e) {}
-        try { cat.msg.remove(); } catch (e) {}
-        ask(text);
+        working.stop();
+        cat.body.textContent = '';
+        cat.body.appendChild(el('span', 'merecat-note',
+          'This browser blocked the live connection to the librarian (WebSocket). Try a different browser or network.'));
+        endTurn();
         return;
       }
       fetchRetry(MERECAT_API + '/ask-init', {
@@ -6132,413 +5988,15 @@
         handle = window.mcLive.chat(chatId, state.key, onFrame);
         liveChat = handle;
         /* a live channel that never speaks within the window is blocked or
-           dead — fall through to HTTP (only reached before the ask is sent) */
+           dead — the ask was never sent, so say so plainly */
         openTimer = setTimeout(function () {
-          if (!asked && !painted && !settled) fallBackHttp();
+          if (!asked && !painted && !settled) giveUpLive('Could not reach the live librarian. Please try again in a moment.');
         }, 12000);
       }).catch(function () {
         if (settled || fellBack || painted) return;
-        fallBackHttp();
+        giveUpLive('Network hiccup. Ask again.');
       });
     }
-    function ask(text) {
-      /* The reader is IN this conversation from the moment they ask: the
-         trail names the question at once (the URL follows on the stream's
-         first line, as soon as the server has minted the thread's id). */
-      if (!chatId) setCrumb(text);
-      fillBody(bubble('you').body, text);
-      var cat = bubble('cat');
-      var working = startWorking(cat.body);
-      /* The reconnect chrome: when a stream dies it must FEEL like a hiccup,
-         not a failure — the cat keeps bobbing, the spinner keeps spinning,
-         and the status says reconnecting. It lives on cat.msg (outside
-         cat.body) so the paced reveal's textContent writes never wipe it. */
-      var reconRow = null, reconTick = null;
-      function showReconnect(statusText) {
-        if (painted || !cat || !cat.msg || !document.contains(cat.msg)) return;
-        if (reconRow) {
-          var st = reconRow.querySelector('.mc-status');
-          if (st) st.textContent = statusText;
-          return;
-        }
-        reconRow = el('div', 'merecat-working');
-        reconRow.appendChild(el('span', 'mc-cat-work', '🐈'));
-        reconRow.appendChild(el('span', 'mc-spin'));
-        reconRow.appendChild(el('span', 'mc-status', statusText));
-        var secs = el('span', 'mc-secs', '');
-        reconRow.appendChild(secs);
-        var t0 = Date.now();
-        reconTick = setInterval(function () {
-          secs.textContent = Math.round((Date.now() - t0) / 1000) + 's';
-        }, 500);
-        cat.msg.appendChild(reconRow);
-      }
-      function clearReconnect() {
-        if (reconTick) { clearInterval(reconTick); reconTick = null; }
-        if (reconRow) { try { reconRow.remove(); } catch (e) {} reconRow = null; }
-      }
-      /* Hoisted so the catch can tell how far the stream got: a null sources
-         means the question never confirmed; anything later means it is stored
-         server-side and the answer will reach the thread regardless. */
-      var pre = '', acc = '', sources = null;
-      /* The paced reveal. The network delivers the answer in bursts (and the
-         final flush lands all at once), so raw rendering snaps rather than
-         flows. Instead the text reveals at a steady adaptive pace, catching up
-         when a burst builds a backlog, and the ask does not count as finished
-         until the reveal itself has run to the end — so a question typed while
-         an answer is still printing waits in the queue for the printing, and
-         nothing ever cuts an answer off mid-flow. */
-      var shown = 0, flowTimer = null, streamDone = false, flowResolve = null;
-      /* The completion mark: the server ends every whole answer with ETX
-         (\u0003, a byte no body can carry). A relay that dies with a CLEAN
-         close mid-answer looks exactly like a normal end — the only tell is
-         the missing mark, and on it the client shows what came and fetches
-         the stored whole instead of passing off half as finished. */
-      var complete = false;
-      /* The stall watchdog. A proxied stream can die SILENTLY — no error, no
-         close, reader.read() simply never resolves again — leaving the screen
-         frozen mid-answer while the finished text lands on the thread anyway
-         (the /store contract). So: track the last byte's arrival, declare a
-         stall when the silence outlives what the phase allows (75s once the
-         answer is printing — tokens flow steadily then — and 10 minutes before
-         the first token, where deep reasoning and queue waits live), abort the
-         dead stream, and RECOVER by polling the thread for the stored answer
-         and rendering it in place. The reader's manual refresh, automated. */
-      var lastByteAt = Date.now(), stalled = false, watchTimer = null;
-      var ctl = window.AbortController ? new AbortController() : null;
-      if (ctl) liveStreams.push(ctl);
-      /* the sticky follow-along grip (stickyFollow above, shared with resume) */
-      var sticky = stickyFollow();
-      var followBottom = sticky.bottom;
-      /* THE RECONCILER. The standing guarantee: from the moment a question is
-         sent until its answer is PAINTED, the page keeps comparing itself to
-         the server's stored truth and heals any gap — a zombie stream, a reap
-         at zero tokens, a throttled background tab, even a view re-render that
-         detached the ask's own nodes mid-flight. The reader never refreshes. */
-      var painted = false;
-      var askStartSec = Math.floor(Date.now() / 1000);
-      var reconTimer = null, visHandler = null;
-      function paintStored(m) {
-        /* Render a stored assistant row into the LIVE document. If the ask's
-           own bubble was detached by a re-render, find the current log and
-           append a fresh one there — the answer lands where eyes are. */
-        var srcs = [];
-        try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
-        var rr = citeRenumber(m.body, srcs);
-        var host = cat && cat.body && document.contains(cat.body) ? cat.body : null;
-        if (!host) {
-          var liveLog = document.querySelector('.merecat-log');
-          if (!liveLog) return false;
-          var mm = el('div', 'merecat-msg cat');
-          mm.appendChild(el('div', 'merecat-who', '🐈 merecat'));
-          host = el('div', 'merecat-body');
-          mm.appendChild(host);
-          liveLog.appendChild(mm);
-          cat = { msg: mm, body: host };
-        }
-        working.stop();
-        clearReconnect();
-        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
-        host.textContent = '';
-        fillBody(host, rr.text, true);
-        srcFooter(host, rr.sources);
-        if (m.id) attachForward(cat.msg, m.id);
-        followBottom();
-        painted = true;
-        if (flowResolve) flowResolve();
-        return true;
-      }
-      function storedMatch(d) {
-        if (!d.ok || !d.msgs || !d.msgs.length) return null;
-        var m = d.msgs[d.msgs.length - 1];
-        if (m.role !== 'assistant') return null;
-        var prev = d.msgs.length > 1 ? d.msgs[d.msgs.length - 2] : null;
-        if (prev && prev.role === 'user' && prev.body.trim() === text.trim()) return m;
-        /* fallback: an assistant row born after this ask began is ours even
-           when the stored question text differs (server-side trims). */
-        if (m.created_at && m.created_at >= askStartSec - 5) return m;
-        return null;
-      }
-      function reconcile() {
-        if (stale()) { if (reconTimer) { clearInterval(reconTimer); reconTimer = null; } return Promise.resolve(false); }
-        if (painted || !chatId || !state.key) return Promise.resolve(false);
-        /* A LIVING stream proves itself every ≤15s (tokens or keepalives), so
-           25s of silence is a true death signal — the reconciler never races
-           or interrupts a healthy reveal, it acts only on the proven-dead. */
-        if (!stalled && Date.now() - lastByteAt < 25000) return Promise.resolve(false);
-        readMark();
-        return fetchRetry(MERECAT_API + '/chat', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, id: chatId }),
-        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
-          if (readThrottled(d)) readEase();
-          var m = storedMatch(d);
-          if (!m) return false;
-          if (m.done === 0) {
-            /* The librarian is STILL WRITING: both backends now flush the
-               growing answer to the thread every few seconds (done = 0 until
-               the final store), so a dead stream reconnects to live text —
-               adopt whatever grew, keep revealing, keep polling. The ask
-               finishes only when the completed row (done = 1) paints. */
-            if (ctl) { try { ctl.abort(); } catch (e) {} }
-            if (m.body && m.body.length > acc.length) {
-              acc = m.body;
-              working.stop();
-              ensureFlow();
-            }
-            showReconnect('connection hiccup — reconnected, the librarian is still writing…');
-            return false;
-          }
-          var ok = paintStored(m);
-          /* the page is whole; cut any zombie stream loose so the ask settles */
-          if (ok && ctl) { try { ctl.abort(); } catch (e) {} }
-          return ok;
-        }).catch(function () { return false; });
-      }
-      function recover() {
-        if (painted) return;
-        working.stop();
-        if (!chatId) {
-          cat.body.textContent = '';
-          cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
-          return;
-        }
-        /* Reconnect, don't resign: keep whatever printed, keep the cat
-           spinning, and poll the thread — fast at first (the answer is often
-           already stored by the time a stall is declared), then patiently
-           while the librarian finishes writing. Partial flushes mean each
-           poll can pick up GROWING text, so the reveal keeps flowing. */
-        if (document.contains(cat.body)) {
-          if (!acc) cat.body.textContent = '';
-          showReconnect('connection hiccup — reconnecting to the librarian…');
-        }
-        var tries = 0;
-        return new Promise(function (resolve) {
-          function poll() {
-            if (painted || stale()) { resolve(); return; }
-            tries += 1;
-            reconcile().then(function (ok) {
-              if (ok || painted) { resolve(); return; }
-              /* Grab fast at first — the answer is usually already stored by
-                 the time a stall is declared, so the first tries at ~3s end it
-                 at once — then ease, and let readPace stretch every gap when
-                 the budget is contended (a resume poll may be alive too). The
-                 old flat 3s for ten tries was 20/min, over the ceiling alone. */
-              if (tries < 60) { setTimeout(poll, readPace(tries < 3 ? 3000 : (tries < 10 ? 6000 : 9000))); return; }
-              clearReconnect();
-              if (document.contains(cat.body)) {
-                cat.body.appendChild(el('p', 'merecat-note',
-                  '— the connection could not be restored, but the librarian keeps writing regardless: the finished answer is saved to this conversation. Reopen it in a little while to read it.'));
-              }
-              resolve();
-            });
-          }
-          poll();
-        });
-      }
-      function flowTick() {
-        try {
-          if (stale()) { clearInterval(flowTimer); flowTimer = null; if (flowResolve) flowResolve(); return; }
-          if (painted) {
-            clearInterval(flowTimer);
-            flowTimer = null;
-            if (flowResolve) flowResolve();
-            return;
-          }
-          var backlog = acc.length - shown;
-          if (backlog > 0) {
-            shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
-            cat.body.textContent = acc.slice(0, shown);
-            followBottom();
-          } else if (streamDone) {
-            clearInterval(flowTimer);
-            flowTimer = null;
-            if (flowResolve) flowResolve();
-          }
-        } catch (e) { /* a DOM hiccup must never wedge the reveal for good */ }
-      }
-      function ensureFlow() { if (!flowTimer) flowTimer = setInterval(flowTick, 40); }
-      var payload = { key: state.key, q: text, chat: chatId || 0 };
-      var mode = modeSel.value || 'high';
-      if (mode === 'instant') payload.instant = true; else payload.effort = mode;
-      watchTimer = setInterval(function () {
-        if (stale()) { clearInterval(watchTimer); watchTimer = null; return; }
-        /* The stream contract guarantees a heartbeat every ≤20s (STX during
-           generation, {queue:N} while waiting), so silence is a fast, honest
-           death signal: 30s once the answer is printing, 45s before the
-           first token (covers cloud first-token latency; local is heartbeat-
-           covered throughout). The old 75s/10min made a dead stream feel
-           like a broken site — detection now costs seconds, and a false
-           positive merely switches to the polling path, which paints the
-           same growing text the stream would have. */
-        var limit = (sources !== null && acc.length) ? 30000 : 45000;
-        if (Date.now() - lastByteAt > limit) {
-          stalled = true;
-          if (ctl) { try { ctl.abort(); } catch (e) {} }
-        }
-      }, 5000);
-      /* the standing listeners: a slow sweep the whole time an answer is owed,
-         and an instant pass the moment a backgrounded tab comes back (browser
-         timer-throttling means the sweep may not have run while hidden) */
-      reconTimer = setInterval(function () { reconcile(); }, 20000);
-      visHandler = function () { if (!document.hidden) reconcile(); };
-      document.addEventListener('visibilitychange', visHandler, { signal: bootSig });
-      fetch(MERECAT_API + '/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: ctl ? ctl.signal : undefined,
-      }).then(function (res) {
-        var ct = res.headers.get('Content-Type') || '';
-        if (ct.indexOf('application/json') !== -1) {
-          /* A refusal: rate limit, daily caps, resting, or a blocked key. */
-          return res.json().then(function (d) {
-            working.stop();
-            if (blockedOut(d)) return;
-            cat.body.textContent = '';
-            cat.body.appendChild(el('span', 'merecat-note',
-              (d.resting ? '🐈 ' : '') + (d.error || 'merecat could not answer. Try again shortly.') +
-              (d.resting || d.capped ? ' That is ' + merecatResetLocal() + ' your time.' : '')));
-          });
-        }
-        var reader = res.body.getReader();
-        var dec = new TextDecoder();
-        function finish() {
-          working.stop();
-          if (painted) return;
-          if (!complete) {
-            /* The stream closed without its mark: a truncated relay wearing a
-               clean ending — with text, or with NONE (a reap during the silent
-               model-load once ended a stream at zero tokens, and requiring
-               text here sent the reader a false "nothing to say" while the
-               stored answer landed thirty seconds later). Recover either way. */
-            if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
-            return recover();
-          }
-          acc = acc.replace(/\s+$/, '');
-          if (!acc) {
-            cat.body.textContent = '';
-            cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
-            followBottom();
-            return;
-          }
-          /* Let the reveal run to the end of the text before the final
-             markdown render lands and the ask counts as done. */
-          streamDone = true;
-          ensureFlow();
-          return new Promise(function (resolve) {
-            flowResolve = function () {
-              if (!painted && document.contains(cat.body)) {
-                var rr = citeRenumber(acc, sources);
-                cat.body.textContent = '';
-                fillBody(cat.body, rr.text, true);
-                srcFooter(cat.body, rr.sources);
-                attachForward(cat.msg, 'last');
-                painted = true;
-                followBottom();
-              }
-              resolve();
-            };
-          });
-        }
-        function pump() {
-          return reader.read().then(function (r) {
-            lastByteAt = Date.now();
-            if (r.done) { return finish(); }
-            var chunk = dec.decode(r.value, { stream: true });
-            if (sources === null) {
-              pre += chunk;
-              /* Consume any leading place-in-line notices, then the real
-                 preamble (chat id + sources + used). A local answer that had
-                 to queue sends {queue:N} first. */
-              while (sources === null) {
-                var cut = pre.indexOf('\n\n');
-                if (cut === -1) break;
-                var head = {};
-                try { head = JSON.parse(pre.slice(0, cut)) || {}; } catch (e) { head = {}; }
-                pre = pre.slice(cut + 2);
-                if (head.queue != null && !head.sources) {
-                  /* The FIRST line already names the thread (the local path
-                     mints it before proxying): adopt it into the URL at
-                     once, so a refresh during the queue wait or the long
-                     reasoning lands back HERE and resumes — not on a bare
-                     page that forgot the question ever existed. */
-                  if (head.chat && head.chat !== chatId) {
-                    chatId = head.chat;
-                    if (history.replaceState) {
-                      history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
-                    }
-                  }
-                  var waitMsg = head.queue > 0
-                    ? (head.queue + (head.queue === 1 ? ' question' : ' questions') +
-                       ' ahead of you in line, please wait')
-                    : 'no one else is in line, answering you now';
-                  var m = modeSel.value || 'high';
-                  if (m === 'high') waitMsg += ' — on High this usually takes about a minute';
-                  else if (m === 'xhigh') waitMsg += ' — at Extra-high this can take a minute or two';
-                  else if (m === 'max') waitMsg += ' — at Max this can take a couple of minutes';
-                  working.setStatus(waitMsg);
-                  continue;
-                }
-                /* Sources in hand — but on the local path the model now THINKS
-                   for up to a minute before the first token, so the counter
-                   must keep ticking: stopping here froze it at ~6s while the
-                   spinner ran on. It stops when the first answer text lands. */
-                sources = head.sources || [];
-                working.setStatus('sources gathered, the librarian is reasoning…');
-                if (head.chat && head.chat !== chatId) {
-                  chatId = head.chat;
-                  if (history.replaceState) {
-                    history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
-                  }
-                  setCrumb(text);
-                }
-                if (head.used) renderQuota(head.used);
-                acc = pre;
-                pre = '';
-              }
-              if (sources === null) return pump();
-            } else {
-              acc += chunk;
-            }
-            if (acc.indexOf('\u0002') !== -1) acc = acc.replace(/\u0002/g, '');
-            var mk = acc.indexOf('\u0003');
-            if (mk !== -1) { complete = true; acc = acc.slice(0, mk); }
-            if (acc) { working.stop(); ensureFlow(); }
-            return pump();
-          });
-        }
-        return pump();
-      }).catch(function () {
-        working.stop();
-        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
-        if (painted) return;   /* the reconciler already made the page whole */
-        if (stalled || sources !== null) {
-          /* A silently dead stream the watchdog cut, or a hard break
-             mid-answer: either way the question is stored server-side and
-             the librarian keeps writing — so RECONNECT (poll the thread,
-             pick up the growing text, paint the finish) instead of leaving
-             a farewell note. The old behavior printed "reopen it in a
-             minute or two" and stopped listening; refreshing the page was
-             genuinely faster, which is exactly backwards. */
-          return recover();
-        }
-        cat.body.textContent = '';
-        cat.body.appendChild(el('span', 'merecat-note', 'Network hiccup. Ask again.'));
-      }).then(function () {
-        if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
-        if (reconTimer) { clearInterval(reconTimer); reconTimer = null; }
-        if (visHandler) { document.removeEventListener('visibilitychange', visHandler); visHandler = null; }
-        sticky.stop();
-        clearReconnect();
-        busy = false;
-        /* The answer is fully rendered. After a short beat so it settles, send
-           the next stacked question; otherwise return focus to the box. */
-        if (askQueue.length) { setTimeout(drain, 900); }
-        else { try { q.focus({ preventScroll: true }); } catch (e) { q.focus(); } }
-      });
-    }
-
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var text = q.value.trim();
@@ -6618,7 +6076,7 @@
             if (m.id) attachForward(b.msg, m.id);
           }
         });
-        if (lastUser && !tailDone) { if (!resumeWs(lastUser, tailPartial)) resumeAsk(lastUser, tailPartial); }
+        if (lastUser && !tailDone) resumeWs(lastUser, tailPartial);
         q.focus();
       }).catch(function () {
         reopenTries += 1;
