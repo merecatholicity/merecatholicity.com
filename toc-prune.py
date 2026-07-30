@@ -5,7 +5,7 @@ import re
 
 DROP_PREFIXES = ("toc-held-as", "toc-staked-by", "toc-tier-")
 
-h = open("book.html").read()
+h = open("docs/book.html").read()
 i = h.find('<nav id="TOC')
 j = h.find("</nav>", i)
 toc = h[i:j]
@@ -14,5 +14,5 @@ toc = re.sub(
     lambda m: "" if m.group(1).startswith(DROP_PREFIXES) else m.group(0),
     toc, flags=re.S)
 toc = re.sub(r"<ul>\s*</ul>", "", toc)
-open("book.html", "w").write(h[:i] + toc + h[j:])
+open("docs/book.html", "w").write(h[:i] + toc + h[j:])
 print("toc pruned")

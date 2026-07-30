@@ -1,0 +1,14 @@
+{
+  "name": "Mere Catholicity",
+  "short_name": "Catholicity",
+  "description": "Mere Catholicity: the book, the library of the Fathers and the Scriptures, and the Catholicity Board.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf6ee",
+  "theme_color": "#8b1a1a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

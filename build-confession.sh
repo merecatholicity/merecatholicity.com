@@ -5,5 +5,5 @@ cd "$(dirname "$0")"
 export SOURCE_DATE_EPOCH=1784160000
 pdflatex -interaction=nonstopmode -halt-on-error confession.tex >/dev/null 2>&1
 pdflatex -interaction=nonstopmode -halt-on-error confession.tex >/dev/null 2>&1
-cp confession.pdf Mere_Catholicity.pdf
+cp confession.pdf docs/Mere_Catholicity.pdf
 echo "built Mere_Catholicity.pdf ($(pdfinfo confession.pdf 2>/dev/null | awk '/^Pages/{print $2}') pages)"

@@ -119,7 +119,7 @@ def main():
         if only and slug not in only:
             continue
         page = build_page(slug, os.path.join(CONTENT_DIR, name), nav_block, footer_block)
-        out = os.path.join(ROOT, slug + '.html')
+        out = os.path.join(ROOT, 'docs', slug + '.html')
         with open(out, 'w', encoding='utf-8') as f:
             f.write(page)
         built.append(slug + '.html')

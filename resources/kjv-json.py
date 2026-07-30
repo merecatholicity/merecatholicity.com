@@ -13,7 +13,7 @@ import re
 from html.parser import HTMLParser
 
 SRC = "kjv-src.html"
-OUT = "../kjv.json"
+OUT = "../docs/kjv.json"
 
 # 66 books in canonical order: (display name, verse-anchor slug)
 BOOKS = [

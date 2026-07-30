@@ -106,12 +106,12 @@ def main():
 
     block = re.compile(r'<nav class="site">.*?<script defer src="nav\.js"></script>(?:\s*<main>)?', re.S)
     for page in PAGES:
-        with open(page) as f:
+        with open('docs/' + page) as f:
             src = f.read()
         new, n = block.subn(lambda _m: nav.strip(), src)
         if n != 1:
             sys.exit(f"{page}: expected exactly one nav block, found {n}")
-        with open(page, "w") as f:
+        with open('docs/' + page, "w") as f:
             f.write(new)
         print("updated", page)
 
