@@ -89,6 +89,7 @@ function Conn(path, onFrame) {
   }
 
   function sendSub() {
+    if (c.nosub) return;   // chat sockets subscribe to nothing — they auth + ask
     if (c.ws && c.ws.readyState === 1) {
       try { c.ws.send(JSON.stringify({ t: 'sub', scope: c.desired })); } catch (e) { /* reconnect handles it */ }
     }
@@ -132,6 +133,44 @@ const boardApi = {
   },
 };
 
+/* chat — a per-conversation merecat socket (Phase 2). Created on demand by
+   viewMerecat, one at a time (opening a new conversation closes any prior),
+   and torn down when the reader leaves. It shares the whole idle/reconnect
+   lifecycle through `conns`, so a hidden tab / locked phone closes it and a
+   return reopens it — the ChatRoom DO keeps generating regardless and replays
+   its state in the `hello` frame on reconnect, which IS the resume. It carries
+   an auth frame (the member key, never in the URL) and subscribes to nothing. */
+let chatConn = null;
+function closeChat() {
+  if (chatConn) {
+    chatConn.want = false;
+    chatConn._close();
+    const i = conns.indexOf(chatConn);
+    if (i >= 0) conns.splice(i, 1);
+    chatConn = null;
+  }
+}
+function openChat(chatId, key, onFrame) {
+  closeChat();
+  const c = Conn('/api/merecat/live?chat=' + encodeURIComponent(chatId), onFrame);
+  c.nosub = true;
+  c.authFrame = JSON.stringify({ t: 'auth', key: key });
+  c.want = true;
+  chatConn = c;
+  conns.push(c);
+  if (!hidden) c._open();
+  return {
+    send: function (obj) {
+      if (c.ws && c.ws.readyState === 1) {
+        try { c.ws.send(JSON.stringify(obj)); return true; } catch (e) { /* reconnect will retry */ }
+      }
+      return false;
+    },
+    ready: function () { return !!(c.ws && c.ws.readyState === 1); },
+    close: function () { if (chatConn === c) closeChat(); },
+  };
+}
+
 function reopenAll() {
   for (const c of conns) { if (c.want && !c.ws) c._open(); }
 }
@@ -143,7 +182,7 @@ let installed = false;
 export function installLive() {
   if (installed || window.mcLive) return;
   installed = true;
-  window.mcLive = { board: boardApi, _conns: conns };
+  window.mcLive = { board: boardApi, chat: openChat, _conns: conns };
 
   /* Idle policy — one place, applied to every connection. A hidden tab / locked
      phone / screensaver must stop consuming resources; the DO keeps no state we
