@@ -4900,18 +4900,28 @@
       if (msg) setTimeout(function () { actNote.hidden = true; }, 7000);
     }
     var pastLoaded = false;
-    past.addEventListener('toggle', function () {
-      if (!past.open || pastLoaded) return;
-      pastLoaded = true;
-      pastBody.textContent = 'Loading…';
+    /* This list and the resume poll share ONE per-IP read budget (READ_LIMIT,
+       15/60s), so opening it while the librarian is mid-answer can be
+       throttled. A 429 is transient, not a dead end: wait for the window to
+       drain and try again a couple of times before conceding, and on any real
+       miss reset pastLoaded so a genuine reopen truly retries — it once stayed
+       true even on failure, making "Reopen to retry" a lie that only a full
+       page reload could undo. */
+    function loadList(attempt) {
+      pastBody.textContent = attempt ? 'The desk is busy for a moment — retrying…' : 'Loading…';
       fetchRetry(MERECAT_API + '/chats', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: state.key }),
       }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
         if (blockedOut(d)) return;
         if (!d.ok || !d.chats) {
+          if (/too many|slow down/i.test(String(d.error || '')) && attempt < 2) {
+            setTimeout(function () { loadList(attempt + 1); }, 6000);
+            return;
+          }
           pastBody.textContent = '';
           pastBody.appendChild(el('p', null, 'Could not load the list. Reopen to retry.'));
+          pastLoaded = false;
           return;
         }
         var chats = d.chats;
@@ -5014,7 +5024,15 @@
           }
         }
         renderChats();
-      }).catch(function () { pastBody.textContent = 'Could not load the list. Reopen to retry.'; });
+      }).catch(function () {
+        pastBody.textContent = 'Could not load the list. Reopen to retry.';
+        pastLoaded = false;
+      });
+    }
+    past.addEventListener('toggle', function () {
+      if (!past.open || pastLoaded) return;
+      pastLoaded = true;
+      loadList(0);
     });
     section.appendChild(past);
 
@@ -5712,7 +5730,15 @@
           giveUp('— the librarian seems to have stopped before writing anything. Ask again when you like.');
           return;
         }
-        var delay = busy ? 8000 : (age > 120000 ? 10000 : 5000);
+        /* The snappy 5s cadence exists to keep a FLOWING answer live, but at
+           12/min it alone nearly fills the shared 15/60s READ_LIMIT bucket
+           (every read endpoint draws from one per-IP budget), starving
+           concurrent reads — opening Past conversations, the unread badges —
+           into 429s. While the librarian is still THINKING (no partial text
+           yet, the long reasoning/queue phase) nothing is waiting to be
+           revealed, so poll gently and leave that headroom; tighten to 5s only
+           once text is actually flowing. */
+        var delay = (busy || !acc) ? 8000 : (age > 120000 ? 10000 : 5000);
         setTimeout(poll, delay);
       }
       function visPass() { if (!document.hidden && !finished) poll(); }
