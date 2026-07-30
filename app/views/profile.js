@@ -86,11 +86,15 @@ class McInbox extends LitElement {
       this.d = d;
     }).catch(() => { this.err = 'load'; });
   }
-  firstUpdated() {
-    /* the DM search box (write machinery) mounts through the kit, above the list */
+  updated() {
+    /* the DM search box (write machinery) mounts through the kit, above the
+       list — in updated() (not firstUpdated) so the data re-render, which
+       Lit reconciles, cannot wipe an imperatively-appended child; guarded to
+       mount once into the empty host */
     const kit = this.kit;
+    if (this._searchMounted || !kit.state.key) return;
     const host = this.querySelector('.mc-dmsearch');
-    if (host && kit.state.key) host.appendChild(kit.dmSearchBox());
+    if (host && !host.firstChild) { this._searchMounted = true; host.appendChild(kit.dmSearchBox()); }
   }
   del(e, other, row) {
     e.preventDefault();
