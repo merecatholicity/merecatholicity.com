@@ -181,7 +181,7 @@
       var seek = el("input", "bp-seek"); seek.type = "range"; seek.min = 0; seek.max = 1000; seek.value = 0; seek.setAttribute("aria-label", "Seek");
       var time = el("span", "bp-time", "0:00 / 0:00");
       var label = el("div", "bp-label");
-      var seeking = false;
+      var seeking = false, dockBooks = null;
       play.addEventListener("click", function () { if (audio.paused) audio.play().catch(function () {}); else audio.pause(); });
       back.addEventListener("click", function () { audio.currentTime = Math.max(0, audio.currentTime - 10); });
       fwd.addEventListener("click", function () { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 10); });
@@ -221,7 +221,15 @@
             seek.value = audio.currentTime / audio.duration * 1000;
             time.textContent = fmt(audio.currentTime) + " / " + fmt(audio.duration);
           }
-          if (dock) dock.claim(text);
+          /* Hand the dock the whole book table + position so it can step
+             chapters, auto-advance, and link back to this reader on its own
+             once this page is swapped away. Built once, reused. */
+          if (dock) {
+            if (!dockBooks) dockBooks = data.books.map(function (bk) {
+              return { slug: bk.slug, name: bk.name, chapters: bk.chapters.length };
+            });
+            dock.claim({ books: dockBooks, audioBase: AUDIO, page: location.pathname, reader: READER, b: cur.b, c: c });
+          }
         }
       };
     }
