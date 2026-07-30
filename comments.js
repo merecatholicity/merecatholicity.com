@@ -4215,6 +4215,7 @@
      in on one cached fetch, so a search narrows every page and the pager turns
      in place). Twenty to a page, click a name to open the profile. */
   function viewUsers() {
+    if (window.mcViews && window.mcViews.users) return window.mcViews.users(section, window.mcKit);
     document.title = 'Members | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Members']]);
     section.appendChild(el('p', 'board-intro',
@@ -4372,6 +4373,7 @@
      links to the exact post, riding the same find-pagination jump as any
      permalink. Newest first, twenty to a page. */
   function viewNotifications() {
+    if (window.mcViews && window.mcViews.notifications) return window.mcViews.notifications(section, window.mcKit);
     document.title = 'Notifications | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Notifications']]);
     if (!state.key) {
@@ -6767,6 +6769,9 @@
     commentNode: commentNode,
     watchToggle: watchToggle, annotateMeta: annotateMeta,
     searchSnippet: searchSnippet, attachAuthorPicker: attachAuthorPicker,
+    /* member read views (Wave C-reads) */
+    dmScore: dmScore,
+    notifClear: function () { try { localStorage.removeItem(NOTIF_CACHE); } catch (e) {} notifUnreadCheck(); },
   };
 
   if (BOARD) {
