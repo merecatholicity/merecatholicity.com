@@ -84,7 +84,7 @@ class McTopic extends LitElement {
     const list = this.querySelector('.comments-list');
     if (!list) return;
     d.total += 1;
-    const node = kit.commentNode(kit, c, false, { topicId: this.topicId });
+    const node = kit.commentNode(c, false, { topicId: this.topicId });
     list.appendChild(node);
     node.classList.add('mc-live-new');
     setTimeout(() => { node.classList.remove('mc-live-new'); }, 2200);
@@ -102,7 +102,7 @@ class McTopic extends LitElement {
       if (!list) return;
       (fresh.replies || []).forEach((c) => {
         if (!this.querySelector('#comment-' + c.id)) {
-          list.appendChild(kit.commentNode(kit, c, false, { topicId: this.topicId }));
+          list.appendChild(kit.commentNode(c, false, { topicId: this.topicId }));
         }
       });
       d.total = fresh.total;
@@ -117,8 +117,8 @@ class McTopic extends LitElement {
     /* the comment list: topic head on page 1, then replies — through the one
        shared renderer, so every post-behavior contract holds */
     const list = this.querySelector('.comments-list');
-    if (d.page === 1) list.appendChild(kit.commentNode(kit, d.topic, false, { topicId: id }));
-    d.replies.forEach((c) => list.appendChild(kit.commentNode(kit, c, false, { topicId: id })));
+    if (d.page === 1) list.appendChild(kit.commentNode(d.topic, false, { topicId: id }));
+    d.replies.forEach((c) => list.appendChild(kit.commentNode(c, false, { topicId: id })));
     /* the watch toggle (kit machinery) */
     const watchSlot = this.querySelector('.mc-watch-slot');
     if (watchSlot && kit.state.key) watchSlot.appendChild(kit.watchToggle(d.topic.id));
@@ -145,7 +145,7 @@ class McTopic extends LitElement {
         if (replyPage === d.page) {
           /* dedup: the live broadcast of our own reply may have already added it */
           let node = list.querySelector('#comment-' + d2.comment.id);
-          if (!node) { d.total += 1; node = kit.commentNode(kit, d2.comment, false, { topicId: id }); list.appendChild(node); }
+          if (!node) { d.total += 1; node = kit.commentNode(d2.comment, false, { topicId: id }); list.appendChild(node); }
           status.textContent = 'Posted.';
           node.scrollIntoView();
         } else {
