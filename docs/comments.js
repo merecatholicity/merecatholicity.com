@@ -5583,6 +5583,16 @@
     section.appendChild(pendingBox);
     var askQueue = [];
     var busy = false;
+    /* The active merecat chat socket (the WebSocket path). Closed when the
+       reader leaves the page so a soft-navigation never leaves it listening on
+       behalf of a detached view — the ChatRoom Durable Object keeps generating
+       regardless and replays its state on reopen, so nothing is lost. */
+    var liveChat = null;
+    if (typeof bootSig !== 'undefined' && bootSig) {
+      bootSig.addEventListener('abort', function () {
+        if (liveChat) { try { liveChat.close(); } catch (e) {} liveChat = null; }
+      });
+    }
     /* A question still waiting in the stack lives only in this page — a sent
        question survives a refresh (the librarian stores its answer on the
        thread), an unsent one does not. So warn on leaving only while unsent
@@ -5629,7 +5639,7 @@
       busy = true;
       var item = askQueue.shift();
       renderPending();
-      ask(item.text);
+      askWs(item.text);
     }
     /* A live "working" indicator: a bobbing merecat, a spinner, and a seconds
        counter that ticks up while the librarian thinks (deep reasoning can run a
@@ -5862,6 +5872,174 @@
       }
       document.addEventListener('visibilitychange', visPass, { signal: bootSig });
       poll();
+    }
+    /* THE WEBSOCKET ASK (primary). merecat's generation is a state machine in
+       a per-conversation Durable Object (ChatRoom): ask-init mints/verifies the
+       thread and adopts its id into the URL BEFORE we connect (so a refresh
+       anywhere lands back here), then the chat socket carries the question up
+       and hello/state/meta/tokens frames down. The DO owns the generation and
+       is the sole D1 writer, so a dropped socket loses nothing — mcLive
+       reconnects and the DO's `hello` replays the phase and the answer-so-far,
+       which IS the resume (no polling, no reconcile/recover). The paced reveal,
+       sticky follow, citations, and forward are shared with the reopen path.
+       If the browser has no WebSocket or the live channel cannot be reached,
+       we fall back to the HTTP ask() below, which still works end to end. */
+    function askWs(text) {
+      var youB = bubble('you');
+      fillBody(youB.body, text);
+      if (!chatId) setCrumb(text);
+      var cat = bubble('cat');
+      var working = startWorking(cat.body);
+      var sticky = stickyFollow();
+      var acc = '', shown = 0, flowTimer = null, sources = null;
+      var streamDone = false, painted = false, settled = false, asked = false, fellBack = false;
+      var handle = null, openTimer = null;
+      var mode = modeSel.value || 'high';
+
+      function endTurn() {
+        if (settled) return; settled = true;
+        working.stop();
+        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        sticky.stop();
+        if (openTimer) { clearTimeout(openTimer); openTimer = null; }
+        if (handle) { try { handle.close(); } catch (e) {} if (liveChat === handle) liveChat = null; handle = null; }
+        busy = false;
+        if (askQueue.length) { setTimeout(drain, 900); }
+        else { try { q.focus({ preventScroll: true }); } catch (e) { q.focus(); } }
+      }
+      function tick() {
+        if (painted) { if (flowTimer) { clearInterval(flowTimer); flowTimer = null; } return; }
+        var backlog = acc.length - shown;
+        if (backlog > 0) {
+          shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
+          cat.body.textContent = acc.slice(0, shown);
+          sticky.bottom();
+        } else if (streamDone) {
+          clearInterval(flowTimer); flowTimer = null; paint();
+        }
+      }
+      function ensureFlow() { if (!flowTimer) flowTimer = setInterval(tick, 40); }
+      function paint() {
+        if (painted) return;
+        painted = true;
+        acc = acc.replace(/\s+$/, '');
+        if (!acc) {
+          cat.body.textContent = '';
+          cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
+        } else {
+          var rr = citeRenumber(acc, sources || []);
+          cat.body.textContent = '';
+          fillBody(cat.body, rr.text, true);
+          srcFooter(cat.body, rr.sources);
+          attachForward(cat.msg, 'last');
+        }
+        sticky.bottom();
+        endTurn();
+      }
+      function refuse(d) {
+        working.stop();
+        if (blockedOut(d)) { endTurn(); return; }
+        cat.body.textContent = '';
+        cat.body.appendChild(el('span', 'merecat-note',
+          (d.resting ? '🐈 ' : '') + (d.error || 'merecat could not answer. Try again shortly.') +
+          (d.resting || d.capped ? ' That is ' + merecatResetLocal() + ' your time.' : '')));
+        endTurn();
+      }
+      /* WebSocket unavailable or unreachable: hand the SAME question to the
+         proven HTTP path. Remove the two bubbles we drew so ask() can add its
+         own without a duplicate pair; chatId (already minted by ask-init) is
+         preserved, so the HTTP /ask simply continues the same thread. */
+      function fallBackHttp() {
+        if (fellBack || painted || settled) return;
+        fellBack = true;
+        if (openTimer) { clearTimeout(openTimer); openTimer = null; }
+        if (handle) { try { handle.close(); } catch (e) {} if (liveChat === handle) liveChat = null; handle = null; }
+        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        working.stop(); sticky.stop();
+        try { youB.msg.remove(); } catch (e) {}
+        try { cat.msg.remove(); } catch (e) {}
+        ask(text);   /* HTTP path owns busy and the queue from here */
+      }
+      function onFrame(m) {
+        if (settled || fellBack || !m) return;
+        if (openTimer) { clearTimeout(openTimer); openTimer = null; }   /* any frame proves the channel */
+        if (m.t === 'hello') {
+          if (m.phase === 'idle') {
+            if (!asked) {
+              asked = true;
+              var a = { t: 'ask', q: text };
+              if (mode === 'instant') a.instant = true; else a.effort = mode;
+              handle.send(a);
+            }
+          } else {
+            /* reconnect / resume: the DO already holds our ask — adopt its state */
+            asked = true;
+            if (m.used) renderQuota(m.used);
+            if (m.sources && m.sources.length) sources = m.sources;
+            if (m.answer && m.answer.length > acc.length) { acc = m.answer; working.stop(); ensureFlow(); }
+            if (m.phase === 'done') { streamDone = true; ensureFlow(); }
+          }
+        } else if (m.t === 'state') {
+          if (m.phase === 'queued') {
+            var wait = (m.place > 0)
+              ? (m.place + (m.place === 1 ? ' question' : ' questions') + ' ahead of you in line, please wait')
+              : 'no one else is in line, answering you now';
+            if (mode === 'high') wait += ' — on High this usually takes about a minute';
+            else if (mode === 'xhigh') wait += ' — at Extra-high this can take a minute or two';
+            else if (mode === 'max') wait += ' — at Max this can take a couple of minutes';
+            working.setStatus(wait);
+          } else if (m.phase === 'thinking') {
+            if (m.used) renderQuota(m.used);
+            working.setStatus('sources gathered, the librarian is reasoning…');
+          } else if (m.phase === 'done') {
+            streamDone = true; ensureFlow();
+          } else if (m.phase === 'error') {
+            refuse(m);
+          }
+        } else if (m.t === 'meta') {
+          sources = m.sources || [];
+          if (m.used) renderQuota(m.used);
+          working.setStatus('sources gathered, the librarian is reasoning…');
+        } else if (m.t === 'tokens') {
+          acc += (m.d || '');
+          if (acc.indexOf('\u0002') !== -1) acc = acc.replace(/\u0002/g, '');   /* defensive: DO strips STX */
+          var mk = acc.indexOf('\u0003');
+          if (mk !== -1) acc = acc.slice(0, mk);
+          if (acc) { working.stop(); ensureFlow(); }
+        }
+      }
+
+      if (!window.WebSocket || !window.mcLive || !window.mcLive.chat) {
+        fellBack = true;
+        working.stop(); sticky.stop();
+        try { youB.msg.remove(); } catch (e) {}
+        try { cat.msg.remove(); } catch (e) {}
+        ask(text);
+        return;
+      }
+      fetchRetry(MERECAT_API + '/ask-init', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, chat: chatId || 0, q: text }),
+      }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+        if (settled || fellBack) return;
+        if (!d.ok) { refuse(d); return; }
+        if (d.chatId && d.chatId !== chatId) {
+          chatId = d.chatId;
+          if (history.replaceState) history.replaceState(null, '', location.pathname + '?merecat=1&chat=' + chatId);
+          setCrumb(text);
+        }
+        if (d.used) renderQuota(d.used);
+        handle = window.mcLive.chat(chatId, state.key, onFrame);
+        liveChat = handle;
+        /* a live channel that never speaks within the window is blocked or
+           dead — fall through to HTTP (only reached before the ask is sent) */
+        openTimer = setTimeout(function () {
+          if (!asked && !painted && !settled) fallBackHttp();
+        }, 12000);
+      }).catch(function () {
+        if (settled || fellBack || painted) return;
+        fallBackHttp();
+      });
     }
     function ask(text) {
       /* The reader is IN this conversation from the moment they ask: the
