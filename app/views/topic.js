@@ -56,6 +56,57 @@ class McTopic extends LitElement {
         }
       })
       .catch((e) => { this.err = e.message || 'failed'; });
+
+    /* Live: watch this thread and merge pushed replies in place (Facebook-style).
+       Optional — if the shell/socket is absent the view behaves exactly as before. */
+    if (window.mcLive) window.mcLive.board.sub(['topic:' + id]);
+    this._onLive = (ev) => this._applyLive(ev.detail);
+    this._onResync = () => this._catchUp();
+    document.addEventListener('mc-live', this._onLive);
+    document.addEventListener('mc-live-resync', this._onResync);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._onLive) document.removeEventListener('mc-live', this._onLive);
+    if (this._onResync) document.removeEventListener('mc-live-resync', this._onResync);
+    if (window.mcLive) window.mcLive.board.leave();
+  }
+  /* A pushed reply for this topic: append it if it belongs on the shown page and
+     is not already here (dedups the poster's own optimistic append + multi-tab). */
+  _applyLive(m) {
+    if (!m || m.t !== 'new-reply' || !this.d || this.d.topic.locked) return;
+    if (String(m.topic_id) !== String(this.topicId)) return;
+    const c = m.comment;
+    if (!c || this.querySelector('#comment-' + c.id)) return;
+    const kit = this.kit;
+    const d = this.d;
+    if (Math.ceil((d.total + 1) / d.per) !== d.page) return;   // belongs on a later page
+    const list = this.querySelector('.comments-list');
+    if (!list) return;
+    d.total += 1;
+    const node = kit.commentNode(kit, c, false, { topicId: this.topicId });
+    list.appendChild(node);
+    node.classList.add('mc-live-new');
+    setTimeout(() => { node.classList.remove('mc-live-new'); }, 2200);
+  }
+  /* On reconnect (e.g. tab returned from hidden), pull any replies missed while
+     away and append the ones not already shown. */
+  _catchUp() {
+    const kit = this.kit;
+    const d = this.d;
+    if (!kit || !d || d.topic.locked) return;
+    kit.fetchRetry(kit.API + '/board/topic?id=' + this.topicId + '&p=' + d.page + kit.freshParam('&'),
+      kit.freshOpts(), [1000]).then((r) => r.json()).then((fresh) => {
+      if (!fresh || !fresh.ok || fresh.page !== d.page) return;
+      const list = this.querySelector('.comments-list');
+      if (!list) return;
+      (fresh.replies || []).forEach((c) => {
+        if (!this.querySelector('#comment-' + c.id)) {
+          list.appendChild(kit.commentNode(kit, c, false, { topicId: this.topicId }));
+        }
+      });
+      d.total = fresh.total;
+    }).catch(() => {});
   }
   updated() {
     if (!this.d || this._mounted) return;
@@ -92,9 +143,9 @@ class McTopic extends LitElement {
         if (d2.status === 'pending') { status.textContent = 'Held for review. It will appear once approved.'; return; }
         const replyPage = Math.ceil((d.total + 1) / d.per);
         if (replyPage === d.page) {
-          d.total += 1;
-          const node = kit.commentNode(kit, d2.comment, false, { topicId: id });
-          list.appendChild(node);
+          /* dedup: the live broadcast of our own reply may have already added it */
+          let node = list.querySelector('#comment-' + d2.comment.id);
+          if (!node) { d.total += 1; node = kit.commentNode(kit, d2.comment, false, { topicId: id }); list.appendChild(node); }
           status.textContent = 'Posted.';
           node.scrollIntoView();
         } else {
