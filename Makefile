@@ -107,8 +107,13 @@ chart-pdfs:
 	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Fifty_Objections.pdf "file://$$(pwd)/objections.html"
 
 .PHONY: serve
+# Local preview only. --bind 127.0.0.1 is LOAD-BEARING SECURITY: without it
+# http.server binds 0.0.0.0 (every interface) and serves this whole working
+# tree — including the git-ignored secrets local/serve.key and librarian/.key
+# and the private shelf — to anyone on the LAN or tailnet. A stray one ran
+# open for two days once (2026-07-29). Never remove the bind.
 serve:
-	python -m http.server 8000
+	python -m http.server 8000 --bind 127.0.0.1
 
 # Export the live comments database to a local .sql file. The file stays out
 # of git: commenters' text belongs on the site, not in the repo history.
