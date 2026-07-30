@@ -5725,6 +5725,106 @@
        runs beside it without confusion; the poll rides READ_LIMIT
        politely (5s young, 10s past two minutes, 8s while a live ask also
        polls) with an instant pass when a background tab returns. */
+    /* THE WEBSOCKET RESUME (primary). Reopening a thread whose last question
+       has no finished answer joins the LIVING generation over the chat socket:
+       the DO's hello frame replays the phase and the answer-so-far, the paced
+       reveal paints from there, and a dropped socket simply reconnects (hello
+       replays again) — no polling. If the DO is idle (the generation finished
+       between the reopen read and the socket, or it truly died), ONE /chat read
+       settles which: paint the finished answer, or show the partial with a
+       note. Falls back to the HTTP resumeAsk when there is no WebSocket. */
+    function resumeWs(userRow, partialRow) {
+      if (!window.WebSocket || !window.mcLive || !window.mcLive.chat) return false;
+      var cat = bubble('cat');
+      var sticky = stickyFollow();
+      var startMs = (Number(userRow.created_at) * 1000) || Date.now();
+      var acc = (partialRow && partialRow.body) ? String(partialRow.body) : '';
+      var shown = 0, flowTimer = null, painted = false, settled = false, streamDone = false;
+      var sources = null, handle = null, idleChecked = false;
+      var working = startWorking(cat.body, startMs);
+      working.setStatus('rejoining the librarian…');
+      function endTurn() {
+        if (settled) return; settled = true;
+        working.stop();
+        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        sticky.stop();
+        if (handle) { try { handle.close(); } catch (e) {} if (liveChat === handle) liveChat = null; handle = null; }
+      }
+      function paint(finalBody, finalSources, fwdId) {
+        if (painted) return; painted = true;
+        var body = (finalBody != null ? finalBody : acc).replace(/\s+$/, '');
+        var srcs = finalSources != null ? finalSources : (sources || []);
+        cat.body.textContent = '';
+        if (!body) {
+          cat.body.appendChild(el('span', 'merecat-note', '— this answer never finished. Ask again when you like.'));
+        } else {
+          var rr = citeRenumber(body, srcs);
+          fillBody(cat.body, rr.text, true);
+          srcFooter(cat.body, rr.sources);
+          if (fwdId) attachForward(cat.msg, fwdId);
+        }
+        sticky.bottom();
+        endTurn();
+      }
+      function tick() {
+        if (painted) { if (flowTimer) { clearInterval(flowTimer); flowTimer = null; } return; }
+        var backlog = acc.length - shown;
+        if (backlog > 0) {
+          shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
+          cat.body.textContent = acc.slice(0, shown);
+          sticky.bottom();
+        } else if (streamDone) { clearInterval(flowTimer); flowTimer = null; paint(null, null, 'last'); }
+      }
+      function ensureFlow() { if (!flowTimer) flowTimer = setInterval(tick, 40); }
+      function idleCheck() {
+        if (idleChecked || painted) return;
+        idleChecked = true;
+        readMark();
+        fetchRetry(MERECAT_API + '/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: chatId }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+          if (painted) return;
+          var rows = (d && d.msgs) || [], fin = null;
+          for (var i = 0; i < rows.length; i++) {
+            var m = rows[i];
+            if (m.id <= userRow.id) continue;
+            if (m.role === 'user') break;
+            if (m.role === 'assistant' && m.done !== 0) { fin = m; break; }
+          }
+          if (fin) {
+            var s = []; try { s = JSON.parse(fin.sources || '[]'); } catch (e) {}
+            paint(fin.body, s, fin.id);
+          } else { paint(); }
+        }).catch(function () { if (!painted) paint(); });
+      }
+      function onFrame(m) {
+        if (settled || painted || !m) return;
+        if (m.t === 'hello') {
+          if (m.sources && m.sources.length) sources = m.sources;
+          if (m.answer && m.answer.length > acc.length) { acc = m.answer; working.stop(); ensureFlow(); }
+          if (m.phase === 'done') { streamDone = true; ensureFlow(); }
+          else if (m.phase === 'idle') { idleCheck(); }
+          else { working.setStatus('the librarian is still writing…'); if (acc) ensureFlow(); }
+        } else if (m.t === 'state') {
+          if (m.phase === 'thinking') working.setStatus('the librarian is reasoning…');
+          else if (m.phase === 'done') { streamDone = true; ensureFlow(); }
+          else if (m.phase === 'error') { paint(); }
+        } else if (m.t === 'meta') {
+          sources = m.sources || [];
+        } else if (m.t === 'tokens') {
+          acc += (m.d || '');
+          if (acc.indexOf('\u0002') !== -1) acc = acc.replace(/\u0002/g, '');
+          var mk = acc.indexOf('\u0003');
+          if (mk !== -1) acc = acc.slice(0, mk);
+          if (acc) { working.stop(); ensureFlow(); }
+        }
+      }
+      if (acc) { working.stop(); ensureFlow(); }
+      handle = window.mcLive.chat(chatId, state.key, onFrame);
+      liveChat = handle;
+      return true;
+    }
     function resumeAsk(userRow, partialRow) {
       var cat = bubble('cat');
       var sticky = stickyFollow();
@@ -6518,7 +6618,7 @@
             if (m.id) attachForward(b.msg, m.id);
           }
         });
-        if (lastUser && !tailDone) resumeAsk(lastUser, tailPartial);
+        if (lastUser && !tailDone) { if (!resumeWs(lastUser, tailPartial)) resumeAsk(lastUser, tailPartial); }
         q.focus();
       }).catch(function () {
         reopenTries += 1;
