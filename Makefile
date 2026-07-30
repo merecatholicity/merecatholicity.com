@@ -99,11 +99,21 @@ publish:
 	cp confession-paperback.pdf Mere_Catholicity_Paperback.pdf
 	@echo "built Mere_Catholicity_Paperback.pdf ($$(pdfinfo confession-paperback.pdf | awk '/^Pages/{print $$2}') pages)"
 
+# Build the decoupled content pages (content/*.md|*.html) into committed
+# static HTML through the one shared skeleton. Runs after nav.py so it reads
+# the freshly generated nav.html; a page under content/ is NOT in nav.py's
+# PAGES (content.py owns the whole page, nav included). See content.py.
+.PHONY: content
+content:
+	python content.py
+
 # Rebuild the site menus from nav.yml: regenerates nav.html, rewrites the
-# nav block in index.html and resources.html, then rebuilds book.html.
+# nav block in the hand pages, rebuilds the content pages from the fresh nav,
+# then rebuilds book.html.
 .PHONY: menu
 menu:
 	python nav.py
+	python content.py
 	$(MAKE) html
 
 .PHONY: chart-pdfs
