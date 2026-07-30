@@ -87,14 +87,15 @@ class McInbox extends LitElement {
     }).catch(() => { this.err = 'load'; });
   }
   updated() {
-    /* the DM search box (write machinery) mounts through the kit, above the
-       list — in updated() (not firstUpdated) so the data re-render, which
-       Lit reconciles, cannot wipe an imperatively-appended child; guarded to
-       mount once into the empty host */
+    /* the DM search box (write machinery) mounts through the kit into its
+       host — whenever the host is present and empty, NOT once-ever: the
+       loading template and the data template are different TemplateResults,
+       so Lit discards the loading DOM (and any child appended into it) and
+       renders a fresh empty host on the data render, which must be re-filled */
     const kit = this.kit;
-    if (this._searchMounted || !kit.state.key) return;
+    if (!kit.state.key) return;
     const host = this.querySelector('.mc-dmsearch');
-    if (host && !host.firstChild) { this._searchMounted = true; host.appendChild(kit.dmSearchBox()); }
+    if (host && !host.firstChild) host.appendChild(kit.dmSearchBox());
   }
   del(e, other, row) {
     e.preventDefault();
