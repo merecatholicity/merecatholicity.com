@@ -2982,7 +2982,7 @@
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
     if (adminGate(viewMerecatThreads)) return;
     section.appendChild(el('p', 'board-intro',
-      'Every question put to the librarian, newest first, read-only. Open one to observe the whole exchange. This is for improving the service, not participating; you cannot ask or reply here.'));
+      'Every question put to the librarian in the last thirty days, newest first, read-only. Open one to observe the whole exchange. A thread a member deletes leaves here too, and one saved past thirty days still ages off this view. This is for improving the service, not participating. You cannot ask or reply here.'));
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     var list = el('div', 'board-topics');
     list.textContent = 'Loading…';

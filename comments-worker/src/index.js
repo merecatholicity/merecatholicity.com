@@ -3558,11 +3558,17 @@ async function handleMerecatAdminThreads(request, env) {
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const per = 30;
   const pg = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
-  const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chats').first();
+  /* A rolling thirty-day window, matching the thread expiry: this is a bird's
+     eye view of recent use, not a keep. A saved thread is exempt from expiry
+     (it lives on in its owner's list), but past thirty days it drops OFF this
+     admin view all the same — the owner's word. A deleted thread is gone from
+     chats outright, so it never appears here either. */
+  const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
+  const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chats WHERE last_at >= ?1').bind(cut).first();
   const rows = await env.LIBDB.prepare(
     'SELECT id, hash, title, COALESCE(msgs, 0) AS msgs, created_at, last_at, COALESCE(saved, 0) AS saved ' +
-    'FROM chats ORDER BY last_at DESC LIMIT ?1 OFFSET ?2'
-  ).bind(per, (pg - 1) * per).all();
+    'FROM chats WHERE last_at >= ?1 ORDER BY last_at DESC LIMIT ?2 OFFSET ?3'
+  ).bind(cut, per, (pg - 1) * per).all();
   const threads = rows.results || [];
   /* Nicks live in the comments DB, not LIBDB — resolve them in one batch. */
   const hashes = [...new Set(threads.map((t) => t.hash).filter(Boolean))];
@@ -3585,9 +3591,10 @@ async function handleMerecatAdminThread(request, env) {
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const id = Number(data.id);
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
   const chat = await env.LIBDB.prepare(
-    'SELECT id, hash, title, COALESCE(msgs, 0) AS msgs, created_at, last_at, COALESCE(saved, 0) AS saved FROM chats WHERE id = ?1'
-  ).bind(id).first();
+    'SELECT id, hash, title, COALESCE(msgs, 0) AS msgs, created_at, last_at, COALESCE(saved, 0) AS saved FROM chats WHERE id = ?1 AND last_at >= ?2'
+  ).bind(id, cut).first();
   if (!chat) return json({ ok: false, error: 'No such conversation.' }, 404);
   const msgs = await env.LIBDB.prepare(
     'SELECT id, role, body, sources, created_at FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
