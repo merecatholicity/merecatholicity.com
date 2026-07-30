@@ -8,38 +8,7 @@
    view functions delegate here when present, one revertible line each. */
 
 import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
-
-/* The page-bar windowing, replicated pure from comments.js pageBar(): show
-   1, the active page's neighbors, and the last; a gap of exactly one page
-   shows that page, a wider gap shows an ellipsis. */
-function pagerPages(total, per, active) {
-  const pages = Math.ceil(total / per);
-  if (pages < 2) return null;
-  const shown = [];
-  for (let n = 1; n <= pages; n++) {
-    if (n === 1 || n === pages || Math.abs(n - active) <= 1) shown.push(n);
-  }
-  const out = [];
-  let prev = 0;
-  shown.forEach((n) => {
-    if (prev) {
-      if (n - prev === 2) out.push({ n: prev + 1 });
-      else if (n - prev > 2) out.push({ gap: true });
-    }
-    out.push({ n, active: n === active });
-    prev = n;
-  });
-  return out;
-}
-
-function pagerTpl(total, per, active, hrefFor, cls) {
-  const items = pagerPages(total, per, active);
-  if (!items) return nothing;
-  return html`<p class=${cls || 'board-pages'}>${items.map((it) =>
-    it.gap ? html` … ` : it.active
-      ? html` <strong>${it.n}</strong> `
-      : html` <a href=${hrefFor(it.n)}>${it.n}</a> `)}</p>`;
-}
+import { pagerTpl } from './util.js';
 
 class McBoardIndex extends LitElement {
   static properties = {
