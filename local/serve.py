@@ -15,6 +15,7 @@ import hmac
 import json
 import os
 import re
+import socket
 import sqlite3
 import sys
 import threading
@@ -517,12 +518,40 @@ class Handler(BaseHTTPRequestHandler):
             store_answer(chat, msg, answer, sources)
 
 
+def sd_notify(msg):
+    """One datagram to systemd's notify socket (Type=notify): READY=1 once
+    bound, WATCHDOG=1 heartbeats thereafter, so a wedged-but-alive process
+    is restarted by the machine itself instead of discovered days later.
+    A no-op outside systemd, and never allowed to raise — liveness
+    reporting must not be what kills the service."""
+    path = os.environ.get("NOTIFY_SOCKET", "")
+    if not path:
+        return
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        try:
+            s.sendto(msg.encode(),
+                     "\0" + path[1:] if path.startswith("@") else path)
+        finally:
+            s.close()
+    except OSError:
+        pass
+
+
 def main():
     if not KEY:
         sys.exit("no shared key — create local/serve.key or set MERECAT_LOCAL_KEY")
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"merecat-local serving on 127.0.0.1:{PORT} "
           f"({VECTORS.shape[0]} chunks, model {CFG['chat_model']})", flush=True)
+    sd_notify("READY=1")
+
+    def _sd_watchdog():
+        # every 25s against the unit's WatchdogSec=90
+        while True:
+            time.sleep(25)
+            sd_notify("WATCHDOG=1")
+    threading.Thread(target=_sd_watchdog, daemon=True).start()
 
     def _startup_canary():
         # Best-effort: at machine boot the reranker may still be loading;

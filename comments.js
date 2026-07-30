@@ -5514,16 +5514,18 @@
     /* A live "working" indicator: a bobbing merecat, a spinner, and a seconds
        counter that ticks up while the librarian thinks (deep reasoning can run a
        minute or more), so the wait feels alive rather than stalled. */
-    function startWorking(body) {
+    function startWorking(body, startMs) {
       body.textContent = '';
       var wrap = el('div', 'merecat-working');
       wrap.appendChild(el('span', 'mc-cat-work', '🐈'));
       wrap.appendChild(el('span', 'mc-spin'));
       var status = el('span', 'mc-status', 'merecat is working…');
-      var secs = el('span', 'mc-secs', '0s');
+      /* startMs lets a RESUMED wait count from the question's own birth, so
+         a reader who refreshed or walked away sees the honest elapsed time */
+      var start = startMs || Date.now();
+      var secs = el('span', 'mc-secs', Math.max(0, Math.round((Date.now() - start) / 1000)) + 's');
       wrap.appendChild(status); wrap.appendChild(secs);
       body.appendChild(wrap);
-      var start = Date.now();
       var timer = setInterval(function () {
         secs.textContent = Math.round((Date.now() - start) / 1000) + 's';
       }, 250);
@@ -5531,6 +5533,201 @@
         setStatus: function (t) { status.textContent = t; },
         stop: function () { if (timer) { clearInterval(timer); timer = null; } },
       };
+    }
+
+    /* The sticky follow-along grip, shared by a live ask and a resumed one:
+       stick to the PAGE bottom while an answer prints if the reader was
+       there when it began or comes back mid-print; any deliberate upward
+       scroll releases it until they return. Never scrollIntoView on the
+       bubble (the composer and footer sit below it — aligning the bubble's
+       end yanked the view off the floor and instantly disarmed the old
+       per-tick sample). The flag is sticky: page growth fires no scroll
+       events, so only the reader's own movement changes it — reaching the
+       bottom arms it, wheel-up or a downward finger-drag disarms at once,
+       a position drop past the near-bottom band disarms too (keys and
+       scrollbar), and the iOS rubber-band settle stays armed since it
+       never leaves that band. */
+    function stickyFollow() {
+      var follow = nearPageBottom();
+      var followY = window.scrollY;
+      var touchY = 0;
+      function onScroll() {
+        var y = window.scrollY;
+        if (y > followY + 2 && nearPageBottom()) follow = true;
+        else if (y < followY - 2 && !nearPageBottom()) follow = false;
+        followY = y;
+      }
+      function onWheel(e) { if (e.deltaY < 0) follow = false; }
+      function onTouchStart(e) {
+        if (e.touches && e.touches.length) touchY = e.touches[0].clientY;
+      }
+      function onTouchMove(e) {
+        if (!(e.touches && e.touches.length)) return;
+        var y = e.touches[0].clientY;
+        if (y > touchY + 8) follow = false;   /* finger down = view up */
+        touchY = y;
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('wheel', onWheel, { passive: true });
+      window.addEventListener('touchstart', onTouchStart, { passive: true });
+      window.addEventListener('touchmove', onTouchMove, { passive: true });
+      return {
+        bottom: function () { if (follow) window.scrollTo(0, document.documentElement.scrollHeight); },
+        stop: function () {
+          window.removeEventListener('scroll', onScroll);
+          window.removeEventListener('wheel', onWheel);
+          window.removeEventListener('touchstart', onTouchStart);
+          window.removeEventListener('touchmove', onTouchMove);
+        },
+      };
+    }
+
+    /* THE RESUME. A reopened thread whose last question has no finished
+       answer joins the LIVING generation instead of showing a dead page:
+       the same working chrome counting from the question's own birth, the
+       stored partial flushes painting through the same paced reveal, the
+       finished row landing exactly as a live stream's finish would. Both
+       backends flush the growing answer to the thread every few seconds,
+       so watching the thread IS watching the librarian — a refresh, an
+       accidental navigation, a walk to another page and back change
+       nothing the reader can see. Bound to its own question row id (the
+       scan stops at any newer question), so a fresh ask typed meanwhile
+       runs beside it without confusion; the poll rides READ_LIMIT
+       politely (5s young, 10s past two minutes, 8s while a live ask also
+       polls) with an instant pass when a background tab returns. */
+    function resumeAsk(userRow, partialRow) {
+      var cat = bubble('cat');
+      var sticky = stickyFollow();
+      var startMs = (Number(userRow.created_at) * 1000) || Date.now();
+      var acc = '';
+      var shown = 0;
+      var flowTimer = null;
+      var finished = false;
+      var working = null;
+      var recon = null, reconTick = null;
+      function clearChrome() {
+        if (working) { working.stop(); working = null; }
+        if (reconTick) { clearInterval(reconTick); reconTick = null; }
+        if (recon) { try { recon.remove(); } catch (e) {} recon = null; }
+      }
+      function settle() {
+        finished = true;
+        clearChrome();
+        if (flowTimer) { clearInterval(flowTimer); flowTimer = null; }
+        document.removeEventListener('visibilitychange', visPass);
+        sticky.stop();
+      }
+      /* before any text: the working chrome inside the bubble; once text
+         flows, the reveal owns the bubble and the status rides a
+         reconnect-style row under it, both counting the question's clock */
+      function flowRow(statusText) {
+        if (working) { working.stop(); working = null; }
+        if (recon) {
+          var st = recon.querySelector('.mc-status');
+          if (st) st.textContent = statusText;
+          return;
+        }
+        recon = el('div', 'merecat-working');
+        recon.appendChild(el('span', 'mc-cat-work', '🐈'));
+        recon.appendChild(el('span', 'mc-spin'));
+        recon.appendChild(el('span', 'mc-status', statusText));
+        var secs = el('span', 'mc-secs', '');
+        recon.appendChild(secs);
+        reconTick = setInterval(function () {
+          secs.textContent = Math.round((Date.now() - startMs) / 1000) + 's';
+        }, 500);
+        cat.msg.appendChild(recon);
+      }
+      function tick() {
+        var backlog = acc.length - shown;
+        if (backlog > 0) {
+          shown = Math.min(acc.length, shown + Math.max(2, Math.ceil(backlog / 15)));
+          cat.body.textContent = acc.slice(0, shown);
+          sticky.bottom();
+        }
+      }
+      function adopt(text) {
+        if (text.length <= acc.length) return;
+        acc = text;
+        flowRow('the librarian is still writing…');
+        if (!flowTimer) flowTimer = setInterval(tick, 40);
+      }
+      function finishRow(m) {
+        var srcs = [];
+        try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
+        var rr = citeRenumber(m.body, srcs);
+        settle();
+        cat.body.textContent = '';
+        fillBody(cat.body, rr.text, true);
+        srcFooter(cat.body, rr.sources);
+        if (m.id) attachForward(cat.msg, m.id);
+        sticky.bottom();
+      }
+      function giveUp(note) {
+        settle();
+        /* the reveal may be mid-flight: show everything we have, then the note */
+        cat.body.textContent = acc || '';
+        cat.body.appendChild(el('p', 'merecat-note', note));
+      }
+      var born = Date.now();
+      var lastGrowth = Date.now();
+      function poll() {
+        if (finished) return;
+        fetchRetry(MERECAT_API + '/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: chatId }),
+        }, [1000]).then(function (r) { return r.json(); }).then(function (d) {
+          if (finished) return;
+          if (blockedOut(d)) { settle(); return; }
+          if (!d.ok) { schedule(); return; }
+          var rows = d.msgs || [];
+          var fin = null, part = null;
+          for (var i = 0; i < rows.length; i++) {
+            var m = rows[i];
+            if (m.id <= userRow.id) continue;
+            if (m.role === 'user') break;   /* a newer question: the tail is no longer ours */
+            if (m.done === 0) part = m;
+            else { fin = m; break; }
+          }
+          if (fin) { finishRow(fin); return; }
+          if (part && part.body && String(part.body).length > acc.length) {
+            lastGrowth = Date.now();
+            adopt(String(part.body));
+          }
+          schedule();
+        }).catch(function () { schedule(); });
+      }
+      function schedule() {
+        if (finished) return;
+        var age = Date.now() - born;
+        if (age > 35 * 60000) {
+          giveUp('— the answer never finished. Ask again when you like.');
+          return;
+        }
+        if (!acc && Date.now() - lastGrowth > 5 * 60000) {
+          giveUp('— the librarian seems to have stopped before writing anything. Ask again when you like.');
+          return;
+        }
+        var delay = busy ? 8000 : (age > 120000 ? 10000 : 5000);
+        setTimeout(poll, delay);
+      }
+      function visPass() { if (!document.hidden && !finished) poll(); }
+      /* a question this old with nothing finished is a generation that died
+         (both engines finish inside minutes; the queue caps at fifteen) —
+         say so plainly instead of spinning forever */
+      if (Date.now() - startMs > 30 * 60000) {
+        if (partialRow && partialRow.body) cat.body.textContent = String(partialRow.body);
+        acc = (partialRow && partialRow.body) ? String(partialRow.body) : '';
+        giveUp('— this answer never finished. Ask again when you like.');
+        return;
+      }
+      if (partialRow && partialRow.body) adopt(String(partialRow.body));
+      else {
+        working = startWorking(cat.body, startMs);
+        working.setStatus('merecat is still working on this…');
+      }
+      document.addEventListener('visibilitychange', visPass);
+      poll();
     }
     function ask(text) {
       fillBody(bubble('you').body, text);
@@ -5593,45 +5790,9 @@
          and rendering it in place. The reader's manual refresh, automated. */
       var lastByteAt = Date.now(), stalled = false, watchTimer = null;
       var ctl = window.AbortController ? new AbortController() : null;
-      /* Follow-along: stick to the PAGE bottom while the answer prints, if
-         the reader was there when it began or comes back mid-print; any
-         deliberate upward scroll releases the grip until they return. The
-         old per-tick sample scrolled the BUBBLE's end into view — but the
-         composer and footer sit below the bubble, so from the true bottom
-         that call yanked the view UP off the floor and the very next sample
-         read "not at bottom" and gave up: following was impossible by
-         construction. The flag is sticky (page growth fires no scroll
-         events, so only the reader's own movement changes it): reaching
-         the bottom arms it, wheel-up or a downward finger-drag disarms at
-         once, and a position drop past the near-bottom band disarms too
-         (keys and scrollbar); the iOS rubber-band settle stays armed since
-         it never leaves that band. */
-      var follow = nearPageBottom();
-      var followY = window.scrollY;
-      var touchY = 0;
-      function followScroll() {
-        var y = window.scrollY;
-        if (y > followY + 2 && nearPageBottom()) follow = true;
-        else if (y < followY - 2 && !nearPageBottom()) follow = false;
-        followY = y;
-      }
-      function followWheel(e) { if (e.deltaY < 0) follow = false; }
-      function followTouchStart(e) {
-        if (e.touches && e.touches.length) touchY = e.touches[0].clientY;
-      }
-      function followTouchMove(e) {
-        if (!(e.touches && e.touches.length)) return;
-        var y = e.touches[0].clientY;
-        if (y > touchY + 8) follow = false;   /* finger down = view up */
-        touchY = y;
-      }
-      function followBottom() {
-        if (follow) window.scrollTo(0, document.documentElement.scrollHeight);
-      }
-      window.addEventListener('scroll', followScroll, { passive: true });
-      window.addEventListener('wheel', followWheel, { passive: true });
-      window.addEventListener('touchstart', followTouchStart, { passive: true });
-      window.addEventListener('touchmove', followTouchMove, { passive: true });
+      /* the sticky follow-along grip (stickyFollow above, shared with resume) */
+      var sticky = stickyFollow();
+      var followBottom = sticky.bottom;
       /* THE RECONCILER. The standing guarantee: from the moment a question is
          sent until its answer is PAINTED, the page keeps comparing itself to
          the server's stored truth and heals any gap — a zombie stream, a reap
@@ -5930,10 +6091,7 @@
         if (watchTimer) { clearInterval(watchTimer); watchTimer = null; }
         if (reconTimer) { clearInterval(reconTimer); reconTimer = null; }
         if (visHandler) { document.removeEventListener('visibilitychange', visHandler); visHandler = null; }
-        window.removeEventListener('scroll', followScroll);
-        window.removeEventListener('wheel', followWheel);
-        window.removeEventListener('touchstart', followTouchStart);
-        window.removeEventListener('touchmove', followTouchMove);
+        sticky.stop();
         clearReconnect();
         busy = false;
         /* The answer is fully rendered. After a short beat so it settles, send
@@ -5976,7 +6134,27 @@
           return;
         }
         setCrumb((d.chat && d.chat.title) || ('Conversation ' + chatId));
-        (d.msgs || []).forEach(function (m) {
+        var rows = d.msgs || [];
+        /* The tail decides whether this thread is at rest or ALIVE: find the
+           last question, then whether anything after it finished (done=1) or
+           is still growing (done=0, the backends' partial flushes). A
+           growing row is never replayed as a finished bubble — it seeds the
+           resume, which paints it through the paced reveal instead. */
+        var lastUser = null;
+        for (var ri = rows.length - 1; ri >= 0; ri--) {
+          if (rows[ri].role === 'user') { lastUser = rows[ri]; break; }
+        }
+        var tailDone = false, tailPartial = null;
+        if (lastUser) {
+          for (var rj = 0; rj < rows.length; rj++) {
+            var rr0 = rows[rj];
+            if (rr0.id <= lastUser.id || rr0.role !== 'assistant') continue;
+            if (rr0.done === 0) tailPartial = rr0;
+            else { tailDone = true; break; }
+          }
+        }
+        rows.forEach(function (m) {
+          if (m.role !== 'user' && m.done === 0) return;   /* the resume's to paint */
           var b = bubble(m.role === 'user' ? 'you' : 'cat');
           if (m.role === 'user') {
             fillBody(b.body, m.body);
@@ -5989,6 +6167,7 @@
             if (m.id) attachForward(b.msg, m.id);
           }
         });
+        if (lastUser && !tailDone) resumeAsk(lastUser, tailPartial);
         q.focus();
       }).catch(function () {
         loadNote.textContent = 'Could not reopen the conversation. Reload to retry.';
