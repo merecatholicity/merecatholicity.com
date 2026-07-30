@@ -13,13 +13,13 @@ build: pdf html logos publish check
 # identifier once shipped in the worker and silenced @merecat mentions for
 # days. eslint no-undef catches that class; deno runs it with no npm setup.
 jscheck:
-	deno run -A npm:eslint comments-worker/src/index.js comments.js nav.js deeplink.js flash.js contact.js bible-reader.js away.js index.js sw.js 'app/**/*.js'
+	deno run -A npm:eslint comments-worker/src/index.js docs/comments.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js 'app/**/*.js'
 
 # The app shell bundle: Lit (vendored under vendor/, no npm anywhere) plus
 # the app/ modules, esbuild pinned for byte-stable output, committed like
 # every built artifact. Pages carrying it load app.js?v=N (see nav.js).
 bundle: jscheck
-	deno run -A npm:esbuild@0.24.2 app/shell.js --bundle --minify --format=iife --outfile=app.js --log-level=warning
+	deno run -A npm:esbuild@0.24.2 app/shell.js --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning
 
 # The only sanctioned way to deploy the comments worker: the guard runs first.
 worker-deploy: jscheck
@@ -39,7 +39,7 @@ pdf:
 memorandum:
 	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error bishop-presbyter.tex >/dev/null
 	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error bishop-presbyter.tex >/dev/null
-	cp bishop-presbyter.pdf The_Bishop_and_the_Presbyter.pdf
+	cp bishop-presbyter.pdf docs/The_Bishop_and_the_Presbyter.pdf
 	@echo "built The_Bishop_and_the_Presbyter.pdf ($$(pdfinfo bishop-presbyter.pdf | awk '/^Pages/{print $$2}') pages)"
 
 # HTML edition from the same .tex, with pandoc-friendly preprocessing:
@@ -56,14 +56,14 @@ html:
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	    --metadata title="Mere Catholicity" \
 	    --css=style.css -H social.html -B nav.html -A book-tail.html \
-	    -o book.html
+	    -o docs/book.html
 	python toc-prune.py
 	rm memorandum-body-html.tex
 	sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' bishop-presbyter.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="The bishop and the presbyter, a question recorded" \
 	    --css=style.css -B nav.html -A footer.html \
-	    -o bishop-presbyter.html
+	    -o docs/bishop-presbyter.html
 	$(MAKE) -C resources html
 	@echo "built book.html"
 	$(MAKE) check
@@ -81,11 +81,11 @@ logos:
 	    -e 's/{memorandum-body.tex}/{memorandum-body-html.tex}/' \
 	    -e 's/\\begin{center}{\\large\\bfseries\\color{heading}The confession}\\end{center}/\\section*{The confession}/' \
 	    confession.tex | \
-	pandoc -f latex -t docx \
+	SOURCE_DATE_EPOCH=1784160000 pandoc -f latex -t docx \
 	    --metadata title="Mere Catholicity" \
-	    -o Mere_Catholicity_Logos.docx
+	    -o docs/Mere_Catholicity_Logos.docx
 	rm memorandum-body-html.tex
-	@echo "built Mere_Catholicity_Logos.docx"
+	@echo "built docs/Mere_Catholicity_Logos.docx"
 
 # KDP paperback interior: 6x9 trim, mirrored margins with gutter, black ink,
 # plain links. Same confession.tex, switched by the \PAPERBACK flag. Separate
@@ -96,7 +96,7 @@ publish:
 	    -jobname=confession-paperback "\def\PAPERBACK{1}\input{confession.tex}" >/dev/null
 	SOURCE_DATE_EPOCH=1784160000 pdflatex -interaction=nonstopmode -halt-on-error \
 	    -jobname=confession-paperback "\def\PAPERBACK{1}\input{confession.tex}" >/dev/null
-	cp confession-paperback.pdf Mere_Catholicity_Paperback.pdf
+	cp confession-paperback.pdf docs/Mere_Catholicity_Paperback.pdf
 	@echo "built Mere_Catholicity_Paperback.pdf ($$(pdfinfo confession-paperback.pdf | awk '/^Pages/{print $$2}') pages)"
 
 # The stylesheet is modular source under styles/, concatenated in filename
@@ -105,8 +105,8 @@ publish:
 # unversioned (cache-TTL), so a change propagates on Cloudflare's TTL.
 .PHONY: css
 css:
-	cat styles/*.css > style.css
-	@echo "built style.css ($$(wc -l < style.css) lines from styles/)"
+	cat styles/*.css > docs/style.css
+	@echo "built style.css ($$(wc -l < docs/style.css) lines from styles/)"
 
 # Build the decoupled content pages (content/*.md|*.html) into committed
 # static HTML through the one shared skeleton. Runs after nav.py so it reads
@@ -127,9 +127,9 @@ menu:
 
 .PHONY: chart-pdfs
 chart-pdfs:
-	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Charting_Historic_Communions.pdf "file://$$(pwd)/charting-communions.html"
-	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Charting_Free_Churches.pdf "file://$$(pwd)/free-churches.html"
-	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=Fifty_Objections.pdf "file://$$(pwd)/objections.html"
+	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Charting_Historic_Communions.pdf "file://$$(pwd)/docs/charting-communions.html"
+	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Charting_Free_Churches.pdf "file://$$(pwd)/docs/free-churches.html"
+	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Fifty_Objections.pdf "file://$$(pwd)/docs/objections.html"
 
 .PHONY: serve
 # Local preview only. --bind 127.0.0.1 is LOAD-BEARING SECURITY: without it
@@ -138,7 +138,7 @@ chart-pdfs:
 # and the private shelf — to anyone on the LAN or tailnet. A stray one ran
 # open for two days once (2026-07-29). Never remove the bind.
 serve:
-	python -m http.server 8000 --bind 127.0.0.1
+	python -m http.server 8000 --bind 127.0.0.1 --directory docs
 
 # Export the live comments database to a local .sql file. The file stays out
 # of git: commenters' text belongs on the site, not in the repo history.

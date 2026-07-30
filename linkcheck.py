@@ -19,7 +19,7 @@ import re
 import sys
 import urllib.parse
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'docs'))
 
 refs = collections.defaultdict(set)   # target file -> referring pages
 frags = collections.defaultdict(set)  # (target file, fragment) -> referrers

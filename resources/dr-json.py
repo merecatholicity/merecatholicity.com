@@ -14,7 +14,7 @@ import re
 from html.parser import HTMLParser
 
 SRC = "douay-rheims-src.html"
-OUT = "../dr.json"
+OUT = "../docs/dr.json"
 
 # 73 books in the source's order: (display name, verse-anchor slug).
 BOOKS = [

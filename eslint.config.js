@@ -33,13 +33,13 @@ export default [
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },
   {
-    files: ['comments.js', 'nav.js', 'deeplink.js', 'flash.js', 'contact.js', 'bible-reader.js', 'away.js', 'index.js'],
+    files: ['docs/comments.js', 'docs/nav.js', 'docs/deeplink.js', 'docs/flash.js', 'docs/contact.js', 'docs/bible-reader.js', 'docs/away.js', 'docs/index.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: browserGlobals },
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },
   // The service worker: its own global set.
   {
-    files: ['sw.js'],
+    files: ['docs/sw.js'],
     languageOptions: {
       ecmaVersion: 2023, sourceType: 'script',
       globals: { self: 'readonly', caches: 'readonly', fetch: 'readonly', URL: 'readonly', Promise: 'readonly', console: 'readonly', Response: 'readonly' },

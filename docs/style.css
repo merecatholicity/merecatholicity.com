@@ -1,0 +1,1045 @@
+/* Mere Catholicity — site style in the idiom of the old scholarly readers:
+   white ground, black serif text, deep maroon accents, thin rules. */
+
+:root {
+  color-scheme: light;
+  --ink: #1a1a1a;
+  --maroon: #8b1a1a;
+  --maroon-dark: #6d1414;
+  --rule: #b9a58c;
+  --faint: #757068;
+  /* Themeable surfaces and muted inks. Light values are the site's originals, so
+     light mode is unchanged; the dark theme below overrides them. */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --cream: #f9f3e6;
+  --cream-2: #faf6ee;
+  --brown: #8a6d3b;
+  --muted: #444444;
+  --muted-b: #555555;
+  --muted-c: #666666;
+  --muted-d: #777777;
+  --faintest: #999999;
+  --ink-soft: #333333;
+  --grade-y: #2f6b2f;
+  --grade-o: #6d4b8b;
+  --glass: rgba(255, 255, 255, 0.97);
+  --creed-bg: #d1e7dd;
+  --creed-head: #0f5132;
+}
+
+/* Dark theme. Applied when the reader has chosen dark (data-theme on <html>, set
+   by nav.js from a cookie) and, before the script runs or with JS off, when the
+   OS prefers dark and no light choice is stored. A warm near-black to keep the
+   parchment character rather than a cold black. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #17140f;
+  --surface: #211c15;
+  --ink: #e8e2d4;
+  --rule: #4b4234;
+  --faint: #a99b85;
+  --maroon: #e39191;
+  --maroon-dark: #f0a6a6;
+  --cream: #2b2318;
+  --cream-2: #251f16;
+  --brown: #cba06a;
+  --muted: #cabfad;
+  --muted-b: #beb3a0;
+  --muted-c: #ab9e88;
+  --muted-d: #9c8f7b;
+  --faintest: #8a7d69;
+  --ink-soft: #cdbfa8;
+  --grade-y: #77c07b;
+  --grade-o: #b98ed6;
+  --glass: rgba(28, 24, 17, 0.97);
+  --creed-bg: #1d2a20;
+  --creed-head: #a6d3b2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #17140f;
+    --surface: #211c15;
+    --ink: #e8e2d4;
+    --rule: #4b4234;
+    --faint: #a99b85;
+    --maroon: #e39191;
+    --maroon-dark: #f0a6a6;
+    --cream: #2b2318;
+    --cream-2: #251f16;
+    --brown: #cba06a;
+    --muted: #cabfad;
+    --muted-b: #beb3a0;
+    --muted-c: #ab9e88;
+    --muted-d: #9c8f7b;
+    --faintest: #8a7d69;
+    --ink-soft: #cdbfa8;
+    --grade-y: #77c07b;
+    --grade-o: #b98ed6;
+    --glass: rgba(28, 24, 17, 0.97);
+    --creed-bg: #1d2a20;
+    --creed-head: #a6d3b2;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Reserve the scrollbar's width from first paint, so the centered column
+   never shifts when the bar appears mid-load. */
+html { overflow-y: scroll; overflow-x: hidden; }
+
+body {
+  font-family: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
+  color: var(--ink);
+  background: var(--bg);
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+  line-height: 1.55;
+  font-size: 1.05rem;
+}
+/* Desktop container widens on the Bootstrap ladder. */
+@media (min-width: 992px) { body { max-width: 960px; } }
+@media (min-width: 1200px) { body { max-width: 1140px; } }
+@media (min-width: 1400px) { body { max-width: 1320px; } }
+
+/* Site navigation */
+nav.site {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1.5rem;
+}
+nav.site .nav-list { list-style: none; margin: 0; padding: 0; }
+nav.site li { position: relative; }
+nav.site .nav-toggle { display: none; }
+
+nav.site .sub-toggle {
+  font: inherit;
+  letter-spacing: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--maroon);
+  cursor: pointer;
+}
+nav.site .sub-toggle:hover { color: var(--maroon-dark); }
+
+/* Desktop bar. About, Book, Resources sit top level. Book drops a panel
+   below itself, deeper menus cascade down and to the right, and JS clamps
+   any panel that would leave the window. */
+@media (min-width: 601px) {
+  nav.site { position: relative; text-align: center; }
+  /* The item row may grow wider than the text column: it sizes to its
+     content and centers itself over the page, wrapping only when the
+     viewport truly runs out. The nav box and its rule stay put. */
+  nav.site .nav-list {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    column-gap: 1.4rem;
+    width: max-content;
+    max-width: calc(100vw - 2rem);
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  nav.site .nav-list > li { white-space: nowrap; }
+  nav.site .nav-list > li > a, nav.site .sub-toggle {
+    display: block;
+    width: 100%;
+    padding: 0.45em 1.1em;
+    border-radius: 6px;
+    font-size: 1.05rem;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+  }
+  nav.site .nav-list > li > a:hover, nav.site .sub-toggle:hover { background: rgba(139, 26, 26, 0.07); color: var(--maroon-dark); }
+  nav.site .sub-toggle span { display: none; }
+  nav.site .sub-toggle::after { content: " \203A"; }
+}
+nav.site a.here, nav.site .sub-toggle.here { color: var(--faint); text-decoration: none; }
+nav.site .sub { list-style: none; margin: 0; padding: 0; display: none; }
+nav.site .sub-row, nav.site .sub-col { list-style: none; margin: 0; padding: 0; }
+nav.site .sub li { list-style: none; }
+nav.site .sub-back { display: none; }
+
+/* Desktop dropdown, scoped to wide screens so nothing here can leak into
+   the mobile sheet, which lays out the same markup its own way below. */
+@media (min-width: 601px) {
+  nav.site .sub {
+    display: block;
+    position: absolute;
+    top: 1.6rem;
+    left: calc(100% - 1.2rem);
+    transform: translate(-0.4rem, 0);
+    padding: 1.8rem 2.4rem;
+    font-size: 1.05rem;
+    background: var(--glass);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.28), 0 2px 10px rgba(0, 0, 0, 0.12);
+    min-width: 17rem;
+    text-align: center;
+    z-index: 12;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+  }
+  nav.site .sub li { margin: 0.7em 0; }
+  nav.site .sub a, nav.site .sub .soon {
+    display: block;
+    padding: 0.75em 1.4em;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background-color 0.15s ease;
+  }
+  nav.site .sub a:hover { background: rgba(139, 26, 26, 0.07); color: var(--maroon-dark); }
+  /* Column layout inside a panel, driven by col numbers in nav.yml. */
+  nav.site .sub-row { display: flex; align-items: flex-start; gap: 0 1.6rem; margin: 0; padding: 0; }
+  nav.site .sub-col { flex: 1; list-style: none; margin: 0; padding: 0; min-width: 9rem; }
+  nav.site .nav-list > li > .sub { top: calc(100% + 0.55rem); left: 0; transform: translate(0, -0.4rem); }
+  /* Invisible bridge over the visual gap between a bar item and its panel,
+     so mousing slowly across the gap never leaves the hover subtree. */
+  nav.site .nav-list > li > .sub::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -0.7rem;
+    height: 0.7rem;
+  }
+  nav.site .has-sub.open > .sub { opacity: 1; visibility: visible; transform: none; }
+}
+@media (max-width: 600px) {
+  /* The bar disappears. A fixed thumb-reach hamburger opens a bottom sheet
+     with the whole menu flattened, over a dimmed scrim. */
+  nav.site { border-bottom: none; padding-bottom: 0; margin-bottom: 0.4rem; }
+  nav.site .nav-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 1rem;
+    top: calc(0.8rem + env(safe-area-inset-top, 0px));
+    width: 3.4rem;
+    height: 3.4rem;
+    border: none;
+    border-radius: 50%;
+    background: var(--maroon);
+    color: #fff;
+    font-size: 1.45rem;
+    line-height: 1;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    z-index: 30;
+  }
+  nav.site .nav-toggle:active { background: var(--maroon-dark); }
+  nav.site .nav-toggle .nav-label { display: none; }
+  nav.site .nav-list { display: none; }
+  nav.site.open {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 25;
+  }
+  nav.site.open .nav-list {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0.9rem;
+    right: 0.9rem;
+    top: calc(5rem + env(safe-area-inset-top, 0px));
+    margin: 0;
+    padding: 0.7rem 0.6rem;
+    background: var(--glass);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 12px;
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.3);
+    text-align: center;
+  }
+  nav.site.open .nav-list > li { margin: 0; }
+  nav.site.open .nav-list a, nav.site.open .nav-list .soon {
+    display: block;
+    padding: 0.8em 1em;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    text-decoration: none;
+  }
+  nav.site.open .nav-list a:active { background: rgba(139, 26, 26, 0.08); }
+  /* Drill-down sheet. Level one is About, Book, Resources. Tapping Book
+     slides in level two, the book items and a back row, nothing else. */
+  nav.site.open .sub-toggle {
+    display: block;
+    width: 100%;
+    font: inherit;
+    letter-spacing: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--maroon);
+    padding: 0.8em 1em;
+    border-radius: 8px;
+    font-size: 1.05rem;
+  }
+  nav.site.open .sub-toggle:active { background: rgba(139, 26, 26, 0.08); }
+  nav.site.open .sub-toggle span { display: none; }
+  nav.site.open .sub-toggle::after { content: " \203A"; }
+  nav.site.open ul:has(> li.has-sub.open) > li { display: none; }
+  nav.site.open ul:has(> li.has-sub.open) > li.has-sub.open { display: block; }
+  nav.site.open .has-sub.open > .sub-toggle { display: none; }
+  nav.site.open .has-sub.open > .sub { display: block; animation: drillin 0.22s ease; }
+  nav.site.open .sub-back { display: block; }
+  /* One step back at a time: while a deeper level is open, the
+     ancestor levels' back rows stay hidden. */
+  nav.site.open .sub:has(.has-sub.open) > .sub-back { display: none; }
+  nav.site.open .sub-back .back-btn {
+    display: block;
+    width: 100%;
+    font: inherit;
+    letter-spacing: inherit;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--faint);
+    text-align: left;
+    padding: 0.55em 1em 0.75em;
+    font-size: 0.95rem;
+  }
+  nav.site.open .sub-back .back-btn:active { color: var(--maroon-dark); }
+  /* Columns are a desktop notion. The sheet flattens the wrappers away
+     and keeps the plain nav.yml order. */
+  nav.site .sub-row, nav.site .sub-col { display: contents; }
+}
+@keyframes drillin {
+  from { opacity: 0; transform: translateX(1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+/* Placeholder for a link that is not live yet, in the nav or the doors list */
+.soon { color: var(--faint); }
+
+/* Links: maroon, underlined, in the old manner */
+a { color: var(--maroon); text-decoration: underline; text-underline-offset: 2px; }
+a:hover { color: var(--maroon-dark); }
+
+/* Bare-URL links (pandoc's a.uri): let the URL break mid-string rather than
+   force the page wider than a phone screen. */
+a.uri { overflow-wrap: anywhere; }
+
+/* Headings */
+h1, h2, h3, h4 {
+  font-weight: bold;
+  color: var(--maroon);
+  line-height: 1.25;
+  margin: 1.6em 0 0.5em;
+}
+h1 { font-size: 1.65rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.25em; }
+h2 { font-size: 1.3rem; }
+h3 { font-size: 1.15rem; color: var(--maroon-dark); }
+h4 { font-size: 1.02rem; color: var(--maroon-dark); margin: 1.2em 0 0.2em; }
+
+header#title-block-header h1, .home-title {
+  text-align: center;
+  border-bottom: none;
+  margin-top: 0.5em;
+}
+
+/* Epigraph / canon line */
+.canon {
+  text-align: center;
+  font-style: italic;
+  color: var(--faint);
+  margin: 0.25em 0 1.2em;
+}
+
+hr { border: none; border-top: 1px solid var(--rule); margin: 2em auto; width: 60%; clear: both; }
+
+/* Body text */
+p { margin: 0.7em 0; }
+blockquote {
+  margin: 1.2em 1.5em;
+  padding-left: 1em;
+  border-left: 2px solid var(--rule);
+  font-style: italic;
+}
+
+/* Table of contents (pandoc) */
+nav#TOC {
+  border: 1px solid var(--rule);
+  padding: 0.8rem 1.2rem;
+  margin: 1.5rem 0;
+  font-size: 0.95rem;
+}
+nav#TOC ul { list-style: none; padding-left: 0.8rem; margin: 0.2rem 0; }
+nav#TOC > ul { padding-left: 0; }
+nav#TOC a { text-decoration: none; }
+nav#TOC a:hover { text-decoration: underline; }
+
+/* The acts table and any others */
+table {
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.92rem;
+  display: block;
+  overflow-x: auto;
+}
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.35em 0.9em 0.35em 0;
+  border-bottom: 1px solid #e4dccd;
+}
+th { color: var(--maroon-dark); }
+
+/* Images (cover) */
+img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
+
+/* Amazon editions strip: cover beside the caption, stacked on phones */
+.amazon {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  margin: 1.4em 0;
+}
+.amazon img { width: 62%; margin: 0; cursor: zoom-in; }
+
+/* Click-to-zoom overlay for the cover. Any click closes it. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  z-index: 10;
+}
+.lightbox img { max-width: 96vw; max-height: 96vh; margin: 0; }
+.amazon .doors { flex: 1; margin: 0; }
+.amazon .doors .btn { min-width: 0; width: 100%; font-size: 1rem; }
+@media (max-width: 600px) {
+  .amazon { flex-direction: column; gap: 0.8rem; }
+  .amazon img { width: 100%; }
+}
+
+/* Home page link list */
+ul.doors { list-style: none; padding: 0; text-align: center; font-size: 1.15rem; clear: both; }
+ul.doors li { margin: 0.7em 0; }
+
+/* Edition buttons in the Bootstrap idiom, no library. Green means free and
+   available here, yellow means coming soon on Amazon. */
+.btn {
+  display: inline-block;
+  min-width: 16rem;
+  padding: 0.45rem 1.2rem;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  text-decoration: none;
+  line-height: 1.4;
+  transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+.btn-read { background: #198754; border-color: #198754; color: #fff; }
+.btn-read:hover { background: #146c43; border-color: #146c43; color: #fff; }
+.btn-pdf { background: transparent; border-color: #198754; color: #198754; }
+.btn-pdf:hover { background: #198754; color: #fff; }
+.btn-amazon { background: #ffc107; border-color: #ffc107; color: #212529; }
+span.btn-amazon { opacity: 0.68; cursor: default; }
+a.btn-amazon:hover { background: #e0a800; border-color: #e0a800; color: #212529; }
+
+/* Contact form */
+form.contact { max-width: 34rem; margin: 1.5rem auto; }
+form.contact label { display: block; margin: 0.9em 0; }
+form.contact input[type="text"], form.contact input[type="email"], form.contact textarea {
+  width: 100%;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+form.contact textarea { resize: vertical; }
+form.contact input:focus, form.contact textarea:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+form.contact .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+form.contact .cf-turnstile { margin: 1em 0; }
+.btn-send { background: var(--maroon); border-color: var(--maroon); color: #fff; font: inherit; letter-spacing: inherit; cursor: pointer; }
+.btn-send:hover { background: var(--maroon-dark); border-color: var(--maroon-dark); color: #fff; }
+.btn-send:disabled { opacity: 0.6; cursor: default; }
+
+footer, .colophon {
+  margin-top: 2.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.85rem;
+  color: var(--faint);
+  text-align: center;
+}
+
+/* Small screens */
+@media (max-width: 600px) {
+  body { font-size: 1rem; padding: 0.9rem 0.8rem 2rem; }
+  h1 { font-size: 1.4rem; }
+  nav#TOC { font-size: 0.9rem; }
+}
+
+/* Current page in the nav: present but not a link */
+nav.site .here { color: var(--faint); }
+
+/* The confession, as the PDF's parchment box. .creed on the home page,
+   .creedbox in the pandoc book edition. */
+.creed, .creedbox {
+  background: var(--creed-bg);
+  border: 1px dashed var(--ink-soft);
+  border-radius: 3px;
+  padding: 1rem 1.4rem;
+  margin: 1rem auto 1.5rem;
+  max-width: 36rem;
+  font-family: 'Hoefler Text', Baskerville, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.creed-head {
+  text-align: center;
+  font-weight: bold;
+  color: var(--creed-head);
+  margin: 0 0 0.6em;
+}
+.creed-note {
+  font-style: normal;
+  font-size: 0.8rem;
+  color: var(--faint);
+  margin-top: 1em;
+}
+/* The Nicene Creed on the credo page: plain ground, dashed frame */
+.creed.nicene { background: var(--surface); }
+
+/* Topic list on the credo page */
+.credo-toc { list-style: none; padding: 0; margin: 1.2rem auto 1.5rem; max-width: 36rem; }
+.credo-toc li { margin: 0.25em 0; }
+
+/* Introduction (review) on the home page */
+.intro h2 { text-align: center; margin-top: 1.2em; }
+.intro h3 { text-align: center; }
+.intro-attrib {
+  text-align: right;
+  font-style: italic;
+  color: var(--faint);
+  margin-top: 0.9em;
+}
+
+/* Pull-quote from the afterword, floated beside the introduction */
+blockquote.pullquote {
+  float: right;
+  width: 46%;
+  margin: 0.4rem 0 1rem 1.6rem;
+  padding: 1rem 1.2rem;
+  border: 1px dashed var(--ink-soft);
+  border-left: 1px dashed var(--ink-soft);
+  font-family: 'Hoefler Text', Baskerville, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+blockquote.pullquote .intro-attrib { font-size: 0.85rem; }
+@media (max-width: 700px) {
+  blockquote.pullquote { float: none; width: auto; margin: 1rem 0; }
+}
+
+/* Reception matrix: the argument in one table. Green = confessed and
+   binding there, maroon = not confessed there. First-millennium rows
+   run green across every column; post-schism rows go green only in the
+   communion that defined them. */
+.table-wrap { margin: 1.5em 0; }
+/* Only narrow screens need the scroll container, and only sideways.
+   The rotated marginalia's transform box would otherwise conjure a
+   spurious vertical scrollbar on desktop. */
+@media (max-width: 991px) {
+  .table-wrap { overflow-x: auto; overflow-y: hidden; padding-bottom: 0.25rem; }
+}
+table.reception {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92rem;
+  /* Undo the generic block-table scroller above. The wrapper handles
+     narrow screens, and a scroll context here would grow a vertical bar
+     from the rotated marginalia's transform box. */
+  display: table;
+  overflow: visible;
+}
+.reception th, .reception td { border: 1px solid var(--rule); padding: 0.35em 0.55em; }
+.reception thead th { text-align: center; font-weight: bold; color: var(--maroon-dark); }
+.reception thead th:first-child { text-align: left; }
+.reception tbody th { text-align: left; font-weight: normal; }
+.reception tr.group th {
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  color: var(--maroon-dark);
+  background: rgba(139, 26, 26, 0.05);
+}
+.reception td { text-align: center; font-weight: bold; font-family: Georgia, serif; font-size: 1.2rem; line-height: 1.1; }
+.reception td.y { color: var(--grade-y); }
+.reception td.n { color: var(--maroon); font-weight: normal; }
+.reception td.q { color: var(--muted-c); }
+.table-note {
+  font-size: 0.95rem;
+  color: var(--faint);
+  line-height: 1.5;
+  margin: 0.7em 0;
+  padding-left: 0.9em;
+  border-left: 2px solid var(--rule);
+}
+/* Sideways marginalia beside each block of the reception table,
+   reading upward like spine text, in a handwritten hand. */
+.reception th.side-head { border: none; background: none; }
+.reception td.side {
+  border: none;
+  background: none;
+  padding: 0;
+  position: relative;
+  vertical-align: middle;
+  font-weight: normal;
+  width: 4.5em;
+  min-width: 4.5em;
+}
+.reception td.side .side-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-70deg);
+  white-space: nowrap;
+  text-align: center;
+  font-family: 'Snell Roundhand', 'Apple Chancery', 'Segoe Script',
+    'Lucida Handwriting', 'Comic Sans MS', cursive;
+  font-style: italic;
+  font-size: 1.25rem;
+  line-height: 1.3;
+  color: var(--maroon);
+  letter-spacing: 0.06em;
+}
+.legend { font-size: 0.98rem; }
+.legend .y { color: var(--grade-y); font-weight: bold; }
+.legend .q { color: var(--muted-c); font-weight: bold; }
+.legend .n { color: var(--maroon); }
+.legend-grid { display: flex; gap: 1.8rem; margin: 1.5em 0; align-items: flex-start; }
+.legend-grid > .legend { flex: 1 1 0; margin: 0; }
+@media (max-width: 700px) { .legend-grid { flex-direction: column; gap: 1em; } }
+/* Comparison variant: text cells, not marks. */
+.reception.compare td { font-size: 0.98rem; font-weight: normal; text-align: left; font-family: inherit; }
+/* The circle: nothing bound at all. A quiet plum, distinct from every judgment color. */
+.reception td.o { color: var(--grade-o); font-weight: normal; }
+.legend .o { color: var(--grade-o); font-weight: bold; }
+
+.objections td { vertical-align: top; font-size: 1.05rem; line-height: 1.55; }
+.objections td:first-child { width: 34%; }
+
+@media print {
+  nav.site, .nav-toggle { display: none; }
+  h1, h2, h3, h4, p.part { break-after: avoid; break-inside: avoid; }
+  p { orphans: 3; widows: 3; }
+  body { max-width: none; padding: 0 0.5in; }
+  a { color: inherit; text-decoration: none; }
+  .table-wrap { overflow: visible; }
+  .reception { font-size: 0.85em; }
+  tr { break-inside: avoid; }
+  .legend-grid { display: flex; flex-direction: row; gap: 1rem; }
+  .legend-grid > .legend { flex: 1 1 0; }
+}
+
+/* Comments. The section is empty markup until comments.js builds it, and it
+   never belongs in the printed editions (make chart-pdfs prints three of the
+   pages that carry it). */
+section.comments { max-width: 34rem; margin: 3rem auto 1.5rem; }
+.comment { border-top: 1px solid var(--rule); padding: 0.9em 0 0.4em; }
+.comment-head { font-size: 0.92rem; }
+.comment-author { font-weight: bold; color: var(--maroon); }
+.comment-date { color: var(--muted-c); margin-left: 0.7em; font-size: 0.9em; }
+a.comment-delete { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; }
+.comment-body { white-space: pre-wrap; overflow-wrap: break-word; margin-top: 0.35em; }
+/* A quoted excerpt inside a comment body: runs of ">"-prefixed lines that
+   fillBody turns into a blockquote. Overrides the article blockquote look. */
+blockquote.comment-quote {
+  margin: 0.5em 0;
+  padding: 0.15em 0.8em;
+  border-left: 3px solid var(--maroon);
+  background: rgba(139, 26, 26, 0.05);
+  color: var(--muted-b);
+  font-style: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+a.comment-quote-link { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
+a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
+/* Inline and list markdown fillBody renders inside a body or signature. */
+.comment-body strong, .comment-sig strong { font-weight: 700; }
+.comment-body em, .comment-sig em { font-style: italic; }
+.comment-body ul.comment-list, .comment-sig ul.comment-list { margin: 0.4em 0; padding-left: 1.5em; }
+.comment-body ul.comment-list li, .comment-sig ul.comment-list li { margin: 0.15em 0; white-space: normal; }
+.comment-pending { opacity: 0.75; }
+.comment-note { font-style: italic; color: var(--muted-c); font-size: 0.9rem; }
+.comments-status, .form-status { color: var(--muted-c); font-size: 0.95rem; min-height: 1.3em; }
+.comment-form { margin-top: 1.6rem; }
+.comment-form .comment-text,
+.comment-editor .comment-text {
+  width: 100%;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  resize: vertical;
+}
+.comment-form .comment-text:focus,
+.comment-editor .comment-text:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+.comment-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.comment-form .ts-slot { margin: 0.6em 0; }
+/* Markdown compose: a button row above the plain-text box, a legend below. */
+.md-toolbar { display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0 0 0.45em; }
+.md-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0.35em 0.6em;
+  color: var(--maroon);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.md-btn:hover { border-color: var(--maroon); background: rgba(139, 26, 26, 0.06); }
+.md-btn.md-b { font-weight: 700; }
+.md-btn.md-i { font-style: italic; }
+.md-legend { margin: 0.35em 0 0; color: var(--muted-c); font-size: 0.95rem; overflow-wrap: anywhere; }
+/* Off-site link warning page (away.html). */
+.away { max-width: 34rem; margin: 2.5rem auto; text-align: center; }
+.away-head { font-size: 1.4rem; margin: 0 0 0.6em; border-bottom: none; }
+.away-note { color: var(--muted); margin: 0 0 0.4em; }
+.away-url {
+  word-break: break-all;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95rem;
+  color: var(--maroon);
+  background: rgba(139, 26, 26, 0.05);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0.6em 0.8em;
+  margin: 0 0 1.2em;
+}
+.away-actions { display: flex; gap: 0.8em; flex-wrap: wrap; justify-content: center; }
+.comment-buttons { display: flex; gap: 0.6em; flex-wrap: wrap; margin: 0.8em 0 0.3em; }
+section.comments .btn { min-width: 0; }
+.btn-anon { background: transparent; border-color: var(--maroon); color: var(--maroon); font: inherit; cursor: pointer; }
+.btn-anon:hover { background: var(--maroon); color: #fff; }
+.btn-anon:disabled { opacity: 0.6; cursor: default; }
+.identity-line { font-size: 0.95rem; color: var(--muted); }
+a.identity-action { color: var(--maroon); }
+.key-box { border: 1px solid var(--rule); border-radius: 6px; padding: 0.8em 0.9em; margin: 0.8em 0; font-size: 0.95rem; }
+.key-note { margin-top: 0; color: var(--muted); font-size: 0.9rem; }
+.key-row { display: flex; gap: 0.5em; margin-bottom: 0.5em; }
+.key-input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.85rem; padding: 0.4em 0.6em; border: 1px solid var(--rule); border-radius: 6px; }
+@media print {
+  section.comments { display: none; }
+}
+
+/* Comment permalinks. The date is the shareable anchor, and the targeted
+   comment is tinted so an arriving reader sees which one was meant. */
+a.comment-date { text-decoration: none; }
+a.comment-date:hover { text-decoration: underline; }
+.comment:target { background: var(--cream); outline: 2px solid var(--rule); outline-offset: 4px; }
+.comment-meta { font-size: 0.78rem; color: var(--faintest); overflow-wrap: anywhere; margin-top: 0.3em; }
+.comment-meta summary { cursor: pointer; color: #b09a7a; }
+.profile .comment-meta { margin-top: 1.2rem; border-top: 1px solid var(--rule); padding-top: 0.6rem; }
+.comments-title .comments-rss {
+  font-size: 0.65em;
+  font-weight: normal;
+  margin-left: 0.9em;
+  vertical-align: middle;
+  text-decoration: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.1em 0.5em;
+  color: var(--brown);
+}
+.comments-title .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
+.agree-row { display: block; font-size: 0.95rem; color: var(--muted); margin-bottom: 0.6em; cursor: pointer; }
+.faith-radios { margin: 0.2rem 0 0.7rem; }
+.faith-legend { font-size: 0.95rem; color: var(--muted); margin-bottom: 0.25em; }
+.faith-option { display: block; font-size: 0.95rem; color: var(--muted); margin: 0.15em 0; cursor: pointer; }
+a.comment-edit { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; }
+.comment-edited { color: var(--faintest); margin-left: 0.6em; font-size: 0.8em; font-style: italic; }
+.comment-editor { margin-top: 0.4em; }
+
+/* The Catholicity Board */
+section.comments.board { margin-top: 1rem; }
+.board-intro { color: var(--muted-c); margin: 0.4em 0; }
+.board-crumb { color: var(--muted-c); font-size: 0.95rem; }
+.board-crumb a { color: var(--maroon); }
+.board-cats, .board-topics { border: 1px solid var(--rule); border-radius: 6px; margin: 1rem 0; }
+.board-cat, .board-topic { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.65em 0.9em; border-top: 1px solid var(--rule); }
+.board-cat:first-child, .board-topic:first-child { border-top: 0; }
+/* The back room's tile: deliberately off-shade from its siblings, in both
+   themes (it was once inline-styled light parchment, which glared in dark). */
+.board-cat-admin { background: #f4efe2; border: 1px solid #cdbd93; border-radius: 4px; }
+:root[data-theme="dark"] .board-cat-admin { background: #2b2519; border-color: #6a5c40; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .board-cat-admin { background: #2b2519; border-color: #6a5c40; }
+}
+a.board-cat-name { font-weight: bold; color: var(--maroon); text-decoration: none; }
+a.board-cat-name:hover { text-decoration: underline; }
+.board-cat-desc { color: var(--muted-b); font-size: 0.92rem; }
+.board-stats { color: var(--muted-d); font-size: 0.85rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
+a.board-topic-title { color: var(--ink); text-decoration: none; font-weight: bold; overflow-wrap: anywhere; }
+a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
+.board-topics .comments-status { padding: 0.65em 0.9em; margin: 0; }
+.board-form-head { margin-bottom: 0.3em; }
+.board-topic-head { overflow-wrap: anywhere; display: flex; align-items: baseline; flex-wrap: wrap; }
+.board-topic-head .comments-rss {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: normal;
+  text-decoration: none;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.15em 0.55em;
+  color: var(--brown);
+}
+.board-topic-head .comments-rss:hover { border-color: var(--maroon); color: var(--maroon); }
+.board-title {
+  width: 100%;
+  padding: 0.5em 0.7em;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  margin-bottom: 0.6em;
+}
+.board-title:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+/* The board tracks the site's widening desktop container instead of sitting in a
+   cramped 40rem column: it fills the body up to the 992px step, then holds a
+   comfortable reading measure so long discussion posts have room without the line
+   length running away on the widest monitors. */
+section.board { max-width: 52rem; }
+@media (min-width: 992px)  { section.board { max-width: 60rem; } }
+@media (min-width: 1200px) { section.board { max-width: 66rem; } }
+@media (max-width: 600px) {
+  .board-cat, .board-topic { flex-direction: column; gap: 0.15rem; }
+  .board-stats { text-align: left; white-space: normal; }
+}
+.board-latest { white-space: normal; margin-top: 0.15em; max-width: 18rem; }
+.board-latest a { color: var(--maroon); text-decoration: none; }
+.board-latest a:hover { text-decoration: underline; }
+.board-stats a { color: var(--maroon); text-decoration: none; }
+.board-stats a:hover { text-decoration: underline; }
+section.board .comment-identity { margin-bottom: 0.4rem; }
+.board-audit-link { margin: 0.6rem 0 0; font-size: 0.9rem; text-align: right; }
+.audit-where { overflow-wrap: anywhere; font-size: 0.95rem; }
+.comment-admin { color: var(--faintest); font-style: italic; font-size: 0.8em; margin-left: 0.45em; }
+a.trust-toggle { color: var(--brown); font-size: 0.85em; text-decoration: none; display: inline-block; margin-top: 0.2em; }
+a.trust-toggle:hover { text-decoration: underline; }
+.board-locked { color: var(--faintest); font-style: italic; font-size: 0.8em; margin-left: 0.5em; }
+.board-sticky { color: var(--maroon); font-weight: bold; font-size: 0.8em; margin-left: 0.5em; }
+.board-admin-links { display: block; margin-top: 0.1em; }
+/* On a category row the admin controls drop to a full-width line and hug the
+   bottom-right corner, clear of the title, pager, and author links so a stray
+   tap cannot sticky, lock, or delete. */
+.board-topic { flex-wrap: wrap; }
+.board-admin-corner { flex-basis: 100%; text-align: right; margin-top: 0.35em; }
+@media (max-width: 600px) { .board-admin-corner { flex-basis: auto; } }
+.board-move { font: inherit; font-size: 0.82em; color: var(--brown); background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 0.05em 0.25em; vertical-align: middle; max-width: 11rem; }
+.board-move:hover { border-color: var(--maroon); }
+.board-topic-left { min-width: 0; }
+.board-pages { color: var(--muted-c); }
+.board-pages a { margin-right: 0.4em; }
+.board-pages strong { margin-right: 0.4em; color: var(--ink); }
+.user-list { margin: 0.5rem 0 1rem; }
+a.user-row { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.5em 0.2em; border-bottom: 1px solid var(--rule); text-decoration: none; }
+a.user-row:hover { background: var(--cream); }
+.user-names { min-width: 0; }
+.user-nick { font-weight: bold; color: var(--maroon); overflow-wrap: anywhere; }
+.user-assigned { color: var(--faintest); font-size: 0.85rem; margin-left: 0.5em; }
+.user-go { color: var(--faintest); font-size: 0.85rem; white-space: nowrap; }
+.trust-line { margin-top: 0.25em; }
+
+/* Profiles. Author names link to a profile; a custom nick shows first with the
+   assigned pseudonym muted beneath it, and a signature rides under each post. */
+.comment-author { display: inline-block; vertical-align: top; }
+a.comment-author-link { color: var(--maroon); font-weight: bold; text-decoration: none; }
+a.comment-author-link:hover { text-decoration: underline; }
+a.comment-author-sub { display: block; margin-top: -0.1em; color: var(--faintest); font-weight: normal; font-size: 0.78rem; text-decoration: none; }
+a.comment-author-sub:hover { text-decoration: underline; }
+.comment-faith { display: block; margin-top: 0.05em; color: var(--maroon); font-weight: normal; font-size: 0.72rem; opacity: 0.9; }
+.comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: var(--muted-d); font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
+.comment-avatar-link { display: inline-block; vertical-align: top; margin-right: 0.5em; }
+.comment-avatar { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--rule); display: block; margin: 0; }
+.profile { max-width: 34rem; margin: 1rem 0; }
+.profile-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--cream-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; margin: 0; display: block; }
+.profile-names { min-width: 0; }
+.profile-name { font-weight: bold; color: var(--maroon); font-size: 1.2rem; overflow-wrap: anywhere; }
+.profile-assigned { color: var(--faintest); font-size: 0.85rem; }
+.profile-faith { color: var(--maroon); font-size: 0.9rem; margin-top: 0.2rem; }
+.profile-empty { color: var(--faintest); font-style: italic; }
+.profile-bio { white-space: pre-wrap; overflow-wrap: break-word; color: var(--ink); margin-top: 0; }
+label.profile-label { display: block; margin: 0.9rem 0 0.25rem; font-size: 0.9rem; color: var(--muted); }
+h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted); }
+.profile .comment-text, .profile .key-input {
+  width: 100%; padding: 0.5em 0.7em; font: inherit; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+}
+.profile textarea.comment-text { resize: vertical; }
+.profile .comment-text:focus, .profile .key-input:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+
+/* Direct messages */
+a.comment-dm { color: var(--brown); margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
+a.comment-dm:hover { text-decoration: underline; color: var(--maroon); }
+.dm-unread { color: var(--maroon); font-weight: bold; }
+.dm-search { position: relative; }
+.dm-suggest { position: absolute; left: 0.9em; right: 0.9em; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 5; }
+a.dm-suggest-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; padding: 0.45em 0.7em; cursor: pointer; font-size: 0.95rem; color: var(--maroon); text-decoration: none; }
+a.dm-suggest-row:hover, .dm-suggest-sel { background: var(--cream); }
+a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
+.dm-suggest-go { color: var(--brown); font-size: 0.85em; white-space: nowrap; }
+.dm-msg { border-top: 1px solid var(--rule); padding: 0.7em 0.6em 0.5em; }
+.dm-msg:first-child { border-top: 0; }
+.dm-mine { background: var(--cream-2); border-radius: 6px; }
+.dm-msg .comment-body { margin-top: 0.25em; }
+
+/* Moderation: the non-fading ban/lock banner, the danger-red controls, and the
+   pending-review rows. */
+.mc-flash { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: #7a1f1f; color: #fff; padding: 0.85em 2.6em 0.85em 1em; font-size: 0.95rem; text-align: center; box-shadow: 0 1px 6px rgba(0,0,0,0.3); }
+.mc-flash-x { position: absolute; right: 0.5em; top: 50%; transform: translateY(-50%); background: none; border: 0; color: #fff; font-size: 1.5rem; line-height: 1; cursor: pointer; padding: 0 0.3em; }
+a.trust-toggle.danger { color: #b3261e; }
+.pending-row { flex-direction: column; align-items: stretch; gap: 0.35rem; }
+.pending-body { white-space: pre-wrap; overflow-wrap: break-word; color: var(--muted); font-size: 0.9rem; border-left: 2px solid var(--rule); padding-left: 0.6em; }
+.mod-help { margin: 0.9em 0 0.2em; color: var(--muted-d); font-size: 0.82rem; line-height: 1.45; border-top: 1px solid var(--rule); padding-top: 0.5em; }
+.audit-scroll { max-height: 26rem; overflow-y: auto; border: 1px solid var(--rule); border-radius: 6px; margin: 0.4rem 0 1rem; }
+.audit-scroll .board-topics { border: 0; margin: 0; }
+.audit-row .board-topic-title { font-weight: normal; }
+.audit-snippet { color: var(--muted-d); font-size: 0.85rem; overflow-wrap: anywhere; margin-top: 0.1em; }
+a.body-link { color: var(--maroon); overflow-wrap: anywhere; }
+.topic-pages { margin: 0.15em 0 0; font-size: 0.8rem; color: var(--faintest); }
+.topic-pages a { margin-right: 0.35em; }
+
+/* Light/dark toggle. A slider in the top-right corner, in normal flow (absolute,
+   not fixed) so it scrolls off the page with everything else. nav.js builds it
+   and flips :root[data-theme]; the knob slides to the moon in dark. */
+.theme-toggle {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  background: none;
+  border: 0;
+  padding: 0.15rem;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  color: var(--faint);
+  -webkit-tap-highlight-color: transparent;
+}
+.theme-toggle .theme-label { display: none; }
+@media (min-width: 601px) { .theme-toggle .theme-label { display: inline; } }
+.theme-switch {
+  position: relative;
+  width: 42px;
+  height: 22px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  transition: background 0.2s ease;
+}
+.theme-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+:root[data-theme="dark"] .theme-knob { transform: translateX(20px); }
+/* On phones the fixed hamburger owns the top-right corner, so the toggle moves
+   to the top-left and still scrolls away. */
+@media (max-width: 600px) { .theme-toggle { top: 1.15rem; left: 0.85rem; right: auto; } }
+
+/* A couple of dark-mode surface touches for panels that carried their own light
+   backgrounds. */
+:root[data-theme="dark"] .comment-meta summary { color: var(--brown); }
+
+/* Deep-link ¶ markers on the generated Scripture and Fathers pages, grafted by
+   deeplink.js onto every heading, paragraph, and verse. Hover reveals the mark
+   (kept faintly visible on touch, where there is no hover); a click copies the
+   passage's permalink. An arriving link tints its target, mirroring
+   .comment:target above. */
+.dl { position: relative; scroll-margin-top: 2rem; }
+/* Always visible (not hover-gated), large enough to hit without a misclick,
+   with a padded tap target extended by a matching negative margin so the
+   glyph keeps its place in the margin. Click copies the link (deeplink.js). */
+.dl-anchor {
+  position: absolute; left: -1.5em; top: -0.05em;
+  opacity: 0.5; font-size: 1.2em; font-weight: normal; line-height: 1;
+  text-decoration: none; color: var(--faint); cursor: pointer;
+  padding: 0.25em 0.4em; margin: -0.25em -0.4em;
+  transition: opacity 0.12s ease, color 0.12s ease;
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+}
+.dl-anchor:hover, .dl-anchor:focus, .dl-anchor.dl-copied { opacity: 1; color: var(--maroon); }
+.dl-anchor.dl-copied::after {
+  content: "link copied"; position: absolute; left: 1.75em; top: 0.1em;
+  white-space: nowrap; font-size: 0.68rem; color: var(--maroon);
+  background: var(--cream); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 0 0.4em;
+}
+@media (hover: none) { .dl-anchor { opacity: 0.6; left: -1.35em; font-size: 1.35em; } }
+.dl-target { background: var(--cream); box-shadow: 0 0 0 0.35em var(--cream); border-radius: 2px; }
+
+/* The one-page Bible reader (bible-reader.js): a book chooser, a row of
+   chapter numbers, a Scourby audio player, and one chapter of text at a time. */
+.bible-loading { color: var(--faint); }
+.bible-bar { display: flex; align-items: center; gap: 0.5em; margin: 0.5rem 0 1rem; }
+.bible-lbl { color: var(--faint); font-size: 0.9rem; }
+.bible-book { font: inherit; font-size: 1rem; padding: 0.3em 0.5em; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); max-width: 22em; }
+.bible-chapters { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3em; margin-bottom: 1rem; }
+.bible-step { font: inherit; font-size: 0.9rem; cursor: pointer; padding: 0.25em 0.6em; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--maroon); }
+.bible-step:hover { background: var(--cream); }
+.bible-chap-grid { display: flex; flex-wrap: wrap; gap: 0.25em; }
+.bible-chap { font: inherit; font-size: 0.85rem; cursor: pointer; min-width: 2em; padding: 0.2em 0.35em; border: 1px solid var(--rule); border-radius: 5px; background: var(--surface); color: var(--ink); }
+.bible-chap:hover { background: var(--cream); border-color: var(--maroon); }
+.bible-chap.on { background: var(--maroon); color: #faf6ee; border-color: var(--maroon); }
+.bible-player { border: 1px solid var(--rule); border-radius: 8px; background: var(--cream); padding: 0.6em 0.8em; margin-bottom: 1.2rem; }
+.bp-label { color: var(--maroon); font-size: 0.92rem; margin-bottom: 0.4em; }
+.bp-row { display: flex; align-items: center; gap: 0.5em; }
+.bp-play, .bp-skip { font: inherit; cursor: pointer; border: 1px solid var(--maroon); background: var(--surface); color: var(--maroon); border-radius: 6px; padding: 0.2em 0.55em; line-height: 1.3; white-space: nowrap; }
+.bp-play { font-size: 1rem; min-width: 2.4em; }
+.bp-skip { font-size: 0.78rem; }
+.bp-play:hover, .bp-skip:hover { background: var(--maroon); color: #faf6ee; }
+.bp-seek { flex: 1 1 auto; min-width: 4em; accent-color: var(--maroon); }
+.bp-time { color: var(--ink-soft); font-size: 0.8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bible-title { color: var(--maroon-dark); margin: 0.5rem 0 0.8rem; }
+.bible-verse { margin: 0 0 0.55em; scroll-margin-top: 2rem; }
+.bible-vnum { font-size: 0.72em; vertical-align: super; color: var(--faint); text-decoration: none; padding: 0 0.15em; cursor: pointer; }
+.bible-vnum:hover, .bible-vnum.copied { color: var(--maroon); }
+.bible-hit { background: var(--cream); box-shadow: 0 0 0 0.35em var(--cream); border-radius: 2px; }
+@media (max-width: 620px) { .bible-book { max-width: 60vw; } .bp-skip { font-size: 0.72rem; } }
