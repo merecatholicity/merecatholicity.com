@@ -2583,6 +2583,9 @@
   }
 
   function viewIndex() {
+    /* Ported (Wave B1): the Lit view renders when the bundle stands; this
+       body remains the no-shell fallback and the one-line revert. */
+    if (window.mcViews && window.mcViews.boardIndex) return window.mcViews.boardIndex(section, window.mcKit);
     document.title = 'Catholicity Board | Mere Catholicity';
     /* A muted word on who we are, for the newcomer who lands here. One paragraph. */
     var introP = el('p', 'board-intro');
@@ -2770,6 +2773,8 @@
     if (!cat) return viewIndex();
     /* the back room shows nothing to a keyless visitor — not even its name */
     if (key === 'adminsonly' && !(state.key && state.myHash)) return viewIndex();
+    /* Ported (Wave B2): the Lit view renders when the bundle stands. */
+    if (window.mcViews && window.mcViews.boardCat) return window.mcViews.boardCat(section, window.mcKit, key);
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     document.title = cat[1] + ' | Catholicity Board';
     var head = crumb([['Catholicity Board', 'community.html'], [cat[1]]]);
@@ -6720,6 +6725,23 @@
     loadTurnstile();
   }
 
+  /* The kit: the per-boot bridge the Lit views (app/views/*) consume — every
+     helper stays HERE, proven and singular; the components render, the kit
+     acts. Rebuilt each boot so closures always bind the live section and
+     state; views receive it by reference at delegation time. */
+  window.mcKit = {
+    state: state, API: API, CATS: CATS,
+    isAdmin: isAdmin, catByKey: catByKey, cachedJson: cachedJson,
+    freshParam: freshParam, freshOpts: freshOpts, blockedOut: blockedOut,
+    renderIdentity: renderIdentity, indexSearchBox: indexSearchBox,
+    displayName: displayName, fmtDateTime: fmtDateTime, notifCacheSet: notifCacheSet,
+    topicAdminCorner: topicAdminCorner, buildBoardForm: buildBoardForm,
+    boardButtons: boardButtons, armBoardForm: armBoardForm,
+    attachMentions: attachMentions, attachDraft: attachDraft, boardPost: boardPost,
+    stampFresh: stampFresh,
+    goIndex: function () { section.textContent = ''; viewIndex(); },
+  };
+
   if (BOARD) {
     startBoard();
   } else if (/^#comment-\d+$/.test(location.hash)) {
@@ -6743,5 +6765,18 @@
   window.mcCommentsTeardown = function () {
     if (mcDown) { var d = mcDown; mcDown = null; try { d(); } catch (e) { /* torn */ } }
   };
-  mcBoot();
+  /* Boot ordering: when the shell is expected (the default), wait for its
+     ready signal so the Lit views are registered before the first render —
+     a dynamically injected app.js is unordered against this deferred file.
+     If the shell never comes (blocked storage, ?app=0, a failed load), the
+     timeout boots the classic way: the site stays a website. */
+  (function () {
+    var shellComing = false;
+    try { shellComing = localStorage.getItem('mc-app') !== '0'; } catch (e) { shellComing = false; }
+    if (!shellComing || window.__mcShellReady || window.mcViews) { mcBoot(); return; }
+    var booted = false;
+    function go() { if (!booted) { booted = true; mcBoot(); } }
+    document.addEventListener('mc-shell-ready', go, { once: true });
+    setTimeout(go, 1500);
+  })();
 })();
