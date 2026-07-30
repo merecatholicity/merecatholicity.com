@@ -206,6 +206,23 @@ document.addEventListener('DOMContentLoaded', function () {
    rebuilding any of them; the script itself no-ops on the hand-authored pages. */
 (function () {
   var s = document.createElement('script');
-  s.src = 'deeplink.js?v=1';
+  s.src = 'deeplink.js?v=2';
   document.head.appendChild(s);
+})();
+
+/* The app shell (Lit soft-navigation), behind a trial flag: ?app=1 arms it
+   for this browser (sticky in localStorage so hard landings keep it),
+   ?app=0 disarms. Off by default while the shell earns its keep — when it
+   becomes the standing experience this gate widens to everyone. */
+(function () {
+  try {
+    if (/[?&]app=0\b/.test(location.search)) localStorage.removeItem('mc-app');
+    else if (/[?&]app=1\b/.test(location.search)) localStorage.setItem('mc-app', '1');
+    if (localStorage.getItem('mc-app') === '1') {
+      var s = document.createElement('script');
+      s.src = 'app.js?v=1';
+      s.defer = true;
+      document.head.appendChild(s);
+    }
+  } catch (e) { /* storage blocked: the site stays a website */ }
 })();

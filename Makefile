@@ -13,7 +13,13 @@ build: pdf html logos publish check
 # identifier once shipped in the worker and silenced @merecat mentions for
 # days. eslint no-undef catches that class; deno runs it with no npm setup.
 jscheck:
-	deno run -A npm:eslint comments-worker/src/index.js comments.js nav.js deeplink.js flash.js contact.js bible-reader.js
+	deno run -A npm:eslint comments-worker/src/index.js comments.js nav.js deeplink.js flash.js contact.js bible-reader.js away.js index.js 'app/**/*.js'
+
+# The app shell bundle: Lit (vendored under vendor/, no npm anywhere) plus
+# the app/ modules, esbuild pinned for byte-stable output, committed like
+# every built artifact. Pages carrying it load app.js?v=N (see nav.js).
+bundle: jscheck
+	deno run -A npm:esbuild@0.24.2 app/shell.js --bundle --minify --format=iife --outfile=app.js --log-level=warning
 
 # The only sanctioned way to deploy the comments worker: the guard runs first.
 worker-deploy: jscheck
