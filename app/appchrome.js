@@ -171,16 +171,20 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false } };
-  constructor() { super(); this.keyShown = false; this.theme = this._theme(); this.copied = false; }
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false } };
+  constructor() { super(); this.keyShown = false; this.theme = this._theme(); this.copied = false; this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal'; }
   createRenderRoot() { return this; }
   _theme() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
   toggleTheme() {
     const n = this.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', n);
     try { document.cookie = 'mc-theme=' + n + ';path=/;max-age=31536000;samesite=lax'; } catch (e) { /* blocked */ }
+    /* keep the chosen dark palette applied when turning dark on, cleared for light */
+    if (n === 'dark' && (this.dark === 'slate' || this.dark === 'ink')) document.documentElement.setAttribute('data-dark', this.dark);
+    else document.documentElement.removeAttribute('data-dark');
     this.theme = n;
   }
+  setDark(p) { if (window.mcSetDark) window.mcSetDark(p); this.dark = p; }
   copyKey() {
     const k = readKey();
     if (!k) return;
@@ -226,6 +230,11 @@ class McSettings extends LitElement {
         <span>Theme<small>${this.theme === 'dark' ? 'Dark' : 'Light'}</small></span>
         <span class=${'mc-set-switch' + (this.theme === 'dark' ? ' on' : '')}><span class="mc-set-knob"></span></span>
       </button>
+      ${this.theme === 'dark' ? html`<div class="mc-set-palette">
+        ${[['charcoal', 'Charcoal'], ['slate', 'Slate'], ['ink', 'Warm ink']].map((p) => html`
+          <button class=${'mc-set-pal mc-pal-' + p[0] + (this.dark === p[0] ? ' on' : '')} @click=${() => this.setDark(p[0])} aria-label=${p[1]}>
+            <span class="mc-pal-sw"></span><span class="mc-pal-name">${p[1]}</span></button>`)}
+      </div>` : ''}
 
       <h3 class="mc-set-sec">Community</h3>
       ${link('community.html?users=1', 'Members', 'Everyone on the board')}
@@ -240,6 +249,65 @@ class McSettings extends LitElement {
   }
 }
 customElements.define('mc-settings', McSettings);
+
+/* ---- the desktop platform bar (≥601px) ----
+   The app's persistent member layer for the big screen: brand, board search, and
+   the member cluster (merecat, notifications, inbox, account) on EVERY page — the
+   features that on desktop today live only in the community identity line. It
+   AUGMENTS the existing nav.site (which stays as the content menu below); it reads
+   the same badge caches as the mobile chrome (no boot-order dependency on mcKit)
+   and links into the existing routes (soft-nav for free). The account button opens
+   a dropdown that reuses <mc-settings> verbatim. Phones never see it (CSS-gated). */
+class McDeskbar extends LitElement {
+  static properties = { notif: { attribute: false }, dm: { attribute: false }, keyed: { attribute: false }, menu: { attribute: false } };
+  constructor() { super(); this.notif = 0; this.dm = 0; this.keyed = false; this.menu = false; }
+  createRenderRoot() { return this; }
+  sync() { this.notif = badgeCount('notif'); this.dm = badgeCount('dm'); this.keyed = !!readKey(); }
+  connectedCallback() {
+    super.connectedCallback();
+    this._onDoc = (e) => { if (this.menu && !e.target.closest('.mc-db-acct')) this.menu = false; };
+    this._onKey = (e) => { if (e.key === 'Escape') this.menu = false; };
+    document.addEventListener('click', this._onDoc);
+    document.addEventListener('keydown', this._onKey);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener('click', this._onDoc);
+    document.removeEventListener('keydown', this._onKey);
+  }
+  toggleMenu(e) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; }
+  search(e) {
+    e.preventDefault();
+    const input = this.querySelector('.mc-db-search input');
+    location.href = 'community.html?q=' + encodeURIComponent((input && input.value.trim()) || '');
+  }
+  render() {
+    const badge = (n) => n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : '';
+    return html`<div class="mc-deskbar">
+      <a class="mc-db-brand" href="index.html" aria-label="Home">${ICON.cross}<span class="mc-db-word">Mere Catholicity</span></a>
+      <form class="mc-db-search" @submit=${(e) => this.search(e)} role="search">
+        <span class="mc-db-searchico">${ICON.search}</span>
+        <input type="search" placeholder="Search the board…" aria-label="Search the board">
+      </form>
+      <nav class="mc-db-cluster" aria-label="Member">
+        <a class="mc-db-ico mc-db-merecat" href="community.html?merecat=1" aria-label="Ask Merecat" title="Ask Merecat">🐈</a>
+        <a class="mc-db-ico" href="community.html?notifications=1" aria-label="Notifications" title="Notifications">${ICON.bell}${badge(this.notif)}</a>
+        <a class="mc-db-ico" href="community.html?inbox=1" aria-label="Inbox" title="Inbox">${ICON.inbox}${badge(this.dm)}</a>
+        ${this.keyed ? html`<div class="mc-db-acct">
+          <button class="mc-db-ico mc-db-avatar" @click=${(e) => this.toggleMenu(e)} aria-label="Account" aria-expanded=${this.menu ? 'true' : 'false'}>${ICON.profile}</button>
+          ${this.menu ? html`<div class="mc-db-menu"></div>` : ''}
+        </div>` : html`<a class="mc-db-join" href="community.html?me=1">Sign in / Join</a>`}
+      </nav>
+    </div>`;
+  }
+  updated() {
+    /* mount the shared settings component into the open dropdown (imperative slot,
+       the McSheet idiom) — a fresh instance each open reflects current state */
+    const menu = this.querySelector('.mc-db-menu');
+    if (menu && !menu.firstChild) menu.appendChild(document.createElement('mc-settings'));
+  }
+}
+customElements.define('mc-deskbar', McDeskbar);
 
 /* ---- the Home launcher (replaces the marketing homepage on phones) ---- */
 class McHome extends LitElement {
@@ -479,6 +547,15 @@ export function installChrome() {
   sheet.setAttribute('data-mc-app', '');
   document.body.appendChild(sheet);
 
+  /* The desktop platform bar (CSS-gated ≥601px). data-mc-app is load-bearing:
+     without it swapContent deletes the bar on the first soft-nav. */
+  const deskbar = document.createElement('mc-deskbar');
+  deskbar.setAttribute('data-mc-app', '');
+  document.body.appendChild(deskbar);
+  /* One marker so desktop CSS knows the shell/deskbar is present (padding under the
+     fixed bar); never set under ?app=0, where installChrome never runs. */
+  document.body.classList.add('mc-app');
+
   window.mcSheet = {
     open: function (heading, node, onClose) { sheet.show(heading, node, onClose); },
     settings: function () { sheet.show('Settings', document.createElement('mc-settings')); },
@@ -492,8 +569,9 @@ export function installChrome() {
   window.mcOnboard = mcOnboard;
 
   /* The comments client fires mc-badge whenever an unread count changes, so the
-     tab bar and bell update the instant a DM or notification lands. */
-  document.addEventListener('mc-badge', function () { tabbar.sync(); appbar.sync(); });
+     tab bar, app-bar bell, and desktop bar update the instant a DM or notification
+     lands. */
+  document.addEventListener('mc-badge', function () { tabbar.sync(); appbar.sync(); deskbar.sync(); });
 
   /* Keyboard-aware composer. A position:fixed composer anchored to the layout
      viewport bottom (the sticky merecat ask box) hides BEHIND the soft keyboard
@@ -545,7 +623,7 @@ export function installChrome() {
     window.mcOnboard();
   }
 
-  function sync() { tabbar.sync(); appbar.sync(); mountHome(); maybeOnboard(); }
+  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); mountHome(); maybeOnboard(); }
   sync();
   /* boots()/chrome.sync() only fire on soft-nav; on a DIRECT initial load the
      onboarding trigger needs one sync once the client has booted (window.mcKit

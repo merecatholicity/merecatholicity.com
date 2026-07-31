@@ -67,7 +67,7 @@ th, td {
   text-align: left;
   vertical-align: top;
   padding: 0.35em 0.9em 0.35em 0;
-  border-bottom: 1px solid #e4dccd;
+  border-bottom: 1px solid var(--rule);
 }
 th { color: var(--maroon-dark); }
 

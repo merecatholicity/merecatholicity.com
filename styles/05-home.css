@@ -69,8 +69,10 @@ form.contact textarea { resize: vertical; }
 form.contact input:focus, form.contact textarea:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
 form.contact .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 form.contact .cf-turnstile { margin: 1em 0; }
-.btn-send { background: var(--maroon); border-color: var(--maroon); color: #fff; font: inherit; letter-spacing: inherit; cursor: pointer; }
-.btn-send:hover { background: var(--maroon-dark); border-color: var(--maroon-dark); color: #fff; }
+/* --accent-fill (not --maroon): a deep red that keeps white text readable in every
+   theme, including dark where --maroon is lightened for text contrast. */
+.btn-send { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); font: inherit; letter-spacing: inherit; cursor: pointer; }
+.btn-send:hover { filter: brightness(1.07); color: var(--accent-on); }
 .btn-send:disabled { opacity: 0.6; cursor: default; }
 
 footer, .colophon {
