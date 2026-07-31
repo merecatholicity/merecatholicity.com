@@ -1677,20 +1677,22 @@
       del.href = '#';
       del.addEventListener('click', function (e) {
         e.preventDefault();
-        if (!confirm('Delete this comment?')) return;
-        fetchRetry(API + '/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: c.id, key: state.key }),
-        }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.ok) {
-            article.remove();
-            /* Same freshness stamp as posting: the deleter's own reloads
-               must not resurrect the comment from the list cache. */
-            try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
-          } else setStatus(d.error || 'Could not delete the comment.');
-        }).catch(function () {
-          setStatus('Network error. The comment was not deleted.');
+        appConfirm('Delete this comment?', { okLabel: 'Delete', danger: true }, function (ok) {
+          if (!ok) return;
+          fetchRetry(API + '/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: c.id, key: state.key }),
+          }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) {
+              article.remove();
+              /* Same freshness stamp as posting: the deleter's own reloads
+                 must not resurrect the comment from the list cache. */
+              try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e2) {}
+            } else setStatus(d.error || 'Could not delete the comment.');
+          }).catch(function () {
+            setStatus('Network error. The comment was not deleted.');
+          });
         });
       });
       head.appendChild(del);
@@ -1938,8 +1940,9 @@
   }
 
   /* Admin moderation controls, all inside the user-fingerprint dropdown and
-     each guarded by a plain confirm() that reads the same on phone or desktop.
-     A reload after each so the page returns true. */
+     each guarded by appConfirm() — a slide-up sheet on phones, the native
+     confirm on desktop, reading the same either way. A reload after each so
+     the page returns true. */
 
   function modLockLine(hash, locked) {
     var line = el('div', 'trust-line');
@@ -1948,14 +1951,17 @@
     a.href = '#';
     a.addEventListener('click', function (e) {
       e.preventDefault();
-      if (!locked && !confirm('Lock this identity? They will be logged out and unable to interact until you unlock them.')) return;
-      fetch(API + '/lock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, hash: hash, locked: !locked }),
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        if (d.ok) location.reload();
-      }).catch(function () {});
+      var doLock = function () {
+        fetch(API + '/lock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, hash: hash, locked: !locked }),
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) location.reload();
+        }).catch(function () {});
+      };
+      if (locked) doLock();
+      else appConfirm('Lock this identity? They will be logged out and unable to interact until you unlock them.', { okLabel: 'Lock', danger: true }, function (ok) { if (ok) doLock(); });
     });
     line.appendChild(a);
     return line;
@@ -1979,8 +1985,9 @@
       all.href = '#';
       all.addEventListener('click', function (e) {
         e.preventDefault();
-        if (!allBanned && !confirm(banAllPrompt(rows))) return;
-        ipbanRequest(rows.map(function (r) { return r.ip_key; }), !allBanned);
+        var doBan = function () { ipbanRequest(rows.map(function (r) { return r.ip_key; }), !allBanned); };
+        if (allBanned) doBan();
+        else appConfirm(banAllPrompt(rows), { okLabel: 'Ban all', danger: true }, function (ok) { if (ok) doBan(); });
       });
       head.appendChild(all);
       wrap.appendChild(head);
@@ -2002,10 +2009,12 @@
     a.href = '#';
     a.addEventListener('click', function (e) {
       e.preventDefault();
-      if (!r.banned && !confirm('Ban ' + r.ip_display + '?' +
+      var doBan = function () { ipbanRequest([r.ip_key], !r.banned); };
+      if (r.banned) { doBan(); return; }
+      appConfirm('Ban ' + r.ip_display + '?' +
         (isSharedV4Client(r.ip_display) ? ' This looks like carrier-grade NAT, shared by many users; banning it may block innocents.' : '') +
-        '\n\nLogged-in users from it will be blocked and sent to the terms page.')) return;
-      ipbanRequest([r.ip_key], !r.banned);
+        '\n\nLogged-in users from it will be blocked and sent to the terms page.',
+      { okLabel: 'Ban', danger: true }, function (ok) { if (ok) doBan(); });
     });
     line.appendChild(a);
     return line;
@@ -2070,15 +2079,19 @@
     a.href = '#';
     a.addEventListener('click', function (e) {
       e.preventDefault();
-      if (!confirm('DELETE THIS USER? This permanently deletes ALL of their posts, their profile, and their avatar, and locks the identity so they cannot post again. This cannot be undone. Continue?')) return;
-      if (!confirm('Are you sure? There is no undo.')) return;
-      fetch(API + '/deleteuser', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, hash: hash }),
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        if (d.ok) location.reload();
-      }).catch(function () {});
+      appConfirm('DELETE THIS USER? This permanently deletes ALL of their posts, their profile, and their avatar, and locks the identity so they cannot post again. This cannot be undone. Continue?', { okLabel: 'Continue', danger: true }, function (ok1) {
+        if (!ok1) return;
+        appConfirm('Are you sure? There is no undo.', { okLabel: 'Delete user', danger: true }, function (ok2) {
+          if (!ok2) return;
+          fetch(API + '/deleteuser', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, hash: hash }),
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) location.reload();
+          }).catch(function () {});
+        });
+      });
     });
     line.appendChild(a);
     return line;
@@ -2259,14 +2272,16 @@
       line.appendChild(identityAction('Show my key', showKeyBox));
       line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('Logout', function () {
-        if (!confirm('Log out and forget this identity here? Unless you saved your key, there is no way back to this name.')) return;
-        clearKey();
-        state.key = '';
-        state.myHash = '';
-        if (BOARD) { location.reload(); return; }
-        hideKeyBox();
-        renderIdentity();
-        load();
+        appConfirm('Log out and forget this identity here? Unless you saved your key, there is no way back to this name.', { okLabel: 'Log out', danger: true }, function (ok) {
+          if (!ok) return;
+          clearKey();
+          state.key = '';
+          state.myHash = '';
+          if (BOARD) { location.reload(); return; }
+          hideKeyBox();
+          renderIdentity();
+          load();
+        });
       }));
     } else {
       line.appendChild(document.createTextNode(state.anonAllowed
@@ -2790,14 +2805,17 @@
     a.href = '#';
     a.addEventListener('click', function (e) {
       e.preventDefault();
-      if (act === 'delete' && !confirm('Delete this topic?')) return;
-      fetch(API + '/moderate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, id: id, act: act }),
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        if (d.ok) { stampFresh(); location.reload(); }
-      }).catch(function () {});
+      var doAct = function () {
+        fetch(API + '/moderate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: id, act: act }),
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) { stampFresh(); location.reload(); }
+        }).catch(function () {});
+      };
+      if (act === 'delete') appConfirm('Delete this topic?', { okLabel: 'Delete', danger: true }, function (ok) { if (ok) doAct(); });
+      else doAct();
     });
     return a;
   }
@@ -3296,16 +3314,18 @@
             rm.href = '#';
             rm.addEventListener('click', function (e) {
               e.preventDefault();
-              if (!confirm(mine
+              appConfirm(mine
                 ? 'Remove your own admin powers? You will lose admin access here.'
-                : 'Remove admin powers from ' + (a.nick || a.assigned) + '?')) return;
-              fetch(API + '/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: state.key, hash: a.hash, admin: false }) })
-                .then(function (x) { return x.json(); })
-                /* Removing yourself ends your access, so leave for the board as a
-                   plain member rather than reload a list you can no longer see. */
-                .then(function (x) { if (x.ok) { if (mine) { location.href = 'community.html'; } else { load(); } } else { addNote.textContent = x.error || 'Could not remove.'; } })
-                .catch(function () { addNote.textContent = 'Network error. Try again.'; });
+                : 'Remove admin powers from ' + (a.nick || a.assigned) + '?', { okLabel: 'Remove', danger: true }, function (ok) {
+                if (!ok) return;
+                fetch(API + '/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: state.key, hash: a.hash, admin: false }) })
+                  .then(function (x) { return x.json(); })
+                  /* Removing yourself ends your access, so leave for the board as a
+                     plain member rather than reload a list you can no longer see. */
+                  .then(function (x) { if (x.ok) { if (mine) { location.href = 'community.html'; } else { load(); } } else { addNote.textContent = x.error || 'Could not remove.'; } })
+                  .catch(function () { addNote.textContent = 'Network error. Try again.'; });
+              });
             });
             r.appendChild(rm);
             list.appendChild(r);
@@ -3353,11 +3373,13 @@
       a.href = '#';
       a.addEventListener('click', function (e) {
         e.preventDefault();
-        if (!confirm('Delete this post?')) return;
-        fetch(API + '/delete', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, id: id }),
-        }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+        appConfirm('Delete this post?', { okLabel: 'Delete', danger: true }, function (ok) {
+          if (!ok) return;
+          fetch(API + '/delete', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, id: id }),
+          }).then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+        });
       });
       return a;
     }
@@ -3543,10 +3565,12 @@
           del.href = '#';
           del.addEventListener('click', function (e) {
             e.preventDefault();
-            if (!confirm('Delete this held comment?')) return;
-            fetch(API + '/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, id: c.id }) })
-              .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+            appConfirm('Delete this held comment?', { okLabel: 'Delete', danger: true }, function (ok) {
+              if (!ok) return;
+              fetch(API + '/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, id: c.id }) })
+                .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+            });
           });
           acts.appendChild(app);
           acts.appendChild(document.createTextNode(' '));
@@ -4416,13 +4440,15 @@
           del.addEventListener('click', (function (other, rowEl) {
             return function (e) {
               e.preventDefault();
-              if (!confirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.')) return;
-              fetch(API + '/dm/delete', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: state.key, with: other }),
-              }).then(function (r) { return r.json(); }).then(function (d2) {
-                if (d2.ok) { rowEl.remove(); try { localStorage.removeItem(DM_CACHE); } catch (e2) {} dmUnreadCheck(); }
-              }).catch(function () {});
+              appConfirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok) {
+                if (!ok) return;
+                fetch(API + '/dm/delete', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: state.key, with: other }),
+                }).then(function (r) { return r.json(); }).then(function (d2) {
+                  if (d2.ok) { rowEl.remove(); try { localStorage.removeItem(DM_CACHE); } catch (e2) {} dmUnreadCheck(); }
+                }).catch(function () {});
+              });
             };
           })(t.other_hash, row));
           delWrap.appendChild(del);
@@ -5139,31 +5165,31 @@
             : 'Keep this conversation permanently';
           sv.addEventListener('click', function (e) {
             e.preventDefault();
-            if (c.saved) {
-              var expired = c.last_at < Math.floor(Date.now() / 1000) - 30 * 86400;
-              if (expired && !confirm('This conversation is older than thirty days. ' +
-                'Unsaving lets it expire, and it may be removed at once. Continue?')) return;
-            }
             /* Optimistic: the row moves at once; the server's answer then
                confirms, reverts with a note, or — on a lost response — a
                resync settles it from the server's truth. */
-            var want = c.saved ? 0 : 1;
-            c.saved = want;
-            renderChats();
-            fetchRetry(MERECAT_API + '/chat/save', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, id: c.id, save: want }),
-            }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
-              if (!dd.ok) {
-                c.saved = want ? 0 : 1;
-                renderChats();
-                actSay((want ? 'Could not save: ' : 'Could not unsave: ') + (dd.error || 'try again in a moment.'));
-              }
-            }).catch(function () {
-              resyncChats().then(function () {
-                actSay('Connection hiccup — the list was refreshed from the server.');
+            var proceed = function () {
+              var want = c.saved ? 0 : 1;
+              c.saved = want;
+              renderChats();
+              fetchRetry(MERECAT_API + '/chat/save', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, id: c.id, save: want }),
+              }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+                if (!dd.ok) {
+                  c.saved = want ? 0 : 1;
+                  renderChats();
+                  actSay((want ? 'Could not save: ' : 'Could not unsave: ') + (dd.error || 'try again in a moment.'));
+                }
+              }).catch(function () {
+                resyncChats().then(function () {
+                  actSay('Connection hiccup — the list was refreshed from the server.');
+                });
               });
-            });
+            };
+            var expired = c.saved && c.last_at < Math.floor(Date.now() / 1000) - 30 * 86400;
+            if (expired) appConfirm('This conversation is older than thirty days. Unsaving lets it expire, and it may be removed at once. Continue?', { okLabel: 'Unsave' }, function (ok) { if (ok) proceed(); });
+            else proceed();
           });
           row.appendChild(sv);
           row.appendChild(document.createTextNode(' · '));
@@ -5259,6 +5285,33 @@
     send.type = 'submit';
     form.appendChild(send);
     section.appendChild(form);
+    /* An empty log on a fresh thread gets an app blank slate on phones (CSS-gated,
+       desktop never shows it): a few example questions that fill the box on tap.
+       It removes itself the moment a question is asked and never shows when
+       reopening an existing thread. */
+    if (loggedIn && !chatId) {
+      var starter = el('div', 'mc-cat-starter');
+      starter.appendChild(el('span', 'mc-cat-starter-ico', '🐈'));
+      starter.appendChild(el('h3', null, 'Ask the librarian'));
+      starter.appendChild(el('p', null,
+        'A question about the Fathers, the councils, Newman, or anything in our Library.'));
+      var chips = el('div', 'mc-cat-chips');
+      ['What do the Fathers make of John 6:53?',
+        'How does Newman describe the development of doctrine?',
+        'What did the Council of Nicaea settle?'].forEach(function (ex) {
+        var chip = el('button', 'mc-cat-chip', ex);
+        chip.type = 'button';
+        chip.addEventListener('click', function () {
+          q.value = ex;
+          q.dispatchEvent(new Event('input', { bubbles: true }));
+          try { q.focus(); } catch (e2) {}
+        });
+        chips.appendChild(chip);
+      });
+      starter.appendChild(chips);
+      log.appendChild(starter);
+      form.addEventListener('submit', function () { if (starter.parentNode) starter.remove(); }, { once: true });
+    }
     if (!loggedIn) {
       var askPlaceholder = q.placeholder;
       q.disabled = true;
@@ -6440,18 +6493,21 @@
       pSave.addEventListener('click', function () {
         var text = pTa.value.trim();
         if (!text) { pNote.textContent = 'The instructions cannot be empty.'; return; }
-        if (text.length < 200 && !confirm('These instructions are very short. Replace the librarian’s whole standing instructions with them?')) return;
-        pSave.disabled = true;
-        pNote.textContent = 'Saving…';
-        fetchRetry(MERECAT_API + '/config', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, persona: text }),
-        }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
-          pNote.textContent = dd.ok
-            ? 'Saved. The librarian answers under these instructions within about five minutes.'
-            : (dd.error || 'Could not save.');
-        }).catch(function () { pNote.textContent = 'Could not save. Try again.'; })
-          .then(function () { pSave.disabled = false; });
+        var doSave = function () {
+          pSave.disabled = true;
+          pNote.textContent = 'Saving…';
+          fetchRetry(MERECAT_API + '/config', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, persona: text }),
+          }, [1000]).then(function (r) { return r.json(); }).then(function (dd) {
+            pNote.textContent = dd.ok
+              ? 'Saved. The librarian answers under these instructions within about five minutes.'
+              : (dd.error || 'Could not save.');
+          }).catch(function () { pNote.textContent = 'Could not save. Try again.'; })
+            .then(function () { pSave.disabled = false; });
+        };
+        if (text.length < 200) appConfirm('These instructions are very short. Replace the librarian’s whole standing instructions with them?', { okLabel: 'Replace', danger: true }, function (ok) { if (ok) doSave(); });
+        else doSave();
       });
       body.appendChild(pSave);
       body.appendChild(pNote);

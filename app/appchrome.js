@@ -377,6 +377,26 @@ export function installChrome() {
      tab bar and bell update the instant a DM or notification lands. */
   document.addEventListener('mc-badge', function () { tabbar.sync(); appbar.sync(); });
 
+  /* Keyboard-aware composer. A position:fixed composer anchored to the layout
+     viewport bottom (the sticky merecat ask box) hides BEHIND the soft keyboard
+     on phones — the classic iOS quirk. Track the visual viewport, publish the
+     bottom overlap as --mc-kb, and flag <body> so the mobile CSS lifts the
+     composer to sit right above the keyboard and slides the tab bar out of the
+     way. Desktop never raises a soft keyboard, so kb stays ~0 and this no-ops. */
+  var vv = window.visualViewport;
+  if (vv) {
+    var applyKb = function () {
+      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      /* A real keyboard is tall; a browser toolbar reveal is not. The threshold
+         keeps chrome bars from being mistaken for a keyboard. */
+      var open = kb > 120;
+      document.documentElement.style.setProperty('--mc-kb', kb + 'px');
+      document.body.classList.toggle('mc-kb-open', open);
+    };
+    vv.addEventListener('resize', applyKb);
+    vv.addEventListener('scroll', applyKb);
+  }
+
   /* On the Home route, drop the launcher into <main> and mark it so the mobile
      CSS hides the marketing siblings (phones only; desktop keeps the homepage). */
   function mountHome() {
