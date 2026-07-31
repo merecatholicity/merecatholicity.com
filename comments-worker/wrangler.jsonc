@@ -76,9 +76,12 @@
   // Avatars: one 400x400 image per identity, fixed key = overwrite = pruned.
   "r2_buckets": [
     { "binding": "BACKUPS", "bucket_name": "merecatholicity-backups" },
-    { "binding": "AVATARS", "bucket_name": "merecatholicity-avatars" }
+    { "binding": "AVATARS", "bucket_name": "merecatholicity-avatars" },
+    // End-to-end-encrypted DM media (client-encrypted ciphertext, random keys).
+    { "binding": "MEDIA", "bucket_name": "merecatholicity-dm-media" }
   ],
-  "triggers": { "crons": ["0 0 1 * *"] },
+  // Monthly: the full backup/prune chain. Hourly: sweep expired DMs + their media.
+  "triggers": { "crons": ["0 0 1 * *", "0 * * * *"] },
   "ratelimits": [
     { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
     // Reads are cached and cheap; 40/min/IP is comfortable for a member clicking

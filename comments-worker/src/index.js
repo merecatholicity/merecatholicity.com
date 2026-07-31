@@ -1753,17 +1753,52 @@ function dmPair(h1, h2) {
    wherever this fragment appears. */
 const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1)";
 
-/* Unread, per viewer: an unheld message from someone else, newer than my
-   read stamp. Held messages can never trip the recipient's badge. */
-const DM_UNREAD_EXISTS =
-  'EXISTS(SELECT 1 FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
-  'AND m.sender_hash != ?1 ' +
-  'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0) ' +
-  'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0))';
+/* A message still lives: not past its disappearing-message expiry. A saved
+   message carries expires_at NULL and so is always live. `now` is a server
+   integer interpolated straight into the SQL (never a bind param), so this can be
+   appended to any DM query without shifting the numbered binds. */
+function dmLive(now) { return '(m.expires_at IS NULL OR m.expires_at > ' + Math.floor(Number(now) || 0) + ')'; }
+
+/* Unread, per viewer: an unheld, unexpired message from someone else, newer than
+   my read stamp. Held and expired messages never trip the recipient's badge. */
+function dmUnreadExists(now) {
+  return 'EXISTS(SELECT 1 FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
+    'AND m.sender_hash != ?1 ' +
+    'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0) ' +
+    'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0) ' +
+    'AND ' + dmLive(now) + ')';
+}
 
 /* A side that deleted the conversation sees only words newer than its clear
    stamp. ?1 is the viewer; t must be the thread row in scope. */
 const DM_CLEARED = 'm.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0)';
+
+/* Disappearing-message + media tunables, and the growing admin key/value store
+   behind them (app_settings). A missing key falls back to these defaults; the
+   admin console (Phase 3) edits the table and busts this per-isolate cache. */
+const DM_TTLS = [86400, 604800, 2592000];   // 24h / 7d / 30d — must match the client
+const MEDIA_CAP_BYTES = 10 * 1024 * 1024 * 1024;   // R2 free tier: 10 GB
+const APP_SETTING_DEFAULTS = {
+  media_enabled: '1',
+  media_max_bytes: String(25 * 1024 * 1024),   // 25 MB per upload
+  dm_default_ttl: '604800',                     // 7 days
+  dm_backstop_days: '30',                       // unopened-message backstop
+  dm_media_bytes: '0',                          // sweep-maintained total, display-only
+};
+let appSettingsCache = { at: 0, s: null };
+async function getAppSettings(env) {
+  const now = Date.now();
+  if (appSettingsCache.s && now - appSettingsCache.at < 300000) return appSettingsCache.s;
+  const s = Object.assign({}, APP_SETTING_DEFAULTS);
+  try {
+    const rows = await env.DB.prepare('SELECT k, v FROM app_settings').all();
+    for (const r of (rows.results || [])) s[r.k] = r.v;
+  } catch (e) { /* fresh DB: defaults stand */ }
+  appSettingsCache = { at: now, s };
+  return s;
+}
+function dmDefaultTtl(s) { return Number(s.dm_default_ttl) || 604800; }
+function dmBackstopSeconds(s) { return (Number(s.dm_backstop_days) || 30) * 86400; }
 
 /* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
    recipient does NOT refuse the send: the message is stored held, reads as
@@ -1803,8 +1838,24 @@ async function handleDmSend(request, env, ctx) {
   if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
+  /* An optional media attachment: the client uploaded the ciphertext to R2 first
+     and passes its opaque key here. Validate it exists and is unused; it is linked
+     to this message below so the sweep can reclaim the R2 object on expiry. */
+  let mediaKey = null, mediaSize = null;
+  const rawMediaKey = String(data.media_key || '');
+  if (rawMediaKey) {
+    if (!/^dm\/[0-9a-f]{64}$/.test(rawMediaKey)) return json({ ok: false, error: 'Bad request.' }, 400);
+    const mrow = await env.DB.prepare('SELECT size, msg_id FROM dm_media WHERE key = ?1').bind(rawMediaKey).first();
+    if (!mrow || mrow.msg_id) return json({ ok: false, error: 'That attachment is not available.' }, 400);
+    mediaKey = rawMediaKey;
+    mediaSize = mrow.size;
+  }
   const [a, b] = dmPair(me, to);
   const now = Math.floor(Date.now() / 1000);
+  /* A fresh message counts down from the unopened backstop; when the recipient
+     opens it, handleDmThread rebases the clock to opened_at + the conversation
+     ttl (so "expires N days after opening"). */
+  const msgExpires = now + dmBackstopSeconds(await getAppSettings(env));
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
   /* A held send must leave the recipient's world untouched: the thread's
      last-word fields stay as they were, so nothing bumps, nothing rings. */
@@ -1818,8 +1869,9 @@ async function handleDmSend(request, env, ctx) {
         'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
       ).bind(a, b, now, me).first();
   const msg = await env.DB.prepare(
-    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id'
-  ).bind(thread.id, me, body, now, held, enc).first();
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc, expires_at, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING id'
+  ).bind(thread.id, me, body, now, held, enc, msgExpires, mediaKey, mediaSize).first();
+  if (mediaKey) await env.DB.prepare('UPDATE dm_media SET msg_id = ?1 WHERE key = ?2').bind(msg.id, mediaKey).run();
   if (!held) {
     /* Recomputed, never incremented, over the visible words alone, and the
        sender's own stamp rides along: what you just said is read by you. */
@@ -1833,7 +1885,7 @@ async function handleDmSend(request, env, ctx) {
        recipient must never learn of a shadow-blocked send. */
     if (ctx) {
       publishLive(env, ctx, { v: 1, t: 'dm', scopes: ['user:' + to], from: me, thread_id: thread.id,
-        message: { id: msg.id, sender_hash: me, body: body, created_at: now, enc: enc } });
+        message: { id: msg.id, sender_hash: me, body: body, created_at: now, enc: enc, media_key: mediaKey } });
     }
     /* A DM also lands in the recipient's notifications list (the inbox badge is
        not the only place it should show). */
@@ -1858,8 +1910,8 @@ async function sendSystemDm(env, fromHash, toHash, body) {
     'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
   ).bind(a, b, now, fromHash).first();
   const msg = await env.DB.prepare(
-    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc) VALUES (?1, ?2, ?3, ?4, 0, 2) RETURNING id'
-  ).bind(thread.id, fromHash, body, now).first();
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc, expires_at) VALUES (?1, ?2, ?3, ?4, 0, 2, ?5) RETURNING id'
+  ).bind(thread.id, fromHash, body, now, now + dmBackstopSeconds(await getAppSettings(env))).first();
   await env.DB.prepare(
     'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
     senderReadCol + ' = ?2 WHERE id = ?1'
@@ -1888,16 +1940,18 @@ async function handleDmThreads(request, env) {
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
+  const now = Math.floor(Date.now() / 1000);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
-  /* Everything per viewer: counts and last-activity over the words this
-     reader may see, and a thread whose every word is held reads as absent. */
+  /* Everything per viewer: counts and last-activity over the words this reader
+     may see (unheld or their own, uncleared, UNEXPIRED); a thread whose every
+     visible word has expired or is held reads as absent. */
   const inner =
     'SELECT t.id, ' +
     'CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END AS other_hash, ' +
     'pr.nick, pr.avatar, ' +
-    '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ') AS msgs, ' +
-    '(SELECT MAX(m.created_at) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ') AS last_at, ' +
-    'CASE WHEN ' + DM_UNREAD_EXISTS + ' THEN 1 ELSE 0 END AS unread ' +
+    '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ') AS msgs, ' +
+    '(SELECT MAX(m.created_at) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ') AS last_at, ' +
+    'CASE WHEN ' + dmUnreadExists(now) + ' THEN 1 ELSE 0 END AS unread ' +
     'FROM dm_threads t LEFT JOIN profiles pr ON pr.hash = CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END ' +
     'WHERE t.a_hash = ?1 OR t.b_hash = ?1';
   const rows = await env.DB.prepare(
@@ -1931,8 +1985,10 @@ async function handleDmThread(request, env) {
   const me = await sha256hex(key);
   if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const [a, b] = dmPair(me, other);
+  const now = Math.floor(Date.now() / 1000);
+  const settings = await getAppSettings(env);
   const thread = await env.DB.prepare(
-    'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at, a_cleared_at, b_cleared_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
+    'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at, a_cleared_at, b_cleared_at, ttl FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
   ).bind(a, b).first();
   const prof = await env.DB.prepare('SELECT nick, avatar FROM profiles WHERE hash = ?1').bind(other).first();
   /* The correspondent's published X25519 public key, so the client can encrypt
@@ -1943,9 +1999,10 @@ async function handleDmThread(request, env) {
   const otherPub = otherPubRow ? otherPubRow.pubkey : null;
   const iBlocked = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
     .bind(me, other).first();
+  const ttl = (thread && thread.ttl) || dmDefaultTtl(settings);
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
-    return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
+    return json({ ok: true, thread_id: null, ttl, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
@@ -1953,14 +2010,14 @@ async function handleDmThread(request, env) {
      what arrived after its own clear stamp (a fresh start). */
   const myCleared = (me === a ? thread.a_cleared_at : thread.b_cleared_at) || 0;
   const totRow = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND m.created_at > ?3'
+    'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND m.created_at > ?3 AND ' + dmLive(now)
   ).bind(me, thread.id, myCleared).first();
   const total = totRow.n || 0;
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
-    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
-    ' AND m.created_at > ?5 ORDER BY m.id LIMIT ?3 OFFSET ?4'
+    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, m.expires_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
+    ' AND m.created_at > ?5 AND ' + dmLive(now) + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
   ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
   /* One conditional write: only when a visible word from the other side is
@@ -1969,8 +2026,17 @@ async function handleDmThread(request, env) {
     'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?3 AND EXISTS(' +
     'SELECT 1 FROM dms m WHERE m.thread_id = ?3 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
     'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
-  ).bind(me, Math.floor(Date.now() / 1000), thread.id, myCleared).run();
-  return json({ ok: true, thread_id: thread.id,
+  ).bind(me, now, thread.id, myCleared).run();
+  /* Start the disappearing-message clock. The messages this viewer is the
+     recipient of, and is opening for the first time, get opened_at = now and a
+     fresh expires_at = now + the conversation ttl, overriding the unopened
+     backstop. Idempotent (opened_at IS NULL); saved messages are left alone so a
+     save survives an open. This is why a message "expires N days after opening". */
+  await env.DB.prepare(
+    'UPDATE dms SET opened_at = ?2, expires_at = ?2 + ?5 WHERE thread_id = ?3 AND sender_hash != ?1 ' +
+    'AND COALESCE(held, 0) = 0 AND opened_at IS NULL AND COALESCE(saved, 0) = 0 AND created_at > ?4'
+  ).bind(me, now, thread.id, myCleared, ttl).run();
+  return json({ ok: true, thread_id: thread.id, ttl,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
     messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
 }
@@ -1994,10 +2060,288 @@ async function handleDmUnread(request, env) {
      page load, so a lock or IP ban logs them out on their next page turn. */
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
+  const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1) AND ' + DM_UNREAD_EXISTS
+    'SELECT COUNT(*) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1) AND ' + dmUnreadExists(now)
   ).bind(me).first();
   return json({ ok: true, unread: row.n || 0 }, 200);
+}
+
+/* Set the per-conversation disappearing-message lifetime. Either participant may
+   change it and the LAST write wins for both — it is a single column. Changing it
+   rebases every opened, unsaved message to the new lifetime, and the other party
+   is told live so their header updates. Upserts the thread if it does not exist
+   yet (a still-empty room, invisible in the inbox), so the choice sticks before
+   the first message is even sent. */
+async function handleDmTtl(request, env, ctx) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const other = String(data.with || '');
+  const ttl = Math.floor(Number(data.ttl) || 0);
+  if (!key || !/^[0-9a-f]{64}$/.test(other) || DM_TTLS.indexOf(ttl) === -1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const [a, b] = dmPair(me, other);
+  const now = Math.floor(Date.now() / 1000);
+  const thread = await env.DB.prepare(
+    'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs, ttl) VALUES (?1, ?2, ?3, ?3, ?4, 0, ?5) ' +
+    'ON CONFLICT(a_hash, b_hash) DO UPDATE SET ttl = ?5 RETURNING id'
+  ).bind(a, b, now, me, ttl).first();
+  await env.DB.prepare(
+    'UPDATE dms SET expires_at = opened_at + ?1 WHERE thread_id = ?2 AND opened_at IS NOT NULL AND COALESCE(saved, 0) = 0'
+  ).bind(ttl, thread.id).run();
+  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-ttl', scopes: ['user:' + other], from: me, thread_id: thread.id, ttl });
+  return json({ ok: true, ttl }, 200);
+}
+
+/* Save or unsave one message (either participant). A saved message is exempt from
+   auto-expiry for BOTH sides (expires_at NULL), so a save keeps it for everyone —
+   which is how expiry stays identical for both. Unsaving resumes the clock. */
+async function handleDmSave(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const other = String(data.with || '');
+  const id = Math.floor(Number(data.id) || 0);
+  const saved = data.saved ? 1 : 0;
+  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const [a, b] = dmPair(me, other);
+  /* The message must belong to this pair's thread; then either party may act. */
+  const row = await env.DB.prepare(
+    'SELECT d.id, d.created_at, d.opened_at, t.ttl FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
+    'WHERE d.id = ?1 AND t.a_hash = ?2 AND t.b_hash = ?3'
+  ).bind(id, a, b).first();
+  if (!row) return json({ ok: false, error: 'No such message.' }, 404);
+  const settings = await getAppSettings(env);
+  const ttl = row.ttl || dmDefaultTtl(settings);
+  const expires = saved ? null : (row.opened_at ? (row.opened_at + ttl) : (row.created_at + dmBackstopSeconds(settings)));
+  await env.DB.prepare('UPDATE dms SET saved = ?1, expires_at = ?2 WHERE id = ?3').bind(saved, expires, id).run();
+  return json({ ok: true, saved, expires_at: expires }, 200);
+}
+
+/* Delete a set of media objects from R2 and their dm_media rows. R2 delete takes
+   up to 1000 keys per call; the D1 delete is chunked to stay under the 50-subrequest
+   budget. Keys are opaque server-minted ids. */
+async function purgeMediaKeys(env, keys) {
+  if (!keys || !keys.length) return;
+  if (env.MEDIA) {
+    for (let i = 0; i < keys.length; i += 1000) {
+      try { await env.MEDIA.delete(keys.slice(i, i + 1000)); } catch (e) { /* keep going */ }
+    }
+  }
+  for (let i = 0; i < keys.length; i += 50) {
+    const chunk = keys.slice(i, i + 50);
+    const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+    try { await env.DB.prepare('DELETE FROM dm_media WHERE key IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
+  }
+}
+
+/* Recompute the total DM-media storage, cache it for the upload gate + admin
+   display, and — only if near the 10 GB free-tier wall — emergency-prune the
+   oldest media (LRU) until back under 90%, nulling the message's media pointer so
+   the client shows it as expired. Normal message-expiry keeps us far from this. */
+async function enforceMediaCap(env) {
+  const totalRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM dm_media').first();
+  let total = totalRow.total || 0;
+  const EMERGENCY = Math.floor(MEDIA_CAP_BYTES * 0.95);
+  const TARGET = Math.floor(MEDIA_CAP_BYTES * 0.90);
+  if (total > EMERGENCY) {
+    const old = await env.DB.prepare(
+      'SELECT key, size, msg_id FROM dm_media WHERE msg_id IS NOT NULL ORDER BY created_at ASC LIMIT 1000'
+    ).all();
+    const kill = [];
+    for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
+    if (kill.length) {
+      await purgeMediaKeys(env, kill.map((r) => r.key));
+      const ids = kill.map((r) => r.msg_id).filter(Boolean);
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+        try { await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL WHERE id IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
+      }
+    }
+  }
+  try {
+    await env.DB.prepare(
+      "INSERT INTO app_settings (k, v, updated_at) VALUES ('dm_media_bytes', ?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?1, updated_at = ?2"
+    ).bind(String(total), Math.floor(Date.now() / 1000)).run();
+    appSettingsCache = { at: 0, s: null };
+  } catch (e) { /* display-only cache; ignore */ }
+}
+
+/* The hourly sweep: hard-delete expired, unsaved messages (and their R2 media),
+   prune orphaned/dangling media, tidy empty threads, and keep the media total
+   fresh. Read-time filtering already hides expired messages instantly; this is
+   the storage-reclamation pass. Each step is isolated so one failure never stops
+   the rest. */
+async function sweepExpiredDms(env) {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const gone = await env.DB.prepare(
+      'SELECT media_key FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0 AND media_key IS NOT NULL LIMIT 5000'
+    ).bind(now).all();
+    const keys = (gone.results || []).map((r) => r.media_key).filter(Boolean);
+    if (keys.length) await purgeMediaKeys(env, keys);
+    await env.DB.prepare(
+      'DELETE FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0'
+    ).bind(now).run();
+  } catch (e) { console.log(JSON.stringify({ event: 'sweep_expired_failed', error: String(e) })); }
+  try {
+    const orphan = await env.DB.prepare(
+      'SELECT key FROM dm_media WHERE (msg_id IS NULL AND created_at < ?1) OR (msg_id IS NOT NULL AND msg_id NOT IN (SELECT id FROM dms)) LIMIT 2000'
+    ).bind(now - 3600).all();
+    await purgeMediaKeys(env, (orphan.results || []).map((r) => r.key));
+  } catch (e) { /* keep going */ }
+  try { await sweepDms(env); } catch (e) { /* empty-thread tidy */ }
+  try { await enforceMediaCap(env); } catch (e) { /* cap/accounting */ }
+}
+
+/* A random opaque R2 object id for a DM media blob. Reveals nothing about who
+   uploaded it or to whom, so the bucket cannot be traced to a member. */
+function randomHex(n) {
+  const b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+/* Upload one end-to-end-encrypted media blob. The bytes are ALREADY client-side
+   ciphertext (AES-256-GCM; the key lives only inside the E2E message body), so the
+   server stores an opaque blob under a random key and never sees the content.
+   Keyed + throttled + enabled/size/storage-cap gated; the Turnstile-gated /dm/send
+   that follows links it to its message. An unlinked upload is an orphan the hourly
+   sweep prunes after an hour. */
+async function handleDmMediaUpload(request, env) {
+  if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many uploads at once. Wait a minute.' }, 429);
+  const settings = await getAppSettings(env);
+  if (settings.media_enabled !== '1') return json({ ok: false, error: 'Media sharing is turned off.' }, 403);
+  const maxBytes = Number(settings.media_max_bytes) || (25 * 1024 * 1024);
+  const declared = Number(request.headers.get('Content-Length') || 0);
+  if (declared && declared > maxBytes + 8192) return json({ ok: false, error: 'That file is too large.' }, 413);
+  let form;
+  try { form = await request.formData(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(form.get('key') || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const file = form.get('file');
+  if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: 'No file.' }, 400);
+  if (file.size > maxBytes) return json({ ok: false, error: 'That file is too large.' }, 413);
+  const usedNow = Number(settings.dm_media_bytes) || 0;
+  if (usedNow + file.size > Math.floor(MEDIA_CAP_BYTES * 0.90)) {
+    return json({ ok: false, error: 'Media storage is full right now — older files clear soon, try again later.' }, 507);
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.length > maxBytes) return json({ ok: false, error: 'That file is too large.' }, 413);
+  const mediaKey = 'dm/' + randomHex(32);
+  await env.MEDIA.put(mediaKey, bytes, { httpMetadata: { contentType: 'application/octet-stream' } });
+  await env.DB.prepare('INSERT INTO dm_media (key, size, created_at, msg_id) VALUES (?1, ?2, ?3, NULL)')
+    .bind(mediaKey, bytes.length, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true, media_key: mediaKey, size: bytes.length }, 200);
+}
+
+/* Stream one media object's ciphertext to a thread participant. Membership is
+   verified against the live, unexpired message that references it; a stranger or an
+   expired reference gets an indistinguishable 404. The bytes are opaque ciphertext,
+   useless without the key the recipient holds from the E2E message body. */
+async function handleDmMediaGet(request, env) {
+  if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  const mediaKey = String(data.media_key || '');
+  if (!key || !/^dm\/[0-9a-f]{64}$/.test(mediaKey)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const now = Math.floor(Date.now() / 1000);
+  const row = await env.DB.prepare(
+    'SELECT t.a_hash, t.b_hash FROM dm_media md JOIN dms d ON d.id = md.msg_id JOIN dm_threads t ON t.id = d.thread_id ' +
+    'WHERE md.key = ?1 AND (d.expires_at IS NULL OR d.expires_at > ?2)'
+  ).bind(mediaKey, now).first();
+  if (!row || (row.a_hash !== me && row.b_hash !== me)) return json({ ok: false, error: 'Not found.' }, 404);
+  const obj = await env.MEDIA.get(mediaKey);
+  if (!obj) return json({ ok: false, error: 'Not found.' }, 404);
+  return new Response(obj.body, {
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Cache-Control': 'private, max-age=86400',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'",
+    },
+  });
+}
+
+/* Admin platform settings: read them (with the current media usage), and set the
+   tunable ones with sanity clamps. The growing home for site-wide toggles. */
+async function handleAdminSettings(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  if (data.set && typeof data.set === 'object') {
+    const now = Math.floor(Date.now() / 1000);
+    const me = await sha256hex(key);
+    const allowed = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1 };
+    const stmts = [];
+    for (const k of Object.keys(data.set)) {
+      if (!allowed[k]) continue;
+      let v = String(data.set[k]);
+      if (k === 'media_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
+      else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
+      else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : 604800);
+      else if (k === 'dm_backstop_days') v = String(Math.max(1, Math.min(365, Math.floor(Number(v)) || 30)));
+      stmts.push(env.DB.prepare(
+        'INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3, updated_by = ?4'
+      ).bind(k, v, now, me));
+    }
+    if (stmts.length) { await env.DB.batch(stmts); appSettingsCache = { at: 0, s: null }; }
+  }
+  const settings = await getAppSettings(env);
+  return json({ ok: true, settings, cap_bytes: MEDIA_CAP_BYTES, ttls: DM_TTLS }, 200);
+}
+
+/* Purge ALL DM media from the bucket (admin, destructive). Cursor-paginated list +
+   batched delete, then clear the pointers and the usage counter. Message text is
+   untouched; only the shared attachments are removed. */
+async function handleDmMediaPurge(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  let deleted = 0;
+  if (env.MEDIA) {
+    let cursor;
+    do {
+      const list = await env.MEDIA.list({ prefix: 'dm/', cursor, limit: 1000 });
+      const keys = (list.objects || []).map((o) => o.key);
+      if (keys.length) { try { await env.MEDIA.delete(keys); } catch (e) { /* keep going */ } deleted += keys.length; }
+      cursor = list.truncated ? list.cursor : null;
+    } while (cursor);
+  }
+  await env.DB.prepare('DELETE FROM dm_media').run();
+  await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL WHERE media_key IS NOT NULL').run();
+  await env.DB.prepare(
+    "INSERT INTO app_settings (k, v, updated_at) VALUES ('dm_media_bytes', '0', ?1) ON CONFLICT(k) DO UPDATE SET v = '0', updated_at = ?1"
+  ).bind(Math.floor(Date.now() / 1000)).run();
+  appSettingsCache = { at: 0, s: null };
+  return json({ ok: true, deleted }, 200);
 }
 
 /* The notification badge count: unread rows for this reader, one indexed COUNT.
@@ -2309,6 +2653,9 @@ async function handleDmDelete(request, env) {
     const surv = await env.DB.prepare('SELECT COUNT(*) AS n FROM dms WHERE thread_id = ?1 AND created_at > ?2')
       .bind(thread.id, Math.min(aC, bC)).first();
     if (!surv.n) {
+      /* Reclaim any R2 media the purged messages carried (D1 can't cascade to R2). */
+      const media = await env.DB.prepare('SELECT media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
+      await purgeMediaKeys(env, (media.results || []).map((r) => r.media_key).filter(Boolean));
       await env.DB.prepare('DELETE FROM dms WHERE thread_id = ?1').bind(thread.id).run();
       await env.DB.prepare('DELETE FROM dm_threads WHERE id = ?1').bind(thread.id).run();
       purged = true;
@@ -5221,6 +5568,12 @@ export default {
       if (path === '/api/comments/dm/delete' && request.method === 'POST') return await handleDmDelete(request, env);
       if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);
       if (path === '/api/comments/dm/pubkey' && request.method === 'POST') return await handleDmPubkey(request, env);
+      if (path === '/api/comments/dm/ttl' && request.method === 'POST') return await handleDmTtl(request, env, ctx);
+      if (path === '/api/comments/dm/save' && request.method === 'POST') return await handleDmSave(request, env);
+      if (path === '/api/comments/dm/media' && request.method === 'POST') return await handleDmMediaUpload(request, env);
+      if (path === '/api/comments/dm/media/get' && request.method === 'POST') return await handleDmMediaGet(request, env);
+      if (path === '/api/comments/dm/media/purge' && request.method === 'POST') return await handleDmMediaPurge(request, env);
+      if (path === '/api/comments/admin/settings' && request.method === 'POST') return await handleAdminSettings(request, env);
       if (path === '/api/comments/notifications/unread' && request.method === 'POST') return await handleNotifUnread(request, env);
       if (path === '/api/comments/notifications/read' && request.method === 'POST') return await handleNotifRead(request, env);
       if (path === '/api/comments/notifications' && request.method === 'POST') return await handleNotifList(request, env);
@@ -5276,8 +5629,16 @@ export default {
      back the database up to R2 so the dump reflects the cleaned state (the prior
      month's backup, kept ninety days, still holds what was just removed). */
   async scheduled(event, env, ctx) {
+    /* Hourly: only sweep expired disappearing DMs + their media (cheap, frequent,
+       the reclamation pass behind the instant read-time hiding). Monthly (any
+       other schedule): the sweep plus the full housekeeping + backup chain. */
+    if (event && event.cron === '0 * * * *') {
+      ctx.waitUntil(sweepExpiredDms(env));
+      return;
+    }
     ctx.waitUntil(
-      pruneIdentityIps(env)
+      sweepExpiredDms(env)
+        .then(() => pruneIdentityIps(env))
         .then(() => pruneComments(env))
         .then(() => sweepDms(env))
         .then(() => pruneNotifications(env))
