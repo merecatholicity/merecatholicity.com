@@ -20,8 +20,6 @@ import sqlite3
 import sys
 import threading
 import time
-import urllib.error
-import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
@@ -49,70 +47,6 @@ def shared_key():
 KEY = shared_key()
 VECTORS = np.load(VEC_PATH, mmap_mode="r")
 
-
-def store_answer(chat, msg, answer, sources):
-    """Report the finished answer back to the worker so it lands on the thread
-    even when the reader has disconnected from the live stream. Server-to-server,
-    carrying the shared key; retried a few times so a transient blip is survived.
-    `msg` is the user-question msg id — the worker's dedup key, so a retry can
-    never double an answer and two generations on one thread can never drop one.
-    A no-op with no store_url configured or no chat id, and only ever called for
-    1-on-1 chats (mentions are stored worker-side from the fully-read stream)."""
-    url = str(CFG.get("store_url", "")).strip()
-    if not url or not chat or not answer:
-        return
-    pub = [{"n": s.get("n"), "title": s.get("title"),
-            "heading": s.get("heading"), "url": s.get("url")}
-           for s in (sources or [])]
-    body = json.dumps({"key": KEY, "chat": chat, "msg": msg or 0,
-                       "answer": answer, "sources": pub}).encode()
-    last = None
-    for i in range(4):
-        try:
-            req = urllib.request.Request(
-                url, data=body, method="POST",
-                headers={"Content-Type": "application/json",
-                         # Cloudflare's edge 403s the default Python-urllib UA
-                         # (ingest.py sets the same for the same reason).
-                         "User-Agent": "curl/8.14.1"})
-            with urllib.request.urlopen(req, timeout=25) as r:
-                r.read()
-            return
-        except urllib.error.HTTPError as e:
-            # a definite server answer: 4xx never heals on retry (bad key,
-            # deleted chat) — log and stop; 5xx may be transient, keep trying
-            if e.code < 500:
-                print(f"store_answer refused ({e.code}) — not retrying", flush=True)
-                return
-            last = e
-            time.sleep(1.5 * (i + 1))
-        except Exception as e:  # noqa: BLE001 — network blip, keep retrying
-            last = e
-            time.sleep(1.5 * (i + 1))
-    print(f"store_answer failed after retries: {last}", flush=True)
-
-
-def flush_partial(chat, msg, answer):
-    """One best-effort POST of the GROWING answer to /store with partial:true
-    (the reconnect contract, 2026-07-29). The worker inserts the row once
-    (done = 0), grows it by UPDATE, and the final store_answer completes the
-    same row — so a reader who lost the stream polls the thread and keeps
-    painting live text instead of waiting out the whole generation. Never
-    retried: the next flush carries a longer snapshot anyway."""
-    url = str(CFG.get("store_url", "")).strip()
-    if not url or not chat or not msg or not answer:
-        return
-    body = json.dumps({"key": KEY, "chat": chat, "msg": msg,
-                       "answer": answer, "partial": True}).encode()
-    try:
-        req = urllib.request.Request(
-            url, data=body, method="POST",
-            headers={"Content-Type": "application/json",
-                     "User-Agent": "curl/8.14.1"})
-        with urllib.request.urlopen(req, timeout=8) as r:
-            r.read()
-    except Exception:  # noqa: BLE001 — best-effort by design
-        pass
 
 # One GPU: a single generation at a time (_gpu), a bounded wait-queue behind
 # it (_pending, capped at QUEUE_CAP = 1 running + the rest waiting), and an
@@ -357,8 +291,6 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"ok": False, "error": "Bad request."})
         effort = str(data.get("effort", "high"))
         context = data.get("context") or ""
-        chat = data.get("chat")   # 1-on-1 thread id; present → store the answer
-        msg = data.get("msg")     # the question's msg id — the /store dedup key
 
         # Preflight: retrieval known-crippled → refuse now (a non-busy 503),
         # so the worker fails the question over to the cloud instead of
@@ -416,9 +348,8 @@ class Handler(BaseHTTPRequestHandler):
             emit(json.dumps({"queue": position}) + "\n\n")
             waited = 0
             while waited < 900:
-                # a vanished reader with no thread to store to (a mention read
-                # whose caller died) has nowhere to deliver — free the slot
-                if client_gone[0] and not chat:
+                # a vanished reader has nowhere to deliver — free the slot
+                if client_gone[0]:
                     return
                 acquired = _gpu.acquire(timeout=20)
                 if acquired:
@@ -450,21 +381,6 @@ class Handler(BaseHTTPRequestHandler):
                 while not hb_stop.wait(15):
                     emit("\x02")
             threading.Thread(target=_beat, daemon=True).start()
-            # The partial flusher: every few seconds the answer-so-far goes to
-            # /store (partial:true), so a reader whose stream died reconnects
-            # to GROWING text by polling the thread. 1-on-1 chats only —
-            # mentions have no thread row to grow.
-            fl_stop = threading.Event()
-
-            def _flusher():
-                sent = 0
-                while not fl_stop.wait(4):
-                    snap = "".join(parts).strip()
-                    if len(snap) > sent:
-                        sent = len(snap)
-                        flush_partial(chat, msg, snap)
-            if chat and msg:
-                threading.Thread(target=_flusher, daemon=True).start()
             try:
                 for kind, delta in llm.chat_stream(CFG, messages, think=True):
                     if kind != "answer":
@@ -489,7 +405,6 @@ class Handler(BaseHTTPRequestHandler):
                     emit("The librarian's engine faltered before the answer began. Please ask again.")
             finally:
                 hb_stop.set()
-                fl_stop.set()
             if not "".join(parts).strip():
                 # generation ended with no visible answer (reasoning ran the
                 # context dry, or the model yielded nothing): say so honestly,
@@ -511,11 +426,6 @@ class Handler(BaseHTTPRequestHandler):
             with _plock:
                 _pending -= 1
 
-        # Store after releasing the GPU, so a slow callback never blocks the next
-        # in line. This is the path that outlives a reader disconnect.
-        answer = "".join(parts).strip()
-        if chat and answer:
-            store_answer(chat, msg, answer, sources)
 
 
 def sd_notify(msg):
