@@ -1293,3 +1293,72 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
     min-height: 46px; padding-left: 1.3rem; padding-right: 1.3rem; font-size: 1rem;
   }
 }
+
+/* ---- Phase 3: the high-touch member screens (phones only) ---- */
+@media (max-width: 600px) {
+
+  /* onboarding: faith as tappable cards, a prominent key reveal */
+  .faith-radios { margin: 0.6rem 0; }
+  .faith-legend { font-weight: 600; margin-bottom: 0.5rem; color: var(--ink); }
+  .faith-option {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.9rem 1rem;
+    border: 1px solid var(--rule); border-radius: 12px; margin-bottom: 0.55rem; cursor: pointer;
+    color: var(--ink);
+  }
+  .faith-option:has(input:checked) { border-color: var(--maroon); background: var(--cream-2); box-shadow: inset 0 0 0 1px var(--maroon); }
+  .faith-option input { width: 1.25rem; height: 1.25rem; flex: none; accent-color: var(--maroon); }
+
+  .key-box { border-radius: 14px; padding: 1rem; }
+  .key-note { font-size: 0.95rem; }
+  .key-row { gap: 0.5rem; }
+  .key-input { font-size: 15px; padding: 0.75rem; border-radius: 10px; }
+  .key-copy { min-height: 46px; font-size: 1rem; padding-left: 1.2rem; padding-right: 1.2rem; }
+  .agree-row { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.6rem 0; font-size: 0.98rem; }
+  .agree-row input[type="checkbox"] { width: 1.35rem; height: 1.35rem; flex: none; accent-color: var(--maroon); margin-top: 0.05rem; }
+
+  /* profile: an app profile screen — big centered avatar, stacked identity,
+     full-width actions */
+  .profile .profile-head { flex-direction: column; align-items: center; text-align: center; gap: 0.5rem; }
+  .profile .profile-avatar { width: 96px; height: 96px; flex: none; }
+  .profile .profile-avatar img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; }
+  .profile .profile-avatar:empty {
+    border-radius: 50%; background: var(--cream-2); border: 1px solid var(--rule);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .profile .profile-avatar:empty::before { content: "\1F464"; font-size: 2.6rem; opacity: 0.5; }
+  .profile .profile-names { display: flex; flex-direction: column; align-items: center; gap: 0.15rem; }
+  .profile .profile-name { font-size: 1.5rem; font-weight: 700; line-height: 1.15; }
+  .profile .profile-assigned { font-size: 0.85rem; }
+  .profile .profile-faith { font-size: 0.9rem; }
+  .profile .profile-rank { color: var(--maroon); }
+  .profile .btn-send, .profile .btn-anon {
+    display: block; width: 100%; min-height: 46px; margin: 0.5rem 0 0;
+    border-radius: 12px; font-size: 1rem;
+  }
+  .profile h3.profile-label { margin-top: 1.1rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
+
+  /* merecat: a chat-style screen — a sticky composer above the tab bar and
+     iMessage-like bubbles. The section reserves room so the fixed composer never
+     covers the last message. */
+  section:has(.merecat-form) { padding-bottom: 5rem; }
+  .merecat-form {
+    position: fixed; left: 0; right: 0;
+    bottom: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px)); z-index: 39;
+    margin: 0; padding: 0.5rem 0.7rem; gap: 0.5rem; align-items: flex-end;
+    background: var(--surface); border-top: 1px solid var(--rule);
+    box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.06);
+  }
+  .merecat-q {
+    flex: 1; min-height: 2.7rem; max-height: 38vh; resize: none;
+    border-radius: 20px; padding: 0.65rem 1rem; font-size: 16px;
+  }
+  .merecat-form .btn-send {
+    min-width: 0; border-radius: 20px; padding: 0.6rem 1.15rem; min-height: 2.7rem;
+    font-size: 1rem; align-self: flex-end; flex: none;
+  }
+  .merecat-msg { max-width: 85%; border-radius: 16px; padding: 0.65rem 0.9rem; }
+  .merecat-msg.you { background: var(--maroon); color: #fff; border-color: var(--maroon); border-bottom-right-radius: 5px; }
+  .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
+  .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
+  .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
+}
