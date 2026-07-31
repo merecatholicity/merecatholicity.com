@@ -660,6 +660,7 @@
     tokenWait: null,
     anonAllowed: false,
     altIps: { ipv4: '', ipv6: '' },
+    dmView: null,   // set by viewDm: the open thread's live drop-in hook
   };
 
   /* Reverse-DNS results, cached per address across drawers so a fingerprint
@@ -2090,10 +2091,10 @@
     renderIdentity();
   }
 
-  function dmUnreadCheck() {
+  function dmUnreadCheck(force) {
     if (!state.key) return;
     var c = dmCacheGet();
-    if (c && Date.now() - c.at < 90000) return;
+    if (!force && c && Date.now() - c.at < 90000) return;
     /* Stamp first, so parallel page loads inside the window stay quiet. */
     try { localStorage.setItem(DM_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
     readMark();
@@ -2118,10 +2119,10 @@
     try { localStorage.setItem(NOTIF_CACHE, JSON.stringify({ n: n, at: Date.now() })) } catch (e) {}
     renderIdentity();
   }
-  function notifUnreadCheck() {
+  function notifUnreadCheck(force) {
     if (!state.key) return;
     var c = notifCacheGet();
-    if (c && Date.now() - c.at < 90000) return;
+    if (!force && c && Date.now() - c.at < 90000) return;
     try { localStorage.setItem(NOTIF_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
     readMark();
     fetch(API + '/notifications/unread', {
@@ -2134,6 +2135,44 @@
       if (d.ok) notifCacheSet(d.unread);
     }).catch(function () {});
   }
+
+  /* ---- Live DMs and notifications (window.mcLive private user scope) ----
+     A signed-in member authenticates the board socket and subscribes to its own
+     user:<hash> scope; the worker pushes that member's DMs and notifications
+     instantly. Here we turn those pushes into the badge tick, the open DM thread
+     drop-in, and (for the Lit lists) a self-refresh. No push ⇒ the 90-second
+     poll below is the fallback, exactly as before. */
+  var dmBadgeT = 0, notifBadgeT = 0;
+  /* Refresh a badge from the server, debounced so a burst of events (and the
+     shared read budget) coalesce into one fresh read. */
+  function liveDmBadge() { clearTimeout(dmBadgeT); dmBadgeT = setTimeout(function () { dmUnreadCheck(true); }, 300); }
+  function liveNotifBadge() { clearTimeout(notifBadgeT); notifBadgeT = setTimeout(function () { notifUnreadCheck(true); }, 300); }
+
+  function onLiveDm(m) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.from && m.message) {
+      state.dmView.append(m.message);   // instant in the open conversation
+    } else {
+      liveDmBadge();   // a background thread — ring the badge (McInbox self-refreshes if open)
+    }
+  }
+  function onLiveNotif() {
+    /* The notifications list (McNotifications) reloads itself and marks read;
+       elsewhere, just ring the badge. */
+    if (new URLSearchParams(location.search).get('notifications') === '1') return;
+    liveNotifBadge();
+  }
+  /* Authenticate the live socket for this member so DM/notif pushes arrive. */
+  function enableMemberLive() {
+    if (state.key && state.myHash && window.mcLive && window.mcLive.member) {
+      window.mcLive.member.enable(state.key, state.myHash);
+    }
+  }
+  document.addEventListener('mc-live', function (ev) {
+    var m = ev.detail; if (!m) return;
+    if (m.t === 'dm') onLiveDm(m);
+    else if (m.t === 'notification') onLiveNotif();
+  }, { signal: bootSig });
 
   /* A locked identity or a banned network, discovered on any keyed call:
      forget the key, raise a message that outlives the redirect, and land on
@@ -2264,6 +2303,7 @@
       state.key = key;
       sha256hex(key).then(function (h) {
         state.myHash = h;
+        enableMemberLive();
         renderIdentity();
         showKeyBox();
       });
@@ -2327,6 +2367,7 @@
       if (BOARD) { location.reload(); return; }
       sha256hex(key).then(function (h) {
         state.myHash = h;
+        enableMemberLive();
         hideKeyBox();
         renderIdentity();
         load();
@@ -4515,6 +4556,22 @@
           list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
         }
         d.messages.forEach(function (m) { list.appendChild(dmMsgNode(m, shortName)); });
+        /* Live drop-in: a message pushed over the private user scope from THIS
+           other party lands at once. It mirrors the send path — appended when we
+           are on the page it lands on, else the badge rings (it is on a later
+           page). Their own echo (sender is me) is ignored. */
+        state.dmView = { other: other, append: function (msg) {
+          if (!msg || String(msg.sender_hash) === state.myHash) return;
+          var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
+          d.total += 1;
+          if (d.page === newMsgPage) {
+            var node = dmMsgNode(msg, shortName);
+            list.appendChild(node);
+            node.scrollIntoView();
+          } else {
+            liveDmBadge();
+          }
+        } };
         var dmPages = Math.max(1, Math.ceil(d.total / d.per));
         function dmHref(i) { return 'community.html?dm=' + other + '&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, dmHref);
@@ -6401,6 +6458,7 @@
     var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
     ready.then(function (h) {
       state.myHash = h;
+      enableMemberLive();
       loadMyProfile();
       dmUnreadCheck();
       notifUnreadCheck();
@@ -6463,6 +6521,7 @@
     var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
     ready.then(function (h) {
       state.myHash = h;
+      enableMemberLive();
       renderIdentity();
       renderButtons();
       load();

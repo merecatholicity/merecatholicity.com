@@ -73,9 +73,20 @@ class McInbox extends LitElement {
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
-    const kit = this.kit;
     document.title = 'Inbox | Catholicity Board';
-    if (!kit.state.key) { this.err = 'gate'; return; }
+    if (!this.kit.state.key) { this.err = 'gate'; return; }
+    this.load();
+    /* Live: a DM pushed over the private user scope bumps its thread to the top
+       and rings the count, so the inbox stays current while it is open. */
+    this._onLive = (ev) => { if (ev.detail && ev.detail.t === 'dm') this.load(); };
+    document.addEventListener('mc-live', this._onLive);
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._onLive) document.removeEventListener('mc-live', this._onLive);
+  }
+  load() {
+    const kit = this.kit;
     const pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     kit.fetchRetry(kit.API + '/dm/threads', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
