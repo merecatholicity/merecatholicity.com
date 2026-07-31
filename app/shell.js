@@ -31,6 +31,7 @@ import { LitElement, html } from '../vendor/lit-all.min.js';
 import * as store from './store.js';
 import * as api from './api.js';
 import { installLive } from './live.js';
+import { installChrome } from './appchrome.js';
 import './richtext.js';
 import './views/board.js';
 import './views/post.js';
@@ -259,6 +260,11 @@ customElements.define('mc-audio-dock', McAudioDock);
      Forum views subscribe on mount; idle tabs close it and reopen on return. */
   installLive();
 
+  /* The mobile app chrome: the persistent bottom tab bar, top app bar, sheet,
+     and Home launcher. Phones only (CSS-gated); desktop renders none of it.
+     chrome.sync() re-syncs the active tab, badges, and Home mount in boots(). */
+  var chrome = installChrome();
+
   /* PWA: the installable face. The worker caches only the small shell
      assets; documents and the API always ride the network. */
   if ('serviceWorker' in navigator) {
@@ -390,6 +396,7 @@ customElements.define('mc-audio-dock', McAudioDock);
     }
     markHere();
     dock.sync();
+    chrome.sync();
   }
 
   var navigating = false;

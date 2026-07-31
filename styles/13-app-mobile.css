@@ -1,0 +1,178 @@
+/* ---- Mobile app chrome (appification, Phase 1) ----
+   Phones only. Desktop (min-width:601px) renders NONE of this and is byte
+   unchanged. Everything uses the palette tokens (01-tokens.css) so light and
+   dark both work. The prized hamburger (03-nav.css / nav.js) is kept fully
+   intact and merely gated off here — remove the two lines under "gated off"
+   below to revive it on mobile. */
+
+/* The chrome elements exist in the DOM on every page (the shell mounts them once
+   with data-mc-app), but are hidden everywhere by default; the phone media query
+   turns them on. So desktop never shows them. */
+mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
+
+@media (max-width: 600px) {
+  :root { --mc-appbar-h: 3rem; --mc-tabbar-h: 3.6rem; }
+
+  /* gated off on mobile: the app chrome replaces the site menu + theme toggle */
+  nav.site { display: none !important; }
+  .theme-toggle { display: none !important; }
+
+  /* room for the fixed bars */
+  body {
+    padding-top: calc(var(--mc-appbar-h) + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px) + 0.4rem);
+  }
+
+  /* ---- top app bar ---- */
+  mc-appbar { display: block; }
+  .mc-appbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    height: calc(var(--mc-appbar-h) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+    display: flex; align-items: center; gap: 0.25rem;
+    background: var(--surface); border-bottom: 1px solid var(--rule);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+  }
+  .mc-appbar-side { display: flex; align-items: center; min-width: 5.2rem; }
+  .mc-appbar-r { justify-content: flex-end; }
+  .mc-appbar-title {
+    flex: 1; text-align: center; font-weight: 600; font-size: 1.02rem;
+    color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 0.2rem;
+  }
+  .mc-ab-btn {
+    -webkit-appearance: none; appearance: none; border: 0; background: none; cursor: pointer;
+    font-size: 1.25rem; line-height: 1; color: var(--maroon); text-decoration: none;
+    width: 2.5rem; height: 2.5rem; display: inline-flex; align-items: center; justify-content: center;
+    position: relative; border-radius: 50%;
+  }
+  .mc-ab-btn:active { background: var(--cream-2); }
+  .mc-ab-brand {
+    font-size: 1.4rem; color: var(--maroon); text-decoration: none;
+    width: 2.5rem; height: 2.5rem; display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* ---- bottom tab bar ---- */
+  mc-tabbar { display: block; }
+  .mc-tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    height: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    display: flex; align-items: stretch;
+    background: var(--surface); border-top: 1px solid var(--rule);
+    box-shadow: 0 -1px 12px rgba(0, 0, 0, 0.08);
+  }
+  .mc-tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; text-decoration: none; color: var(--faint); font-size: 0.66rem;
+    padding: 0.3rem 0; -webkit-tap-highlight-color: transparent;
+  }
+  .mc-tab-ico { font-size: 1.35rem; line-height: 1; position: relative; transition: transform 0.12s ease; }
+  .mc-tab-lbl { line-height: 1; }
+  .mc-tab-on { color: var(--maroon); }
+  .mc-tab-on .mc-tab-ico { transform: translateY(-1px) scale(1.06); }
+
+  /* the raised center hero: Ask Merecat, the standout */
+  .mc-tab-hero .mc-tab-ico {
+    width: 3.1rem; height: 3.1rem; margin-top: -1.6rem; border-radius: 50%;
+    background: #8b1a1a; color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; box-shadow: 0 4px 14px rgba(139, 26, 26, 0.45); border: 3px solid var(--surface);
+  }
+  .mc-tab-hero .mc-tab-lbl { color: var(--maroon); font-weight: 600; margin-top: -0.1rem; }
+  .mc-tab-hero.mc-tab-on .mc-tab-ico { transform: scale(1.04); }
+
+  .mc-tab-badge {
+    position: absolute; top: -0.35rem; right: -0.55rem; min-width: 1.05rem; height: 1.05rem;
+    padding: 0 0.25rem; border-radius: 0.55rem; background: #d33; color: #fff;
+    font-size: 0.6rem; line-height: 1.05rem; text-align: center; font-weight: 700;
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+
+  /* lift the audio dock clear of the tab bar */
+  .mc-dock { bottom: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px) + 12px) !important; }
+
+  /* ---- the slide-up sheet ---- */
+  mc-sheet { display: block; }
+  .mc-sheet-scrim {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.42); z-index: 60;
+    opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0.2s ease;
+  }
+  .mc-sheet-scrim.on { opacity: 1; visibility: visible; }
+  .mc-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
+    max-height: 86vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    background: var(--surface); border-radius: 18px 18px 0 0;
+    box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.28);
+    padding: 0.3rem 1rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
+    transform: translateY(100%); transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .mc-sheet.on { transform: translateY(0); }
+  .mc-sheet-grip {
+    display: block; width: 2.4rem; height: 0.3rem; border: 0; padding: 0; cursor: pointer;
+    border-radius: 999px; background: var(--rule); margin: 0.6rem auto 0.4rem;
+  }
+  .mc-sheet-head { margin: 0.1rem 0 0.6rem; font-size: 1.1rem; color: var(--ink); }
+
+  /* settings rows */
+  .mc-set-sec { margin: 1rem 0 0.3rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+  .mc-set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%;
+    padding: 0.85rem 0.2rem; border: 0; border-bottom: 1px solid var(--rule); background: none;
+    color: var(--ink); text-decoration: none; font: inherit; text-align: left; cursor: pointer;
+  }
+  .mc-set-row small { display: block; color: var(--faint); font-size: 0.78rem; margin-top: 0.1rem; }
+  .mc-set-go { color: var(--faint); font-size: 1.1rem; flex: none; }
+  .mc-set-danger { color: var(--maroon); }
+  .mc-set-key { display: flex; gap: 0.5rem; padding: 0.5rem 0.2rem 0.8rem; }
+  .mc-set-keyin {
+    flex: 1; min-width: 0; font-family: monospace; font-size: 1rem; padding: 0.6rem;
+    border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink);
+  }
+  .mc-set-copy { min-width: 0 !important; padding: 0.5rem 1rem; }
+  .mc-set-switch {
+    width: 2.6rem; height: 1.5rem; border-radius: 999px; background: var(--rule);
+    position: relative; transition: background 0.2s ease; flex: none;
+  }
+  .mc-set-switch.on { background: var(--maroon); }
+  .mc-set-knob {
+    position: absolute; top: 2px; left: 2px; width: 1.1rem; height: 1.1rem; border-radius: 50%;
+    background: #fff; transition: transform 0.2s ease;
+  }
+  .mc-set-switch.on .mc-set-knob { transform: translateX(1.1rem); }
+
+  /* ---- the Home launcher ---- */
+  mc-home { display: block; }
+  main.mc-app-home > :not(mc-home) { display: none; }
+  .mc-home { padding: 0.4rem 0 1rem; }
+  .mc-home-hero { text-align: center; padding: 1.4rem 1rem 1.2rem; }
+  .mc-home-cross { font-size: 2.4rem; color: var(--maroon); display: block; }
+  .mc-home-hero h1 { margin: 0.3rem 0 0.1rem; font-size: 1.5rem; color: var(--ink); }
+  .mc-home-hero p { margin: 0; color: var(--faint); font-size: 0.95rem; }
+  .mc-home-feats { display: flex; flex-direction: column; gap: 0.7rem; padding: 0 1rem; }
+  .mc-home-feat {
+    display: flex; align-items: center; gap: 0.8rem; text-decoration: none;
+    background: var(--cream-2); border: 1px solid var(--rule); border-radius: 14px; padding: 0.9rem 1rem;
+    color: var(--ink); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  }
+  .mc-home-feat-ico {
+    font-size: 1.7rem; width: 2.6rem; height: 2.6rem; flex: none;
+    display: flex; align-items: center; justify-content: center; background: var(--surface); border-radius: 12px;
+  }
+  .mc-home-feat-txt { flex: 1; display: flex; flex-direction: column; }
+  .mc-home-feat-txt strong { font-size: 1.05rem; color: var(--maroon); }
+  .mc-home-feat-txt small { color: var(--faint); font-size: 0.82rem; }
+  .mc-home-go { color: var(--faint); font-size: 1.3rem; flex: none; }
+  .mc-home-sec { margin: 1.4rem 1rem 0.5rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+  .mc-home-shelf { padding: 0 1rem; }
+  .mc-home-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+    padding: 0.95rem 0.2rem; border-bottom: 1px solid var(--rule); text-decoration: none; color: var(--ink);
+  }
+  .mc-home-row-txt { display: flex; flex-direction: column; }
+  .mc-home-row-txt strong { font-weight: 600; }
+  .mc-home-row-txt small { color: var(--faint); font-size: 0.8rem; margin-top: 0.1rem; }
+  .mc-home-settings {
+    display: block; margin: 1.4rem auto 0.5rem; padding: 0.7rem 1.4rem;
+    border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); color: var(--ink);
+    font: inherit; cursor: pointer;
+  }
+}
