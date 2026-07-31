@@ -23,7 +23,7 @@ NAV_YML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nav.yml")
 # home page (its <head> carries og/twitter meta), the contact form (an async
 # Turnstile script the extractor can't see), the dynamic board SPA, and the
 # off-site interstitial.
-PAGES = ["index.html", "contact.html", "community.html", "away.html", "kjv.html", "douay-rheims.html"]
+PAGES = ["index.html", "contact.html", "community.html", "away.html", "kjv.html", "douay-rheims.html", "where-to-begin.html", "the-book.html"]
 # The Makefile runs this from the repo root (`python scripts/nav.py`), so these
 # paths are relative to the root: docs/ holds the built PAGES, and the generated
 # nav fragment lives in partials/. (nav.yml is the exception — see NAV_YML above,
@@ -88,7 +88,18 @@ def render_sub(title, children):
     return lines
 
 
+# The horizontal site menu (nav.site) is DISABLED for now: the app shell's left
+# app-bar + Home launcher + Settings gear are the platform's navigation. The
+# generating code below is intentionally KEPT (good code, the owner may want it
+# back) — flip NAV_ENABLED to True and rerun `make menu` to restore it. See
+# CLAUDE.md. The soft-nav content anchor (the nav.js <script> + <main>) is emitted
+# either way, so nothing downstream breaks.
+NAV_ENABLED = False
+
+
 def build_nav(items):
+    if not NAV_ENABLED:
+        return '<script defer src="nav.js"></script>\n'
     lines = ['<nav class="site">', TOGGLE, '<ul class="nav-list" id="nav-list">']
     for item in items:
         title, kind, payload, _col = parse_item(item)  # col is ignored on the top bar
@@ -113,7 +124,10 @@ def main():
         f.write(nav)
     print("wrote", FRAGMENT)
 
-    block = re.compile(r'<nav class="site">.*?<script defer src="nav\.js"></script>(?:\s*<main>)?', re.S)
+    # Matches the nav block whether or not the <nav class="site"> menu is present
+    # (NAV_ENABLED off ⇒ only the script+<main> anchor), so `make menu` stays
+    # idempotent across the disable.
+    block = re.compile(r'(?:<nav class="site">.*?</nav>\s*)?<script defer src="nav\.js"></script>(?:\s*<main>)?', re.S)
     for page in PAGES:
         with open('docs/' + page) as f:
             src = f.read()

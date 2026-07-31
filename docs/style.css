@@ -1612,6 +1612,12 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 /* the deskbar is hidden until the desktop query turns it on (mobile never shows it) */
 mc-deskbar { display: none; }
 
+/* The old horizontal site menu is RETIRED — the platform now navigates through the
+   left app-bar (mc-sidebar) + the Home launcher + the Settings gear. Hidden here so
+   it disappears at once (the markup is kept in the HTML for easy revival; scripts/
+   nav.py's NAV_ENABLED=False strips it from the pages on the next full build). */
+nav.site { display: none !important; }
+
 /* ---- system-sans on the platform UI (ungated) ---- */
 /* Applied to UI CONTAINERS; their descendants inherit. Long-form article prose is
    NOT in any of these containers, so it keeps the body serif. */
@@ -1640,6 +1646,22 @@ mc-deskbar, mc-appbar, mc-tabbar, mc-sheet, mc-home, mc-settings,
 .mc-pal-charcoal .mc-pal-sw { background: linear-gradient(135deg, #0f1113 50%, #ef6b6b 50%); }
 .mc-pal-slate .mc-pal-sw { background: linear-gradient(135deg, #0d1117 50%, #ef6b6b 50%); }
 .mc-pal-ink .mc-pal-sw { background: linear-gradient(135deg, #14120f 50%, #ef6b6b 50%); }
+
+/* ---- Show-my-key (ungated): the key is a full-width block ABOVE the Copy
+   button, never a squished field crammed beside it (fixes mobile + desktop) ---- */
+.mc-set-key { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem 0.2rem; }
+.mc-set-keyin { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 0.85rem; padding: 0.55rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.mc-set-copy { align-self: flex-start; }
+
+/* ---- the persistent site footer (both breakpoints) ---- */
+mc-footer { display: block; }
+.mc-footer { text-align: center; padding: 1.8rem 1rem 2.2rem; margin-top: 2.5rem; border-top: 1px solid var(--rule); color: var(--faint); font-size: 0.86rem; font-family: var(--font-sans); }
+.mc-footer a { color: var(--faint); text-decoration: none; }
+.mc-footer a:hover { color: var(--maroon); text-decoration: underline; }
+.mc-foot-sep { margin: 0 0.6rem; opacity: 0.6; }
+/* the shell footer is canonical; hide any page's own static footer under it so
+   they don't stack (the static one still shows under ?app=0, no shell) */
+body.mc-app > footer { display: none; }
 
 @media (min-width: 601px) {
   :root { --mc-deskbar-h: 3.25rem; }
@@ -1709,8 +1731,9 @@ mc-deskbar, mc-appbar, mc-tabbar, mc-sheet, mc-home, mc-settings,
   .mc-db-menu .mc-set-row small { display: block; color: var(--faint); font-size: 0.78rem; margin-top: 0.1rem; }
   .mc-db-menu .mc-set-go { color: var(--faint); flex: none; }
   .mc-db-menu .mc-set-danger { color: var(--maroon); }
-  .mc-db-menu .mc-set-key { display: flex; gap: 0.5rem; padding: 0.5rem 0.2rem; }
-  .mc-db-menu .mc-set-keyin { flex: 1; min-width: 0; font-family: monospace; font-size: 0.9rem; padding: 0.5rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .mc-db-menu .mc-set-key { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem 0.2rem; }
+  .mc-db-menu .mc-set-keyin { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 0.85rem; padding: 0.55rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .mc-db-menu .mc-set-copy { align-self: flex-start; }
   .mc-db-menu .mc-set-switch { width: 2.6rem; height: 1.5rem; border-radius: 999px; background: var(--rule); position: relative; transition: background var(--tap); flex: none; }
   .mc-db-menu .mc-set-switch.on { background: var(--maroon); }
   .mc-db-menu .mc-set-knob { position: absolute; top: 2px; left: 2px; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: #fff; transition: transform var(--tap); }
@@ -1761,6 +1784,52 @@ mc-deskbar, mc-appbar, mc-tabbar, mc-sheet, mc-home, mc-settings,
     border-radius: 8px; transition: background var(--tap), color var(--tap);
   }
   nav.site .nav-list > li > a:hover, nav.site .nav-list > li > .nav-parent:hover { background: var(--cream); }
+
+  /* ---- the LEFT app-bar: the mobile tabs stood up as a floating, vertically-
+     centered rail (GNOME/Facebook-inspired). Wide with labels by default; the
+     clicker collapses it to icons and the content floats back left. ---- */
+  :root { --mc-sidebar-w: 13rem; --mc-sidebar-min: 3.7rem; }
+  mc-sidebar { display: block; }
+  .mc-sidebar {
+    position: fixed; left: 0.7rem; top: 50%; transform: translateY(-50%); z-index: 44;
+    display: flex; flex-direction: column; gap: 0.15rem; padding: 0.5rem;
+    width: var(--mc-sidebar-min); transition: width var(--tap);
+    background: var(--glass); backdrop-filter: saturate(1.4) blur(8px);
+    border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow-2);
+  }
+  .mc-sidebar.mc-sb-wide { width: var(--mc-sidebar-w); }
+  .mc-sb-toggle {
+    align-self: flex-end; width: 1.9rem; height: 1.9rem; margin-bottom: 0.2rem; padding: 0;
+    border: 0; background: none; color: var(--faint); cursor: pointer; border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .mc-sb-toggle:hover { background: var(--cream); color: var(--maroon); }
+  .mc-sb-toggle .mc-ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mc-sb-item {
+    position: relative; display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0.55rem; border-radius: 10px;
+    text-decoration: none; color: var(--muted-c); white-space: nowrap; overflow: hidden;
+    transition: background var(--tap), color var(--tap);
+  }
+  .mc-sb-item:hover { background: var(--cream); color: var(--maroon); }
+  .mc-sb-item.mc-tab-on { background: color-mix(in srgb, var(--maroon) 12%, transparent); color: var(--maroon); font-weight: 600; }
+  .mc-sb-ico { position: relative; flex: none; width: 1.9rem; height: 1.9rem; display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+  .mc-sb-ico .mc-ico { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .mc-sb-lbl { font-size: 0.98rem; opacity: 0; width: 0; transition: opacity var(--tap); }
+  .mc-sidebar.mc-sb-wide .mc-sb-lbl { opacity: 1; width: auto; }
+  .mc-sb-item .mc-tab-badge {
+    position: absolute; top: 0.15rem; left: 1.95rem; min-width: 1.05rem; height: 1.05rem; padding: 0 0.22rem;
+    border-radius: 0.55rem; background: #d33; color: #fff; font-size: 0.62rem; line-height: 1.05rem; text-align: center; font-weight: 700;
+  }
+  /* content clears the floating rail; the expanded rail pushes it further right */
+  body.mc-app { padding-left: calc(var(--mc-sidebar-min) + 1.5rem); }
+  body.mc-app.mc-sb-wide { padding-left: calc(var(--mc-sidebar-w) + 1.5rem); }
+
+  /* history back/forward group on the top bar */
+  .mc-db-hist { display: flex; align-items: center; gap: 0.1rem; flex: none; }
+
+  /* ---- desktop Home becomes the launcher, exactly like the phone Home ---- */
+  mc-home { display: block; }
+  main.mc-app-home > :not(mc-home) { display: none; }
 }
 /* The Library drill-down (mc-library, app/views/library.js). App-style category
    cards → a shelf's works, both breakpoints, responsive. It is a navigation

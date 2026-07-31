@@ -600,6 +600,7 @@
   }
   function clearKey() {
     try { localStorage.removeItem(STORAGE); } catch (e) {}
+    try { localStorage.removeItem('mc-admin'); } catch (e) {}
   }
   function makeKey() {
     var bytes = new Uint8Array(32);
@@ -2636,25 +2637,9 @@
       merecatLink.href = 'community.html?merecat=1';
       merecatLink.title = 'Ask the librarian';
       line.appendChild(merecatLink);
-      line.appendChild(document.createTextNode(' · '));
-      /* Same line now: who you are, then the account actions, after the nav. */
-      line.appendChild(document.createTextNode('Logged in as '));
-      line.appendChild(el('strong', null, state.myNick || displayName(state.myHash)));
-      line.appendChild(document.createTextNode('. '));
-      line.appendChild(identityAction('Show my key', showKeyBox));
-      line.appendChild(document.createTextNode(' · '));
-      line.appendChild(identityAction('Logout', function () {
-        appConfirm('Log out and forget this identity here? Unless you saved your key, there is no way back to this name.', { okLabel: 'Log out', danger: true }, function (ok) {
-          if (!ok) return;
-          clearKey();
-          state.key = '';
-          state.myHash = '';
-          if (BOARD) { location.reload(); return; }
-          hideKeyBox();
-          renderIdentity();
-          load();
-        });
-      }));
+      /* The platform-level identity controls (who you are, Show my key, Logout)
+         moved OUT of the forum line into the platform chrome / Settings gear, now
+         that the site is a platform and not only a forum. Forum controls stay. */
     } else {
       line.appendChild(document.createTextNode(state.anonAllowed
         ? 'Commenting anonymously. '
@@ -3098,11 +3083,9 @@
     function ensureAuditLink() {
       var ar = section.querySelector('.board-cat-admin');
       if (ar) ar.style.display = isAdmin() ? '' : 'none';
+      /* "Administrative options" moved to the platform Settings gear (admin-only),
+         off the community page — the site is a platform now, not just a forum. */
       auditSlot.textContent = '';
-      if (!isAdmin()) return;
-      var a = el('a', 'identity-action', 'Administrative options');
-      a.href = 'community.html?admin=1';
-      auditSlot.appendChild(a);
     }
     ensureAuditLink();
     new MutationObserver(ensureAuditLink)
@@ -4065,6 +4048,9 @@
           state.myAdmin = !!d.profile.admin;
         }
         state.profileLoaded = true;
+        /* Bridge admin status to the platform chrome (the Settings gear reads this
+           flag to show the admin-only "Administrative options" entry). */
+        try { localStorage.setItem('mc-admin', isAdmin() ? '1' : '0'); } catch (e) {}
         if (BOARD && isAdmin() !== wasAdmin) { profileWaiters = []; route(); return; }
         if (section.querySelector('.comment-identity')) renderIdentity();
         flushProfileWaiters();
