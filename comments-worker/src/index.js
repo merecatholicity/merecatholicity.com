@@ -805,6 +805,14 @@ async function handleEdit(request, env, ctx) {
     'UPDATE comments SET body = ?1, status = ?2, ai_verdict = ?3, edited_at = ?4 WHERE id = ?5'
   ).bind(body, status, verdict, editedAt, id).run();
   if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
+  /* Live: an edit to a live PUBLIC board post updates its text for everyone
+     watching the thread at once. A re-screen that held the edit (pending) never
+     broadcasts, and the back room never crosses the wire. */
+  if (env.HUB && status === 'live' && boardKey(row.page) && row.page !== ADMIN_CAT) {
+    const topicId = row.parent_id || id;
+    publishLive(env, ctx, { v: 1, t: 'edited', topic_id: topicId, id, body, edited_at: editedAt,
+      scopes: ['topic:' + topicId] });
+  }
   return json({ ok: true, status, edited_at: editedAt }, 200);
 }
 
