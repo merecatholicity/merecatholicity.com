@@ -1375,7 +1375,9 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
      `.merecat-msg.you{background:var(--cream)}` (appended to <head> after style.css,
      equal specificity, later-wins). Without the extra ancestor the injected cream
      background survived while our white text did not → white-on-cream in light mode. */
-  .merecat-log .merecat-msg.you { background: var(--maroon); color: #fff; border-color: var(--maroon); border-bottom-right-radius: 5px; }
+  /* literal maroon (not var(--maroon), which is lightened in dark mode → white
+     text would go low-contrast): a fixed accent bubble reads in both themes. */
+  .merecat-log .merecat-msg.you { background: #8b1a1a; color: #fff; border-color: #8b1a1a; border-bottom-right-radius: 5px; }
   .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
   .merecat-log .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
@@ -1491,7 +1493,7 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
     display: inline-block; margin: 0.4rem 0.3rem 0; min-height: 44px; line-height: 44px;
     padding: 0 1.3rem; border-radius: 12px; text-decoration: none; font-weight: 600;
   }
-  .identity-line-out .identity-action:first-of-type { background: var(--maroon); color: #fff; }
+  .identity-line-out .identity-action:first-of-type { background: #8b1a1a; color: #fff; }
   .identity-line-out .identity-action:last-of-type { border: 1px solid var(--rule); color: var(--maroon); }
 
   /* breadcrumbs → a single clean screen title (category/search render it; topics
@@ -1508,7 +1510,7 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   }
   .board-pages a { background: var(--cream-2); border: 1px solid var(--rule); color: var(--maroon); }
   .board-pages a:active { background: var(--rule); }
-  .board-pages strong { background: var(--maroon); color: #fff; }
+  .board-pages strong { background: #8b1a1a; color: #fff; }
   /* the cramped per-row mini-pager inside a tap-card is clutter — the card opens the thread */
   .mc-cardnav .topic-pages { display: none; }
 
