@@ -11,19 +11,20 @@ build: pdf html logos publish check
 # added but never built, a typo'd href) can never ship silently again.
 # Static guard over the hand-maintained JS (worker + client): an undefined
 # identifier once shipped in the worker and silenced @merecat mentions for
-# days. eslint no-undef catches that class; deno runs it with no npm setup.
+# days. eslint no-undef catches that class. Runs the npm-managed eslint
+# (node_modules/, from the committed lockfile — never a global install).
 jscheck:
-	deno run -A npm:eslint comments-worker/src/index.js docs/comments.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js 'app/**/*.js'
+	npm run lint
 
-# The app shell bundle: Lit (vendored under vendor/, no npm anywhere) plus
-# the app/ modules, esbuild pinned for byte-stable output, committed like
-# every built artifact. Pages carrying it load app.js?v=N (see nav.js).
+# The app shell bundle: Lit (vendored under vendor/, not from npm) plus the
+# app/ modules, esbuild pinned EXACT in package.json for byte-stable output,
+# committed like every built artifact. Pages carrying it load app.js?v=N (nav.js).
 bundle: jscheck
-	deno run -A npm:esbuild@0.24.2 app/shell.js --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning
+	npm run build:js
 
 # The only sanctioned way to deploy the comments worker: the guard runs first.
 worker-deploy: jscheck
-	cd comments-worker && deno run -A npm:wrangler deploy
+	npm run worker:deploy
 
 check: jscheck
 	python scripts/linkcheck.py
@@ -99,14 +100,14 @@ publish:
 	cp book/confession-paperback.pdf docs/Mere_Catholicity_Paperback.pdf
 	@echo "built Mere_Catholicity_Paperback.pdf ($$(pdfinfo book/confession-paperback.pdf | awk '/^Pages/{print $$2}') pages)"
 
-# The stylesheet is modular source under styles/, concatenated in filename
-# order (the NN- prefixes fix it) into the committed style.css that every
-# page links. Plain cat is deterministic and byte-stable; style.css stays
-# unversioned (cache-TTL), so a change propagates on Cloudflare's TTL.
+# The stylesheet is built by Tailwind (v4, CSS-first) from styles/main.css —
+# the entry that imports the tailwind theme+utilities and the hand-authored
+# NN-*.css. Deterministic, minified. style.css stays unversioned (cache-TTL),
+# so a change propagates on Cloudflare's TTL. See styles/main.css / CLAUDE.md.
 .PHONY: css
 css:
-	cat styles/*.css > docs/style.css
-	@echo "built style.css ($$(wc -l < docs/style.css) lines from styles/)"
+	npm run build:css
+	@echo "built docs/style.css ($$(wc -c < docs/style.css) bytes via tailwindcss)"
 
 # Build the decoupled content pages (content/*.md|*.html) into committed
 # static HTML through the one shared skeleton. Runs after nav.py so it reads
@@ -144,7 +145,7 @@ serve:
 # of git: commenters' text belongs on the site, not in the repo history.
 .PHONY: comments-backup
 comments-backup:
-	cd comments-worker && deno run -A npm:wrangler d1 export merecatholicity-comments --remote --output ../comments-backup.sql
+	cd comments-worker && npx wrangler d1 export merecatholicity-comments --remote --output ../comments-backup.sql
 	@echo "exported comments-backup.sql (kept out of git)"
 
 # Rebuild and push everything merecat (the librarian bot) knows: the corpus

@@ -15,6 +15,12 @@ book/*.pdf
 book/*.dvi
 book/memorandum-body-html.tex
 
+# npm: the JS toolchain (Tailwind, esbuild, eslint, wrangler) is a per-project
+# devDependency set, restored from the committed package-lock.json with `npm ci`.
+# node_modules/ is build machinery — never committed, never installed with -g or
+# sudo. See README (setup) and CLAUDE.md (the npm discipline).
+node_modules/
+
 # Cloudflare Worker local state and secrets — never in git.
 .wrangler/
 contact-worker/.wrangler/

@@ -1,0 +1,73 @@
+/* Mere Catholicity — Tailwind entry point. Built by `npm run build:css`
+   (tailwindcss v4, CSS-first) into the committed docs/style.css that every page
+   links. See CLAUDE.md for the build/discipline notes.
+
+   Preflight is intentionally NOT imported: the site carries its own base reset
+   (01-tokens.css sets `* { box-sizing: border-box }`, 04-base.css the element
+   defaults), so Tailwind utilities layer on top without disturbing the tuned
+   reading design. The hand-authored NN-*.css are @imported UNLAYERED so they keep
+   the exact precedence the old `cat styles/*.css` gave them; they are folded into
+   Tailwind surface-by-surface (Phase 3) until this file is the only source. */
+
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+/* The existing modular stylesheet, in filename order, unlayered (current cascade). */
+@import "./01-tokens.css";
+@import "./02-layout.css";
+@import "./03-nav.css";
+@import "./04-base.css";
+@import "./05-home.css";
+@import "./06-content.css";
+@import "./07-comments.css";
+@import "./08-board.css";
+@import "./09-dm-moderation.css";
+@import "./10-toggle.css";
+@import "./11-deeplink.css";
+@import "./12-bible-reader.css";
+@import "./13-app-mobile.css";
+@import "./14-desktop-platform.css";
+@import "./15-library.css";
+
+@plugin "@tailwindcss/typography";
+
+/* Automatic content detection is DISABLED (source(none) above): the generated
+   corpus prose contains English words like "table"/"block"/"hidden" that would be
+   emitted as spurious utilities. Utility scanning is turned on per surface in
+   Phase 3 via explicit @source lines added here as each surface is converted. */
+
+/* Brand tokens as Tailwind theme colors, so the bg, text, and border utilities
+   exist and inherit the site's dark/palette switching (each maps to the live var,
+   which 01-tokens.css redefines under [data-theme="dark"]/[data-dark]). Tailwind's
+   default color palette is dropped to keep output lean; spacing/sizing/typography
+   defaults are kept for the utilities Phase 3 will use. */
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-maroon: var(--maroon);
+  --color-maroon-dark: var(--maroon-dark);
+  --color-rule: var(--rule);
+  --color-faint: var(--faint);
+  --color-faintest: var(--faintest);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-cream: var(--cream);
+  --color-cream-2: var(--cream-2);
+  --color-brown: var(--brown);
+  --color-muted: var(--muted);
+  --color-muted-b: var(--muted-b);
+  --color-muted-c: var(--muted-c);
+  --color-muted-d: var(--muted-d);
+  --color-grade-y: var(--grade-y);
+  --color-grade-o: var(--grade-o);
+  --color-creed-bg: var(--creed-bg);
+  --color-creed-head: var(--creed-head);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-on: var(--accent-on);
+}
