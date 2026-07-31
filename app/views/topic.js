@@ -334,6 +334,7 @@ class McSearch extends LitElement {
         : html`<p class="comments-status">${this.count}</p>`;
     return html`
       ${crumbTpl([['Catholicity Board', 'community.html'], ['Search']])}
+      <h1 class="mc-screen-title">Search</h1>
       <form class="board-search">
         <div class="key-row">
           <input class="key-input mc-q" type="search" .value=${this.q || ''}
