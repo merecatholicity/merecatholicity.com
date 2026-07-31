@@ -215,7 +215,16 @@ class McBoardCat extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._onLive) document.removeEventListener('mc-live', this._onLive);
+    if (this._refetchT) clearTimeout(this._refetchT);
     if (window.mcLive) window.mcLive.board.leave();
+  }
+  _refetchCat() {
+    if (this._refetchT) clearTimeout(this._refetchT);
+    const kit = this.kit;
+    this._refetchT = setTimeout(() => {
+      kit.fetchRetry(kit.API + '/board/cat?cat=' + this.catKey + '&p=1&cb=' + Date.now(), {}, [1000])
+        .then((r) => r.json()).then((d) => { if (d && d.ok) this.payload = d; }).catch(() => {});
+    }, 1500);
   }
   _applyLive(m) {
     if (!m || !this.payload) return;
@@ -226,11 +235,17 @@ class McBoardCat extends LitElement {
       if (p.topics.some((t) => t.id === m.topic.id)) return;   // dedup (own post / multi-tab)
       this.payload = { ...p, topics: sortTopics([m.topic, ...p.topics]), total: (p.total || 0) + 1 };
     } else if (m.t === 'topic-stats' && m.cat === this.catKey) {
-      if (!p.topics.some((t) => t.id === m.topic_id)) return;   // not on this page
-      const topics = p.topics.map((x) => x.id === m.topic_id
-        ? { ...x, replies: m.replies, last: m.last, last_id: m.last_id, author_hash: m.author_hash, nick: m.nick }
-        : x);
-      this.payload = { ...p, topics: sortTopics(topics) };
+      if (p.topics.some((t) => t.id === m.topic_id)) {
+        const topics = p.topics.map((x) => x.id === m.topic_id
+          ? { ...x, replies: m.replies, last: m.last, last_id: m.last_id, author_hash: m.author_hash, nick: m.nick }
+          : x);
+        this.payload = { ...p, topics: sortTopics(topics) };
+      } else if (this.pageNum === 1) {
+        /* a topic not on this page got a reply and should bump to the top of
+           page 1 — a stats event lacks its full row (author, created_at, flags),
+           so refetch page 1 lightly (debounced), exactly as the index does */
+        this._refetchCat();
+      }
     } else if ((m.t === 'moderation' && m.act === 'delete') || m.t === 'moved') {
       /* a whole topic removed from, or moved out of, this category */
       if (!p.topics.some((t) => t.id === m.id)) return;

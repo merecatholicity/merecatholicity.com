@@ -14,13 +14,16 @@ import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
 import { pagerTpl, crumbTpl } from './util.js';
 
 class McTopic extends LitElement {
-  static properties = { d: { attribute: false }, err: { attribute: false } };
+  static properties = { d: { attribute: false }, err: { attribute: false },
+    newAway: { attribute: false }, newLastPage: { attribute: false } };
   constructor() {
     super();
     this.kit = null;
     this.topicId = 0;
     this.d = null;
     this.err = '';
+    this.newAway = 0;      // replies pushed live that live on a later page
+    this.newLastPage = 0;  // the page to jump to for them
   }
   createRenderRoot() { return this; }
   connectedCallback() {
@@ -83,14 +86,26 @@ class McTopic extends LitElement {
       if (d.topic.locked) return;
       const c = m.comment;
       if (!c || this.querySelector('#comment-' + c.id)) return;   // dedup own/multi-tab
-      if (Math.ceil((d.total + 1) / d.per) !== d.page) return;     // belongs on a later page
-      const list = this.querySelector('.comments-list');
-      if (!list) return;
       d.total += 1;
-      const node = kit.commentNode(c, false, { topicId: this.topicId });
-      list.appendChild(node);
-      node.classList.add('mc-live-new');
-      setTimeout(() => { node.classList.remove('mc-live-new'); }, 2200);
+      const replyPage = Math.ceil(d.total / d.per);
+      if (replyPage === d.page) {
+        /* it belongs on the page in front of the reader — drop it in live */
+        const list = this.querySelector('.comments-list');
+        if (list) {
+          const node = kit.commentNode(c, false, { topicId: this.topicId });
+          list.appendChild(node);
+          node.classList.add('mc-live-new');
+          setTimeout(() => { node.classList.remove('mc-live-new'); }, 2200);
+        }
+      } else if (replyPage > d.page) {
+        /* it opened (or filled) a later page — nudge with a pill to jump there */
+        this.newAway = (this.newAway || 0) + 1;
+        this.newLastPage = replyPage;
+      }
+      /* the thread grew: refresh the pagers so the new page count shows. The
+         comments-list is a static template node with no bindings inside, so a
+         re-render leaves the imperatively-appended posts in place. */
+      this.requestUpdate();
     } else if (m.t === 'moderation') {
       if (m.act === 'delete') {
         if (String(m.id) === String(this.topicId)) { this.err = 'No such topic.'; this.d = null; }
@@ -118,6 +133,7 @@ class McTopic extends LitElement {
         }
       });
       d.total = fresh.total;
+      this.requestUpdate();   // pages may have grown while we were away
     }).catch(() => {});
   }
   updated() {
@@ -196,6 +212,7 @@ class McTopic extends LitElement {
       ${crumbTpl([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]])}
       <h2 class="board-topic-head">${d.topic.title}${d.topic.sticky ? html`<span class="board-sticky">(sticky)</span>` : nothing}${d.topic.locked ? html`<span class="board-locked">(locked)</span>` : nothing}${d.cat === 'adminsonly' ? nothing : html`<a class="comments-rss" href=${kit.API + '/feed?topic=' + d.topic.id} title="Follow this topic with a feed reader">RSS</a>`}</h2>
       ${kit.state.key ? html`<p class="board-intro mc-watch-slot"></p>` : nothing}
+      ${this.newAway ? html`<a class="mc-live-pill" href=${href(this.newLastPage)}>↓ ${this.newAway} new repl${this.newAway === 1 ? 'y' : 'ies'} — go to page ${this.newLastPage}</a>` : nothing}
       ${pagerTpl(d.total, d.per, d.page, href)}
       <div class="comments-list"></div>
       ${pagerTpl(d.total, d.per, d.page, href)}
