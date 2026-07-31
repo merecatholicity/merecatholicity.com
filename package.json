@@ -10,7 +10,8 @@
   },
   "scripts": {
     "lint": "eslint comments-worker/src/index.js docs/comments.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js app/",
-    "build:js": "esbuild app/shell.js --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning",
+    "build:ps": "(test -x vendor/purs/purs || make purs) && rm -rf purescript/output && cd purescript && PATH=\"$OLDPWD/vendor/purs:$PATH\" npx spago build",
+    "build:js": "npm run build:ps && esbuild app/shell.js --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
     "build": "npm run lint && npm run build:js && npm run build:css",
     "worker:deploy": "cd comments-worker && wrangler deploy"

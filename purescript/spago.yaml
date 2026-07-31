@@ -1,12 +1,14 @@
+# The PureScript domain layer for merecatholicity.com. Compiled by the vendored
+# `purs` (make purs) into purescript/output/ (ESM), which esbuild inlines into
+# docs/app.js through the app/core.js barrel. spago only resolves + orchestrates
+# the build; the compiler binary is vendored (vendor/purs/), never from npm.
+# Determinism: pinned package set (registry below) + pinned purs + `rm -rf
+# output` before each release build; the build-twice byte-diff gate confirms it.
 package:
   name: mc-domain
   dependencies:
-    - console
-    - effect
     - prelude
-  test:
-    main: Test.Main
-    dependencies: []
+    - arrays
 workspace:
   packageSet:
     registry: 80.2.0
