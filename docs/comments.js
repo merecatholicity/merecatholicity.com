@@ -739,6 +739,25 @@
         if (ok) { dmMarkVerified(other); if (link) link.textContent = '✓ verified'; }
       });
   }
+  /* The quiet "🔒 End-to-end encrypted" badge, shared by the inbox and the thread
+     view: the honest explainer one tap away, and — when a specific correspondent
+     is in view — the optional safety-number verify. No PIN, no friction. */
+  function dmE2eBadge(other, otherPubB64) {
+    var e2e = el('p', 'dm-e2e');
+    e2e.appendChild(document.createTextNode('🔒 End-to-end encrypted · '));
+    var how = el('a', null, 'how it works');
+    how.href = '#';
+    how.addEventListener('click', function (ev) { ev.preventDefault(); dmE2eExplainer(); });
+    e2e.appendChild(how);
+    if (other && otherPubB64) {
+      e2e.appendChild(document.createTextNode(' · '));
+      var v = el('a', null, dmVerified(other) ? '✓ verified' : 'verify');
+      v.href = '#';
+      v.addEventListener('click', function (ev) { ev.preventDefault(); dmVerifyPanel(other, otherPubB64, v); });
+      e2e.appendChild(v);
+    }
+    return e2e;
+  }
 
   var section = document.querySelector('section[data-comments], section[data-board]');
   if (!section) return;
@@ -4594,7 +4613,12 @@
   }
 
   function viewInbox() {
-    if (window.mcViews && window.mcViews.inbox) return window.mcViews.inbox(section, window.mcKit);
+    if (window.mcViews && window.mcViews.inbox) {
+      /* The Lit <mc-inbox> renders into its own subtree without clearing section,
+         so a badge prepended here survives above the list — no bundle change. */
+      section.appendChild(dmE2eBadge());
+      return window.mcViews.inbox(section, window.mcKit);
+    }
     document.title = 'Inbox | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Inbox']]);
     if (!state.key) {
@@ -4602,13 +4626,7 @@
       return;
     }
     section.appendChild(dmSearchBox());
-    var e2eBadge = el('p', 'dm-e2e');
-    e2eBadge.appendChild(document.createTextNode('🔒 End-to-end encrypted · '));
-    var e2eHow = el('a', null, 'how it works');
-    e2eHow.href = '#';
-    e2eHow.addEventListener('click', function (ev) { ev.preventDefault(); dmE2eExplainer(); });
-    e2eBadge.appendChild(e2eHow);
-    section.appendChild(e2eBadge);
+    section.appendChild(dmE2eBadge());
     var list = el('div', 'board-topics');
     list.textContent = 'Loading messages...';
     section.appendChild(list);
@@ -4815,20 +4833,7 @@
         section.appendChild(headEl);
         /* The encrypted-inbox assurance: a quiet badge, the honest explainer one
            tap away, and the optional safety-number verify — no PIN, no friction. */
-        var e2e = el('p', 'dm-e2e');
-        e2e.appendChild(document.createTextNode('🔒 End-to-end encrypted · '));
-        var howLink = el('a', null, 'how it works');
-        howLink.href = '#';
-        howLink.addEventListener('click', function (ev) { ev.preventDefault(); dmE2eExplainer(); });
-        e2e.appendChild(howLink);
-        if (otherPub) {
-          e2e.appendChild(document.createTextNode(' · '));
-          var vLink = el('a', null, dmVerified(other) ? '✓ verified' : 'verify');
-          vLink.href = '#';
-          vLink.addEventListener('click', function (ev) { ev.preventDefault(); dmVerifyPanel(other, otherPub, vLink); });
-          e2e.appendChild(vLink);
-        }
-        section.appendChild(e2e);
+        section.appendChild(dmE2eBadge(other, otherPub));
         /* Opening marked it read on the server; make the badge tell the
            same story on the next paint. */
         try { localStorage.removeItem(DM_CACHE); } catch (e) {}
