@@ -126,21 +126,25 @@ function el(tag, cls, text) {
       del.href = '#';
       del.addEventListener('click', function (e) {
         e.preventDefault();
-        if (!confirm('Delete this comment?')) return;
-        kit.fetchRetry(kit.API + '/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: c.id, key: kit.state.key }),
-        }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.ok) {
-            article.remove();
-            /* Same freshness stamp as posting: the deleter's own reloads
-               must not resurrect the comment from the list cache. */
-            try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
-          } else kit.setStatus(d.error || 'Could not delete the comment.');
-        }).catch(function () {
-          kit.setStatus('Network error. The comment was not deleted.');
-        });
+        var go = function (ok) {
+          if (!ok) return;
+          kit.fetchRetry(kit.API + '/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: c.id, key: kit.state.key }),
+          }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
+            if (d.ok) {
+              article.remove();
+              /* Same freshness stamp as posting: the deleter's own reloads
+                 must not resurrect the comment from the list cache. */
+              try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e2) {}
+            } else kit.setStatus(d.error || 'Could not delete the comment.');
+          }).catch(function () {
+            kit.setStatus('Network error. The comment was not deleted.');
+          });
+        };
+        if (window.mcConfirm) window.mcConfirm('Delete this comment?', { okLabel: 'Delete', danger: true }).then(go);
+        else go(confirm('Delete this comment?'));
       });
       head.appendChild(del);
     }

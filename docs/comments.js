@@ -2126,6 +2126,12 @@
   function badgeChanged() {
     try { document.dispatchEvent(new CustomEvent('mc-badge')); } catch (e) {}
   }
+  /* A confirm that becomes an app dialog on phones (window.mcConfirm from the
+     shell) and stays the native confirm on desktop. cb receives true/false. */
+  function appConfirm(msg, opts, cb) {
+    if (window.mcConfirm) window.mcConfirm(msg, opts || {}).then(cb);
+    else cb(window.confirm(msg));
+  }
   function notifUnreadCheck(force) {
     if (!state.key) return;
     var c = notifCacheGet();
@@ -2802,20 +2808,25 @@
       if (c[0] === curCat) o.disabled = true;
       moveSel.appendChild(o);
     });
+    var resetMove = function () { moveSel.value = ''; if (moveSel.__mcHandle) moveSel.__mcHandle.refresh(); };
     moveSel.addEventListener('change', function () {
       var target = moveSel.value;
       if (!target) return;
       var name = catByKey(target)[1];
-      if (!confirm('Move "' + topic.title + '" to ' + name + '? The original poster will be notified by DM.')) { moveSel.value = ''; return; }
-      fetch(API + '/move', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, id: topic.id, cat: target, catName: name }),
-      }).then(function (r) { return r.json(); }).then(function (d) {
-        if (d.ok) { stampFresh(); location.reload(); } else moveSel.value = '';
-      }).catch(function () { moveSel.value = ''; });
+      appConfirm('Move "' + topic.title + '" to ' + name + '? The original poster will be notified by DM.', { okLabel: 'Move' }, function (ok) {
+        if (!ok) { resetMove(); return; }
+        fetch(API + '/move', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: topic.id, cat: target, catName: name }),
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.ok) { stampFresh(); location.reload(); } else resetMove();
+        }).catch(function () { resetMove(); });
+      });
     });
+    moveSel.setAttribute('aria-label', 'Move to category');
     admin.appendChild(moveSel);
+    if (window.mcSelectSheet) window.mcSelectSheet(moveSel);
     admin.appendChild(document.createTextNode(' '));
     admin.appendChild(modLinkEl(topic.id, topic.sticky ? 'unsticky' : 'sticky', topic.sticky ? '(unsticky)' : '(sticky)'));
     admin.appendChild(document.createTextNode(' '));
@@ -4650,25 +4661,30 @@
         var blockLine = el('p', 'board-audit-link');
         blockLine.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
           var blocking = !d.blocked;
-          if (blocking && !confirm('Block this member? Their future messages will be held out of your sight, and they will never be told. Unblocking delivers everything they wrote meanwhile.')) return;
-          fetch(API + '/dm/block', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: state.key, hash: other, blocked: blocking }),
-          }).then(function (r) { return r.json(); }).then(function (d3) {
-            if (d3.ok) location.reload();
-          }).catch(function () {});
+          var doBlock = function () {
+            fetch(API + '/dm/block', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, hash: other, blocked: blocking }),
+            }).then(function (r) { return r.json(); }).then(function (d3) {
+              if (d3.ok) location.reload();
+            }).catch(function () {});
+          };
+          if (blocking) appConfirm('Block this member? Their future messages will be held out of your sight, and they will never be told. Unblocking delivers everything they wrote meanwhile.', { okLabel: 'Block', danger: true }, function (ok) { if (ok) doBlock(); });
+          else doBlock();
         }));
         blockLine.appendChild(document.createTextNode(' · '));
         blockLine.appendChild(identityAction('Delete conversation', function () {
-          if (!confirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.')) return;
-          fetch(API + '/dm/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: state.key, with: other }),
-          }).then(function (r) { return r.json(); }).then(function (d3) {
-            if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} location.href = 'community.html?inbox=1'; }
-          }).catch(function () {});
+          appConfirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok) {
+            if (!ok) return;
+            fetch(API + '/dm/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, with: other }),
+            }).then(function (r) { return r.json(); }).then(function (d3) {
+              if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} location.href = 'community.html?inbox=1'; }
+            }).catch(function () {});
+          });
         }));
         section.appendChild(blockLine);
         /* Open a conversation at its newest word: on the last page, bring the
@@ -5278,8 +5294,10 @@
     modeSel.addEventListener('change', function () {
       try { localStorage.setItem('mc-merecat-mode', modeSel.value); } catch (e) {}
     });
+    modeSel.setAttribute('aria-label', 'Reasoning');
     modeRow.appendChild(modeSel);
     section.appendChild(modeRow);
+    if (window.mcSelectSheet) window.mcSelectSheet(modeSel);   // app picker on phones
     function renderQuota(u) {
       if (!u) return;
       if (u.backend) modeRow.hidden = (u.backend !== 'local');

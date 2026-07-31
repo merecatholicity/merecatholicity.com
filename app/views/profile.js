@@ -111,13 +111,18 @@ class McInbox extends LitElement {
   del(e, other, row) {
     e.preventDefault();
     const kit = this.kit;
-    if (!confirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.')) return;
-    fetch(kit.API + '/dm/delete', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: kit.state.key, with: other }),
-    }).then((r) => r.json()).then((d2) => {
-      if (d2.ok) { row.remove(); try { localStorage.removeItem('mc-dm-unread'); } catch (e2) {} kit.dmUnreadCheck(); }
-    }).catch(() => {});
+    const go = (ok) => {
+      if (!ok) return;
+      fetch(kit.API + '/dm/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: kit.state.key, with: other }),
+      }).then((r) => r.json()).then((d2) => {
+        if (d2.ok) { row.remove(); try { localStorage.removeItem('mc-dm-unread'); } catch (e2) {} kit.dmUnreadCheck(); }
+      }).catch(() => {});
+    };
+    const msg = 'Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.';
+    if (window.mcConfirm) window.mcConfirm(msg, { okLabel: 'Delete', danger: true }).then(go);
+    else go(confirm(msg));
   }
   render() {
     const kit = this.kit;
