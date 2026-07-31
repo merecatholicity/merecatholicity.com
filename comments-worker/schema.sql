@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS dm_threads (
   b_read_at    INTEGER,
   a_cleared_at INTEGER,
   b_cleared_at INTEGER,
+  -- ttl: disappearing-message lifetime in SECONDS for this conversation. The
+  -- clock starts when the RECIPIENT opens a message. NULL = the app default
+  -- (7 days). The per-conversation toggle sets 86400 (24h) / 604800 (7d) /
+  -- 2592000 (30d); either party may change it and the last write wins for both.
+  ttl          INTEGER,
   UNIQUE(a_hash, b_hash)
 );
 CREATE INDEX IF NOT EXISTS dm_threads_a_idx ON dm_threads(a_hash, last_at);
@@ -117,9 +122,23 @@ CREATE TABLE IF NOT EXISTS dms (
   body        TEXT NOT NULL,
   created_at  INTEGER NOT NULL,
   held        INTEGER,
-  enc         INTEGER
+  enc         INTEGER,
+  -- Disappearing-message lifecycle. opened_at = when the RECIPIENT first opened
+  -- this message (NULL until then). expires_at = the single shared instant the
+  -- row is swept, identical for both sides so a message vanishes for both at
+  -- once: created_at + backstop (30d) while unopened, then opened_at + thread
+  -- ttl once opened. saved = 1 exempts it from expiry for BOTH (either party may
+  -- save; a saved row carries expires_at NULL). media_key = the opaque random R2
+  -- object id for a media message (the ciphertext blob; the AES key lives only
+  -- inside the E2E body), media_size its ciphertext byte length.
+  opened_at   INTEGER,
+  expires_at  INTEGER,
+  saved       INTEGER,
+  media_key   TEXT,
+  media_size  INTEGER
 );
 CREATE INDEX IF NOT EXISTS dms_thread_idx ON dms(thread_id, id);
+CREATE INDEX IF NOT EXISTS dms_expires_idx ON dms(expires_at);
 
 -- A block silently holds the blocked party's future messages to the owner.
 -- The blocked party is never told; their sends read as delivered to them.
@@ -263,4 +282,32 @@ CREATE TABLE IF NOT EXISTS dm_pubkeys (
   pubkey     TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER
+);
+
+-- End-to-end-encrypted DM media objects in the R2 bucket merecatholicity-dm-media
+-- (binding MEDIA). key is a random opaque object id — no uploader/recipient in it
+-- or in R2 metadata, so the bucket cannot be traced to who uploaded what — and the
+-- stored bytes are client-encrypted ciphertext (AES-256-GCM, the key living only
+-- inside the E2E message body). size is the ciphertext byte length (for the 10 GB
+-- accounting). msg_id links the object to its dms row once the media message is
+-- sent (NULL = uploaded-but-unsent, pruned as an orphan after an hour). The
+-- object's lifetime follows its message: deleted on expiry / conversation-delete.
+CREATE TABLE IF NOT EXISTS dm_media (
+  key        TEXT PRIMARY KEY,
+  size       INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  msg_id     INTEGER
+);
+CREATE INDEX IF NOT EXISTS dm_media_msg_idx ON dm_media(msg_id);
+
+-- Admin-tunable global platform settings: a growing key/value store the admin
+-- console edits at runtime (mirroring the librarian's config table). Known keys:
+-- media_enabled ('1'/'0'), media_max_bytes (per-upload cap), dm_default_ttl
+-- (seconds), dm_backstop_days (unopened-message backstop), dm_media_bytes (the
+-- sweep-maintained total R2 usage, display-only). A missing key = coded default.
+CREATE TABLE IF NOT EXISTS app_settings (
+  k          TEXT PRIMARY KEY,
+  v          TEXT NOT NULL,
+  updated_at INTEGER,
+  updated_by TEXT
 );

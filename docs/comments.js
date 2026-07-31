@@ -758,6 +758,180 @@
     }
     return e2e;
   }
+  /* ---- Disappearing messages: the expiry note + chooser, and the per-message
+     save toggle. The lifetime is per-conversation; either party changes it and
+     the last write wins for both. Saving a message exempts it for both. ---- */
+  function dmTtlLabel(ttl) {
+    ttl = Number(ttl) || 604800;
+    if (ttl <= 86400) return '24 hours';
+    if (ttl >= 2592000) return '30 days';
+    return '7 days';
+  }
+  function dmExpiryNode(other, ttl, isNew) {
+    var p = el('p', 'dm-expiry');
+    var cur = Number(ttl) || 604800;
+    function paint() {
+      p.textContent = '';
+      p.appendChild(document.createTextNode('⏳ ' + (isNew ? 'Messages here disappear ' : 'Disappears ') + dmTtlLabel(cur) + ' after they are opened. '));
+      var change = el('a', null, 'change');
+      change.href = '#';
+      change.addEventListener('click', function (ev) { ev.preventDefault(); chooser(); });
+      p.appendChild(change);
+    }
+    function chooser() {
+      p.textContent = 'Disappears after opening: ';
+      [[86400, '24 hours'], [604800, '7 days'], [2592000, '30 days']].forEach(function (opt, i) {
+        if (i) p.appendChild(document.createTextNode(' · '));
+        var a = el('a', null, opt[1] + (cur === opt[0] ? ' ✓' : ''));
+        a.href = '#';
+        a.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          fetch(API + '/dm/ttl', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, with: other, ttl: opt[0] }) })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { if (d && d.ok) { cur = opt[0]; isNew = false; paint(); } })
+            .catch(function () {});
+        });
+        p.appendChild(a);
+      });
+      p.appendChild(document.createTextNode(' · '));
+      var cancel = el('a', null, 'cancel');
+      cancel.href = '#';
+      cancel.addEventListener('click', function (ev) { ev.preventDefault(); paint(); });
+      p.appendChild(cancel);
+    }
+    p.mcSetTtl = function (t) { cur = Number(t) || cur; isNew = false; paint(); };
+    paint();
+    return p;
+  }
+  function dmSaveControl(m, other) {
+    if (!m || !m.id) return null;
+    var a = el('a', 'dm-save', m.saved ? '★ saved' : '☆ save');
+    a.href = '#';
+    a.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      var want = m.saved ? 0 : 1;
+      fetch(API + '/dm/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, with: other, id: m.id, saved: !!want }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.ok) { m.saved = want; a.textContent = want ? '★ saved' : '☆ save'; } })
+        .catch(function () {});
+    });
+    return a;
+  }
+  /* ---- E2E media: encrypt a file with AES-256-GCM (a fresh key per file), carry
+     the key/iv/meta inside the nacl.box message body, upload only ciphertext, and
+     lazily fetch + decrypt + blob-render it on the other side. ---- */
+  function fmtBytes(n) {
+    n = Number(n) || 0;
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    if (n >= 1024) return Math.round(n / 1024) + ' KB';
+    return n + ' B';
+  }
+  function dmMediaEncryptFile(file) {
+    return file.arrayBuffer().then(function (buf) {
+      var iv = crypto.getRandomValues(new Uint8Array(12));
+      return crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']).then(function (k) {
+        return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, k, buf).then(function (ctBuf) {
+          return crypto.subtle.exportKey('raw', k).then(function (rawK) {
+            return { ct: new Uint8Array(ctBuf), env: { k: dmB64uEnc(new Uint8Array(rawK)), iv: dmB64uEnc(iv),
+              name: String(file.name || 'file').slice(0, 120), mime: file.type || 'application/octet-stream', size: file.size } };
+          });
+        });
+      });
+    });
+  }
+  function dmMediaDecrypt(ct, envInfo) {
+    return crypto.subtle.importKey('raw', dmB64uDec(envInfo.k), { name: 'AES-GCM' }, false, ['decrypt'])
+      .then(function (k) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: dmB64uDec(envInfo.iv) }, k, ct); })
+      .then(function (buf) { return new Uint8Array(buf); });
+  }
+  var _mediaCache = {};
+  function loadDmMedia(mediaKey, envInfo) {
+    if (_mediaCache[mediaKey]) return Promise.resolve(_mediaCache[mediaKey]);
+    return fetch(API + '/dm/media/get', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, media_key: mediaKey }) })
+      .then(function (r) { if (!r.ok) throw new Error('media ' + r.status); return r.arrayBuffer(); })
+      .then(function (buf) { return dmMediaDecrypt(new Uint8Array(buf), envInfo); })
+      .then(function (bytes) {
+        var url = URL.createObjectURL(new Blob([bytes], { type: (envInfo && envInfo.mime) || 'application/octet-stream' }));
+        _mediaCache[mediaKey] = url;
+        return url;
+      });
+  }
+  /* One media bubble: the same chrome as dmMsgNode, but the body lazily loads the
+     decrypted media as an <img>/<video>/<audio> (or a download link). */
+  function dmMediaNode(m, otherLabel, other, envInfo) {
+    var mine = m.sender_hash === state.myHash;
+    var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
+    var head = el('div', 'comment-head');
+    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
+    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    node.appendChild(head);
+    var bodyEl = el('div', 'comment-body dm-media-body');
+    var holder = el('div', 'dm-media');
+    holder.appendChild(el('p', 'dm-media-status', 'Loading ' + ((envInfo && envInfo.name) || 'media') + '…'));
+    bodyEl.appendChild(holder);
+    if (envInfo && envInfo.caption) bodyEl.appendChild(fillBody(el('div', 'dm-media-caption'), envInfo.caption));
+    node.appendChild(bodyEl);
+    loadDmMedia(m.media_key, envInfo).then(function (url) {
+      holder.textContent = '';
+      var mime = (envInfo && envInfo.mime) || '';
+      var mel;
+      if (/^image\//.test(mime)) { mel = el('img', 'dm-media-img'); mel.src = url; mel.alt = envInfo.name || 'image'; mel.loading = 'lazy'; }
+      else if (/^video\//.test(mime)) { mel = el('video', 'dm-media-vid'); mel.src = url; mel.controls = true; }
+      else if (/^audio\//.test(mime)) { mel = el('audio', 'dm-media-aud'); mel.src = url; mel.controls = true; }
+      else { mel = el('a', 'dm-media-file', (envInfo.name || 'download') + ' · ' + fmtBytes(envInfo.size)); mel.href = url; mel.download = envInfo.name || 'file'; }
+      holder.appendChild(mel);
+    }).catch(function () {
+      holder.textContent = '';
+      holder.appendChild(el('span', 'dm-media-status', '⚠️ media unavailable (it may have expired)'));
+    });
+    return node;
+  }
+  /* Render one decrypted DM message: text via dmMsgNode, media via dmMediaNode,
+     with the per-message save control attached. Shared by history + live paths. */
+  function dmRenderMsg(m, otherPub, shortName, other) {
+    var e = Number(m.enc || 0);
+    var lbl = shortName;
+    var node;
+    if (m.media_key) {
+      var envInfo = null;
+      if (e === 1) { try { envInfo = JSON.parse(dmDecrypt(m.body, otherPub) || 'null'); } catch (x) { envInfo = null; } }
+      if (envInfo) node = dmMediaNode(m, lbl, other, envInfo);
+      else { m.body = '⚠️ could not open media'; node = dmMsgNode(m, lbl); }
+    } else {
+      if (e === 1) m.body = dmDecrypt(m.body, otherPub) || '⚠️ could not decrypt';
+      else if (e === 2) lbl = '⚙️ Automated notice';
+      node = dmMsgNode(m, lbl);
+    }
+    var sv = dmSaveControl(m, other);
+    if (sv) node.appendChild(sv);
+    return node;
+  }
+  /* One injected style block for the disappearing/media/settings UI — kept out of
+     the shared stylesheets (like the emoji CSS) so it never collides. */
+  function ensureDmStyles() {
+    if (document.getElementById('mc-dm-css')) return;
+    var css = '' +
+      '.dm-expiry{font-size:0.85em;opacity:0.72;margin:0.15em 0 0.5em}' +
+      '.dm-expiry a{cursor:pointer}' +
+      '.dm-save{font-size:0.78em;opacity:0.55;margin-left:10px;cursor:pointer;white-space:nowrap}' +
+      '.dm-save:hover{opacity:0.9}' +
+      '.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}' +
+      '.btn-attach{margin-left:6px}' +
+      '.dm-media{margin:0.1em 0}' +
+      '.dm-media-status{opacity:0.6;font-size:0.9em}' +
+      '.dm-media-img,.dm-media-vid{max-width:100%;max-height:60vh;border-radius:8px;display:block}' +
+      '.dm-media-aud{width:100%;max-width:320px}' +
+      '.dm-media-caption{margin-top:0.35em}' +
+      '.admin-set-row{margin:0.6em 0}' +
+      '.admin-set-row input[type=number]{width:6em}';
+    var st = el('style');
+    st.id = 'mc-dm-css';
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
 
   var section = document.querySelector('section[data-comments], section[data-board]');
   if (!section) return;
@@ -2375,6 +2549,12 @@
       liveDmBadge();   // a background thread — ring the badge (McInbox self-refreshes if open)
     }
   }
+  /* The other party changed the disappearing-message lifetime: update the open
+     conversation's expiry note live so both sides always show the same setting. */
+  function onLiveDmTtl(m) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.from && state.dmView.setTtl) state.dmView.setTtl(m.ttl);
+  }
   function onLiveNotif() {
     /* The notifications list (McNotifications) reloads itself and marks read;
        elsewhere, just ring the badge. */
@@ -2391,6 +2571,7 @@
   document.addEventListener('mc-live', function (ev) {
     var m = ev.detail; if (!m) return;
     if (m.t === 'dm') onLiveDm(m);
+    else if (m.t === 'dm-ttl') onLiveDmTtl(m);
     else if (m.t === 'notification') onLiveNotif();
   }, { signal: bootSig });
 
@@ -3350,6 +3531,7 @@
       ['Activity audit', 'community.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
       ['IP ban list', 'community.html?ipbans=1', 'Every banned address, added and removed by hand.'],
       ['Add / Remove Admins', 'community.html?admins=1', 'Grant a member admin powers, or take them back.'],
+      ['Platform settings', 'community.html?settings=1', 'Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button.'],
       ['merecat administration', 'community.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
       ['merecat Q&A at a glance', 'community.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
     ].forEach(function (opt) {
@@ -4833,7 +5015,12 @@
         section.appendChild(headEl);
         /* The encrypted-inbox assurance: a quiet badge, the honest explainer one
            tap away, and the optional safety-number verify — no PIN, no friction. */
+        ensureDmStyles();
         section.appendChild(dmE2eBadge(other, otherPub));
+        /* Disappearing-message notice (implied at the top of every conversation,
+           more prominent on a brand-new one) with the 24h/7d/30d chooser. */
+        var expiryNote = dmExpiryNode(other, d.ttl, !d.messages.length);
+        section.appendChild(expiryNote);
         /* Opening marked it read on the server; make the badge tell the
            same story on the next paint. */
         try { localStorage.removeItem(DM_CACHE); } catch (e) {}
@@ -4843,25 +5030,19 @@
         if (!d.messages.length) {
           list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
         }
-        d.messages.forEach(function (m) {
-          var lbl = shortName;
-          if (Number(m.enc || 0) === 1) m.body = dmDecrypt(m.body, otherPub) || '⚠️ could not decrypt';
-          else if (Number(m.enc || 0) === 2) lbl = '⚙️ Automated notice';
-          list.appendChild(dmMsgNode(m, lbl));
-        });
+        d.messages.forEach(function (m) { list.appendChild(dmRenderMsg(m, otherPub, shortName, other)); });
         /* Live drop-in: a message pushed over the private user scope from THIS
            other party lands at once. It mirrors the send path — appended when we
            are on the page it lands on, else the badge rings (it is on a later
            page). Their own echo (sender is me) is ignored. */
-        state.dmView = { other: other, append: function (msg) {
+        state.dmView = { other: other,
+          setTtl: function (t) { if (expiryNote && expiryNote.mcSetTtl) expiryNote.mcSetTtl(t); },
+          append: function (msg) {
           if (!msg || String(msg.sender_hash) === state.myHash) return;
           var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
           d.total += 1;
           if (d.page === newMsgPage) {
-            var lbl = shortName;
-            if (Number(msg.enc || 0) === 1) msg.body = dmDecrypt(msg.body, otherPub) || '⚠️ could not decrypt';
-            else if (Number(msg.enc || 0) === 2) lbl = '⚙️ Automated notice';
-            var node = dmMsgNode(msg, lbl);
+            var node = dmRenderMsg(msg, otherPub, shortName, other);
             list.appendChild(node);
             node.scrollIntoView();
           } else {
@@ -4888,6 +5069,37 @@
         btnRow.appendChild(send);
         var pv = previewButton(ta);
         if (pv) btnRow.appendChild(pv);
+        /* Attach a photo / audio / video from the device library. It is encrypted
+           in the browser (AES-GCM) and sent as an E2E media message on Send; the
+           text box becomes an optional caption. */
+        var pendingFile = null;
+        var fileInput = el('input', 'dm-file-input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*,video/*,audio/*';
+        fileInput.style.display = 'none';
+        var attach = el('button', 'btn btn-attach', '📎 Attach');
+        attach.type = 'button';
+        var mediaChip = el('span', 'dm-attach-chip');
+        mediaChip.style.display = 'none';
+        function clearAttach() { pendingFile = null; fileInput.value = ''; mediaChip.style.display = 'none'; mediaChip.textContent = ''; }
+        attach.addEventListener('click', function () { fileInput.click(); });
+        fileInput.addEventListener('change', function () {
+          var f = fileInput.files && fileInput.files[0];
+          if (!f) return;
+          if (f.size > 60 * 1024 * 1024) { fileInput.value = ''; status.textContent = 'That file is too large to share here.'; return; }
+          pendingFile = f;
+          status.textContent = '';
+          mediaChip.textContent = '';
+          mediaChip.appendChild(document.createTextNode('📎 ' + f.name + ' · ' + fmtBytes(f.size) + '  '));
+          var x = el('a', null, '✕');
+          x.href = '#';
+          x.addEventListener('click', function (ev) { ev.preventDefault(); clearAttach(); });
+          mediaChip.appendChild(x);
+          mediaChip.style.display = '';
+        });
+        btnRow.appendChild(attach);
+        form.appendChild(mediaChip);
+        form.appendChild(fileInput);
         form.appendChild(btnRow);
         var status = el('p', 'form-status');
         form.appendChild(status);
@@ -4904,14 +5116,36 @@
         }
         send.addEventListener('click', function () {
           var body = ta.value.replace(/\s+$/, '');
-          if (!body.trim()) {
+          if (!pendingFile && !body.trim()) {
             if (ta.mcPreview) ta.mcPreview.off();
             ta.focus();
             return;
           }
           send.disabled = true;
           status.textContent = 'Verifying...';
+          var sending = pendingFile;   // captured: the echo path needs the local file
           getToken().then(function (token) {
+            if (sending) {
+              /* Media: encrypt the file in the browser, upload only ciphertext,
+                 then send a normal E2E message whose body carries the AES key. */
+              status.textContent = 'Encrypting...';
+              return dmMediaEncryptFile(sending).then(function (mm) {
+                status.textContent = 'Uploading...';
+                var fd = new FormData();
+                fd.append('key', state.key);
+                fd.append('file', new Blob([mm.ct]), 'blob');
+                return fetch(API + '/dm/media', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (u) {
+                  if (!u.ok) throw new Error(u.error || 'The file could not be uploaded.');
+                  status.textContent = 'Sending...';
+                  if (body.trim()) mm.env.caption = body;
+                  return fetchRetry(API + '/dm/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: state.key, to: other, body: dmEncrypt(JSON.stringify(mm.env), otherPub), enc: 1, media_key: u.media_key, token: token }),
+                  }, [1500]).then(function (r) { return r.json(); }).then(function (d2) { d2._env = mm.env; d2._media_key = u.media_key; return d2; });
+                });
+              });
+            }
             status.textContent = 'Sending...';
             return fetchRetry(API + '/dm/send', {
               method: 'POST',
@@ -4925,12 +5159,27 @@
             ta.value = '';
             if (ta.mcDraftDone) ta.mcDraftDone();
             if (ta.mcPreview) ta.mcPreview.off();
+            /* Seed the media cache from the local file so our own echo renders
+               instantly without a round-trip. */
+            if (sending && d2._media_key) { try { _mediaCache[d2._media_key] = URL.createObjectURL(sending); } catch (e) {} }
+            clearAttach();
             /* Newest message lands at the bottom of the last page. Show it
                inline when that page is on screen; else jump to it. */
             var msgPage = Math.ceil((d.total + 1) / d.per);
             if (msgPage === d.page) {
               d.total += 1;
-              var node = dmMsgNode({ sender_hash: state.myHash, body: body, created_at: d2.created_at }, shortName);
+              var node;
+              if (sending && d2._media_key) {
+                var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0 };
+                node = dmMediaNode(mecho, shortName, other, d2._env);
+                var sv2 = dmSaveControl(mecho, other);
+                if (sv2) node.appendChild(sv2);
+              } else {
+                var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0 };
+                node = dmMsgNode(echo, shortName);
+                var sv = dmSaveControl(echo, other);
+                if (sv) node.appendChild(sv);
+              }
               list.appendChild(node);
               status.textContent = 'Sent.';
               node.scrollIntoView();
@@ -6663,6 +6912,94 @@
     draw();
   }
 
+  /* The growing platform-settings page: media sharing controls + the disappearing-
+     message defaults + a purge-all-media button. Admin-only, server-enforced. */
+  function viewPlatformSettings() {
+    document.title = 'Platform settings | Catholicity Board';
+    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Platform settings']]);
+    if (adminGate(viewPlatformSettings)) return;
+    ensureDmStyles();
+    var wrap = el('div', 'admin-settings');
+    wrap.textContent = 'Loading…';
+    section.appendChild(wrap);
+    fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }) })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        wrap.textContent = '';
+        var s = d.settings || {};
+        var cap = Number(d.cap_bytes) || (10 * 1024 * 1024 * 1024);
+        wrap.appendChild(el('h3', null, 'Direct-message media'));
+        var used = Number(s.dm_media_bytes) || 0;
+        var usage = el('p', 'board-cat-desc', 'Storage in use: ' + fmtBytes(used) + ' of ' + fmtBytes(cap) + ' (' + Math.round(used / cap * 100) + '%).');
+        wrap.appendChild(usage);
+        var enRow = el('p', 'admin-set-row');
+        var enCb = el('input');
+        enCb.type = 'checkbox';
+        enCb.checked = s.media_enabled === '1';
+        enRow.appendChild(enCb);
+        enRow.appendChild(document.createTextNode(' Allow members to share photos, audio, and video'));
+        wrap.appendChild(enRow);
+        var szRow = el('p', 'admin-set-row');
+        szRow.appendChild(document.createTextNode('Max upload size (MB): '));
+        var szInp = el('input');
+        szInp.type = 'number'; szInp.min = '1'; szInp.max = '100';
+        szInp.value = String(Math.round((Number(s.media_max_bytes) || 26214400) / 1048576));
+        szRow.appendChild(szInp);
+        wrap.appendChild(szRow);
+        var ttlRow = el('p', 'admin-set-row');
+        ttlRow.appendChild(document.createTextNode('Default disappear time for new conversations: '));
+        var ttlSel = el('select');
+        [[86400, '24 hours'], [604800, '7 days'], [2592000, '30 days']].forEach(function (o) {
+          var opt = el('option', null, o[1]);
+          opt.value = String(o[0]);
+          if (Number(s.dm_default_ttl) === o[0]) opt.selected = true;
+          ttlSel.appendChild(opt);
+        });
+        ttlRow.appendChild(ttlSel);
+        wrap.appendChild(ttlRow);
+        var bsRow = el('p', 'admin-set-row');
+        bsRow.appendChild(document.createTextNode('Unopened-message backstop (days): '));
+        var bsInp = el('input');
+        bsInp.type = 'number'; bsInp.min = '1'; bsInp.max = '365';
+        bsInp.value = String(Number(s.dm_backstop_days) || 30);
+        bsRow.appendChild(bsInp);
+        wrap.appendChild(bsRow);
+        var saveBtn = el('button', 'btn btn-send', 'Save settings');
+        saveBtn.type = 'button';
+        var saveStatus = el('p', 'form-status');
+        saveBtn.addEventListener('click', function () {
+          saveBtn.disabled = true;
+          saveStatus.textContent = 'Saving…';
+          fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, set: {
+              media_enabled: enCb.checked ? '1' : '0',
+              media_max_bytes: String(Math.round((Number(szInp.value) || 25) * 1048576)),
+              dm_default_ttl: ttlSel.value,
+              dm_backstop_days: bsInp.value,
+            } }) }).then(function (r) { return r.json(); }).then(function (d2) {
+            saveBtn.disabled = false;
+            saveStatus.textContent = d2 && d2.ok ? 'Saved.' : ((d2 && d2.error) || 'Save failed.');
+          }).catch(function () { saveBtn.disabled = false; saveStatus.textContent = 'Save failed.'; });
+        });
+        wrap.appendChild(saveBtn);
+        wrap.appendChild(saveStatus);
+        wrap.appendChild(el('h3', null, 'Danger zone'));
+        var purgeP = el('p', 'board-audit-link');
+        purgeP.appendChild(identityAction('Purge ALL direct-message media', function () {
+          appConfirm('Delete EVERY shared photo, audio, and video from all conversations? Message text is kept; the attachments are permanently removed for everyone. This cannot be undone.', { okLabel: 'Purge all media', danger: true }, function (ok) {
+            if (!ok) return;
+            usage.textContent = 'Purging…';
+            fetch(API + '/dm/media/purge', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d3) {
+              usage.textContent = d3 && d3.ok ? ('Purged ' + d3.deleted + ' files. Storage in use: 0 B of ' + fmtBytes(cap) + '.') : 'Purge failed.';
+            }).catch(function () { usage.textContent = 'Purge failed.'; });
+          });
+        }));
+        wrap.appendChild(purgeP);
+      })
+      .catch(function () { wrap.textContent = 'The settings could not be loaded.'; });
+  }
   function viewMerecatAdmin() {
     document.title = 'merecat administration | Catholicity Board';
     crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat']]);
@@ -6775,6 +7112,7 @@
     section.textContent = '';
     var params = new URLSearchParams(location.search);
     if (params.get('ipbans')) return viewIpBans();
+    if (params.get('settings')) return viewPlatformSettings();
     if (params.get('admins')) return viewAdmins();
     if (params.get('admin')) return viewAdminHome();
     if (params.get('merecatadmin')) return viewMerecatAdmin();
