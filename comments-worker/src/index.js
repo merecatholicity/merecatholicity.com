@@ -35,7 +35,11 @@ function boardKey(raw) {
   return m && BOARD_CATS.includes(m[1]) ? raw : null;
 }
 
+/* The site's own origin, used to build human-facing links (feed items, the
+   move-notice DM). Overridable per deployment via the SITE var; the constant is
+   the production default so prod behaves identically when the var is unset. */
 const SITE = 'https://merecatholicity.com';
+function siteBase(env) { return (env && env.SITE) || SITE; }
 const MAX_BODY = 4000;
 const MAX_TITLE = 120;
 /* Known-IPs retention: the fingerprint drawer shows addresses seen inside
@@ -61,8 +65,9 @@ function cleanFaith(raw) {
 }
 const CONTROL_RE = /[\u0000-\u0008\u000B-\u001F\u007F]/;
 
-/* Must stay identical to the lists in comments.js, or the name in the
-   notification email will not match the name on the page. */
+/* Must stay identical to the lists in comments.js, or a member's assigned
+   pseudonym will differ between the server (feed, /config, the `assigned` field)
+   and the web client that renders it. Also served verbatim by /api/comments/config. */
 const ADJ = ['Patient','Quiet','Steadfast','Humble','Gentle','Sober','Watchful','Earnest',
   'Merry','Plain','Hidden','Upright','Ancient','Early','Golden','Green',
   'Grey','Amber','Ivory','Deep','Broad','High','Still','Bright',
@@ -81,6 +86,88 @@ function displayName(hash) {
   return adj + '-' + noun + ' ' + hash.slice(0, 4);
 }
 
+/* The scriptorium rank ladder: standing by total live-forum posts. Thresholds
+   ascend; rankFor returns the highest reached. Mirrors RANKS in comments.js; the
+   count itself is postCountsFor. Served in /config and stamped on author rows so
+   a client need not carry the ladder. */
+const RANKS = [[0, 'Novice'], [10, 'Apprentice'], [50, 'Scriptorium Hand'], [100, 'Copyist'],
+  [250, 'Scribe'], [500, 'Illuminator'], [1000, 'Master Scribe'], [2500, 'Keeper of Scrolls'], [5000, 'Treasury of Wisdom']];
+function rankFor(n) {
+  n = Number(n) || 0;
+  let name = RANKS[0][1];
+  for (const r of RANKS) if (n >= r[0]) name = r[1];
+  return name;
+}
+
+/* Attach server-resolved identity to an author-bearing row: `assigned` is the
+   pseudonym the client would otherwise derive itself (displayName), and `rank`
+   the ladder label — supplied whenever the post count is known. Additive: the
+   existing `nick`/`posts` fields are unchanged. */
+function withNames(row, posts) {
+  const out = Object.assign({}, row);
+  out.assigned = row.author_hash ? displayName(row.author_hash) : null;
+  if (posts != null) { out.posts = posts; out.rank = rankFor(posts); }
+  return out;
+}
+
+/* ---- Served display constants (GET /api/comments/config) ----
+   These display-only tables mirror the ones in comments.js. The endpoint makes
+   the worker the single SERVED source so a native client fetches them instead of
+   triplicating the constants; comments.js keeps its inline copies as a pre-load
+   fallback (a later pass can have it read /config). Cat keys are validated
+   against BOARD_CATS so the two rosters cannot drift. */
+const CAT_META = [
+  ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific. New here? ', 'Introduce yourself and say hello', 'community.html?topic=37'],
+  ['news', 'News', 'News of the Church and of the world.'],
+  ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
+  ['theology', 'Theology', 'All genres. Systematic and Dogmatic, Biblical and Exegetical, Historical and Patristic, Philosophical and Natural, etc.'],
+  ['philosophy', 'Philosophy', 'From Plato and Aristotle to Kant and Wittgenstein.'],
+  ['history', 'History', 'World, church, and national history. All of it.'],
+  ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
+  ['rc', 'Roman Catholic', 'In-house talk for Roman Catholics.'],
+  ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
+  ['lutheran', 'Confessional Lutheran', 'In-house talk for confessional Lutherans.'],
+  ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
+  ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Reformed Baptists are welcome to coexist here too.'],
+  ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
+  ['adminsonly', 'Admins only', 'The back room.'],
+];
+const FAITH_LABELS = { nicene: 'Nicene', 'indo-european': 'pre-Christian Indo European', seeker: 'Seeker' };
+const EMOJI_PACKS = {
+  memes: [['cry', 'emoji/memes/cry.webp'], ['pogging', 'emoji/memes/pogging.webp'], ['bonk', 'emoji/memes/bonk.webp'], ['catkiss', 'emoji/memes/catkiss.webp'], ['crythumbsup', 'emoji/memes/crythumbsup.webp'], ['catjam', 'emoji/memes/catjam.webp'], ['megareverse-1', 'emoji/memes/megareverse-1.webp'], ['shrug', 'emoji/memes/shrug.webp'], ['kekw', 'emoji/memes/kekw.webp'], ['boohoo', 'emoji/memes/boohoo.webp'], ['laughing-hard', 'emoji/memes/laughing-hard.webp'], ['bruh', 'emoji/memes/bruh.webp'], ['pepecringe', 'emoji/memes/pepecringe.webp'], ['kitty-happy', 'emoji/memes/kitty-happy.webp'], ['catsneeze', 'emoji/memes/catsneeze.webp'], ['cutecatstare', 'emoji/memes/cutecatstare.webp'], ['catsmile', 'emoji/memes/catsmile.webp'], ['catstare', 'emoji/memes/catstare.webp'], ['cat-laughing', 'emoji/memes/cat-laughing.webp'], ['soldjacat', 'emoji/memes/soldjacat.webp'], ['crycat', 'emoji/memes/crycat.webp'], ['bingus-shush', 'emoji/memes/bingus-shush.webp'], ['huhcat', 'emoji/memes/huhcat.webp'], ['catno', 'emoji/memes/catno.webp'], ['seriously', 'emoji/memes/seriously.webp'], ['cat-sleep', 'emoji/memes/cat-sleep.webp'], ['crisiscat', 'emoji/memes/crisiscat.webp'], ['huhcat-2', 'emoji/memes/huhcat-2.webp'], ['cat-kiss', 'emoji/memes/cat-kiss.webp'], ['catfunny', 'emoji/memes/catfunny.webp'], ['happy', 'emoji/memes/happy.webp'], ['laughing-cat', 'emoji/memes/laughing-cat.webp'], ['kitty-sad', 'emoji/memes/kitty-sad.webp']],
+  pepe: [['pepecross', 'emoji/pepe/pepecross.webp'], ['pepetyping', 'emoji/pepe/pepetyping.webp'], ['pepeheart', 'emoji/pepe/pepeheart.webp'], ['pepelaugh', 'emoji/pepe/pepelaugh.webp'], ['pepeperfect', 'emoji/pepe/pepeperfect.webp'], ['strongpepe', 'emoji/pepe/strongpepe.webp'], ['pepebanger', 'emoji/pepe/pepebanger.webp'], ['pepeclap', 'emoji/pepe/pepeclap.webp'], ['pepetorchfire', 'emoji/pepe/pepetorchfire.webp'], ['pepeblink', 'emoji/pepe/pepeblink.webp'], ['pepeuwu', 'emoji/pepe/pepeuwu.webp'], ['pepeokay', 'emoji/pepe/pepeokay.webp'], ['pepepug', 'emoji/pepe/pepepug.webp'], ['kingpepe', 'emoji/pepe/kingpepe.webp'], ['kingpepe-2', 'emoji/pepe/kingpepe-2.webp'], ['nou', 'emoji/pepe/nou.webp'], ['peperain', 'emoji/pepe/peperain.webp'], ['peperich', 'emoji/pepe/peperich.webp'], ['pepehacker', 'emoji/pepe/pepehacker.webp'], ['pepeclap-2', 'emoji/pepe/pepeclap-2.webp'], ['pepe-blushy', 'emoji/pepe/pepe-blushy.webp'], ['pepe-sad', 'emoji/pepe/pepe-sad.webp'], ['pepehug', 'emoji/pepe/pepehug.webp'], ['pepe-hehe', 'emoji/pepe/pepe-hehe.webp'], ['pepes', 'emoji/pepe/pepes.webp'], ['sleepypepe', 'emoji/pepe/sleepypepe.webp'], ['pepohappy', 'emoji/pepe/pepohappy.webp']],
+};
+const NAMED_EMOJI = (() => {
+  const out = {};
+  const toks = ('smile 😄 smiley 😃 grin 😁 laughing 😆 joy 😂 rofl 🤣 sweat_smile 😅 slight_smile 🙂 upside_down 🙃 wink 😉 blush 😊 innocent 😇 heart_eyes 😍 star_struck 🤩 kissing_heart 😘 yum 😋 stuck_out_tongue 😛 zany 🤪 thinking 🤔 shush 🤫 hand_over_mouth 🤭 neutral 😐 expressionless 😑 no_mouth 😶 smirk 😏 unamused 😒 rolling_eyes 🙄 relieved 😌 pensive 😔 sleepy 😪 sleeping 😴 mask 😷 nauseated 🤢 vomiting 🤮 sneeze 🤧 hot 🥵 cold 🥶 dizzy_face 😵 exploding_head 🤯 cowboy 🤠 partying 🥳 sunglasses 😎 nerd 🤓 monocle 🧐 confused 😕 worried 😟 frowning 🙁 open_mouth 😮 astonished 😲 flushed 😳 pleading 🥺 fearful 😨 cold_sweat 😰 cry 😢 sob 😭 scream 😱 confounded 😖 disappointed 😞 weary 😩 tired 😫 yawn 🥱 triumph 😤 rage 😡 angry 😠 cursing 🤬 smiling_imp 😈 imp 👿 skull 💀 poop 💩 clown 🤡 ghost 👻 alien 👽 robot 🤖 wave 👋 ok_hand 👌 v ✌️ crossed_fingers 🤞 love_you 🤟 call_me 🤙 point_up ☝️ thumbsup 👍 thumbsdown 👎 fist ✊ punch 👊 clap 👏 raised_hands 🙌 pray 🙏 handshake 🤝 muscle 💪 middle_finger 🖕 heart ❤️ orange_heart 🧡 yellow_heart 💛 green_heart 💚 blue_heart 💙 purple_heart 💜 black_heart 🖤 broken_heart 💔 two_hearts 💕 sparkling_heart 💖 100 💯 anger 💢 boom 💥 sweat_drops 💦 dash 💨 fire 🔥 star ⭐ star2 🌟 sparkles ✨ zap ⚡ rainbow 🌈 sunny ☀️ tada 🎉 confetti 🎊 gift 🎁 trophy 🏆 dart 🎯 white_check_mark ✅ x ❌ o ⭕ exclamation ❗ question ❓ warning ⚠️ bell 🔔 bulb 💡 key 🔑 lock 🔒 dog 🐶 cat 🐱 mouse 🐭 hamster 🐹 rabbit 🐰 fox 🦊 bear 🐻 panda 🐼 koala 🐨 tiger 🐯 lion 🦁 cow 🐮 pig 🐷 frog 🐸 monkey 🐵 chicken 🐔 penguin 🐧 bird 🐦 unicorn 🦄 bee 🐝 butterfly 🦋 snail 🐌 turtle 🐢 snake 🐍 octopus 🐙 whale 🐳 apple 🍎 banana 🍌 watermelon 🍉 grapes 🍇 strawberry 🍓 cherries 🍒 peach 🍑 avocado 🥑 corn 🌽 mushroom 🍄 bread 🍞 cheese 🧀 hamburger 🍔 fries 🍟 pizza 🍕 hotdog 🌭 taco 🌮 popcorn 🍿 doughnut 🍩 cookie 🍪 cake 🍰 chocolate 🍫 candy 🍬 lollipop 🍭 beer 🍺 beers 🍻 wine 🍷 coffee ☕ tea 🍵').trim().split(/\s+/);
+  for (let i = 0; i < toks.length; i += 2) out[toks[i]] = toks[i + 1];
+  return out;
+})();
+/* Book spelling/abbreviation -> KJV verse-anchor slug, mirroring BIBLE in
+   comments.js. Served so a native renderer can autolink scripture references. */
+const BIBLE_SPEC = [
+  ['genesis', 'genesis|gen|ge|gn'], ['exodus', 'exodus|exod|exo|ex'], ['leviticus', 'leviticus|lev|lv'], ['numbers', 'numbers|num|nm|nb'],
+  ['deuteronomy', 'deuteronomy|deut|deu|dt'], ['joshua', 'joshua|josh|jos|jsh'], ['judges', 'judges|judg|jdg|jg'], ['ruth', 'ruth|rth|ru'],
+  ['1-samuel', '1 samuel|1samuel|1 sam|1sam|1 sa|i samuel|i sam|first samuel'], ['2-samuel', '2 samuel|2samuel|2 sam|2sam|2 sa|ii samuel|ii sam|second samuel'],
+  ['1-kings', '1 kings|1kings|1 kgs|1kgs|1 ki|i kings|i kgs|first kings'], ['2-kings', '2 kings|2kings|2 kgs|2kgs|2 ki|ii kings|ii kgs|second kings'],
+  ['1-chronicles', '1 chronicles|1 chron|1 chr|1chr|1 ch|i chronicles|i chron|first chronicles'], ['2-chronicles', '2 chronicles|2 chron|2 chr|2chr|2 ch|ii chronicles|ii chron|second chronicles'],
+  ['ezra', 'ezra|ezr|ez'], ['nehemiah', 'nehemiah|neh|ne'], ['esther', 'esther|esth|est|es'], ['job', 'job|jb'],
+  ['psalms', 'psalms|psalm|pslm|psa|ps|pss|psm'], ['proverbs', 'proverbs|prov|pro|prv|pr'], ['ecclesiastes', 'ecclesiastes|eccles|eccl|ecc|ec|qoh'],
+  ['song-of-solomon', 'song of solomon|song of songs|song|sos|canticles|cant'], ['isaiah', 'isaiah|isa|isai'], ['jeremiah', 'jeremiah|jer|je|jr'],
+  ['lamentations', 'lamentations|lam|la'], ['ezekiel', 'ezekiel|ezek|eze|ezk'], ['daniel', 'daniel|dan|da|dn'], ['hosea', 'hosea|hos|ho'],
+  ['joel', 'joel|joe|jl'], ['amos', 'amos|amo'], ['obadiah', 'obadiah|obad|oba|ob'], ['jonah', 'jonah|jon|jnh'], ['micah', 'micah|mic|mc'], ['nahum', 'nahum|nah|na'],
+  ['habakkuk', 'habakkuk|hab|hb'], ['zephaniah', 'zephaniah|zeph|zep|zp'], ['haggai', 'haggai|hag|hg'], ['zechariah', 'zechariah|zech|zec|zc'], ['malachi', 'malachi|mal|ml'],
+  ['matthew', 'matthew|matt|mat|mt'], ['mark', 'mark|mrk|mar|mk|mr'], ['luke', 'luke|luk|lk'], ['john', 'john|jhn|joh|jn'], ['acts', 'acts|act|ac'], ['romans', 'romans|rom|ro|rm'],
+  ['1-corinthians', '1 corinthians|1 cor|1cor|1 co|i corinthians|i cor|first corinthians'], ['2-corinthians', '2 corinthians|2 cor|2cor|2 co|ii corinthians|ii cor|second corinthians'],
+  ['galatians', 'galatians|gal|ga'], ['ephesians', 'ephesians|ephes|eph'], ['philippians', 'philippians|phil|php|pp'], ['colossians', 'colossians|col'],
+  ['1-thessalonians', '1 thessalonians|1 thess|1thess|1 thes|1 th|i thessalonians|i thess|first thessalonians'], ['2-thessalonians', '2 thessalonians|2 thess|2thess|2 thes|2 th|ii thessalonians|ii thess|second thessalonians'],
+  ['1-timothy', '1 timothy|1 tim|1tim|1 ti|i timothy|i tim|first timothy'], ['2-timothy', '2 timothy|2 tim|2tim|2 ti|ii timothy|ii tim|second timothy'],
+  ['titus', 'titus|tit|ti'], ['philemon', 'philemon|philem|phlm|phm|pm'], ['hebrews', 'hebrews|heb|hb'], ['james', 'james|jas|jm'],
+  ['1-peter', '1 peter|1 pet|1pet|1 pe|1 pt|i peter|i pet|first peter'], ['2-peter', '2 peter|2 pet|2pet|2 pe|2 pt|ii peter|ii pet|second peter'],
+  ['1-john', '1 john|1 jhn|1 jn|1jn|i john|i jn|first john'], ['2-john', '2 john|2 jhn|2 jn|2jn|ii john|ii jn|second john'], ['3-john', '3 john|3 jhn|3 jn|3jn|iii john|iii jn|third john'],
+  ['jude', 'jude|jud|jd'], ['revelation', 'revelation|revelations|rev|apocalypse|apoc'],
+];
+
 const enc = new TextEncoder();
 
 async function sha256hex(text) {
@@ -90,11 +177,18 @@ async function sha256hex(text) {
 
 /* Same-origin API. A cross-origin browser POST always carries an Origin, so
    reject any Origin that is not ours; a missing Origin (non-browser clients,
-   some same-origin form posts) is allowed through to the usual gates. */
-const ALLOWED_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];
-function originOk(request) {
+   some same-origin form posts) is allowed through to the usual gates. The
+   allowlist is overridable per deployment via the ALLOWED_ORIGINS var (comma-
+   separated) — e.g. to admit a staging host or a hybrid-app origin — and falls
+   back to the production defaults when unset, so prod is unchanged. */
+const DEFAULT_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];
+function allowedOrigins(env) {
+  const v = env && env.ALLOWED_ORIGINS;
+  return v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_ORIGINS;
+}
+function originOk(request, env) {
   const o = request.headers.get('Origin');
-  return !o || ALLOWED_ORIGINS.includes(o);
+  return !o || allowedOrigins(env).includes(o);
 }
 
 function json(body, status, headers) {
@@ -387,11 +481,11 @@ async function screen(env, body, trusted) {
 
 /* Where a human clicks to see the comment: the page anchor for site
    comments, the topic view for board posts. */
-function viewLink(page, id, parentId) {
+function viewLink(env, page, id, parentId) {
   if (page.indexOf('board:') === 0) {
-    return SITE + '/community.html?topic=' + (parentId || id) + '#comment-' + id;
+    return siteBase(env) + '/community.html?topic=' + (parentId || id) + '#comment-' + id;
   }
-  return SITE + page + '#comment-' + id;
+  return siteBase(env) + page + '#comment-' + id;
 }
 
 /* Comment email notifications were retired: the owner watches recent activity
@@ -406,6 +500,35 @@ function cacheHeader(url) {
   return { 'Cache-Control': 'public, max-age=' + (url.searchParams.get('fresh') ? 60 : 300) };
 }
 
+/* The shared-constants endpoint: one cacheable read serving the display tables a
+   second client (native app, CLI) would otherwise triplicate — category roster,
+   faith labels, rank ladder, commentable pages, the bot hash, the scripture
+   autolink table, and the emoji whitelists — plus an explicit apiVersion. Public
+   and edge-cacheable like every other read. Additive: nothing consumes it yet;
+   the web client keeps its inline copies. */
+async function handleConfig(request, env, url) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const custom = {};
+  for (const k of Object.keys(EMOJI_PACKS)) for (const [code, path] of EMOJI_PACKS[k]) custom[code] = path;
+  return json({
+    ok: true,
+    apiVersion: 1,
+    cats: CAT_META.filter((c) => BOARD_CATS.includes(c[0])).map((c, i) => {
+      const o = { key: c[0], label: c[1], blurb: c[2], order: i };
+      if (c[3]) o.link = { text: c[3], url: c[4] };
+      return o;
+    }),
+    faiths: FAITHS.map((code, i) => ({ code, label: FAITH_LABELS[code] || code, order: i })),
+    ranks: RANKS.map((r) => ({ min: r[0], label: r[1] })),
+    pages: PAGES,
+    bot_hash: MERECAT_BOT.hash,
+    bible: BIBLE_SPEC.map((r) => ({ slug: r[0], spellings: r[1].split('|') })),
+    emoji: { custom, named: NAMED_EMOJI, data_url: '/emoji/emoji-data.json' },
+  }, 200, cacheHeader(url));
+}
+
 async function handleGet(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
@@ -418,7 +541,7 @@ async function handleGet(request, env, url) {
     "WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id LIMIT 500"
   ).bind(page).all();
   const counts = await postCountsFor(env, (rows.results || []).map((r) => r.author_hash));
-  const comments = (rows.results || []).map((r) => Object.assign({}, r, { posts: counts[r.author_hash] || 0 }));
+  const comments = (rows.results || []).map((r) => withNames(r, counts[r.author_hash] || 0));
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
 }
@@ -571,30 +694,30 @@ async function handlePost(request, env, ctx) {
      comment renders with them at once, before any cache refresh. */
   const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
 
-  /* Live push: broadcast the fresh post to everyone watching this scope over the
-     BoardHub socket. Gated to live PUBLIC board posts (the back room never crosses
-     the wire); deferred + env-guarded so it never delays or breaks the post. */
-  if (env.HUB && status === 'live' && boardKey(page) && page !== ADMIN_CAT) {
+  /* Live push: broadcast the fresh post to everyone watching this scope through
+     the one board sink (broadcastBoard gates the back room). Only a live post is
+     announced; the builder queries the topic's stats for a reply. */
+  if (status === 'live') {
     const catKey = page.slice(6);
     const topicId = parentId || inserted.id;
     const nick = prof && prof.nick || null;
-    ctx.waitUntil((async () => {
-      const hub = env.HUB.get(env.HUB.idFromName('board'));
+    broadcastBoard(env, ctx, page, async () => {
       if (parentId == null) {
-        await hub.publish({ v: 1, t: 'new-topic', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+        return [{ v: 1, t: 'new-topic', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
           topic: { id: inserted.id, title, author_hash: authorHash, nick, created_at: createdAt,
-            locked: 0, sticky: 0, replies: 0, last: createdAt, last_id: inserted.id } });
-      } else {
-        const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
-        await hub.publish({ v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
+            locked: 0, sticky: 0, replies: 0, last: createdAt, last_id: inserted.id } }];
+      }
+      const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
+      return [
+        { v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
           comment: { id: inserted.id, author_hash: authorHash, nick,
             signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
-            faith: prof && prof.faith || null, body, created_at: createdAt } });
-        await hub.publish({ v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+            faith: prof && prof.faith || null, body, created_at: createdAt } },
+        { v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
           topic_id: topicId, title: (stat && stat.title) || null, replies: (stat && stat.replies) || 0,
-          last: createdAt, last_id: inserted.id, author_hash: authorHash, nick });
-      }
-    })().catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+          last: createdAt, last_id: inserted.id, author_hash: authorHash, nick },
+      ];
+    });
   }
 
   return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
@@ -612,6 +735,7 @@ async function deliverNotifications(env, o) {
   const now = Math.floor(Date.now() / 1000);
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
   const stmts = [];
+  const pushTo = new Set();   // recipients to also nudge by push (scaffold; gated off)
 
   if (o.authorHash && o.authorHash !== MERECAT_BOT.hash) {
     stmts.push(env.DB.prepare('INSERT OR IGNORE INTO watches (hash, topic_id, created_at) VALUES (?1, ?2, ?3)')
@@ -639,6 +763,7 @@ async function deliverNotifications(env, o) {
     for (const h of mentions) {
       if (admSet && !admSet.has(h)) continue;
       stmts.push(env.DB.prepare(NOTIF).bind(h, 'mention', o.topicId, o.commentId, o.authorHash, now));
+      pushTo.add(h);
     }
 
     if (o.isReply) {
@@ -651,12 +776,73 @@ async function deliverNotifications(env, o) {
       for (const r of (rows.results || [])) recips.add(r.hash);
       for (const h of recips) {
         if (admSet && !admSet.has(h)) continue;
-        if (h && !skip.has(h)) stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now));
+        if (h && !skip.has(h)) { stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now)); pushTo.add(h); }
       }
     }
   }
 
   if (stmts.length) await env.DB.batch(stmts);
+  if (pushTo.size) await deliverPush(env, [...pushTo], { kind: o.isReply ? 'reply' : 'mention', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash });
+}
+
+/* Best-effort push fan-out — the mobile-notification landing pad. A NO-OP unless
+   PUSH_ENABLED === 'true'; even then it only delivers when a provider is wired,
+   which it is not yet (no app, no APNs/FCM/VAPID creds). It looks up each
+   recipient's registered device tokens and records intent; the app team fills in
+   the actual provider send. Never throws into the caller (a push failure must
+   never affect a post or a DM). */
+async function deliverPush(env, hashes, payload) {
+  try {
+    if (env.PUSH_ENABLED !== 'true') return;
+    const uniq = [...new Set((hashes || []).filter(Boolean))];
+    if (!uniq.length) return;
+    const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
+    const rows = await env.DB.prepare('SELECT hash, platform, token FROM push_tokens WHERE hash IN (' + ph + ')').bind(...uniq).all();
+    const tokens = rows.results || [];
+    if (!tokens.length) return;
+    /* TODO(app): deliver `payload` to each { platform, token } via APNs (HTTP/2),
+       FCM, or Web Push (VAPID). Until a provider is configured, record intent so
+       the wiring is verifiable end-to-end without losing anything. */
+    console.log(JSON.stringify({ event: 'push_pending', recipients: tokens.length, kind: payload && payload.kind }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'push_failed', error: String(e) }));
+  }
+}
+
+/* Register a device's push token to the caller's identity (one row per token, so
+   re-registering the same token just refreshes it). Additive and gated: it fills
+   push_tokens, which deliverPush reads only when PUSH_ENABLED is on. */
+async function handlePushRegister(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const platform = String(data.platform || '');
+  const token = String(data.token || '').slice(0, 4096);
+  if (!key || !token || !/^[a-z0-9_-]{1,20}$/i.test(platform)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  await env.DB.prepare('INSERT OR REPLACE INTO push_tokens (hash, platform, token, created_at) VALUES (?1, ?2, ?3, ?4)')
+    .bind(me, platform, token, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true }, 200);
+}
+
+/* Drop one device token (logout / uninstall). */
+async function handlePushUnregister(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const token = String(data.token || '');
+  if (!key || !token) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  await env.DB.prepare('DELETE FROM push_tokens WHERE hash = ?1 AND token = ?2').bind(me, token).run();
+  return json({ ok: true }, 200);
 }
 
 async function handleSelfDelete(request, env, ctx) {
@@ -741,7 +927,7 @@ async function handleFeed(request, env, url) {
   }
   const items = results.map(function (c) {
     const name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
-    const link = viewLink(page, c.id, c.parent_id);
+    const link = viewLink(env, page, c.id, c.parent_id);
     const itemTitle = c.title ? c.title
       : topicRow ? name + ' re: ' + topicRow.title
       : name + ' on ' + page;
@@ -757,8 +943,8 @@ async function handleFeed(request, env, url) {
     : isBoard
     ? 'Catholicity Board - ' + page.slice(6) + ' - merecatholicity.com'
     : 'Comments on ' + page + ' - merecatholicity.com';
-  const feedLink = topicRow ? SITE + '/community.html?topic=' + topicRow.id
-    : isBoard ? SITE + '/community.html?cat=' + page.slice(6) : SITE + page;
+  const feedLink = topicRow ? siteBase(env) + '/community.html?topic=' + topicRow.id
+    : isBoard ? siteBase(env) + '/community.html?cat=' + page.slice(6) : siteBase(env) + page;
   const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<rss version="2.0"><channel>' +
     '<title>' + xmlEscape(feedTitle) + '</title>' +
@@ -953,7 +1139,7 @@ async function handleBoardIndex(request, env, url) {
       topics: r.topics,
       posts: r.posts,
       last: r.created_at,
-      latest: { topic_id: r.topic_id, id: r.post_id, title: r.title, author_hash: r.author_hash, nick: r.nick, created_at: r.created_at },
+      latest: withNames({ topic_id: r.topic_id, id: r.post_id, title: r.title, author_hash: r.author_hash, nick: r.nick, created_at: r.created_at }),
     };
   });
   return json({ ok: true, cats }, 200, cacheHeader(url));
@@ -998,7 +1184,7 @@ async function boardCatPayload(env, page, p, q) {
     'WHERE ' + where + ' ' +
     'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
   ).bind(...binds, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
-  return { ok: true, topics: rows.results, total: total.n, page: p, per: TOPICS_PER_PAGE };
+  return { ok: true, topics: (rows.results || []).map((r) => withNames(r)), total: total.n, page: p, per: TOPICS_PER_PAGE };
 }
 
 /* A member's own recent forum posts, newest first — the "recent posts" list on a
@@ -1115,7 +1301,7 @@ async function handleSearch(request, env, url) {
       'SELECT COUNT(*) AS n FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid ' +
       'LEFT JOIN comments pt ON pt.id = c.parent_id ' + where
     ).bind(...binds).first();
-    const items = (rows.results || []).map((r) => ({
+    const items = (rows.results || []).map((r) => withNames({
       comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
       author_hash: r.author_hash, nick: r.nick, cat: String(r.page).slice(6),
       created_at: r.created_at, snip: r.snip,
@@ -1169,8 +1355,8 @@ async function topicViewPayload(env, topic, pRaw, findRaw) {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: { id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, posts: counts[topic.author_hash] || 0 },
-    replies: (replies.results || []).map((r) => Object.assign({}, r, { posts: counts[r.author_hash] || 0 })),
+    topic: withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0 }, counts[topic.author_hash] || 0),
+    replies: (replies.results || []).map((r) => withNames(r, counts[r.author_hash] || 0)),
     total: topic.replies || 0,
     page: p,
     per: TOPICS_PER_PAGE,
@@ -1283,7 +1469,7 @@ async function handleMove(request, env, ctx) {
   let notified = false;
   if (topic.author_hash && topic.author_hash !== adminHash && newPage !== ADMIN_CAT) {
     const name = String(data.catName || newPage.slice(6)).replace(CONTROL_RE, '').replace(/\s+/g, ' ').trim().slice(0, 60);
-    const link = SITE + '/community.html?topic=' + id;
+    const link = siteBase(env) + '/community.html?topic=' + id;
     const body = ('Your topic "' + topic.title + '" was moved to ' + name + '. You can read it here: ' + link).slice(0, MAX_BODY);
     try { notified = await sendSystemDm(env, adminHash, topic.author_hash, body); } catch { notified = false; }
   }
@@ -1415,6 +1601,7 @@ async function handleProfileGet(request, env, url) {
       avatar: row ? (row.avatar || null) : null,
       faith: row ? (row.faith || null) : null,
       posts: counts[hash] || 0,
+      rank: rankFor(counts[hash] || 0),
       assigned: displayName(hash),
       admin: await isAdminHash(env, hash),
     },
@@ -1597,6 +1784,9 @@ async function handleDmSend(request, env) {
       'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
       myReadCol + ' = ?2 WHERE id = ?1'
     ).bind(thread.id, now).run();
+    /* Push nudge (scaffold; a no-op unless PUSH_ENABLED). A held message never
+       nudges — the recipient must not learn of a shadow-blocked send. */
+    await deliverPush(env, [to], { kind: 'dm', thread_id: thread.id });
   }
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
 }
@@ -1659,7 +1849,9 @@ async function handleDmThreads(request, env) {
   const totals = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'
   ).bind(me).first();
-  return json({ ok: true, threads: rows.results, total: totals.n || 0,
+  const threads = (rows.results || []).map((r) => Object.assign({}, r,
+    { assigned: r.other_hash ? displayName(r.other_hash) : null }));
+  return json({ ok: true, threads, total: totals.n || 0,
     unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE }, 200);
 }
 
@@ -1690,7 +1882,7 @@ async function handleDmThread(request, env) {
     .bind(me, other).first();
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
-    return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
+    return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other) },
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
@@ -1716,7 +1908,7 @@ async function handleDmThread(request, env) {
     'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
   ).bind(me, Math.floor(Date.now() / 1000), thread.id, myCleared).run();
   return json({ ok: true, thread_id: thread.id,
-    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null },
+    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other) },
     messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
 }
 
@@ -1791,7 +1983,9 @@ async function handleNotifList(request, env) {
     'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END), 0) AS unread ' +
     'FROM notifications WHERE recipient_hash = ?1'
   ).bind(me).first();
-  return json({ ok: true, items: rows.results, total: totals.n || 0,
+  const items = (rows.results || []).map((r) => Object.assign({}, r,
+    { actor_assigned: r.actor_hash ? displayName(r.actor_hash) : null }));
+  return json({ ok: true, items, total: totals.n || 0,
     unread_total: totals.unread || 0, page: p, per: NOTIF_PER_PAGE }, 200);
 }
 
@@ -2061,8 +2255,9 @@ async function handleDmDelete(request, env) {
 }
 
 /* The autocomplete corpus: every hash that has ever appeared publicly, with
-   its nick when one is set. Assigned names are derived client-side from the
-   hash, so they are not sent. Public-by-construction data, cacheable. */
+   its nick when one is set and its server-resolved `assigned` pseudonym (the web
+   client derives the same value from the hash; native clients read it here).
+   Public-by-construction data, cacheable. */
 async function handleDmDirectory(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
@@ -2082,7 +2277,9 @@ async function handleDmDirectory(request, env, url) {
     "WHERE u.hash != ?1 AND (pr.nick IS NULL OR pr.nick NOT LIKE 'merecat%') " +
     'ORDER BY u.joined DESC LIMIT 2000'
   ).bind(MERECAT_BOT.hash).all();
-  return json({ ok: true, users: rows.results }, 200, cacheHeader(url));
+  const users = (rows.results || []).map((r) => Object.assign({}, r,
+    { assigned: r.hash ? displayName(r.hash) : null }));
+  return json({ ok: true, users }, 200, cacheHeader(url));
 }
 
 /* ---- Avatars. One 400x400 raster image per identity, stored in R2 under
@@ -2665,8 +2862,9 @@ async function handleReport(request, env) {
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const target = await env.DB.prepare("SELECT page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
-  if (target && target.page === ADMIN_CAT) return json({ ok: false, error: 'Bad request.' }, 400);
-  if (!target) return json({ ok: false, error: 'No such post.' }, 404);
+  /* A live back-room post answers exactly as a nonexistent id does, so a keyed
+     prober cannot detect which ids are back-room posts. */
+  if (!target || target.page === ADMIN_CAT) return json({ ok: false, error: 'No such post.' }, 404);
   let reason = String(data.reason || '').replace(/\s+/g, ' ').trim().slice(0, 200);
   if (CONTROL_RE.test(reason)) reason = '';
   await env.DB.prepare(
@@ -2708,33 +2906,34 @@ async function handleApprove(request, env, ctx) {
   if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
   /* Live push (Phase 1b): a held post, once approved, enters the stream — the
      one place besides handlePost where a post becomes live. Same events, so the
-     forum views merge it exactly as a fresh post. Back room stays silent. */
-  if (env.HUB && row && boardKey(row.page) && row.page !== ADMIN_CAT) {
-    ctx.waitUntil((async () => {
+     forum views merge it exactly as a fresh post. Back room stays silent
+     (broadcastBoard gates it). */
+  if (row) {
+    broadcastBoard(env, ctx, row.page, async () => {
       const c = await env.DB.prepare(
         'SELECT c.id, c.page, c.parent_id, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, ' +
         'c.body, c.created_at FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.id = ?1'
       ).bind(id).first();
-      if (!c) return;
+      if (!c) return [];
       const catKey = c.page.slice(6);
       const topicId = c.parent_id || c.id;
-      const hub = env.HUB.get(env.HUB.idFromName('board'));
       if (c.parent_id == null) {
         const t = await env.DB.prepare('SELECT replies, COALESCE(last_at, created_at) AS last FROM comments WHERE id = ?1').bind(c.id).first();
-        await hub.publish({ v: 1, t: 'new-topic', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+        return [{ v: 1, t: 'new-topic', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
           topic: { id: c.id, title: c.title, author_hash: c.author_hash, nick: c.nick || null,
             created_at: c.created_at, locked: 0, sticky: 0, replies: (t && t.replies) || 0,
-            last: (t && t.last) || c.created_at, last_id: c.id } });
-      } else {
-        const t = await env.DB.prepare('SELECT replies, title, COALESCE(last_at, created_at) AS last FROM comments WHERE id = ?1').bind(topicId).first();
-        await hub.publish({ v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
-          comment: { id: c.id, author_hash: c.author_hash, nick: c.nick || null, signature: c.signature || null,
-            avatar: c.avatar || null, faith: c.faith || null, body: c.body, created_at: c.created_at } });
-        await hub.publish({ v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
-          topic_id: topicId, title: (t && t.title) || null, replies: (t && t.replies) || 0,
-          last: (t && t.last) || c.created_at, last_id: c.id, author_hash: c.author_hash, nick: c.nick || null });
+            last: (t && t.last) || c.created_at, last_id: c.id } }];
       }
-    })().catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+      const t = await env.DB.prepare('SELECT replies, title, COALESCE(last_at, created_at) AS last FROM comments WHERE id = ?1').bind(topicId).first();
+      return [
+        { v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
+          comment: { id: c.id, author_hash: c.author_hash, nick: c.nick || null, signature: c.signature || null,
+            avatar: c.avatar || null, faith: c.faith || null, body: c.body, created_at: c.created_at } },
+        { v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+          topic_id: topicId, title: (t && t.title) || null, replies: (t && t.replies) || 0,
+          last: (t && t.last) || c.created_at, last_id: c.id, author_hash: c.author_hash, nick: c.nick || null },
+      ];
+    });
   }
   return json({ ok: true, approved: !!row }, 200);
 }
@@ -3876,23 +4075,23 @@ async function merecatInsertComment(env, src, isBoard, topicId, topicAuthorHash,
     }).catch((e) => console.log(JSON.stringify({ event: 'merecat_reply_notify_failed', error: String(e) })));
     /* Live push: the bot's public reply (an @merecat answer or a forwarded one)
        appears for everyone watching the thread and the index at once, exactly as
-       a member's reply does in handlePost. Back-room posts never cross the wire. */
-    if (env.HUB && boardKey(src.page) && src.page !== ADMIN_CAT) {
-      try {
-        const catKey = src.page.slice(6);
-        const prof = await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(MERECAT_BOT.hash).first();
-        const nick = (prof && prof.nick) || null;
-        const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
-        const hub = env.HUB.get(env.HUB.idFromName('board'));
-        await hub.publish({ v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
+       a member's reply does in handlePost. Routed through the one board sink so
+       the back-room gate is central (publishBoardEvents no-ops for it). */
+    try {
+      const catKey = src.page.slice(6);
+      const prof = await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(MERECAT_BOT.hash).first();
+      const nick = (prof && prof.nick) || null;
+      const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
+      await publishBoardEvents(env, src.page, [
+        { v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
           comment: { id: ins.id, author_hash: MERECAT_BOT.hash, nick,
             signature: (prof && prof.signature) || null, avatar: (prof && prof.avatar) || null,
-            faith: (prof && prof.faith) || null, body, created_at: now } });
-        await hub.publish({ v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+            faith: (prof && prof.faith) || null, body, created_at: now } },
+        { v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
           topic_id: topicId, title: (stat && stat.title) || null, replies: (stat && stat.replies) || 0,
-          last: now, last_id: ins.id, author_hash: MERECAT_BOT.hash, nick });
-      } catch (e) { console.log(JSON.stringify({ event: 'merecat_publish_failed', error: String(e) })); }
-    }
+          last: now, last_id: ins.id, author_hash: MERECAT_BOT.hash, nick },
+      ]);
+    } catch (e) { console.log(JSON.stringify({ event: 'merecat_publish_failed', error: String(e) })); }
   }
   return ins.id;
 }
@@ -4369,7 +4568,7 @@ export class BoardHub extends DurableObject {
   }
 
   async fetch(request) {
-    if (request.headers.get('Upgrade') !== 'websocket') {
+    if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
       return new Response('expected websocket', { status: 426 });
     }
     const pair = new WebSocketPair();
@@ -4435,17 +4634,30 @@ export class ChatRoom extends DurableObject {
       new WebSocketRequestResponsePair(JSON.stringify({ t: 'ping' }), JSON.stringify({ t: 'pong' })));
   }
 
+  /* Broadcast a frame to the OWNER's sockets only. Every state/meta/tokens frame
+     carries the in-flight answer, so it must never reach an unauthenticated (or
+     someone-else's) socket — only #auth, which checks chats(id, hash=me), can set
+     auth:true, so the authed set is exactly the owner's connections. The hello
+     resume frame is sent per-socket from #auth, not here. */
   #emit(obj) {
     const s = JSON.stringify(obj);
-    for (const ws of this.ctx.getWebSockets()) { try { ws.send(s); } catch { /* dropped */ } }
+    for (const ws of this.ctx.getWebSockets()) {
+      let a; try { a = ws.deserializeAttachment(); } catch { a = null; }
+      if (!a || a.auth !== true) continue;
+      try { ws.send(s); } catch { /* dropped */ }
+    }
   }
 
   async fetch(request) {
-    if (request.headers.get('Upgrade') !== 'websocket') return new Response('expected websocket', { status: 426 });
+    if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') return new Response('expected websocket', { status: 426 });
     const cid = Number(new URL(request.url).searchParams.get('chat')) || 0;
+    /* CF-Connecting-IP survives the forward from handleMerecatLive (stub.fetch
+       forwards the request headers), so the WS ask can re-check IP bans — the
+       HTTP path only checks them at ask-init. */
+    const ip = request.headers.get('CF-Connecting-IP') || '';
     const pair = new WebSocketPair();
     this.ctx.acceptWebSocket(pair[1], ['v1']);
-    pair[1].serializeAttachment({ auth: false, chatId: cid });
+    pair[1].serializeAttachment({ auth: false, chatId: cid, ip });
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
@@ -4468,18 +4680,20 @@ export class ChatRoom extends DurableObject {
   }
 
   async #auth(ws, m) {
-    const key = String(m.key || '');
-    if (!key) { ws.send('{"t":"state","phase":"error","error":"Missing key."}'); return; }
-    const me = await sha256hex(key);
     const a = ws.deserializeAttachment() || {};
+    const fail = (err) => { try { ws.send(JSON.stringify({ t: 'state', phase: 'error', error: err })); } catch { /* gone */ }
+      try { ws.close(1008, 'unauthorized'); } catch { /* gone */ } };
+    const key = String(m.key || '');
+    if (!key) { fail('Missing key.'); return; }
+    const me = await sha256hex(key);
     const cid = a.chatId || Number(m.chat) || 0;
     if (cid) {
       const own = await this.env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2').bind(cid, me).first();
-      if (!own) { ws.send('{"t":"state","phase":"error","error":"No such conversation."}'); return; }
+      if (!own) { fail('No such conversation.'); return; }
       this.chatId = cid;
     }
     const admin = await isAdminHash(this.env, me);
-    ws.serializeAttachment({ auth: true, me, admin, chatId: cid });
+    ws.serializeAttachment({ auth: true, me, admin, chatId: cid, ip: a.ip || '' });
     this.#hello(ws);
   }
 
@@ -4493,7 +4707,7 @@ export class ChatRoom extends DurableObject {
     if (!q) return;
     const me = a.me;
     const admin = !!a.admin;
-    const gate = await blockedReason(this.env, me, '');
+    const gate = await blockedReason(this.env, me, a.ip || '');
     if (gate) { ws.send('{"t":"state","phase":"error","error":"blocked"}'); return; }
     const cfg = await merecatConfig(this.env);
     const day = merecatDay();
@@ -4718,7 +4932,7 @@ export class ChatRoom extends DurableObject {
    a poll; a dedicated CONNECT_LIMIT bucket absorbs reconnect storms without
    starving normal reads. env-guarded so a deploy without the binding just 503s. */
 async function handleLive(request, env) {
-  if (!originOk(request)) return new Response('bad origin', { status: 403 });
+  if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.HUB) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.CONNECT_LIMIT.limit({ key: ip });
@@ -4726,13 +4940,53 @@ async function handleLive(request, env) {
   return env.HUB.get(env.HUB.idFromName('board')).fetch(request);
 }
 
-/* Fire-and-forget a live event to the board hub. env-guarded (a no-op when the
-   DO is unbound) and deferred via waitUntil so it never delays or breaks a post. */
+/* The back-room privacy gate for live events, in ONE place: nothing whose cat is
+   the admins-only room (or whose scopes name it) ever crosses the anonymous
+   board socket. Every emit path runs through this, so a future emit site cannot
+   leak the back room by forgetting a local guard. A subscriber fan-out
+   (webhook/Discord/etc.) would hook in here too, once, without touching any
+   forum handler. */
+function boardEventPublic(event) {
+  return !!event && event.cat !== 'adminsonly' &&
+    !(Array.isArray(event.scopes) && event.scopes.includes('cat:adminsonly'));
+}
+
+/* The single send primitive: EVERY board event reaches the hub through here, so
+   the back-room privacy gate is one predicate in one place and a future
+   subscriber (webhook / Discord / Matrix) is a single addition here — no forum
+   handler ever changes. Returns a promise; env-guarded (no-op without the DO). */
+function sendToHub(env, event) {
+  if (!env.HUB || !boardEventPublic(event)) return Promise.resolve();
+  return env.HUB.get(env.HUB.idFromName('board')).publish(event);
+}
+
+/* Publish a batch of board events (awaitable), with a cheap page pre-gate (a
+   non-board or admins-only page emits nothing). Each event still passes the
+   central gate in sendToHub. Shared by broadcastBoard and the bot's inline reply. */
+async function publishBoardEvents(env, page, events) {
+  if (!boardKey(page) || page === ADMIN_CAT) return;
+  const list = Array.isArray(events) ? events : [events];
+  for (const e of list) await sendToHub(env, e);
+}
+
+/* The board-broadcast sink: fire-and-forget, env-guarded, deferred via waitUntil
+   so it never delays or breaks the write. `events` is an array, or a function
+   returning one (sync or async) for sites that must query per-event data — the
+   page pre-gate runs first, so the builder is skipped for the back room. */
+function broadcastBoard(env, ctx, page, events) {
+  if (!env.HUB || !boardKey(page) || page === ADMIN_CAT) return;
+  ctx.waitUntil((async () => {
+    const list = typeof events === 'function' ? await events() : events;
+    await publishBoardEvents(env, page, list);
+  })().catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+}
+
+/* Fire-and-forget a single live event through the one sink; deferred via
+   waitUntil so it never delays or breaks a write. */
 function publishLive(env, ctx, event) {
   if (!env.HUB) return;
-  ctx.waitUntil(
-    env.HUB.get(env.HUB.idFromName('board')).publish(event)
-      .catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+  ctx.waitUntil(sendToHub(env, event)
+    .catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
 }
 
 /* merecat over WebSockets (Phase 2). ask-init mints (or verifies) the
@@ -4781,7 +5035,7 @@ async function handleMerecatAskInit(request, env) {
 /* The merecat WebSocket upgrade → the per-conversation ChatRoom (getByName by id
    so it is the same instance the ask-init minted). Not READ_LIMIT-gated. */
 async function handleMerecatLive(request, env) {
-  if (!originOk(request)) return new Response('bad origin', { status: 403 });
+  if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.CHAT) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.CONNECT_LIMIT.limit({ key: ip });
@@ -4797,18 +5051,19 @@ export default {
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, '') || '/';
 
-      if (request.method === 'POST' && !originOk(request)) {
+      if (request.method === 'POST' && !originOk(request, env)) {
         return json({ ok: false, error: 'Bad origin.' }, 403);
       }
 
       /* Live updates: the WebSocket upgrade to the board hub (a GET, so it never
          hits the POST origin guard above; handleLive does its own origin check). */
       if (path === '/api/comments/live' && request.method === 'GET' &&
-          request.headers.get('Upgrade') === 'websocket') {
+          (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') {
         return await handleLive(request, env);
       }
 
       if (path === '/api/comments' && request.method === 'GET') return await handleGet(request, env, url);
+      if (path === '/api/comments/config' && request.method === 'GET') return await handleConfig(request, env, url);
       if (path === '/api/comments' && request.method === 'POST') return await handlePost(request, env, ctx);
       if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env, ctx);
       if (path === '/api/comments/edit' && request.method === 'POST') return await handleEdit(request, env, ctx);
@@ -4858,9 +5113,11 @@ export default {
       if (path === '/api/comments/report/dismiss' && request.method === 'POST') return await handleReportDismiss(request, env);
       if (path === '/api/comments/admins' && request.method === 'POST') return await handleAdmins(request, env);
       if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
+      if (path === '/api/comments/push/register' && request.method === 'POST') return await handlePushRegister(request, env);
+      if (path === '/api/comments/push/unregister' && request.method === 'POST') return await handlePushUnregister(request, env);
       if (path === '/api/merecat/ask-init' && request.method === 'POST') return await handleMerecatAskInit(request, env);
       if (path === '/api/merecat/live' && request.method === 'GET' &&
-          request.headers.get('Upgrade') === 'websocket') return await handleMerecatLive(request, env);
+          (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') return await handleMerecatLive(request, env);
       if (path === '/api/merecat/about' && request.method === 'POST') return await handleMerecatAbout(request, env);
       if (path === '/api/merecat/backends' && request.method === 'POST') return await handleMerecatBackends(request, env);
       if (path === '/api/merecat/store' && request.method === 'POST') return await handleMerecatStore(request, env);
