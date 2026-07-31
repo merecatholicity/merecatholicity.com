@@ -794,6 +794,32 @@ async function deliverNotifications(env, o) {
   if (pushTo.size) await deliverPush(env, [...pushTo], { kind: o.isReply ? 'reply' : 'mention', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash });
 }
 
+/* A direct message is a notification-worthy event, so it also lands in the
+   notifications list (not only the inbox badge). Coalesced: one UNREAD 'dm'
+   notification per (recipient, sender), so a burst of messages surfaces once as
+   "X sent you a message" until it is read, rather than burying the list. A 'dm'
+   notification carries no topic/comment (both 0) and jumps to the conversation.
+   A DM must never fail because its notification did, so this never throws out. */
+async function notifyDm(env, toHash, fromHash) {
+  try {
+    if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
+    const now = Math.floor(Date.now() / 1000);
+    const r = await env.DB.prepare(
+      "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
+      "SELECT ?1, 'dm', 0, 0, ?2, ?3 WHERE NOT EXISTS (" +
+      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'dm' AND actor_hash = ?2 AND read_at IS NULL)"
+    ).bind(toHash, fromHash, now).run();
+    /* Ring the notification badge only when a row was actually added (an existing
+       unread 'dm' from this sender already counts). */
+    if (r.meta && r.meta.changes > 0) {
+      await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
+        kind: 'dm', topic_id: 0, comment_id: 0, actor_hash: fromHash, created_at: now }]);
+    }
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'notify_dm_failed', error: String(e) }));
+  }
+}
+
 /* Best-effort push fan-out — the mobile-notification landing pad. A NO-OP unless
    PUSH_ENABLED === 'true'; even then it only delivers when a provider is wired,
    which it is not yet (no app, no APNs/FCM/VAPID creds). It looks up each
@@ -1801,6 +1827,9 @@ async function handleDmSend(request, env, ctx) {
       publishLive(env, ctx, { v: 1, t: 'dm', scopes: ['user:' + to], from: me, thread_id: thread.id,
         message: { id: msg.id, sender_hash: me, body: body, created_at: now } });
     }
+    /* A DM also lands in the recipient's notifications list (the inbox badge is
+       not the only place it should show). */
+    await notifyDm(env, to, me);
     await deliverPush(env, [to], { kind: 'dm', thread_id: thread.id });
   }
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
@@ -1830,6 +1859,8 @@ async function sendSystemDm(env, fromHash, toHash, body) {
   /* Nudge the recipient's own connections (badge + open thread) like any DM. */
   await publishUser(env, [{ v: 1, t: 'dm', scopes: ['user:' + toHash], from: fromHash, thread_id: thread.id,
     message: { id: (msg && msg.id) || 0, sender_hash: fromHash, body: body, created_at: now } }]);
+  /* A system DM (e.g. a topic-move notice) is notification-worthy too. */
+  await notifyDm(env, toHash, fromHash);
   return true;
 }
 
@@ -2656,8 +2687,10 @@ async function pruneNotifications(env) {
     console.log(JSON.stringify({ event: 'notif_prune_failed', error: String(e) }));
   }
   try {
+    /* 'dm' notifications carry no comment (comment_id 0) and must be spared this
+       orphan sweep, which only clears reply/mention rows whose post is gone. */
     const r = await env.DB.prepare(
-      'DELETE FROM notifications WHERE comment_id NOT IN (SELECT id FROM comments)'
+      "DELETE FROM notifications WHERE kind IN ('reply','mention') AND comment_id NOT IN (SELECT id FROM comments)"
     ).run();
     console.log(JSON.stringify({ event: 'notif_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
   } catch (e) {

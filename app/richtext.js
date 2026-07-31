@@ -330,7 +330,9 @@ function el(tag, cls, text) {
       '.mc-hd3{font-size:1.09em}' +
       '.mc-hd4{font-size:1em}' +
       '.mc-hd5{font-size:0.92em}' +
-      '.mc-emoji{height:1.35em;width:auto;vertical-align:-0.28em;margin:0 .04em}' +
+      /* display is set explicitly: a site-wide `img{display:block}` (05-home.css)
+         would otherwise drop every inline emoji onto its own line. */
+      '.mc-emoji{display:inline-block;height:1.35em;width:auto;vertical-align:-0.28em;margin:0 .04em}' +
       '.emoji-suggest{max-height:15em;overflow-y:auto}' +
       'a.emoji-suggest-row{align-items:center}' +
       '.emoji-suggest-glyph{display:inline-flex;align-items:center;justify-content:center;min-width:1.6em;font-size:1.15rem}' +

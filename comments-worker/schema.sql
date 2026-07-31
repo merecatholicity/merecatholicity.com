@@ -138,14 +138,17 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 -- In-app notifications: one row per event for one recipient. kind 'reply' is a
--- new reply in a thread the recipient watches; 'mention' is an @mention. The
--- read watermark is a single stamp (read_at NULL = unread), same idiom as the
--- DM read stamps; opening the notifications list stamps them all read. topic_id
--- is the thread to open, comment_id the exact post to jump to.
+-- new reply in a thread the recipient watches; 'mention' is an @mention; 'dm' is
+-- a direct message (so a DM shows in the notifications list, not only the inbox
+-- badge — coalesced to one unread row per sender, carrying topic_id/comment_id 0
+-- and jumping to the conversation). The read watermark is a single stamp
+-- (read_at NULL = unread), same idiom as the DM read stamps; opening the
+-- notifications list stamps them all read. For reply/mention, topic_id is the
+-- thread to open and comment_id the exact post to jump to.
 CREATE TABLE IF NOT EXISTS notifications (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   recipient_hash TEXT NOT NULL,
-  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention')),
+  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention','dm')),
   topic_id       INTEGER NOT NULL,
   comment_id     INTEGER NOT NULL,
   actor_hash     TEXT,

@@ -19,6 +19,14 @@ a.board-cat-name:hover { text-decoration: underline; }
 .board-stats { color: var(--muted-d); font-size: 0.85rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
 a.board-topic-title { color: var(--ink); text-decoration: none; font-weight: bold; overflow-wrap: anywhere; }
 a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
+/* The whole category tile / topic row is a click target into the category or
+   topic (board.js synthesizes a click on the primary link, so the shell
+   soft-navigates; a nested link and a text selection still win). The cursor and
+   a soft hover — a light tint plus a maroon left accent — make the card legible,
+   applied only to the forum's own listing rows via the mc-cardnav marker so the
+   reused .board-topic in search/notifications/inbox is untouched. */
+.mc-cardnav { cursor: pointer; transition: background 0.14s ease, box-shadow 0.14s ease; }
+.mc-cardnav:hover { background: var(--cream); box-shadow: inset 3px 0 0 var(--maroon); }
 .board-topics .comments-status { padding: 0.65em 0.9em; margin: 0; }
 .board-form-head { margin-bottom: 0.3em; }
 .board-topic-head { overflow-wrap: anywhere; display: flex; align-items: baseline; flex-wrap: wrap; }

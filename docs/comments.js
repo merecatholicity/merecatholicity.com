@@ -697,21 +697,38 @@
     document.head.appendChild(script);
   }
 
+  /* Get a fresh Turnstile token. The widget loads lazily and asynchronously, so a
+     reader who clicks Post/Send the instant a composer opens once hit a bare
+     "still loading" refusal and had to refresh. Now the click ensures the script
+     is loading and WAITS for the widget to be ready (up to ~10s, polling), then
+     runs the challenge — so the button just works after a brief beat instead of
+     failing. Only a genuine load failure or a real timeout rejects. */
   function getToken() {
     return new Promise(function (resolve, reject) {
-      if (state.tsError) {
-        reject(new Error('Verification could not load. Check your connection and reload the page.'));
-        return;
+      loadTurnstile();   // a click may be the first thing that needs it
+      var waited = 0;
+      var STEP = 150, MAX = 10000;
+      function run() {
+        if (state.tsError) {
+          reject(new Error('Verification could not load. Check your connection and reload the page.'));
+          return;
+        }
+        if (!window.turnstile || state.widgetId === null) {
+          if (waited >= MAX) {
+            reject(new Error('Verification is taking a moment to load. Give it a few seconds and press the button again.'));
+            return;
+          }
+          waited += STEP;
+          setTimeout(run, STEP);
+          return;
+        }
+        state.tokenWait = { resolve: resolve, reject: reject };
+        try { turnstile.execute(state.widgetId); } catch (e) {
+          state.tokenWait = null;
+          reject(e);
+        }
       }
-      if (!window.turnstile || state.widgetId === null) {
-        reject(new Error('Verification is still loading. Try again in a moment.'));
-        return;
-      }
-      state.tokenWait = { resolve: resolve, reject: reject };
-      try { turnstile.execute(state.widgetId); } catch (e) {
-        state.tokenWait = null;
-        reject(e);
-      }
+      run();
     });
   }
 
@@ -1348,7 +1365,9 @@
       '.mc-hd3{font-size:1.09em}' +
       '.mc-hd4{font-size:1em}' +
       '.mc-hd5{font-size:0.92em}' +
-      '.mc-emoji{height:1.35em;width:auto;vertical-align:-0.28em;margin:0 .04em}' +
+      /* display explicit: a site-wide img{display:block} (05-home.css) would
+         otherwise drop every inline emoji onto its own line. */
+      '.mc-emoji{display:inline-block;height:1.35em;width:auto;vertical-align:-0.28em;margin:0 .04em}' +
       '.emoji-suggest{max-height:15em;overflow-y:auto}' +
       'a.emoji-suggest-row{align-items:center}' +
       '.emoji-suggest-glyph{display:inline-flex;align-items:center;justify-content:center;min-width:1.6em;font-size:1.15rem}' +
@@ -2152,6 +2171,22 @@
     if (window.mcConfirm) window.mcConfirm(msg, opts || {}).then(cb);
     else cb(window.confirm(msg));
   }
+  /* Mark a topic read on open — deduped so paging through a thread does not fire
+     the write on every page turn (opening any page already marks the whole thread
+     read). One write per topic per minute; the notif badge rides its response. */
+  var _readMarks = {};
+  function markThreadRead(topicId) {
+    if (!state.key || !topicId) return;
+    var now = Date.now();
+    if (_readMarks[topicId] && now - _readMarks[topicId] < 60000) return;
+    _readMarks[topicId] = now;
+    fetch(API + '/board/read', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, topic: topicId }),
+    }).then(function (r) { return r.json(); }).then(function (rd) {
+      if (rd && rd.ok && typeof rd.notif_unread === 'number') notifCacheSet(rd.notif_unread);
+    }).catch(function () {});
+  }
   function notifUnreadCheck(force) {
     if (!state.key) return;
     var c = notifCacheGet();
@@ -2675,9 +2710,7 @@
     /* A muted word on who we are, for the newcomer who lands here. One paragraph. */
     var introP = el('p', 'board-intro');
     introP.appendChild(el('small', null,
-      'A board for exploring what it means to be merely catholic. ' +
-      'If you hold the Nicene Creed you are welcome. Or if you are a seeker, or if you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation. ' +
-      'This is not a forum for debating non-Christian religions, or atheism / agnosticism. Comparative religion discussion is welcome from a Christian perspective.'));
+      'A board for exploring what it means to be merely catholic.'));
     section.appendChild(introP);
     /* The identity drawer lives on the front page too, so a reader can
        create, show, or swap a key before ever entering a room. */
@@ -3018,18 +3051,10 @@
         state.anonAllowed = !!d.anon;
         document.title = d.topic.title + ' | Catholicity Board';
         /* Opening a thread marks it read for the "new since last visit" state
-           AND reads its notifications — however you got here. The reply's
-           fresh unread count corrects the badge on this very page. */
-        if (state.key) {
-          fetch(API + '/board/read', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: state.key, topic: d.topic.id }),
-          }).then(function (r) { return r.json(); })
-            .then(function (rd) {
-              if (rd && rd.ok && typeof rd.notif_unread === 'number') notifCacheSet(rd.notif_unread);
-            })
-            .catch(function () {});
-        }
+           AND reads its notifications — however you got here. Deduped so paging
+           within the thread does not re-write each turn; the reply's fresh unread
+           count corrects the badge on this very page. */
+        if (state.key) markThreadRead(d.topic.id);
         crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
         var headEl = el('h2', 'board-topic-head', d.topic.title);
         if (d.topic.sticky) headEl.appendChild(el('span', 'board-sticky', '(sticky)'));
@@ -4506,12 +4531,16 @@
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
           var who = it.actor_nick || (it.actor_hash ? displayName(it.actor_hash) : 'Someone');
-          var verb = it.kind === 'mention' ? ' mentioned you in ' : ' replied in ';
-          var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), who + verb + (it.topic_title || 'a thread'));
-          a.href = 'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id;
+          /* A 'dm' notification opens the conversation; reply/mention jump to the post. */
+          var isDm = it.kind === 'dm';
+          var label = isDm ? (who + ' sent you a message')
+            : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+          var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
+          a.href = isDm ? ('community.html?dm=' + it.actor_hash)
+            : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
-          if (it.snippet) left.appendChild(el('div', 'board-intro', it.snippet));
+          if (it.snippet && !isDm) left.appendChild(el('div', 'board-intro', it.snippet));
           row.appendChild(left);
           row.appendChild(el('div', 'board-stats', fmtDateTime(it.created_at)));
           list.appendChild(row);
@@ -6672,7 +6701,7 @@
     renderProfile: renderProfile, adminProfileEditor: adminProfileEditor,
     loadTurnstile: loadTurnstile,
     dmSearchBox: dmSearchBox, dmLabel: dmLabel,
-    dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck,
+    dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck, markThreadRead: markThreadRead,
     /* admin read/observe cluster (Wave C-reads 3) */
     MERECAT_API: MERECAT_API,
     onProfile: function (cb) { profileWaiters.push(cb); },

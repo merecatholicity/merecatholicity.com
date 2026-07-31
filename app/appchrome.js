@@ -28,8 +28,8 @@ const ICON = {
    AI). hrefs are ordinary same-origin links the shell intercepts + soft-navs. */
 const TABS = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
-  { key: 'community', label: 'Community', svg: 'community', href: 'community.html' },
-  { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'community.html?merecat=1', hero: true },
+  { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'community.html?merecat=1' },
+  { key: 'community', label: 'Community', svg: 'community', href: 'community.html', hero: true },
   { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'community.html?inbox=1', badge: 'dm' },
   { key: 'profile', label: 'Profile', svg: 'profile', href: 'community.html?me=1' },
 ];
@@ -94,7 +94,7 @@ class McTabbar extends LitElement {
       ${TABS.map((t) => html`
         <a class=${'mc-tab' + (t.hero ? ' mc-tab-hero' : '') + (this.active === t.key ? ' mc-tab-on' : '')}
            href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'}>
-          <span class="mc-tab-ico">${t.hero ? t.icon : ICON[t.svg]}${t.badge === 'dm' && this.dm
+          <span class="mc-tab-ico">${t.icon ? t.icon : ICON[t.svg]}${t.badge === 'dm' && this.dm
             ? html`<span class="mc-tab-badge">${badgeText(this.dm)}</span>` : ''}</span>
           <span class="mc-tab-lbl">${t.label}</span>
         </a>`)}

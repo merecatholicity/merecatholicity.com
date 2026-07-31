@@ -114,6 +114,16 @@ class McBoardIndex extends LitElement {
     }).then(() => { kit.notifCacheSet(0); kit.stampFresh(); location.reload(); })
       .catch(() => {});
   }
+  /* The whole category tile is a click target into the category — but a nested
+     link (the latest-post link, a "see X" link in the description) still wins,
+     and a text selection never navigates. Synthesizing a click on the category
+     name link lets the shell soft-navigate it exactly as a direct click would. */
+  _catNav(e) {
+    if (e.target.closest('a, button, select, input, label')) return;
+    if (window.getSelection && String(window.getSelection()).length) return;
+    const a = e.currentTarget.querySelector('.board-cat-name');
+    if (a) a.click();
+  }
   statsCell(catKey) {
     const kit = this.kit;
     if (catKey === 'adminsonly') return html`<div class="board-stats">🔒 admins alone</div>`;
@@ -136,7 +146,7 @@ class McBoardIndex extends LitElement {
     const kit = this.kit;
     if (!kit) return nothing;
     return html`
-      <p class="board-intro"><small>A board for exploring what it means to be merely catholic. If you hold the Nicene Creed you are welcome. Or if you are a seeker, or if you keep one of the old pre-Christian Indo-European ways, you are also welcome as our guest in the conversation. This is not a forum for debating non-Christian religions, or atheism / agnosticism. Comparative religion discussion is welcome from a Christian perspective.</small></p>
+      <p class="board-intro"><small>A board for exploring what it means to be merely catholic.</small></p>
       <div class="comment-identity"></div>
       <div class="key-box" hidden></div>
       <div class="mc-index-search"></div>
@@ -147,7 +157,8 @@ class McBoardIndex extends LitElement {
         ${kit.CATS.map((cat) => {
           const isBack = cat[0] === 'adminsonly';
           const unread = this.byCat && this.byCat[cat[0]];
-          return html`<div class=${isBack ? 'board-cat board-cat-admin' : 'board-cat'}
+          return html`<div class=${isBack ? 'board-cat board-cat-admin mc-cardnav' : 'board-cat mc-cardnav'}
+              @click=${this._catNav}
               style=${isBack && !this.adminOn ? 'display:none' : nothing}>
             <div class="board-cat-left">
               <a class="board-cat-name" href=${'community.html?cat=' + cat[0]}>${cat[1]}</a>${unread ? html`<span class="dm-unread"> (${unread} new)</span>` : nothing}
@@ -303,11 +314,20 @@ class McBoardCat extends LitElement {
       if (t) row.appendChild(kit.topicAdminCorner(t, this.catKey));
     });
   }
+  /* The whole topic row is a click target into the topic; a nested link (the
+     title itself, a pager page, the last-poster jump, an admin control) still
+     wins, and a text selection never navigates. */
+  _topicNav(e) {
+    if (e.target.closest('a, button, select, input, label')) return;
+    if (window.getSelection && String(window.getSelection()).length) return;
+    const a = e.currentTarget.querySelector('.board-topic-title');
+    if (a) a.click();
+  }
   topicRow(t) {
     const kit = this.kit;
     const isNew = this.unread && this.unread.indexOf(t.id) !== -1;
     const who = t.author_hash ? (t.nick || kit.displayName(t.author_hash)) : 'Anonymous';
-    return html`<div class="board-topic" data-tid=${t.id}>
+    return html`<div class="board-topic mc-cardnav" data-tid=${t.id} @click=${this._topicNav}>
       <div class="board-topic-left">
         <a class=${isNew ? 'board-topic-title dm-unread' : 'board-topic-title'}
            href=${'community.html?topic=' + t.id}>${t.title}</a>${isNew ? html`<span class="dm-unread"> ● new</span>` : nothing}

@@ -81,7 +81,11 @@
   "triggers": { "crons": ["0 0 1 * *"] },
   "ratelimits": [
     { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 5, "period": 60 } },
-    { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 15, "period": 60 } },
+    // Reads are cached and cheap; 40/min/IP is comfortable for a member clicking
+    // through forum pages (topic pages + the two background badge polls all draw
+    // from this one bucket) while still capping a scraper. Raised from 15 after a
+    // reader hit "topic could not be loaded" paging quickly through a thread.
+    { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 40, "period": 60 } },
     // WebSocket connect throttle (its own bucket, NOT shared with READ_LIMIT) so
     // a reconnect storm can never starve normal reads.
     { "name": "CONNECT_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } }
@@ -133,7 +137,7 @@
     "staging": {
       "ratelimits": [
         { "name": "POST_LIMIT", "namespace_id": "9001", "simple": { "limit": 5, "period": 60 } },
-        { "name": "READ_LIMIT", "namespace_id": "9002", "simple": { "limit": 15, "period": 60 } },
+        { "name": "READ_LIMIT", "namespace_id": "9002", "simple": { "limit": 40, "period": 60 } },
         { "name": "CONNECT_LIMIT", "namespace_id": "9003", "simple": { "limit": 10, "period": 60 } }
       ],
       "vars": {
