@@ -3866,6 +3866,25 @@ async function merecatInsertComment(env, src, isBoard, topicId, topicAuthorHash,
       authorHash: MERECAT_BOT.hash, status: 'live', topicId, commentId: ins.id,
       isReply: true, topicAuthorHash, mentions: [],
     }).catch((e) => console.log(JSON.stringify({ event: 'merecat_reply_notify_failed', error: String(e) })));
+    /* Live push: the bot's public reply (an @merecat answer or a forwarded one)
+       appears for everyone watching the thread and the index at once, exactly as
+       a member's reply does in handlePost. Back-room posts never cross the wire. */
+    if (env.HUB && boardKey(src.page) && src.page !== ADMIN_CAT) {
+      try {
+        const catKey = src.page.slice(6);
+        const prof = await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(MERECAT_BOT.hash).first();
+        const nick = (prof && prof.nick) || null;
+        const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
+        const hub = env.HUB.get(env.HUB.idFromName('board'));
+        await hub.publish({ v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
+          comment: { id: ins.id, author_hash: MERECAT_BOT.hash, nick,
+            signature: (prof && prof.signature) || null, avatar: (prof && prof.avatar) || null,
+            faith: (prof && prof.faith) || null, body, created_at: now } });
+        await hub.publish({ v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
+          topic_id: topicId, title: (stat && stat.title) || null, replies: (stat && stat.replies) || 0,
+          last: now, last_id: ins.id, author_hash: MERECAT_BOT.hash, nick });
+      } catch (e) { console.log(JSON.stringify({ event: 'merecat_publish_failed', error: String(e) })); }
+    }
   }
   return ins.id;
 }
