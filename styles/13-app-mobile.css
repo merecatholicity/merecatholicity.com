@@ -176,3 +176,63 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
     font: inherit; cursor: pointer;
   }
 }
+
+/* ---- Phase 2: app controls (phones only) ---- */
+
+/* A native <select> enhanced by mcSelectSheet keeps its element (the source of
+   truth) but is hidden on phones behind a tappable button; desktop keeps the
+   native select (the button is hidden). */
+.mc-selbtn { display: none; }
+
+@media (max-width: 600px) {
+  select.mc-hassheet { display: none; }
+  .mc-selbtn {
+    display: inline-flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+    width: 100%; min-height: 46px; padding: 0.6rem 0.9rem; font: inherit; font-size: 16px;
+    text-align: left; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 10px; cursor: pointer;
+  }
+  .mc-selbtn-caret { color: var(--faint); font-size: 0.9rem; flex: none; }
+
+  /* the option list inside a sheet */
+  .mc-optlist { display: flex; flex-direction: column; }
+  .mc-optrow {
+    display: block; width: 100%; text-align: left; font: inherit; font-size: 1.02rem;
+    padding: 0.95rem 0.3rem; border: 0; border-bottom: 1px solid var(--rule);
+    background: none; color: var(--ink); cursor: pointer;
+  }
+  .mc-optrow.on { color: var(--maroon); font-weight: 600; }
+  .mc-optrow.on::after { content: " ✓"; }
+
+  /* the confirm dialog (inside a sheet) */
+  .mc-confirm-msg { margin: 0.2rem 0 1.1rem; font-size: 1.05rem; color: var(--ink); line-height: 1.45; }
+  .mc-confirm-row { display: flex; gap: 0.7rem; }
+  .mc-confirm-btn {
+    flex: 1; min-height: 48px; font: inherit; font-size: 1rem; font-weight: 600;
+    border-radius: 12px; cursor: pointer; border: 1px solid var(--rule);
+  }
+  .mc-confirm-cancel { background: var(--surface); color: var(--ink); }
+  .mc-confirm-ok { background: var(--maroon); border-color: var(--maroon); color: #fff; }
+  .mc-confirm-danger { background: #b52020; border-color: #b52020; color: #fff; }
+
+  /* toast */
+  .mc-toast {
+    position: fixed; left: 50%; transform: translateX(-50%) translateY(0.6rem);
+    bottom: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px) + 0.8rem); z-index: 70;
+    max-width: 90vw; padding: 0.7rem 1.1rem; border-radius: 999px;
+    background: var(--ink); color: var(--bg); font-size: 0.9rem; text-align: center;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3); opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .mc-toast.on { opacity: 0.96; transform: translateX(-50%) translateY(0); }
+
+  /* fat, zoom-proof text controls in the forum + composers */
+  .comment-text, .key-input, .merecat-q, input.mc-userq,
+  .contact-form input, .contact-form textarea,
+  .board-search input[type="search"], .board-search input[type="text"] {
+    font-size: 16px; border-radius: 10px;
+  }
+  .comment-text, .merecat-q { padding: 0.7rem; }
+  .comment-buttons .btn-send, .comment-buttons .btn-anon, .merecat-form .btn-send {
+    min-height: 46px; padding-left: 1.3rem; padding-right: 1.3rem; font-size: 1rem;
+  }
+}

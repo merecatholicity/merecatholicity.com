@@ -121,10 +121,15 @@ customElements.define('mc-appbar', McAppbar);
 /* ---- the reusable slide-up sheet (the app-dialog primitive) ---- */
 class McSheet extends LitElement {
   static properties = { open: { attribute: false }, heading: { attribute: false } };
-  constructor() { super(); this.open = false; this.heading = ''; this._node = null; }
+  constructor() { super(); this.open = false; this.heading = ''; this._node = null; this._onClose = null; }
   createRenderRoot() { return this; }
-  show(heading, node) { this.heading = heading || ''; this._node = node || null; this.open = true; }
-  close() { this.open = false; }
+  show(heading, node, onClose) { this.heading = heading || ''; this._node = node || null; this._onClose = onClose || null; this.open = true; }
+  close() {
+    if (!this.open) return;
+    this.open = false;
+    const cb = this._onClose; this._onClose = null;
+    if (cb) { try { cb(); } catch (e) { /* caller's problem */ } }
+  }
   updated() {
     /* The body host is a static template node, so Lit keeps whatever we append
        into it across re-renders (the McInbox dm-search idiom). Swap on new node. */
@@ -163,13 +168,16 @@ class McSettings extends LitElement {
     } catch (e) { /* no clipboard */ }
   }
   logout() {
-    if (!confirm('Log out of this identity? Keep your key saved so you can log back in.')) return;
-    try {
-      localStorage.removeItem('mc-comment-key');
-      localStorage.removeItem('mc-dm-unread');
-      localStorage.removeItem('mc-notif-unread');
-    } catch (e) { /* blocked */ }
-    location.href = 'index.html';
+    mcConfirm('Log out of this identity? Keep your key saved so you can log back in.',
+      { okLabel: 'Log out', danger: true }).then(function (ok) {
+      if (!ok) return;
+      try {
+        localStorage.removeItem('mc-comment-key');
+        localStorage.removeItem('mc-dm-unread');
+        localStorage.removeItem('mc-notif-unread');
+      } catch (e) { /* blocked */ }
+      location.href = 'index.html';
+    });
   }
   render() {
     const k = readKey();
@@ -235,6 +243,94 @@ class McHome extends LitElement {
 }
 customElements.define('mc-home', McHome);
 
+/* Phones get the app controls; desktop keeps its native ones (the decoupling
+   line, matching the CSS breakpoint). */
+function isMobile() { try { return matchMedia('(max-width: 600px)').matches; } catch (e) { return false; } }
+
+/* An app-style confirm: a sheet with the message and two fat buttons on phones,
+   the native confirm on desktop (which the owner keeps as-is). Returns a Promise
+   that resolves true/false; dismissing the sheet (scrim/grip) is a cancel. */
+function mcConfirm(message, opts) {
+  opts = opts || {};
+  if (!isMobile() || !window.mcSheet) return Promise.resolve(window.confirm(message));
+  return new Promise(function (resolve) {
+    let done = false;
+    const finish = function (v) { if (done) return; done = true; window.mcSheet.close(); resolve(v); };
+    const wrap = document.createElement('div');
+    wrap.className = 'mc-confirm';
+    const msg = document.createElement('p'); msg.className = 'mc-confirm-msg'; msg.textContent = message;
+    const row = document.createElement('div'); row.className = 'mc-confirm-row';
+    const cancel = document.createElement('button'); cancel.type = 'button';
+    cancel.className = 'mc-confirm-btn mc-confirm-cancel'; cancel.textContent = opts.cancelLabel || 'Cancel';
+    const ok = document.createElement('button'); ok.type = 'button';
+    ok.className = 'mc-confirm-btn mc-confirm-ok' + (opts.danger ? ' mc-confirm-danger' : '');
+    ok.textContent = opts.okLabel || 'OK';
+    cancel.addEventListener('click', function () { finish(false); });
+    ok.addEventListener('click', function () { finish(true); });
+    row.appendChild(cancel); row.appendChild(ok);
+    wrap.appendChild(msg); wrap.appendChild(row);
+    window.mcSheet.open(opts.title || 'Confirm', wrap, function () { finish(false); });
+  });
+}
+
+/* A brief bottom toast (phones only; desktop keeps its inline status text). */
+function mcToast(message) {
+  if (!isMobile()) return;
+  const t = document.createElement('div');
+  t.className = 'mc-toast'; t.setAttribute('data-mc-app', ''); t.textContent = message;
+  document.body.appendChild(t);
+  requestAnimationFrame(function () { t.classList.add('on'); });
+  setTimeout(function () {
+    t.classList.remove('on');
+    setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+  }, 2400);
+}
+
+/* Give a native <select> an app bottom-sheet picker on phones: the select stays
+   the source of truth and the change target, but is visually replaced by a
+   tappable button that opens a sheet of big option rows. Desktop keeps the native
+   select untouched. Idempotent. Returns { refresh } to re-sync the button label
+   after options are repopulated (cascading pickers). */
+function mcSelectSheet(sel) {
+  if (!sel) return { refresh: function () {} };
+  /* Re-entrant: if the button was reconciled away by a Lit re-render, rebuild it
+     (call this from the view's updated()); otherwise reuse the existing one. */
+  if (sel.__mcBtn && sel.__mcBtn.isConnected) return sel.__mcHandle;
+  if (!sel.parentNode) return { refresh: function () {} };
+  sel.classList.add('mc-hassheet');
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'mc-selbtn';
+  sel.parentNode.insertBefore(btn, sel.nextSibling);
+  const refresh = function () {
+    const o = sel.options[sel.selectedIndex];
+    btn.textContent = (o ? o.textContent : '') || ' ';
+    const caret = document.createElement('span'); caret.className = 'mc-selbtn-caret'; caret.textContent = '▾';
+    btn.appendChild(caret);
+  };
+  btn.addEventListener('click', function () {
+    if (!isMobile() || !window.mcSheet) { try { sel.focus(); } catch (e) { /* gone */ } return; }
+    const list = document.createElement('div'); list.className = 'mc-optlist';
+    Array.prototype.forEach.call(sel.options, function (o, i) {
+      if (o.disabled) return;
+      const r = document.createElement('button');
+      r.type = 'button'; r.className = 'mc-optrow' + (i === sel.selectedIndex ? ' on' : '');
+      r.textContent = o.textContent;
+      r.addEventListener('click', function () {
+        sel.selectedIndex = i;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        refresh();
+        window.mcSheet.close();
+      });
+      list.appendChild(r);
+    });
+    window.mcSheet.open(sel.getAttribute('aria-label') || sel.getAttribute('title') || 'Choose', list);
+  });
+  refresh();
+  sel.__mcBtn = btn;
+  sel.__mcHandle = { refresh: refresh };
+  return sel.__mcHandle;
+}
+
 /* Mount the persistent chrome (called by the shell after the ?app=0 latch) and
    return { sync } for boots() to call after every swap. The elements carry
    data-mc-app so swapContent skips them; CSS keeps them off desktop. */
@@ -252,10 +348,15 @@ export function installChrome() {
   document.body.appendChild(sheet);
 
   window.mcSheet = {
-    open: function (heading, node) { sheet.show(heading, node); },
+    open: function (heading, node, onClose) { sheet.show(heading, node, onClose); },
     settings: function () { sheet.show('Settings', document.createElement('mc-settings')); },
     close: function () { sheet.close(); },
   };
+  /* App controls for the whole client to reach (phones only; desktop no-ops to
+     the native control). Phase 2 of the appification. */
+  window.mcConfirm = mcConfirm;
+  window.mcToast = mcToast;
+  window.mcSelectSheet = mcSelectSheet;
 
   /* The comments client fires mc-badge whenever an unread count changes, so the
      tab bar and bell update the instant a DM or notification lands. */

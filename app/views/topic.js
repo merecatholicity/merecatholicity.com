@@ -267,8 +267,18 @@ class McSearch extends LitElement {
       })
       .catch(() => { this.count = ''; this.d = { error: true }; });
   }
-  firstUpdated() { this.mountForm(); }
-  updated() { this.mountSnippets(); }
+  firstUpdated() { this.mountForm(); this.mountSelects(); }
+  updated() { this.mountSnippets(); this.mountSelects(); }
+  /* App bottom-sheet pickers over the category + sort selects on phones (desktop
+     keeps the native selects). Re-applied each render; mcSelectSheet is
+     re-entrant, so a Lit reconcile that drops the button rebuilds it. */
+  mountSelects() {
+    if (!window.mcSelectSheet) return;
+    const cat = this.querySelector('.mc-cat');
+    const sort = this.querySelector('.mc-sort');
+    if (cat) { cat.setAttribute('aria-label', 'Category'); window.mcSelectSheet(cat); }
+    if (sort) { sort.setAttribute('aria-label', 'Sort'); window.mcSelectSheet(sort); }
+  }
   mountForm() {
     const kit = this.kit;
     const form = this.querySelector('.board-search');
