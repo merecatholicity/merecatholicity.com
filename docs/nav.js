@@ -8,6 +8,13 @@
     var m = document.cookie.match(/(?:^|;\s*)mc-theme=(light|dark)\b/);
     return m ? m[1] : '';
   }
+  /* Which dark palette the reader chose: charcoal (default) / slate / warm ink.
+     Only meaningful in dark mode; drives data-dark on <html> for the token
+     variant blocks in 01-tokens.css. */
+  function readDark() {
+    var m = document.cookie.match(/(?:^|;\s*)mc-dark=(charcoal|slate|ink)\b/);
+    return m ? m[1] : 'charcoal';
+  }
   function systemDark() {
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   }
@@ -16,10 +23,26 @@
   }
   function apply(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+    /* charcoal is the base [data-theme="dark"] block (no attribute); slate/ink are
+       delta blocks keyed on data-dark. Cleared in light mode so nothing lingers. */
+    var dark = readDark();
+    if (theme === 'dark' && (dark === 'slate' || dark === 'ink')) {
+      document.documentElement.setAttribute('data-dark', dark);
+    } else {
+      document.documentElement.removeAttribute('data-dark');
+    }
   }
   /* Apply as soon as the (deferred) script runs, so an explicit choice takes
      hold before the reader interacts. */
   apply(effective());
+  /* The dark-palette picker (in the settings sheet / desktop account menu) reaches
+     the theme engine through these, so the palette lives in one place. */
+  window.mcGetDark = readDark;
+  window.mcSetDark = function (v) {
+    if (v !== 'charcoal' && v !== 'slate' && v !== 'ink') return;
+    document.cookie = 'mc-dark=' + v + ';path=/;max-age=31536000;samesite=lax';
+    apply(effective());
+  };
 
   function build() {
     if (!document.body || document.querySelector('.theme-toggle')) return;
@@ -222,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=25';
+    s.src = 'app.js?v=26';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

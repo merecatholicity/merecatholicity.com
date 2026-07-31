@@ -1,0 +1,160 @@
+/* ---- Desktop platform layer + shared UI font ----
+   The desktop counterpart to 13-app-mobile.css. A persistent member/platform bar
+   (McDeskbar), modern system-sans UI, fat buttons, real hover, clickable cards, and
+   a dark-palette picker. The FONT rules are UNGATED (system-sans on the platform UI,
+   identical mobile+desktop, the owner's choice) while long-form reading stays serif;
+   everything else is @media (min-width:601px) so the mobile app is unchanged. */
+
+/* the deskbar is hidden until the desktop query turns it on (mobile never shows it) */
+mc-deskbar { display: none; }
+
+/* ---- system-sans on the platform UI (ungated) ---- */
+/* Applied to UI CONTAINERS; their descendants inherit. Long-form article prose is
+   NOT in any of these containers, so it keeps the body serif. */
+nav.site, .theme-toggle,
+.btn, .btn-read, .btn-pdf, .btn-amazon, .btn-send, .btn-anon, .md-btn,
+section.comments, .board-cats, .board-topics, .board-crumb, .board-pages,
+.user-list, .profile, .mc-cardnav, .mc-screen-title,
+mc-deskbar, mc-appbar, mc-tabbar, mc-sheet, mc-home, mc-settings,
+.bible-bar, .bible-player, .bp-btn, .bp-time, .bp-title, .bible-chapters,
+.bible-chap, .bible-chap-grid, .bible-step, .bible-lbl, .bible-loading, .bible-hit {
+  font-family: var(--font-sans);
+}
+/* but scripture reading text stays serif even inside the reader chrome */
+.bible-verse, .bible-vnum, .bible-title { font-family: var(--font-serif); }
+
+/* ---- the dark-palette picker (in the settings sheet + the desktop account menu;
+   ungated so it works in both) ---- */
+.mc-set-palette { display: flex; gap: 0.5rem; padding: 0.5rem 0.2rem 0.3rem; }
+.mc-set-pal {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+  padding: 0.5rem 0.3rem; border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--surface); color: var(--faint); font: inherit; font-size: 0.82rem; cursor: pointer;
+}
+.mc-set-pal.on { border-color: var(--maroon); color: var(--ink); box-shadow: inset 0 0 0 1px var(--maroon); }
+.mc-pal-sw { width: 100%; height: 1.5rem; border-radius: 6px; border: 1px solid rgba(0, 0, 0, 0.15); }
+.mc-pal-charcoal .mc-pal-sw { background: linear-gradient(135deg, #0f1113 50%, #ef6b6b 50%); }
+.mc-pal-slate .mc-pal-sw { background: linear-gradient(135deg, #0d1117 50%, #ef6b6b 50%); }
+.mc-pal-ink .mc-pal-sw { background: linear-gradient(135deg, #14120f 50%, #ef6b6b 50%); }
+
+@media (min-width: 601px) {
+  :root { --mc-deskbar-h: 3.25rem; }
+
+  /* ---- the platform bar ---- */
+  mc-deskbar { display: block; }
+  .mc-deskbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 45; height: var(--mc-deskbar-h);
+    display: flex; align-items: center; gap: 0.9rem; padding: 0 1rem;
+    background: var(--glass); backdrop-filter: saturate(1.4) blur(8px);
+    border-bottom: 1px solid var(--rule); box-shadow: var(--shadow-1);
+  }
+  /* the fixed bar needs headroom; only when the shell is present (never ?app=0) */
+  body.mc-app { padding-top: calc(var(--mc-deskbar-h) + 0.4rem); }
+
+  .mc-db-brand { display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; color: var(--maroon); flex: none; }
+  .mc-db-brand .mc-ico { width: 20px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mc-db-word { font-weight: 700; font-size: 1.05rem; color: var(--ink); letter-spacing: -0.01em; }
+
+  .mc-db-search { flex: 1; max-width: 30rem; position: relative; display: flex; align-items: center; }
+  .mc-db-searchico { position: absolute; left: 0.7rem; width: 18px; height: 18px; color: var(--faint); pointer-events: none; }
+  .mc-db-searchico .mc-ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .mc-db-search input {
+    width: 100%; height: 2.3rem; padding: 0 0.8rem 0 2.2rem; font: inherit; font-size: 0.95rem;
+    color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 999px;
+    transition: border-color var(--tap), box-shadow var(--tap);
+  }
+  .mc-db-search input:focus { outline: none; border-color: var(--maroon); box-shadow: 0 0 0 3px color-mix(in srgb, var(--maroon) 22%, transparent); }
+
+  .mc-db-cluster { display: flex; align-items: center; gap: 0.35rem; flex: none; }
+  .mc-db-ico {
+    position: relative; width: 2.4rem; height: 2.4rem; display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px; text-decoration: none; color: var(--muted-c); background: none; border: 0; cursor: pointer;
+    font-size: 1.25rem; transition: background var(--tap), color var(--tap);
+  }
+  .mc-db-ico .mc-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .mc-db-ico:hover { background: var(--cream); color: var(--maroon); }
+  .mc-db-merecat { font-size: 1.35rem; }
+  .mc-db-cluster .mc-tab-badge {
+    position: absolute; top: 0.15rem; right: 0.15rem; min-width: 1.05rem; height: 1.05rem; padding: 0 0.22rem;
+    border-radius: 0.55rem; background: #d33; color: #fff; font-size: 0.62rem; line-height: 1.05rem;
+    text-align: center; font-weight: 700; box-shadow: 0 0 0 2px var(--surface);
+  }
+  .mc-db-join {
+    margin-left: 0.3rem; display: inline-flex; align-items: center; min-height: 2.2rem; padding: 0 1.1rem;
+    border-radius: 999px; background: var(--accent-fill); color: var(--accent-on); text-decoration: none;
+    font-weight: 600; font-size: 0.92rem; box-shadow: var(--shadow-1); transition: transform var(--tap), box-shadow var(--tap);
+  }
+  .mc-db-join:hover { transform: translateY(var(--lift)); box-shadow: var(--shadow-2); }
+
+  /* the account dropdown */
+  .mc-db-acct { position: relative; }
+  .mc-db-menu {
+    position: absolute; top: calc(100% + 0.5rem); right: 0; width: 20rem; max-height: 80vh; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-2); padding: 0.4rem 0.9rem 0.9rem; z-index: 60;
+  }
+
+  /* desktop styling for the shared mc-settings rows (mobile has its own block) */
+  .mc-db-menu .mc-set-sec { margin: 0.9rem 0 0.2rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+  .mc-db-menu .mc-set-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; width: 100%;
+    padding: 0.6rem 0.3rem; border: 0; border-bottom: 1px solid var(--rule); background: none;
+    color: var(--ink); text-decoration: none; font: inherit; text-align: left; cursor: pointer; border-radius: 6px;
+  }
+  .mc-db-menu .mc-set-row:hover { background: var(--cream); }
+  .mc-db-menu .mc-set-row small { display: block; color: var(--faint); font-size: 0.78rem; margin-top: 0.1rem; }
+  .mc-db-menu .mc-set-go { color: var(--faint); flex: none; }
+  .mc-db-menu .mc-set-danger { color: var(--maroon); }
+  .mc-db-menu .mc-set-key { display: flex; gap: 0.5rem; padding: 0.5rem 0.2rem; }
+  .mc-db-menu .mc-set-keyin { flex: 1; min-width: 0; font-family: monospace; font-size: 0.9rem; padding: 0.5rem; border: 1px solid var(--rule); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .mc-db-menu .mc-set-switch { width: 2.6rem; height: 1.5rem; border-radius: 999px; background: var(--rule); position: relative; transition: background var(--tap); flex: none; }
+  .mc-db-menu .mc-set-switch.on { background: var(--maroon); }
+  .mc-db-menu .mc-set-knob { position: absolute; top: 2px; left: 2px; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: #fff; transition: transform var(--tap); }
+  .mc-db-menu .mc-set-switch.on .mc-set-knob { transform: translateX(1.1rem); }
+
+  /* keep the corner light/dark toggle out of the fixed bar's way (logged-out
+     readers reach theme here; logged-in also have it in the account menu) */
+  body.mc-app .theme-toggle { top: auto; bottom: 1rem; }
+
+  /* ---- fat buttons + real hover ---- */
+  .btn, .btn-send, .btn-anon {
+    box-shadow: var(--shadow-1); transition: background-color var(--tap), color var(--tap), transform var(--tap), box-shadow var(--tap);
+  }
+  .btn:hover, .btn-send:hover, .btn-anon:hover { transform: translateY(var(--lift)); box-shadow: var(--shadow-2); }
+  .btn:active, .btn-send:active, .btn-anon:active { transform: none; box-shadow: var(--shadow-1); }
+
+  /* the desktop identity actions become real pills, not bare maroon text */
+  .identity-line-in { line-height: 2.4; }
+  a.identity-action {
+    display: inline-flex; align-items: center; min-height: 2rem; padding: 0.1rem 0.9rem; margin: 0 0.15rem;
+    border: 1px solid var(--rule); border-radius: 999px; text-decoration: none; color: var(--maroon);
+    background: var(--surface); transition: background var(--tap), border-color var(--tap), transform var(--tap), box-shadow var(--tap);
+  }
+  a.identity-action:hover { border-color: var(--maroon); transform: translateY(var(--lift)); box-shadow: var(--shadow-1); text-decoration: none; }
+
+  /* ---- forum cards: a real, obviously-clickable hover ---- */
+  .board-cats, .board-topics { border-radius: var(--radius); overflow: hidden; }
+  .board-cat, .board-topic { padding: 0.9em 1.05em; }
+  .mc-cardnav { transition: background var(--tap), box-shadow var(--tap), transform var(--tap); }
+  .mc-cardnav:hover {
+    background: var(--cream); box-shadow: var(--shadow-2), inset 3px 0 0 var(--maroon);
+    transform: translateY(var(--lift)); position: relative; z-index: 1;
+  }
+  a.user-row { padding: 0.7em 0.6em; border-radius: var(--radius); transition: background var(--tap); }
+  a.user-row:hover { background: var(--cream); }
+
+  /* ---- fatter pager pills on desktop ---- */
+  .board-pages a, .board-pages strong {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 2.2rem; height: 2.2rem;
+    margin: 0 0.15rem 0 0; padding: 0 0.5rem; border-radius: 8px; text-decoration: none;
+  }
+  .board-pages a { border: 1px solid var(--rule); color: var(--maroon); transition: background var(--tap), border-color var(--tap); }
+  .board-pages a:hover { background: var(--cream); border-color: var(--maroon); }
+  .board-pages strong { background: var(--accent-fill); color: var(--accent-on); }
+
+  /* ---- the content nav, modernized to read as one header with the deskbar ---- */
+  nav.site .nav-list > li > a, nav.site .nav-list > li > .nav-parent {
+    border-radius: 8px; transition: background var(--tap), color var(--tap);
+  }
+  nav.site .nav-list > li > a:hover, nav.site .nav-list > li > .nav-parent:hover { background: var(--cream); }
+}
