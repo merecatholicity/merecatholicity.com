@@ -1362,3 +1362,25 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
 }
+
+/* ---- Phase 4: polish — crisp icons + micro-animations (phones only) ---- */
+@media (max-width: 600px) {
+  /* stroke icons inherit the element's color (active tab = maroon, else faint) */
+  .mc-ico { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; display: block; }
+  .mc-tab .mc-ico { width: 25px; height: 25px; }
+  .mc-ab-btn .mc-ico { width: 22px; height: 22px; }
+  .mc-ab-brand .mc-ico { width: 20px; height: 24px; stroke-width: 2; }
+  .mc-tab-ico { font-size: 1.35rem; }
+
+  /* tap feedback on the tabs */
+  .mc-tab:active .mc-tab-ico { transform: scale(0.88); }
+  .mc-tab-hero:active .mc-tab-ico { transform: scale(0.94); }
+
+  /* a gentle fade-in of freshly soft-navigated content */
+  @keyframes mc-swapin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  main.mc-swapin { animation: mc-swapin 0.2s ease; }
+
+  /* merecat messages pop in like a chat */
+  @keyframes mc-bubblein { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+  .merecat-msg { animation: mc-bubblein 0.22s ease; }
+}

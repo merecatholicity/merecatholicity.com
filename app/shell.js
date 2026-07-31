@@ -397,6 +397,10 @@ customElements.define('mc-audio-dock', McAudioDock);
     markHere();
     dock.sync();
     chrome.sync();
+    /* A gentle fade-in of freshly-swapped content (phones only; CSS-gated). The
+       <main> is a new node each swap, so the class triggers the animation once. */
+    var swapped = document.querySelector('main');
+    if (swapped) swapped.classList.add('mc-swapin');
   }
 
   var navigating = false;

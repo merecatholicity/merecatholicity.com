@@ -1149,10 +1149,17 @@
       var ref = b.name + ' ' + c + ':' + a + (z > a ? '-' + z : '');
       return '> ' + parts.join(' ') + ' (' + ref + ')\n';
     }
-    bookSel.addEventListener('change', fillChapters);
-    chapSel.addEventListener('change', fillVerses);
-    v1Sel.addEventListener('change', drawPreview);
-    v2Sel.addEventListener('change', drawPreview);
+    /* App bottom-sheet pickers over the four cascading selects on phones; each
+       fill repopulates dependents, so refresh their picker labels after. */
+    function enhSel(sel, label) {
+      sel.setAttribute('aria-label', label);
+      if (window.mcSelectSheet) { var h = window.mcSelectSheet(sel); if (h) h.refresh(); }
+    }
+    function enhAll() { enhSel(bookSel, 'Book'); enhSel(chapSel, 'Chapter'); enhSel(v1Sel, 'From verse'); enhSel(v2Sel, 'To verse'); }
+    bookSel.addEventListener('change', function () { fillChapters(); enhAll(); });
+    chapSel.addEventListener('change', function () { fillVerses(); enhAll(); });
+    v1Sel.addEventListener('change', function () { drawPreview(); enhAll(); });
+    v2Sel.addEventListener('change', function () { drawPreview(); enhAll(); });
     insert.addEventListener('click', function () {
       insertAtCaret(textarea, passage());
       textarea.focus();
@@ -1161,11 +1168,11 @@
 
     panel.openPanel = function () {
       panel.hidden = false;
-      if (kjvData) { status.hidden = true; fillBooks(); }
+      if (kjvData) { status.hidden = true; fillBooks(); enhAll(); }
       else {
         status.hidden = false;
         loadKjv().then(function () {
-          if (kjvData.books.length) { status.hidden = true; fillBooks(); }
+          if (kjvData.books.length) { status.hidden = true; fillBooks(); enhAll(); }
           else status.textContent = 'Could not load the Bible text.';
         });
       }
@@ -4019,17 +4026,19 @@
       avDel.href = '#';
       avDel.addEventListener('click', function (e) {
         e.preventDefault();
-        if (!confirm('Remove your avatar?')) return;
-        fetchRetry(API + '/avatar/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key }),
-        }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
-          if (!d.ok) throw new Error(d.error || 'Could not remove it.');
-          stampFresh();
-          p.avatar = null;
-          editProfile(card, p);
-        }).catch(function (err) { avNote.textContent = err.message; });
+        appConfirm('Remove your avatar?', { okLabel: 'Remove', danger: true }, function (ok) {
+          if (!ok) return;
+          fetchRetry(API + '/avatar/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key }),
+          }, [1500]).then(function (r) { return r.json(); }).then(function (d) {
+            if (!d.ok) throw new Error(d.error || 'Could not remove it.');
+            stampFresh();
+            p.avatar = null;
+            editProfile(card, p);
+          }).catch(function (err) { avNote.textContent = err.message; });
+        });
       });
       card.appendChild(avDel);
     }
@@ -5162,7 +5171,8 @@
           del.href = '#';
           del.addEventListener('click', function (e) {
             e.preventDefault();
-            if (!confirm('Delete this conversation outright? There is no undo.')) return;
+            appConfirm('Delete this conversation outright? There is no undo.', { okLabel: 'Delete', danger: true }, function (ok) {
+            if (!ok) return;
             fetchRetry(MERECAT_API + '/chat/delete', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ key: state.key, id: c.id }),
@@ -5178,6 +5188,7 @@
               resyncChats().then(function () {
                 actSay('Connection hiccup — the list was refreshed from the server. Try the delete again if it still stands.');
               });
+            });
             });
           });
           row.appendChild(del);
