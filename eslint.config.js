@@ -27,6 +27,7 @@ const browserGlobals = {
   atob: 'readonly', btoa: 'readonly', scrollTo: 'readonly', innerWidth: 'readonly', innerHeight: 'readonly',
   Audio: 'readonly', Event: 'readonly', addEventListener: 'readonly',
   WebSocket: 'readonly', removeEventListener: 'readonly',
+  nacl: 'readonly',   // vendored tweetnacl.min.js (E2E DM crypto), loaded on demand
 };
 export default [
   {

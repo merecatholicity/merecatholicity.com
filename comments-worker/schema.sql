@@ -103,13 +103,21 @@ CREATE INDEX IF NOT EXISTS dm_threads_b_idx ON dm_threads(b_hash, last_at);
 -- held = 1 is the shadow hold: a message sent while its sender stood blocked
 -- by the recipient. The sender sees it as delivered in their own view; the
 -- recipient never does, until an unblock releases it with its original time.
+-- enc marks how body is encoded, so the server stays blind and the client knows
+-- whether to decrypt: NULL/0 = legacy pre-E2E plaintext (render as-is); 1 = an
+-- end-to-end-encrypted member message (body is an opaque "E1.<nonce>.<ct>" blob
+-- the client decrypts with the pair's shared X25519 secret); 2 = a system /
+-- automated plaintext notice, e.g. a topic-move notice authored by the server
+-- (render as-is, labelled). Only enc = 1 is ciphertext; the server never reads
+-- any of it. (Existing DBs: ALTER TABLE dms ADD COLUMN enc INTEGER;)
 CREATE TABLE IF NOT EXISTS dms (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   thread_id   INTEGER NOT NULL,
   sender_hash TEXT NOT NULL,
   body        TEXT NOT NULL,
   created_at  INTEGER NOT NULL,
-  held        INTEGER
+  held        INTEGER,
+  enc         INTEGER
 );
 CREATE INDEX IF NOT EXISTS dms_thread_idx ON dms(thread_id, id);
 
@@ -242,3 +250,17 @@ CREATE TABLE IF NOT EXISTS push_tokens (
   PRIMARY KEY (hash, token)
 );
 CREATE INDEX IF NOT EXISTS push_tokens_hash_idx ON push_tokens(hash);
+
+-- Published X25519 public keys for the end-to-end-encrypted inbox. Each member
+-- derives a keypair deterministically from the secret behind their identity
+-- hash and publishes only the PUBLIC half here (POST /dm/pubkey, keyed). To send
+-- a DM the client fetches the recipient's pubkey (served in /dm/thread) and
+-- encrypts to it; the server never sees a private key and cannot derive one from
+-- the hash it stores. pubkey is base64url of 32 bytes. Re-publishing is a no-op
+-- (keygen is deterministic), so this upserts. Derived, not backed up.
+CREATE TABLE IF NOT EXISTS dm_pubkeys (
+  hash       TEXT PRIMARY KEY,
+  pubkey     TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER
+);
