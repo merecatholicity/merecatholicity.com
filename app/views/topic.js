@@ -49,14 +49,9 @@ class McTopic extends LitElement {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.d = d;
         document.title = d.topic.title + ' | Catholicity Board';
-        if (kit.state.key) {
-          fetch(kit.API + '/board/read', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: kit.state.key, topic: d.topic.id }),
-          }).then((r) => r.json()).then((rd) => {
-            if (rd && rd.ok && typeof rd.notif_unread === 'number') kit.notifCacheSet(rd.notif_unread);
-          }).catch(() => {});
-        }
+        /* Mark the thread read (deduped in the kit, so paging within it does not
+           re-write on every page turn). */
+        if (kit.state.key) kit.markThreadRead(d.topic.id);
       })
       .catch((e) => { this.err = e.message || 'failed'; });
 

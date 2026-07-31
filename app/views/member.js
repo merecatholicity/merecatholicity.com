@@ -137,10 +137,15 @@ class McNotifications extends LitElement {
       ${pagerTpl(d.total, d.per, d.page, href)}
       <div class="board-topics">${d.items.map((it) => {
         const who = it.actor_nick || (it.actor_hash ? kit.displayName(it.actor_hash) : 'Someone');
-        const verb = it.kind === 'mention' ? ' mentioned you in ' : ' replied in ';
+        /* A 'dm' notification opens the conversation; reply/mention jump to the post. */
+        const isDm = it.kind === 'dm';
+        const label = isDm ? (who + ' sent you a message')
+          : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+        const to = isDm ? ('community.html?dm=' + it.actor_hash)
+          : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
         return html`<div class="board-topic"><div class="board-topic-left">
-          <a class=${'board-topic-title' + (it.read_at ? '' : ' dm-unread')} href=${'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id}>${who + verb + (it.topic_title || 'a thread')}</a>${it.read_at ? nothing : html`<span class="dm-unread"> ● new</span>`}
-          ${it.snippet ? html`<div class="board-intro">${it.snippet}</div>` : nothing}
+          <a class=${'board-topic-title' + (it.read_at ? '' : ' dm-unread')} href=${to}>${label}</a>${it.read_at ? nothing : html`<span class="dm-unread"> ● new</span>`}
+          ${it.snippet && !isDm ? html`<div class="board-intro">${it.snippet}</div>` : nothing}
           </div><div class="board-stats">${kit.fmtDateTime(it.created_at)}</div></div>`;
       })}</div>
       ${pagerTpl(d.total, d.per, d.page, href)}`;

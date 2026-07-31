@@ -333,6 +333,40 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   .mc-cat-chip:active { background: var(--rule); }
 }
 
+/* ---- The forum as Home-style tap cards (phones only) ----
+   The community board's category tiles and topic rows read like the Home
+   launcher's big tappable cards instead of a 2000s list: each is a rounded card
+   on the page background with a chevron, the whole card a tap target (the
+   board.js handler). Scoped to the forum's own rows via .mc-cardnav (so the
+   reused .board-topic in search/notifications/inbox keeps its plain list look),
+   and to phones — desktop is unchanged. :has() scopes the container reset to a
+   listing that actually holds cards. */
+@media (max-width: 600px) {
+  .board-cats:has(.mc-cardnav), .board-topics:has(.mc-cardnav) {
+    border: 0; border-radius: 0; margin: 0.7rem 0; background: none;
+  }
+  .mc-cardnav {
+    position: relative; flex-direction: column; gap: 0.2rem;
+    border: 1px solid var(--rule); border-radius: 14px; background: var(--cream-2);
+    margin-bottom: 0.6rem; padding: 0.85rem 2.3rem 0.85rem 1rem;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  }
+  /* beat 08-board.css's `.board-cat:first-child{border-top:0}` (equal specificity,
+     later source) so the first card keeps its full border */
+  .mc-cardnav:first-child { border-top: 1px solid var(--rule); }
+  .mc-cardnav:hover { box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05); }   /* no desktop hover-tint on touch */
+  .mc-cardnav:active { background: var(--rule); }
+  .mc-cardnav::after {
+    content: "›"; position: absolute; right: 0.9rem; top: 50%; transform: translateY(-50%);
+    color: var(--faint); font-size: 1.5rem; line-height: 1;
+  }
+  .mc-cardnav .board-cat-name, .mc-cardnav a.board-cat-name { font-size: 1.08rem; }
+  .mc-cardnav a.board-topic-title { font-size: 1.05rem; }
+  .mc-cardnav .board-cat-desc { font-size: 0.86rem; }
+  .mc-cardnav .board-stats { text-align: left; white-space: normal; font-size: 0.82rem; margin-top: 0.15rem; }
+  .mc-cardnav .board-latest { max-width: none; }
+}
+
 /* ---- Phase 4: empty states (phones only) ----
    The read views render their empties as <p class="comments-status mc-empty"
    data-ico="…">; desktop has no rule for the extra class/attr, so it is byte
