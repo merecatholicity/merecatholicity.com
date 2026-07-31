@@ -8,6 +8,7 @@
    click delegate in shell.js soft-navigates the tabs' <a href>s for free. */
 
 import { LitElement, html } from '../vendor/lit-all.min.js';
+import { mountLibrary } from './views/library.js';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -623,7 +624,15 @@ export function installChrome() {
     window.mcOnboard();
   }
 
-  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); mountHome(); maybeOnboard(); }
+  /* The Library page becomes an app-style drill-down on both breakpoints (parses
+     its own static catalog; SEO/no-JS keep the flat list). Runs after every swap. */
+  function mountLibraryHook() {
+    if ((location.pathname.split('/').pop() || '') !== 'library.html') return;
+    const main = document.querySelector('main');
+    if (main) mountLibrary(main);
+  }
+
+  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); mountHome(); mountLibraryHook(); maybeOnboard(); }
   sync();
   /* boots()/chrome.sync() only fire on soft-nav; on a DIRECT initial load the
      onboarding trigger needs one sync once the client has booted (window.mcKit
