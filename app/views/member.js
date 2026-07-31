@@ -131,7 +131,7 @@ class McNotifications extends LitElement {
     if (this.err === 'load') return html`${head}<p class="comments-status">Notifications could not be loaded. Check your connection and reload the page.</p>`;
     if (!this.d) return html`${head}<p class="comments-status">Loading notifications...</p>`;
     const d = this.d;
-    if (!d.items.length) return html`${head}<p class="comments-status">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`;
+    if (!d.items.length) return html`${head}<p class="comments-status mc-empty" data-ico="🔔">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`;
     const href = (i) => 'community.html?notifications=1&p=' + i;
     return html`${head}
       ${pagerTpl(d.total, d.per, d.page, href)}

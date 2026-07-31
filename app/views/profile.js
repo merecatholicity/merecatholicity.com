@@ -138,7 +138,7 @@ class McInbox extends LitElement {
       ${d.threads.length ? pagerTpl(d.total, d.per, d.page, href) : nothing}
       <div class="board-topics">
         ${!d.threads.length
-          ? html`<p class="comments-status">No messages yet. Find a member above, or press Direct Message on any post.</p>`
+          ? html`<p class="comments-status mc-empty" data-ico="✉️">No messages yet. Find a member above, or press Direct Message on any post.</p>`
           : d.threads.map((t) => html`<div class="board-topic">
               <div class="board-topic-left">
                 <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'community.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}

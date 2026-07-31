@@ -9,6 +9,9 @@
    with data-mc-app), but are hidden everywhere by default; the phone media query
    turns them on. So desktop never shows them. */
 mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
+/* The merecat starter is a phones-only blank slate; hidden on desktop (the
+   media query below turns it on). */
+.mc-cat-starter { display: none; }
 
 @media (max-width: 600px) {
   :root { --mc-appbar-h: 3rem; --mc-tabbar-h: 3.6rem; }
@@ -304,6 +307,46 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
   .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
+
+  /* keyboard-aware composer: while the soft keyboard is up (the shell publishes
+     --mc-kb + .mc-kb-open from visualViewport) the sticky merecat composer rides
+     right above the keyboard and the tab bar slides away so it never floats over
+     the screen. The transition makes both feel like one motion with the keyboard. */
+  .mc-tabbar { transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  body.mc-kb-open .mc-tabbar { transform: translateY(100%); }
+  body.mc-kb-open .merecat-form { bottom: var(--mc-kb, 0px); transition: bottom 0.18s ease; }
+  body.mc-kb-open .mc-dock { display: none; }
+
+  /* a friendly starter shown in an empty merecat log (phones only): a few
+     example questions that fill the ask box on tap. */
+  .mc-cat-starter { display: block; text-align: center; padding: 1.6rem 1rem 0.5rem; }
+  .mc-cat-starter-ico { font-size: 3rem; display: block; }
+  .mc-cat-starter h3 { margin: 0.5rem 0 0.2rem; font-size: 1.2rem; color: var(--ink); }
+  .mc-cat-starter p { margin: 0 0 0.9rem; color: var(--faint); font-size: 0.92rem; }
+  .mc-cat-chips { display: flex; flex-direction: column; gap: 0.5rem; }
+  .mc-cat-chip {
+    display: block; width: 100%; text-align: left; font: inherit; font-size: 0.95rem;
+    padding: 0.75rem 0.95rem; border: 1px solid var(--rule); border-radius: 14px;
+    background: var(--cream-2); color: var(--ink); cursor: pointer;
+  }
+  .mc-cat-chip::before { content: "🐈 "; }
+  .mc-cat-chip:active { background: var(--rule); }
+}
+
+/* ---- Phase 4: empty states (phones only) ----
+   The read views render their empties as <p class="comments-status mc-empty"
+   data-ico="…">; desktop has no rule for the extra class/attr, so it is byte
+   unchanged, while phones get a centered icon + roomy text that reads as an app
+   blank slate rather than a stray status line. */
+.comments-status.mc-empty { display: block; }
+@media (max-width: 600px) {
+  .comments-status.mc-empty {
+    text-align: center; padding: 2.6rem 1.6rem; color: var(--faint);
+    font-size: 1rem; line-height: 1.5; border: 0;
+  }
+  .comments-status.mc-empty::before {
+    content: attr(data-ico); display: block; font-size: 2.9rem; margin-bottom: 0.55rem; opacity: 0.85;
+  }
 }
 
 /* ---- Phase 4: polish — crisp icons + micro-animations (phones only) ---- */

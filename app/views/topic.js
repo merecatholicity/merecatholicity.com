@@ -329,6 +329,14 @@ class McSearch extends LitElement {
       return u + '&p=' + i;
     };
     const d = this.d && !this.d.error ? this.d : null;
+    /* The two "nothing here" messages become app blank slates on phones (a big
+       search glyph + roomy text); every other status (Searching…, "3 results.")
+       stays the plain inline line. */
+    const status = this.count === 'Nothing found for that search.'
+      ? html`<p class="comments-status mc-empty" data-ico="🔍">Nothing found for that search. Try fewer or different words.</p>`
+      : this.count === 'Type a search above. Put "quotes" around an exact phrase.'
+        ? html`<p class="comments-status mc-empty" data-ico="🔍">Search the board. Put "quotes" around an exact phrase.</p>`
+        : html`<p class="comments-status">${this.count}</p>`;
     return html`
       ${crumbTpl([['Catholicity Board', 'community.html'], ['Search']])}
       <form class="board-search">
@@ -350,7 +358,7 @@ class McSearch extends LitElement {
           </select>
         </div>
       </form>
-      <p class="comments-status">${this.count}</p>
+      ${status}
       <div class="board-topics">
         ${d && d.items && d.items.length ? d.items.map((it) => this.resultRow(it)) : nothing}
         ${this.d && this.d.error ? html`<p class="comments-status">Search could not be run. Check your connection and reload the page.</p>` : nothing}
