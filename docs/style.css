@@ -1762,3 +1762,62 @@ mc-deskbar, mc-appbar, mc-tabbar, mc-sheet, mc-home, mc-settings,
   }
   nav.site .nav-list > li > a:hover, nav.site .nav-list > li > .nav-parent:hover { background: var(--cream); }
 }
+/* The Library drill-down (mc-library, app/views/library.js). App-style category
+   cards → a shelf's works, both breakpoints, responsive. It is a navigation
+   surface, so it rides the system-sans UI font, not the reading serif. Uses the
+   shared depth tokens (--radius/--shadow/--lift/--tap). */
+
+mc-library { display: block; }
+.mc-lib { font-family: var(--font-sans); }
+
+.mc-lib-title { font-size: 2rem; font-weight: 800; color: var(--ink); margin: 0.4rem 0 0.3rem; letter-spacing: -0.02em; line-height: 1.15; }
+.mc-lib-intro { color: var(--faint); font-size: 1rem; line-height: 1.5; margin: 0 0 1.4rem; max-width: 42rem; }
+
+/* the category grid */
+.mc-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.8rem; }
+.mc-lib-card {
+  display: flex; align-items: center; gap: 0.8rem; text-decoration: none;
+  padding: 1.05rem 1.15rem; background: var(--cream-2); border: 1px solid var(--rule); border-radius: var(--radius-lg);
+  color: var(--ink); box-shadow: var(--shadow-1);
+  transition: transform var(--tap), box-shadow var(--tap), border-color var(--tap);
+}
+.mc-lib-card:hover { transform: translateY(var(--lift)); box-shadow: var(--shadow-2); border-color: var(--maroon); }
+.mc-lib-card-body { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.mc-lib-card-name { font-weight: 700; font-size: 1.05rem; color: var(--maroon); }
+.mc-lib-card-meta { color: var(--faint); font-size: 0.82rem; }
+.mc-lib-go { color: var(--faint); font-size: 1.5rem; flex: none; line-height: 1; }
+
+/* the back bar + a shelf's works */
+.mc-lib-bar { margin: 0.2rem 0 0.7rem; }
+.mc-lib-back {
+  display: inline-flex; align-items: center; gap: 0.25rem; min-height: 2.2rem; padding: 0 1rem 0 0.75rem;
+  border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); color: var(--maroon);
+  font: inherit; font-weight: 600; cursor: pointer; box-shadow: var(--shadow-1);
+  transition: transform var(--tap), box-shadow var(--tap), background var(--tap);
+}
+.mc-lib-back:hover { transform: translateY(var(--lift)); box-shadow: var(--shadow-2); background: var(--cream); }
+
+.mc-lib-shelf { font-size: 1.15rem; font-weight: 700; color: var(--ink); margin: 1.6rem 0 0.6rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--rule); }
+.mc-lib-works { display: flex; flex-direction: column; gap: 0.5rem; }
+.mc-lib-work {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 1rem;
+  padding: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius);
+  transition: border-color var(--tap), box-shadow var(--tap);
+}
+.mc-lib-work:hover { border-color: var(--maroon); box-shadow: var(--shadow-1); }
+.mc-lib-work-title { font-weight: 600; color: var(--ink); flex: 1 1 18rem; min-width: 0; }
+.mc-lib-work-links { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; flex: none; }
+.mc-lib-work-links a {
+  display: inline-flex; align-items: center; min-height: 1.9rem; padding: 0 0.7rem; border-radius: 999px;
+  background: var(--cream); border: 1px solid var(--rule); color: var(--maroon); text-decoration: none; font-size: 0.85rem;
+  transition: background var(--tap), border-color var(--tap), color var(--tap);
+}
+.mc-lib-work-links a:hover { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
+.mc-lib-work-note { color: var(--faint); font-size: 0.82rem; flex-basis: 100%; }
+
+@media (max-width: 600px) {
+  .mc-lib-title { font-size: 1.6rem; }
+  .mc-lib-grid { grid-template-columns: 1fr; gap: 0.6rem; }
+  .mc-lib-work { flex-direction: column; align-items: stretch; }
+  .mc-lib-work-links { justify-content: flex-start; }
+}
