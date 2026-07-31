@@ -55,13 +55,18 @@
     [250, 'Scribe'], [500, 'Illuminator'], [1000, 'Master Scribe'],
     [2500, 'Keeper of Scrolls'], [5000, 'Treasury of Wisdom']
   ];
+  /* The rank ladder is the first slice migrated to the PureScript domain layer
+     (Domain.Rank). When the app shell is present it computes rank; the classic
+     body below is the no-bundle fallback, kept until Wave F. See PURESCRIPT.md. */
   function rankFor(n) {
+    if (window.mcCore) return window.mcCore.rankFor(n);
     n = Number(n) || 0;
     var name = RANKS[0][1];
     for (var i = 0; i < RANKS.length; i++) { if (n >= RANKS[i][0]) name = RANKS[i][1]; }
     return name;
   }
   function rankLine(posts) {
+    if (window.mcCore) return window.mcCore.rankLine(posts);
     return rankFor(posts) + ' · ' + posts + (posts === 1 ? ' post' : ' posts');
   }
   /* Fingerprints of the site owners' identities. Holding a key that hashes

@@ -22,6 +22,39 @@ jscheck:
 bundle: jscheck
 	npm run build:js
 
+# The PureScript domain layer (see PURESCRIPT.md). The compiler is VENDORED:
+# npm-12 blocks the `purescript` package's install-script, so `make purs`
+# fetches a pinned tarball by URL, verifies its SHA-256, and extracts the `purs`
+# binary into the git-ignored vendor/purs/ (mirroring the vendored Lit and the
+# exact-pinned esbuild). spago (a clean devDependency) resolves deps and shells
+# out to this binary. The compile itself lives in the npm `build:ps` script so
+# `make bundle` and a bare `npm run build:js` are both self-sufficient.
+PURS_VERSION := 0.15.16
+PURS_SHA256  := 44da9efb8a4e14519e8fd5350acc377a4b981e42351a78c53e9f84045bf38e22
+PURS := vendor/purs/purs
+
+.PHONY: purs psbuild pstest
+purs: $(PURS)
+$(PURS):
+	mkdir -p vendor/purs
+	curl -fsSL -o vendor/purs/purs.tar.gz \
+	  https://github.com/purescript/purescript/releases/download/v$(PURS_VERSION)/linux64.tar.gz
+	printf '%s  vendor/purs/purs.tar.gz\n' "$(PURS_SHA256)" | sha256sum -c -
+	tar -xzf vendor/purs/purs.tar.gz -C vendor/purs --strip-components=1 purescript/purs
+	rm -f vendor/purs/purs.tar.gz
+	@$(PURS) --version
+
+# Compile purescript/src -> purescript/output (ESM). Delegates to the npm script
+# (single source), which fetches purs on first use and wipes output/ for
+# byte-reproducible codegen. `make bundle` reaches this through `npm run build:js`.
+psbuild:
+	npm run build:ps
+
+# The PureScript pure-unit tests (Layer 1): a Node-native runner over the ESM
+# output — no browser, no framework. Layer 2 (headless parity) is webtest/.
+pstest: psbuild
+	node purescript/test/run.mjs
+
 # The only sanctioned way to deploy the comments worker: the guard runs first.
 worker-deploy: jscheck
 	npm run worker:deploy

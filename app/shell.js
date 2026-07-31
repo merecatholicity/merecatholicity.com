@@ -30,6 +30,7 @@
 import { LitElement, html } from '../vendor/lit-all.min.js';
 import * as store from './store.js';
 import * as api from './api.js';
+import * as core from './core.js';
 import { installLive } from './live.js';
 import { installChrome } from './appchrome.js';
 import './richtext.js';
@@ -44,6 +45,13 @@ import './views/admin.js';
    in-memory TTL + in-flight dedup for the views' reads, invalidated by
    writes and identity changes. See app/store.js. */
 window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, metrics: store.metrics };
+
+/* The PureScript domain kernel — the app/core.js barrel over the compiled
+   purescript/output/. The un-bundled docs/comments.js delegates to it via
+   `if (window.mcCore) …`, exactly like window.mcRich; the Lit views import
+   app/core.js directly. Importing it above is what inlines compiled PureScript
+   into docs/app.js (the bundle route). See PURESCRIPT.md. */
+window.mcCore = core;
 
 /* The headless-API client SDK (app/api.js) rides the shell too — the single
    documented seam (comments-worker/API.md) new features call. Transport +
