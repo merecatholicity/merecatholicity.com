@@ -125,3 +125,10 @@ h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted
 @keyframes mc-live-fade { from { background: rgba(139, 26, 26, 0.10); } to { background: transparent; } }
 .mc-live-new { animation: mc-live-fade 2.2s ease-out; }
 
+/* A live nudge when a reply lands on a page the reader is not viewing: the
+   pager already grows to show the new page, and this pill jumps straight to it. */
+.mc-live-pill { display: inline-block; margin: 0.4rem 0; padding: 0.35rem 0.7rem;
+  background: var(--maroon, #8b1a1a); color: #fff; border-radius: 1rem;
+  font-size: 0.85rem; text-decoration: none; animation: mc-live-fade 2.2s ease-out; }
+.mc-live-pill:hover { filter: brightness(1.1); text-decoration: none; }
+
