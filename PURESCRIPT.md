@@ -345,7 +345,7 @@ Plus: bump `app.js?v=N` in `docs/nav.js` iff `docs/app.js` bytes changed.
 
 | Phase | Domain | Status | Classic fallback |
 |------|--------|--------|------------------|
-| 0 | `Domain.Rank` (toolchain + seam proof) | in progress | present (delete when views + comments.js consume `mcCore.rankFor`) |
+| 0 | `Domain.Rank` (toolchain + seam proof) | **shipped** (df2a065) | retained — it is the genuine no-bundle path (app disabled / storage blocked ⇒ no `window.mcCore`); deletes at Wave F when `comments.js` itself dissolves into the bundle, not before |
 | 1 | `Domain.Scripture` (client) | planned | — |
 | 2 | `Domain.Profile` (drift-killer), Faith, dmScore, pagerPages, emoji, cats, TTLs | planned | — |
 | 3 | `Domain.Access` (permissions), `Domain.Live` (live-event decisions), search/route, library model | planned | — |
