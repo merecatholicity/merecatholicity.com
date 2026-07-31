@@ -349,6 +349,7 @@ class McBoardCat extends LitElement {
     return html`
       <p class="board-crumb"><a href="community.html">Catholicity Board</a> › <span>${cat[1]}</span>
         ${this.catKey === 'adminsonly' ? nothing : html` <a class="comments-rss" href=${kit.API + '/feed?cat=' + this.catKey} title="Follow this category with a feed reader">RSS</a>`}</p>
+      <h1 class="mc-screen-title">${cat[1]}</h1>
       <p class="board-cat-desc">${cat[2]}${cat[3] ? html`<a href=${cat[4]}>${cat[3]}</a>.` : nothing}</p>
       ${this.payload ? pagerTpl(this.payload.total, this.payload.per, this.payload.page, hrefFor) : nothing}
       <div class="board-topics">

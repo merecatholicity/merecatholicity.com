@@ -1077,6 +1077,9 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 /* The merecat starter is a phones-only blank slate; hidden on desktop (the
    media query below turns it on). */
 .mc-cat-starter { display: none; }
+/* The mobile screen-title replaces the breadcrumb on phones; it is in the shared
+   Lit template, so it must be hidden on desktop (the media query turns it on). */
+.mc-screen-title { display: none; }
 
 @media (max-width: 600px) {
   :root { --mc-appbar-h: 3rem; --mc-tabbar-h: 3.6rem; }
@@ -1368,9 +1371,13 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
     font-size: 1rem; align-self: flex-end; flex: none;
   }
   .merecat-msg { max-width: 85%; border-radius: 16px; padding: 0.65rem 0.9rem; }
-  .merecat-msg.you { background: var(--maroon); color: #fff; border-color: var(--maroon); border-bottom-right-radius: 5px; }
-  .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
-  .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
+  /* Scoped under .merecat-log so these beat the runtime-injected #mc-merecat-css
+     `.merecat-msg.you{background:var(--cream)}` (appended to <head> after style.css,
+     equal specificity, later-wins). Without the extra ancestor the injected cream
+     background survived while our white text did not → white-on-cream in light mode. */
+  .merecat-log .merecat-msg.you { background: var(--maroon); color: #fff; border-color: var(--maroon); border-bottom-right-radius: 5px; }
+  .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
+  .merecat-log .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
 
   /* keyboard-aware composer: while the soft keyboard is up (the shell publishes
@@ -1468,4 +1475,58 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   /* merecat messages pop in like a chat */
   @keyframes mc-bubblein { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
   .merecat-msg { animation: mc-bubblein 0.22s ease; }
+}
+
+/* ---- Phase 5: app-native content (phones only) ----
+   The in-content desktop chrome is stripped and replaced app-native: the redundant
+   logged-in identity line is hidden, the logged-out create line becomes fat buttons,
+   breadcrumbs give way to a clean screen title, pagination grows fat tap targets,
+   and the join sheet + back-dim are styled. Desktop (≥601px) renders none of it. */
+@media (max-width: 600px) {
+  /* identity line: hide the logged-in nav (all of it is in the tab bar / app bar /
+     settings sheet); keep the logged-out create line, restyled as fat buttons. */
+  .identity-line-in { display: none !important; }
+  .identity-line-out { margin: 0.6rem 0; text-align: center; color: var(--faint); font-size: 0.95rem; }
+  .identity-line-out .identity-action {
+    display: inline-block; margin: 0.4rem 0.3rem 0; min-height: 44px; line-height: 44px;
+    padding: 0 1.3rem; border-radius: 12px; text-decoration: none; font-weight: 600;
+  }
+  .identity-line-out .identity-action:first-of-type { background: var(--maroon); color: #fff; }
+  .identity-line-out .identity-action:last-of-type { border: 1px solid var(--rule); color: var(--maroon); }
+
+  /* breadcrumbs → a single clean screen title (category/search render it; topics
+     keep their H2; the desktop "Board › … › …" trail is dropped). */
+  .board-crumb { display: none !important; }
+  .mc-screen-title { display: block; margin: 0.2rem 0 0.6rem; font-size: 1.5rem; font-weight: 700; color: var(--ink); line-height: 1.15; }
+
+  /* pagination: fat ≥44px tap pills (category lists AND within threads). Tolerates
+     pageBar's leading "Pages: " text node. */
+  .board-pages { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.8rem 0; }
+  .board-pages a, .board-pages strong {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px;
+    padding: 0 0.6rem; margin: 0; border-radius: 12px; font-size: 1rem; text-decoration: none;
+  }
+  .board-pages a { background: var(--cream-2); border: 1px solid var(--rule); color: var(--maroon); }
+  .board-pages a:active { background: var(--rule); }
+  .board-pages strong { background: var(--maroon); color: #fff; }
+  /* the cramped per-row mini-pager inside a tap-card is clutter — the card opens the thread */
+  .mc-cardnav .topic-pages { display: none; }
+
+  /* dim the back arrow at the very start of history */
+  .mc-ab-dim { opacity: 0.35; }
+
+  /* the join / onboarding sheet */
+  .mc-onboard-intro { margin: 0.2rem 0 0.9rem; font-size: 1.02rem; color: var(--ink); line-height: 1.45; }
+  .mc-onboard-faiths { margin: 0 0 0.4rem; }
+  .mc-onboard-faiths .faith-option small { color: var(--faint); font-size: 0.82rem; }
+  .mc-onboard-agree { margin: 0.4rem 0 0.9rem; }
+  .mc-onboard-create { display: block; width: 100%; min-height: 50px; font-size: 1.05rem; border-radius: 14px; margin: 0.2rem 0; }
+  .mc-onboard-create:disabled { opacity: 0.5; }
+  .mc-onboard-note { margin: 0.5rem 0 0; color: var(--faint); font-size: 0.9rem; text-align: center; min-height: 1em; }
+  .mc-onboard-havekey {
+    display: block; width: 100%; margin: 0.7rem 0 0; padding: 0.5rem; background: none; border: 0;
+    color: var(--maroon); font: inherit; font-size: 0.95rem; text-decoration: underline; cursor: pointer;
+  }
+  .mc-onboard-paste { display: flex; gap: 0.5rem; margin: 0.5rem 0 0; }
+  .mc-onboard-keyin { flex: 1; min-width: 0; }
 }

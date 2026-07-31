@@ -19,9 +19,10 @@ const ICON = {
   profile: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.4-3.6 3.4-5.6 7-5.6s6.6 2 7 5.6"/></svg>`,
   search: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4-4"/></svg>`,
   bell: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8"/><path d="M10.2 19a1.9 1.9 0 0 0 3.6 0"/></svg>`,
-  gear: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>`,
+  gear: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
   cross: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="M12 3.5v17M7.5 8.5h9"/></svg>`,
   back: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>`,
+  forward: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg>`,
 };
 
 /* The five primary destinations. Merecat is the raised center hero (the standout
@@ -103,30 +104,35 @@ class McTabbar extends LitElement {
 }
 customElements.define('mc-tabbar', McTabbar);
 
-/* ---- the top app bar ---- */
+/* ---- the top app bar ----
+   A browser-like nav frame: a persistent back < at the far left and forward > at
+   the far right (just past the gear), so back/forward are always in the same place.
+   The center title is intentionally empty (the tab bar + content title say where
+   you are); the div stays as the flex:1 spacer that pins the two icon clusters to
+   the edges. */
 class McAppbar extends LitElement {
-  static properties = { heading: { attribute: false }, back: { attribute: false }, notif: { attribute: false } };
-  constructor() { super(); this.heading = ''; this.back = false; this.notif = 0; }
+  static properties = { canBack: { attribute: false }, notif: { attribute: false } };
+  constructor() { super(); this.canBack = false; this.notif = 0; }
   createRenderRoot() { return this; }
   sync() {
-    this.back = activeTab() === '';
+    this.canBack = history.length > 1;   // dim < at the very start of history
     this.notif = badgeCount('notif');
-    const t = (document.title || '').split('|')[0].split('·')[0].trim();
-    this.heading = t || 'Mere Catholicity';
   }
   goBack(e) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
+  goFwd(e) { e.preventDefault(); history.forward(); }
   settings(e) { e.preventDefault(); if (window.mcSheet) window.mcSheet.settings(); }
   render() {
     return html`<header class="mc-appbar">
-      <div class="mc-appbar-side mc-appbar-l">${this.back
-        ? html`<button class="mc-ab-btn" @click=${(e) => this.goBack(e)} aria-label="Back">${ICON.back}</button>`
-        : html`<a class="mc-ab-brand" href="index.html" aria-label="Home">${ICON.cross}</a>`}</div>
-      <div class="mc-appbar-title">${this.heading}</div>
+      <div class="mc-appbar-side mc-appbar-l">
+        <button class=${'mc-ab-btn' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e) => this.goBack(e)} aria-label="Back">${ICON.back}</button>
+      </div>
+      <div class="mc-appbar-title"></div>
       <div class="mc-appbar-side mc-appbar-r">
         <a class="mc-ab-btn" href="community.html?q=" aria-label="Search">${ICON.search}</a>
         <a class="mc-ab-btn mc-ab-bell" href="community.html?notifications=1" aria-label="Notifications">${ICON.bell}${this.notif
           ? html`<span class="mc-tab-badge">${badgeText(this.notif)}</span>` : ''}</a>
         <button class="mc-ab-btn" @click=${(e) => this.settings(e)} aria-label="Settings">${ICON.gear}</button>
+        <button class="mc-ab-btn" @click=${(e) => this.goFwd(e)} aria-label="Forward">${ICON.forward}</button>
       </div>
     </header>`;
   }
@@ -211,7 +217,8 @@ class McSettings extends LitElement {
         <button class="mc-set-row mc-set-btn mc-set-danger" @click=${() => this.logout()}>
           <span>Log out</span><span class="mc-set-go">›</span></button>
       ` : html`
-        ${link('community.html?me=1', 'Create an identity', 'One click, no signup')}
+        <button class="mc-set-row mc-set-btn" @click=${() => window.mcOnboard && window.mcOnboard()}>
+          <span>Create an identity<small>One tap, no signup</small></span><span class="mc-set-go">›</span></button>
       `}
 
       <h3 class="mc-set-sec">Appearance</h3>
@@ -346,6 +353,116 @@ function mcSelectSheet(sel) {
   return sel.__mcHandle;
 }
 
+/* App-native onboarding (phones only): a slide-up "join in one tap" sheet that
+   replaces the dead-end gates and the dreaded "create an identity | I have a key"
+   text links. It mints the identity IN PLACE through the identity primitives the
+   comments client exports on window.mcKit (read lazily at tap-time so it never
+   races the client boot), reveals the new key to save, then reloads so the current
+   view renders logged-in (the same reload the classic login/logout paths use).
+   Desktop / ?app=0 never see it (no mcSheet, isMobile() false). */
+const ONBOARD_FAITHS = [
+  ['nicene', 'Nicene Christian', 'I hold the Nicene Creed'],
+  ['indo-european', 'Indo-European', 'I keep one of the old pre-Christian ways (a guest)'],
+  ['seeker', 'Seeker', 'I’m still seeking'],
+];
+function mcOnboard(onDone) {
+  if (!isMobile() || !window.mcSheet) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'mc-onboard';
+  const done = function () { window.mcSheet.close(); if (onDone) { try { onDone(); } catch (e) { /* caller */ } } location.reload(); };
+
+  const intro = document.createElement('p');
+  intro.className = 'mc-onboard-intro';
+  intro.textContent = 'Join in one tap — no email, no signup. Pick where you stand:';
+  wrap.appendChild(intro);
+
+  let chosenFaith = '';
+  const faiths = document.createElement('div');
+  faiths.className = 'faith-radios mc-onboard-faiths';
+  ONBOARD_FAITHS.forEach(function (f) {
+    const lbl = document.createElement('label');
+    lbl.className = 'faith-option';
+    const rad = document.createElement('input');
+    rad.type = 'radio'; rad.name = 'mc-onboard-faith'; rad.value = f[0];
+    rad.addEventListener('change', function () { chosenFaith = f[0]; refresh(); });
+    const txt = document.createElement('span');
+    const strong = document.createElement('strong'); strong.textContent = f[1];
+    const small = document.createElement('small'); small.textContent = f[2];
+    txt.appendChild(strong); txt.appendChild(document.createElement('br')); txt.appendChild(small);
+    lbl.appendChild(rad); lbl.appendChild(txt);
+    faiths.appendChild(lbl);
+  });
+  wrap.appendChild(faiths);
+
+  const agreeRow = document.createElement('label');
+  agreeRow.className = 'agree-row mc-onboard-agree';
+  const agree = document.createElement('input'); agree.type = 'checkbox';
+  agree.addEventListener('change', refresh);
+  const agreeTxt = document.createElement('span');
+  agreeTxt.appendChild(document.createTextNode('I agree to the '));
+  const termsLink = document.createElement('a'); termsLink.href = 'terms.html'; termsLink.target = '_blank'; termsLink.textContent = 'terms';
+  agreeTxt.appendChild(termsLink); agreeTxt.appendChild(document.createTextNode('.'));
+  agreeRow.appendChild(agree); agreeRow.appendChild(agreeTxt);
+  wrap.appendChild(agreeRow);
+
+  const createBtn = document.createElement('button');
+  createBtn.type = 'button'; createBtn.className = 'btn btn-send mc-onboard-create';
+  createBtn.textContent = 'Create my identity'; createBtn.disabled = true;
+  wrap.appendChild(createBtn);
+
+  const note = document.createElement('p'); note.className = 'mc-onboard-note'; wrap.appendChild(note);
+
+  const haveKey = document.createElement('button');
+  haveKey.type = 'button'; haveKey.className = 'mc-onboard-havekey'; haveKey.textContent = 'I already have a key';
+  wrap.appendChild(haveKey);
+  const pasteWrap = document.createElement('div'); pasteWrap.className = 'mc-onboard-paste'; pasteWrap.hidden = true;
+  const pasteIn = document.createElement('input'); pasteIn.type = 'text'; pasteIn.className = 'key-input mc-onboard-keyin'; pasteIn.placeholder = 'Paste your key';
+  const pasteBtn = document.createElement('button'); pasteBtn.type = 'button'; pasteBtn.className = 'btn btn-send'; pasteBtn.textContent = 'Log in';
+  pasteWrap.appendChild(pasteIn); pasteWrap.appendChild(pasteBtn);
+  wrap.appendChild(pasteWrap);
+
+  function refresh() { createBtn.disabled = !(chosenFaith && agree.checked); }
+  haveKey.addEventListener('click', function () { pasteWrap.hidden = !pasteWrap.hidden; if (!pasteWrap.hidden) pasteIn.focus(); });
+
+  function revealKey(key) {
+    wrap.textContent = '';
+    const h = document.createElement('p'); h.className = 'mc-onboard-intro';
+    h.textContent = 'You’re in. Save your key — it is the only way back to this identity.';
+    wrap.appendChild(h);
+    const keyRow = document.createElement('div'); keyRow.className = 'mc-set-key';
+    const keyIn = document.createElement('input'); keyIn.className = 'mc-set-keyin'; keyIn.readOnly = true; keyIn.value = key || '';
+    keyIn.addEventListener('focus', function () { keyIn.select(); });
+    const copyBtn = document.createElement('button'); copyBtn.type = 'button'; copyBtn.className = 'btn btn-send mc-set-copy'; copyBtn.textContent = 'Copy';
+    copyBtn.addEventListener('click', function () { try { if (navigator.clipboard) { navigator.clipboard.writeText(key); copyBtn.textContent = 'Copied'; } } catch (e) { /* no clipboard */ } });
+    keyRow.appendChild(keyIn); keyRow.appendChild(copyBtn);
+    wrap.appendChild(keyRow);
+    const cont = document.createElement('button'); cont.type = 'button'; cont.className = 'btn btn-send mc-onboard-create'; cont.textContent = 'Continue';
+    cont.addEventListener('click', done);
+    wrap.appendChild(cont);
+  }
+
+  createBtn.addEventListener('click', function () {
+    const kit = window.mcKit;
+    if (!kit || !kit.mintIdentity) { location.href = 'community.html?me=1'; return; }
+    createBtn.disabled = true; note.textContent = 'Creating…';
+    kit.mintIdentity(chosenFaith).then(function (res) { revealKey(res && res.key); })
+      .catch(function () { note.textContent = 'Could not create. Try again.'; createBtn.disabled = false; });
+  });
+  pasteBtn.addEventListener('click', function () {
+    const kit = window.mcKit;
+    const key = pasteIn.value.trim();
+    if (!key) { pasteIn.focus(); return; }
+    if (!kit || !kit.loginWithKey) { location.href = 'community.html?me=1'; return; }
+    pasteBtn.disabled = true; note.textContent = 'Logging in…';
+    kit.loginWithKey(key).then(function (ok) {
+      if (ok) done();
+      else { note.textContent = 'That key was not recognized.'; pasteBtn.disabled = false; }
+    }).catch(function () { note.textContent = 'Could not log in. Try again.'; pasteBtn.disabled = false; });
+  });
+
+  window.mcSheet.open('Join the conversation', wrap);
+}
+
 /* Mount the persistent chrome (called by the shell after the ?app=0 latch) and
    return { sync } for boots() to call after every swap. The elements carry
    data-mc-app so swapContent skips them; CSS keeps them off desktop. */
@@ -372,6 +489,7 @@ export function installChrome() {
   window.mcConfirm = mcConfirm;
   window.mcToast = mcToast;
   window.mcSelectSheet = mcSelectSheet;
+  window.mcOnboard = mcOnboard;
 
   /* The comments client fires mc-badge whenever an unread count changes, so the
      tab bar and bell update the instant a DM or notification lands. */
@@ -408,7 +526,38 @@ export function installChrome() {
     }
   }
 
-  function sync() { tabbar.sync(); appbar.sync(); mountHome(); }
+  /* A logged-out reader who lands on a screen that NEEDS an identity (Inbox,
+     Profile, Notifications) is signed up in place — the onboarding sheet opens
+     instead of a dead-end. Latched per route-entry so the repeated sync() calls
+     (every soft-nav + every mc-badge) never re-open it after a dismissal; a fresh
+     gated route (or login) re-arms it. Reads window.mcKit, so it no-ops on the
+     pre-boot sync and only fires once the client has booted. */
+  var onboardLatch = '';
+  function maybeOnboard() {
+    if (!isMobile() || !window.mcKit || !window.mcOnboard) { onboardLatch = ''; return; }
+    if (readKey()) { onboardLatch = ''; return; }               // logged in — nothing to do
+    var tab = activeTab();
+    var gated = tab === 'messages' || tab === 'profile' || /[?&]notifications=1\b/.test(location.search);
+    if (!gated) { onboardLatch = ''; return; }
+    var routeKey = location.pathname + location.search;
+    if (onboardLatch === routeKey) return;                       // already offered here
+    onboardLatch = routeKey;
+    window.mcOnboard();
+  }
+
+  function sync() { tabbar.sync(); appbar.sync(); mountHome(); maybeOnboard(); }
   sync();
+  /* boots()/chrome.sync() only fire on soft-nav; on a DIRECT initial load the
+     onboarding trigger needs one sync once the client has booted (window.mcKit
+     set), so a logged-out reader who lands straight on a gated URL still gets the
+     sheet. Bounded poll; a no-op on soft-nav loads (mcKit already present). */
+  if (!window.mcKit) {
+    var kitTries = 0;
+    (function waitKit() {
+      if (window.mcKit) { sync(); return; }
+      if (kitTries++ > 30) return;
+      setTimeout(waitKit, 100);
+    })();
+  }
   return { sync: sync };
 }

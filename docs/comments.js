@@ -2267,8 +2267,12 @@
     var box = section.querySelector('.comment-identity');
     if (!box) return;
     box.textContent = '';
-    var line = el('p', 'identity-line');
-    if (state.key && state.myHash) {
+    /* The -in / -out modifier lets the mobile CSS hide the redundant logged-in nav
+       line (every link is in the tab bar / app-bar / settings sheet) while keeping
+       the logged-out create line, which is the only join path on article pages. */
+    var loggedIn = !!(state.key && state.myHash);
+    var line = el('p', 'identity-line ' + (loggedIn ? 'identity-line-in' : 'identity-line-out'));
+    if (loggedIn) {
       /* First line: where to go, grouped — your activity (the two badge feeds),
          then people (you, then the roster), then search over it all. */
       var notifLink = el('a', 'identity-action', 'Notifications');
@@ -2322,7 +2326,12 @@
       line.appendChild(document.createTextNode(state.anonAllowed
         ? 'Commenting anonymously. '
         : 'To comment, create an identity. One click, no signup. '));
-      line.appendChild(identityAction('Create an identity', showAgreeBox));
+      /* On phones "Create an identity" opens the app-native onboarding sheet; on
+         desktop (or with the shell absent) it opens the classic inline drawer. */
+      line.appendChild(identityAction('Create an identity', function () {
+        if (window.mcOnboard && window.matchMedia && matchMedia('(max-width:600px)').matches) window.mcOnboard();
+        else showAgreeBox();
+      }));
       line.appendChild(document.createTextNode(' · '));
       line.appendChild(identityAction('I have a key', showPasteBox));
     }
@@ -2448,6 +2457,36 @@
     box.appendChild(row);
     box.appendChild(identityAction('Cancel', hideKeyBox));
     box.hidden = false;
+  }
+
+  /* The identity mint + login, factored out for the app-native onboarding sheet
+     (window.mcKit.mintIdentity / loginWithKey, called from app/appchrome.js on
+     phones). Same steps as showAgreeBox's Create and showPasteBox's Use it; the
+     sheet reloads on success (like the classic BOARD login), so these only mint,
+     store, set state, and resolve — they do not repaint. */
+  function mintIdentity(faith) {
+    try { localStorage.setItem('mc-agreed-at', String(Date.now())); } catch (e) {}
+    if (faith) setFaith(faith);
+    var key = makeKey();
+    setKey(key);
+    state.key = key;
+    return sha256hex(key).then(function (h) {
+      state.myHash = h;
+      enableMemberLive();
+      return { key: key, hash: h };
+    });
+  }
+  function loginWithKey(key) {
+    key = String(key || '').trim();
+    if (key.length < 16) return Promise.resolve(false);
+    setKey(key);
+    state.key = key;
+    try { localStorage.removeItem(DM_CACHE); } catch (e) {}
+    return sha256hex(key).then(function (h) {
+      state.myHash = h;
+      enableMemberLive();
+      return true;
+    });
   }
 
   function hideKeyBox() {
@@ -6702,6 +6741,7 @@
     loadTurnstile: loadTurnstile,
     dmSearchBox: dmSearchBox, dmLabel: dmLabel,
     dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck, markThreadRead: markThreadRead,
+    mintIdentity: mintIdentity, loginWithKey: loginWithKey,
     /* admin read/observe cluster (Wave C-reads 3) */
     MERECAT_API: MERECAT_API,
     onProfile: function (cb) { profileWaiters.push(cb); },
