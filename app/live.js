@@ -10,8 +10,11 @@
    auto-responder, close-on-hidden/idle + reopen-and-resync on return, and
    silent degradation (missing/blocked WS ⇒ the site behaves exactly as today).
 
-   Structured for Phase 2 to add a per-conversation chat socket beside `board`
-   under this same lifecycle. Instantiated once by the shell (installLive). */
+   A signed-in member also authenticates the board socket to add a private
+   user:<hash> scope (mcLive.member.enable) over which the worker pushes that
+   member's own DMs and notifications instantly — badge, open thread, and lists,
+   no more 90-second polling. A per-conversation merecat chat socket rides beside
+   `board` under this same lifecycle. Instantiated once by the shell (installLive). */
 
 const BACKOFF = [1000, 2000, 5000, 10000, 30000];
 const GRACE_MS = 45000;     // keep the socket this long after the tab hides
@@ -30,7 +33,7 @@ function jitter(ms) { return Math.round(ms * (0.8 + Math.random() * 0.4)); }
    client's; the server DO holds no timer and hibernates when idle. */
 function Conn(path, onFrame) {
   const c = {
-    ws: null, want: false, desired: [], authFrame: null,
+    ws: null, want: false, desired: [], userScope: '', authFrame: null,
     ix: 0, failures: 0, reconnectT: 0, pingT: 0, lastRx: 0, closing: false,
   };
 
@@ -91,7 +94,12 @@ function Conn(path, onFrame) {
   function sendSub() {
     if (c.nosub) return;   // chat sockets subscribe to nothing — they auth + ask
     if (c.ws && c.ws.readyState === 1) {
-      try { c.ws.send(JSON.stringify({ t: 'sub', scope: c.desired })); } catch (e) { /* reconnect handles it */ }
+      /* A member's private user:<hash> scope (DMs, notifications) is persistent
+         across forum-view changes, so every sub carries it alongside whatever
+         forum scope is shown. It leads the list so the server's scope cap never
+         drops it. */
+      const scope = c.userScope ? [c.userScope].concat(c.desired) : c.desired;
+      try { c.ws.send(JSON.stringify({ t: 'sub', scope: scope })); } catch (e) { /* reconnect handles it */ }
     }
   }
 
@@ -122,14 +130,43 @@ const boardApi = {
     board.want = true;
     if (board.ws) board._sendSub(); else if (!hidden) board._open();
   },
-  /* On unmount: stop receiving. A short grace keeps the socket for the next
-     forum view; if none arrives, it closes (reopens instantly on the next sub). */
+  /* On unmount: stop receiving forum events. A short grace keeps the socket for
+     the next forum view; if none arrives AND no member scope is active, it closes
+     (reopens instantly on the next sub). A signed-in member keeps the socket for
+     the private user scope even with no forum view shown. */
   leave: function () {
     board.desired = [];
     board._sendSub();
     setTimeout(function () {
-      if (board.desired.length === 0) { board.want = false; board._close(); }
+      if (board.desired.length === 0 && !board.userScope) { board.want = false; board._close(); }
     }, 3000);
+  },
+};
+
+/* member — a signed-in member's private scope on the board socket, for instant
+   DMs and notifications. The socket authenticates (the key in the auth frame,
+   never the URL) and subscribes to user:<hash>; the DO honors that scope only
+   for the hash the key proves, so a member's private events reach their own
+   connections alone. Persistent: it rides every sub frame and keeps the socket
+   open across forum-view changes and on any page (badges everywhere). */
+const memberApi = {
+  enable: function (key, hash) {
+    if (!key || !/^[0-9a-f]{64}$/.test(String(hash))) return;
+    const next = 'user:' + hash;
+    if (board.userScope === next && board.authFrame) return;   // already enabled
+    board.authFrame = JSON.stringify({ t: 'auth', key: key });
+    board.userScope = next;
+    board.want = true;
+    if (board.ws && board.ws.readyState === 1) {
+      try { board.ws.send(board.authFrame); } catch (e) { /* reconnect re-auths */ }
+      board._sendSub();
+    } else if (!hidden) { board._open(); }
+  },
+  disable: function () {
+    board.authFrame = null;
+    board.userScope = '';
+    if (board.desired.length === 0) { board.want = false; board._close(); }
+    else board._sendSub();
   },
 };
 
@@ -182,7 +219,7 @@ let installed = false;
 export function installLive() {
   if (installed || window.mcLive) return;
   installed = true;
-  window.mcLive = { board: boardApi, chat: openChat, _conns: conns };
+  window.mcLive = { board: boardApi, member: memberApi, chat: openChat, _conns: conns };
 
   /* Idle policy — one place, applied to every connection. A hidden tab / locked
      phone / screensaver must stop consuming resources; the DO keeps no state we

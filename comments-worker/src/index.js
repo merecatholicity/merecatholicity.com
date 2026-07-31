@@ -736,6 +736,7 @@ async function deliverNotifications(env, o) {
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
   const stmts = [];
   const pushTo = new Set();   // recipients to also nudge by push (scaffold; gated off)
+  const liveEvents = [];      // per-recipient live 'notification' events (WebSocket)
 
   if (o.authorHash && o.authorHash !== MERECAT_BOT.hash) {
     stmts.push(env.DB.prepare('INSERT OR IGNORE INTO watches (hash, topic_id, created_at) VALUES (?1, ?2, ?3)')
@@ -764,6 +765,7 @@ async function deliverNotifications(env, o) {
       if (admSet && !admSet.has(h)) continue;
       stmts.push(env.DB.prepare(NOTIF).bind(h, 'mention', o.topicId, o.commentId, o.authorHash, now));
       pushTo.add(h);
+      liveEvents.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'mention', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash, created_at: now });
     }
 
     if (o.isReply) {
@@ -776,12 +778,19 @@ async function deliverNotifications(env, o) {
       for (const r of (rows.results || [])) recips.add(r.hash);
       for (const h of recips) {
         if (admSet && !admSet.has(h)) continue;
-        if (h && !skip.has(h)) { stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now)); pushTo.add(h); }
+        if (h && !skip.has(h)) {
+          stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now));
+          pushTo.add(h);
+          liveEvents.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'reply', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash, created_at: now });
+        }
       }
     }
   }
 
   if (stmts.length) await env.DB.batch(stmts);
+  /* Instant per-member push over the private user:<hash> scope (badge + list),
+     alongside the (gated-off) native push scaffold. Both no-op without the DO. */
+  if (liveEvents.length) await publishUser(env, liveEvents);
   if (pushTo.size) await deliverPush(env, [...pushTo], { kind: o.isReply ? 'reply' : 'mention', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash });
 }
 
@@ -1730,7 +1739,7 @@ const DM_CLEARED = 'm.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cle
    recipient does NOT refuse the send: the message is stored held, reads as
    delivered to its sender, and stays invisible to the recipient until an
    unblock releases it. The blocked party is never told. */
-async function handleDmSend(request, env) {
+async function handleDmSend(request, env, ctx) {
   let data;
   try {
     data = await request.json();
@@ -1784,8 +1793,14 @@ async function handleDmSend(request, env) {
       'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
       myReadCol + ' = ?2 WHERE id = ?1'
     ).bind(thread.id, now).run();
-    /* Push nudge (scaffold; a no-op unless PUSH_ENABLED). A held message never
-       nudges — the recipient must not learn of a shadow-blocked send. */
+    /* Instant delivery to the recipient's own connections over the private
+       user:<to> scope — their open thread drops it in, their badge rings — plus
+       the (gated-off) native push nudge. A HELD message does neither: the
+       recipient must never learn of a shadow-blocked send. */
+    if (ctx) {
+      publishLive(env, ctx, { v: 1, t: 'dm', scopes: ['user:' + to], from: me, thread_id: thread.id,
+        message: { id: msg.id, sender_hash: me, body: body, created_at: now } });
+    }
     await deliverPush(env, [to], { kind: 'dm', thread_id: thread.id });
   }
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
@@ -1805,13 +1820,16 @@ async function sendSystemDm(env, fromHash, toHash, body) {
     'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
     'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
   ).bind(a, b, now, fromHash).first();
-  await env.DB.prepare(
-    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held) VALUES (?1, ?2, ?3, ?4, 0)'
-  ).bind(thread.id, fromHash, body, now).run();
+  const msg = await env.DB.prepare(
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held) VALUES (?1, ?2, ?3, ?4, 0) RETURNING id'
+  ).bind(thread.id, fromHash, body, now).first();
   await env.DB.prepare(
     'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
     senderReadCol + ' = ?2 WHERE id = ?1'
   ).bind(thread.id, now).run();
+  /* Nudge the recipient's own connections (badge + open thread) like any DM. */
+  await publishUser(env, [{ v: 1, t: 'dm', scopes: ['user:' + toHash], from: fromHash, thread_id: thread.id,
+    message: { id: (msg && msg.id) || 0, sender_hash: fromHash, body: body, created_at: now } }]);
   return true;
 }
 
@@ -4536,24 +4554,35 @@ async function handleMerecatStats(request, env) {
    subscriptions live in its serializeAttachment (survives hibernation), so the
    object uses no ctx.storage and NO timers (either would block hibernation and
    start billing idle duration). The socket is READ-ONLY — it carries {t:'sub'}
-   up and broadcast events down; every write stays on the authenticated,
-   Turnstile-gated, rate-limited HTTP path. The back room never crosses the wire
-   (sanitizeScopes refuses cat:adminsonly; the worker emits nothing for it). */
+   (and, for a member, {t:'auth'}) up and broadcast events down; every write
+   stays on the authenticated, Turnstile-gated, rate-limited HTTP path. The back
+   room never crosses the wire (sanitizeScopes refuses cat:adminsonly; the worker
+   emits nothing for it). A member may authenticate to add a PRIVATE
+   'user:<hash>' scope — kept only for the hash their key proves — over which the
+   worker pushes that member's own DMs and notifications (nobody else's socket
+   can hold that scope, so the private events reach their connections alone). */
 
 /* A subscription scope is one of 'board:index', 'cat:<key>' (never the back
-   room), or 'topic:<positive int>'. Anything else is dropped; at most 4 kept. */
-function sanitizeScopes(raw) {
+   room), 'topic:<positive int>', or the PRIVATE 'user:<hash>' — kept ONLY when
+   the socket authenticated as that exact hash (`me`), so a member's DM and
+   notification pushes reach their own connections alone. Anything else is
+   dropped; at most 5 kept (one private + up to four forum scopes). */
+function sanitizeScopes(raw, me) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const s of raw) {
-    if (typeof s !== 'string' || out.length >= 4) continue;
+    if (typeof s !== 'string' || out.length >= 5) continue;
     if (s === 'board:index') { out.push(s); continue; }
     if (s.startsWith('cat:')) {
       const k = s.slice(4);
       if (k !== 'adminsonly' && BOARD_CATS.includes(k)) out.push(s);
       continue;
     }
-    if (/^topic:[1-9][0-9]*$/.test(s)) out.push(s);
+    if (/^topic:[1-9][0-9]*$/.test(s)) { out.push(s); continue; }
+    if (s.startsWith('user:')) {
+      const h = s.slice(5);
+      if (me && h === me && /^[0-9a-f]{64}$/.test(h)) out.push(s);   // only your own
+    }
   }
   return out;
 }
@@ -4582,13 +4611,24 @@ export class BoardHub extends DurableObject {
   async webSocketMessage(ws, msg) {
     let m;
     try { m = JSON.parse(typeof msg === 'string' ? msg : ''); } catch { return; }
-    if (!m || m.t !== 'sub') return;   // a stray {t:'ping'} is handled by the auto-responder
-    const subs = sanitizeScopes(m.scope);
+    if (!m) return;   // a stray {t:'ping'} is handled by the auto-responder
     let a;
     try { a = ws.deserializeAttachment(); } catch { a = null; }
+    /* A member authenticates so this socket may subscribe to its own private
+       user:<hash> scope (DMs, notifications). The key rides the frame, never the
+       URL; the hash is stored on the attachment and gates every later sub. */
+    if (m.t === 'auth') {
+      const key = String(m.key || '');
+      const me = key ? await sha256hex(key) : '';
+      ws.serializeAttachment({ subs: (a && a.subs) || [], n: (a && a.n) || 0, me });
+      return;
+    }
+    if (m.t !== 'sub') return;
+    const me = (a && a.me) || '';
+    const subs = sanitizeScopes(m.scope, me);
     const n = ((a && a.n) || 0) + 1;
     if (n > 500) { try { ws.close(1008, 'too many'); } catch { /* gone */ } return; }
-    ws.serializeAttachment({ subs, n });
+    ws.serializeAttachment({ subs, n, me });
   }
 
   webSocketError(ws, err) {
@@ -4989,6 +5029,17 @@ function publishLive(env, ctx, event) {
     .catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
 }
 
+/* Fire PRIVATE per-member live events (DMs, notifications) through the one hub.
+   Each event is scoped to a single 'user:<hash>', which the DO fans only to
+   sockets that authenticated as that hash — so a member's own connections alone
+   receive it. Awaitable: a caller already inside a waitUntil (deliverNotifications)
+   just awaits it; a plain handler passes ctx to publishLive-style fire-and-forget. */
+async function publishUser(env, events) {
+  if (!env.HUB) return;
+  const list = (Array.isArray(events) ? events : [events]).filter(Boolean);
+  for (const e of list) await sendToHub(env, e);
+}
+
 /* merecat over WebSockets (Phase 2). ask-init mints (or verifies) the
    conversation and returns its id BEFORE the socket opens, so the client adopts
    ?chat=<id> at once and dials the ChatRoom instance that matches the id (the DO
@@ -5084,7 +5135,7 @@ export default {
       if (path === '/api/comments/profile/admin' && request.method === 'POST') return await handleProfileAdminEdit(request, env);
       if (path === '/api/comments/profile/clear' && request.method === 'POST') return await handleProfileClear(request, env);
       if (path === '/api/comments/backup' && request.method === 'POST') return await handleBackup(request, env);
-      if (path === '/api/comments/dm/send' && request.method === 'POST') return await handleDmSend(request, env);
+      if (path === '/api/comments/dm/send' && request.method === 'POST') return await handleDmSend(request, env, ctx);
       if (path === '/api/comments/dm/threads' && request.method === 'POST') return await handleDmThreads(request, env);
       if (path === '/api/comments/dm/thread' && request.method === 'POST') return await handleDmThread(request, env);
       if (path === '/api/comments/dm/unread' && request.method === 'POST') return await handleDmUnread(request, env);
