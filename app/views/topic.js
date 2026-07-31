@@ -114,6 +114,17 @@ class McTopic extends LitElement {
         this.d = { ...d, topic: { ...d.topic, locked: m.act === 'lock' ? 1 : 0 } };
       }
       /* sticky/unsticky change nothing visible inside the thread */
+    } else if (m.t === 'edited') {
+      /* an author edited a post: re-render its body in place if it is on the
+         page in front of the reader (else the fresh text loads when they reach
+         its page). window.mcRich is the one living body renderer. */
+      const bodyEl = this.querySelector('#comment-' + m.id + ' .comment-body');
+      if (bodyEl && window.mcRich) {
+        bodyEl.textContent = '';
+        window.mcRich.fillBody(bodyEl, m.body);
+        bodyEl.classList.add('mc-live-new');
+        setTimeout(() => { bodyEl.classList.remove('mc-live-new'); }, 2200);
+      }
     }
   }
   /* On reconnect (e.g. tab returned from hidden), pull any replies missed while
