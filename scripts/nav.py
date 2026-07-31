@@ -117,8 +117,10 @@ def main():
     # The app shell's content region opens right after the nav block on every
     # page (the includes and the block rewrite both carry it); the footer
     # includes and each hand page close it. nav.html is GENERATED — this line
-    # is the single source of the <main> open.
-    nav = nav.rstrip("\n") + "\n<main>\n"
+    # is the single source of the <main> open. It carries class="prose", the
+    # reading-typography surface (styles/04-base.css); platform component classes
+    # override it (:where() keeps prose at zero element specificity).
+    nav = nav.rstrip("\n") + '\n<main class="prose">\n'
 
     with open(FRAGMENT, "w") as f:
         f.write(nav)
@@ -127,7 +129,7 @@ def main():
     # Matches the nav block whether or not the <nav class="site"> menu is present
     # (NAV_ENABLED off ⇒ only the script+<main> anchor), so `make menu` stays
     # idempotent across the disable.
-    block = re.compile(r'(?:<nav class="site">.*?</nav>\s*)?<script defer src="nav\.js"></script>(?:\s*<main>)?', re.S)
+    block = re.compile(r'(?:<nav class="site">.*?</nav>\s*)?<script defer src="nav\.js"></script>(?:\s*<main[^>]*>)?', re.S)
     for page in PAGES:
         with open('docs/' + page) as f:
             src = f.read()
