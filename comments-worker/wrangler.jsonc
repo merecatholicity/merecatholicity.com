@@ -1,9 +1,9 @@
 // Comments handler for merecatholicity.com. Free tier only: D1 for storage,
 // Workers AI (Llama Guard) for screening, Turnstile for the spam gate, the
-// rate-limit binding for per-IP throttling, Email Routing for notifications.
-// Routed on the zone itself (/api/comments*) so the API is same-origin with
-// the pages and no CORS preflights are spent against the daily request cap.
-// Deploy from this directory: deno run -A npm:wrangler deploy
+// rate-limit binding for per-IP throttling. In-app notifications only (email
+// was retired). Routed on the zone itself (/api/comments*) so the API is
+// same-origin with the pages and no CORS preflights are spent against the daily
+// request cap. Deploy from this directory: deno run -A npm:wrangler deploy
 {
   "name": "merecatholicity-comments",
   "main": "src/index.js",
@@ -109,6 +109,38 @@
     // merecat-local backend: the Tailscale Funnel URL of the owner's
     // machine. The shared key is the MERECAT_LOCAL_KEY secret. The routing
     // switch (config 'backend') defaults to cloudflare; local proxies here.
-    "MERECAT_LOCAL_URL": "https://obsidian.tilapia-koi.ts.net"
+    "MERECAT_LOCAL_URL": "https://obsidian.tilapia-koi.ts.net",
+    // The site's own origin, used to build human-facing links (RSS items, the
+    // move-notice DM). A staging deploy overrides it; the worker falls back to
+    // the production value in source if this is unset.
+    "SITE": "https://merecatholicity.com",
+    // The allowed browser origins for the POST/WebSocket origin gate (comma-
+    // separated). A missing Origin (native clients, curl) always passes; this
+    // list only bounds which browser origins may POST. Override for a staging
+    // host or a hybrid-app origin; source falls back to the two prod origins.
+    "ALLOWED_ORIGINS": "https://merecatholicity.com,https://www.merecatholicity.com",
+    // Mobile push (landing pad). "false" = deliverPush is a no-op and the
+    // push_tokens table simply fills; flip to "true" once an app and a provider
+    // (APNs/FCM/Web Push) are wired. Registration endpoints work regardless.
+    "PUSH_ENABLED": "false"
+  },
+  // A staging deployment: `wrangler deploy --env staging`. Distinct rate-limit
+  // namespace ids so it never shares the production per-IP buckets, and its own
+  // origin/site so links and the origin gate point at the staging host. Bindings
+  // (D1/R2/DO/AI/Vectorize) are inherited from the top level; point them at
+  // staging resources here if/when they exist.
+  "env": {
+    "staging": {
+      "ratelimits": [
+        { "name": "POST_LIMIT", "namespace_id": "9001", "simple": { "limit": 5, "period": 60 } },
+        { "name": "READ_LIMIT", "namespace_id": "9002", "simple": { "limit": 15, "period": 60 } },
+        { "name": "CONNECT_LIMIT", "namespace_id": "9003", "simple": { "limit": 10, "period": 60 } }
+      ],
+      "vars": {
+        "MODERATION_MODE": "ai",
+        "ALLOW_ANON": "false",
+        "PUSH_ENABLED": "false"
+      }
+    }
   }
 }

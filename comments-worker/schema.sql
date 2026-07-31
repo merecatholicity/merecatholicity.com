@@ -226,3 +226,16 @@ CREATE TABLE IF NOT EXISTS admins (
   added_by   TEXT,
   created_at INTEGER NOT NULL
 );
+
+-- Device push tokens for the mobile-notification landing pad. One row per token
+-- (a member may have several devices); re-registering a token refreshes it.
+-- deliverPush() reads these only when PUSH_ENABLED is on — until an app and a
+-- provider (APNs/FCM/Web Push) exist, the table simply fills and is unused.
+CREATE TABLE IF NOT EXISTS push_tokens (
+  hash       TEXT NOT NULL,
+  platform   TEXT NOT NULL,
+  token      TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, token)
+);
+CREATE INDEX IF NOT EXISTS push_tokens_hash_idx ON push_tokens(hash);
