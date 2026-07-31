@@ -9,14 +9,29 @@
 
 import { LitElement, html } from '../vendor/lit-all.min.js';
 
+/* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
+   app, not a website. Static SVG templates — no unsafe injection. The Merecat
+   hero keeps the 🐈 mascot on purpose (it IS the brand). */
+const ICON = {
+  home: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="M3 10.8 12 3.5l9 7.3"/><path d="M5.5 9.6V20h13V9.6"/></svg>`,
+  community: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="M20 14a2 2 0 0 1-2 2H8.5L4.5 20V6a2 2 0 0 1 2-2H18a2 2 0 0 1 2 2z"/></svg>`,
+  inbox: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7.5 8.5 6 8.5-6"/></svg>`,
+  profile: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.4-3.6 3.4-5.6 7-5.6s6.6 2 7 5.6"/></svg>`,
+  search: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4-4"/></svg>`,
+  bell: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8"/><path d="M10.2 19a1.9 1.9 0 0 0 3.6 0"/></svg>`,
+  gear: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M2.5 12h3M18.5 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>`,
+  cross: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="M12 3.5v17M7.5 8.5h9"/></svg>`,
+  back: html`<svg viewBox="0 0 24 24" class="mc-ico" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>`,
+};
+
 /* The five primary destinations. Merecat is the raised center hero (the standout
    AI). hrefs are ordinary same-origin links the shell intercepts + soft-navs. */
 const TABS = [
-  { key: 'home', label: 'Home', icon: '🏠', href: 'index.html' },
-  { key: 'community', label: 'Community', icon: '💬', href: 'community.html' },
+  { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
+  { key: 'community', label: 'Community', svg: 'community', href: 'community.html' },
   { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'community.html?merecat=1', hero: true },
-  { key: 'messages', label: 'Inbox', icon: '✉️', href: 'community.html?inbox=1', badge: 'dm' },
-  { key: 'profile', label: 'Profile', icon: '👤', href: 'community.html?me=1' },
+  { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'community.html?inbox=1', badge: 'dm' },
+  { key: 'profile', label: 'Profile', svg: 'profile', href: 'community.html?me=1' },
 ];
 
 /* The Home launcher: standout features first, then the reading shelf (mirrors
@@ -79,7 +94,7 @@ class McTabbar extends LitElement {
       ${TABS.map((t) => html`
         <a class=${'mc-tab' + (t.hero ? ' mc-tab-hero' : '') + (this.active === t.key ? ' mc-tab-on' : '')}
            href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'}>
-          <span class="mc-tab-ico">${t.icon}${t.badge === 'dm' && this.dm
+          <span class="mc-tab-ico">${t.hero ? t.icon : ICON[t.svg]}${t.badge === 'dm' && this.dm
             ? html`<span class="mc-tab-badge">${badgeText(this.dm)}</span>` : ''}</span>
           <span class="mc-tab-lbl">${t.label}</span>
         </a>`)}
@@ -104,14 +119,14 @@ class McAppbar extends LitElement {
   render() {
     return html`<header class="mc-appbar">
       <div class="mc-appbar-side mc-appbar-l">${this.back
-        ? html`<button class="mc-ab-btn" @click=${(e) => this.goBack(e)} aria-label="Back">‹</button>`
-        : html`<a class="mc-ab-brand" href="index.html" aria-label="Home">✝</a>`}</div>
+        ? html`<button class="mc-ab-btn" @click=${(e) => this.goBack(e)} aria-label="Back">${ICON.back}</button>`
+        : html`<a class="mc-ab-brand" href="index.html" aria-label="Home">${ICON.cross}</a>`}</div>
       <div class="mc-appbar-title">${this.heading}</div>
       <div class="mc-appbar-side mc-appbar-r">
-        <a class="mc-ab-btn" href="community.html?q=" aria-label="Search">🔍</a>
-        <a class="mc-ab-btn mc-ab-bell" href="community.html?notifications=1" aria-label="Notifications">🔔${this.notif
+        <a class="mc-ab-btn" href="community.html?q=" aria-label="Search">${ICON.search}</a>
+        <a class="mc-ab-btn mc-ab-bell" href="community.html?notifications=1" aria-label="Notifications">${ICON.bell}${this.notif
           ? html`<span class="mc-tab-badge">${badgeText(this.notif)}</span>` : ''}</a>
-        <button class="mc-ab-btn" @click=${(e) => this.settings(e)} aria-label="Settings">⚙</button>
+        <button class="mc-ab-btn" @click=${(e) => this.settings(e)} aria-label="Settings">${ICON.gear}</button>
       </div>
     </header>`;
   }
