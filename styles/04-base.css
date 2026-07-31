@@ -1,42 +1,50 @@
-/* Links: maroon, underlined, in the old manner */
+/* Reading typography — the `.prose` surface. Every page's reading content sits in
+   <main class="prose">, and the long-form typography (headings, paragraphs, the
+   epigraph, blockquotes, the pandoc TOC, tables) is scoped to it. `:where()` keeps
+   the element specificity at zero, so the platform's component classes (app chrome,
+   forum, library) always win over the reading defaults — the same override order the
+   old global element selectors had by source position, made explicit. Links and the
+   image reset stay GLOBAL (they apply site-wide, outside the reading column too).
+   Converted from global element selectors to the Tailwind `.prose` surface 2026-07-31. */
+
+/* Links: maroon, underlined, in the old manner (GLOBAL — nav, footer, chrome, prose) */
 a { color: var(--maroon); text-decoration: underline; text-underline-offset: 2px; }
 a:hover { color: var(--maroon-dark); }
-
 /* Bare-URL links (pandoc's a.uri): let the URL break mid-string rather than
    force the page wider than a phone screen. */
 a.uri { overflow-wrap: anywhere; }
 
 /* Headings */
-h1, h2, h3, h4 {
+.prose :where(h1, h2, h3, h4) {
   font-weight: bold;
   color: var(--maroon);
   line-height: 1.25;
   margin: 1.6em 0 0.5em;
 }
-h1 { font-size: 1.65rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.25em; }
-h2 { font-size: 1.3rem; }
-h3 { font-size: 1.15rem; color: var(--maroon-dark); }
-h4 { font-size: 1.02rem; color: var(--maroon-dark); margin: 1.2em 0 0.2em; }
+.prose :where(h1) { font-size: 1.65rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.25em; }
+.prose :where(h2) { font-size: 1.3rem; }
+.prose :where(h3) { font-size: 1.15rem; color: var(--maroon-dark); }
+.prose :where(h4) { font-size: 1.02rem; color: var(--maroon-dark); margin: 1.2em 0 0.2em; }
 
-header#title-block-header h1, .home-title {
+.prose :where(header#title-block-header h1), .prose :where(.home-title) {
   text-align: center;
   border-bottom: none;
   margin-top: 0.5em;
 }
 
 /* Epigraph / canon line */
-.canon {
+.prose :where(.canon) {
   text-align: center;
   font-style: italic;
   color: var(--faint);
   margin: 0.25em 0 1.2em;
 }
 
-hr { border: none; border-top: 1px solid var(--rule); margin: 2em auto; width: 60%; clear: both; }
+.prose :where(hr) { border: none; border-top: 1px solid var(--rule); margin: 2em auto; width: 60%; clear: both; }
 
 /* Body text */
-p { margin: 0.7em 0; }
-blockquote {
+.prose :where(p) { margin: 0.7em 0; }
+.prose :where(blockquote) {
   margin: 1.2em 1.5em;
   padding-left: 1em;
   border-left: 2px solid var(--rule);
@@ -44,30 +52,29 @@ blockquote {
 }
 
 /* Table of contents (pandoc) */
-nav#TOC {
+.prose :where(nav#TOC) {
   border: 1px solid var(--rule);
   padding: 0.8rem 1.2rem;
   margin: 1.5rem 0;
   font-size: 0.95rem;
 }
-nav#TOC ul { list-style: none; padding-left: 0.8rem; margin: 0.2rem 0; }
-nav#TOC > ul { padding-left: 0; }
-nav#TOC a { text-decoration: none; }
-nav#TOC a:hover { text-decoration: underline; }
+.prose :where(nav#TOC ul) { list-style: none; padding-left: 0.8rem; margin: 0.2rem 0; }
+.prose :where(nav#TOC > ul) { padding-left: 0; }
+.prose :where(nav#TOC a) { text-decoration: none; }
+.prose :where(nav#TOC a:hover) { text-decoration: underline; }
 
 /* The acts table and any others */
-table {
+.prose :where(table) {
   border-collapse: collapse;
   margin: 1.5em 0;
   font-size: 0.92rem;
   display: block;
   overflow-x: auto;
 }
-th, td {
+.prose :where(th, td) {
   text-align: left;
   vertical-align: top;
   padding: 0.35em 0.9em 0.35em 0;
   border-bottom: 1px solid var(--rule);
 }
-th { color: var(--maroon-dark); }
-
+.prose :where(th) { color: var(--maroon-dark); }

@@ -87,8 +87,8 @@ footer, .colophon {
 /* Small screens */
 @media (max-width: 600px) {
   body { font-size: 1rem; padding: 0.9rem 0.8rem 2rem; }
-  h1 { font-size: 1.4rem; }
-  nav#TOC { font-size: 0.9rem; }
+  .prose :where(h1) { font-size: 1.4rem; }
+  .prose :where(nav#TOC) { font-size: 0.9rem; }
 }
 
 /* Current page in the nav: present but not a link */
