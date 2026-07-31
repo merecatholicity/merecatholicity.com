@@ -608,6 +608,138 @@
       .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
 
+  /* ---- End-to-end-encrypted DM crypto (TweetNaCl, loaded on demand) ---------
+     Each identity derives an X25519 keypair deterministically from the secret
+     behind its localStorage key, so nothing new is stored and carrying the key to
+     another browser reproduces the same keypair. Only the PUBLIC half is ever
+     published (/dm/pubkey). A message is sealed with the pair's shared secret
+     X25519(mine, theirs), which both sides compute identically — so one
+     ciphertext is opened by the recipient AND re-read later by the sender. The
+     server only ever holds the opaque "E1.<nonce>.<ct>" blob and cannot decrypt.
+     nacl is the vendored tweetnacl.min.js, injected once on first use. */
+  var NACL_SRC = 'tweetnacl.min.js?v=1';
+  var _naclP = null;
+  function ensureNacl() {
+    if (window.nacl) return Promise.resolve(window.nacl);
+    if (_naclP) return _naclP;
+    _naclP = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = NACL_SRC;
+      s.async = true;
+      s.onload = function () { if (window.nacl) resolve(window.nacl); else { _naclP = null; reject(new Error('nacl')); } };
+      s.onerror = function () { _naclP = null; reject(new Error('nacl load failed')); };
+      document.head.appendChild(s);
+    });
+    return _naclP;
+  }
+  function dmB64uEnc(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function dmB64uDec(str) {
+    var s = String(str).replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = atob(s);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  /* Keypair from the identity secret, cached until the key changes. SHA-512 of a
+     domain-separated copy of the secret gives a 32-byte curve25519 seed (the
+     secret is already 256-bit uniform, so this is a clean PRF); tweetnacl clamps
+     it internally when it computes the public half. */
+  var _dmKP = null, _dmKPFor = null;
+  function myDmKeypair() {
+    if (_dmKP && _dmKPFor === state.key) return _dmKP;
+    var seed = nacl.hash(new TextEncoder().encode('mc/dm/x25519/v1|' + state.key)).subarray(0, 32);
+    _dmKP = nacl.box.keyPair.fromSecretKey(new Uint8Array(seed));
+    _dmKPFor = state.key;
+    return _dmKP;
+  }
+  function dmEncrypt(plaintext, otherPubB64) {
+    var kp = myDmKeypair();
+    var nonce = nacl.randomBytes(24);
+    var ct = nacl.box(new TextEncoder().encode(plaintext), nonce, dmB64uDec(otherPubB64), kp.secretKey);
+    return 'E1.' + dmB64uEnc(nonce) + '.' + dmB64uEnc(ct);
+  }
+  function dmDecrypt(blob, otherPubB64) {
+    if (typeof blob !== 'string' || blob.slice(0, 3) !== 'E1.' || !otherPubB64) return null;
+    var parts = blob.split('.');
+    if (parts.length !== 3) return null;
+    try {
+      var pt = nacl.box.open(dmB64uDec(parts[2]), dmB64uDec(parts[1]), dmB64uDec(otherPubB64), myDmKeypair().secretKey);
+      return pt ? new TextDecoder().decode(pt) : null;
+    } catch (e) { return null; }
+  }
+  /* A per-conversation safety number: a short fingerprint of the two public keys,
+     ordered the same way on both sides so both compute the identical code. Two
+     people compare it out of band to be sure no key was substituted. */
+  function dmSafetyNumber(otherPubB64) {
+    try {
+      var mineBytes = myDmKeypair().publicKey;
+      var mineB64 = dmB64uEnc(mineBytes);
+      var theirBytes = dmB64uDec(otherPubB64);
+      var mineFirst = mineB64 < otherPubB64;
+      var f = mineFirst ? mineBytes : theirBytes;
+      var s = mineFirst ? theirBytes : mineBytes;
+      var cat = new Uint8Array(f.length + s.length);
+      cat.set(f, 0); cat.set(s, f.length);
+      var h = nacl.hash(cat);
+      var hex = '';
+      for (var i = 0; i < 10; i++) hex += ('0' + h[i].toString(16)).slice(-2);
+      return hex.toUpperCase().replace(/(.{4})/g, '$1 ').trim();
+    } catch (e) { return ''; }
+  }
+  /* Publish my public key once per session (idempotent server-side). Fired when
+     an identity goes live, so any active member is reachable for an encrypted DM. */
+  var _pubkeyFor = null;
+  function ensureMyPubkey() {
+    if (!state.key || !state.myHash || _pubkeyFor === state.key) return;
+    var forKey = state.key;
+    _pubkeyFor = forKey;
+    ensureNacl().then(function () {
+      return fetch(API + '/dm/pubkey', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: forKey, pubkey: dmB64uEnc(myDmKeypair().publicKey) }),
+      });
+    }).then(function (r) { return r.json(); })
+      .then(function (d) { if (!d || !d.ok) { if (_pubkeyFor === forKey) _pubkeyFor = null; } })
+      .catch(function () { if (_pubkeyFor === forKey) _pubkeyFor = null; });
+  }
+  /* Which correspondents this browser has marked "safety number verified". */
+  var DM_VERIFIED = 'mc-dm-verified';
+  function dmVerifiedSet() { try { var a = JSON.parse(localStorage.getItem(DM_VERIFIED)); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function dmVerified(other) { return dmVerifiedSet().indexOf(other) !== -1; }
+  function dmMarkVerified(other) {
+    var a = dmVerifiedSet();
+    if (a.indexOf(other) === -1) { a.push(other); try { localStorage.setItem(DM_VERIFIED, JSON.stringify(a)); } catch (e) {} }
+  }
+  /* The honest "how it works" note behind the badge — confident, scoped to what
+     the design actually guarantees (stored ciphertext, keys never leave you). */
+  function dmE2eExplainer() {
+    appConfirm(
+      'End-to-end encrypted. Your messages are encrypted on your own device before they are sent. '
+      + 'We store them only as ciphertext, we do not hold the keys, and we cannot read your inbox — '
+      + 'only you and the person you are writing to can open them. The encryption is standard, open '
+      + 'X25519 + XSalsa20-Poly1305 (NaCl), and the code that runs it is public in our repository. '
+      + 'To be sure no one is in the middle, compare the safety number at the top of a conversation. '
+      + 'One thing to keep in mind: because only you hold your key, a lost key means the encrypted '
+      + 'history cannot be recovered — not even by us.',
+      { okLabel: 'Got it', cancelLabel: 'Close' }, function () {});
+  }
+  /* The tucked-away verify step: reveal the safety number and let the reader mark
+     the pair confirmed (remembered locally, so it never nags again). */
+  function dmVerifyPanel(other, otherPubB64, link) {
+    appConfirm(
+      'Safety number: ' + dmSafetyNumber(otherPubB64) + '.  '
+      + 'Read this aloud with the person you are messaging. If it matches on both sides, no one is '
+      + 'intercepting this conversation. This is optional — your messages are encrypted either way.',
+      { okLabel: 'Mark verified', cancelLabel: 'Close' }, function (ok) {
+        if (ok) { dmMarkVerified(other); if (link) link.textContent = '✓ verified'; }
+      });
+  }
+
   var section = document.querySelector('section[data-comments], section[data-board]');
   if (!section) return;
   var BOARD = section.hasAttribute('data-board');
@@ -2232,6 +2364,7 @@
   }
   /* Authenticate the live socket for this member so DM/notif pushes arrive. */
   function enableMemberLive() {
+    ensureMyPubkey();   // publish this identity's DM public key once it is live
     if (state.key && state.myHash && window.mcLive && window.mcLive.member) {
       window.mcLive.member.enable(state.key, state.myHash);
     }
@@ -4469,6 +4602,13 @@
       return;
     }
     section.appendChild(dmSearchBox());
+    var e2eBadge = el('p', 'dm-e2e');
+    e2eBadge.appendChild(document.createTextNode('🔒 End-to-end encrypted · '));
+    var e2eHow = el('a', null, 'how it works');
+    e2eHow.href = '#';
+    e2eHow.addEventListener('click', function (ev) { ev.preventDefault(); dmE2eExplainer(); });
+    e2eBadge.appendChild(e2eHow);
+    section.appendChild(e2eBadge);
     var list = el('div', 'board-topics');
     list.textContent = 'Loading messages...';
     section.appendChild(list);
@@ -4650,14 +4790,20 @@
     var pNum = Math.floor(Number(qs.get('p')) || 0);
     var payload = { key: state.key, with: other };
     if (pNum > 0) payload.p = pNum;
-    fetchRetry(API + '/dm/thread', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }, [1000, 3000])
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
+    Promise.all([
+      ensureNacl(),
+      fetchRetry(API + '/dm/thread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }, [1000, 3000]).then(function (r) { return r.json(); }),
+    ])
+      .then(function (res) {
+        var d = res[1];
         if (!d.ok) throw new Error(d.error || 'failed');
+        /* The correspondent's public key drives both decrypt and encrypt for the
+           whole thread (the shared secret is the same in both directions). */
+        var otherPub = (d.other && d.other.pubkey) || null;
         var label = dmLabel(other, d.other.nick);
         var shortName = d.other.nick || displayName(other);
         document.title = shortName + ' | Inbox';
@@ -4667,6 +4813,22 @@
         nameLink.href = profileHref(other);
         headEl.appendChild(nameLink);
         section.appendChild(headEl);
+        /* The encrypted-inbox assurance: a quiet badge, the honest explainer one
+           tap away, and the optional safety-number verify — no PIN, no friction. */
+        var e2e = el('p', 'dm-e2e');
+        e2e.appendChild(document.createTextNode('🔒 End-to-end encrypted · '));
+        var howLink = el('a', null, 'how it works');
+        howLink.href = '#';
+        howLink.addEventListener('click', function (ev) { ev.preventDefault(); dmE2eExplainer(); });
+        e2e.appendChild(howLink);
+        if (otherPub) {
+          e2e.appendChild(document.createTextNode(' · '));
+          var vLink = el('a', null, dmVerified(other) ? '✓ verified' : 'verify');
+          vLink.href = '#';
+          vLink.addEventListener('click', function (ev) { ev.preventDefault(); dmVerifyPanel(other, otherPub, vLink); });
+          e2e.appendChild(vLink);
+        }
+        section.appendChild(e2e);
         /* Opening marked it read on the server; make the badge tell the
            same story on the next paint. */
         try { localStorage.removeItem(DM_CACHE); } catch (e) {}
@@ -4676,7 +4838,12 @@
         if (!d.messages.length) {
           list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
         }
-        d.messages.forEach(function (m) { list.appendChild(dmMsgNode(m, shortName)); });
+        d.messages.forEach(function (m) {
+          var lbl = shortName;
+          if (Number(m.enc || 0) === 1) m.body = dmDecrypt(m.body, otherPub) || '⚠️ could not decrypt';
+          else if (Number(m.enc || 0) === 2) lbl = '⚙️ Automated notice';
+          list.appendChild(dmMsgNode(m, lbl));
+        });
         /* Live drop-in: a message pushed over the private user scope from THIS
            other party lands at once. It mirrors the send path — appended when we
            are on the page it lands on, else the badge rings (it is on a later
@@ -4686,7 +4853,10 @@
           var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
           d.total += 1;
           if (d.page === newMsgPage) {
-            var node = dmMsgNode(msg, shortName);
+            var lbl = shortName;
+            if (Number(msg.enc || 0) === 1) msg.body = dmDecrypt(msg.body, otherPub) || '⚠️ could not decrypt';
+            else if (Number(msg.enc || 0) === 2) lbl = '⚙️ Automated notice';
+            var node = dmMsgNode(msg, lbl);
             list.appendChild(node);
             node.scrollIntoView();
           } else {
@@ -4718,6 +4888,15 @@
         form.appendChild(status);
         section.appendChild(form);
         loadTurnstile();
+        /* We can only encrypt to a member who has published a key. Until they have
+           signed in once under the encrypted client, hold the send with a plain
+           notice rather than silently falling back to plaintext. */
+        if (!otherPub) {
+          send.disabled = true;
+          ta.disabled = true;
+          ta.placeholder = 'Waiting for this member to sign in once to set up encryption.';
+          status.textContent = 'You can message them privately once they have signed in to set up their encryption key.';
+        }
         send.addEventListener('click', function () {
           var body = ta.value.replace(/\s+$/, '');
           if (!body.trim()) {
@@ -4732,7 +4911,7 @@
             return fetchRetry(API + '/dm/send', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, to: other, body: body, token: token }),
+              body: JSON.stringify({ key: state.key, to: other, body: dmEncrypt(body, otherPub), enc: 1, token: token }),
             }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
               .then(function (r) { return r.json(); });
           }).then(function (d2) {

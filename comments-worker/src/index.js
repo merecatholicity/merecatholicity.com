@@ -41,6 +41,10 @@ function boardKey(raw) {
 const SITE = 'https://merecatholicity.com';
 function siteBase(env) { return (env && env.SITE) || SITE; }
 const MAX_BODY = 4000;
+/* Ciphertext cap for an end-to-end-encrypted DM: base64url of a MAX_BODY-sized
+   plaintext plus the nonce/tag and the "E1." header, with generous headroom. The
+   plaintext length is capped in the browser; the server only bounds the blob. */
+const DM_ENC_MAX = 24000;
 const MAX_TITLE = 120;
 /* Known-IPs retention: the fingerprint drawer shows addresses seen inside
    IP_SHOW_DAYS, and the monthly cron deletes rows idle past IP_KEEP_DAYS.
@@ -1778,9 +1782,13 @@ async function handleDmSend(request, env, ctx) {
   const key = String(data.key || '');
   const to = String(data.to || '');
   if (!key || !/^[0-9a-f]{64}$/.test(to)) return json({ ok: false, error: 'Bad request.' }, 400);
+  /* enc = 1: the body is an opaque end-to-end-encrypted blob the server must not
+     touch beyond bounding its size; enc = 0: a legacy/plain body. Either way the
+     store is verbatim — the server never reads the message content. */
+  const enc = (data.enc === 1 || data.enc === true) ? 1 : 0;
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
-  if (body.length > MAX_BODY) return json({ ok: false, error: 'The message is too long.' }, 400);
+  if (body.length > (enc ? DM_ENC_MAX : MAX_BODY)) return json({ ok: false, error: 'The message is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   if (me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
@@ -1810,8 +1818,8 @@ async function handleDmSend(request, env, ctx) {
         'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
       ).bind(a, b, now, me).first();
   const msg = await env.DB.prepare(
-    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id'
-  ).bind(thread.id, me, body, now, held).first();
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id'
+  ).bind(thread.id, me, body, now, held, enc).first();
   if (!held) {
     /* Recomputed, never incremented, over the visible words alone, and the
        sender's own stamp rides along: what you just said is read by you. */
@@ -1825,7 +1833,7 @@ async function handleDmSend(request, env, ctx) {
        recipient must never learn of a shadow-blocked send. */
     if (ctx) {
       publishLive(env, ctx, { v: 1, t: 'dm', scopes: ['user:' + to], from: me, thread_id: thread.id,
-        message: { id: msg.id, sender_hash: me, body: body, created_at: now } });
+        message: { id: msg.id, sender_hash: me, body: body, created_at: now, enc: enc } });
     }
     /* A DM also lands in the recipient's notifications list (the inbox badge is
        not the only place it should show). */
@@ -1850,7 +1858,7 @@ async function sendSystemDm(env, fromHash, toHash, body) {
     'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
   ).bind(a, b, now, fromHash).first();
   const msg = await env.DB.prepare(
-    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held) VALUES (?1, ?2, ?3, ?4, 0) RETURNING id'
+    'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc) VALUES (?1, ?2, ?3, ?4, 0, 2) RETURNING id'
   ).bind(thread.id, fromHash, body, now).first();
   await env.DB.prepare(
     'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
@@ -1858,7 +1866,7 @@ async function sendSystemDm(env, fromHash, toHash, body) {
   ).bind(thread.id, now).run();
   /* Nudge the recipient's own connections (badge + open thread) like any DM. */
   await publishUser(env, [{ v: 1, t: 'dm', scopes: ['user:' + toHash], from: fromHash, thread_id: thread.id,
-    message: { id: (msg && msg.id) || 0, sender_hash: fromHash, body: body, created_at: now } }]);
+    message: { id: (msg && msg.id) || 0, sender_hash: fromHash, body: body, created_at: now, enc: 2 } }]);
   /* A system DM (e.g. a topic-move notice) is notification-worthy too. */
   await notifyDm(env, toHash, fromHash);
   return true;
@@ -1927,11 +1935,17 @@ async function handleDmThread(request, env) {
     'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at, a_cleared_at, b_cleared_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
   ).bind(a, b).first();
   const prof = await env.DB.prepare('SELECT nick, avatar FROM profiles WHERE hash = ?1').bind(other).first();
+  /* The correspondent's published X25519 public key, so the client can encrypt
+     to them and decrypt this pair's messages. Null until they have signed in once
+     under the encrypted-inbox client (the client then blocks the send with a
+     notice rather than falling back to plaintext). */
+  const otherPubRow = await env.DB.prepare('SELECT pubkey FROM dm_pubkeys WHERE hash = ?1').bind(other).first();
+  const otherPub = otherPubRow ? otherPubRow.pubkey : null;
   const iBlocked = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
     .bind(me, other).first();
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
-    return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other) },
+    return json({ ok: true, thread_id: null, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
@@ -1945,7 +1959,7 @@ async function handleDmThread(request, env) {
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
-    'SELECT m.id, m.sender_hash, m.body, m.created_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
+    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
     ' AND m.created_at > ?5 ORDER BY m.id LIMIT ?3 OFFSET ?4'
   ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
@@ -1957,7 +1971,7 @@ async function handleDmThread(request, env) {
     'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
   ).bind(me, Math.floor(Date.now() / 1000), thread.id, myCleared).run();
   return json({ ok: true, thread_id: thread.id,
-    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other) },
+    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
     messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
 }
 
@@ -2329,6 +2343,37 @@ async function handleDmDirectory(request, env, url) {
   const users = (rows.results || []).map((r) => Object.assign({}, r,
     { assigned: r.hash ? displayName(r.hash) : null }));
   return json({ ok: true, users }, 200, cacheHeader(url));
+}
+
+/* Publish this member's X25519 public key for the end-to-end-encrypted inbox.
+   The client derives its keypair deterministically from the secret behind its
+   identity hash and sends only the PUBLIC half; the server stores it so a
+   correspondent can encrypt to it. Keyed (proves ownership of the hash), and
+   idempotent — keygen is deterministic, so re-publishing the same key is a
+   no-op, and only the key's owner can ever change the row. The server never sees
+   or can derive the private key from the hash it holds. */
+async function handleDmPubkey(request, env) {
+  let data;
+  try {
+    data = await request.json();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const pubkey = String(data.pubkey || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  /* 32 raw bytes as unpadded base64url is exactly 43 chars over [A-Za-z0-9_-]. */
+  if (!/^[A-Za-z0-9_-]{43}$/.test(pubkey)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const now = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(
+    'INSERT INTO dm_pubkeys (hash, pubkey, created_at, updated_at) VALUES (?1, ?2, ?3, ?3) ' +
+    'ON CONFLICT(hash) DO UPDATE SET pubkey = ?2, updated_at = ?3'
+  ).bind(me, pubkey, now).run();
+  return json({ ok: true }, 200);
 }
 
 /* ---- Avatars. One 400x400 raster image per identity, stored in R2 under
@@ -5175,6 +5220,7 @@ export default {
       if (path === '/api/comments/dm/block' && request.method === 'POST') return await handleDmBlock(request, env);
       if (path === '/api/comments/dm/delete' && request.method === 'POST') return await handleDmDelete(request, env);
       if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);
+      if (path === '/api/comments/dm/pubkey' && request.method === 'POST') return await handleDmPubkey(request, env);
       if (path === '/api/comments/notifications/unread' && request.method === 'POST') return await handleNotifUnread(request, env);
       if (path === '/api/comments/notifications/read' && request.method === 'POST') return await handleNotifRead(request, env);
       if (path === '/api/comments/notifications' && request.method === 'POST') return await handleNotifList(request, env);
