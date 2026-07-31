@@ -5,7 +5,7 @@ static theological site with a small dynamic backend on Cloudflare's free tier.
 
 It hosts our own book (*Mere Catholicity*) in several editions, a large library of
 public-domain Christian and classical texts we re-typeset from source, a community
-forum with direct messages and notifications, and **merecat**, a retrieval-augmented
+forum with end-to-end-encrypted direct messages and notifications, and **merecat**, a retrieval-augmented
 librarian chatbot that answers from the library.
 
 The whole reading experience is a static site (fast, no-JS-readable, indexable) that a
@@ -268,7 +268,7 @@ must stay within it. Config is each directory's `wrangler.jsonc`; secrets are se
 
 | Kind | Resource | Use |
 | --- | --- | --- |
-| **D1** (edge SQLite) | `merecatholicity-comments` | Comments, forum, DMs, notifications, profiles, moderation, FTS5 search index |
+| **D1** (edge SQLite) | `merecatholicity-comments` | Comments, forum, DMs (end-to-end encrypted), notifications, profiles, DM public keys, moderation, FTS5 search index |
 | **D1** | `merecat-library`, `merecat-library-deep`, `merecat-library-deep2` | merecat's chunked corpus + config/usage/chat threads |
 | **R2** (S3-compatible) | `merecatholicity-avatars` | Member avatar JPEGs (one key per identity) |
 | **R2** | `merecatholicity-backups` | Monthly D1 dump + avatar mirror (90-day retention) |
