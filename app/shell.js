@@ -409,6 +409,11 @@ customElements.define('mc-audio-dock', McAudioDock);
   function softNav(url, push) {
     if (navigating) return;
     navigating = true;
+    /* Any navigation closes the app menus/sheets so a chosen link never loads
+       behind an open one (the mobile Settings sheet + the desktop account
+       dropdown, which its own outside-click can't catch for an in-menu link). */
+    try { if (window.mcSheet) window.mcSheet.close(); } catch (e) { /* ignore */ }
+    try { document.dispatchEvent(new Event('mc-navigate')); } catch (e) { /* ignore */ }
     progress.active = true;
     var key = url.pathname;
     var cached = cache.get(key);

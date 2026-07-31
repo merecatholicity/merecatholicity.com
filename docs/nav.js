@@ -2,7 +2,8 @@
    to the operating system's preference when nothing is saved. The stylesheet
    already answers prefers-color-scheme before any script runs, so a system-dark
    reader sees dark from first paint; this only records and re-applies an explicit
-   choice, and builds the corner toggle. data-theme goes on <html>. */
+   choice. data-theme goes on <html>. The reader toggles the theme from the
+   platform Settings (the gear → Appearance); there is no longer a corner widget. */
 (function () {
   function readCookie() {
     var m = document.cookie.match(/(?:^|;\s*)mc-theme=(light|dark)\b/);
@@ -44,39 +45,10 @@
     apply(effective());
   };
 
-  function build() {
-    if (!document.body || document.querySelector('.theme-toggle')) return;
-    var btn = document.createElement('button');
-    btn.className = 'theme-toggle';
-    btn.type = 'button';
-    btn.setAttribute('aria-label', 'Switch between light and dark');
-    btn.title = 'Light / dark';
-    var label = document.createElement('span');
-    label.className = 'theme-label';
-    var sw = document.createElement('span');
-    sw.className = 'theme-switch';
-    var knob = document.createElement('span');
-    knob.className = 'theme-knob';
-    sw.appendChild(knob);
-    btn.appendChild(label);
-    btn.appendChild(sw);
-    function reflect() {
-      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
-      knob.textContent = dark ? '☽' : '☀';
-      label.textContent = dark ? 'Dark' : 'Light';
-      btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
-    }
-    reflect();
-    btn.addEventListener('click', function () {
-      var next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      apply(next);
-      document.cookie = 'mc-theme=' + next + ';path=/;max-age=31536000;samesite=lax';
-      reflect();
-    });
-    document.body.insertBefore(btn, document.body.firstChild);
-  }
-  if (document.body) build();
-  else document.addEventListener('DOMContentLoaded', build);
+  /* The floating corner light/dark toggle was RETIRED — the theme now lives in
+     the platform Settings (gear → Appearance), which drives the same engine via
+     window.mcSetDark / the mc-theme cookie. The engine above (apply on load +
+     cookies) stays; only the corner widget is gone. */
 })();
 
 /* Site menu: WAI-ARIA disclosure navigation, start-menu style on desktop.
@@ -245,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=27';
+    s.src = 'app.js?v=28';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

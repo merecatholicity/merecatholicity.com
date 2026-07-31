@@ -39,19 +39,29 @@ const TABS = [
 /* The Home launcher: standout features first, then the reading shelf (mirrors
    scripts/nav.yml). Static links only — the shell adds no API traffic here. */
 const HOME_FEATURES = [
+  { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
+  { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
   { icon: '💬', title: 'Community', sub: 'The Catholicity Board — join the conversation', href: 'community.html' },
   { icon: '🐈', title: 'Ask Merecat', sub: 'Put a question to the librarian AI', href: 'community.html?merecat=1' },
 ];
-const HOME_SHELF = [
-  { title: 'Credo', sub: 'What we believe', href: 'credo.html' },
-  { title: 'Lex orandi, lex credendi', sub: 'The rule of prayer', href: 'lex-orandi.html' },
-  { title: 'Mere Catholicity — the book', sub: 'Read online', href: 'book.html' },
-  { title: 'Charting: the historic communions', sub: 'Companion chart', href: 'charting-communions.html' },
-  { title: 'Charting: the free churches', sub: 'Companion chart', href: 'free-churches.html' },
-  { title: 'Charting: fifty objections', sub: 'Answered by grade', href: 'objections.html' },
-  { title: 'The bishop and the presbyter', sub: 'Companion paper', href: 'bishop-presbyter.html' },
-  { title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
-  { title: 'About', sub: 'The project', href: 'about.html' },
+/* The reading shelf, grouped the way a newcomer reads it. Surfaces the whole
+   site nav (Contact lives in Settings + the footer, not here). */
+const HOME_SECTIONS = [
+  { heading: 'Start here', items: [
+    { title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
+    { title: 'Lex orandi, lex credendi', sub: 'The rule of prayer', href: 'lex-orandi.html' },
+  ] },
+  { heading: 'The papers', items: [
+    { title: 'Charting: the historic communions', sub: 'Rome, the Orthodox, the confessional churches', href: 'charting-communions.html' },
+    { title: 'Charting: the free churches', sub: 'The same rule, turned around', href: 'free-churches.html' },
+    { title: 'The top fifty objections', sub: 'Answered one by one', href: 'objections.html' },
+    { title: 'The bishop and the presbyter', sub: 'Companion paper', href: 'bishop-presbyter.html' },
+  ] },
+  { heading: 'Explore', items: [
+    { title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
+    { title: 'Sources', sub: 'The primary texts, Newman included', href: 'resources.html' },
+    { title: 'About', sub: 'The project', href: 'about.html' },
+  ] },
 ];
 
 /* Which tab the current URL belongs to (the forum's views live in the query
@@ -83,6 +93,11 @@ function badgeText(n) { return n > 99 ? '99+' : String(n); }
 
 function readKey() {
   try { return localStorage.getItem('mc-comment-key') || ''; } catch (e) { return ''; }
+}
+/* Admin status, bridged from the comments client (loadMyProfile writes the flag)
+   so the platform chrome can surface admin-only entries without its own fetch. */
+function isAdmin() {
+  try { return localStorage.getItem('mc-admin') === '1'; } catch (e) { return false; }
 }
 
 /* ---- the bottom tab bar ---- */
@@ -201,6 +216,7 @@ class McSettings extends LitElement {
         localStorage.removeItem('mc-comment-key');
         localStorage.removeItem('mc-dm-unread');
         localStorage.removeItem('mc-notif-unread');
+        localStorage.removeItem('mc-admin');
       } catch (e) { /* blocked */ }
       location.href = 'index.html';
     });
@@ -241,6 +257,9 @@ class McSettings extends LitElement {
       ${link('community.html?users=1', 'Members', 'Everyone on the board')}
       ${link('community.html?q=', 'Search', 'Search the forum')}
 
+      ${isAdmin() ? html`<h3 class="mc-set-sec">Administration</h3>
+      ${link('community.html?admin=1', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
+
       <h3 class="mc-set-sec">Read &amp; help</h3>
       ${link('library.html', 'Library')}
       ${link('about.html', 'About')}
@@ -251,32 +270,37 @@ class McSettings extends LitElement {
 }
 customElements.define('mc-settings', McSettings);
 
-/* ---- the desktop platform bar (≥601px) ----
-   The app's persistent member layer for the big screen: brand, board search, and
-   the member cluster (merecat, notifications, inbox, account) on EVERY page — the
-   features that on desktop today live only in the community identity line. It
-   AUGMENTS the existing nav.site (which stays as the content menu below); it reads
-   the same badge caches as the mobile chrome (no boot-order dependency on mcKit)
-   and links into the existing routes (soft-nav for free). The account button opens
-   a dropdown that reuses <mc-settings> verbatim. Phones never see it (CSS-gated). */
+/* ---- the desktop TOP bar (≥601px) ----
+   The platform's utility bar on the big screen, mirroring the mobile app bar:
+   history back/forward, brand, board search, notifications, and a settings gear
+   whose dropdown reuses <mc-settings> verbatim (account, theme, admin, help). The
+   five primary destinations live in the LEFT app-bar (mc-sidebar) below, exactly
+   as the mobile bottom tabs do. Reads the same badge caches; phones never see it
+   (CSS-gated). The dropdown closes on outside-click, Escape, AND any soft-nav
+   (the mc-navigate signal) so a chosen link never loads behind an open menu. */
 class McDeskbar extends LitElement {
-  static properties = { notif: { attribute: false }, dm: { attribute: false }, keyed: { attribute: false }, menu: { attribute: false } };
-  constructor() { super(); this.notif = 0; this.dm = 0; this.keyed = false; this.menu = false; }
+  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false } };
+  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; }
   createRenderRoot() { return this; }
-  sync() { this.notif = badgeCount('notif'); this.dm = badgeCount('dm'); this.keyed = !!readKey(); }
+  sync() { this.notif = badgeCount('notif'); this.canBack = history.length > 1; }
   connectedCallback() {
     super.connectedCallback();
     this._onDoc = (e) => { if (this.menu && !e.target.closest('.mc-db-acct')) this.menu = false; };
     this._onKey = (e) => { if (e.key === 'Escape') this.menu = false; };
+    this._onNav = () => { this.menu = false; };
     document.addEventListener('click', this._onDoc);
     document.addEventListener('keydown', this._onKey);
+    document.addEventListener('mc-navigate', this._onNav);
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     document.removeEventListener('click', this._onDoc);
     document.removeEventListener('keydown', this._onKey);
+    document.removeEventListener('mc-navigate', this._onNav);
   }
   toggleMenu(e) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; }
+  goBack(e) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
+  goFwd(e) { e.preventDefault(); history.forward(); }
   search(e) {
     e.preventDefault();
     const input = this.querySelector('.mc-db-search input');
@@ -285,30 +309,82 @@ class McDeskbar extends LitElement {
   render() {
     const badge = (n) => n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : '';
     return html`<div class="mc-deskbar">
+      <div class="mc-db-hist">
+        <button class=${'mc-db-ico' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e) => this.goBack(e)} aria-label="Back" title="Back">${ICON.back}</button>
+        <button class="mc-db-ico" @click=${(e) => this.goFwd(e)} aria-label="Forward" title="Forward">${ICON.forward}</button>
+      </div>
       <a class="mc-db-brand" href="index.html" aria-label="Home">${ICON.cross}<span class="mc-db-word">Mere Catholicity</span></a>
       <form class="mc-db-search" @submit=${(e) => this.search(e)} role="search">
         <span class="mc-db-searchico">${ICON.search}</span>
         <input type="search" placeholder="Search the board…" aria-label="Search the board">
       </form>
-      <nav class="mc-db-cluster" aria-label="Member">
-        <a class="mc-db-ico mc-db-merecat" href="community.html?merecat=1" aria-label="Ask Merecat" title="Ask Merecat">🐈</a>
+      <nav class="mc-db-cluster" aria-label="Account">
         <a class="mc-db-ico" href="community.html?notifications=1" aria-label="Notifications" title="Notifications">${ICON.bell}${badge(this.notif)}</a>
-        <a class="mc-db-ico" href="community.html?inbox=1" aria-label="Inbox" title="Inbox">${ICON.inbox}${badge(this.dm)}</a>
-        ${this.keyed ? html`<div class="mc-db-acct">
-          <button class="mc-db-ico mc-db-avatar" @click=${(e) => this.toggleMenu(e)} aria-label="Account" aria-expanded=${this.menu ? 'true' : 'false'}>${ICON.profile}</button>
+        <div class="mc-db-acct">
+          <button class="mc-db-ico mc-db-gear" @click=${(e) => this.toggleMenu(e)} aria-label="Settings" aria-expanded=${this.menu ? 'true' : 'false'}>${ICON.gear}</button>
           ${this.menu ? html`<div class="mc-db-menu"></div>` : ''}
-        </div>` : html`<a class="mc-db-join" href="community.html?me=1">Sign in / Join</a>`}
+        </div>
       </nav>
     </div>`;
   }
   updated() {
-    /* mount the shared settings component into the open dropdown (imperative slot,
-       the McSheet idiom) — a fresh instance each open reflects current state */
     const menu = this.querySelector('.mc-db-menu');
     if (menu && !menu.firstChild) menu.appendChild(document.createElement('mc-settings'));
   }
 }
 customElements.define('mc-deskbar', McDeskbar);
+
+/* ---- the desktop LEFT app-bar (≥601px) ----
+   The mobile bottom tabs, stood up as a floating, vertically-centered rail on the
+   big screen (GNOME / Facebook-inspired): wide with labels by default, a clicker
+   collapses it to icons-only (persisted in localStorage). Reuses TABS / activeTab
+   and the badge caches. Phones never see it (CSS-gated ≥601px). */
+class McSidebar extends LitElement {
+  static properties = { active: { attribute: false }, dm: { attribute: false }, wide: { attribute: false } };
+  constructor() {
+    super();
+    this.active = 'home'; this.dm = 0;
+    let w = true;
+    try { w = localStorage.getItem('mc-sidebar') !== 'icons'; } catch (e) { /* default wide */ }
+    this.wide = w;
+  }
+  createRenderRoot() { return this; }
+  connectedCallback() { super.connectedCallback(); this._applyBody(); }
+  /* Reflect wide/collapsed on <body> so the desktop CSS pushes the content over
+     when the rail is expanded (like Facebook), and floats it back when collapsed. */
+  _applyBody() { try { document.body.classList.toggle('mc-sb-wide', this.wide); } catch (e) { /* blocked */ } }
+  sync() { this.active = activeTab(); this.dm = badgeCount('dm'); }
+  toggle() {
+    this.wide = !this.wide;
+    try { localStorage.setItem('mc-sidebar', this.wide ? 'wide' : 'icons'); } catch (e) { /* blocked */ }
+    this._applyBody();
+  }
+  render() {
+    return html`<nav class=${'mc-sidebar' + (this.wide ? ' mc-sb-wide' : '')} aria-label="Primary">
+      <button class="mc-sb-toggle" @click=${() => this.toggle()} aria-label=${this.wide ? 'Collapse menu' : 'Expand menu'} title=${this.wide ? 'Collapse' : 'Expand'}>${this.wide ? ICON.back : ICON.forward}</button>
+      ${TABS.map((t) => {
+        const n = t.badge === 'dm' ? this.dm : 0;
+        return html`<a class=${'mc-sb-item' + (this.active === t.key ? ' mc-tab-on' : '')} href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'} title=${t.label}>
+          <span class="mc-sb-ico">${t.icon ? t.icon : ICON[t.svg]}${n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : ''}</span>
+          <span class="mc-sb-lbl">${t.label}</span></a>`;
+      })}
+    </nav>`;
+  }
+}
+customElements.define('mc-sidebar', McSidebar);
+
+/* ---- the persistent site footer (all viewports) ---- */
+class McFooter extends LitElement {
+  createRenderRoot() { return this; }
+  render() {
+    return html`<div class="mc-footer">
+      <a href="index.html">merecatholicity.com</a><span class="mc-foot-sep">·</span>
+      <a href="terms.html">terms &amp; conditions</a><span class="mc-foot-sep">·</span>
+      <a href="contact.html">Contact</a>
+    </div>`;
+  }
+}
+customElements.define('mc-footer', McFooter);
 
 /* ---- the Home launcher (replaces the marketing homepage on phones) ---- */
 class McHome extends LitElement {
@@ -323,11 +399,12 @@ class McHome extends LitElement {
           <span class="mc-home-feat-ico">${f.icon}</span>
           <span class="mc-home-feat-txt"><strong>${f.title}</strong><small>${f.sub}</small></span>
           <span class="mc-home-go">›</span></a>`)}</div>
-      <h2 class="mc-home-sec">Read</h2>
-      <div class="mc-home-shelf">${HOME_SHELF.map((s) => html`
-        <a class="mc-home-row" href=${s.href}>
-          <span class="mc-home-row-txt"><strong>${s.title}</strong>${s.sub ? html`<small>${s.sub}</small>` : ''}</span>
-          <span class="mc-home-go">›</span></a>`)}</div>
+      ${HOME_SECTIONS.map((sec) => html`
+        <h2 class="mc-home-sec">${sec.heading}</h2>
+        <div class="mc-home-shelf">${sec.items.map((s) => html`
+          <a class="mc-home-row" href=${s.href}>
+            <span class="mc-home-row-txt"><strong>${s.title}</strong>${s.sub ? html`<small>${s.sub}</small>` : ''}</span>
+            <span class="mc-home-go">›</span></a>`)}</div>`)}
       <button class="mc-home-settings" @click=${() => window.mcSheet && window.mcSheet.settings()}>⚙ Settings</button>
     </div>`;
   }
@@ -553,6 +630,14 @@ export function installChrome() {
   const deskbar = document.createElement('mc-deskbar');
   deskbar.setAttribute('data-mc-app', '');
   document.body.appendChild(deskbar);
+  /* The desktop LEFT app-bar (the mobile tabs stood up) + the persistent site
+     footer. Both data-mc-app so soft-nav preserves them across swaps. */
+  const sidebar = document.createElement('mc-sidebar');
+  sidebar.setAttribute('data-mc-app', '');
+  document.body.appendChild(sidebar);
+  const footer = document.createElement('mc-footer');
+  footer.setAttribute('data-mc-app', '');
+  document.body.appendChild(footer);
   /* One marker so desktop CSS knows the shell/deskbar is present (padding under the
      fixed bar); never set under ?app=0, where installChrome never runs. */
   document.body.classList.add('mc-app');
@@ -572,7 +657,7 @@ export function installChrome() {
   /* The comments client fires mc-badge whenever an unread count changes, so the
      tab bar, app-bar bell, and desktop bar update the instant a DM or notification
      lands. */
-  document.addEventListener('mc-badge', function () { tabbar.sync(); appbar.sync(); deskbar.sync(); });
+  document.addEventListener('mc-badge', function () { tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); });
 
   /* Keyboard-aware composer. A position:fixed composer anchored to the layout
      viewport bottom (the sticky merecat ask box) hides BEHIND the soft keyboard
@@ -632,7 +717,7 @@ export function installChrome() {
     if (main) mountLibrary(main);
   }
 
-  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); mountHome(); mountLibraryHook(); maybeOnboard(); }
+  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); mountHome(); mountLibraryHook(); maybeOnboard(); }
   sync();
   /* boots()/chrome.sync() only fire on soft-nav; on a DIRECT initial load the
      onboarding trigger needs one sync once the client has booted (window.mcKit
