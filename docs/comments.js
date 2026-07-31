@@ -2089,6 +2089,7 @@
   function dmCacheSet(n) {
     try { localStorage.setItem(DM_CACHE, JSON.stringify({ n: n, at: Date.now() })) } catch (e) {}
     renderIdentity();
+    badgeChanged();
   }
 
   function dmUnreadCheck(force) {
@@ -2118,6 +2119,12 @@
   function notifCacheSet(n) {
     try { localStorage.setItem(NOTIF_CACHE, JSON.stringify({ n: n, at: Date.now() })) } catch (e) {}
     renderIdentity();
+    badgeChanged();
+  }
+  /* Tell the mobile app chrome (tab bar + notification bell) a badge changed, so
+     they update the instant a DM or notification lands, not on their own poll. */
+  function badgeChanged() {
+    try { document.dispatchEvent(new CustomEvent('mc-badge')); } catch (e) {}
   }
   function notifUnreadCheck(force) {
     if (!state.key) return;
@@ -6442,6 +6449,9 @@
     if (params.get('users')) return viewUsers();
     if (params.get('q') !== null) return viewSearch();
     if (params.get('dm')) return viewDm(params.get('dm'));
+    /* The mobile Profile tab lands here: your own profile when signed in, else
+       the board front where the identity line offers "Create an identity". */
+    if (params.get('me')) return (state.key && state.myHash) ? viewProfile(state.myHash) : viewIndex();
     if (params.get('profile')) return viewProfile(params.get('profile'));
     if (params.get('audit')) return viewAudit();
     var topic = Number(params.get('topic'));
