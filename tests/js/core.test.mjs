@@ -38,11 +38,12 @@ test('profileLimits is the plain caps record', () => {
   assert.deepEqual(Core.profileLimits, { nick: 40, bio: 500, sig: 200 });
 });
 
-test('dmTtlLabel coerces a missing/zero TTL to the 7-day default', () => {
+test('dmTtlLabel coerces a missing/zero TTL to the 30-day default', () => {
   assert.equal(Core.dmTtlLabel(86400), '24 hours');
-  assert.equal(Core.dmTtlLabel(0), '7 days', '0 -> default');
-  assert.equal(Core.dmTtlLabel(null), '7 days', 'null -> default');
-  assert.equal(Core.dmTtlLabel('604800'), '7 days', 'numeric string coerces');
+  assert.equal(Core.dmTtlLabel(0), '30 days', '0 -> default (Domain.Dm.defaultTtl)');
+  assert.equal(Core.dmTtlLabel(null), '30 days', 'null -> default');
+  assert.equal(Core.dmTtlLabel(604800), '7 days', 'an explicit 7-day value still labels 7 days');
+  assert.equal(Core.dmTtlLabel('2592000'), '30 days', 'numeric string coerces');
 });
 
 test('the Access predicates coerce nullish hashes to a keyless viewer', () => {

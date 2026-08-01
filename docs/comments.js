@@ -805,7 +805,7 @@
      the last write wins for both. Saving a message exempts it for both. ---- */
   function dmTtlLabel(ttl) {
     if (window.mcCore) return window.mcCore.dmTtlLabel(ttl);
-    ttl = Number(ttl) || 604800;
+    ttl = Number(ttl) || 2592000;   // Domain.Dm.defaultTtl (30 days)
     if (ttl <= 86400) return '24 hours';
     if (ttl >= 2592000) return '30 days';
     return '7 days';
@@ -819,7 +819,7 @@
   }
   function dmExpiryNode(other, ttl, isNew) {
     var p = el('p', 'dm-expiry');
-    var cur = Number(ttl) || 604800;
+    var cur = Number(ttl) || 2592000;   // Domain.Dm.defaultTtl (30 days)
     function paint() {
       p.textContent = '';
       p.appendChild(document.createTextNode('⏳ ' + (isNew ? 'Messages here disappear ' : 'Disappears ') + dmTtlLabel(cur) + ' after they are opened. '));
@@ -939,6 +939,25 @@
     });
     return node;
   }
+  /* An elegant stand-in for a media attachment the 30-day hard cap has swept away
+     while the (saved) message itself survives — no fetch, just the placeholder over
+     any caption the message still carries. */
+  function dmMediaExpiredNode(m, otherLabel, caption) {
+    var mine = m.sender_hash === state.myHash;
+    var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
+    var head = el('div', 'comment-head');
+    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
+    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    node.appendChild(head);
+    var bodyEl = el('div', 'comment-body dm-media-body');
+    var ph = el('div', 'dm-media-expired');
+    ph.appendChild(el('span', 'dm-media-expired-icon', '🖼️'));
+    ph.appendChild(el('span', 'dm-media-expired-text', 'Attachment expired'));
+    bodyEl.appendChild(ph);
+    if (caption) bodyEl.appendChild(fillBody(el('div', 'dm-media-caption'), caption));
+    node.appendChild(bodyEl);
+    return node;
+  }
   /* Render one decrypted DM message: text via dmMsgNode, media via dmMediaNode,
      with the per-message save control attached. Shared by history + live paths. */
   function dmRenderMsg(m, otherPub, shortName, other) {
@@ -950,6 +969,10 @@
       if (e === 1) { try { envInfo = JSON.parse(dmDecrypt(m.body, otherPub) || 'null'); } catch (x) { envInfo = null; } }
       if (envInfo) node = dmMediaNode(m, lbl, other, envInfo);
       else { m.body = '⚠️ could not open media'; node = dmMsgNode(m, lbl); }
+    } else if (m.media_expired) {
+      var cap = '';
+      if (e === 1) { try { var ev = JSON.parse(dmDecrypt(m.body, otherPub) || 'null'); cap = (ev && ev.caption) || ''; } catch (x2) { cap = ''; } }
+      node = dmMediaExpiredNode(m, lbl, cap);
     } else {
       if (e === 1) m.body = dmDecrypt(m.body, otherPub) || '⚠️ could not decrypt';
       else if (e === 2) lbl = '⚙️ Automated notice';
@@ -975,6 +998,9 @@
       '.dm-media-img,.dm-media-vid{max-width:100%;max-height:60vh;border-radius:8px;display:block}' +
       '.dm-media-aud{width:100%;max-width:320px}' +
       '.dm-media-caption{margin-top:0.35em}' +
+      '.dm-media-expired{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px dashed var(--rule,#cbb);border-radius:10px;opacity:0.78}' +
+      '.dm-media-expired-icon{font-size:1.25em;filter:grayscale(1);opacity:0.7}' +
+      '.dm-media-expired-text{font-size:0.9em;font-style:italic;opacity:0.85}' +
       '.admin-set-row{margin:0.6em 0}' +
       '.admin-set-row input[type=number]{width:6em}';
     var st = el('style');
