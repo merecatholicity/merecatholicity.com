@@ -12,6 +12,11 @@ import { repeat } from 'lit/directives/repeat.js';
 import { pagerTpl } from './util.ts';
 import * as Core from '../core.ts';
 
+/* The six confessional "in-house talk for [tradition]" rooms, grouped apart from
+   the general rooms on the index so the 14-room wall reads as a map (P3-c). Keys
+   match Domain.Board's boardCatRows. */
+const TRADITION_CATS = ['rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot'];
+
 /* Category ordering must match the server's ORDER BY: stickies first, then by
    last-activity descending. Used when live events reshuffle the listing. The
    comparator lives in the PureScript Domain.Live (Core.topicCompare). */
@@ -138,7 +143,7 @@ class McBoardIndex extends LitElement {
     if (catKey === 'adminsonly') return html`<div class="board-stats">🔒 admins alone</div>`;
     const c = this.stats && this.stats[catKey];
     if (this.stats === null) return html`<div class="board-stats">—</div>`;
-    if (!c) return html`<div class="board-stats">quiet so far</div>`;
+    if (!c) return html`<div class="board-stats board-stats-empty">Be the first to post →</div>`;
     const latest = c.latest && c.latest.title ? (() => {
       const t = String(c.latest.title);
       const titleText = t.length > 42 ? t.slice(0, 42) + '…' : t;
@@ -162,13 +167,24 @@ class McBoardIndex extends LitElement {
       ${this.unreadTotal > 0 ? html`<p class="board-intro">
           ${this.unreadTotal + (this.unreadTotal === 1 ? ' new thread since your last visit. ' : ' new threads since your last visit. ')}
           <a class="identity-action" href="#" @click=${this.markAllRead}>Mark all read</a></p>` : nothing}
+      ${this._catGroup('Common rooms', kit.CATS.filter((c: any) => c[0] !== 'adminsonly' && TRADITION_CATS.indexOf(c[0]) < 0))}
+      ${this._catGroup('In-house, by tradition', kit.CATS.filter((c: any) => TRADITION_CATS.indexOf(c[0]) >= 0))}
+      ${this.adminOn ? this._catGroup('', kit.CATS.filter((c: any) => c[0] === 'adminsonly')) : nothing}
+      <p class="board-audit-link">${this.adminOn ? html`<a class="identity-action" href="community.html?admin=1">Administrative options</a>` : nothing}</p>
+    `;
+  }
+  /* P3-c: the 14-room wall is grouped so a newcomer gets a map — the general
+     rooms, then the confessional in-house rooms — instead of scanning look-alike
+     rows. The back room (admin-only) is its own unlabelled group at the foot. */
+  _catGroup(heading: string, cats: any[]) {
+    if (!cats.length) return nothing;
+    return html`${heading ? html`<h3 class="board-group-head">${heading}</h3>` : nothing}
       <div class="board-cats">
-        ${kit.CATS.map((cat: any) => {
+        ${cats.map((cat: any) => {
           const isBack = cat[0] === 'adminsonly';
           const unread = this.byCat && this.byCat[cat[0]];
           return html`<div class=${isBack ? 'board-cat board-cat-admin mc-cardnav' : 'board-cat mc-cardnav'}
-              @click=${this._catNav}
-              style=${isBack && !this.adminOn ? 'display:none' : nothing}>
+              @click=${this._catNav}>
             <div class="board-cat-left">
               <a class="board-cat-name" href=${'community.html?cat=' + cat[0]}>${cat[1]}</a>${unread ? html`<span class="dm-unread"> (${unread} new)</span>` : nothing}
               <div class="board-cat-desc">${cat[2]}${cat[3] ? html`<a href=${cat[4]}>${cat[3]}</a>.` : nothing}</div>
@@ -176,9 +192,7 @@ class McBoardIndex extends LitElement {
             ${this.statsCell(cat[0])}
           </div>`;
         })}
-      </div>
-      <p class="board-audit-link">${this.adminOn ? html`<a class="identity-action" href="community.html?admin=1">Administrative options</a>` : nothing}</p>
-    `;
+      </div>`;
   }
 }
 customElements.define('mc-board-index', McBoardIndex);

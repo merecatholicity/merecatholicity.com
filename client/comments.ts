@@ -7983,6 +7983,12 @@
   /* A logged-out reader on a members-only page (Messages, Profile) sees this clean
      prompt instead of the board; the app-chrome gate also pops the registration
      modal on top (desktop and mobile). */
+  /* The members-only gate (Merecat / Profile / Inbox / DM / Feed / Post). This is
+     the SAME calm, non-blocking idiom as the inline community gate (renderIdentity)
+     — a prompt with a primary button and an "I have a key" link — NOT a forced,
+     boxed-in modal. The onboarding sheet opens only on an explicit tap, so a
+     visitor who came just to read the intro is never trapped (no auto-pop, no
+     keyboard trap on someone who only wanted to look). */
   function viewJoin(what: any) {
     var wrap = el('div', 'mc-join');
     wrap.appendChild(el('p', 'comments-status', 'Create an identity to ' + what + '. One tap, no email, no signup.'));
@@ -7993,11 +7999,13 @@
       else location.href = 'community.html';
     });
     wrap.appendChild(btn);
+    var have = el('p', 'mc-join-havekey');
+    have.appendChild(identityAction('I already have a key', function () {
+      if (window.mcOnboard) window.mcOnboard(null, { key: true });
+      else location.href = 'community.html';
+    }));
+    wrap.appendChild(have);
     section.appendChild(wrap);
-    /* Pop the registration modal automatically (as Inbox/Profile/Merecat do), so
-       a logged-out reader who lands on a members-only view (incl. the Feed tab) is
-       invited to join at once. Guarded so a re-render never double-opens it. */
-    if (window.mcOnboard && !document.querySelector('.mc-onboard')) window.mcOnboard();
   }
 
   function route() {

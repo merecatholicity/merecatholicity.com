@@ -38,8 +38,8 @@
   --muted: #444444;
   --muted-b: #555555;
   --muted-c: #666666;
-  --muted-d: #777777;
-  --faintest: #999999;
+  --muted-d: #696969;
+  --faintest: #6d6d6d;
   --ink-soft: #333333;
   --grade-y: #2f6b2f;
   --grade-o: #6d4b8b;
@@ -81,7 +81,7 @@
   --maroon: #ef6b6b;
   --maroon-dark: #f2827c;
   --cream: #20242a;
-  --cream-2: #1b1f24;
+  --cream-2: #262b32;
   --brown: #cba36a;
   --muted: #c6cace;
   --muted-b: #b3b8be;
@@ -91,7 +91,7 @@
   --ink-soft: #d3d6d9;
   --grade-y: #6cc47a;
   --grade-o: #c79ae0;
-  --glass: rgba(15, 17, 19, 0.97);
+  --glass: rgba(30, 34, 39, 0.86);
   --creed-bg: #16241c;
   --creed-head: #a6d3b2;
   --accent-fill: #d13b34;
@@ -110,7 +110,7 @@
     --maroon: #ef6b6b;
     --maroon-dark: #f2827c;
     --cream: #20242a;
-    --cream-2: #1b1f24;
+    --cream-2: #262b32;
     --brown: #cba36a;
     --muted: #c6cace;
     --muted-b: #b3b8be;
@@ -120,7 +120,7 @@
     --ink-soft: #d3d6d9;
     --grade-y: #6cc47a;
     --grade-o: #c79ae0;
-    --glass: rgba(15, 17, 19, 0.97);
+    --glass: rgba(30, 34, 39, 0.86);
     --creed-bg: #16241c;
     --creed-head: #a6d3b2;
     --accent-fill: #d13b34;
@@ -143,7 +143,7 @@
   --rule: #2a313a;
   --faint: #8b949e;
   --cream: #1f2733;
-  --cream-2: #171d26;
+  --cream-2: #232b36;
   --brown: #c3a878;
   --muted: #c9d1d9;
   --muted-b: #b1bac4;
@@ -151,7 +151,7 @@
   --muted-d: #8b949e;
   --faintest: #767e87;
   --ink-soft: #cdd5dd;
-  --glass: rgba(13, 17, 23, 0.97);
+  --glass: rgba(28, 34, 42, 0.86);
   --creed-bg: #132019;
 }
 :root[data-theme="dark"][data-dark="ink"] {
@@ -161,7 +161,7 @@
   --rule: #38332b;
   --faint: #a99f8d;
   --cream: #262119;
-  --cream-2: #201c15;
+  --cream-2: #2b2519;
   --brown: #cba06a;
   --muted: #cdc4b4;
   --muted-b: #bcb2a0;
@@ -169,7 +169,7 @@
   --muted-d: #988e7c;
   --faintest: #837a68;
   --ink-soft: #d8d0c0;
-  --glass: rgba(20, 18, 15, 0.97);
+  --glass: rgba(36, 32, 26, 0.86);
   --creed-bg: #1a2419;
 }
 
@@ -206,6 +206,19 @@
    never shifts when the bar appears mid-load. */
 html { overflow-y: scroll; overflow-x: hidden; }
 
+/* Accessibility base: one keyboard-only focus ring for every interactive
+   element (the site had none — UA defaults only on the icon chrome), and a
+   global reduced-motion guard for the soft-nav / chat-bubble / sheet motion. */
+:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 body {
   font-family: var(--font-serif);
   color: var(--ink);
@@ -218,10 +231,13 @@ body {
 }
 
 /* ============================ 02-layout.css ============================ */
-/* Desktop container widens on the Bootstrap ladder. */
-@media (min-width: 992px) { body { max-width: 960px; } }
-@media (min-width: 1200px) { body { max-width: 1140px; } }
-@media (min-width: 1400px) { body { max-width: 1320px; } }
+/* Desktop container widens on the Bootstrap ladder. --frame mirrors the body's
+   max-width at each step so the fixed left rail (P2-a) can align to the centered
+   content box's left edge instead of hugging the window edge over a void. */
+:root { --frame: 46rem; }
+@media (min-width: 992px) { body { max-width: 960px; } :root { --frame: 960px; } }
+@media (min-width: 1200px) { body { max-width: 1140px; } :root { --frame: 1140px; } }
+@media (min-width: 1400px) { body { max-width: 1320px; } :root { --frame: 1320px; } }
 
 /* ============================ 03-nav.css ============================ */
 /* Site navigation */
@@ -526,6 +542,34 @@ a.uri { overflow-wrap: anywhere; }
 }
 .prose :where(th) { color: var(--maroon-dark); }
 
+/* P1: cap the reading measure so long-form text keeps a 45-75ch band instead of
+   sprawling to the full ~1080px content box on desktop. Scoped to main.prose so
+   only the reading column is capped; the platform surfaces that render INSIDE a
+   prose main set their own wider widths (the forum, the Library grid) and the
+   wide argument matrix must stay full width, so exempt any prose main hosting
+   one. Generic corpus tables already scroll (display:block; overflow-x:auto),
+   so they stay contained within the cap. */
+main.prose { max-width: 46rem; margin-inline: auto; }
+main.prose:has(section.board),
+main.prose:has(mc-library),
+main.prose:has(.mc-lib),
+main.prose:has(table.reception) { max-width: none; margin-inline: 0; }
+
+/* P2-d: deep-link / TOC / verse anchors must clear the fixed app chrome, or the
+   jumped-to target hides behind the bar. scroll-margin-top references the bar
+   height, so each rule lives in the media query where its --mc-*bar-h var is
+   defined. */
+@media (max-width: 600px) {
+  body.mc-app :where(.dl, .bible-verse, main.prose h1, main.prose h2, main.prose h3, main.prose h4) {
+    scroll-margin-top: calc(var(--mc-appbar-h) + 1rem);
+  }
+}
+@media (min-width: 601px) {
+  body.mc-app :where(.dl, .bible-verse, main.prose h1, main.prose h2, main.prose h3, main.prose h4) {
+    scroll-margin-top: calc(var(--mc-deskbar-h) + 1rem);
+  }
+}
+
 /* ============================ 05-home.css ============================ */
 /* Images (cover) */
 img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
@@ -562,25 +606,29 @@ img { max-width: 100%; height: auto; display: block; margin: 1.2em auto; }
 ul.doors { list-style: none; padding: 0; text-align: center; font-size: 1.15rem; clear: both; }
 ul.doors li { margin: 0.7em 0; }
 
-/* Edition buttons in the Bootstrap idiom, no library. Green means free and
-   available here, yellow means coming soon on Amazon. */
+/* Edition buttons in the site's maroon token system (P2-g — they were a
+   theme-blind Bootstrap green/amber palette that read as a different site and,
+   in dark mode, were the ONLY buttons that didn't recolour). The FREE actions
+   carry the emphasis for a CC0 work: "Read online" is the solid accent primary,
+   the free downloads are maroon outlines, and the paid Amazon editions are a
+   quiet brown outline (secondary) that adapts to dark like everything else. */
 .btn {
   display: inline-block;
   min-width: 16rem;
   padding: 0.45rem 1.2rem;
   border: 1px solid transparent;
-  border-radius: 0.375rem;
+  border-radius: var(--radius);
   text-decoration: none;
   line-height: 1.4;
   transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
 }
-.btn-read { background: #198754; border-color: #198754; color: #fff; }
-.btn-read:hover { background: #146c43; border-color: #146c43; color: #fff; }
-.btn-pdf { background: transparent; border-color: #198754; color: #198754; }
-.btn-pdf:hover { background: #198754; color: #fff; }
-.btn-amazon { background: #ffc107; border-color: #ffc107; color: #212529; }
+.btn-read { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
+.btn-read:hover { filter: brightness(1.07); color: var(--accent-on); }
+.btn-pdf { background: transparent; border-color: var(--maroon); color: var(--maroon); }
+.btn-pdf:hover { background: var(--maroon); color: var(--accent-on); }
+.btn-amazon { background: transparent; border-color: var(--brown); color: var(--brown); }
 span.btn-amazon { opacity: 0.68; cursor: default; }
-a.btn-amazon:hover { background: #e0a800; border-color: #e0a800; color: #212529; }
+a.btn-amazon:hover { background: var(--brown); border-color: var(--brown); color: var(--surface); }
 
 /* Contact form */
 form.contact { max-width: 34rem; margin: 1.5rem auto; }
@@ -595,14 +643,19 @@ form.contact input[type="text"], form.contact input[type="email"], form.contact 
   border-radius: 6px;
 }
 form.contact textarea { resize: vertical; }
-form.contact input:focus, form.contact textarea:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+form.contact input:focus-visible, form.contact textarea:focus-visible { border-color: var(--maroon); }
 form.contact .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 form.contact .cf-turnstile { margin: 1em 0; }
 /* --accent-fill (not --maroon): a deep red that keeps white text readable in every
    theme, including dark where --maroon is lightened for text contrast. */
 .btn-send { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); font: inherit; letter-spacing: inherit; cursor: pointer; }
 .btn-send:hover { filter: brightness(1.07); color: var(--accent-on); }
-.btn-send:disabled { opacity: 0.6; cursor: default; }
+/* Dedicated disabled treatment: a legible grey, not a washed-out fade of the
+   accent (which reads as broken when it is the only CTA on screen). */
+.btn-send:disabled, .btn-anon:disabled, .mc-onboard-create:disabled { background: var(--rule); border-color: var(--rule); color: var(--muted-c); opacity: 1; cursor: not-allowed; filter: none; }
+/* The contact Send fills its 34rem field column instead of hanging as a narrow
+   left block. */
+form.contact .btn-send { width: 100%; }
 
 footer, .colophon {
   margin-top: 2.5rem;
@@ -793,7 +846,7 @@ section.comments { max-width: 34rem; margin: 3rem auto 1.5rem; }
 .comment { border-top: 1px solid var(--rule); padding: 0.9em 0 0.4em; }
 .comment-head { font-size: 0.92rem; }
 .comment-author { font-weight: bold; color: var(--maroon); }
-.comment-date { color: var(--muted-c); margin-left: 0.7em; font-size: 0.9em; }
+.comment-date { color: var(--muted-c); margin-left: 0.7em; font-size: 0.9em; white-space: nowrap; }
 a.comment-delete { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; }
 .comment-body { white-space: pre-wrap; overflow-wrap: break-word; margin-top: 0.35em; }
 /* A quoted excerpt inside a comment body: runs of ">"-prefixed lines that
@@ -830,8 +883,8 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
   border-radius: 6px;
   resize: vertical;
 }
-.comment-form .comment-text:focus,
-.comment-editor .comment-text:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+.comment-form .comment-text:focus-visible,
+.comment-editor .comment-text:focus-visible { border-color: var(--maroon); }
 .comment-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 .comment-form .ts-slot { margin: 0.6em 0; }
 /* Markdown compose: a button row above the plain-text box, a legend below. */
@@ -871,7 +924,6 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 section.comments .btn { min-width: 0; }
 .btn-anon { background: transparent; border-color: var(--maroon); color: var(--maroon); font: inherit; cursor: pointer; }
 .btn-anon:hover { background: var(--maroon); color: #fff; }
-.btn-anon:disabled { opacity: 0.6; cursor: default; }
 .identity-line { font-size: 0.95rem; color: var(--muted); }
 a.identity-action { color: var(--maroon); }
 .key-box { border: 1px solid var(--rule); border-radius: 6px; padding: 0.8em 0.9em; margin: 0.8em 0; font-size: 0.95rem; }
@@ -917,6 +969,12 @@ section.comments.board { margin-top: 1rem; }
 .board-crumb { color: var(--muted-c); font-size: 0.95rem; }
 .board-crumb a { color: var(--maroon); }
 .board-cats, .board-topics { border: 1px solid var(--rule); border-radius: 6px; margin: 1rem 0; }
+/* P3-c: labelled group headers over the room lists (Common rooms / In-house by
+   tradition), so the 14-room wall reads as a map. */
+.board-group-head { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); margin: 1.4rem 0 0.4rem; font-weight: 600; }
+.board-group-head:first-child { margin-top: 0.6rem; }
+/* an empty room's stat cell reads as an invitation, not a dead-end (P4) */
+.board-stats-empty { color: var(--maroon); }
 .board-cat, .board-topic { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.65em 0.9em; border-top: 1px solid var(--rule); }
 .board-cat:first-child, .board-topic:first-child { border-top: 0; }
 /* The back room's tile: deliberately off-shade from its siblings (--cream sits a
@@ -961,7 +1019,7 @@ a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
   border-radius: 6px;
   margin-bottom: 0.6em;
 }
-.board-title:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+.board-title:focus-visible { border-color: var(--maroon); }
 /* The board tracks the site's widening desktop container instead of sitting in a
    cramped 40rem column: it fills the body up to the 992px step, then holds a
    comfortable reading measure so long discussion posts have room without the line
@@ -979,7 +1037,7 @@ section.board { max-width: 52rem; }
   .board-pages a, .board-pages strong { display: inline-block; min-width: 2.1em; padding: 0.35em 0.15em; margin-right: 0.25em; text-align: center; }
   .board-pages a { color: var(--maroon); }
 }
-.board-latest { white-space: normal; margin-top: 0.15em; max-width: 18rem; }
+.board-latest { white-space: normal; margin-top: 0.15em; max-width: 26rem; }
 .board-latest a { color: var(--maroon); text-decoration: none; }
 .board-latest a:hover { text-decoration: underline; }
 .board-stats a { color: var(--maroon); text-decoration: none; }
@@ -1042,7 +1100,7 @@ h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted
   background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
 }
 .profile textarea.comment-text { resize: vertical; }
-.profile .comment-text:focus, .profile .key-input:focus { outline: 1px solid var(--maroon); border-color: var(--maroon); }
+.profile .comment-text:focus-visible, .profile .key-input:focus-visible { border-color: var(--maroon); }
 
 /* A reply that arrived live over the WebSocket gets a brief highlight so the
    eye catches it appearing (Facebook-style), then fades to normal. */
@@ -1052,7 +1110,7 @@ h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted
 /* A live nudge when a reply lands on a page the reader is not viewing: the
    pager already grows to show the new page, and this pill jumps straight to it. */
 .mc-live-pill { display: inline-block; margin: 0.4rem 0; padding: 0.35rem 0.7rem;
-  background: var(--maroon, #8b1a1a); color: #fff; border-radius: 1rem;
+  background: var(--accent-fill); color: var(--accent-on); border-radius: 1rem;
   font-size: 0.85rem; text-decoration: none; animation: mc-live-fade 2.2s ease-out; }
 .mc-live-pill:hover { filter: brightness(1.1); text-decoration: none; }
 
@@ -1257,7 +1315,7 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   .mc-ab-btn {
     -webkit-appearance: none; appearance: none; border: 0; background: none; cursor: pointer;
     font-size: 1.25rem; line-height: 1; color: var(--maroon); text-decoration: none;
-    width: 2.5rem; height: 2.5rem; display: inline-flex; align-items: center; justify-content: center;
+    width: 2.75rem; height: 2.75rem; display: inline-flex; align-items: center; justify-content: center;
     position: relative; border-radius: 50%;
   }
   .mc-ab-btn:active { background: var(--cream-2); }
@@ -1289,7 +1347,7 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   /* the raised center hero: Ask Merecat, the standout */
   .mc-tab-hero .mc-tab-ico {
     width: 3.1rem; height: 3.1rem; margin-top: -1.6rem; border-radius: 50%;
-    background: #8b1a1a; color: #fff; display: flex; align-items: center; justify-content: center;
+    background: var(--accent-fill); color: var(--accent-on); display: flex; align-items: center; justify-content: center;
     font-size: 1.5rem; box-shadow: 0 4px 14px rgba(139, 26, 26, 0.45); border: 3px solid var(--surface);
   }
   .mc-tab-hero .mc-tab-lbl { color: var(--maroon); font-weight: 600; margin-top: -0.1rem; }
@@ -1358,11 +1416,19 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
      rules are global below, so mc-home looks right on desktop too) ---- */
   mc-home { display: block; }
   main.mc-app-home > :not(mc-home) { display: none; }
-  /* The page title rides the top app bar now, so drop the article's own leading
-     title on content pages under the app shell — no redundancy (credo shows
-     "Credo" only in the bar, the library texts show their title only in the bar,
-     the board shows "Community" only in the bar). */
-  body.mc-app main.prose > .home-title { display: none; }
+}
+
+/* P2-b: the page title rides the app chrome (deskbar on desktop, app bar on
+   mobile), so the article's own leading title is redundant under the shell on
+   BOTH breakpoints (credo showed "Credo" twice on desktop; the ~250 corpus pages
+   used #title-block-header which the old mobile-only .home-title rule never
+   matched). Visually HIDE it (not display:none) so each document keeps one real
+   H1 in the a11y tree — the chrome title is a div, not a heading. Scoped to
+   body.mc-app, so ?app=0 (no shell) still shows the article title. */
+body.mc-app main.prose > .home-title,
+body.mc-app main.prose > #title-block-header {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
 }
 
 /* The Home launcher LAYOUT — global, so it styles mc-home at BOTH breakpoints
@@ -1377,8 +1443,15 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 .mc-home-feat {
   display: flex; align-items: center; gap: 0.8rem; text-decoration: none;
   background: var(--cream-2); border: 1px solid var(--rule); border-radius: 14px; padding: 0.9rem 1rem;
-  color: var(--ink); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+  color: var(--ink); box-shadow: var(--shadow-1);
+  transition: transform var(--tap), box-shadow var(--tap), border-color var(--tap);
 }
+/* P4: feature cards lift on hover like every other card on the site (they gave
+   zero feedback before). */
+.mc-home-feat:hover { transform: translateY(var(--lift)); box-shadow: var(--shadow-2); border-color: var(--maroon); }
+/* P4: pin the card's colour across :link/:visited so a visited destination
+   ("The Book", once opened) can't leak a browser visited-link tint onto the card. */
+.mc-home-feat:link, .mc-home-feat:visited { color: var(--ink); background: var(--cream-2); }
 .mc-home-feat-ico {
   font-size: 1.5rem; width: 2.4rem; height: 2.4rem; flex: none; line-height: 1;
   display: flex; align-items: center; justify-content: center; background: var(--surface); border-radius: 12px;
@@ -1392,14 +1465,23 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 .mc-home-row {
   display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
   padding: 0.95rem 0.2rem; border-bottom: 1px solid var(--rule); text-decoration: none; color: var(--ink);
+  transition: color var(--tap), padding var(--tap);
 }
+/* P4: the shelf rows read as labels (no maroon+underline link cue); give a clear
+   hover — the title goes maroon and the chevron nudges — so they read as taps. */
+.mc-home-row:link, .mc-home-row:visited { color: var(--ink); }
+.mc-home-row:hover { color: var(--maroon); }
+.mc-home-row:hover .mc-home-row-txt strong { color: var(--maroon); }
+.mc-home-row:hover .mc-home-go { transform: translateX(2px); }
+.mc-home-row .mc-home-go { transition: transform var(--tap); }
 .mc-home-row-txt { display: flex; flex-direction: column; }
-.mc-home-row-txt strong { font-weight: 600; }
+.mc-home-row-txt strong { font-weight: 600; transition: color var(--tap); }
 .mc-home-row-txt small { color: var(--faint); font-size: 0.8rem; margin-top: 0.1rem; }
 
 /* Logged-out prompt on the members-only pages (Messages, Profile). */
 .mc-join { text-align: center; padding: 2.4rem 1rem; }
 .mc-join .btn { margin-top: 0.9rem; }
+.mc-join-havekey { margin: 1rem 0 0; font-size: 0.95rem; }
 
 /* The notifications panel (bell dropdown on desktop, sheet on mobile) — a plain
    list of tappable rows; works inside .mc-db-menu (desktop) and .mc-sheet-body. */
@@ -1475,7 +1557,45 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   .comment-buttons .btn-send, .comment-buttons .btn-anon, .merecat-form .btn-send {
     min-height: 46px; padding-left: 1.3rem; padding-right: 1.3rem; font-size: 1rem;
   }
+  /* composer toolbar buttons reach the 44px touch target on phones */
+  .md-btn { min-height: 44px; }
 }
+
+/* ---- Onboarding / faith cards — BOTH breakpoints (P2-e) ----
+   These lived only in the phones-only blocks below, so the desktop centered
+   register modal (mc-sheet) fell back to bare native OS radios and a gray-bevel
+   browser <button> — a glaring break in the all-maroon system on the most
+   important screen for a new member, and unreadable light chips on the dark
+   sheet. Ungated here so the desktop/dark modal matches the mobile onboarding;
+   the phone blocks keep any mobile-only sizing. Applies to the profile faith
+   editor too (already cards on mobile — now consistent on desktop). */
+.faith-radios { margin: 0.6rem 0; }
+.faith-legend { font-weight: 600; margin-bottom: 0.5rem; color: var(--ink); }
+.faith-option {
+  display: flex; align-items: center; gap: 0.6rem; padding: 0.9rem 1rem;
+  border: 1px solid var(--rule); border-radius: 12px; margin-bottom: 0.55rem; cursor: pointer;
+  color: var(--ink);
+}
+.faith-option:has(input:checked) { border-color: var(--maroon); background: var(--cream-2); box-shadow: inset 0 0 0 1px var(--maroon); }
+.faith-option input { width: 1.25rem; height: 1.25rem; flex: none; accent-color: var(--maroon); }
+.agree-row { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.6rem 0; font-size: 0.98rem; cursor: pointer; color: var(--muted); }
+.agree-row input[type="checkbox"] { width: 1.35rem; height: 1.35rem; flex: none; accent-color: var(--maroon); margin-top: 0.05rem; }
+.key-box { border-radius: 14px; }
+.mc-onboard-intro { margin: 0.2rem 0 0.9rem; font-size: 1.02rem; color: var(--ink); line-height: 1.45; }
+.mc-onboard-faiths { margin: 0 0 0.4rem; }
+.mc-onboard-faiths .faith-option small { color: var(--faint); font-size: 0.82rem; }
+.mc-onboard-agree { margin: 0.4rem 0 0.9rem; }
+.mc-onboard-create { display: block; width: 100%; min-height: 50px; font-size: 1.05rem; border-radius: 14px; margin: 0.2rem 0; }
+.mc-onboard-note { margin: 0.5rem 0 0; color: var(--faint); font-size: 0.9rem; text-align: center; min-height: 1em; }
+.mc-onboard-havekey {
+  display: block; width: 100%; margin: 0.7rem 0 0; padding: 0.5rem; background: none; border: 0;
+  color: var(--maroon); font: inherit; font-size: 0.95rem; text-decoration: underline; cursor: pointer;
+}
+.mc-onboard-paste { display: flex; gap: 0.5rem; margin: 0.5rem 0 0; }
+.mc-onboard-keyin { flex: 1; min-width: 0; }
+/* P4: cap the "Log in" button so the paste field keeps priority (it was clipped
+   to "Paste your k" by the base .btn min-width:16rem). */
+.mc-onboard-paste .btn { min-width: 0; flex: none; }
 
 /* ---- Phase 3: the high-touch member screens (phones only) ---- */
 @media (max-width: 600px) {
@@ -1544,9 +1664,10 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
      `.merecat-msg.you{background:var(--cream)}` (appended to <head> after style.css,
      equal specificity, later-wins). Without the extra ancestor the injected cream
      background survived while our white text did not → white-on-cream in light mode. */
-  /* literal maroon (not var(--maroon), which is lightened in dark mode → white
-     text would go low-contrast): a fixed accent bubble reads in both themes. */
-  .merecat-log .merecat-msg.you { background: #8b1a1a; color: #fff; border-color: #8b1a1a; border-bottom-right-radius: 5px; }
+  /* --accent-fill (NOT var(--maroon), which is lightened in dark mode → white
+     text would go low-contrast): the fill token is a deep red in light and a
+     brighter red in dark, always readable with --accent-on. */
+  .merecat-log .merecat-msg.you { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); border-bottom-right-radius: 5px; }
   .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
   .merecat-log .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
@@ -1662,7 +1783,7 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
     display: inline-block; margin: 0.4rem 0.3rem 0; min-height: 44px; line-height: 44px;
     padding: 0 1.3rem; border-radius: 12px; text-decoration: none; font-weight: 600;
   }
-  .identity-line-out .identity-action:first-of-type { background: #8b1a1a; color: #fff; }
+  .identity-line-out .identity-action:first-of-type { background: var(--accent-fill); color: var(--accent-on); }
   .identity-line-out .identity-action:last-of-type { border: 1px solid var(--rule); color: var(--maroon); }
 
   /* breadcrumbs → a single clean screen title (category/search render it; topics
@@ -1679,7 +1800,7 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   }
   .board-pages a { background: var(--cream-2); border: 1px solid var(--rule); color: var(--maroon); }
   .board-pages a:active { background: var(--rule); }
-  .board-pages strong { background: #8b1a1a; color: #fff; }
+  .board-pages strong { background: var(--accent-fill); color: var(--accent-on); }
   /* the cramped per-row mini-pager inside a tap-card is clutter — the card opens the thread */
   .mc-cardnav .topic-pages { display: none; }
 
@@ -1692,7 +1813,6 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   .mc-onboard-faiths .faith-option small { color: var(--faint); font-size: 0.82rem; }
   .mc-onboard-agree { margin: 0.4rem 0 0.9rem; }
   .mc-onboard-create { display: block; width: 100%; min-height: 50px; font-size: 1.05rem; border-radius: 14px; margin: 0.2rem 0; }
-  .mc-onboard-create:disabled { opacity: 0.5; }
   .mc-onboard-note { margin: 0.5rem 0 0; color: var(--faint); font-size: 0.9rem; text-align: center; min-height: 1em; }
   .mc-onboard-havekey {
     display: block; width: 100%; margin: 0.7rem 0 0; padding: 0.5rem; background: none; border: 0;
@@ -1739,6 +1859,19 @@ mc-sidebar { display: none; }
   .mc-sheet-grip { display: none; }
   .mc-sheet-head { margin: 0 0 0.7rem; font-size: 1.25rem; color: var(--ink); }
 }
+
+/* The desktop close X (P2-f) — the modal needs a visible dismissal since the grip
+   is hidden on desktop; on mobile the grip + swipe-down cover it, so it stays
+   hidden there. Base rule FIRST, the ≥601px reveal AFTER, so source order lets the
+   desktop display win. */
+.mc-sheet-close {
+  display: none; position: absolute; top: 0.6rem; right: 0.7rem;
+  width: 2.2rem; height: 2.2rem; align-items: center; justify-content: center;
+  border: 0; background: none; color: var(--faint); font-size: 1.7rem; line-height: 1;
+  cursor: pointer; border-radius: 999px; padding: 0;
+}
+.mc-sheet-close:hover { background: var(--cream); color: var(--maroon); }
+@media (min-width: 601px) { .mc-sheet-close { display: flex; } }
 
 /* The old horizontal site menu is RETIRED — the platform now navigates through the
    left app-bar (mc-sidebar) + the Home launcher + the Settings gear. Hidden here so
@@ -1812,22 +1945,29 @@ body.mc-app > footer { display: none; }
   .mc-db-brand .mc-ico { width: 20px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   .mc-db-word { font-weight: 700; font-size: 1.05rem; color: var(--ink); letter-spacing: -0.01em; }
 
-  .mc-db-search { flex: 1; max-width: 30rem; position: relative; display: flex; align-items: center; }
-  /* Off the forum the search is replaced by the current page's title (or an empty
-     flex spacer on Home, where the brand already says it). */
+  /* P3-b: the deskbar centre is now STABLE — always the current page's title (or
+     an empty flex spacer on Home, where the brand already says it) — instead of
+     morphing into a search field on Community. Board search moved to a persistent
+     control in the right cluster, reachable from ANY page. */
   .mc-db-center { flex: 1; }
   .mc-db-title {
     text-align: center; font-weight: 600; font-size: 1.05rem; color: var(--ink);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 0.5rem;
   }
-  .mc-db-searchico { position: absolute; left: 0.7rem; width: 18px; height: 18px; color: var(--faint); pointer-events: none; }
+  .mc-db-searchico { position: absolute; left: 0.8rem; width: 18px; height: 18px; color: var(--faint); pointer-events: none; }
   .mc-db-searchico .mc-ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; display: block; }
-  .mc-db-search input {
-    width: 100%; height: 2.3rem; padding: 0 0.8rem 0 2.2rem; font: inherit; font-size: 0.95rem;
-    color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: 999px;
-    transition: border-color var(--tap), box-shadow var(--tap);
+
+  /* the persistent board-search control (icon → popover input, routes to ?q=) */
+  .mc-db-searchwrap { position: relative; display: flex; align-items: center; }
+  .mc-db-searchpop {
+    position: absolute; top: calc(100% + 0.5rem); right: 0; width: min(22rem, 80vw);
+    display: flex; align-items: center; background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 999px; box-shadow: var(--shadow-2); z-index: 60;
   }
-  .mc-db-search input:focus { outline: none; border-color: var(--maroon); box-shadow: 0 0 0 3px color-mix(in srgb, var(--maroon) 22%, transparent); }
+  .mc-db-searchpop input {
+    width: 100%; height: 2.5rem; padding: 0 0.9rem 0 2.4rem; font: inherit; font-size: 0.95rem;
+    color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 999px;
+  }
 
   .mc-db-cluster { display: flex; align-items: center; gap: 0.35rem; flex: none; }
   .mc-db-ico {
@@ -1897,15 +2037,28 @@ body.mc-app > footer { display: none; }
     background: var(--surface); transition: background var(--tap), border-color var(--tap), transform var(--tap), box-shadow var(--tap);
   }
   a.identity-action:hover { border-color: var(--maroon); transform: translateY(var(--lift)); box-shadow: var(--shadow-1); text-decoration: none; }
+  /* P4: the primary CTA gets a filled emphasis over the secondary "I have a key"
+     pill (the two were identical outlines; the mobile filled-primary was never
+     carried up). Filled via the accent token, so no maroon-on-maroon state. */
+  .identity-line-out .identity-action:first-of-type { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); }
+  .identity-line-out .identity-action:first-of-type:hover { color: var(--accent-on); border-color: var(--accent-fill); }
 
   /* ---- forum cards: a real, obviously-clickable hover ---- */
   .board-cats, .board-topics { border-radius: var(--radius); overflow: hidden; }
   .board-cat, .board-topic { padding: 0.9em 1.05em; }
-  .mc-cardnav { transition: background var(--tap), box-shadow var(--tap), transform var(--tap); }
+  .mc-cardnav { position: relative; transition: background var(--tap), box-shadow var(--tap), transform var(--tap); }
   .mc-cardnav:hover {
     background: var(--cream); box-shadow: var(--shadow-2), inset 3px 0 0 var(--maroon);
-    transform: translateY(var(--lift)); position: relative; z-index: 1;
+    transform: translateY(var(--lift)); z-index: 1;
   }
+  /* P4: a low-contrast persistent chevron so a board row reads as clickable at
+     rest on desktop too (the chevron was mobile-only). */
+  .board-cats .mc-cardnav, .board-topics .mc-cardnav { padding-right: 2.2rem; }
+  .board-cats .mc-cardnav::after, .board-topics .mc-cardnav::after {
+    content: "›"; position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
+    color: var(--faint); font-size: 1.4rem; line-height: 1; opacity: 0.5; transition: opacity var(--tap), color var(--tap);
+  }
+  .board-cats .mc-cardnav:hover::after, .board-topics .mc-cardnav:hover::after { opacity: 1; color: var(--maroon); }
   a.user-row { padding: 0.7em 0.6em; border-radius: var(--radius); transition: background var(--tap); }
   a.user-row:hover { background: var(--cream); }
 
@@ -1929,10 +2082,15 @@ body.mc-app > footer { display: none; }
      clicker collapses it to icons and the content floats back left. ---- */
   :root { --mc-sidebar-w: 13rem; --mc-sidebar-min: 3.7rem; }
   mc-sidebar { display: block; }
+  /* Align the rail to the centered content frame's left edge (P2-a): the body's
+     padding-left reserves the rail's lane INSIDE that centered box, so sitting the
+     rail there — not at the window edge — reads [rail + content] as one optically
+     centred unit and collapses the ~340px left void. max(0.7rem, …) keeps it on
+     screen when the viewport is narrower than the frame. */
   .mc-sidebar {
-    position: fixed; left: 0.7rem; top: 50%; transform: translateY(-50%); z-index: 44;
+    position: fixed; left: max(0.7rem, calc(50vw - var(--frame) / 2)); top: 50%; transform: translateY(-50%); z-index: 44;
     display: flex; flex-direction: column; gap: 0.15rem; padding: 0.5rem;
-    width: var(--mc-sidebar-min); transition: width var(--tap);
+    width: var(--mc-sidebar-min); transition: width var(--tap), left var(--tap);
     background: var(--glass); backdrop-filter: saturate(1.4) blur(8px);
     border: 1px solid var(--rule); border-radius: var(--radius-lg); box-shadow: var(--shadow-2);
   }
@@ -1951,6 +2109,9 @@ body.mc-app > footer { display: none; }
   }
   .mc-sb-item:hover { background: var(--cream); color: var(--maroon); }
   .mc-sb-item.mc-tab-on { background: color-mix(in srgb, var(--maroon) 12%, transparent); color: var(--maroon); font-weight: 600; }
+  /* the active item is a non-navigating "current" marker (P3-e) — no hover lift */
+  .mc-sb-current { cursor: default; }
+  .mc-sb-current:hover { background: color-mix(in srgb, var(--maroon) 12%, transparent); }
   .mc-sb-ico { position: relative; flex: none; width: 1.9rem; height: 1.9rem; display: inline-flex; align-items: center; justify-content: center; font-size: 1.3rem; }
   .mc-sb-ico .mc-ico { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
   .mc-sb-lbl { font-size: 0.98rem; opacity: 0; width: 0; transition: opacity var(--tap); }
@@ -1971,6 +2132,25 @@ body.mc-app > footer { display: none; }
   main.mc-app-home > :not(mc-home) { display: none; }
 }
 
+/* P2-a: on wide desktops the Home launcher fills the canvas as a card GRID
+   (mirroring the Library's .mc-lib-grid) instead of a single 34rem column — Home
+   was the emptiest page on the site while the Library one click over proved the
+   same card vocabulary fills the width. This also makes the desktop void vanish
+   on Home by itself. Mobile keeps the single-column stack. */
+@media (min-width: 992px) {
+  main.mc-app-home .mc-home { max-width: none; }
+  .mc-home-feats { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.8rem; align-items: stretch; }
+  .mc-home-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: 0.4rem 0.8rem; }
+  /* rows in the grid drop the full-width bottom rule (it read as a divider across
+     a single column); each becomes a self-contained tap card */
+  .mc-home-shelf .mc-home-row {
+    border-bottom: 0; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--cream-2);
+    padding: 0.85rem 1rem; box-shadow: var(--shadow-1);
+    transition: transform var(--tap), box-shadow var(--tap), border-color var(--tap);
+  }
+  .mc-home-shelf .mc-home-row:hover { transform: translateY(var(--lift)); box-shadow: var(--shadow-2); border-color: var(--maroon); }
+}
+
 /* ============================ 15-library.css ============================ */
 /* The Library drill-down (mc-library, app/views/library.js). App-style category
    cards → a shelf's works, both breakpoints, responsive. It is a navigation
@@ -1980,7 +2160,9 @@ body.mc-app > footer { display: none; }
 mc-library { display: block; }
 .mc-lib { font-family: var(--font-sans); }
 
-.mc-lib-title { font-size: 2rem; font-weight: 800; color: var(--ink); margin: 0.4rem 0 0.3rem; letter-spacing: -0.02em; line-height: 1.15; }
+/* P4: weight 700 / no negative tracking, joining the platform-title family
+   (it was the only 800 / -0.02em on the site). */
+.mc-lib-title { font-size: 2rem; font-weight: 700; color: var(--ink); margin: 0.4rem 0 0.3rem; letter-spacing: 0; line-height: 1.15; }
 .mc-lib-intro { color: var(--faint); font-size: 1rem; line-height: 1.5; margin: 0 0 1.4rem; max-width: 42rem; }
 
 /* the category grid */

@@ -24,10 +24,14 @@ const ICON = {
   cross: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="M12 3.5v17M7.5 8.5h9"/></svg>`,
   back: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>`,
   forward: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg>`,
+  feed: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7 8.5h6M7 12h10M7 15.5h10"/></svg>`,
 };
 
-/* The five primary destinations. Merecat is the raised center hero (the standout
-   AI). hrefs are ordinary same-origin links the shell intercepts + soft-navs. */
+/* The primary destinations. Community (the forum hub) is the raised center hero;
+   Merecat 🐈 keeps its mascot emoji (a deliberate brand mark), Feed uses a stroke
+   SVG like the other structural tabs. hrefs are ordinary same-origin links the
+   shell intercepts + soft-navs. (A 6-item bar can't optically centre the raised
+   hero; it sits at slot 4 by design.) */
 interface Tab {
   key: string;
   label: string;
@@ -40,26 +44,30 @@ interface Tab {
 const TABS: Tab[] = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
   { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
-  { key: 'feed', label: 'Feed', icon: '📰', href: 'community.html?feed=1' },
+  { key: 'feed', label: 'Feed', svg: 'feed', href: 'community.html?feed=1' },
   { key: 'community', label: 'Community', svg: 'community', href: 'community.html', hero: true },
   { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'messages.html', badge: 'dm' },
   { key: 'profile', label: 'Profile', svg: 'profile', href: 'profile.html' },
 ];
 
-/* The Home launcher: standout features first, then the reading shelf (mirrors
-   scripts/nav.yml). Static links only — the shell adds no API traffic here. */
+/* The Home launcher: standout BROWSE features first, then the reading shelf
+   (mirrors scripts/nav.yml). Static links only — the shell adds no API traffic
+   here. P3-e: these deliberately do NOT repeat the rail / tab-bar destinations
+   (Community, Ask Merecat, Inbox, Profile) — the rail is the quick-switch, the
+   launcher is browse — and no item appears both here and in HOME_SECTIONS. */
 const HOME_FEATURES = [
   { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
   { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
-  { icon: '💬', title: 'Community', sub: 'Join the conversation', href: 'community.html' },
-  { icon: '🐈', title: 'Ask Merecat', sub: 'Put a question to the librarian AI', href: 'merecat-ai.html' },
+  { icon: '📜', title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
+  { icon: '📚', title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
 ];
-/* The reading shelf, grouped the way a newcomer reads it. Surfaces the whole
-   site nav (Contact lives only in the footer, kept quiet by design — not here). */
+/* The reading shelf, grouped the way a newcomer reads it. Surfaces the rest of
+   the site nav (Contact lives only in the footer, kept quiet by design — not
+   here; Credo + Library are up in the feature cards, not repeated here). */
 const HOME_SECTIONS = [
   { heading: 'Start here', items: [
-    { title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
     { title: 'Lex orandi, lex credendi', sub: 'The rule of prayer', href: 'lex-orandi.html' },
+    { title: 'About', sub: 'The project', href: 'about.html' },
   ] },
   { heading: 'The papers', items: [
     { title: 'Charting: the historic communions', sub: 'Rome, the Orthodox, the confessional churches', href: 'charting-communions.html' },
@@ -68,9 +76,7 @@ const HOME_SECTIONS = [
     { title: 'The bishop and the presbyter', sub: 'Companion paper', href: 'bishop-presbyter.html' },
   ] },
   { heading: 'Explore', items: [
-    { title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
     { title: 'Sources', sub: 'The primary texts, Newman included', href: 'resources.html' },
-    { title: 'About', sub: 'The project', href: 'about.html' },
   ] },
 ];
 
@@ -92,7 +98,13 @@ function activeTab() {
    (each forum view + content page keeps document.title current, and a title
    MutationObserver re-syncs the bar whenever an async view updates it). */
 function pageTitle() {
-  if (activeTab() === 'home') return 'Mere Catholicity';
+  var tab = activeTab();
+  if (tab === 'home') return 'Mere Catholicity';
+  /* The forum's tabbed views share community.html, and its static <title> reads
+     "Community" until the async view resets it — so name the Feed explicitly to
+     keep the chrome from briefly (or, on a slow view, lastingly) labelling the
+     Feed screen "Community", contradicting the tab. */
+  if (tab === 'feed') return 'Feed';
   var t = String(document.title || '').split(/\s+[|—–]\s+/)[0].trim();
   return t || 'Mere Catholicity';
 }
@@ -210,20 +222,66 @@ class McSheet extends LitElement {
   declare _drag: { sheet: HTMLElement; y0: number; y: number; t: number; dy: number; vy: number; active: boolean } | null;
   declare _pm: ((ev: PointerEvent) => void) | null;
   declare _pu: ((ev: PointerEvent) => void) | null;
-  constructor() { super(); this.open = false; this.heading = ''; this._node = null; this._onClose = null; }
+  declare _onKey: ((e: KeyboardEvent) => void) | null;
+  declare _restoreFocus: HTMLElement | null;
+  constructor() { super(); this.open = false; this.heading = ''; this._node = null; this._onClose = null; this._onKey = null; this._restoreFocus = null; }
   createRenderRoot() { return this; }
-  show(heading?: string | null, node?: Node | null, onClose?: (() => void) | null) { this.heading = heading || ''; this._node = node || null; this._onClose = onClose || null; this.open = true; }
+  connectedCallback() {
+    super.connectedCallback();
+    /* Escape closes the dialog and Tab is trapped inside it while open — with
+       role=dialog/aria-modal set, a modal MUST offer a keyboard exit and keep
+       focus within, or it is a broken-dialog a11y failure. */
+    this._onKey = (e: KeyboardEvent) => {
+      if (!this.open) return;
+      if (e.key === 'Escape') { e.preventDefault(); this.close(); return; }
+      if (e.key === 'Tab') this._trapTab(e);
+    };
+    document.addEventListener('keydown', this._onKey, true);
+  }
+  disconnectedCallback() {
+    if (this._onKey) document.removeEventListener('keydown', this._onKey, true);
+    this._onKey = null;
+    super.disconnectedCallback();
+  }
+  _focusables(): HTMLElement[] {
+    const sheet = this.querySelector('.mc-sheet');
+    if (!sheet) return [];
+    return Array.from(sheet.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter(el => el.offsetParent !== null || el === document.activeElement);
+  }
+  _trapTab(e: KeyboardEvent) {
+    const items = this._focusables();
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (e.shiftKey && (active === first || !this.contains(active))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+  }
+  show(heading?: string | null, node?: Node | null, onClose?: (() => void) | null) {
+    if (!this.open) this._restoreFocus = document.activeElement as HTMLElement | null;
+    this.heading = heading || ''; this._node = node || null; this._onClose = onClose || null; this.open = true;
+  }
   close() {
     if (!this.open) return;
     this.open = false;
+    const restore = this._restoreFocus; this._restoreFocus = null;
     const cb = this._onClose; this._onClose = null;
     if (cb) { try { cb(); } catch (e) { /* caller's problem */ } }
+    /* Return focus to whatever opened the dialog (the a11y contract). */
+    if (restore && typeof restore.focus === 'function' && document.contains(restore)) { try { restore.focus(); } catch (e) { /* gone */ } }
   }
-  updated() {
+  updated(changed: Map<string, unknown>) {
     /* The body host is a static template node, so Lit keeps whatever we append
        into it across re-renders (the McInbox dm-search idiom). Swap on new node. */
     const body = this.querySelector('.mc-sheet-body');
     if (body && this._node && body.firstChild !== this._node) { body.textContent = ''; body.appendChild(this._node); }
+    /* On open, move focus into the dialog so keyboard/AT users land inside it. */
+    if (changed.has('open') && this.open) {
+      const items = this._focusables();
+      const target = items[0] || this.querySelector<HTMLElement>('.mc-sheet');
+      if (target) { try { target.focus(); } catch (e) { /* not focusable yet */ } }
+    }
   }
   /* Swipe-down-to-dismiss. A downward drag that starts at the top of the sheet
      (so it never fights content scrolling) drags the panel with the finger; a far
@@ -274,9 +332,11 @@ class McSheet extends LitElement {
   render() {
     return html`
       <div class=${'mc-sheet-scrim' + (this.open ? ' on' : '')} @click=${() => this.close()}></div>
-      <section class=${'mc-sheet' + (this.open ? ' on' : '')} role="dialog" aria-modal="true" aria-label=${this.heading || 'Sheet'}
+      <section class=${'mc-sheet' + (this.open ? ' on' : '')} role="dialog" aria-modal="true" tabindex="-1"
+        aria-label=${this.heading || 'Sheet'}
         @pointerdown=${(e: PointerEvent) => this.dragStart(e)}>
         <button class="mc-sheet-grip" @click=${() => this.close()} aria-label="Close"></button>
+        <button class="mc-sheet-close" @click=${() => this.close()} aria-label="Close" type="button">×</button>
         ${this.heading ? html`<h2 class="mc-sheet-head">${this.heading}</h2>` : ''}
         <div class="mc-sheet-body"></div>
       </section>`;
@@ -764,15 +824,16 @@ customElements.define('mc-notifs', McNotifs);
    (CSS-gated). The dropdown closes on outside-click, Escape, AND any soft-nav
    (the mc-navigate signal) so a chosen link never loads behind an open menu. */
 class McDeskbar extends LitElement {
-  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false }, notifMenu: { attribute: false } };
+  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false }, notifMenu: { attribute: false }, searchMenu: { attribute: false } };
   declare notif: number;
   declare canBack: boolean;
   declare menu: boolean;
   declare notifMenu: boolean;
+  declare searchMenu: boolean;
   declare _onDoc: (e: Event) => void;
   declare _onKey: (e: KeyboardEvent) => void;
   declare _onNav: () => void;
-  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; this.notifMenu = false; }
+  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; this.notifMenu = false; this.searchMenu = false; }
   createRenderRoot() { return this; }
   sync() { this.notif = badgeCount('notif'); this.canBack = history.length > 1; this.title = pageTitle(); }
   connectedCallback() {
@@ -780,9 +841,10 @@ class McDeskbar extends LitElement {
     this._onDoc = (e) => {
       if (this.menu && !(e.target as HTMLElement).closest('.mc-db-acct')) this.menu = false;
       if (this.notifMenu && !(e.target as HTMLElement).closest('.mc-db-notif')) this.notifMenu = false;
+      if (this.searchMenu && !(e.target as HTMLElement).closest('.mc-db-searchwrap')) this.searchMenu = false;
     };
-    this._onKey = (e) => { if (e.key === 'Escape') { this.menu = false; this.notifMenu = false; } };
-    this._onNav = () => { this.menu = false; this.notifMenu = false; };
+    this._onKey = (e) => { if (e.key === 'Escape') { this.menu = false; this.notifMenu = false; this.searchMenu = false; } };
+    this._onNav = () => { this.menu = false; this.notifMenu = false; this.searchMenu = false; };
     document.addEventListener('click', this._onDoc);
     document.addEventListener('keydown', this._onKey);
     document.addEventListener('mc-navigate', this._onNav);
@@ -793,13 +855,14 @@ class McDeskbar extends LitElement {
     document.removeEventListener('keydown', this._onKey);
     document.removeEventListener('mc-navigate', this._onNav);
   }
-  toggleMenu(e: Event) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; }
-  toggleNotif(e: Event) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; }
+  toggleMenu(e: Event) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; this.searchMenu = false; }
+  toggleNotif(e: Event) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; this.searchMenu = false; }
+  toggleSearch(e: Event) { e.preventDefault(); e.stopPropagation(); this.searchMenu = !this.searchMenu; this.menu = false; this.notifMenu = false; }
   goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
   goFwd(e: Event) { e.preventDefault(); history.forward(); }
   search(e: Event) {
     e.preventDefault();
-    const input = this.querySelector('.mc-db-search input') as HTMLInputElement | null;
+    const input = this.querySelector('.mc-db-searchwrap input') as HTMLInputElement | null;
     location.href = 'community.html?q=' + encodeURIComponent((input && input.value.trim()) || '');
   }
   render() {
@@ -810,15 +873,17 @@ class McDeskbar extends LitElement {
         <button class="mc-db-ico" @click=${(e: Event) => this.goFwd(e)} aria-label="Forward" title="Forward">${ICON.forward}</button>
       </div>
       <a class="mc-db-brand" href="index.html" aria-label="Home">${ICON.cross}<span class="mc-db-word">Mere Catholicity</span></a>
-      ${onCommunity()
-        ? html`<form class="mc-db-search" @submit=${(e: Event) => this.search(e)} role="search">
+      ${activeTab() === 'home'
+        ? html`<span class="mc-db-center"></span>`
+        : html`<div class="mc-db-center mc-db-title" title=${this.title}>${this.title}</div>`}
+      <nav class="mc-db-cluster" aria-label="Account">
+        <div class="mc-db-searchwrap">
+          <button class="mc-db-ico" @click=${(e: Event) => this.toggleSearch(e)} aria-label="Search the board" title="Search the board" aria-expanded=${this.searchMenu ? 'true' : 'false'}>${ICON.search}</button>
+          ${this.searchMenu ? html`<form class="mc-db-searchpop" @submit=${(e: Event) => this.search(e)} role="search">
             <span class="mc-db-searchico">${ICON.search}</span>
             <input type="search" placeholder="Search the board…" aria-label="Search the board">
-          </form>`
-        : (activeTab() === 'home'
-            ? html`<span class="mc-db-center"></span>`
-            : html`<div class="mc-db-center mc-db-title" title=${this.title}>${this.title}</div>`)}
-      <nav class="mc-db-cluster" aria-label="Account">
+          </form>` : ''}
+        </div>
         <div class="mc-db-notif">
           <button class="mc-db-ico" @click=${(e: Event) => this.toggleNotif(e)} aria-label="Notifications" title="Notifications" aria-expanded=${this.notifMenu ? 'true' : 'false'}>${ICON.bell}${badge(this.notif)}</button>
           ${this.notifMenu ? html`<div class="mc-db-menu mc-db-notifmenu"></div>` : ''}
@@ -835,6 +900,7 @@ class McDeskbar extends LitElement {
     if (menu && !menu.firstChild) menu.appendChild(document.createElement('mc-settings'));
     const nmenu = this.querySelector('.mc-db-notifmenu');
     if (nmenu && !nmenu.firstChild) nmenu.appendChild(document.createElement('mc-notifs'));
+    if (this.searchMenu) { const si = this.querySelector('.mc-db-searchpop input') as HTMLInputElement | null; if (si && document.activeElement !== si) si.focus(); }
   }
 }
 customElements.define('mc-deskbar', McDeskbar);
@@ -872,9 +938,14 @@ class McSidebar extends LitElement {
       <button class="mc-sb-toggle" @click=${() => this.toggle()} aria-label=${this.wide ? 'Collapse menu' : 'Expand menu'} title=${this.wide ? 'Collapse' : 'Expand'}>${this.wide ? ICON.back : ICON.forward}</button>
       ${TABS.map((t) => {
         const n = t.badge === 'dm' ? this.dm : 0;
-        return html`<a class=${'mc-sb-item' + (this.active === t.key ? ' mc-tab-on' : '')} href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'} title=${t.label}>
-          <span class="mc-sb-ico">${t.icon ? t.icon : ICON[t.svg!]}${n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : ''}</span>
-          <span class="mc-sb-lbl">${t.label}</span></a>`;
+        const inner = html`<span class="mc-sb-ico">${t.icon ? t.icon : ICON[t.svg!]}${n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : ''}</span>
+          <span class="mc-sb-lbl">${t.label}</span>`;
+        /* P3-e: the active destination is rendered as a non-navigating "current"
+           item (a span, not a self-link) so the rail doesn't offer "Home" while on
+           Home — the rail is a quick-switch, and you cannot switch to where you are. */
+        return this.active === t.key
+          ? html`<span class="mc-sb-item mc-tab-on mc-sb-current" aria-current="page" title=${t.label}>${inner}</span>`
+          : html`<a class="mc-sb-item" href=${t.href} aria-label=${t.label} title=${t.label}>${inner}</a>`;
       })}
     </nav>`;
   }
@@ -1222,26 +1293,12 @@ export function installChrome() {
     }
   }
 
-  /* A logged-out reader who lands on a screen that NEEDS an identity (Inbox,
-     Profile, Notifications) is signed up in place — the onboarding sheet opens
-     instead of a dead-end. Latched per route-entry so the repeated sync() calls
-     (every soft-nav + every mc-badge) never re-open it after a dismissal; a fresh
-     gated route (or login) re-arms it. Reads window.mcKit, so it no-ops on the
-     pre-boot sync and only fires once the client has booted. */
-  var onboardLatch = '';
-  function maybeOnboard() {
-    if (!window.mcKit || !window.mcOnboard) { onboardLatch = ''; return; }   // desktop + mobile
-    if (readKey()) { onboardLatch = ''; return; }               // logged in — nothing to do
-    var tab = activeTab();
-    /* Only Home and Community are usable logged-out; every other destination pops
-       the registration modal instead of a dead end. */
-    var gated = tab === 'messages' || tab === 'profile' || tab === 'merecat' || /[?&]notifications=1\b/.test(location.search);
-    if (!gated) { onboardLatch = ''; return; }
-    var routeKey = location.pathname + location.search;
-    if (onboardLatch === routeKey) return;                       // already offered here
-    onboardLatch = routeKey;
-    window.mcOnboard();
-  }
+  /* P3-a: a logged-out reader on a gated screen (Inbox, Profile, Merecat,
+     Notifications) is NO LONGER met by an auto-popped, boxed-in modal. The client
+     renders a calm, non-blocking inline prompt in place (comments.ts viewJoin),
+     matching the Community gate, and the onboarding sheet opens only on an explicit
+     tap — so exploring a members-only feature never traps a visitor who only came
+     to look. (The former shell-level auto-open latch lived here.) */
 
   /* The Library page becomes an app-style drill-down on both breakpoints (parses
      its own static catalog; SEO/no-JS keep the flat list). Runs after every swap. */
@@ -1251,7 +1308,7 @@ export function installChrome() {
     if (main) mountLibrary(main);
   }
 
-  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); mountHome(); mountLibraryHook(); maybeOnboard(); }
+  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); mountHome(); mountLibraryHook(); }
   sync();
   /* boots()/chrome.sync() only fire on soft-nav; on a DIRECT initial load the
      onboarding trigger needs one sync once the client has booted (window.mcKit
