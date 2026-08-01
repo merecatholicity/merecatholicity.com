@@ -96,7 +96,7 @@ html:
 	cd book && sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' bishop-presbyter.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="The bishop and the presbyter, a question recorded" \
-	    --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
+	    --css=style.css -H ../partials/social-bishop.html -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/bishop-presbyter.html
 	$(MAKE) -C resources html
 	@echo "built book.html"
