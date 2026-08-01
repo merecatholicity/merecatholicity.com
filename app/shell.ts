@@ -28,11 +28,11 @@
    instant at zero requests. */
 
 import { LitElement, html } from 'lit';
-import * as store from './store.js';
-import * as api from './api.js';
-import * as core from './core.js';
-import { installLive } from './live.js';
-import { installChrome } from './appchrome.js';
+import * as store from './store.ts';
+import * as api from './api.ts';
+import * as core from './core.ts';
+import { installLive } from './live.ts';
+import { installChrome } from './appchrome.ts';
 import './richtext.js';
 import './views/board.js';
 import './views/post.js';
@@ -40,6 +40,16 @@ import './views/topic.js';
 import './views/member.js';
 import './views/profile.js';
 import './views/admin.js';
+
+/* Shell-owned window seams (only referenced here among the typed files;
+   declared locally to keep them off the shared globals.d.ts). */
+declare global {
+  interface Window {
+    __mcShell?: boolean;
+    __mcShellReady?: boolean;
+    mcAudioDock?: { audio: HTMLAudioElement; claim: (ctx: any) => void; release: () => void };
+  }
+}
 
 /* The API store rides the shell (window bridge until the interiors port):
    in-memory TTL + in-flight dedup for the views' reads, invalidated by
@@ -51,21 +61,21 @@ window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, met
    `if (window.mcCore) …`, exactly like window.mcRich; the Lit views import
    app/core.js directly. Importing it above is what inlines compiled PureScript
    into docs/app.js (the bundle route). See CLAUDE.md. */
-window.mcCore = core;
+window.mcCore = core as unknown as NonNullable<typeof window.mcCore>;
 
 /* The headless-API client SDK (app/api.js) rides the shell too — the single
    documented seam (comments-worker/API.md) new features call. Transport +
    identity + fresh-read policy are wired from the board client (window.mcKit)
    once it boots, so api.js reuses the proven fetchRetry/key/freshOpts. */
-window.mcApi = api;
+window.mcApi = api as unknown as NonNullable<typeof window.mcApi>;
 document.addEventListener('mc-shell-ready', function wireApi() {
   var tryWire = function () {
     var k = window.mcKit;
     if (!k) return false;
     api.configure({
-      tx: function (url, init) { return k.fetchRetry(url, init, [1000, 3000]); },
-      key: function () { return k.state.key || ''; },
-      fresh: function () { return !!k.freshOpts(); },
+      tx: function (url, init) { return k!.fetchRetry(url, init, [1000, 3000]); },
+      key: function () { return k!.state.key || ''; },
+      fresh: function () { return !!k!.freshOpts(); },
     });
     return true;
   };
@@ -79,6 +89,7 @@ document.addEventListener('mc-shell-ready', function wireApi() {
    style.css and the theme own it. */
 class McProgress extends LitElement {
   static properties = { active: { type: Boolean } };
+  declare active: boolean;
   constructor() { super(); this.active = false; }
   createRenderRoot() { return this; }
   render() {
@@ -104,6 +115,14 @@ class McAudioDock extends LitElement {
     label: { type: String }, playing: { type: Boolean }, shown: { type: Boolean },
     href: { type: String }, canStep: { type: Boolean }, pos: { state: true },
   };
+  declare label: string;
+  declare playing: boolean;
+  declare shown: boolean;
+  declare href: string;
+  declare canStep: boolean;
+  declare pos: { left: number; top: number } | null;
+  declare claimed: boolean;
+  declare ctx: any;
   constructor() {
     super();
     this.label = ''; this.playing = false; this.shown = false;
@@ -130,7 +149,7 @@ class McAudioDock extends LitElement {
     }
   }
   /* the reader calls this on every chapter it opens */
-  claim(ctx) {
+  claim(ctx: any) {
     if (ctx && typeof ctx === 'object') this.ctx = Object.assign(this.ctx || {}, ctx);
     this.claimed = true;
     this.sync();
@@ -142,11 +161,11 @@ class McAudioDock extends LitElement {
     try { dockAudio.removeAttribute('src'); dockAudio.load(); } catch (e) { /* fine */ }
     this.shown = false;
   }
-  skip(d) {
+  skip(d: number) {
     try { dockAudio.currentTime = Math.max(0, Math.min(dockAudio.duration || Infinity, (dockAudio.currentTime || 0) + d)); } catch (e) { /* not seekable yet */ }
   }
   /* step chapters, crossing book boundaries, entirely from ctx (no reader needed) */
-  step(dir) {
+  step(dir: number) {
     var c = this.ctx;
     if (!c || !c.books || !c.books.length) return;
     var b = c.b, ch = (c.c || 1) + dir;
@@ -161,14 +180,14 @@ class McAudioDock extends LitElement {
     if (!this.claimed && this.ctx && this.ctx.books) this.step(1);   // the reader advances when it is present
     else this.sync();
   }
-  startDrag(e) {
-    if (e.target.closest('button, a')) return;   // let the controls take their own clicks
+  startDrag(e: PointerEvent) {
+    if ((e.target as HTMLElement).closest('button, a')) return;   // let the controls take their own clicks
     var box = this.querySelector('.mc-dock');
     if (!box) return;
     var r = box.getBoundingClientRect();
     var offX = e.clientX - r.left, offY = e.clientY - r.top, w = r.width, h = r.height;
     var self = this;
-    function move(ev) {
+    function move(ev: PointerEvent) {
       self.pos = {
         left: Math.max(4, Math.min(window.innerWidth - w - 4, ev.clientX - offX)),
         top: Math.max(4, Math.min(window.innerHeight - h - 4, ev.clientY - offY)),
@@ -188,7 +207,7 @@ class McAudioDock extends LitElement {
     var p = this.pos;
     var style = p ? ('left:' + Math.min(p.left, window.innerWidth - 60) + 'px;top:'
       + Math.min(p.top, window.innerHeight - 30) + 'px;right:auto;bottom:auto') : '';
-    return html`<div class="mc-dock" style=${style} @pointerdown=${(e) => this.startDrag(e)}>
+    return html`<div class="mc-dock" style=${style} @pointerdown=${(e: PointerEvent) => this.startDrag(e)}>
       <button type="button" class="mc-dock-btn" @click=${() => this.step(-1)} ?disabled=${!this.canStep}
         title="Previous chapter" aria-label="Previous chapter">⏮</button>
       <button type="button" class="mc-dock-btn" @click=${() => this.skip(-10)}
@@ -249,18 +268,18 @@ customElements.define('mc-audio-dock', McAudioDock);
     document.dispatchEvent(new CustomEvent('mc-shell-ready'));
     return;
   }
-  var progress = document.createElement('mc-progress');
+  var progress = document.createElement('mc-progress') as McProgress;
   progress.setAttribute('data-mc-app', '');
   document.body.appendChild(progress);
 
-  var dock = document.createElement('mc-audio-dock');
+  var dock = document.createElement('mc-audio-dock') as McAudioDock;
   dock.setAttribute('data-mc-app', '');
   document.body.appendChild(dock);
   window.mcAudioDock = {
     audio: dockAudio,
     /* ctx = { books:[{slug,name,chapters}], audioBase, page, reader, b, c } —
        enough for the dock to step chapters and link back on its own. */
-    claim: function (ctx) { dock.claim(ctx); },
+    claim: function (ctx: any) { dock.claim(ctx); },
     release: function () { dock.release(); },
   };
 
@@ -311,7 +330,7 @@ customElements.define('mc-audio-dock', McAudioDock);
   }
   (function updateWatch() {
     var runEl = document.querySelector('script[src*="app.js?v="]');
-    var m0 = runEl && String(runEl.src).match(/app\.js\?v=(\d+)/);
+    var m0 = runEl && String((runEl as HTMLScriptElement).src).match(/app\.js\?v=(\d+)/);
     var running = m0 ? Number(m0[1]) : 0;
     if (!running) return;
     var last = 0, shown = false;
@@ -339,34 +358,34 @@ customElements.define('mc-audio-dock', McAudioDock);
     evt: null,
     available: function () { return !!(window.mcInstall && window.mcInstall.evt); },
     prompt: function () {
-      var e = window.mcInstall.evt;
+      var e = window.mcInstall!.evt;
       if (!e) return;
-      window.mcInstall.evt = null;
+      window.mcInstall!.evt = null;
       try { e.prompt(); } catch (err) { /* dismissed */ }
     },
   };
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
-    window.mcInstall.evt = e;
+    window.mcInstall!.evt = e;
     document.dispatchEvent(new CustomEvent('mc-install-available'));
   });
   window.addEventListener('appinstalled', function () {
-    window.mcInstall.evt = null;
+    window.mcInstall!.evt = null;
     document.dispatchEvent(new CustomEvent('mc-install-available'));
   });
 
   /* ---- the per-page boot registry ---- */
-  var REG = {
+  var REG: Record<string, { boot: string; down?: string }> = {
     'comments.js': { boot: 'mcCommentsBoot', down: 'mcCommentsTeardown' },
     'bible-reader.js': { boot: 'mcBibleBoot', down: 'mcBibleTeardown' },
     'contact.js': { boot: 'mcContactBoot' },
     'index.js': { boot: 'mcIndexBoot' },
     'flash.js': { boot: 'mcFlashBoot' },
   };
-  function baseName(src) {
-    return (src || '').split('?')[0].split('/').pop();
+  function baseName(src: string | null): string {
+    return (src || '').split('?')[0].split('/').pop()!;
   }
-  var loadedScripts = {};
+  var loadedScripts: Record<string, boolean> = {};
   Array.prototype.forEach.call(document.querySelectorAll('script[src]'), function (s) {
     loadedScripts[baseName(s.getAttribute('src'))] = true;
   });
@@ -374,13 +393,13 @@ customElements.define('mc-audio-dock', McAudioDock);
   function teardownPage() {
     Object.keys(REG).forEach(function (name) {
       var down = REG[name].down;
-      if (down && loadedScripts[name] && typeof window[down] === 'function') {
-        try { window[down](); } catch (e) { /* half-torn is torn */ }
+      if (down && loadedScripts[name] && typeof (window as any)[down] === 'function') {
+        try { (window as any)[down](); } catch (e) { /* half-torn is torn */ }
       }
     });
   }
-  function pageScripts(doc) {
-    var out = [];
+  function pageScripts(doc: Document) {
+    var out: Array<{ name: string; src: string }> = [];
     Array.prototype.forEach.call(doc.querySelectorAll('body script[src]'), function (s) {
       var name = baseName(s.getAttribute('src'));
       if (name === 'nav.js' || name === 'app.js') return;
@@ -388,7 +407,7 @@ customElements.define('mc-audio-dock', McAudioDock);
     });
     return out;
   }
-  function loadScript(src) {
+  function loadScript(src: string) {
     return new Promise(function (resolve) {
       var s = document.createElement('script');
       s.src = src;
@@ -398,37 +417,37 @@ customElements.define('mc-audio-dock', McAudioDock);
       document.head.appendChild(s);
     });
   }
-  function bootPage(doc) {
+  function bootPage(doc: Document) {
     var jobs = pageScripts(doc).map(function (want) {
       if (!loadedScripts[want.name]) {
         loadedScripts[want.name] = true;
         return loadScript(want.src);   // a fresh script self-boots on load
       }
       var reg = REG[want.name];
-      if (reg && typeof window[reg.boot] === 'function') {
-        try { window[reg.boot](); } catch (e) { /* boot failed; page still readable */ }
+      if (reg && typeof (window as any)[reg.boot] === 'function') {
+        try { (window as any)[reg.boot](); } catch (e) { /* boot failed; page still readable */ }
       }
       return Promise.resolve(true);
     });
     return Promise.all(jobs);
   }
 
-  function navScript(doc) {
+  function navScript(doc: Document) {
     return doc.querySelector('body script[src*="nav.js"]');
   }
-  function contentNodes(doc) {
+  function contentNodes(doc: Document) {
     var anchor = navScript(doc);
     if (!anchor) return null;
     var out = [];
     var n = anchor.nextSibling;
     while (n) {
-      if (!(n.nodeType === 1 && (n.hasAttribute('data-mc-app') ||
-            n.tagName === 'MC-PROGRESS' || n.tagName === 'MC-AUDIO-DOCK'))) out.push(n);
+      if (!(n.nodeType === 1 && ((n as Element).hasAttribute('data-mc-app') ||
+            (n as Element).tagName === 'MC-PROGRESS' || (n as Element).tagName === 'MC-AUDIO-DOCK'))) out.push(n);
       n = n.nextSibling;
     }
     return out;
   }
-  function swapContent(doc) {
+  function swapContent(doc: Document) {
     var mineMain = document.querySelector('main');
     var theirMain = doc.querySelector('main');
     if (mineMain && theirMain) {
@@ -444,11 +463,11 @@ customElements.define('mc-audio-dock', McAudioDock);
     document.body.appendChild(frag);
     return true;
   }
-  function noShell(doc) {
+  function noShell(doc: Document) {
     return !!doc.querySelector('.away, [data-noshell]');
   }
-  function sameOrigin(url) { return url.origin === location.origin; }
-  function pageish(url) {
+  function sameOrigin(url: URL) { return url.origin === location.origin; }
+  function pageish(url: URL) {
     var p = url.pathname;
     return p === '/' || /\.html$/.test(p);
   }
@@ -462,7 +481,7 @@ customElements.define('mc-audio-dock', McAudioDock);
       if (a.getAttribute('href') === here) {
         a.classList.add('here');
         var sub = a.closest('.sub');
-        if (sub) sub.parentElement.querySelector('.sub-toggle').classList.add('here');
+        if (sub) sub.parentElement!.querySelector('.sub-toggle')!.classList.add('here');
       }
     });
   }
@@ -484,7 +503,7 @@ customElements.define('mc-audio-dock', McAudioDock);
   var navigating = false;
   var lastPath = location.pathname;
   var lastSearch = location.search;
-  function softNav(url, push) {
+  function softNav(url: URL, push: boolean) {
     if (navigating) return;
     navigating = true;
     /* Any navigation closes the app menus/sheets so a chosen link never loads
@@ -533,7 +552,7 @@ customElements.define('mc-audio-dock', McAudioDock);
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0) return;
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    var a = e.target && e.target.closest && e.target.closest('a[href]');
+    var a = (e.target && (e.target as Element).closest && (e.target as Element).closest('a[href]')) as HTMLAnchorElement | null;
     if (!a) return;
     if (a.target && a.target !== '_self') return;
     if (a.hasAttribute('download') || a.hasAttribute('data-noshell')) return;

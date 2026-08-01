@@ -9,17 +9,24 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { pagerTpl } from './util.js';
-import * as Core from '../core.js';
+import { pagerTpl } from './util.ts';
+import * as Core from '../core.ts';
 
 /* Category ordering must match the server's ORDER BY: stickies first, then by
    last-activity descending. Used when live events reshuffle the listing. The
    comparator lives in the PureScript Domain.Live (Core.topicCompare). */
-function sortTopics(arr) {
-  return arr.slice().sort((a, b) => Core.topicCompare(a, b));
+function sortTopics(arr: any[]) {
+  return arr.slice().sort((a: any, b: any) => Core.topicCompare(a, b));
 }
 
 class McBoardIndex extends LitElement {
+  declare kit: any;
+  declare stats: any;
+  declare unreadTotal: number;
+  declare byCat: any;
+  declare adminOn: boolean;
+  declare _onLive?: (ev: Event) => void;
+  declare _refetchT?: ReturnType<typeof setTimeout>;
   static properties = {
     stats: { attribute: false }, unreadTotal: { attribute: false },
     byCat: { attribute: false }, adminOn: { attribute: false },
@@ -39,13 +46,13 @@ class McBoardIndex extends LitElement {
     const kit = this.kit;
     this.adminOn = kit.isAdmin();
     kit.cachedJson(kit.API + '/board' + kit.freshParam('?'), kit.freshOpts(), 45000)
-      .then((d) => { if (d.ok) this.stats = d.cats; })
+      .then((d: any) => { if (d.ok) this.stats = d.cats; })
       .catch(() => {});
     if (kit.state.key) {
       kit.cachedJson(kit.API + '/board/unread', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: kit.state.key }),
-      }, 45000).then((d) => {
+      }, 45000).then((d: any) => {
         if (kit.blockedOut(d) || !d.ok) return;
         this.unreadTotal = d.total || 0;
         this.byCat = d.byCat || null;
@@ -53,7 +60,7 @@ class McBoardIndex extends LitElement {
     }
     /* Live: the per-category latest-poster / counts update as posts happen. */
     if (window.mcLive) window.mcLive.board.sub(['board:index']);
-    this._onLive = (ev) => this._applyLive(ev.detail);
+    this._onLive = (ev: Event) => this._applyLive((ev as CustomEvent).detail);
     document.addEventListener('mc-live', this._onLive);
   }
   disconnectedCallback() {
@@ -62,7 +69,7 @@ class McBoardIndex extends LitElement {
     if (this._refetchT) clearTimeout(this._refetchT);
     if (window.mcLive) window.mcLive.board.leave();
   }
-  _applyLive(m) {
+  _applyLive(m: any) {
     if (!m || !this.stats) return;   // loading: the initial fetch is already fresh
     /* delete/move change counts and the latest-poster in ways not worth patching
        by hand; they are rare (admin actions), so refetch the whole (tiny) index. */
@@ -89,7 +96,7 @@ class McBoardIndex extends LitElement {
     const kit = this.kit;
     this._refetchT = setTimeout(() => {
       kit.fetchRetry(kit.API + '/board?cb=' + Date.now(), {}, [1000])
-        .then((r) => r.json()).then((d) => { if (d && d.ok) this.stats = d.cats; }).catch(() => {});
+        .then((r: Response) => r.json()).then((d: any) => { if (d && d.ok) this.stats = d.cats; }).catch(() => {});
     }, 1500);
   }
   firstUpdated() {
@@ -107,7 +114,7 @@ class McBoardIndex extends LitElement {
       searchSlot.appendChild(kit.indexSearchBox());
     }
   }
-  markAllRead(e) {
+  markAllRead(e: Event) {
     e.preventDefault();
     const kit = this.kit;
     fetch(kit.API + '/board/read-all', {
@@ -120,13 +127,13 @@ class McBoardIndex extends LitElement {
      link (the latest-post link, a "see X" link in the description) still wins,
      and a text selection never navigates. Synthesizing a click on the category
      name link lets the shell soft-navigate it exactly as a direct click would. */
-  _catNav(e) {
-    if (e.target.closest('a, button, select, input, label')) return;
+  _catNav(e: Event) {
+    if ((e.target as HTMLElement).closest('a, button, select, input, label')) return;
     if (window.getSelection && String(window.getSelection()).length) return;
-    const a = e.currentTarget.querySelector('.board-cat-name');
-    if (a) a.click();
+    const a = (e.currentTarget as HTMLElement).querySelector('.board-cat-name');
+    if (a) (a as HTMLElement).click();
   }
-  statsCell(catKey) {
+  statsCell(catKey: string) {
     const kit = this.kit;
     if (catKey === 'adminsonly') return html`<div class="board-stats">🔒 admins alone</div>`;
     const c = this.stats && this.stats[catKey];
@@ -156,7 +163,7 @@ class McBoardIndex extends LitElement {
           ${this.unreadTotal + (this.unreadTotal === 1 ? ' new thread since your last visit. ' : ' new threads since your last visit. ')}
           <a class="identity-action" href="#" @click=${this.markAllRead}>Mark all read</a></p>` : nothing}
       <div class="board-cats">
-        ${kit.CATS.map((cat) => {
+        ${kit.CATS.map((cat: any) => {
           const isBack = cat[0] === 'adminsonly';
           const unread = this.byCat && this.byCat[cat[0]];
           return html`<div class=${isBack ? 'board-cat board-cat-admin mc-cardnav' : 'board-cat mc-cardnav'}
@@ -177,6 +184,14 @@ class McBoardIndex extends LitElement {
 customElements.define('mc-board-index', McBoardIndex);
 
 class McBoardCat extends LitElement {
+  declare kit: any;
+  declare catKey: string;
+  declare pageNum: number;
+  declare payload: any;
+  declare unread: any;
+  declare err: string;
+  declare _onLive?: (ev: Event) => void;
+  declare _refetchT?: ReturnType<typeof setTimeout>;
   static properties = {
     payload: { attribute: false }, unread: { attribute: false }, err: { attribute: false },
   };
@@ -202,7 +217,7 @@ class McBoardCat extends LitElement {
           body: JSON.stringify({ key: kit.state.key || '', p: this.pageNum }),
         }, 45000)
       : kit.cachedJson(kit.API + '/board/cat?cat=' + this.catKey + '&p=' + this.pageNum + kit.freshParam('&'), kit.freshOpts(), 45000))
-      .then((d) => {
+      .then((d: any) => {
         if (!d.ok) {
           if (this.catKey === 'adminsonly') { kit.goIndex(); return; }
           throw new Error(d.error || 'failed');
@@ -212,7 +227,7 @@ class McBoardCat extends LitElement {
           kit.cachedJson(kit.API + '/board/reads', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: kit.state.key, cat: this.catKey }),
-          }, 45000).then((rd) => {
+          }, 45000).then((rd: any) => {
             if (kit.blockedOut(rd) || !rd.ok) return;
             this.unread = rd.unread || [];
           }).catch(() => {});
@@ -222,7 +237,7 @@ class McBoardCat extends LitElement {
     /* Live: new topics appear and rows re-sort as posts happen (page 1 only —
        new activity always lands on the first page). The back room isn't broadcast. */
     if (window.mcLive && this.catKey !== 'adminsonly') window.mcLive.board.sub(['cat:' + this.catKey]);
-    this._onLive = (ev) => this._applyLive(ev.detail);
+    this._onLive = (ev: Event) => this._applyLive((ev as CustomEvent).detail);
     document.addEventListener('mc-live', this._onLive);
   }
   disconnectedCallback() {
@@ -236,20 +251,20 @@ class McBoardCat extends LitElement {
     const kit = this.kit;
     this._refetchT = setTimeout(() => {
       kit.fetchRetry(kit.API + '/board/cat?cat=' + this.catKey + '&p=1&cb=' + Date.now(), {}, [1000])
-        .then((r) => r.json()).then((d) => { if (d && d.ok) this.payload = d; }).catch(() => {});
+        .then((r: Response) => r.json()).then((d: any) => { if (d && d.ok) this.payload = d; }).catch(() => {});
     }, 1500);
   }
-  _applyLive(m) {
+  _applyLive(m: any) {
     if (!m || !this.payload) return;
     if (m.cat !== this.catKey && m.from !== this.catKey) return;   // for-this-category only
     const p = this.payload;
     if (m.t === 'new-topic' && m.cat === this.catKey) {
       if (this.pageNum !== 1) return;                       // new topics land on page 1
-      if (p.topics.some((t) => t.id === m.topic.id)) return;   // dedup (own post / multi-tab)
+      if (p.topics.some((t: any) => t.id === m.topic.id)) return;   // dedup (own post / multi-tab)
       this.payload = { ...p, topics: sortTopics([m.topic, ...p.topics]), total: (p.total || 0) + 1 };
     } else if (m.t === 'topic-stats' && m.cat === this.catKey) {
-      if (p.topics.some((t) => t.id === m.topic_id)) {
-        const topics = p.topics.map((x) => x.id === m.topic_id
+      if (p.topics.some((t: any) => t.id === m.topic_id)) {
+        const topics = p.topics.map((x: any) => x.id === m.topic_id
           ? { ...x, replies: m.replies, last: m.last, last_id: m.last_id, author_hash: m.author_hash, nick: m.nick }
           : x);
         this.payload = { ...p, topics: sortTopics(topics) };
@@ -261,11 +276,11 @@ class McBoardCat extends LitElement {
       }
     } else if ((m.t === 'moderation' && m.act === 'delete') || m.t === 'moved') {
       /* a whole topic removed from, or moved out of, this category */
-      if (!p.topics.some((t) => t.id === m.id)) return;
-      this.payload = { ...p, topics: p.topics.filter((t) => t.id !== m.id), total: Math.max(0, (p.total || 1) - 1) };
+      if (!p.topics.some((t: any) => t.id === m.id)) return;
+      this.payload = { ...p, topics: p.topics.filter((t: any) => t.id !== m.id), total: Math.max(0, (p.total || 1) - 1) };
     } else if (m.t === 'moderation' && (m.act === 'lock' || m.act === 'unlock' || m.act === 'sticky' || m.act === 'unsticky')) {
-      if (!p.topics.some((t) => t.id === m.topic_id)) return;
-      const topics = p.topics.map((t) => t.id === m.topic_id
+      if (!p.topics.some((t: any) => t.id === m.topic_id)) return;
+      const topics = p.topics.map((t: any) => t.id === m.topic_id
         ? { ...t, locked: m.locked != null ? m.locked : t.locked, sticky: m.sticky != null ? m.sticky : t.sticky }
         : t);
       this.payload = { ...p, topics: sortTopics(topics) };
@@ -278,16 +293,16 @@ class McBoardCat extends LitElement {
     const key = this.catKey;
     kit.buildBoardForm(true, 'Start a topic');
     kit.boardButtons('Post topic', () => {
-      const section = this.parentElement;
-      const ta = section.querySelector('.comment-form .comment-text');
-      const titleBox = section.querySelector('.comment-form .board-title');
+      const section = this.parentElement!;
+      const ta = section.querySelector('.comment-form .comment-text') as HTMLTextAreaElement & { mcPreview?: { off(): void }; mcDraftDone?: () => void };
+      const titleBox = section.querySelector('.comment-form .board-title') as HTMLInputElement;
       const title = titleBox.value.replace(/\s+/g, ' ').trim();
       const body = ta.value.replace(/\s+$/, '');
-      const status = section.querySelector('.form-status');
+      const status = section.querySelector('.form-status') as HTMLElement;
       if (ta.mcPreview && (title.length < 3 || !body.trim())) ta.mcPreview.off();
       if (title.length < 3) { titleBox.focus(); return; }
       if (!body.trim()) { ta.focus(); return; }
-      kit.boardPost({ cat: key, title, body }, (d) => {
+      kit.boardPost({ cat: key, title, body }, (d: any) => {
         if (ta.mcDraftDone) ta.mcDraftDone();
         if (d.status === 'pending') {
           status.textContent = 'Held for review. It will appear once approved.';
@@ -300,7 +315,7 @@ class McBoardCat extends LitElement {
       });
     });
     kit.armBoardForm();
-    const section = this.parentElement;
+    const section = this.parentElement!;
     kit.attachMentions(section.querySelector('.comment-form .comment-text'));
     kit.attachDraft(section.querySelector('.comment-form .comment-text'), 'topic:' + key,
       section.querySelector('.comment-form .board-title'));
@@ -312,20 +327,20 @@ class McBoardCat extends LitElement {
     this.querySelectorAll('.board-topic[data-tid]').forEach((row) => {
       if (row.hasAttribute('data-corner')) return;
       row.setAttribute('data-corner', '1');
-      const t = this.payload.topics.find((x) => String(x.id) === row.getAttribute('data-tid'));
+      const t = this.payload.topics.find((x: any) => String(x.id) === row.getAttribute('data-tid'));
       if (t) row.appendChild(kit.topicAdminCorner(t, this.catKey));
     });
   }
   /* The whole topic row is a click target into the topic; a nested link (the
      title itself, a pager page, the last-poster jump, an admin control) still
      wins, and a text selection never navigates. */
-  _topicNav(e) {
-    if (e.target.closest('a, button, select, input, label')) return;
+  _topicNav(e: Event) {
+    if ((e.target as HTMLElement).closest('a, button, select, input, label')) return;
     if (window.getSelection && String(window.getSelection()).length) return;
-    const a = e.currentTarget.querySelector('.board-topic-title');
-    if (a) a.click();
+    const a = (e.currentTarget as HTMLElement).querySelector('.board-topic-title');
+    if (a) (a as HTMLElement).click();
   }
-  topicRow(t) {
+  topicRow(t: any) {
     const kit = this.kit;
     const isNew = this.unread && this.unread.indexOf(t.id) !== -1;
     const who = t.author_hash ? (t.nick || kit.displayName(t.author_hash)) : 'Anonymous';
@@ -347,7 +362,7 @@ class McBoardCat extends LitElement {
     const kit = this.kit;
     if (!kit) return nothing;
     const cat = kit.catByKey(this.catKey);
-    const hrefFor = (i) => 'community.html?cat=' + this.catKey + '&p=' + i;
+    const hrefFor = (i: number) => 'community.html?cat=' + this.catKey + '&p=' + i;
     return html`
       <p class="board-crumb"><a href="community.html">Community</a> › <span>${cat[1]}</span>
         ${this.catKey === 'adminsonly' ? nothing : html` <a class="comments-rss" href=${kit.API + '/feed?cat=' + this.catKey} title="Follow this category with a feed reader">RSS</a>`}</p>
@@ -359,7 +374,7 @@ class McBoardCat extends LitElement {
         : !this.payload ? html`<p class="comments-status">Loading topics...</p>`
         : this.payload.topics.length === 0
           ? html`<p class="comments-status">No topics yet. Yours can be the first.</p>`
-          : repeat(this.payload.topics, (t) => t.id, (t) => this.topicRow(t))}
+          : repeat(this.payload.topics, (t: any) => t.id, (t: any) => this.topicRow(t))}
       </div>
       ${this.payload ? pagerTpl(this.payload.total, this.payload.per, this.payload.page, hrefFor) : nothing}
     `;
@@ -369,12 +384,12 @@ customElements.define('mc-board-cat', McBoardCat);
 
 window.mcViews = window.mcViews || {};
 window.mcViews.boardIndex = function (section, kit) {
-  const node = document.createElement('mc-board-index');
+  const node = document.createElement('mc-board-index') as McBoardIndex;
   node.kit = kit;
   section.appendChild(node);
 };
 window.mcViews.boardCat = function (section, kit, key) {
-  const node = document.createElement('mc-board-cat');
+  const node = document.createElement('mc-board-cat') as McBoardCat;
   node.kit = kit;
   node.catKey = key;
   section.appendChild(node);

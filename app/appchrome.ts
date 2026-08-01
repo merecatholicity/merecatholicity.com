@@ -8,7 +8,7 @@
    click delegate in shell.js soft-navigates the tabs' <a href>s for free. */
 
 import { LitElement, html } from 'lit';
-import { mountLibrary } from './views/library.js';
+import { mountLibrary } from './views/library.ts';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -28,7 +28,16 @@ const ICON = {
 
 /* The five primary destinations. Merecat is the raised center hero (the standout
    AI). hrefs are ordinary same-origin links the shell intercepts + soft-navs. */
-const TABS = [
+interface Tab {
+  key: string;
+  label: string;
+  href: string;
+  svg?: keyof typeof ICON;
+  icon?: string;
+  hero?: boolean;
+  badge?: string;
+}
+const TABS: Tab[] = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
   { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
   { key: 'feed', label: 'Feed', icon: '📰', href: 'community.html?feed=1' },
@@ -96,14 +105,14 @@ function onCommunity() {
 
 /* Unread counts, read from the caches the comments client keeps current (live
    layer + 90s poll). No fetch — the chrome only reflects what is already known. */
-function badgeCount(which) {
+function badgeCount(which: string) {
   try {
     const raw = localStorage.getItem(which === 'dm' ? 'mc-dm-unread' : 'mc-notif-unread');
     const o = raw ? JSON.parse(raw) : null;
     return o && o.n > 0 ? o.n : 0;
   } catch (e) { return 0; }
 }
-function badgeText(n) { return n > 99 ? '99+' : String(n); }
+function badgeText(n: number) { return n > 99 ? '99+' : String(n); }
 
 function readKey() {
   try { return localStorage.getItem('mc-comment-key') || ''; } catch (e) { return ''; }
@@ -116,7 +125,7 @@ function isAdmin() {
 
 /* The standard VAPID applicationServerKey decoder: base64url string -> Uint8Array
    (pushManager.subscribe needs raw bytes, not the string). */
-function urlBase64ToUint8Array(base64String) {
+function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const raw = atob(base64);
@@ -124,7 +133,7 @@ function urlBase64ToUint8Array(base64String) {
   for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
   return out;
 }
-function sameBytes(a, b) {
+function sameBytes(a: Uint8Array | null, b: Uint8Array | null) {
   if (!a || !b || a.length !== b.length) return false;
   for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
   return true;
@@ -133,6 +142,8 @@ function sameBytes(a, b) {
 /* ---- the bottom tab bar ---- */
 class McTabbar extends LitElement {
   static properties = { active: { attribute: false }, dm: { attribute: false } };
+  declare active: string;
+  declare dm: number;
   constructor() { super(); this.active = 'home'; this.dm = 0; }
   createRenderRoot() { return this; }
   sync() { this.active = activeTab(); this.dm = badgeCount('dm'); }
@@ -141,7 +152,7 @@ class McTabbar extends LitElement {
       ${TABS.map((t) => html`
         <a class=${'mc-tab' + (t.hero ? ' mc-tab-hero' : '') + (this.active === t.key ? ' mc-tab-on' : '')}
            href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'}>
-          <span class="mc-tab-ico">${t.icon ? t.icon : ICON[t.svg]}${t.badge === 'dm' && this.dm
+          <span class="mc-tab-ico">${t.icon ? t.icon : ICON[t.svg!]}${t.badge === 'dm' && this.dm
             ? html`<span class="mc-tab-badge">${badgeText(this.dm)}</span>` : ''}</span>
           <span class="mc-tab-lbl">${t.label}</span>
         </a>`)}
@@ -158,6 +169,8 @@ customElements.define('mc-tabbar', McTabbar);
    the edges. */
 class McAppbar extends LitElement {
   static properties = { canBack: { attribute: false }, notif: { attribute: false }, title: { attribute: false } };
+  declare canBack: boolean;
+  declare notif: number;
   constructor() { super(); this.canBack = false; this.notif = 0; this.title = ''; }
   createRenderRoot() { return this; }
   sync() {
@@ -165,22 +178,22 @@ class McAppbar extends LitElement {
     this.notif = badgeCount('notif');
     this.title = pageTitle();             // the current page/view title, shown centered
   }
-  goBack(e) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
-  goFwd(e) { e.preventDefault(); history.forward(); }
-  settings(e) { e.preventDefault(); if (window.mcSheet) window.mcSheet.settings(); }
-  notifs(e) { e.preventDefault(); if (window.mcSheet) window.mcSheet.open('', document.createElement('mc-notifs')); }
+  goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
+  goFwd(e: Event) { e.preventDefault(); history.forward(); }
+  settings(e: Event) { e.preventDefault(); if (window.mcSheet) window.mcSheet.settings!(); }
+  notifs(e: Event) { e.preventDefault(); if (window.mcSheet) window.mcSheet.open('', document.createElement('mc-notifs')); }
   render() {
     return html`<header class="mc-appbar">
       <div class="mc-appbar-side mc-appbar-l">
-        <button class=${'mc-ab-btn' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e) => this.goBack(e)} aria-label="Back">${ICON.back}</button>
+        <button class=${'mc-ab-btn' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e: Event) => this.goBack(e)} aria-label="Back">${ICON.back}</button>
       </div>
       <div class="mc-appbar-title" title=${this.title}>${this.title}</div>
       <div class="mc-appbar-side mc-appbar-r">
         ${onCommunity() ? html`<a class="mc-ab-btn" href="community.html?q=" aria-label="Search">${ICON.search}</a>` : ''}
-        <button class="mc-ab-btn mc-ab-bell" @click=${(e) => this.notifs(e)} aria-label="Notifications">${ICON.bell}${this.notif
+        <button class="mc-ab-btn mc-ab-bell" @click=${(e: Event) => this.notifs(e)} aria-label="Notifications">${ICON.bell}${this.notif
           ? html`<span class="mc-tab-badge">${badgeText(this.notif)}</span>` : ''}</button>
-        <button class="mc-ab-btn" @click=${(e) => this.settings(e)} aria-label="Settings">${ICON.gear}</button>
-        <button class="mc-ab-btn" @click=${(e) => this.goFwd(e)} aria-label="Forward">${ICON.forward}</button>
+        <button class="mc-ab-btn" @click=${(e: Event) => this.settings(e)} aria-label="Settings">${ICON.gear}</button>
+        <button class="mc-ab-btn" @click=${(e: Event) => this.goFwd(e)} aria-label="Forward">${ICON.forward}</button>
       </div>
     </header>`;
   }
@@ -190,9 +203,16 @@ customElements.define('mc-appbar', McAppbar);
 /* ---- the reusable slide-up sheet (the app-dialog primitive) ---- */
 class McSheet extends LitElement {
   static properties = { open: { attribute: false }, heading: { attribute: false } };
+  declare open: boolean;
+  declare heading: string;
+  declare _node: Node | null;
+  declare _onClose: (() => void) | null;
+  declare _drag: { sheet: HTMLElement; y0: number; y: number; t: number; dy: number; vy: number; active: boolean } | null;
+  declare _pm: ((ev: PointerEvent) => void) | null;
+  declare _pu: ((ev: PointerEvent) => void) | null;
   constructor() { super(); this.open = false; this.heading = ''; this._node = null; this._onClose = null; }
   createRenderRoot() { return this; }
-  show(heading, node, onClose) { this.heading = heading || ''; this._node = node || null; this._onClose = onClose || null; this.open = true; }
+  show(heading?: string | null, node?: Node | null, onClose?: (() => void) | null) { this.heading = heading || ''; this._node = node || null; this._onClose = onClose || null; this.open = true; }
   close() {
     if (!this.open) return;
     this.open = false;
@@ -209,9 +229,9 @@ class McSheet extends LitElement {
      (so it never fights content scrolling) drags the panel with the finger; a far
      enough pull or a quick flick lets it go, otherwise it snaps back. Tapping the
      scrim or the grip still closes it as before. */
-  dragStart(e) {
+  dragStart(e: PointerEvent) {
     if (!isMobile()) return;                             // desktop is a centered modal — no drag
-    const sheet = e.currentTarget;
+    const sheet = e.currentTarget as HTMLElement;
     if (sheet.scrollTop > 0) return;                     // let the content scroll
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     this._drag = { sheet, y0: e.clientY, y: e.clientY, t: e.timeStamp || 0, dy: 0, vy: 0, active: false };
@@ -221,7 +241,7 @@ class McSheet extends LitElement {
     document.addEventListener('pointerup', this._pu);
     document.addEventListener('pointercancel', this._pu);
   }
-  dragMove(e) {
+  dragMove(e: PointerEvent) {
     const d = this._drag; if (!d) return;
     const dy = e.clientY - d.y0;
     if (!d.active) {
@@ -235,7 +255,7 @@ class McSheet extends LitElement {
     const dt = Math.max(1, (e.timeStamp || 0) - d.t);
     d.vy = (e.clientY - d.y) / dt; d.y = e.clientY; d.t = e.timeStamp || 0;
   }
-  dragEnd() {
+  dragEnd(_ev?: PointerEvent) {
     const d = this._drag; this.dragCleanup();
     if (!d || !d.active) return;
     if (d.dy > 90 || d.vy > 0.5) {           // far enough, or a quick flick — dismiss
@@ -255,7 +275,7 @@ class McSheet extends LitElement {
     return html`
       <div class=${'mc-sheet-scrim' + (this.open ? ' on' : '')} @click=${() => this.close()}></div>
       <section class=${'mc-sheet' + (this.open ? ' on' : '')} role="dialog" aria-modal="true" aria-label=${this.heading || 'Sheet'}
-        @pointerdown=${(e) => this.dragStart(e)}>
+        @pointerdown=${(e: PointerEvent) => this.dragStart(e)}>
         <button class="mc-sheet-grip" @click=${() => this.close()} aria-label="Close"></button>
         ${this.heading ? html`<h2 class="mc-sheet-head">${this.heading}</h2>` : ''}
         <div class="mc-sheet-body"></div>
@@ -267,6 +287,21 @@ customElements.define('mc-sheet', McSheet);
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
   static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
+  declare keyShown: boolean;
+  declare theme: string;
+  declare copied: boolean;
+  declare dark: string;
+  declare light: string;
+  declare presence: string;
+  declare prefs: any;
+  declare panel: string;
+  declare blocked: Array<{ hash: string; nick?: string; assigned?: string }> | null;
+  declare muted: Array<{ hash: string; name: string }> | null;
+  declare canInstall: boolean;
+  declare pushOn: boolean | null;
+  declare pushBusy: boolean;
+  declare pushMsg: string;
+  declare _onInstall: () => void;
   constructor() {
     super();
     this.keyShown = false; this.theme = this._theme(); this.copied = false;
@@ -286,15 +321,15 @@ class McSettings extends LitElement {
     fetch(this._api() + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }) })
       .then((r) => r.json()).then((d) => { if (d && d.ok) { this.prefs = d.prefs; window.mcPrefs = d.prefs; } }).catch(() => { /* keep defaults */ });
   }
-  _setPref(patch) {
+  _setPref(patch: Record<string, unknown>) {
     const k = readKey(); if (!k) return;
     this.prefs = Object.assign({ receipts: 'auto', notify_reply: 1, notify_mention: 1, notify_dm: 1 }, this.prefs, patch);
     window.mcPrefs = this.prefs;
     fetch(this._api() + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, set: patch }) }).catch(() => { /* best effort */ });
   }
-  _notifyOn(kind) { return !this.prefs || this.prefs['notify_' + kind] !== 0; }
+  _notifyOn(kind: string) { return !this.prefs || this.prefs['notify_' + kind] !== 0; }
   _receiptsOn() { return !(this.prefs && this.prefs.receipts === 'off'); }
-  _openPanel(which) {
+  _openPanel(which: string) {
     this.panel = this.panel === which ? '' : which;
     if (this.panel === 'blocked' && this.blocked == null) this._loadBlocked();
     if (this.panel === 'muted') this._loadMuted();
@@ -304,20 +339,20 @@ class McSettings extends LitElement {
     fetch(this._api() + '/dm/blocked', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }) })
       .then((r) => r.json()).then((d) => { this.blocked = (d && d.ok) ? d.blocked : []; }).catch(() => { this.blocked = []; });
   }
-  _unblock(hash) {
+  _unblock(hash: string) {
     const k = readKey(); if (!k) return;
     this.blocked = (this.blocked || []).filter((b) => b.hash !== hash);
     fetch(this._api() + '/dm/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, hash, blocked: false }) }).catch(() => { /* best effort */ });
   }
   _loadMuted() {
-    let list = [];
-    try { list = JSON.parse(localStorage.getItem('mc-muted')) || []; } catch (e) { list = []; }
-    const dn = (h) => (window.mcCore ? window.mcCore.displayName(h) : String(h).slice(0, 8));
+    let list: string[] = [];
+    try { list = JSON.parse(localStorage.getItem('mc-muted') as string) || []; } catch (e) { list = []; }
+    const dn = (h: string) => (window.mcCore ? window.mcCore.displayName(h) : String(h).slice(0, 8));
     this.muted = list.filter(Boolean).map((h) => ({ hash: h, name: dn(h) }));
   }
-  _unmute(hash) {
-    let list = [];
-    try { list = JSON.parse(localStorage.getItem('mc-muted')) || []; } catch (e) { list = []; }
+  _unmute(hash: string) {
+    let list: string[] = [];
+    try { list = JSON.parse(localStorage.getItem('mc-muted') as string) || []; } catch (e) { list = []; }
     list = list.filter((h) => h !== hash);
     try { localStorage.setItem('mc-muted', JSON.stringify(list)); } catch (e) { /* blocked */ }
     this.muted = (this.muted || []).filter((m) => m.hash !== hash);
@@ -327,7 +362,7 @@ class McSettings extends LitElement {
   /* ---- Add-to-Home-Screen + native push (Web Push / VAPID) ---- */
   _isStandalone() {
     try {
-      return (matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+      return (matchMedia && matchMedia('(display-mode: standalone)').matches) || (navigator as any).standalone === true;
     } catch (e) { return false; }
   }
   _isIOS() {
@@ -401,7 +436,7 @@ class McSettings extends LitElement {
       this.pushBusy = false;
     }
   }
-  async _enablePush(key) {
+  async _enablePush(key: string) {
     // 1) permission — this runs from the toggle tap, so it is a valid user gesture
     let perm = Notification.permission;
     if (perm === 'default') perm = await Notification.requestPermission();
@@ -442,7 +477,7 @@ class McSettings extends LitElement {
     try { localStorage.setItem('mc-push-owner', key); } catch (e) { /* blocked */ }
     this.pushMsg = ''; this.pushOn = true;
   }
-  async _disablePush(key) {
+  async _disablePush(key: string) {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (sub) {
@@ -474,8 +509,8 @@ class McSettings extends LitElement {
     else document.documentElement.removeAttribute('data-dark');
     this.theme = n;
   }
-  setDark(p) { if (window.mcSetDark) window.mcSetDark(p); this.dark = p; }
-  setLight(p) { if (window.mcSetLight) window.mcSetLight(p); this.light = p; }
+  setDark(p: string) { if (window.mcSetDark) window.mcSetDark(p); this.dark = p; }
+  setLight(p: string) { if (window.mcSetLight) window.mcSetLight(p); this.light = p; }
   copyKey() {
     const k = readKey();
     if (!k) return;
@@ -502,12 +537,12 @@ class McSettings extends LitElement {
       location.href = 'index.html';
     });
   }
-  _switch(label, note, on, onClick) {
+  _switch(label: string, note: any, on: boolean, onClick: (e?: Event) => any) {
     return html`<button class="mc-set-row mc-set-btn" @click=${onClick}>
       <span>${label}${note ? html`<small>${note}</small>` : ''}</span>
       <span class=${'mc-set-switch' + (on ? ' on' : '')}><span class="mc-set-knob"></span></span></button>`;
   }
-  _managedList(which, label, count, rows, action, actionLabel) {
+  _managedList(which: string, label: string, count: number | null, rows: Array<{ name: string; hash: string }> | null, action: (hash: string) => void, actionLabel: string) {
     const open = this.panel === which;
     return html`
       <button class="mc-set-row mc-set-btn" @click=${() => this._openPanel(which)}>
@@ -563,7 +598,7 @@ class McSettings extends LitElement {
   }
   render() {
     const k = readKey();
-    const link = (href, label, note) => html`<a class="mc-set-row" href=${href}>
+    const link = (href: string, label: string, note?: any) => html`<a class="mc-set-row" href=${href}>
       <span>${label}${note ? html`<small>${note}</small>` : ''}</span><span class="mc-set-go">›</span></a>`;
     const blockedRows = this.blocked == null ? null : this.blocked.map((b) => ({ hash: b.hash, name: b.nick || b.assigned || (b.hash || '').slice(0, 8) }));
     return html`<div class="mc-settings">
@@ -573,7 +608,7 @@ class McSettings extends LitElement {
         <button class="mc-set-row mc-set-btn" @click=${() => { this.keyShown = !this.keyShown; }}>
           <span>Show my key<small>Your one login secret — save it somewhere safe</small></span><span class="mc-set-go">${this.keyShown ? '▾' : '›'}</span></button>
         ${this.keyShown ? html`<div class="mc-set-key">
-          <input class="mc-set-keyin" readonly .value=${k} @focus=${(e) => e.target.select()}>
+          <input class="mc-set-keyin" readonly .value=${k} @focus=${(e: Event) => (e.target as HTMLInputElement).select()}>
           <button class="btn btn-send mc-set-copy" @click=${() => this.copyKey()}>${this.copied ? 'Copied' : 'Copy'}</button>
         </div>` : ''}
         <button class="mc-set-row mc-set-btn mc-set-danger" @click=${() => this.logout()}>
@@ -624,6 +659,8 @@ customElements.define('mc-settings', McSettings);
    leaves the page — the bell behaves exactly like the gear. */
 class McNotifs extends LitElement {
   static properties = { items: { attribute: false }, state: { attribute: false } };
+  declare items: any[] | null;
+  declare state: string;
   constructor() { super(); this.items = null; this.state = 'load'; }
   createRenderRoot() { return this; }
   connectedCallback() {
@@ -644,13 +681,13 @@ class McNotifs extends LitElement {
       }).catch(() => { this.state = 'err'; });
   }
   render() {
-    const wrap = (inner) => html`<div class="mc-notifs"><h3 class="mc-set-sec">Notifications</h3>${inner}</div>`;
+    const wrap = (inner: unknown) => html`<div class="mc-notifs"><h3 class="mc-set-sec">Notifications</h3>${inner}</div>`;
     if (this.state === 'gate') return wrap(html`<p class="mc-notifs-empty">Notifications need an identity — create one from the board.</p>`);
     if (this.state === 'err') return wrap(html`<p class="mc-notifs-empty">Could not load notifications. Check your connection.</p>`);
     if (this.state === 'load') return wrap(html`<p class="mc-notifs-empty">Loading…</p>`);
-    if (!this.items.length) return wrap(html`<p class="mc-notifs-empty" data-ico="🔔">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`);
-    const name = (it) => it.actor_nick || (it.actor_hash && window.mcCore ? window.mcCore.displayName(it.actor_hash) : 'Someone');
-    return wrap(html`${this.items.map((it) => {
+    if (!this.items!.length) return wrap(html`<p class="mc-notifs-empty" data-ico="🔔">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`);
+    const name = (it: any) => it.actor_nick || (it.actor_hash && window.mcCore ? window.mcCore.displayName(it.actor_hash) : 'Someone');
+    return wrap(html`${this.items!.map((it: any) => {
       const isDm = it.kind === 'dm';
       const isWall = it.kind === 'wall';
       const isLike = it.kind === 'wall-like';
@@ -678,14 +715,21 @@ customElements.define('mc-notifs', McNotifs);
    (the mc-navigate signal) so a chosen link never loads behind an open menu. */
 class McDeskbar extends LitElement {
   static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false }, notifMenu: { attribute: false } };
+  declare notif: number;
+  declare canBack: boolean;
+  declare menu: boolean;
+  declare notifMenu: boolean;
+  declare _onDoc: (e: Event) => void;
+  declare _onKey: (e: KeyboardEvent) => void;
+  declare _onNav: () => void;
   constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; this.notifMenu = false; }
   createRenderRoot() { return this; }
   sync() { this.notif = badgeCount('notif'); this.canBack = history.length > 1; this.title = pageTitle(); }
   connectedCallback() {
     super.connectedCallback();
     this._onDoc = (e) => {
-      if (this.menu && !e.target.closest('.mc-db-acct')) this.menu = false;
-      if (this.notifMenu && !e.target.closest('.mc-db-notif')) this.notifMenu = false;
+      if (this.menu && !(e.target as HTMLElement).closest('.mc-db-acct')) this.menu = false;
+      if (this.notifMenu && !(e.target as HTMLElement).closest('.mc-db-notif')) this.notifMenu = false;
     };
     this._onKey = (e) => { if (e.key === 'Escape') { this.menu = false; this.notifMenu = false; } };
     this._onNav = () => { this.menu = false; this.notifMenu = false; };
@@ -699,25 +743,25 @@ class McDeskbar extends LitElement {
     document.removeEventListener('keydown', this._onKey);
     document.removeEventListener('mc-navigate', this._onNav);
   }
-  toggleMenu(e) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; }
-  toggleNotif(e) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; }
-  goBack(e) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
-  goFwd(e) { e.preventDefault(); history.forward(); }
-  search(e) {
+  toggleMenu(e: Event) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; }
+  toggleNotif(e: Event) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; }
+  goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
+  goFwd(e: Event) { e.preventDefault(); history.forward(); }
+  search(e: Event) {
     e.preventDefault();
-    const input = this.querySelector('.mc-db-search input');
+    const input = this.querySelector('.mc-db-search input') as HTMLInputElement | null;
     location.href = 'community.html?q=' + encodeURIComponent((input && input.value.trim()) || '');
   }
   render() {
-    const badge = (n) => n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : '';
+    const badge = (n: number) => n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : '';
     return html`<div class="mc-deskbar">
       <div class="mc-db-hist">
-        <button class=${'mc-db-ico' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e) => this.goBack(e)} aria-label="Back" title="Back">${ICON.back}</button>
-        <button class="mc-db-ico" @click=${(e) => this.goFwd(e)} aria-label="Forward" title="Forward">${ICON.forward}</button>
+        <button class=${'mc-db-ico' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e: Event) => this.goBack(e)} aria-label="Back" title="Back">${ICON.back}</button>
+        <button class="mc-db-ico" @click=${(e: Event) => this.goFwd(e)} aria-label="Forward" title="Forward">${ICON.forward}</button>
       </div>
       <a class="mc-db-brand" href="index.html" aria-label="Home">${ICON.cross}<span class="mc-db-word">Mere Catholicity</span></a>
       ${onCommunity()
-        ? html`<form class="mc-db-search" @submit=${(e) => this.search(e)} role="search">
+        ? html`<form class="mc-db-search" @submit=${(e: Event) => this.search(e)} role="search">
             <span class="mc-db-searchico">${ICON.search}</span>
             <input type="search" placeholder="Search the board…" aria-label="Search the board">
           </form>`
@@ -726,11 +770,11 @@ class McDeskbar extends LitElement {
             : html`<div class="mc-db-center mc-db-title" title=${this.title}>${this.title}</div>`)}
       <nav class="mc-db-cluster" aria-label="Account">
         <div class="mc-db-notif">
-          <button class="mc-db-ico" @click=${(e) => this.toggleNotif(e)} aria-label="Notifications" title="Notifications" aria-expanded=${this.notifMenu ? 'true' : 'false'}>${ICON.bell}${badge(this.notif)}</button>
+          <button class="mc-db-ico" @click=${(e: Event) => this.toggleNotif(e)} aria-label="Notifications" title="Notifications" aria-expanded=${this.notifMenu ? 'true' : 'false'}>${ICON.bell}${badge(this.notif)}</button>
           ${this.notifMenu ? html`<div class="mc-db-menu mc-db-notifmenu"></div>` : ''}
         </div>
         <div class="mc-db-acct">
-          <button class="mc-db-ico mc-db-gear" @click=${(e) => this.toggleMenu(e)} aria-label="Settings" aria-expanded=${this.menu ? 'true' : 'false'}>${ICON.gear}</button>
+          <button class="mc-db-ico mc-db-gear" @click=${(e: Event) => this.toggleMenu(e)} aria-label="Settings" aria-expanded=${this.menu ? 'true' : 'false'}>${ICON.gear}</button>
           ${this.menu ? html`<div class="mc-db-menu"></div>` : ''}
         </div>
       </nav>
@@ -752,6 +796,9 @@ customElements.define('mc-deskbar', McDeskbar);
    and the badge caches. Phones never see it (CSS-gated ≥601px). */
 class McSidebar extends LitElement {
   static properties = { active: { attribute: false }, dm: { attribute: false }, wide: { attribute: false } };
+  declare active: string;
+  declare dm: number;
+  declare wide: boolean;
   constructor() {
     super();
     this.active = 'home'; this.dm = 0;
@@ -776,7 +823,7 @@ class McSidebar extends LitElement {
       ${TABS.map((t) => {
         const n = t.badge === 'dm' ? this.dm : 0;
         return html`<a class=${'mc-sb-item' + (this.active === t.key ? ' mc-tab-on' : '')} href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'} title=${t.label}>
-          <span class="mc-sb-ico">${t.icon ? t.icon : ICON[t.svg]}${n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : ''}</span>
+          <span class="mc-sb-ico">${t.icon ? t.icon : ICON[t.svg!]}${n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : ''}</span>
           <span class="mc-sb-lbl">${t.label}</span></a>`;
       })}
     </nav>`;
@@ -830,12 +877,12 @@ function isMobile() { try { return matchMedia('(max-width: 600px)').matches; } c
 /* An app-style confirm: a sheet with the message and two fat buttons on phones,
    the native confirm on desktop (which the owner keeps as-is). Returns a Promise
    that resolves true/false; dismissing the sheet (scrim/grip) is a cancel. */
-function mcConfirm(message, opts) {
+function mcConfirm(message: string, opts?: any): Promise<boolean> {
   opts = opts || {};
   if (!isMobile() || !window.mcSheet) return Promise.resolve(window.confirm(message));
-  return new Promise(function (resolve) {
+  return new Promise<boolean>(function (resolve) {
     let done = false;
-    const finish = function (v) { if (done) return; done = true; window.mcSheet.close(); resolve(v); };
+    const finish = function (v: boolean) { if (done) return; done = true; window.mcSheet!.close(); resolve(v); };
     const wrap = document.createElement('div');
     wrap.className = 'mc-confirm';
     const msg = document.createElement('p'); msg.className = 'mc-confirm-msg'; msg.textContent = message;
@@ -849,12 +896,12 @@ function mcConfirm(message, opts) {
     ok.addEventListener('click', function () { finish(true); });
     row.appendChild(cancel); row.appendChild(ok);
     wrap.appendChild(msg); wrap.appendChild(row);
-    window.mcSheet.open(opts.title || 'Confirm', wrap, function () { finish(false); });
+    window.mcSheet!.open(opts.title || 'Confirm', wrap, function () { finish(false); });
   });
 }
 
 /* A brief bottom toast (phones only; desktop keeps its inline status text). */
-function mcToast(message) {
+function mcToast(message: string) {
   if (!isMobile()) return;
   const t = document.createElement('div');
   t.className = 'mc-toast'; t.setAttribute('data-mc-app', ''); t.textContent = message;
@@ -871,7 +918,7 @@ function mcToast(message) {
    tappable button that opens a sheet of big option rows. Desktop keeps the native
    select untouched. Idempotent. Returns { refresh } to re-sync the button label
    after options are repopulated (cascading pickers). */
-function mcSelectSheet(sel) {
+function mcSelectSheet(sel: any) {
   if (!sel) return { refresh: function () {} };
   /* Re-entrant: if the button was reconciled away by a Lit re-render, rebuild it
      (call this from the view's updated()); otherwise reuse the existing one. */
@@ -899,7 +946,7 @@ function mcSelectSheet(sel) {
         sel.selectedIndex = i;
         sel.dispatchEvent(new Event('change', { bubbles: true }));
         refresh();
-        window.mcSheet.close();
+        window.mcSheet!.close();
       });
       list.appendChild(r);
     });
@@ -923,11 +970,11 @@ const ONBOARD_FAITHS = [
   ['indo-european', 'Indo-European', 'I keep one of the old pre-Christian ways'],
   ['seeker', 'Seeker', 'I’m still seeking'],
 ];
-function mcOnboard(onDone, opts) {
+function mcOnboard(onDone?: any, opts?: any) {
   if (!window.mcSheet) return;   // the sheet is a centered modal on desktop, a bottom sheet on phones
   const wrap = document.createElement('div');
   wrap.className = 'mc-onboard';
-  const done = function () { window.mcSheet.close(); if (onDone) { try { onDone(); } catch (e) { /* caller */ } } location.reload(); };
+  const done = function () { window.mcSheet!.close(); if (onDone) { try { onDone(); } catch (e) { /* caller */ } } location.reload(); };
 
   const intro = document.createElement('p');
   intro.className = 'mc-onboard-intro';
@@ -982,7 +1029,7 @@ function mcOnboard(onDone, opts) {
   function refresh() { createBtn.disabled = !(chosenFaith && agree.checked); }
   haveKey.addEventListener('click', function () { pasteWrap.hidden = !pasteWrap.hidden; if (!pasteWrap.hidden) pasteIn.focus(); });
 
-  function revealKey(key) {
+  function revealKey(key: string) {
     wrap.textContent = '';
     const h = document.createElement('p'); h.className = 'mc-onboard-intro';
     h.textContent = 'You’re in. Save your key — it is the only way back to this identity.';
@@ -1003,7 +1050,7 @@ function mcOnboard(onDone, opts) {
     const kit = window.mcKit;
     if (!kit || !kit.mintIdentity) { location.href = 'profile.html'; return; }
     createBtn.disabled = true; note.textContent = 'Creating…';
-    kit.mintIdentity(chosenFaith).then(function (res) { revealKey(res && res.key); })
+    kit.mintIdentity(chosenFaith).then(function (res: any) { revealKey(res && res.key); })
       .catch(function () { note.textContent = 'Could not create. Try again.'; createBtn.disabled = false; });
   });
   pasteBtn.addEventListener('click', function () {
@@ -1012,7 +1059,7 @@ function mcOnboard(onDone, opts) {
     if (!key) { pasteIn.focus(); return; }
     if (!kit || !kit.loginWithKey) { location.href = 'profile.html'; return; }
     pasteBtn.disabled = true; note.textContent = 'Logging in…';
-    kit.loginWithKey(key).then(function (ok) {
+    kit.loginWithKey(key).then(function (ok: any) {
       if (ok) done();
       else { note.textContent = 'That key was not recognized.'; pasteBtn.disabled = false; }
     }).catch(function () { note.textContent = 'Could not log in. Try again.'; pasteBtn.disabled = false; });
@@ -1027,26 +1074,26 @@ function mcOnboard(onDone, opts) {
    return { sync } for boots() to call after every swap. The elements carry
    data-mc-app so swapContent skips them; CSS keeps them off desktop. */
 export function installChrome() {
-  const appbar = document.createElement('mc-appbar');
+  const appbar = document.createElement('mc-appbar') as McAppbar;
   appbar.setAttribute('data-mc-app', '');
   document.body.appendChild(appbar);
 
-  const tabbar = document.createElement('mc-tabbar');
+  const tabbar = document.createElement('mc-tabbar') as McTabbar;
   tabbar.setAttribute('data-mc-app', '');
   document.body.appendChild(tabbar);
 
-  const sheet = document.createElement('mc-sheet');
+  const sheet = document.createElement('mc-sheet') as McSheet;
   sheet.setAttribute('data-mc-app', '');
   document.body.appendChild(sheet);
 
   /* The desktop platform bar (CSS-gated ≥601px). data-mc-app is load-bearing:
      without it swapContent deletes the bar on the first soft-nav. */
-  const deskbar = document.createElement('mc-deskbar');
+  const deskbar = document.createElement('mc-deskbar') as McDeskbar;
   deskbar.setAttribute('data-mc-app', '');
   document.body.appendChild(deskbar);
   /* The desktop LEFT app-bar (the mobile tabs stood up) + the persistent site
      footer. Both data-mc-app so soft-nav preserves them across swaps. */
-  const sidebar = document.createElement('mc-sidebar');
+  const sidebar = document.createElement('mc-sidebar') as McSidebar;
   sidebar.setAttribute('data-mc-app', '');
   document.body.appendChild(sidebar);
   const footer = document.createElement('mc-footer');
@@ -1091,7 +1138,7 @@ export function installChrome() {
   var vv = window.visualViewport;
   if (vv) {
     var applyKb = function () {
-      var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      var kb = Math.max(0, Math.round(window.innerHeight - vv!.height - vv!.offsetTop));
       /* A real keyboard is tall; a browser toolbar reveal is not. The threshold
          keeps chrome bars from being mistaken for a keyboard. */
       var open = kb > 120;

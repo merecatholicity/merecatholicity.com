@@ -5,7 +5,7 @@
    pinning. The transport is INJECTED, so these tests touch no network. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchJson, invalidate, metrics } from '../../app/store.js';
+import { fetchJson, invalidate, metrics } from '../../app/store.ts';
 
 // A fake transport: records how many times it was actually called, returns a
 // Response-shaped object whose .json() resolves to `payload`.

@@ -23,19 +23,40 @@ const PING_MS = 40000;      // app-level heartbeat cadence
 const DEAD_MS = 15000;      // no pong within this past a ping ⇒ force reconnect
 const DEGRADE_AT = 4;       // consecutive failures before we announce degraded
 
-function wsUrl(path) {
+function wsUrl(path: string) {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return proto + '//' + location.host + path;
 }
-function jitter(ms) { return Math.round(ms * (0.8 + Math.random() * 0.4)); }
+function jitter(ms: number) { return Math.round(ms * (0.8 + Math.random() * 0.4)); }
+
+/* One managed connection's mutable state. The object literal below carries only
+   the data fields; `_open`/`_close`/`_sendSub` are attached before Conn returns
+   and `nosub` is set by openChat, so both are part of the shape. */
+interface ConnState {
+  ws: WebSocket | null;
+  want: boolean;
+  desired: string[];
+  userScope: string;
+  authFrame: string | null;
+  ix: number;
+  failures: number;
+  reconnectT: number;
+  pingT: number;
+  lastRx: number;
+  closing: boolean;
+  nosub?: boolean;
+  _open: () => void;
+  _close: () => void;
+  _sendSub: () => void;
+}
 
 /* One managed connection (board today; chat in Phase 2). All timers are the
    client's; the server DO holds no timer and hibernates when idle. */
-function Conn(path, onFrame) {
+function Conn(path: string, onFrame: (m: any) => void): ConnState {
   const c = {
     ws: null, want: false, desired: [], userScope: '', authFrame: null,
     ix: 0, failures: 0, reconnectT: 0, pingT: 0, lastRx: 0, closing: false,
-  };
+  } as unknown as ConnState;
 
   function clearTimers() {
     if (c.pingT) { clearInterval(c.pingT); c.pingT = 0; }
@@ -112,12 +133,12 @@ function Conn(path, onFrame) {
   return c;
 }
 
-const conns = [];   // every managed connection, for the shared idle policy
+const conns: ConnState[] = [];   // every managed connection, for the shared idle policy
 let hidden = false;
 let idleT = 0;
 
 /* board — the always-available forum feed. */
-const board = Conn('/api/comments/live', function (m) {
+const board = Conn('/api/comments/live', function (m: any) {
   document.dispatchEvent(new CustomEvent('mc-live', { detail: m }));
 });
 conns.push(board);
@@ -125,7 +146,7 @@ conns.push(board);
 const boardApi = {
   /* A forum view calls this on mount with its scope(s). Replaces the desired
      subscription (one forum view is shown at a time) and ensures the socket. */
-  sub: function (scopes) {
+  sub: function (scopes: string[]) {
     board.desired = Array.isArray(scopes) ? scopes : [];
     board.want = true;
     if (board.ws) board._sendSub(); else if (!hidden) board._open();
@@ -154,7 +175,7 @@ function presenceMode() {
   try { return localStorage.getItem('mc-presence') === 'off' ? 'off' : 'auto'; } catch (e) { return 'auto'; }
 }
 const memberApi = {
-  enable: function (key, hash) {
+  enable: function (key: string, hash: string) {
     if (!key || !/^[0-9a-f]{64}$/.test(String(hash))) return;
     const next = 'user:' + hash;
     if (board.userScope === next && board.authFrame) return;   // already enabled
@@ -176,14 +197,14 @@ const memberApi = {
   },
   /* Transient "I am typing to <to>" signal, sent over the live socket only (no
      HTTP, no rate-limit bucket); the caller debounces it. state 'start'|'stop'. */
-  typing: function (to, state) {
+  typing: function (to: string, state?: string) {
     if (!board.ws || board.ws.readyState !== 1) return;
     if (!/^[0-9a-f]{64}$/.test(String(to))) return;
     try { board.ws.send(JSON.stringify({ t: 'typing', to: to, state: state === 'stop' ? 'stop' : 'start' })); } catch (e) { /* dropped */ }
   },
   /* Change my presence mode ('auto'|'off'), persist it, and re-auth so the DO
      broadcasts the change to anyone watching me. */
-  setPresence: function (mode) {
+  setPresence: function (mode: string) {
     try { localStorage.setItem('mc-presence', mode === 'off' ? 'off' : 'auto'); } catch (e) { /* private mode */ }
     if (!memberKey) return;
     board.authFrame = JSON.stringify({ t: 'auth', key: memberKey, presence: presenceMode() });
@@ -199,7 +220,7 @@ const memberApi = {
    return reopens it — the ChatRoom DO keeps generating regardless and replays
    its state in the `hello` frame on reconnect, which IS the resume. It carries
    an auth frame (the member key, never in the URL) and subscribes to nothing. */
-let chatConn = null;
+let chatConn: ConnState | null = null;
 function closeChat() {
   if (chatConn) {
     chatConn.want = false;
@@ -209,7 +230,7 @@ function closeChat() {
     chatConn = null;
   }
 }
-function openChat(chatId, key, onFrame) {
+function openChat(chatId: string | number, key: string, onFrame: (m: any) => void) {
   closeChat();
   const c = Conn('/api/merecat/live?chat=' + encodeURIComponent(chatId), onFrame);
   c.nosub = true;
@@ -219,7 +240,7 @@ function openChat(chatId, key, onFrame) {
   conns.push(c);
   if (!hidden) c._open();
   return {
-    send: function (obj) {
+    send: function (obj: any) {
       if (c.ws && c.ws.readyState === 1) {
         try { c.ws.send(JSON.stringify(obj)); return true; } catch (e) { /* reconnect will retry */ }
       }

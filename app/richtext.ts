@@ -9,9 +9,9 @@
    source; its own copies serve only the no-bundle fallback and retire at
    Wave F. Assigned to window.mcRich. */
 
-import * as Core from './core.js';
+import * as Core from './core.ts';
 
-function el(tag, cls, text) {
+function el(tag: string, cls?: string | null, text?: string | null): HTMLElement {
   var node = document.createElement(tag);
   if (cls) node.className = cls;
   if (text != null) node.textContent = text;
@@ -22,11 +22,11 @@ function el(tag, cls, text) {
      body stores only the plain-text code; the renderer swaps a KNOWN code for a
      same-origin <img> from this whitelist, and an unknown :code: stays literal
      text, so nothing a user writes ever becomes an arbitrary image source. */
-  var EMOJI_PACKS = {
+  var EMOJI_PACKS: Record<string, string[][]> = {
     memes: [['cry','emoji/memes/cry.webp'],['pogging','emoji/memes/pogging.webp'],['bonk','emoji/memes/bonk.webp'],['catkiss','emoji/memes/catkiss.webp'],['crythumbsup','emoji/memes/crythumbsup.webp'],['catjam','emoji/memes/catjam.webp'],['megareverse-1','emoji/memes/megareverse-1.webp'],['shrug','emoji/memes/shrug.webp'],['kekw','emoji/memes/kekw.webp'],['boohoo','emoji/memes/boohoo.webp'],['laughing-hard','emoji/memes/laughing-hard.webp'],['bruh','emoji/memes/bruh.webp'],['pepecringe','emoji/memes/pepecringe.webp'],['kitty-happy','emoji/memes/kitty-happy.webp'],['catsneeze','emoji/memes/catsneeze.webp'],['cutecatstare','emoji/memes/cutecatstare.webp'],['catsmile','emoji/memes/catsmile.webp'],['catstare','emoji/memes/catstare.webp'],['cat-laughing','emoji/memes/cat-laughing.webp'],['soldjacat','emoji/memes/soldjacat.webp'],['crycat','emoji/memes/crycat.webp'],['bingus-shush','emoji/memes/bingus-shush.webp'],['huhcat','emoji/memes/huhcat.webp'],['catno','emoji/memes/catno.webp'],['seriously','emoji/memes/seriously.webp'],['cat-sleep','emoji/memes/cat-sleep.webp'],['crisiscat','emoji/memes/crisiscat.webp'],['huhcat-2','emoji/memes/huhcat-2.webp'],['cat-kiss','emoji/memes/cat-kiss.webp'],['catfunny','emoji/memes/catfunny.webp'],['happy','emoji/memes/happy.webp'],['laughing-cat','emoji/memes/laughing-cat.webp'],['kitty-sad','emoji/memes/kitty-sad.webp']],
     pepe: [['pepecross','emoji/pepe/pepecross.webp'],['pepetyping','emoji/pepe/pepetyping.webp'],['pepeheart','emoji/pepe/pepeheart.webp'],['pepelaugh','emoji/pepe/pepelaugh.webp'],['pepeperfect','emoji/pepe/pepeperfect.webp'],['strongpepe','emoji/pepe/strongpepe.webp'],['pepebanger','emoji/pepe/pepebanger.webp'],['pepeclap','emoji/pepe/pepeclap.webp'],['pepetorchfire','emoji/pepe/pepetorchfire.webp'],['pepeblink','emoji/pepe/pepeblink.webp'],['pepeuwu','emoji/pepe/pepeuwu.webp'],['pepeokay','emoji/pepe/pepeokay.webp'],['pepepug','emoji/pepe/pepepug.webp'],['kingpepe','emoji/pepe/kingpepe.webp'],['kingpepe-2','emoji/pepe/kingpepe-2.webp'],['nou','emoji/pepe/nou.webp'],['peperain','emoji/pepe/peperain.webp'],['peperich','emoji/pepe/peperich.webp'],['pepehacker','emoji/pepe/pepehacker.webp'],['pepeclap-2','emoji/pepe/pepeclap-2.webp'],['pepe-blushy','emoji/pepe/pepe-blushy.webp'],['pepe-sad','emoji/pepe/pepe-sad.webp'],['pepehug','emoji/pepe/pepehug.webp'],['pepe-hehe','emoji/pepe/pepe-hehe.webp'],['pepes','emoji/pepe/pepes.webp'],['sleepypepe','emoji/pepe/sleepypepe.webp'],['pepohappy','emoji/pepe/pepohappy.webp']]
   };
-  var CUSTOM_EMOJI = {};
+  var CUSTOM_EMOJI: Record<string, string> = {};
   Object.keys(EMOJI_PACKS).forEach(function (k) {
     EMOJI_PACKS[k].forEach(function (e) { CUSTOM_EMOJI[e[0]] = e[1]; });
   });
@@ -38,7 +38,7 @@ function el(tag, cls, text) {
      same path custom pack codes take. name/char pairs, char never holding a
      space. A :code: matches a custom image first, then a name here, else stays
      literal text. */
-  var NAMED_EMOJI = {};
+  var NAMED_EMOJI: Record<string, string> = {};
   ('smile 😄 smiley 😃 grin 😁 laughing 😆 joy 😂 rofl 🤣 sweat_smile 😅 slight_smile 🙂 upside_down 🙃 wink 😉 blush 😊 innocent 😇 heart_eyes 😍 star_struck 🤩 kissing_heart 😘 yum 😋 stuck_out_tongue 😛 zany 🤪 thinking 🤔 shush 🤫 hand_over_mouth 🤭 neutral 😐 expressionless 😑 no_mouth 😶 smirk 😏 unamused 😒 rolling_eyes 🙄 relieved 😌 pensive 😔 sleepy 😪 sleeping 😴 mask 😷 nauseated 🤢 vomiting 🤮 sneeze 🤧 hot 🥵 cold 🥶 dizzy_face 😵 exploding_head 🤯 cowboy 🤠 partying 🥳 sunglasses 😎 nerd 🤓 monocle 🧐 confused 😕 worried 😟 frowning 🙁 open_mouth 😮 astonished 😲 flushed 😳 pleading 🥺 fearful 😨 cold_sweat 😰 cry 😢 sob 😭 scream 😱 confounded 😖 disappointed 😞 weary 😩 tired 😫 yawn 🥱 triumph 😤 rage 😡 angry 😠 cursing 🤬 smiling_imp 😈 imp 👿 skull 💀 poop 💩 clown 🤡 ghost 👻 alien 👽 robot 🤖 wave 👋 ok_hand 👌 v ✌️ crossed_fingers 🤞 love_you 🤟 call_me 🤙 point_up ☝️ thumbsup 👍 thumbsdown 👎 fist ✊ punch 👊 clap 👏 raised_hands 🙌 pray 🙏 handshake 🤝 muscle 💪 middle_finger 🖕 heart ❤️ orange_heart 🧡 yellow_heart 💛 green_heart 💚 blue_heart 💙 purple_heart 💜 black_heart 🖤 broken_heart 💔 two_hearts 💕 sparkling_heart 💖 100 💯 anger 💢 boom 💥 sweat_drops 💦 dash 💨 fire 🔥 star ⭐ star2 🌟 sparkles ✨ zap ⚡ rainbow 🌈 sunny ☀️ tada 🎉 confetti 🎊 gift 🎁 trophy 🏆 dart 🎯 white_check_mark ✅ x ❌ o ⭕ exclamation ❗ question ❓ warning ⚠️ bell 🔔 bulb 💡 key 🔑 lock 🔒 dog 🐶 cat 🐱 mouse 🐭 hamster 🐹 rabbit 🐰 fox 🦊 bear 🐻 panda 🐼 koala 🐨 tiger 🐯 lion 🦁 cow 🐮 pig 🐷 frog 🐸 monkey 🐵 chicken 🐔 penguin 🐧 bird 🐦 unicorn 🦄 bee 🐝 butterfly 🦋 snail 🐌 turtle 🐢 snake 🐍 octopus 🐙 whale 🐳 apple 🍎 banana 🍌 watermelon 🍉 grapes 🍇 strawberry 🍓 cherries 🍒 peach 🍑 avocado 🥑 corn 🌽 mushroom 🍄 bread 🍞 cheese 🧀 hamburger 🍔 fries 🍟 pizza 🍕 hotdog 🌭 taco 🌮 popcorn 🍿 doughnut 🍩 cookie 🍪 cake 🍰 chocolate 🍫 candy 🍬 lollipop 🍭 beer 🍺 beers 🍻 wine 🍷 coffee ☕ tea 🍵').trim().split(/\s+/).forEach(function (tok, i, a) { if (i % 2 === 0) NAMED_EMOJI[tok] = a[i + 1]; });
   /* Inline markup, parsed left-to-right in one pass and built ONLY from
      createElement + text nodes (never innerHTML), so nothing a user writes can
@@ -67,7 +67,7 @@ function el(tag, cls, text) {
      (merecat writes those), or a sources-footer entry. The slug is greedy, so
      1-corinthians-6-9 splits book/chapter/verse correctly; a chapter-only
      hash (no verse) stays undecorated since there is nothing to preview. */
-  function scriptureDecor(a, url) {
+  function scriptureDecor(a: Element, url: string) {
     var m = /(?:^|\/)kjv\.html#([a-z0-9-]+)-(\d+)-(\d+)$/.exec(String(url || ''));
     var dr = null;
     if (!m) {
@@ -95,7 +95,7 @@ function el(tag, cls, text) {
      <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
      (a link inside bold works) by recursing on the strictly-shorter inner text.
      Shared by the body renderer and each quoted/list line. */
-  function appendRich(target, str, plain) {
+  function appendRich(target: Node, str: string | null | undefined, plain?: boolean) {
     /* plain mode — the librarian's leash: every markdown feature is consumed
        but none applies, so the bot may write **bold** all day and the reader
        sees only "bold". Scripture autolinks and [text](url) links stay live
@@ -128,14 +128,14 @@ function el(tag, cls, text) {
            (8:28-30) points at its first verse. */
         var ref = Core.verseParts(m[6].toLowerCase().replace(/\s+/g, ' '), m[7], m[8], m[9]);
         if (ref) {
-          var sa = el('a', 'body-link scripture-link');
+          var sa = el('a', 'body-link scripture-link') as HTMLAnchorElement;
           sa.href = 'kjv.html#' + ref.href;
           /* Parts kept for the on-hover verse preview (see scriptureHover). A
              validated ref only: a real book, chapter/verse >= 1, ordered range. */
           sa.setAttribute('data-slug', ref.slug);
-          sa.setAttribute('data-ch', ref.ch);
-          sa.setAttribute('data-v1', ref.v1);
-          sa.setAttribute('data-v2', ref.v2);
+          sa.setAttribute('data-ch', ref.ch as any);
+          sa.setAttribute('data-v1', ref.v1 as any);
+          sa.setAttribute('data-v2', ref.v2 as any);
           sa.appendChild(document.createTextNode(m[0]));
           target.appendChild(sa);
         } else {
@@ -143,7 +143,7 @@ function el(tag, cls, text) {
         }
       } else {
         var url = m[3] !== undefined ? m[4] : m[0];
-        var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]);
+        var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]) as HTMLAnchorElement;
         if (/^https?:\/\/(?:www\.)?merecatholicity\.com(?:[\/?#]|$)/i.test(url)) {
           a.href = url;
           scriptureDecor(a, url);
@@ -166,7 +166,7 @@ function el(tag, cls, text) {
      button writes and anyone may type by hand. Built entirely from text nodes
      and anchors, never innerHTML, so a body can never inject markup. Use this
      in place of a plain textContent wherever a user body is shown. */
-  function fillBody(node, text, plain) {
+  function fillBody(node: HTMLElement, text: string | null | undefined, plain?: boolean) {
     node.textContent = '';
     var lines = String(text == null ? '' : text).split('\n');
     var i = 0;
@@ -215,12 +215,12 @@ function el(tag, cls, text) {
         var hm = /^(#{1,5}) +(.*)$/.exec(lines[i]);
         if (plain) {
           var hp = el('p');
-          appendRich(hp, hm[2], plain);
+          appendRich(hp, hm![2], plain);
           node.appendChild(hp);
         } else {
           ensureEmojiStyles();
-          var hd = el('p', 'mc-hd mc-hd' + hm[1].length);
-          appendRich(hd, hm[2]);
+          var hd = el('p', 'mc-hd mc-hd' + hm![1].length);
+          appendRich(hd, hm![2]);
           node.appendChild(hd);
         }
         i++;
@@ -236,15 +236,15 @@ function el(tag, cls, text) {
     }
     return node;
   }
-  function emojiToken(code, raw) {
+  function emojiToken(code: string, raw: string) {
     var c = code.toLowerCase();
     if (CUSTOM_EMOJI[c]) return emojiImg(CUSTOM_EMOJI[c], c);
     if (NAMED_EMOJI[c]) return document.createTextNode(NAMED_EMOJI[c]);
     return document.createTextNode(raw);
   }
-  function emojiImg(path, code) {
+  function emojiImg(path: string, code: string) {
     ensureEmojiStyles();
-    var img = el('img', 'mc-emoji');
+    var img = el('img', 'mc-emoji') as HTMLImageElement;
     img.src = path;
     img.alt = ':' + code + ':';
     img.title = ':' + code + ':';
@@ -252,7 +252,7 @@ function el(tag, cls, text) {
     img.decoding = 'async';
     return img;
   }
-  var kjvData = null, kjvPromise = null;
+  var kjvData: any = null, kjvPromise: Promise<any> | null = null;
   function loadKjv() {
     if (kjvPromise) return kjvPromise;
     kjvPromise = fetch('kjv.json').then(function (r) { return r.json(); })
@@ -260,7 +260,7 @@ function el(tag, cls, text) {
       .catch(function () { kjvData = { books: [] }; return kjvData; });
     return kjvPromise;
   }
-  var drData = null, drPromise = null;
+  var drData: any = null, drPromise: Promise<any> | null = null;
   function loadDr() {
     if (drPromise) return drPromise;
     drPromise = fetch('dr.json').then(function (r) { return r.json(); })
@@ -334,18 +334,18 @@ function el(tag, cls, text) {
     var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
     document.head.appendChild(st);
   }
-function initScriptureHover(signal) {
+function initScriptureHover(signal: AbortSignal) {
   (function scriptureHover() {
     try { if (!window.matchMedia || !window.matchMedia('(hover: hover)').matches) return; } catch (e) { return; }
-    var tip = null, maps = {}, hideTimer = null, CAP = 30;
-    function bySlug(which, data, slug) {
+    var tip: any = null, maps: Record<string, any> = {}, hideTimer: any = null, CAP = 30;
+    function bySlug(which: string, data: any, slug: string | null) {
       if (!maps[which] && data) {
         maps[which] = {};
-        data.books.forEach(function (b) { maps[which][b.slug] = b; });
+        data.books.forEach(function (b: any) { maps[which][b.slug] = b; });
       }
-      return maps[which] ? maps[which][slug] : null;
+      return maps[which] ? maps[which][slug as string] : null;
     }
-    function place(a, ex, ey) {
+    function place(a: Element, ex: number, ey: number) {
       /* A reference that wraps across lines has a union box spanning the
          whole paragraph width, and a tip placed from it lands far from the
          cursor (in the narrow merecat bubbles this happened constantly and
@@ -373,12 +373,12 @@ function initScriptureHover(signal) {
       }
       tip.style.top = top + 'px';
     }
-    function show(a, ex, ey) {
+    function show(a: Element, ex: number, ey: number) {
       var dr = a.getAttribute('data-bible') === 'dr';
       (dr ? loadDr() : loadKjv()).then(function () {
         var b = bySlug(dr ? 'dr' : 'kjv', dr ? drData : kjvData, a.getAttribute('data-slug')); if (!b) return;
-        var c = +a.getAttribute('data-ch'), ch = b.chapters[c - 1]; if (!ch) return;
-        var v1 = +a.getAttribute('data-v1'), v2 = +a.getAttribute('data-v2');
+        var c = +a.getAttribute('data-ch')!, ch = b.chapters[c - 1]; if (!ch) return;
+        var v1 = +a.getAttribute('data-v1')!, v2 = +a.getAttribute('data-v2')!;
         if (!tip) {
           /* The tip's CSS rides ensureEmojiStyles, which composer views call
              and the merecat chat does not: without it the tip is an unstyled
@@ -404,14 +404,14 @@ function initScriptureHover(signal) {
         place(a, ex, ey);
       });
     }
-    document.addEventListener('mouseover', function (e) {
-      var a = e.target && e.target.closest && e.target.closest('a.scripture-link');
+    document.addEventListener('mouseover', function (e: MouseEvent) {
+      var a = e.target && (e.target as any).closest && (e.target as any).closest('a.scripture-link');
       if (!a) return;
       clearTimeout(hideTimer);
       show(a, e.clientX, e.clientY);
     }, { signal: signal });
-    document.addEventListener('mouseout', function (e) {
-      var a = e.target && e.target.closest && e.target.closest('a.scripture-link');
+    document.addEventListener('mouseout', function (e: MouseEvent) {
+      var a = e.target && (e.target as any).closest && (e.target as any).closest('a.scripture-link');
       if (!a) return;
       hideTimer = setTimeout(function () { if (tip) tip.hidden = true; }, 160);
     }, { signal: signal });

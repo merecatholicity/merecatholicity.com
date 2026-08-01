@@ -10,10 +10,15 @@
    dominated by the Turnstile-gated composer, stays kit machinery. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl } from './util.js';
+import { pagerTpl, crumbTpl } from './util.ts';
 
 class McProfile extends LitElement {
   static properties = { profile: { attribute: false }, err: { attribute: false } };
+  declare kit: any;
+  declare hash: string;
+  declare profile: any;
+  declare err: string;
+  declare _done: boolean;
   constructor() {
     super();
     this.kit = null;
@@ -28,7 +33,7 @@ class McProfile extends LitElement {
     document.title = 'Profile | Community';
     if (!/^[0-9a-f]{64}$/.test(String(this.hash))) { this.err = 'bad'; return; }
     kit.cachedJson(kit.API + '/profile?hash=' + this.hash + kit.freshParam('&'), kit.freshOpts(), 30000)
-      .then((d) => {
+      .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.profile = d.profile;
       })
@@ -44,7 +49,7 @@ class McProfile extends LitElement {
        survives the read/edit toggle) — mounted exactly as the old view did. */
     if (editable) {
       const slot = this.querySelector('.mc-ts-host');
-      slot.appendChild(kit.el('div', 'ts-slot'));
+      slot!.appendChild(kit.el('div', 'ts-slot'));
       kit.loadTurnstile();
     }
     kit.renderProfile(card, this.profile, editable);
@@ -64,6 +69,10 @@ customElements.define('mc-profile', McProfile);
 
 class McInbox extends LitElement {
   static properties = { d: { attribute: false }, err: { attribute: false } };
+  declare kit: any;
+  declare d: any;
+  declare err: string;
+  declare _onLive: (ev: Event) => void;
   constructor() {
     super();
     this.kit = null;
@@ -78,7 +87,7 @@ class McInbox extends LitElement {
     this.load();
     /* Live: a DM pushed over the private user scope bumps its thread to the top
        and rings the count, so the inbox stays current while it is open. */
-    this._onLive = (ev) => { if (ev.detail && ev.detail.t === 'dm') this.load(); };
+    this._onLive = (ev: Event) => { const det = (ev as CustomEvent).detail; if (det && det.t === 'dm') this.load(); };
     document.addEventListener('mc-live', this._onLive);
   }
   disconnectedCallback() {
@@ -91,7 +100,7 @@ class McInbox extends LitElement {
     kit.fetchRetry(kit.API + '/dm/threads', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, p: pageNum }),
-    }, [1000, 3000]).then((r) => r.json()).then((d) => {
+    }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
       if (!d.ok) throw new Error(d.error || 'failed');
       kit.dmCacheSet(d.unread_total);
       this.d = d;
@@ -108,10 +117,10 @@ class McInbox extends LitElement {
     const host = this.querySelector('.mc-dmsearch');
     if (host && !host.firstChild) host.appendChild(kit.dmSearchBox());
   }
-  del(e, other, row) {
+  del(e: Event, other: string, row: HTMLElement) {
     e.preventDefault();
     const kit = this.kit;
-    const go = (ok) => {
+    const go = (ok: boolean) => {
       if (!ok) return;
       fetch(kit.API + '/dm/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -132,19 +141,19 @@ class McInbox extends LitElement {
     if (this.err === 'load') return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">The inbox could not be loaded. Check your connection and reload the page.</p>`;
     if (!this.d) return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">Loading messages...</p>`;
     const d = this.d;
-    const href = (i) => 'messages.html&p=' + i;
+    const href = (i: number) => 'messages.html&p=' + i;
     return html`${head}
       <div class="mc-dmsearch"></div>
       ${d.threads.length ? pagerTpl(d.total, d.per, d.page, href) : nothing}
       <div class="board-topics">
         ${!d.threads.length
           ? html`<p class="comments-status mc-empty" data-ico="✉️">No messages yet. Find a member above, or press Direct Message on any post.</p>`
-          : d.threads.map((t) => html`<div class="board-topic">
+          : d.threads.map((t: any) => html`<div class="board-topic">
               <div class="board-topic-left">
                 <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}
               </div>
               <div class="board-stats">${t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + kit.fmtDateTime(t.last_at)}</div>
-              <div class="board-admin-corner"><a class="trust-toggle" href="#" @click=${(e) => this.del(e, t.other_hash, e.target.closest('.board-topic'))}>Delete</a></div>
+              <div class="board-admin-corner"><a class="trust-toggle" href="#" @click=${(e: Event) => this.del(e, t.other_hash, (e.target as HTMLElement).closest('.board-topic') as HTMLElement)}>Delete</a></div>
             </div>`)}
       </div>
       ${d.threads.length ? pagerTpl(d.total, d.per, d.page, href) : nothing}`;
@@ -154,8 +163,8 @@ customElements.define('mc-inbox', McInbox);
 
 window.mcViews = window.mcViews || {};
 window.mcViews.profile = function (section, kit, hash) {
-  const n = document.createElement('mc-profile'); n.kit = kit; n.hash = hash; section.appendChild(n);
+  const n = document.createElement('mc-profile') as any; n.kit = kit; n.hash = hash; section.appendChild(n);
 };
 window.mcViews.inbox = function (section, kit) {
-  const n = document.createElement('mc-inbox'); n.kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-inbox') as any; n.kit = kit; section.appendChild(n);
 };

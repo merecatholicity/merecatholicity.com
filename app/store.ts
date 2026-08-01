@@ -18,7 +18,7 @@ export const metrics = { hits: 0, misses: 0, dedup: 0 };
 
 function now() { return Date.now(); }
 
-export function invalidate(prefix) {
+export function invalidate(prefix?: string) {
   if (prefix == null) { entries.clear(); return; }
   for (const k of Array.from(entries.keys())) {
     if (k.indexOf(prefix) === 0) entries.delete(k);
@@ -30,10 +30,15 @@ export function invalidate(prefix) {
    exactly what they were); opts: { ttl (ms), key, bypass }. Only 2xx JSON
    with ok !== false is cached; refusals and errors pass through uncached so
    a rate-limited answer can never be memoized. */
-export function fetchJson(fetcher, url, init, opts) {
+export function fetchJson(
+  fetcher: (url: string, init?: RequestInit) => Promise<Response> | Response,
+  url: string,
+  init?: RequestInit,
+  opts?: { ttl?: number; key?: string; bypass?: boolean },
+) {
   opts = opts || {};
   const ttl = opts.ttl == null ? 45000 : opts.ttl;
-  const key = opts.key || (url + '|' + ((init && init.body) || ''));
+  const key = opts.key || (url + '|' + (((init && init.body) || '') as string));
   const hit = entries.get(key);
   if (!opts.bypass && hit && now() - hit.at < hit.ttl) {
     metrics.hits++;

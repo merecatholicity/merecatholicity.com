@@ -6,7 +6,7 @@
    get the wrong shape — so this is where those seams are guarded. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Core from '../../app/core.js';
+import * as Core from '../../app/core.ts';
 
 test('rankFor/rankLine coerce their argument to an Int (n | 0)', () => {
   assert.equal(Core.rankFor(10), 'Apprentice');

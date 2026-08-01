@@ -8,11 +8,11 @@
    never a false refusal, exactly as the old adminGate did. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl } from './util.js';
+import { pagerTpl, crumbTpl } from './util.ts';
 
 /* Shared admin gate for a component: returns 'ok' | 'wait' | 'no', and
    registers a re-render for when the profile (hence admin status) lands. */
-function gate(kit, host) {
+function gate(kit: any, host: LitElement): 'ok' | 'wait' | 'no' {
   if (kit.isAdmin()) return 'ok';
   if (!kit.state.key || kit.state.profileLoaded) return 'no';
   kit.onProfile(() => host.requestUpdate());
@@ -21,6 +21,8 @@ function gate(kit, host) {
 
 class McAdminHome extends LitElement {
   static properties = { g: { attribute: false } };
+  declare kit: any;
+  declare g: string;
   constructor() { super(); this.kit = null; this.g = ''; }
   createRenderRoot() { return this; }
   connectedCallback() { super.connectedCallback(); document.title = 'Administrative options | Community'; }
@@ -49,6 +51,10 @@ customElements.define('mc-admin-home', McAdminHome);
 
 class McMerecatThreads extends LitElement {
   static properties = { d: { attribute: false }, err: { attribute: false } };
+  declare kit: any;
+  declare d: any;
+  declare err: string;
+  declare _loading: boolean;
   constructor() { super(); this.kit = null; this.d = null; this.err = ''; }
   createRenderRoot() { return this; }
   connectedCallback() {
@@ -65,7 +71,7 @@ class McMerecatThreads extends LitElement {
     kit.fetchRetry(kit.MERECAT_API + '/admin/threads', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, p: pageNum }),
-    }, [1000, 3000]).then((r) => r.json()).then((d) => {
+    }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
       if (kit.blockedOut(d)) return;
       if (!d.ok) { this.err = d.error === 'No.' ? 'This is for admins alone.' : 'Could not load.'; return; }
       this.d = d;
@@ -82,9 +88,9 @@ class McMerecatThreads extends LitElement {
     if (this.err) return html`${head}${intro}<p class="comments-status">${this.err}</p>`;
     if (!this.d) return html`${head}${intro}<p class="comments-status">Loading…</p>`;
     if (!this.d.threads.length) return html`${head}${intro}<p class="comments-status">No conversations yet.</p>`;
-    const href = (i) => 'community.html?merecatthreads=1&p=' + i;
+    const href = (i: number) => 'community.html?merecatthreads=1&p=' + i;
     return html`${head}${intro}
-      <div class="board-topics">${this.d.threads.map((t) => {
+      <div class="board-topics">${this.d.threads.map((t: any) => {
         const q = Math.max(0, Math.ceil((t.msgs || 0) / 2));
         return html`<div class="board-topic"><div class="board-topic-left">
           <a class="board-topic-title" href=${'community.html?merecatthread=' + t.id}>${t.title || ('Conversation ' + t.id)}</a>${t.saved ? html`<span class="board-sticky"> (saved)</span>` : nothing}
@@ -98,6 +104,12 @@ customElements.define('mc-merecat-threads', McMerecatThreads);
 
 class McMerecatThread extends LitElement {
   static properties = { d: { attribute: false }, err: { attribute: false } };
+  declare kit: any;
+  declare tid: number;
+  declare d: any;
+  declare err: string;
+  declare _loading: boolean;
+  declare _painted: boolean;
   constructor() { super(); this.kit = null; this.tid = 0; this.d = null; this.err = ''; }
   createRenderRoot() { return this; }
   connectedCallback() {
@@ -118,7 +130,7 @@ class McMerecatThread extends LitElement {
     kit.fetchRetry(kit.MERECAT_API + '/admin/thread', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, id: this.tid }),
-    }, [1000, 3000]).then((r) => r.json()).then((d) => {
+    }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
       if (kit.blockedOut(d)) return;
       if (!d.ok) { this.err = d.error === 'No.' ? 'This is for admins alone.' : 'That conversation is gone.'; return; }
       this.d = d;
@@ -131,20 +143,20 @@ class McMerecatThread extends LitElement {
     const d = this.d;
     const who = d.chat.nick || kit.displayName(d.chat.hash);
     const log = this.querySelector('.merecat-log');
-    (d.msgs || []).forEach((m) => {
+    (d.msgs || []).forEach((m: any) => {
       const msg = kit.el('div', 'merecat-msg ' + (m.role === 'user' ? 'you' : 'cat'));
       msg.appendChild(kit.el('div', 'merecat-who', m.role === 'user' ? who : '🐈 merecat'));
       const body = kit.el('div', 'merecat-body');
       msg.appendChild(body);
-      if (m.role === 'user') { window.mcRich.fillBody(body, m.body); }
+      if (m.role === 'user') { window.mcRich!.fillBody(body, m.body); }
       else {
-        window.mcRich.fillBody(body, m.body, true);
-        let srcs = [];
+        window.mcRich!.fillBody(body, m.body, true);
+        let srcs: any[] = [];
         try { srcs = JSON.parse(m.sources || '[]'); } catch (e) { /* footer stays off */ }
         if (srcs.length) {
           const ft = kit.el('p', 'merecat-note');
           ft.appendChild(kit.el('strong', null, 'Sources: '));
-          srcs.forEach((sc, i) => {
+          srcs.forEach((sc: any, i: number) => {
             if (i) ft.appendChild(document.createTextNode(' · '));
             const label = '[' + (sc.n || (i + 1)) + '] ' + (sc.title || '');
             if (sc.url) { const a = kit.el('a', 'body-link', label); a.href = sc.url; ft.appendChild(a); }
@@ -153,7 +165,7 @@ class McMerecatThread extends LitElement {
           msg.appendChild(ft);
         }
       }
-      log.appendChild(msg);
+      log!.appendChild(msg);
     });
   }
   render() {
@@ -178,11 +190,11 @@ customElements.define('mc-merecat-thread', McMerecatThread);
 
 window.mcViews = window.mcViews || {};
 window.mcViews.adminHome = function (section, kit) {
-  const n = document.createElement('mc-admin-home'); n.kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-admin-home') as any; n.kit = kit; section.appendChild(n);
 };
 window.mcViews.merecatThreads = function (section, kit) {
-  const n = document.createElement('mc-merecat-threads'); n.kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-merecat-threads') as any; n.kit = kit; section.appendChild(n);
 };
 window.mcViews.merecatThread = function (section, kit, id) {
-  const n = document.createElement('mc-merecat-thread'); n.kit = kit; n.tid = id; section.appendChild(n);
+  const n = document.createElement('mc-merecat-thread') as any; n.kit = kit; n.tid = id; section.appendChild(n);
 };
