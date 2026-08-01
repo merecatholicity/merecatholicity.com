@@ -149,12 +149,17 @@ const boardApi = {
    for the hash the key proves, so a member's private events reach their own
    connections alone. Persistent: it rides every sub frame and keeps the socket
    open across forum-view changes and on any page (badges everywhere). */
+let memberKey = '';
+function presenceMode() {
+  try { return localStorage.getItem('mc-presence') === 'off' ? 'off' : 'auto'; } catch (e) { return 'auto'; }
+}
 const memberApi = {
   enable: function (key, hash) {
     if (!key || !/^[0-9a-f]{64}$/.test(String(hash))) return;
     const next = 'user:' + hash;
     if (board.userScope === next && board.authFrame) return;   // already enabled
-    board.authFrame = JSON.stringify({ t: 'auth', key: key });
+    memberKey = key;
+    board.authFrame = JSON.stringify({ t: 'auth', key: key, presence: presenceMode() });
     board.userScope = next;
     board.want = true;
     if (board.ws && board.ws.readyState === 1) {
@@ -165,9 +170,26 @@ const memberApi = {
   disable: function () {
     board.authFrame = null;
     board.userScope = '';
+    memberKey = '';
     if (board.desired.length === 0) { board.want = false; board._close(); }
     else board._sendSub();
   },
+  /* Transient "I am typing to <to>" signal, sent over the live socket only (no
+     HTTP, no rate-limit bucket); the caller debounces it. state 'start'|'stop'. */
+  typing: function (to, state) {
+    if (!board.ws || board.ws.readyState !== 1) return;
+    if (!/^[0-9a-f]{64}$/.test(String(to))) return;
+    try { board.ws.send(JSON.stringify({ t: 'typing', to: to, state: state === 'stop' ? 'stop' : 'start' })); } catch (e) { /* dropped */ }
+  },
+  /* Change my presence mode ('auto'|'off'), persist it, and re-auth so the DO
+     broadcasts the change to anyone watching me. */
+  setPresence: function (mode) {
+    try { localStorage.setItem('mc-presence', mode === 'off' ? 'off' : 'auto'); } catch (e) { /* private mode */ }
+    if (!memberKey) return;
+    board.authFrame = JSON.stringify({ t: 'auth', key: memberKey, presence: presenceMode() });
+    if (board.ws && board.ws.readyState === 1) { try { board.ws.send(board.authFrame); } catch (e) { /* reconnect */ } }
+  },
+  presenceMode: presenceMode,
 };
 
 /* chat — a per-conversation merecat socket (Phase 2). Created on demand by

@@ -16,6 +16,7 @@ import * as Fts from '../../purescript/output/Domain.Fts/index.js';
 import * as Board from '../../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../../purescript/output/Domain.Emoji/index.js';
 import * as Presence from '../../purescript/output/Domain.Presence/index.js';
+import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
@@ -1676,6 +1677,8 @@ const APP_SETTING_DEFAULTS = {
   dm_default_ttl: String(Dm.defaultTtl),        // 30 days (single-sourced from Domain.Dm)
   dm_backstop_days: '30',                       // unopened-message backstop
   dm_media_bytes: '0',                          // sweep-maintained total, display-only
+  wall_prune_enabled: '0',                      // public posts persist forever until this is turned on
+  wall_prune_days: '365',                       // retention when pruning is enabled
 };
 let appSettingsCache = { at: 0, s: null };
 async function getAppSettings(env) {
@@ -1861,7 +1864,7 @@ async function handleDmThreads(request, env) {
 /* One conversation, paged by twenty like everything else, defaulting to the
    LAST page so it opens at its newest words. Opening marks it read with at
    most one write, none when nothing was unread. */
-async function handleDmThread(request, env) {
+async function handleDmThread(request, env, ctx) {
   let data;
   try {
     data = await request.json();
@@ -1924,10 +1927,17 @@ async function handleDmThread(request, env) {
      fresh expires_at = now + the conversation ttl, overriding the unopened
      backstop. Idempotent (opened_at IS NULL); saved messages are left alone so a
      save survives an open. This is why a message "expires N days after opening". */
-  await env.DB.prepare(
+  const openRes = await env.DB.prepare(
     'UPDATE dms SET opened_at = ?2, expires_at = ?2 + ?5 WHERE thread_id = ?3 AND sender_hash != ?1 ' +
     'AND COALESCE(held, 0) = 0 AND opened_at IS NULL AND COALESCE(saved, 0) = 0 AND created_at > ?4'
   ).bind(me, now, thread.id, myCleared, ttl).run();
+  /* Read receipt: if I just opened messages the OTHER side sent, tell the SENDER
+     (their user:<hash> sockets) that everything up to `now` has been seen, so
+     their open thread flips those bubbles to "Seen" live. One event per open. */
+  if (openRes && openRes.meta && openRes.meta.changes > 0) {
+    const ev = { v: 1, t: 'dm-read', scopes: ['user:' + other], thread_id: thread.id, reader: me, at: now };
+    if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+  }
   return json({ ok: true, thread_id: thread.id, ttl,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
     messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
@@ -1957,6 +1967,28 @@ async function handleDmUnread(request, env) {
     'SELECT COUNT(*) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1) AND ' + dmUnreadExists(now)
   ).bind(me).first();
   return json({ ok: true, unread: row.n || 0 }, 200);
+}
+
+/* The batched inbox presence check: given a list of correspondent hashes, which
+   are online right now (honouring appear-offline)? One keyed request per inbox
+   load, answered by the BoardHub DO's live socket set — no polling. */
+async function handleDmPresence(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const hashes = (Array.isArray(data.hashes) ? data.hashes : [])
+    .filter((h) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 50);
+  if (!hashes.length || !env.HUB) return json({ ok: true, online: [] }, 200);
+  let online = [];
+  try { online = await env.HUB.get(env.HUB.idFromName('board')).presenceOf(hashes); } catch { online = []; }
+  return json({ ok: true, online: Array.isArray(online) ? online : [] }, 200);
 }
 
 /* Set the per-conversation disappearing-message lifetime. Either participant may
@@ -2213,15 +2245,16 @@ async function handleAdminSettings(request, env) {
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
     const me = await sha256hex(key);
-    const allowed = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1 };
+    const allowed = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1 };
     const stmts = [];
     for (const k of Object.keys(data.set)) {
       if (!allowed[k]) continue;
       let v = String(data.set[k]);
-      if (k === 'media_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
+      if (k === 'media_enabled' || k === 'wall_prune_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
-      else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : 604800);
+      else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : Dm.defaultTtl);
       else if (k === 'dm_backstop_days') v = String(Math.max(1, Math.min(365, Math.floor(Number(v)) || 30)));
+      else if (k === 'wall_prune_days') v = String(Wall.clampPruneDays(Math.floor(Number(v)) || 365));
       stmts.push(env.DB.prepare(
         'INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3, updated_by = ?4'
       ).bind(k, v, now, me));
@@ -2229,7 +2262,7 @@ async function handleAdminSettings(request, env) {
     if (stmts.length) { await env.DB.batch(stmts); appSettingsCache = { at: 0, s: null }; }
   }
   const settings = await getAppSettings(env);
-  return json({ ok: true, settings, cap_bytes: MEDIA_CAP_BYTES, ttls: DM_TTLS }, 200);
+  return json({ ok: true, settings, cap_bytes: MEDIA_CAP_BYTES, ttls: DM_TTLS, wall_prune_options: Wall.pruneDayOptions }, 200);
 }
 
 /* Purge ALL DM media from the bucket (admin, destructive). Cursor-paginated list +
@@ -2256,6 +2289,360 @@ async function handleDmMediaPurge(request, env) {
     "INSERT INTO app_settings (k, v, updated_at) VALUES ('dm_media_bytes', '0', ?1) ON CONFLICT(k) DO UPDATE SET v = '0', updated_at = ?1"
   ).bind(Math.floor(Date.now() / 1000)).run();
   appSettingsCache = { at: 0, s: null };
+  return json({ ok: true, deleted }, 200);
+}
+
+/* ================= Public posting: walls + the global feed =================
+   A member's "wall" is their own stream of public posts; the "feed" is every
+   member's posts together. Public + UNencrypted (unlike DMs), reusing the forum's
+   Turnstile + AI screen (held-if-flagged) + @mention notifications. Media rides a
+   public R2 bucket (WALLMEDIA), served same-origin like avatars. Posts persist
+   until the admin auto-prune (Phase D) removes them. All members-only to read. */
+
+const WALL_PER_PAGE = 20;
+// Object-key shape: wall/<kind>/<64hex>, kind i=image v=video a=audio (the client
+// picks <img>/<video>/<audio> from the kind — no mime column or JOIN needed).
+const WALL_MEDIA_RE = /^wall\/[iva]\/[0-9a-f]{64}$/;
+const WALL_POST_COLS = 'p.id, p.author_hash, pr.nick, pr.avatar, pr.faith, p.body, p.created_at, p.edited_at, p.media_key, p.media_size, p.comments';
+const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.avatar, pr.faith, c.body, c.created_at, c.media_key, c.media_size';
+
+/* Add the author display fields (assigned pseudonym + rank) the client renders,
+   mirroring the forum's withNames. nick/avatar/faith are already joined in. */
+async function wallEnrich(env, rows) {
+  const list = rows || [];
+  const counts = await postCountsFor(env, list.map((r) => r.author_hash));
+  return list.map((r) => withNames(r, counts[r.author_hash] || 0));
+}
+
+/* The wall's own notifications (kind 'wall', comment_id = the post id, jumps to
+   ?post=<id>): a comment tells the post author, and an @mention tells the picked
+   member. Reuses the private user:<hash> live push. */
+async function deliverWallNotifications(env, o) {
+  const now = Math.floor(Date.now() / 1000);
+  const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
+  const stmts = [];
+  const live = [];
+  const seen = new Set([o.authorHash, MERECAT_BOT.hash]);
+  // topic_id encodes the wall sub-kind for the label: 1 = a comment on your post,
+  // 0 = an @mention. comment_id is always the post id (jumps to ?post=<id>).
+  const add = (h, commented) => {
+    const flag = commented ? 1 : 0;
+    stmts.push(env.DB.prepare(NOTIF).bind(h, 'wall', flag, o.postId, o.authorHash, now));
+    live.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'wall', topic_id: flag, comment_id: o.postId, actor_hash: o.authorHash, created_at: now });
+    seen.add(h);
+  };
+  if (o.postAuthorHash && !seen.has(o.postAuthorHash)) add(o.postAuthorHash, true);
+  if (Array.isArray(o.mentions)) {
+    let count = 0;
+    for (const m of o.mentions) {
+      const h = String(m || '').toLowerCase();
+      if (/^[0-9a-f]{64}$/.test(h) && !seen.has(h) && count < 10) { add(h, false); count += 1; }
+    }
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  if (live.length) await publishUser(env, live);
+}
+
+/* Shared R2 purge for public post/comment media (mirror of purgeMediaKeys). */
+async function purgeWallMedia(env, keys) {
+  if (!keys || !keys.length) return;
+  if (env.WALLMEDIA) {
+    for (let i = 0; i < keys.length; i += 1000) {
+      try { await env.WALLMEDIA.delete(keys.slice(i, i + 1000)); } catch (e) { /* keep going */ }
+    }
+  }
+  for (let i = 0; i < keys.length; i += 50) {
+    const chunk = keys.slice(i, i + 50);
+    const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+    try { await env.DB.prepare('DELETE FROM wall_media WHERE key IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
+  }
+}
+
+/* Reclaim public-media objects with no live owner: an upload that was never
+   attached to a post (older than an hour), or one whose post/comment is gone. */
+async function sweepWallOrphanMedia(env) {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const orphan = await env.DB.prepare(
+      'SELECT key FROM wall_media WHERE (ref_id IS NULL AND created_at < ?1) ' +
+      "OR (ref_type = 'post' AND ref_id NOT IN (SELECT id FROM wall_posts)) " +
+      "OR (ref_type = 'comment' AND ref_id NOT IN (SELECT id FROM wall_comments)) LIMIT 2000"
+    ).bind(now - 3600).all();
+    await purgeWallMedia(env, (orphan.results || []).map((r) => r.key));
+  } catch (e) { /* keep going */ }
+}
+
+/* Read gate shared by the members-only feed/wall/post reads. Returns the member
+   hash, or a Response to return immediately (401 / blocked / 429). */
+async function wallReader(request, env, data) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return { resp: json({ ok: false, error: 'Too many requests. Slow down.' }, 429) };
+  const key = String((data && data.key) || '');
+  if (!key) return { resp: json({ ok: false, error: 'Sign in to see the feed.' }, 401) };
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return { resp: blockedJson(gate) };
+  return { me };
+}
+
+/* GET-style read (POST body, keyed): the global feed, newest first, keyset cursor
+   (id < cursor) for infinite scroll. */
+async function handleWallFeed(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const r = await wallReader(request, env, data);
+  if (r.resp) return r.resp;
+  const cursor = Math.floor(Number(data.cursor) || 0);
+  const rows = cursor > 0
+    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND p.id < ?1 ORDER BY p.id DESC LIMIT ?2").bind(cursor, WALL_PER_PAGE).all()
+    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' ORDER BY p.id DESC LIMIT ?1").bind(WALL_PER_PAGE).all();
+  const list = rows.results || [];
+  const posts = await wallEnrich(env, list);
+  const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
+  return json({ ok: true, posts, next, me: r.me }, 200);
+}
+
+/* One member's wall (their own posts), keyset-paged like the feed. */
+async function handleWall(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const r = await wallReader(request, env, data);
+  if (r.resp) return r.resp;
+  const hash = String(data.hash || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'No such member.' }, 400);
+  const cursor = Math.floor(Number(data.cursor) || 0);
+  const rows = cursor > 0
+    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND p.id < ?2 ORDER BY p.id DESC LIMIT ?3").bind(hash, cursor, WALL_PER_PAGE).all()
+    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' ORDER BY p.id DESC LIMIT ?2").bind(hash, WALL_PER_PAGE).all();
+  const list = rows.results || [];
+  const posts = await wallEnrich(env, list);
+  const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
+  return json({ ok: true, posts, next, me: r.me, hash }, 200);
+}
+
+/* One post plus all its live comments (the ?post=<id> detail + mention target). */
+async function handleWallPostGet(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const r = await wallReader(request, env, data);
+  if (r.resp) return r.resp;
+  const id = Math.floor(Number(data.id) || 0);
+  const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live'").bind(id).first();
+  if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
+  const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' ORDER BY c.id").bind(id).all();
+  const enriched = await wallEnrich(env, [post].concat(crows.results || []));
+  return json({ ok: true, post: enriched[0], comments: enriched.slice(1), me: r.me }, 200);
+}
+
+/* Validate an attached media_key: it must be an unlinked wall_media row. Returns
+   { key, size } or null. */
+async function wallClaimMedia(env, mediaKey) {
+  if (!mediaKey || !WALL_MEDIA_RE.test(String(mediaKey))) return null;
+  const mr = await env.DB.prepare('SELECT size FROM wall_media WHERE key = ?1 AND ref_id IS NULL').bind(String(mediaKey)).first();
+  return mr ? { key: String(mediaKey), size: mr.size } : null;
+}
+
+/* Create a post on my own wall (author = me), which also lands it in the feed.
+   Turnstile + AI screen (held-if-flagged) exactly like a forum comment. */
+async function handleWallPost(request, env, ctx) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Sign in to post.' }, 401);
+  const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
+  const media = await wallClaimMedia(env, data.media_key);
+  if (!body && !media) return json({ ok: false, error: 'Say something or attach something.' }, 400);
+  if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
+  if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, key))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const { status } = await screen(env, body || '(media post)', await isTrusted(env, me));
+  const now = Math.floor(Date.now() / 1000);
+  const ins = await env.DB.prepare(
+    'INSERT INTO wall_posts (author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id'
+  ).bind(me, body, now, status, media ? media.key : null, media ? media.size : null).first();
+  if (media) await env.DB.prepare("UPDATE wall_media SET ref_type = 'post', ref_id = ?1 WHERE key = ?2").bind(ins.id, media.key).run();
+  if (status === 'live') {
+    if (ctx) ctx.waitUntil(deliverWallNotifications(env, { authorHash: me, postId: ins.id, mentions: data.mentions }));
+    publishLive(env, ctx, { v: 1, t: 'wall-post', scopes: ['feed:global'], id: ins.id });
+  }
+  return json({ ok: true, id: ins.id, status }, 200);
+}
+
+/* Comment on a post (text + optional media). Notifies the post author + mentions. */
+async function handleWallComment(request, env, ctx) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Sign in to comment.' }, 401);
+  const postId = Math.floor(Number(data.post) || 0);
+  const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first();
+  if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
+  const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
+  const media = await wallClaimMedia(env, data.media_key);
+  if (!body && !media) return json({ ok: false, error: 'Say something or attach something.' }, 400);
+  if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
+  if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, key))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const { status } = await screen(env, body || '(media comment)', await isTrusted(env, me));
+  const now = Math.floor(Date.now() / 1000);
+  const ins = await env.DB.prepare(
+    'INSERT INTO wall_comments (post_id, author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id'
+  ).bind(postId, me, body, now, status, media ? media.key : null, media ? media.size : null).first();
+  if (media) await env.DB.prepare("UPDATE wall_media SET ref_type = 'comment', ref_id = ?1 WHERE key = ?2").bind(ins.id, media.key).run();
+  if (status === 'live') {
+    await env.DB.prepare('UPDATE wall_posts SET comments = comments + 1 WHERE id = ?1').bind(postId).run();
+    if (ctx) ctx.waitUntil(deliverWallNotifications(env, { authorHash: me, postId: postId, mentions: data.mentions, postAuthorHash: post.author_hash }));
+    publishLive(env, ctx, { v: 1, t: 'wall-comment', scopes: ['feed:global'], post: postId });
+  }
+  return json({ ok: true, id: ins.id, status }, 200);
+}
+
+/* Delete a post (and its comments + all their media) or a single comment. Author
+   or admin only (Domain.Wall.canDelete). Hard delete — public content, no soft
+   state to keep. */
+async function handleWallDelete(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const admin = await isAdminHash(env, me);
+  const id = Math.floor(Number(data.id) || 0);
+  if (data.kind === 'comment') {
+    const row = await env.DB.prepare('SELECT post_id, author_hash, media_key FROM wall_comments WHERE id = ?1').bind(id).first();
+    if (!row) return json({ ok: true }, 200);
+    if (!Wall.canDelete(row.author_hash)(me)(admin)) return json({ ok: false, error: 'No.' }, 403);
+    if (row.media_key) await purgeWallMedia(env, [row.media_key]);
+    await env.DB.prepare('DELETE FROM wall_comments WHERE id = ?1').bind(id).run();
+    await env.DB.prepare('UPDATE wall_posts SET comments = MAX(0, comments - 1) WHERE id = ?1').bind(row.post_id).run();
+    return json({ ok: true }, 200);
+  }
+  const row = await env.DB.prepare('SELECT author_hash, media_key FROM wall_posts WHERE id = ?1').bind(id).first();
+  if (!row) return json({ ok: true }, 200);
+  if (!Wall.canDelete(row.author_hash)(me)(admin)) return json({ ok: false, error: 'No.' }, 403);
+  const keys = [];
+  if (row.media_key) keys.push(row.media_key);
+  const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE post_id = ?1 AND media_key IS NOT NULL').bind(id).all();
+  (cm.results || []).forEach((r) => keys.push(r.media_key));
+  if (keys.length) await purgeWallMedia(env, keys);
+  await env.DB.prepare('DELETE FROM wall_comments WHERE post_id = ?1').bind(id).run();
+  await env.DB.prepare('DELETE FROM wall_posts WHERE id = ?1').bind(id).run();
+  return json({ ok: true }, 200);
+}
+
+/* Upload public post/comment media. Images are AI-screened (LLaVA, like avatars);
+   video/audio are validated by declared type + size only. Stored UNencrypted; the
+   object key encodes the kind so the client can render it. Linked to its post/
+   comment by handleWallPost/Comment; orphans (unlinked) are pruned. */
+async function handleWallMediaUpload(request, env) {
+  if (!env.WALLMEDIA) return json({ ok: false, error: 'Media is unavailable.' }, 503);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const settings = await getAppSettings(env);
+  if (settings.media_enabled !== '1') return json({ ok: false, error: 'Media uploads are turned off.' }, 403);
+  const maxBytes = Number(settings.media_max_bytes) || (25 * 1024 * 1024);
+  const clen = Number(request.headers.get('Content-Length') || 0);
+  if (clen && clen > maxBytes + 8192) return json({ ok: false, error: 'That file is too large.' }, 413);
+  let form;
+  try { form = await request.formData(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(form.get('key') || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const file = form.get('file');
+  if (!file || typeof file === 'string') return json({ ok: false, error: 'No file.' }, 400);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!bytes.length) return json({ ok: false, error: 'Empty file.' }, 400);
+  if (bytes.length > maxBytes) return json({ ok: false, error: 'That file is too large.' }, 413);
+  const declared = String(file.type || '');
+  let kind = '', mime = '';
+  const img = sniffImage(bytes);
+  if (img && (!declared || declared.startsWith('image/'))) {
+    if (!(await screenImage(env, bytes))) return json({ ok: false, error: 'That image was declined by the safety check.' }, 422);
+    kind = 'i'; mime = img.mime;
+  } else if (declared.startsWith('video/')) { kind = 'v'; mime = declared.slice(0, 60); }
+  else if (declared.startsWith('audio/')) { kind = 'a'; mime = declared.slice(0, 60); }
+  else return json({ ok: false, error: 'Only images, video, and audio can be shared.' }, 400);
+  const objKey = 'wall/' + kind + '/' + randomHex(32);
+  try { await env.WALLMEDIA.put(objKey, bytes, { httpMetadata: { contentType: mime } }); }
+  catch { return json({ ok: false, error: 'Upload failed.' }, 500); }
+  await env.DB.prepare('INSERT INTO wall_media (key, size, created_at) VALUES (?1, ?2, ?3)')
+    .bind(objKey, bytes.length, Math.floor(Date.now() / 1000)).run();
+  return json({ ok: true, media_key: objKey, size: bytes.length }, 200);
+}
+
+/* Serve public post media, keyless + cacheable, same-origin (like avatars). */
+async function handleWallMediaGet(request, env, url) {
+  if (!env.WALLMEDIA) return new Response('gone', { status: 404 });
+  const k = String(url.searchParams.get('key') || '');
+  if (!WALL_MEDIA_RE.test(k)) return new Response('bad request', { status: 400 });
+  const obj = await env.WALLMEDIA.get(k);
+  if (!obj) return new Response('not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });
+  return new Response(obj.body, { headers: {
+    'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream',
+    'Cache-Control': 'public, max-age=86400',
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'",
+  } });
+}
+
+/* Delete public posts/comments older than `days` and purge their media. Shared by
+   the cron (only when auto-prune is enabled) and the admin "prune now" button. */
+async function runWallPrune(env, days) {
+  const cutoff = Math.floor(Date.now() / 1000) - Wall.clampPruneDays(days) * 86400;
+  let deleted = 0;
+  try {
+    const pm = await env.DB.prepare('SELECT media_key FROM wall_posts WHERE created_at < ?1 AND media_key IS NOT NULL LIMIT 5000').bind(cutoff).all();
+    const keys = (pm.results || []).map((r) => r.media_key);
+    const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE media_key IS NOT NULL AND (created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)) LIMIT 5000').bind(cutoff).all();
+    (cm.results || []).forEach((r) => keys.push(r.media_key));
+    if (keys.length) await purgeWallMedia(env, keys);
+    await env.DB.prepare('DELETE FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
+    const del = await env.DB.prepare('DELETE FROM wall_posts WHERE created_at < ?1').bind(cutoff).run();
+    deleted = (del.meta && del.meta.changes) || 0;
+  } catch (e) { console.log(JSON.stringify({ event: 'prune_wall_failed', error: String(e) })); }
+  return deleted;
+}
+
+/* Cron entry (monthly chain): prune only when the admin turned it on. */
+async function pruneWallPosts(env) {
+  const s = await getAppSettings(env);
+  if (s.wall_prune_enabled !== '1') return;
+  await runWallPrune(env, Number(s.wall_prune_days) || 365);
+}
+
+/* Admin "prune now" — runs regardless of the enabled flag, using the configured
+   (or a passed) retention. */
+async function handleWallPrune(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const s = await getAppSettings(env);
+  const deleted = await runWallPrune(env, Number(data.days) || Number(s.wall_prune_days) || 365);
   return json({ ok: true, deleted }, 200);
 }
 
@@ -2294,10 +2681,12 @@ async function handleNotifList(request, env) {
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const rows = await env.DB.prepare(
     'SELECT n.id, n.kind, n.topic_id, n.comment_id, n.actor_hash, n.created_at, n.read_at, ' +
-    't.title AS topic_title, pr.nick AS actor_nick, substr(c.body, 1, 140) AS snippet ' +
+    't.title AS topic_title, pr.nick AS actor_nick, ' +
+    "CASE WHEN n.kind = 'wall' THEN substr(wp.body, 1, 140) ELSE substr(c.body, 1, 140) END AS snippet " +
     'FROM notifications n ' +
-    'LEFT JOIN comments t ON t.id = n.topic_id ' +
-    'LEFT JOIN comments c ON c.id = n.comment_id ' +
+    "LEFT JOIN comments t ON t.id = n.topic_id AND n.kind != 'wall' " +
+    "LEFT JOIN comments c ON c.id = n.comment_id AND n.kind != 'wall' " +
+    "LEFT JOIN wall_posts wp ON wp.id = n.comment_id AND n.kind = 'wall' " +
     'LEFT JOIN profiles pr ON pr.hash = n.actor_hash ' +
     'WHERE n.recipient_hash = ?1 ORDER BY n.id DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, NOTIF_PER_PAGE, (p - 1) * NOTIF_PER_PAGE).all();
@@ -4901,11 +5290,25 @@ export class BoardHub extends DurableObject {
     try { a = ws.deserializeAttachment(); } catch { a = null; }
     /* A member authenticates so this socket may subscribe to its own private
        user:<hash> scope (DMs, notifications). The key rides the frame, never the
-       URL; the hash is stored on the attachment and gates every later sub. */
+       URL; the hash is stored on the attachment and gates every later sub. The
+       auth frame also carries the member's presence mode ("auto"/"off") so the
+       DO can honour appear-offline without a DB read, and coming online (or
+       going appear-offline) is broadcast to anyone watching this member. */
     if (m.t === 'auth') {
       const key = String(m.key || '');
       const me = key ? await sha256hex(key) : '';
-      ws.serializeAttachment({ subs: (a && a.subs) || [], n: (a && a.n) || 0, me });
+      const presenceMode = Presence.normalizeMode(String(m.presence || 'auto'));
+      ws.serializeAttachment({ subs: (a && a.subs) || [], n: (a && a.n) || 0, me, presenceMode });
+      if (me) this.#broadcastPresence(me, this.#isOnline(me));
+      return;
+    }
+    /* A transient typing signal (client → client, no storage): fan it to the
+       recipient's own sockets only, tagged with the authenticated sender. */
+    if (m.t === 'typing') {
+      const me = (a && a.me) || '';
+      const to = String(m.to || '');
+      if (!me || !/^[0-9a-f]{64}$/.test(to)) return;
+      this.#fan('user:' + to, JSON.stringify({ v: 1, t: 'typing', from: me, state: m.state === 'stop' ? 'stop' : 'start' }));
       return;
     }
     if (m.t !== 'sub') return;
@@ -4913,11 +5316,68 @@ export class BoardHub extends DurableObject {
     const subs = sanitizeScopes(m.scope, me);
     const n = ((a && a.n) || 0) + 1;
     if (n > 500) { try { ws.close(1008, 'too many'); } catch { /* gone */ } return; }
-    ws.serializeAttachment({ subs, n, me });
+    ws.serializeAttachment({ subs, n, me, presenceMode: (a && a.presenceMode) || 'auto' });
+    /* Seed each newly-watched member's current presence to this socket. */
+    for (const s of subs) {
+      if (s.startsWith('presence:')) {
+        const h = s.slice(9);
+        try { ws.send(JSON.stringify({ v: 1, t: 'presence', hash: h, online: this.#isOnline(h) })); } catch { /* gone */ }
+      }
+    }
+  }
+
+  /* A socket dropped: if it was the member's last online connection, tell anyone
+     watching that they went offline. (webSocketError has no such last-socket
+     meaning; it just logs.) */
+  webSocketClose(ws) {
+    let a;
+    try { a = ws.deserializeAttachment(); } catch { a = null; }
+    const me = a && a.me;
+    if (!me) return;
+    if (!this.#isOnline(me, ws)) this.#broadcastPresence(me, false);
   }
 
   webSocketError(ws, err) {
     console.log(JSON.stringify({ event: 'hub_ws_error', error: String(err) }));
+  }
+
+  /* Is <hash> online? True iff some live socket authenticated as that hash with a
+     non-"off" presence mode. `exclude` skips one socket (the one closing). */
+  #isOnline(hash, exclude) {
+    for (const s of this.ctx.getWebSockets()) {
+      if (exclude && s === exclude) continue;
+      let a;
+      try { a = s.deserializeAttachment(); } catch { a = null; }
+      if (a && a.me === hash && a.presenceMode !== 'off') return true;
+    }
+    return false;
+  }
+
+  /* Send a frame to every socket subscribed to `scope`. */
+  #fan(scope, payload) {
+    for (const s of this.ctx.getWebSockets()) {
+      let a;
+      try { a = s.deserializeAttachment(); } catch { a = null; }
+      if (a && Array.isArray(a.subs) && a.subs.includes(scope)) {
+        try { s.send(payload); } catch { /* dropped */ }
+      }
+    }
+  }
+
+  #broadcastPresence(hash, online) {
+    this.#fan('presence:' + hash, JSON.stringify({ v: 1, t: 'presence', hash, online: !!online }));
+  }
+
+  /* RPC for the batched inbox check: of these hashes, which are online now
+     (honouring appear-offline)? One request per inbox load. */
+  async presenceOf(hashes) {
+    const live = new Set();
+    for (const s of this.ctx.getWebSockets()) {
+      let a;
+      try { a = s.deserializeAttachment(); } catch { a = null; }
+      if (a && a.me && a.presenceMode !== 'off') live.add(a.me);
+    }
+    return (Array.isArray(hashes) ? hashes : []).filter((h) => live.has(h));
   }
 
   /* RPC, called by the worker on every live public board mutation. */
@@ -5415,8 +5875,9 @@ export default {
       if (path === '/api/comments/backup' && request.method === 'POST') return await handleBackup(request, env);
       if (path === '/api/comments/dm/send' && request.method === 'POST') return await handleDmSend(request, env, ctx);
       if (path === '/api/comments/dm/threads' && request.method === 'POST') return await handleDmThreads(request, env);
-      if (path === '/api/comments/dm/thread' && request.method === 'POST') return await handleDmThread(request, env);
+      if (path === '/api/comments/dm/thread' && request.method === 'POST') return await handleDmThread(request, env, ctx);
       if (path === '/api/comments/dm/unread' && request.method === 'POST') return await handleDmUnread(request, env);
+      if (path === '/api/comments/dm/presence' && request.method === 'POST') return await handleDmPresence(request, env);
       if (path === '/api/comments/dm/block' && request.method === 'POST') return await handleDmBlock(request, env);
       if (path === '/api/comments/dm/delete' && request.method === 'POST') return await handleDmDelete(request, env);
       if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);
@@ -5438,6 +5899,16 @@ export default {
       if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
       if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);
       if (path === '/api/comments/avatar/delete' && request.method === 'POST') return await handleAvatarDelete(request, env);
+      // Public posting: walls + the global feed (all members-only reads).
+      if (path === '/api/comments/wall/feed' && request.method === 'POST') return await handleWallFeed(request, env);
+      if (path === '/api/comments/wall/post' && request.method === 'POST') return await handleWallPost(request, env, ctx);
+      if (path === '/api/comments/wall/post/get' && request.method === 'POST') return await handleWallPostGet(request, env);
+      if (path === '/api/comments/wall/comment' && request.method === 'POST') return await handleWallComment(request, env, ctx);
+      if (path === '/api/comments/wall/delete' && request.method === 'POST') return await handleWallDelete(request, env);
+      if (path === '/api/comments/wall/prune' && request.method === 'POST') return await handleWallPrune(request, env);
+      if (path === '/api/comments/wall/media' && request.method === 'GET') return await handleWallMediaGet(request, env, url);
+      if (path === '/api/comments/wall/media' && request.method === 'POST') return await handleWallMediaUpload(request, env);
+      if (path === '/api/comments/wall' && request.method === 'POST') return await handleWall(request, env);
       if (path === '/api/comments/lock' && request.method === 'POST') return await handleLock(request, env);
       if (path === '/api/comments/deleteuser' && request.method === 'POST') return await handleDeleteUser(request, env);
       if (path === '/api/comments/ipban' && request.method === 'POST') return await handleIpBan(request, env);
@@ -5486,7 +5957,7 @@ export default {
        the reclamation pass behind the instant read-time hiding). Monthly (any
        other schedule): the sweep plus the full housekeeping + backup chain. */
     if (event && event.cron === '0 * * * *') {
-      ctx.waitUntil(sweepExpiredDms(env));
+      ctx.waitUntil(sweepExpiredDms(env).then(() => sweepWallOrphanMedia(env)));
       return;
     }
     ctx.waitUntil(
@@ -5496,6 +5967,8 @@ export default {
         .then(() => sweepDms(env))
         .then(() => pruneNotifications(env))
         .then(() => pruneMerecatChats(env))
+        .then(() => sweepWallOrphanMedia(env))
+        .then(() => pruneWallPosts(env))
         .then(() => runBackup(env))
     );
   },

@@ -132,9 +132,10 @@ export const parseRoute = (get) => {
   return Route.routeTag(Route.parseRoute({
     ipbans: get('ipbans'), settings: get('settings'), admins: get('admins'),
     admin: get('admin'), merecatadmin: get('merecatadmin'), merecatthread: get('merecatthread'),
-    merecatthreads: get('merecatthreads'), merecat: get('merecat'), notifications: get('notifications'),
-    inbox: get('inbox'), users: get('users'), q: get('q'), dm: get('dm'), me: get('me'),
-    profile: get('profile'), audit: get('audit'), topic, cat: get('cat'),
+    merecatthreads: get('merecatthreads'), merecat: get('merecat'), feed: get('feed'),
+    notifications: get('notifications'), inbox: get('inbox'), users: get('users'), q: get('q'),
+    dm: get('dm'), me: get('me'), profile: get('profile'), post: get('post'),
+    audit: get('audit'), topic, cat: get('cat'),
   }));
 };
 
