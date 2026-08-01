@@ -6,6 +6,7 @@
         "core": {
           "dependencies": [
             "arrays",
+            "either",
             "maybe",
             "nullable",
             "prelude",
