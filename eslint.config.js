@@ -61,7 +61,7 @@ export default [
     files: ['app/**/*.js'],
     languageOptions: {
       ecmaVersion: 2023, sourceType: 'module',
-      globals: { ...browserGlobals, customElements: 'readonly', DOMParser: 'readonly', Map: 'readonly', Promise: 'readonly' },
+      globals: { ...browserGlobals, customElements: 'readonly', DOMParser: 'readonly', Map: 'readonly', Promise: 'readonly', Notification: 'readonly' },
     },
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },

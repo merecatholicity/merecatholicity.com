@@ -27,6 +27,8 @@ import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
 } from './pure.js';
+// Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
+import { createPusher } from './webpush.js';
 
 const PAGES = [
   '/book.html',
@@ -664,7 +666,8 @@ async function deliverNotifications(env, o) {
   const now = Math.floor(Date.now() / 1000);
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
   const stmts = [];
-  const pushTo = new Set();   // recipients to also nudge by push (scaffold; gated off)
+  const pushMention = new Set();   // recipients to nudge by native push, per kind (disjoint sets)
+  const pushReply = new Set();
   const liveEvents = [];      // per-recipient live 'notification' events (WebSocket)
 
   if (o.authorHash && o.authorHash !== MERECAT_BOT.hash) {
@@ -695,7 +698,7 @@ async function deliverNotifications(env, o) {
       if (admSet && !admSet.has(h)) continue;
       if (!notifyEnabled(mPrefs[h], 'mention')) continue;   // recipient turned mentions off
       stmts.push(env.DB.prepare(NOTIF).bind(h, 'mention', o.topicId, o.commentId, o.authorHash, now));
-      pushTo.add(h);
+      pushMention.add(h);
       liveEvents.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'mention', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash, created_at: now });
     }
 
@@ -712,7 +715,7 @@ async function deliverNotifications(env, o) {
         if (admSet && !admSet.has(h)) continue;
         if (h && !skip.has(h) && notifyEnabled(rPrefs[h], 'reply')) {   // recipient's reply pref
           stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now));
-          pushTo.add(h);
+          pushReply.add(h);
           liveEvents.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'reply', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash, created_at: now });
         }
       }
@@ -721,9 +724,16 @@ async function deliverNotifications(env, o) {
 
   if (stmts.length) await env.DB.batch(stmts);
   /* Instant per-member push over the private user:<hash> scope (badge + list),
-     alongside the (gated-off) native push scaffold. Both no-op without the DO. */
+     alongside the native Web Push nudge. The live event no-ops without the DO;
+     the push no-ops unless PUSH_ENABLED + VAPID keys are set. */
   if (liveEvents.length) await publishUser(env, liveEvents);
-  if (pushTo.size) await deliverPush(env, [...pushTo], { kind: o.isReply ? 'reply' : 'mention', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash });
+  const topicUrl = '/community.html?topic=' + o.topicId + '#comment-' + o.commentId;
+  if (pushMention.size) {
+    await deliverPush(env, [...pushMention], { kind: 'mention', title: 'You were mentioned', body: 'Someone mentioned you', url: topicUrl });
+  }
+  if (pushReply.size) {
+    await deliverPush(env, [...pushReply], { kind: 'reply', title: 'New reply', body: 'Someone replied to your thread', url: topicUrl });
+  }
 }
 
 /* A direct message is a notification-worthy event, so it also lands in the
@@ -757,25 +767,44 @@ async function notifyDm(env, toHash, fromHash) {
   }
 }
 
-/* Best-effort push fan-out — the mobile-notification landing pad. A NO-OP unless
-   PUSH_ENABLED === 'true'; even then it only delivers when a provider is wired,
-   which it is not yet (no app, no APNs/FCM/VAPID creds). It looks up each
-   recipient's registered device tokens and records intent; the app team fills in
-   the actual provider send. Never throws into the caller (a push failure must
-   never affect a post or a DM). */
+/* Best-effort push fan-out — real Web Push (VAPID + aes128gcm) over crypto.subtle,
+   no external service (see webpush.js). A NO-OP unless PUSH_ENABLED === 'true'
+   AND the VAPID keypair is configured (VAPID_PRIVATE_KEY secret + VAPID_PUBLIC_KEY
+   var). Looks up each recipient's registered subscriptions and sends `payload`
+   (title/body/url, never message content — privacy + E2E). A dead subscription
+   (404/410) is pruned. Never throws into the caller (a push failure must never
+   affect a post or a DM). */
 async function deliverPush(env, hashes, payload) {
   try {
     if (env.PUSH_ENABLED !== 'true') return;
+    if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) {
+      console.log(JSON.stringify({ event: 'push_unconfigured' }));   // enabled but no keys set yet
+      return;
+    }
     const uniq = [...new Set((hashes || []).filter(Boolean))];
     if (!uniq.length) return;
     const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
     const rows = await env.DB.prepare('SELECT hash, platform, token FROM push_tokens WHERE hash IN (' + ph + ')').bind(...uniq).all();
     const tokens = rows.results || [];
     if (!tokens.length) return;
-    /* TODO(app): deliver `payload` to each { platform, token } via APNs (HTTP/2),
-       FCM, or Web Push (VAPID). Until a provider is configured, record intent so
-       the wiring is verifiable end-to-end without losing anything. */
-    console.log(JSON.stringify({ event: 'push_pending', recipients: tokens.length, kind: payload && payload.kind }));
+    const pusher = await createPusher(env);
+    const dead = [];   // { hash, token } rows whose subscription is gone
+    let sent = 0;
+    for (const row of tokens) {
+      let sub = null;
+      try { sub = JSON.parse(row.token); } catch { sub = null; }
+      if (!sub || !sub.endpoint) { dead.push(row); continue; }   // unparseable => prune
+      const res = await pusher.send(sub, payload);
+      if (res.ok) sent += 1;
+      else if (res.gone) dead.push(row);
+    }
+    /* Prune expired/removed subscriptions so the table doesn't accrete dead rows
+       (a browser that unsubscribes or an OS that rotates the endpoint). */
+    if (dead.length) {
+      const stmts = dead.map((r) => env.DB.prepare('DELETE FROM push_tokens WHERE hash = ?1 AND token = ?2').bind(r.hash, r.token));
+      try { await env.DB.batch(stmts); } catch (e) { /* pruning is best-effort */ }
+    }
+    console.log(JSON.stringify({ event: 'push_sent', kind: payload && payload.kind, sent, pruned: dead.length, total: tokens.length }));
   } catch (e) {
     console.log(JSON.stringify({ event: 'push_failed', error: String(e) }));
   }
@@ -815,6 +844,16 @@ async function handlePushUnregister(request, env) {
   const me = await sha256hex(key);
   await env.DB.prepare('DELETE FROM push_tokens WHERE hash = ?1 AND token = ?2').bind(me, token).run();
   return json({ ok: true }, 200);
+}
+
+/* Serve the VAPID public key so the client can call pushManager.subscribe with it
+   as the applicationServerKey. The value is public by design (it is in every push
+   subscription); cacheable like the other constant reads. Rotating the keypair
+   means swapping this var + the VAPID_PRIVATE_KEY secret; an already-subscribed
+   client re-subscribes with the new key on its next Settings open (_reflectPush
+   compares this against its subscription's key). */
+async function handleVapidKey(request, env, url) {
+  return json({ ok: true, key: String(env.VAPID_PUBLIC_KEY || '') }, 200, cacheHeader(url));
 }
 
 async function handleSelfDelete(request, env, ctx) {
@@ -1893,8 +1932,8 @@ async function handleDmSend(request, env, ctx) {
     ).bind(thread.id, now).run();
     /* Instant delivery to the recipient's own connections over the private
        user:<to> scope — their open thread drops it in, their badge rings — plus
-       the (gated-off) native push nudge. A HELD message does neither: the
-       recipient must never learn of a shadow-blocked send. */
+       the native Web Push nudge. A HELD message does neither: the recipient must
+       never learn of a shadow-blocked send. */
     if (ctx) {
       publishLive(env, ctx, { v: 1, t: 'dm', scopes: ['user:' + to], from: me, thread_id: thread.id,
         message: { id: msg.id, sender_hash: me, body: body, created_at: now, enc: enc, media_key: mediaKey } });
@@ -1902,7 +1941,18 @@ async function handleDmSend(request, env, ctx) {
     /* A DM also lands in the recipient's notifications list (the inbox badge is
        not the only place it should show). */
     await notifyDm(env, to, me);
-    await deliverPush(env, [to], { kind: 'dm', thread_id: thread.id });
+    /* Native push nudge, DEFERRED (like the reply/mention/wall paths) so a slow
+       push service never delays the sender's response — but only if the recipient
+       hasn't turned DM notifications off ("the bell only — messages still
+       arrive"); a push is the loudest bell, so it honors that opt-out too. Carries
+       NO message content (DMs are E2E; the server never sees the plaintext). */
+    const pushDm = async () => {
+      const dmPref = (await notifyPrefsFor(env, [to]))[to];
+      if (notifyEnabled(dmPref, 'dm')) {
+        await deliverPush(env, [to], { kind: 'dm', title: 'New message', body: 'You have a new message', url: '/community.html?dm=' + me });
+      }
+    };
+    if (ctx) ctx.waitUntil(pushDm()); else await pushDm();
   }
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
 }
@@ -2520,6 +2570,8 @@ async function deliverWallNotifications(env, o) {
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
   const stmts = [];
   const live = [];
+  const pushComment = new Set();   // native-push recipients, split by copy (disjoint via `seen`)
+  const pushMention = new Set();
   const seen = new Set([o.authorHash, MERECAT_BOT.hash]);
   // topic_id encodes the wall sub-kind for the label: 1 = a comment on your post,
   // 0 = an @mention. comment_id is always the post id (jumps to ?post=<id>).
@@ -2527,6 +2579,7 @@ async function deliverWallNotifications(env, o) {
     const flag = commented ? 1 : 0;
     stmts.push(env.DB.prepare(NOTIF).bind(h, 'wall', flag, o.postId, o.authorHash, now));
     live.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'wall', topic_id: flag, comment_id: o.postId, actor_hash: o.authorHash, created_at: now });
+    (commented ? pushComment : pushMention).add(h);
     seen.add(h);
   };
   if (o.postAuthorHash && !seen.has(o.postAuthorHash)) add(o.postAuthorHash, true);
@@ -2539,6 +2592,13 @@ async function deliverWallNotifications(env, o) {
   }
   if (stmts.length) await env.DB.batch(stmts);
   if (live.length) await publishUser(env, live);
+  const postUrl = '/community.html?post=' + o.postId;
+  if (pushComment.size) {
+    await deliverPush(env, [...pushComment], { kind: 'wall', title: 'New comment', body: 'Someone commented on your post', url: postUrl });
+  }
+  if (pushMention.size) {
+    await deliverPush(env, [...pushMention], { kind: 'wall', title: 'You were mentioned', body: 'Someone mentioned you in a post', url: postUrl });
+  }
 }
 
 /* Shared R2 purge for public post/comment media (mirror of purgeMediaKeys). */
@@ -6267,6 +6327,7 @@ export default {
       if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
       if (path === '/api/comments/push/register' && request.method === 'POST') return await handlePushRegister(request, env);
       if (path === '/api/comments/push/unregister' && request.method === 'POST') return await handlePushUnregister(request, env);
+      if (path === '/api/comments/push/vapid-key' && request.method === 'GET') return await handleVapidKey(request, env, url);
       if (path === '/api/merecat/ask-init' && request.method === 'POST') return await handleMerecatAskInit(request, env);
       if (path === '/api/merecat/live' && request.method === 'GET' &&
           (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') return await handleMerecatLive(request, env);

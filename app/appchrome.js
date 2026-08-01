@@ -114,6 +114,22 @@ function isAdmin() {
   try { return localStorage.getItem('mc-admin') === '1'; } catch (e) { return false; }
 }
 
+/* The standard VAPID applicationServerKey decoder: base64url string -> Uint8Array
+   (pushManager.subscribe needs raw bytes, not the string). */
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function sameBytes(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /* ---- the bottom tab bar ---- */
 class McTabbar extends LitElement {
   static properties = { active: { attribute: false }, dm: { attribute: false } };
@@ -250,7 +266,7 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false } };
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
   constructor() {
     super();
     this.keyShown = false; this.theme = this._theme(); this.copied = false;
@@ -258,10 +274,11 @@ class McSettings extends LitElement {
     this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence();
     this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null; this.muted = null;
     this.canInstall = !!(window.mcInstall && window.mcInstall.evt);
+    this.pushOn = null; this.pushBusy = false; this.pushMsg = '';   // null = state not yet reflected
     this._onInstall = () => { this.canInstall = !!(window.mcInstall && window.mcInstall.evt); };
   }
   createRenderRoot() { return this; }
-  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-install-available', this._onInstall); this._loadPrefs(); }
+  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-install-available', this._onInstall); this._loadPrefs(); this._reflectPush(); }
   disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-install-available', this._onInstall); }
   _api() { return '/api/comments'; }
   _loadPrefs() {
@@ -306,6 +323,140 @@ class McSettings extends LitElement {
     this.muted = (this.muted || []).filter((m) => m.hash !== hash);
   }
   _install() { if (window.mcInstall) window.mcInstall.prompt(); this.canInstall = false; }
+
+  /* ---- Add-to-Home-Screen + native push (Web Push / VAPID) ---- */
+  _isStandalone() {
+    try {
+      return (matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    } catch (e) { return false; }
+  }
+  _isIOS() {
+    const ua = navigator.userAgent || '';
+    // iPadOS 13+ reports as MacIntel; the touch-point count distinguishes it.
+    return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  _pushSupported() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+  /* Reflect the current subscription so the toggle opens showing the truth. It
+     reflects ON only for the identity that actually enabled push on THIS device
+     (tracked in mc-push-owner), so a leftover subscription is never silently
+     adopted by whoever logs in next. When it does own the subscription it also
+     self-heals a VAPID key rotation (re-subscribe with the new key) and refreshes
+     the server token binding. */
+  async _reflectPush() {
+    if (!this._pushSupported() || (this._isIOS() && !this._isStandalone())) { this.pushOn = false; return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      const key = readKey();
+      let owner = '';
+      try { owner = localStorage.getItem('mc-push-owner') || ''; } catch (e) { owner = ''; }
+      // Not this identity's subscription (or none, or permission revoked): show
+      // OFF and touch nothing — never re-register someone else's device to this key.
+      if (!sub || Notification.permission !== 'granted' || !key || owner !== key) {
+        this.pushOn = !!(sub && Notification.permission === 'granted' && key && owner === key);
+        return;
+      }
+      // Self-heal a VAPID key rotation: the old subscription's pushes would be
+      // rejected (403, never pruned server-side), so re-subscribe with the new key.
+      try {
+        const kr = await fetch(this._api() + '/push/vapid-key').then((r) => r.json()).catch(() => null);
+        if (kr && kr.ok && kr.key) {
+          const want = urlBase64ToUint8Array(kr.key);
+          const have = (sub.options && sub.options.applicationServerKey) ? new Uint8Array(sub.options.applicationServerKey) : null;
+          if (have && !sameBytes(have, want)) {
+            const oldToken = JSON.stringify(sub.toJSON());
+            try { await sub.unsubscribe(); } catch (e) { /* ignore */ }
+            fetch(this._api() + '/push/unregister', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key, token: oldToken }),
+            }).catch(() => { /* drop the stale binding */ });
+            sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
+          }
+        }
+      } catch (e) { /* rotation re-subscribe failed — fall through and re-check */ }
+      // Confirm a live subscription still exists (a failed rotation may have torn
+      // the old one down) before claiming ON and registering its token.
+      const live = await reg.pushManager.getSubscription().catch(() => null);
+      if (!live) { this.pushOn = false; return; }
+      this.pushOn = true;
+      fetch(this._api() + '/push/register', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, platform: 'web', token: JSON.stringify(live.toJSON()) }),
+      }).catch(() => { /* best-effort refresh */ });
+    } catch (e) { this.pushOn = false; }
+  }
+  async _togglePush() {
+    if (this.pushBusy) return;
+    const key = readKey();
+    if (!key) { this.pushMsg = 'Create an identity first, then turn on notifications.'; return; }
+    this.pushBusy = true; this.pushMsg = '';
+    try {
+      if (this.pushOn) await this._disablePush(key);
+      else await this._enablePush(key);
+    } catch (e) {
+      this.pushMsg = 'Something went wrong. Try again.'; this.pushOn = false;
+    } finally {
+      this.pushBusy = false;
+    }
+  }
+  async _enablePush(key) {
+    // 1) permission — this runs from the toggle tap, so it is a valid user gesture
+    let perm = Notification.permission;
+    if (perm === 'default') perm = await Notification.requestPermission();
+    if (perm === 'denied') { this.pushMsg = 'Notifications are blocked — turn them on in your browser or site settings.'; this.pushOn = false; return; }
+    if (perm !== 'granted') { this.pushOn = false; return; }
+    // 2) the active service worker
+    const reg = await navigator.serviceWorker.ready;
+    // 3) the server's VAPID public key
+    const kr = await fetch(this._api() + '/push/vapid-key').then((r) => r.json()).catch(() => null);
+    if (!kr || !kr.ok || !kr.key) { this.pushMsg = "Couldn't reach the notification service. Try again."; this.pushOn = false; return; }
+    const appKey = urlBase64ToUint8Array(kr.key);
+    // 4) subscribe (idempotent for the same key; replace a stale different-key sub)
+    let sub;
+    try {
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+    } catch (e) {
+      const old = await reg.pushManager.getSubscription();
+      if (old) { try { await old.unsubscribe(); } catch (e2) { /* ignore */ } }
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+    }
+    const token = JSON.stringify(sub.toJSON());
+    // If a DIFFERENT identity previously enabled push on this device, drop its
+    // binding first, so one browser is never registered to two identities at once.
+    let prevOwner = '';
+    try { prevOwner = localStorage.getItem('mc-push-owner') || ''; } catch (e) { prevOwner = ''; }
+    if (prevOwner && prevOwner !== key) {
+      fetch(this._api() + '/push/unregister', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: prevOwner, token }),
+      }).catch(() => { /* best-effort */ });
+    }
+    // 5) register the token to this identity
+    const res = await fetch(this._api() + '/push/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, platform: 'web', token }),
+    }).then((r) => r.json()).catch(() => null);
+    if (!res || !res.ok) { this.pushMsg = "Couldn't register for notifications. Try again."; this.pushOn = false; return; }
+    try { localStorage.setItem('mc-push-owner', key); } catch (e) { /* blocked */ }
+    this.pushMsg = ''; this.pushOn = true;
+  }
+  async _disablePush(key) {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      const token = JSON.stringify(sub.toJSON());
+      try { await sub.unsubscribe(); } catch (e) { /* keep going — still unregister */ }
+      fetch(this._api() + '/push/unregister', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, token }),
+      }).catch(() => { /* best-effort */ });
+    }
+    try { localStorage.removeItem('mc-push-owner'); } catch (e) { /* blocked */ }
+    this.pushMsg = ''; this.pushOn = false;
+  }
+
   _presence() { try { return localStorage.getItem('mc-presence') === 'off' ? 'off' : 'auto'; } catch (e) { return 'auto'; } }
   togglePresence() {
     const n = this.presence === 'off' ? 'auto' : 'off';
@@ -334,8 +485,14 @@ class McSettings extends LitElement {
   }
   logout() {
     mcConfirm('Log out of this identity? Keep your key saved so you can log back in.',
-      { okLabel: 'Log out', danger: true }).then(function (ok) {
+      { okLabel: 'Log out', danger: true }).then(async (ok) => {
       if (!ok) return;
+      // Tear down this device's push subscription FIRST (while the key is still
+      // present), so a logged-out or handed-off browser stops receiving this
+      // identity's OS notifications and the server token row is removed. Best
+      // effort — logout must never hang on it.
+      const key = readKey();
+      if (key && this._pushSupported()) { try { await this._disablePush(key); } catch (e) { /* ignore */ } }
       try {
         localStorage.removeItem('mc-comment-key');
         localStorage.removeItem('mc-dm-unread');
@@ -364,6 +521,45 @@ class McSettings extends LitElement {
             <button class="btn" style="padding:0.15rem 0.6rem;font-size:0.85em" @click=${() => action(r.hash)}>${actionLabel}</button>
           </div>`) : html`<p style="opacity:0.6;margin:0.2rem 0">Nobody here.</p>`)}
       </div>` : ''}`;
+  }
+  /* "Add to Home Screen": the right control per platform. Android/desktop Chrome
+     get the real install prompt; iOS Safari (no beforeinstallprompt) gets the
+     Share -> Add to Home Screen instructions; anything else, a friendly nudge.
+     Hidden once installed (standalone). */
+  _homeScreenSection() {
+    const noteStyle = 'padding:0.5rem 0.95rem 0.7rem;font-size:0.92em;opacity:0.8;line-height:1.5';
+    if (this._isStandalone()) {
+      return html`<h3 class="mc-set-sec">App</h3>
+        <div class="mc-set-note" style=${noteStyle}>Installed ✓ — you're using merecatholicity as an app.</div>`;
+    }
+    return html`<h3 class="mc-set-sec">Add to Home Screen</h3>
+      ${this.canInstall ? html`
+        <button class="mc-set-row mc-set-btn" @click=${() => this._install()}>
+          <span>Add to Home Screen<small>Install merecatholicity as an app</small></span><span class="mc-set-go">›</span></button>`
+      : this._isIOS() ? html`
+        <div class="mc-set-note" style=${noteStyle}>Tap the Share button
+          <span aria-hidden="true" style="display:inline-block;transform:translateY(2px)">⎋</span>
+          at the bottom of Safari, then choose <strong>Add to Home Screen</strong>. Open merecatholicity from
+          its new icon — that's what lets you turn on notifications.</div>`
+      : html`
+        <div class="mc-set-note" style=${noteStyle}>Open this site in Chrome, Edge, or Safari and choose
+          <strong>Add to Home Screen</strong> (or <strong>Install</strong>) from the browser menu.</div>`}`;
+  }
+  /* The push toggle, guarded: unsupported browsers and iOS-not-installed get a
+     note instead of a dead switch. */
+  _pushRow() {
+    const noteStyle = 'padding:0.5rem 0.95rem 0.7rem;font-size:0.92em;opacity:0.8;line-height:1.5';
+    if (!this._pushSupported()) {
+      return html`<div class="mc-set-note" style=${noteStyle}>Your browser doesn't support push notifications.</div>`;
+    }
+    if (this._isIOS() && !this._isStandalone()) {
+      return html`<div class="mc-set-note" style=${noteStyle}>To get notifications on iPhone or iPad, first
+        <strong>Add to Home Screen</strong> (above), then open merecatholicity from its icon and come back
+        here to turn them on.</div>`;
+    }
+    const note = this.pushBusy ? 'Working…'
+      : (this.pushMsg || (this.pushOn ? 'On — notified even with the site closed' : 'Off — get notified even with the site closed'));
+    return this._switch('Push notifications', note, !!this.pushOn, () => this._togglePush());
   }
   render() {
     const k = readKey();
@@ -399,6 +595,8 @@ class McSettings extends LitElement {
             <span class="mc-pal-sw"></span><span class="mc-pal-name">${p[1]}</span></button>`)}
       </div>`}
 
+      ${this._homeScreenSection()}
+
       ${k ? html`
         <h3 class="mc-set-sec">Privacy &amp; safety</h3>
         ${this._switch("Show when I'm online", this.presence === 'off' ? 'Appear offline' : 'Automatic', this.presence !== 'off', () => this.togglePresence())}
@@ -410,14 +608,11 @@ class McSettings extends LitElement {
         ${this._switch('Replies', null, this._notifyOn('reply'), () => this._setPref({ notify_reply: this._notifyOn('reply') ? 0 : 1 }))}
         ${this._switch('Mentions', null, this._notifyOn('mention'), () => this._setPref({ notify_mention: this._notifyOn('mention') ? 0 : 1 }))}
         ${this._switch('Direct messages', 'The bell only — messages still arrive', this._notifyOn('dm'), () => this._setPref({ notify_dm: this._notifyOn('dm') ? 0 : 1 }))}
+        ${this._pushRow()}
       ` : ''}
 
       ${isAdmin() ? html`<h3 class="mc-set-sec">Administration</h3>
       ${link('community.html?admin=1', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
-
-      ${this.canInstall ? html`<h3 class="mc-set-sec">App</h3>
-        <button class="mc-set-row mc-set-btn" @click=${() => this._install()}>
-          <span>Install app<small>Add merecatholicity to your home screen</small></span><span class="mc-set-go">›</span></button>` : ''}
     </div>`;
   }
 }
