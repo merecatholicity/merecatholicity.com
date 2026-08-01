@@ -33,6 +33,45 @@ CONTENT_DIR = os.path.join(ROOT, 'content')
 # discipline): a content page with comments carries this exact include.
 COMMENTS_V = 183
 
+# Social-sharing defaults (Open Graph / Twitter cards). Every built page carries
+# a correct per-page card so a shared link shows what the page IS, not a generic
+# site blurb. Per-page overrides ride the frontmatter (`description`, `image`,
+# `og_type`); absent those, these apply. The image is the branded book cover as a
+# stopgap — a dedicated 1200x630 banner can replace DEFAULT_IMAGE later without
+# touching any page.
+SITE = 'https://merecatholicity.com'
+SITE_NAME = 'Mere Catholicity'
+DEFAULT_DESC = 'What has been believed everywhere, always, and by all.'
+DEFAULT_IMAGE = 'cover.jpg'
+
+
+def _esc(s):
+    """HTML-attribute-safe escaping for meta content."""
+    return (str(s).replace('&', '&amp;').replace('"', '&quot;')
+            .replace('<', '&lt;').replace('>', '&gt;'))
+
+
+def social_head(slug, title, description, image, og_type):
+    """The per-page Open Graph + Twitter-card block for one content page.
+    og:url is the page's own canonical URL; og:title is the clean title (the
+    brand lives in og:site_name), so a shared card reads as the page itself."""
+    url = SITE + '/' + slug + '.html'
+    img = image if str(image).startswith('http') else SITE + '/' + image
+    tags = [
+        ('meta name="description"', description),
+        ('meta property="og:type"', og_type),
+        ('meta property="og:site_name"', SITE_NAME),
+        ('meta property="og:title"', title),
+        ('meta property="og:description"', description),
+        ('meta property="og:url"', url),
+        ('meta property="og:image"', img),
+        ('meta name="twitter:card"', 'summary_large_image'),
+        ('meta name="twitter:title"', title),
+        ('meta name="twitter:description"', description),
+        ('meta name="twitter:image"', img),
+    ]
+    return ''.join('<' + attr + ' content="' + _esc(val) + '">\n' for attr, val in tags)
+
 
 def split_frontmatter(text):
     """A leading `---\\n … \\n---\\n` YAML block, then the body."""
@@ -72,9 +111,12 @@ def build_page(slug, source_path, nav_block, footer_block):
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<title>' + title + ' | Mere Catholicity</title>\n'
     )
-    if fm.get('description'):
-        head += ('<meta name="description" content="'
-                 + fm['description'].replace('"', '&quot;') + '">\n')
+    head += social_head(
+        slug, title,
+        fm.get('description') or DEFAULT_DESC,
+        fm.get('image') or DEFAULT_IMAGE,
+        fm.get('og_type') or 'article',
+    )
     head += ('<link rel="icon" href="favicon.ico">\n'
              '<link rel="stylesheet" href="style.css">\n</head>\n<body>\n')
 

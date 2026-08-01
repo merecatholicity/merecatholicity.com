@@ -1,5 +1,6 @@
 ---
 title: The Hours
+description: "The daily Psalter as the first-millennium layman's foundation for prayer."
 canon: The daily Psalter is the first-millennium layman’s foundation.
 comments: false
 ---
