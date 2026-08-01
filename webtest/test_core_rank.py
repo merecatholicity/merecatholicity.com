@@ -124,7 +124,8 @@ SCRIPTURE_PROBE = r"""
       return { muted: C.isMuted('bot', 'a', ['a']), botExempt: C.isMuted('bot', 'bot', ['bot']),
         toggleAdd: t.added && t.list.length === 1 && t.list[0] === 'x',
         ipban: C.blockedMessage('ipban').indexOf('network is banned') !== -1,
-        locked: C.blockedMessage('locked').indexOf('identity has been locked') !== -1 };
+        locked: C.blockedMessage('locked').indexOf('identity has been locked') !== -1,
+        mentions: (C.mentionsIn('hi @a and @b', [{token:'@a',hash:'h1'},{token:'@b',hash:'h2'},{token:'@z',hash:'h9'}]) || []).join(',') };
     })()
   };
 """
@@ -222,6 +223,8 @@ def main():
              and (sc.get('mod') or {}).get('toggleAdd') is True
              and (sc.get('mod') or {}).get('ipban') is True
              and (sc.get('mod') or {}).get('locked') is True),
+            ('mcCore.mentionsIn (present @-picks -> hashes, absent dropped)',
+             (sc.get('mod') or {}).get('mentions') == 'h1,h2'),
         ]
         return f.verdict(checks)
 
