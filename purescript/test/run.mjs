@@ -19,6 +19,8 @@ import * as Board from '../output/Domain.Board/index.js';
 import * as Emoji from '../output/Domain.Emoji/index.js';
 import * as Route from '../output/Domain.Route/index.js';
 import * as Auth from '../output/Domain.Auth/index.js';
+import * as Mute from '../output/Domain.Mute/index.js';
+import * as Blocked from '../output/Domain.Blocked/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -316,3 +318,17 @@ assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: true, profileL
 assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: true, profileLoaded: true, myAdmin: true, hint: false })), 'Admin');
 assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: true, profileLoaded: false, myAdmin: false, hint: true })), 'Admin', 'hint before load = Admin');
 console.log('pstest: Domain.Auth OK (' + authN + ' signal combos + AuthState classify)');
+
+// --- Domain.Mute + Domain.Blocked (moderation) ---
+const BOT = 'botHASH';
+assert.equal(Mute.isMuted(BOT)('a')(['a']), true);
+assert.equal(Mute.isMuted(BOT)(BOT)([BOT]), false, 'bot never muted');
+assert.equal(Mute.isMuted(BOT)('')([]), false, 'empty hash');
+assert.equal(Mute.isMuted(BOT)('z')(['a', 'b']), false);
+assert.deepEqual(Mute.toggleMute('x')([]), { list: ['x'], added: true });
+assert.deepEqual(Mute.toggleMute('x')(['x', 'y']), { list: ['y'], added: false });
+assert.equal(Blocked.messageFor('ipban').startsWith('Your network is banned'), true);
+assert.equal(Blocked.messageFor('locked').startsWith('This identity has been locked'), true);
+assert.equal(Blocked.messageFor('banned').startsWith('This identity has been locked'), true);
+assert.equal(Blocked.messageFor('unknown').startsWith('This identity has been locked'), true, 'unknown -> identity (classic else)');
+console.log('pstest: Domain.Mute + Domain.Blocked OK');

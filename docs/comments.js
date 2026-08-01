@@ -451,11 +451,17 @@
   /* The librarian cannot be muted: it speaks only when summoned, so a muted
      bot would read as a broken summons (a stale stored mute is ignored too). */
   function isMuted(hash) {
+    if (window.mcCore) return window.mcCore.isMuted(MERECAT_BOT_HASH, hash, getMuted());
     if (hash === MERECAT_BOT_HASH) return false;
     return !!hash && getMuted().indexOf(hash) !== -1;
   }
   function toggleMute(hash) {
     if (!hash) return false;
+    if (window.mcCore) {
+      var r = window.mcCore.toggleMute(hash, getMuted());
+      try { localStorage.setItem(MUTED_STORE, JSON.stringify(r.list)); } catch (e) {}
+      return r.added;
+    }
     var a = getMuted(), i = a.indexOf(hash);
     if (i === -1) a.push(hash); else a.splice(i, 1);
     try { localStorage.setItem(MUTED_STORE, JSON.stringify(a)); } catch (e) {}
@@ -2621,9 +2627,11 @@
   function blockedOut(d) {
     if (!d || !d.blocked) return false;
     try {
-      localStorage.setItem('mc-flash', d.blocked === 'ipban'
-        ? 'Your network is banned from merecatholicity.com for violating the terms and conditions.'
-        : 'This identity has been locked by the moderators for violating the terms and conditions.');
+      localStorage.setItem('mc-flash', window.mcCore
+        ? window.mcCore.blockedMessage(d.blocked)
+        : (d.blocked === 'ipban'
+          ? 'Your network is banned from merecatholicity.com for violating the terms and conditions.'
+          : 'This identity has been locked by the moderators for violating the terms and conditions.'));
     } catch (e) {}
     clearKey();
     state.key = '';

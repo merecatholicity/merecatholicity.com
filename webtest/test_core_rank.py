@@ -117,6 +117,14 @@ SCRIPTURE_PROBE = r"""
         gatePass: C.authGate(s(true, true, true, true, false)),
         gateWait: C.authGate(s(true, true, false, false, false)),
         gateDeny: C.authGate(s(false, false, false, false, false)) };
+    })(),
+    mod: (function () {
+      var C = window.mcCore;
+      var t = C.toggleMute('x', []);
+      return { muted: C.isMuted('bot', 'a', ['a']), botExempt: C.isMuted('bot', 'bot', ['bot']),
+        toggleAdd: t.added && t.list.length === 1 && t.list[0] === 'x',
+        ipban: C.blockedMessage('ipban').indexOf('network is banned') !== -1,
+        locked: C.blockedMessage('locked').indexOf('identity has been locked') !== -1 };
     })()
   };
 """
@@ -208,6 +216,12 @@ def main():
              and (sc.get('auth') or {}).get('gatePass') == 'pass'
              and (sc.get('auth') or {}).get('gateWait') == 'wait'
              and (sc.get('auth') or {}).get('gateDeny') == 'deny'),
+            ('mcCore.mute + blockedMessage (membership, bot-exempt, toggle-add, ipban/locked strings)',
+             (sc.get('mod') or {}).get('muted') is True
+             and (sc.get('mod') or {}).get('botExempt') is False
+             and (sc.get('mod') or {}).get('toggleAdd') is True
+             and (sc.get('mod') or {}).get('ipban') is True
+             and (sc.get('mod') or {}).get('locked') is True),
         ]
         return f.verdict(checks)
 
