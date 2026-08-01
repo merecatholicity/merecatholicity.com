@@ -134,10 +134,20 @@
     // list only bounds which browser origins may POST. Override for a staging
     // host or a hybrid-app origin; source falls back to the two prod origins.
     "ALLOWED_ORIGINS": "https://merecatholicity.com,https://www.merecatholicity.com",
-    // Mobile push (landing pad). "false" = deliverPush is a no-op and the
-    // push_tokens table simply fills; flip to "true" once an app and a provider
-    // (APNs/FCM/Web Push) are wired. Registration endpoints work regardless.
-    "PUSH_ENABLED": "false"
+    // Web Push (VAPID + aes128gcm), sent natively from the worker on crypto.subtle
+    // — no external service. "true" turns deliverPush on; it ALSO needs the VAPID
+    // keypair set: VAPID_PUBLIC_KEY (below, public) + the VAPID_PRIVATE_KEY SECRET
+    // (`cd comments-worker && wrangler secret put VAPID_PRIVATE_KEY`). deliverPush
+    // no-ops safely if the keys are absent. Registration endpoints work
+    // regardless. Set to "false" to silence all push without unsetting keys.
+    "PUSH_ENABLED": "true",
+    // The VAPID applicationServerKey: the P-256 public point (base64url, 65 bytes
+    // starting 0x04). Public by design — served to clients at
+    // /api/comments/push/vapid-key. The matching private key is the
+    // VAPID_PRIVATE_KEY secret (never in source). Rotate BOTH together.
+    "VAPID_PUBLIC_KEY": "BGu90jVwRuyDpx_lnCMDdsuvF-1mHEHSS1IunwbOdhTq7f1G4ImfS0DFZac3ikV8a-sGQFqSaVuXLu67wBPS-uQ",
+    // The VAPID JWT "sub" claim: a mailto: (or https:) the push service can reach.
+    "VAPID_SUBJECT": "mailto:admin@merecatholicity.com"
   },
   // A staging deployment: `wrangler deploy --env staging`. Distinct rate-limit
   // namespace ids so it never shares the production per-IP buckets, and its own
@@ -154,7 +164,11 @@
       "vars": {
         "MODERATION_MODE": "ai",
         "ALLOW_ANON": "false",
-        "PUSH_ENABLED": "false"
+        "PUSH_ENABLED": "true",
+        // Same VAPID public key as prod; the VAPID_PRIVATE_KEY secret must also be
+        // set for the staging env (`wrangler secret put VAPID_PRIVATE_KEY --env staging`).
+        "VAPID_PUBLIC_KEY": "BGu90jVwRuyDpx_lnCMDdsuvF-1mHEHSS1IunwbOdhTq7f1G4ImfS0DFZac3ikV8a-sGQFqSaVuXLu67wBPS-uQ",
+        "VAPID_SUBJECT": "mailto:admin@merecatholicity.com"
       }
     }
   }

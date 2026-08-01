@@ -5,7 +5,7 @@
    adds zero API traffic). Exact-URL cache keys: a bumped ?v= misses and
    fetches fresh, so the site's standing cache-busting discipline is
    untouched. Bump VERSION to sweep the cache wholesale. */
-var VERSION = 'mc-shell-v1';
+var VERSION = 'mc-shell-v2';
 var SHELL = {
   'app.js': 1, 'nav.js': 1, 'deeplink.js': 1, 'style.css': 1,
   'manifest.webmanifest': 1, 'icon-192.png': 1, 'icon-512.png': 1,
@@ -41,4 +41,44 @@ self.addEventListener('fetch', function (e) {
       });
     })
   );
+});
+
+/* Web Push: show the notification the worker sent (title/body/url only — never
+   message content). The payload is the JSON deliverPush encrypted. */
+self.addEventListener('push', function (event) {
+  var d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = {}; }
+  var title = d.title || 'Mere Catholicity';
+  var opts = {
+    body: d.body || '',
+    icon: 'icon-192.png',
+    badge: 'icon-192.png',
+    tag: d.tag || undefined,
+    data: { url: d.url || '/community.html' },
+  };
+  event.waitUntil(self.registration.showNotification(title, opts));
+});
+
+/* Tapping a notification focuses an existing tab (navigating it to the deep link)
+   or opens a new one. */
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  var url = (event.notification.data && event.notification.data.url) || '/community.html';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
+      for (var i = 0; i < cs.length; i++) {
+        if ('focus' in cs[i]) {
+          try { cs[i].navigate(url); } catch (e) { /* cross-origin/older browser */ }
+          return cs[i].focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
+/* The push subscription can be rotated by the browser/OS. Best-effort no-op here;
+   the client re-checks and re-registers its subscription on every load. */
+self.addEventListener('pushsubscriptionchange', function (event) {
+  event.waitUntil(Promise.resolve());
 });
