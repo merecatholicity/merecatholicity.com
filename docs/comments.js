@@ -782,10 +782,18 @@
      save toggle. The lifetime is per-conversation; either party changes it and
      the last write wins for both. Saving a message exempts it for both. ---- */
   function dmTtlLabel(ttl) {
+    if (window.mcCore) return window.mcCore.dmTtlLabel(ttl);
     ttl = Number(ttl) || 604800;
     if (ttl <= 86400) return '24 hours';
     if (ttl >= 2592000) return '30 days';
     return '7 days';
+  }
+  /* The DM lifetime chooser options, single-sourced from the PureScript Domain.Dm
+     (Core); the inline fallback matches the worker's DM_TTLS. */
+  function dmTtlChoices() {
+    return (window.mcCore && window.mcCore.dmTtlOptions)
+      ? window.mcCore.dmTtlOptions.map(function (o) { return [o.secs, o.label]; })
+      : [[86400, '24 hours'], [604800, '7 days'], [2592000, '30 days']];
   }
   function dmExpiryNode(other, ttl, isNew) {
     var p = el('p', 'dm-expiry');
@@ -800,7 +808,7 @@
     }
     function chooser() {
       p.textContent = 'Disappears after opening: ';
-      [[86400, '24 hours'], [604800, '7 days'], [2592000, '30 days']].forEach(function (opt, i) {
+      dmTtlChoices().forEach(function (opt, i) {
         if (i) p.appendChild(document.createTextNode(' · '));
         var a = el('a', null, opt[1] + (cur === opt[0] ? ' ✓' : ''));
         a.href = '#';
@@ -6966,7 +6974,7 @@
         var ttlRow = el('p', 'admin-set-row');
         ttlRow.appendChild(document.createTextNode('Default disappear time for new conversations: '));
         var ttlSel = el('select');
-        [[86400, '24 hours'], [604800, '7 days'], [2592000, '30 days']].forEach(function (o) {
+        dmTtlChoices().forEach(function (o) {
           var opt = el('option', null, o[1]);
           opt.value = String(o[0]);
           if (Number(s.dm_default_ttl) === o[0]) opt.selected = true;

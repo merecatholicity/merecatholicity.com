@@ -10,6 +10,7 @@ import * as Scripture from '../output/Domain.Scripture/index.js';
 import * as Profile from '../output/Domain.Profile/index.js';
 import * as Faith from '../output/Domain.Faith/index.js';
 import * as Pseudonym from '../output/Domain.Pseudonym/index.js';
+import * as Dm from '../output/Domain.Dm/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -105,3 +106,11 @@ assert.equal(Pseudonym.displayName('0000000000000000'), 'Patient-Cedar 0000');
 assert.equal(Pseudonym.displayName('ffffffffffffffff'), 'Green-Wheat ffff');
 assert.equal(Pseudonym.displayName('abcdef0123456789aa'), 'Swift-Field abcd');
 console.log('pstest: Domain.Pseudonym OK (displayName parity)');
+
+// --- Domain.Dm: DM lifetimes ---
+assert.deepEqual(Dm.ttlOptions.map((o) => o.secs), [86400, 604800, 2592000]);
+assert.equal(Dm.ttlLabel(86400), '24 hours');
+assert.equal(Dm.ttlLabel(604800), '7 days');
+assert.equal(Dm.ttlLabel(2592000), '30 days');
+assert.equal(Dm.ttlLabel(3600), '24 hours');
+console.log('pstest: Domain.Dm OK (ttl options + labels)');
