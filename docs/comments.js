@@ -5148,7 +5148,9 @@
     ta.maxLength = 4000; ta.rows = kind === 'comment' ? 2 : 3;
     ta.placeholder = kind === 'comment' ? 'Write a comment…' : 'Share something with the community…';
     form.appendChild(mdEditor(ta));
-    attachDraft(ta, (kind === 'comment' ? 'wallc:' + extra.post : 'wall:' + (state.myHash || '')));
+    /* No draft autosave for the wall/feed: what you type here on your profile wall
+       or the global Feed is NOT remembered by the browser. Draft-remembering is
+       deliberately limited to the Community forum and page/article comment boxes. */
     attachMentions(ta);
     form.appendChild(el('div', 'ts-slot'));
     var btnRow = el('div', 'comment-buttons');
