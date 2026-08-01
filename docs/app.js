@@ -104,8 +104,8 @@
       ${Zc.map(t=>{let r=t.badge==="dm"?this.dm:0;return u`<a class=${"mc-sb-item"+(this.active===t.key?" mc-tab-on":"")} href=${t.href} aria-label=${t.label} aria-current=${this.active===t.key?"page":"false"} title=${t.label}>
           <span class="mc-sb-ico">${t.icon?t.icon:it[t.svg]}${r?u`<span class="mc-tab-badge">${Hr(r)}</span>`:""}</span>
           <span class="mc-sb-lbl">${t.label}</span></a>`})}
-    </nav>`}};customElements.define("mc-sidebar",ja);var La=class extends C{createRenderRoot(){return this}render(){return u`<div class="mc-footer">
-      <a href="index.html">merecatholicity.com</a><span class="mc-foot-sep">·</span>
+    </nav>`}};customElements.define("mc-sidebar",ja);var La=class extends C{createRenderRoot(){return this}render(){let t=new Date().getFullYear();return u`<div class="mc-footer">
+      <a href="index.html">© ${t} merecatholicity.com</a><span class="mc-foot-sep">·</span>
       <a href="terms.html">terms &amp; conditions</a><span class="mc-foot-sep">·</span>
       <a href="contact.html">Contact</a>
     </div>`}};customElements.define("mc-footer",La);var Ua=class extends C{createRenderRoot(){return this}render(){return u`<div class="mc-home">
