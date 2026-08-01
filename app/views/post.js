@@ -5,6 +5,8 @@
    living richtext module (window.mcRich). The old copy in comments.js
    stands as the no-bundle fallback and retires at Wave F. */
 
+import * as Core from '../core.js';
+
 function el(tag, cls, text) {
   var node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -57,8 +59,7 @@ function el(tag, cls, text) {
     }
     /* A door to a private word with the author, for keyed readers only.
        The librarian holds no inbox: its posts carry no DM link. */
-    if (c.author_hash && kit.state.myHash && c.author_hash !== kit.state.myHash &&
-        c.author_hash !== kit.MERECAT_BOT_HASH) {
+    if (Core.canInteract(c.author_hash, kit.state.myHash, kit.MERECAT_BOT_HASH)) {
       var dm = el('a', 'comment-dm', 'Direct Message');
       dm.href = 'community.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
@@ -112,7 +113,7 @@ function el(tag, cls, text) {
     });
     head.appendChild(quote);
     if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
-    if (c.author_hash && c.author_hash === kit.state.myHash) {
+    if (Core.canEdit(c.author_hash, kit.state.myHash)) {
       var ed = el('a', 'comment-edit', 'edit');
       ed.href = '#';
       ed.addEventListener('click', function (e) {
@@ -121,7 +122,7 @@ function el(tag, cls, text) {
       });
       head.appendChild(ed);
     }
-    if (kit.state.myHash && (c.author_hash === kit.state.myHash || kit.isAdmin())) {
+    if (Core.canDelete(c.author_hash, kit.state.myHash, kit.isAdmin())) {
       var del = el('a', 'comment-delete', 'delete');
       del.href = '#';
       del.addEventListener('click', function (e) {

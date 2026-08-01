@@ -66,7 +66,10 @@ SCRIPTURE_PROBE = r"""
     faithsLen: (window.mcCore.faiths || []).length,
     pseudo: window.mcCore.displayName('ffffffffffffffff'),
     dmTtl: window.mcCore.dmTtlLabel(604800),
-    dmTtlN: (window.mcCore.dmTtlOptions || []).length
+    dmTtlN: (window.mcCore.dmTtlOptions || []).length,
+    accDelAdmin: window.mcCore.canDelete('x', 'me', true),
+    accEditSelf: window.mcCore.canEdit('me', 'me'),
+    accNoSelfInteract: window.mcCore.canInteract('me', 'me', 'bot')
   };
 """
 
@@ -112,6 +115,9 @@ def main():
              sc.get('pseudo') == 'Green-Wheat ffff'),
             ('mcCore.dmTtlLabel/Options (604800 → "7 days", 3 options)',
              sc.get('dmTtl') == '7 days' and sc.get('dmTtlN') == 3),
+            ('mcCore.canDelete/canEdit/canInteract (permission matrix)',
+             sc.get('accDelAdmin') is True and sc.get('accEditSelf') is True
+             and sc.get('accNoSelfInteract') is False),
         ]
         return f.verdict(checks)
 

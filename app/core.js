@@ -18,6 +18,7 @@ import * as Profile from '../purescript/output/Domain.Profile/index.js';
 import * as Faith from '../purescript/output/Domain.Faith/index.js';
 import * as Pseudonym from '../purescript/output/Domain.Pseudonym/index.js';
 import * as Dm from '../purescript/output/Domain.Dm/index.js';
+import * as Access from '../purescript/output/Domain.Access/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -69,3 +70,12 @@ export const displayName = Pseudonym.displayName;
    DM_TTLS the worker also holds (Phase 6). */
 export const dmTtlLabel = (ttl) => Dm.ttlLabel((Number(ttl) || 604800) | 0);
 export const dmTtlOptions = Dm.ttlOptions;
+
+/* Post permission predicates (Domain.Access): pure UI authorization over the
+   author hash, the viewer's hash, the bot hash, and admin-ness. canInteract =
+   DM/mute; canReport = interact & !admin; canEdit = own; canDelete = own|admin.
+   Nullish hashes coerce to '' (a keyless viewer). Server authority unchanged. */
+export const canInteract = (author, me, bot) => Access.canInteract(author || '')(me || '')(bot || '');
+export const canReport = (author, me, bot, isAdmin) => Access.canReport(author || '')(me || '')(bot || '')(!!isAdmin);
+export const canEdit = (author, me) => Access.canEdit(author || '')(me || '');
+export const canDelete = (author, me, isAdmin) => Access.canDelete(author || '')(me || '')(!!isAdmin);
