@@ -41,8 +41,10 @@ psbuild:
 pstest: psbuild
 	node purescript/test/run.mjs
 
-# The only sanctioned way to deploy the comments worker: the guard runs first.
-worker-deploy: jscheck
+# The only sanctioned way to deploy the comments worker: the guard runs first,
+# then psbuild so the worker's PureScript imports (Domain.*, Phase 6) resolve
+# against a fresh purescript/output that wrangler bundles in.
+worker-deploy: jscheck psbuild
 	npm run worker:deploy
 
 check: jscheck
