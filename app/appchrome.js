@@ -595,7 +595,7 @@ class McFooter extends LitElement {
     const year = new Date().getFullYear();
     return html`<div class="mc-footer">
       <a href="index.html">© ${year} merecatholicity.com</a><span class="mc-foot-sep">·</span>
-      <a href="terms.html">terms &amp; conditions</a><span class="mc-foot-sep">·</span>
+      <a href="terms.html">Terms &amp; conditions</a><span class="mc-foot-sep">·</span>
       <a href="contact.html">Contact</a>
     </div>`;
   }

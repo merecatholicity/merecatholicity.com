@@ -4403,6 +4403,25 @@
     if (p.posts != null) names.appendChild(el('div', 'profile-faith profile-rank', rankLine(Number(p.posts) || 0)));
     headRow.appendChild(names);
     card.appendChild(headRow);
+    /* Share: one tap copies this member's public profile link (the pretty
+       /@handle when they have one, else the ?u= form) to the clipboard. */
+    var shareUrl = location.origin + (p.handle ? ('/@' + p.handle) : ('/' + profileHref(p.hash)));
+    var shareLink = el('a', 'identity-action profile-share', '🔗 Share profile');
+    shareLink.href = shareUrl;
+    shareLink.addEventListener('click', function (e) {
+      e.preventDefault();
+      var done = function () {
+        var was = shareLink.textContent;
+        shareLink.textContent = '✓ Link copied';
+        setTimeout(function () { shareLink.textContent = was; }, 2000);
+      };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareUrl).then(done).catch(function () { window.prompt('Copy this link:', shareUrl); });
+        } else { window.prompt('Copy this link:', shareUrl); }
+      } catch (err) { window.prompt('Copy this link:', shareUrl); }
+    });
+    card.appendChild(shareLink);
     if (p.bio) {
       card.appendChild(el('h3', 'profile-label', 'Bio'));
       card.appendChild(el('p', 'profile-bio', p.bio));

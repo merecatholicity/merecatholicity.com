@@ -136,7 +136,7 @@
           <span class="mc-sb-lbl">${t.label}</span></a>`})}
     </nav>`}};customElements.define("mc-sidebar",uo);var co=class extends C{createRenderRoot(){return this}render(){let t=new Date().getFullYear();return u`<div class="mc-footer">
       <a href="index.html">© ${t} merecatholicity.com</a><span class="mc-foot-sep">·</span>
-      <a href="terms.html">terms &amp; conditions</a><span class="mc-foot-sep">·</span>
+      <a href="terms.html">Terms &amp; conditions</a><span class="mc-foot-sep">·</span>
       <a href="contact.html">Contact</a>
     </div>`}};customElements.define("mc-footer",co);var so=class extends C{createRenderRoot(){return this}render(){return u`<div class="mc-home">
       <div class="mc-home-hero"><span class="mc-home-cross">✝</span>
