@@ -71,7 +71,15 @@ SCRIPTURE_PROBE = r"""
     accEditSelf: window.mcCore.canEdit('me', 'me'),
     accNoSelfInteract: window.mcCore.canInteract('me', 'me', 'bot'),
     replyPage21: window.mcCore.replyPage(21, 20),
-    stickyWins: window.mcCore.topicCompare({sticky:1,last:1}, {sticky:0,last:99}) < 0
+    stickyWins: window.mcCore.topicCompare({sticky:1,last:1}, {sticky:0,last:99}) < 0,
+    pager: (function () {
+      function s(total, per, active) {
+        return (window.mcCore.pagerItems(total, per, active) || []).map(function (it) {
+          return it.gap ? '…' : (it.active ? it.n + '*' : String(it.n));
+        }).join('|');
+      }
+      return { big: s(500, 20, 10), two: s(40, 20, 1), none: s(10, 20, 1) };
+    })()
   };
 """
 
@@ -122,6 +130,10 @@ def main():
              and sc.get('accNoSelfInteract') is False),
             ('mcCore.replyPage/topicCompare (live decisions)',
              sc.get('replyPage21') == 2 and sc.get('stickyWins') is True),
+            ('mcCore.pagerItems windowing (1|…|9|10*|11|…|25 ; 1*|2 ; empty)',
+             (sc.get('pager') or {}).get('big') == '1|…|9|10*|11|…|25'
+             and (sc.get('pager') or {}).get('two') == '1*|2'
+             and (sc.get('pager') or {}).get('none') == ''),
         ]
         return f.verdict(checks)
 
