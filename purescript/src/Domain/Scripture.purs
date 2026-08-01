@@ -12,6 +12,7 @@
 module Domain.Scripture
   ( bookSlug
   , bibleSrc
+  , bibleSpec
   , verseParts
   ) where
 
@@ -93,6 +94,11 @@ spec =
   , { slug: "jude", forms: "jude|jud|jd" }
   , { slug: "revelation", forms: "revelation|revelations|rev|apocalypse|apoc" }
   ]
+
+-- | The book table as {slug, spellings[]} — the served /config `bible` shape.
+-- | The worker reads this (Phase 6) instead of its own BIBLE_SPEC copy.
+bibleSpec :: Array { slug :: String, spellings :: Array String }
+bibleSpec = map (\r -> { slug: r.slug, spellings: split (Pattern "|") r.forms }) spec
 
 type FormRow = { form :: String, slug :: String }
 
