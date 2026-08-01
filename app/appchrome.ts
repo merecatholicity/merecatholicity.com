@@ -890,6 +890,7 @@ class McFooter extends LitElement {
     return html`<div class="mc-footer">
       <a href="index.html">© ${year} merecatholicity.com</a><span class="mc-foot-sep">·</span>
       <a href="terms.html">Terms &amp; conditions</a><span class="mc-foot-sep">·</span>
+      <a href="privacy.html">Privacy</a><span class="mc-foot-sep">·</span>
       <a href="contact.html">Contact</a>
     </div>`;
   }
@@ -1060,6 +1061,17 @@ function mcOnboard(onDone?: any, opts?: any) {
   agreeRow.appendChild(agree); agreeRow.appendChild(agreeTxt);
   wrap.appendChild(agreeRow);
 
+  /* This place is for adults only (terms + privacy): confirming 18+ is
+     required to mint an identity, like the terms agreement. */
+  const ageRow = document.createElement('label');
+  ageRow.className = 'agree-row mc-onboard-agree';
+  const age = document.createElement('input'); age.type = 'checkbox';
+  age.addEventListener('change', refresh);
+  const ageTxt = document.createElement('span');
+  ageTxt.appendChild(document.createTextNode('I am at least 18 years old.'));
+  ageRow.appendChild(age); ageRow.appendChild(ageTxt);
+  wrap.appendChild(ageRow);
+
   const createBtn = document.createElement('button');
   createBtn.type = 'button'; createBtn.className = 'btn btn-send mc-onboard-create';
   createBtn.textContent = 'Create my identity'; createBtn.disabled = true;
@@ -1076,7 +1088,7 @@ function mcOnboard(onDone?: any, opts?: any) {
   pasteWrap.appendChild(pasteIn); pasteWrap.appendChild(pasteBtn);
   wrap.appendChild(pasteWrap);
 
-  function refresh() { createBtn.disabled = !(chosenFaith && agree.checked); }
+  function refresh() { createBtn.disabled = !(chosenFaith && agree.checked && age.checked); }
   haveKey.addEventListener('click', function () { pasteWrap.hidden = !pasteWrap.hidden; if (!pasteWrap.hidden) pasteIn.focus(); });
 
   function revealKey(key: string) {
