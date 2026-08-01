@@ -10,12 +10,13 @@
 import { LitElement, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { pagerTpl } from './util.js';
+import * as Core from '../core.js';
 
 /* Category ordering must match the server's ORDER BY: stickies first, then by
-   last-activity descending. Used when live events reshuffle the listing. */
+   last-activity descending. Used when live events reshuffle the listing. The
+   comparator lives in the PureScript Domain.Live (Core.topicCompare). */
 function sortTopics(arr) {
-  return arr.slice().sort((a, b) =>
-    (Number(b.sticky || 0) - Number(a.sticky || 0)) || (Number(b.last || 0) - Number(a.last || 0)));
+  return arr.slice().sort((a, b) => Core.topicCompare(a, b));
 }
 
 class McBoardIndex extends LitElement {

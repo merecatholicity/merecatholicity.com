@@ -19,6 +19,7 @@ import * as Faith from '../purescript/output/Domain.Faith/index.js';
 import * as Pseudonym from '../purescript/output/Domain.Pseudonym/index.js';
 import * as Dm from '../purescript/output/Domain.Dm/index.js';
 import * as Access from '../purescript/output/Domain.Access/index.js';
+import * as Live from '../purescript/output/Domain.Live/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -79,3 +80,11 @@ export const canInteract = (author, me, bot) => Access.canInteract(author || '')
 export const canReport = (author, me, bot, isAdmin) => Access.canReport(author || '')(me || '')(bot || '')(!!isAdmin);
 export const canEdit = (author, me) => Access.canEdit(author || '')(me || '');
 export const canDelete = (author, me, isAdmin) => Access.canDelete(author || '')(me || '')(!!isAdmin);
+
+/* Live-forum pure decisions (Domain.Live). topicCompare(a,b) is the category
+   sort comparator (stickies first, then recency) for Array.sort; replyPage
+   (total, per) is the 1-based page a reply lands on. The DOM effects stay in
+   the views. */
+export const topicCompare = (a, b) =>
+  Live.topicCompare({ sticky: Number(a.sticky || 0), last: Number(a.last || 0) })({ sticky: Number(b.sticky || 0), last: Number(b.last || 0) });
+export const replyPage = (total, per) => Live.replyPage(total | 0)(per | 0);

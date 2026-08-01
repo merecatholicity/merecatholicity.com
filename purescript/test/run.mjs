@@ -12,6 +12,7 @@ import * as Faith from '../output/Domain.Faith/index.js';
 import * as Pseudonym from '../output/Domain.Pseudonym/index.js';
 import * as Dm from '../output/Domain.Dm/index.js';
 import * as Access from '../output/Domain.Access/index.js';
+import * as Live from '../output/Domain.Live/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -134,3 +135,14 @@ assert.equal(cd('x', 'me', false), false, 'non-admin cannot delete other');
 assert.equal(cd('me', 'me', false), true, 'own post deletable');
 assert.equal(cd('x', '', true), false, 'keyless cannot delete');
 console.log('pstest: Domain.Access OK (permission matrix)');
+
+// --- Domain.Live: the pure live-forum decisions ---
+const tc = (a, b) => Live.topicCompare(a)(b);
+// comparator < 0 means the first arg sorts first (Array.sort)
+assert.equal(Math.sign(tc({ sticky: 1, last: 10 }, { sticky: 0, last: 99 })), -1, 'sticky sorts first');
+assert.equal(Math.sign(tc({ sticky: 0, last: 5 }, { sticky: 0, last: 9 })), 1, 'more recent sorts first');
+assert.equal(tc({ sticky: 0, last: 9 }, { sticky: 0, last: 9 }), 0, 'equal keeps order');
+assert.equal(Live.replyPage(21)(20), 2);
+assert.equal(Live.replyPage(20)(20), 1);
+assert.equal(Live.replyPage(1)(20), 1);
+console.log('pstest: Domain.Live OK (topicCompare + replyPage)');
