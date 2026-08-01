@@ -29,6 +29,8 @@ import {
 } from './pure.js';
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 import { createPusher } from './webpush.js';
+// Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
+import { inList, rankFor, withNames, postCountsFor } from './db.js';
 
 /* Worker environment bindings (D1 databases, R2 buckets, Vectorize, Workers AI,
    Durable Object namespaces, rate limiters) plus string vars/secrets. Typed
@@ -114,23 +116,11 @@ const displayName = Pseudonym.displayName;
    ascend; rankFor returns the highest reached. Mirrors RANKS in comments.js; the
    count itself is postCountsFor. Served in /config and stamped on author rows so
    a client need not carry the ladder. */
-/* The rank ladder is single-sourced from the PureScript Domain.Rank — the very
-   module the client bundles (CLAUDE.md). rankFor erases the Rank
-   ADT to its label. This retires the RANKS/rankFor copy that used to live here. */
-function rankFor(n: any) {
-  return Rank.rankLabel(Rank.rankFor((Number(n) || 0) | 0));
-}
-
-/* Attach server-resolved identity to an author-bearing row: `assigned` is the
-   pseudonym the client would otherwise derive itself (displayName), and `rank`
-   the ladder label — supplied whenever the post count is known. Additive: the
-   existing `nick`/`posts` fields are unchanged. */
-function withNames(row: any, posts?: any) {
-  const out = Object.assign({}, row);
-  out.assigned = row.author_hash ? displayName(row.author_hash) : null;
-  if (posts != null) { out.posts = posts; out.rank = rankFor(posts); }
-  return out;
-}
+/* rankFor and withNames (and postCountsFor, below) now live in the repository
+   layer, ./db.ts — imported at the top. rankFor erases the Domain.Rank ADT to
+   its label; withNames attaches the server-resolved `assigned` pseudonym + rank
+   to an author row (single-sourced from Domain.Rank/Pseudonym, the same modules
+   the client bundles). */
 
 /* ---- Served display constants (GET /api/comments/config) ----
    These display-only tables mirror the ones in comments.js. The endpoint makes
@@ -656,7 +646,7 @@ async function notifyPrefsFor(env: any, hashes: any) {
   const list = [...new Set((hashes || []).filter(Boolean))];
   for (let i = 0; i < list.length; i += 50) {
     const chunk = list.slice(i, i + 50);
-    const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+    const ph = inList(chunk.length);
     try {
       const rows = await env.DB.prepare('SELECT hash, notify_reply, notify_mention, notify_dm FROM profiles WHERE hash IN (' + ph + ')').bind(...chunk).all();
       for (const r of (rows.results || [])) map[r.hash] = r;
@@ -792,7 +782,7 @@ async function deliverPush(env: any, hashes: any, payload: any) {
     }
     const uniq = [...new Set((hashes || []).filter(Boolean))];
     if (!uniq.length) return;
-    const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
+    const ph = inList(uniq.length);
     const rows = await env.DB.prepare('SELECT hash, platform, token FROM push_tokens WHERE hash IN (' + ph + ')').bind(...uniq).all();
     const tokens = rows.results || [];
     if (!tokens.length) return;
@@ -1101,7 +1091,7 @@ async function handleMeta(request: any, env: any) {
   const commentKeys = [...new Set(list.map((r: any) => ipKey(r.ip)).filter(Boolean))];
   const bannedSet = new Set();
   if (commentKeys.length) {
-    const ph = commentKeys.map((_, i) => '?' + (i + 1)).join(',');
+    const ph = inList(commentKeys.length);
     const b = await env.DB.prepare('SELECT ip FROM ip_bans WHERE ip IN (' + ph + ')').bind(...commentKeys).all();
     for (const x of b.results) bannedSet.add(x.ip);
   }
@@ -1112,7 +1102,7 @@ async function handleMeta(request: any, env: any) {
   const hashes = [...new Set(list.map((r: any) => r.author_hash).filter(Boolean))];
   const identities: any = {};
   if (hashes.length) {
-    const ph = hashes.map((_, i) => '?' + (i + 1)).join(',');
+    const ph = inList(hashes.length);
     /* Only the recent window shows, banned keys always. */
     const cutoffPh = '?' + (hashes.length + 1);
     const ipRows = await env.DB.prepare(
@@ -1238,25 +1228,9 @@ async function handleAuthorPosts(request: any, env: any, url: any) {
   return json({ ok: true, items, total: (total && total.n) || 0, page: p, per }, 200, cacheHeader(url));
 }
 
-/* A member's live-forum post count (topics always, replies only under a live
-   topic) for a batch of hashes at once — the same definition handleAuthorPosts
-   totals, so the profile figure and the per-post badge always agree. One grouped
-   query for every distinct author on a page drives the rank shown by each post. */
-async function postCountsFor(env: any, hashes: any) {
-  const uniq = [...new Set((hashes || []).filter((h: any) => /^[0-9a-f]{64}$/.test(h)))];
-  const out: any = {};
-  if (!uniq.length) return out;
-  const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
-  const rows = await env.DB.prepare(
-    'SELECT c.author_hash AS h, COUNT(*) AS n FROM comments c ' +
-    'LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' +
-    'WHERE c.author_hash IN (' + ph + ") AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
-    "AND (c.parent_id IS NULL OR t.status = 'live') GROUP BY c.author_hash"
-  ).bind(...uniq).all();
-  uniq.forEach((h: any) => { out[h] = 0; });
-  (rows.results || []).forEach((r: any) => { out[r.h] = r.n; });
-  return out;
-}
+/* postCountsFor — a member's live-forum post count (topics always, replies only
+   under a live topic) for a batch of hashes, the same definition handleAuthorPosts
+   totals — now lives in the repository layer, ./db.ts (imported at the top). */
 
 const SEARCH_PER_PAGE = 20;
 
@@ -2310,7 +2284,7 @@ async function purgeMediaKeys(env: any, keys: any) {
   }
   for (let i = 0; i < keys.length; i += 50) {
     const chunk = keys.slice(i, i + 50);
-    const ph = chunk.map((_: any, j: any) => '?' + (j + 1)).join(',');
+    const ph = inList(chunk.length);
     try { await env.DB.prepare('DELETE FROM dm_media WHERE key IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
   }
 }
@@ -2335,7 +2309,7 @@ async function enforceMediaCap(env: any) {
       const ids = kill.map((r) => r.msg_id).filter(Boolean);
       for (let i = 0; i < ids.length; i += 50) {
         const chunk = ids.slice(i, i + 50);
-        const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+        const ph = inList(chunk.length);
         try { await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL WHERE id IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
       }
     }
@@ -2381,7 +2355,7 @@ async function sweepExpiredDms(env: any) {
       const ids = rows.map((r: any) => r.msg_id).filter(Boolean);
       for (let i = 0; i < ids.length; i += 50) {
         const chunk = ids.slice(i, i + 50);
-        const ph = chunk.map((_: any, j: any) => '?' + (j + 1)).join(',');
+        const ph = inList(chunk.length);
         try {
           await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + ph + ')').bind(...chunk).run();
         } catch (e) { /* keep going */ }
@@ -2560,7 +2534,7 @@ async function wallEnrich(env: any, rows: any, me: any) {
   let liked = new Set();
   const postIds = list.filter((r: any) => r.likes !== undefined && r.likes !== null).map((r: any) => r.id);
   if (me && postIds.length) {
-    const ph = postIds.map((_: any, i: any) => '?' + (i + 2)).join(',');
+    const ph = inList(postIds.length, 2);
     const lr = await env.DB.prepare('SELECT post_id FROM wall_likes WHERE author_hash = ?1 AND post_id IN (' + ph + ')').bind(me, ...postIds).all();
     liked = new Set((lr.results || []).map((x: any) => x.post_id));
   }
@@ -2620,7 +2594,7 @@ async function purgeWallMedia(env: any, keys: any) {
   }
   for (let i = 0; i < keys.length; i += 50) {
     const chunk = keys.slice(i, i + 50);
-    const ph = chunk.map((_: any, j: any) => '?' + (j + 1)).join(',');
+    const ph = inList(chunk.length);
     try { await env.DB.prepare('DELETE FROM wall_media WHERE key IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
   }
 }
@@ -4077,7 +4051,7 @@ async function handleAdmins(request: any, env: any) {
   /* Resolve each admin's chosen nick in one query; the assigned pseudonym is
      pure from the hash, so it fills the rest. */
   if (list.length) {
-    const ph = list.map((_: any, i: any) => '?' + (i + 1)).join(',');
+    const ph = inList(list.length);
     const rows = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')')
       .bind(...list.map((a: any) => a.hash)).all();
     const nick: any = {};
@@ -4417,7 +4391,7 @@ async function merecatRetrieve(env: any, q: any, cfg: any) {
     // hydrate matches from whichever room holds them: vectorized works may
     // live in any database (the worldview core rides deep2)
     const byCid: any = {};
-    const ph = semIds.map((_: any, i: any) => '?' + (i + 1)).join(',');
+    const ph = inList(semIds.length);
     for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
       if (!db) continue;
       try {
@@ -4679,7 +4653,7 @@ async function handleMerecatAdminThreads(request: any, env: any) {
   const hashes = [...new Set(threads.map((t: any) => t.hash).filter(Boolean))];
   const nicks: any = {};
   if (hashes.length) {
-    const ph = hashes.map((_, i) => '?' + (i + 1)).join(',');
+    const ph = inList(hashes.length);
     const prof = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')').bind(...hashes).all();
     for (const r of (prof.results || [])) nicks[r.hash] = r.nick;
   }
@@ -5099,7 +5073,7 @@ async function merecatNames(env: any, hashes: any) {
   const uniq = [...new Set(hashes.filter((h: any) => h))];
   const out: any = {};
   if (!uniq.length) return out;
-  const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
+  const ph = inList(uniq.length);
   const rows = await env.DB.prepare(
     'SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')').bind(...uniq).all();
   for (const r of rows.results || []) if (r.nick) out[r.hash] = r.nick;
