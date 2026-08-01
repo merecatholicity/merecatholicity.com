@@ -6218,6 +6218,107 @@ async function handleHandleCard(request: any, env: any, url: any) {
   }
 }
 
+/* Declarative route table (was a 91-branch if-chain in fetch). Every entry
+   is (method, exact path, handler thunk); the fn copies the original call
+   verbatim so args are identical. Matched in order, but every (method,path)
+   pair is unique so order is immaterial. The 4 special branches (/@ prefix,
+   POST origin guard, the two websocket upgrades) stay explicit in fetch. */
+type Route = { m: string; p: string;
+  fn: (request: Request, env: Env, ctx: ExecutionContext, url: URL) => Promise<Response> | Response };
+const ROUTES: Route[] = [
+  { m: 'GET', p: '/api/comments', fn: (request, env, ctx, url) => handleGet(request, env, url) },
+  { m: 'GET', p: '/api/comments/config', fn: (request, env, ctx, url) => handleConfig(request, env, url) },
+  { m: 'POST', p: '/api/comments', fn: (request, env, ctx, url) => handlePost(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/delete', fn: (request, env, ctx, url) => handleSelfDelete(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/edit', fn: (request, env, ctx, url) => handleEdit(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/meta', fn: (request, env, ctx, url) => handleMeta(request, env) },
+  { m: 'POST', p: '/api/comments/audit', fn: (request, env, ctx, url) => handleAudit(request, env) },
+  { m: 'POST', p: '/api/comments/trust', fn: (request, env, ctx, url) => handleTrust(request, env) },
+  { m: 'POST', p: '/api/comments/moderate', fn: (request, env, ctx, url) => handleModerate(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/move', fn: (request, env, ctx, url) => handleMove(request, env, ctx) },
+  { m: 'GET', p: '/api/comments/feed', fn: (request, env, ctx, url) => handleFeed(request, env, url) },
+  { m: 'GET', p: '/api/comments/board', fn: (request, env, ctx, url) => handleBoardIndex(request, env, url) },
+  { m: 'GET', p: '/api/comments/board/cat', fn: (request, env, ctx, url) => handleBoardCat(request, env, url) },
+  { m: 'GET', p: '/api/comments/board/author', fn: (request, env, ctx, url) => handleAuthorPosts(request, env, url) },
+  { m: 'GET', p: '/api/comments/board/topic', fn: (request, env, ctx, url) => handleTopicView(request, env, url) },
+  { m: 'POST', p: '/api/comments/board/admin', fn: (request, env, ctx, url) => handleBoardAdmin(request, env) },
+  { m: 'GET', p: '/api/comments/search', fn: (request, env, ctx, url) => handleSearch(request, env, url) },
+  { m: 'GET', p: '/api/comments/profile', fn: (request, env, ctx, url) => handleProfileGet(request, env, url) },
+  { m: 'POST', p: '/api/comments/profile', fn: (request, env, ctx, url) => handleProfileSave(request, env) },
+  { m: 'POST', p: '/api/comments/profile/admin', fn: (request, env, ctx, url) => handleProfileAdminEdit(request, env) },
+  { m: 'POST', p: '/api/comments/profile/clear', fn: (request, env, ctx, url) => handleProfileClear(request, env) },
+  { m: 'POST', p: '/api/comments/backup', fn: (request, env, ctx, url) => handleBackup(request, env) },
+  { m: 'POST', p: '/api/comments/dm/send', fn: (request, env, ctx, url) => handleDmSend(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/threads', fn: (request, env, ctx, url) => handleDmThreads(request, env) },
+  { m: 'POST', p: '/api/comments/dm/thread', fn: (request, env, ctx, url) => handleDmThread(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/unread', fn: (request, env, ctx, url) => handleDmUnread(request, env) },
+  { m: 'POST', p: '/api/comments/dm/presence', fn: (request, env, ctx, url) => handleDmPresence(request, env) },
+  { m: 'POST', p: '/api/comments/dm/blocked', fn: (request, env, ctx, url) => handleDmBlocked(request, env) },
+  { m: 'POST', p: '/api/comments/prefs', fn: (request, env, ctx, url) => handlePrefs(request, env) },
+  { m: 'POST', p: '/api/comments/dm/block', fn: (request, env, ctx, url) => handleDmBlock(request, env) },
+  { m: 'POST', p: '/api/comments/dm/delete', fn: (request, env, ctx, url) => handleDmDelete(request, env) },
+  { m: 'GET', p: '/api/comments/dm/directory', fn: (request, env, ctx, url) => handleDmDirectory(request, env, url) },
+  { m: 'POST', p: '/api/comments/dm/pubkey', fn: (request, env, ctx, url) => handleDmPubkey(request, env) },
+  { m: 'POST', p: '/api/comments/dm/ttl', fn: (request, env, ctx, url) => handleDmTtl(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/save', fn: (request, env, ctx, url) => handleDmSave(request, env) },
+  { m: 'POST', p: '/api/comments/dm/media', fn: (request, env, ctx, url) => handleDmMediaUpload(request, env) },
+  { m: 'POST', p: '/api/comments/dm/media/get', fn: (request, env, ctx, url) => handleDmMediaGet(request, env) },
+  { m: 'POST', p: '/api/comments/dm/media/purge', fn: (request, env, ctx, url) => handleDmMediaPurge(request, env) },
+  { m: 'POST', p: '/api/comments/admin/settings', fn: (request, env, ctx, url) => handleAdminSettings(request, env) },
+  { m: 'POST', p: '/api/comments/notifications/unread', fn: (request, env, ctx, url) => handleNotifUnread(request, env) },
+  { m: 'POST', p: '/api/comments/notifications/read', fn: (request, env, ctx, url) => handleNotifRead(request, env) },
+  { m: 'POST', p: '/api/comments/notifications', fn: (request, env, ctx, url) => handleNotifList(request, env) },
+  { m: 'POST', p: '/api/comments/watch', fn: (request, env, ctx, url) => handleWatch(request, env) },
+  { m: 'POST', p: '/api/comments/board/unread', fn: (request, env, ctx, url) => handleBoardUnread(request, env) },
+  { m: 'POST', p: '/api/comments/board/reads', fn: (request, env, ctx, url) => handleBoardReads(request, env) },
+  { m: 'POST', p: '/api/comments/board/read', fn: (request, env, ctx, url) => handleBoardRead(request, env) },
+  { m: 'POST', p: '/api/comments/board/read-all', fn: (request, env, ctx, url) => handleBoardReadAll(request, env) },
+  { m: 'GET', p: '/api/comments/avatar', fn: (request, env, ctx, url) => handleAvatarGet(request, env, url) },
+  { m: 'POST', p: '/api/comments/avatar', fn: (request, env, ctx, url) => handleAvatarUpload(request, env) },
+  { m: 'POST', p: '/api/comments/avatar/delete', fn: (request, env, ctx, url) => handleAvatarDelete(request, env) },
+  { m: 'POST', p: '/api/comments/wall/feed', fn: (request, env, ctx, url) => handleWallFeed(request, env) },
+  { m: 'POST', p: '/api/comments/wall/post', fn: (request, env, ctx, url) => handleWallPost(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/wall/post/get', fn: (request, env, ctx, url) => handleWallPostGet(request, env) },
+  { m: 'POST', p: '/api/comments/wall/comment', fn: (request, env, ctx, url) => handleWallComment(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/wall/delete', fn: (request, env, ctx, url) => handleWallDelete(request, env) },
+  { m: 'POST', p: '/api/comments/wall/like', fn: (request, env, ctx, url) => handleWallLike(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/wall/prune', fn: (request, env, ctx, url) => handleWallPrune(request, env) },
+  { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url) },
+  { m: 'POST', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaUpload(request, env) },
+  { m: 'POST', p: '/api/comments/wall', fn: (request, env, ctx, url) => handleWall(request, env) },
+  { m: 'POST', p: '/api/comments/lock', fn: (request, env, ctx, url) => handleLock(request, env) },
+  { m: 'POST', p: '/api/comments/deleteuser', fn: (request, env, ctx, url) => handleDeleteUser(request, env) },
+  { m: 'POST', p: '/api/comments/ipban', fn: (request, env, ctx, url) => handleIpBan(request, env) },
+  { m: 'POST', p: '/api/comments/ipbans', fn: (request, env, ctx, url) => handleIpBans(request, env) },
+  { m: 'POST', p: '/api/comments/rdns', fn: (request, env, ctx, url) => handleRdns(request, env) },
+  { m: 'POST', p: '/api/comments/approve', fn: (request, env, ctx, url) => handleApprove(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/pending', fn: (request, env, ctx, url) => handlePending(request, env) },
+  { m: 'POST', p: '/api/comments/report', fn: (request, env, ctx, url) => handleReport(request, env) },
+  { m: 'POST', p: '/api/comments/report/dismiss', fn: (request, env, ctx, url) => handleReportDismiss(request, env) },
+  { m: 'POST', p: '/api/comments/admins', fn: (request, env, ctx, url) => handleAdmins(request, env) },
+  { m: 'POST', p: '/api/comments/admin', fn: (request, env, ctx, url) => handleAdmin(request, env) },
+  { m: 'POST', p: '/api/comments/push/register', fn: (request, env, ctx, url) => handlePushRegister(request, env) },
+  { m: 'POST', p: '/api/comments/push/unregister', fn: (request, env, ctx, url) => handlePushUnregister(request, env) },
+  { m: 'GET', p: '/api/comments/push/vapid-key', fn: (request, env, ctx, url) => handleVapidKey(request, env, url) },
+  { m: 'POST', p: '/api/merecat/ask-init', fn: (request, env, ctx, url) => handleMerecatAskInit(request, env) },
+  { m: 'POST', p: '/api/merecat/about', fn: (request, env, ctx, url) => handleMerecatAbout(request, env) },
+  { m: 'POST', p: '/api/merecat/backends', fn: (request, env, ctx, url) => handleMerecatBackends(request, env) },
+  { m: 'POST', p: '/api/merecat/store', fn: (request, env, ctx, url) => handleMerecatStore(request, env) },
+  { m: 'POST', p: '/api/merecat/usage', fn: (request, env, ctx, url) => handleMerecatUsage(request, env) },
+  { m: 'POST', p: '/api/merecat/forward', fn: (request, env, ctx, url) => handleMerecatForward(request, env) },
+  { m: 'POST', p: '/api/merecat/mention', fn: (request, env, ctx, url) => handleMerecatMention(request, env) },
+  { m: 'POST', p: '/api/merecat/chats', fn: (request, env, ctx, url) => handleMerecatChats(request, env) },
+  { m: 'POST', p: '/api/merecat/chat', fn: (request, env, ctx, url) => handleMerecatChat(request, env) },
+  { m: 'POST', p: '/api/merecat/chat/delete', fn: (request, env, ctx, url) => handleMerecatChatDelete(request, env) },
+  { m: 'POST', p: '/api/merecat/admin/threads', fn: (request, env, ctx, url) => handleMerecatAdminThreads(request, env) },
+  { m: 'POST', p: '/api/merecat/admin/thread', fn: (request, env, ctx, url) => handleMerecatAdminThread(request, env) },
+  { m: 'POST', p: '/api/merecat/chat/save', fn: (request, env, ctx, url) => handleMerecatChatSave(request, env) },
+  { m: 'POST', p: '/api/merecat/ingest', fn: (request, env, ctx, url) => handleMerecatIngest(request, env) },
+  { m: 'POST', p: '/api/merecat/works', fn: (request, env, ctx, url) => handleMerecatWorks(request, env) },
+  { m: 'POST', p: '/api/merecat/config', fn: (request, env, ctx, url) => handleMerecatConfigSet(request, env) },
+  { m: 'POST', p: '/api/merecat/stats', fn: (request, env, ctx, url) => handleMerecatStats(request, env) },
+];
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     try {
@@ -6242,100 +6343,13 @@ export default {
         return await handleLive(request, env);
       }
 
-      if (path === '/api/comments' && request.method === 'GET') return await handleGet(request, env, url);
-      if (path === '/api/comments/config' && request.method === 'GET') return await handleConfig(request, env, url);
-      if (path === '/api/comments' && request.method === 'POST') return await handlePost(request, env, ctx);
-      if (path === '/api/comments/delete' && request.method === 'POST') return await handleSelfDelete(request, env, ctx);
-      if (path === '/api/comments/edit' && request.method === 'POST') return await handleEdit(request, env, ctx);
-      if (path === '/api/comments/meta' && request.method === 'POST') return await handleMeta(request, env);
-      if (path === '/api/comments/audit' && request.method === 'POST') return await handleAudit(request, env);
-      if (path === '/api/comments/trust' && request.method === 'POST') return await handleTrust(request, env);
-      if (path === '/api/comments/moderate' && request.method === 'POST') return await handleModerate(request, env, ctx);
-      if (path === '/api/comments/move' && request.method === 'POST') return await handleMove(request, env, ctx);
-      if (path === '/api/comments/feed' && request.method === 'GET') return await handleFeed(request, env, url);
-      if (path === '/api/comments/board' && request.method === 'GET') return await handleBoardIndex(request, env, url);
-      if (path === '/api/comments/board/cat' && request.method === 'GET') return await handleBoardCat(request, env, url);
-      if (path === '/api/comments/board/author' && request.method === 'GET') return await handleAuthorPosts(request, env, url);
-      if (path === '/api/comments/board/topic' && request.method === 'GET') return await handleTopicView(request, env, url);
-      if (path === '/api/comments/board/admin' && request.method === 'POST') return await handleBoardAdmin(request, env);
-      if (path === '/api/comments/search' && request.method === 'GET') return await handleSearch(request, env, url);
-      if (path === '/api/comments/profile' && request.method === 'GET') return await handleProfileGet(request, env, url);
-      if (path === '/api/comments/profile' && request.method === 'POST') return await handleProfileSave(request, env);
-      if (path === '/api/comments/profile/admin' && request.method === 'POST') return await handleProfileAdminEdit(request, env);
-      if (path === '/api/comments/profile/clear' && request.method === 'POST') return await handleProfileClear(request, env);
-      if (path === '/api/comments/backup' && request.method === 'POST') return await handleBackup(request, env);
-      if (path === '/api/comments/dm/send' && request.method === 'POST') return await handleDmSend(request, env, ctx);
-      if (path === '/api/comments/dm/threads' && request.method === 'POST') return await handleDmThreads(request, env);
-      if (path === '/api/comments/dm/thread' && request.method === 'POST') return await handleDmThread(request, env, ctx);
-      if (path === '/api/comments/dm/unread' && request.method === 'POST') return await handleDmUnread(request, env);
-      if (path === '/api/comments/dm/presence' && request.method === 'POST') return await handleDmPresence(request, env);
-      if (path === '/api/comments/dm/blocked' && request.method === 'POST') return await handleDmBlocked(request, env);
-      if (path === '/api/comments/prefs' && request.method === 'POST') return await handlePrefs(request, env);
-      if (path === '/api/comments/dm/block' && request.method === 'POST') return await handleDmBlock(request, env);
-      if (path === '/api/comments/dm/delete' && request.method === 'POST') return await handleDmDelete(request, env);
-      if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);
-      if (path === '/api/comments/dm/pubkey' && request.method === 'POST') return await handleDmPubkey(request, env);
-      if (path === '/api/comments/dm/ttl' && request.method === 'POST') return await handleDmTtl(request, env, ctx);
-      if (path === '/api/comments/dm/save' && request.method === 'POST') return await handleDmSave(request, env);
-      if (path === '/api/comments/dm/media' && request.method === 'POST') return await handleDmMediaUpload(request, env);
-      if (path === '/api/comments/dm/media/get' && request.method === 'POST') return await handleDmMediaGet(request, env);
-      if (path === '/api/comments/dm/media/purge' && request.method === 'POST') return await handleDmMediaPurge(request, env);
-      if (path === '/api/comments/admin/settings' && request.method === 'POST') return await handleAdminSettings(request, env);
-      if (path === '/api/comments/notifications/unread' && request.method === 'POST') return await handleNotifUnread(request, env);
-      if (path === '/api/comments/notifications/read' && request.method === 'POST') return await handleNotifRead(request, env);
-      if (path === '/api/comments/notifications' && request.method === 'POST') return await handleNotifList(request, env);
-      if (path === '/api/comments/watch' && request.method === 'POST') return await handleWatch(request, env);
-      if (path === '/api/comments/board/unread' && request.method === 'POST') return await handleBoardUnread(request, env);
-      if (path === '/api/comments/board/reads' && request.method === 'POST') return await handleBoardReads(request, env);
-      if (path === '/api/comments/board/read' && request.method === 'POST') return await handleBoardRead(request, env);
-      if (path === '/api/comments/board/read-all' && request.method === 'POST') return await handleBoardReadAll(request, env);
-      if (path === '/api/comments/avatar' && request.method === 'GET') return await handleAvatarGet(request, env, url);
-      if (path === '/api/comments/avatar' && request.method === 'POST') return await handleAvatarUpload(request, env);
-      if (path === '/api/comments/avatar/delete' && request.method === 'POST') return await handleAvatarDelete(request, env);
-      // Public posting: walls + the global feed (all members-only reads).
-      if (path === '/api/comments/wall/feed' && request.method === 'POST') return await handleWallFeed(request, env);
-      if (path === '/api/comments/wall/post' && request.method === 'POST') return await handleWallPost(request, env, ctx);
-      if (path === '/api/comments/wall/post/get' && request.method === 'POST') return await handleWallPostGet(request, env);
-      if (path === '/api/comments/wall/comment' && request.method === 'POST') return await handleWallComment(request, env, ctx);
-      if (path === '/api/comments/wall/delete' && request.method === 'POST') return await handleWallDelete(request, env);
-      if (path === '/api/comments/wall/like' && request.method === 'POST') return await handleWallLike(request, env, ctx);
-      if (path === '/api/comments/wall/prune' && request.method === 'POST') return await handleWallPrune(request, env);
-      if (path === '/api/comments/wall/media' && request.method === 'GET') return await handleWallMediaGet(request, env, url);
-      if (path === '/api/comments/wall/media' && request.method === 'POST') return await handleWallMediaUpload(request, env);
-      if (path === '/api/comments/wall' && request.method === 'POST') return await handleWall(request, env);
-      if (path === '/api/comments/lock' && request.method === 'POST') return await handleLock(request, env);
-      if (path === '/api/comments/deleteuser' && request.method === 'POST') return await handleDeleteUser(request, env);
-      if (path === '/api/comments/ipban' && request.method === 'POST') return await handleIpBan(request, env);
-      if (path === '/api/comments/ipbans' && request.method === 'POST') return await handleIpBans(request, env);
-      if (path === '/api/comments/rdns' && request.method === 'POST') return await handleRdns(request, env);
-      if (path === '/api/comments/approve' && request.method === 'POST') return await handleApprove(request, env, ctx);
-      if (path === '/api/comments/pending' && request.method === 'POST') return await handlePending(request, env);
-      if (path === '/api/comments/report' && request.method === 'POST') return await handleReport(request, env);
-      if (path === '/api/comments/report/dismiss' && request.method === 'POST') return await handleReportDismiss(request, env);
-      if (path === '/api/comments/admins' && request.method === 'POST') return await handleAdmins(request, env);
-      if (path === '/api/comments/admin' && request.method === 'POST') return await handleAdmin(request, env);
-      if (path === '/api/comments/push/register' && request.method === 'POST') return await handlePushRegister(request, env);
-      if (path === '/api/comments/push/unregister' && request.method === 'POST') return await handlePushUnregister(request, env);
-      if (path === '/api/comments/push/vapid-key' && request.method === 'GET') return await handleVapidKey(request, env, url);
-      if (path === '/api/merecat/ask-init' && request.method === 'POST') return await handleMerecatAskInit(request, env);
+      for (const r of ROUTES) {
+        if (request.method === r.m && path === r.p) return await r.fn(request, env, ctx, url);
+      }
+      /* merecat live chat WebSocket upgrade (GET, so it skips the POST origin
+         guard; handleMerecatLive does its own auth). */
       if (path === '/api/merecat/live' && request.method === 'GET' &&
           (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') return await handleMerecatLive(request, env);
-      if (path === '/api/merecat/about' && request.method === 'POST') return await handleMerecatAbout(request, env);
-      if (path === '/api/merecat/backends' && request.method === 'POST') return await handleMerecatBackends(request, env);
-      if (path === '/api/merecat/store' && request.method === 'POST') return await handleMerecatStore(request, env);
-      if (path === '/api/merecat/usage' && request.method === 'POST') return await handleMerecatUsage(request, env);
-      if (path === '/api/merecat/forward' && request.method === 'POST') return await handleMerecatForward(request, env);
-      if (path === '/api/merecat/mention' && request.method === 'POST') return await handleMerecatMention(request, env);
-      if (path === '/api/merecat/chats' && request.method === 'POST') return await handleMerecatChats(request, env);
-      if (path === '/api/merecat/chat' && request.method === 'POST') return await handleMerecatChat(request, env);
-      if (path === '/api/merecat/chat/delete' && request.method === 'POST') return await handleMerecatChatDelete(request, env);
-      if (path === '/api/merecat/admin/threads' && request.method === 'POST') return await handleMerecatAdminThreads(request, env);
-      if (path === '/api/merecat/admin/thread' && request.method === 'POST') return await handleMerecatAdminThread(request, env);
-      if (path === '/api/merecat/chat/save' && request.method === 'POST') return await handleMerecatChatSave(request, env);
-      if (path === '/api/merecat/ingest' && request.method === 'POST') return await handleMerecatIngest(request, env);
-      if (path === '/api/merecat/works' && request.method === 'POST') return await handleMerecatWorks(request, env);
-      if (path === '/api/merecat/config' && request.method === 'POST') return await handleMerecatConfigSet(request, env);
-      if (path === '/api/merecat/stats' && request.method === 'POST') return await handleMerecatStats(request, env);
       return json({ ok: false, error: 'Not found.' }, 404);
     } catch (err) {
       console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));
