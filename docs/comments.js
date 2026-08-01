@@ -2872,16 +2872,23 @@
       terms.target = "_blank";
       label.appendChild(terms);
       box.appendChild(label);
+      var ageLabel = el("label", "agree-row");
+      var ageCheck = el("input");
+      ageCheck.type = "checkbox";
+      ageLabel.appendChild(ageCheck);
+      ageLabel.appendChild(document.createTextNode(" I am at least 18 years old."));
+      box.appendChild(ageLabel);
       var row = el("div", "key-row");
       var create = el("button", "btn btn-send key-copy", "Create");
       create.type = "button";
       create.disabled = true;
       function refresh() {
-        create.disabled = !(check.checked && chosenFaith);
+        create.disabled = !(check.checked && ageCheck.checked && chosenFaith);
       }
       check.addEventListener("change", refresh);
+      ageCheck.addEventListener("change", refresh);
       create.addEventListener("click", function() {
-        if (!check.checked || !chosenFaith) return;
+        if (!check.checked || !ageCheck.checked || !chosenFaith) return;
         try {
           localStorage.setItem("mc-agreed-at", String(Date.now()));
         } catch (e) {
@@ -8617,8 +8624,13 @@
         else location.href = "community.html";
       });
       wrap.appendChild(btn);
+      var have = el("p", "mc-join-havekey");
+      have.appendChild(identityAction("I already have a key", function() {
+        if (window.mcOnboard) window.mcOnboard(null, { key: true });
+        else location.href = "community.html";
+      }));
+      wrap.appendChild(have);
       section.appendChild(wrap);
-      if (window.mcOnboard && !document.querySelector(".mc-onboard")) window.mcOnboard();
     }
     function route() {
       section.textContent = "";
