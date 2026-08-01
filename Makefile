@@ -15,6 +15,7 @@ build: pdf html logos publish check
 # (node_modules/, from the committed lockfile — never a global install).
 jscheck:
 	npm run lint
+	npm run tsc
 
 # The app shell bundle: Lit (vendored under vendor/, not from npm) plus the
 # app/ modules, esbuild pinned EXACT in package.json for byte-stable output,

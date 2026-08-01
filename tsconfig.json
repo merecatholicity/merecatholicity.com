@@ -1,0 +1,29 @@
+{
+  // Strict type-check gate for the CLIENT code (app/ + client/). The worker has
+  // its own tsconfig (comments-worker/tsconfig.json) because it needs the
+  // Cloudflare Worker globals, not the browser DOM — the two lib sets conflict
+  // (self, addEventListener, …), so they cannot share one project. `npm run tsc`
+  // runs both. noEmit: esbuild does the transpile; tsc only checks.
+  //
+  // checkJs is off + allowJs on so a .ts file may still import a not-yet-converted
+  // .js during the migration (typed as any); each file is strict-checked the
+  // moment it becomes .ts. The PureScript compiled output is untyped .js (excluded
+  // as a project root; imported as any at the membrane, which erases it anyway).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false,
+    "noUncheckedIndexedAccess": false,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": false,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "include": ["globals.d.ts", "app/**/*.ts", "client/**/*.ts"],
+  "exclude": ["node_modules", "purescript/output", "docs", "vendor", "**/*.min.js"]
+}

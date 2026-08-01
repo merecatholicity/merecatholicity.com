@@ -13,10 +13,12 @@
     "build:ps": "rm -rf purescript/output && cd purescript && spago build",
     "build:js": "npm run build:ps && esbuild app/shell.js --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
+    "tsc": "tsc -p tsconfig.json",
     "build": "npm run lint && npm run build:js && npm run build:css",
     "worker:deploy": "cd comments-worker && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260801.1",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
     "esbuild": "0.24.2",
@@ -24,6 +26,7 @@
     "purescript": "0.15.16",
     "spago": "^1.0.4",
     "tailwindcss": "^4.3.3",
+    "typescript": "7.0.2",
     "wrangler": "^4.118.0"
   },
   "dependencies": {
