@@ -110,3 +110,38 @@ export function boardEventPublic(event) {
   return !!event && event.cat !== 'adminsonly' &&
     !(Array.isArray(event.scopes) && event.scopes.includes('cat:adminsonly'));
 }
+
+/* The WebSocket subscription allowlist — SECURITY-critical: it decides which
+   scopes a socket may listen on, and it is the ONLY thing stopping a member from
+   subscribing to someone else's private events. Allowed: 'board:index'; a real
+   'cat:<key>' (never the admins-only back room); 'topic:<positive int>';
+   'presence:<64hex>' (anyone may watch anyone's online state); 'feed:global' (the
+   public feed channel); and the PRIVATE 'user:<hash>' ONLY when the socket
+   authenticated as that exact hash (`me`). Anything else is dropped, at most 5
+   kept. `boardCats` is the worker's BOARD_CATS (passed in so this stays pure). */
+export function sanitizeScopes(raw, me, boardCats) {
+  if (!Array.isArray(raw)) return [];
+  const cats = Array.isArray(boardCats) ? boardCats : [];
+  const out = [];
+  for (const s of raw) {
+    if (typeof s !== 'string' || out.length >= 5) continue;
+    if (s === 'board:index') { out.push(s); continue; }
+    if (s.startsWith('cat:')) {
+      const k = s.slice(4);
+      if (k !== 'adminsonly' && cats.includes(k)) out.push(s);
+      continue;
+    }
+    if (/^topic:[1-9][0-9]*$/.test(s)) { out.push(s); continue; }
+    if (s.startsWith('presence:')) {
+      const h = s.slice(9);
+      if (/^[0-9a-f]{64}$/.test(h)) out.push(s);   // anyone may watch anyone's online state
+      continue;
+    }
+    if (s === 'feed:global') { out.push('feed:global'); continue; }   // the public feed's live channel
+    if (s.startsWith('user:')) {
+      const h = s.slice(5);
+      if (me && h === me && /^[0-9a-f]{64}$/.test(h)) out.push(s);   // only your own
+    }
+  }
+  return out;
+}

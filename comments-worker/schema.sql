@@ -166,7 +166,19 @@ CREATE TABLE IF NOT EXISTS profiles (
   avatar     TEXT,
   faith      TEXT,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER
+  updated_at INTEGER,
+  -- Settings-gear preferences (Privacy & safety + Notifications). All keyed +
+  -- private (never exposed on the public profile read). receipts_mode 'auto'/'off'
+  -- gates read receipts reciprocally (off = send none AND see none). notify_reply/
+  -- notify_mention/notify_dm are 1 (on, the default) / 0 (off), checked at delivery
+  -- (dm off silences only the bell; the message + inbox badge still arrive). NULL =
+  -- the default (receipts auto, all notifies on). See Domain.Prefs.
+  -- (Existing DBs: ALTER TABLE profiles ADD COLUMN receipts_mode TEXT; +
+  --  notify_reply/notify_mention/notify_dm INTEGER.)
+  receipts_mode  TEXT,
+  notify_reply   INTEGER,
+  notify_mention INTEGER,
+  notify_dm      INTEGER
 );
 
 -- In-app notifications: one row per event for one recipient. kind 'reply' is a
