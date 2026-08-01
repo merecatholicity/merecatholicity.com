@@ -105,6 +105,18 @@ SCRIPTURE_PROBE = r"""
         search: tag('q=').tag, topicTag: tag('topic=42').tag, topicN: tag('topic=42').n,
         catS: tag('cat=rc').s, priority: tag('merecat=1&topic=5').tag, dmS: tag('dm=abc').s,
         me: tag('me=1').tag, topicZero: tag('topic=0').tag };
+    })(),
+    auth: (function () {
+      var C = window.mcCore;
+      function s(k, h, pl, ma, hi) { return { hasKey: k, hasHash: h, profileLoaded: pl, myAdmin: ma, hint: hi }; }
+      return { anonAdmin: C.authIsAdmin(s(false, false, false, true, true)),
+        hintAdmin: C.authIsAdmin(s(true, true, false, false, true)),
+        loadedNotAdmin: C.authIsAdmin(s(true, true, true, false, true)),
+        member: C.authIsMember(s(true, true, false, false, false)),
+        notMember: C.authIsMember(s(true, false, false, false, false)),
+        gatePass: C.authGate(s(true, true, true, true, false)),
+        gateWait: C.authGate(s(true, true, false, false, false)),
+        gateDeny: C.authGate(s(false, false, false, false, false)) };
     })()
   };
 """
@@ -187,6 +199,15 @@ def main():
              and (sc.get('routes') or {}).get('dmS') == 'abc'
              and (sc.get('routes') or {}).get('me') == 'Me'
              and (sc.get('routes') or {}).get('topicZero') == 'Index'),
+            ('mcCore.auth classification (no-key/hint/server-override admin; member; gate pass/wait/deny)',
+             (sc.get('auth') or {}).get('anonAdmin') is False
+             and (sc.get('auth') or {}).get('hintAdmin') is True
+             and (sc.get('auth') or {}).get('loadedNotAdmin') is False
+             and (sc.get('auth') or {}).get('member') is True
+             and (sc.get('auth') or {}).get('notMember') is False
+             and (sc.get('auth') or {}).get('gatePass') == 'pass'
+             and (sc.get('auth') or {}).get('gateWait') == 'wait'
+             and (sc.get('auth') or {}).get('gateDeny') == 'deny'),
         ]
         return f.verdict(checks)
 

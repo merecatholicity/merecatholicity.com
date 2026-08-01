@@ -578,7 +578,12 @@
      admin's controls are not withheld for a beat; once it loads the server is
      the sole authority, so an admin removed elsewhere loses the controls here
      too. The board re-renders when the answer changes (see loadMyProfile). */
+  function authSig() {
+    return { hasKey: state.key, hasHash: state.myHash, profileLoaded: state.profileLoaded,
+      myAdmin: state.myAdmin, hint: ADMIN_HASHES.indexOf(state.myHash) !== -1 };
+  }
   function isAdmin() {
+    if (window.mcCore) return window.mcCore.authIsAdmin(authSig());
     if (!state.key) return false;
     if (state.profileLoaded) return state.myAdmin;
     return state.myAdmin || ADMIN_HASHES.indexOf(state.myHash) !== -1;
@@ -594,8 +599,10 @@
      or once the profile is in, the answer is certain. Returns true when the
      caller should stop. */
   function adminGate(rerender) {
-    if (isAdmin()) return false;
-    if (!state.key || state.profileLoaded) {
+    var g = window.mcCore ? window.mcCore.authGate(authSig())
+      : (isAdmin() ? 'pass' : ((!state.key || state.profileLoaded) ? 'deny' : 'wait'));
+    if (g === 'pass') return false;
+    if (g === 'deny') {
       section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
       return true;
     }
