@@ -13,9 +13,12 @@ Lit-based app shell progressively upgrades into a single-page app. Everything dy
 comments, the forum, DMs, the bot — is delegated to Cloudflare Workers so the site itself
 stays free to serve.
 
-> **New to the code?** Read **[`docs/architecture/CODEBASE.md`](docs/architecture/CODEBASE.md)**
-> first — the module map, a measured duplication/modularity analysis, and the newcomer
-> reading order. This README is *how it's built*; that doc is *how it's structured*.
+> **New to the code?** Read **[`SPEC.md`](SPEC.md)** for the architecture and the
+> *reasoning* (why PureScript for the kernel, TypeScript/Lit for the edges, the
+> Cloudflare storage/AI split, the free-tier economics, how we relate to MVC), then
+> **[`docs/architecture/CODEBASE.md`](docs/architecture/CODEBASE.md)** for the module
+> map + measured modularity analysis. This README is *how it's built*; SPEC.md is
+> *why it's shaped this way*; CODEBASE.md is *how it's structured*.
 
 ---
 
@@ -167,16 +170,26 @@ The repo is an npm project (`package.json` + a committed `package-lock.json`); `
 restores the exact toolchain into `node_modules/`.
 
 ```sh
-npm ci             # restore Tailwind, esbuild, eslint, wrangler from the lockfile (per-project)
-npm run build      # lint, then bundle app.js, then build style.css
+npm ci             # restore Tailwind, esbuild, eslint, wrangler, tsc from the lockfile
+npm run build      # lint + tsc, then bundle app.js + comments.js, then build style.css
+npm run build:js   # esbuild  app/shell.ts -> docs/app.js  +  client/comments.ts -> docs/comments.js
 npm run build:css  # tailwindcss  styles/main.css -> docs/style.css   (= make css)
-npm run build:js   # esbuild      app/shell.js   -> docs/app.js       (= make bundle)
-npm run lint       # eslint over the worker + client JS                (= make jscheck)
+npm run tsc        # strict type-check: client + both workers (part of make jscheck)
+npm run lint       # eslint over the still-JS worker/client files       (= make jscheck = lint + tsc)
 ```
 
-`esbuild` and `lit` are pinned to exact versions (byte-stable, reproducible bundles); the
-rest float within the lockfile. Adding a JS dependency is `npm install --save-dev <pkg>`
-(which updates the lockfile — commit it); **never** install globally or with `sudo`.
+**The whole hand-written surface is TypeScript** (2026-08-01): the app bundle
+(`app/**`), the served client (`client/comments.ts` → `docs/comments.js`), and both
+Cloudflare Workers (`comments-worker/`, `contact-worker/`). Three separate `tsconfig`
+projects — the client one uses the browser DOM lib, each worker one uses the Cloudflare
+Worker globals (`@cloudflare/workers-types`); the two lib sets conflict, so they can't
+share a project. `tsc` type-checks; **esbuild does the transpile** (types erase to
+nothing), which is why the JS→TS migration shipped byte-identical bundles. The pure
+domain logic stays **PureScript** (see below), not TypeScript — TS is for the effectful
+edges. `esbuild`, `typescript`, `purescript`, and `lit` are pinned to exact versions
+(byte-stable, reproducible bundles); the rest float within the lockfile. Adding a JS
+dependency is `npm install --save-dev <pkg>` (commit the lockfile); **never** install
+globally or with `sudo`.
 
 ### The PureScript domain layer
 
