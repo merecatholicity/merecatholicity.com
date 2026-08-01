@@ -17,6 +17,7 @@ import * as Fts from '../output/Domain.Fts/index.js';
 import * as Pager from '../output/Domain.Pager/index.js';
 import * as Board from '../output/Domain.Board/index.js';
 import * as Emoji from '../output/Domain.Emoji/index.js';
+import * as Route from '../output/Domain.Route/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -263,3 +264,34 @@ assert.equal(toks.length % 2, 0, 'named tokens pair up');
 assert.equal(toks.length, 364, '182 name/emoji pairs');
 assert.equal(toks[0], 'smile'); assert.equal(toks[1], '\u{1F604}');
 console.log('pstest: Domain.Emoji OK (33 memes, 27 pepe, 182 named pairs)');
+
+// --- Domain.Route: the URL->view priority ladder (single source for route()) ---
+function psRoute(qs) {
+  const params = new URLSearchParams(qs);
+  const topicRaw = params.get('topic');
+  const topicNum = Number(topicRaw);
+  const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
+  const g = (k) => params.get(k);
+  return Route.routeTag(Route.parseRoute({
+    ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'),
+    merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),
+    merecat: g('merecat'), notifications: g('notifications'), inbox: g('inbox'), users: g('users'),
+    q: g('q'), dm: g('dm'), me: g('me'), profile: g('profile'), audit: g('audit'), topic, cat: g('cat'),
+  }));
+}
+assert.equal(psRoute('').tag, 'Index');
+assert.equal(psRoute('cat=rc').tag, 'Cat');
+assert.equal(psRoute('cat=rc').s, 'rc');
+assert.equal(psRoute('topic=42').tag, 'Topic');
+assert.equal(psRoute('topic=42').n, 42);
+assert.equal(psRoute('topic=0').tag, 'Index', 'topic=0 -> not a topic');
+assert.equal(psRoute('topic=5.5').tag, 'Index', 'non-integer topic -> not a topic');
+assert.equal(psRoute('q=').tag, 'Search', 'bare ?q= (present) -> search');
+assert.equal(psRoute('merecatthreads').tag, 'MerecatThreads', 'bare ?merecatthreads (present)');
+assert.equal(psRoute('ipbans=1').tag, 'IpBans');
+assert.equal(psRoute('merecat=1&topic=5').tag, 'Merecat', 'priority: earlier param wins');
+assert.equal(psRoute('dm=abc').tag, 'Dm');
+assert.equal(psRoute('dm=abc').s, 'abc');
+assert.equal(psRoute('me=1').tag, 'Me');
+assert.equal(psRoute('ipbans').tag, 'Index', 'bare ?ipbans (empty value) is falsy -> not ipbans');
+console.log('pstest: Domain.Route OK (priority ladder + topic/present edge cases)');

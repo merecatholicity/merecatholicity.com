@@ -23,6 +23,7 @@ import * as Live from '../purescript/output/Domain.Live/index.js';
 import * as Pager from '../purescript/output/Domain.Pager/index.js';
 import * as Board from '../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../purescript/output/Domain.Emoji/index.js';
+import * as Route from '../purescript/output/Domain.Route/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -114,3 +115,21 @@ export const adminCat = Board.adminCat;
    Both already plain, so no erasure. */
 export const emojiPacks = Emoji.packs;
 export const emojiNamedTokens = Emoji.namedTokens;
+
+/* parseRoute(get) -> {tag, s, n}: the forum's URL→view decision (Domain.Route),
+   the priority ladder comments.js route() ran. `get` is URLSearchParams.get
+   (name -> string|null). The `topic` param's Number()+isInteger coercion runs
+   HERE at the JS boundary (those quirks belong in JS); the id or null is passed
+   in, and PS decides the route. The ADT is erased to {tag, s, n} inside PS. */
+export const parseRoute = (get) => {
+  const topicRaw = get('topic');
+  const topicNum = Number(topicRaw);
+  const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
+  return Route.routeTag(Route.parseRoute({
+    ipbans: get('ipbans'), settings: get('settings'), admins: get('admins'),
+    admin: get('admin'), merecatadmin: get('merecatadmin'), merecatthread: get('merecatthread'),
+    merecatthreads: get('merecatthreads'), merecat: get('merecat'), notifications: get('notifications'),
+    inbox: get('inbox'), users: get('users'), q: get('q'), dm: get('dm'), me: get('me'),
+    profile: get('profile'), audit: get('audit'), topic, cat: get('cat'),
+  }));
+};
