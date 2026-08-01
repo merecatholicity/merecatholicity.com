@@ -22,7 +22,7 @@ the presentation boundary.
 ## How this repo is wired (the concrete boundary)
 
 ```
-purescript/src/Domain/*.purs ──(vendored purs, `make psbuild`)──▶ purescript/output/**/index.js  (ESM)
+purescript/src/Domain/*.purs ──(npm-installed purs, `make psbuild`)──▶ purescript/output/**/index.js  (ESM)
                                                                         │ imported by
                                                                         ▼
                                                                  app/core.js  (the barrel = translation membrane)
@@ -37,12 +37,12 @@ purescript/src/Domain/*.purs ──(vendored purs, `make psbuild`)──▶ pure
                               docs/app.js  (the one committed, self-hosted, CSP-clean bundle)
 ```
 
-- **The compiler is vendored, not from npm.** `make purs` fetches a pinned,
-  SHA-256-checksummed `purs` tarball into git-ignored `vendor/purs/` (npm-12
-  blocks the `purescript` package's install-script; this mirrors the vendored
-  Lit and exact-pinned esbuild). `spago` (a clean pure-JS devDependency) only
-  resolves dependencies and orchestrates the compile; it shells out to the
-  vendored `purs`.
+- **The compiler is an npm devDependency.** `purs` (`purescript@0.15.16`,
+  exact-pinned) and `spago` are restored by `npm ci` like the rest of the
+  toolchain. npm-12 blocks the `purescript` package's install-script by default,
+  so its approval is committed in `package.json`'s `allowScripts` — `npm ci`
+  materializes the pinned binary (`node_modules/.bin/purs`) that `spago` compiles
+  with (found on PATH). No vendored binary.
 - **The barrel `app/core.js` is the single seam.** `app/shell.js` imports it and
   sets `window.mcCore = Core` (mirroring the existing `window.mcRich` /
   `mcStore` / `mcApi` bridges). The Lit views under `app/views/` import from
