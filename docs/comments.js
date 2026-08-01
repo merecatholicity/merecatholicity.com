@@ -2695,14 +2695,19 @@
       line.appendChild(document.createTextNode(state.anonAllowed
         ? 'Commenting anonymously. '
         : 'To comment, create an identity. One click, no signup. '));
-      /* On phones "Create an identity" opens the app-native onboarding sheet; on
-         desktop (or with the shell absent) it opens the classic inline drawer. */
+      /* Both actions open the app-native onboarding modal (a slide-up sheet on
+         phones, a centered popup on desktop) — the same slick animation the tab
+         gates use. Only ?app=0 (no shell) falls back to the classic inline drawer.
+         "I have a key" opens the modal straight to its paste-your-key box. */
       line.appendChild(identityAction('Create an identity', function () {
-        if (window.mcOnboard && window.matchMedia && matchMedia('(max-width:600px)').matches) window.mcOnboard();
+        if (window.mcOnboard) window.mcOnboard();
         else showAgreeBox();
       }));
       line.appendChild(document.createTextNode(' · '));
-      line.appendChild(identityAction('I have a key', showPasteBox));
+      line.appendChild(identityAction('I have a key', function () {
+        if (window.mcOnboard) window.mcOnboard(null, { key: true });
+        else showPasteBox();
+      }));
     }
     box.appendChild(line);
   }
