@@ -4676,6 +4676,7 @@
       .catch(function () { mentionDirLoading = false; });
   }
   function collectMentions(text) {
+    if (window.mcCore) return window.mcCore.mentionsIn(text, pendingMentions);
     var out = [];
     for (var i = 0; i < pendingMentions.length; i++) {
       var m = pendingMentions[i];

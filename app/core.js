@@ -27,6 +27,7 @@ import * as Route from '../purescript/output/Domain.Route/index.js';
 import * as Auth from '../purescript/output/Domain.Auth/index.js';
 import * as Mute from '../purescript/output/Domain.Mute/index.js';
 import * as Blocked from '../purescript/output/Domain.Blocked/index.js';
+import * as Compose from '../purescript/output/Domain.Compose/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -159,3 +160,8 @@ export const toggleMute = (hash, list) => Mute.toggleMute(hash || '')(list || []
 /* blockedMessage(reason): the flash-banner string for a moderation-block code
    (Domain.Blocked; 'ipban' -> network-banned, else identity-locked). */
 export const blockedMessage = (reason) => Blocked.messageFor(reason || '');
+
+/* mentionsIn(text, picks) -> the mention hashes to send: the @-picks whose token
+   still stands in the body, deduped, in order (Domain.Compose; collectMentions).
+   `picks` is [{token, hash}]. Returns a plain string array. */
+export const mentionsIn = (text, picks) => Compose.mentionsIn(text || '')(picks || []);

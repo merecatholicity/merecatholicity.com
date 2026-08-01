@@ -21,6 +21,7 @@ import * as Route from '../output/Domain.Route/index.js';
 import * as Auth from '../output/Domain.Auth/index.js';
 import * as Mute from '../output/Domain.Mute/index.js';
 import * as Blocked from '../output/Domain.Blocked/index.js';
+import * as Compose from '../output/Domain.Compose/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -332,3 +333,10 @@ assert.equal(Blocked.messageFor('locked').startsWith('This identity has been loc
 assert.equal(Blocked.messageFor('banned').startsWith('This identity has been locked'), true);
 assert.equal(Blocked.messageFor('unknown').startsWith('This identity has been locked'), true, 'unknown -> identity (classic else)');
 console.log('pstest: Domain.Mute + Domain.Blocked OK');
+
+// --- Domain.Compose.mentionsIn (send-time mention resolution) ---
+assert.deepEqual(Compose.mentionsIn('hi @alice and @bob')([{ token: '@alice', hash: 'h1' }, { token: '@bob', hash: 'h2' }]), ['h1', 'h2']);
+assert.deepEqual(Compose.mentionsIn('only @alice')([{ token: '@alice', hash: 'h1' }, { token: '@bob', hash: 'h2' }]), ['h1'], 'token gone -> dropped');
+assert.deepEqual(Compose.mentionsIn('@a @a')([{ token: '@a', hash: 'h1' }, { token: '@a', hash: 'h1' }]), ['h1'], 'dedup by hash');
+assert.deepEqual(Compose.mentionsIn('none')([{ token: '@x', hash: 'h9' }]), []);
+console.log('pstest: Domain.Compose OK (mentionsIn)');
