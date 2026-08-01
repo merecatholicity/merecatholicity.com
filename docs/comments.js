@@ -7231,7 +7231,12 @@
       if (!isMember()) return viewJoin('your profile');
       return viewProfile(state.myHash);
     }
-    if (page === 'merecat-ai.html') return viewMerecat();
+    if (page === 'merecat-ai.html') {
+      /* Logged-out merecat gets the SAME clean join prompt + registration modal as
+         Profile/Inbox — not the old inline identity drawer embedded in the page. */
+      if (!isMember()) return viewJoin('ask the librarian');
+      return viewMerecat();
+    }
 
     /* community.html — the forum + its administration. Legacy ?dm/?inbox/?me/
        ?profile/?merecat links (old bookmarks, already-delivered notifications)
