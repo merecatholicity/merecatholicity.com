@@ -145,3 +145,23 @@ export function sanitizeScopes(raw, me, boardCats) {
   }
   return out;
 }
+
+/* ================= Discord webhook helpers (pure) =================
+   isDiscordWebhook is a SECURITY validator: only a genuine Discord webhook
+   endpoint is ever accepted, so a corrupted or hostile app_setting can never
+   make the worker POST member content to an arbitrary host. discordSnippet
+   turns a post body into a safe one-embed excerpt (control chars stripped so our
+   highlight sentinels never reach Discord; capped at a comfortable length). */
+export function isDiscordWebhook(u) {
+  if (typeof u !== 'string') return false;
+  return /^https:\/\/(?:discord|discordapp)\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/.test(u.trim());
+}
+
+export function discordSnippet(body, max = 500) {
+  let s = String(body == null ? '' : body)
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '')   // control chars, keep \n (U+000A)
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (s.length > max) s = s.slice(0, max - 1).trimEnd() + '\u2026';
+  return s;
+}
