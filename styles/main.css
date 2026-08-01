@@ -173,6 +173,33 @@
   --creed-bg: #1a2419;
 }
 
+/* Light palette VARIANTS — the light-mode twins of the dark variants above,
+   chosen in settings (mc-light cookie → data-light on <html>, nav.js). PAPER is
+   the base light :root (no attribute); MIST (cool paper) and SEPIA (warm
+   parchment) are delta blocks that retint only the surface/cream ramp and share
+   the base light ink + accent. A variant is always an explicit choice, so nav.js
+   sets data-theme="light" alongside data-light (no prefers-color-scheme twin is
+   needed — system-light before JS is always paper). */
+:root[data-theme="light"][data-light="mist"] {
+  --bg: #f3f6f8;
+  --surface: #ffffff;
+  --rule: #cdd5dd;
+  --cream: #e9eef3;
+  --cream-2: #f1f5f8;
+  --glass: rgba(243, 246, 248, 0.97);
+  --creed-bg: #d5e6de;
+}
+:root[data-theme="light"][data-light="sepia"] {
+  --bg: #f4ecd8;
+  --surface: #fbf5e6;
+  --rule: #ccb994;
+  --cream: #efe4cb;
+  --cream-2: #f5edd7;
+  --brown: #7a5c28;
+  --glass: rgba(244, 236, 216, 0.97);
+  --creed-bg: #dbe7d1;
+}
+
 * { box-sizing: border-box; }
 
 /* Reserve the scrollbar's width from first paint, so the centered column
@@ -1741,6 +1768,9 @@ mc-deskbar, mc-appbar, mc-tabbar, mc-sheet, mc-home, mc-settings,
 .mc-pal-charcoal .mc-pal-sw { background: linear-gradient(135deg, #0f1113 50%, #ef6b6b 50%); }
 .mc-pal-slate .mc-pal-sw { background: linear-gradient(135deg, #0d1117 50%, #ef6b6b 50%); }
 .mc-pal-ink .mc-pal-sw { background: linear-gradient(135deg, #14120f 50%, #ef6b6b 50%); }
+.mc-pal-paper .mc-pal-sw { background: linear-gradient(135deg, #ffffff 50%, #8b1a1a 50%); }
+.mc-pal-mist .mc-pal-sw { background: linear-gradient(135deg, #f3f6f8 50%, #8b1a1a 50%); }
+.mc-pal-sepia .mc-pal-sw { background: linear-gradient(135deg, #f4ecd8 50%, #8b1a1a 50%); }
 
 /* ---- Show-my-key (ungated): the key is a full-width block ABOVE the Copy
    button, never a squished field crammed beside it (fixes mobile + desktop) ---- */
