@@ -12,6 +12,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl } from './util.js';
+import * as Core from '../core.js';
 
 class McTopic extends LitElement {
   static properties = { d: { attribute: false }, err: { attribute: false },
@@ -82,7 +83,7 @@ class McTopic extends LitElement {
       const c = m.comment;
       if (!c || this.querySelector('#comment-' + c.id)) return;   // dedup own/multi-tab
       d.total += 1;
-      const replyPage = Math.ceil(d.total / d.per);
+      const replyPage = Core.replyPage(d.total, d.per);
       if (replyPage === d.page) {
         /* it belongs on the page in front of the reader — drop it in live */
         const list = this.querySelector('.comments-list');
@@ -175,7 +176,7 @@ class McTopic extends LitElement {
         if (ta.mcDraftDone) ta.mcDraftDone();
         if (ta.mcPreview) ta.mcPreview.off();
         if (d2.status === 'pending') { status.textContent = 'Held for review. It will appear once approved.'; return; }
-        const replyPage = Math.ceil((d.total + 1) / d.per);
+        const replyPage = Core.replyPage(d.total + 1, d.per);
         if (replyPage === d.page) {
           /* dedup: the live broadcast of our own reply may have already added it */
           let node = list.querySelector('#comment-' + d2.comment.id);

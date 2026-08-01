@@ -69,7 +69,9 @@ SCRIPTURE_PROBE = r"""
     dmTtlN: (window.mcCore.dmTtlOptions || []).length,
     accDelAdmin: window.mcCore.canDelete('x', 'me', true),
     accEditSelf: window.mcCore.canEdit('me', 'me'),
-    accNoSelfInteract: window.mcCore.canInteract('me', 'me', 'bot')
+    accNoSelfInteract: window.mcCore.canInteract('me', 'me', 'bot'),
+    replyPage21: window.mcCore.replyPage(21, 20),
+    stickyWins: window.mcCore.topicCompare({sticky:1,last:1}, {sticky:0,last:99}) < 0
   };
 """
 
@@ -118,6 +120,8 @@ def main():
             ('mcCore.canDelete/canEdit/canInteract (permission matrix)',
              sc.get('accDelAdmin') is True and sc.get('accEditSelf') is True
              and sc.get('accNoSelfInteract') is False),
+            ('mcCore.replyPage/topicCompare (live decisions)',
+             sc.get('replyPage21') == 2 and sc.get('stickyWins') is True),
         ]
         return f.verdict(checks)
 
