@@ -49,7 +49,7 @@ class McTopic extends LitElement {
       .then((d) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.d = d;
-        document.title = d.topic.title + ' | Catholicity Board';
+        document.title = d.topic.title + ' | Community';
         /* Mark the thread read (deduped in the kit, so paging within it does not
            re-write on every page turn). */
         if (kit.state.key) kit.markThreadRead(d.topic.id);
@@ -203,20 +203,20 @@ class McTopic extends LitElement {
     const kit = this.kit;
     if (!kit) return nothing;
     if (this.err) {
-      return html`${crumbTpl([['Catholicity Board', 'community.html'], ['Topic']])}
+      return html`${crumbTpl([['Community', 'community.html'], ['Topic']])}
         <p class="comments-status">${this.err === 'No such topic.'
           ? 'No such topic. It may have been removed.'
           : 'The topic could not be loaded. Check your connection and reload the page.'}</p>`;
     }
     if (!this.d) {
-      return html`${crumbTpl([['Catholicity Board', 'community.html'], ['Topic']])}
+      return html`${crumbTpl([['Community', 'community.html'], ['Topic']])}
         <p class="comments-status">Loading…</p>`;
     }
     const d = this.d;
     const cat = kit.catByKey(d.cat);
     const href = (i) => 'community.html?topic=' + this.topicId + '&p=' + i;
     return html`
-      ${crumbTpl([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]])}
+      ${crumbTpl([['Community', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]])}
       <h2 class="board-topic-head">${d.topic.title}${d.topic.sticky ? html`<span class="board-sticky">(sticky)</span>` : nothing}${d.topic.locked ? html`<span class="board-locked">(locked)</span>` : nothing}${d.cat === 'adminsonly' ? nothing : html`<a class="comments-rss" href=${kit.API + '/feed?topic=' + d.topic.id} title="Follow this topic with a feed reader">RSS</a>`}</h2>
       ${kit.state.key ? html`<p class="board-intro mc-watch-slot"></p>` : nothing}
       ${this.newAway ? html`<a class="mc-live-pill" href=${href(this.newLastPage)}>↓ ${this.newAway} new repl${this.newAway === 1 ? 'y' : 'ies'} — go to page ${this.newLastPage}</a>` : nothing}
@@ -241,7 +241,7 @@ class McSearch extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     const kit = this.kit;
-    document.title = 'Search | Catholicity Board';
+    document.title = 'Search | Community';
     if (!(kit.state.key && kit.state.myHash)) { this.count = 'gate'; return; }
     const qs = new URLSearchParams(location.search);
     this.q = qs.get('q') || '';
@@ -314,7 +314,7 @@ class McSearch extends LitElement {
     const kit = this.kit;
     if (!kit) return nothing;
     if (this.count === 'gate') {
-      return html`${crumbTpl([['Catholicity Board', 'community.html'], ['Search']])}
+      return html`${crumbTpl([['Community', 'community.html'], ['Search']])}
         <p class="comments-status">Search is for logged-in members. Create an identity or paste your key above, then search the board.</p>`;
     }
     const href = (i) => {
@@ -334,7 +334,7 @@ class McSearch extends LitElement {
         ? html`<p class="comments-status mc-empty" data-ico="🔍">Search the board. Put "quotes" around an exact phrase.</p>`
         : html`<p class="comments-status">${this.count}</p>`;
     return html`
-      ${crumbTpl([['Catholicity Board', 'community.html'], ['Search']])}
+      ${crumbTpl([['Community', 'community.html'], ['Search']])}
       <h1 class="mc-screen-title">Search</h1>
       <form class="board-search">
         <div class="key-row">

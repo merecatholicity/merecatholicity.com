@@ -1321,43 +1321,53 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   }
   .mc-set-switch.on .mc-set-knob { transform: translateX(1.1rem); }
 
-  /* ---- the Home launcher ---- */
+  /* ---- the Home launcher: show it, hide the marketing siblings (the layout
+     rules are global below, so mc-home looks right on desktop too) ---- */
   mc-home { display: block; }
   main.mc-app-home > :not(mc-home) { display: none; }
-  .mc-home { padding: 0.4rem 0 1rem; }
-  .mc-home-hero { text-align: center; padding: 1.4rem 1rem 1.2rem; }
-  .mc-home-cross { font-size: 2.4rem; color: var(--maroon); display: block; }
-  .mc-home-hero h1 { margin: 0.3rem 0 0.1rem; font-size: 1.5rem; color: var(--ink); }
-  .mc-home-hero p { margin: 0; color: var(--faint); font-size: 0.95rem; }
-  .mc-home-feats { display: flex; flex-direction: column; gap: 0.7rem; padding: 0 1rem; }
-  .mc-home-feat {
-    display: flex; align-items: center; gap: 0.8rem; text-decoration: none;
-    background: var(--cream-2); border: 1px solid var(--rule); border-radius: 14px; padding: 0.9rem 1rem;
-    color: var(--ink); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
-  }
-  .mc-home-feat-ico {
-    font-size: 1.7rem; width: 2.6rem; height: 2.6rem; flex: none;
-    display: flex; align-items: center; justify-content: center; background: var(--surface); border-radius: 12px;
-  }
-  .mc-home-feat-txt { flex: 1; display: flex; flex-direction: column; }
-  .mc-home-feat-txt strong { font-size: 1.05rem; color: var(--maroon); }
-  .mc-home-feat-txt small { color: var(--faint); font-size: 0.82rem; }
-  .mc-home-go { color: var(--faint); font-size: 1.3rem; flex: none; }
-  .mc-home-sec { margin: 1.4rem 1rem 0.5rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
-  .mc-home-shelf { padding: 0 1rem; }
-  .mc-home-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
-    padding: 0.95rem 0.2rem; border-bottom: 1px solid var(--rule); text-decoration: none; color: var(--ink);
-  }
-  .mc-home-row-txt { display: flex; flex-direction: column; }
-  .mc-home-row-txt strong { font-weight: 600; }
-  .mc-home-row-txt small { color: var(--faint); font-size: 0.8rem; margin-top: 0.1rem; }
-  .mc-home-settings {
-    display: block; margin: 1.4rem auto 0.5rem; padding: 0.7rem 1.4rem;
-    border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); color: var(--ink);
-    font: inherit; cursor: pointer;
-  }
+  /* The page title rides the top app bar now, so drop the article's own leading
+     title on content pages under the app shell — no redundancy (credo shows
+     "Credo" only in the bar, the library texts show their title only in the bar,
+     the board shows "Community" only in the bar). */
+  body.mc-app main.prose > .home-title { display: none; }
 }
+
+/* The Home launcher LAYOUT — global, so it styles mc-home at BOTH breakpoints
+   (mc-home now renders on desktop too; when its CSS lived only in the phone
+   media block, the desktop launcher rendered unstyled with giant raw emoji). */
+.mc-home { padding: 0.4rem 0 1rem; max-width: 34rem; margin: 0 auto; }
+.mc-home-hero { text-align: center; padding: 1.4rem 1rem 0.6rem; }
+.mc-home-cross { font-size: 2.4rem; color: var(--maroon); display: block; }
+.mc-home-hero p { margin: 0.4rem 0 0; color: var(--faint); font-size: 0.98rem; }
+.mc-home-rule { border: 0; border-top: 1px solid var(--rule); margin: 0.4rem 1rem 1.1rem; }
+.mc-home-feats { display: flex; flex-direction: column; gap: 0.7rem; padding: 0 1rem; }
+.mc-home-feat {
+  display: flex; align-items: center; gap: 0.8rem; text-decoration: none;
+  background: var(--cream-2); border: 1px solid var(--rule); border-radius: 14px; padding: 0.9rem 1rem;
+  color: var(--ink); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.05);
+}
+.mc-home-feat-ico {
+  font-size: 1.5rem; width: 2.4rem; height: 2.4rem; flex: none; line-height: 1;
+  display: flex; align-items: center; justify-content: center; background: var(--surface); border-radius: 12px;
+}
+.mc-home-feat-txt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.mc-home-feat-txt strong { font-size: 1.05rem; color: var(--maroon); }
+.mc-home-feat-txt small { color: var(--faint); font-size: 0.82rem; }
+.mc-home-go { color: var(--faint); font-size: 1.3rem; flex: none; }
+.mc-home-sec { margin: 1.4rem 1rem 0.5rem; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); }
+.mc-home-shelf { padding: 0 1rem; }
+.mc-home-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  padding: 0.95rem 0.2rem; border-bottom: 1px solid var(--rule); text-decoration: none; color: var(--ink);
+}
+.mc-home-row-txt { display: flex; flex-direction: column; }
+.mc-home-row-txt strong { font-weight: 600; }
+.mc-home-row-txt small { color: var(--faint); font-size: 0.8rem; margin-top: 0.1rem; }
+
+/* merecat intro "read more": the tail is hidden until the toggle is tapped. */
+.merecat-intro-more { display: none; }
+.merecat-intro-toggle { color: var(--maroon); cursor: pointer; white-space: nowrap; }
+.merecat-intro-toggle:hover { text-decoration: underline; }
 
 /* ---- Phase 2: app controls (phones only) ---- */
 
@@ -1933,6 +1943,9 @@ mc-library { display: block; }
   .mc-lib-title { font-size: 1.6rem; }
   .mc-lib-grid { grid-template-columns: 1fr; gap: 0.6rem; }
   .mc-lib-work { flex-direction: column; align-items: stretch; }
+  /* In the column layout the title's `flex: 1 1 18rem` would make 18rem the
+     HEIGHT (giant square cards); size it to its content instead. */
+  .mc-lib-work-title { flex: 0 0 auto; }
   .mc-lib-work-links { justify-content: flex-start; }
 }
 
