@@ -61,7 +61,9 @@ SCRIPTURE_PROBE = r"""
     validHref: valid && valid.href,
     validV2: valid && valid.v2,
     zeroRef: vp('rom', '0', '0', null),
-    profileLimits: window.mcCore.profileLimits
+    profileLimits: window.mcCore.profileLimits,
+    faithNicene: window.mcCore.faithLabel('nicene'),
+    faithsLen: (window.mcCore.faiths || []).length
   };
 """
 
@@ -101,6 +103,8 @@ def main():
              (sc.get('profileLimits') or {}).get('bio') == 500
              and (sc.get('profileLimits') or {}).get('nick') == 40
              and (sc.get('profileLimits') or {}).get('sig') == 200),
+            ('mcCore.faithLabel + faiths (3 ordered)',
+             sc.get('faithNicene') == 'Nicene' and sc.get('faithsLen') == 3),
         ]
         return f.verdict(checks)
 

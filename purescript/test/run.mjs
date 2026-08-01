@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import * as Rank from '../output/Domain.Rank/index.js';
 import * as Scripture from '../output/Domain.Scripture/index.js';
 import * as Profile from '../output/Domain.Profile/index.js';
+import * as Faith from '../output/Domain.Faith/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -86,3 +87,13 @@ assert.ok(Profile.mkBio('x'.repeat(500)) instanceof Either.Right, 'bio of 500 ac
 assert.ok(Profile.mkBio('x'.repeat(501)) instanceof Either.Left, 'bio of 501 rejected');
 assert.ok(Profile.mkNick('x'.repeat(41)) instanceof Either.Left, 'nick of 41 rejected');
 console.log('pstest: Domain.Profile OK (caps 40/500/200 + validators; bio locked at 500)');
+
+// --- Domain.Faith: the closed code↔label set + order ---
+const flabel = (c) => Maybe.maybe('')((s) => s)(Faith.labelForCode(c));
+assert.equal(Faith.faithList.length, 3);
+assert.deepEqual(Faith.faithList.map((f) => f.code), ['nicene', 'indo-european', 'seeker']);
+assert.equal(flabel('nicene'), 'Nicene');
+assert.equal(flabel('indo-european'), 'pre-Christian Indo European');
+assert.equal(flabel('seeker'), 'Seeker');
+assert.equal(flabel('bogus'), '', 'unknown faith -> no label');
+console.log('pstest: Domain.Faith OK (3 codes, ordered, labels)');
