@@ -965,8 +965,13 @@
   if (!section) return;
   var BOARD = section.hasAttribute('data-board');
 
-  /* Keys must match BOARD_CATS in the worker. */
-  var CATS = [
+  /* The category display rows. Single-sourced from Domain.Board via window.mcCore
+     (the same table the worker reads); the inline copy below is the no-app
+     fallback (app disabled / storage blocked ⇒ no mcCore). Keys must match
+     BOARD_CATS in the worker — which is why they now come from one PS source.
+     The back room (adminsonly) is hidden here by courtesy; the server refuses
+     everyone but admins on every path, which is the real lock. */
+  var CATS = (window.mcCore && window.mcCore.boardCatRows) || [
     ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific. New here? ', 'Introduce yourself and say hello', 'community.html?topic=37'],
     ['news', 'News', 'News of the Church and of the world.'],
     ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
@@ -980,8 +985,6 @@
     ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
     ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Reformed Baptists are welcome to coexist here too.'],
     ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
-    /* The back room. The server refuses everyone but admins on every path;
-       hiding it here is courtesy, not the lock. */
     ['adminsonly', 'Admins only', 'The back room.'],
   ];
 

@@ -21,6 +21,7 @@ import * as Dm from '../purescript/output/Domain.Dm/index.js';
 import * as Access from '../purescript/output/Domain.Access/index.js';
 import * as Live from '../purescript/output/Domain.Live/index.js';
 import * as Pager from '../purescript/output/Domain.Pager/index.js';
+import * as Board from '../purescript/output/Domain.Board/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -96,3 +97,11 @@ export const replyPage = (total, per) => Live.replyPage(total | 0)(per | 0);
    sources the windowing the util.js href pager and the member.js button pager
    both computed. The cells are already plain records, so no erasure. */
 export const pagerItems = (total, per, active) => Pager.pagerItems(total | 0)(per | 0)(active | 0);
+
+/* Board categories (Domain.Board), single-sourced with the worker. boardCatRows
+   = the display rows [key,label,blurb,(linkText,linkHref)] the client CATS held;
+   boardCatKeys = the key order (the worker's BOARD_CATS); adminCat = the back
+   room's board key. Already plain arrays/string, so no erasure. */
+export const boardCatRows = Board.catRows;
+export const boardCatKeys = Board.catKeys;
+export const adminCat = Board.adminCat;
