@@ -256,7 +256,7 @@ monoliths' section headers):
 | 1 | D1 `wrangler migrations` — one schema origin | — | ✅ |
 | 2A | Strict `tsc` gate (`tsconfig`, `globals.d.ts`, `McCore` contract) | — | ✅ |
 | 2B | `app/**` → TypeScript, strict-green; byte-identical bundle | — | ✅ |
-| 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ◑ in progress |
+| 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ✅ |
 | 2D | Both workers → TypeScript (`Env`, typed rows) | — | ☐ |
 | 3 | **`db.ts` repository** — route all 329 `.prepare()` through it | −25 join copies, −14 `?N` sites | ☐ |
 | 4 | **Middleware + declarative routes** — replace the 93-branch chain | −~90 preamble copies (~500 lines) | ☐ |
