@@ -78,7 +78,10 @@
     { "binding": "BACKUPS", "bucket_name": "merecatholicity-backups" },
     { "binding": "AVATARS", "bucket_name": "merecatholicity-avatars" },
     // End-to-end-encrypted DM media (client-encrypted ciphertext, random keys).
-    { "binding": "MEDIA", "bucket_name": "merecatholicity-dm-media" }
+    { "binding": "MEDIA", "bucket_name": "merecatholicity-dm-media" },
+    // Public wall/feed post + comment media (UNencrypted, served publicly
+    // same-origin like avatars; random opaque keys). Admin-prunable, not backed up.
+    { "binding": "WALLMEDIA", "bucket_name": "merecatholicity-wall-media" }
   ],
   // Monthly: the full backup/prune chain. Hourly: sweep expired DMs + their media.
   "triggers": { "crons": ["0 0 1 * *", "0 * * * *"] },

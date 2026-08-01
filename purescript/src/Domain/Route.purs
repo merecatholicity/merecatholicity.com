@@ -26,6 +26,7 @@ type Params =
   , merecatthread :: Nullable String
   , merecatthreads :: Nullable String
   , merecat :: Nullable String
+  , feed :: Nullable String
   , notifications :: Nullable String
   , inbox :: Nullable String
   , users :: Nullable String
@@ -33,6 +34,7 @@ type Params =
   , dm :: Nullable String
   , me :: Nullable String
   , profile :: Nullable String
+  , post :: Nullable String
   , audit :: Nullable String
   , topic :: Nullable Int
   , cat :: Nullable String
@@ -47,6 +49,7 @@ data Route
   | RMerecatThread String
   | RMerecatThreads
   | RMerecat
+  | RFeed
   | RNotifications
   | RInbox
   | RUsers
@@ -54,6 +57,7 @@ data Route
   | RDm String
   | RMe
   | RProfile String
+  | RPost String
   | RAudit
   | RTopic Int
   | RCat String
@@ -83,6 +87,7 @@ parseRoute p =
   else if truthy p.merecatthread then RMerecatThread (str p.merecatthread)
   else if present p.merecatthreads then RMerecatThreads
   else if truthy p.merecat then RMerecat
+  else if truthy p.feed then RFeed
   else if truthy p.notifications then RNotifications
   else if truthy p.inbox then RInbox
   else if truthy p.users then RUsers
@@ -90,6 +95,7 @@ parseRoute p =
   else if truthy p.dm then RDm (str p.dm)
   else if truthy p.me then RMe
   else if truthy p.profile then RProfile (str p.profile)
+  else if truthy p.post then RPost (str p.post)
   else if truthy p.audit then RAudit
   else case toMaybe p.topic of
     Just n -> RTopic n
@@ -107,6 +113,7 @@ routeTag r = case r of
   RMerecatThread s -> ts "MerecatThread" s
   RMerecatThreads -> t "MerecatThreads"
   RMerecat -> t "Merecat"
+  RFeed -> t "Feed"
   RNotifications -> t "Notifications"
   RInbox -> t "Inbox"
   RUsers -> t "Users"
@@ -114,6 +121,7 @@ routeTag r = case r of
   RDm s -> ts "Dm" s
   RMe -> t "Me"
   RProfile s -> ts "Profile" s
+  RPost s -> ts "Post" s
   RAudit -> t "Audit"
   RTopic n -> tn "Topic" n
   RCat s -> ts "Cat" s

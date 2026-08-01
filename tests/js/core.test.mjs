@@ -82,6 +82,8 @@ test('parseRoute runs the topic integer-gate at the JS boundary', () => {
   assert.equal(route('topic=0').tag, 'Index', 'topic=0 -> not a topic');
   assert.equal(route('topic=5.5').tag, 'Index', 'non-integer -> not a topic');
   assert.equal(route('merecat=1&topic=5').tag, 'Merecat', 'priority ladder');
+  assert.equal(route('feed=1').tag, 'Feed', 'the public feed route');
+  assert.equal(route('post=7').tag, 'Post', 'a single public post route');
 });
 
 test('auth predicates coerce every signal to Boolean', () => {

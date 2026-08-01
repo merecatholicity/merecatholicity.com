@@ -17,8 +17,8 @@ function psRoute(qs) {
   return Route.routeTag(Route.parseRoute({
     ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'),
     merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),
-    merecat: g('merecat'), notifications: g('notifications'), inbox: g('inbox'), users: g('users'),
-    q: g('q'), dm: g('dm'), me: g('me'), profile: g('profile'), audit: g('audit'), topic, cat: g('cat'),
+    merecat: g('merecat'), feed: g('feed'), notifications: g('notifications'), inbox: g('inbox'), users: g('users'),
+    q: g('q'), dm: g('dm'), me: g('me'), profile: g('profile'), post: g('post'), audit: g('audit'), topic, cat: g('cat'),
   }));
 }
 
@@ -47,4 +47,12 @@ test('presence is by truthy value; a bare empty param does not select', () => {
 
 test('priority ladder: an earlier param wins over a later one', () => {
   assert.equal(psRoute('merecat=1&topic=5').tag, 'Merecat');
+});
+
+test('the public posting routes: feed and single post', () => {
+  assert.equal(psRoute('feed=1').tag, 'Feed', '?feed=1 -> the global feed');
+  assert.equal(psRoute('post=42').tag, 'Post');
+  assert.equal(psRoute('post=42').s, '42', 'post id rides as a string (JS Number()s it)');
+  assert.equal(psRoute('feed=1&topic=9').tag, 'Feed', 'feed beats topic in the ladder');
+  assert.equal(psRoute('').tag, 'Index', 'no feed/post param -> not a wall route (absent = null, not truthy)');
 });

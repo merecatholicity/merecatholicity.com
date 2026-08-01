@@ -1001,6 +1001,23 @@
       '.dm-media-expired{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px dashed var(--rule,#cbb);border-radius:10px;opacity:0.78}' +
       '.dm-media-expired-icon{font-size:1.25em;filter:grayscale(1);opacity:0.7}' +
       '.dm-media-expired-text{font-size:0.9em;font-style:italic;opacity:0.85}' +
+      '.dm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;background:#c8c8c8}' +
+      '.dm-dot-on{background:#3ba55d;box-shadow:0 0 0 2px rgba(59,165,93,0.22)}' +
+      '.dm-dot-off{background:#c0c0c0}.dm-dot-unknown{background:#dcdcdc}' +
+      '.dm-typing{font-size:0.85em;opacity:0.7;font-style:italic;margin:0.25em 0.2em}' +
+      '.dm-receipt{display:block;font-size:0.72em;opacity:0.5;margin-top:2px}' +
+      '.dm-receipt-seen{opacity:0.8;color:var(--maroon,#8b1a1a)}' +
+      '.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}' +
+      '.wall-media{margin:0.45em 0}' +
+      '.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}' +
+      '.wall-media-gone{opacity:0.6;font-size:0.9em;font-style:italic}' +
+      '.wall-foot{margin-top:0.45em;font-size:0.9em}' +
+      '.wall-comments-toggle{cursor:pointer;opacity:0.78}.wall-comments-toggle:hover{opacity:1}' +
+      '.wall-comments{margin:0.55em 0 0.2em 0.9em;border-left:2px solid var(--rule,#e6e0d5);padding-left:0.85em}' +
+      '.wall-comment{margin:0.45em 0}' +
+      '.wall-newpill{display:inline-block;margin:0.4em 0;padding:0.3em 0.85em;border-radius:14px;background:var(--maroon,#8b1a1a);color:#fff;font-size:0.85em;cursor:pointer;text-decoration:none}' +
+      '.wall-composer{margin:0.6em 0 1.1em}.wall-del{color:var(--maroon,#8b1a1a);opacity:0.7}' +
+      '.wall-sentinel{height:1px}' +
       '.admin-set-row{margin:0.6em 0}' +
       '.admin-set-row input[type=number]{width:6em}';
     var st = el('style');
@@ -2640,6 +2657,24 @@
     if (new URLSearchParams(location.search).get('notifications') === '1') return;
     liveNotifBadge();
   }
+  /* The recipient opened my messages: flip the open conversation's sent bubbles
+     to "Seen" up to their read timestamp. m.reader is the other party. */
+  function onLiveDmRead(m) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.reader && state.dmView.markRead) state.dmView.markRead(m.at);
+  }
+  /* The other party is (or stopped) typing — show/hide the "…typing" line in the
+     open conversation only. */
+  function onLiveTyping(m) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.from && state.dmView.setTyping) state.dmView.setTyping(m.state !== 'stop');
+  }
+  /* A member's online state changed: update the open thread's header dot and any
+     inbox row dot. */
+  function onLivePresence(m) {
+    if (state.dmView && state.dmView.other === m.hash && state.dmView.setPresence) state.dmView.setPresence(!!m.online);
+    if (state.inboxPresence) state.inboxPresence(m.hash, !!m.online);
+  }
   /* Authenticate the live socket for this member so DM/notif pushes arrive. */
   function enableMemberLive() {
     ensureMyPubkey();   // publish this identity's DM public key once it is live
@@ -2651,7 +2686,11 @@
     var m = ev.detail; if (!m) return;
     if (m.t === 'dm') onLiveDm(m);
     else if (m.t === 'dm-ttl') onLiveDmTtl(m);
+    else if (m.t === 'dm-read') onLiveDmRead(m);
+    else if (m.t === 'typing') onLiveTyping(m);
+    else if (m.t === 'presence') onLivePresence(m);
     else if (m.t === 'notification') onLiveNotif();
+    else if (m.t === 'wall-post' || m.t === 'wall-comment') { if (state.onLiveWall) state.onLiveWall(m); }
   }, { signal: bootSig });
 
   /* A locked identity or a banned network, discovered on any keyed call:
@@ -4364,6 +4403,8 @@
         card.appendChild(muteBtn);
       }
     }
+    /* The member's public wall — their own posts, with a composer on your own. */
+    renderProfileWall(card, p.hash, editable);
     /* A member's own recent forum posts, so a reader can follow a thinker. */
     renderProfilePosts(card, p.hash);
     /* Admins get the very same user-fingerprint drawer here as on a post,
@@ -4874,6 +4915,300 @@
       });
   }
 
+  /* ===================== Public posting: walls + the feed =====================
+     A member's wall is their own public posts; the feed is everyone's together.
+     Public + unencrypted, reusing the composer, Turnstile, @mentions, and the
+     rank/faith author line. Media rides the public /wall/media endpoint. */
+
+  function wallAvatarInto(head, hash, avatar) {
+    if (!avatar || !hash) return;
+    var link = el('a', 'comment-avatar-link');
+    link.href = profileHref(hash);
+    var img = el('img', 'comment-avatar');
+    img.src = API + '/avatar?hash=' + hash + '&v=' + encodeURIComponent(avatar);
+    img.alt = ''; img.width = 32; img.height = 32;
+    link.appendChild(img);
+    head.appendChild(link);
+  }
+  /* The public media element for a post/comment. The object key encodes the kind
+     (wall/i|v|a/...), so we pick <img>/<video>/<audio> without extra data. */
+  function wallMediaNode(mediaKey) {
+    if (!mediaKey) return null;
+    var kind = String(mediaKey).split('/')[1];
+    var src = API + '/wall/media?key=' + encodeURIComponent(mediaKey);
+    var holder = el('div', 'wall-media');
+    var mel;
+    if (kind === 'v') { mel = el('video', 'wall-media-el'); mel.src = src; mel.controls = true; mel.preload = 'metadata'; }
+    else if (kind === 'a') { mel = el('audio', 'wall-media-el'); mel.src = src; mel.controls = true; mel.preload = 'metadata'; }
+    else { mel = el('img', 'wall-media-el'); mel.src = src; mel.alt = ''; mel.loading = 'lazy'; }
+    mel.addEventListener('error', function () {
+      holder.textContent = '';
+      holder.appendChild(el('span', 'wall-media-gone', '🖼️ media unavailable'));
+    });
+    holder.appendChild(mel);
+    return holder;
+  }
+  /* True if I may delete this authored item (mine, or I am an admin). */
+  function wallCanDelete(authorHash) {
+    if (window.mcCore) return window.mcCore.canDelete(authorHash, state.myHash, isAdmin());
+    return isAdmin() || (!!state.myHash && authorHash === state.myHash);
+  }
+  function wallDeleteLink(id, kind, node) {
+    var a = el('a', 'comment-quote-link wall-del', 'delete');
+    a.href = '#';
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      appConfirm('Delete this ' + (kind === 'comment' ? 'comment' : 'post') + '? This cannot be undone.', { okLabel: 'Delete', danger: true }, function (ok) {
+        if (!ok) return;
+        fetch(API + '/wall/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: id, kind: kind }) })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { if (d && d.ok && node && node.parentNode) node.parentNode.removeChild(node); })
+          .catch(function () {});
+      });
+    });
+    return a;
+  }
+  /* One comment on a public post. */
+  function wallCommentNode(c) {
+    var node = el('article', 'comment wall-comment');
+    var head = el('div', 'comment-head');
+    wallAvatarInto(head, c.author_hash, c.avatar);
+    head.appendChild(authorNode(c.author_hash, c.nick, true, c.faith, c.posts));
+    if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
+    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(c.created_at)));
+    if (wallCanDelete(c.author_hash)) head.appendChild(wallDeleteLink(c.id, 'comment', node));
+    node.appendChild(head);
+    node.appendChild(fillBody(el('div', 'comment-body'), c.body));
+    if (c.media_key) { var m = wallMediaNode(c.media_key); if (m) node.appendChild(m); }
+    return node;
+  }
+  /* One public post: header, body, media, and a lazily-loaded comment section
+     with its own composer. `expand` opens the comments immediately (post detail). */
+  function wallPostNode(p, expand) {
+    ensureDmStyles();
+    var node = el('article', 'comment wall-post');
+    node.id = 'post-' + p.id;
+    var head = el('div', 'comment-head');
+    wallAvatarInto(head, p.author_hash, p.avatar);
+    head.appendChild(authorNode(p.author_hash, p.nick, true, p.faith, p.posts));
+    if (p.author_hash && ADMIN_HASHES.indexOf(p.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
+    var permalink = el('a', 'comment-date', ' ' + fmtDateTime(p.created_at));
+    permalink.href = 'community.html?post=' + p.id;
+    head.appendChild(permalink);
+    if (p.author_hash && state.myHash && p.author_hash !== state.myHash && p.author_hash !== MERECAT_BOT_HASH) {
+      var dm = el('a', 'comment-dm', 'Direct Message'); dm.href = 'messages.html?dm=' + p.author_hash; head.appendChild(dm);
+    }
+    if (wallCanDelete(p.author_hash)) head.appendChild(wallDeleteLink(p.id, 'post', node));
+    node.appendChild(head);
+    node.appendChild(fillBody(el('div', 'comment-body'), p.body));
+    if (p.media_key) { var mm = wallMediaNode(p.media_key); if (mm) node.appendChild(mm); }
+
+    var foot = el('div', 'wall-foot');
+    var cn = Number(p.comments) || 0;
+    var toggle = el('a', 'wall-comments-toggle', cn === 1 ? '1 comment' : cn + ' comments');
+    toggle.href = '#';
+    var box = el('div', 'wall-comments');
+    box.style.display = 'none';
+    var loaded = false;
+    function openComments() {
+      box.style.display = '';
+      if (loaded) return;
+      loaded = true;
+      var list = el('div', 'wall-comment-list');
+      list.appendChild(el('p', 'comments-status', 'Loading…'));
+      box.appendChild(list);
+      fetch(API + '/wall/post/get', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, id: p.id }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          list.textContent = '';
+          if (!d || !d.ok) { list.appendChild(el('p', 'comments-status', 'Could not load comments.')); return; }
+          (d.comments || []).forEach(function (c) { list.appendChild(wallCommentNode(c)); });
+          if (state.myHash) box.appendChild(wallComposer('comment', { post: p.id }, function (added) {
+            if (added) list.appendChild(wallCommentNode(added));
+          }));
+        }).catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'Could not load comments.')); });
+    }
+    toggle.addEventListener('click', function (e) { e.preventDefault(); if (box.style.display === 'none') openComments(); else box.style.display = 'none'; });
+    foot.appendChild(toggle);
+    node.appendChild(foot);
+    node.appendChild(box);
+    if (expand) openComments();
+    return node;
+  }
+
+  /* A composer for a post (kind 'post') or a comment (kind 'comment', extra.post).
+     Reuses mdEditor + preview + drafts + @mentions + Turnstile + a media attach,
+     uploading to /wall/media then posting to /wall/post|/wall/comment. onDone gets
+     the created row (enriched enough to render) when it went live, or null. */
+  function wallComposer(kind, extra, onDone) {
+    var form = el('div', 'comment-form wall-composer');
+    var ta = el('textarea', 'comment-text');
+    ta.maxLength = 4000; ta.rows = kind === 'comment' ? 2 : 3;
+    ta.placeholder = kind === 'comment' ? 'Write a comment…' : 'Share something with the community…';
+    form.appendChild(mdEditor(ta));
+    attachDraft(ta, (kind === 'comment' ? 'wallc:' + extra.post : 'wall:' + (state.myHash || '')));
+    attachMentions(ta);
+    form.appendChild(el('div', 'ts-slot'));
+    var btnRow = el('div', 'comment-buttons');
+    var send = el('button', 'btn btn-send', kind === 'comment' ? 'Comment' : 'Post'); send.type = 'button';
+    btnRow.appendChild(send);
+    var pv = previewButton(ta); if (pv) btnRow.appendChild(pv);
+    var pendingFile = null;
+    var fileInput = el('input'); fileInput.type = 'file'; fileInput.accept = 'image/*,video/*,audio/*'; fileInput.style.display = 'none';
+    var attach = el('button', 'btn btn-attach', '📎 Attach'); attach.type = 'button';
+    var chip = el('span', 'dm-attach-chip'); chip.style.display = 'none';
+    function clearAttach() { pendingFile = null; fileInput.value = ''; chip.style.display = 'none'; chip.textContent = ''; }
+    attach.addEventListener('click', function () { fileInput.click(); });
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0]; if (!f) return;
+      pendingFile = f; chip.textContent = '';
+      chip.appendChild(document.createTextNode('📎 ' + f.name + ' · ' + fmtBytes(f.size) + '  '));
+      var x = el('a', null, '✕'); x.href = '#'; x.addEventListener('click', function (e) { e.preventDefault(); clearAttach(); });
+      chip.appendChild(x); chip.style.display = '';
+    });
+    btnRow.appendChild(attach);
+    form.appendChild(chip); form.appendChild(fileInput); form.appendChild(btnRow);
+    var status = el('p', 'form-status'); form.appendChild(status);
+    ensureDmStyles();
+    loadTurnstile();
+    send.addEventListener('click', function () {
+      var body = ta.value.replace(/\s+$/, '');
+      if (!pendingFile && !body.trim()) { if (ta.mcPreview) ta.mcPreview.off(); ta.focus(); return; }
+      send.disabled = true; status.textContent = 'Verifying…';
+      var file = pendingFile;
+      getToken().then(function (token) {
+        function post(mediaKey) {
+          status.textContent = 'Posting…';
+          var payload = { key: state.key, body: body, token: token, mentions: collectMentions(body) };
+          if (mediaKey) payload.media_key = mediaKey;
+          var url = API + '/wall/post';
+          if (kind === 'comment') { payload.post = extra.post; url = API + '/wall/comment'; }
+          return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              send.disabled = false;
+              if (blockedOut(d)) return;
+              if (!d || !d.ok) { status.textContent = (d && d.error) || 'Could not post.'; if (window.turnstile) try { turnstile.reset(); } catch (e) {} return; }
+              ta.value = ''; if (ta.mcDraftDone) ta.mcDraftDone(); clearAttach();
+              if (ta.mcPreview) ta.mcPreview.off();
+              if (window.turnstile) try { turnstile.reset(); } catch (e) {}
+              if (d.status === 'pending') { status.textContent = 'Held for review. It will appear once approved.'; return; }
+              status.textContent = '';
+              /* Build a local row to render immediately (author = me). */
+              var row = { id: d.id, author_hash: state.myHash, nick: myNick(), avatar: myAvatar(), faith: getFaith(),
+                body: body, created_at: Math.floor(Date.now() / 1000), media_key: mediaKey || null, comments: 0,
+                posts: myPostCount() };
+              if (onDone) onDone(row);
+            });
+        }
+        if (file) {
+          status.textContent = 'Uploading…';
+          var fd = new FormData(); fd.append('key', state.key); fd.append('file', file);
+          return fetch(API + '/wall/media', { method: 'POST', body: fd })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (!d || !d.ok) { send.disabled = false; status.textContent = (d && d.error) || 'Upload failed.'; return; }
+              return post(d.media_key);
+            });
+        }
+        return post(null);
+      }).catch(function () { send.disabled = false; status.textContent = 'Could not post. Try again.'; });
+    });
+    return form;
+  }
+
+  /* Best-effort "my own" display bits for an optimistic render (the server is
+     authoritative on the next load). */
+  function myNick() { try { return (state.profile && state.profile.nick) || ''; } catch (e) { return ''; } }
+  function myAvatar() { try { return (state.profile && state.profile.avatar) || ''; } catch (e) { return ''; } }
+  function myPostCount() { try { return (state.profile && state.profile.posts) || 0; } catch (e) { return 0; } }
+
+  /* A reusable infinite-scroll list: `fetcher(cursor)` returns {ok, posts, next}. */
+  function wallInfiniteList(fetcher) {
+    var wrap = el('div', 'wall-list');
+    var status = el('p', 'comments-status');
+    var sentinel = el('div', 'wall-sentinel');
+    wrap.appendChild(sentinel); wrap.appendChild(status);
+    var next = 0, loading = false, done = false, any = false;
+    function load() {
+      if (loading || done) return;
+      loading = true; status.textContent = 'Loading…';
+      fetcher(next).then(function (d) {
+        loading = false; status.textContent = '';
+        if (blockedOut(d)) return;
+        if (!d || !d.ok) { status.textContent = 'Could not load. Reload the page.'; return; }
+        (d.posts || []).forEach(function (p) { any = true; wrap.insertBefore(wallPostNode(p), sentinel); });
+        next = Number(d.next) || 0;
+        if (!next) { done = true; if (!any) status.textContent = 'Nothing here yet. Be the first to post.'; }
+      }).catch(function () { loading = false; status.textContent = 'Could not load. Reload the page.'; });
+    }
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (ents) { if (ents.some(function (e) { return e.isIntersecting; })) load(); });
+      io.observe(sentinel);
+    } else {
+      var more = el('button', 'btn', 'Load more'); more.type = 'button';
+      more.addEventListener('click', load); wrap.appendChild(more);
+    }
+    load();
+    return { wrap: wrap, prepend: function (row) { any = true; wrap.insertBefore(wallPostNode(row), wrap.firstChild); } };
+  }
+
+  function viewFeed() {
+    document.title = 'Feed | Community';
+    crumb([['Community', 'community.html'], ['Feed']]);
+    if (!isMember()) { viewJoin('see and post to the community feed'); return; }
+    section.appendChild(el('p', 'board-intro', 'Everything the community is sharing. Your posts appear here and on your profile.'));
+    section.appendChild(wallComposer('post', {}, function (row) { if (row && list) list.prepend(row); }));
+    var pill = el('a', 'wall-newpill', '↑ New posts — tap to refresh');
+    pill.href = '#'; pill.style.display = 'none';
+    pill.addEventListener('click', function (e) { e.preventDefault(); route(); });
+    section.appendChild(pill);
+    var list = wallInfiniteList(function (cursor) {
+      return fetch(API + '/wall/feed', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, cursor: cursor }) }).then(function (r) { return r.json(); });
+    });
+    section.appendChild(list.wrap);
+    /* Live: a new post/comment anywhere rings a subtle refresh pill (we only get
+       the id over the wire; the tap re-fetches the top). */
+    var pillT = 0;
+    state.onLiveWall = function () { clearTimeout(pillT); pillT = setTimeout(function () { pill.style.display = ''; }, 400); };
+  }
+
+  function viewPost(id) {
+    if (!(id > 0)) { crumb([['Community', 'community.html'], ['Feed', 'community.html?feed=1']]); section.appendChild(el('p', 'comments-status', 'No such post.')); return; }
+    if (!isMember()) { viewJoin('view this post'); return; }
+    document.title = 'Post | Community';
+    crumb([['Community', 'community.html'], ['Feed', 'community.html?feed=1'], ['Post']]);
+    var holder = el('div', 'wall-list'); section.appendChild(holder);
+    holder.appendChild(el('p', 'comments-status', 'Loading…'));
+    fetch(API + '/wall/post/get', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, id: id }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        holder.textContent = '';
+        if (blockedOut(d)) return;
+        if (!d || !d.ok) { holder.appendChild(el('p', 'comments-status', d && d.error ? d.error : 'That post is gone.')); return; }
+        holder.appendChild(wallPostNode(d.post, true));
+      }).catch(function () { holder.textContent = ''; holder.appendChild(el('p', 'comments-status', 'Could not load the post.')); });
+  }
+
+  /* The wall section on a profile: the member's own posts, with a composer when
+     it is your own profile. Called from renderProfile. */
+  function renderProfileWall(card, hash, editable) {
+    if (!isMember()) return;   // profiles are members-only now; a guest never gets here
+    card.appendChild(el('h3', null, editable ? 'Your wall' : 'Wall'));
+    if (editable) {
+      card.appendChild(wallComposer('post', {}, function (row) { if (row) wrap.wrap.insertBefore(wallPostNode(row), wrap.wrap.firstChild); }));
+    }
+    var wrap = wallInfiniteList(function (cursor) {
+      return fetch(API + '/wall', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, hash: hash, cursor: cursor }) }).then(function (r) { return r.json(); });
+    });
+    card.appendChild(wrap.wrap);
+  }
+
   function viewInbox() {
     if (window.mcViews && window.mcViews.inbox) {
       /* The Lit <mc-inbox> renders into its own subtree without clearing section,
@@ -4907,9 +5242,15 @@
           list.appendChild(el('p', 'comments-status', 'No messages yet. Find a member above, or press Direct Message on any post.'));
           return;
         }
+        var presDots = {};
         d.threads.forEach(function (t) {
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
+          var dot = el('span', 'mc-inbox-dot');
+          dot.style.display = 'none';
+          dot.title = 'Online';
+          left.appendChild(dot);
+          presDots[t.other_hash] = dot;
           var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmLabel(t.other_hash, t.nick));
           a.href = 'messages.html?dm=' + t.other_hash;
           left.appendChild(a);
@@ -4939,6 +5280,17 @@
           row.appendChild(delWrap);
           list.appendChild(row);
         });
+        /* One batched presence snapshot for the whole page: which correspondents
+           are online now (honouring appear-offline). No per-row polling. */
+        var presHashes = d.threads.map(function (t) { return t.other_hash; });
+        if (presHashes.length) {
+          fetch(API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, hashes: presHashes }) })
+            .then(function (r) { return r.json(); })
+            .then(function (pd) { if (pd && pd.ok && Array.isArray(pd.online)) pd.online.forEach(function (h) { if (presDots[h]) presDots[h].style.display = ''; }); })
+            .catch(function () {});
+        }
+        state.inboxPresence = function (h, on) { if (presDots[h]) presDots[h].style.display = on ? '' : 'none'; };
         function inboxHref(i) { return 'messages.html&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, inboxHref);
         if (topBar) section.insertBefore(topBar, list);
@@ -4990,13 +5342,17 @@
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
           var who = it.actor_nick || (it.actor_hash ? displayName(it.actor_hash) : 'Someone');
-          /* A 'dm' notification opens the conversation; reply/mention jump to the post. */
+          /* A 'dm' notification opens the conversation; 'wall' jumps to the post;
+             reply/mention jump to the forum post. */
           var isDm = it.kind === 'dm';
+          var isWall = it.kind === 'wall';
           var label = isDm ? (who + ' sent you a message')
-            : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+            : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+              : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
           var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
           a.href = isDm ? ('messages.html?dm=' + it.actor_hash)
-            : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+            : isWall ? ('community.html?post=' + it.comment_id)
+              : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
           if (it.snippet && !isDm) left.appendChild(el('div', 'board-intro', it.snippet));
@@ -5089,6 +5445,8 @@
         document.title = shortName + ' | Inbox';
         crumb([['Community', 'community.html'], ['Inbox', 'messages.html'], [shortName]]);
         var headEl = el('h2', 'board-topic-head');
+        var presDot = el('span', 'dm-dot dm-dot-unknown');
+        headEl.appendChild(presDot);
         var nameLink = el('a', null, label);
         nameLink.href = profileHref(other);
         headEl.appendChild(nameLink);
@@ -5110,31 +5468,66 @@
         if (!d.messages.length) {
           list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
         }
-        d.messages.forEach(function (m) { list.appendChild(dmRenderMsg(m, otherPub, shortName, other)); });
-        /* Live drop-in: a message pushed over the private user scope from THIS
-           other party lands at once. It mirrors the send path — appended when we
-           are on the page it lands on, else the badge rings (it is on a later
-           page). Their own echo (sender is me) is ignored. */
+        /* Read receipts: my own bubbles read "Delivered" until the other opens
+           them (opened_at is set at load, or a live dm-read event flips them to
+           "Seen"). Only my sent messages carry a receipt. */
+        var receipts = [];
+        function addReceipt(node, m) {
+          if (String(m.sender_hash) !== state.myHash) return;
+          var seen = !!m.opened_at;
+          var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : ''), seen ? '✓✓ Seen' : '✓ Delivered');
+          node.appendChild(r);
+          receipts.push({ created: Number(m.created_at) || 0, span: r });
+        }
+        function renderMsg(m) { var n = dmRenderMsg(m, otherPub, shortName, other); addReceipt(n, m); return n; }
+        d.messages.forEach(function (m) { list.appendChild(renderMsg(m)); });
+        /* The "…is typing" line, shown only while the other side is composing. */
+        var typingLine = el('p', 'dm-typing', shortName + ' is typing…');
+        typingLine.style.display = 'none';
+        var typingHideT = 0;
+        /* Live drop-in + presence/typing/receipt updates for this open thread.
+           A message pushed over the private user scope from THIS other party lands
+           at once (their own echo is ignored); presence toggles the header dot;
+           dm-read flips my bubbles to "Seen". */
         state.dmView = { other: other,
           setTtl: function (t) { if (expiryNote && expiryNote.mcSetTtl) expiryNote.mcSetTtl(t); },
+          setPresence: function (on) {
+            presDot.className = 'dm-dot ' + (on ? 'dm-dot-on' : 'dm-dot-off');
+            presDot.title = on ? 'Online' : 'Offline';
+          },
+          setTyping: function (on) {
+            clearTimeout(typingHideT);
+            if (on) { typingLine.style.display = ''; typingHideT = setTimeout(function () { typingLine.style.display = 'none'; }, 6000); }
+            else { typingLine.style.display = 'none'; }
+          },
+          markRead: function (at) {
+            var t = Number(at) || 0;
+            receipts.forEach(function (rc) {
+              if (rc.created <= t) { rc.span.textContent = '✓✓ Seen'; rc.span.className = 'dm-receipt dm-receipt-seen'; }
+            });
+          },
           append: function (msg) {
-          if (!msg || String(msg.sender_hash) === state.myHash) return;
-          var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
-          d.total += 1;
-          if (d.page === newMsgPage) {
-            var node = dmRenderMsg(msg, otherPub, shortName, other);
-            list.appendChild(node);
-            node.scrollIntoView();
-          } else {
-            liveDmBadge();
-          }
-        } };
+            if (!msg || String(msg.sender_hash) === state.myHash) return;
+            clearTimeout(typingHideT); typingLine.style.display = 'none';   // a real message ends "typing"
+            var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
+            d.total += 1;
+            if (d.page === newMsgPage) {
+              var node = renderMsg(msg);
+              list.appendChild(node);
+              node.scrollIntoView();
+            } else {
+              liveDmBadge();
+            }
+          } };
+        /* Watch the other party's online state live (the DO seeds it now). */
+        if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + other]);
         var dmPages = Math.max(1, Math.ceil(d.total / d.per));
         function dmHref(i) { return 'messages.html?dm=' + other + '&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, dmHref);
         if (topBar) section.insertBefore(topBar, list);
         var botBar = pageBar(d.total, d.per, d.page, dmHref);
         if (botBar) section.appendChild(botBar);
+        section.appendChild(typingLine);
         var form = el('div', 'comment-form');
         var ta = el('textarea', 'comment-text');
         ta.maxLength = 4000;
@@ -5142,6 +5535,16 @@
         ta.placeholder = 'Write your message.';
         form.appendChild(mdEditor(ta));
         attachDraft(ta, 'dm:' + other);
+        /* Sparing typing signal: a "start" at most once per 3s while composing,
+           a "stop" 4s after the last keystroke. WebSocket only — no HTTP. */
+        var typingLastSent = 0, typingStopT = 0;
+        ta.addEventListener('input', function () {
+          if (!(window.mcLive && window.mcLive.member)) return;
+          var now = Date.now();
+          if (now - typingLastSent > 3000) { window.mcLive.member.typing(other, 'start'); typingLastSent = now; }
+          clearTimeout(typingStopT);
+          typingStopT = setTimeout(function () { window.mcLive.member.typing(other, 'stop'); typingLastSent = 0; }, 4000);
+        });
         form.appendChild(el('div', 'ts-slot'));
         var btnRow = el('div', 'comment-buttons');
         var send = el('button', 'btn btn-send', 'Send');
@@ -7059,6 +7462,23 @@
         bsInp.value = String(Number(s.dm_backstop_days) || 30);
         bsRow.appendChild(bsInp);
         wrap.appendChild(bsRow);
+        /* Public posts (walls + feed): they persist forever unless auto-prune is on. */
+        wrap.appendChild(el('h3', null, 'Public posts (walls & feed)'));
+        var wpEnRow = el('p', 'admin-set-row');
+        var wpEn = el('input'); wpEn.type = 'checkbox'; wpEn.checked = s.wall_prune_enabled === '1';
+        wpEnRow.appendChild(wpEn);
+        wpEnRow.appendChild(document.createTextNode(' Automatically delete old public posts (off = keep forever)'));
+        wrap.appendChild(wpEnRow);
+        var wpRow = el('p', 'admin-set-row');
+        wpRow.appendChild(document.createTextNode('Delete public posts older than: '));
+        var wpSel = el('select');
+        (d.wall_prune_options || [90, 180, 365]).forEach(function (n) {
+          var o = el('option', null, n + ' days'); o.value = String(n);
+          if (Number(s.wall_prune_days) === n) o.selected = true;
+          wpSel.appendChild(o);
+        });
+        wpRow.appendChild(wpSel);
+        wrap.appendChild(wpRow);
         var saveBtn = el('button', 'btn btn-send', 'Save settings');
         saveBtn.type = 'button';
         var saveStatus = el('p', 'form-status');
@@ -7071,6 +7491,8 @@
               media_max_bytes: String(Math.round((Number(szInp.value) || 25) * 1048576)),
               dm_default_ttl: ttlSel.value,
               dm_backstop_days: bsInp.value,
+              wall_prune_enabled: wpEn.checked ? '1' : '0',
+              wall_prune_days: wpSel.value,
             } }) }).then(function (r) { return r.json(); }).then(function (d2) {
             saveBtn.disabled = false;
             saveStatus.textContent = d2 && d2.ok ? 'Saved.' : ((d2 && d2.error) || 'Save failed.');
@@ -7091,6 +7513,17 @@
           });
         }));
         wrap.appendChild(purgeP);
+        var wprP = el('p', 'board-audit-link');
+        wprP.appendChild(identityAction('Prune public posts now', function () {
+          appConfirm('Delete public posts and their media older than the retention set above, right now? This cannot be undone.', { okLabel: 'Prune now', danger: true }, function (ok) {
+            if (!ok) return;
+            fetch(API + '/wall/prune', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d4) {
+              wprP.appendChild(el('span', 'form-status', d4 && d4.ok ? (' Deleted ' + d4.deleted + ' posts.') : ' Prune failed.'));
+            }).catch(function () { wprP.appendChild(el('span', 'form-status', ' Prune failed.')); });
+          });
+        }));
+        wrap.appendChild(wprP);
       })
       .catch(function () { wrap.textContent = 'The settings could not be loaded.'; });
   }
@@ -7214,6 +7647,7 @@
     if (params.get('merecatthread')) return { tag: 'MerecatThread', s: params.get('merecatthread') };
     if (params.get('merecatthreads') !== null) return { tag: 'MerecatThreads' };
     if (params.get('merecat')) return { tag: 'Merecat' };
+    if (params.get('feed')) return { tag: 'Feed' };
     if (params.get('notifications')) return { tag: 'Notifications' };
     if (params.get('inbox')) return { tag: 'Inbox' };
     if (params.get('users')) return { tag: 'Users' };
@@ -7221,6 +7655,7 @@
     if (params.get('dm')) return { tag: 'Dm', s: params.get('dm') };
     if (params.get('me')) return { tag: 'Me' };
     if (params.get('profile')) return { tag: 'Profile', s: params.get('profile') };
+    if (params.get('post')) return { tag: 'Post', s: params.get('post') };
     if (params.get('audit')) return { tag: 'Audit' };
     var topic = Number(params.get('topic'));
     if (Number.isInteger(topic) && topic > 0) return { tag: 'Topic', n: topic };
@@ -7258,9 +7693,8 @@
     }
     if (page === 'profile.html') {
       var u = params.get('u') || params.get('profile');
-      if (u) return viewProfile(u);                 // anyone's profile is a public read
-      if (!isMember()) return viewJoin('your profile');
-      return viewProfile(state.myHash);
+      if (!isMember()) return viewJoin(u ? "view members' profiles" : 'set up your profile');
+      return viewProfile(u || state.myHash);        // members-only: profiles need a login now
     }
     if (page === 'merecat-ai.html') {
       /* Logged-out merecat gets the SAME clean join prompt + registration modal as
@@ -7292,6 +7726,8 @@
       case 'Users': return viewUsers();
       case 'Search': return viewSearch();
       case 'Audit': return viewAudit();
+      case 'Feed': return isMember() ? viewFeed() : viewJoin('see and post to the community feed');
+      case 'Post': return isMember() ? viewPost(Number(r.s)) : viewJoin('view this post');
       case 'Topic': return viewTopic(r.n);
       case 'Cat': return viewCat(r.s);
       default: return viewIndex();

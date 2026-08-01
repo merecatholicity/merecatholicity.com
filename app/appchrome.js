@@ -31,6 +31,7 @@ const ICON = {
 const TABS = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
   { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
+  { key: 'feed', label: 'Feed', icon: '📰', href: 'community.html?feed=1' },
   { key: 'community', label: 'Community', svg: 'community', href: 'community.html', hero: true },
   { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'messages.html', badge: 'dm' },
   { key: 'profile', label: 'Profile', svg: 'profile', href: 'profile.html' },
@@ -73,7 +74,7 @@ function activeTab() {
   if (path === 'merecat-ai.html') return 'merecat';
   if (path === 'messages.html') return 'messages';
   if (path === 'profile.html') return 'profile';
-  if (path === 'community.html') return 'community';
+  if (path === 'community.html') return /[?&]feed=1\b/.test(location.search) ? 'feed' : 'community';
   return '';
 }
 
@@ -249,9 +250,16 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false } };
-  constructor() { super(); this.keyShown = false; this.theme = this._theme(); this.copied = false; this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal'; }
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, presence: { attribute: false } };
+  constructor() { super(); this.keyShown = false; this.theme = this._theme(); this.copied = false; this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal'; this.presence = this._presence(); }
   createRenderRoot() { return this; }
+  _presence() { try { return localStorage.getItem('mc-presence') === 'off' ? 'off' : 'auto'; } catch (e) { return 'auto'; } }
+  togglePresence() {
+    const n = this.presence === 'off' ? 'auto' : 'off';
+    try { localStorage.setItem('mc-presence', n); } catch (e) { /* blocked */ }
+    if (window.mcLive && window.mcLive.member && window.mcLive.member.setPresence) window.mcLive.member.setPresence(n);
+    this.presence = n;
+  }
   _theme() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
   toggleTheme() {
     const n = this.theme === 'dark' ? 'light' : 'dark';
@@ -291,6 +299,9 @@ class McSettings extends LitElement {
       <h3 class="mc-set-sec">Account</h3>
       ${k ? html`
         ${link('profile.html', 'My profile', 'Edit your name, faith, avatar')}
+        <button class="mc-set-row mc-set-btn" @click=${() => this.togglePresence()}>
+          <span>Show when I'm online<small>${this.presence === 'off' ? 'Appear offline' : 'Automatic'}</small></span>
+          <span class=${'mc-set-switch' + (this.presence !== 'off' ? ' on' : '')}><span class="mc-set-knob"></span></span></button>
         <button class="mc-set-row mc-set-btn" @click=${() => { this.keyShown = !this.keyShown; }}>
           <span>Show my key<small>Your one login secret — save it somewhere safe</small></span><span class="mc-set-go">${this.keyShown ? '▾' : '›'}</span></button>
         ${this.keyShown ? html`<div class="mc-set-key">
@@ -356,11 +367,14 @@ class McNotifs extends LitElement {
     const name = (it) => it.actor_nick || (it.actor_hash && window.mcCore ? window.mcCore.displayName(it.actor_hash) : 'Someone');
     return wrap(html`${this.items.map((it) => {
       const isDm = it.kind === 'dm';
+      const isWall = it.kind === 'wall';
       const who = name(it);
       const label = isDm ? (who + ' sent you a message')
-        : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+        : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+          : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
       const to = isDm ? ('messages.html?dm=' + it.actor_hash)
-        : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+        : isWall ? ('community.html?post=' + it.comment_id)
+          : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
       return html`<a class=${'mc-notifs-row' + (it.read_at ? '' : ' mc-notifs-new')} href=${to}>${label}</a>`;
     })}`);
   }

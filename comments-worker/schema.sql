@@ -173,14 +173,17 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- new reply in a thread the recipient watches; 'mention' is an @mention; 'dm' is
 -- a direct message (so a DM shows in the notifications list, not only the inbox
 -- badge — coalesced to one unread row per sender, carrying topic_id/comment_id 0
--- and jumping to the conversation). The read watermark is a single stamp
--- (read_at NULL = unread), same idiom as the DM read stamps; opening the
--- notifications list stamps them all read. For reply/mention, topic_id is the
--- thread to open and comment_id the exact post to jump to.
+-- and jumping to the conversation); 'wall' is a public-post mention or a comment
+-- on your post (comment_id = the wall_posts id, jumps to ?post=<id>). The read
+-- watermark is a single stamp (read_at NULL = unread), same idiom as the DM read
+-- stamps; opening the notifications list stamps them all read. For reply/mention,
+-- topic_id is the thread to open and comment_id the exact post to jump to.
+-- (Adding the 'wall' kind on an existing DB is a table rebuild — SQLite cannot
+-- ALTER a CHECK: create a new table with the widened CHECK, copy rows, swap.)
 CREATE TABLE IF NOT EXISTS notifications (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   recipient_hash TEXT NOT NULL,
-  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention','dm')),
+  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention','dm','wall')),
   topic_id       INTEGER NOT NULL,
   comment_id     INTEGER NOT NULL,
   actor_hash     TEXT,
@@ -316,3 +319,52 @@ CREATE TABLE IF NOT EXISTS app_settings (
   updated_at INTEGER,
   updated_by TEXT
 );
+
+-- ---- Public posting: walls + the global feed ----------------------------------
+-- A "wall" is a member's own stream of PUBLIC posts. You post only to your own
+-- wall (author_hash IS the wall owner); a post shows on the author's wall AND in
+-- the global feed. Unlike DMs these are public and UNencrypted, and they persist
+-- INDEFINITELY unless the admin enables auto-prune (see app_settings wall_prune_*).
+-- status mirrors comments: 'live' | 'pending' (held by the AI screen) | 'deleted'.
+-- media_key/media_size point at an optional attachment in the WALLMEDIA bucket
+-- (served publicly, same-origin). comments is a denormalized live-comment count.
+CREATE TABLE IF NOT EXISTS wall_posts (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  author_hash TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  edited_at   INTEGER,
+  status      TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live','pending','deleted')),
+  media_key   TEXT,
+  media_size  INTEGER,
+  comments    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS wall_posts_feed_idx ON wall_posts(created_at);
+CREATE INDEX IF NOT EXISTS wall_posts_author_idx ON wall_posts(author_hash, created_at);
+
+-- A comment on a public post (text + optional media). Any member may comment on
+-- any post. Swept with its post by the prune / delete paths (no FK cascade in D1,
+-- so deletes are explicit).
+CREATE TABLE IF NOT EXISTS wall_comments (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id     INTEGER NOT NULL,
+  author_hash TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live','pending','deleted')),
+  media_key   TEXT,
+  media_size  INTEGER
+);
+CREATE INDEX IF NOT EXISTS wall_comments_post_idx ON wall_comments(post_id, id);
+
+-- R2 accounting for public post/comment media (mirrors dm_media). key = the
+-- opaque 'wall/<hex>' object id; ref_type 'post'|'comment' + ref_id link it (NULL
+-- until the post/comment that carries it is saved; orphan-pruned after an hour).
+CREATE TABLE IF NOT EXISTS wall_media (
+  key        TEXT PRIMARY KEY,
+  size       INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  ref_type   TEXT,
+  ref_id     INTEGER
+);
+CREATE INDEX IF NOT EXISTS wall_media_ref_idx ON wall_media(ref_type, ref_id);
