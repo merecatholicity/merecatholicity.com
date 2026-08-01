@@ -2454,15 +2454,29 @@ const WALL_PER_PAGE = 20;
 // Object-key shape: wall/<kind>/<64hex>, kind i=image v=video a=audio (the client
 // picks <img>/<video>/<audio> from the kind — no mime column or JOIN needed).
 const WALL_MEDIA_RE = /^wall\/[iva]\/[0-9a-f]{64}$/;
-const WALL_POST_COLS = 'p.id, p.author_hash, pr.nick, pr.avatar, pr.faith, p.body, p.created_at, p.edited_at, p.media_key, p.media_size, p.comments';
+const WALL_POST_COLS = 'p.id, p.author_hash, pr.nick, pr.avatar, pr.faith, p.body, p.created_at, p.edited_at, p.media_key, p.media_size, p.comments, (SELECT COUNT(*) FROM wall_likes wl WHERE wl.post_id = p.id) AS likes';
 const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.avatar, pr.faith, c.body, c.created_at, c.media_key, c.media_size';
 
 /* Add the author display fields (assigned pseudonym + rank) the client renders,
    mirroring the forum's withNames. nick/avatar/faith are already joined in. */
-async function wallEnrich(env, rows) {
+async function wallEnrich(env, rows, me) {
   const list = rows || [];
   const counts = await postCountsFor(env, list.map((r) => r.author_hash));
-  return list.map((r) => withNames(r, counts[r.author_hash] || 0));
+  /* Which of these POST rows the viewer has liked. A post row carries the `likes`
+     COUNT (from WALL_POST_COLS); a comment row does not, so it never gets a like
+     flag. One batched point-lookup over the post ids. */
+  let liked = new Set();
+  const postIds = list.filter((r) => r.likes !== undefined && r.likes !== null).map((r) => r.id);
+  if (me && postIds.length) {
+    const ph = postIds.map((_, i) => '?' + (i + 2)).join(',');
+    const lr = await env.DB.prepare('SELECT post_id FROM wall_likes WHERE author_hash = ?1 AND post_id IN (' + ph + ')').bind(me, ...postIds).all();
+    liked = new Set((lr.results || []).map((x) => x.post_id));
+  }
+  return list.map((r) => {
+    const out = withNames(r, counts[r.author_hash] || 0);
+    if (r.likes !== undefined && r.likes !== null) { out.likes = Number(r.likes) || 0; out.liked = liked.has(r.id) ? 1 : 0; }
+    return out;
+  });
 }
 
 /* The wall's own notifications (kind 'wall', comment_id = the post id, jumps to
@@ -2549,7 +2563,7 @@ async function handleWallFeed(request, env) {
     ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND p.id < ?1 ORDER BY p.id DESC LIMIT ?2").bind(cursor, WALL_PER_PAGE).all()
     : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' ORDER BY p.id DESC LIMIT ?1").bind(WALL_PER_PAGE).all();
   const list = rows.results || [];
-  const posts = await wallEnrich(env, list);
+  const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
   return json({ ok: true, posts, next, me: r.me }, 200);
 }
@@ -2567,7 +2581,7 @@ async function handleWall(request, env) {
     ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND p.id < ?2 ORDER BY p.id DESC LIMIT ?3").bind(hash, cursor, WALL_PER_PAGE).all()
     : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' ORDER BY p.id DESC LIMIT ?2").bind(hash, WALL_PER_PAGE).all();
   const list = rows.results || [];
-  const posts = await wallEnrich(env, list);
+  const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
   return json({ ok: true, posts, next, me: r.me, hash }, 200);
 }
@@ -2582,8 +2596,71 @@ async function handleWallPostGet(request, env) {
   const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live'").bind(id).first();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
   const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' ORDER BY c.id").bind(id).all();
-  const enriched = await wallEnrich(env, [post].concat(crows.results || []));
+  const enriched = await wallEnrich(env, [post].concat(crows.results || []), r.me);
   return json({ ok: true, post: enriched[0], comments: enriched.slice(1), me: r.me }, 200);
+}
+
+/* Like or unlike a public post — a lightweight toggle: READ_LIMIT (not the post
+   budget), no Turnstile, gated like any write (key + blockedReason). Liking
+   notifies the post author (coalesced, Facebook style); unliking before it is
+   read retracts that notification. Returns the fresh {liked, likes}. */
+async function handleWallLike(request, env, ctx) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Sign in to like.' }, 401);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const postId = Math.floor(Number(data.post || data.id) || 0);
+  const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first();
+  if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
+  const want = !(data.like === false || data.like === 0 || data.like === 'false');   // default: like
+  const now = Math.floor(Date.now() / 1000);
+  if (want) {
+    const r = await env.DB.prepare('INSERT OR IGNORE INTO wall_likes (post_id, author_hash, created_at) VALUES (?1, ?2, ?3)').bind(postId, me, now).run();
+    /* Notify only on a genuinely NEW like (changes>0, not a repeat), never for
+       your own post, never the bot. */
+    if (r.meta && r.meta.changes > 0 && post.author_hash && post.author_hash !== me && post.author_hash !== MERECAT_BOT.hash) {
+      if (ctx) ctx.waitUntil(notifyWallLike(env, post.author_hash, me, postId));
+      else await notifyWallLike(env, post.author_hash, me, postId);
+    }
+  } else {
+    await env.DB.prepare('DELETE FROM wall_likes WHERE post_id = ?1 AND author_hash = ?2').bind(postId, me).run();
+    /* Retract the like-notification if the author has not seen it yet (a read one
+       stays, Facebook style). */
+    try {
+      await env.DB.prepare("DELETE FROM notifications WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?2 AND comment_id = ?3 AND read_at IS NULL")
+        .bind(post.author_hash, me, postId).run();
+    } catch (e) { /* never break the unlike */ }
+  }
+  const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM wall_likes WHERE post_id = ?1').bind(postId).first();
+  return json({ ok: true, liked: want ? 1 : 0, likes: (c && c.n) || 0 }, 200);
+}
+
+/* Coalesced like-notification (mirror of notifyDm): one unread row per
+   (recipient, actor, post), so re-liking while unread never duplicates, but two
+   different posts liked by the same person are two rows. Bell rings only on a
+   fresh insert; a live push tells the author's open tab. */
+async function notifyWallLike(env, toHash, fromHash, postId) {
+  try {
+    if (!toHash || !fromHash || toHash === fromHash) return;
+    const now = Math.floor(Date.now() / 1000);
+    const r = await env.DB.prepare(
+      "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
+      "SELECT ?1, 'wall-like', 0, ?2, ?3, ?4 WHERE NOT EXISTS (" +
+      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?3 AND comment_id = ?2 AND read_at IS NULL)"
+    ).bind(toHash, postId, fromHash, now).run();
+    if (r.meta && r.meta.changes > 0) {
+      await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
+        kind: 'wall-like', topic_id: 0, comment_id: postId, actor_hash: fromHash, created_at: now }]);
+    }
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'notify_wall_like_failed', error: String(e) }));
+  }
 }
 
 /* Validate an attached media_key: it must be an unlinked wall_media row. Returns
@@ -2833,11 +2910,11 @@ async function handleNotifList(request, env) {
   const rows = await env.DB.prepare(
     'SELECT n.id, n.kind, n.topic_id, n.comment_id, n.actor_hash, n.created_at, n.read_at, ' +
     't.title AS topic_title, pr.nick AS actor_nick, ' +
-    "CASE WHEN n.kind = 'wall' THEN substr(wp.body, 1, 140) ELSE substr(c.body, 1, 140) END AS snippet " +
+    "CASE WHEN n.kind IN ('wall','wall-like') THEN substr(wp.body, 1, 140) ELSE substr(c.body, 1, 140) END AS snippet " +
     'FROM notifications n ' +
-    "LEFT JOIN comments t ON t.id = n.topic_id AND n.kind != 'wall' " +
-    "LEFT JOIN comments c ON c.id = n.comment_id AND n.kind != 'wall' " +
-    "LEFT JOIN wall_posts wp ON wp.id = n.comment_id AND n.kind = 'wall' " +
+    "LEFT JOIN comments t ON t.id = n.topic_id AND n.kind NOT IN ('wall','wall-like') " +
+    "LEFT JOIN comments c ON c.id = n.comment_id AND n.kind NOT IN ('wall','wall-like') " +
+    "LEFT JOIN wall_posts wp ON wp.id = n.comment_id AND n.kind IN ('wall','wall-like') " +
     'LEFT JOIN profiles pr ON pr.hash = n.actor_hash ' +
     'WHERE n.recipient_hash = ?1 ORDER BY n.id DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, NOTIF_PER_PAGE, (p - 1) * NOTIF_PER_PAGE).all();
@@ -3546,6 +3623,16 @@ async function pruneNotifications(env) {
     console.log(JSON.stringify({ event: 'notif_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
   } catch (e) {
     console.log(JSON.stringify({ event: 'notif_orphan_sweep_failed', error: String(e) }));
+  }
+  try {
+    /* Wall notifications ('wall' comment/mention, 'wall-like') carry comment_id =
+       the post id; sweep any whose post is gone. */
+    const r = await env.DB.prepare(
+      "DELETE FROM notifications WHERE kind IN ('wall','wall-like') AND comment_id NOT IN (SELECT id FROM wall_posts)"
+    ).run();
+    console.log(JSON.stringify({ event: 'notif_wall_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'notif_wall_orphan_sweep_failed', error: String(e) }));
   }
   try {
     const r = await env.DB.prepare(
@@ -6109,6 +6196,7 @@ export default {
       if (path === '/api/comments/wall/post/get' && request.method === 'POST') return await handleWallPostGet(request, env);
       if (path === '/api/comments/wall/comment' && request.method === 'POST') return await handleWallComment(request, env, ctx);
       if (path === '/api/comments/wall/delete' && request.method === 'POST') return await handleWallDelete(request, env);
+      if (path === '/api/comments/wall/like' && request.method === 'POST') return await handleWallLike(request, env, ctx);
       if (path === '/api/comments/wall/prune' && request.method === 'POST') return await handleWallPrune(request, env);
       if (path === '/api/comments/wall/media' && request.method === 'GET') return await handleWallMediaGet(request, env, url);
       if (path === '/api/comments/wall/media' && request.method === 'POST') return await handleWallMediaUpload(request, env);

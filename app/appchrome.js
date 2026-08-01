@@ -458,12 +458,14 @@ class McNotifs extends LitElement {
     return wrap(html`${this.items.map((it) => {
       const isDm = it.kind === 'dm';
       const isWall = it.kind === 'wall';
+      const isLike = it.kind === 'wall-like';
       const who = name(it);
       const label = isDm ? (who + ' sent you a message')
-        : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-          : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+        : isLike ? (who + ' liked your post')
+          : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+            : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
       const to = isDm ? ('messages.html?dm=' + it.actor_hash)
-        : isWall ? ('community.html?post=' + it.comment_id)
+        : (isWall || isLike) ? ('community.html?post=' + it.comment_id)
           : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
       return html`<a class=${'mc-notifs-row' + (it.read_at ? '' : ' mc-notifs-new')} href=${to}>${label}</a>`;
     })}`);

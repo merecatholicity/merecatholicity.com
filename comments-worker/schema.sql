@@ -198,12 +198,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS profiles_handle ON profiles(handle);
 -- watermark is a single stamp (read_at NULL = unread), same idiom as the DM read
 -- stamps; opening the notifications list stamps them all read. For reply/mention,
 -- topic_id is the thread to open and comment_id the exact post to jump to.
--- (Adding the 'wall' kind on an existing DB is a table rebuild — SQLite cannot
--- ALTER a CHECK: create a new table with the widened CHECK, copy rows, swap.)
+-- (Adding a kind — 'wall', 'wall-like' — on an existing DB is a table rebuild:
+-- SQLite cannot ALTER a CHECK, so create a new table with the widened CHECK, copy
+-- rows, swap. 'wall'/'wall-like' carry comment_id = the wall post id.)
 CREATE TABLE IF NOT EXISTS notifications (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   recipient_hash TEXT NOT NULL,
-  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention','dm','wall')),
+  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention','dm','wall','wall-like')),
   topic_id       INTEGER NOT NULL,
   comment_id     INTEGER NOT NULL,
   actor_hash     TEXT,
@@ -388,3 +389,16 @@ CREATE TABLE IF NOT EXISTS wall_media (
   ref_id     INTEGER
 );
 CREATE INDEX IF NOT EXISTS wall_media_ref_idx ON wall_media(ref_type, ref_id);
+
+-- A "like" on a public wall post: one per member per post. The composite PK makes
+-- the toggle idempotent (like = INSERT OR IGNORE, unlike = DELETE on the full key)
+-- and already indexes both hot paths — the per-post count (WHERE post_id=?) and the
+-- "did I like it" point lookup — so no extra index is needed. Public and
+-- unencrypted like the posts; the count is computed from this table, not stored.
+-- Swept with its post (no FK cascade in D1 — deletes are explicit / orphan-pruned).
+CREATE TABLE IF NOT EXISTS wall_likes (
+  post_id     INTEGER NOT NULL,
+  author_hash TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (post_id, author_hash)
+);
