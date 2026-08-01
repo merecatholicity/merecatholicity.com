@@ -4533,30 +4533,34 @@
     function pushAvatar(img, mode) {
       var iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
       if (!iw || !ih) { avNote.textContent = 'That image could not be read. Try another.'; return; }
+      /* Rasterize to a fixed square. Larger than the old 400px so an upload keeps
+         more detail; the CSS caps the display size, and the worker accepts any
+         square in its range. */
+      var AV = 512;
       var c = document.createElement('canvas');
-      c.width = 400;
-      c.height = 400;
+      c.width = AV;
+      c.height = AV;
       var ctx = c.getContext('2d');
       if (mode === 'contain') {
         ctx.fillStyle = '#faf6ee';
-        ctx.fillRect(0, 0, 400, 400);
-        var box = 400 * 0.82;
+        ctx.fillRect(0, 0, AV, AV);
+        var box = AV * 0.82;
         var s = Math.min(box / iw, box / ih);
         var cw = iw * s, ch = ih * s;
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, (400 - cw) / 2, (400 - ch) / 2, cw, ch);
+        ctx.drawImage(img, (AV - cw) / 2, (AV - ch) / 2, cw, ch);
       } else {
-        var scale = Math.max(400 / iw, 400 / ih);
+        var scale = Math.max(AV / iw, AV / ih);
         var w = iw * scale, h = ih * scale;
-        ctx.drawImage(img, (400 - w) / 2, (400 - h) / 2, w, h);
+        ctx.drawImage(img, (AV - w) / 2, (AV - h) / 2, w, h);
       }
       /* JPEG, so the stored bytes decode cleanly for both the AI vision screen
          and every browser; a lower-quality second pass is the net for the rare
          frame that overruns the cap. */
       var send = function (blob) {
-        if (!blob || blob.size > 500 * 1024) {
-          avNote.textContent = 'The image could not be brought under 500 KB. Try another.';
+        if (!blob || blob.size > 1024 * 1024) {
+          avNote.textContent = 'The image could not be brought under 1 MB. Try another.';
           return;
         }
         avNote.textContent = 'Verifying...';
@@ -4580,7 +4584,7 @@
         });
       };
       c.toBlob(function (blob) {
-        if (blob && blob.size <= 500 * 1024) return send(blob);
+        if (blob && blob.size <= 1024 * 1024) return send(blob);
         c.toBlob(send, 'image/jpeg', 0.7);
       }, 'image/jpeg', 0.85);
     }
@@ -4631,7 +4635,7 @@
     card.appendChild(gallery);
 
     card.appendChild(el('p', 'profile-empty',
-      'Upload a JPEG (cropped square to 400 by 400 pixels, 500 KB at most) or pick a ready-made from the gallery. ' +
+      'Upload a JPEG (cropped to a square, 1 MB at most) or pick a ready-made from the gallery. ' +
       (p.avatar ? 'Either choice replaces your current avatar.' : '')));
     card.appendChild(avNote);
     if (p.avatar) {
@@ -7765,6 +7769,15 @@
     section.textContent = '';
     var params = new URLSearchParams(location.search);
     var page = location.pathname.split('/').pop() || 'index.html';
+
+    /* Pretty profile URL: /@handle is served as profile.html by an edge rewrite,
+       so the browser keeps the pretty path. Read the handle straight from it and
+       resolve to the member (same path as ?u=<handle>). */
+    var atMatch = location.pathname.match(/^\/@([A-Za-z0-9_]+)\/?$/);
+    if (atMatch) {
+      if (!isMember()) return viewJoin("view members' profiles");
+      return viewProfileByHandle(atMatch[1].toLowerCase());
+    }
 
     /* The platform split (2026-08): direct messages, the profile, and the AI each
        live on their own page now. They all boot this same client — route by page. */
