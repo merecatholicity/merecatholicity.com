@@ -346,7 +346,8 @@ Plus: bump `app.js?v=N` in `docs/nav.js` iff `docs/app.js` bytes changed.
 | Phase | Domain | Status | Classic fallback |
 |------|--------|--------|------------------|
 | 0 | `Domain.Rank` (toolchain + seam proof) | **shipped** (df2a065) | retained — it is the genuine no-bundle path (app disabled / storage blocked ⇒ no `window.mcCore`); deletes at Wave F when `comments.js` itself dissolves into the bundle, not before |
-| 1 | `Domain.Scripture` (client) | planned | — |
+| 1a | `Domain.Scripture` — table + autolink regex (client) | **shipped** (8d3ebe4) | app/richtext.js retired onto Core.bibleSrc/bookSlug; the comments.js copy + worker copies remain (1b / Phase 6) |
+| 1b | `Domain.Scripture` — VerseRef parser + anchor; retire the comments.js copy | planned | — |
 | 2 | `Domain.Profile` (drift-killer), Faith, dmScore, pagerPages, emoji, cats, TTLs | planned | — |
 | 3 | `Domain.Access` (permissions), `Domain.Live` (live-event decisions), search/route, library model | planned | — |
 | 4 | Application state = State + Events + Transitions (auth ADT, notifications, mute) | planned | — |
