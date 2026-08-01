@@ -30,6 +30,15 @@ import {
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 import { createPusher } from './webpush.js';
 
+/* Worker environment bindings (D1 databases, R2 buckets, Vectorize, Workers AI,
+   Durable Object namespaces, rate limiters) plus string vars/secrets. Typed
+   loosely (index signature) on purpose — this is a typing pass, not a
+   binding-by-binding audit, and every access site already treats env as
+   whatever-shape-it-needs-to-be at runtime. */
+interface Env {
+  [key: string]: any;
+}
+
 const PAGES = [
   '/book.html',
   '/charting-communions.html',
@@ -54,7 +63,7 @@ const BOARD_CATS = Board.catKeys;
    (a retraction from public view, not a move the poster can follow). */
 const ADMIN_CAT = Board.adminCat;
 
-function boardKey(raw) {
+function boardKey(raw: any) {
   const m = /^board:([a-z]+)$/.exec(String(raw || ''));
   return m && BOARD_CATS.includes(m[1]) ? raw : null;
 }
@@ -63,7 +72,7 @@ function boardKey(raw) {
    move-notice DM). Overridable per deployment via the SITE var; the constant is
    the production default so prod behaves identically when the var is unset. */
 const SITE = 'https://merecatholicity.com';
-function siteBase(env) { return (env && env.SITE) || SITE; }
+function siteBase(env: any) { return (env && env.SITE) || SITE; }
 const MAX_BODY = 4000;
 /* Ciphertext cap for an end-to-end-encrypted DM: base64url of a MAX_BODY-sized
    plaintext plus the nonce/tag and the "E1." header, with generous headroom. The
@@ -86,8 +95,8 @@ const NOTIF_PER_PAGE = 20;
 /* The faith declaration every member picks at signup: one of three, stored as
    a short code, its display wording owned by the client. Kept in step with the
    FAITH map in comments.js. */
-const FAITHS = Faith.faithList.map((f) => f.code);   // single-sourced from Domain.Faith
-function cleanFaith(raw) {
+const FAITHS = Faith.faithList.map((f: any) => f.code);   // single-sourced from Domain.Faith
+function cleanFaith(raw: any) {
   const v = String(raw || '').trim();
   return FAITHS.includes(v) ? v : null;
 }
@@ -108,7 +117,7 @@ const displayName = Pseudonym.displayName;
 /* The rank ladder is single-sourced from the PureScript Domain.Rank — the very
    module the client bundles (CLAUDE.md). rankFor erases the Rank
    ADT to its label. This retires the RANKS/rankFor copy that used to live here. */
-function rankFor(n) {
+function rankFor(n: any) {
   return Rank.rankLabel(Rank.rankFor((Number(n) || 0) | 0));
 }
 
@@ -116,7 +125,7 @@ function rankFor(n) {
    pseudonym the client would otherwise derive itself (displayName), and `rank`
    the ladder label — supplied whenever the post count is known. Additive: the
    existing `nick`/`posts` fields are unchanged. */
-function withNames(row, posts) {
+function withNames(row: any, posts?: any) {
   const out = Object.assign({}, row);
   out.assigned = row.author_hash ? displayName(row.author_hash) : null;
   if (posts != null) { out.posts = posts; out.rank = rankFor(posts); }
@@ -131,13 +140,13 @@ function withNames(row, posts) {
    against BOARD_CATS so the two rosters cannot drift. Single-sourced from
    Domain.Board.catRows, the same table the client renders. */
 const CAT_META = Board.catRows;
-const FAITH_LABELS = Object.fromEntries(Faith.faithList.map((f) => [f.code, f.label]));
+const FAITH_LABELS = Object.fromEntries(Faith.faithList.map((f: any) => [f.code, f.label]));
 /* Emoji packs + named-alias tokens single-sourced from Domain.Emoji (the same
    data the client renders); the building code (whitelist derive, alias pairing)
    is trivial and stays per-consumer. */
 const EMOJI_PACKS = Emoji.packs;
 const NAMED_EMOJI = (() => {
-  const out = {};
+  const out: any = {};
   const toks = Emoji.namedTokens.trim().split(/\s+/);
   for (let i = 0; i < toks.length; i += 2) out[toks[i]] = toks[i + 1];
   return out;
@@ -149,7 +158,7 @@ const NAMED_EMOJI = (() => {
 
 const enc = new TextEncoder();
 
-async function sha256hex(text) {
+async function sha256hex(text: any) {
   const digest = await crypto.subtle.digest('SHA-256', enc.encode(text));
   return [...new Uint8Array(digest)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
@@ -161,23 +170,23 @@ async function sha256hex(text) {
    separated) — e.g. to admit a staging host or a hybrid-app origin — and falls
    back to the production defaults when unset, so prod is unchanged. */
 const DEFAULT_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];
-function allowedOrigins(env) {
+function allowedOrigins(env: any) {
   const v = env && env.ALLOWED_ORIGINS;
   return v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_ORIGINS;
 }
-function originOk(request, env) {
+function originOk(request: any, env: any) {
   const o = request.headers.get('Origin');
   return !o || allowedOrigins(env).includes(o);
 }
 
-function json(body, status, headers) {
+function json(body: any, status?: any, headers?: any) {
   return new Response(JSON.stringify(body), {
     status: status,
     headers: { 'Content-Type': 'application/json', ...headers },
   });
 }
 
-function parseOS(ua) {
+function parseOS(ua: any) {
   if (/iphone|ipad|ipod/i.test(ua)) return 'iOS';
   if (/android/i.test(ua)) return 'Android';
   if (/windows nt/i.test(ua)) return 'Windows';
@@ -192,14 +201,14 @@ function parseOS(ua) {
    re-enable themselves if the table is ever emptied (a fresh or wiped DB), so the
    board can never be permanently locked out. Once the table holds anyone, it is
    the sole authority and every admin is an equal, removable row, owners included. */
-function rootAdmins(env) {
-  return (env.ADMIN_HASHES || '').split(',').map((s) => s.trim()).filter((h) => /^[0-9a-f]{64}$/.test(h));
+function rootAdmins(env: any) {
+  return (env.ADMIN_HASHES || '').split(',').map((s: any) => s.trim()).filter((h: any) => /^[0-9a-f]{64}$/.test(h));
 }
 
 /* Admin status is membership in the admins table. The env owners count only
    while the table is still empty (bootstrap), so a live board is governed
    entirely by the table and no admin is privileged over another. */
-async function isAdminHash(env, hash) {
+async function isAdminHash(env: any, hash: any) {
   if (!hash) return false;
   const row = await env.DB.prepare('SELECT 1 AS a FROM admins WHERE hash = ?1').bind(hash).first();
   if (row) return true;
@@ -213,7 +222,7 @@ async function isAdminHash(env, hash) {
 /* Fill the table from the env owners the first time the console needs it, so
    they show as ordinary, removable rows rather than a hidden privileged set. A
    no-op once anyone is in the table (including after owners are removed). */
-async function ensureAdminsSeeded(env) {
+async function ensureAdminsSeeded(env: any) {
   const any = await env.DB.prepare('SELECT 1 AS a FROM admins LIMIT 1').first();
   if (any) return;
   const now = Math.floor(Date.now() / 1000);
@@ -223,7 +232,7 @@ async function ensureAdminsSeeded(env) {
   }
 }
 
-function normalizePage(raw) {
+function normalizePage(raw: any) {
   let p = String(raw || '').split('?')[0].split('#')[0];
   if (!p.startsWith('/')) return null;
   if (p.endsWith('/')) p += 'index.html';
@@ -233,7 +242,7 @@ function normalizePage(raw) {
 
 /* Fails closed. A blip reaching siteverify refuses the post rather than
    crashing the worker or waving the post through unverified. */
-async function verifyTurnstile(env, token, ip, key) {
+async function verifyTurnstile(env: any, token: any, ip: any, key: any) {
   /* TEST BYPASS (interactive regression kit, webtest/live_kit.py): a designated
      throwaway test identity may skip Turnstile by presenting the shared secret as
      its token, so the two-user cloakbrowser suite can drive real writes (headless
@@ -243,18 +252,18 @@ async function verifyTurnstile(env, token, ip, key) {
      applies. Without the secrets set this whole branch is dead code. */
   if (env.MC_TEST_BYPASS && key && token === 'TEST:' + env.MC_TEST_BYPASS) {
     const h = await sha256hex(key);
-    if ((env.TEST_HASHES || '').split(',').map((s) => s.trim()).includes(h)) return true;
+    if ((env.TEST_HASHES || '').split(',').map((s: any) => s.trim()).includes(h)) return true;
   }
   try {
     const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
       method: 'POST',
       body: new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token, remoteip: ip }),
     });
-    const verdict = await res.json();
+    const verdict: any = await res.json();
     if (!verdict.success) return false;
     /* Defense in depth on top of the sitekey's own domain lock: if a host
        allow-list is configured, the token must have been solved on one. */
-    const allow = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h) => h.trim()).filter(Boolean);
+    const allow = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h: any) => h.trim()).filter(Boolean);
     if (allow.length && !allow.includes(verdict.hostname)) {
       console.log(JSON.stringify({ event: 'turnstile_hostname', hostname: verdict.hostname }));
       return false;
@@ -270,7 +279,7 @@ async function verifyTurnstile(env, token, ip, key) {
    pages read topic rows alone. Recomputed, never incremented, from the
    indexed replies whenever anything in the thread mutates, so the numbers
    cannot drift. */
-async function refreshTopicStats(env, topicId) {
+async function refreshTopicStats(env: any, topicId: any) {
   await env.DB.prepare(
     'UPDATE comments SET ' +
     "replies = (SELECT COUNT(*) FROM comments r WHERE r.parent_id = ?1 AND r.status = 'live'), " +
@@ -279,7 +288,7 @@ async function refreshTopicStats(env, topicId) {
   ).bind(topicId).run();
 }
 
-async function isTrusted(env, hash) {
+async function isTrusted(env: any, hash: any) {
   if (!hash) return false;
   const row = await env.DB.prepare('SELECT 1 AS t FROM trusted WHERE hash = ?1').bind(hash).first();
   return !!row;
@@ -293,7 +302,7 @@ async function isTrusted(env, hash) {
 
 /* Reverse-DNS one address via Cloudflare DoH JSON. Best-effort: the PTR
    hostname without its trailing dot, or null on any failure or timeout. */
-async function ptrLookup(ip) {
+async function ptrLookup(ip: any) {
   const name = reverseDnsName(ip);
   if (!name) return null;
   const ctl = new AbortController();
@@ -302,8 +311,8 @@ async function ptrLookup(ip) {
     const r = await fetch('https://cloudflare-dns.com/dns-query?type=PTR&name=' + encodeURIComponent(name),
       { headers: { accept: 'application/dns-json' }, signal: ctl.signal });
     if (!r.ok) return null;
-    const j = await r.json();
-    const ans = j && j.Answer && j.Answer.find((a) => a.type === 12);
+    const j: any = await r.json();
+    const ans = j && j.Answer && j.Answer.find((a: any) => a.type === 12);
     return ans && ans.data ? String(ans.data).replace(/\.$/, '') : null;
   } catch {
     return null;
@@ -317,7 +326,7 @@ async function ptrLookup(ip) {
    echo, the opposite-family address it reported (source 'claimed'). Stored
    under the normalized key so a ban on any one closes every door. Best-effort:
    a failure here must never break a post that already succeeded. */
-async function recordIps(env, hash, connIp, data) {
+async function recordIps(env: any, hash: any, connIp: any, data: any) {
   if (!hash) return;
   const now = Math.floor(Date.now() / 1000);
   const connFam = ipFamily(connIp);
@@ -351,7 +360,7 @@ async function recordIps(env, hash, connIp, data) {
    IP, or a legacy ban. Returns null when clear, else the reason a keyed
    endpoint hands back as {blocked}. Public reads never call this, so cached
    and anonymous browsing is untouched. */
-async function blockedReason(env, hash, ip) {
+async function blockedReason(env: any, hash: any, ip: any) {
   const row = await env.DB.prepare(
     "SELECT 'locked' AS r FROM locks WHERE hash = ?1 " +
     "UNION ALL SELECT 'ipban' FROM ip_bans WHERE ip = ?2 " +
@@ -360,7 +369,7 @@ async function blockedReason(env, hash, ip) {
   return row ? row.r : null;
 }
 
-function blockedJson(reason) {
+function blockedJson(reason: any) {
   return json({ ok: false, blocked: reason, error: 'Interaction is not available.' }, 403);
 }
 
@@ -368,7 +377,7 @@ function blockedJson(reason) {
    failure mode must be a delay for the poster, never a silent publish.
    A trusted author skips the screen entirely, though hold-all, the
    emergency brake, still holds everyone, and bans are checked upstream. */
-async function screen(env, body, trusted) {
+async function screen(env: any, body: any, trusted: any) {
   const mode = env.MODERATION_MODE || 'ai';
   if (mode === 'hold-all') return { status: 'pending', verdict: 'hold-all' };
   if (trusted) return { status: 'live', verdict: 'trusted' };
@@ -390,7 +399,7 @@ async function screen(env, body, trusted) {
 
 /* Where a human clicks to see the comment: the page anchor for site
    comments, the topic view for board posts. */
-function viewLink(env, page, id, parentId) {
+function viewLink(env: any, page: any, id: any, parentId: any) {
   if (page.indexOf('board:') === 0) {
     return siteBase(env) + '/community.html?topic=' + (parentId || id) + '#comment-' + id;
   }
@@ -405,7 +414,7 @@ function viewLink(env, page, id, parentId) {
    for the fresh one with ?fresh=1 and live as they always have. Anonymous
    readers ride a five-minute cache, their repeat views never reaching the
    worker at all. */
-function cacheHeader(url) {
+function cacheHeader(url: any) {
   return { 'Cache-Control': 'public, max-age=' + (url.searchParams.get('fresh') ? 60 : 300) };
 }
 
@@ -415,21 +424,21 @@ function cacheHeader(url) {
    autolink table, and the emoji whitelists — plus an explicit apiVersion. Public
    and edge-cacheable like every other read. Additive: nothing consumes it yet;
    the web client keeps its inline copies. */
-async function handleConfig(request, env, url) {
+async function handleConfig(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const custom = {};
-  for (const k of Object.keys(EMOJI_PACKS)) for (const [code, path] of EMOJI_PACKS[k]) custom[code] = path;
+  const custom: any = {};
+  for (const k of Object.keys(EMOJI_PACKS)) for (const [code, path] of (EMOJI_PACKS as any)[k]) custom[code] = path;
   return json({
     ok: true,
     apiVersion: 1,
     cats: CAT_META.filter((c) => BOARD_CATS.includes(c[0])).map((c, i) => {
-      const o = { key: c[0], label: c[1], blurb: c[2], order: i };
+      const o: any = { key: c[0], label: c[1], blurb: c[2], order: i };
       if (c[3]) o.link = { text: c[3], url: c[4] };
       return o;
     }),
-    faiths: FAITHS.map((code, i) => ({ code, label: FAITH_LABELS[code] || code, order: i })),
+    faiths: FAITHS.map((code: any, i: any) => ({ code, label: FAITH_LABELS[code] || code, order: i })),
     ranks: Rank.rankTable,
     pages: PAGES,
     bot_hash: MERECAT_BOT.hash,
@@ -438,7 +447,7 @@ async function handleConfig(request, env, url) {
   }, 200, cacheHeader(url));
 }
 
-async function handleGet(request, env, url) {
+async function handleGet(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -449,13 +458,13 @@ async function handleGet(request, env, url) {
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id LIMIT 500"
   ).bind(page).all();
-  const counts = await postCountsFor(env, (rows.results || []).map((r) => r.author_hash));
-  const comments = (rows.results || []).map((r) => withNames(r, counts[r.author_hash] || 0));
+  const counts = await postCountsFor(env, (rows.results || []).map((r: any) => r.author_hash));
+  const comments = (rows.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0));
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
 }
 
-async function handlePost(request, env, ctx) {
+async function handlePost(request: any, env: any, ctx: any) {
   let data;
   try {
     data = await request.json();
@@ -642,8 +651,8 @@ async function handlePost(request, env, ctx) {
    anyone already mentioned so no one is told twice for one post. One batch write. */
 /* Batch-load the per-type notification prefs for a set of recipients. A member
    with no profile row (or a NULL column) keeps the default (on). */
-async function notifyPrefsFor(env, hashes) {
-  const map = {};
+async function notifyPrefsFor(env: any, hashes: any) {
+  const map: any = {};
   const list = [...new Set((hashes || []).filter(Boolean))];
   for (let i = 0; i < list.length; i += 50) {
     const chunk = list.slice(i, i + 50);
@@ -656,13 +665,13 @@ async function notifyPrefsFor(env, hashes) {
   return map;
 }
 /* Is a kind enabled for this recipient? NULL / missing profile = on (default). */
-function notifyEnabled(prefRow, kind) {
+function notifyEnabled(prefRow: any, kind: any) {
   if (!prefRow) return true;
   const v = prefRow['notify_' + kind];
   return v == null ? true : Prefs.notifyOn(Number(v) || 0);
 }
 
-async function deliverNotifications(env, o) {
+async function deliverNotifications(env: any, o: any) {
   const now = Math.floor(Date.now() / 1000);
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
   const stmts = [];
@@ -691,7 +700,7 @@ async function deliverNotifications(env, o) {
     let admSet = null;
     if (o.page === ADMIN_CAT) {
       const admRows = await env.DB.prepare('SELECT hash FROM admins').all();
-      admSet = new Set((admRows.results || []).map((r) => r.hash));
+      admSet = new Set((admRows.results || []).map((r: any) => r.hash));
     }
     const mPrefs = await notifyPrefsFor(env, mentions);
     for (const h of mentions) {
@@ -706,7 +715,7 @@ async function deliverNotifications(env, o) {
       const skip = new Set(mentions);
       if (o.authorHash) skip.add(o.authorHash);
       skip.add(MERECAT_BOT.hash);
-      const recips = new Set();
+      const recips: any = new Set();
       if (o.topicAuthorHash) recips.add(o.topicAuthorHash);
       const rows = await env.DB.prepare('SELECT hash FROM watches WHERE topic_id = ?1').bind(o.topicId).all();
       for (const r of (rows.results || [])) recips.add(r.hash);
@@ -742,7 +751,7 @@ async function deliverNotifications(env, o) {
    "X sent you a message" until it is read, rather than burying the list. A 'dm'
    notification carries no topic/comment (both 0) and jumps to the conversation.
    A DM must never fail because its notification did, so this never throws out. */
-async function notifyDm(env, toHash, fromHash) {
+async function notifyDm(env: any, toHash: any, fromHash: any) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     /* "Direct messages" notifications off silences the BELL only — the message
@@ -774,7 +783,7 @@ async function notifyDm(env, toHash, fromHash) {
    (title/body/url, never message content — privacy + E2E). A dead subscription
    (404/410) is pruned. Never throws into the caller (a push failure must never
    affect a post or a DM). */
-async function deliverPush(env, hashes, payload) {
+async function deliverPush(env: any, hashes: any, payload: any) {
   try {
     if (env.PUSH_ENABLED !== 'true') return;
     if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) {
@@ -813,7 +822,7 @@ async function deliverPush(env, hashes, payload) {
 /* Register a device's push token to the caller's identity (one row per token, so
    re-registering the same token just refreshes it). Additive and gated: it fills
    push_tokens, which deliverPush reads only when PUSH_ENABLED is on. */
-async function handlePushRegister(request, env) {
+async function handlePushRegister(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -832,7 +841,7 @@ async function handlePushRegister(request, env) {
 }
 
 /* Drop one device token (logout / uninstall). */
-async function handlePushUnregister(request, env) {
+async function handlePushUnregister(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -852,11 +861,11 @@ async function handlePushUnregister(request, env) {
    means swapping this var + the VAPID_PRIVATE_KEY secret; an already-subscribed
    client re-subscribes with the new key on its next Settings open (_reflectPush
    compares this against its subscription's key). */
-async function handleVapidKey(request, env, url) {
+async function handleVapidKey(request: any, env: any, url: any) {
   return json({ ok: true, key: String(env.VAPID_PUBLIC_KEY || '') }, 200, cacheHeader(url));
 }
 
-async function handleSelfDelete(request, env, ctx) {
+async function handleSelfDelete(request: any, env: any, ctx: any) {
   let data;
   try {
     data = await request.json();
@@ -897,14 +906,14 @@ async function handleSelfDelete(request, env, ctx) {
   return json({ ok: true }, 200);
 }
 
-function xmlEscape(s) {
+function xmlEscape(s: any) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
 /* RSS 2.0 feed of a page's live comments, so anyone can follow a thread
    with a feed reader and nobody has to hand this site an email address. */
-async function handleFeed(request, env, url) {
+async function handleFeed(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return new Response('Too many requests.', { status: 429 });
@@ -936,7 +945,7 @@ async function handleFeed(request, env, url) {
     ).bind(page).all();
     results = rows.results;
   }
-  const items = results.map(function (c) {
+  const items = results.map(function (c: any) {
     const name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
     const link = viewLink(env, page, c.id, c.parent_id);
     const itemTitle = c.title ? c.title
@@ -972,7 +981,7 @@ async function handleFeed(request, env, url) {
    admins included only for their own comments. Every edit passes the same
    screen as a new post, or a clean comment could be edited into filth
    after approval, and a flagged edit drops the comment to pending. */
-async function handleEdit(request, env, ctx) {
+async function handleEdit(request: any, env: any, ctx: any) {
   let data;
   try {
     data = await request.json();
@@ -1019,7 +1028,7 @@ async function handleEdit(request, env, ctx) {
    post's captured header, the identity-level trust and lock flags, and every
    known IP with its ban state. Same shape as one per-comment meta row so the
    client builds the identical drawer. */
-async function metaForHash(env, hash) {
+async function metaForHash(env: any, hash: any) {
   const last = await env.DB.prepare(
     'SELECT id, ip, ua, os, tz, lang FROM comments WHERE author_hash = ?1 ORDER BY id DESC LIMIT 1'
   ).bind(hash).first();
@@ -1035,8 +1044,8 @@ async function metaForHash(env, hash) {
     'WHERE ii.hash = ?1 AND (ii.last_seen >= ?2 OR ib.ip IS NOT NULL) ' +
     'ORDER BY ii.family, ii.last_seen DESC'
   ).bind(hash, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all();
-  const identities = {};
-  identities[hash] = ipRows.results.map((r) => ({
+  const identities: any = {};
+  identities[hash] = ipRows.results.map((r: any) => ({
     ip_display: r.ip_display, ip_key: r.ip_key, family: r.family, source: r.source, banned: r.banned,
   }));
   let ipbanned = 0;
@@ -1056,7 +1065,7 @@ async function metaForHash(env, hash) {
   return json({ ok: true, meta: [row], identities }, 200);
 }
 
-async function handleMeta(request, env) {
+async function handleMeta(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -1089,7 +1098,7 @@ async function handleMeta(request, env) {
 
   /* ip_bans now stores v6 as a /64 the raw c.ip will not equal, so recompute
      each comment's banned flag against the normalized key. */
-  const commentKeys = [...new Set(list.map((r) => ipKey(r.ip)).filter(Boolean))];
+  const commentKeys = [...new Set(list.map((r: any) => ipKey(r.ip)).filter(Boolean))];
   const bannedSet = new Set();
   if (commentKeys.length) {
     const ph = commentKeys.map((_, i) => '?' + (i + 1)).join(',');
@@ -1100,8 +1109,8 @@ async function handleMeta(request, env) {
 
   /* Every IP tied to each identity on the page, each with its ban state, so the
      drawer can show and ban both families of a dual-stack user together. */
-  const hashes = [...new Set(list.map((r) => r.author_hash).filter(Boolean))];
-  const identities = {};
+  const hashes = [...new Set(list.map((r: any) => r.author_hash).filter(Boolean))];
+  const identities: any = {};
   if (hashes.length) {
     const ph = hashes.map((_, i) => '?' + (i + 1)).join(',');
     /* Only the recent window shows, banned keys always. */
@@ -1124,7 +1133,7 @@ async function handleMeta(request, env) {
 }
 
 /* The board index: per-category topic and post counts with last activity. */
-async function handleBoardIndex(request, env, url) {
+async function handleBoardIndex(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -1144,8 +1153,8 @@ async function handleBoardIndex(request, env, url) {
     "    AND (c.parent_id IS NULL OR p.status = 'live')" +
     ') WHERE rn = 1'
   ).all();
-  const cats = {};
-  rows.results.forEach(function (r) {
+  const cats: any = {};
+  rows.results.forEach(function (r: any) {
     cats[r.page.slice(6)] = {
       topics: r.topics,
       posts: r.posts,
@@ -1159,7 +1168,7 @@ async function handleBoardIndex(request, env, url) {
 /* One category page: twenty topics by newest activity, read from the
    denormalized topic rows alone, the replies never scanned. */
 const TOPICS_PER_PAGE = 20;
-async function handleBoardCat(request, env, url) {
+async function handleBoardCat(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -1171,7 +1180,7 @@ async function handleBoardCat(request, env, url) {
   return json(await boardCatPayload(env, page, p, url.searchParams.get('q')), 200, cacheHeader(url));
 }
 
-async function boardCatPayload(env, page, p, q) {
+async function boardCatPayload(env: any, page: any, p: any, q: any) {
   /* Optional title narrowing (the merecat forward picker's type-to-narrow):
      up to five typed words, each a case-insensitive substring of the topic
      title, ANDed in any order. The LIKE walk covers only this category's
@@ -1195,14 +1204,14 @@ async function boardCatPayload(env, page, p, q) {
     'WHERE ' + where + ' ' +
     'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
   ).bind(...binds, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
-  return { ok: true, topics: (rows.results || []).map((r) => withNames(r)), total: total.n, page: p, per: TOPICS_PER_PAGE };
+  return { ok: true, topics: (rows.results || []).map((r: any) => withNames(r)), total: total.n, page: p, per: TOPICS_PER_PAGE };
 }
 
 /* A member's own recent forum posts, newest first — the "recent posts" list on a
    profile, so a reader can follow a thinker. The same live-and-forum filter the
    board uses, plus an author clause; a reply borrows its topic's title and links
    to the exact post. Public and cacheable like every board read. */
-async function handleAuthorPosts(request, env, url) {
+async function handleAuthorPosts(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -1222,7 +1231,7 @@ async function handleAuthorPosts(request, env, url) {
     'FROM comments c LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' + where +
     ' ORDER BY c.id DESC LIMIT ?2 OFFSET ?3'
   ).bind(hash, per, (p - 1) * per).all();
-  const items = (rows.results || []).map((r) => ({
+  const items = (rows.results || []).map((r: any) => ({
     comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
     cat: String(r.page).slice(6), created_at: r.created_at, snippet: r.snippet,
   }));
@@ -1233,9 +1242,9 @@ async function handleAuthorPosts(request, env, url) {
    topic) for a batch of hashes at once — the same definition handleAuthorPosts
    totals, so the profile figure and the per-post badge always agree. One grouped
    query for every distinct author on a page drives the rank shown by each post. */
-async function postCountsFor(env, hashes) {
-  const uniq = [...new Set((hashes || []).filter((h) => /^[0-9a-f]{64}$/.test(h)))];
-  const out = {};
+async function postCountsFor(env: any, hashes: any) {
+  const uniq = [...new Set((hashes || []).filter((h: any) => /^[0-9a-f]{64}$/.test(h)))];
+  const out: any = {};
   if (!uniq.length) return out;
   const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
   const rows = await env.DB.prepare(
@@ -1244,8 +1253,8 @@ async function postCountsFor(env, hashes) {
     'WHERE c.author_hash IN (' + ph + ") AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
     "AND (c.parent_id IS NULL OR t.status = 'live') GROUP BY c.author_hash"
   ).bind(...uniq).all();
-  uniq.forEach((h) => { out[h] = 0; });
-  (rows.results || []).forEach((r) => { out[r.h] = r.n; });
+  uniq.forEach((h: any) => { out[h] = 0; });
+  (rows.results || []).forEach((r: any) => { out[r.h] = r.n; });
   return out;
 }
 
@@ -1256,7 +1265,7 @@ const SEARCH_PER_PAGE = 20;
    operator (- * : ^ NEAR AND OR NOT parentheses) can be injected, cap at ten — is
    single-sourced in Domain.Fts, which returns a `SafeMatch` whose only exit is
    `unSafeMatch`. The injection guarantee lives in that type, not here. */
-function buildMatch(q) {
+function buildMatch(q: any) {
   return Fts.unSafeMatch(Fts.buildMatch(String(q ?? '')));
 }
 
@@ -1266,7 +1275,7 @@ function buildMatch(q) {
    control characters for the client to highlight, and is cacheable like every
    public read. An unknown category or malformed author is dropped, not errored,
    so a stray filter never blanks the results. */
-async function handleSearch(request, env, url) {
+async function handleSearch(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -1305,7 +1314,7 @@ async function handleSearch(request, env, url) {
       'SELECT COUNT(*) AS n FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid ' +
       'LEFT JOIN comments pt ON pt.id = c.parent_id ' + where
     ).bind(...binds).first();
-    const items = (rows.results || []).map((r) => withNames({
+    const items = (rows.results || []).map((r: any) => withNames({
       comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
       author_hash: r.author_hash, nick: r.nick, cat: String(r.page).slice(6),
       created_at: r.created_at, snip: r.snip,
@@ -1318,7 +1327,7 @@ async function handleSearch(request, env, url) {
 }
 
 /* One topic with its live replies in order. */
-async function handleTopicView(request, env, url) {
+async function handleTopicView(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -1335,7 +1344,7 @@ async function handleTopicView(request, env, url) {
   return json(await topicViewPayload(env, topic, url.searchParams.get('p'), url.searchParams.get('find')), 200, cacheHeader(url));
 }
 
-async function topicViewPayload(env, topic, pRaw, findRaw) {
+async function topicViewPayload(env: any, topic: any, pRaw: any, findRaw: any) {
   const id = topic.id;
   /* Twenty replies a page. A permalink arrives with find=<reply id> and
      one indexed count places it on the right page. */
@@ -1354,13 +1363,13 @@ async function topicViewPayload(env, topic, pRaw, findRaw) {
   ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
   /* Each post carries its author's total forum-post count, for the rank the
      client shows under the name. One grouped query for every author on the page. */
-  const counts = await postCountsFor(env, [topic.author_hash].concat((replies.results || []).map((r) => r.author_hash)));
+  const counts = await postCountsFor(env, [topic.author_hash].concat((replies.results || []).map((r: any) => r.author_hash)));
   return {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
     topic: withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0 }, counts[topic.author_hash] || 0),
-    replies: (replies.results || []).map((r) => withNames(r, counts[r.author_hash] || 0)),
+    replies: (replies.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0)),
     total: topic.replies || 0,
     page: p,
     per: TOPICS_PER_PAGE,
@@ -1371,7 +1380,7 @@ async function topicViewPayload(env, topic, pRaw, findRaw) {
    public GETs serve, behind the admin key and never cached. Strict: it serves
    the admins-only category and its topics alone — everything public stays on
    the public path. */
-async function handleBoardAdmin(request, env) {
+async function handleBoardAdmin(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -1397,7 +1406,7 @@ async function handleBoardAdmin(request, env) {
 
 /* Admin-only topic moderation from the page: lock and unlock close and
    reopen a thread to new replies, delete takes the topic down. */
-async function handleModerate(request, env, ctx) {
+async function handleModerate(request: any, env: any, ctx: any) {
   let data;
   try {
     data = await request.json();
@@ -1420,7 +1429,7 @@ async function handleModerate(request, env, ctx) {
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   /* Live push of the moderation (Phase 1b): gated out for the back room. */
   const catKey = topic.page.slice(6);
-  const emit = (ev) => { if (topic.page !== ADMIN_CAT) publishLive(env, ctx, ev); };
+  const emit = (ev: any) => { if (topic.page !== ADMIN_CAT) publishLive(env, ctx, ev); };
   if (act === 'delete') {
     await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
     emit({ v: 1, t: 'moderation', act: 'delete', id, topic_id: id, cat: catKey,
@@ -1444,7 +1453,7 @@ async function handleModerate(request, env, ctx) {
 /* Admin-only: move a whole thread to another category, then DM the original
    poster an automated notice with a link to its new home. The topic row and
    every reply row carry their own page, so all move together. */
-async function handleMove(request, env, ctx) {
+async function handleMove(request: any, env: any, ctx: any) {
   let data;
   try {
     data = await request.json();
@@ -1507,7 +1516,7 @@ async function handleMove(request, env, ctx) {
 
 /* Admin-only trust toggle. A trusted author's posts skip the AI screen.
    The flag lives by fingerprint and its holder never learns it exists. */
-async function handleTrust(request, env) {
+async function handleTrust(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -1533,7 +1542,7 @@ async function handleTrust(request, env) {
 /* Admin-only activity audit: the newest non-deleted post on every site
    page and in every board topic, author and moment, nothing else. Pending
    posts count as activity, they are exactly what an admin wants to see. */
-async function handleAudit(request, env) {
+async function handleAudit(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -1587,7 +1596,7 @@ const MAX_SIG = Profile.limits.sig;
 /* Public read of a profile: the custom fields plus the assigned pseudonym,
    never any private fingerprint or trust/ban state. Missing profile still
    answers, with null fields, so any hash resolves to at least its name. */
-async function handleProfileGet(request, env, url) {
+async function handleProfileGet(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -1629,7 +1638,7 @@ async function handleProfileGet(request, env, url) {
 /* One profile field, normalized like a comment body: CRLF folded, trimmed,
    control characters (bar newline and tab) refused. Empty becomes null,
    which clears the field and falls the name back to the assigned pseudonym. */
-function cleanField(raw, max) {
+function cleanField(raw: any, max: any) {
   const v = String(raw || '').replace(/\r\n?/g, '\n').trim();
   if (v.length > max) return { error: true };
   if (CONTROL_RE.test(v)) return { error: true };
@@ -1637,7 +1646,7 @@ function cleanField(raw, max) {
 }
 
 /* Parse the stored offsite-links JSON back to an object for the client. */
-function safeParseLinks(s) {
+function safeParseLinks(s: any) {
   try { const o = JSON.parse(s); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null; } catch { return null; }
 }
 
@@ -1645,9 +1654,9 @@ function safeParseLinks(s) {
    normalized https URLs — Domain.Links drops anything that is not an http(s) URL
    or a normalizable handle. Returns the JSON string, or null when nothing valid
    remains (which clears the column). */
-function normalizeLinks(raw) {
+function normalizeLinks(raw: any) {
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const out = {};
+  const out: any = {};
   for (const plat of Links.platforms) {
     const v = src[plat];
     if (v == null || String(v).trim() === '') continue;
@@ -1661,7 +1670,7 @@ function normalizeLinks(raw) {
    profile is only ever edited by its holder. The three fields are screened as
    one blob and rejected outright when flagged (a profile has no pending
    state); an unscreenable blob is allowed, being low-risk and admin-clearable. */
-async function handleProfileSave(request, env) {
+async function handleProfileSave(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -1752,7 +1761,7 @@ async function handleProfileSave(request, env) {
 }
 
 /* Map a Domain.Handle rejection tag to a member-facing message. */
-function handleErrorMessage(tag) {
+function handleErrorMessage(tag: any) {
   switch (tag) {
     case 'too_short': return 'That handle is too short (3 to 30 characters).';
     case 'too_long': return 'That handle is too long (3 to 30 characters).';
@@ -1766,7 +1775,7 @@ function handleErrorMessage(tag) {
 
 /* Admin-only: wipe an abusive profile back to the assigned pseudonym without
    banning the author. Bans still only stop posting. */
-async function handleProfileClear(request, env) {
+async function handleProfileClear(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -1793,7 +1802,7 @@ async function handleProfileClear(request, env) {
 
 const DM_PER_PAGE = 20;
 
-function dmPair(h1, h2) {
+function dmPair(h1: any, h2: any) {
   return h1 < h2 ? [h1, h2] : [h2, h1];
 }
 
@@ -1806,11 +1815,11 @@ const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1)";
    message carries expires_at NULL and so is always live. `now` is a server
    integer interpolated straight into the SQL (never a bind param), so this can be
    appended to any DM query without shifting the numbered binds. */
-function dmLive(now) { return '(m.expires_at IS NULL OR m.expires_at > ' + Math.floor(Number(now) || 0) + ')'; }
+function dmLive(now: any) { return '(m.expires_at IS NULL OR m.expires_at > ' + Math.floor(Number(now) || 0) + ')'; }
 
 /* Unread, per viewer: an unheld, unexpired message from someone else, newer than
    my read stamp. Held and expired messages never trip the recipient's badge. */
-function dmUnreadExists(now) {
+function dmUnreadExists(now: any) {
   return 'EXISTS(SELECT 1 FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
     'AND m.sender_hash != ?1 ' +
     'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0) ' +
@@ -1837,10 +1846,10 @@ const APP_SETTING_DEFAULTS = {
   wall_prune_days: '365',                       // retention when pruning is enabled
 };
 let appSettingsCache = { at: 0, s: null };
-async function getAppSettings(env) {
+async function getAppSettings(env: any) {
   const now = Date.now();
   if (appSettingsCache.s && now - appSettingsCache.at < 300000) return appSettingsCache.s;
-  const s = Object.assign({}, APP_SETTING_DEFAULTS);
+  const s: any = Object.assign({}, APP_SETTING_DEFAULTS);
   try {
     const rows = await env.DB.prepare('SELECT k, v FROM app_settings').all();
     for (const r of (rows.results || [])) s[r.k] = r.v;
@@ -1848,14 +1857,14 @@ async function getAppSettings(env) {
   appSettingsCache = { at: now, s };
   return s;
 }
-function dmDefaultTtl(s) { return Number(s.dm_default_ttl) || Dm.defaultTtl; }
-function dmBackstopSeconds(s) { return (Number(s.dm_backstop_days) || 30) * 86400; }
+function dmDefaultTtl(s: any) { return Number(s.dm_default_ttl) || Dm.defaultTtl; }
+function dmBackstopSeconds(s: any) { return (Number(s.dm_backstop_days) || 30) * 86400; }
 
 /* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
    recipient does NOT refuse the send: the message is stored held, reads as
    delivered to its sender, and stays invisible to the recipient until an
    unblock releases it. The blocked party is never told. */
-async function handleDmSend(request, env, ctx) {
+async function handleDmSend(request: any, env: any, ctx: any) {
   let data;
   try {
     data = await request.json();
@@ -1962,7 +1971,7 @@ async function handleDmSend(request, env, ctx) {
    moderation notice reaches its target regardless of blocks, and it post-dates
    any clear stamp so a fresh-started thread resurfaces to carry it. Returns
    whether it delivered. */
-async function sendSystemDm(env, fromHash, toHash, body) {
+async function sendSystemDm(env: any, fromHash: any, toHash: any, body: any) {
   if (!fromHash || !toHash || fromHash === toHash || !body) return false;
   const [a, b] = dmPair(fromHash, toHash);
   const now = Math.floor(Date.now() / 1000);
@@ -1989,7 +1998,7 @@ async function sendSystemDm(env, fromHash, toHash, body) {
 /* Inbox: my threads by newest activity, the other party resolved with their
    nick and avatar, and the total unread count riding along so one call feeds
    both the list and the badge. */
-async function handleDmThreads(request, env) {
+async function handleDmThreads(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -2022,7 +2031,7 @@ async function handleDmThreads(request, env) {
   const totals = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'
   ).bind(me).first();
-  const threads = (rows.results || []).map((r) => Object.assign({}, r,
+  const threads = (rows.results || []).map((r: any) => Object.assign({}, r,
     { assigned: r.other_hash ? displayName(r.other_hash) : null }));
   return json({ ok: true, threads, total: totals.n || 0,
     unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE }, 200);
@@ -2031,7 +2040,7 @@ async function handleDmThreads(request, env) {
 /* One conversation, paged by twenty like everything else, defaulting to the
    LAST page so it opens at its newest words. Opening marks it read with at
    most one write, none when nothing was unread. */
-async function handleDmThread(request, env, ctx) {
+async function handleDmThread(request: any, env: any, ctx: any) {
   let data;
   try {
     data = await request.json();
@@ -2117,7 +2126,7 @@ async function handleDmThread(request, env, ctx) {
 
 /* The badge count: unread threads, one indexed COUNT. The client asks at most
    once per ninety seconds, so this stays cheap on every side. */
-async function handleDmUnread(request, env) {
+async function handleDmUnread(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -2144,7 +2153,7 @@ async function handleDmUnread(request, env) {
 /* The batched inbox presence check: given a list of correspondent hashes, which
    are online right now (honouring appear-offline)? One keyed request per inbox
    load, answered by the BoardHub DO's live socket set — no polling. */
-async function handleDmPresence(request, env) {
+async function handleDmPresence(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2156,7 +2165,7 @@ async function handleDmPresence(request, env) {
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const hashes = (Array.isArray(data.hashes) ? data.hashes : [])
-    .filter((h) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 50);
+    .filter((h: any) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 50);
   if (!hashes.length || !env.HUB) return json({ ok: true, online: [] }, 200);
   let online = [];
   try { online = await env.HUB.get(env.HUB.idFromName('board')).presenceOf(hashes); } catch { online = []; }
@@ -2166,7 +2175,7 @@ async function handleDmPresence(request, env) {
 /* Settings-gear preferences (keyed + private): read your own read-receipts mode
    and per-type notification switches, and set them. Never exposed on the public
    profile read. */
-async function handlePrefs(request, env) {
+async function handlePrefs(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2194,7 +2203,7 @@ async function handlePrefs(request, env) {
     }
   }
   const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm FROM profiles WHERE hash = ?1').bind(me).first();
-  const onOff = (v) => (v == null ? 1 : (v ? 1 : 0));
+  const onOff = (v: any) => (v == null ? 1 : (v ? 1 : 0));
   return json({ ok: true, prefs: {
     receipts: (row && row.receipts_mode === 'off') ? 'off' : 'auto',
     notify_reply: onOff(row && row.notify_reply),
@@ -2206,7 +2215,7 @@ async function handlePrefs(request, env) {
 /* The blocked-members roster for the settings gear: the members this reader has
    blocked, so they can be seen and unblocked from one place (unblocking reuses
    the existing /dm/block with blocked:false). Keyed + private. */
-async function handleDmBlocked(request, env) {
+async function handleDmBlocked(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2221,7 +2230,7 @@ async function handleDmBlocked(request, env) {
     'SELECT b.blocked_hash AS hash, pr.nick AS nick, pr.avatar AS avatar FROM dm_blocks b ' +
     'LEFT JOIN profiles pr ON pr.hash = b.blocked_hash WHERE b.owner_hash = ?1 ORDER BY b.created_at DESC LIMIT 200'
   ).bind(me).all();
-  const blocked = (rows.results || []).map((r) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash) }));
+  const blocked = (rows.results || []).map((r: any) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash) }));
   return json({ ok: true, blocked }, 200);
 }
 
@@ -2231,7 +2240,7 @@ async function handleDmBlocked(request, env) {
    is told live so their header updates. Upserts the thread if it does not exist
    yet (a still-empty room, invisible in the inbox), so the choice sticks before
    the first message is even sent. */
-async function handleDmTtl(request, env, ctx) {
+async function handleDmTtl(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2261,7 +2270,7 @@ async function handleDmTtl(request, env, ctx) {
 /* Save or unsave one message (either participant). A saved message is exempt from
    auto-expiry for BOTH sides (expires_at NULL), so a save keeps it for everyone —
    which is how expiry stays identical for both. Unsaving resumes the clock. */
-async function handleDmSave(request, env) {
+async function handleDmSave(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2292,7 +2301,7 @@ async function handleDmSave(request, env) {
 /* Delete a set of media objects from R2 and their dm_media rows. R2 delete takes
    up to 1000 keys per call; the D1 delete is chunked to stay under the 50-subrequest
    budget. Keys are opaque server-minted ids. */
-async function purgeMediaKeys(env, keys) {
+async function purgeMediaKeys(env: any, keys: any) {
   if (!keys || !keys.length) return;
   if (env.MEDIA) {
     for (let i = 0; i < keys.length; i += 1000) {
@@ -2301,7 +2310,7 @@ async function purgeMediaKeys(env, keys) {
   }
   for (let i = 0; i < keys.length; i += 50) {
     const chunk = keys.slice(i, i + 50);
-    const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+    const ph = chunk.map((_: any, j: any) => '?' + (j + 1)).join(',');
     try { await env.DB.prepare('DELETE FROM dm_media WHERE key IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
   }
 }
@@ -2310,7 +2319,7 @@ async function purgeMediaKeys(env, keys) {
    display, and — only if near the 10 GB free-tier wall — emergency-prune the
    oldest media (LRU) until back under 90%, nulling the message's media pointer so
    the client shows it as expired. Normal message-expiry keeps us far from this. */
-async function enforceMediaCap(env) {
+async function enforceMediaCap(env: any) {
   const totalRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM dm_media').first();
   let total = totalRow.total || 0;
   const EMERGENCY = Math.floor(MEDIA_CAP_BYTES * 0.95);
@@ -2344,13 +2353,13 @@ async function enforceMediaCap(env) {
    fresh. Read-time filtering already hides expired messages instantly; this is
    the storage-reclamation pass. Each step is isolated so one failure never stops
    the rest. */
-async function sweepExpiredDms(env) {
+async function sweepExpiredDms(env: any) {
   const now = Math.floor(Date.now() / 1000);
   try {
     const gone = await env.DB.prepare(
       'SELECT media_key FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0 AND media_key IS NOT NULL LIMIT 5000'
     ).bind(now).all();
-    const keys = (gone.results || []).map((r) => r.media_key).filter(Boolean);
+    const keys = (gone.results || []).map((r: any) => r.media_key).filter(Boolean);
     if (keys.length) await purgeMediaKeys(env, keys);
     await env.DB.prepare(
       'DELETE FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0'
@@ -2368,11 +2377,11 @@ async function sweepExpiredDms(env) {
     ).bind(cap).all();
     const rows = capped.results || [];
     if (rows.length) {
-      await purgeMediaKeys(env, rows.map((r) => r.key).filter(Boolean));
-      const ids = rows.map((r) => r.msg_id).filter(Boolean);
+      await purgeMediaKeys(env, rows.map((r: any) => r.key).filter(Boolean));
+      const ids = rows.map((r: any) => r.msg_id).filter(Boolean);
       for (let i = 0; i < ids.length; i += 50) {
         const chunk = ids.slice(i, i + 50);
-        const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+        const ph = chunk.map((_: any, j: any) => '?' + (j + 1)).join(',');
         try {
           await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + ph + ')').bind(...chunk).run();
         } catch (e) { /* keep going */ }
@@ -2383,7 +2392,7 @@ async function sweepExpiredDms(env) {
     const orphan = await env.DB.prepare(
       'SELECT key FROM dm_media WHERE (msg_id IS NULL AND created_at < ?1) OR (msg_id IS NOT NULL AND msg_id NOT IN (SELECT id FROM dms)) LIMIT 2000'
     ).bind(now - 3600).all();
-    await purgeMediaKeys(env, (orphan.results || []).map((r) => r.key));
+    await purgeMediaKeys(env, (orphan.results || []).map((r: any) => r.key));
   } catch (e) { /* keep going */ }
   try { await sweepDms(env); } catch (e) { /* empty-thread tidy */ }
   try { await enforceMediaCap(env); } catch (e) { /* cap/accounting */ }
@@ -2391,7 +2400,7 @@ async function sweepExpiredDms(env) {
 
 /* A random opaque R2 object id for a DM media blob. Reveals nothing about who
    uploaded it or to whom, so the bucket cannot be traced to a member. */
-function randomHex(n) {
+function randomHex(n: any) {
   const b = new Uint8Array(n);
   crypto.getRandomValues(b);
   return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -2403,7 +2412,7 @@ function randomHex(n) {
    Keyed + throttled + enabled/size/storage-cap gated; the Turnstile-gated /dm/send
    that follows links it to its message. An unlinked upload is an orphan the hourly
    sweep prunes after an hour. */
-async function handleDmMediaUpload(request, env) {
+async function handleDmMediaUpload(request: any, env: any) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -2440,7 +2449,7 @@ async function handleDmMediaUpload(request, env) {
    verified against the live, unexpired message that references it; a stranger or an
    expired reference gets an indistinguishable 404. The bytes are opaque ciphertext,
    useless without the key the recipient holds from the E2E message body. */
-async function handleDmMediaGet(request, env) {
+async function handleDmMediaGet(request: any, env: any) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
@@ -2471,7 +2480,7 @@ async function handleDmMediaGet(request, env) {
 
 /* Admin platform settings: read them (with the current media usage), and set the
    tunable ones with sanity clamps. The growing home for site-wide toggles. */
-async function handleAdminSettings(request, env) {
+async function handleAdminSettings(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(data.key || '');
@@ -2479,7 +2488,7 @@ async function handleAdminSettings(request, env) {
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
     const me = await sha256hex(key);
-    const allowed = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1 };
+    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1 };
     const stmts = [];
     for (const k of Object.keys(data.set)) {
       if (!allowed[k]) continue;
@@ -2502,17 +2511,17 @@ async function handleAdminSettings(request, env) {
 /* Purge ALL DM media from the bucket (admin, destructive). Cursor-paginated list +
    batched delete, then clear the pointers and the usage counter. Message text is
    untouched; only the shared attachments are removed. */
-async function handleDmMediaPurge(request, env) {
+async function handleDmMediaPurge(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(data.key || '');
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
   let deleted = 0;
   if (env.MEDIA) {
-    let cursor;
+    let cursor: any;
     do {
       const list = await env.MEDIA.list({ prefix: 'dm/', cursor, limit: 1000 });
-      const keys = (list.objects || []).map((o) => o.key);
+      const keys = (list.objects || []).map((o: any) => o.key);
       if (keys.length) { try { await env.MEDIA.delete(keys); } catch (e) { /* keep going */ } deleted += keys.length; }
       cursor = list.truncated ? list.cursor : null;
     } while (cursor);
@@ -2542,20 +2551,20 @@ const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.avatar, p
 
 /* Add the author display fields (assigned pseudonym + rank) the client renders,
    mirroring the forum's withNames. nick/avatar/faith are already joined in. */
-async function wallEnrich(env, rows, me) {
+async function wallEnrich(env: any, rows: any, me: any) {
   const list = rows || [];
-  const counts = await postCountsFor(env, list.map((r) => r.author_hash));
+  const counts = await postCountsFor(env, list.map((r: any) => r.author_hash));
   /* Which of these POST rows the viewer has liked. A post row carries the `likes`
      COUNT (from WALL_POST_COLS); a comment row does not, so it never gets a like
      flag. One batched point-lookup over the post ids. */
   let liked = new Set();
-  const postIds = list.filter((r) => r.likes !== undefined && r.likes !== null).map((r) => r.id);
+  const postIds = list.filter((r: any) => r.likes !== undefined && r.likes !== null).map((r: any) => r.id);
   if (me && postIds.length) {
-    const ph = postIds.map((_, i) => '?' + (i + 2)).join(',');
+    const ph = postIds.map((_: any, i: any) => '?' + (i + 2)).join(',');
     const lr = await env.DB.prepare('SELECT post_id FROM wall_likes WHERE author_hash = ?1 AND post_id IN (' + ph + ')').bind(me, ...postIds).all();
-    liked = new Set((lr.results || []).map((x) => x.post_id));
+    liked = new Set((lr.results || []).map((x: any) => x.post_id));
   }
-  return list.map((r) => {
+  return list.map((r: any) => {
     const out = withNames(r, counts[r.author_hash] || 0);
     if (r.likes !== undefined && r.likes !== null) { out.likes = Number(r.likes) || 0; out.liked = liked.has(r.id) ? 1 : 0; }
     return out;
@@ -2565,17 +2574,17 @@ async function wallEnrich(env, rows, me) {
 /* The wall's own notifications (kind 'wall', comment_id = the post id, jumps to
    ?post=<id>): a comment tells the post author, and an @mention tells the picked
    member. Reuses the private user:<hash> live push. */
-async function deliverWallNotifications(env, o) {
+async function deliverWallNotifications(env: any, o: any) {
   const now = Math.floor(Date.now() / 1000);
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
-  const stmts = [];
-  const live = [];
+  const stmts: any[] = [];
+  const live: any[] = [];
   const pushComment = new Set();   // native-push recipients, split by copy (disjoint via `seen`)
   const pushMention = new Set();
   const seen = new Set([o.authorHash, MERECAT_BOT.hash]);
   // topic_id encodes the wall sub-kind for the label: 1 = a comment on your post,
   // 0 = an @mention. comment_id is always the post id (jumps to ?post=<id>).
-  const add = (h, commented) => {
+  const add = (h: any, commented: any) => {
     const flag = commented ? 1 : 0;
     stmts.push(env.DB.prepare(NOTIF).bind(h, 'wall', flag, o.postId, o.authorHash, now));
     live.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'wall', topic_id: flag, comment_id: o.postId, actor_hash: o.authorHash, created_at: now });
@@ -2602,7 +2611,7 @@ async function deliverWallNotifications(env, o) {
 }
 
 /* Shared R2 purge for public post/comment media (mirror of purgeMediaKeys). */
-async function purgeWallMedia(env, keys) {
+async function purgeWallMedia(env: any, keys: any) {
   if (!keys || !keys.length) return;
   if (env.WALLMEDIA) {
     for (let i = 0; i < keys.length; i += 1000) {
@@ -2611,14 +2620,14 @@ async function purgeWallMedia(env, keys) {
   }
   for (let i = 0; i < keys.length; i += 50) {
     const chunk = keys.slice(i, i + 50);
-    const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+    const ph = chunk.map((_: any, j: any) => '?' + (j + 1)).join(',');
     try { await env.DB.prepare('DELETE FROM wall_media WHERE key IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
   }
 }
 
 /* Reclaim public-media objects with no live owner: an upload that was never
    attached to a post (older than an hour), or one whose post/comment is gone. */
-async function sweepWallOrphanMedia(env) {
+async function sweepWallOrphanMedia(env: any) {
   const now = Math.floor(Date.now() / 1000);
   try {
     const orphan = await env.DB.prepare(
@@ -2626,13 +2635,13 @@ async function sweepWallOrphanMedia(env) {
       "OR (ref_type = 'post' AND ref_id NOT IN (SELECT id FROM wall_posts)) " +
       "OR (ref_type = 'comment' AND ref_id NOT IN (SELECT id FROM wall_comments)) LIMIT 2000"
     ).bind(now - 3600).all();
-    await purgeWallMedia(env, (orphan.results || []).map((r) => r.key));
+    await purgeWallMedia(env, (orphan.results || []).map((r: any) => r.key));
   } catch (e) { /* keep going */ }
 }
 
 /* Read gate shared by the members-only feed/wall/post reads. Returns the member
    hash, or a Response to return immediately (401 / blocked / 429). */
-async function wallReader(request, env, data) {
+async function wallReader(request: any, env: any, data: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return { resp: json({ ok: false, error: 'Too many requests. Slow down.' }, 429) };
@@ -2646,7 +2655,7 @@ async function wallReader(request, env, data) {
 
 /* GET-style read (POST body, keyed): the global feed, newest first, keyset cursor
    (id < cursor) for infinite scroll. */
-async function handleWallFeed(request, env) {
+async function handleWallFeed(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
@@ -2662,7 +2671,7 @@ async function handleWallFeed(request, env) {
 }
 
 /* One member's wall (their own posts), keyset-paged like the feed. */
-async function handleWall(request, env) {
+async function handleWall(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
@@ -2680,7 +2689,7 @@ async function handleWall(request, env) {
 }
 
 /* One post plus all its live comments (the ?post=<id> detail + mention target). */
-async function handleWallPostGet(request, env) {
+async function handleWallPostGet(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
@@ -2697,7 +2706,7 @@ async function handleWallPostGet(request, env) {
    budget), no Turnstile, gated like any write (key + blockedReason). Liking
    notifies the post author (coalesced, Facebook style); unliking before it is
    read retracts that notification. Returns the fresh {liked, likes}. */
-async function handleWallLike(request, env, ctx) {
+async function handleWallLike(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2738,7 +2747,7 @@ async function handleWallLike(request, env, ctx) {
    (recipient, actor, post), so re-liking while unread never duplicates, but two
    different posts liked by the same person are two rows. Bell rings only on a
    fresh insert; a live push tells the author's open tab. */
-async function notifyWallLike(env, toHash, fromHash, postId) {
+async function notifyWallLike(env: any, toHash: any, fromHash: any, postId: any) {
   try {
     if (!toHash || !fromHash || toHash === fromHash) return;
     const now = Math.floor(Date.now() / 1000);
@@ -2776,7 +2785,7 @@ async function notifyWallLike(env, toHash, fromHash, postId) {
 
 /* Validate an attached media_key: it must be an unlinked wall_media row. Returns
    { key, size } or null. */
-async function wallClaimMedia(env, mediaKey) {
+async function wallClaimMedia(env: any, mediaKey: any) {
   if (!mediaKey || !WALL_MEDIA_RE.test(String(mediaKey))) return null;
   const mr = await env.DB.prepare('SELECT size FROM wall_media WHERE key = ?1 AND ref_id IS NULL').bind(String(mediaKey)).first();
   return mr ? { key: String(mediaKey), size: mr.size } : null;
@@ -2784,7 +2793,7 @@ async function wallClaimMedia(env, mediaKey) {
 
 /* Create a post on my own wall (author = me), which also lands it in the feed.
    Turnstile + AI screen (held-if-flagged) exactly like a forum comment. */
-async function handleWallPost(request, env, ctx) {
+async function handleWallPost(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
@@ -2818,7 +2827,7 @@ async function handleWallPost(request, env, ctx) {
 }
 
 /* Comment on a post (text + optional media). Notifies the post author + mentions. */
-async function handleWallComment(request, env, ctx) {
+async function handleWallComment(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
@@ -2858,7 +2867,7 @@ async function handleWallComment(request, env, ctx) {
 /* Delete a post (and its comments + all their media) or a single comment. Author
    or admin only (Domain.Wall.canDelete). Hard delete — public content, no soft
    state to keep. */
-async function handleWallDelete(request, env) {
+async function handleWallDelete(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(data.key || '');
@@ -2884,7 +2893,7 @@ async function handleWallDelete(request, env) {
   const keys = [];
   if (row.media_key) keys.push(row.media_key);
   const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE post_id = ?1 AND media_key IS NOT NULL').bind(id).all();
-  (cm.results || []).forEach((r) => keys.push(r.media_key));
+  (cm.results || []).forEach((r: any) => keys.push(r.media_key));
   if (keys.length) await purgeWallMedia(env, keys);
   await env.DB.prepare('DELETE FROM wall_comments WHERE post_id = ?1').bind(id).run();
   await env.DB.prepare('DELETE FROM wall_likes WHERE post_id = ?1').bind(id).run();
@@ -2896,7 +2905,7 @@ async function handleWallDelete(request, env) {
    video/audio are validated by declared type + size only. Stored UNencrypted; the
    object key encodes the kind so the client can render it. Linked to its post/
    comment by handleWallPost/Comment; orphans (unlinked) are pruned. */
-async function handleWallMediaUpload(request, env) {
+async function handleWallMediaUpload(request: any, env: any) {
   if (!env.WALLMEDIA) return json({ ok: false, error: 'Media is unavailable.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -2936,7 +2945,7 @@ async function handleWallMediaUpload(request, env) {
 }
 
 /* Serve public post media, keyless + cacheable, same-origin (like avatars). */
-async function handleWallMediaGet(request, env, url) {
+async function handleWallMediaGet(request: any, env: any, url: any) {
   if (!env.WALLMEDIA) return new Response('gone', { status: 404 });
   const k = String(url.searchParams.get('key') || '');
   if (!WALL_MEDIA_RE.test(k)) return new Response('bad request', { status: 400 });
@@ -2952,14 +2961,14 @@ async function handleWallMediaGet(request, env, url) {
 
 /* Delete public posts/comments older than `days` and purge their media. Shared by
    the cron (only when auto-prune is enabled) and the admin "prune now" button. */
-async function runWallPrune(env, days) {
+async function runWallPrune(env: any, days: any) {
   const cutoff = Math.floor(Date.now() / 1000) - Wall.clampPruneDays(days) * 86400;
   let deleted = 0;
   try {
     const pm = await env.DB.prepare('SELECT media_key FROM wall_posts WHERE created_at < ?1 AND media_key IS NOT NULL LIMIT 5000').bind(cutoff).all();
-    const keys = (pm.results || []).map((r) => r.media_key);
+    const keys = (pm.results || []).map((r: any) => r.media_key);
     const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE media_key IS NOT NULL AND (created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)) LIMIT 5000').bind(cutoff).all();
-    (cm.results || []).forEach((r) => keys.push(r.media_key));
+    (cm.results || []).forEach((r: any) => keys.push(r.media_key));
     if (keys.length) await purgeWallMedia(env, keys);
     await env.DB.prepare('DELETE FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
     await env.DB.prepare('DELETE FROM wall_likes WHERE post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
@@ -2970,7 +2979,7 @@ async function runWallPrune(env, days) {
 }
 
 /* Cron entry (monthly chain): prune only when the admin turned it on. */
-async function pruneWallPosts(env) {
+async function pruneWallPosts(env: any) {
   const s = await getAppSettings(env);
   if (s.wall_prune_enabled !== '1') return;
   await runWallPrune(env, Number(s.wall_prune_days) || 365);
@@ -2978,7 +2987,7 @@ async function pruneWallPosts(env) {
 
 /* Admin "prune now" — runs regardless of the enabled flag, using the configured
    (or a passed) retention. */
-async function handleWallPrune(request, env) {
+async function handleWallPrune(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
@@ -2990,7 +2999,7 @@ async function handleWallPrune(request, env) {
 /* The notification badge count: unread rows for this reader, one indexed COUNT.
    Like the DM poll it fires at most once per ninety seconds and doubles as the
    logout trip for a locked or banned identity. */
-async function handleNotifUnread(request, env) {
+async function handleNotifUnread(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3010,7 +3019,7 @@ async function handleNotifUnread(request, env) {
 /* The notification list, newest first, paged by twenty. Each row carries the
    thread title, a snippet of the post, and the actor's nick so the client can
    render "X replied/mentioned you in <title>" and jump to the exact comment. */
-async function handleNotifList(request, env) {
+async function handleNotifList(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3035,7 +3044,7 @@ async function handleNotifList(request, env) {
     'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END), 0) AS unread ' +
     'FROM notifications WHERE recipient_hash = ?1'
   ).bind(me).first();
-  const items = (rows.results || []).map((r) => Object.assign({}, r,
+  const items = (rows.results || []).map((r: any) => Object.assign({}, r,
     { actor_assigned: r.actor_hash ? displayName(r.actor_hash) : null }));
   return json({ ok: true, items, total: totals.n || 0,
     unread_total: totals.unread || 0, page: p, per: NOTIF_PER_PAGE }, 200);
@@ -3043,7 +3052,7 @@ async function handleNotifList(request, env) {
 
 /* Opening the list marks everything read, the notifications analogue of opening
    a DM thread. One write; the badge clears on the client's next poll. */
-async function handleNotifRead(request, env) {
+async function handleNotifRead(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3063,7 +3072,7 @@ async function handleNotifRead(request, env) {
 /* Watch, unwatch, or read the state of a thread. Posting a reply auto-watches;
    this is the manual toggle in the topic header. 'status' is a cheap read, so it
    rides READ_LIMIT; the mutations ride the stricter write limit. */
-async function handleWatch(request, env) {
+async function handleWatch(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(data.key || '');
@@ -3090,14 +3099,14 @@ async function handleWatch(request, env) {
 /* Board read state ("new since last visit"). A thread reads as new when its
    last activity is newer than the reader's read stamp for it, or than the floor
    (the topic_id=0 row) when they have never opened it. */
-async function boardFloor(env, me) {
+async function boardFloor(env: any, me: any) {
   const row = await env.DB.prepare('SELECT read_at FROM thread_reads WHERE hash = ?1 AND topic_id = 0').bind(me).first();
   return row ? row.read_at : null;
 }
 
 /* Unread summary for the board index. On a reader's first-ever call the floor is
    set to now, so nothing before this visit reads as new (start-all-read). */
-async function handleBoardUnread(request, env) {
+async function handleBoardUnread(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3124,14 +3133,14 @@ async function handleBoardUnread(request, env) {
     (adm ? '' : "AND c.page != 'board:adminsonly' ") +
     'AND COALESCE(c.last_at, c.created_at) > COALESCE(tr.read_at, ?2) GROUP BY c.page'
   ).bind(me, floor).all();
-  const byCat = {};
+  const byCat: any = {};
   let total = 0;
   for (const r of (rows.results || [])) { byCat[String(r.page).slice(6)] = r.n; total += r.n; }
   return json({ ok: true, total, byCat }, 200);
 }
 
 /* The unread topic ids in one category, so the listing can mark them "new". */
-async function handleBoardReads(request, env) {
+async function handleBoardReads(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3150,11 +3159,11 @@ async function handleBoardReads(request, env) {
     "WHERE c.page = ?2 AND c.parent_id IS NULL AND c.status = 'live' " +
     'AND COALESCE(c.last_at, c.created_at) > COALESCE(tr.read_at, ?3)'
   ).bind(me, catPage, floor).all();
-  return json({ ok: true, unread: (rows.results || []).map((r) => r.id) }, 200);
+  return json({ ok: true, unread: (rows.results || []).map((r: any) => r.id) }, 200);
 }
 
 /* Mark one thread read — fired on opening a topic. */
-async function handleBoardRead(request, env) {
+async function handleBoardRead(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3186,7 +3195,7 @@ async function handleBoardRead(request, env) {
 
 /* Mark everything read: raise the floor to now and drop the per-thread rows it
    now subsumes, so the table stays lean. */
-async function handleBoardReadAll(request, env) {
+async function handleBoardReadAll(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3208,7 +3217,7 @@ async function handleBoardReadAll(request, env) {
 }
 
 /* Block and unblock, owner-side only. */
-async function handleDmBlock(request, env) {
+async function handleDmBlock(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -3263,7 +3272,7 @@ async function handleDmBlock(request, env) {
    earlier word from me while the other keeps their copy; when both sides have
    cleared and no word outlives the earlier clear, the thread and all its words
    are purged so nothing persists. Keyed, not admin — you delete your own. */
-async function handleDmDelete(request, env) {
+async function handleDmDelete(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -3300,7 +3309,7 @@ async function handleDmDelete(request, env) {
     if (!surv.n) {
       /* Reclaim any R2 media the purged messages carried (D1 can't cascade to R2). */
       const media = await env.DB.prepare('SELECT media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
-      await purgeMediaKeys(env, (media.results || []).map((r) => r.media_key).filter(Boolean));
+      await purgeMediaKeys(env, (media.results || []).map((r: any) => r.media_key).filter(Boolean));
       await env.DB.prepare('DELETE FROM dms WHERE thread_id = ?1').bind(thread.id).run();
       await env.DB.prepare('DELETE FROM dm_threads WHERE id = ?1').bind(thread.id).run();
       purged = true;
@@ -3313,7 +3322,7 @@ async function handleDmDelete(request, env) {
    its nick when one is set and its server-resolved `assigned` pseudonym (the web
    client derives the same value from the hash; native clients read it here).
    Public-by-construction data, cacheable. */
-async function handleDmDirectory(request, env, url) {
+async function handleDmDirectory(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -3332,7 +3341,7 @@ async function handleDmDirectory(request, env, url) {
     "WHERE u.hash != ?1 AND (pr.nick IS NULL OR pr.nick NOT LIKE 'merecat%') " +
     'ORDER BY u.joined DESC LIMIT 2000'
   ).bind(MERECAT_BOT.hash).all();
-  const users = (rows.results || []).map((r) => Object.assign({}, r,
+  const users = (rows.results || []).map((r: any) => Object.assign({}, r,
     { assigned: r.hash ? displayName(r.hash) : null }));
   return json({ ok: true, users }, 200, cacheHeader(url));
 }
@@ -3344,7 +3353,7 @@ async function handleDmDirectory(request, env, url) {
    idempotent — keygen is deterministic, so re-publishing the same key is a
    no-op, and only the key's owner can ever change the row. The server never sees
    or can derive the private key from the hash it holds. */
-async function handleDmPubkey(request, env) {
+async function handleDmPubkey(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -3382,11 +3391,11 @@ const MAX_AVATAR_BYTES = 1024 * 1024;
 const AVATAR_MIN = 96;
 const AVATAR_MAX = 1024;
 
-function be16(b, i) { return (b[i] << 8) | b[i + 1]; }
+function be16(b: any, i: any) { return (b[i] << 8) | b[i + 1]; }
 
 /* Returns {mime, width, height} or null. Only the three raster formats a
    browser canvas emits are recognized; everything else is refused. */
-function sniffImage(b) {
+function sniffImage(b: any) {
   if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47 &&
       b[4] === 0x0D && b[5] === 0x0A && b[6] === 0x1A && b[7] === 0x0A) {
     return { mime: 'image/png',
@@ -3431,7 +3440,7 @@ function sniffImage(b) {
    error: a throttled or broken model must not block every avatar, and the
    owner still sees and can clear any that slip through. Not a guarantee, and
    never a substitute for CSAM hash-scanning, which is a separate control. */
-async function screenImage(env, bytes) {
+async function screenImage(env: any, bytes: any) {
   try {
     const result = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
       image: [...bytes],
@@ -3459,7 +3468,7 @@ async function screenImage(env, bytes) {
    librarian's reserved-name guard, empty fields clearing their columns, and
    clear_avatar removing both the R2 object and the column. Only admins pass;
    a regular key is refused before anything is read. */
-async function handleProfileAdminEdit(request, env) {
+async function handleProfileAdminEdit(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3493,7 +3502,7 @@ async function handleProfileAdminEdit(request, env) {
   return json({ ok: true }, 200);
 }
 
-async function handleAvatarUpload(request, env) {
+async function handleAvatarUpload(request: any, env: any) {
   if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -3543,7 +3552,7 @@ async function handleAvatarUpload(request, env) {
 
 /* Owner removes their own avatar: the object is deleted and the profile flag
    cleared. Same gates as self-deleting a comment. */
-async function handleAvatarDelete(request, env) {
+async function handleAvatarDelete(request: any, env: any) {
   if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
   let data;
   try {
@@ -3567,7 +3576,7 @@ async function handleAvatarDelete(request, env) {
    a deny-all CSP, so the bytes can never run as anything. Long browser cache;
    the URL carries the upload stamp as a cache-buster, so a new avatar is a
    new URL. No rate limiter: one page can hold many authors. */
-async function handleAvatarGet(request, env, url) {
+async function handleAvatarGet(request: any, env: any, url: any) {
   if (!env.AVATARS) return new Response('No avatar.', { status: 404 });
   const hash = String(url.searchParams.get('hash') || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return new Response('Bad request.', { status: 400 });
@@ -3591,7 +3600,7 @@ async function handleAvatarGet(request, env, url) {
    The dump carries the search index's virtual table and triggers and rebuilds
    it from the restored rows, so the one file brings search back on its own. ---- */
 
-function sqlLit(v) {
+function sqlLit(v: any) {
   if (v === null || v === undefined) return 'NULL';
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
   return "'" + String(v).replace(/'/g, "''") + "'";
@@ -3600,7 +3609,7 @@ function sqlLit(v) {
 /* A restorable dump: every user table's CREATE (as IF NOT EXISTS) and rows,
    then the indexes. Explicit ids in the INSERTs carry the AUTOINCREMENT
    sequence along on their own. */
-async function dumpDatabase(env) {
+async function dumpDatabase(env: any) {
   const master = await env.DB.prepare(
     "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL " +
     "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'comments_fts%' " +
@@ -3617,7 +3626,7 @@ async function dumpDatabase(env) {
       const colList = cols.map((c) => '"' + c + '"').join(', ');
       for (let i = 0; i < rs.length; i += 50) {
         const values = rs.slice(i, i + 50)
-          .map((r) => '(' + cols.map((c) => sqlLit(r[c])).join(', ') + ')').join(',\n');
+          .map((r: any) => '(' + cols.map((c) => sqlLit(r[c])).join(', ') + ')').join(',\n');
         parts.push('INSERT INTO "' + m.name + '" (' + colList + ') VALUES\n' + values + ';');
       }
     } else if (m.type === 'index') {
@@ -3638,7 +3647,7 @@ async function dumpDatabase(env) {
   return parts.join('\n');
 }
 
-async function gzipBytes(text) {
+async function gzipBytes(text: any) {
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
@@ -3648,7 +3657,7 @@ const BACKUP_KEEP_DAYS = 90;
 /* The Known-IPs history is not a ledger: rows idle past IP_KEEP_DAYS go, and
    banned keys stay whatever their age so a standing ban keeps its handle in
    the drawer. One statement, once a month, riding the backup cron. */
-async function pruneIdentityIps(env) {
+async function pruneIdentityIps(env: any) {
   const cutoff = Math.floor(Date.now() / 1000) - IP_KEEP_DAYS * 86400;
   try {
     const r = await env.DB.prepare(
@@ -3666,7 +3675,7 @@ async function pruneIdentityIps(env) {
    then sweeps the live replies stranded when a topic was deleted (topic delete
    does not cascade to its replies). Pending rows are left for the admin queue,
    and each statement is guarded so a failure can't stop the backup behind it. */
-async function pruneComments(env) {
+async function pruneComments(env: any) {
   const cutoff = Math.floor(Date.now() / 1000) - DELETED_KEEP_DAYS * 86400;
   try {
     const r = await env.DB.prepare(
@@ -3694,7 +3703,7 @@ async function pruneComments(env) {
    threads left with no messages. handleDmDelete purges in two statements, so a
    crash between them could strand one side; this catches that drift. Held
    messages and deleted-identity threads are deliberately left whole. */
-async function sweepDms(env) {
+async function sweepDms(env: any) {
   try {
     const r = await env.DB.prepare(
       'DELETE FROM dms WHERE thread_id NOT IN (SELECT id FROM dm_threads)'
@@ -3717,7 +3726,7 @@ async function sweepDms(env) {
    notification whose post is gone, and a watch on a vanished thread. Unread
    notifications are kept however old, since the reader has not seen them yet.
    Each statement is guarded so one failure never stops the backup behind it. */
-async function pruneNotifications(env) {
+async function pruneNotifications(env: any) {
   const cutoff = Math.floor(Date.now() / 1000) - NOTIFICATIONS_KEEP_DAYS * 86400;
   try {
     const r = await env.DB.prepare(
@@ -3773,7 +3782,7 @@ async function pruneNotifications(env) {
   }
 }
 
-async function runBackup(env) {
+async function runBackup(env: any) {
   if (!env.BACKUPS) return { error: 'BACKUPS bucket not bound; enable R2 and redeploy.' };
   const sql = await dumpDatabase(env);
   const gz = await gzipBytes(sql);
@@ -3813,7 +3822,7 @@ async function runBackup(env) {
 
 /* Admin-only manual run of the same backup the cron performs, so the path
    can be exercised any day, not only on the first of the month. */
-async function handleBackup(request, env) {
+async function handleBackup(request: any, env: any) {
   let data;
   try {
     data = await request.json();
@@ -3833,13 +3842,13 @@ async function handleBackup(request, env) {
 /* ---- In-platform moderation. Every control demands a key hashing into
    ADMIN_HASHES; the old signed email links are gone entirely. ---- */
 
-async function requireAdmin(env, key) {
+async function requireAdmin(env: any, key: any) {
   return !!key && (await isAdminHash(env, await sha256hex(key)));
 }
 
 /* Lock or unlock an identity: a reversible disable that logs the holder out
    and refuses every keyed interaction until reversed. */
-async function handleLock(request, env) {
+async function handleLock(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3861,7 +3870,7 @@ async function handleLock(request, env) {
 /* Delete a user and all their public posts: comments go to 'deleted', the
    profile and avatar are removed, and the identity is locked so the same key
    cannot post again. Private DMs are left untouched. */
-async function handleDeleteUser(request, env) {
+async function handleDeleteUser(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3890,7 +3899,7 @@ async function handleDeleteUser(request, env) {
    key: a v4 address verbatim, a v6 address to its /64 prefix, so one row holds
    a whole rotating /64 and banning an identity's addresses shuts both families
    at once. */
-async function handleIpBan(request, env) {
+async function handleIpBan(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const cip = request.headers.get('CF-Connecting-IP') || '';
@@ -3915,7 +3924,7 @@ async function handleIpBan(request, env) {
 /* Lazy, admin-only reverse-DNS for the IPs of one fingerprint, fetched when a
    drawer opens. Kept off the bulk meta path and the poster's write path; a
    handful of DoH lookups per call, well under the free-tier subrequest cap. */
-async function handleRdns(request, env) {
+async function handleRdns(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3923,8 +3932,8 @@ async function handleRdns(request, env) {
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const ips = Array.isArray(data.ips) ? data.ips.slice(0, 8) : [];
-  const rdns = {};
-  await Promise.all(ips.map(async (raw) => {
+  const rdns: any = {};
+  await Promise.all(ips.map(async (raw: any) => {
     const s = String(raw || '').trim();
     if (looksLikeIp(s)) rdns[s] = await ptrLookup(s);
   }));
@@ -3932,7 +3941,7 @@ async function handleRdns(request, env) {
 }
 
 /* The banned-IP list for the admin page. */
-async function handleIpBans(request, env) {
+async function handleIpBans(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3947,7 +3956,7 @@ async function handleIpBans(request, env) {
    only surfaces it in the Activity audit's Reported queue. One report per member
    per post (INSERT OR IGNORE against the UNIQUE), so no brigade can inflate a
    count or hide anything. An optional short reason rides along. */
-async function handleReport(request, env) {
+async function handleReport(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3973,7 +3982,7 @@ async function handleReport(request, env) {
 
 /* An admin dismisses a post's reports, clearing it from the Reported queue while
    leaving the post itself alone. */
-async function handleReportDismiss(request, env) {
+async function handleReportDismiss(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -3988,7 +3997,7 @@ async function handleReportDismiss(request, env) {
 }
 
 /* Approve a held comment: the in-platform replacement for the old email link. */
-async function handleApprove(request, env, ctx) {
+async function handleApprove(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4037,7 +4046,7 @@ async function handleApprove(request, env, ctx) {
 }
 
 /* The pending-review queue: every held comment, newest first. */
-async function handlePending(request, env) {
+async function handlePending(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4055,7 +4064,7 @@ async function handlePending(request, env) {
 /* The admin roster for the console: every admin, equal, each removable, carried
    with the name they post under so the list reads in people, not hashes. Seeded
    from the env owners on first view so they appear as ordinary rows. */
-async function handleAdmins(request, env) {
+async function handleAdmins(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4064,14 +4073,14 @@ async function handleAdmins(request, env) {
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   await ensureAdminsSeeded(env);
   const dyn = await env.DB.prepare('SELECT hash, created_at FROM admins ORDER BY created_at, hash').all();
-  const list = (dyn.results || []).map((r) => ({ hash: r.hash, created_at: r.created_at }));
+  const list = (dyn.results || []).map((r: any) => ({ hash: r.hash, created_at: r.created_at }));
   /* Resolve each admin's chosen nick in one query; the assigned pseudonym is
      pure from the hash, so it fills the rest. */
   if (list.length) {
-    const ph = list.map((_, i) => '?' + (i + 1)).join(',');
+    const ph = list.map((_: any, i: any) => '?' + (i + 1)).join(',');
     const rows = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')')
-      .bind(...list.map((a) => a.hash)).all();
-    const nick = {};
+      .bind(...list.map((a: any) => a.hash)).all();
+    const nick: any = {};
     for (const r of (rows.results || [])) nick[r.hash] = r.nick;
     for (const a of list) { a.nick = nick[a.hash] || null; a.assigned = displayName(a.hash); }
   }
@@ -4083,7 +4092,7 @@ async function handleAdmins(request, env) {
    included. The one guard is a rule about count, not about who — the last admin
    cannot be removed, so the board is never left with none, an irreversible
    lockout. Add another first, then step down. */
-async function handleAdmin(request, env) {
+async function handleAdmin(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4160,7 +4169,7 @@ const MERECAT_MENTION_RE = /@merecat\b/i;
 /* A mention inside a quoted line is someone else's words: quoting a summons
    must not resummon (nor charge the quoter a question). Only unquoted text
    can call the librarian. */
-function merecatMentioned(body) {
+function merecatMentioned(body: any) {
   const unquoted = String(body || '').split('\n')
     .filter((l) => !/^\s*>/.test(l)).join('\n');
   return MERECAT_MENTION_RE.test(unquoted);
@@ -4170,9 +4179,9 @@ const MERECAT_RV = 15;  // retrieval build: bump when retrieval logic changes
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
    a config push clears this isolate at once and the rest lag out the TTL. */
-let merecatConfigCache = { at: 0, cfg: null };
+let merecatConfigCache: any = { at: 0, cfg: null };
 
-async function merecatConfig(env) {
+async function merecatConfig(env: any) {
   if (merecatConfigCache.cfg && Date.now() - merecatConfigCache.at < 300000) {
     return merecatConfigCache.cfg;
   }
@@ -4186,7 +4195,7 @@ async function merecatConfig(env) {
       else if (r.k === 'failover') cfg.failover = Number(r.v) ? 1 : 0;
       else if (r.k === 'mention_effort') cfg.mention_effort = String(r.v);
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
-      else if (r.k in MERECAT_DEFAULTS) cfg[r.k] = Number(r.v) || MERECAT_DEFAULTS[r.k];
+      else if (r.k in MERECAT_DEFAULTS) (cfg as any)[r.k] = Number(r.v) || (MERECAT_DEFAULTS as any)[r.k];
     }
   } catch (err) {
     console.log(JSON.stringify({ event: 'merecat_config_failed', error: String(err) }));
@@ -4208,7 +4217,7 @@ function merecatThinkStripper() {
   let carry = '';
   let inThink = false;
   let started = false; // trim leading whitespace once, after any think block
-  return function feed(delta) {
+  return function feed(delta: any) {
     if (delta != null) carry += delta;
     let out = '';
     for (;;) {
@@ -4245,7 +4254,7 @@ function merecatThinkStripper() {
    matches. Every token is double-quoted, so no FTS5 operator can ride in. The
    stopword set, the sub-2-char/dedup filter, and the quoting are single-sourced
    in Domain.Fts (a `SafeMatch`, injection-proof by construction). */
-function merecatMatch(q) {
+function merecatMatch(q: any) {
   return Fts.unSafeMatch(Fts.merecatMatch(String(q ?? '')));
 }
 
@@ -4254,7 +4263,7 @@ function merecatMatch(q) {
    six-word phrase that texts merely discussing it rarely reproduce. Slide
    windows over the question's tokens (stopwords kept, phrases need them)
    and offer the longest few as FTS phrase alternatives. */
-function merecatPhrases(q) {
+function merecatPhrases(q: any) {
   const words = String(q || '').match(/[A-Za-z0-9À-ɏ'’]+/g) || [];
   if (words.length < 5) return '';
   const phrases = [];
@@ -4281,7 +4290,7 @@ const MERECAT_BIBLE = (() => {
     // The 66-book KJV core is single-sourced from Domain.Scripture (the same
     // table the client autolinks against), so the "must stay in step" hazard
     // cannot recur. Only the Vulgate namings and deuterocanon below are added.
-    ...Scripture.bibleSpec.map((r) => [r.slug, r.spellings.join('|')]),
+    ...Scripture.bibleSpec.map((r: any) => [r.slug, r.spellings.join('|')]),
     // Vulgate namings and the deuterocanon, resolved to the canonical slug
     ['joshua', 'josue'], ['ezra', '1 esdras'], ['nehemiah', '2 esdras'],
     ['1-chronicles', '1 paralipomenon|i paralipomenon'],
@@ -4298,7 +4307,7 @@ const MERECAT_BIBLE = (() => {
     ['1-machabees', '1 machabees|1 maccabees|1 macc|1 mac|i machabees|i maccabees|first machabees'],
     ['2-machabees', '2 machabees|2 maccabees|2 macc|2 mac|ii machabees|ii maccabees|second machabees']
   ];
-  const map = {}; const forms = [];
+  const map: any = {}; const forms = [];
   for (const row of spec) for (let f of row[1].split('|')) {
     f = f.trim(); if (f) { map[f] = row[0]; forms.push(f); }
   }
@@ -4322,7 +4331,7 @@ const MERECAT_KJV2DR = {
   'malachi': 'malachias', 'obadiah': 'abdias', 'revelation': 'apocalypse',
 };
 
-async function merecatVerseSeats(env, q, add) {
+async function merecatVerseSeats(env: any, q: any, add: any) {
   const jobs = []; const seen = new Set();
   MERECAT_BIBLE.re.lastIndex = 0;
   let m;
@@ -4338,7 +4347,7 @@ async function merecatVerseSeats(env, q, add) {
   for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
     if (!db) continue;
     for (const j of jobs) {
-      for (const s of new Set([j.slug, MERECAT_KJV2DR[j.slug] || j.slug])) {
+      for (const s of new Set([j.slug, (MERECAT_KJV2DR as any)[j.slug] || j.slug])) {
         try {
           const base = s + '-' + j.ch;
           const rows = await db.prepare(
@@ -4369,7 +4378,7 @@ async function merecatVerseSeats(env, q, add) {
    and prompt windows must read as plain text wherever they surface (the
    footer, the board, the model's own eyes) — including sources stored in
    old chats before the ingest-side scrub existed. */
-function merecatScrub(t, keepNl) {
+function merecatScrub(t: any, keepNl?: any) {
   let x = String(t || '').replace(/<\/?[a-zA-Z][^>]{0,300}?>/g, ' ')
     .replace(/&#x([0-9a-fA-F]{1,6});/g, (m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch { return ' '; } })
     .replace(/&#(\d{1,7});/g, (m, n) => { try { return String.fromCodePoint(+n); } catch { return ' '; } })
@@ -4381,9 +4390,9 @@ function merecatScrub(t, keepNl) {
 /* Hybrid retrieval: returns up to cfg.topk chunks, each
    { cid, title, url, anchor, heading, tier, text }. Every leg fails soft so a
    broken index degrades the answer instead of killing it. */
-async function merecatRetrieve(env, q, cfg) {
+async function merecatRetrieve(env: any, q: any, cfg: any) {
   const pool = new Map(); // cid -> chunk row stub
-  const add = (r, sem, phr) => {
+  const add = (r: any, sem: any, phr?: any) => {
     if (!r || !r.cid) return;
     const had = pool.get(r.cid);
     if (had) { if (phr) had.phr = true; return; }
@@ -4399,7 +4408,7 @@ async function merecatRetrieve(env, q, cfg) {
     const vec = emb && emb.data && emb.data[0];
     if (vec) {
       const res = await env.MERECAT_INDEX.query(vec, { topK: 8, returnMetadata: 'none' });
-      semIds = (res && res.matches ? res.matches : []).map((m) => m.id);
+      semIds = (res && res.matches ? res.matches : []).map((m: any) => m.id);
     }
   } catch (err) {
     console.log(JSON.stringify({ event: 'merecat_semantic_failed', error: String(err) }));
@@ -4407,8 +4416,8 @@ async function merecatRetrieve(env, q, cfg) {
   if (semIds.length) {
     // hydrate matches from whichever room holds them: vectorized works may
     // live in any database (the worldview core rides deep2)
-    const byCid = {};
-    const ph = semIds.map((_, i) => '?' + (i + 1)).join(',');
+    const byCid: any = {};
+    const ph = semIds.map((_: any, i: any) => '?' + (i + 1)).join(',');
     for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
       if (!db) continue;
       try {
@@ -4482,8 +4491,8 @@ async function merecatRetrieve(env, q, cfg) {
       }));
       const rr = await env.AI.run('@cf/baai/bge-reranker-base', { query: q, contexts });
       const scored = (rr && rr.response ? rr.response : [])
-        .filter((s) => s && Number.isInteger(s.id) && candidates[s.id])
-        .sort((a, b) => b.score - a.score);
+        .filter((s: any) => s && Number.isInteger(s.id) && candidates[s.id])
+        .sort((a: any, b: any) => b.score - a.score);
       if (scored.length) {
         const seen = new Set();
         const ranked = [];
@@ -4520,7 +4529,7 @@ async function merecatRetrieve(env, q, cfg) {
    tail and the proxy pump's mid-flight failover, so the two can never drift:
    persona, the thread's condensed summary when one exists, the numbered
    sources, the recent turns verbatim, the question. */
-async function merecatPrompt(env, q, history, summary, cfg) {
+async function merecatPrompt(env: any, q: any, history: any, summary: any, cfg: any) {
   const chunks = await merecatRetrieve(env, q, cfg);
   const sources = chunks.map((c, i) => ({
     n: i + 1, title: merecatScrub(c.title), heading: merecatScrub(c.heading),
@@ -4528,7 +4537,7 @@ async function merecatPrompt(env, q, history, summary, cfg) {
   }));
   let srcBlock = '';
   chunks.forEach((c, i) => {
-    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + merecatScrub(c.title) +
+    srcBlock += '[' + (i + 1) + '] (' + ((MERECAT_TIER_LABEL as any)[c.tier] || 'shelf') + ') ' + merecatScrub(c.title) +
       (c.heading ? ' — ' + merecatScrub(c.heading) : '') + '\n' + merecatScrub(c.text.slice(0, 2800), true) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
@@ -4548,7 +4557,7 @@ async function merecatPrompt(env, q, history, summary, cfg) {
 /* POST a question to the local bot over the Funnel with the shared key. Returns
    the streaming Response, or null on any failure (offline, refused, queue full)
    so the caller can fail over to the cloud when that is enabled. */
-async function merecatLocalFetch(env, body, ctl) {
+async function merecatLocalFetch(env: any, body: any, ctl?: any) {
   const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
   if (!base) return null;
   // serve.py sends headers at once (before its GPU wait), so a slow header is a
@@ -4580,7 +4589,7 @@ async function merecatLocalFetch(env, body, ctl) {
       clearTimeout(headerTimer);
       if (r.status === 503) {
         // full queue, not a dead machine — let the caller say so honestly
-        let refuse = null;
+        let refuse: any = null;
         try { refuse = await r.json(); } catch { /* not JSON */ }
         if (refuse && refuse.busy) return { busy: true };
         return null;
@@ -4590,7 +4599,7 @@ async function merecatLocalFetch(env, body, ctl) {
       console.log(JSON.stringify({ event: 'merecat_local_unreachable', status: r.status, attempt }));
     } catch (err) {
       clearTimeout(headerTimer);
-      retriable = (Date.now() - t0) < 5000 && !(err && err.name === 'AbortError');
+      retriable = (Date.now() - t0) < 5000 && !(err && (err as any).name === 'AbortError');
       console.log(JSON.stringify({ event: 'merecat_local_unreachable', error: String(err), attempt }));
     }
     if (!retriable || attempt >= 2) return null;
@@ -4601,11 +4610,11 @@ async function merecatLocalFetch(env, body, ctl) {
 /* Read a local answer fully — for @merecat mentions, which post a comment
    rather than stream to a browser. Skips any leading {queue} notices, reads
    the {sources} header, and returns { sources, answer } or null. */
-async function merecatLocalRead(env, body) {
+async function merecatLocalRead(env: any, body: any) {
   // A whole-call deadline: a mention read runs inside waitUntil, where a hung
   // local stream would otherwise park until the runtime kills the invocation.
   const ctl = new AbortController();
-  const resp = await merecatLocalFetch(env, body, ctl);
+  const resp: any = await merecatLocalFetch(env, body, ctl);
   if (!resp || resp.busy) return resp;   // null offline, {busy} full queue
   const deadline = setTimeout(() => { try { ctl.abort(); } catch { /* raced */ } }, 600000);
   let full = '';
@@ -4631,7 +4640,7 @@ async function merecatLocalRead(env, body) {
   return { sources, answer: rest.trim() };
 }
 
-async function handleMerecatStore(request, env) {
+async function handleMerecatStore(request: any, env: any) {
   /* Retired: the ChatRoom Durable Object is the sole D1 writer now (the WS
      path calls serve.py without chat/msg, so serve.py never calls back
      here). Kept as a no-op so any in-flight callback from a pre-cutover
@@ -4645,7 +4654,7 @@ async function handleMerecatStore(request, env) {
    librarian (to guide what to teach it next) WITHOUT participating. They only
    ever SELECT — no prune, no write, nothing touched. This deliberately adds
    the admin-read path the design once withheld, now that the terms allow it. */
-async function handleMerecatAdminThreads(request, env) {
+async function handleMerecatAdminThreads(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4667,8 +4676,8 @@ async function handleMerecatAdminThreads(request, env) {
   ).bind(cut, per, (pg - 1) * per).all();
   const threads = rows.results || [];
   /* Nicks live in the comments DB, not LIBDB — resolve them in one batch. */
-  const hashes = [...new Set(threads.map((t) => t.hash).filter(Boolean))];
-  const nicks = {};
+  const hashes = [...new Set(threads.map((t: any) => t.hash).filter(Boolean))];
+  const nicks: any = {};
   if (hashes.length) {
     const ph = hashes.map((_, i) => '?' + (i + 1)).join(',');
     const prof = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')').bind(...hashes).all();
@@ -4678,7 +4687,7 @@ async function handleMerecatAdminThreads(request, env) {
   return json({ ok: true, threads, total: (total && total.n) || 0, page: pg, per }, 200);
 }
 
-async function handleMerecatAdminThread(request, env) {
+async function handleMerecatAdminThread(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4707,15 +4716,15 @@ async function handleMerecatAdminThread(request, env) {
    until a refresh rode the warmed route. Escalating tries — each failure
    warms the way for the next — and the answer carries what /health knows:
    readiness, the reranker canary, and the measured round trip. */
-async function handleMerecatBackends(request, env) {
-  let data = {};
+async function handleMerecatBackends(request: any, env: any) {
+  let data: any = {};
   try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const cfg = await merecatConfig(env);
   const day = merecatDay();
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   const today = (g && g.q) || 0;
-  let local = { online: false };
+  let local: any = { online: false };
   const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
   if (base) {
     const budgets = [1500, 3000, 5000];
@@ -4727,7 +4736,7 @@ async function handleMerecatBackends(request, env) {
         const r = await fetch(base + '/health', { signal: ctl.signal });
         clearTimeout(timer);
         if (r.ok) {
-          const h = await r.json();
+          const h: any = await r.json();
           local = { online: true, ms: Date.now() - t0, tries: i + 1,
             chunks: h.chunks || 0, model: h.model || '',
             ready: h.ready !== false, why: h.why || '',
@@ -4751,7 +4760,7 @@ async function handleMerecatBackends(request, env) {
 const MERECAT_WINDOW = 10;   // newest turns sent verbatim
 const MERECAT_FOLD_MIN = 4;  // fold only when this many turns have aged out
 
-async function merecatFold(env, cfg, chatId) {
+async function merecatFold(env: any, cfg: any, chatId: any) {
   try {
     const chat = await env.LIBDB.prepare(
       'SELECT summary, summarized_to FROM chats WHERE id = ?1').bind(chatId).first();
@@ -4761,9 +4770,9 @@ async function merecatFold(env, cfg, chatId) {
     const rows = all.results || [];
     if (rows.length <= MERECAT_WINDOW) return;
     const cutoff = rows[rows.length - MERECAT_WINDOW].id;
-    const aged = rows.filter((r) => r.id < cutoff && r.id > (chat.summarized_to || 0));
+    const aged = rows.filter((r: any) => r.id < cutoff && r.id > (chat.summarized_to || 0));
     if (aged.length < MERECAT_FOLD_MIN) return;
-    const notes = aged.map((r) =>
+    const notes = aged.map((r: any) =>
       (r.role === 'user' ? 'Reader: ' : 'Librarian: ') + String(r.body).slice(0, 800)).join('\n');
     const res = await env.AI.run(cfg.model, {
       messages: [
@@ -4795,7 +4804,7 @@ async function merecatFold(env, cfg, chatId) {
    moment anyone looks; the monthly cron sweeps the never-returning rest. */
 const MERECAT_CHAT_DAYS = 30;
 
-async function handleMerecatChats(request, env) {
+async function handleMerecatChats(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4820,7 +4829,7 @@ async function handleMerecatChats(request, env) {
   return json({ ok: true, chats: rows.results || [] }, 200);
 }
 
-async function handleMerecatChat(request, env) {
+async function handleMerecatChat(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4842,7 +4851,7 @@ async function handleMerecatChat(request, env) {
   return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
 }
 
-async function handleMerecatChatDelete(request, env) {
+async function handleMerecatChatDelete(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4868,7 +4877,7 @@ async function handleMerecatChatDelete(request, env) {
    thirty-day expiry — both the listing's opportunistic prune and the monthly
    cron pass it by — until its owner unsaves or deletes it. Unsaving a thread
    already past the cut lets the next sweep take it, which the client warns of. */
-async function handleMerecatChatSave(request, env) {
+async function handleMerecatChatSave(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -4895,7 +4904,7 @@ async function handleMerecatChatSave(request, env) {
 /* Monthly sweep of expired threads (the opportunistic per-owner prune in
    handleMerecatChats covers everyone who returns; this catches the rest).
    Self-contained like every prune, so a failure never stops the backup. */
-async function pruneMerecatChats(env) {
+async function pruneMerecatChats(env: any) {
   try {
     const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
     await env.LIBDB.batch([
@@ -4919,7 +4928,7 @@ async function pruneMerecatChats(env) {
    append batches (rows, and vectors for Tier-1 works), then end (stamp the
    content hash — the completeness marker an interrupted push never reaches,
    so the next run redoes that work). mode delete removes a work outright. */
-async function handleMerecatIngest(request, env) {
+async function handleMerecatIngest(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
@@ -5017,7 +5026,7 @@ async function handleMerecatIngest(request, env) {
         for (let attempt = 0; attempt < 2 && !vecs; attempt++) {
           try {
             const emb = await env.AI.run('@cf/baai/bge-m3', {
-              text: slice.map((r) => (r.heading ? r.heading + ': ' : '') + String(r.text || '').slice(0, 1800)),
+              text: slice.map((r: any) => (r.heading ? r.heading + ': ' : '') + String(r.text || '').slice(0, 1800)),
             });
             vecs = (emb && emb.data) || null;
           } catch (err) {
@@ -5068,7 +5077,7 @@ async function handleMerecatIngest(request, env) {
    R2 under its hash like anyone's): Nicene by confession, bio and signature
    fixed, upserted on every reply so this code stays the source of truth. The
    avatar column is left alone — it carries the upload stamp. */
-async function merecatEnsureProfile(env) {
+async function merecatEnsureProfile(env: any) {
   const now = Math.floor(Date.now() / 1000);
   const bio =
     'The librarian. I keep the front desk of this site’s Library: the Scriptures in two editions, ' +
@@ -5086,9 +5095,9 @@ async function merecatEnsureProfile(env) {
   ).bind(MERECAT_BOT.hash, MERECAT_BOT.nick, bio, signature, now).run();
 }
 
-async function merecatNames(env, hashes) {
-  const uniq = [...new Set(hashes.filter((h) => h))];
-  const out = {};
+async function merecatNames(env: any, hashes: any) {
+  const uniq = [...new Set(hashes.filter((h: any) => h))];
+  const out: any = {};
   if (!uniq.length) return out;
   const ph = uniq.map((_, i) => '?' + (i + 1)).join(',');
   const rows = await env.DB.prepare(
@@ -5100,7 +5109,7 @@ async function merecatNames(env, hashes) {
 /* Post the bot's comment: a reply under the topic on the board, a flat (or
    same-parent) comment on an article page. Board replies bump the topic and
    fan out notifications like anyone's reply, so the asker hears back. */
-async function merecatInsertComment(env, src, isBoard, topicId, topicAuthorHash, body) {
+async function merecatInsertComment(env: any, src: any, isBoard: any, topicId: any, topicAuthorHash: any, body: any) {
   await merecatEnsureProfile(env);
   const now = Math.floor(Date.now() / 1000);
   const parent = isBoard ? topicId : (src.parent_id || null);
@@ -5142,29 +5151,29 @@ async function merecatInsertComment(env, src, isBoard, topicId, topicAuthorHash,
    footer labels bracket-sanitized (a heading like "[The Contemporary
    Review]" nested in [text](url) breaks the markdown link and prints raw).
    Shared by @merecat thread replies and forwarded chat answers. */
-function merecatFinishAnswer(answer, sources) {
+function merecatFinishAnswer(answer: any, sources: any) {
   const firstAt = new Map();
-  answer.replace(/\[(\d+)\]/g, (m, n, at) => {
+  answer.replace(/\[(\d+)\]/g, (m: any, n: any, at: any) => {
     const num = Number(n);
-    if (sources.some((s) => s.n === num) && !firstAt.has(num)) firstAt.set(num, at);
+    if (sources.some((s: any) => s.n === num) && !firstAt.has(num)) firstAt.set(num, at);
     return m;
   });
   const order = [...firstAt.keys()].sort((a, b) => firstAt.get(a) - firstAt.get(b));
   const renum = new Map(order.map((n, i) => [n, i + 1]));
   if (renum.size) {
-    answer = answer.replace(/\[(\d+)\]/g, (m, n) =>
+    answer = answer.replace(/\[(\d+)\]/g, (m: any, n: any) =>
       renum.has(Number(n)) ? '[' + renum.get(Number(n)) + ']' : m);
-    const cited = sources.filter((s) => renum.has(s.n))
-      .sort((a, b) => renum.get(a.n) - renum.get(b.n));
-    const label = (s) => merecatScrub(s.title + (s.heading ? ' — ' + s.heading : ''))
+    const cited = sources.filter((s: any) => renum.has(s.n))
+      .sort((a: any, b: any) => renum.get(a.n)! - renum.get(b.n)!);
+    const label = (s: any) => merecatScrub(s.title + (s.heading ? ' — ' + s.heading : ''))
       .replace(/\[/g, '(').replace(/\]/g, ')');
-    answer += '\n\nSources:\n' + cited.map((s) =>
+    answer += '\n\nSources:\n' + cited.map((s: any) =>
       '[' + renum.get(s.n) + '] ' + (s.url ? '[' + label(s) + '](' + s.url + ')' : label(s))).join('\n');
   }
   return answer;
 }
 
-async function merecatMentionReply(env, commentId) {
+async function merecatMentionReply(env: any, commentId: any) {
   const c = await env.DB.prepare(
     "SELECT id, page, parent_id, title, author_hash, body FROM comments WHERE id = ?1 AND status = 'live'"
   ).bind(commentId).first();
@@ -5236,7 +5245,7 @@ async function merecatMentionReply(env, commentId) {
     for (const r of (recent.results || []).reverse()) talk.push([r.author_hash, String(r.body || '')]);
   }
   const names = await merecatNames(env, talk.map((t) => t[0]).concat([c.author_hash]));
-  const nameOf = (h) => names[h] || (h === MERECAT_BOT.hash ? MERECAT_BOT.nick : 'a member');
+  const nameOf = (h: any) => names[h] || (h === MERECAT_BOT.hash ? MERECAT_BOT.nick : 'a member');
   const talkBlock = (opening ? opening + '\n---\n' : '') +
     talk.map((t) => nameOf(t[0]) + ': ' + t[1].slice(0, 700)).join('\n---\n');
 
@@ -5281,7 +5290,7 @@ async function merecatMentionReply(env, commentId) {
     }));
     let srcBlock = '';
     chunks.forEach((cc, i) => {
-      srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
+      srcBlock += '[' + (i + 1) + '] (' + ((MERECAT_TIER_LABEL as any)[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
         (cc.heading ? ' — ' + merecatScrub(cc.heading) : '') + '\n' + merecatScrub(cc.text.slice(0, 2800), true) + '\n\n';
     });
     const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
@@ -5331,7 +5340,7 @@ async function merecatMentionReply(env, commentId) {
 /* Admin lever: run the mention pipeline on any existing comment — the
    manual re-summon for a post that was held and approved later, and the
    test hook. */
-async function handleMerecatMention(request, env) {
+async function handleMerecatMention(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
@@ -5346,7 +5355,7 @@ async function handleMerecatMention(request, env) {
    forwarded by the member, with the question quoted and the cited-sources
    footer rebuilt — bot words stay under the bot's name, and nothing private
    goes public except by the owner's hand. */
-async function handleMerecatForward(request, env) {
+async function handleMerecatForward(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -5411,7 +5420,7 @@ async function handleMerecatForward(request, env) {
    "you have used N of M today" the moment it opens (the ask preamble keeps
    it fresh afterward). Admins read their true count against the same cap
    they are allowed to exceed. */
-async function handleMerecatUsage(request, env) {
+async function handleMerecatUsage(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -5440,11 +5449,11 @@ async function handleMerecatUsage(request, env) {
    key rides along. Everything here is public site content or the reader's
    own number — no per-question data exists to disclose, since the server
    keeps counters only. */
-async function handleMerecatAbout(request, env) {
+async function handleMerecatAbout(request: any, env: any) {
   /* Admin-only since the public transparency panel retired (2026-07-28):
      this returns the persona verbatim and the whole roster, and the owner
      wills neither public. The administration page is the one consumer. */
-  let data = {};
+  let data: any = {};
   try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
@@ -5472,13 +5481,13 @@ async function handleMerecatAbout(request, env) {
     }
   }
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
-  const out = {
+  const out: any = {
     ok: true,
     model: cfg.model, topk: cfg.topk,
     user_daily: cfg.user_daily, user_cap_on: cfg.user_cap_on, global_daily: cfg.global_daily,
     backend: cfg.backend,
     persona: cfg.persona,
-    chunks: list.reduce((n, w) => n + (w.chunks || 0), 0),
+    chunks: list.reduce((n: any, w: any) => n + (w.chunks || 0), 0),
     works: list,
     today: (g && g.q) || 0,
   };
@@ -5494,7 +5503,7 @@ async function handleMerecatAbout(request, env) {
 }
 
 /* Works roster + content hashes, so ingest.py can skip unchanged works. */
-async function handleMerecatWorks(request, env) {
+async function handleMerecatWorks(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
@@ -5527,12 +5536,12 @@ async function handleMerecatWorks(request, env) {
 }
 
 /* Persona / model / caps push from librarian/config.yml + persona.md. */
-async function handleMerecatConfigSet(request, env) {
+async function handleMerecatConfigSet(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
-  const stmts = [];
-  const put = (k, v) => stmts.push(env.LIBDB.prepare(
+  const stmts: any[] = [];
+  const put = (k: any, v: any) => stmts.push(env.LIBDB.prepare(
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
   if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
@@ -5547,7 +5556,7 @@ async function handleMerecatConfigSet(request, env) {
 
 /* Usage counters for the admin: the last fourteen days, questions and rough
    token spend, distinct askers per day. Counters only — no question text. */
-async function handleMerecatStats(request, env) {
+async function handleMerecatStats(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
@@ -5564,9 +5573,9 @@ async function handleMerecatStats(request, env) {
       deepN += (d2 && d2.n) || 0;
     } catch { /* the first room still reports */ }
   }
-  const byDay = {};
+  const byDay: any = {};
   for (const r of users.results || []) byDay[r.day] = r.users;
-  const days = (use.results || []).map((r) => ({ ...r, users: byDay[r.day] || 0 }));
+  const days = (use.results || []).map((r: any) => ({ ...r, users: byDay[r.day] || 0 }));
   return json({ ok: true, days, chunks: ((total && total.n) || 0) + deepN }, 200);
 }
 
@@ -5594,8 +5603,8 @@ async function handleMerecatStats(request, env) {
    security-critical and unit-tested there. BOARD_CATS is passed in so the pure
    helper stays dependency-free. */
 
-export class BoardHub extends DurableObject {
-  constructor(ctx, env) {
+export class BoardHub extends DurableObject<Env> {
+  constructor(ctx: any, env: any) {
     super(ctx, env);
     /* The client's {t:'ping'} is answered {t:'pong'} by the runtime without
        waking the object, so a hibernating socket stays warm at zero cost. */
@@ -5603,7 +5612,7 @@ export class BoardHub extends DurableObject {
       new WebSocketRequestResponsePair(JSON.stringify({ t: 'ping' }), JSON.stringify({ t: 'pong' })));
   }
 
-  async fetch(request) {
+  async fetch(request: any) {
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
       return new Response('expected websocket', { status: 426 });
     }
@@ -5615,7 +5624,7 @@ export class BoardHub extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  async webSocketMessage(ws, msg) {
+  async webSocketMessage(ws: any, msg: any) {
     let m;
     try { m = JSON.parse(typeof msg === 'string' ? msg : ''); } catch { return; }
     if (!m) return;   // a stray {t:'ping'} is handled by the auto-responder
@@ -5662,7 +5671,7 @@ export class BoardHub extends DurableObject {
   /* A socket dropped: if it was the member's last online connection, tell anyone
      watching that they went offline. (webSocketError has no such last-socket
      meaning; it just logs.) */
-  webSocketClose(ws) {
+  webSocketClose(ws: any) {
     let a;
     try { a = ws.deserializeAttachment(); } catch { a = null; }
     const me = a && a.me;
@@ -5670,13 +5679,13 @@ export class BoardHub extends DurableObject {
     if (!this.#isOnline(me, ws)) this.#broadcastPresence(me, false);
   }
 
-  webSocketError(ws, err) {
+  webSocketError(ws: any, err: any) {
     console.log(JSON.stringify({ event: 'hub_ws_error', error: String(err) }));
   }
 
   /* Is <hash> online? True iff some live socket authenticated as that hash with a
      non-"off" presence mode. `exclude` skips one socket (the one closing). */
-  #isOnline(hash, exclude) {
+  #isOnline(hash: any, exclude?: any) {
     for (const s of this.ctx.getWebSockets()) {
       if (exclude && s === exclude) continue;
       let a;
@@ -5687,7 +5696,7 @@ export class BoardHub extends DurableObject {
   }
 
   /* Send a frame to every socket subscribed to `scope`. */
-  #fan(scope, payload) {
+  #fan(scope: any, payload: any) {
     for (const s of this.ctx.getWebSockets()) {
       let a;
       try { a = s.deserializeAttachment(); } catch { a = null; }
@@ -5697,13 +5706,13 @@ export class BoardHub extends DurableObject {
     }
   }
 
-  #broadcastPresence(hash, online) {
+  #broadcastPresence(hash: any, online: any) {
     this.#fan('presence:' + hash, JSON.stringify({ v: 1, t: 'presence', hash, online: !!online }));
   }
 
   /* RPC for the batched inbox check: of these hashes, which are online now
      (honouring appear-offline)? One request per inbox load. */
-  async presenceOf(hashes) {
+  async presenceOf(hashes: any) {
     const live = new Set();
     for (const s of this.ctx.getWebSockets()) {
       let a;
@@ -5714,13 +5723,13 @@ export class BoardHub extends DurableObject {
   }
 
   /* RPC, called by the worker on every live public board mutation. */
-  async publish(event) {
+  async publish(event: any) {
     if (!event || !Array.isArray(event.scopes)) return;
     const payload = JSON.stringify(event);
     for (const ws of this.ctx.getWebSockets()) {
       let a;
       try { a = ws.deserializeAttachment(); } catch { a = null; }
-      if (a && Array.isArray(a.subs) && a.subs.some((s) => event.scopes.includes(s))) {
+      if (a && Array.isArray(a.subs) && a.subs.some((s: any) => event.scopes.includes(s))) {
         try { ws.send(payload); } catch { /* a dropped socket; the close handler cleans up */ }
       }
     }
@@ -5742,8 +5751,12 @@ export class BoardHub extends DurableObject {
    merecatThinkStripper/merecatFold verbatim. This is now the ONLY merecat
    generation path — the HTTP /ask streaming endpoint and its store callback
    were retired once this was proven live. */
-export class ChatRoom extends DurableObject {
-  constructor(ctx, env) {
+export class ChatRoom extends DurableObject<Env> {
+  declare phase: any;
+  declare chatId: any;
+  declare gen: any;
+
+  constructor(ctx: any, env: any) {
     super(ctx, env);
     this.phase = 'idle';
     this.chatId = 0;
@@ -5757,7 +5770,7 @@ export class ChatRoom extends DurableObject {
      someone-else's) socket — only #auth, which checks chats(id, hash=me), can set
      auth:true, so the authed set is exactly the owner's connections. The hello
      resume frame is sent per-socket from #auth, not here. */
-  #emit(obj) {
+  #emit(obj: any) {
     const s = JSON.stringify(obj);
     for (const ws of this.ctx.getWebSockets()) {
       let a; try { a = ws.deserializeAttachment(); } catch { a = null; }
@@ -5766,7 +5779,7 @@ export class ChatRoom extends DurableObject {
     }
   }
 
-  async fetch(request) {
+  async fetch(request: any) {
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') return new Response('expected websocket', { status: 426 });
     const cid = Number(new URL(request.url).searchParams.get('chat')) || 0;
     /* CF-Connecting-IP survives the forward from handleMerecatLive (stub.fetch
@@ -5779,7 +5792,7 @@ export class ChatRoom extends DurableObject {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  async webSocketMessage(ws, msg) {
+  async webSocketMessage(ws: any, msg: any) {
     let m;
     try { m = JSON.parse(typeof msg === 'string' ? msg : ''); } catch { return; }
     if (!m) return;
@@ -5787,19 +5800,19 @@ export class ChatRoom extends DurableObject {
     if (m.t === 'ask') return this.#ask(ws, m);
   }
 
-  webSocketError(ws, err) { console.log(JSON.stringify({ event: 'chat_ws_error', error: String(err) })); }
+  webSocketError(ws: any, err: any) { console.log(JSON.stringify({ event: 'chat_ws_error', error: String(err) })); }
   /* A closing reader does NOT stop the generation — that is the whole point. */
 
-  #hello(ws) {
+  #hello(ws: any) {
     const g = this.gen;
     ws.send(JSON.stringify({ t: 'hello', chatId: this.chatId, phase: this.phase,
       answer: (g && g.answer) || '', sources: (g && g.sources) || [], used: (g && g.used) || null,
       startedAtMs: (g && g.startedAtMs) || 0, backend: (g && g.backend) || 'cloudflare' }));
   }
 
-  async #auth(ws, m) {
+  async #auth(ws: any, m: any) {
     const a = ws.deserializeAttachment() || {};
-    const fail = (err) => { try { ws.send(JSON.stringify({ t: 'state', phase: 'error', error: err })); } catch { /* gone */ }
+    const fail = (err: any) => { try { ws.send(JSON.stringify({ t: 'state', phase: 'error', error: err })); } catch { /* gone */ }
       try { ws.close(1008, 'unauthorized'); } catch { /* gone */ } };
     const key = String(m.key || '');
     if (!key) { fail('Missing key.'); return; }
@@ -5815,7 +5828,7 @@ export class ChatRoom extends DurableObject {
     this.#hello(ws);
   }
 
-  async #ask(ws, m) {
+  async #ask(ws: any, m: any) {
     const a = ws.deserializeAttachment() || {};
     if (!a.auth) { ws.send('{"t":"state","phase":"error","error":"Authenticate first."}'); return; }
     if (this.phase === 'thinking' || this.phase === 'streaming' || this.phase === 'queued') {
@@ -5862,7 +5875,7 @@ export class ChatRoom extends DurableObject {
       const rows = await this.env.LIBDB.prepare(
         'SELECT role, body FROM chat_msgs WHERE chat_id = ?1 AND COALESCE(done, 1) = 1 ORDER BY id DESC LIMIT ' + MERECAT_WINDOW
       ).bind(this.chatId).all();
-      history = (rows.results || []).reverse().map((r) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
+      history = (rows.results || []).reverse().map((r: any) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
     }
     const urs = await this.env.LIBDB.batch([
       this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3) RETURNING id").bind(this.chatId, q, now),
@@ -5886,13 +5899,13 @@ export class ChatRoom extends DurableObject {
     });
   }
 
-  async #generate(q, history, summary, cfg, me, day) {
+  async #generate(q: any, history: any, summary: any, cfg: any, me: any, day: any) {
     /* Shared token sink: batch to the socket (~60ms) and persist the growing
        answer to D1 (done=0) every few seconds. The DO is the SOLE writer — the
        local box is called WITHOUT chat/msg, so serve.py streams only and never
        /stores, which removes the old two-writer race entirely. */
     let batch = ''; let lastSend = 0; let lastPersist = 0;
-    let sources = [];
+    let sources: any[] = [];
     const sendBatch = () => { if (batch) { this.#emit({ t: 'tokens', d: batch }); batch = ''; lastSend = Date.now(); } };
     const persist = async () => {
       const body = this.gen.answer.trim();
@@ -5908,7 +5921,7 @@ export class ChatRoom extends DurableObject {
         }
       } catch { /* a failed flush just waits for the next */ }
     };
-    const onToken = async (vis) => {
+    const onToken = async (vis: any) => {
       if (this.phase !== 'streaming') { this.phase = 'streaming'; this.#emit({ t: 'state', phase: 'streaming' }); }
       this.gen.answer += vis; batch += vis;
       if (Date.now() - lastSend > 60) sendBatch();
@@ -5922,7 +5935,7 @@ export class ChatRoom extends DurableObject {
        with failover on falls through to the cloud INTO the same generation. */
     if (backend === 'local') {
       let failover = false;
-      const resp = await merecatLocalFetch(this.env, { q, history, summary, effort: this.gen.effort || 'high' });
+      const resp: any = await merecatLocalFetch(this.env, { q, history, summary, effort: this.gen.effort || 'high' });
       if (!resp || resp.busy) {
         if (cfg.failover) failover = true;
         else {
@@ -5932,7 +5945,7 @@ export class ChatRoom extends DurableObject {
           this.gen = null; return;
         }
       } else {
-        const r = await this.#relayLocal(resp, onToken, (s) => {
+        const r = await this.#relayLocal(resp, onToken, (s: any) => {
           sources = s; this.gen.sources = s;
           this.#emit({ t: 'meta', sources: s, used: this.gen.used, rv: MERECAT_RV, backend: 'local', chatId: this.chatId });
         });
@@ -5955,7 +5968,7 @@ export class ChatRoom extends DurableObject {
         const { done, value } = await reader.read();
         if (done) break;
         buf += dec.decode(value, { stream: true });
-        const lines = buf.split('\n'); buf = lines.pop();
+        const lines = buf.split('\n'); buf = lines.pop()!;
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
@@ -6002,14 +6015,14 @@ export class ChatRoom extends DurableObject {
      onMeta, answer bytes → onToken (STX heartbeats stripped, ETX = clean end).
      Returns {ok} once the preamble was seen (finished or died after it — keep
      what streamed), or {failover} if it died before the preamble. */
-  async #relayLocal(resp, onToken, onMeta) {
+  async #relayLocal(resp: any, onToken: any, onMeta: any) {
     const reader = resp.body.getReader();
     const dec = new TextDecoder();
     let buf = ''; let headerDone = false;
     for (;;) {
-      let deadTimer;
+      let deadTimer: any;
       const step = await Promise.race([
-        reader.read().then((x) => ({ read: x }), (e) => ({ err: e })),
+        reader.read().then((x: any) => ({ read: x }), (e: any) => ({ err: e })),
         new Promise((res) => { deadTimer = setTimeout(() => res({ silent: true }), 35000); }),
       ]);
       clearTimeout(deadTimer);
@@ -6049,7 +6062,7 @@ export class ChatRoom extends DurableObject {
 /* The WebSocket upgrade endpoint. NOT gated by READ_LIMIT — a connection is not
    a poll; a dedicated CONNECT_LIMIT bucket absorbs reconnect storms without
    starving normal reads. env-guarded so a deploy without the binding just 503s. */
-async function handleLive(request, env) {
+async function handleLive(request: any, env: any) {
   if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.HUB) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -6066,7 +6079,7 @@ async function handleLive(request, env) {
    the back-room privacy gate is one predicate in one place and a future
    subscriber (webhook / Discord / Matrix) is a single addition here — no forum
    handler ever changes. Returns a promise; env-guarded (no-op without the DO). */
-function sendToHub(env, event) {
+function sendToHub(env: any, event: any) {
   if (!env.HUB || !boardEventPublic(event)) return Promise.resolve();
   return env.HUB.get(env.HUB.idFromName('board')).publish(event);
 }
@@ -6074,7 +6087,7 @@ function sendToHub(env, event) {
 /* Publish a batch of board events (awaitable), with a cheap page pre-gate (a
    non-board or admins-only page emits nothing). Each event still passes the
    central gate in sendToHub. Shared by broadcastBoard and the bot's inline reply. */
-async function publishBoardEvents(env, page, events) {
+async function publishBoardEvents(env: any, page: any, events: any) {
   if (!boardKey(page) || page === ADMIN_CAT) return;
   const list = Array.isArray(events) ? events : [events];
   for (const e of list) await sendToHub(env, e);
@@ -6084,7 +6097,7 @@ async function publishBoardEvents(env, page, events) {
    so it never delays or breaks the write. `events` is an array, or a function
    returning one (sync or async) for sites that must query per-event data — the
    page pre-gate runs first, so the builder is skipped for the back room. */
-function broadcastBoard(env, ctx, page, events) {
+function broadcastBoard(env: any, ctx: any, page: any, events: any) {
   if (!env.HUB || !boardKey(page) || page === ADMIN_CAT) return;
   ctx.waitUntil((async () => {
     const list = typeof events === 'function' ? await events() : events;
@@ -6094,10 +6107,10 @@ function broadcastBoard(env, ctx, page, events) {
 
 /* Fire-and-forget a single live event through the one sink; deferred via
    waitUntil so it never delays or breaks a write. */
-function publishLive(env, ctx, event) {
+function publishLive(env: any, ctx: any, event: any) {
   if (!env.HUB) return;
   ctx.waitUntil(sendToHub(env, event)
-    .catch((e) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+    .catch((e: any) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
 }
 
 /* Fire PRIVATE per-member live events (DMs, notifications) through the one hub.
@@ -6105,7 +6118,7 @@ function publishLive(env, ctx, event) {
    sockets that authenticated as that hash — so a member's own connections alone
    receive it. Awaitable: a caller already inside a waitUntil (deliverNotifications)
    just awaits it; a plain handler passes ctx to publishLive-style fire-and-forget. */
-async function publishUser(env, events) {
+async function publishUser(env: any, events: any) {
   if (!env.HUB) return;
   const list = (Array.isArray(events) ? events : [events]).filter(Boolean);
   for (const e of list) await sendToHub(env, e);
@@ -6115,7 +6128,7 @@ async function publishUser(env, events) {
    conversation and returns its id BEFORE the socket opens, so the client adopts
    ?chat=<id> at once and dials the ChatRoom instance that matches the id (the DO
    name = 'chat:'+id, so a reconnect always reaches the same generator). */
-async function handleMerecatAskInit(request, env) {
+async function handleMerecatAskInit(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -6156,7 +6169,7 @@ async function handleMerecatAskInit(request, env) {
 
 /* The merecat WebSocket upgrade → the per-conversation ChatRoom (getByName by id
    so it is the same instance the ask-init minted). Not READ_LIMIT-gated. */
-async function handleMerecatLive(request, env) {
+async function handleMerecatLive(request: any, env: any) {
   if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.CHAT) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -6170,15 +6183,17 @@ async function handleMerecatLive(request, env) {
 /* Sets one attribute on a matched element (HTMLRewriter handler). Used to
    overwrite the static profile.html OG tags with per-profile values. */
 class MetaAttr {
-  constructor(value) { this.value = value; }
-  element(el) { el.setAttribute('content', this.value); }
+  declare value: any;
+  constructor(value: any) { this.value = value; }
+  element(el: any) { el.setAttribute('content', this.value); }
 }
 class TitleText {
+  declare value: any;
   /* NB: the field is `value`, not `text` — HTMLRewriter treats a `text` field on
      a handler object as a text-node handler (must be a function), so naming it
      `text` makes .on() reject the handler. */
-  constructor(value) { this.value = value; }
-  element(el) { el.setInnerContent(this.value); }
+  constructor(value: any) { this.value = value; }
+  element(el: any) { el.setInnerContent(this.value); }
 }
 
 /* Serve /@handle: fetch the static profile.html from the origin and inject the
@@ -6186,7 +6201,7 @@ class TitleText {
    previews as the person. Everyone gets the real page; the client resolves the
    handle from the URL path. Bulletproof: any failure falls back to the plain
    page or a redirect to the ?u= form, so /@handle is never broken. */
-async function handleHandleCard(request, env, url) {
+async function handleHandleCard(request: any, env: any, url: any) {
   const raw = decodeURIComponent(url.pathname.slice(2)).replace(/\/+$/, '');
   const pageReq = new URL('/profile.html', url.origin).toString();
   try {
@@ -6230,7 +6245,7 @@ async function handleHandleCard(request, env, url) {
 }
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     try {
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, '') || '/';
@@ -6358,7 +6373,7 @@ export default {
      sweep stray DM rows, clear read notifications and their dead weight, then
      back the database up to R2 so the dump reflects the cleaned state (the prior
      month's backup, kept ninety days, still holds what was just removed). */
-  async scheduled(event, env, ctx) {
+  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     /* Hourly: only sweep expired disappearing DMs + their media (cheap, frequent,
        the reclamation pass behind the instant read-time hiding). Monthly (any
        other schedule): the sweep plus the full housekeeping + backup chain. */

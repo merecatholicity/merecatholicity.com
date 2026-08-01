@@ -1,0 +1,23 @@
+{
+  // Strict type-check for the comments Worker. Separate project from the client
+  // tsconfig because the Worker has Cloudflare's runtime globals (from
+  // @cloudflare/workers-types), NOT the browser DOM — the two lib/global sets
+  // conflict. noEmit: wrangler's esbuild does the transpile; tsc only checks.
+  // checkJs off + allowJs on so index.ts may import the still-JS pure.js /
+  // webpush.js and the untyped PureScript output (all typed as any).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false,
+    "forceConsistentCasingInFileNames": true,
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}
