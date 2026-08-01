@@ -11,12 +11,21 @@
    knocks once and the server judges. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl } from './util.js';
-import * as Core from '../core.js';
+import { pagerTpl, crumbTpl } from './util.ts';
+import * as Core from '../core.ts';
 
 class McTopic extends LitElement {
   static properties = { d: { attribute: false }, err: { attribute: false },
     newAway: { attribute: false }, newLastPage: { attribute: false } };
+  declare kit: any;
+  declare topicId: number;
+  declare d: any;
+  declare err: string;
+  declare newAway: number;
+  declare newLastPage: number;
+  declare _onLive?: (ev: any) => void;
+  declare _onResync?: () => void;
+  declare _mounted?: boolean;
   constructor() {
     super();
     this.kit = null;
@@ -36,17 +45,17 @@ class McTopic extends LitElement {
     const hashMatch = /^#comment-(\d+)$/.exec(location.hash);
     const extra = pNum ? '&p=' + pNum : (hashMatch ? '&find=' + hashMatch[1] : '');
     kit.cachedJson(kit.API + '/board/topic?id=' + id + extra + kit.freshParam('&'), kit.freshOpts(), 30000)
-      .then((d) => {
+      .then((d: any) => {
         if (d && !d.ok && kit.state.key) {
           return kit.fetchRetry(kit.API + '/board/admin', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: kit.state.key, id: id, p: pNum || undefined,
               find: hashMatch ? hashMatch[1] : undefined }),
-          }, [1000, 3000]).then((r) => r.json());
+          }, [1000, 3000]).then((r: Response) => r.json());
         }
         return d;
       })
-      .then((d) => {
+      .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.d = d;
         document.title = d.topic.title + ' | Community';
@@ -54,7 +63,7 @@ class McTopic extends LitElement {
            re-write on every page turn). */
         if (kit.state.key) kit.markThreadRead(d.topic.id);
       })
-      .catch((e) => { this.err = e.message || 'failed'; });
+      .catch((e: any) => { this.err = e.message || 'failed'; });
 
     /* Live: watch this thread and merge pushed replies in place (Facebook-style).
        Optional — if the shell/socket is absent the view behaves exactly as before. */
@@ -72,7 +81,7 @@ class McTopic extends LitElement {
   }
   /* A pushed reply for this topic: append it if it belongs on the shown page and
      is not already here (dedups the poster's own optimistic append + multi-tab). */
-  _applyLive(m) {
+  _applyLive(m: any) {
     if (!m || !this.d) return;
     if (String(m.topic_id) !== String(this.topicId) &&
         !(m.t === 'moderation' && String(m.id) === String(this.topicId))) return;
@@ -130,11 +139,11 @@ class McTopic extends LitElement {
     const d = this.d;
     if (!kit || !d || d.topic.locked) return;
     kit.fetchRetry(kit.API + '/board/topic?id=' + this.topicId + '&p=' + d.page + kit.freshParam('&'),
-      kit.freshOpts(), [1000]).then((r) => r.json()).then((fresh) => {
+      kit.freshOpts(), [1000]).then((r: Response) => r.json()).then((fresh: any) => {
       if (!fresh || !fresh.ok || fresh.page !== d.page) return;
       const list = this.querySelector('.comments-list');
       if (!list) return;
-      (fresh.replies || []).forEach((c) => {
+      (fresh.replies || []).forEach((c: any) => {
         if (!this.querySelector('#comment-' + c.id)) {
           list.appendChild(kit.commentNode(c, false, { topicId: this.topicId }));
         }
@@ -151,9 +160,9 @@ class McTopic extends LitElement {
     const id = this.topicId;
     /* the comment list: topic head on page 1, then replies — through the one
        shared renderer, so every post-behavior contract holds */
-    const list = this.querySelector('.comments-list');
+    const list = this.querySelector('.comments-list') as HTMLElement;
     if (d.page === 1) list.appendChild(kit.commentNode(d.topic, false, { topicId: id }));
-    d.replies.forEach((c) => list.appendChild(kit.commentNode(c, false, { topicId: id })));
+    d.replies.forEach((c: any) => list.appendChild(kit.commentNode(c, false, { topicId: id })));
     /* the watch toggle (kit machinery) */
     const watchSlot = this.querySelector('.mc-watch-slot');
     if (watchSlot && kit.state.key) watchSlot.appendChild(kit.watchToggle(d.topic.id));
@@ -164,14 +173,14 @@ class McTopic extends LitElement {
     }
     /* the reply composer (Wave C machinery) mounts into `section` via the kit,
        exactly as the board-cat view mounts its new-topic form */
-    const section = this.parentElement;
+    const section = this.parentElement as HTMLElement;
     kit.buildBoardForm(false, 'Reply');
     kit.boardButtons('Reply', () => {
-      const ta = section.querySelector('.comment-form .comment-text');
+      const ta = section.querySelector('.comment-form .comment-text') as any;
       const body = ta.value.replace(/\s+$/, '');
-      const status = section.querySelector('.form-status');
+      const status = section.querySelector('.form-status') as HTMLElement;
       if (!body.trim()) { if (ta.mcPreview) ta.mcPreview.off(); ta.focus(); return; }
-      kit.boardPost({ topic: id, body }, (d2) => {
+      kit.boardPost({ topic: id, body }, (d2: any) => {
         ta.value = '';
         if (ta.mcDraftDone) ta.mcDraftDone();
         if (ta.mcPreview) ta.mcPreview.off();
@@ -179,7 +188,7 @@ class McTopic extends LitElement {
         const replyPage = Core.replyPage(d.total + 1, d.per);
         if (replyPage === d.page) {
           /* dedup: the live broadcast of our own reply may have already added it */
-          let node = list.querySelector('#comment-' + d2.comment.id);
+          let node: any = list.querySelector('#comment-' + d2.comment.id);
           if (!node) { d.total += 1; node = kit.commentNode(d2.comment, false, { topicId: id }); list.appendChild(node); }
           status.textContent = 'Posted.';
           node.scrollIntoView();
@@ -214,7 +223,7 @@ class McTopic extends LitElement {
     }
     const d = this.d;
     const cat = kit.catByKey(d.cat);
-    const href = (i) => 'community.html?topic=' + this.topicId + '&p=' + i;
+    const href = (i: number) => 'community.html?topic=' + this.topicId + '&p=' + i;
     return html`
       ${crumbTpl([['Community', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]])}
       <h2 class="board-topic-head">${d.topic.title}${d.topic.sticky ? html`<span class="board-sticky">(sticky)</span>` : nothing}${d.topic.locked ? html`<span class="board-locked">(locked)</span>` : nothing}${d.cat === 'adminsonly' ? nothing : html`<a class="comments-rss" href=${kit.API + '/feed?topic=' + d.topic.id} title="Follow this topic with a feed reader">RSS</a>`}</h2>
@@ -231,6 +240,14 @@ customElements.define('mc-topic', McTopic);
 
 class McSearch extends LitElement {
   static properties = { d: { attribute: false }, count: { attribute: false } };
+  declare kit: any;
+  declare d: any;
+  declare count: string;
+  declare q: string;
+  declare cat0: string;
+  declare author0: string;
+  declare sort0: string;
+  declare page: number;
   constructor() {
     super();
     this.kit = null;
@@ -256,7 +273,7 @@ class McSearch extends LitElement {
     if (this.author0) u += '&author=' + encodeURIComponent(this.author0);
     if (this.sort0) u += '&sort=' + encodeURIComponent(this.sort0);
     kit.cachedJson(u + '&p=' + this.page + kit.freshParam('&'), kit.freshOpts(), 30000)
-      .then((d) => {
+      .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.d = d;
         this.count = d.items.length ? (d.total + (d.total === 1 ? ' result.' : ' results.')) : 'Nothing found for that search.';
@@ -277,31 +294,31 @@ class McSearch extends LitElement {
   }
   mountForm() {
     const kit = this.kit;
-    const form = this.querySelector('.board-search');
-    if (!form || form._armed) return;
-    form._armed = true;
+    const form = this.querySelector('.board-search') as HTMLFormElement;
+    if (!form || (form as any)._armed) return;
+    (form as any)._armed = true;
     const authorInput = form.querySelector('.mc-author');
     const picker = kit.attachAuthorPicker(authorInput);
     if (/^[0-9a-f]{64}$/.test(this.author0 || '')) picker.set(this.author0, kit.displayName(this.author0));
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      let u = 'community.html?q=' + encodeURIComponent(form.querySelector('.mc-q').value.trim());
-      if (form.querySelector('.mc-cat').value) u += '&cat=' + form.querySelector('.mc-cat').value;
+      let u = 'community.html?q=' + encodeURIComponent((form.querySelector('.mc-q') as HTMLInputElement).value.trim());
+      if ((form.querySelector('.mc-cat') as HTMLSelectElement).value) u += '&cat=' + (form.querySelector('.mc-cat') as HTMLSelectElement).value;
       if (picker.hash()) u += '&author=' + picker.hash();
-      if (form.querySelector('.mc-sort').value) u += '&sort=' + form.querySelector('.mc-sort').value;
+      if ((form.querySelector('.mc-sort') as HTMLSelectElement).value) u += '&sort=' + (form.querySelector('.mc-sort') as HTMLSelectElement).value;
       location.href = u;
     });
   }
   mountSnippets() {
     const kit = this.kit;
     if (!this.d || this.d.error) return;
-    this.querySelectorAll('.mc-snip[data-snip]').forEach((slot) => {
+    this.querySelectorAll('.mc-snip[data-snip]').forEach((slot: any) => {
       if (slot._done) return;
       slot._done = true;
       slot.appendChild(kit.searchSnippet(slot.getAttribute('data-snip')));
     });
   }
-  resultRow(it) {
+  resultRow(it: any) {
     const kit = this.kit;
     const who = it.nick || (it.author_hash ? kit.displayName(it.author_hash) : 'Anonymous');
     const ce = kit.catByKey(it.cat);
@@ -317,7 +334,7 @@ class McSearch extends LitElement {
       return html`${crumbTpl([['Community', 'community.html'], ['Search']])}
         <p class="comments-status">Search is for logged-in members. Create an identity or paste your key above, then search the board.</p>`;
     }
-    const href = (i) => {
+    const href = (i: number) => {
       let u = 'community.html?q=' + encodeURIComponent(this.q);
       if (this.cat0) u += '&cat=' + encodeURIComponent(this.cat0);
       if (this.author0) u += '&author=' + encodeURIComponent(this.author0);
@@ -345,7 +362,7 @@ class McSearch extends LitElement {
         <div class="key-row">
           <select class="board-move mc-cat">
             <option value="">All categories</option>
-            ${kit.CATS.filter((c) => c[0] !== 'adminsonly').map((c) =>
+            ${kit.CATS.filter((c: any) => c[0] !== 'adminsonly').map((c: any) =>
               html`<option value=${c[0]} ?selected=${c[0] === this.cat0}>${c[1]}</option>`)}
           </select>
           <input class="key-input mc-author" type="text" placeholder="@author (optional)">
@@ -357,7 +374,7 @@ class McSearch extends LitElement {
       </form>
       ${status}
       <div class="board-topics">
-        ${d && d.items && d.items.length ? d.items.map((it) => this.resultRow(it)) : nothing}
+        ${d && d.items && d.items.length ? d.items.map((it: any) => this.resultRow(it)) : nothing}
         ${this.d && this.d.error ? html`<p class="comments-status">Search could not be run. Check your connection and reload the page.</p>` : nothing}
       </div>
       ${d && d.items && d.items.length ? pagerTpl(d.total, d.per, d.page, href) : nothing}
@@ -368,12 +385,12 @@ customElements.define('mc-search', McSearch);
 
 window.mcViews = window.mcViews || {};
 window.mcViews.topic = function (section, kit, id) {
-  const n = document.createElement('mc-topic');
+  const n = document.createElement('mc-topic') as McTopic;
   n.kit = kit; n.topicId = id;
   section.appendChild(n);
 };
 window.mcViews.search = function (section, kit) {
-  const n = document.createElement('mc-search');
+  const n = document.createElement('mc-search') as McSearch;
   n.kit = kit;
   section.appendChild(n);
 };

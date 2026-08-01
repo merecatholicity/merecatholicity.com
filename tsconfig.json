@@ -17,6 +17,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "checkJs": false,
     "noUncheckedIndexedAccess": false,
     "forceConsistentCasingInFileNames": true,

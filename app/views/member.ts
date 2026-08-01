@@ -6,12 +6,18 @@
    as every board view. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl } from './util.js';
-import { pagerItems } from '../core.js';
+import { pagerTpl, crumbTpl } from './util.ts';
+import { pagerItems } from '../core.ts';
 
 const PER_USERS = 20;
 
 class McUsers extends LitElement {
+  declare kit: any;
+  declare roster: any[] | null;
+  declare q: string;
+  declare page: number;
+  declare err: string;
+  declare _t: ReturnType<typeof setTimeout> | undefined;
   static properties = { roster: { attribute: false }, q: { attribute: false }, page: { attribute: false }, err: { attribute: false } };
   constructor() {
     super();
@@ -28,7 +34,7 @@ class McUsers extends LitElement {
     document.title = 'Members | Community';
     this.page = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     kit.cachedJson(kit.API + '/dm/directory' + kit.freshParam('?'), kit.freshOpts(), 45000)
-      .then((d) => {
+      .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.roster = d.users || [];
       })
@@ -39,14 +45,14 @@ class McUsers extends LitElement {
     if (!this.q) return this.roster || [];
     const q = this.q.toLowerCase();
     return (this.roster || [])
-      .map((u) => ({ u, s: Math.max(kit.dmScore(q, u.nick), kit.dmScore(q, kit.displayName(u.hash))) }))
-      .filter((x) => x.s > 0)
-      .sort((x, y) => y.s - x.s)
-      .map((x) => x.u);
+      .map((u: any) => ({ u, s: Math.max(kit.dmScore(q, u.nick), kit.dmScore(q, kit.displayName(u.hash))) }))
+      .filter((x: any) => x.s > 0)
+      .sort((x: any, y: any) => y.s - x.s)
+      .map((x: any) => x.u);
   }
-  onSearch(e) {
+  onSearch(e: Event) {
     clearTimeout(this._t);
-    const v = e.target.value.trim();
+    const v = (e.target as HTMLInputElement).value.trim();
     this._t = setTimeout(() => { this.q = v; this.page = 1; }, 120);
   }
   render() {
@@ -54,7 +60,7 @@ class McUsers extends LitElement {
     if (!kit) return nothing;
     const head = html`${crumbTpl([['Community', 'community.html'], ['Members']])}
       <p class="board-intro">Everyone on the board, newest first. Search by nickname or assigned name to find who is who, then open a profile.</p>
-      <div class="key-row"><input class="key-input mc-userq" type="text" placeholder="Search members by name..." .value=${this.q} @input=${(e) => this.onSearch(e)}></div>`;
+      <div class="key-row"><input class="key-input mc-userq" type="text" placeholder="Search members by name..." .value=${this.q} @input=${(e: Event) => this.onSearch(e)}></div>`;
     if (this.err) return html`${head}<p class="comments-status">${this.err}</p>`;
     if (this.roster === null) return html`${head}<p class="comments-status">Loading members...</p>`;
     const items = this.visible();
@@ -68,23 +74,27 @@ class McUsers extends LitElement {
        windowing is Core.pagerItems (same source as the href pagers) */
     const cells = pagerItems(total, PER_USERS, this.page);
     const pager = !cells.length ? nothing : html`<p class="board-pages">${
-      cells.map((it) => it.gap ? html` … ` : it.active
+      cells.map((it: any) => it.gap ? html` … ` : it.active
         ? html` <strong>${it.n}</strong> `
-        : html` <a href="#" @click=${(e) => this.go(e, it.n)}>${it.n}</a> `)}</p>`;
+        : html` <a href="#" @click=${(e: Event) => this.go(e, it.n)}>${it.n}</a> `)}</p>`;
     return html`${head}
       <p class="comments-status">${count}</p>
-      <div class="user-list">${slice.map((u) => html`<a class="user-row" href=${kit.profileHref(u.hash)}>
+      <div class="user-list">${slice.map((u: any) => html`<a class="user-row" href=${kit.profileHref(u.hash)}>
         <span class="user-names">${u.nick
           ? html`<span class="user-nick">${u.nick}</span><span class="user-assigned">${kit.displayName(u.hash)}</span>`
           : html`<span class="user-nick">${kit.displayName(u.hash)}</span>`}</span>
         <span class="user-go">profile →</span></a>`)}</div>
       ${pager}`;
   }
-  go(e, n) { e.preventDefault(); this.page = n; window.scrollTo(0, 0); }
+  go(e: Event, n: number) { e.preventDefault(); this.page = n; window.scrollTo(0, 0); }
 }
 customElements.define('mc-users', McUsers);
 
 class McNotifications extends LitElement {
+  declare kit: any;
+  declare d: any;
+  declare err: string;
+  declare _onLive?: (ev: Event) => void;
   static properties = { d: { attribute: false }, err: { attribute: false } };
   constructor() {
     super();
@@ -100,7 +110,7 @@ class McNotifications extends LitElement {
     this.load();
     /* Live: a notification pushed over the private user scope reloads the list
        (which also re-marks it read), so a new arrival appears while it is open. */
-    this._onLive = (ev) => { if (ev.detail && ev.detail.t === 'notification') this.load(); };
+    this._onLive = (ev: Event) => { const det = (ev as CustomEvent).detail; if (det && det.t === 'notification') this.load(); };
     document.addEventListener('mc-live', this._onLive);
   }
   disconnectedCallback() {
@@ -113,7 +123,7 @@ class McNotifications extends LitElement {
     kit.fetchRetry(kit.API + '/notifications', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, p: pageNum }),
-    }, [1000, 3000]).then((r) => r.json()).then((d) => {
+    }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
       if (kit.blockedOut(d)) return;
       if (!d.ok) throw new Error(d.error || 'failed');
       this.d = d;
@@ -133,10 +143,10 @@ class McNotifications extends LitElement {
     if (!this.d) return html`${head}<p class="comments-status">Loading notifications...</p>`;
     const d = this.d;
     if (!d.items.length) return html`${head}<p class="comments-status mc-empty" data-ico="🔔">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`;
-    const href = (i) => 'community.html?notifications=1&p=' + i;
+    const href = (i: number) => 'community.html?notifications=1&p=' + i;
     return html`${head}
       ${pagerTpl(d.total, d.per, d.page, href)}
-      <div class="board-topics">${d.items.map((it) => {
+      <div class="board-topics">${d.items.map((it: any) => {
         const who = it.actor_nick || (it.actor_hash ? kit.displayName(it.actor_hash) : 'Someone');
         /* A 'dm' notification opens the conversation; reply/mention jump to the post. */
         const isDm = it.kind === 'dm';
@@ -161,8 +171,8 @@ customElements.define('mc-notifications', McNotifications);
 
 window.mcViews = window.mcViews || {};
 window.mcViews.users = function (section, kit) {
-  const n = document.createElement('mc-users'); n.kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-users'); (n as any).kit = kit; section.appendChild(n);
 };
 window.mcViews.notifications = function (section, kit) {
-  const n = document.createElement('mc-notifications'); n.kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-notifications'); (n as any).kit = kit; section.appendChild(n);
 };

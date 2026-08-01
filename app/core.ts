@@ -35,10 +35,10 @@ import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
    docs/comments.js rankFor returns. `n | 0` guarantees the Int the PS side
    expects (post counts are small non-negative integers). */
-export const rankFor = (n) => Rank.rankLabel(Rank.rankFor(n | 0));
+export const rankFor = (n: number): string => Rank.rankLabel(Rank.rankFor(n | 0));
 
 /* rankLine(n) -> "<label> · <n> post(s)". */
-export const rankLine = (n) => Rank.rankLine(n | 0);
+export const rankLine = (n: number): string => Rank.rankLine(n | 0);
 
 /* bibleSrc: the Scripture autolink regex fragment, byte-identical to the former
    richtext.js BIBLE.src (golden-tested), spliced into the inline-markdown regex. */
@@ -48,15 +48,16 @@ export const bibleSrc = Scripture.bibleSrc;
    normalized reference (lowercase, whitespace runs collapsed) — the boundary op
    the caller does on the regex match. The PS `Maybe` is erased to `slug | null`
    here, at the one membrane. */
-export const bookSlug = (key) => Maybe.maybe(null)((s) => s)(Scripture.bookSlug(key));
+export const bookSlug = (key: string): string | null => Maybe.maybe(null)((s: string) => s)(Scripture.bookSlug(key));
 
 /* verseParts(bookKey, ch, v1, v2) -> {slug, ch, v1, v2, href} | null. A VALIDATED
    reference (real book, chapter/verse ≥ 1, ordered range); href is the kjv.html#
    fragment. ch/v1/v2 come from the regex as strings; `| 0` coerces to Int, and a
    missing range end (v2 == null) stays null. PureScript `Nullable` maps straight
    to JS null/value, so no erasure is needed here. */
-export const verseParts = (bookKey, ch, v1, v2) =>
-  Scripture.verseParts(bookKey)(ch | 0)(v1 | 0)(v2 == null ? null : (v2 | 0));
+export const verseParts = (bookKey: string, ch: number | string, v1: number | string, v2?: number | string | null):
+  { slug: string; ch: number; v1: number; v2: number; href: string } | null =>
+  Scripture.verseParts(bookKey)((ch as number) | 0)((v1 as number) | 0)(v2 == null ? null : ((v2 as number) | 0));
 
 /* profileLimits: the single source of the profile field caps { nick, bio, sig }
    (a plain PS record). The client profile editors read these for maxLength; the
@@ -70,19 +71,19 @@ export const profileLimits = Profile.limits;
    ('too_short'|'too_long'|'bad_chars'|'bad_start'|'bad_underscore'|'reserved').
    Already a plain record (erased inside PureScript), so no further work here.
    handleMax is the max length for the input's maxLength. */
-export const handleValidate = (raw) => Handle.validate(String(raw == null ? '' : raw));
+export const handleValidate = (raw: string): { ok: boolean; handle: string; error: string } => Handle.validate(String(raw == null ? '' : raw));
 export const handleMax = Handle.maxLen;
 
 /* linkNormalize(platform, raw) -> { ok, url, error }: sanitize/normalize one
    offsite profile link (website/x/facebook/instagram/tiktok) to a safe https URL,
    single-sourced with the worker (Domain.Links). Already a plain record. */
-export const linkNormalize = (platform, raw) => Links.normalize(String(platform == null ? '' : platform))(String(raw == null ? '' : raw));
+export const linkNormalize = (platform: string, raw: string) => Links.normalize(String(platform == null ? '' : platform))(String(raw == null ? '' : raw));
 export const linkPlatforms = Links.platforms;
 
 /* faithLabel(code) -> the display label, or '' for an unrecognized code (the
    client checks truthiness). faiths -> the ordered [{code,label}] the signup
    radios render. Single-sources the FAITH/FAITH_ORDER copy in comments.js. */
-export const faithLabel = (code) => Maybe.maybe('')((s) => s)(Faith.labelForCode(code));
+export const faithLabel = (code: string): string => Maybe.maybe('')((s: string) => s)(Faith.labelForCode(code));
 export const faiths = Faith.faithList;
 
 /* displayName(hash) -> the "Adjective-Noun xxxx" pseudonym for an identity with
@@ -94,32 +95,32 @@ export const displayName = Pseudonym.displayName;
    coercing a missing/zero value to the 7-day default as the classic did.
    dmTtlOptions -> the ordered [{secs,label}] chooser. Single-sources the
    DM_TTLS the worker also holds (Phase 6). */
-export const dmTtlLabel = (ttl) => Dm.ttlLabel((Number(ttl) || Dm.defaultTtl) | 0);
+export const dmTtlLabel = (ttl: number | string): string => Dm.ttlLabel((Number(ttl) || Dm.defaultTtl) | 0);
 export const dmTtlOptions = Dm.ttlOptions;
 
 /* Post permission predicates (Domain.Access): pure UI authorization over the
    author hash, the viewer's hash, the bot hash, and admin-ness. canInteract =
    DM/mute; canReport = interact & !admin; canEdit = own; canDelete = own|admin.
    Nullish hashes coerce to '' (a keyless viewer). Server authority unchanged. */
-export const canInteract = (author, me, bot) => Access.canInteract(author || '')(me || '')(bot || '');
-export const canReport = (author, me, bot, isAdmin) => Access.canReport(author || '')(me || '')(bot || '')(!!isAdmin);
-export const canEdit = (author, me) => Access.canEdit(author || '')(me || '');
-export const canDelete = (author, me, isAdmin) => Access.canDelete(author || '')(me || '')(!!isAdmin);
+export const canInteract = (author: string, me: string, bot: string): boolean => Access.canInteract(author || '')(me || '')(bot || '');
+export const canReport = (author: string, me: string, bot: string, isAdmin: boolean): boolean => Access.canReport(author || '')(me || '')(bot || '')(!!isAdmin);
+export const canEdit = (author: string, me: string): boolean => Access.canEdit(author || '')(me || '');
+export const canDelete = (author: string, me: string, isAdmin: boolean): boolean => Access.canDelete(author || '')(me || '')(!!isAdmin);
 
 /* Live-forum pure decisions (Domain.Live). topicCompare(a,b) is the category
    sort comparator (stickies first, then recency) for Array.sort; replyPage
    (total, per) is the 1-based page a reply lands on. The DOM effects stay in
    the views. */
-export const topicCompare = (a, b) =>
+export const topicCompare = (a: { sticky?: number; last?: number }, b: { sticky?: number; last?: number }): number =>
   Live.topicCompare({ sticky: Number(a.sticky || 0), last: Number(a.last || 0) })({ sticky: Number(b.sticky || 0), last: Number(b.last || 0) });
-export const replyPage = (total, per) => Live.replyPage(total | 0)(per | 0);
+export const replyPage = (total: number, per: number): number => Live.replyPage(total | 0)(per | 0);
 
 /* pagerItems(total, per, active) -> the page-bar window as plain cells
    [{gap, n, active}]: page 1, the last page, the active page's neighbours, with
    one-page gaps filled and wider gaps an ellipsis; [] for a single page. Single-
    sources the windowing the util.js href pager and the member.js button pager
    both computed. The cells are already plain records, so no erasure. */
-export const pagerItems = (total, per, active) => Pager.pagerItems(total | 0)(per | 0)(active | 0);
+export const pagerItems = (total: number, per: number, active: number): Array<{ gap: boolean; n: number; active: boolean }> => Pager.pagerItems(total | 0)(per | 0)(active | 0);
 
 /* Board categories (Domain.Board), single-sourced with the worker. boardCatRows
    = the display rows [key,label,blurb,(linkText,linkHref)] the client CATS held;
@@ -142,7 +143,7 @@ export const emojiNamedTokens = Emoji.namedTokens;
    (name -> string|null). The `topic` param's Number()+isInteger coercion runs
    HERE at the JS boundary (those quirks belong in JS); the id or null is passed
    in, and PS decides the route. The ADT is erased to {tag, s, n} inside PS. */
-export const parseRoute = (get) => {
+export const parseRoute = (get: (k: string) => string | null): { tag: string; s: string; n: number } => {
   const topicRaw = get('topic');
   const topicNum = Number(topicRaw);
   const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
@@ -161,25 +162,25 @@ export const parseRoute = (get) => {
    profile loads, else server-or-hint); authIsMember(sig) is key && hash;
    authGate(sig) -> "pass"|"deny"|"wait" is the admin-page guard. `sig` carries
    the raw state signals; each is coerced to Boolean at this membrane. */
-const authSignals = (s) => ({
+const authSignals = (s: Record<string, unknown>) => ({
   hasKey: !!s.hasKey, hasHash: !!s.hasHash, profileLoaded: !!s.profileLoaded,
   myAdmin: !!s.myAdmin, hint: !!s.hint,
 });
-export const authIsAdmin = (s) => Auth.isAdmin(authSignals(s));
-export const authIsMember = (s) => Auth.isMember(authSignals(s));
-export const authGate = (s) => Auth.gate(authSignals(s));
+export const authIsAdmin = (s: Record<string, unknown>): boolean => Auth.isAdmin(authSignals(s));
+export const authIsMember = (s: Record<string, unknown>): boolean => Auth.isMember(authSignals(s));
+export const authGate = (s: Record<string, unknown>): string => Auth.gate(authSignals(s));
 
 /* Mute (Domain.Mute): a client-only list of hashes whose posts collapse for this
    reader. isMuted(bot, hash, list) is bot-exempt non-empty membership;
    toggleMute(hash, list) -> {list, added} for the caller to persist. */
-export const isMuted = (bot, hash, list) => Mute.isMuted(bot || '')(hash || '')(list || []);
-export const toggleMute = (hash, list) => Mute.toggleMute(hash || '')(list || []);
+export const isMuted = (bot: string, hash: string, list: string[]): boolean => Mute.isMuted(bot || '')(hash || '')(list || []);
+export const toggleMute = (hash: string, list: string[]): { list: string[]; added: boolean } => Mute.toggleMute(hash || '')(list || []);
 
 /* blockedMessage(reason): the flash-banner string for a moderation-block code
    (Domain.Blocked; 'ipban' -> network-banned, else identity-locked). */
-export const blockedMessage = (reason) => Blocked.messageFor(reason || '');
+export const blockedMessage = (reason: string): string => Blocked.messageFor(reason || '');
 
 /* mentionsIn(text, picks) -> the mention hashes to send: the @-picks whose token
    still stands in the body, deduped, in order (Domain.Compose; collectMentions).
    `picks` is [{token, hash}]. Returns a plain string array. */
-export const mentionsIn = (text, picks) => Compose.mentionsIn(text || '')(picks || []);
+export const mentionsIn = (text: string, picks: Array<{ token: string; hash: string }>): string[] => Compose.mentionsIn(text || '')(picks || []);

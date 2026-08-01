@@ -82,9 +82,11 @@ declare global {
     mcOnboard?: (onDone?: any, opts?: any) => void;
     mcConfirm?: (msg: string, opts?: any) => Promise<boolean>;
     mcToast?: (msg: string, opts?: any) => void;
-    mcSheet?: { open: (...a: any[]) => void; close: () => void };
+    mcSheet?: { open: (...a: any[]) => void; settings?: () => void; close: () => void };
     mcGetDark?: () => string;
     mcSetDark?: (p: string) => void;
+    mcGetLight?: () => string;
+    mcSetLight?: (p: string) => void;
     mcDeeplink?: { run: () => void; reveal: () => void };
     mcCommentsBoot?: () => void;
     mcCommentsTeardown?: () => void;

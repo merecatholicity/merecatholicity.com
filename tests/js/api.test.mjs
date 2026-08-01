@@ -5,8 +5,8 @@
    and the read-cache + write-invalidation contract — with no network. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as api from '../../app/api.js';
-import * as store from '../../app/store.js';
+import * as api from '../../app/api.ts';
+import * as store from '../../app/store.ts';
 
 // Wire a recording transport and a fixed identity key; start from a clean store.
 function harness(reply) {
