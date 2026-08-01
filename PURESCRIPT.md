@@ -352,7 +352,7 @@ Plus: bump `app.js?v=N` in `docs/nav.js` iff `docs/app.js` bytes changed.
 | 3 | `Domain.Access` (permissions) + `Domain.Live` (topicCompare/replyPage) **shipped**; search/route, library model planned | in progress | post permission gates + the pure live-forum decisions (topic sort comparator, reply-page math) single-sourced; DOM effects stay in the views as a dumb interpreter; no-bundle fallbacks stay (Wave F) |
 | 4 | Application state = State + Events + Transitions (auth ADT, notifications, mute) | planned | — |
 | 5 | comments.js effect cores (validation/what-to-send in PS; Turnstile/nacl/WS/fetch as FFI); typed API client | planned | — |
-| 6 | Worker single-source (`SafeMatch` pilot, then BIBLE/RANKS/FAITHS/MAX_*/pseudonym/DM_TTLS/BOARD_CATS) | planned | — |
+| 6 | Worker single-source — **started**: `RANKS`/`rankFor` retired, the worker now imports `Domain.Rank` (proven: wrangler bundles `../../purescript/output`; `make worker-deploy` runs psbuild first). Faith/profile/pseudonym/scripture/TTLs to follow. | in progress | the worker's `rankFor` + `/config` ranks read `Domain.Rank`; one typed source now backs BOTH client and server |
 | 7 | Completion — dissolve remaining fallbacks | planned | — |
 
 Keep this table current: when a slice's classic fallback is deleted, mark it here.

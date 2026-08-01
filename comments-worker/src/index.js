@@ -6,6 +6,7 @@
    The only secret is TURNSTILE_SECRET, the Turnstile server key. */
 
 import { DurableObject } from 'cloudflare:workers';
+import * as Rank from '../../purescript/output/Domain.Rank/index.js';
 
 const PAGES = [
   '/book.html',
@@ -94,13 +95,11 @@ function displayName(hash) {
    ascend; rankFor returns the highest reached. Mirrors RANKS in comments.js; the
    count itself is postCountsFor. Served in /config and stamped on author rows so
    a client need not carry the ladder. */
-const RANKS = [[0, 'Novice'], [10, 'Apprentice'], [50, 'Scriptorium Hand'], [100, 'Copyist'],
-  [250, 'Scribe'], [500, 'Illuminator'], [1000, 'Master Scribe'], [2500, 'Keeper of Scrolls'], [5000, 'Treasury of Wisdom']];
+/* The rank ladder is single-sourced from the PureScript Domain.Rank — the very
+   module the client bundles (PURESCRIPT.md, Phase 6). rankFor erases the Rank
+   ADT to its label. This retires the RANKS/rankFor copy that used to live here. */
 function rankFor(n) {
-  n = Number(n) || 0;
-  let name = RANKS[0][1];
-  for (const r of RANKS) if (n >= r[0]) name = r[1];
-  return name;
+  return Rank.rankLabel(Rank.rankFor((Number(n) || 0) | 0));
 }
 
 /* Attach server-resolved identity to an author-bearing row: `assigned` is the
@@ -525,7 +524,7 @@ async function handleConfig(request, env, url) {
       return o;
     }),
     faiths: FAITHS.map((code, i) => ({ code, label: FAITH_LABELS[code] || code, order: i })),
-    ranks: RANKS.map((r) => ({ min: r[0], label: r[1] })),
+    ranks: Rank.rankTable,
     pages: PAGES,
     bot_hash: MERECAT_BOT.hash,
     bible: BIBLE_SPEC.map((r) => ({ slug: r[0], spellings: r[1].split('|') })),

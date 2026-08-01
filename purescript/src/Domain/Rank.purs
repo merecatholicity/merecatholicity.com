@@ -16,6 +16,7 @@ module Domain.Rank
   , rankFor
   , rankLabel
   , rankLine
+  , rankTable
   ) where
 
 import Prelude
@@ -77,3 +78,8 @@ rankLine posts =
     <> show posts
     <> " "
     <> (if posts == 1 then "post" else "posts")
+
+-- | The ladder as {min, label} rows — the served /config `ranks` shape. The
+-- | worker reads this instead of its own RANKS copy (Phase 6).
+rankTable :: Array { min :: Int, label :: String }
+rankTable = map (\row -> { min: row.min, label: rankLabel row.rank }) ladder
