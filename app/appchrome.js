@@ -154,6 +154,7 @@ class McAppbar extends LitElement {
   goBack(e) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
   goFwd(e) { e.preventDefault(); history.forward(); }
   settings(e) { e.preventDefault(); if (window.mcSheet) window.mcSheet.settings(); }
+  notifs(e) { e.preventDefault(); if (window.mcSheet) window.mcSheet.open('', document.createElement('mc-notifs')); }
   render() {
     return html`<header class="mc-appbar">
       <div class="mc-appbar-side mc-appbar-l">
@@ -162,8 +163,8 @@ class McAppbar extends LitElement {
       <div class="mc-appbar-title" title=${this.title}>${this.title}</div>
       <div class="mc-appbar-side mc-appbar-r">
         ${onCommunity() ? html`<a class="mc-ab-btn" href="community.html?q=" aria-label="Search">${ICON.search}</a>` : ''}
-        <a class="mc-ab-btn mc-ab-bell" href="community.html?notifications=1" aria-label="Notifications">${ICON.bell}${this.notif
-          ? html`<span class="mc-tab-badge">${badgeText(this.notif)}</span>` : ''}</a>
+        <button class="mc-ab-btn mc-ab-bell" @click=${(e) => this.notifs(e)} aria-label="Notifications">${ICON.bell}${this.notif
+          ? html`<span class="mc-tab-badge">${badgeText(this.notif)}</span>` : ''}</button>
         <button class="mc-ab-btn" @click=${(e) => this.settings(e)} aria-label="Settings">${ICON.gear}</button>
         <button class="mc-ab-btn" @click=${(e) => this.goFwd(e)} aria-label="Forward">${ICON.forward}</button>
       </div>
@@ -333,6 +334,51 @@ class McSettings extends LitElement {
 }
 customElements.define('mc-settings', McSettings);
 
+/* ---- the notifications panel (bell dropdown / sheet, mirrors mc-settings) ----
+   Self-contained like mc-settings: reads the identity from storage, fetches the
+   list, renders it, and marks it read (clearing the badge). Opening it never
+   leaves the page — the bell behaves exactly like the gear. */
+class McNotifs extends LitElement {
+  static properties = { items: { attribute: false }, state: { attribute: false } };
+  constructor() { super(); this.items = null; this.state = 'load'; }
+  createRenderRoot() { return this; }
+  connectedCallback() {
+    super.connectedCallback();
+    const key = readKey();
+    if (!key) { this.state = 'gate'; return; }
+    const API = '/api/comments';
+    fetch(API + '/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key, p: 1 }) })
+      .then((r) => r.json()).then((d) => {
+        if (!d || !d.ok) { this.state = 'err'; return; }
+        this.items = d.items || []; this.state = 'ok';
+        /* reading the list clears it on the server — tell the badge the truth */
+        fetch(API + '/notifications/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: key }) })
+          .then(() => {
+            try { localStorage.setItem('mc-notif-unread', JSON.stringify({ n: 0, at: Date.now() })); } catch (e) { /* storage */ }
+            document.dispatchEvent(new Event('mc-badge'));
+          }).catch(() => {});
+      }).catch(() => { this.state = 'err'; });
+  }
+  render() {
+    const wrap = (inner) => html`<div class="mc-notifs"><h3 class="mc-set-sec">Notifications</h3>${inner}</div>`;
+    if (this.state === 'gate') return wrap(html`<p class="mc-notifs-empty">Notifications need an identity — create one from the board.</p>`);
+    if (this.state === 'err') return wrap(html`<p class="mc-notifs-empty">Could not load notifications. Check your connection.</p>`);
+    if (this.state === 'load') return wrap(html`<p class="mc-notifs-empty">Loading…</p>`);
+    if (!this.items.length) return wrap(html`<p class="mc-notifs-empty" data-ico="🔔">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`);
+    const name = (it) => it.actor_nick || (it.actor_hash && window.mcCore ? window.mcCore.displayName(it.actor_hash) : 'Someone');
+    return wrap(html`${this.items.map((it) => {
+      const isDm = it.kind === 'dm';
+      const who = name(it);
+      const label = isDm ? (who + ' sent you a message')
+        : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+      const to = isDm ? ('community.html?dm=' + it.actor_hash)
+        : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+      return html`<a class=${'mc-notifs-row' + (it.read_at ? '' : ' mc-notifs-new')} href=${to}>${label}</a>`;
+    })}`);
+  }
+}
+customElements.define('mc-notifs', McNotifs);
+
 /* ---- the desktop TOP bar (≥601px) ----
    The platform's utility bar on the big screen, mirroring the mobile app bar:
    history back/forward, brand, board search, notifications, and a settings gear
@@ -342,15 +388,18 @@ customElements.define('mc-settings', McSettings);
    (CSS-gated). The dropdown closes on outside-click, Escape, AND any soft-nav
    (the mc-navigate signal) so a chosen link never loads behind an open menu. */
 class McDeskbar extends LitElement {
-  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false } };
-  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; }
+  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false }, notifMenu: { attribute: false } };
+  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; this.notifMenu = false; }
   createRenderRoot() { return this; }
   sync() { this.notif = badgeCount('notif'); this.canBack = history.length > 1; this.title = pageTitle(); }
   connectedCallback() {
     super.connectedCallback();
-    this._onDoc = (e) => { if (this.menu && !e.target.closest('.mc-db-acct')) this.menu = false; };
-    this._onKey = (e) => { if (e.key === 'Escape') this.menu = false; };
-    this._onNav = () => { this.menu = false; };
+    this._onDoc = (e) => {
+      if (this.menu && !e.target.closest('.mc-db-acct')) this.menu = false;
+      if (this.notifMenu && !e.target.closest('.mc-db-notif')) this.notifMenu = false;
+    };
+    this._onKey = (e) => { if (e.key === 'Escape') { this.menu = false; this.notifMenu = false; } };
+    this._onNav = () => { this.menu = false; this.notifMenu = false; };
     document.addEventListener('click', this._onDoc);
     document.addEventListener('keydown', this._onKey);
     document.addEventListener('mc-navigate', this._onNav);
@@ -361,7 +410,8 @@ class McDeskbar extends LitElement {
     document.removeEventListener('keydown', this._onKey);
     document.removeEventListener('mc-navigate', this._onNav);
   }
-  toggleMenu(e) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; }
+  toggleMenu(e) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; }
+  toggleNotif(e) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; }
   goBack(e) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
   goFwd(e) { e.preventDefault(); history.forward(); }
   search(e) {
@@ -386,7 +436,10 @@ class McDeskbar extends LitElement {
             ? html`<span class="mc-db-center"></span>`
             : html`<div class="mc-db-center mc-db-title" title=${this.title}>${this.title}</div>`)}
       <nav class="mc-db-cluster" aria-label="Account">
-        <a class="mc-db-ico" href="community.html?notifications=1" aria-label="Notifications" title="Notifications">${ICON.bell}${badge(this.notif)}</a>
+        <div class="mc-db-notif">
+          <button class="mc-db-ico" @click=${(e) => this.toggleNotif(e)} aria-label="Notifications" title="Notifications" aria-expanded=${this.notifMenu ? 'true' : 'false'}>${ICON.bell}${badge(this.notif)}</button>
+          ${this.notifMenu ? html`<div class="mc-db-menu mc-db-notifmenu"></div>` : ''}
+        </div>
         <div class="mc-db-acct">
           <button class="mc-db-ico mc-db-gear" @click=${(e) => this.toggleMenu(e)} aria-label="Settings" aria-expanded=${this.menu ? 'true' : 'false'}>${ICON.gear}</button>
           ${this.menu ? html`<div class="mc-db-menu"></div>` : ''}
@@ -395,8 +448,10 @@ class McDeskbar extends LitElement {
     </div>`;
   }
   updated() {
-    const menu = this.querySelector('.mc-db-menu');
+    const menu = this.querySelector('.mc-db-menu:not(.mc-db-notifmenu)');
     if (menu && !menu.firstChild) menu.appendChild(document.createElement('mc-settings'));
+    const nmenu = this.querySelector('.mc-db-notifmenu');
+    if (nmenu && !nmenu.firstChild) nmenu.appendChild(document.createElement('mc-notifs'));
   }
 }
 customElements.define('mc-deskbar', McDeskbar);
