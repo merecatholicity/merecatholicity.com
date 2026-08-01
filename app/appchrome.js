@@ -315,18 +315,8 @@ class McSettings extends LitElement {
             <span class="mc-pal-sw"></span><span class="mc-pal-name">${p[1]}</span></button>`)}
       </div>` : ''}
 
-      <h3 class="mc-set-sec">Community</h3>
-      ${link('community.html?users=1', 'Members', 'Everyone on the board')}
-      ${link('community.html?q=', 'Search', 'Search the forum')}
-
       ${isAdmin() ? html`<h3 class="mc-set-sec">Administration</h3>
       ${link('community.html?admin=1', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
-
-      <h3 class="mc-set-sec">Read &amp; help</h3>
-      ${link('library.html', 'Library')}
-      ${link('about.html', 'About')}
-      ${link('contact.html', 'Contact')}
-      ${link('terms.html', 'Terms & conditions')}
     </div>`;
   }
 }
