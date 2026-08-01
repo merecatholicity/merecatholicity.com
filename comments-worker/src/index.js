@@ -2649,12 +2649,30 @@ async function notifyWallLike(env, toHash, fromHash, postId) {
   try {
     if (!toHash || !fromHash || toHash === fromHash) return;
     const now = Math.floor(Date.now() / 1000);
-    const r = await env.DB.prepare(
-      "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
-      "SELECT ?1, 'wall-like', 0, ?2, ?3, ?4 WHERE NOT EXISTS (" +
-      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?3 AND comment_id = ?2 AND read_at IS NULL)"
+    /* First reopen a previously-READ like-notification from this liker on this post
+       (a fresh like after the author already saw the last one) rather than minting a
+       new row — so re-liking can never pile up rows: there is ever at most ONE
+       (recipient, actor, post) row. Both writes require the like to STILL exist
+       (EXISTS wall_likes), which closes the like/unlike race: if a concurrent unlike
+       already removed the like, neither fires and no orphan notification is left. */
+    const up = await env.DB.prepare(
+      "UPDATE notifications SET read_at = NULL, created_at = ?4 " +
+      "WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?3 AND comment_id = ?2 AND read_at IS NOT NULL " +
+      "AND EXISTS (SELECT 1 FROM wall_likes WHERE post_id = ?2 AND author_hash = ?3)"
     ).bind(toHash, postId, fromHash, now).run();
-    if (r.meta && r.meta.changes > 0) {
+    let rang = up.meta && up.meta.changes > 0;
+    if (!rang) {
+      /* No read row to reopen: insert one, but only if the like stands AND there is
+         no existing row at all (an already-unread one is left as-is — no re-ring). */
+      const ins = await env.DB.prepare(
+        "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
+        "SELECT ?1, 'wall-like', 0, ?2, ?3, ?4 WHERE " +
+        "EXISTS (SELECT 1 FROM wall_likes WHERE post_id = ?2 AND author_hash = ?3) AND " +
+        "NOT EXISTS (SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?3 AND comment_id = ?2)"
+      ).bind(toHash, postId, fromHash, now).run();
+      rang = ins.meta && ins.meta.changes > 0;
+    }
+    if (rang) {
       await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
         kind: 'wall-like', topic_id: 0, comment_id: postId, actor_hash: fromHash, created_at: now }]);
     }
@@ -2776,6 +2794,7 @@ async function handleWallDelete(request, env) {
   (cm.results || []).forEach((r) => keys.push(r.media_key));
   if (keys.length) await purgeWallMedia(env, keys);
   await env.DB.prepare('DELETE FROM wall_comments WHERE post_id = ?1').bind(id).run();
+  await env.DB.prepare('DELETE FROM wall_likes WHERE post_id = ?1').bind(id).run();
   await env.DB.prepare('DELETE FROM wall_posts WHERE id = ?1').bind(id).run();
   return json({ ok: true }, 200);
 }
@@ -2850,6 +2869,7 @@ async function runWallPrune(env, days) {
     (cm.results || []).forEach((r) => keys.push(r.media_key));
     if (keys.length) await purgeWallMedia(env, keys);
     await env.DB.prepare('DELETE FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
+    await env.DB.prepare('DELETE FROM wall_likes WHERE post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
     const del = await env.DB.prepare('DELETE FROM wall_posts WHERE created_at < ?1').bind(cutoff).run();
     deleted = (del.meta && del.meta.changes) || 0;
   } catch (e) { console.log(JSON.stringify({ event: 'prune_wall_failed', error: String(e) })); }
