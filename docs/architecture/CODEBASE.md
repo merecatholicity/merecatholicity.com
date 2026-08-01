@@ -259,7 +259,7 @@ monoliths' section headers):
 | 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ✅ |
 | 2D | Both workers → TypeScript (`Env`, typed rows) | — | ✅ |
 | 3 | **`db.ts` repository** — foundation shipped (`inList` retires the 13 hand-rolled `?N` loops, the `Query` builder, the `rankFor`/`withNames`/`postCountsFor` mappers moved in, unit-tested); routing the remaining trivial one-off `.prepare()` sites + the profile-join/DM-fragment consolidation is a further slice | −13 `?N` loops; mappers single-sourced | ◑ |
-| 4 | **Middleware + declarative routes** — replace the 93-branch chain | −~90 preamble copies (~500 lines) | ☐ |
+| 4 | **Middleware + declarative routes** — the 91-branch chain is now a declarative `ROUTES` table (behavior-proven by an independent route-parity diff); `keyed`/`keyedGated` middleware extracted and applied to the 7 handlers whose preamble is a byte-exact match (the ~30 variant preambles + the file-split into `routes/`·`services/`·`durable/` remain) | −7 exact preamble copies; declarative dispatch | ◑ |
 | 5 | **Client Wave F** — write paths → components; delete the fallbacks | −42 dual paths, −the renderer clone | ☐ |
 
 **Target:** every hand-written file ≤ ~400 lines; duplication < 2%; one schema
