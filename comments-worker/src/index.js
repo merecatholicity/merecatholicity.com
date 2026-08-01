@@ -11,6 +11,7 @@ import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
 import * as Faith from '../../purescript/output/Domain.Faith/index.js';
 import * as Profile from '../../purescript/output/Domain.Profile/index.js';
 import * as Dm from '../../purescript/output/Domain.Dm/index.js';
+import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
 
 const PAGES = [
   '/book.html',
@@ -139,28 +140,8 @@ const NAMED_EMOJI = (() => {
 })();
 /* Book spelling/abbreviation -> KJV verse-anchor slug, mirroring BIBLE in
    comments.js. Served so a native renderer can autolink scripture references. */
-const BIBLE_SPEC = [
-  ['genesis', 'genesis|gen|ge|gn'], ['exodus', 'exodus|exod|exo|ex'], ['leviticus', 'leviticus|lev|lv'], ['numbers', 'numbers|num|nm|nb'],
-  ['deuteronomy', 'deuteronomy|deut|deu|dt'], ['joshua', 'joshua|josh|jos|jsh'], ['judges', 'judges|judg|jdg|jg'], ['ruth', 'ruth|rth|ru'],
-  ['1-samuel', '1 samuel|1samuel|1 sam|1sam|1 sa|i samuel|i sam|first samuel'], ['2-samuel', '2 samuel|2samuel|2 sam|2sam|2 sa|ii samuel|ii sam|second samuel'],
-  ['1-kings', '1 kings|1kings|1 kgs|1kgs|1 ki|i kings|i kgs|first kings'], ['2-kings', '2 kings|2kings|2 kgs|2kgs|2 ki|ii kings|ii kgs|second kings'],
-  ['1-chronicles', '1 chronicles|1 chron|1 chr|1chr|1 ch|i chronicles|i chron|first chronicles'], ['2-chronicles', '2 chronicles|2 chron|2 chr|2chr|2 ch|ii chronicles|ii chron|second chronicles'],
-  ['ezra', 'ezra|ezr|ez'], ['nehemiah', 'nehemiah|neh|ne'], ['esther', 'esther|esth|est|es'], ['job', 'job|jb'],
-  ['psalms', 'psalms|psalm|pslm|psa|ps|pss|psm'], ['proverbs', 'proverbs|prov|pro|prv|pr'], ['ecclesiastes', 'ecclesiastes|eccles|eccl|ecc|ec|qoh'],
-  ['song-of-solomon', 'song of solomon|song of songs|song|sos|canticles|cant'], ['isaiah', 'isaiah|isa|isai'], ['jeremiah', 'jeremiah|jer|je|jr'],
-  ['lamentations', 'lamentations|lam|la'], ['ezekiel', 'ezekiel|ezek|eze|ezk'], ['daniel', 'daniel|dan|da|dn'], ['hosea', 'hosea|hos|ho'],
-  ['joel', 'joel|joe|jl'], ['amos', 'amos|amo'], ['obadiah', 'obadiah|obad|oba|ob'], ['jonah', 'jonah|jon|jnh'], ['micah', 'micah|mic|mc'], ['nahum', 'nahum|nah|na'],
-  ['habakkuk', 'habakkuk|hab|hb'], ['zephaniah', 'zephaniah|zeph|zep|zp'], ['haggai', 'haggai|hag|hg'], ['zechariah', 'zechariah|zech|zec|zc'], ['malachi', 'malachi|mal|ml'],
-  ['matthew', 'matthew|matt|mat|mt'], ['mark', 'mark|mrk|mar|mk|mr'], ['luke', 'luke|luk|lk'], ['john', 'john|jhn|joh|jn'], ['acts', 'acts|act|ac'], ['romans', 'romans|rom|ro|rm'],
-  ['1-corinthians', '1 corinthians|1 cor|1cor|1 co|i corinthians|i cor|first corinthians'], ['2-corinthians', '2 corinthians|2 cor|2cor|2 co|ii corinthians|ii cor|second corinthians'],
-  ['galatians', 'galatians|gal|ga'], ['ephesians', 'ephesians|ephes|eph'], ['philippians', 'philippians|phil|php|pp'], ['colossians', 'colossians|col'],
-  ['1-thessalonians', '1 thessalonians|1 thess|1thess|1 thes|1 th|i thessalonians|i thess|first thessalonians'], ['2-thessalonians', '2 thessalonians|2 thess|2thess|2 thes|2 th|ii thessalonians|ii thess|second thessalonians'],
-  ['1-timothy', '1 timothy|1 tim|1tim|1 ti|i timothy|i tim|first timothy'], ['2-timothy', '2 timothy|2 tim|2tim|2 ti|ii timothy|ii tim|second timothy'],
-  ['titus', 'titus|tit|ti'], ['philemon', 'philemon|philem|phlm|phm|pm'], ['hebrews', 'hebrews|heb|hb'], ['james', 'james|jas|jm'],
-  ['1-peter', '1 peter|1 pet|1pet|1 pe|1 pt|i peter|i pet|first peter'], ['2-peter', '2 peter|2 pet|2pet|2 pe|2 pt|ii peter|ii pet|second peter'],
-  ['1-john', '1 john|1 jhn|1 jn|1jn|i john|i jn|first john'], ['2-john', '2 john|2 jhn|2 jn|2jn|ii john|ii jn|second john'], ['3-john', '3 john|3 jhn|3 jn|3jn|iii john|iii jn|third john'],
-  ['jude', 'jude|jud|jd'], ['revelation', 'revelation|revelations|rev|apocalypse|apoc'],
-];
+/* BIBLE_SPEC retired — the book table is single-sourced from the PureScript
+   Domain.Scripture.bibleSpec, the same table the client bundles (Phase 6). */
 
 const enc = new TextEncoder();
 
@@ -518,7 +499,7 @@ async function handleConfig(request, env, url) {
     ranks: Rank.rankTable,
     pages: PAGES,
     bot_hash: MERECAT_BOT.hash,
-    bible: BIBLE_SPEC.map((r) => ({ slug: r[0], spellings: r[1].split('|') })),
+    bible: Scripture.bibleSpec,
     emoji: { custom, named: NAMED_EMOJI, data_url: '/emoji/emoji-data.json' },
   }, 200, cacheHeader(url));
 }
