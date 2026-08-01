@@ -92,7 +92,7 @@ const displayName = Pseudonym.displayName;
    count itself is postCountsFor. Served in /config and stamped on author rows so
    a client need not carry the ladder. */
 /* The rank ladder is single-sourced from the PureScript Domain.Rank — the very
-   module the client bundles (PURESCRIPT.md, Phase 6). rankFor erases the Rank
+   module the client bundles (CLAUDE.md). rankFor erases the Rank
    ADT to its label. This retires the RANKS/rankFor copy that used to live here. */
 function rankFor(n) {
   return Rank.rankLabel(Rank.rankFor((Number(n) || 0) | 0));

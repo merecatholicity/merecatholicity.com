@@ -49,7 +49,7 @@
 
   /* Faith code↔label + display order, single-sourced from the PureScript
      Domain.Faith (via window.mcCore); the inline FAITH/FAITH_ORDER above are the
-     no-bundle fallback (retire at Wave F). See PURESCRIPT.md. */
+     no-bundle fallback (the deliberate no-bundle fallback). See CLAUDE.md. */
   function faithLabel(code) {
     return (window.mcCore ? window.mcCore.faithLabel(code) : (FAITH[code] || '')) || '';
   }
@@ -69,7 +69,7 @@
   ];
   /* The rank ladder is the first slice migrated to the PureScript domain layer
      (Domain.Rank). When the app shell is present it computes rank; the classic
-     body below is the no-bundle fallback, kept until Wave F. See PURESCRIPT.md. */
+     body below is the no-bundle fallback, kept as the deliberate no-bundle fallback. See CLAUDE.md. */
   function rankFor(n) {
     if (window.mcCore) return window.mcCore.rankFor(n);
     n = Number(n) || 0;
@@ -259,7 +259,7 @@
      Shared by the body renderer and each quoted/list line. */
   function appendRich(target, str, plain) {
     /* Wave B3a: the living renderer is app/richtext.js when the bundle
-       stands; this body is the frozen no-bundle fallback (retires Wave F). */
+       stands; this body is the frozen no-bundle fallback (the deliberate no-bundle fallback). */
     if (window.mcRich) return window.mcRich.appendRich(target, str, plain);
     /* plain mode — the librarian's leash: every markdown feature is consumed
        but none applies, so the bot may write **bold** all day and the reader
@@ -1957,7 +1957,7 @@
 
   function commentNode(c, pending, quoteCtx, reveal) {
     /* Ported (Wave B3b): the module builder renders when the bundle stands;
-       this body is the no-bundle fallback (retires Wave F). */
+       this body is the no-bundle fallback (the deliberate no-bundle fallback). */
     if (window.mcViews && window.mcViews.commentNode) return window.mcViews.commentNode(window.mcKit, c, pending, quoteCtx, reveal);
     /* A muted member's post shows only a slim line until you choose to see it. */
     if (!reveal && c.author_hash && c.author_hash !== state.myHash && isMuted(c.author_hash)) {
@@ -4158,8 +4158,8 @@
 
   /* The profile field caps, single-sourced from the PureScript Domain.Profile
      (via window.mcCore); the fallback matches the worker (the no-bundle path,
-     retires at Wave F). Fixes the drift where the admin editor capped bio at
-     1000 while the worker rejects anything over 500. See PURESCRIPT.md. */
+     the deliberate no-bundle fallback). Fixes the drift where the admin editor capped bio at
+     1000 while the worker rejects anything over 500. See CLAUDE.md. */
   function profileLimits() {
     return (window.mcCore && window.mcCore.profileLimits) || { nick: 40, bio: 500, sig: 200 };
   }

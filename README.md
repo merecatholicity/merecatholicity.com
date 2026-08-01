@@ -174,13 +174,21 @@ rest float within the lockfile. Adding a JS dependency is `npm install --save-de
 
 ### The PureScript domain layer
 
-The site's **application/domain logic is migrating to PureScript**, with Lit.js kept as the
-render layer. Full rulebook and phase ledger: [`PURESCRIPT.md`](PURESCRIPT.md). Sources live
-in `purescript/src/`; the vendored compiler emits ESM into `purescript/output/`, which a
-small barrel `app/core.js` re-exports and `esbuild` inlines into `docs/app.js` (so no bundle
-command changed). `app/shell.js` exposes it as `window.mcCore`; the Lit views import
-`app/core.js` directly, and the un-bundled `docs/comments.js` delegates via
-`if (window.mcCore) …`.
+The site's **application/domain logic is a PureScript kernel**, with Lit.js as the render
+layer and JS as interop only (DOM, effects, crypto). `purescript/src/Domain/` is 17 modules —
+`Rank`, `Scripture`, `Profile`, `Faith`, `Pseudonym`, `Dm`, `Access`, `Live`, `Board`,
+`Emoji`, `Fts`, `Route`, `Auth`, `Mute`, `Blocked`, `Compose` — covering the meaningful logic
+(constants, validation, permissions, parsing, routing, identity classification, FTS
+sanitization), consumed by **both** the client bundle and the Cloudflare worker (one kernel,
+so the constants the two used to duplicate can no longer drift). The compiler emits ESM into `purescript/output/`,
+which a small barrel `app/core.js` re-exports (the audited translation membrane that erases
+PureScript types at the JS boundary) and `esbuild` inlines into `docs/app.js` (so no bundle
+command changed); `comments-worker/src/index.js` imports the same output. `app/shell.js`
+exposes the barrel as `window.mcCore`; the Lit views import `app/core.js` directly, and the
+un-bundled `docs/comments.js` delegates via `if (window.mcCore) … else …classic…`, where each
+classic branch is the no-bundle fallback (app disabled / storage blocked). What stays JS by
+design: DOM/Lit rendering, the Turnstile/nacl/WebCrypto/fetch/WebSocket effects, the DM E2E
+crypto, and the raw identity key/hash storage.
 
 ```sh
 make psbuild   # rm -rf purescript/output; compile purescript/src -> purescript/output (ESM)
