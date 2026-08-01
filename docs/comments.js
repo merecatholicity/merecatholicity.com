@@ -1010,6 +1010,8 @@
       '.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}' +
       '.wall-media{margin:0.45em 0}' +
       '.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}' +
+      '.wall-post-detail .wall-media-el{max-height:85vh}' +
+      '.wall-share{position:relative;display:inline-flex;align-items:center}.wall-share-menu{display:inline-flex;flex-wrap:wrap;gap:0.7em;margin-left:0.7em}' +
       '.wall-media-gone{opacity:0.6;font-size:0.9em;font-style:italic}' +
       '.wall-foot{margin-top:0.45em;font-size:0.9em}' +
       '.wall-comments-toggle{cursor:pointer;opacity:0.78}.wall-comments-toggle:hover{opacity:1}' +
@@ -4326,53 +4328,66 @@
   /* The "recent posts" list on a profile: a member's own live forum posts,
      newest first, each linking to the exact post, paged in place. */
   function renderProfilePosts(card, hash) {
-    card.appendChild(el('h3', 'profile-label', 'Recent posts'));
+    card.appendChild(el('h3', 'profile-label', 'Recent Community Posts'));
     var wrap = el('div', 'profile-posts');
     card.appendChild(wrap);
-    /* Deferred behind a click: a profile view costs no worker call for the post
-       history unless the reader actually asks to see it. */
-    var reveal = el('a', 'identity-action', 'Show recent posts');
-    reveal.href = '#';
-    wrap.appendChild(reveal);
-    reveal.addEventListener('click', function (e) {
-      e.preventDefault();
-      reveal.remove();
-      var list = el('div', 'board-topics');
+    /* Deferred behind a click (no worker call until asked), and RE-collapsible: a
+       reader can expand it, then close it again to get back down to the wall. */
+    var toggle = el('button', 'btn btn-anon profile-posts-toggle', 'Show recent posts');
+    toggle.type = 'button';
+    wrap.appendChild(toggle);
+    var panel = el('div', 'profile-posts-panel');
+    panel.style.display = 'none';
+    wrap.appendChild(panel);
+    var loaded = false;
+    var list, pagerHost;
+    var st = { page: 1 };
+    function draw() {
       list.textContent = 'Loading...';
-      wrap.appendChild(list);
-      var pagerHost = el('div');
-      wrap.appendChild(pagerHost);
-      var st = { page: 1 };
-      function draw() {
-        list.textContent = 'Loading...';
-        pagerHost.textContent = '';
-        fetchRetry(API + '/board/author?hash=' + hash + '&p=' + st.page + freshParam('&'), freshOpts(), [1000, 3000])
-          .then(function (r) { return r.json(); })
-          .then(function (d) {
-            if (!d.ok) throw new Error('failed');
-            list.textContent = '';
-            if (!d.items.length) {
-              list.appendChild(el('p', 'comments-status', st.page > 1 ? 'No more posts.' : 'No forum posts yet.'));
-              return;
-            }
-            d.items.forEach(function (it) {
-              var row = el('div', 'board-topic');
-              var left = el('div', 'board-topic-left');
-              var a = el('a', 'board-topic-title', it.title || 'a thread');
-              a.href = 'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id;
-              left.appendChild(a);
-              if (it.snippet) left.appendChild(el('div', 'board-intro', it.snippet));
-              row.appendChild(left);
-              var ce = catByKey(it.cat);
-              row.appendChild(el('div', 'board-stats', (ce ? ce[1] : it.cat) + ' · ' + fmtDateTime(it.created_at)));
-              list.appendChild(row);
-            });
-            var bar = pageBar(d.total, d.per, d.page, null, function (n) { st.page = n; draw(); window.scrollTo(0, 0); });
-            if (bar) pagerHost.appendChild(bar);
-          })
-          .catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'Recent posts could not be loaded.')); });
+      pagerHost.textContent = '';
+      fetchRetry(API + '/board/author?hash=' + hash + '&p=' + st.page + freshParam('&'), freshOpts(), [1000, 3000])
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error('failed');
+          list.textContent = '';
+          if (!d.items.length) {
+            list.appendChild(el('p', 'comments-status', st.page > 1 ? 'No more posts.' : 'No forum posts yet.'));
+            return;
+          }
+          d.items.forEach(function (it) {
+            var row = el('div', 'board-topic');
+            var left = el('div', 'board-topic-left');
+            var a = el('a', 'board-topic-title', it.title || 'a thread');
+            a.href = 'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id;
+            left.appendChild(a);
+            if (it.snippet) left.appendChild(el('div', 'board-intro', it.snippet));
+            row.appendChild(left);
+            var ce = catByKey(it.cat);
+            row.appendChild(el('div', 'board-stats', (ce ? ce[1] : it.cat) + ' · ' + fmtDateTime(it.created_at)));
+            list.appendChild(row);
+          });
+          var bar = pageBar(d.total, d.per, d.page, null, function (n) { st.page = n; draw(); window.scrollTo(0, 0); });
+          if (bar) pagerHost.appendChild(bar);
+        })
+        .catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'Recent posts could not be loaded.')); });
+    }
+    toggle.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (panel.style.display === 'none') {
+        panel.style.display = '';
+        toggle.textContent = 'Hide recent posts';
+        if (!loaded) {
+          loaded = true;
+          list = el('div', 'board-topics');
+          panel.appendChild(list);
+          pagerHost = el('div');
+          panel.appendChild(pagerHost);
+          draw();
+        }
+      } else {
+        panel.style.display = 'none';
+        toggle.textContent = 'Show recent posts';
       }
-      draw();
     });
   }
 
@@ -4441,8 +4456,8 @@
     /* Share: one tap copies this member's public profile link (the pretty
        /@handle when they have one, else the ?u= form) to the clipboard. */
     var shareUrl = location.origin + (p.handle ? ('/@' + p.handle) : ('/' + profileHref(p.hash)));
-    var shareLink = el('a', 'identity-action profile-share', '🔗 Share profile');
-    shareLink.href = shareUrl;
+    var shareLink = el('button', 'btn btn-anon profile-share', '🔗 Share profile');
+    shareLink.type = 'button';
     shareLink.addEventListener('click', function (e) {
       e.preventDefault();
       var done = function () {
@@ -4507,9 +4522,10 @@
       }
     }
     /* The member's public wall — their own posts, with a composer on your own. */
-    renderProfileWall(card, p.hash, editable);
-    /* A member's own recent forum posts, so a reader can follow a thinker. */
+    /* Recent Community Posts sit ABOVE the wall so heavy wall posting never buries
+       the way to look up someone's forum history; it stays collapsed by default. */
     renderProfilePosts(card, p.hash);
+    renderProfileWall(card, p.hash, editable);
     /* Admins get the very same user-fingerprint drawer here as on a post,
        driven by this identity's hash. Everyone else sees nothing. */
     annotateProfileMeta(p.hash, card);
@@ -5117,6 +5133,26 @@
   }
   /* The public media element for a post/comment. The object key encodes the kind
      (wall/i|v|a/...), so we pick <img>/<video>/<audio> without extra data. */
+  /* Full-screen image viewer: a fixed overlay, close on tap / Esc / ✕. Built with
+     inline styles (self-contained, CSP-safe — no innerHTML). */
+  function mcLightbox(src) {
+    var ov = el('div', 'mc-lightbox');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:1rem;cursor:zoom-out';
+    var img = el('img');
+    img.src = src; img.alt = '';
+    img.style.cssText = 'max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 4px 30px rgba(0,0,0,0.5)';
+    var x = el('button', null, '✕');
+    x.type = 'button';
+    x.style.cssText = 'position:absolute;top:0.6rem;right:0.9rem;font-size:1.6rem;line-height:1;color:#fff;background:none;border:none;cursor:pointer';
+    ov.appendChild(img); ov.appendChild(x);
+    function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    ov.addEventListener('click', close);
+    img.addEventListener('click', function (e) { e.stopPropagation(); });
+    x.addEventListener('click', function (e) { e.stopPropagation(); close(); });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(ov);
+  }
   function wallMediaNode(mediaKey) {
     if (!mediaKey) return null;
     var kind = String(mediaKey).split('/')[1];
@@ -5125,7 +5161,13 @@
     var mel;
     if (kind === 'v') { mel = el('video', 'wall-media-el'); mel.src = src; mel.controls = true; mel.preload = 'metadata'; }
     else if (kind === 'a') { mel = el('audio', 'wall-media-el'); mel.src = src; mel.controls = true; mel.preload = 'metadata'; }
-    else { mel = el('img', 'wall-media-el'); mel.src = src; mel.alt = ''; mel.loading = 'lazy'; }
+    else {
+      mel = el('img', 'wall-media-el'); mel.src = src; mel.alt = ''; mel.loading = 'lazy';
+      mel.style.cursor = 'zoom-in';
+      /* Tap the image to view it large; stopPropagation keeps the card's post-open
+         click from also firing. */
+      mel.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); mcLightbox(src); });
+    }
     mel.addEventListener('error', function () {
       holder.textContent = '';
       holder.appendChild(el('span', 'wall-media-gone', '🖼️ media unavailable'));
@@ -5170,10 +5212,62 @@
   }
   /* One public post: header, body, media, and a lazily-loaded comment section
      with its own composer. `expand` opens the comments immediately (post detail). */
+  /* Share a single post: a "🔗 Share" foot link that reveals Copy link / X /
+     Facebook, plus the native OS share sheet when available (that path covers
+     Instagram / TikTok / WhatsApp, which have no web share-URL). */
+  function wallShareControl(p) {
+    var shareUrl = location.origin + '/community.html?post=' + p.id;
+    var box = el('span', 'wall-share');
+    var btn = el('a', 'wall-comments-toggle wall-share-btn', '🔗 Share');
+    btn.href = '#';
+    var menu = el('span', 'wall-share-menu');
+    menu.style.display = 'none';
+    var copy = el('a', 'wall-comments-toggle', 'Copy link');
+    copy.href = '#';
+    copy.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var done = function () { copy.textContent = '✓ Copied'; setTimeout(function () { copy.textContent = 'Copy link'; }, 1500); };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(shareUrl).then(done).catch(function () { window.prompt('Copy this link:', shareUrl); });
+        else window.prompt('Copy this link:', shareUrl);
+      } catch (err) { window.prompt('Copy this link:', shareUrl); }
+    });
+    menu.appendChild(copy);
+    var xa = el('a', 'wall-comments-toggle', 'X');
+    xa.href = 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(shareUrl);
+    xa.target = '_blank'; xa.rel = 'noopener noreferrer';
+    xa.addEventListener('click', function (e) { e.stopPropagation(); });
+    menu.appendChild(xa);
+    var fba = el('a', 'wall-comments-toggle', 'Facebook');
+    fba.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl);
+    fba.target = '_blank'; fba.rel = 'noopener noreferrer';
+    fba.addEventListener('click', function (e) { e.stopPropagation(); });
+    menu.appendChild(fba);
+    if (navigator.share) {
+      var na = el('a', 'wall-comments-toggle', 'Share…');
+      na.href = '#';
+      na.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); navigator.share({ url: shareUrl, title: 'A post on Mere Catholicity' }).catch(function () {}); });
+      menu.appendChild(na);
+    }
+    btn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); menu.style.display = menu.style.display === 'none' ? '' : 'none'; });
+    box.appendChild(btn); box.appendChild(menu);
+    return box;
+  }
   function wallPostNode(p, expand) {
     ensureDmStyles();
-    var node = el('article', 'comment wall-post');
+    var node = el('article', 'comment wall-post' + (expand ? ' wall-post-detail' : ''));
     node.id = 'post-' + p.id;
+    /* In the feed/list (not the detail view), the whole card opens the post's own
+       page — but never when the click lands on a control, link, media, or the
+       comments area, and never over a text selection. */
+    if (!expand) {
+      node.style.cursor = 'pointer';
+      node.addEventListener('click', function (e) {
+        if (e.target.closest('a, button, video, audio, input, textarea, label, .wall-comments, .wall-media')) return;
+        if (window.getSelection && String(window.getSelection())) return;
+        location.href = 'community.html?post=' + p.id;
+      });
+    }
     var head = el('div', 'comment-head');
     wallAvatarInto(head, p.author_hash, p.avatar);
     head.appendChild(authorNode(p.author_hash, p.nick, true, p.faith, p.posts));
@@ -5251,6 +5345,7 @@
     }
     toggle.addEventListener('click', function (e) { e.preventDefault(); if (box.style.display === 'none') openComments(); else box.style.display = 'none'; });
     foot.appendChild(toggle);
+    foot.appendChild(wallShareControl(p));
     node.appendChild(foot);
     node.appendChild(box);
     if (expand) openComments();
