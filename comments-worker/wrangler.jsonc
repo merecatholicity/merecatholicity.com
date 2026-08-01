@@ -6,7 +6,7 @@
 // request cap. Deploy from this directory: deno run -A npm:wrangler deploy
 {
   "name": "merecatholicity-comments",
-  "main": "src/index.js",
+  "main": "src/index.ts",
   "compatibility_date": "2026-07-18",
   // D1 migrations for the persistent comments DB live in the default migrations/
   // directory (wrangler auto-discovers it — no config key needed), applied with

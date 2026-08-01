@@ -6,28 +6,39 @@
    address are overridable per deployment (ALLOWED_ORIGINS / CONTACT_FROM vars),
    falling back to the production values so prod is unchanged. */
 
+interface Env {
+  ALLOWED_ORIGINS?: string;
+  CONTACT_FROM?: string;
+  TURNSTILE_SECRET: string;
+  TURNSTILE_HOSTNAMES?: string;
+  CONTACT_TO?: string;
+  SEND_LIMIT: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  EMAIL: { send(msg: unknown): Promise<void> };
+  [k: string]: unknown;
+}
+
 const DEFAULT_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];
 const DEFAULT_FROM = { email: 'contact-form@merecatholicity.com', name: 'merecatholicity.com contact form' };
 
-function allowedOrigins(env) {
+function allowedOrigins(env: Env): string[] {
   const v = env && env.ALLOWED_ORIGINS;
   return v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_ORIGINS;
 }
-function fromAddress(env) {
+function fromAddress(env: Env) {
   return { email: (env && env.CONTACT_FROM) || DEFAULT_FROM.email, name: DEFAULT_FROM.name };
 }
 
-function corsHeaders(request, env) {
+function corsHeaders(request: Request, env: Env) {
   const origin = request.headers.get('Origin');
   const allowed = allowedOrigins(env);
   return {
-    'Access-Control-Allow-Origin': allowed.includes(origin) ? origin : allowed[0],
+    'Access-Control-Allow-Origin': allowed.includes(origin as string) ? origin as string : allowed[0],
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 }
 
-function json(body, status, request, env) {
+function json(body: unknown, status: number, request: Request, env: Env) {
   return new Response(JSON.stringify(body), {
     status: status,
     headers: { 'Content-Type': 'application/json', ...corsHeaders(request, env) },
@@ -35,7 +46,7 @@ function json(body, status, request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request: Request, env: Env) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(request, env) });
     }
@@ -85,10 +96,10 @@ export default {
         remoteip: ip,
       }),
     });
-    const verdict = await verifyResponse.json();
+    const verdict = await verifyResponse.json() as { success?: boolean; hostname?: string };
     /* Defense in depth on top of the sitekey's own domain lock. */
-    const allowedHosts = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h) => h.trim()).filter(Boolean);
-    if (!verdict.success || (allowedHosts.length && !allowedHosts.includes(verdict.hostname))) {
+    const allowedHosts = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h: string) => h.trim()).filter(Boolean);
+    if (!verdict.success || (allowedHosts.length && !allowedHosts.includes(verdict.hostname as string))) {
       return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403, request, env);
     }
 
@@ -97,7 +108,10 @@ export default {
       console.log(JSON.stringify({ event: 'contact_to_unset' }));
       return json({ ok: false, error: 'Could not deliver the message. Please try again later.' }, 502, request, env);
     }
-    const send = {
+    const send: {
+      to: string; from: { email: string; name: string }; subject: string; text: string;
+      replyTo?: { email: string; name: string | undefined };
+    } = {
       to: to,
       from: fromAddress(env),
       subject: 'merecatholicity.com: message from ' + (name || 'anonymous'),
