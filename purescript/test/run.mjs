@@ -16,6 +16,7 @@ import * as Live from '../output/Domain.Live/index.js';
 import * as Fts from '../output/Domain.Fts/index.js';
 import * as Pager from '../output/Domain.Pager/index.js';
 import * as Board from '../output/Domain.Board/index.js';
+import * as Emoji from '../output/Domain.Emoji/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -252,3 +253,13 @@ assert.deepEqual(Board.catRows[0], ['pub', 'Pub', 'General discussion, for whate
 assert.deepEqual(Board.catRows[13], ['adminsonly', 'Admins only', 'The back room.']);
 assert.equal(Board.adminCat, 'board:adminsonly');
 console.log('pstest: Domain.Board OK (14 categories, keys, adminCat)');
+
+// --- Domain.Emoji: the packs + named-alias tokens (single source for worker /config + client) ---
+assert.equal(Emoji.packs.memes.length, 33, '33 meme emoji');
+assert.equal(Emoji.packs.pepe.length, 27, '27 pepe emoji');
+assert.deepEqual(Emoji.packs.memes[0], ['cry', 'emoji/memes/cry.webp']);
+const toks = Emoji.namedTokens.trim().split(/\s+/);
+assert.equal(toks.length % 2, 0, 'named tokens pair up');
+assert.equal(toks.length, 364, '182 name/emoji pairs');
+assert.equal(toks[0], 'smile'); assert.equal(toks[1], '\u{1F604}');
+console.log('pstest: Domain.Emoji OK (33 memes, 27 pepe, 182 named pairs)');

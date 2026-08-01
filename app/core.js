@@ -22,6 +22,7 @@ import * as Access from '../purescript/output/Domain.Access/index.js';
 import * as Live from '../purescript/output/Domain.Live/index.js';
 import * as Pager from '../purescript/output/Domain.Pager/index.js';
 import * as Board from '../purescript/output/Domain.Board/index.js';
+import * as Emoji from '../purescript/output/Domain.Emoji/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -105,3 +106,11 @@ export const pagerItems = (total, per, active) => Pager.pagerItems(total | 0)(pe
 export const boardCatRows = Board.catRows;
 export const boardCatKeys = Board.catKeys;
 export const adminCat = Board.adminCat;
+
+/* Emoji data (Domain.Emoji), single-sourced with the worker's /config copy.
+   emojiPacks = { memes:[[code,path]…], pepe:[…] } (the image packs); the
+   standard ~250-emoji set stays client-only. emojiNamedTokens = the space-
+   separated "name emoji …" alias source the client pairs into NAMED_EMOJI.
+   Both already plain, so no erasure. */
+export const emojiPacks = Emoji.packs;
+export const emojiNamedTokens = Emoji.namedTokens;

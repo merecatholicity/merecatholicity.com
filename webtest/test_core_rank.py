@@ -85,6 +85,19 @@ SCRIPTURE_PROBE = r"""
       return { n: r.length, firstKey: r[0] && r[0][0], firstLabel: r[0] && r[0][1],
         lastKey: r[13] && r[13][0], keys: (window.mcCore.boardCatKeys || []).join(','),
         admin: window.mcCore.adminCat };
+    })(),
+    emoji: (function () {
+      var p = window.mcCore.emojiPacks || {};
+      var t = (window.mcCore.emojiNamedTokens || '').trim().split(/\s+/);
+      // render a custom-pack code, a named alias, and a bogus code through the
+      // real renderer to prove the client builds CUSTOM_EMOJI/NAMED_EMOJI from mcCore.
+      var d = document.createElement('div');
+      window.mcRich.fillBody(d, 'a :cry: b :fire: c :notacode: d', false);
+      var img = d.querySelector('img.mc-emoji');
+      return { memes: (p.memes || []).length, pepe: (p.pepe || []).length,
+        firstMeme: (p.memes || [])[0] && (p.memes || [])[0][0], namedPairs: t.length,
+        cryImg: img && img.getAttribute('src'), hasFireChar: d.textContent.indexOf('🔥') !== -1,
+        literalBogus: d.textContent.indexOf(':notacode:') !== -1 };
     })()
   };
 """
@@ -147,6 +160,14 @@ def main():
              and (sc.get('board') or {}).get('lastKey') == 'adminsonly'
              and (sc.get('board') or {}).get('admin') == 'board:adminsonly'
              and (sc.get('board') or {}).get('keys', '').startswith('pub,news,offtopic')),
+            ('mcCore.emojiPacks/Tokens render (:cry:→img, :fire:→🔥, :notacode: literal)',
+             (sc.get('emoji') or {}).get('memes') == 33
+             and (sc.get('emoji') or {}).get('pepe') == 27
+             and (sc.get('emoji') or {}).get('firstMeme') == 'cry'
+             and (sc.get('emoji') or {}).get('namedPairs') == 364
+             and (sc.get('emoji') or {}).get('cryImg') == 'emoji/memes/cry.webp'
+             and (sc.get('emoji') or {}).get('hasFireChar') is True
+             and (sc.get('emoji') or {}).get('literalBogus') is True),
         ]
         return f.verdict(checks)
 
