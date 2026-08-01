@@ -7137,31 +7137,61 @@
   /* The transparency panel's content. Live numbers (the shelf, the counts,
      the persona) come from /about; when that fetch fails the account still
      renders, minus the live parts. Everything is plain createElement. */
+  /* The URL→view decision is single-sourced in Domain.Route (parseRoute); this
+     is the effect dispatch over its {tag, s, n}. classicRoute below is the exact
+     same priority ladder, kept as the no-app fallback (no window.mcCore). */
+  function classicRoute(params) {
+    if (params.get('ipbans')) return { tag: 'IpBans' };
+    if (params.get('settings')) return { tag: 'Settings' };
+    if (params.get('admins')) return { tag: 'Admins' };
+    if (params.get('admin')) return { tag: 'AdminHome' };
+    if (params.get('merecatadmin')) return { tag: 'MerecatAdmin' };
+    if (params.get('merecatthread')) return { tag: 'MerecatThread', s: params.get('merecatthread') };
+    if (params.get('merecatthreads') !== null) return { tag: 'MerecatThreads' };
+    if (params.get('merecat')) return { tag: 'Merecat' };
+    if (params.get('notifications')) return { tag: 'Notifications' };
+    if (params.get('inbox')) return { tag: 'Inbox' };
+    if (params.get('users')) return { tag: 'Users' };
+    if (params.get('q') !== null) return { tag: 'Search' };
+    if (params.get('dm')) return { tag: 'Dm', s: params.get('dm') };
+    if (params.get('me')) return { tag: 'Me' };
+    if (params.get('profile')) return { tag: 'Profile', s: params.get('profile') };
+    if (params.get('audit')) return { tag: 'Audit' };
+    var topic = Number(params.get('topic'));
+    if (Number.isInteger(topic) && topic > 0) return { tag: 'Topic', n: topic };
+    if (params.get('cat')) return { tag: 'Cat', s: params.get('cat') };
+    return { tag: 'Index' };
+  }
+
   function route() {
     section.textContent = '';
     var params = new URLSearchParams(location.search);
-    if (params.get('ipbans')) return viewIpBans();
-    if (params.get('settings')) return viewPlatformSettings();
-    if (params.get('admins')) return viewAdmins();
-    if (params.get('admin')) return viewAdminHome();
-    if (params.get('merecatadmin')) return viewMerecatAdmin();
-    if (params.get('merecatthread')) return viewMerecatThread(Number(params.get('merecatthread')));
-    if (params.get('merecatthreads') !== null) return viewMerecatThreads();
-    if (params.get('merecat')) return viewMerecat();
-    if (params.get('notifications')) return viewNotifications();
-    if (params.get('inbox')) return viewInbox();
-    if (params.get('users')) return viewUsers();
-    if (params.get('q') !== null) return viewSearch();
-    if (params.get('dm')) return viewDm(params.get('dm'));
-    /* The mobile Profile tab lands here: your own profile when signed in, else
-       the board front where the identity line offers "Create an identity". */
-    if (params.get('me')) return (state.key && state.myHash) ? viewProfile(state.myHash) : viewIndex();
-    if (params.get('profile')) return viewProfile(params.get('profile'));
-    if (params.get('audit')) return viewAudit();
-    var topic = Number(params.get('topic'));
-    if (Number.isInteger(topic) && topic > 0) return viewTopic(topic);
-    if (params.get('cat')) return viewCat(params.get('cat'));
-    viewIndex();
+    var r = window.mcCore
+      ? window.mcCore.parseRoute(function (k) { return params.get(k); })
+      : classicRoute(params);
+    switch (r.tag) {
+      case 'IpBans': return viewIpBans();
+      case 'Settings': return viewPlatformSettings();
+      case 'Admins': return viewAdmins();
+      case 'AdminHome': return viewAdminHome();
+      case 'MerecatAdmin': return viewMerecatAdmin();
+      case 'MerecatThread': return viewMerecatThread(Number(r.s));
+      case 'MerecatThreads': return viewMerecatThreads();
+      case 'Merecat': return viewMerecat();
+      case 'Notifications': return viewNotifications();
+      case 'Inbox': return viewInbox();
+      case 'Users': return viewUsers();
+      case 'Search': return viewSearch();
+      case 'Dm': return viewDm(r.s);
+      /* The mobile Profile tab lands here: your own profile when signed in, else
+         the board front where the identity line offers "Create an identity". */
+      case 'Me': return (state.key && state.myHash) ? viewProfile(state.myHash) : viewIndex();
+      case 'Profile': return viewProfile(r.s);
+      case 'Audit': return viewAudit();
+      case 'Topic': return viewTopic(r.n);
+      case 'Cat': return viewCat(r.s);
+      default: return viewIndex();
+    }
   }
 
   function startBoard() {

@@ -98,6 +98,13 @@ SCRIPTURE_PROBE = r"""
         firstMeme: (p.memes || [])[0] && (p.memes || [])[0][0], namedPairs: t.length,
         cryImg: img && img.getAttribute('src'), hasFireChar: d.textContent.indexOf('🔥') !== -1,
         literalBogus: d.textContent.indexOf(':notacode:') !== -1 };
+    })(),
+    routes: (function () {
+      function tag(qs) { var p = new URLSearchParams(qs); return window.mcCore.parseRoute(function (k) { return p.get(k); }); }
+      return { index: tag('').tag, merecat: tag('merecat=1').tag, users: tag('users=1').tag,
+        search: tag('q=').tag, topicTag: tag('topic=42').tag, topicN: tag('topic=42').n,
+        catS: tag('cat=rc').s, priority: tag('merecat=1&topic=5').tag, dmS: tag('dm=abc').s,
+        me: tag('me=1').tag, topicZero: tag('topic=0').tag };
     })()
   };
 """
@@ -168,6 +175,18 @@ def main():
              and (sc.get('emoji') or {}).get('cryImg') == 'emoji/memes/cry.webp'
              and (sc.get('emoji') or {}).get('hasFireChar') is True
              and (sc.get('emoji') or {}).get('literalBogus') is True),
+            ('mcCore.parseRoute ladder (index/merecat/users/search/topic/cat/priority/me; topic=0→index)',
+             (sc.get('routes') or {}).get('index') == 'Index'
+             and (sc.get('routes') or {}).get('merecat') == 'Merecat'
+             and (sc.get('routes') or {}).get('users') == 'Users'
+             and (sc.get('routes') or {}).get('search') == 'Search'
+             and (sc.get('routes') or {}).get('topicTag') == 'Topic'
+             and (sc.get('routes') or {}).get('topicN') == 42
+             and (sc.get('routes') or {}).get('catS') == 'rc'
+             and (sc.get('routes') or {}).get('priority') == 'Merecat'
+             and (sc.get('routes') or {}).get('dmS') == 'abc'
+             and (sc.get('routes') or {}).get('me') == 'Me'
+             and (sc.get('routes') or {}).get('topicZero') == 'Index'),
         ]
         return f.verdict(checks)
 
