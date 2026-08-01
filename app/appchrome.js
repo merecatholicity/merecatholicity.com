@@ -627,10 +627,10 @@ function mcSelectSheet(sel) {
    Desktop / ?app=0 never see it (no mcSheet, isMobile() false). */
 const ONBOARD_FAITHS = [
   ['nicene', 'Nicene Christian', 'I hold the Nicene Creed'],
-  ['indo-european', 'Indo-European', 'I keep one of the old pre-Christian ways (a guest)'],
+  ['indo-european', 'Indo-European', 'I keep one of the old pre-Christian ways'],
   ['seeker', 'Seeker', 'I’m still seeking'],
 ];
-function mcOnboard(onDone) {
+function mcOnboard(onDone, opts) {
   if (!window.mcSheet) return;   // the sheet is a centered modal on desktop, a bottom sheet on phones
   const wrap = document.createElement('div');
   wrap.className = 'mc-onboard';
@@ -726,6 +726,8 @@ function mcOnboard(onDone) {
   });
 
   window.mcSheet.open('Join the conversation', wrap);
+  /* "I have a key" entry point: reveal the paste box up front and focus it. */
+  if (opts && opts.key) { pasteWrap.hidden = false; try { pasteIn.focus(); } catch (e) { /* not focusable yet */ } }
 }
 
 /* Mount the persistent chrome (called by the shell after the ?app=0 latch) and

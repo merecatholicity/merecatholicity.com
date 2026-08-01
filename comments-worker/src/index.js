@@ -1672,7 +1672,7 @@ const MEDIA_CAP_BYTES = 10 * 1024 * 1024 * 1024;   // R2 free tier: 10 GB
 const APP_SETTING_DEFAULTS = {
   media_enabled: '1',
   media_max_bytes: String(25 * 1024 * 1024),   // 25 MB per upload
-  dm_default_ttl: '604800',                     // 7 days
+  dm_default_ttl: String(Dm.defaultTtl),        // 30 days (single-sourced from Domain.Dm)
   dm_backstop_days: '30',                       // unopened-message backstop
   dm_media_bytes: '0',                          // sweep-maintained total, display-only
 };
@@ -1688,7 +1688,7 @@ async function getAppSettings(env) {
   appSettingsCache = { at: now, s };
   return s;
 }
-function dmDefaultTtl(s) { return Number(s.dm_default_ttl) || 604800; }
+function dmDefaultTtl(s) { return Number(s.dm_default_ttl) || Dm.defaultTtl; }
 function dmBackstopSeconds(s) { return (Number(s.dm_backstop_days) || 30) * 86400; }
 
 /* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
@@ -1907,7 +1907,7 @@ async function handleDmThread(request, env) {
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
-    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, m.expires_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
+    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, m.opened_at, m.expires_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
     ' AND m.created_at > ?5 AND ' + dmLive(now) + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
   ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
@@ -2089,6 +2089,29 @@ async function sweepExpiredDms(env) {
       'DELETE FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0'
     ).bind(now).run();
   } catch (e) { console.log(JSON.stringify({ event: 'sweep_expired_failed', error: String(e) })); }
+  try {
+    // Hard media cap (Domain.Dm.mediaMaxSeconds): NO media attachment persists
+    // beyond 30 days, even inside a SAVED message. On a surviving message whose
+    // media has aged out, purge the R2 object + row and mark the message
+    // media_expired so the client shows a placeholder over any saved text/caption.
+    const cap = now - Dm.mediaMaxSeconds;
+    const capped = await env.DB.prepare(
+      'SELECT md.key AS key, md.msg_id AS msg_id FROM dm_media md JOIN dms d ON d.id = md.msg_id ' +
+      'WHERE md.created_at < ?1 AND d.media_key IS NOT NULL LIMIT 5000'
+    ).bind(cap).all();
+    const rows = capped.results || [];
+    if (rows.length) {
+      await purgeMediaKeys(env, rows.map((r) => r.key).filter(Boolean));
+      const ids = rows.map((r) => r.msg_id).filter(Boolean);
+      for (let i = 0; i < ids.length; i += 50) {
+        const chunk = ids.slice(i, i + 50);
+        const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+        try {
+          await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + ph + ')').bind(...chunk).run();
+        } catch (e) { /* keep going */ }
+      }
+    }
+  } catch (e) { console.log(JSON.stringify({ event: 'sweep_media_cap_failed', error: String(e) })); }
   try {
     const orphan = await env.DB.prepare(
       'SELECT key FROM dm_media WHERE (msg_id IS NULL AND created_at < ?1) OR (msg_id IS NOT NULL AND msg_id NOT IN (SELECT id FROM dms)) LIMIT 2000'
