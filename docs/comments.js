@@ -403,7 +403,7 @@
   }
 
   function profileHref(hash) {
-    return 'community.html?profile=' + hash;
+    return 'profile.html?u=' + hash;
   }
 
   /* An author's visible name: the custom nick when set, the assigned pseudonym
@@ -2006,7 +2006,7 @@
     if (c.author_hash && state.myHash && c.author_hash !== state.myHash &&
         c.author_hash !== MERECAT_BOT_HASH) {
       var dm = el('a', 'comment-dm', 'Direct Message');
-      dm.href = 'community.html?dm=' + c.author_hash;
+      dm.href = 'messages.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
       head.appendChild(dm);
       /* Mute this member's posts for yourself. Reloading re-renders the view so
@@ -2670,7 +2670,7 @@
       if (nc && nc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + nc.n + ')'));
       line.appendChild(document.createTextNode(' · '));
       var inboxLink = el('a', 'identity-action', 'Inbox');
-      inboxLink.href = 'community.html?inbox=1';
+      inboxLink.href = 'messages.html';
       line.appendChild(inboxLink);
       var dmc = dmCacheGet();
       if (dmc && dmc.n > 0) line.appendChild(el('span', 'dm-unread', ' (' + dmc.n + ')'));
@@ -4321,7 +4321,7 @@
         var dmBtn = el('button', 'btn btn-send', 'Send a Direct Message');
         dmBtn.type = 'button';
         dmBtn.addEventListener('click', function () {
-          location.href = 'community.html?dm=' + p.hash;
+          location.href = 'messages.html?dm=' + p.hash;
         });
         card.appendChild(dmBtn);
         var muteBtn = el('button', 'btn btn-anon', isMuted(p.hash) ? 'Unmute this member' : 'Mute this member');
@@ -4606,13 +4606,13 @@
       if (!current.length) { sug.hidden = true; return; }
       current.forEach(function (u, i) {
         var r = el('a', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
-        r.href = 'community.html?dm=' + u.hash;
+        r.href = 'messages.html?dm=' + u.hash;
         r.title = 'Open the conversation';
         r.appendChild(el('span', null, dmLabel(u.hash, u.nick)));
         r.appendChild(el('span', 'dm-suggest-go', 'message →'));
         r.addEventListener('mousedown', function (e) {
           e.preventDefault();
-          location.href = 'community.html?dm=' + u.hash;
+          location.href = 'messages.html?dm=' + u.hash;
         });
         sug.appendChild(r);
       });
@@ -4647,7 +4647,7 @@
       else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); renderSug(); }
       else if (e.key === 'Enter') {
         e.preventDefault();
-        if (current[sel]) location.href = 'community.html?dm=' + current[sel].hash;
+        if (current[sel]) location.href = 'messages.html?dm=' + current[sel].hash;
       } else if (e.key === 'Escape') { current = []; renderSug(); }
     });
     input.addEventListener('blur', function () {
@@ -4880,7 +4880,7 @@
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
           var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmLabel(t.other_hash, t.nick));
-          a.href = 'community.html?dm=' + t.other_hash;
+          a.href = 'messages.html?dm=' + t.other_hash;
           left.appendChild(a);
           if (t.unread) left.appendChild(el('span', 'dm-unread', ' ● new'));
           row.appendChild(left);
@@ -4908,7 +4908,7 @@
           row.appendChild(delWrap);
           list.appendChild(row);
         });
-        function inboxHref(i) { return 'community.html?inbox=1&p=' + i; }
+        function inboxHref(i) { return 'messages.html&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, inboxHref);
         if (topBar) section.insertBefore(topBar, list);
         var botBar = pageBar(d.total, d.per, d.page, inboxHref);
@@ -4964,7 +4964,7 @@
           var label = isDm ? (who + ' sent you a message')
             : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
           var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
-          a.href = isDm ? ('community.html?dm=' + it.actor_hash)
+          a.href = isDm ? ('messages.html?dm=' + it.actor_hash)
             : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
@@ -5056,7 +5056,7 @@
         var label = dmLabel(other, d.other.nick);
         var shortName = d.other.nick || displayName(other);
         document.title = shortName + ' | Inbox';
-        crumb([['Community', 'community.html'], ['Inbox', 'community.html?inbox=1'], [shortName]]);
+        crumb([['Community', 'community.html'], ['Inbox', 'messages.html'], [shortName]]);
         var headEl = el('h2', 'board-topic-head');
         var nameLink = el('a', null, label);
         nameLink.href = profileHref(other);
@@ -5099,7 +5099,7 @@
           }
         } };
         var dmPages = Math.max(1, Math.ceil(d.total / d.per));
-        function dmHref(i) { return 'community.html?dm=' + other + '&p=' + i; }
+        function dmHref(i) { return 'messages.html?dm=' + other + '&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, dmHref);
         if (topBar) section.insertBefore(topBar, list);
         var botBar = pageBar(d.total, d.per, d.page, dmHref);
@@ -5233,7 +5233,7 @@
               status.textContent = 'Sent.';
               node.scrollIntoView();
             } else {
-              location.href = 'community.html?dm=' + other + '&p=' + msgPage;
+              location.href = 'messages.html?dm=' + other + '&p=' + msgPage;
             }
           }).catch(function (err) {
             status.textContent = err.message || 'Network error. Try again in a moment.';
@@ -5267,7 +5267,7 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ key: state.key, with: other }),
             }).then(function (r) { return r.json(); }).then(function (d3) {
-              if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} location.href = 'community.html?inbox=1'; }
+              if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} location.href = 'messages.html'; }
             }).catch(function () {});
           });
         }));
@@ -5603,7 +5603,7 @@
       crumbP.textContent = '';
       var short = tail ? (tail.length > 48 ? tail.slice(0, 48) + '…' : tail) : '';
       var parts = [['Community', 'community.html']];
-      if (short) { parts.push(['merecat', 'community.html?merecat=1']); parts.push([short]); }
+      if (short) { parts.push(['merecat', 'merecat-ai.html']); parts.push([short]); }
       else parts.push(['merecat']);
       parts.forEach(function (part, i) {
         if (i) crumbP.appendChild(document.createTextNode(' › '));
@@ -5718,7 +5718,7 @@
         function chatRow(c) {
           var row = el('p');
           var a = el('a', 'body-link', c.title || ('Conversation ' + c.id));
-          a.href = 'community.html?merecat=1&chat=' + c.id;
+          a.href = 'merecat-ai.html&chat=' + c.id;
           row.appendChild(a);
           row.appendChild(document.createTextNode(
             ' · ' + c.msgs + (c.msgs === 1 ? ' message · ' : ' messages · ') +
@@ -5770,7 +5770,7 @@
               if (dd.ok) {
                 chats = chats.filter(function (x) { return x !== c; });
                 renderChats();
-                if (c.id === chatId) location.href = 'community.html?merecat=1';
+                if (c.id === chatId) location.href = 'merecat-ai.html';
               } else {
                 actSay('Could not delete: ' + (dd.error || 'try again in a moment.'));
               }
@@ -6837,7 +6837,7 @@
             var note = el('p', 'merecat-quota');
             note.appendChild(document.createTextNode('🐈 The librarian is still working on your last question — '));
             var back = el('a', 'body-link', 'rejoin it');
-            back.href = 'community.html?merecat=1&chat=' + newest.id;
+            back.href = 'merecat-ai.html&chat=' + newest.id;
             note.appendChild(back);
             note.appendChild(document.createTextNode('.'));
             log.insertBefore(note, log.firstChild);
@@ -7197,13 +7197,54 @@
     return { tag: 'Index' };
   }
 
+  /* A logged-out reader on a members-only page (Messages, Profile) sees this clean
+     prompt instead of the board; the app-chrome gate also pops the registration
+     modal on top (desktop and mobile). */
+  function viewJoin(what) {
+    var wrap = el('div', 'mc-join');
+    wrap.appendChild(el('p', 'comments-status', 'Create an identity to ' + what + '. One tap, no email, no signup.'));
+    var btn = el('button', 'btn btn-send', 'Create an identity');
+    btn.type = 'button';
+    btn.addEventListener('click', function () {
+      if (window.mcOnboard) window.mcOnboard();
+      else location.href = 'community.html';
+    });
+    wrap.appendChild(btn);
+    section.appendChild(wrap);
+  }
+
   function route() {
     section.textContent = '';
     var params = new URLSearchParams(location.search);
+    var page = location.pathname.split('/').pop() || 'index.html';
+
+    /* The platform split (2026-08): direct messages, the profile, and the AI each
+       live on their own page now. They all boot this same client — route by page. */
+    if (page === 'messages.html') {
+      if (!isMember()) return viewJoin('read and send messages');
+      var dmh = params.get('dm');
+      return dmh ? viewDm(dmh) : viewInbox();
+    }
+    if (page === 'profile.html') {
+      var u = params.get('u') || params.get('profile');
+      if (u) return viewProfile(u);                 // anyone's profile is a public read
+      if (!isMember()) return viewJoin('your profile');
+      return viewProfile(state.myHash);
+    }
+    if (page === 'merecat-ai.html') return viewMerecat();
+
+    /* community.html — the forum + its administration. Legacy ?dm/?inbox/?me/
+       ?profile/?merecat links (old bookmarks, already-delivered notifications)
+       redirect to their new home so nothing that was ever shared breaks. */
     var r = window.mcCore
       ? window.mcCore.parseRoute(function (k) { return params.get(k); })
       : classicRoute(params);
     switch (r.tag) {
+      case 'Dm': location.replace('messages.html?dm=' + encodeURIComponent(r.s) + location.hash); return;
+      case 'Inbox': location.replace('messages.html'); return;
+      case 'Me': location.replace('profile.html'); return;
+      case 'Profile': location.replace('profile.html?u=' + encodeURIComponent(r.s)); return;
+      case 'Merecat': location.replace('merecat-ai.html' + (params.get('chat') ? '?chat=' + encodeURIComponent(params.get('chat')) : '')); return;
       case 'IpBans': return viewIpBans();
       case 'Settings': return viewPlatformSettings();
       case 'Admins': return viewAdmins();
@@ -7211,16 +7252,9 @@
       case 'MerecatAdmin': return viewMerecatAdmin();
       case 'MerecatThread': return viewMerecatThread(Number(r.s));
       case 'MerecatThreads': return viewMerecatThreads();
-      case 'Merecat': return viewMerecat();
       case 'Notifications': return viewNotifications();
-      case 'Inbox': return viewInbox();
       case 'Users': return viewUsers();
       case 'Search': return viewSearch();
-      case 'Dm': return viewDm(r.s);
-      /* The mobile Profile tab lands here: your own profile when signed in, else
-         the board front where the identity line offers "Create an identity". */
-      case 'Me': return (isMember()) ? viewProfile(state.myHash) : viewIndex();
-      case 'Profile': return viewProfile(r.s);
       case 'Audit': return viewAudit();
       case 'Topic': return viewTopic(r.n);
       case 'Cat': return viewCat(r.s);

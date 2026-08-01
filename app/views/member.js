@@ -142,7 +142,7 @@ class McNotifications extends LitElement {
         const isDm = it.kind === 'dm';
         const label = isDm ? (who + ' sent you a message')
           : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
-        const to = isDm ? ('community.html?dm=' + it.actor_hash)
+        const to = isDm ? ('messages.html?dm=' + it.actor_hash)
           : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
         return html`<div class="board-topic"><div class="board-topic-left">
           <a class=${'board-topic-title' + (it.read_at ? '' : ' dm-unread')} href=${to}>${label}</a>${it.read_at ? nothing : html`<span class="dm-unread"> ● new</span>`}

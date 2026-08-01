@@ -30,10 +30,10 @@ const ICON = {
    AI). hrefs are ordinary same-origin links the shell intercepts + soft-navs. */
 const TABS = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
-  { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'community.html?merecat=1' },
+  { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
   { key: 'community', label: 'Community', svg: 'community', href: 'community.html', hero: true },
-  { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'community.html?inbox=1', badge: 'dm' },
-  { key: 'profile', label: 'Profile', svg: 'profile', href: 'community.html?me=1' },
+  { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'messages.html', badge: 'dm' },
+  { key: 'profile', label: 'Profile', svg: 'profile', href: 'profile.html' },
 ];
 
 /* The Home launcher: standout features first, then the reading shelf (mirrors
@@ -42,7 +42,7 @@ const HOME_FEATURES = [
   { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
   { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
   { icon: '💬', title: 'Community', sub: 'Join the conversation', href: 'community.html' },
-  { icon: '🐈', title: 'Ask Merecat', sub: 'Put a question to the librarian AI', href: 'community.html?merecat=1' },
+  { icon: '🐈', title: 'Ask Merecat', sub: 'Put a question to the librarian AI', href: 'merecat-ai.html' },
 ];
 /* The reading shelf, grouped the way a newcomer reads it. Surfaces the whole
    site nav (Contact lives in Settings + the footer, not here). */
@@ -69,14 +69,11 @@ const HOME_SECTIONS = [
    active and the app bar shows a back arrow. */
 function activeTab() {
   const path = location.pathname.split('/').pop() || 'index.html';
-  const qs = location.search;
   if (path === 'index.html' || path === '') return 'home';
-  if (path === 'community.html') {
-    if (/[?&]merecat=1\b/.test(qs)) return 'merecat';
-    if (/[?&]inbox=1\b/.test(qs) || /[?&]dm=/.test(qs)) return 'messages';
-    if (/[?&]me=1\b/.test(qs) || /[?&]profile=/.test(qs)) return 'profile';
-    return 'community';
-  }
+  if (path === 'merecat-ai.html') return 'merecat';
+  if (path === 'messages.html') return 'messages';
+  if (path === 'profile.html') return 'profile';
+  if (path === 'community.html') return 'community';
   return '';
 }
 
@@ -196,6 +193,7 @@ class McSheet extends LitElement {
      enough pull or a quick flick lets it go, otherwise it snaps back. Tapping the
      scrim or the grip still closes it as before. */
   dragStart(e) {
+    if (!isMobile()) return;                             // desktop is a centered modal — no drag
     const sheet = e.currentTarget;
     if (sheet.scrollTop > 0) return;                     // let the content scroll
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -292,7 +290,7 @@ class McSettings extends LitElement {
     return html`<div class="mc-settings">
       <h3 class="mc-set-sec">Account</h3>
       ${k ? html`
-        ${link('community.html?me=1', 'My profile', 'Edit your name, faith, avatar')}
+        ${link('profile.html', 'My profile', 'Edit your name, faith, avatar')}
         <button class="mc-set-row mc-set-btn" @click=${() => { this.keyShown = !this.keyShown; }}>
           <span>Show my key<small>Your one login secret — save it somewhere safe</small></span><span class="mc-set-go">${this.keyShown ? '▾' : '›'}</span></button>
         ${this.keyShown ? html`<div class="mc-set-key">
@@ -371,7 +369,7 @@ class McNotifs extends LitElement {
       const who = name(it);
       const label = isDm ? (who + ' sent you a message')
         : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
-      const to = isDm ? ('community.html?dm=' + it.actor_hash)
+      const to = isDm ? ('messages.html?dm=' + it.actor_hash)
         : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
       return html`<a class=${'mc-notifs-row' + (it.read_at ? '' : ' mc-notifs-new')} href=${to}>${label}</a>`;
     })}`);
@@ -633,7 +631,7 @@ const ONBOARD_FAITHS = [
   ['seeker', 'Seeker', 'I’m still seeking'],
 ];
 function mcOnboard(onDone) {
-  if (!isMobile() || !window.mcSheet) return;
+  if (!window.mcSheet) return;   // the sheet is a centered modal on desktop, a bottom sheet on phones
   const wrap = document.createElement('div');
   wrap.className = 'mc-onboard';
   const done = function () { window.mcSheet.close(); if (onDone) { try { onDone(); } catch (e) { /* caller */ } } location.reload(); };
@@ -710,7 +708,7 @@ function mcOnboard(onDone) {
 
   createBtn.addEventListener('click', function () {
     const kit = window.mcKit;
-    if (!kit || !kit.mintIdentity) { location.href = 'community.html?me=1'; return; }
+    if (!kit || !kit.mintIdentity) { location.href = 'profile.html'; return; }
     createBtn.disabled = true; note.textContent = 'Creating…';
     kit.mintIdentity(chosenFaith).then(function (res) { revealKey(res && res.key); })
       .catch(function () { note.textContent = 'Could not create. Try again.'; createBtn.disabled = false; });
@@ -719,7 +717,7 @@ function mcOnboard(onDone) {
     const kit = window.mcKit;
     const key = pasteIn.value.trim();
     if (!key) { pasteIn.focus(); return; }
-    if (!kit || !kit.loginWithKey) { location.href = 'community.html?me=1'; return; }
+    if (!kit || !kit.loginWithKey) { location.href = 'profile.html'; return; }
     pasteBtn.disabled = true; note.textContent = 'Logging in…';
     kit.loginWithKey(key).then(function (ok) {
       if (ok) done();
@@ -828,9 +826,11 @@ export function installChrome() {
      pre-boot sync and only fires once the client has booted. */
   var onboardLatch = '';
   function maybeOnboard() {
-    if (!isMobile() || !window.mcKit || !window.mcOnboard) { onboardLatch = ''; return; }
+    if (!window.mcKit || !window.mcOnboard) { onboardLatch = ''; return; }   // desktop + mobile
     if (readKey()) { onboardLatch = ''; return; }               // logged in — nothing to do
     var tab = activeTab();
+    /* Only Home and Community are usable logged-out; every other destination pops
+       the registration modal instead of a dead end. */
     var gated = tab === 'messages' || tab === 'profile' || tab === 'merecat' || /[?&]notifications=1\b/.test(location.search);
     if (!gated) { onboardLatch = ''; return; }
     var routeKey = location.pathname + location.search;
