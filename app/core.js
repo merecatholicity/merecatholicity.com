@@ -28,6 +28,7 @@ import * as Auth from '../purescript/output/Domain.Auth/index.js';
 import * as Mute from '../purescript/output/Domain.Mute/index.js';
 import * as Blocked from '../purescript/output/Domain.Blocked/index.js';
 import * as Compose from '../purescript/output/Domain.Compose/index.js';
+import * as Handle from '../purescript/output/Domain.Handle/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -61,6 +62,15 @@ export const verseParts = (bookKey, ch, v1, v2) =>
    worker's MAX_* read the same source in Phase 6. Retires the drift where the
    admin editor capped bio at 1000 while the worker rejects over 500. */
 export const profileLimits = Profile.limits;
+
+/* handleValidate(raw) -> { ok, handle, error }: the custom @handle format rules
+   (Domain.Handle), single-sourced with the worker. `ok` true carries the
+   normalized (lower-cased) handle; false carries a discriminant error tag
+   ('too_short'|'too_long'|'bad_chars'|'bad_start'|'bad_underscore'|'reserved').
+   Already a plain record (erased inside PureScript), so no further work here.
+   handleMax is the max length for the input's maxLength. */
+export const handleValidate = (raw) => Handle.validate(String(raw == null ? '' : raw));
+export const handleMax = Handle.maxLen;
 
 /* faithLabel(code) -> the display label, or '' for an unrecognized code (the
    client checks truthiness). faiths -> the ordered [{code,label}] the signup

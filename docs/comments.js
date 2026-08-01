@@ -4198,6 +4198,28 @@
 
   /* A profile view. Your own is read/write; everyone else's is read-only. It
      is reached from the View-profile link and from every clickable username. */
+  /* Resolve a custom @handle to its owner's hash, then render the profile the
+     normal way (both the classic path and the Lit view take a hash). The URL
+     keeps the handle so the shared link stays pretty. */
+  function viewProfileByHandle(handle) {
+    crumb([['Community', 'community.html'], ['Profile']]);
+    var status = el('p', 'comments-status', 'Loading profile...');
+    section.appendChild(status);
+    fetchRetry(API + '/profile?handle=' + encodeURIComponent(handle) + freshParam('&'), freshOpts(), [1000, 3000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        section.textContent = '';
+        if (!d.ok || !d.profile || !d.profile.hash) {
+          section.appendChild(el('p', 'comments-status', 'No such profile.'));
+          return;
+        }
+        viewProfile(d.profile.hash);
+      })
+      .catch(function () {
+        status.textContent = 'The profile could not be loaded. Check your connection and reload the page.';
+      });
+  }
+
   function viewProfile(hash) {
     if (window.mcViews && window.mcViews.profile) return window.mcViews.profile(section, window.mcKit, hash);
     document.title = 'Profile | Community';
@@ -4370,6 +4392,7 @@
     var names = el('div', 'profile-names');
     names.appendChild(el('div', 'profile-name', p.nick || p.assigned));
     if (p.nick) names.appendChild(el('div', 'profile-assigned', p.assigned));
+    if (p.handle) names.appendChild(el('div', 'profile-assigned profile-handle', '@' + p.handle));
     if (p.admin) names.appendChild(el('span', 'comment-admin', '(admin)'));
     /* The faith declaration. For one's own profile it falls back to the local
        choice before the first post has carried it to the server. */
@@ -4452,6 +4475,49 @@
     sigIn.rows = 2;
     sigIn.value = p.signature || '';
     card.appendChild(sigIn);
+
+    /* Custom @handle — the member's own profile URL (merecatholicity.com/@handle),
+       distinct from the display nickname. Optional; lower-cased; must be unique
+       (the server is authoritative and returns a clear message if it is taken).
+       The live hint shows the resulting link, or why a value is not allowed,
+       validated through the same kernel the server uses. */
+    function handleErrText(tag) {
+      switch (tag) {
+        case 'too_short': return 'Too short — 3 to 30 characters.';
+        case 'too_long': return 'Too long — 3 to 30 characters.';
+        case 'bad_chars': return 'Use only lowercase letters, numbers, and underscore.';
+        case 'bad_start': return 'Must start with a letter.';
+        case 'bad_underscore': return 'Cannot end with, or repeat, an underscore.';
+        case 'reserved': return 'That handle is reserved.';
+        default: return 'That handle is not allowed.';
+      }
+    }
+    card.appendChild(el('label', 'profile-label', 'Profile link — your @handle (optional)'));
+    var handleIn = el('input', 'key-input');
+    handleIn.type = 'text';
+    handleIn.maxLength = (window.mcCore && window.mcCore.handleMax) || 30;
+    handleIn.placeholder = 'e.g. john_smith';
+    handleIn.value = p.handle || '';
+    handleIn.autocapitalize = 'none';
+    handleIn.autocomplete = 'off';
+    handleIn.spellcheck = false;
+    card.appendChild(handleIn);
+    var handleHint = el('p', 'profile-empty');
+    card.appendChild(handleHint);
+    function updateHandleHint() {
+      var raw = handleIn.value.trim();
+      handleHint.style.color = '';
+      if (!raw) { handleHint.textContent = 'No handle set — your link stays the default.'; return; }
+      if (window.mcCore && window.mcCore.handleValidate) {
+        var v = window.mcCore.handleValidate(raw);
+        if (v.ok) { handleHint.textContent = 'Your link: merecatholicity.com/@' + v.handle; }
+        else { handleHint.textContent = handleErrText(v.error); handleHint.style.color = '#a3324a'; }
+      } else {
+        handleHint.textContent = 'Your link: merecatholicity.com/@' + raw.toLowerCase();
+      }
+    }
+    handleIn.addEventListener('input', updateHandleHint);
+    updateHandleHint();
 
     /* Avatar. Two ways to set one: upload your own JPEG, or pick a ready-made
        from the gallery. Both end in the same canvas step that hands the server
@@ -4611,7 +4677,7 @@
         return fetchRetry(API + '/profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, nick: nickIn.value, bio: bioIn.value, signature: sigIn.value, faith: chosenFaith, token: token }),
+          body: JSON.stringify({ key: state.key, nick: nickIn.value, bio: bioIn.value, signature: sigIn.value, faith: chosenFaith, handle: handleIn.value, token: token }),
         }, [1500], function () { note.textContent = 'Network hiccup, retrying...'; })
           .then(function (r) { return r.json(); });
       })
@@ -7710,6 +7776,11 @@
     if (page === 'profile.html') {
       var u = params.get('u') || params.get('profile');
       if (!isMember()) return viewJoin(u ? "view members' profiles" : 'set up your profile');
+      /* ?u= may carry a 64-hex hash (internal links) OR a custom @handle (a
+         shared /@handle link, rewritten to ?u=handle at the edge). A handle is
+         resolved to its owner's hash first, so viewProfile + the Lit view stay
+         hash-based and unchanged. */
+      if (u && !/^[0-9a-f]{64}$/.test(u)) return viewProfileByHandle(u);
       return viewProfile(u || state.myHash);        // members-only: profiles need a login now
     }
     if (page === 'merecat-ai.html') {
