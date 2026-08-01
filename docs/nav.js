@@ -16,6 +16,13 @@
     var m = document.cookie.match(/(?:^|;\s*)mc-dark=(charcoal|slate|ink)\b/);
     return m ? m[1] : 'charcoal';
   }
+  /* Which light palette the reader chose: paper (default) / mist (cool) / sepia
+     (warm). Only meaningful in light mode; drives data-light on <html> for the
+     light variant blocks in the stylesheet. */
+  function readLight() {
+    var m = document.cookie.match(/(?:^|;\s*)mc-light=(paper|mist|sepia)\b/);
+    return m ? m[1] : 'paper';
+  }
   function systemDark() {
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   }
@@ -32,6 +39,14 @@
     } else {
       document.documentElement.removeAttribute('data-dark');
     }
+    /* paper is the base light :root (no attribute); mist/sepia are delta blocks
+       keyed on data-light. Cleared in dark mode so nothing lingers. */
+    var light = readLight();
+    if (theme === 'light' && (light === 'mist' || light === 'sepia')) {
+      document.documentElement.setAttribute('data-light', light);
+    } else {
+      document.documentElement.removeAttribute('data-light');
+    }
   }
   /* Apply as soon as the (deferred) script runs, so an explicit choice takes
      hold before the reader interacts. */
@@ -42,6 +57,12 @@
   window.mcSetDark = function (v) {
     if (v !== 'charcoal' && v !== 'slate' && v !== 'ink') return;
     document.cookie = 'mc-dark=' + v + ';path=/;max-age=31536000;samesite=lax';
+    apply(effective());
+  };
+  window.mcGetLight = readLight;
+  window.mcSetLight = function (v) {
+    if (v !== 'paper' && v !== 'mist' && v !== 'sepia') return;
+    document.cookie = 'mc-light=' + v + ';path=/;max-age=31536000;samesite=lax';
     apply(effective());
   };
 
@@ -217,7 +238,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=58';
+    s.src = 'app.js?v=59';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

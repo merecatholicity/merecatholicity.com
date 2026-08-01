@@ -250,9 +250,62 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, presence: { attribute: false } };
-  constructor() { super(); this.keyShown = false; this.theme = this._theme(); this.copied = false; this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal'; this.presence = this._presence(); }
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false } };
+  constructor() {
+    super();
+    this.keyShown = false; this.theme = this._theme(); this.copied = false;
+    this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal';
+    this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence();
+    this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null; this.muted = null;
+    this.canInstall = !!(window.mcInstall && window.mcInstall.evt);
+    this._onInstall = () => { this.canInstall = !!(window.mcInstall && window.mcInstall.evt); };
+  }
   createRenderRoot() { return this; }
+  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-install-available', this._onInstall); this._loadPrefs(); }
+  disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-install-available', this._onInstall); }
+  _api() { return '/api/comments'; }
+  _loadPrefs() {
+    const k = readKey(); if (!k) return;
+    fetch(this._api() + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }) })
+      .then((r) => r.json()).then((d) => { if (d && d.ok) { this.prefs = d.prefs; window.mcPrefs = d.prefs; } }).catch(() => { /* keep defaults */ });
+  }
+  _setPref(patch) {
+    const k = readKey(); if (!k) return;
+    this.prefs = Object.assign({ receipts: 'auto', notify_reply: 1, notify_mention: 1, notify_dm: 1 }, this.prefs, patch);
+    window.mcPrefs = this.prefs;
+    fetch(this._api() + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, set: patch }) }).catch(() => { /* best effort */ });
+  }
+  _notifyOn(kind) { return !this.prefs || this.prefs['notify_' + kind] !== 0; }
+  _receiptsOn() { return !(this.prefs && this.prefs.receipts === 'off'); }
+  _openPanel(which) {
+    this.panel = this.panel === which ? '' : which;
+    if (this.panel === 'blocked' && this.blocked == null) this._loadBlocked();
+    if (this.panel === 'muted') this._loadMuted();
+  }
+  _loadBlocked() {
+    const k = readKey(); if (!k) { this.blocked = []; return; }
+    fetch(this._api() + '/dm/blocked', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }) })
+      .then((r) => r.json()).then((d) => { this.blocked = (d && d.ok) ? d.blocked : []; }).catch(() => { this.blocked = []; });
+  }
+  _unblock(hash) {
+    const k = readKey(); if (!k) return;
+    this.blocked = (this.blocked || []).filter((b) => b.hash !== hash);
+    fetch(this._api() + '/dm/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, hash, blocked: false }) }).catch(() => { /* best effort */ });
+  }
+  _loadMuted() {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem('mc-muted')) || []; } catch (e) { list = []; }
+    const dn = (h) => (window.mcCore ? window.mcCore.displayName(h) : String(h).slice(0, 8));
+    this.muted = list.filter(Boolean).map((h) => ({ hash: h, name: dn(h) }));
+  }
+  _unmute(hash) {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem('mc-muted')) || []; } catch (e) { list = []; }
+    list = list.filter((h) => h !== hash);
+    try { localStorage.setItem('mc-muted', JSON.stringify(list)); } catch (e) { /* blocked */ }
+    this.muted = (this.muted || []).filter((m) => m.hash !== hash);
+  }
+  _install() { if (window.mcInstall) window.mcInstall.prompt(); this.canInstall = false; }
   _presence() { try { return localStorage.getItem('mc-presence') === 'off' ? 'off' : 'auto'; } catch (e) { return 'auto'; } }
   togglePresence() {
     const n = this.presence === 'off' ? 'auto' : 'off';
@@ -271,6 +324,7 @@ class McSettings extends LitElement {
     this.theme = n;
   }
   setDark(p) { if (window.mcSetDark) window.mcSetDark(p); this.dark = p; }
+  setLight(p) { if (window.mcSetLight) window.mcSetLight(p); this.light = p; }
   copyKey() {
     const k = readKey();
     if (!k) return;
@@ -291,17 +345,35 @@ class McSettings extends LitElement {
       location.href = 'index.html';
     });
   }
+  _switch(label, note, on, onClick) {
+    return html`<button class="mc-set-row mc-set-btn" @click=${onClick}>
+      <span>${label}${note ? html`<small>${note}</small>` : ''}</span>
+      <span class=${'mc-set-switch' + (on ? ' on' : '')}><span class="mc-set-knob"></span></span></button>`;
+  }
+  _managedList(which, label, count, rows, action, actionLabel) {
+    const open = this.panel === which;
+    return html`
+      <button class="mc-set-row mc-set-btn" @click=${() => this._openPanel(which)}>
+        <span>${label}${count != null ? html`<small>${count === 0 ? 'None' : (count + (count === 1 ? ' member' : ' members'))}</small>` : ''}</span>
+        <span class="mc-set-go">${open ? '▾' : '›'}</span></button>
+      ${open ? html`<div class="mc-set-key" style="flex-direction:column;gap:0.35rem;align-items:stretch">
+        ${rows == null ? html`<p style="opacity:0.6;margin:0.2rem 0">Loading…</p>`
+        : (rows.length ? rows.map((r) => html`
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</span>
+            <button class="btn" style="padding:0.15rem 0.6rem;font-size:0.85em" @click=${() => action(r.hash)}>${actionLabel}</button>
+          </div>`) : html`<p style="opacity:0.6;margin:0.2rem 0">Nobody here.</p>`)}
+      </div>` : ''}`;
+  }
   render() {
     const k = readKey();
     const link = (href, label, note) => html`<a class="mc-set-row" href=${href}>
       <span>${label}${note ? html`<small>${note}</small>` : ''}</span><span class="mc-set-go">›</span></a>`;
+    const blockedRows = this.blocked == null ? null : this.blocked.map((b) => ({ hash: b.hash, name: b.nick || b.assigned || (b.hash || '').slice(0, 8) }));
     return html`<div class="mc-settings">
       <h3 class="mc-set-sec">Account</h3>
       ${k ? html`
         ${link('profile.html', 'My profile', 'Edit your name, faith, avatar')}
-        <button class="mc-set-row mc-set-btn" @click=${() => this.togglePresence()}>
-          <span>Show when I'm online<small>${this.presence === 'off' ? 'Appear offline' : 'Automatic'}</small></span>
-          <span class=${'mc-set-switch' + (this.presence !== 'off' ? ' on' : '')}><span class="mc-set-knob"></span></span></button>
         <button class="mc-set-row mc-set-btn" @click=${() => { this.keyShown = !this.keyShown; }}>
           <span>Show my key<small>Your one login secret — save it somewhere safe</small></span><span class="mc-set-go">${this.keyShown ? '▾' : '›'}</span></button>
         ${this.keyShown ? html`<div class="mc-set-key">
@@ -316,18 +388,36 @@ class McSettings extends LitElement {
       `}
 
       <h3 class="mc-set-sec">Appearance</h3>
-      <button class="mc-set-row mc-set-btn" @click=${() => this.toggleTheme()}>
-        <span>Theme<small>${this.theme === 'dark' ? 'Dark' : 'Light'}</small></span>
-        <span class=${'mc-set-switch' + (this.theme === 'dark' ? ' on' : '')}><span class="mc-set-knob"></span></span>
-      </button>
+      ${this._switch('Theme', this.theme === 'dark' ? 'Dark' : 'Light', this.theme === 'dark', () => this.toggleTheme())}
       ${this.theme === 'dark' ? html`<div class="mc-set-palette">
         ${[['charcoal', 'Charcoal'], ['slate', 'Slate'], ['ink', 'Warm ink']].map((p) => html`
           <button class=${'mc-set-pal mc-pal-' + p[0] + (this.dark === p[0] ? ' on' : '')} @click=${() => this.setDark(p[0])} aria-label=${p[1]}>
             <span class="mc-pal-sw"></span><span class="mc-pal-name">${p[1]}</span></button>`)}
-      </div>` : ''}
+      </div>` : html`<div class="mc-set-palette">
+        ${[['paper', 'Paper'], ['mist', 'Mist'], ['sepia', 'Sepia']].map((p) => html`
+          <button class=${'mc-set-pal mc-pal-' + p[0] + (this.light === p[0] ? ' on' : '')} @click=${() => this.setLight(p[0])} aria-label=${p[1]}>
+            <span class="mc-pal-sw"></span><span class="mc-pal-name">${p[1]}</span></button>`)}
+      </div>`}
+
+      ${k ? html`
+        <h3 class="mc-set-sec">Privacy &amp; safety</h3>
+        ${this._switch("Show when I'm online", this.presence === 'off' ? 'Appear offline' : 'Automatic', this.presence !== 'off', () => this.togglePresence())}
+        ${this._switch('Read receipts', this._receiptsOn() ? 'On' : 'Off — you send none and see none', this._receiptsOn(), () => this._setPref({ receipts: this._receiptsOn() ? 'off' : 'auto' }))}
+        ${this._managedList('blocked', 'Blocked members', blockedRows ? blockedRows.length : null, blockedRows, (h) => this._unblock(h), 'Unblock')}
+        ${this._managedList('muted', 'Muted members', this.muted ? this.muted.length : null, this.muted, (h) => this._unmute(h), 'Unmute')}
+
+        <h3 class="mc-set-sec">Notifications</h3>
+        ${this._switch('Replies', null, this._notifyOn('reply'), () => this._setPref({ notify_reply: this._notifyOn('reply') ? 0 : 1 }))}
+        ${this._switch('Mentions', null, this._notifyOn('mention'), () => this._setPref({ notify_mention: this._notifyOn('mention') ? 0 : 1 }))}
+        ${this._switch('Direct messages', 'The bell only — messages still arrive', this._notifyOn('dm'), () => this._setPref({ notify_dm: this._notifyOn('dm') ? 0 : 1 }))}
+      ` : ''}
 
       ${isAdmin() ? html`<h3 class="mc-set-sec">Administration</h3>
       ${link('community.html?admin=1', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
+
+      ${this.canInstall ? html`<h3 class="mc-set-sec">App</h3>
+        <button class="mc-set-row mc-set-btn" @click=${() => this._install()}>
+          <span>Install app<small>Add merecatholicity to your home screen</small></span><span class="mc-set-go">›</span></button>` : ''}
     </div>`;
   }
 }

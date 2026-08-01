@@ -17,12 +17,13 @@ import * as Board from '../../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../../purescript/output/Domain.Emoji/index.js';
 import * as Presence from '../../purescript/output/Domain.Presence/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
+import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
 // there or client-side; imported here only what index.js calls directly.)
 import {
-  ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic,
+  ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
 } from './pure.js';
 
 const PAGES = [
@@ -635,6 +636,28 @@ async function handlePost(request, env, ctx) {
    Only a live post tells anyone: each validated @mention gets a 'mention', and a
    reply gives the topic author and every watcher a 'reply', minus the replier and
    anyone already mentioned so no one is told twice for one post. One batch write. */
+/* Batch-load the per-type notification prefs for a set of recipients. A member
+   with no profile row (or a NULL column) keeps the default (on). */
+async function notifyPrefsFor(env, hashes) {
+  const map = {};
+  const list = [...new Set((hashes || []).filter(Boolean))];
+  for (let i = 0; i < list.length; i += 50) {
+    const chunk = list.slice(i, i + 50);
+    const ph = chunk.map((_, j) => '?' + (j + 1)).join(',');
+    try {
+      const rows = await env.DB.prepare('SELECT hash, notify_reply, notify_mention, notify_dm FROM profiles WHERE hash IN (' + ph + ')').bind(...chunk).all();
+      for (const r of (rows.results || [])) map[r.hash] = r;
+    } catch (e) { /* defaults (all on) stand */ }
+  }
+  return map;
+}
+/* Is a kind enabled for this recipient? NULL / missing profile = on (default). */
+function notifyEnabled(prefRow, kind) {
+  if (!prefRow) return true;
+  const v = prefRow['notify_' + kind];
+  return v == null ? true : Prefs.notifyOn(Number(v) || 0);
+}
+
 async function deliverNotifications(env, o) {
   const now = Math.floor(Date.now() / 1000);
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
@@ -665,8 +688,10 @@ async function deliverNotifications(env, o) {
       const admRows = await env.DB.prepare('SELECT hash FROM admins').all();
       admSet = new Set((admRows.results || []).map((r) => r.hash));
     }
+    const mPrefs = await notifyPrefsFor(env, mentions);
     for (const h of mentions) {
       if (admSet && !admSet.has(h)) continue;
+      if (!notifyEnabled(mPrefs[h], 'mention')) continue;   // recipient turned mentions off
       stmts.push(env.DB.prepare(NOTIF).bind(h, 'mention', o.topicId, o.commentId, o.authorHash, now));
       pushTo.add(h);
       liveEvents.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'mention', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash, created_at: now });
@@ -680,9 +705,10 @@ async function deliverNotifications(env, o) {
       if (o.topicAuthorHash) recips.add(o.topicAuthorHash);
       const rows = await env.DB.prepare('SELECT hash FROM watches WHERE topic_id = ?1').bind(o.topicId).all();
       for (const r of (rows.results || [])) recips.add(r.hash);
+      const rPrefs = await notifyPrefsFor(env, [...recips]);
       for (const h of recips) {
         if (admSet && !admSet.has(h)) continue;
-        if (h && !skip.has(h)) {
+        if (h && !skip.has(h) && notifyEnabled(rPrefs[h], 'reply')) {   // recipient's reply pref
           stmts.push(env.DB.prepare(NOTIF).bind(h, 'reply', o.topicId, o.commentId, o.authorHash, now));
           pushTo.add(h);
           liveEvents.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'reply', topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.authorHash, created_at: now });
@@ -707,6 +733,11 @@ async function deliverNotifications(env, o) {
 async function notifyDm(env, toHash, fromHash) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
+    /* "Direct messages" notifications off silences the BELL only — the message
+       still arrives (handleDmSend's t:'dm' push) and the inbox unread badge still
+       updates; we simply skip the notifications-list row + its ping. */
+    const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
+    if (!notifyEnabled(pref, 'dm')) return;
     const now = Math.floor(Date.now() / 1000);
     const r = await env.DB.prepare(
       "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
@@ -1935,8 +1966,13 @@ async function handleDmThread(request, env, ctx) {
      (their user:<hash> sockets) that everything up to `now` has been seen, so
      their open thread flips those bubbles to "Seen" live. One event per open. */
   if (openRes && openRes.meta && openRes.meta.changes > 0) {
-    const ev = { v: 1, t: 'dm-read', scopes: ['user:' + other], thread_id: thread.id, reader: me, at: now };
-    if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+    /* Reciprocal read receipts: a reader who set receipts to "off" sends none
+       (and, client-side, sees none), so we only emit when their mode allows it. */
+    const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first();
+    if (Prefs.receiptsOn((myPref && myPref.receipts_mode) || 'auto')) {
+      const ev = { v: 1, t: 'dm-read', scopes: ['user:' + other], thread_id: thread.id, reader: me, at: now };
+      if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+    }
   }
   return json({ ok: true, thread_id: thread.id, ttl,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
@@ -1989,6 +2025,68 @@ async function handleDmPresence(request, env) {
   let online = [];
   try { online = await env.HUB.get(env.HUB.idFromName('board')).presenceOf(hashes); } catch { online = []; }
   return json({ ok: true, online: Array.isArray(online) ? online : [] }, 200);
+}
+
+/* Settings-gear preferences (keyed + private): read your own read-receipts mode
+   and per-type notification switches, and set them. Never exposed on the public
+   profile read. */
+async function handlePrefs(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const now = Math.floor(Date.now() / 1000);
+  if (data.set && typeof data.set === 'object') {
+    await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(me, now).run();
+    const set = data.set;
+    const parts = [];
+    const vals = [];
+    if ('receipts' in set) { parts.push('receipts_mode = ?'); vals.push(String(set.receipts) === 'off' ? 'off' : 'auto'); }
+    for (const k of ['reply', 'mention', 'dm']) {
+      const sk = 'notify_' + k;
+      if (sk in set) { parts.push(sk + ' = ?'); vals.push((set[sk] === false || set[sk] === 0 || set[sk] === '0') ? 0 : 1); }
+    }
+    if (parts.length) {
+      parts.push('updated_at = ?'); vals.push(now);
+      await env.DB.prepare('UPDATE profiles SET ' + parts.join(', ') + ' WHERE hash = ?').bind(...vals, me).run();
+    }
+  }
+  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm FROM profiles WHERE hash = ?1').bind(me).first();
+  const onOff = (v) => (v == null ? 1 : (v ? 1 : 0));
+  return json({ ok: true, prefs: {
+    receipts: (row && row.receipts_mode === 'off') ? 'off' : 'auto',
+    notify_reply: onOff(row && row.notify_reply),
+    notify_mention: onOff(row && row.notify_mention),
+    notify_dm: onOff(row && row.notify_dm),
+  } }, 200);
+}
+
+/* The blocked-members roster for the settings gear: the members this reader has
+   blocked, so they can be seen and unblocked from one place (unblocking reuses
+   the existing /dm/block with blocked:false). Keyed + private. */
+async function handleDmBlocked(request, env) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const rows = await env.DB.prepare(
+    'SELECT b.blocked_hash AS hash, pr.nick AS nick, pr.avatar AS avatar FROM dm_blocks b ' +
+    'LEFT JOIN profiles pr ON pr.hash = b.blocked_hash WHERE b.owner_hash = ?1 ORDER BY b.created_at DESC LIMIT 200'
+  ).bind(me).all();
+  const blocked = (rows.results || []).map((r) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash) }));
+  return json({ ok: true, blocked }, 200);
 }
 
 /* Set the per-conversation disappearing-message lifetime. Either participant may
@@ -5235,31 +5333,9 @@ async function handleMerecatStats(request, env) {
    the socket authenticated as that exact hash (`me`), so a member's DM and
    notification pushes reach their own connections alone. Anything else is
    dropped; at most 5 kept (one private + up to four forum scopes). */
-function sanitizeScopes(raw, me) {
-  if (!Array.isArray(raw)) return [];
-  const out = [];
-  for (const s of raw) {
-    if (typeof s !== 'string' || out.length >= 5) continue;
-    if (s === 'board:index') { out.push(s); continue; }
-    if (s.startsWith('cat:')) {
-      const k = s.slice(4);
-      if (k !== 'adminsonly' && BOARD_CATS.includes(k)) out.push(s);
-      continue;
-    }
-    if (/^topic:[1-9][0-9]*$/.test(s)) { out.push(s); continue; }
-    if (s.startsWith('presence:')) {
-      const h = s.slice(9);
-      if (/^[0-9a-f]{64}$/.test(h)) out.push(s);   // anyone may watch anyone's online state
-      continue;
-    }
-    if (s.startsWith('feed:global')) { out.push('feed:global'); continue; }   // the public feed's live channel
-    if (s.startsWith('user:')) {
-      const h = s.slice(5);
-      if (me && h === me && /^[0-9a-f]{64}$/.test(h)) out.push(s);   // only your own
-    }
-  }
-  return out;
-}
+/* sanitizeScopes (the WebSocket subscription allowlist) lives in src/pure.js —
+   security-critical and unit-tested there. BOARD_CATS is passed in so the pure
+   helper stays dependency-free. */
 
 export class BoardHub extends DurableObject {
   constructor(ctx, env) {
@@ -5313,7 +5389,7 @@ export class BoardHub extends DurableObject {
     }
     if (m.t !== 'sub') return;
     const me = (a && a.me) || '';
-    const subs = sanitizeScopes(m.scope, me);
+    const subs = sanitizeScopes(m.scope, me, BOARD_CATS);
     const n = ((a && a.n) || 0) + 1;
     if (n > 500) { try { ws.close(1008, 'too many'); } catch { /* gone */ } return; }
     ws.serializeAttachment({ subs, n, me, presenceMode: (a && a.presenceMode) || 'auto' });
@@ -5878,6 +5954,8 @@ export default {
       if (path === '/api/comments/dm/thread' && request.method === 'POST') return await handleDmThread(request, env, ctx);
       if (path === '/api/comments/dm/unread' && request.method === 'POST') return await handleDmUnread(request, env);
       if (path === '/api/comments/dm/presence' && request.method === 'POST') return await handleDmPresence(request, env);
+      if (path === '/api/comments/dm/blocked' && request.method === 'POST') return await handleDmBlocked(request, env);
+      if (path === '/api/comments/prefs' && request.method === 'POST') return await handlePrefs(request, env);
       if (path === '/api/comments/dm/block' && request.method === 'POST') return await handleDmBlock(request, env);
       if (path === '/api/comments/dm/delete' && request.method === 'POST') return await handleDmDelete(request, env);
       if (path === '/api/comments/dm/directory' && request.method === 'GET') return await handleDmDirectory(request, env, url);

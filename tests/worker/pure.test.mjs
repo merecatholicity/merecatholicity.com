@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ipFamily, ipv6Groups, ipv6Prefix64, ipv6Full, ipKey, toBanKey,
-  isSharedV4, reverseDnsName, looksLikeIp, boardEventPublic,
+  isSharedV4, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
 } from '../../comments-worker/src/pure.js';
 
 test('ipFamily distinguishes v4 / v6 / neither', () => {
@@ -91,4 +91,30 @@ test('boardEventPublic: the back-room privacy gate (never leaks adminsonly)', ()
   assert.equal(boardEventPublic({ cat: 'pub', scopes: ['cat:adminsonly'] }), false, 'a back-room scope never crosses');
   assert.equal(boardEventPublic(null), false);
   assert.equal(boardEventPublic(undefined), false);
+});
+
+test('sanitizeScopes: the WebSocket allowlist — the private-scope guard holds', () => {
+  const CATS = ['pub', 'rc', 'adminsonly'];
+  const ME = 'a'.repeat(64);
+  const OTHER = 'b'.repeat(64);
+  const san = (raw, me) => sanitizeScopes(raw, me, CATS);
+  // public scopes anyone may hold
+  assert.deepEqual(san(['board:index'], ME), ['board:index']);
+  assert.deepEqual(san(['cat:pub'], ME), ['cat:pub']);
+  assert.deepEqual(san(['topic:42'], ME), ['topic:42']);
+  assert.deepEqual(san(['feed:global'], ''), ['feed:global']);
+  assert.deepEqual(san(['presence:' + OTHER], ME), ['presence:' + OTHER], 'anyone may watch anyone online');
+  // the back room can never be subscribed
+  assert.deepEqual(san(['cat:adminsonly'], ME), [], 'admins-only room is never a live scope');
+  assert.deepEqual(san(['cat:nope'], ME), [], 'an unknown cat is dropped');
+  assert.deepEqual(san(['topic:0'], ME), [], 'non-positive topic dropped');
+  // THE load-bearing security rule: a private user:<hash> is kept ONLY for its own hash
+  assert.deepEqual(san(['user:' + ME], ME), ['user:' + ME], 'my own private scope is allowed');
+  assert.deepEqual(san(['user:' + OTHER], ME), [], "another member's private scope is REFUSED");
+  assert.deepEqual(san(['user:' + ME], ''), [], 'an unauthenticated socket gets no private scope');
+  assert.deepEqual(san(['presence:xyz'], ME), [], 'a malformed presence hash is dropped');
+  // capped at 5, junk ignored
+  assert.equal(san(['board:index', 'cat:pub', 'cat:rc', 'topic:1', 'topic:2', 'topic:3'], ME).length, 5, 'at most 5 scopes');
+  assert.deepEqual(san('not-an-array', ME), []);
+  assert.deepEqual(san([42, {}, null, 'board:index'], ME), ['board:index'], 'non-string entries ignored');
 });

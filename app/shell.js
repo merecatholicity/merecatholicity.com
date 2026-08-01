@@ -285,6 +285,29 @@ customElements.define('mc-audio-dock', McAudioDock);
     document.head.appendChild(mf);
   }
 
+  /* Capture the browser's install prompt so the settings gear can offer an
+     "Install app" row only when it is actually available (and hide it once
+     installed). No effect where the browser doesn't fire the event. */
+  window.mcInstall = window.mcInstall || {
+    evt: null,
+    available: function () { return !!(window.mcInstall && window.mcInstall.evt); },
+    prompt: function () {
+      var e = window.mcInstall.evt;
+      if (!e) return;
+      window.mcInstall.evt = null;
+      try { e.prompt(); } catch (err) { /* dismissed */ }
+    },
+  };
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.mcInstall.evt = e;
+    document.dispatchEvent(new CustomEvent('mc-install-available'));
+  });
+  window.addEventListener('appinstalled', function () {
+    window.mcInstall.evt = null;
+    document.dispatchEvent(new CustomEvent('mc-install-available'));
+  });
+
   /* ---- the per-page boot registry ---- */
   var REG = {
     'comments.js': { boot: 'mcCommentsBoot', down: 'mcCommentsTeardown' },
