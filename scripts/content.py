@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT_DIR = os.path.join(ROOT, 'content')
 # Keep in step with the comments.js cache-bust bump (the wordlists-style
 # discipline): a content page with comments carries this exact include.
-COMMENTS_V = 193
+COMMENTS_V = 194
 
 # Social-sharing defaults (Open Graph / Twitter cards). Every built page carries
 # a correct per-page card so a shared link shows what the page IS, not a generic
