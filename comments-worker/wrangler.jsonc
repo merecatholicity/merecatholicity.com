@@ -16,7 +16,12 @@
     // identity/auth machinery; its data lives in its own D1 DB + Vectorize
     // index (below), decoupled from the comments store.
     { "pattern": "merecatholicity.com/api/merecat*", "zone_name": "merecatholicity.com" },
-    { "pattern": "www.merecatholicity.com/api/merecat*", "zone_name": "merecatholicity.com" }
+    { "pattern": "www.merecatholicity.com/api/merecat*", "zone_name": "merecatholicity.com" },
+    // Pretty profile URLs: /@handle is served by the worker (fetches the static
+    // profile.html from the origin and injects per-profile share-card OG). Only
+    // /@* is routed here, so profile.html itself is never fronted (no fetch loop).
+    { "pattern": "merecatholicity.com/@*", "zone_name": "merecatholicity.com" },
+    { "pattern": "www.merecatholicity.com/@*", "zone_name": "merecatholicity.com" }
   ],
   "d1_databases": [
     {

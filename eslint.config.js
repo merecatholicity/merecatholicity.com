@@ -12,6 +12,7 @@ const workerGlobals = {
   AbortController: 'readonly', structuredClone: 'readonly', Blob: 'readonly',
   URLSearchParams: 'readonly', CompressionStream: 'readonly',
   WebSocketPair: 'readonly', WebSocketRequestResponsePair: 'readonly', WebSocket: 'readonly',
+  HTMLRewriter: 'readonly',
 };
 const browserGlobals = {
   window: 'readonly', document: 'readonly', location: 'readonly', history: 'readonly',
