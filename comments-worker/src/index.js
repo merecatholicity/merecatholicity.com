@@ -5974,8 +5974,11 @@ class MetaAttr {
   element(el) { el.setAttribute('content', this.value); }
 }
 class TitleText {
-  constructor(text) { this.text = text; }
-  element(el) { el.setInnerContent(this.text); }
+  /* NB: the field is `value`, not `text` — HTMLRewriter treats a `text` field on
+     a handler object as a text-node handler (must be a function), so naming it
+     `text` makes .on() reject the handler. */
+  constructor(value) { this.value = value; }
+  element(el) { el.setInnerContent(this.value); }
 }
 
 /* Serve /@handle: fetch the static profile.html from the origin and inject the
@@ -5986,45 +5989,44 @@ class TitleText {
 async function handleHandleCard(request, env, url) {
   const raw = decodeURIComponent(url.pathname.slice(2)).replace(/\/+$/, '');
   const pageReq = new URL('/profile.html', url.origin).toString();
-  let originResp;
   try {
-    originResp = await fetch(pageReq, { headers: { Accept: 'text/html' } });
-  } catch {
-    return Response.redirect(new URL('/profile.html?u=' + encodeURIComponent(raw), url.origin).toString(), 302);
-  }
-  /* Resolve the handle to its profile for the card. A miss (or any error) just
-     serves the plain page unchanged — the client then shows "No such profile". */
-  let prof = null;
-  try {
+    const originResp = await fetch(pageReq, { headers: { Accept: 'text/html' } });
+    if (!originResp.ok) return originResp;
+    let prof = null;
     const v = Handle.validate(raw);
     if (v.ok) {
       const row = await env.DB.prepare('SELECT hash, nick, bio, avatar, handle FROM profiles WHERE handle = ?1').bind(v.handle).first();
       if (row && row.hash) prof = row;
     }
-  } catch { /* serve as-is */ }
-  if (!prof || !originResp.ok) return new Response(originResp.body, originResp);
-
-  const name = prof.nick || displayName(prof.hash);
-  const title = name + ' (@' + prof.handle + ')';
-  const desc = (prof.bio ? String(prof.bio).replace(/\s+/g, ' ').trim().slice(0, 200) : '')
-    || ('A member of the Mere Catholicity community. @' + prof.handle);
-  const image = prof.avatar
-    ? url.origin + '/api/comments/avatar?hash=' + prof.hash + '&v=' + encodeURIComponent(prof.avatar)
-    : url.origin + '/cover.jpg';
-  const pageUrl = url.origin + '/@' + prof.handle;
-
-  return new HTMLRewriter()
-    .on('meta[property="og:title"]', new MetaAttr(title))
-    .on('meta[name="twitter:title"]', new MetaAttr(title))
-    .on('meta[property="og:description"]', new MetaAttr(desc))
-    .on('meta[name="twitter:description"]', new MetaAttr(desc))
-    .on('meta[name="description"]', new MetaAttr(desc))
-    .on('meta[property="og:image"]', new MetaAttr(image))
-    .on('meta[name="twitter:image"]', new MetaAttr(image))
-    .on('meta[property="og:url"]', new MetaAttr(pageUrl))
-    .on('meta[property="og:type"]', new MetaAttr('profile'))
-    .on('title', new TitleText(title + ' | Mere Catholicity'))
-    .transform(new Response(originResp.body, originResp));
+    if (!prof) return originResp;   // unknown handle: the plain page (client shows "No such profile")
+    const name = prof.nick || displayName(prof.hash);
+    const title = name + ' (@' + prof.handle + ')';
+    const desc = (prof.bio ? String(prof.bio).replace(/\s+/g, ' ').trim().slice(0, 200) : '')
+      || ('A member of the Mere Catholicity community. @' + prof.handle);
+    const image = prof.avatar
+      ? url.origin + '/api/comments/avatar?hash=' + prof.hash + '&v=' + encodeURIComponent(prof.avatar)
+      : url.origin + '/cover.jpg';
+    const pageUrl = url.origin + '/@' + prof.handle;
+    return new HTMLRewriter()
+      .on('meta[property="og:title"]', new MetaAttr(title))
+      .on('meta[name="twitter:title"]', new MetaAttr(title))
+      .on('meta[property="og:description"]', new MetaAttr(desc))
+      .on('meta[name="twitter:description"]', new MetaAttr(desc))
+      .on('meta[name="description"]', new MetaAttr(desc))
+      .on('meta[property="og:image"]', new MetaAttr(image))
+      .on('meta[name="twitter:image"]', new MetaAttr(image))
+      .on('meta[property="og:url"]', new MetaAttr(pageUrl))
+      .on('meta[property="og:type"]', new MetaAttr('profile'))
+      .on('title', new TitleText(title + ' | Mere Catholicity'))
+      .transform(originResp);
+  } catch {
+    /* Never break /@handle: serve the plain page, or redirect to the ?u= form. */
+    try {
+      return await fetch(pageReq, { headers: { Accept: 'text/html' } });
+    } catch {
+      return Response.redirect(new URL('/profile.html?u=' + encodeURIComponent(raw), url.origin).toString(), 302);
+    }
+  }
 }
 
 export default {
