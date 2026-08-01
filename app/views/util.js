@@ -4,7 +4,7 @@
    active page's neighbours, and the last; a one-page gap shows that page, a
    wider gap an ellipsis. */
 
-import { html, nothing } from '../../vendor/lit-all.min.js';
+import { html, nothing } from 'lit';
 
 export function pagerPages(total, per, active) {
   const pages = Math.ceil(total / per);

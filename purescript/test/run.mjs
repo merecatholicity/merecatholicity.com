@@ -61,3 +61,17 @@ const slugCases = [
 ];
 for (const [k, want] of slugCases) assert.equal(slug(k), want, `bookSlug(${k})`);
 console.log(`pstest: Domain.Scripture OK (bibleSrc 2267 chars + ${slugCases.length} bookSlug cases)`);
+
+// verseParts: a validated reference {slug, ch, v1, v2, href}, or null. Illegal
+// refs (chapter/verse below 1, non-book) are unrepresentable — they return null.
+const vp = (b, c, v1, v2) => Scripture.verseParts(b)(c)(v1)(v2 == null ? null : v2);
+const r1 = vp('rom', 8, 28, 30);
+assert.ok(r1 && r1.slug === 'romans' && r1.href === 'romans-8-28' && r1.v2 === 30, 'rom 8:28-30');
+const r2 = vp('john', 3, 16, null);
+assert.ok(r2 && r2.href === 'john-3-16' && r2.v2 === 16, 'john 3:16 (no range)');
+assert.equal(vp('rom', 0, 0, null), null, 'chapter 0 -> null');
+assert.equal(vp('rom', 5, 0, null), null, 'verse 0 -> null');
+assert.equal(vp('nope', 1, 1, null), null, 'non-book -> null');
+const r3 = vp('rom', 3, 16, 10);
+assert.ok(r3 && r3.v2 === 16 && r3.href === 'romans-3-16', 'backward range collapses to single verse');
+console.log('pstest: Domain.Scripture.verseParts OK (validated refs + rejections)');

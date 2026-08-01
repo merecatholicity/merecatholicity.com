@@ -10,7 +10,7 @@
    refusal is indistinguishable from a missing topic, so a keyed reader
    knocks once and the server judges. */
 
-import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
+import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl } from './util.js';
 
 class McTopic extends LitElement {

@@ -126,15 +126,16 @@ function el(tag, cls, text) {
         /* A scripture reference: link to the exact verse in our KJV, or, if the
            book isn't one we know, leave the whole thing as plain text. A range
            (8:28-30) points at its first verse. */
-        var slug = Core.bookSlug(m[6].toLowerCase().replace(/\s+/g, ' '));
-        if (slug) {
+        var ref = Core.verseParts(m[6].toLowerCase().replace(/\s+/g, ' '), m[7], m[8], m[9]);
+        if (ref) {
           var sa = el('a', 'body-link scripture-link');
-          sa.href = 'kjv.html#' + slug + '-' + m[7] + '-' + m[8];
-          /* Parts kept for the on-hover verse preview (see scriptureHover). */
-          sa.setAttribute('data-slug', slug);
-          sa.setAttribute('data-ch', m[7]);
-          sa.setAttribute('data-v1', m[8]);
-          sa.setAttribute('data-v2', m[9] || m[8]);
+          sa.href = 'kjv.html#' + ref.href;
+          /* Parts kept for the on-hover verse preview (see scriptureHover). A
+             validated ref only: a real book, chapter/verse >= 1, ordered range. */
+          sa.setAttribute('data-slug', ref.slug);
+          sa.setAttribute('data-ch', ref.ch);
+          sa.setAttribute('data-v1', ref.v1);
+          sa.setAttribute('data-v2', ref.v2);
           sa.appendChild(document.createTextNode(m[0]));
           target.appendChild(sa);
         } else {

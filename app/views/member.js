@@ -5,7 +5,7 @@
    Same light-DOM, same class names, same delegation-with-fallback pattern
    as every board view. */
 
-import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
+import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl } from './util.js';
 
 const PER_USERS = 20;

@@ -27,7 +27,7 @@
    /api/* and adds no polling. A small in-memory cache makes back/forward
    instant at zero requests. */
 
-import { LitElement, html } from '../vendor/lit-all.min.js';
+import { LitElement, html } from 'lit';
 import * as store from './store.js';
 import * as api from './api.js';
 import * as core from './core.js';
