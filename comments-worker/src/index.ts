@@ -32,6 +32,30 @@ import { createPusher } from './webpush.js';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
 import { inList, rankFor, withNames, postCountsFor } from './db.js';
 
+/* Keyed-request preamble, single-sourced. Parse the JSON body, rate-limit by IP
+   on `bucket`, then require + hash the identity key. Returns the resolved
+   {ip, data, key, me} or a Response to return early. `keyedGated` adds the
+   blocked-identity gate (a locked/banned hash is refused). These replicate,
+   verbatim, the preamble that used to open each keyed handler. */
+async function keyed(request: any, env: any, bucket: string): Promise<Response | { ip: string; data: any; key: string; me: string }> {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env[bucket].limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  return { ip, data, key, me };
+}
+async function keyedGated(request: any, env: any, bucket: string): Promise<Response | { ip: string; data: any; key: string; me: string }> {
+  const pre = await keyed(request, env, bucket);
+  if (pre instanceof Response) return pre;
+  const gate = await blockedReason(env, pre.me, pre.ip);
+  if (gate) return blockedJson(gate);
+  return pre;
+}
+
 /* Worker environment bindings (D1 databases, R2 buckets, Vectorize, Workers AI,
    Durable Object namespaces, rate limiters) plus string vars/secrets. Typed
    loosely (index signature) on purpose — this is a typing pass, not a
@@ -2128,16 +2152,9 @@ async function handleDmUnread(request: any, env: any) {
    are online right now (honouring appear-offline)? One keyed request per inbox
    load, answered by the BoardHub DO's live socket set — no polling. */
 async function handleDmPresence(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const hashes = (Array.isArray(data.hashes) ? data.hashes : [])
     .filter((h: any) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 50);
   if (!hashes.length || !env.HUB) return json({ ok: true, online: [] }, 200);
@@ -2150,16 +2167,9 @@ async function handleDmPresence(request: any, env: any) {
    and per-type notification switches, and set them. Never exposed on the public
    profile read. */
 async function handlePrefs(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const now = Math.floor(Date.now() / 1000);
   if (data.set && typeof data.set === 'object') {
     await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(me, now).run();
@@ -2190,16 +2200,9 @@ async function handlePrefs(request: any, env: any) {
    blocked, so they can be seen and unblocked from one place (unblocking reuses
    the existing /dm/block with blocked:false). Keyed + private. */
 async function handleDmBlocked(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const rows = await env.DB.prepare(
     'SELECT b.blocked_hash AS hash, pr.nick AS nick, pr.avatar AS avatar FROM dm_blocks b ' +
     'LEFT JOIN profiles pr ON pr.hash = b.blocked_hash WHERE b.owner_hash = ?1 ORDER BY b.created_at DESC LIMIT 200'
@@ -2974,16 +2977,9 @@ async function handleWallPrune(request: any, env: any) {
    Like the DM poll it fires at most once per ninety seconds and doubles as the
    logout trip for a locked or banned identity. */
 async function handleNotifUnread(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const row = await env.DB.prepare(
     'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
   ).bind(me).first();
@@ -3027,16 +3023,9 @@ async function handleNotifList(request: any, env: any) {
 /* Opening the list marks everything read, the notifications analogue of opening
    a DM thread. One write; the badge clears on the client's next poll. */
 async function handleNotifRead(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   await env.DB.prepare(
     'UPDATE notifications SET read_at = ?2 WHERE recipient_hash = ?1 AND read_at IS NULL'
   ).bind(me, Math.floor(Date.now() / 1000)).run();
@@ -3081,16 +3070,9 @@ async function boardFloor(env: any, me: any) {
 /* Unread summary for the board index. On a reader's first-ever call the floor is
    set to now, so nothing before this visit reads as new (start-all-read). */
 async function handleBoardUnread(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   /* A keyed board visit registers the member too (see the ask-side note). */
   await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
     .bind(me, Math.floor(Date.now() / 1000)).run();
@@ -3170,16 +3152,9 @@ async function handleBoardRead(request: any, env: any) {
 /* Mark everything read: raise the floor to now and drop the per-thread rows it
    now subsumes, so the table stays lean. */
 async function handleBoardReadAll(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const now = Math.floor(Date.now() / 1000);
   await env.DB.batch([
     env.DB.prepare('INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?1, 0, ?2) ON CONFLICT(hash, topic_id) DO UPDATE SET read_at = ?2').bind(me, now),
