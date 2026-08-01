@@ -1,12 +1,15 @@
 /* The richtext spine (interior campaign, Wave B3a): the body renderer and
    everything it stands on, extracted BYTE-VERBATIM from comments.js — the
-   inline grammar, the Scripture autolink table (THE WORDLISTS DISCIPLINE:
-   this BIBLE map, the frozen fallback copy still in comments.js, and
-   MERECAT_BIBLE in the worker must change TOGETHER), the emoji whitelists,
-   appendRich/fillBody, the verse hover, and the injected emoji styles.
-   comments.js defers here whenever the bundle stands (the default for
-   everyone), keeping ONE living source; its own copies serve only the
-   no-bundle fallback and retire at Wave F. Assigned to window.mcRich. */
+   inline grammar, the emoji whitelists, appendRich/fillBody, the verse hover,
+   and the injected emoji styles. The Scripture autolink table now lives in the
+   PureScript Domain.Scripture (via the app/core.js barrel, imported below);
+   the frozen fallback copy in comments.js and MERECAT_BIBLE in the worker are
+   the two remaining copies (Phase 1b / Phase 6). comments.js defers here
+   whenever the bundle stands (the default for everyone), keeping ONE living
+   source; its own copies serve only the no-bundle fallback and retire at
+   Wave F. Assigned to window.mcRich. */
+
+import * as Core from './core.js';
 
 function el(tag, cls, text) {
   var node = document.createElement(tag);
@@ -54,63 +57,10 @@ function el(tag, cls, text) {
      to the verse-anchor slug and yields the regex fragment (book, chapter,
      verse) spliced into INLINE_MD below. Two-letter forms that are common
      English words (is/am/so/re) are deliberately omitted to avoid false hits. */
-  var BIBLE = (function () {
-    var spec = [
-      ['genesis', 'genesis|gen|ge|gn'], ['exodus', 'exodus|exod|exo|ex'],
-      ['leviticus', 'leviticus|lev|lv'], ['numbers', 'numbers|num|nm|nb'],
-      ['deuteronomy', 'deuteronomy|deut|deu|dt'], ['joshua', 'joshua|josh|jos|jsh'],
-      ['judges', 'judges|judg|jdg|jg'], ['ruth', 'ruth|rth|ru'],
-      ['1-samuel', '1 samuel|1samuel|1 sam|1sam|1 sa|i samuel|i sam|first samuel'],
-      ['2-samuel', '2 samuel|2samuel|2 sam|2sam|2 sa|ii samuel|ii sam|second samuel'],
-      ['1-kings', '1 kings|1kings|1 kgs|1kgs|1 ki|i kings|i kgs|first kings'],
-      ['2-kings', '2 kings|2kings|2 kgs|2kgs|2 ki|ii kings|ii kgs|second kings'],
-      ['1-chronicles', '1 chronicles|1 chron|1 chr|1chr|1 ch|i chronicles|i chron|first chronicles'],
-      ['2-chronicles', '2 chronicles|2 chron|2 chr|2chr|2 ch|ii chronicles|ii chron|second chronicles'],
-      ['ezra', 'ezra|ezr|ez'], ['nehemiah', 'nehemiah|neh|ne'],
-      ['esther', 'esther|esth|est|es'], ['job', 'job|jb'],
-      ['psalms', 'psalms|psalm|pslm|psa|ps|pss|psm'], ['proverbs', 'proverbs|prov|pro|prv|pr'],
-      ['ecclesiastes', 'ecclesiastes|eccles|eccl|ecc|ec|qoh'],
-      ['song-of-solomon', 'song of solomon|song of songs|song|sos|canticles|cant'],
-      ['isaiah', 'isaiah|isa|isai'], ['jeremiah', 'jeremiah|jer|je|jr'],
-      ['lamentations', 'lamentations|lam|la'], ['ezekiel', 'ezekiel|ezek|eze|ezk'],
-      ['daniel', 'daniel|dan|da|dn'], ['hosea', 'hosea|hos|ho'],
-      ['joel', 'joel|joe|jl'], ['amos', 'amos|amo'], ['obadiah', 'obadiah|obad|oba|ob'],
-      ['jonah', 'jonah|jon|jnh'], ['micah', 'micah|mic|mc'], ['nahum', 'nahum|nah|na'],
-      ['habakkuk', 'habakkuk|hab|hb'], ['zephaniah', 'zephaniah|zeph|zep|zp'],
-      ['haggai', 'haggai|hag|hg'], ['zechariah', 'zechariah|zech|zec|zc'],
-      ['malachi', 'malachi|mal|ml'], ['matthew', 'matthew|matt|mat|mt'],
-      ['mark', 'mark|mrk|mar|mk|mr'], ['luke', 'luke|luk|lk'],
-      ['john', 'john|jhn|joh|jn'], ['acts', 'acts|act|ac'],
-      ['romans', 'romans|rom|ro|rm'],
-      ['1-corinthians', '1 corinthians|1 cor|1cor|1 co|i corinthians|i cor|first corinthians'],
-      ['2-corinthians', '2 corinthians|2 cor|2cor|2 co|ii corinthians|ii cor|second corinthians'],
-      ['galatians', 'galatians|gal|ga'], ['ephesians', 'ephesians|ephes|eph'],
-      ['philippians', 'philippians|phil|php|pp'], ['colossians', 'colossians|col'],
-      ['1-thessalonians', '1 thessalonians|1 thess|1thess|1 thes|1 th|i thessalonians|i thess|first thessalonians'],
-      ['2-thessalonians', '2 thessalonians|2 thess|2thess|2 thes|2 th|ii thessalonians|ii thess|second thessalonians'],
-      ['1-timothy', '1 timothy|1 tim|1tim|1 ti|i timothy|i tim|first timothy'],
-      ['2-timothy', '2 timothy|2 tim|2tim|2 ti|ii timothy|ii tim|second timothy'],
-      ['titus', 'titus|tit|ti'], ['philemon', 'philemon|philem|phlm|phm|pm'],
-      ['hebrews', 'hebrews|heb|hb'], ['james', 'james|jas|jm'],
-      ['1-peter', '1 peter|1 pet|1pet|1 pe|1 pt|i peter|i pet|first peter'],
-      ['2-peter', '2 peter|2 pet|2pet|2 pe|2 pt|ii peter|ii pet|second peter'],
-      ['1-john', '1 john|1 jhn|1 jn|1jn|i john|i jn|first john'],
-      ['2-john', '2 john|2 jhn|2 jn|2jn|ii john|ii jn|second john'],
-      ['3-john', '3 john|3 jhn|3 jn|3jn|iii john|iii jn|third john'],
-      ['jude', 'jude|jud|jd'], ['revelation', 'revelation|revelations|rev|apocalypse|apoc']
-    ];
-    var map = {}, forms = [];
-    spec.forEach(function (row) {
-      row[1].split('|').forEach(function (f) {
-        f = f.trim(); if (!f) return; map[f] = row[0]; forms.push(f);
-      });
-    });
-    forms.sort(function (a, b) { return b.length - a.length; });   // longest-first
-    var alt = forms.map(function (f) {
-      return f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
-    }).join('|');
-    return { map: map, src: '(' + alt + ')\\.?[ \\t]+(\\d+):(\\d+)(?:[\\-\\u2013](\\d+))?' };
-  })();
+  // The Scripture spelling table and its autolink regex fragment now come from
+  // the PureScript Domain.Scripture, through the app/core.js barrel:
+  // Core.bibleSrc is byte-identical to the former BIBLE.src (golden-tested), and
+  // Core.bookSlug(normalizedKey) replaces the former BIBLE.map lookup.
 
   /* Any anchor whose href lands on a KJV verse gets the hover-preview data,
      however the anchor was born: a plain written reference, a markdown link
@@ -140,7 +90,7 @@ function el(tag, cls, text) {
   /* The base inline grammar; the scripture group (book=6, chapter=7, verse=8) is
      appended so a reference becomes a same-site verse link in appendRich. */
   var INLINE_BASE = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+|:([a-z0-9_+-]{1,40}):/gi;
-  var INLINE_MD = new RegExp(INLINE_BASE.source + '|' + BIBLE.src, 'gi');
+  var INLINE_MD = new RegExp(INLINE_BASE.source + '|' + Core.bibleSrc, 'gi');
   /* Append rich inline text to a node: the marked spans above become <strong>,
      <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
      (a link inside bold works) by recursing on the strictly-shorter inner text.
@@ -176,7 +126,7 @@ function el(tag, cls, text) {
         /* A scripture reference: link to the exact verse in our KJV, or, if the
            book isn't one we know, leave the whole thing as plain text. A range
            (8:28-30) points at its first verse. */
-        var slug = BIBLE.map[m[6].toLowerCase().replace(/\s+/g, ' ')];
+        var slug = Core.bookSlug(m[6].toLowerCase().replace(/\s+/g, ' '));
         if (slug) {
           var sa = el('a', 'body-link scripture-link');
           sa.href = 'kjv.html#' + slug + '-' + m[7] + '-' + m[8];
@@ -473,7 +423,6 @@ window.mcRich = {
   scriptureDecor: scriptureDecor,
   ensureEmojiStyles: ensureEmojiStyles,
   initScriptureHover: initScriptureHover,
-  BIBLE: BIBLE,
   CUSTOM_EMOJI: CUSTOM_EMOJI,
   NAMED_EMOJI: NAMED_EMOJI,
   STANDARD_EMOJI: STANDARD_EMOJI,

@@ -6,6 +6,8 @@
 // replaces, so the parity gate can license deleting the classic fallback.
 import assert from 'node:assert/strict';
 import * as Rank from '../output/Domain.Rank/index.js';
+import * as Scripture from '../output/Domain.Scripture/index.js';
+import * as Maybe from '../output/Data.Maybe/index.js';
 
 const label = (n) => Rank.rankLabel(Rank.rankFor(n));
 
@@ -43,3 +45,19 @@ for (let n = 0; n <= 6000; n++) {
 }
 
 console.log(`pstest: Domain.Rank OK (${cases.length} ladder cases + rankLine + monotonicity 0..6000)`);
+
+// --- Domain.Scripture: the book table + autolink regex fragment ---
+const slug = (k) => Maybe.maybe(null)((s) => s)(Scripture.bookSlug(k));
+// bibleSrc invariants (full byte-equality vs the classic src is verified live in
+// webtest/test_core_rank.py against a freshly recomputed oracle).
+assert.equal(Scripture.bibleSrc.length, 2267, 'bibleSrc length');
+assert.ok(Scripture.bibleSrc.startsWith('(second\\s+thessalonians|'), 'longest spelling first (stable sort)');
+assert.ok(Scripture.bibleSrc.endsWith(')\\.?[ \\t]+(\\d+):(\\d+)(?:[\\-\\u2013](\\d+))?'), 'chapter:verse tail');
+// bookSlug: a normalized key → canonical KJV slug, or null for a non-book.
+const slugCases = [
+  ['1 cor', '1-corinthians'], ['john', 'john'], ['ii samuel', '2-samuel'],
+  ['song of solomon', 'song-of-solomon'], ['rev', 'revelation'], ['ps', 'psalms'],
+  ['first thessalonians', '1-thessalonians'], ['nope', null], ['so', null],
+];
+for (const [k, want] of slugCases) assert.equal(slug(k), want, `bookSlug(${k})`);
+console.log(`pstest: Domain.Scripture OK (bibleSrc 2267 chars + ${slugCases.length} bookSlug cases)`);
