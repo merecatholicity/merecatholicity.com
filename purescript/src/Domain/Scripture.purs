@@ -17,7 +17,7 @@ module Domain.Scripture
   ) where
 
 import Prelude
-import Data.Array (concatMap, filter, find, sortBy)
+import Data.Array (concatMap, filter, find, reverse, sortBy)
 import Data.Maybe (Maybe(..))
 import Data.Nullable (Nullable, toMaybe, toNullable)
 import Data.String (Pattern(..), Replacement(..), joinWith, length, replaceAll, split, trim)
@@ -110,11 +110,23 @@ formRows = concatMap
             (filter (\f -> f /= "") (map trim (split (Pattern "|") r.forms))))
   spec
 
+-- | formRows in reverse spec order, so a `find` yields the LAST matching form.
+-- | This mirrors the classic BIBLE lookup, a `map[form] = slug` object where a
+-- | later assignment overwrote an earlier one. The one ambiguous form in the
+-- | table, "hb", is listed under BOTH Habakkuk and Hebrews (in that spec order),
+-- | so the classic map resolved "Hb 11:1" to Hebrews — as do the surviving
+-- | no-bundle comments.js copy and the worker's MERECAT_BIBLE. A plain first-
+-- | match `find` over formRows would return Habakkuk and disagree with all three
+-- | (Habakkuk has only 3 chapters, so the deeplink would be dead); last-match
+-- | keeps every copy in step. "hb" is the only collision in the 307-form table.
+formRowsRev :: Array FormRow
+formRowsRev = reverse formRows
+
 -- | Look up a canonical slug from an already-normalized key (lowercase,
 -- | whitespace collapsed). `Nothing` ⇒ not a book we host ⇒ the caller leaves
 -- | the reference as plain text. The barrel erases this to `slug | null`.
 bookSlug :: String -> Maybe String
-bookSlug key = _.slug <$> find (\r -> r.form == key) formRows
+bookSlug key = _.slug <$> find (\r -> r.form == key) formRowsRev
 
 -- | The autolink regex fragment, generated from the SAME spec: spellings
 -- | longest-first (stable sort, so equal-length forms keep spec order), spaces

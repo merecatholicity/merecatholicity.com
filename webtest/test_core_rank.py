@@ -45,7 +45,7 @@ PROBE = r"""
 # confirm the autolinks are unchanged, plus the raw bibleSrc/bookSlug shape.
 SCRIPTURE_PROBE = r"""
   var d = document.createElement('div');
-  window.mcRich.fillBody(d, 'See Rom 8:28-30 and John 3:16 and Nope 1:1 and Rom 0:5 here.', false);
+  window.mcRich.fillBody(d, 'See Rom 8:28-30 and John 3:16 and Nope 1:1 and Rom 0:5 and Hb 11:1 here.', false);
   var links = Array.prototype.slice.call(d.querySelectorAll('a.scripture-link')).map(function (a) {
     return { href: a.getAttribute('href'), text: a.textContent };
   });
@@ -154,8 +154,10 @@ def main():
             ('PS == classic across -5..6000 (no mismatches)', r.get('mismatches') == []),
             ('scripture: Rom 8:28-30 → kjv.html#romans-8-28', 'kjv.html#romans-8-28' in hrefs),
             ('scripture: John 3:16 → kjv.html#john-3-16', 'kjv.html#john-3-16' in hrefs),
-            ('scripture: only the 2 valid refs link (Nope + Rom 0:5 stay plain)',
-             len(sc.get('links') or []) == 2 and bool(sc.get('plainNope')) and bool(sc.get('plainZero'))),
+            ('scripture: only the 3 valid refs link (Nope + Rom 0:5 stay plain)',
+             len(sc.get('links') or []) == 3 and bool(sc.get('plainNope')) and bool(sc.get('plainZero'))),
+            ('scripture: ambiguous "Hb 11:1" → hebrews (last-wins), not the dead habakkuk anchor',
+             'kjv.html#hebrews-11-1' in hrefs and 'kjv.html#habakkuk-11-1' not in hrefs),
             ('mcCore.verseParts valid ref → href romans-8-28, v2 30',
              sc.get('validHref') == 'romans-8-28' and sc.get('validV2') == 30),
             ('mcCore.verseParts rejects Rom 0:0 (→ null)', sc.get('zeroRef') is None),
