@@ -1735,6 +1735,13 @@ body.mc-app > footer { display: none; }
   .mc-db-word { font-weight: 700; font-size: 1.05rem; color: var(--ink); letter-spacing: -0.01em; }
 
   .mc-db-search { flex: 1; max-width: 30rem; position: relative; display: flex; align-items: center; }
+  /* Off the forum the search is replaced by the current page's title (or an empty
+     flex spacer on Home, where the brand already says it). */
+  .mc-db-center { flex: 1; }
+  .mc-db-title {
+    text-align: center; font-weight: 600; font-size: 1.05rem; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 0.5rem;
+  }
   .mc-db-searchico { position: absolute; left: 0.7rem; width: 18px; height: 18px; color: var(--faint); pointer-events: none; }
   .mc-db-searchico .mc-ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; display: block; }
   .mc-db-search input {
