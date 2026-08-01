@@ -76,6 +76,9 @@ const slugCases = [
   ['first thessalonians', '1-thessalonians'], ['nope', null], ['so', null],
 ];
 for (const [k, want] of slugCases) assert.equal(slug(k), want, `bookSlug(${k})`);
+// Ambiguous 'hb' (listed under both Habakkuk and Hebrews) resolves LAST-wins to
+// hebrews, matching the classic map and the worker/no-bundle copies (review fix).
+assert.equal(slug('hb'), 'hebrews', "ambiguous 'hb' -> hebrews (last-wins parity)");
 console.log(`pstest: Domain.Scripture OK (bibleSrc 2267 chars + ${slugCases.length} bookSlug cases)`);
 
 // verseParts: a validated reference {slug, ch, v1, v2, href}, or null. Illegal
