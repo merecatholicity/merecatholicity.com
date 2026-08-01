@@ -25,6 +25,8 @@ import * as Board from '../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../purescript/output/Domain.Emoji/index.js';
 import * as Route from '../purescript/output/Domain.Route/index.js';
 import * as Auth from '../purescript/output/Domain.Auth/index.js';
+import * as Mute from '../purescript/output/Domain.Mute/index.js';
+import * as Blocked from '../purescript/output/Domain.Blocked/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -147,3 +149,13 @@ const authSignals = (s) => ({
 export const authIsAdmin = (s) => Auth.isAdmin(authSignals(s));
 export const authIsMember = (s) => Auth.isMember(authSignals(s));
 export const authGate = (s) => Auth.gate(authSignals(s));
+
+/* Mute (Domain.Mute): a client-only list of hashes whose posts collapse for this
+   reader. isMuted(bot, hash, list) is bot-exempt non-empty membership;
+   toggleMute(hash, list) -> {list, added} for the caller to persist. */
+export const isMuted = (bot, hash, list) => Mute.isMuted(bot || '')(hash || '')(list || []);
+export const toggleMute = (hash, list) => Mute.toggleMute(hash || '')(list || []);
+
+/* blockedMessage(reason): the flash-banner string for a moderation-block code
+   (Domain.Blocked; 'ipban' -> network-banned, else identity-locked). */
+export const blockedMessage = (reason) => Blocked.messageFor(reason || '');
