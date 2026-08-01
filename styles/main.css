@@ -1364,6 +1364,10 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 .mc-home-row-txt strong { font-weight: 600; }
 .mc-home-row-txt small { color: var(--faint); font-size: 0.8rem; margin-top: 0.1rem; }
 
+/* Logged-out prompt on the members-only pages (Messages, Profile). */
+.mc-join { text-align: center; padding: 2.4rem 1rem; }
+.mc-join .btn { margin-top: 0.9rem; }
+
 /* The notifications panel (bell dropdown on desktop, sheet on mobile) — a plain
    list of tappable rows; works inside .mc-db-menu (desktop) and .mc-sheet-body. */
 .mc-notifs-row {
@@ -1675,6 +1679,33 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 
 /* the deskbar is hidden until the desktop query turns it on (mobile never shows it) */
 mc-deskbar { display: none; }
+/* The left rail is desktop-only chrome. It was missing a mobile default-hidden
+   rule, so on phones it leaked in as inline content with unsized (giant) icons —
+   the "giant sidebar icons" bug. Hidden by default; the ≥601px block shows it. */
+mc-sidebar { display: none; }
+
+/* On desktop the slide-up sheet becomes a centered modal — used for the
+   registration/onboarding flow (settings uses the deskbar dropdown instead). So
+   a logged-out reader on Profile / Messages / Merecat gets the same slick
+   register prompt as on mobile, just centered. */
+@media (min-width: 601px) {
+  mc-sheet { display: block; }
+  .mc-sheet-scrim {
+    position: fixed; inset: 0; background: rgba(20, 12, 12, 0.45); z-index: 70;
+    opacity: 0; visibility: hidden; transition: opacity 0.2s ease;
+  }
+  .mc-sheet-scrim.on { opacity: 1; visibility: visible; }
+  .mc-sheet {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -46%);
+    width: min(30rem, 92vw); max-height: 86vh; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 16px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35); padding: 1.3rem 1.5rem 1.5rem; z-index: 71;
+    opacity: 0; visibility: hidden; transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+  .mc-sheet.on { opacity: 1; visibility: visible; transform: translate(-50%, -50%); }
+  .mc-sheet-grip { display: none; }
+  .mc-sheet-head { margin: 0 0 0.7rem; font-size: 1.25rem; color: var(--ink); }
+}
 
 /* The old horizontal site menu is RETIRED — the platform now navigates through the
    left app-bar (mc-sidebar) + the Home launcher + the Settings gear. Hidden here so

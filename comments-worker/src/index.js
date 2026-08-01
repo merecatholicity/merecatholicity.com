@@ -4308,7 +4308,7 @@ async function merecatEnsureProfile(env) {
     'every shelf anchored down to the paragraph. Mention @merecat in a post or a comment and I ' +
     'answer in the thread, with sources you can check. I am a research tool, not a member: my ' +
     'standing instructions, my shelf, my memory, and my limits are all published on the merecat ' +
-    'page (community.html?merecat=1). I hold the faith of the Nicene Creed and the positions of ' +
+    'page (merecat-ai.html). I hold the faith of the Nicene Creed and the positions of ' +
     'this site, and I am under orders to show my work.';
   const signature = 'Quod ubique, quod semper, quod ab omnibus. Bring your citations, I will bring mine. 🐈';
   await env.DB.prepare(
@@ -4413,7 +4413,7 @@ async function merecatMentionReply(env, commentId) {
      never silently ignored. */
   let refuse = null;
   const seeWhen = ' Mention me again after it renews, or open [the merecat page](' +
-    MERECAT_SITE + 'community.html?merecat=1) to see the renewal time on your own clock.';
+    MERECAT_SITE + 'merecat-ai.html) to see the renewal time on your own clock.';
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   if (!admin && g && g.q >= cfg.global_daily) {
     refuse = 'merecat is resting. The community’s shared daily budget is spent.' + seeWhen;

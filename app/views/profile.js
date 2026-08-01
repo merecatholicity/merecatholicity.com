@@ -132,7 +132,7 @@ class McInbox extends LitElement {
     if (this.err === 'load') return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">The inbox could not be loaded. Check your connection and reload the page.</p>`;
     if (!this.d) return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">Loading messages...</p>`;
     const d = this.d;
-    const href = (i) => 'community.html?inbox=1&p=' + i;
+    const href = (i) => 'messages.html&p=' + i;
     return html`${head}
       <div class="mc-dmsearch"></div>
       ${d.threads.length ? pagerTpl(d.total, d.per, d.page, href) : nothing}
@@ -141,7 +141,7 @@ class McInbox extends LitElement {
           ? html`<p class="comments-status mc-empty" data-ico="✉️">No messages yet. Find a member above, or press Direct Message on any post.</p>`
           : d.threads.map((t) => html`<div class="board-topic">
               <div class="board-topic-left">
-                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'community.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}
+                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}
               </div>
               <div class="board-stats">${t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + kit.fmtDateTime(t.last_at)}</div>
               <div class="board-admin-corner"><a class="trust-toggle" href="#" @click=${(e) => this.del(e, t.other_hash, e.target.closest('.board-topic'))}>Delete</a></div>
