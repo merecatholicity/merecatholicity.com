@@ -50,7 +50,7 @@ window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, met
    purescript/output/. The un-bundled docs/comments.js delegates to it via
    `if (window.mcCore) …`, exactly like window.mcRich; the Lit views import
    app/core.js directly. Importing it above is what inlines compiled PureScript
-   into docs/app.js (the bundle route). See PURESCRIPT.md. */
+   into docs/app.js (the bundle route). See CLAUDE.md. */
 window.mcCore = core;
 
 /* The headless-API client SDK (app/api.js) rides the shell too — the single

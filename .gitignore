@@ -58,3 +58,6 @@ local/data/
 local/models/
 local/serve.key
 local/persona.local.md
+
+# Interactive test-kit identity keys (throwaway, never committed).
+webtest/.testkeys

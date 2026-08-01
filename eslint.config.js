@@ -30,7 +30,7 @@ const browserGlobals = {
   nacl: 'readonly',   // vendored tweetnacl.min.js (E2E DM crypto), loaded on demand
 };
 export default [
-  // Generated PureScript codegen is never linted (see PURESCRIPT.md). The
+  // Generated PureScript codegen is never linted (see CLAUDE.md). The
   // hand-written barrel app/core.js is covered by the app/**/*.js block below;
   // FFI .js under purescript/src/ gets its own block when the first one lands
   // (Phase 4+).

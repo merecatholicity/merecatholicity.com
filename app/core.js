@@ -8,8 +8,8 @@
      Either e a   -> { ok:true, value } | { ok:false, error }
      data T = …   -> a discriminant string, or the already-rendered value
    Nothing exported from this file returns a raw PureScript constructor. Keep it
-   tiny and audited; type safety lives inside PureScript, not here. See
-   PURESCRIPT.md. The bundle exposes this as window.mcCore (app/shell.js), which
+   tiny and audited; type safety lives inside PureScript, not here. See CLAUDE.md.
+   The bundle exposes this as window.mcCore (app/shell.js), which
    the un-bundled docs/comments.js delegates to via `if (window.mcCore) …`. */
 
 import * as Rank from '../purescript/output/Domain.Rank/index.js';
