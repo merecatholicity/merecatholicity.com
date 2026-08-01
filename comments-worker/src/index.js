@@ -5967,11 +5967,78 @@ async function handleMerecatLive(request, env) {
   return env.CHAT.get(env.CHAT.idFromName('chat:' + cid)).fetch(request);
 }
 
+/* Sets one attribute on a matched element (HTMLRewriter handler). Used to
+   overwrite the static profile.html OG tags with per-profile values. */
+class MetaAttr {
+  constructor(value) { this.value = value; }
+  element(el) { el.setAttribute('content', this.value); }
+}
+class TitleText {
+  constructor(text) { this.text = text; }
+  element(el) { el.setInnerContent(this.text); }
+}
+
+/* Serve /@handle: fetch the static profile.html from the origin and inject the
+   member's share-card OG (title/description/image/url), so a shared /@handle
+   previews as the person. Everyone gets the real page; the client resolves the
+   handle from the URL path. Bulletproof: any failure falls back to the plain
+   page or a redirect to the ?u= form, so /@handle is never broken. */
+async function handleHandleCard(request, env, url) {
+  const raw = decodeURIComponent(url.pathname.slice(2)).replace(/\/+$/, '');
+  const pageReq = new URL('/profile.html', url.origin).toString();
+  let originResp;
+  try {
+    originResp = await fetch(pageReq, { headers: { Accept: 'text/html' } });
+  } catch {
+    return Response.redirect(new URL('/profile.html?u=' + encodeURIComponent(raw), url.origin).toString(), 302);
+  }
+  /* Resolve the handle to its profile for the card. A miss (or any error) just
+     serves the plain page unchanged — the client then shows "No such profile". */
+  let prof = null;
+  try {
+    const v = Handle.validate(raw);
+    if (v.ok) {
+      const row = await env.DB.prepare('SELECT hash, nick, bio, avatar, handle FROM profiles WHERE handle = ?1').bind(v.handle).first();
+      if (row && row.hash) prof = row;
+    }
+  } catch { /* serve as-is */ }
+  if (!prof || !originResp.ok) return new Response(originResp.body, originResp);
+
+  const name = prof.nick || displayName(prof.hash);
+  const title = name + ' (@' + prof.handle + ')';
+  const desc = (prof.bio ? String(prof.bio).replace(/\s+/g, ' ').trim().slice(0, 200) : '')
+    || ('A member of the Mere Catholicity community. @' + prof.handle);
+  const image = prof.avatar
+    ? url.origin + '/api/comments/avatar?hash=' + prof.hash + '&v=' + encodeURIComponent(prof.avatar)
+    : url.origin + '/cover.jpg';
+  const pageUrl = url.origin + '/@' + prof.handle;
+
+  return new HTMLRewriter()
+    .on('meta[property="og:title"]', new MetaAttr(title))
+    .on('meta[name="twitter:title"]', new MetaAttr(title))
+    .on('meta[property="og:description"]', new MetaAttr(desc))
+    .on('meta[name="twitter:description"]', new MetaAttr(desc))
+    .on('meta[name="description"]', new MetaAttr(desc))
+    .on('meta[property="og:image"]', new MetaAttr(image))
+    .on('meta[name="twitter:image"]', new MetaAttr(image))
+    .on('meta[property="og:url"]', new MetaAttr(pageUrl))
+    .on('meta[property="og:type"]', new MetaAttr('profile'))
+    .on('title', new TitleText(title + ' | Mere Catholicity'))
+    .transform(new Response(originResp.body, originResp));
+}
+
 export default {
   async fetch(request, env, ctx) {
     try {
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, '') || '/';
+
+      /* Pretty profile URLs: /@handle is served by this worker — it fetches the
+         static profile.html from the origin (which is NOT routed here, so no loop)
+         and injects the member's share-card OG (name, avatar, bio), so a shared
+         /@handle previews as the person. Humans get the same page; the client
+         resolves the handle from the path. Only /@* reaches the worker. */
+      if (path.startsWith('/@') && request.method === 'GET') return await handleHandleCard(request, env, url);
 
       if (request.method === 'POST' && !originOk(request, env)) {
         return json({ ok: false, error: 'Bad origin.' }, 403);
