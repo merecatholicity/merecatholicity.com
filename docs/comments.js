@@ -437,7 +437,7 @@
       }
       return attempt(0);
     }
-    var READ_CEIL = 15;
+    var READ_CEIL = 120;
     var readStamps = [];
     var readEaseUntil = 0;
     function readTrim(now) {
@@ -981,11 +981,12 @@
       // set by viewDm: the open thread's live drop-in hook
     };
     var rdnsCache = {};
-    function loadTurnstile() {
-      if (window.turnstile || document.getElementById("mc-ts-script")) return;
-      window.__mcCommentsTs = function() {
-        var slot = section.querySelector(".ts-slot");
-        if (!slot) return;
+    function renderTurnstileWidget() {
+      if (!window.turnstile) return;
+      var slot = section.querySelector(".ts-slot");
+      if (!slot) return;
+      if (state.widgetId !== null && slot.querySelector("iframe")) return;
+      try {
         state.widgetId = turnstile.render(slot, {
           sitekey: SITEKEY,
           execution: "execute",
@@ -1006,6 +1007,17 @@
           "expired-callback": function() {
           }
         });
+      } catch (e) {
+      }
+    }
+    function loadTurnstile() {
+      if (window.turnstile) {
+        renderTurnstileWidget();
+        return;
+      }
+      if (document.getElementById("mc-ts-script")) return;
+      window.__mcCommentsTs = function() {
+        renderTurnstileWidget();
       };
       var script = document.createElement("script");
       script.id = "mc-ts-script";
@@ -1026,6 +1038,7 @@
             reject(new Error("Verification could not load. Check your connection and reload the page."));
             return;
           }
+          if (window.turnstile && state.widgetId === null) renderTurnstileWidget();
           if (!window.turnstile || state.widgetId === null) {
             if (waited >= MAX) {
               reject(new Error("Verification is taking a moment to load. Give it a few seconds and press the button again."));
@@ -6875,7 +6888,7 @@
           function chatRow(c) {
             var row = el("p");
             var a = el("a", "body-link", c.title || "Conversation " + c.id);
-            a.href = "merecat-ai.html&chat=" + c.id;
+            a.href = "merecat-ai.html?chat=" + c.id;
             row.appendChild(a);
             row.appendChild(document.createTextNode(
               " \xB7 " + c.msgs + (c.msgs === 1 ? " message \xB7 " : " messages \xB7 ") + new Date(c.last_at * 1e3).toLocaleDateString() + " \xB7 "
@@ -8102,7 +8115,7 @@
                 var note = el("p", "merecat-quota");
                 note.appendChild(document.createTextNode("\u{1F408} The librarian is still working on your last question \u2014 "));
                 var back = el("a", "body-link", "rejoin it");
-                back.href = "merecat-ai.html&chat=" + newest.id;
+                back.href = "merecat-ai.html?chat=" + newest.id;
                 note.appendChild(back);
                 note.appendChild(document.createTextNode("."));
                 log.insertBefore(note, log.firstChild);
