@@ -15,6 +15,7 @@ import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
 import * as Fts from '../../purescript/output/Domain.Fts/index.js';
 import * as Board from '../../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../../purescript/output/Domain.Emoji/index.js';
+import * as Presence from '../../purescript/output/Domain.Presence/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
@@ -4857,6 +4858,12 @@ function sanitizeScopes(raw, me) {
       continue;
     }
     if (/^topic:[1-9][0-9]*$/.test(s)) { out.push(s); continue; }
+    if (s.startsWith('presence:')) {
+      const h = s.slice(9);
+      if (/^[0-9a-f]{64}$/.test(h)) out.push(s);   // anyone may watch anyone's online state
+      continue;
+    }
+    if (s.startsWith('feed:global')) { out.push('feed:global'); continue; }   // the public feed's live channel
     if (s.startsWith('user:')) {
       const h = s.slice(5);
       if (me && h === me && /^[0-9a-f]{64}$/.test(h)) out.push(s);   // only your own

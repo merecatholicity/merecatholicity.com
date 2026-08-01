@@ -45,7 +45,7 @@ const HOME_FEATURES = [
   { icon: '🐈', title: 'Ask Merecat', sub: 'Put a question to the librarian AI', href: 'merecat-ai.html' },
 ];
 /* The reading shelf, grouped the way a newcomer reads it. Surfaces the whole
-   site nav (Contact lives in Settings + the footer, not here). */
+   site nav (Contact lives only in the footer, kept quiet by design — not here). */
 const HOME_SECTIONS = [
   { heading: 'Start here', items: [
     { title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
@@ -487,8 +487,10 @@ customElements.define('mc-sidebar', McSidebar);
 class McFooter extends LitElement {
   createRenderRoot() { return this; }
   render() {
+    /* Year computed at render time so the copyright never goes stale — never hardcoded. */
+    const year = new Date().getFullYear();
     return html`<div class="mc-footer">
-      <a href="index.html">merecatholicity.com</a><span class="mc-foot-sep">·</span>
+      <a href="index.html">© ${year} merecatholicity.com</a><span class="mc-foot-sep">·</span>
       <a href="terms.html">terms &amp; conditions</a><span class="mc-foot-sep">·</span>
       <a href="contact.html">Contact</a>
     </div>`;
