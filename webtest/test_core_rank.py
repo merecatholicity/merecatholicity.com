@@ -64,7 +64,9 @@ SCRIPTURE_PROBE = r"""
     profileLimits: window.mcCore.profileLimits,
     faithNicene: window.mcCore.faithLabel('nicene'),
     faithsLen: (window.mcCore.faiths || []).length,
-    pseudo: window.mcCore.displayName('ffffffffffffffff')
+    pseudo: window.mcCore.displayName('ffffffffffffffff'),
+    dmTtl: window.mcCore.dmTtlLabel(604800),
+    dmTtlN: (window.mcCore.dmTtlOptions || []).length
   };
 """
 
@@ -108,6 +110,8 @@ def main():
              sc.get('faithNicene') == 'Nicene' and sc.get('faithsLen') == 3),
             ('mcCore.displayName parity (ffff… → Green-Wheat ffff)',
              sc.get('pseudo') == 'Green-Wheat ffff'),
+            ('mcCore.dmTtlLabel/Options (604800 → "7 days", 3 options)',
+             sc.get('dmTtl') == '7 days' and sc.get('dmTtlN') == 3),
         ]
         return f.verdict(checks)
 

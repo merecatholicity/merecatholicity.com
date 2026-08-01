@@ -17,6 +17,7 @@ import * as Scripture from '../purescript/output/Domain.Scripture/index.js';
 import * as Profile from '../purescript/output/Domain.Profile/index.js';
 import * as Faith from '../purescript/output/Domain.Faith/index.js';
 import * as Pseudonym from '../purescript/output/Domain.Pseudonym/index.js';
+import * as Dm from '../purescript/output/Domain.Dm/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -61,3 +62,10 @@ export const faiths = Faith.faithList;
    no nick. Single-sources the ADJ/NOUN wordlists + derivation duplicated in
    comments.js and the worker (Phase 6). Returns a plain string. */
 export const displayName = Pseudonym.displayName;
+
+/* DM lifetimes: dmTtlLabel(secs) -> the label ("24 hours"/"7 days"/"30 days"),
+   coercing a missing/zero value to the 7-day default as the classic did.
+   dmTtlOptions -> the ordered [{secs,label}] chooser. Single-sources the
+   DM_TTLS the worker also holds (Phase 6). */
+export const dmTtlLabel = (ttl) => Dm.ttlLabel((Number(ttl) || 604800) | 0);
+export const dmTtlOptions = Dm.ttlOptions;
