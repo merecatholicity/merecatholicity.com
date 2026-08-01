@@ -16,6 +16,7 @@ import * as Rank from '../purescript/output/Domain.Rank/index.js';
 import * as Scripture from '../purescript/output/Domain.Scripture/index.js';
 import * as Profile from '../purescript/output/Domain.Profile/index.js';
 import * as Faith from '../purescript/output/Domain.Faith/index.js';
+import * as Pseudonym from '../purescript/output/Domain.Pseudonym/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -55,3 +56,8 @@ export const profileLimits = Profile.limits;
    radios render. Single-sources the FAITH/FAITH_ORDER copy in comments.js. */
 export const faithLabel = (code) => Maybe.maybe('')((s) => s)(Faith.labelForCode(code));
 export const faiths = Faith.faithList;
+
+/* displayName(hash) -> the "Adjective-Noun xxxx" pseudonym for an identity with
+   no nick. Single-sources the ADJ/NOUN wordlists + derivation duplicated in
+   comments.js and the worker (Phase 6). Returns a plain string. */
+export const displayName = Pseudonym.displayName;
