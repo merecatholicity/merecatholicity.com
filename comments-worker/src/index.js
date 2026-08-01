@@ -16,6 +16,7 @@ import * as Fts from '../../purescript/output/Domain.Fts/index.js';
 import * as Board from '../../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../../purescript/output/Domain.Emoji/index.js';
 import * as Presence from '../../purescript/output/Domain.Presence/index.js';
+import * as Handle from '../../purescript/output/Domain.Handle/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
@@ -1550,9 +1551,21 @@ async function handleProfileGet(request, env, url) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const hash = String(url.searchParams.get('hash') || '');
+  /* Address a profile by its 64-hex hash OR by a custom ?handle=<name> (the URL
+     name a member claimed). A handle resolves to its owner's hash; an unclaimed
+     handle is an ordinary "not found" (an empty profile, like a hashless hash). */
+  let hash = String(url.searchParams.get('hash') || '');
+  const handleParam = String(url.searchParams.get('handle') || '');
+  if (!hash && handleParam) {
+    const v = Handle.validate(handleParam);
+    if (v.ok) {
+      const owner = await env.DB.prepare('SELECT hash FROM profiles WHERE handle = ?1').bind(v.handle).first();
+      if (owner && owner.hash) hash = owner.hash;
+    }
+    if (!hash) return json({ ok: false, error: 'No such profile.' }, 404, cacheHeader(url));
+  }
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(hash).first();
+  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith, handle FROM profiles WHERE hash = ?1').bind(hash).first();
   const counts = await postCountsFor(env, [hash]);
   return json({
     ok: true,
@@ -1563,6 +1576,7 @@ async function handleProfileGet(request, env, url) {
       signature: row ? (row.signature || null) : null,
       avatar: row ? (row.avatar || null) : null,
       faith: row ? (row.faith || null) : null,
+      handle: row ? (row.handle || null) : null,
       posts: counts[hash] || 0,
       rank: rankFor(counts[hash] || 0),
       assigned: displayName(hash),
@@ -1615,6 +1629,21 @@ async function handleProfileSave(request, env) {
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
+  /* Custom @handle (the profile URL name), validated against the shared kernel
+     and checked for uniqueness before any write. Absent key = leave unchanged;
+     empty string = clear it; a claimed name someone else holds = 409. */
+  const handleProvided = Object.prototype.hasOwnProperty.call(data, 'handle');
+  let handleVal = null;
+  if (handleProvided) {
+    const raw = String(data.handle == null ? '' : data.handle).trim();
+    if (raw !== '') {
+      const v = Handle.validate(raw);
+      if (!v.ok) return json({ ok: false, error: handleErrorMessage(v.error), handle_error: v.error }, 400);
+      const taken = await env.DB.prepare('SELECT hash FROM profiles WHERE handle = ?1 AND hash != ?2').bind(v.handle, authorHash).first();
+      if (taken) return json({ ok: false, error: 'That @handle is taken. Pick another.', handle_error: 'taken' }, 409);
+      handleVal = v.handle;
+    }
+  }
   const blob = [nick.value, bio.value, signature.value].filter(Boolean).join('\n');
   if (blob) {
     const { status, verdict } = await screen(env, blob, await isTrusted(env, authorHash));
@@ -1628,15 +1657,39 @@ async function handleProfileSave(request, env) {
     'INSERT INTO profiles (hash, nick, bio, signature, faith, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6) ' +
     'ON CONFLICT(hash) DO UPDATE SET nick = ?2, bio = ?3, signature = ?4, faith = COALESCE(?5, faith), updated_at = ?6'
   ).bind(authorHash, nick.value, bio.value, signature.value, faith, now).run();
+  /* Handle is written separately so an absent key leaves it untouched (an empty
+     string clears it). The UNIQUE INDEX is the real guard: on the rare same-instant
+     race past the check above it throws, which we surface as the same 409. */
+  if (handleProvided) {
+    try {
+      await env.DB.prepare('UPDATE profiles SET handle = ?2, updated_at = ?3 WHERE hash = ?1')
+        .bind(authorHash, handleVal, now).run();
+    } catch {
+      return json({ ok: false, error: 'That @handle is taken. Pick another.', handle_error: 'taken' }, 409);
+    }
+  }
   /* The text upsert leaves the avatar and faith columns as they stand when not
-     given; read them back so the client's re-render keeps both. */
-  const av = await env.DB.prepare('SELECT avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash).first();
+     given; read them back (with the handle) so the client's re-render keeps them. */
+  const av = await env.DB.prepare('SELECT avatar, faith, handle FROM profiles WHERE hash = ?1').bind(authorHash).first();
   return json({
     ok: true,
     profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
-      avatar: av && av.avatar || null, faith: av && av.faith || null,
+      avatar: av && av.avatar || null, faith: av && av.faith || null, handle: av && av.handle || null,
       assigned: displayName(authorHash), admin: await isAdminHash(env, authorHash) },
   }, 200);
+}
+
+/* Map a Domain.Handle rejection tag to a member-facing message. */
+function handleErrorMessage(tag) {
+  switch (tag) {
+    case 'too_short': return 'That handle is too short (3 to 30 characters).';
+    case 'too_long': return 'That handle is too long (3 to 30 characters).';
+    case 'bad_chars': return 'A handle can use only lowercase letters, numbers, and underscore.';
+    case 'bad_start': return 'A handle must start with a letter.';
+    case 'bad_underscore': return 'A handle cannot end with, or repeat, an underscore.';
+    case 'reserved': return 'That handle is reserved. Pick another.';
+    default: return 'That handle is not allowed.';
+  }
 }
 
 /* Admin-only: wipe an abusive profile back to the assigned pseudonym without

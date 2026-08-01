@@ -178,8 +178,16 @@ CREATE TABLE IF NOT EXISTS profiles (
   receipts_mode  TEXT,
   notify_reply   INTEGER,
   notify_mention INTEGER,
-  notify_dm      INTEGER
+  notify_dm      INTEGER,
+  -- Custom profile @handle: the public URL name (merecatholicity.com/@handle →
+  -- profile.html?u=handle), stored lower-cased and unique, distinct from the
+  -- free-form display `nick`. NULL = none (the URL falls back to ?u=<hash>). The
+  -- format rules live in Domain.Handle; uniqueness is the index below.
+  -- (Existing DBs: ALTER TABLE profiles ADD COLUMN handle TEXT;)
+  handle         TEXT
 );
+-- One holder per handle (case-insensitive: handles are stored already-lowered).
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_handle ON profiles(handle);
 
 -- In-app notifications: one row per event for one recipient. kind 'reply' is a
 -- new reply in a thread the recipient watches; 'mention' is an @mention; 'dm' is
