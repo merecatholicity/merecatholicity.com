@@ -13,6 +13,10 @@ Lit-based app shell progressively upgrades into a single-page app. Everything dy
 comments, the forum, DMs, the bot — is delegated to Cloudflare Workers so the site itself
 stays free to serve.
 
+> **New to the code?** Read **[`docs/architecture/CODEBASE.md`](docs/architecture/CODEBASE.md)**
+> first — the module map, a measured duplication/modularity analysis, and the newcomer
+> reading order. This README is *how it's built*; that doc is *how it's structured*.
+
 ---
 
 ## Table of contents
