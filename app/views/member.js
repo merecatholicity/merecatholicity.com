@@ -7,6 +7,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl } from './util.js';
+import { pagerItems } from '../core.js';
 
 const PER_USERS = 20;
 
@@ -63,13 +64,13 @@ class McUsers extends LitElement {
     const count = !total ? (this.q ? 'No member matches that.' : 'No members yet.')
       : (this.q ? total + (total === 1 ? ' match' : ' matches') : total + (total === 1 ? ' member' : ' members'));
     const slice = items.slice((this.page - 1) * PER_USERS, this.page * PER_USERS);
-    /* page turns in place (no URL), so the pager is buttons that set state */
-    const pager = pages < 2 ? nothing : html`<p class="board-pages">${
-      Array.from({ length: pages }, (_, i) => i + 1).filter((n) => n === 1 || n === pages || Math.abs(n - this.page) <= 1).map((n, i, arr) => {
-        const prev = arr[i - 1];
-        const gap = prev && n - prev > 1 ? (n - prev === 2 ? html` <a href="#" @click=${(e) => this.go(e, prev + 1)}>${prev + 1}</a> ` : html` … `) : nothing;
-        return html`${gap}${n === this.page ? html` <strong>${n}</strong> ` : html` <a href="#" @click=${(e) => this.go(e, n)}>${n}</a> `}`;
-      })}</p>`;
+    /* page turns in place (no URL), so the pager is buttons that set state; the
+       windowing is Core.pagerItems (same source as the href pagers) */
+    const cells = pagerItems(total, PER_USERS, this.page);
+    const pager = !cells.length ? nothing : html`<p class="board-pages">${
+      cells.map((it) => it.gap ? html` … ` : it.active
+        ? html` <strong>${it.n}</strong> `
+        : html` <a href="#" @click=${(e) => this.go(e, it.n)}>${it.n}</a> `)}</p>`;
     return html`${head}
       <p class="comments-status">${count}</p>
       <div class="user-list">${slice.map((u) => html`<a class="user-row" href=${kit.profileHref(u.hash)}>

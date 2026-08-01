@@ -20,6 +20,7 @@ import * as Pseudonym from '../purescript/output/Domain.Pseudonym/index.js';
 import * as Dm from '../purescript/output/Domain.Dm/index.js';
 import * as Access from '../purescript/output/Domain.Access/index.js';
 import * as Live from '../purescript/output/Domain.Live/index.js';
+import * as Pager from '../purescript/output/Domain.Pager/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -88,3 +89,10 @@ export const canDelete = (author, me, isAdmin) => Access.canDelete(author || '')
 export const topicCompare = (a, b) =>
   Live.topicCompare({ sticky: Number(a.sticky || 0), last: Number(a.last || 0) })({ sticky: Number(b.sticky || 0), last: Number(b.last || 0) });
 export const replyPage = (total, per) => Live.replyPage(total | 0)(per | 0);
+
+/* pagerItems(total, per, active) -> the page-bar window as plain cells
+   [{gap, n, active}]: page 1, the last page, the active page's neighbours, with
+   one-page gaps filled and wider gaps an ellipsis; [] for a single page. Single-
+   sources the windowing the util.js href pager and the member.js button pager
+   both computed. The cells are already plain records, so no erasure. */
+export const pagerItems = (total, per, active) => Pager.pagerItems(total | 0)(per | 0)(active | 0);

@@ -1,34 +1,16 @@
-/* Shared Lit view helpers (interior campaign): the page-bar windowing and
-   the breadcrumb, pure and template-returning, one source for every board
-   view. The pager mirrors comments.js pageBar() exactly — show 1, the
-   active page's neighbours, and the last; a one-page gap shows that page, a
-   wider gap an ellipsis. */
+/* Shared Lit view helpers (interior campaign): the page-bar renderer and the
+   breadcrumb, template-returning, one source for every board view. The windowing
+   itself — show 1, the active page's neighbours, and the last; a one-page gap
+   shows that page, a wider gap an ellipsis — is single-sourced in Domain.Pager
+   (Core.pagerItems); this file only renders the returned cells. (The classic
+   comments.js pageBar uses a wider first-three window, deliberately distinct.) */
 
 import { html, nothing } from 'lit';
-
-export function pagerPages(total, per, active) {
-  const pages = Math.ceil(total / per);
-  if (pages < 2) return null;
-  const shown = [];
-  for (let n = 1; n <= pages; n++) {
-    if (n === 1 || n === pages || Math.abs(n - active) <= 1) shown.push(n);
-  }
-  const out = [];
-  let prev = 0;
-  shown.forEach((n) => {
-    if (prev) {
-      if (n - prev === 2) out.push({ n: prev + 1 });
-      else if (n - prev > 2) out.push({ gap: true });
-    }
-    out.push({ n, active: n === active });
-    prev = n;
-  });
-  return out;
-}
+import { pagerItems } from '../core.js';
 
 export function pagerTpl(total, per, active, hrefFor, cls) {
-  const items = pagerPages(total, per, active);
-  if (!items) return nothing;
+  const items = pagerItems(total, per, active);
+  if (!items.length) return nothing;
   return html`<p class=${cls || 'board-pages'}>${items.map((it) =>
     it.gap ? html` … ` : it.active
       ? html` <strong>${it.n}</strong> `
