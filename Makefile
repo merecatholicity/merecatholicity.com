@@ -59,6 +59,26 @@ tests: psbuild
 worker-deploy: jscheck psbuild
 	npm run worker:deploy
 
+# D1 migrations for the persistent comments DB (comments-worker/migrations/).
+# A schema change = a NEW migrations/NNNN_name.sql (wrangler d1 migrations create),
+# then `make migrate`. `schema.sql` is a GENERATED snapshot (make schema-snapshot);
+# never hand-edit it. The 3 librarian D1s are derived data (rebuilt by ingest from
+# schema-librarian.sql), not under this ledger.
+.PHONY: migrate migrate-status schema-snapshot
+migrate:
+	cd comments-worker && npx wrangler d1 migrations apply merecatholicity-comments --remote
+migrate-status:
+	cd comments-worker && npx wrangler d1 migrations list merecatholicity-comments --remote
+# Regenerate comments-worker/schema.sql as a read-only snapshot of migrations/.
+schema-snapshot:
+	@{ echo "-- GENERATED — do not hand-edit. A concatenated snapshot of"; \
+	   echo "-- comments-worker/migrations/ (the source of truth), for reference/grep."; \
+	   echo "-- Change the schema with a NEW migration + \`make migrate\`; regenerate with"; \
+	   echo "-- \`make schema-snapshot\`. The 3 librarian D1s live in schema-librarian.sql."; \
+	   echo ""; \
+	   cat comments-worker/migrations/*.sql; } > comments-worker/schema.sql
+	@echo "regenerated comments-worker/schema.sql from migrations/"
+
 check: jscheck
 	python scripts/linkcheck.py
 

@@ -1,8 +1,3 @@
--- GENERATED — do not hand-edit. A concatenated snapshot of
--- comments-worker/migrations/ (the source of truth), for reference/grep.
--- Change the schema with a NEW migration + `make migrate`; regenerate with
--- `make schema-snapshot`. The 3 librarian D1s live in schema-librarian.sql.
-
 -- 0000_baseline_comments — the reconciled baseline of the merecatholicity-comments D1
 -- database, captured from the previously hand-applied schema.sql (all CREATE ... IF NOT
 -- EXISTS, so applying it on the existing prod DB is a no-op that only records the ledger).

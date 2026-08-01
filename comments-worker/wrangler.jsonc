@@ -8,6 +8,12 @@
   "name": "merecatholicity-comments",
   "main": "src/index.js",
   "compatibility_date": "2026-07-18",
+  // D1 migrations for the persistent comments DB live in the default migrations/
+  // directory (wrangler auto-discovers it — no config key needed), applied with
+  // `wrangler d1 migrations apply merecatholicity-comments --remote` (see `make
+  // migrate`). Separate from the "migrations" key below, which is the Durable
+  // Object class-migration list. The 3 librarian D1s are NOT migrated here — they
+  // are derived data, rebuilt from schema-librarian.sql by ingest.
   "observability": { "enabled": true },
   "routes": [
     { "pattern": "merecatholicity.com/api/comments*", "zone_name": "merecatholicity.com" },

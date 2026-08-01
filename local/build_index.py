@@ -179,6 +179,15 @@ def main():
         items = items[:args.limit]
 
     # ---- Pass 1: build every work's chunks and write the sqlite rows -------
+    # This is the LOCAL GPU backend's own sqlite store, rebuilt from scratch each
+    # run (os.remove below). It deliberately DIFFERS from the cloud D1 `chunks`
+    # (comments-worker/schema-librarian.sql: id/cid/work_id/seq/heading/anchor/text
+    # + chunks_fts): the local retriever reads tier/url/kind/title INLINE, whereas
+    # the worker joins those from the `works` table. Same cid/work_id/seq/heading/
+    # anchor/text core + the same chunks_fts(heading,text) porter-unicode61 vtable,
+    # so a chunk is the same thing in both; the extra local columns are an additive
+    # superset, not a divergent origin. Keep the shared core in step with
+    # schema-librarian.sql; the extra four columns are local-only by design.
     if os.path.exists(db_path):
         os.remove(db_path)
     db = sqlite3.connect(db_path)
@@ -187,7 +196,7 @@ def main():
         CREATE TABLE chunks (
           rowid INTEGER PRIMARY KEY,
           cid TEXT UNIQUE, work_id TEXT, seq INTEGER,
-          tier INTEGER, url TEXT, kind TEXT,
+          tier INTEGER, url TEXT, kind TEXT,          -- local-only (D1 joins works)
           heading TEXT, anchor TEXT, text TEXT, title TEXT);
         CREATE INDEX chunks_work ON chunks(work_id);
         CREATE VIRTUAL TABLE chunks_fts USING fts5(
