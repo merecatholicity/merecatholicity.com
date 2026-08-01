@@ -4107,6 +4107,14 @@
       });
   }
 
+  /* The profile field caps, single-sourced from the PureScript Domain.Profile
+     (via window.mcCore); the fallback matches the worker (the no-bundle path,
+     retires at Wave F). Fixes the drift where the admin editor capped bio at
+     1000 while the worker rejects anything over 500. See PURESCRIPT.md. */
+  function profileLimits() {
+    return (window.mcCore && window.mcCore.profileLimits) || { nick: 40, bio: 500, sig: 200 };
+  }
+
   function adminProfileEditor(card, hash, prof) {
     var slot = el('div', 'profile-admin-edit');
     var open = el('a', 'identity-action', 'Edit this profile (admin)');
@@ -4125,9 +4133,10 @@
         slot.appendChild(inp);
         return inp;
       }
-      var nick = field('Nickname', prof.nick, 40);
-      var bio = field('Bio', prof.bio, 1000, 'textarea');
-      var sig = field('Signature', prof.signature, 200, 'textarea');
+      var PLIM = profileLimits();
+      var nick = field('Nickname', prof.nick, PLIM.nick);
+      var bio = field('Bio', prof.bio, PLIM.bio, 'textarea');
+      var sig = field('Signature', prof.signature, PLIM.sig, 'textarea');
       var avRow = el('label', 'profile-label');
       var avChk = el('input');
       avChk.type = 'checkbox';
@@ -4293,22 +4302,23 @@
       'A custom nickname simply shows first.'));
     var chosenFaith = p.faith || (p.hash === state.myHash ? getFaith() : '') || '';
     card.appendChild(faithRadios(chosenFaith, function (code) { chosenFaith = code; }));
-    card.appendChild(el('label', 'profile-label', 'Nickname (up to 40 characters)'));
+    var PLIM = profileLimits();
+    card.appendChild(el('label', 'profile-label', 'Nickname (up to ' + PLIM.nick + ' characters)'));
     var nickIn = el('input', 'key-input');
     nickIn.type = 'text';
-    nickIn.maxLength = 40;
+    nickIn.maxLength = PLIM.nick;
     nickIn.placeholder = p.assigned;
     nickIn.value = p.nick || '';
     card.appendChild(nickIn);
-    card.appendChild(el('label', 'profile-label', 'Bio (up to 500 characters)'));
+    card.appendChild(el('label', 'profile-label', 'Bio (up to ' + PLIM.bio + ' characters)'));
     var bioIn = el('textarea', 'comment-text');
-    bioIn.maxLength = 500;
+    bioIn.maxLength = PLIM.bio;
     bioIn.rows = 4;
     bioIn.value = p.bio || '';
     card.appendChild(bioIn);
-    card.appendChild(el('label', 'profile-label', 'Signature (up to 200 characters)'));
+    card.appendChild(el('label', 'profile-label', 'Signature (up to ' + PLIM.sig + ' characters)'));
     var sigIn = el('textarea', 'comment-text');
-    sigIn.maxLength = 200;
+    sigIn.maxLength = PLIM.sig;
     sigIn.rows = 2;
     sigIn.value = p.signature || '';
     card.appendChild(sigIn);

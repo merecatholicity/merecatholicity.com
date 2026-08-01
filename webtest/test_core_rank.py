@@ -60,7 +60,8 @@ SCRIPTURE_PROBE = r"""
     plainZero: d.textContent.indexOf('Rom 0:5') !== -1,
     validHref: valid && valid.href,
     validV2: valid && valid.v2,
-    zeroRef: vp('rom', '0', '0', null)
+    zeroRef: vp('rom', '0', '0', null),
+    profileLimits: window.mcCore.profileLimits
   };
 """
 
@@ -96,6 +97,10 @@ def main():
             ('mcCore.bibleSrc is 2267 chars', sc.get('bibleSrcLen') == 2267),
             ("mcCore.bookSlug('1 cor') == '1-corinthians'", sc.get('slug1cor') == '1-corinthians'),
             ("mcCore.bookSlug('nope') == null", sc.get('slugNope') is None),
+            ('mcCore.profileLimits == {nick:40, bio:500, sig:200} (drift-killer)',
+             (sc.get('profileLimits') or {}).get('bio') == 500
+             and (sc.get('profileLimits') or {}).get('nick') == 40
+             and (sc.get('profileLimits') or {}).get('sig') == 200),
         ]
         return f.verdict(checks)
 

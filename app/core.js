@@ -14,6 +14,7 @@
 
 import * as Rank from '../purescript/output/Domain.Rank/index.js';
 import * as Scripture from '../purescript/output/Domain.Scripture/index.js';
+import * as Profile from '../purescript/output/Domain.Profile/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -41,3 +42,9 @@ export const bookSlug = (key) => Maybe.maybe(null)((s) => s)(Scripture.bookSlug(
    to JS null/value, so no erasure is needed here. */
 export const verseParts = (bookKey, ch, v1, v2) =>
   Scripture.verseParts(bookKey)(ch | 0)(v1 | 0)(v2 == null ? null : (v2 | 0));
+
+/* profileLimits: the single source of the profile field caps { nick, bio, sig }
+   (a plain PS record). The client profile editors read these for maxLength; the
+   worker's MAX_* read the same source in Phase 6. Retires the drift where the
+   admin editor capped bio at 1000 while the worker rejects over 500. */
+export const profileLimits = Profile.limits;

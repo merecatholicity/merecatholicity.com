@@ -348,7 +348,7 @@ Plus: bump `app.js?v=N` in `docs/nav.js` iff `docs/app.js` bytes changed.
 | 0 | `Domain.Rank` (toolchain + seam proof) | **shipped** (df2a065) | retained — it is the genuine no-bundle path (app disabled / storage blocked ⇒ no `window.mcCore`); deletes at Wave F when `comments.js` itself dissolves into the bundle, not before |
 | 1a | `Domain.Scripture` — table + autolink regex (client) | **shipped** (8d3ebe4) | app/richtext.js retired onto Core.bibleSrc/bookSlug; the comments.js copy + worker copies remain (1b / Phase 6) |
 | 1b | `Domain.Scripture` — VerseRef parse + anchor (client) | **shipped** | richtext.js builds the `kjv.html#` href via `Core.verseParts` (a validated ref — real book, chapter/verse ≥ 1, ordered range); malformed refs like "Rom 0:0" now stay plain. The comments.js copy stays (no-bundle fallback, retires at Wave F, not here) |
-| 2 | `Domain.Profile` (drift-killer), Faith, dmScore, pagerPages, emoji, cats, TTLs | planned | — |
+| 2 | `Domain.Profile` (drift-killer) **shipped**; Faith / dmScore / pagerPages / emoji / cats / TTLs planned | in progress | profile caps single-sourced (client editors read `Core.profileLimits`; admin-editor bio drift 1000→500 fixed); the comments.js fallback `{40,500,200}` stays (no-bundle); worker `MAX_*` single-sources here in Phase 6 |
 | 3 | `Domain.Access` (permissions), `Domain.Live` (live-event decisions), search/route, library model | planned | — |
 | 4 | Application state = State + Events + Transitions (auth ADT, notifications, mute) | planned | — |
 | 5 | comments.js effect cores (validation/what-to-send in PS; Turnstile/nacl/WS/fetch as FFI); typed API client | planned | — |

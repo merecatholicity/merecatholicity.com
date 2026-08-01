@@ -9,6 +9,7 @@ package:
   dependencies:
     - prelude
     - arrays
+    - either
     - maybe
     - nullable
     - strings

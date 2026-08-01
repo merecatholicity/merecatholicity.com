@@ -7,7 +7,9 @@
 import assert from 'node:assert/strict';
 import * as Rank from '../output/Domain.Rank/index.js';
 import * as Scripture from '../output/Domain.Scripture/index.js';
+import * as Profile from '../output/Domain.Profile/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
+import * as Either from '../output/Data.Either/index.js';
 
 const label = (n) => Rank.rankLabel(Rank.rankFor(n));
 
@@ -75,3 +77,12 @@ assert.equal(vp('nope', 1, 1, null), null, 'non-book -> null');
 const r3 = vp('rom', 3, 16, 10);
 assert.ok(r3 && r3.v2 === 16 && r3.href === 'romans-3-16', 'backward range collapses to single verse');
 console.log('pstest: Domain.Scripture.verseParts OK (validated refs + rejections)');
+
+// --- Domain.Profile: the field caps (single source) + validators ---
+assert.equal(Profile.limits.nick, 40, 'nick cap 40');
+assert.equal(Profile.limits.bio, 500, 'bio cap 500 (drift lock: was 1000 in the admin editor)');
+assert.equal(Profile.limits.sig, 200, 'sig cap 200');
+assert.ok(Profile.mkBio('x'.repeat(500)) instanceof Either.Right, 'bio of 500 accepted');
+assert.ok(Profile.mkBio('x'.repeat(501)) instanceof Either.Left, 'bio of 501 rejected');
+assert.ok(Profile.mkNick('x'.repeat(41)) instanceof Either.Left, 'nick of 41 rejected');
+console.log('pstest: Domain.Profile OK (caps 40/500/200 + validators; bio locked at 500)');

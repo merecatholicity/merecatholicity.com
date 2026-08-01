@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT_DIR = os.path.join(ROOT, 'content')
 # Keep in step with the comments.js cache-bust bump (the wordlists-style
 # discipline): a content page with comments carries this exact include.
-COMMENTS_V = 166
+COMMENTS_V = 167
 
 
 def split_frontmatter(text):
