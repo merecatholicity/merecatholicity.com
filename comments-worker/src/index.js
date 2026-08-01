@@ -3185,8 +3185,12 @@ async function handleDmPubkey(request, env) {
    dimensions are read from the image header itself, and the stored
    content-type is the sniffed one. ---- */
 
-const MAX_AVATAR_BYTES = 500 * 1024;
-const AVATAR_SIZE = 400;
+const MAX_AVATAR_BYTES = 1024 * 1024;
+/* Avatars are square (round display, one R2 key per identity) but no longer a
+   fixed 400px: any square in this range is stored as-is and the CSS caps the
+   display size. Historical 400x400 avatars sit comfortably inside the range. */
+const AVATAR_MIN = 96;
+const AVATAR_MAX = 1024;
 
 function be16(b, i) { return (b[i] << 8) | b[i + 1]; }
 
@@ -3306,7 +3310,7 @@ async function handleAvatarUpload(request, env) {
   if (!success) return json({ ok: false, error: 'Too many requests. Wait a minute and try again.' }, 429);
   const declared = Number(request.headers.get('Content-Length'));
   if (Number.isFinite(declared) && declared > MAX_AVATAR_BYTES + 8192) {
-    return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
+    return json({ ok: false, error: 'The image is too large. 1 MB at most.' }, 413);
   }
   let form;
   try {
@@ -3324,16 +3328,16 @@ async function handleAvatarUpload(request, env) {
   }
   const file = form.get('avatar');
   if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: 'No image arrived.' }, 400);
-  if (file.size > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
+  if (file.size > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 1 MB at most.' }, 413);
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.length > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 500 KB at most.' }, 413);
+  if (bytes.length > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 1 MB at most.' }, 413);
   /* JPEG alone is stored, whatever any client claims or an old cached
      client sends. The canvas step upstream re-encodes every source to JPEG,
      so an honest upload always passes; everything else is refused here. */
   const img = sniffImage(bytes);
   if (!img || img.mime !== 'image/jpeg') return json({ ok: false, error: 'Avatars must be JPEG.' }, 400);
-  if (img.width !== AVATAR_SIZE || img.height !== AVATAR_SIZE) {
-    return json({ ok: false, error: 'The avatar must be exactly 400 by 400 pixels.' }, 400);
+  if (img.width !== img.height || img.width < AVATAR_MIN || img.width > AVATAR_MAX) {
+    return json({ ok: false, error: 'The avatar must be square, between ' + AVATAR_MIN + ' and ' + AVATAR_MAX + ' pixels.' }, 400);
   }
   if (!(await screenImage(env, bytes))) {
     return json({ ok: false, error: 'That image was flagged and cannot be used as an avatar. Please choose another.' }, 400);
