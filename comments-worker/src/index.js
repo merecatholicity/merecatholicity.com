@@ -7,6 +7,10 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import * as Rank from '../../purescript/output/Domain.Rank/index.js';
+import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
+import * as Faith from '../../purescript/output/Domain.Faith/index.js';
+import * as Profile from '../../purescript/output/Domain.Profile/index.js';
+import * as Dm from '../../purescript/output/Domain.Dm/index.js';
 
 const PAGES = [
   '/book.html',
@@ -63,7 +67,7 @@ const NOTIF_PER_PAGE = 20;
 /* The faith declaration every member picks at signup: one of three, stored as
    a short code, its display wording owned by the client. Kept in step with the
    FAITH map in comments.js. */
-const FAITHS = ['nicene', 'indo-european', 'seeker'];
+const FAITHS = Faith.faithList.map((f) => f.code);   // single-sourced from Domain.Faith
 function cleanFaith(raw) {
   const v = String(raw || '').trim();
   return FAITHS.includes(v) ? v : null;
@@ -73,23 +77,10 @@ const CONTROL_RE = /[\u0000-\u0008\u000B-\u001F\u007F]/;
 /* Must stay identical to the lists in comments.js, or a member's assigned
    pseudonym will differ between the server (feed, /config, the `assigned` field)
    and the web client that renders it. Also served verbatim by /api/comments/config. */
-const ADJ = ['Patient','Quiet','Steadfast','Humble','Gentle','Sober','Watchful','Earnest',
-  'Merry','Plain','Hidden','Upright','Ancient','Early','Golden','Green',
-  'Grey','Amber','Ivory','Deep','Broad','High','Still','Bright',
-  'Clear','Kind','Mild','Firm','True','Swift','Careful','Cheerful',
-  'Constant','Modest','Peaceful','Prudent','Silent','Simple','Sturdy','Temperate'];
-const NOUN = ['Cedar','Harbor','Meadow','River','Garden','Orchard','Bridge','Lantern',
-  'Anchor','Well','Spring','Stone','Oak','Olive','Vine','Wheat',
-  'Barley','Dove','Sparrow','Heron','Candle','Bell','Tower','Gate',
-  'Path','Field','Hill','Valley','Brook','Shore','Island','Harvest',
-  'Vineyard','Cypress','Juniper','Almond','Fig','Palm','Elm','Ash'];
-
-function displayName(hash) {
-  const b = (i) => parseInt(hash.slice(i * 2, i * 2 + 2), 16);
-  const adj = ADJ[((b(4) << 8) | b(5)) % ADJ.length];
-  const noun = NOUN[((b(6) << 8) | b(7)) % NOUN.length];
-  return adj + '-' + noun + ' ' + hash.slice(0, 4);
-}
+/* The pseudonym derivation + its two 40-word lists are single-sourced from the
+   PureScript Domain.Pseudonym — the same module the client bundles (Phase 6) —
+   retiring the ADJ/NOUN copy that used to live here. */
+const displayName = Pseudonym.displayName;
 
 /* The scriptorium rank ladder: standing by total live-forum posts. Thresholds
    ascend; rankFor returns the highest reached. Mirrors RANKS in comments.js; the
@@ -135,7 +126,7 @@ const CAT_META = [
   ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
   ['adminsonly', 'Admins only', 'The back room.'],
 ];
-const FAITH_LABELS = { nicene: 'Nicene', 'indo-european': 'pre-Christian Indo European', seeker: 'Seeker' };
+const FAITH_LABELS = Object.fromEntries(Faith.faithList.map((f) => [f.code, f.label]));
 const EMOJI_PACKS = {
   memes: [['cry', 'emoji/memes/cry.webp'], ['pogging', 'emoji/memes/pogging.webp'], ['bonk', 'emoji/memes/bonk.webp'], ['catkiss', 'emoji/memes/catkiss.webp'], ['crythumbsup', 'emoji/memes/crythumbsup.webp'], ['catjam', 'emoji/memes/catjam.webp'], ['megareverse-1', 'emoji/memes/megareverse-1.webp'], ['shrug', 'emoji/memes/shrug.webp'], ['kekw', 'emoji/memes/kekw.webp'], ['boohoo', 'emoji/memes/boohoo.webp'], ['laughing-hard', 'emoji/memes/laughing-hard.webp'], ['bruh', 'emoji/memes/bruh.webp'], ['pepecringe', 'emoji/memes/pepecringe.webp'], ['kitty-happy', 'emoji/memes/kitty-happy.webp'], ['catsneeze', 'emoji/memes/catsneeze.webp'], ['cutecatstare', 'emoji/memes/cutecatstare.webp'], ['catsmile', 'emoji/memes/catsmile.webp'], ['catstare', 'emoji/memes/catstare.webp'], ['cat-laughing', 'emoji/memes/cat-laughing.webp'], ['soldjacat', 'emoji/memes/soldjacat.webp'], ['crycat', 'emoji/memes/crycat.webp'], ['bingus-shush', 'emoji/memes/bingus-shush.webp'], ['huhcat', 'emoji/memes/huhcat.webp'], ['catno', 'emoji/memes/catno.webp'], ['seriously', 'emoji/memes/seriously.webp'], ['cat-sleep', 'emoji/memes/cat-sleep.webp'], ['crisiscat', 'emoji/memes/crisiscat.webp'], ['huhcat-2', 'emoji/memes/huhcat-2.webp'], ['cat-kiss', 'emoji/memes/cat-kiss.webp'], ['catfunny', 'emoji/memes/catfunny.webp'], ['happy', 'emoji/memes/happy.webp'], ['laughing-cat', 'emoji/memes/laughing-cat.webp'], ['kitty-sad', 'emoji/memes/kitty-sad.webp']],
   pepe: [['pepecross', 'emoji/pepe/pepecross.webp'], ['pepetyping', 'emoji/pepe/pepetyping.webp'], ['pepeheart', 'emoji/pepe/pepeheart.webp'], ['pepelaugh', 'emoji/pepe/pepelaugh.webp'], ['pepeperfect', 'emoji/pepe/pepeperfect.webp'], ['strongpepe', 'emoji/pepe/strongpepe.webp'], ['pepebanger', 'emoji/pepe/pepebanger.webp'], ['pepeclap', 'emoji/pepe/pepeclap.webp'], ['pepetorchfire', 'emoji/pepe/pepetorchfire.webp'], ['pepeblink', 'emoji/pepe/pepeblink.webp'], ['pepeuwu', 'emoji/pepe/pepeuwu.webp'], ['pepeokay', 'emoji/pepe/pepeokay.webp'], ['pepepug', 'emoji/pepe/pepepug.webp'], ['kingpepe', 'emoji/pepe/kingpepe.webp'], ['kingpepe-2', 'emoji/pepe/kingpepe-2.webp'], ['nou', 'emoji/pepe/nou.webp'], ['peperain', 'emoji/pepe/peperain.webp'], ['peperich', 'emoji/pepe/peperich.webp'], ['pepehacker', 'emoji/pepe/pepehacker.webp'], ['pepeclap-2', 'emoji/pepe/pepeclap-2.webp'], ['pepe-blushy', 'emoji/pepe/pepe-blushy.webp'], ['pepe-sad', 'emoji/pepe/pepe-sad.webp'], ['pepehug', 'emoji/pepe/pepehug.webp'], ['pepe-hehe', 'emoji/pepe/pepe-hehe.webp'], ['pepes', 'emoji/pepe/pepes.webp'], ['sleepypepe', 'emoji/pepe/sleepypepe.webp'], ['pepohappy', 'emoji/pepe/pepohappy.webp']],
@@ -1614,9 +1605,9 @@ async function handleAudit(request, env) {
   return json({ ok: true, reports: reports.results, pages: pages.results, topics: topics.results, days: 14 }, 200);
 }
 
-const MAX_NICK = 40;
-const MAX_BIO = 500;
-const MAX_SIG = 200;
+const MAX_NICK = Profile.limits.nick;
+const MAX_BIO = Profile.limits.bio;
+const MAX_SIG = Profile.limits.sig;
 
 /* Public read of a profile: the custom fields plus the assigned pseudonym,
    never any private fingerprint or trust/ban state. Missing profile still
@@ -1775,7 +1766,7 @@ const DM_CLEARED = 'm.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cle
 /* Disappearing-message + media tunables, and the growing admin key/value store
    behind them (app_settings). A missing key falls back to these defaults; the
    admin console (Phase 3) edits the table and busts this per-isolate cache. */
-const DM_TTLS = [86400, 604800, 2592000];   // 24h / 7d / 30d — must match the client
+const DM_TTLS = Dm.ttlOptions.map((o) => o.secs);   // single-sourced from Domain.Dm
 const MEDIA_CAP_BYTES = 10 * 1024 * 1024 * 1024;   // R2 free tier: 10 GB
 const APP_SETTING_DEFAULTS = {
   media_enabled: '1',
