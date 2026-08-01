@@ -11,6 +11,7 @@ import * as Profile from '../output/Domain.Profile/index.js';
 import * as Faith from '../output/Domain.Faith/index.js';
 import * as Pseudonym from '../output/Domain.Pseudonym/index.js';
 import * as Dm from '../output/Domain.Dm/index.js';
+import * as Access from '../output/Domain.Access/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -114,3 +115,22 @@ assert.equal(Dm.ttlLabel(604800), '7 days');
 assert.equal(Dm.ttlLabel(2592000), '30 days');
 assert.equal(Dm.ttlLabel(3600), '24 hours');
 console.log('pstest: Domain.Dm OK (ttl options + labels)');
+
+// --- Domain.Access: the post permission matrix ---
+const ci = (a, m, b) => Access.canInteract(a)(m)(b);
+const cr = (a, m, b, ad) => Access.canReport(a)(m)(b)(ad);
+const ce = (a, m) => Access.canEdit(a)(m);
+const cd = (a, m, ad) => Access.canDelete(a)(m)(ad);
+assert.equal(ci('x', 'me', 'bot'), true);
+assert.equal(ci('me', 'me', 'bot'), false, 'no self-interact');
+assert.equal(ci('bot', 'me', 'bot'), false, 'no bot-interact');
+assert.equal(ci('x', '', 'bot'), false, 'keyless cannot interact');
+assert.equal(cr('x', 'me', 'bot', true), false, 'admin has no report link');
+assert.equal(cr('x', 'me', 'bot', false), true);
+assert.equal(ce('me', 'me'), true);
+assert.equal(ce('x', 'me'), false, 'only own post editable');
+assert.equal(cd('x', 'me', true), true, 'admin deletes any');
+assert.equal(cd('x', 'me', false), false, 'non-admin cannot delete other');
+assert.equal(cd('me', 'me', false), true, 'own post deletable');
+assert.equal(cd('x', '', true), false, 'keyless cannot delete');
+console.log('pstest: Domain.Access OK (permission matrix)');

@@ -349,7 +349,7 @@ Plus: bump `app.js?v=N` in `docs/nav.js` iff `docs/app.js` bytes changed.
 | 1a | `Domain.Scripture` — table + autolink regex (client) | **shipped** (8d3ebe4) | app/richtext.js retired onto Core.bibleSrc/bookSlug; the comments.js copy + worker copies remain (1b / Phase 6) |
 | 1b | `Domain.Scripture` — VerseRef parse + anchor (client) | **shipped** | richtext.js builds the `kjv.html#` href via `Core.verseParts` (a validated ref — real book, chapter/verse ≥ 1, ordered range); malformed refs like "Rom 0:0" now stay plain. The comments.js copy stays (no-bundle fallback, retires at Wave F, not here) |
 | 2 | `Domain.Profile` + `Domain.Faith` + `Domain.Pseudonym` + `Domain.Dm` (TTLs) **shipped**; dmScore / pagerPages / emoji / cats deferred (no dup/bug, lower value) | mostly done | profile caps (admin bio 1000→500 fixed), faith enum, displayName pseudonym (ADJ/NOUN, 20+ sites), DM lifetimes single-sourced; comments.js fallbacks stay (no-bundle); worker copies single-source here in Phase 6 |
-| 3 | `Domain.Access` (permissions), `Domain.Live` (live-event decisions), search/route, library model | planned | — |
+| 3 | `Domain.Access` (permissions) **shipped**; `Domain.Live` (live-event decisions), search/route, library model planned | in progress | post.js permission gates (canInteract/canReport/canEdit/canDelete) single-sourced to `Domain.Access`; comments.js commentNode fallback stays (Wave F) |
 | 4 | Application state = State + Events + Transitions (auth ADT, notifications, mute) | planned | — |
 | 5 | comments.js effect cores (validation/what-to-send in PS; Turnstile/nacl/WS/fetch as FFI); typed API client | planned | — |
 | 6 | Worker single-source (`SafeMatch` pilot, then BIBLE/RANKS/FAITHS/MAX_*/pseudonym/DM_TTLS/BOARD_CATS) | planned | — |
