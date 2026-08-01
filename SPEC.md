@@ -153,7 +153,39 @@ opposite — a render layer so dumb it can be swapped without touching a rule. L
 light-DOM + "progressive enhancement over a static page" model is also the only one
 that respects §3.1: if the bundle never loads, the static HTML is still there.
 
-### 3.6 Cloudflare Workers — *why the backend is edge functions*
+### 3.6 Tailwind (CSS-first) — *why one stylesheet, and mostly not utilities*
+
+Styling is **Tailwind v4** in its CSS-first mode: one entry, `styles/main.css`,
+compiles to a single committed, minified `docs/style.css`. `main.css` registers the
+site's design tokens in an `@theme` block mapped to the **live CSS variables** the
+palette redefines under dark mode, so `bg-*`/`text-*`/`border-*` utilities inherit
+light/dark switching for free — no per-element `dark:` variant — and it pulls in
+`@tailwindcss/typography` for the reading corpus's `prose` surface.
+
+**Why Tailwind at all, given the rest of the stack is anti-framework:** it earns its
+place for exactly two things — the **design-token system** (one source for the
+palette, dark mode for free) and the **`typography` plugin** over the ~250
+Pandoc-generated library pages. It is a *build-time* tool with **zero runtime** and
+**zero bundle cost** — it emits plain CSS — so it never touches §3.1 or the
+free-tier compute law: the output is a static stylesheet the CDN serves.
+
+**Why mostly NOT utility classes, though:** two deliberate departures from idiomatic
+Tailwind, both forced by measurement. First, **preflight (Tailwind's reset) is not
+imported** — the site keeps its own base reset, because preflight would flatten the
+reading typography across every generated corpus page. Second, **content
+auto-detection is disabled** (`source(none)`, with scanning turned on per surface via
+explicit `@source` lines) because the generated prose contains ordinary English words
+like "table," "block," and "hidden" that Tailwind would mistake for utility names and
+emit as spurious CSS. And when we tried converting the app chrome and forum to
+`@apply`/utilities, it *measurably bloated* the output (~68 KB vs ~63 KB) for zero
+visual change: `@apply` drags in Tailwind's utility machinery (`--tw-*`, the
+`@property` polyfill, the spacing/color indirection) for stateful, breakpoint-gated
+component CSS that is already clean and token-driven. So those surfaces stay
+hand-authored component CSS — *inside* the Tailwind build (they consume the `@theme`
+tokens) but not expressed as utilities. Tailwind here is a token engine and a `prose`
+generator, not a styling paradigm we adopted wholesale.
+
+### 3.7 Cloudflare Workers — *why the backend is edge functions*
 
 The two dynamic features (comments/forum/DM/bot, and the contact form) are
 **Cloudflare Workers** — functions that run at the edge, same-origin with the pages
@@ -166,7 +198,7 @@ CDN. The whole platform's compute is "run this function when a request arrives."
 For a bursty, niche community that is exactly the right billing model and the right
 operational surface (there is nothing to keep alive).
 
-### 3.7 D1 + R2 + Durable Objects + Vectorize — *why this storage split*
+### 3.8 D1 + R2 + Durable Objects + Vectorize — *why this storage split*
 
 Four storage primitives, each chosen for what it's uniquely good at:
 
@@ -185,12 +217,12 @@ Four storage primitives, each chosen for what it's uniquely good at:
   hibernatable WebSockets on the free plan.
 - **Vectorize** — the semantic index for the AI's retrieval leg (bge-m3
   embeddings, cosine). Free-tier caps the vector count (~5k), which is why
-  retrieval is *hybrid* (see §3.9) rather than pure-vector.
+  retrieval is *hybrid* (see §3.10) rather than pure-vector.
 
 The art is matching each kind of data to the primitive whose free tier it fits:
 relational→D1, blobs→R2 (egress-free), realtime→DO, semantic→Vectorize.
 
-### 3.8 The in-house ORM (`db.ts`) — *why not an ORM library*
+### 3.9 The in-house ORM (`db.ts`) — *why not an ORM library*
 
 The worker's data access goes through a small repository layer, `db.ts`: typed row
 mappers, single-sourced SQL fragments (the `LEFT JOIN profiles` author join was
@@ -209,7 +241,7 @@ row↔object mapping." It is unit-tested (`inList` is proven to emit exactly the
 strings the hand-rolled loops did), which is how we route SQL through it without
 fear.
 
-### 3.9 Cloudflare Workers AI + a local GPU — *why hybrid AI*
+### 3.10 Cloudflare Workers AI + a local GPU — *why hybrid AI*
 
 **merecat** answers questions by retrieving from the library and generating an
 answer in the site's voice. Retrieval is **five-legged** (semantic via Vectorize,
@@ -238,7 +270,7 @@ If you squint, the stack is MVC-shaped:
 | MVC role | Here | Note |
 |---|---|---|
 | **Model** | PureScript `Domain.*` kernel + `db.ts` rows | the rules + the data mapping |
-| **View** | Lit components + Pandoc-rendered pages | strictly presentational |
+| **View** | Lit components + Pandoc-rendered pages, styled by Tailwind-built CSS | strictly presentational |
 | **Controller** | Worker route table + middleware + services | request → services → response |
 
 But we differ from textbook MVC in three deliberate ways:
