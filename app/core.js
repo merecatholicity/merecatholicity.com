@@ -15,6 +15,7 @@
 import * as Rank from '../purescript/output/Domain.Rank/index.js';
 import * as Scripture from '../purescript/output/Domain.Scripture/index.js';
 import * as Profile from '../purescript/output/Domain.Profile/index.js';
+import * as Faith from '../purescript/output/Domain.Faith/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -48,3 +49,9 @@ export const verseParts = (bookKey, ch, v1, v2) =>
    worker's MAX_* read the same source in Phase 6. Retires the drift where the
    admin editor capped bio at 1000 while the worker rejects over 500. */
 export const profileLimits = Profile.limits;
+
+/* faithLabel(code) -> the display label, or '' for an unrecognized code (the
+   client checks truthiness). faiths -> the ordered [{code,label}] the signup
+   radios render. Single-sources the FAITH/FAITH_ORDER copy in comments.js. */
+export const faithLabel = (code) => Maybe.maybe('')((s) => s)(Faith.labelForCode(code));
+export const faiths = Faith.faithList;

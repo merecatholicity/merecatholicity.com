@@ -47,6 +47,18 @@
   var FAITH_ORDER = ['nicene', 'indo-european', 'seeker'];
   var FAITH_STORE = 'mc-faith';
 
+  /* Faith code↔label + display order, single-sourced from the PureScript
+     Domain.Faith (via window.mcCore); the inline FAITH/FAITH_ORDER above are the
+     no-bundle fallback (retire at Wave F). See PURESCRIPT.md. */
+  function faithLabel(code) {
+    return (window.mcCore ? window.mcCore.faithLabel(code) : (FAITH[code] || '')) || '';
+  }
+  function faithCodes() {
+    return (window.mcCore && window.mcCore.faiths)
+      ? window.mcCore.faiths.map(function (f) { return f.code; })
+      : FAITH_ORDER;
+  }
+
   /* The scriptorium rank ladder: a member's standing by total live forum posts.
      Thresholds ascend; rankFor returns the highest one reached. The count itself
      rides each post and the profile from the worker (postCountsFor). */
@@ -408,7 +420,8 @@
       wrap.appendChild(sub);
     }
     /* The faith declaration sits under the name on every post. */
-    if (faith && FAITH[faith]) wrap.appendChild(el('span', 'comment-faith', FAITH[faith]));
+    var fl = faith && faithLabel(faith);
+    if (fl) wrap.appendChild(el('span', 'comment-faith', fl));
     /* The rank and post count sit under that, when the caller has the count (a
        post or comment). Reuses the muted faith-line styling. */
     if (posts != null) wrap.appendChild(el('span', 'comment-faith comment-rank', rankLine(Number(posts) || 0)));
@@ -418,10 +431,10 @@
   /* The member's declared faith lives in localStorage from signup and rides
      along with each post; the profile edit is the authoritative changer. */
   function getFaith() {
-    try { var v = localStorage.getItem(FAITH_STORE); return FAITH[v] ? v : ''; } catch (e) { return ''; }
+    try { var v = localStorage.getItem(FAITH_STORE); return faithLabel(v) ? v : ''; } catch (e) { return ''; }
   }
   function setFaith(code) {
-    try { if (FAITH[code]) localStorage.setItem(FAITH_STORE, code); } catch (e) {}
+    try { if (faithLabel(code)) localStorage.setItem(FAITH_STORE, code); } catch (e) {}
   }
 
   /* Mute is self-moderation for a pseudonymous room: a purely local list of
@@ -450,7 +463,7 @@
   function faithRadios(current, onChange) {
     var wrap = el('div', 'faith-radios');
     wrap.appendChild(el('div', 'faith-legend', 'I hold to:'));
-    FAITH_ORDER.forEach(function (code) {
+    faithCodes().forEach(function (code) {
       var lab = el('label', 'faith-option');
       var r = el('input');
       r.type = 'radio';
@@ -459,7 +472,7 @@
       if (code === current) r.checked = true;
       r.addEventListener('change', function () { if (r.checked && onChange) onChange(code); });
       lab.appendChild(r);
-      lab.appendChild(document.createTextNode(' ' + FAITH[code]));
+      lab.appendChild(document.createTextNode(' ' + faithLabel(code)));
       wrap.appendChild(lab);
     });
     return wrap;
@@ -4247,7 +4260,8 @@
     /* The faith declaration. For one's own profile it falls back to the local
        choice before the first post has carried it to the server. */
     var faithCode = p.faith || (p.hash === state.myHash ? getFaith() : '');
-    if (faithCode && FAITH[faithCode]) names.appendChild(el('div', 'profile-faith', 'I hold to: ' + FAITH[faithCode]));
+    var pfl = faithCode && faithLabel(faithCode);
+    if (pfl) names.appendChild(el('div', 'profile-faith', 'I hold to: ' + pfl));
     /* Standing on the board: the total post count and the rank it earns. */
     if (p.posts != null) names.appendChild(el('div', 'profile-faith profile-rank', rankLine(Number(p.posts) || 0)));
     headRow.appendChild(names);
