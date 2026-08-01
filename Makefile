@@ -99,6 +99,7 @@ html:
 	    --css=style.css -H ../partials/social-bishop.html -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/bishop-presbyter.html
 	$(MAKE) -C resources html
+	python scripts/inject_social.py
 	@echo "built book.html"
 	$(MAKE) check
 

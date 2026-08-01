@@ -2681,6 +2681,17 @@
     if (isMember() && window.mcLive && window.mcLive.member) {
       window.mcLive.member.enable(state.key, state.myHash);
     }
+    loadPrefs();
+  }
+  /* The member's private settings-gear prefs (read-receipts mode + per-type
+     notification switches). Loaded once so the DM view can honour receipts
+     reciprocally; the gear reads/writes them too. */
+  function loadPrefs() {
+    if (!state.key) return;
+    fetch(API + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok) { state.prefs = d.prefs; window.mcPrefs = d.prefs; } })
+      .catch(function () {});
   }
   document.addEventListener('mc-live', function (ev) {
     var m = ev.detail; if (!m) return;
@@ -5474,6 +5485,7 @@
         var receipts = [];
         function addReceipt(node, m) {
           if (String(m.sender_hash) !== state.myHash) return;
+          if (state.prefs && state.prefs.receipts === 'off') return;   // reciprocal: I send none AND see none
           var seen = !!m.opened_at;
           var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : ''), seen ? '✓✓ Seen' : '✓ Delivered');
           node.appendChild(r);
@@ -7677,6 +7689,10 @@
     });
     wrap.appendChild(btn);
     section.appendChild(wrap);
+    /* Pop the registration modal automatically (as Inbox/Profile/Merecat do), so
+       a logged-out reader who lands on a members-only view (incl. the Feed tab) is
+       invited to join at once. Guarded so a re-render never double-opens it. */
+    if (window.mcOnboard && !document.querySelector('.mc-onboard')) window.mcOnboard();
   }
 
   function route() {
