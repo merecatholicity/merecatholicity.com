@@ -35,49 +35,26 @@
     var API = "/api/comments";
     var SITEKEY = "0x4AAAAAAD8IYH9_xQ0HE0yB";
     var STORAGE = "mc-comment-key";
-    var FAITH = { nicene: "Nicene", "indo-european": "pre-Christian Indo European", seeker: "Seeker" };
-    var FAITH_ORDER = ["nicene", "indo-european", "seeker"];
     var FAITH_STORE = "mc-faith";
     function faithLabel(code) {
-      return (window.mcCore ? window.mcCore.faithLabel(code) : FAITH[code] || "") || "";
+      return window.mcCore.faithLabel(code) || "";
     }
     function faithCodes() {
-      return window.mcCore && window.mcCore.faiths ? window.mcCore.faiths.map(function(f) {
+      return window.mcCore.faiths.map(function(f) {
         return f.code;
-      }) : FAITH_ORDER;
+      });
     }
-    var RANKS = [
-      [0, "Novice"],
-      [10, "Apprentice"],
-      [50, "Scriptorium Hand"],
-      [100, "Copyist"],
-      [250, "Scribe"],
-      [500, "Illuminator"],
-      [1e3, "Master Scribe"],
-      [2500, "Keeper of Scrolls"],
-      [5e3, "Treasury of Wisdom"]
-    ];
     function rankFor(n) {
-      if (window.mcCore) return window.mcCore.rankFor(n);
-      n = Number(n) || 0;
-      var name = RANKS[0][1];
-      for (var i = 0; i < RANKS.length; i++) {
-        if (n >= RANKS[i][0]) name = RANKS[i][1];
-      }
-      return name;
+      return window.mcCore.rankFor(n);
     }
     function rankLine(posts) {
-      if (window.mcCore) return window.mcCore.rankLine(posts);
-      return rankFor(posts) + " \xB7 " + posts + (posts === 1 ? " post" : " posts");
+      return window.mcCore.rankLine(posts);
     }
     var ADMIN_HASHES = [
       "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6",
       "c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03"
     ];
-    var EMOJI_PACKS = window.mcCore && window.mcCore.emojiPacks || {
-      memes: [["cry", "emoji/memes/cry.webp"], ["pogging", "emoji/memes/pogging.webp"], ["bonk", "emoji/memes/bonk.webp"], ["catkiss", "emoji/memes/catkiss.webp"], ["crythumbsup", "emoji/memes/crythumbsup.webp"], ["catjam", "emoji/memes/catjam.webp"], ["megareverse-1", "emoji/memes/megareverse-1.webp"], ["shrug", "emoji/memes/shrug.webp"], ["kekw", "emoji/memes/kekw.webp"], ["boohoo", "emoji/memes/boohoo.webp"], ["laughing-hard", "emoji/memes/laughing-hard.webp"], ["bruh", "emoji/memes/bruh.webp"], ["pepecringe", "emoji/memes/pepecringe.webp"], ["kitty-happy", "emoji/memes/kitty-happy.webp"], ["catsneeze", "emoji/memes/catsneeze.webp"], ["cutecatstare", "emoji/memes/cutecatstare.webp"], ["catsmile", "emoji/memes/catsmile.webp"], ["catstare", "emoji/memes/catstare.webp"], ["cat-laughing", "emoji/memes/cat-laughing.webp"], ["soldjacat", "emoji/memes/soldjacat.webp"], ["crycat", "emoji/memes/crycat.webp"], ["bingus-shush", "emoji/memes/bingus-shush.webp"], ["huhcat", "emoji/memes/huhcat.webp"], ["catno", "emoji/memes/catno.webp"], ["seriously", "emoji/memes/seriously.webp"], ["cat-sleep", "emoji/memes/cat-sleep.webp"], ["crisiscat", "emoji/memes/crisiscat.webp"], ["huhcat-2", "emoji/memes/huhcat-2.webp"], ["cat-kiss", "emoji/memes/cat-kiss.webp"], ["catfunny", "emoji/memes/catfunny.webp"], ["happy", "emoji/memes/happy.webp"], ["laughing-cat", "emoji/memes/laughing-cat.webp"], ["kitty-sad", "emoji/memes/kitty-sad.webp"]],
-      pepe: [["pepecross", "emoji/pepe/pepecross.webp"], ["pepetyping", "emoji/pepe/pepetyping.webp"], ["pepeheart", "emoji/pepe/pepeheart.webp"], ["pepelaugh", "emoji/pepe/pepelaugh.webp"], ["pepeperfect", "emoji/pepe/pepeperfect.webp"], ["strongpepe", "emoji/pepe/strongpepe.webp"], ["pepebanger", "emoji/pepe/pepebanger.webp"], ["pepeclap", "emoji/pepe/pepeclap.webp"], ["pepetorchfire", "emoji/pepe/pepetorchfire.webp"], ["pepeblink", "emoji/pepe/pepeblink.webp"], ["pepeuwu", "emoji/pepe/pepeuwu.webp"], ["pepeokay", "emoji/pepe/pepeokay.webp"], ["pepepug", "emoji/pepe/pepepug.webp"], ["kingpepe", "emoji/pepe/kingpepe.webp"], ["kingpepe-2", "emoji/pepe/kingpepe-2.webp"], ["nou", "emoji/pepe/nou.webp"], ["peperain", "emoji/pepe/peperain.webp"], ["peperich", "emoji/pepe/peperich.webp"], ["pepehacker", "emoji/pepe/pepehacker.webp"], ["pepeclap-2", "emoji/pepe/pepeclap-2.webp"], ["pepe-blushy", "emoji/pepe/pepe-blushy.webp"], ["pepe-sad", "emoji/pepe/pepe-sad.webp"], ["pepehug", "emoji/pepe/pepehug.webp"], ["pepe-hehe", "emoji/pepe/pepe-hehe.webp"], ["pepes", "emoji/pepe/pepes.webp"], ["sleepypepe", "emoji/pepe/sleepypepe.webp"], ["pepohappy", "emoji/pepe/pepohappy.webp"]]
-    };
+    var EMOJI_PACKS = window.mcCore.emojiPacks;
     var CUSTOM_EMOJI = {};
     Object.keys(EMOJI_PACKS).forEach(function(k) {
       EMOJI_PACKS[k].forEach(function(e) {
@@ -86,101 +63,11 @@
     });
     var STANDARD_EMOJI = "\u{1F600} \u{1F603} \u{1F604} \u{1F601} \u{1F606} \u{1F605} \u{1F602} \u{1F923} \u{1F642} \u{1F643} \u{1F609} \u{1F60A} \u{1F607} \u{1F970} \u{1F60D} \u{1F929} \u{1F618} \u{1F617} \u{1F61A} \u{1F619} \u{1F60B} \u{1F61B} \u{1F61C} \u{1F92A} \u{1F61D} \u{1F917} \u{1F92D} \u{1F92B} \u{1F914} \u{1F910} \u{1F928} \u{1F610} \u{1F611} \u{1F636} \u{1F60F} \u{1F612} \u{1F644} \u{1F62C} \u{1F60C} \u{1F614} \u{1F62A} \u{1F924} \u{1F634} \u{1F637} \u{1F912} \u{1F915} \u{1F922} \u{1F92E} \u{1F927} \u{1F975} \u{1F976} \u{1F974} \u{1F635} \u{1F92F} \u{1F920} \u{1F973} \u{1F60E} \u{1F913} \u{1F9D0} \u{1F615} \u{1F61F} \u{1F641} \u{1F62E} \u{1F62F} \u{1F632} \u{1F633} \u{1F97A} \u{1F626} \u{1F627} \u{1F628} \u{1F630} \u{1F625} \u{1F622} \u{1F62D} \u{1F631} \u{1F616} \u{1F623} \u{1F61E} \u{1F613} \u{1F629} \u{1F62B} \u{1F971} \u{1F624} \u{1F621} \u{1F620} \u{1F92C} \u{1F608} \u{1F47F} \u{1F480} \u{1F4A9} \u{1F921} \u{1F47B} \u{1F47D} \u{1F916} \u{1F63A} \u{1F638} \u{1F639} \u{1F63B} \u{1F63C} \u{1F63D} \u{1F640} \u{1F63F} \u{1F63E} \u{1F44B} \u{1F91A} \u270B \u{1F596} \u{1F44C} \u{1F90C} \u{1F90F} \u270C\uFE0F \u{1F91E} \u{1F91F} \u{1F918} \u{1F919} \u{1F448} \u{1F449} \u{1F446} \u{1F447} \u261D\uFE0F \u{1F44D} \u{1F44E} \u270A \u{1F44A} \u{1F91B} \u{1F91C} \u{1F44F} \u{1F64C} \u{1F450} \u{1F932} \u{1F64F} \u{1F91D} \u{1F4AA} \u{1F595} \u2764\uFE0F \u{1F9E1} \u{1F49B} \u{1F49A} \u{1F499} \u{1F49C} \u{1F5A4} \u{1F90D} \u{1F90E} \u{1F494} \u{1F495} \u{1F49E} \u{1F493} \u{1F497} \u{1F496} \u{1F498} \u{1F49D} \u{1F4AF} \u{1F4A2} \u{1F4A5} \u{1F4AB} \u{1F4A6} \u{1F4A8} \u{1F4AC} \u{1F4AD} \u{1F4A4} \u{1F525} \u2B50 \u{1F31F} \u2728 \u26A1 \u{1F4A7} \u{1F308} \u2600\uFE0F \u{1F389} \u{1F38A} \u{1F381} \u{1F3C6} \u{1F947} \u{1F3AF} \u2705 \u274C \u2B55 \u2757 \u2753 \u26A0\uFE0F \u{1F514} \u{1F4A1} \u{1F511} \u{1F512} \u{1F436} \u{1F431} \u{1F42D} \u{1F439} \u{1F430} \u{1F98A} \u{1F43B} \u{1F43C} \u{1F428} \u{1F42F} \u{1F981} \u{1F42E} \u{1F437} \u{1F438} \u{1F435} \u{1F648} \u{1F649} \u{1F64A} \u{1F414} \u{1F427} \u{1F426} \u{1F986} \u{1F989} \u{1F43A} \u{1F417} \u{1F434} \u{1F984} \u{1F41D} \u{1F41B} \u{1F98B} \u{1F40C} \u{1F422} \u{1F40D} \u{1F419} \u{1F980} \u{1F41F} \u{1F42C} \u{1F433} \u{1F34E} \u{1F34C} \u{1F349} \u{1F347} \u{1F353} \u{1F352} \u{1F351} \u{1F34D} \u{1F95D} \u{1F345} \u{1F951} \u{1F33D} \u{1F344} \u{1F35E} \u{1F9C0} \u{1F354} \u{1F35F} \u{1F355} \u{1F32D} \u{1F32E} \u{1F37F} \u{1F369} \u{1F36A} \u{1F382} \u{1F370} \u{1F36B} \u{1F36C} \u{1F36D} \u{1F37A} \u{1F37B} \u{1F942} \u{1F377} \u2615 \u{1F375}".split(" ");
     var NAMED_EMOJI = {};
-    (window.mcCore && window.mcCore.emojiNamedTokens || "smile \u{1F604} smiley \u{1F603} grin \u{1F601} laughing \u{1F606} joy \u{1F602} rofl \u{1F923} sweat_smile \u{1F605} slight_smile \u{1F642} upside_down \u{1F643} wink \u{1F609} blush \u{1F60A} innocent \u{1F607} heart_eyes \u{1F60D} star_struck \u{1F929} kissing_heart \u{1F618} yum \u{1F60B} stuck_out_tongue \u{1F61B} zany \u{1F92A} thinking \u{1F914} shush \u{1F92B} hand_over_mouth \u{1F92D} neutral \u{1F610} expressionless \u{1F611} no_mouth \u{1F636} smirk \u{1F60F} unamused \u{1F612} rolling_eyes \u{1F644} relieved \u{1F60C} pensive \u{1F614} sleepy \u{1F62A} sleeping \u{1F634} mask \u{1F637} nauseated \u{1F922} vomiting \u{1F92E} sneeze \u{1F927} hot \u{1F975} cold \u{1F976} dizzy_face \u{1F635} exploding_head \u{1F92F} cowboy \u{1F920} partying \u{1F973} sunglasses \u{1F60E} nerd \u{1F913} monocle \u{1F9D0} confused \u{1F615} worried \u{1F61F} frowning \u{1F641} open_mouth \u{1F62E} astonished \u{1F632} flushed \u{1F633} pleading \u{1F97A} fearful \u{1F628} cold_sweat \u{1F630} cry \u{1F622} sob \u{1F62D} scream \u{1F631} confounded \u{1F616} disappointed \u{1F61E} weary \u{1F629} tired \u{1F62B} yawn \u{1F971} triumph \u{1F624} rage \u{1F621} angry \u{1F620} cursing \u{1F92C} smiling_imp \u{1F608} imp \u{1F47F} skull \u{1F480} poop \u{1F4A9} clown \u{1F921} ghost \u{1F47B} alien \u{1F47D} robot \u{1F916} wave \u{1F44B} ok_hand \u{1F44C} v \u270C\uFE0F crossed_fingers \u{1F91E} love_you \u{1F91F} call_me \u{1F919} point_up \u261D\uFE0F thumbsup \u{1F44D} thumbsdown \u{1F44E} fist \u270A punch \u{1F44A} clap \u{1F44F} raised_hands \u{1F64C} pray \u{1F64F} handshake \u{1F91D} muscle \u{1F4AA} middle_finger \u{1F595} heart \u2764\uFE0F orange_heart \u{1F9E1} yellow_heart \u{1F49B} green_heart \u{1F49A} blue_heart \u{1F499} purple_heart \u{1F49C} black_heart \u{1F5A4} broken_heart \u{1F494} two_hearts \u{1F495} sparkling_heart \u{1F496} 100 \u{1F4AF} anger \u{1F4A2} boom \u{1F4A5} sweat_drops \u{1F4A6} dash \u{1F4A8} fire \u{1F525} star \u2B50 star2 \u{1F31F} sparkles \u2728 zap \u26A1 rainbow \u{1F308} sunny \u2600\uFE0F tada \u{1F389} confetti \u{1F38A} gift \u{1F381} trophy \u{1F3C6} dart \u{1F3AF} white_check_mark \u2705 x \u274C o \u2B55 exclamation \u2757 question \u2753 warning \u26A0\uFE0F bell \u{1F514} bulb \u{1F4A1} key \u{1F511} lock \u{1F512} dog \u{1F436} cat \u{1F431} mouse \u{1F42D} hamster \u{1F439} rabbit \u{1F430} fox \u{1F98A} bear \u{1F43B} panda \u{1F43C} koala \u{1F428} tiger \u{1F42F} lion \u{1F981} cow \u{1F42E} pig \u{1F437} frog \u{1F438} monkey \u{1F435} chicken \u{1F414} penguin \u{1F427} bird \u{1F426} unicorn \u{1F984} bee \u{1F41D} butterfly \u{1F98B} snail \u{1F40C} turtle \u{1F422} snake \u{1F40D} octopus \u{1F419} whale \u{1F433} apple \u{1F34E} banana \u{1F34C} watermelon \u{1F349} grapes \u{1F347} strawberry \u{1F353} cherries \u{1F352} peach \u{1F351} avocado \u{1F951} corn \u{1F33D} mushroom \u{1F344} bread \u{1F35E} cheese \u{1F9C0} hamburger \u{1F354} fries \u{1F35F} pizza \u{1F355} hotdog \u{1F32D} taco \u{1F32E} popcorn \u{1F37F} doughnut \u{1F369} cookie \u{1F36A} cake \u{1F370} chocolate \u{1F36B} candy \u{1F36C} lollipop \u{1F36D} beer \u{1F37A} beers \u{1F37B} wine \u{1F377} coffee \u2615 tea \u{1F375}").trim().split(/\s+/).forEach(function(tok, i, a) {
+    window.mcCore.emojiNamedTokens.trim().split(/\s+/).forEach(function(tok, i, a) {
       if (i % 2 === 0) NAMED_EMOJI[tok] = a[i + 1];
     });
-    var ADJ = [
-      "Patient",
-      "Quiet",
-      "Steadfast",
-      "Humble",
-      "Gentle",
-      "Sober",
-      "Watchful",
-      "Earnest",
-      "Merry",
-      "Plain",
-      "Hidden",
-      "Upright",
-      "Ancient",
-      "Early",
-      "Golden",
-      "Green",
-      "Grey",
-      "Amber",
-      "Ivory",
-      "Deep",
-      "Broad",
-      "High",
-      "Still",
-      "Bright",
-      "Clear",
-      "Kind",
-      "Mild",
-      "Firm",
-      "True",
-      "Swift",
-      "Careful",
-      "Cheerful",
-      "Constant",
-      "Modest",
-      "Peaceful",
-      "Prudent",
-      "Silent",
-      "Simple",
-      "Sturdy",
-      "Temperate"
-    ];
-    var NOUN = [
-      "Cedar",
-      "Harbor",
-      "Meadow",
-      "River",
-      "Garden",
-      "Orchard",
-      "Bridge",
-      "Lantern",
-      "Anchor",
-      "Well",
-      "Spring",
-      "Stone",
-      "Oak",
-      "Olive",
-      "Vine",
-      "Wheat",
-      "Barley",
-      "Dove",
-      "Sparrow",
-      "Heron",
-      "Candle",
-      "Bell",
-      "Tower",
-      "Gate",
-      "Path",
-      "Field",
-      "Hill",
-      "Valley",
-      "Brook",
-      "Shore",
-      "Island",
-      "Harvest",
-      "Vineyard",
-      "Cypress",
-      "Juniper",
-      "Almond",
-      "Fig",
-      "Palm",
-      "Elm",
-      "Ash"
-    ];
     function displayName(hash) {
-      if (window.mcCore) return window.mcCore.displayName(hash);
-      function b(i) {
-        return parseInt(hash.slice(i * 2, i * 2 + 2), 16);
-      }
-      var adj = ADJ[(b(4) << 8 | b(5)) % ADJ.length];
-      var noun = NOUN[(b(6) << 8 | b(7)) % NOUN.length];
-      return adj + "-" + noun + " " + hash.slice(0, 4);
+      return window.mcCore.displayName(hash);
     }
     function pagePath() {
       var p = location.pathname;
@@ -1064,22 +951,7 @@
     var section = document.querySelector("section[data-comments], section[data-board]");
     if (!section) return;
     var BOARD = section.hasAttribute("data-board");
-    var CATS = window.mcCore && window.mcCore.boardCatRows || [
-      ["pub", "Pub", "General discussion, for whatever fits nowhere more specific. New here? ", "Introduce yourself and say hello", "community.html?topic=37"],
-      ["news", "News", "News of the Church and of the world."],
-      ["offtopic", "Off Topic", "Everything else, cheerfully off the point."],
-      ["theology", "Theology", "All genres. Systematic and Dogmatic, Biblical and Exegetical, Historical and Patristic, Philosophical and Natural, etc."],
-      ["philosophy", "Philosophy", "From Plato and Aristotle to Kant and Wittgenstein."],
-      ["history", "History", "World, church, and national history. All of it."],
-      ["indoeuropean", "Indo-European Religion", "Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more."],
-      ["rc", "Roman Catholic", "In-house talk for Roman Catholics."],
-      ["eo", "Eastern Orthodoxy", "In-house talk for the Eastern Orthodox."],
-      ["lutheran", "Confessional Lutheran", "In-house talk for confessional Lutherans."],
-      ["anglican", "High Anglican", "In-house talk for high Anglicans."],
-      ["presbyterian", "Reformed Presbyterian", "In-house talk for Reformed Presbyterians. Reformed Congregationalists and Reformed Baptists are welcome to coexist here too."],
-      ["prot", "Protestantism", "For everyone the rooms above do not quite fit, e.g. ", "the free churches", "free-churches.html"],
-      ["adminsonly", "Admins only", "The back room."]
-    ];
+    var CATS = window.mcCore.boardCatRows;
     function catDescNode(tag, cat) {
       var node = el(tag, "board-cat-desc", cat[2]);
       if (cat[3]) {

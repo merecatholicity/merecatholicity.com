@@ -43,43 +43,29 @@
   /* The faith declaration a member picks at signup and may change in their
      profile. Codes are stored; these are the words shown. Kept identical to
      the FAITHS list in comments-worker/src/index.js. */
-  var FAITH: Record<string, string> = { nicene: 'Nicene', 'indo-european': 'pre-Christian Indo European', seeker: 'Seeker' };
-  var FAITH_ORDER = ['nicene', 'indo-european', 'seeker'];
   var FAITH_STORE = 'mc-faith';
 
   /* Faith code↔label + display order, single-sourced from the PureScript
-     Domain.Faith (via window.mcCore); the inline FAITH/FAITH_ORDER above are the
-     no-bundle fallback (the deliberate no-bundle fallback). See CLAUDE.md. */
+     Domain.Faith via window.mcCore. The bundle is required (Wave F, 2026-08-01):
+     the shell always installs mcCore before booting this client. */
   function faithLabel(code: any) {
-    return (window.mcCore ? window.mcCore.faithLabel(code) : (FAITH[code] || '')) || '';
+    return window.mcCore!.faithLabel(code) || '';
   }
   function faithCodes() {
-    return (window.mcCore && window.mcCore.faiths)
-      ? window.mcCore.faiths.map(function (f) { return f.code; })
-      : FAITH_ORDER;
+    return window.mcCore!.faiths.map(function (f) { return f.code; });
   }
 
   /* The scriptorium rank ladder: a member's standing by total live forum posts.
      Thresholds ascend; rankFor returns the highest one reached. The count itself
      rides each post and the profile from the worker (postCountsFor). */
-  var RANKS = [
-    [0, 'Novice'], [10, 'Apprentice'], [50, 'Scriptorium Hand'], [100, 'Copyist'],
-    [250, 'Scribe'], [500, 'Illuminator'], [1000, 'Master Scribe'],
-    [2500, 'Keeper of Scrolls'], [5000, 'Treasury of Wisdom']
-  ];
   /* The rank ladder is the first slice migrated to the PureScript domain layer
      (Domain.Rank). When the app shell is present it computes rank; the classic
      body below is the no-bundle fallback, kept as the deliberate no-bundle fallback. See CLAUDE.md. */
   function rankFor(n: any) {
-    if (window.mcCore) return window.mcCore.rankFor(n);
-    n = Number(n) || 0;
-    var name = RANKS[0][1];
-    for (var i = 0; i < RANKS.length; i++) { if (n >= RANKS[i][0]) name = RANKS[i][1]; }
-    return name;
+    return window.mcCore!.rankFor(n);
   }
   function rankLine(posts: any) {
-    if (window.mcCore) return window.mcCore.rankLine(posts);
-    return rankFor(posts) + ' · ' + posts + (posts === 1 ? ' post' : ' posts');
+    return window.mcCore!.rankLine(posts);
   }
   /* Fingerprints of the site owners' identities. Holding a key that hashes
      to one of these shows delete links on every comment, and the server
@@ -94,10 +80,7 @@
      text, so nothing a user writes ever becomes an arbitrary image source. */
   /* Single-sourced from Domain.Emoji via window.mcCore (the same packs the worker
      serves at /config); the inline copy is the no-app fallback. */
-  var EMOJI_PACKS: Record<string, [string, string][]> = (window.mcCore && window.mcCore.emojiPacks) || {
-    memes: [['cry','emoji/memes/cry.webp'],['pogging','emoji/memes/pogging.webp'],['bonk','emoji/memes/bonk.webp'],['catkiss','emoji/memes/catkiss.webp'],['crythumbsup','emoji/memes/crythumbsup.webp'],['catjam','emoji/memes/catjam.webp'],['megareverse-1','emoji/memes/megareverse-1.webp'],['shrug','emoji/memes/shrug.webp'],['kekw','emoji/memes/kekw.webp'],['boohoo','emoji/memes/boohoo.webp'],['laughing-hard','emoji/memes/laughing-hard.webp'],['bruh','emoji/memes/bruh.webp'],['pepecringe','emoji/memes/pepecringe.webp'],['kitty-happy','emoji/memes/kitty-happy.webp'],['catsneeze','emoji/memes/catsneeze.webp'],['cutecatstare','emoji/memes/cutecatstare.webp'],['catsmile','emoji/memes/catsmile.webp'],['catstare','emoji/memes/catstare.webp'],['cat-laughing','emoji/memes/cat-laughing.webp'],['soldjacat','emoji/memes/soldjacat.webp'],['crycat','emoji/memes/crycat.webp'],['bingus-shush','emoji/memes/bingus-shush.webp'],['huhcat','emoji/memes/huhcat.webp'],['catno','emoji/memes/catno.webp'],['seriously','emoji/memes/seriously.webp'],['cat-sleep','emoji/memes/cat-sleep.webp'],['crisiscat','emoji/memes/crisiscat.webp'],['huhcat-2','emoji/memes/huhcat-2.webp'],['cat-kiss','emoji/memes/cat-kiss.webp'],['catfunny','emoji/memes/catfunny.webp'],['happy','emoji/memes/happy.webp'],['laughing-cat','emoji/memes/laughing-cat.webp'],['kitty-sad','emoji/memes/kitty-sad.webp']],
-    pepe: [['pepecross','emoji/pepe/pepecross.webp'],['pepetyping','emoji/pepe/pepetyping.webp'],['pepeheart','emoji/pepe/pepeheart.webp'],['pepelaugh','emoji/pepe/pepelaugh.webp'],['pepeperfect','emoji/pepe/pepeperfect.webp'],['strongpepe','emoji/pepe/strongpepe.webp'],['pepebanger','emoji/pepe/pepebanger.webp'],['pepeclap','emoji/pepe/pepeclap.webp'],['pepetorchfire','emoji/pepe/pepetorchfire.webp'],['pepeblink','emoji/pepe/pepeblink.webp'],['pepeuwu','emoji/pepe/pepeuwu.webp'],['pepeokay','emoji/pepe/pepeokay.webp'],['pepepug','emoji/pepe/pepepug.webp'],['kingpepe','emoji/pepe/kingpepe.webp'],['kingpepe-2','emoji/pepe/kingpepe-2.webp'],['nou','emoji/pepe/nou.webp'],['peperain','emoji/pepe/peperain.webp'],['peperich','emoji/pepe/peperich.webp'],['pepehacker','emoji/pepe/pepehacker.webp'],['pepeclap-2','emoji/pepe/pepeclap-2.webp'],['pepe-blushy','emoji/pepe/pepe-blushy.webp'],['pepe-sad','emoji/pepe/pepe-sad.webp'],['pepehug','emoji/pepe/pepehug.webp'],['pepe-hehe','emoji/pepe/pepe-hehe.webp'],['pepes','emoji/pepe/pepes.webp'],['sleepypepe','emoji/pepe/sleepypepe.webp'],['pepohappy','emoji/pepe/pepohappy.webp']]
-  };
+  var EMOJI_PACKS: Record<string, [string, string][]> = window.mcCore!.emojiPacks;
   var CUSTOM_EMOJI: Record<string, string> = {};
   Object.keys(EMOJI_PACKS).forEach(function (k) {
     EMOJI_PACKS[k].forEach(function (e: any) { CUSTOM_EMOJI[e[0]] = e[1]; });
@@ -111,26 +94,11 @@
      space. A :code: matches a custom image first, then a name here, else stays
      literal text. */
   var NAMED_EMOJI: Record<string, string> = {};
-  ((window.mcCore && window.mcCore.emojiNamedTokens) || 'smile 😄 smiley 😃 grin 😁 laughing 😆 joy 😂 rofl 🤣 sweat_smile 😅 slight_smile 🙂 upside_down 🙃 wink 😉 blush 😊 innocent 😇 heart_eyes 😍 star_struck 🤩 kissing_heart 😘 yum 😋 stuck_out_tongue 😛 zany 🤪 thinking 🤔 shush 🤫 hand_over_mouth 🤭 neutral 😐 expressionless 😑 no_mouth 😶 smirk 😏 unamused 😒 rolling_eyes 🙄 relieved 😌 pensive 😔 sleepy 😪 sleeping 😴 mask 😷 nauseated 🤢 vomiting 🤮 sneeze 🤧 hot 🥵 cold 🥶 dizzy_face 😵 exploding_head 🤯 cowboy 🤠 partying 🥳 sunglasses 😎 nerd 🤓 monocle 🧐 confused 😕 worried 😟 frowning 🙁 open_mouth 😮 astonished 😲 flushed 😳 pleading 🥺 fearful 😨 cold_sweat 😰 cry 😢 sob 😭 scream 😱 confounded 😖 disappointed 😞 weary 😩 tired 😫 yawn 🥱 triumph 😤 rage 😡 angry 😠 cursing 🤬 smiling_imp 😈 imp 👿 skull 💀 poop 💩 clown 🤡 ghost 👻 alien 👽 robot 🤖 wave 👋 ok_hand 👌 v ✌️ crossed_fingers 🤞 love_you 🤟 call_me 🤙 point_up ☝️ thumbsup 👍 thumbsdown 👎 fist ✊ punch 👊 clap 👏 raised_hands 🙌 pray 🙏 handshake 🤝 muscle 💪 middle_finger 🖕 heart ❤️ orange_heart 🧡 yellow_heart 💛 green_heart 💚 blue_heart 💙 purple_heart 💜 black_heart 🖤 broken_heart 💔 two_hearts 💕 sparkling_heart 💖 100 💯 anger 💢 boom 💥 sweat_drops 💦 dash 💨 fire 🔥 star ⭐ star2 🌟 sparkles ✨ zap ⚡ rainbow 🌈 sunny ☀️ tada 🎉 confetti 🎊 gift 🎁 trophy 🏆 dart 🎯 white_check_mark ✅ x ❌ o ⭕ exclamation ❗ question ❓ warning ⚠️ bell 🔔 bulb 💡 key 🔑 lock 🔒 dog 🐶 cat 🐱 mouse 🐭 hamster 🐹 rabbit 🐰 fox 🦊 bear 🐻 panda 🐼 koala 🐨 tiger 🐯 lion 🦁 cow 🐮 pig 🐷 frog 🐸 monkey 🐵 chicken 🐔 penguin 🐧 bird 🐦 unicorn 🦄 bee 🐝 butterfly 🦋 snail 🐌 turtle 🐢 snake 🐍 octopus 🐙 whale 🐳 apple 🍎 banana 🍌 watermelon 🍉 grapes 🍇 strawberry 🍓 cherries 🍒 peach 🍑 avocado 🥑 corn 🌽 mushroom 🍄 bread 🍞 cheese 🧀 hamburger 🍔 fries 🍟 pizza 🍕 hotdog 🌭 taco 🌮 popcorn 🍿 doughnut 🍩 cookie 🍪 cake 🍰 chocolate 🍫 candy 🍬 lollipop 🍭 beer 🍺 beers 🍻 wine 🍷 coffee ☕ tea 🍵').trim().split(/\s+/).forEach(function (tok, i, a) { if (i % 2 === 0) NAMED_EMOJI[tok] = a[i + 1]; });
+  (window.mcCore!.emojiNamedTokens).trim().split(/\s+/).forEach(function (tok, i, a) { if (i % 2 === 0) NAMED_EMOJI[tok] = a[i + 1]; });
 
-  /* Must stay identical to the lists in comments-worker/src/index.js. */
-  var ADJ = ['Patient','Quiet','Steadfast','Humble','Gentle','Sober','Watchful','Earnest',
-    'Merry','Plain','Hidden','Upright','Ancient','Early','Golden','Green',
-    'Grey','Amber','Ivory','Deep','Broad','High','Still','Bright',
-    'Clear','Kind','Mild','Firm','True','Swift','Careful','Cheerful',
-    'Constant','Modest','Peaceful','Prudent','Silent','Simple','Sturdy','Temperate'];
-  var NOUN = ['Cedar','Harbor','Meadow','River','Garden','Orchard','Bridge','Lantern',
-    'Anchor','Well','Spring','Stone','Oak','Olive','Vine','Wheat',
-    'Barley','Dove','Sparrow','Heron','Candle','Bell','Tower','Gate',
-    'Path','Field','Hill','Valley','Brook','Shore','Island','Harvest',
-    'Vineyard','Cypress','Juniper','Almond','Fig','Palm','Elm','Ash'];
 
   function displayName(hash: any) {
-    if (window.mcCore) return window.mcCore.displayName(hash);
-    function b(i: any) { return parseInt(hash.slice(i * 2, i * 2 + 2), 16); }
-    var adj = ADJ[((b(4) << 8) | b(5)) % ADJ.length];
-    var noun = NOUN[((b(6) << 8) | b(7)) % NOUN.length];
-    return adj + '-' + noun + ' ' + hash.slice(0, 4);
+    return window.mcCore!.displayName(hash);
   }
 
   function pagePath() {
@@ -1038,22 +1006,7 @@
      BOARD_CATS in the worker — which is why they now come from one PS source.
      The back room (adminsonly) is hidden here by courtesy; the server refuses
      everyone but admins on every path, which is the real lock. */
-  var CATS = (window.mcCore && window.mcCore.boardCatRows) || [
-    ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific. New here? ', 'Introduce yourself and say hello', 'community.html?topic=37'],
-    ['news', 'News', 'News of the Church and of the world.'],
-    ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
-    ['theology', 'Theology', 'All genres. Systematic and Dogmatic, Biblical and Exegetical, Historical and Patristic, Philosophical and Natural, etc.'],
-    ['philosophy', 'Philosophy', 'From Plato and Aristotle to Kant and Wittgenstein.'],
-    ['history', 'History', 'World, church, and national history. All of it.'],
-    ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
-    ['rc', 'Roman Catholic', 'In-house talk for Roman Catholics.'],
-    ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
-    ['lutheran', 'Confessional Lutheran', 'In-house talk for confessional Lutherans.'],
-    ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
-    ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Reformed Baptists are welcome to coexist here too.'],
-    ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
-    ['adminsonly', 'Admins only', 'The back room.'],
-  ];
+  var CATS = window.mcCore!.boardCatRows;
 
   /* A description with an optional trailing link, built as nodes so the
      link is real and everything else stays inert text. */
