@@ -12,6 +12,7 @@ import * as Faith from '../../purescript/output/Domain.Faith/index.js';
 import * as Profile from '../../purescript/output/Domain.Profile/index.js';
 import * as Dm from '../../purescript/output/Domain.Dm/index.js';
 import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
+import * as Fts from '../../purescript/output/Domain.Fts/index.js';
 
 const PAGES = [
   '/book.html',
@@ -1250,20 +1251,13 @@ async function postCountsFor(env, hashes) {
 
 const SEARCH_PER_PAGE = 20;
 
-/* Turn a user query into a safe FTS5 MATCH: pull out "quoted phrases" and bare
-   words, double any embedded quote, and wrap every token in quotes so each is a
-   literal term or phrase — no FTS5 operator (- * : ^ NEAR AND OR NOT parentheses)
-   can be injected. A bare word matches as a stemmed term; a quoted run matches as
-   an adjacency phrase. Capped at ten tokens; empty when nothing usable is left. */
+/* Turn a user query into a safe FTS5 MATCH. The logic — pull out "quoted phrases"
+   and bare words, double any embedded quote, wrap every token in quotes so no FTS5
+   operator (- * : ^ NEAR AND OR NOT parentheses) can be injected, cap at ten — is
+   single-sourced in Domain.Fts, which returns a `SafeMatch` whose only exit is
+   `unSafeMatch`. The injection guarantee lives in that type, not here. */
 function buildMatch(q) {
-  const tokens = [];
-  const re = /"([^"]*)"|(\S+)/g;
-  let m;
-  while ((m = re.exec(String(q || ''))) && tokens.length < 10) {
-    const raw = (m[1] !== undefined ? m[1] : m[2]).trim();
-    if (raw) tokens.push('"' + raw.replace(/"/g, '""') + '"');
-  }
-  return tokens.join(' ');
+  return Fts.unSafeMatch(Fts.buildMatch(String(q ?? '')));
 }
 
 /* Full-text search over the FORUM only. Live board rows are filtered in at query
@@ -3558,29 +3552,11 @@ function merecatThinkStripper() {
    truncated away. So merecat translates a question itself: drop the filler,
    keep up to sixteen informative tokens (user-quoted phrases preserved),
    and join with OR so bm25 ranks by how much of the MEANING a chunk
-   matches. Every token is double-quoted, so no FTS5 operator can ride in. */
-const MERECAT_STOP = new Set(('a about all an and any are as at be been but by can could did do does for from had has have ' +
-  'he her his how i if in into is it its just like me my no not of on one or our out over say says said she should so some ' +
-  'than that the their them then there these they this to under up us was we were what when where which who why will with ' +
-  'would you your').split(' '));
-
+   matches. Every token is double-quoted, so no FTS5 operator can ride in. The
+   stopword set, the sub-2-char/dedup filter, and the quoting are single-sourced
+   in Domain.Fts (a `SafeMatch`, injection-proof by construction). */
 function merecatMatch(q) {
-  const out = [];
-  const seen = new Set();
-  const re = /"([^"]*)"|([A-Za-z0-9À-ɏ'’]+)/g;
-  let m;
-  while ((m = re.exec(String(q || ''))) && out.length < 16) {
-    if (m[1] !== undefined) {
-      const p = m[1].trim();
-      if (p) out.push('"' + p.replace(/"/g, '""') + '"');
-      continue;
-    }
-    const w = m[2].toLowerCase().replace(/[’']/g, '');
-    if (w.length < 2 || MERECAT_STOP.has(w) || seen.has(w)) continue;
-    seen.add(w);
-    out.push('"' + w.replace(/"/g, '""') + '"');
-  }
-  return out.join(' OR ');
+  return Fts.unSafeMatch(Fts.merecatMatch(String(q ?? '')));
 }
 
 /* The phrase leg: when a question carries a quotation, its own word runs
