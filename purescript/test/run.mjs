@@ -15,6 +15,7 @@ import * as Access from '../output/Domain.Access/index.js';
 import * as Live from '../output/Domain.Live/index.js';
 import * as Fts from '../output/Domain.Fts/index.js';
 import * as Pager from '../output/Domain.Pager/index.js';
+import * as Board from '../output/Domain.Board/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -242,3 +243,12 @@ for (let total = 0; total <= 90; total++) for (const per of [1, 2, 5, 10, 20]) {
 }
 assert.deepEqual(Pager.pagerItems(0)(20)(1), [], 'single/empty page -> []');
 console.log(`pstest: Domain.Pager OK (${pagerN} windowing cases vs classic pagerPages)`);
+
+// --- Domain.Board: the category table (single source for worker CAT_META/BOARD_CATS + client CATS) ---
+assert.equal(Board.catRows.length, 14, '14 categories');
+assert.equal(Board.catKeys.length, 14);
+assert.deepEqual(Board.catKeys, Board.catRows.map((r) => r[0]), 'catKeys === row keys');
+assert.deepEqual(Board.catRows[0], ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific. New here? ', 'Introduce yourself and say hello', 'community.html?topic=37']);
+assert.deepEqual(Board.catRows[13], ['adminsonly', 'Admins only', 'The back room.']);
+assert.equal(Board.adminCat, 'board:adminsonly');
+console.log('pstest: Domain.Board OK (14 categories, keys, adminCat)');

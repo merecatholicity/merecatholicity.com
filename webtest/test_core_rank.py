@@ -79,6 +79,12 @@ SCRIPTURE_PROBE = r"""
         }).join('|');
       }
       return { big: s(500, 20, 10), two: s(40, 20, 1), none: s(10, 20, 1) };
+    })(),
+    board: (function () {
+      var r = window.mcCore.boardCatRows || [];
+      return { n: r.length, firstKey: r[0] && r[0][0], firstLabel: r[0] && r[0][1],
+        lastKey: r[13] && r[13][0], keys: (window.mcCore.boardCatKeys || []).join(','),
+        admin: window.mcCore.adminCat };
     })()
   };
 """
@@ -134,6 +140,13 @@ def main():
              (sc.get('pager') or {}).get('big') == '1|…|9|10*|11|…|25'
              and (sc.get('pager') or {}).get('two') == '1*|2'
              and (sc.get('pager') or {}).get('none') == ''),
+            ('mcCore.boardCatRows/Keys/adminCat (14 cats, pub first, adminsonly last)',
+             (sc.get('board') or {}).get('n') == 14
+             and (sc.get('board') or {}).get('firstKey') == 'pub'
+             and (sc.get('board') or {}).get('firstLabel') == 'Pub'
+             and (sc.get('board') or {}).get('lastKey') == 'adminsonly'
+             and (sc.get('board') or {}).get('admin') == 'board:adminsonly'
+             and (sc.get('board') or {}).get('keys', '').startswith('pub,news,offtopic')),
         ]
         return f.verdict(checks)
 

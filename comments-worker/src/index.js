@@ -13,6 +13,7 @@ import * as Profile from '../../purescript/output/Domain.Profile/index.js';
 import * as Dm from '../../purescript/output/Domain.Dm/index.js';
 import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
 import * as Fts from '../../purescript/output/Domain.Fts/index.js';
+import * as Board from '../../purescript/output/Domain.Board/index.js';
 
 const PAGES = [
   '/book.html',
@@ -27,15 +28,16 @@ const PAGES = [
 /* The Catholicity Board. A category is a virtual page key, a topic is a
    titled comment with no parent, a reply is a comment whose parent is the
    topic. Everything else, identity, screening, limits, moderation, is the
-   one pipeline all comments share. Keys must match CATS in comments.js. */
-const BOARD_CATS = ['pub', 'news', 'offtopic', 'theology', 'philosophy', 'history', 'indoeuropean', 'rc', 'eo', 'lutheran', 'anglican', 'presbyterian', 'prot', 'adminsonly'];
+   one pipeline all comments share. Single-sourced from Domain.Board (the same
+   table the client reads), so BOARD_CATS/CAT_META/CATS can no longer drift. */
+const BOARD_CATS = Board.catKeys;
 /* The back room: a category only admins can see, read, or write. Every public
    read excludes it outright (the board index, listings, topic views, search,
    author histories, post counts, feeds); admins reach it through the keyed
    POST /board/admin. Writes into it demand an admin identity, notifications
    from it reach admins alone, and a topic moved INTO it sends no courtesy DM
    (a retraction from public view, not a move the poster can follow). */
-const ADMIN_CAT = 'board:adminsonly';
+const ADMIN_CAT = Board.adminCat;
 
 function boardKey(raw) {
   const m = /^board:([a-z]+)$/.exec(String(raw || ''));
@@ -111,23 +113,9 @@ function withNames(row, posts) {
    the worker the single SERVED source so a native client fetches them instead of
    triplicating the constants; comments.js keeps its inline copies as a pre-load
    fallback (a later pass can have it read /config). Cat keys are validated
-   against BOARD_CATS so the two rosters cannot drift. */
-const CAT_META = [
-  ['pub', 'Pub', 'General discussion, for whatever fits nowhere more specific. New here? ', 'Introduce yourself and say hello', 'community.html?topic=37'],
-  ['news', 'News', 'News of the Church and of the world.'],
-  ['offtopic', 'Off Topic', 'Everything else, cheerfully off the point.'],
-  ['theology', 'Theology', 'All genres. Systematic and Dogmatic, Biblical and Exegetical, Historical and Patristic, Philosophical and Natural, etc.'],
-  ['philosophy', 'Philosophy', 'From Plato and Aristotle to Kant and Wittgenstein.'],
-  ['history', 'History', 'World, church, and national history. All of it.'],
-  ['indoeuropean', 'Indo-European Religion', 'Healendry, Germanic and Norse Christianity, pre-Christian Indo-European religion, Japhetic origins, and more.'],
-  ['rc', 'Roman Catholic', 'In-house talk for Roman Catholics.'],
-  ['eo', 'Eastern Orthodoxy', 'In-house talk for the Eastern Orthodox.'],
-  ['lutheran', 'Confessional Lutheran', 'In-house talk for confessional Lutherans.'],
-  ['anglican', 'High Anglican', 'In-house talk for high Anglicans.'],
-  ['presbyterian', 'Reformed Presbyterian', 'In-house talk for Reformed Presbyterians. Reformed Congregationalists and Reformed Baptists are welcome to coexist here too.'],
-  ['prot', 'Protestantism', 'For everyone the rooms above do not quite fit, e.g. ', 'the free churches', 'free-churches.html'],
-  ['adminsonly', 'Admins only', 'The back room.'],
-];
+   against BOARD_CATS so the two rosters cannot drift. Single-sourced from
+   Domain.Board.catRows, the same table the client renders. */
+const CAT_META = Board.catRows;
 const FAITH_LABELS = Object.fromEntries(Faith.faithList.map((f) => [f.code, f.label]));
 const EMOJI_PACKS = {
   memes: [['cry', 'emoji/memes/cry.webp'], ['pogging', 'emoji/memes/pogging.webp'], ['bonk', 'emoji/memes/bonk.webp'], ['catkiss', 'emoji/memes/catkiss.webp'], ['crythumbsup', 'emoji/memes/crythumbsup.webp'], ['catjam', 'emoji/memes/catjam.webp'], ['megareverse-1', 'emoji/memes/megareverse-1.webp'], ['shrug', 'emoji/memes/shrug.webp'], ['kekw', 'emoji/memes/kekw.webp'], ['boohoo', 'emoji/memes/boohoo.webp'], ['laughing-hard', 'emoji/memes/laughing-hard.webp'], ['bruh', 'emoji/memes/bruh.webp'], ['pepecringe', 'emoji/memes/pepecringe.webp'], ['kitty-happy', 'emoji/memes/kitty-happy.webp'], ['catsneeze', 'emoji/memes/catsneeze.webp'], ['cutecatstare', 'emoji/memes/cutecatstare.webp'], ['catsmile', 'emoji/memes/catsmile.webp'], ['catstare', 'emoji/memes/catstare.webp'], ['cat-laughing', 'emoji/memes/cat-laughing.webp'], ['soldjacat', 'emoji/memes/soldjacat.webp'], ['crycat', 'emoji/memes/crycat.webp'], ['bingus-shush', 'emoji/memes/bingus-shush.webp'], ['huhcat', 'emoji/memes/huhcat.webp'], ['catno', 'emoji/memes/catno.webp'], ['seriously', 'emoji/memes/seriously.webp'], ['cat-sleep', 'emoji/memes/cat-sleep.webp'], ['crisiscat', 'emoji/memes/crisiscat.webp'], ['huhcat-2', 'emoji/memes/huhcat-2.webp'], ['cat-kiss', 'emoji/memes/cat-kiss.webp'], ['catfunny', 'emoji/memes/catfunny.webp'], ['happy', 'emoji/memes/happy.webp'], ['laughing-cat', 'emoji/memes/laughing-cat.webp'], ['kitty-sad', 'emoji/memes/kitty-sad.webp']],
