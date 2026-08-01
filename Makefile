@@ -29,17 +29,29 @@ bundle: jscheck
 # (node_modules/.bin/purs) that spago compiles with — no vendored binary. The
 # compile lives in the npm `build:ps` script (spago finds purs on PATH), so both
 # `make bundle` and a bare `npm run build:js` are self-sufficient.
-.PHONY: psbuild pstest
+.PHONY: psbuild pstest tests
 # Compile purescript/src -> purescript/output (ESM). Delegates to the npm script
 # (single source), which wipes output/ for byte-reproducible codegen. `make
 # bundle` reaches this through `npm run build:js`.
 psbuild:
 	npm run build:ps
 
-# The PureScript pure-unit tests (Layer 1): a Node-native runner over the ESM
-# output — no browser, no framework. Layer 2 (headless parity) is webtest/.
+# The PureScript pure-unit tests (Layer 1), one file per Domain module under
+# tests/purescript/, run with Node's built-in runner over the compiled ESM.
+# A fast alias for the PureScript slice of `make tests`.
 pstest: psbuild
-	node purescript/test/run.mjs
+	node --test $$(find tests/purescript -name '*.test.mjs' | sort)
+
+# The full unit suite (Layer 1): PureScript + JS via Node's built-in runner
+# (node:assert), Python + the CSS/build invariants via stdlib unittest. Hermetic
+# and fast — no browser, no network. psbuild first so the compiled Domain output
+# the JS/PS tests import is fresh. Layer 2 (headless render parity) is webtest/;
+# the librarian backend regression is local/tests/. See tests/README.md.
+tests: psbuild
+	@echo "== PureScript + JS unit tests (node --test) =="
+	@node --test $$(find tests -name '*.test.mjs' | sort)
+	@echo "== Python + CSS unit tests (unittest) =="
+	@for f in $$(find tests -name 'test_*.py' | sort); do echo "-- $$f"; python3 "$$f" || exit 1; done
 
 # The only sanctioned way to deploy the comments worker: the guard runs first,
 # then psbuild so the worker's PureScript imports (Domain.*, Phase 6) resolve

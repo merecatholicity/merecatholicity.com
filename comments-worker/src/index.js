@@ -15,6 +15,13 @@ import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
 import * as Fts from '../../purescript/output/Domain.Fts/index.js';
 import * as Board from '../../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../../purescript/output/Domain.Emoji/index.js';
+// Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
+// extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
+// also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
+// there or client-side; imported here only what index.js calls directly.)
+import {
+  ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic,
+} from './pure.js';
 
 const PAGES = [
   '/book.html',
@@ -219,7 +226,18 @@ function normalizePage(raw) {
 
 /* Fails closed. A blip reaching siteverify refuses the post rather than
    crashing the worker or waving the post through unverified. */
-async function verifyTurnstile(env, token, ip) {
+async function verifyTurnstile(env, token, ip, key) {
+  /* TEST BYPASS (interactive regression kit, webtest/live_kit.py): a designated
+     throwaway test identity may skip Turnstile by presenting the shared secret as
+     its token, so the two-user cloakbrowser suite can drive real writes (headless
+     browsers cannot solve the production managed challenge). INERT unless BOTH
+     env secrets are set (MC_TEST_BYPASS + TEST_HASHES); gated to the listed
+     hashes; every other gate (rate-limit, AI screen, IP/identity blocks) still
+     applies. Without the secrets set this whole branch is dead code. */
+  if (env.MC_TEST_BYPASS && key && token === 'TEST:' + env.MC_TEST_BYPASS) {
+    const h = await sha256hex(key);
+    if ((env.TEST_HASHES || '').split(',').map((s) => s.trim()).includes(h)) return true;
+  }
   try {
     const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
       method: 'POST',
@@ -260,92 +278,11 @@ async function isTrusted(env, hash) {
   return !!row;
 }
 
-/* ---- IP normalization. A dual-stack user carries both an IPv4 and an IPv6
-   address, and their IPv6 interface identifier rotates daily (SLAAC privacy
-   extensions) while the /64 the ISP delegates stays fixed. So we ban and match
-   on a normalized key: the v4 address as-is, or the v6 /64 prefix. ---- */
-
-function ipFamily(ip) {
-  const s = String(ip || '');
-  if (s.indexOf(':') !== -1) return 6;
-  if (s.indexOf('.') !== -1) return 4;
-  return 0;
-}
-
-/* The eight hextets of a v6 address, each padded to four nibbles, or null. */
-function ipv6Groups(ip) {
-  let s = String(ip || '').trim().toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/%.*$/, '');
-  if (s.indexOf(':') === -1) return null;
-  const dbl = s.indexOf('::');
-  let head, tail;
-  if (dbl !== -1) {
-    head = s.slice(0, dbl) ? s.slice(0, dbl).split(':') : [];
-    tail = s.slice(dbl + 2) ? s.slice(dbl + 2).split(':') : [];
-  } else {
-    head = s.split(':');
-    tail = [];
-  }
-  const fill = 8 - head.length - tail.length;
-  if (fill < 0) return null;
-  const groups = head.concat(Array(fill).fill('0'), tail);
-  if (groups.length !== 8) return null;
-  for (const g of groups) if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
-  return groups.map((g) => g.padStart(4, '0'));
-}
-
-/* Canonical /64 prefix, e.g. 2605:59ca:39db:4308::/64, or null. */
-function ipv6Prefix64(ip) {
-  const g = ipv6Groups(ip);
-  if (!g) return null;
-  return g.slice(0, 4).map((h) => h.replace(/^0+(?=.)/, '')).join(':') + '::/64';
-}
-
-/* All 32 nibbles of a v6 address with no separators, for the .ip6.arpa name. */
-function ipv6Full(ip) {
-  const g = ipv6Groups(ip);
-  return g ? g.join('') : null;
-}
-
-/* The value stored in and matched against ip_bans: v4 verbatim, v6 as /64. */
-function ipKey(ip) {
-  const fam = ipFamily(ip);
-  if (fam === 4) return String(ip).trim();
-  if (fam === 6) return ipv6Prefix64(ip) || String(ip).trim();
-  return String(ip || '').trim();
-}
-
-/* Turn an admin-supplied string into a ban key: a raw address is normalized,
-   an already-stored v6 /64 key passes through so unbanning it still matches. */
-function toBanKey(s) {
-  s = String(s || '').trim();
-  if (looksLikeIp(s)) return ipKey(s);
-  if (/^[0-9a-f:]+::\/64$/i.test(s)) return s.toLowerCase();
-  return null;
-}
-
-/* Carrier-grade NAT (100.64.0.0/10) is shared by many customers, so a v4 ban
-   there can hit innocents; the drawer flags it before the admin commits. */
-function isSharedV4(ip) {
-  const m = /^(\d{1,3})\.(\d{1,3})\./.exec(String(ip || ''));
-  if (!m) return false;
-  return +m[1] === 100 && +m[2] >= 64 && +m[2] <= 127;
-}
-
-/* The reverse-DNS query name for an address, or null. */
-function reverseDnsName(ip) {
-  const fam = ipFamily(ip);
-  if (fam === 4) {
-    const p = String(ip).trim().split('.');
-    if (p.length !== 4) return null;
-    return p.reverse().join('.') + '.in-addr.arpa';
-  }
-  if (fam === 6) {
-    const full = ipv6Full(ip);
-    if (!full) return null;
-    return full.split('').reverse().join('.') + '.ip6.arpa';
-  }
-  return null;
-}
+/* IP normalization + ban-key helpers (ipFamily/ipv6Groups/ipv6Prefix64/
+   ipv6Full/ipKey/toBanKey/isSharedV4/reverseDnsName/looksLikeIp) live in
+   src/pure.js, imported at the top — extracted so they can be unit-tested in
+   plain Node. A dual-stack user's v6 interface id rotates daily while the /64
+   stays fixed, so bans match on a normalized key (v4 verbatim, v6 as /64). */
 
 /* Reverse-DNS one address via Cloudflare DoH JSON. Best-effort: the PTR
    hostname without its trailing dot, or null on any failure or timeout. */
@@ -567,7 +504,7 @@ async function handlePost(request, env, ctx) {
   /* Control characters other than newline and tab are nothing a person types. */
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
 
-  if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
 
@@ -1629,7 +1566,7 @@ async function handleProfileSave(request, env) {
   if (!success) return json({ ok: false, error: 'Too many changes at once. Wait a minute and try again.' }, 429);
   /* Same Turnstile gate as posting: a profile is public text a bot could
      otherwise write with a self-made key and no challenge. */
-  if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
   const nick = cleanField(data.nick, MAX_NICK);
@@ -1789,7 +1726,7 @@ async function handleDmSend(request, env, ctx) {
   const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
     .bind(to, me).first();
   const held = blockRow ? 1 : 0;
-  if (!(await verifyTurnstile(env, String(data.token || ''), ip))) {
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
   /* An optional media attachment: the client uploaded the ciphertext to R2 first
@@ -2818,7 +2755,7 @@ async function handleAvatarUpload(request, env) {
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
-  if (!(await verifyTurnstile(env, String(form.get('token') || ''), ip))) {
+  if (!(await verifyTurnstile(env, String(form.get('token') || ''), ip, String(form.get('key') || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
   const file = form.get('avatar');
@@ -3178,10 +3115,6 @@ async function handleDeleteUser(request, env) {
     .bind(hash, Math.floor(Date.now() / 1000)).run();
   for (const r of affected.results) await refreshTopicStats(env, r.topic);
   return json({ ok: true }, 200);
-}
-
-function looksLikeIp(s) {
-  return /^[0-9a-fA-F:.]{3,45}$/.test(s) && (s.indexOf('.') !== -1 || s.indexOf(':') !== -1);
 }
 
 /* Ban or unban IPs. Accepts a single `ip` (the manual list page) or an `ips`
@@ -5302,16 +5235,9 @@ async function handleLive(request, env) {
   return env.HUB.get(env.HUB.idFromName('board')).fetch(request);
 }
 
-/* The back-room privacy gate for live events, in ONE place: nothing whose cat is
-   the admins-only room (or whose scopes name it) ever crosses the anonymous
-   board socket. Every emit path runs through this, so a future emit site cannot
-   leak the back room by forgetting a local guard. A subscriber fan-out
-   (webhook/Discord/etc.) would hook in here too, once, without touching any
-   forum handler. */
-function boardEventPublic(event) {
-  return !!event && event.cat !== 'adminsonly' &&
-    !(Array.isArray(event.scopes) && event.scopes.includes('cat:adminsonly'));
-}
+/* boardEventPublic — the back-room privacy gate for live events — lives in
+   src/pure.js (imported at top): the ONE predicate every emit path runs through,
+   so a future emit site cannot leak the admins-only room. sendToHub is its use. */
 
 /* The single send primitive: EVERY board event reaches the hub through here, so
    the back-room privacy gate is one predicate in one place and a future
