@@ -13,6 +13,8 @@
    the un-bundled docs/comments.js delegates to via `if (window.mcCore) …`. */
 
 import * as Rank from '../purescript/output/Domain.Rank/index.js';
+import * as Scripture from '../purescript/output/Domain.Scripture/index.js';
+import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
    docs/comments.js rankFor returns. `n | 0` guarantees the Int the PS side
@@ -21,3 +23,13 @@ export const rankFor = (n) => Rank.rankLabel(Rank.rankFor(n | 0));
 
 /* rankLine(n) -> "<label> · <n> post(s)". */
 export const rankLine = (n) => Rank.rankLine(n | 0);
+
+/* bibleSrc: the Scripture autolink regex fragment, byte-identical to the former
+   richtext.js BIBLE.src (golden-tested), spliced into the inline-markdown regex. */
+export const bibleSrc = Scripture.bibleSrc;
+
+/* bookSlug(key) -> canonical KJV slug string, or null. `key` is an already-
+   normalized reference (lowercase, whitespace runs collapsed) — the boundary op
+   the caller does on the regex match. The PS `Maybe` is erased to `slug | null`
+   here, at the one membrane. */
+export const bookSlug = (key) => Maybe.maybe(null)((s) => s)(Scripture.bookSlug(key));

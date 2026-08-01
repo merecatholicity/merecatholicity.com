@@ -40,19 +40,39 @@ PROBE = r"""
     mismatches: mism };
 """
 
+# Domain.Scripture (Phase 1a): render real references through the bundle's
+# mcRich.fillBody — which now sources its regex + slug lookup from Core — and
+# confirm the autolinks are unchanged, plus the raw bibleSrc/bookSlug shape.
+SCRIPTURE_PROBE = r"""
+  var d = document.createElement('div');
+  window.mcRich.fillBody(d, 'See Rom 8:28-30 and John 3:16 and Nope 1:1 here.', false);
+  var links = Array.prototype.slice.call(d.querySelectorAll('a.scripture-link')).map(function (a) {
+    return { href: a.getAttribute('href'), text: a.textContent };
+  });
+  return {
+    bibleSrcLen: (window.mcCore.bibleSrc || '').length,
+    slug1cor: window.mcCore.bookSlug('1 cor'),
+    slugNope: window.mcCore.bookSlug('nope'),
+    links: links,
+    plainNope: d.textContent.indexOf('Nope 1:1') !== -1
+  };
+"""
+
 
 def main():
     with Flow(port=9571) as f:
         f.goto('credo.html?app=1')
-        if not f.wait('window.mcCore && typeof window.mcCore.rankLine === "function"', timeout=20):
+        if not f.wait('window.mcCore && window.mcRich && typeof window.mcCore.rankLine === "function"', timeout=20):
             print('FAIL window.mcCore never appeared (bundle did not boot?)')
             return 2
         r = f.js1('return (function(){' + PROBE + '})();') or {}
-        f.assert_console_clean('core-rank')
+        sc = f.js1('return (function(){' + SCRIPTURE_PROBE + '})();') or {}
+        f.assert_console_clean('core')
         samples = r.get('samples') or {}
         if r.get('mismatches'):
             for m in r['mismatches']:
                 print('  mismatch:', m)
+        hrefs = [l.get('href') for l in (sc.get('links') or [])]
         checks = [
             ('window.mcCore populated from the bundle', bool(r.get('ok'))),
             ('mcCore shape (rankFor/rankLine are functions)', bool(r.get('shape'))),
@@ -60,6 +80,13 @@ def main():
             ('rankLine(1) singular "post"', samples.get('r1') == 'Novice · 1 post'),
             ('rankFor(5000) == "Treasury of Wisdom"', samples.get('r5000') == 'Treasury of Wisdom'),
             ('PS == classic across -5..6000 (no mismatches)', r.get('mismatches') == []),
+            ('scripture: Rom 8:28-30 → kjv.html#romans-8-28', 'kjv.html#romans-8-28' in hrefs),
+            ('scripture: John 3:16 → kjv.html#john-3-16', 'kjv.html#john-3-16' in hrefs),
+            ('scripture: only the 2 known refs link (Nope stays plain)',
+             len(sc.get('links') or []) == 2 and bool(sc.get('plainNope'))),
+            ('mcCore.bibleSrc is 2267 chars', sc.get('bibleSrcLen') == 2267),
+            ("mcCore.bookSlug('1 cor') == '1-corinthians'", sc.get('slug1cor') == '1-corinthians'),
+            ("mcCore.bookSlug('nope') == null", sc.get('slugNope') is None),
         ]
         return f.verdict(checks)
 
