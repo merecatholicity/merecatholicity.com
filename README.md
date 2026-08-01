@@ -79,9 +79,6 @@ app/             The Lit app shell (shell.js + views/ + store.js + api.js + rich
                  bundled by esbuild into docs/app.js. Lit is an npm dependency (imported
                  as 'lit'), bundled into app.js — same-origin, so the CSP is satisfied.
 
-vendor/          Large binaries the npm toolchain doesn't fetch (the PureScript compiler).
-                 Lit used to be vendored here; it is now an npm dependency.
-
 comments-worker/ Cloudflare Worker: comments, forum, DMs, notifications, profiles,
                  moderation, AND merecat. Routes /api/comments* and /api/merecat*.
 contact-worker/  Cloudflare Worker: the contact form (contact-api.merecatholicity.com).
@@ -186,20 +183,20 @@ command changed). `app/shell.js` exposes it as `window.mcCore`; the Lit views im
 `if (window.mcCore) …`.
 
 ```sh
-make purs      # fetch the pinned, SHA-256-checksummed purs binary into vendor/purs/  (once)
 make psbuild   # rm -rf purescript/output; compile purescript/src -> purescript/output (ESM)
 make pstest    # run the Node-native pure-unit tests over the compiled output
-make bundle    # now runs psbuild, then esbuild app/ -> docs/app.js
+make bundle    # runs psbuild, then esbuild app/ -> docs/app.js
 ```
 
-The compiler is **vendored** (npm-12 blocks the `purescript` package's install-script, so
-`make purs` fetches a pinned tarball + checks its SHA-256, mirroring the vendored Lit and
-exact-pinned esbuild); `spago` is a clean pure-JS devDependency that only resolves deps and
-shells out to the vendored `purs`. Codegen is deterministic (pinned `purs` + pinned package
-set in `purescript/spago.yaml` + the `rm -rf output` guard), so the usual rule holds: **any
-`docs/app.js` byte change bumps `app.js?v=N` in `docs/nav.js`.** `purescript/output/` and
-`vendor/purs/` are git-ignored; only the inlined `docs/app.js` is committed. eslint lints
-`app/core.js` and the FFI `.js` under `purescript/src/`, and ignores `purescript/output/`.
+The `purs` compiler and `spago` are **npm devDependencies** restored by `npm ci`, like the
+rest of the toolchain. npm-12 blocks the `purescript` package's install-script by default, so
+its approval is committed in `package.json`'s `allowScripts`; `npm ci` then materializes the
+pinned binary (`node_modules/.bin/purs`, `purescript@0.15.16`) that `spago` compiles with.
+Codegen is deterministic (pinned `purs` + pinned package set in `purescript/spago.yaml` + the
+`rm -rf output` guard), so the usual rule holds: **any `docs/app.js` byte change bumps
+`app.js?v=N` in `docs/nav.js`.** `purescript/output/` is git-ignored; only the inlined
+`docs/app.js` is committed. eslint lints `app/core.js` and the FFI `.js` under
+`purescript/src/`, and ignores `purescript/output/`.
 
 ### Our book
 
@@ -306,7 +303,6 @@ python webtest/test_topic_search.py       # per-slice batteries (store, board, r
 | `make content` | Content pages (`content/` → `docs/`) |
 | `make menu` | Regenerate nav from `scripts/nav.yml`, then rebuild |
 | `make css` | Build `styles/main.css` (Tailwind) → `docs/style.css` |
-| `make purs` | Fetch the pinned `purs` compiler into `vendor/purs/` (once) |
 | `make psbuild` | Compile `purescript/src/` → `purescript/output/` (ESM) |
 | `make pstest` | Run the PureScript pure-unit tests |
 | `make bundle` | Compile PureScript, then bundle `app/` → `docs/app.js` (esbuild) |

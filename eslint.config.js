@@ -30,11 +30,11 @@ const browserGlobals = {
   nacl: 'readonly',   // vendored tweetnacl.min.js (E2E DM crypto), loaded on demand
 };
 export default [
-  // Generated PureScript codegen and the vendored compiler binary are never
-  // linted (see PURESCRIPT.md). The hand-written barrel app/core.js is covered
-  // by the app/**/*.js block below; FFI .js under purescript/src/ gets its own
-  // block when the first one lands (Phase 4+).
-  { ignores: ['purescript/output/**', 'vendor/**'] },
+  // Generated PureScript codegen is never linted (see PURESCRIPT.md). The
+  // hand-written barrel app/core.js is covered by the app/**/*.js block below;
+  // FFI .js under purescript/src/ gets its own block when the first one lands
+  // (Phase 4+).
+  { ignores: ['purescript/output/**'] },
   {
     files: ['comments-worker/src/*.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: workerGlobals },
