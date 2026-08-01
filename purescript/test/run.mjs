@@ -9,6 +9,7 @@ import * as Rank from '../output/Domain.Rank/index.js';
 import * as Scripture from '../output/Domain.Scripture/index.js';
 import * as Profile from '../output/Domain.Profile/index.js';
 import * as Faith from '../output/Domain.Faith/index.js';
+import * as Pseudonym from '../output/Domain.Pseudonym/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -97,3 +98,10 @@ assert.equal(flabel('indo-european'), 'pre-Christian Indo European');
 assert.equal(flabel('seeker'), 'Seeker');
 assert.equal(flabel('bogus'), '', 'unknown faith -> no label');
 console.log('pstest: Domain.Faith OK (3 codes, ordered, labels)');
+
+// --- Domain.Pseudonym: the "Adjective-Noun xxxx" derivation ---
+assert.equal(Pseudonym.displayName('d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6'), 'Constant-Almond d191');
+assert.equal(Pseudonym.displayName('0000000000000000'), 'Patient-Cedar 0000');
+assert.equal(Pseudonym.displayName('ffffffffffffffff'), 'Green-Wheat ffff');
+assert.equal(Pseudonym.displayName('abcdef0123456789aa'), 'Swift-Field abcd');
+console.log('pstest: Domain.Pseudonym OK (displayName parity)');

@@ -63,7 +63,8 @@ SCRIPTURE_PROBE = r"""
     zeroRef: vp('rom', '0', '0', null),
     profileLimits: window.mcCore.profileLimits,
     faithNicene: window.mcCore.faithLabel('nicene'),
-    faithsLen: (window.mcCore.faiths || []).length
+    faithsLen: (window.mcCore.faiths || []).length,
+    pseudo: window.mcCore.displayName('ffffffffffffffff')
   };
 """
 
@@ -105,6 +106,8 @@ def main():
              and (sc.get('profileLimits') or {}).get('sig') == 200),
             ('mcCore.faithLabel + faiths (3 ordered)',
              sc.get('faithNicene') == 'Nicene' and sc.get('faithsLen') == 3),
+            ('mcCore.displayName parity (ffff… → Green-Wheat ffff)',
+             sc.get('pseudo') == 'Green-Wheat ffff'),
         ]
         return f.verdict(checks)
 

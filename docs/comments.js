@@ -124,6 +124,7 @@
     'Vineyard','Cypress','Juniper','Almond','Fig','Palm','Elm','Ash'];
 
   function displayName(hash) {
+    if (window.mcCore) return window.mcCore.displayName(hash);
     function b(i) { return parseInt(hash.slice(i * 2, i * 2 + 2), 16); }
     var adj = ADJ[((b(4) << 8) | b(5)) % ADJ.length];
     var noun = NOUN[((b(6) << 8) | b(7)) % NOUN.length];

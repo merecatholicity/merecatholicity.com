@@ -10,6 +10,7 @@ package:
     - prelude
     - arrays
     - either
+    - integers
     - maybe
     - nullable
     - strings
