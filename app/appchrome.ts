@@ -370,6 +370,29 @@ class McSettings extends LitElement {
     // iPadOS 13+ reports as MacIntel; the touch-point count distinguishes it.
     return /iphone|ipad|ipod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
+  /* Which browser we're in, precisely enough to give the RIGHT install steps.
+     On iOS this matters more than anywhere: only Safari can install a real,
+     push-capable web app — Chrome/Firefox/Edge/Opera there run on WebKit and
+     produce only a bookmark (no notifications, an Apple limitation). Brave on
+     iOS masquerades as Safari in its UA and is not separable, so it falls into
+     'ios-safari' and its note carries the "if that doesn't work, use Safari"
+     caveat. */
+  _browser() {
+    const ua = navigator.userAgent || '';
+    if (this._isIOS()) {
+      if (/CriOS/.test(ua)) return 'ios-chrome';
+      if (/FxiOS/.test(ua)) return 'ios-firefox';
+      if (/EdgiOS/.test(ua)) return 'ios-edge';
+      if (/OPiOS|OPT\//.test(ua)) return 'ios-opera';
+      return 'ios-safari';
+    }
+    if (/Firefox\//.test(ua)) return 'firefox';
+    if (/Edg\//.test(ua)) return 'edge';
+    if (/OPR\//.test(ua)) return 'opera';
+    if (/Safari\//.test(ua) && !/Chrome|Chromium|CriOS/.test(ua)) return 'safari';   // desktop Safari
+    if (/Chrome|Chromium/.test(ua)) return 'chrome';
+    return 'other';
+  }
   _pushSupported() {
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   }
@@ -557,28 +580,55 @@ class McSettings extends LitElement {
           </div>`) : html`<p style="opacity:0.6;margin:0.2rem 0">Nobody here.</p>`)}
       </div>` : ''}`;
   }
-  /* "Add to Home Screen": the right control per platform. Android/desktop Chrome
-     get the real install prompt; iOS Safari (no beforeinstallprompt) gets the
-     Share -> Add to Home Screen instructions; anything else, a friendly nudge.
-     Hidden once installed (standalone). */
+  /* Install the app — a real affordance for EVERY platform, from the gear.
+     Android / desktop Chrome & Edge fire beforeinstallprompt, so they get the
+     one-tap native button. Everyone else (iOS Safari, iOS non-Safari, desktop
+     Safari, Firefox, and the long tail) gets the exact, browser-correct steps
+     — no dead "open it somewhere else" hand-wave. Hidden once installed. */
   _homeScreenSection() {
-    const noteStyle = 'padding:0.5rem 0.95rem 0.7rem;font-size:0.92em;opacity:0.8;line-height:1.5';
+    const noteStyle = 'padding:0.5rem 0.95rem 0.7rem;font-size:0.92em;opacity:0.85;line-height:1.55';
     if (this._isStandalone()) {
       return html`<h3 class="mc-set-sec">App</h3>
         <div class="mc-set-note" style=${noteStyle}>Installed ✓ — you're using merecatholicity as an app.</div>`;
     }
-    return html`<h3 class="mc-set-sec">Add to Home Screen</h3>
-      ${this.canInstall ? html`
+    const heading = html`<h3 class="mc-set-sec">Install the app</h3>`;
+    // The one-tap path: the browser handed us a real install prompt.
+    if (this.canInstall) {
+      return html`${heading}
         <button class="mc-set-row mc-set-btn" @click=${() => this._install()}>
-          <span>Add to Home Screen<small>Install merecatholicity as an app</small></span><span class="mc-set-go">›</span></button>`
-      : this._isIOS() ? html`
-        <div class="mc-set-note" style=${noteStyle}>Tap the Share button
-          <span aria-hidden="true" style="display:inline-block;transform:translateY(2px)">⎋</span>
-          at the bottom of Safari, then choose <strong>Add to Home Screen</strong>. Open merecatholicity from
-          its new icon — that's what lets you turn on notifications.</div>`
-      : html`
-        <div class="mc-set-note" style=${noteStyle}>Open this site in Chrome, Edge, or Safari and choose
-          <strong>Add to Home Screen</strong> (or <strong>Install</strong>) from the browser menu.</div>`}`;
+          <span>Install this app<small>Adds merecatholicity to your home screen</small></span>
+          <span class="mc-set-go">›</span></button>`;
+    }
+    const share = html`<span aria-hidden="true" style="display:inline-block;transform:translateY(2px)">⎋</span>`;
+    let steps;
+    switch (this._browser()) {
+      case 'ios-safari':
+        steps = html`Tap the Share button ${share} in Safari's toolbar, then choose
+          <strong>Add to Home Screen</strong>. Open merecatholicity from its new icon — that's what unlocks
+          notifications on iPhone and iPad. <em>Using Brave, Chrome or another browser? Open the site in
+          <strong>Safari</strong> first — only Safari can install it with notifications.</em>`;
+        break;
+      case 'ios-chrome': case 'ios-firefox': case 'ios-edge': case 'ios-opera':
+        steps = html`On iPhone and iPad the app installs from <strong>Safari</strong>. Open
+          <strong>merecatholicity.com in Safari</strong>, tap Share ${share} → <strong>Add to Home Screen</strong>,
+          then open it from its icon. (Chrome, Brave, Firefox and Edge on iOS can't install web apps or
+          receive notifications — that's an Apple limitation, not ours.)`;
+        break;
+      case 'safari':
+        steps = html`In Safari, open the <strong>File</strong> menu → <strong>Add to Dock</strong>
+          (or the Share button ${share} → <strong>Add to Dock</strong>). merecatholicity then opens in its
+          own window like an app.`;
+        break;
+      case 'firefox':
+        steps = html`Firefox on the desktop doesn't support installing web apps. To install merecatholicity,
+          open it in <strong>Chrome</strong>, <strong>Edge</strong>, or <strong>Safari</strong> and use their
+          install option.`;
+        break;
+      default:
+        steps = html`Look for <strong>Install merecatholicity</strong> in your browser's menu, or the install
+          icon in the address bar. On a phone, use <strong>Add to Home Screen</strong>.`;
+    }
+    return html`${heading}<div class="mc-set-note" style=${noteStyle}>${steps}</div>`;
   }
   /* The push toggle, guarded: unsupported browsers and iOS-not-installed get a
      note instead of a dead switch. */
@@ -588,9 +638,9 @@ class McSettings extends LitElement {
       return html`<div class="mc-set-note" style=${noteStyle}>Your browser doesn't support push notifications.</div>`;
     }
     if (this._isIOS() && !this._isStandalone()) {
-      return html`<div class="mc-set-note" style=${noteStyle}>To get notifications on iPhone or iPad, first
-        <strong>Add to Home Screen</strong> (above), then open merecatholicity from its icon and come back
-        here to turn them on.</div>`;
+      return html`<div class="mc-set-note" style=${noteStyle}>Notifications on iPhone and iPad work only from the
+        installed app. Use <strong>Install the app</strong> above (in <strong>Safari</strong>) to add it to your
+        home screen, then open merecatholicity from its icon and come back here to turn them on.</div>`;
     }
     const note = this.pushBusy ? 'Working…'
       : (this.pushMsg || (this.pushOn ? 'On — notified even with the site closed' : 'Off — get notified even with the site closed'));
