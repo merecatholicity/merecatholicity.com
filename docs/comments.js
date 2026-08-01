@@ -5120,20 +5120,23 @@
       likeBtn.title = liked ? 'Unlike this post' : 'Like this post';
     }
     renderLike();
+    var likeGen = 0;
     likeBtn.addEventListener('click', function (e) {
       e.preventDefault();
       if (!state.myHash) { if (window.mcOnboard) window.mcOnboard(); return; }
       var want = !liked;
+      var myGen = ++likeGen;   // only the latest click's response paints (no out-of-order desync)
       liked = want; likeN = Math.max(0, likeN + (want ? 1 : -1)); renderLike();
       fetch(API + '/wall/like', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: state.key, post: p.id, like: want }) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
+          if (myGen !== likeGen) return;   // a newer click superseded this one
           if (d && d.ok) { liked = !!d.liked; likeN = Number(d.likes) || 0; }
           else { liked = !want; likeN = Math.max(0, likeN + (want ? -1 : 1)); }
           renderLike();
         })
-        .catch(function () { liked = !want; likeN = Math.max(0, likeN + (want ? -1 : 1)); renderLike(); });
+        .catch(function () { if (myGen !== likeGen) return; liked = !want; likeN = Math.max(0, likeN + (want ? -1 : 1)); renderLike(); });
     });
     foot.appendChild(likeBtn);
     var cn = Number(p.comments) || 0;
