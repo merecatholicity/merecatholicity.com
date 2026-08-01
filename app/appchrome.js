@@ -190,10 +190,56 @@ class McSheet extends LitElement {
     const body = this.querySelector('.mc-sheet-body');
     if (body && this._node && body.firstChild !== this._node) { body.textContent = ''; body.appendChild(this._node); }
   }
+  /* Swipe-down-to-dismiss. A downward drag that starts at the top of the sheet
+     (so it never fights content scrolling) drags the panel with the finger; a far
+     enough pull or a quick flick lets it go, otherwise it snaps back. Tapping the
+     scrim or the grip still closes it as before. */
+  dragStart(e) {
+    const sheet = e.currentTarget;
+    if (sheet.scrollTop > 0) return;                     // let the content scroll
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    this._drag = { sheet, y0: e.clientY, y: e.clientY, t: e.timeStamp || 0, dy: 0, vy: 0, active: false };
+    this._pm = (ev) => this.dragMove(ev);
+    this._pu = (ev) => this.dragEnd(ev);
+    document.addEventListener('pointermove', this._pm, { passive: false });
+    document.addEventListener('pointerup', this._pu);
+    document.addEventListener('pointercancel', this._pu);
+  }
+  dragMove(e) {
+    const d = this._drag; if (!d) return;
+    const dy = e.clientY - d.y0;
+    if (!d.active) {
+      if (d.sheet.scrollTop > 0) { this.dragCleanup(); return; }  // scrolled — hand back
+      if (dy > 5) d.active = true; else return;                    // only a real downward pull
+    }
+    e.preventDefault();
+    d.dy = Math.max(0, dy);
+    d.sheet.style.transition = 'none';
+    d.sheet.style.transform = 'translateY(' + d.dy + 'px)';
+    const dt = Math.max(1, (e.timeStamp || 0) - d.t);
+    d.vy = (e.clientY - d.y) / dt; d.y = e.clientY; d.t = e.timeStamp || 0;
+  }
+  dragEnd() {
+    const d = this._drag; this.dragCleanup();
+    if (!d || !d.active) return;
+    if (d.dy > 90 || d.vy > 0.5) {           // far enough, or a quick flick — dismiss
+      d.sheet.style.transition = 'transform 0.2s ease-out';
+      d.sheet.style.transform = 'translateY(100%)';
+      setTimeout(() => { this.close(); d.sheet.style.transition = ''; d.sheet.style.transform = ''; }, 190);
+    } else {                                  // snap back to the CSS resting position
+      d.sheet.style.transition = ''; d.sheet.style.transform = '';
+    }
+  }
+  dragCleanup() {
+    if (this._pm) document.removeEventListener('pointermove', this._pm);
+    if (this._pu) { document.removeEventListener('pointerup', this._pu); document.removeEventListener('pointercancel', this._pu); }
+    this._pm = this._pu = null; this._drag = null;
+  }
   render() {
     return html`
       <div class=${'mc-sheet-scrim' + (this.open ? ' on' : '')} @click=${() => this.close()}></div>
-      <section class=${'mc-sheet' + (this.open ? ' on' : '')} role="dialog" aria-modal="true" aria-label=${this.heading || 'Sheet'}>
+      <section class=${'mc-sheet' + (this.open ? ' on' : '')} role="dialog" aria-modal="true" aria-label=${this.heading || 'Sheet'}
+        @pointerdown=${(e) => this.dragStart(e)}>
         <button class="mc-sheet-grip" @click=${() => this.close()} aria-label="Close"></button>
         ${this.heading ? html`<h2 class="mc-sheet-head">${this.heading}</h2>` : ''}
         <div class="mc-sheet-body"></div>
@@ -296,10 +342,10 @@ customElements.define('mc-settings', McSettings);
    (CSS-gated). The dropdown closes on outside-click, Escape, AND any soft-nav
    (the mc-navigate signal) so a chosen link never loads behind an open menu. */
 class McDeskbar extends LitElement {
-  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false } };
-  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; }
+  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false } };
+  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; }
   createRenderRoot() { return this; }
-  sync() { this.notif = badgeCount('notif'); this.canBack = history.length > 1; }
+  sync() { this.notif = badgeCount('notif'); this.canBack = history.length > 1; this.title = pageTitle(); }
   connectedCallback() {
     super.connectedCallback();
     this._onDoc = (e) => { if (this.menu && !e.target.closest('.mc-db-acct')) this.menu = false; };
@@ -331,10 +377,14 @@ class McDeskbar extends LitElement {
         <button class="mc-db-ico" @click=${(e) => this.goFwd(e)} aria-label="Forward" title="Forward">${ICON.forward}</button>
       </div>
       <a class="mc-db-brand" href="index.html" aria-label="Home">${ICON.cross}<span class="mc-db-word">Mere Catholicity</span></a>
-      <form class="mc-db-search" @submit=${(e) => this.search(e)} role="search">
-        <span class="mc-db-searchico">${ICON.search}</span>
-        <input type="search" placeholder="Search the board…" aria-label="Search the board">
-      </form>
+      ${onCommunity()
+        ? html`<form class="mc-db-search" @submit=${(e) => this.search(e)} role="search">
+            <span class="mc-db-searchico">${ICON.search}</span>
+            <input type="search" placeholder="Search the board…" aria-label="Search the board">
+          </form>`
+        : (activeTab() === 'home'
+            ? html`<span class="mc-db-center"></span>`
+            : html`<div class="mc-db-center mc-db-title" title=${this.title}>${this.title}</div>`)}
       <nav class="mc-db-cluster" aria-label="Account">
         <a class="mc-db-ico" href="community.html?notifications=1" aria-label="Notifications" title="Notifications">${ICON.bell}${badge(this.notif)}</a>
         <div class="mc-db-acct">
