@@ -97,15 +97,23 @@
   // Monthly: the full backup/prune chain. Hourly: sweep expired DMs + their media.
   "triggers": { "crons": ["0 0 1 * *", "0 * * * *"] },
   "ratelimits": [
-    { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
-    // Reads are cached and cheap; 40/min/IP is comfortable for a member clicking
-    // through forum pages (topic pages + the two background badge polls all draw
-    // from this one bucket) while still capping a scraper. Raised from 15 after a
-    // reader hit "topic could not be loaded" paging quickly through a thread.
-    { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 40, "period": 60 } },
+    // Writes. These pass Turnstile + AI moderation before they land, so the
+    // limiter is only an abuse backstop, not the primary gate. 30/min/IP lets an
+    // engaged member start a topic and fire off a burst of replies/edits/DMs
+    // without ever meeting a wall; a spam flood still trips it. Policy: err
+    // generous on the free tier, tighten later if abused (rate-limit bindings
+    // are free — they don't consume the request/D1/AI budgets themselves).
+    { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    // Reads are cached and cheap; ONE bucket serves topic pages, the two
+    // background badge polls, merecat resume/reconcile polling, AND the reader's
+    // own clicks. 120/min/IP gives generous headroom so quick page-hopping,
+    // resume polling, and normal browsing never collide. Keep the client's
+    // READ_CEIL (comments.ts) in step with this number.
+    { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } },
     // WebSocket connect throttle (its own bucket, NOT shared with READ_LIMIT) so
-    // a reconnect storm can never starve normal reads.
-    { "name": "CONNECT_LIMIT", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } }
+    // a reconnect storm can never starve normal reads. Generous enough for a
+    // flaky mobile link cycling board + chat sockets across a few page hops.
+    { "name": "CONNECT_LIMIT", "namespace_id": "1003", "simple": { "limit": 40, "period": 60 } }
   ],
   "vars": {
     // "ai": Llama Guard screens each comment, clean ones publish instantly,
@@ -163,9 +171,9 @@
   "env": {
     "staging": {
       "ratelimits": [
-        { "name": "POST_LIMIT", "namespace_id": "9001", "simple": { "limit": 10, "period": 60 } },
-        { "name": "READ_LIMIT", "namespace_id": "9002", "simple": { "limit": 40, "period": 60 } },
-        { "name": "CONNECT_LIMIT", "namespace_id": "9003", "simple": { "limit": 10, "period": 60 } }
+        { "name": "POST_LIMIT", "namespace_id": "9001", "simple": { "limit": 30, "period": 60 } },
+        { "name": "READ_LIMIT", "namespace_id": "9002", "simple": { "limit": 120, "period": 60 } },
+        { "name": "CONNECT_LIMIT", "namespace_id": "9003", "simple": { "limit": 40, "period": 60 } }
       ],
       "vars": {
         "MODERATION_MODE": "ai",

@@ -505,7 +505,7 @@
 
   /* ---- The shared read budget: one brain over every polling limb. ----
      Each quiet endpoint draws from a single per-IP server bucket (READ_LIMIT,
-     fifteen reads a minute). A page can keep several background polls alive at
+     120 reads a minute). A page can keep several background polls alive at
      once — a resume watching a thread grow, the reconciler guarding a live
      answer, a recovery poll after a dropped stream, the two unread badges —
      and the reader's own clicks (opening Past conversations, a thread) draw
@@ -519,7 +519,7 @@
      ledger empty while the server's window lives on, so the reactive ease (any
      429, from any poller or click) is the true safety net; the ledger only
      smooths the steady state. */
-  var READ_CEIL = 15;                 // the server bucket: reads per minute per IP
+  var READ_CEIL = 120;                // the server bucket: reads per minute per IP (keep in step with wrangler.jsonc READ_LIMIT)
   var readStamps: any[] = [];                // times of recent polled reads
   var readEaseUntil = 0;              // a throttle anywhere eases every poller until here
   function readTrim(now: any) { while (readStamps.length && readStamps[0] <= now - 60000) readStamps.shift(); }
@@ -1046,11 +1046,21 @@
   /* ---- Turnstile. Loaded lazily, challenge run only at post time so the
      token cannot expire while a long comment is being written. ---- */
 
-  function loadTurnstile() {
-    if (window.turnstile || document.getElementById('mc-ts-script')) return;
-    (window as any).__mcCommentsTs = function () {
-      var slot = section.querySelector('.ts-slot');
-      if (!slot) return;
+  /* Render (or re-render) the invisible widget into the current view's slot.
+     Idempotent and safe to call repeatedly: it keeps a widget that is still live
+     in the DOM and only (re)renders when there is none, or when the one we had
+     was torn out with its old composer/view. This is the load-bearing fix for
+     the SPA: once the Turnstile script is loaded (page-wide, it lives on
+     document.head), any later boot/view has a fresh boot-scoped `state`
+     (widgetId=null) but window.turnstile already exists — without an explicit
+     re-render here the widget was never created for the new view and every
+     getToken() timed out ("Verification is taking a moment to load"). */
+  function renderTurnstileWidget() {
+    if (!window.turnstile) return;
+    var slot = section.querySelector('.ts-slot');
+    if (!slot) return;
+    if (state.widgetId !== null && slot.querySelector('iframe')) return;
+    try {
       state.widgetId = turnstile.render(slot, {
         sitekey: SITEKEY,
         execution: 'execute',
@@ -1064,7 +1074,13 @@
         },
         'expired-callback': function () {},
       });
-    };
+    } catch (e) { /* a double-render into the same slot throws; ignore */ }
+  }
+
+  function loadTurnstile() {
+    if (window.turnstile) { renderTurnstileWidget(); return; }
+    if (document.getElementById('mc-ts-script')) return;   // loading; onload renders
+    (window as any).__mcCommentsTs = function () { renderTurnstileWidget(); };
     var script = document.createElement('script');
     script.id = 'mc-ts-script';
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__mcCommentsTs&render=explicit';
@@ -1089,6 +1105,7 @@
           reject(new Error('Verification could not load. Check your connection and reload the page.'));
           return;
         }
+        if (window.turnstile && state.widgetId === null) renderTurnstileWidget();
         if (!window.turnstile || state.widgetId === null) {
           if (waited >= MAX) {
             reject(new Error('Verification is taking a moment to load. Give it a few seconds and press the button again.'));
@@ -6424,7 +6441,7 @@
         function chatRow(c: any) {
           var row = el('p');
           var a = el('a', 'body-link', c.title || ('Conversation ' + c.id));
-          a.href = 'merecat-ai.html&chat=' + c.id;
+          a.href = 'merecat-ai.html?chat=' + c.id;
           row.appendChild(a);
           row.appendChild(document.createTextNode(
             ' · ' + c.msgs + (c.msgs === 1 ? ' message · ' : ' messages · ') +
@@ -7543,7 +7560,7 @@
             var note = el('p', 'merecat-quota');
             note.appendChild(document.createTextNode('🐈 The librarian is still working on your last question — '));
             var back = el('a', 'body-link', 'rejoin it');
-            back.href = 'merecat-ai.html&chat=' + newest.id;
+            back.href = 'merecat-ai.html?chat=' + newest.id;
             note.appendChild(back);
             note.appendChild(document.createTextNode('.'));
             log.insertBefore(note, log.firstChild);
@@ -7751,6 +7768,24 @@
         });
         wpRow.appendChild(wpSel);
         wrap.appendChild(wpRow);
+        /* Discord notifications: paste a channel webhook URL to mirror new posts
+           there; clear it to turn it off. One for the forum, one for the feed. */
+        wrap.appendChild(el('h3', null, 'Discord notifications'));
+        wrap.appendChild(el('p', 'board-cat-desc', 'Paste a Discord channel webhook URL to announce new posts there. Leave a box empty to turn that one off. Create one in Discord under Server Settings → Integrations → Webhooks.'));
+        var dfRow = el('p', 'admin-set-row mc-set-key');
+        dfRow.appendChild(el('label', null, 'Forum posts webhook (new topics & replies):'));
+        var dfInp = el('input');
+        dfInp.type = 'url'; dfInp.placeholder = 'https://discord.com/api/webhooks/…';
+        dfInp.value = String(s.discord_forum_webhook || '');
+        dfRow.appendChild(dfInp);
+        wrap.appendChild(dfRow);
+        var dgRow = el('p', 'admin-set-row mc-set-key');
+        dgRow.appendChild(el('label', null, 'Feed posts webhook:'));
+        var dgInp = el('input');
+        dgInp.type = 'url'; dgInp.placeholder = 'https://discord.com/api/webhooks/…';
+        dgInp.value = String(s.discord_feed_webhook || '');
+        dgRow.appendChild(dgInp);
+        wrap.appendChild(dgRow);
         var saveBtn = el('button', 'btn btn-send', 'Save settings');
         saveBtn.type = 'button';
         var saveStatus = el('p', 'form-status');
