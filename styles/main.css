@@ -1364,6 +1364,17 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 .mc-home-row-txt strong { font-weight: 600; }
 .mc-home-row-txt small { color: var(--faint); font-size: 0.8rem; margin-top: 0.1rem; }
 
+/* The notifications panel (bell dropdown on desktop, sheet on mobile) — a plain
+   list of tappable rows; works inside .mc-db-menu (desktop) and .mc-sheet-body. */
+.mc-notifs-row {
+  display: block; padding: 0.7rem 0.2rem; border-bottom: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink); font-size: 0.95rem; line-height: 1.35;
+}
+.mc-notifs-row:hover { color: var(--maroon); }
+.mc-notifs-row:last-child { border-bottom: 0; }
+.mc-notifs-new { font-weight: 600; }
+.mc-notifs-empty { color: var(--faint); padding: 0.5rem 0.2rem; font-size: 0.92rem; line-height: 1.45; }
+
 /* merecat intro "read more": the tail is hidden until the toggle is tapped. */
 .merecat-intro-more { display: none; }
 .merecat-intro-toggle { color: var(--maroon); cursor: pointer; white-space: nowrap; }
@@ -1774,6 +1785,7 @@ body.mc-app > footer { display: none; }
 
   /* the account dropdown */
   .mc-db-acct { position: relative; }
+  .mc-db-notif { position: relative; }
   .mc-db-menu {
     position: absolute; top: calc(100% + 0.5rem); right: 0; width: 20rem; max-height: 80vh; overflow-y: auto;
     background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-lg);
