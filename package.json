@@ -2,20 +2,21 @@
   "name": "merecatholicity",
   "version": "0.0.0",
   "private": true,
-  "description": "Build tooling for merecatholicity.com — the static site (docs/) and its Cloudflare Workers. Not a published package; it manages the whole front-end toolchain behind a committed lockfile: Tailwind, esbuild, eslint, wrangler, the PureScript compiler (purs) + spago, and Lit (the app's UI library, bundled into app.js).",
+  "description": "Build tooling for merecatholicity.com \u2014 the static site (docs/) and its Cloudflare Workers. Not a published package; it manages the whole front-end toolchain behind a committed lockfile: Tailwind, esbuild, eslint, wrangler, the PureScript compiler (purs) + spago, and Lit (the app's UI library, bundled into app.js).",
   "license": "CC0-1.0",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "lint": "eslint comments-worker/src/index.js comments-worker/src/pure.js comments-worker/src/webpush.js docs/comments.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js ",
+    "lint": "eslint comments-worker/src/index.js comments-worker/src/pure.js comments-worker/src/webpush.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js ",
     "build:ps": "rm -rf purescript/output && cd purescript && spago build",
-    "build:js": "npm run build:ps && esbuild app/shell.ts --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning",
+    "build:js": "npm run build:ps && esbuild app/shell.ts --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning && npm run build:client",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
     "tsc": "tsc -p tsconfig.json",
     "build": "npm run lint && npm run build:js && npm run build:css",
-    "worker:deploy": "cd comments-worker && wrangler deploy"
+    "worker:deploy": "cd comments-worker && wrangler deploy",
+    "build:client": "esbuild client/comments.ts --outfile=docs/comments.js --log-level=warning"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260801.1",
