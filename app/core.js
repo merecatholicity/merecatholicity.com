@@ -24,6 +24,7 @@ import * as Pager from '../purescript/output/Domain.Pager/index.js';
 import * as Board from '../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../purescript/output/Domain.Emoji/index.js';
 import * as Route from '../purescript/output/Domain.Route/index.js';
+import * as Auth from '../purescript/output/Domain.Auth/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -133,3 +134,16 @@ export const parseRoute = (get) => {
     profile: get('profile'), audit: get('audit'), topic, cat: get('cat'),
   }));
 };
+
+/* Auth classification (Domain.Auth): the reader's identity state as one typed
+   decision. authIsAdmin(sig) is the isAdmin() logic (server authority once the
+   profile loads, else server-or-hint); authIsMember(sig) is key && hash;
+   authGate(sig) -> "pass"|"deny"|"wait" is the admin-page guard. `sig` carries
+   the raw state signals; each is coerced to Boolean at this membrane. */
+const authSignals = (s) => ({
+  hasKey: !!s.hasKey, hasHash: !!s.hasHash, profileLoaded: !!s.profileLoaded,
+  myAdmin: !!s.myAdmin, hint: !!s.hint,
+});
+export const authIsAdmin = (s) => Auth.isAdmin(authSignals(s));
+export const authIsMember = (s) => Auth.isMember(authSignals(s));
+export const authGate = (s) => Auth.gate(authSignals(s));

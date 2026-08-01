@@ -18,6 +18,7 @@ import * as Pager from '../output/Domain.Pager/index.js';
 import * as Board from '../output/Domain.Board/index.js';
 import * as Emoji from '../output/Domain.Emoji/index.js';
 import * as Route from '../output/Domain.Route/index.js';
+import * as Auth from '../output/Domain.Auth/index.js';
 import * as Maybe from '../output/Data.Maybe/index.js';
 import * as Either from '../output/Data.Either/index.js';
 
@@ -295,3 +296,23 @@ assert.equal(psRoute('dm=abc').s, 'abc');
 assert.equal(psRoute('me=1').tag, 'Me');
 assert.equal(psRoute('ipbans').tag, 'Index', 'bare ?ipbans (empty value) is falsy -> not ipbans');
 console.log('pstest: Domain.Route OK (priority ladder + topic/present edge cases)');
+
+// --- Domain.Auth: the identity/admin classification (single source for isAdmin/adminGate) ---
+function cAdmin(hasKey, profileLoaded, myAdmin, hint) { if (!hasKey) return false; if (profileLoaded) return myAdmin; return myAdmin || hint; }
+function cGate(hasKey, profileLoaded, myAdmin, hint) { if (cAdmin(hasKey, profileLoaded, myAdmin, hint)) return 'pass'; if (!hasKey || profileLoaded) return 'deny'; return 'wait'; }
+let authN = 0;
+for (const hasKey of [false, true]) for (const hasHash of [false, true]) for (const profileLoaded of [false, true])
+  for (const myAdmin of [false, true]) for (const hint of [false, true]) {
+    authN++;
+    const sig = { hasKey, hasHash, profileLoaded, myAdmin, hint };
+    assert.equal(Auth.isAdmin(sig), cAdmin(hasKey, profileLoaded, myAdmin, hint), 'isAdmin ' + JSON.stringify(sig));
+    assert.equal(Auth.isMember(sig), !!(hasKey && hasHash), 'isMember ' + JSON.stringify(sig));
+    assert.equal(Auth.gate(sig), cGate(hasKey, profileLoaded, myAdmin, hint), 'gate ' + JSON.stringify(sig));
+  }
+assert.equal(Auth.stateTag(Auth.classify({ hasKey: false, hasHash: false, profileLoaded: false, myAdmin: false, hint: false })), 'Anonymous');
+assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: false, profileLoaded: false, myAdmin: false, hint: false })), 'Authenticating');
+assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: true, profileLoaded: false, myAdmin: false, hint: false })), 'Pending');
+assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: true, profileLoaded: true, myAdmin: false, hint: false })), 'Member');
+assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: true, profileLoaded: true, myAdmin: true, hint: false })), 'Admin');
+assert.equal(Auth.stateTag(Auth.classify({ hasKey: true, hasHash: true, profileLoaded: false, myAdmin: false, hint: true })), 'Admin', 'hint before load = Admin');
+console.log('pstest: Domain.Auth OK (' + authN + ' signal combos + AuthState classify)');
