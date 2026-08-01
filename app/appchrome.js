@@ -326,7 +326,7 @@ class McSettings extends LitElement {
       ${link('library.html', 'Library')}
       ${link('about.html', 'About')}
       ${link('contact.html', 'Contact')}
-      ${link('terms.html', 'Terms &amp; conditions')}
+      ${link('terms.html', 'Terms & conditions')}
     </div>`;
   }
 }

@@ -77,7 +77,7 @@ export const displayName = Pseudonym.displayName;
    coercing a missing/zero value to the 7-day default as the classic did.
    dmTtlOptions -> the ordered [{secs,label}] chooser. Single-sources the
    DM_TTLS the worker also holds (Phase 6). */
-export const dmTtlLabel = (ttl) => Dm.ttlLabel((Number(ttl) || 604800) | 0);
+export const dmTtlLabel = (ttl) => Dm.ttlLabel((Number(ttl) || Dm.defaultTtl) | 0);
 export const dmTtlOptions = Dm.ttlOptions;
 
 /* Post permission predicates (Domain.Access): pure UI authorization over the

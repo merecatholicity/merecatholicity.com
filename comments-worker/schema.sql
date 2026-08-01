@@ -130,12 +130,17 @@ CREATE TABLE IF NOT EXISTS dms (
   -- ttl once opened. saved = 1 exempts it from expiry for BOTH (either party may
   -- save; a saved row carries expires_at NULL). media_key = the opaque random R2
   -- object id for a media message (the ciphertext blob; the AES key lives only
-  -- inside the E2E body), media_size its ciphertext byte length.
-  opened_at   INTEGER,
-  expires_at  INTEGER,
-  saved       INTEGER,
-  media_key   TEXT,
-  media_size  INTEGER
+  -- inside the E2E body), media_size its ciphertext byte length. media_expired = 1
+  -- once the 30-day HARD media cap (Domain.Dm.mediaMaxSeconds) has swept the media
+  -- away even though the message itself survives (a saved text/caption keeps
+  -- standing; the client renders a "media expired" placeholder in its place).
+  -- (Existing DBs: ALTER TABLE dms ADD COLUMN media_expired INTEGER;)
+  opened_at    INTEGER,
+  expires_at   INTEGER,
+  saved        INTEGER,
+  media_key    TEXT,
+  media_size   INTEGER,
+  media_expired INTEGER
 );
 CREATE INDEX IF NOT EXISTS dms_thread_idx ON dms(thread_id, id);
 CREATE INDEX IF NOT EXISTS dms_expires_idx ON dms(expires_at);
