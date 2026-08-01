@@ -285,6 +285,53 @@ customElements.define('mc-audio-dock', McAudioDock);
     document.head.appendChild(mf);
   }
 
+  /* Fresh-deploy detector. The running app version is app.js?v=N (set in nav.js).
+     On each return-to-tab (throttled to ≤ once / 15 min, so no polling), fetch the
+     UNVERSIONED nav.js cache-busted — that hits GitHub Pages (static), never the
+     /api worker, so it costs zero worker/D1 budget — and if it references a newer
+     app.js?v, show a one-time "refresh" banner. */
+  function showUpdateBanner() {
+    if (document.getElementById('mc-update-bar')) return;
+    var bar = document.createElement('div');
+    bar.id = 'mc-update-bar';
+    bar.setAttribute('data-mc-app', '');   // survive soft-nav swaps
+    bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:1rem;z-index:4000;max-width:calc(100% - 1.5rem);display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.9rem;border-radius:10px;background:#4a121f;color:#fff;box-shadow:0 4px 20px rgba(0,0,0,0.3);font:inherit;font-size:0.9rem';
+    var txt = document.createElement('span');
+    txt.textContent = 'A new version of Mere Catholicity is available.';
+    var refresh = document.createElement('button');
+    refresh.type = 'button'; refresh.textContent = 'Refresh';
+    refresh.style.cssText = 'font:inherit;font-weight:600;cursor:pointer;border:none;border-radius:7px;padding:0.35rem 0.8rem;background:#fff;color:#4a121f';
+    refresh.addEventListener('click', function () { location.reload(); });
+    var dismiss = document.createElement('button');
+    dismiss.type = 'button'; dismiss.textContent = '✕'; dismiss.setAttribute('aria-label', 'Dismiss');
+    dismiss.style.cssText = 'font:inherit;cursor:pointer;border:none;background:none;color:#fff;font-size:1.1rem;line-height:1';
+    dismiss.addEventListener('click', function () { if (bar.parentNode) bar.parentNode.removeChild(bar); });
+    bar.appendChild(txt); bar.appendChild(refresh); bar.appendChild(dismiss);
+    document.body.appendChild(bar);
+  }
+  (function updateWatch() {
+    var runEl = document.querySelector('script[src*="app.js?v="]');
+    var m0 = runEl && String(runEl.src).match(/app\.js\?v=(\d+)/);
+    var running = m0 ? Number(m0[1]) : 0;
+    if (!running) return;
+    var last = 0, shown = false;
+    function check() {
+      if (shown || document.hidden) return;
+      var now = Date.now();
+      if (now - last < 15 * 60 * 1000) return;
+      last = now;
+      fetch('nav.js?_=' + now, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (t) {
+          var m = t.match(/app\.js\?v=(\d+)/);
+          if (m && Number(m[1]) > running) { shown = true; showUpdateBanner(); }
+        })
+        .catch(function () {});
+    }
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+    setTimeout(check, 60000);   // one delayed check for a long-open tab that never hides
+  })();
+
   /* Capture the browser's install prompt so the settings gear can offer an
      "Install app" row only when it is actually available (and hide it once
      installed). No effect where the browser doesn't fire the event. */
