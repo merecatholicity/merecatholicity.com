@@ -7,7 +7,8 @@
    verbatim machinery untouched. Registration: window.mcViews.* — the old
    view functions delegate here when present, one revertible line each. */
 
-import { LitElement, html, nothing, repeat } from '../../vendor/lit-all.min.js';
+import { LitElement, html, nothing } from 'lit';
+import { repeat } from 'lit/directives/repeat.js';
 import { pagerTpl } from './util.js';
 
 /* Category ordering must match the server's ORDER BY: stickies first, then by

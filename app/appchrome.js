@@ -7,7 +7,7 @@
    ?app=0 latch; its returned sync() runs in boots() after every swap, and the
    click delegate in shell.js soft-navigates the tabs' <a href>s for free. */
 
-import { LitElement, html } from '../vendor/lit-all.min.js';
+import { LitElement, html } from 'lit';
 import { mountLibrary } from './views/library.js';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an

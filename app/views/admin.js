@@ -7,7 +7,7 @@
    (window.mcRich). The admin gate shows a neutral wait while status loads,
    never a false refusal, exactly as the old adminGate did. */
 
-import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
+import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl } from './util.js';
 
 /* Shared admin gate for a component: returns 'ok' | 'wait' | 'no', and

@@ -9,7 +9,7 @@
    search box (write machinery) through the kit. The DM thread itself, being
    dominated by the Turnstile-gated composer, stays kit machinery. */
 
-import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
+import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl } from './util.js';
 
 class McProfile extends LitElement {

@@ -45,16 +45,22 @@ PROBE = r"""
 # confirm the autolinks are unchanged, plus the raw bibleSrc/bookSlug shape.
 SCRIPTURE_PROBE = r"""
   var d = document.createElement('div');
-  window.mcRich.fillBody(d, 'See Rom 8:28-30 and John 3:16 and Nope 1:1 here.', false);
+  window.mcRich.fillBody(d, 'See Rom 8:28-30 and John 3:16 and Nope 1:1 and Rom 0:5 here.', false);
   var links = Array.prototype.slice.call(d.querySelectorAll('a.scripture-link')).map(function (a) {
     return { href: a.getAttribute('href'), text: a.textContent };
   });
+  var vp = window.mcCore.verseParts;
+  var valid = vp('rom', '8', '28', '30');
   return {
     bibleSrcLen: (window.mcCore.bibleSrc || '').length,
     slug1cor: window.mcCore.bookSlug('1 cor'),
     slugNope: window.mcCore.bookSlug('nope'),
     links: links,
-    plainNope: d.textContent.indexOf('Nope 1:1') !== -1
+    plainNope: d.textContent.indexOf('Nope 1:1') !== -1,
+    plainZero: d.textContent.indexOf('Rom 0:5') !== -1,
+    validHref: valid && valid.href,
+    validV2: valid && valid.v2,
+    zeroRef: vp('rom', '0', '0', null)
   };
 """
 
@@ -82,8 +88,11 @@ def main():
             ('PS == classic across -5..6000 (no mismatches)', r.get('mismatches') == []),
             ('scripture: Rom 8:28-30 → kjv.html#romans-8-28', 'kjv.html#romans-8-28' in hrefs),
             ('scripture: John 3:16 → kjv.html#john-3-16', 'kjv.html#john-3-16' in hrefs),
-            ('scripture: only the 2 known refs link (Nope stays plain)',
-             len(sc.get('links') or []) == 2 and bool(sc.get('plainNope'))),
+            ('scripture: only the 2 valid refs link (Nope + Rom 0:5 stay plain)',
+             len(sc.get('links') or []) == 2 and bool(sc.get('plainNope')) and bool(sc.get('plainZero'))),
+            ('mcCore.verseParts valid ref → href romans-8-28, v2 30',
+             sc.get('validHref') == 'romans-8-28' and sc.get('validV2') == 30),
+            ('mcCore.verseParts rejects Rom 0:0 (→ null)', sc.get('zeroRef') is None),
             ('mcCore.bibleSrc is 2267 chars', sc.get('bibleSrcLen') == 2267),
             ("mcCore.bookSlug('1 cor') == '1-corinthians'", sc.get('slug1cor') == '1-corinthians'),
             ("mcCore.bookSlug('nope') == null", sc.get('slugNope') is None),

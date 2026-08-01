@@ -33,3 +33,11 @@ export const bibleSrc = Scripture.bibleSrc;
    the caller does on the regex match. The PS `Maybe` is erased to `slug | null`
    here, at the one membrane. */
 export const bookSlug = (key) => Maybe.maybe(null)((s) => s)(Scripture.bookSlug(key));
+
+/* verseParts(bookKey, ch, v1, v2) -> {slug, ch, v1, v2, href} | null. A VALIDATED
+   reference (real book, chapter/verse ≥ 1, ordered range); href is the kjv.html#
+   fragment. ch/v1/v2 come from the regex as strings; `| 0` coerces to Int, and a
+   missing range end (v2 == null) stays null. PureScript `Nullable` maps straight
+   to JS null/value, so no erasure is needed here. */
+export const verseParts = (bookKey, ch, v1, v2) =>
+  Scripture.verseParts(bookKey)(ch | 0)(v1 | 0)(v2 == null ? null : (v2 | 0));

@@ -7,7 +7,7 @@
    readers keep the full flat list; JS readers get the drill-down. Mounted by the
    shell on library.html via mountLibrary() in appchrome. */
 
-import { LitElement, html, nothing } from '../../vendor/lit-all.min.js';
+import { LitElement, html, nothing } from 'lit';
 
 function slug(s) {
   return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');

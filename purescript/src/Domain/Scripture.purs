@@ -12,11 +12,13 @@
 module Domain.Scripture
   ( bookSlug
   , bibleSrc
+  , verseParts
   ) where
 
 import Prelude
 import Data.Array (concatMap, filter, find, sortBy)
-import Data.Maybe (Maybe)
+import Data.Maybe (Maybe(..))
+import Data.Nullable (Nullable, toMaybe, toNullable)
 import Data.String (Pattern(..), Replacement(..), joinWith, length, replaceAll, split, trim)
 
 -- | The one source: canonical KJV slug + its accepted spellings (pipe-joined),
@@ -120,3 +122,39 @@ bibleSrc = "(" <> alt <> ")\\.?[ \\t]+(\\d+):(\\d+)(?:[\\-\\u2013](\\d+))?"
   -- spec forms are [a-z0-9 ] only, so the JS regex-char escape is a no-op here
   -- (asserted in run.mjs); only the space → \s+ rewrite applies.
   escape = replaceAll (Pattern " ") (Replacement "\\s+")
+
+-- | A validated Scripture reference. It is constructed ONLY through mkVerseRef,
+-- | so it can never hold a non-book, a chapter or verse below 1, or a backward
+-- | range (end < start collapses to a single verse). This is where the illegal
+-- | states become unrepresentable: richtext.js used to build the `kjv.html#`
+-- | href by raw string concatenation of the regex groups, linking even
+-- | nonsensical refs like "Rom 0:0".
+newtype VerseRef = VerseRef { slug :: String, ch :: Int, v1 :: Int, v2 :: Int }
+
+mkVerseRef :: String -> Int -> Int -> Maybe Int -> Maybe VerseRef
+mkVerseRef bookKey chN v1N mEnd =
+  if chN >= 1 && v1N >= 1
+    then map (\slug -> VerseRef { slug, ch: chN, v1: v1N, v2: v2N }) (bookSlug bookKey)
+    else Nothing
+  where
+  v2N = case mEnd of
+    Just e | e >= v1N -> e
+    _ -> v1N
+
+-- | The kjv.html# fragment: a range points at its first verse (matching the
+-- | former richtext.js `slug + '-' + ch + '-' + v1`).
+anchor :: VerseRef -> String
+anchor (VerseRef r) = r.slug <> "-" <> show r.ch <> "-" <> show r.v1
+
+-- | The JS boundary: from a normalized book key + chapter + first verse +
+-- | optional end verse, a plain record `{slug, ch, v1, v2, href}` or null. The
+-- | record is produced only for a valid reference, so the caller renders a link
+-- | exactly when one is warranted. `Nullable` maps straight to JS null/value, so
+-- | the barrel passes the result through untouched.
+verseParts
+  :: String -> Int -> Int -> Nullable Int
+  -> Nullable { slug :: String, ch :: Int, v1 :: Int, v2 :: Int, href :: String }
+verseParts bookKey chN v1N mEndN =
+  toNullable (map project (mkVerseRef bookKey chN v1N (toMaybe mEndN)))
+  where
+  project vr@(VerseRef r) = { slug: r.slug, ch: r.ch, v1: r.v1, v2: r.v2, href: anchor vr }
