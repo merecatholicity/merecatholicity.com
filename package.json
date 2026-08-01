@@ -9,7 +9,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "lint": "eslint comments-worker/src/index.js docs/comments.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js app/",
+    "lint": "eslint comments-worker/src/index.js comments-worker/src/pure.js docs/comments.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js app/",
     "build:ps": "rm -rf purescript/output && cd purescript && spago build",
     "build:js": "npm run build:ps && esbuild app/shell.js --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",

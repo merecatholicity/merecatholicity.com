@@ -91,6 +91,8 @@ local/           merecat-local: the optional offline GPU backend (serve.py + sys
                  units) the bot can be switched to. Its models/index are derived, ignored.
 
 webtest/         Headless-Chromium verification harness (audit.py + flows.py + test_*.py).
+tests/           The unit suite (`make tests`): PureScript + JS via `node --test`,
+                 Python + CSS invariants via stdlib `unittest`. One file per concern.
 
 Makefile         The build entrypoint (`make …`); scripts/nav.yml is the site-menu source.
 eslint.config.js Lints the worker + every hand-written client script (root by eslint convention).
@@ -286,13 +288,17 @@ make bundle   # app/ -> docs/app.js  (esbuild, minified IIFE, deterministic)
 ### Verifying a build
 
 ```sh
+make tests    # the unit suite (Layer 1): PureScript + JS + Python + CSS, hermetic and fast
 make check    # jscheck (eslint over the worker + client JS) then linkcheck
 make jscheck  # eslint only — RUN AFTER ANY hand edit to worker or client JS
 ```
 
-`scripts/linkcheck.py` scans `docs/` and fails loudly if any internal href/src or
-`#fragment` doesn't resolve. Anything that depends on client JS actually running (anchor
-jumps, board/DM rendering, the bot) is verified with the **headless harness**:
+`make tests` is the fast, hermetic **unit** layer (`tests/`, one file per concern; see
+`tests/README.md`). It exists to clarify what the code does and guard the rules that break
+silently — not to chase coverage. `scripts/linkcheck.py` (via `make check`) scans `docs/`
+and fails loudly if any internal href/src or `#fragment` doesn't resolve. Anything that
+depends on client JS actually running (anchor jumps, board/DM rendering, the bot) is
+verified with the **headless harness** (Layer 2):
 
 ```sh
 python webtest/audit.py --pages           # page matrix: console errors, >=400s, dup loads
@@ -312,7 +318,8 @@ python webtest/test_topic_search.py       # per-slice batteries (store, board, r
 | `make menu` | Regenerate nav from `scripts/nav.yml`, then rebuild |
 | `make css` | Build `styles/main.css` (Tailwind) → `docs/style.css` |
 | `make psbuild` | Compile `purescript/src/` → `purescript/output/` (ESM) |
-| `make pstest` | Run the PureScript pure-unit tests |
+| `make tests` | Run the whole unit suite (PureScript + JS + Python + CSS) |
+| `make pstest` | Run the PureScript unit tests (fast; the PS slice of `make tests`) |
 | `make bundle` | Compile PureScript, then bundle `app/` → `docs/app.js` (esbuild) |
 | `make check` / `make jscheck` | Link check / JS lint |
 | `make serve` | Local preview on 127.0.0.1:8000 over `docs/` |
