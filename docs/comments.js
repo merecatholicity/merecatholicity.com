@@ -8364,6 +8364,24 @@
         });
         wpRow.appendChild(wpSel);
         wrap.appendChild(wpRow);
+        wrap.appendChild(el("h3", null, "Discord notifications"));
+        wrap.appendChild(el("p", "board-cat-desc", "Paste a Discord channel webhook URL to announce new posts there. Leave a box empty to turn that one off. Create one in Discord under Server Settings \u2192 Integrations \u2192 Webhooks."));
+        var dfRow = el("p", "admin-set-row mc-set-key");
+        dfRow.appendChild(el("label", null, "Forum posts webhook (new topics & replies):"));
+        var dfInp = el("input");
+        dfInp.type = "url";
+        dfInp.placeholder = "https://discord.com/api/webhooks/\u2026";
+        dfInp.value = String(s.discord_forum_webhook || "");
+        dfRow.appendChild(dfInp);
+        wrap.appendChild(dfRow);
+        var dgRow = el("p", "admin-set-row mc-set-key");
+        dgRow.appendChild(el("label", null, "Feed posts webhook:"));
+        var dgInp = el("input");
+        dgInp.type = "url";
+        dgInp.placeholder = "https://discord.com/api/webhooks/\u2026";
+        dgInp.value = String(s.discord_feed_webhook || "");
+        dgRow.appendChild(dgInp);
+        wrap.appendChild(dgRow);
         var saveBtn = el("button", "btn btn-send", "Save settings");
         saveBtn.type = "button";
         var saveStatus = el("p", "form-status");
@@ -8379,7 +8397,9 @@
               dm_default_ttl: ttlSel.value,
               dm_backstop_days: bsInp.value,
               wall_prune_enabled: wpEn.checked ? "1" : "0",
-              wall_prune_days: wpSel.value
+              wall_prune_days: wpSel.value,
+              discord_forum_webhook: dfInp.value.trim(),
+              discord_feed_webhook: dgInp.value.trim()
             } })
           }).then(function(r) {
             return r.json();

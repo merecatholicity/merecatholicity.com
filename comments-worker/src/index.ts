@@ -115,11 +115,13 @@ import {
   dmUnreadExists,
   dumpDatabase,
   enc,
+  discordSnippet,
   enforceMediaCap,
   ensureAdminsSeeded,
   getAppSettings,
   gzipBytes,
   isAdminHash,
+  isDiscordWebhook,
   isTrusted,
   json,
   keyed,
@@ -173,6 +175,7 @@ import {
   safeParseLinks,
   screen,
   screenImage,
+  sendDiscord,
   sendSystemDm,
   sendToHub,
   sha256hex,
@@ -233,6 +236,60 @@ async function handleGet(request: any, env: any, url: any) {
   const comments = (rows.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0));
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
+}
+
+/* Announce a fresh LIVE forum post to Discord, if a forum webhook is configured.
+   Topics and replies both go (the message distinguishes them); the back room is
+   NEVER announced (the caller excludes it). Reads the topic title for a reply so
+   the embed can say what thread it landed in. Fire-and-forget: any failure is
+   swallowed, so Discord being down or misconfigured never touches the post. */
+async function notifyDiscordForum(env: any, p: {
+  page: string; commentId: number; topicId: number; isReply: boolean;
+  title: any; authorHash: any; nick: any; body: any; createdAt: number;
+}) {
+  const s = await getAppSettings(env);
+  const hook = s.discord_forum_webhook;
+  if (!isDiscordWebhook(hook)) return;
+  let topicTitle = p.title;
+  if (p.isReply || !topicTitle) {
+    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(p.topicId).first();
+    topicTitle = (t && t.title) || 'a thread';
+  }
+  const name = p.nick || displayName(p.authorHash);
+  const link = siteBase(env) + '/community.html?topic=' + p.topicId + '#comment-' + p.commentId;
+  const heading = p.isReply ? (name + ' replied in “' + topicTitle + '”')
+    : (name + ' started a new topic');
+  await sendDiscord(hook, {
+    title: (topicTitle || 'New forum post').slice(0, 240),
+    url: link,
+    description: discordSnippet(p.body) || (p.isReply ? '(reply)' : '(new topic)'),
+    author: { name: heading.slice(0, 240) },
+    color: 0x7a1f2b,
+    footer: { text: 'Mere Catholicity · Community' },
+    timestamp: new Date(p.createdAt * 1000).toISOString(),
+  });
+}
+
+/* Announce a fresh LIVE feed (wall) post to Discord, if a feed webhook is set. */
+async function notifyDiscordFeed(env: any, p: {
+  postId: number; authorHash: string; body: string;
+  hasMedia: boolean; createdAt: number;
+}) {
+  const s = await getAppSettings(env);
+  const hook = s.discord_feed_webhook;
+  if (!isDiscordWebhook(hook)) return;
+  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first();
+  const name = (prof && prof.nick) || displayName(p.authorHash);
+  const link = siteBase(env) + '/community.html?post=' + p.postId;
+  await sendDiscord(hook, {
+    title: 'New post in the feed',
+    url: link,
+    description: discordSnippet(p.body) || (p.hasMedia ? '(shared an attachment)' : ''),
+    author: { name: (name + ' posted').slice(0, 240) },
+    color: 0x7a1f2b,
+    footer: { text: 'Mere Catholicity · Feed' },
+    timestamp: new Date(p.createdAt * 1000).toISOString(),
+  });
 }
 
 async function handlePost(request: any, env: any, ctx: any) {
@@ -407,6 +464,16 @@ async function handlePost(request: any, env: any, ctx: any) {
           last: createdAt, last_id: inserted.id, author_hash: authorHash, nick },
       ];
     });
+  }
+
+  /* Mirror a live forum post to Discord if a forum webhook is configured — topics
+     and replies both, never the back room. Deferred so a webhook never delays the
+     poster's response. */
+  if (status === 'live' && boardKey(page) && page !== ADMIN_CAT) {
+    ctx.waitUntil(notifyDiscordForum(env, {
+      page, commentId: inserted.id, topicId: parentId || inserted.id, isReply: parentId != null,
+      title, authorHash, nick: prof && prof.nick || null, body, createdAt,
+    }).catch((e) => console.log(JSON.stringify({ event: 'discord_forum_failed', error: String(e) }))));
   }
 
   return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
@@ -1681,7 +1748,7 @@ async function handleAdminSettings(request: any, env: any) {
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
     const me = await sha256hex(key);
-    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1 };
+    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1 };
     const stmts = [];
     for (const k of Object.keys(data.set)) {
       if (!allowed[k]) continue;
@@ -1691,6 +1758,12 @@ async function handleAdminSettings(request: any, env: any) {
       else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : Dm.defaultTtl);
       else if (k === 'dm_backstop_days') v = String(Math.max(1, Math.min(365, Math.floor(Number(v)) || 30)));
       else if (k === 'wall_prune_days') v = String(Wall.clampPruneDays(Math.floor(Number(v)) || 365));
+      else if (k === 'discord_forum_webhook' || k === 'discord_feed_webhook') {
+        /* Empty clears (turns the webhook off); anything else must be a genuine
+           Discord webhook URL, so a typo or hostile value is never stored/POSTed. */
+        v = v.trim();
+        if (v && !isDiscordWebhook(v)) return json({ ok: false, error: 'That is not a valid Discord webhook URL.' }, 400);
+      }
       stmts.push(env.DB.prepare(
         'INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3, updated_by = ?4'
       ).bind(k, v, now, me));
@@ -1856,6 +1929,9 @@ async function handleWallPost(request: any, env: any, ctx: any) {
   if (status === 'live') {
     if (ctx) ctx.waitUntil(deliverWallNotifications(env, { authorHash: me, postId: ins.id, mentions: data.mentions }));
     publishLive(env, ctx, { v: 1, t: 'wall-post', scopes: ['feed:global'], id: ins.id });
+    if (ctx) ctx.waitUntil(notifyDiscordFeed(env, {
+      postId: ins.id, authorHash: me, body, hasMedia: !!media, createdAt: now,
+    }).catch((e) => console.log(JSON.stringify({ event: 'discord_feed_failed', error: String(e) }))));
   }
   return json({ ok: true, id: ins.id, status }, 200);
 }

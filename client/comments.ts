@@ -2789,14 +2789,22 @@
     terms.target = '_blank';
     label.appendChild(terms);
     box.appendChild(label);
+    /* Adults only (terms + privacy): confirming 18+ is required to join. */
+    var ageLabel = el('label', 'agree-row');
+    var ageCheck = el('input');
+    ageCheck.type = 'checkbox';
+    ageLabel.appendChild(ageCheck);
+    ageLabel.appendChild(document.createTextNode(' I am at least 18 years old.'));
+    box.appendChild(ageLabel);
     var row = el('div', 'key-row');
     var create = el('button', 'btn btn-send key-copy', 'Create');
     create.type = 'button';
     create.disabled = true;
-    function refresh() { create.disabled = !(check.checked && chosenFaith); }
+    function refresh() { create.disabled = !(check.checked && ageCheck.checked && chosenFaith); }
     check.addEventListener('change', refresh);
+    ageCheck.addEventListener('change', refresh);
     create.addEventListener('click', function () {
-      if (!check.checked || !chosenFaith) return;
+      if (!check.checked || !ageCheck.checked || !chosenFaith) return;
       try { localStorage.setItem('mc-agreed-at', String(Date.now())); } catch (e) {}
       setFaith(chosenFaith);
       var key = makeKey();
@@ -7800,6 +7808,8 @@
               dm_backstop_days: bsInp.value,
               wall_prune_enabled: wpEn.checked ? '1' : '0',
               wall_prune_days: wpSel.value,
+              discord_forum_webhook: dfInp.value.trim(),
+              discord_feed_webhook: dgInp.value.trim(),
             } }) }).then(function (r) { return r.json(); }).then(function (d2) {
             saveBtn.disabled = false;
             saveStatus.textContent = d2 && d2.ok ? 'Saved.' : ((d2 && d2.error) || 'Save failed.');

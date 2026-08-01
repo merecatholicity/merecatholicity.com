@@ -23,7 +23,9 @@ import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 // there or client-side; imported here only what index.js calls directly.)
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
+  isDiscordWebhook, discordSnippet,
 } from './pure.js';
+export { isDiscordWebhook, discordSnippet };   // re-exported so index.ts imports them from here
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 import { createPusher } from './webpush.js';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
@@ -815,6 +817,8 @@ export const APP_SETTING_DEFAULTS = {
   dm_media_bytes: '0',                          // sweep-maintained total, display-only
   wall_prune_enabled: '0',                      // public posts persist forever until this is turned on
   wall_prune_days: '365',                       // retention when pruning is enabled
+  discord_forum_webhook: '',                    // optional Discord webhook for new forum posts (empty = off)
+  discord_feed_webhook: '',                     // optional Discord webhook for new feed posts (empty = off)
 };
 export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
 export async function getAppSettings(env: any) {
@@ -830,6 +834,33 @@ export async function getAppSettings(env: any) {
 }
 export function dmDefaultTtl(s: any) { return Number(s.dm_default_ttl) || Dm.defaultTtl; }
 export function dmBackstopSeconds(s: any) { return (Number(s.dm_backstop_days) || 30) * 86400; }
+
+/* ================= Discord webhook fan-out =================
+   Two OPTIONAL webhooks (forum posts, feed posts) live in app_settings as full
+   Discord webhook URLs; empty = off. The URL is validated by isDiscordWebhook
+   (pure.js) so a corrupted/hostile setting can never make the worker POST member
+   content to an arbitrary host. Member text rides ONLY in an embed (embeds never
+   ping) and allowed_mentions is emptied, so no post body can @everyone or @here
+   the channel. Fire-and-forget with a hard timeout: a dead or slow webhook never
+   delays or breaks a post. Callers exclude the back room. */
+export async function sendDiscord(hookUrl: any, embed: any): Promise<void> {
+  if (!isDiscordWebhook(hookUrl)) return;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 5000);
+  try {
+    await fetch(hookUrl.trim(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'Mere Catholicity',
+        embeds: [embed],
+        allowed_mentions: { parse: [] },
+      }),
+      signal: ctl.signal,
+    });
+  } catch (e) { /* a dead webhook must never break a post */ }
+  finally { clearTimeout(timer); }
+}
 
 /* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
    recipient does NOT refuse the send: the message is stored held, reads as
