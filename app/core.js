@@ -29,6 +29,7 @@ import * as Mute from '../purescript/output/Domain.Mute/index.js';
 import * as Blocked from '../purescript/output/Domain.Blocked/index.js';
 import * as Compose from '../purescript/output/Domain.Compose/index.js';
 import * as Handle from '../purescript/output/Domain.Handle/index.js';
+import * as Links from '../purescript/output/Domain.Links/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -71,6 +72,12 @@ export const profileLimits = Profile.limits;
    handleMax is the max length for the input's maxLength. */
 export const handleValidate = (raw) => Handle.validate(String(raw == null ? '' : raw));
 export const handleMax = Handle.maxLen;
+
+/* linkNormalize(platform, raw) -> { ok, url, error }: sanitize/normalize one
+   offsite profile link (website/x/facebook/instagram/tiktok) to a safe https URL,
+   single-sourced with the worker (Domain.Links). Already a plain record. */
+export const linkNormalize = (platform, raw) => Links.normalize(String(platform == null ? '' : platform))(String(raw == null ? '' : raw));
+export const linkPlatforms = Links.platforms;
 
 /* faithLabel(code) -> the display label, or '' for an unrecognized code (the
    client checks truthiness). faiths -> the ordered [{code,label}] the signup
