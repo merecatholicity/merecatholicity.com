@@ -5105,6 +5105,37 @@
     if (p.media_key) { var mm = wallMediaNode(p.media_key); if (mm) node.appendChild(mm); }
 
     var foot = el('div', 'wall-foot');
+    /* Like toggle: ♥ + count, member-gated, optimistic (the server returns the
+       fresh state/count and repairs a wrong guess). Reuses the foot-link style;
+       maroon + filled when you have liked. */
+    var likeN = Number(p.likes) || 0;
+    var liked = !!p.liked;
+    var likeBtn = el('a', 'wall-comments-toggle wall-like');
+    likeBtn.href = '#';
+    likeBtn.style.marginRight = '1.1em';
+    function renderLike() {
+      likeBtn.textContent = (liked ? '♥' : '♡') + ' ' + (likeN > 0 ? likeN : 'Like');
+      likeBtn.style.color = liked ? 'var(--maroon)' : '';
+      likeBtn.style.fontWeight = liked ? '600' : '';
+      likeBtn.title = liked ? 'Unlike this post' : 'Like this post';
+    }
+    renderLike();
+    likeBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (!state.myHash) { if (window.mcOnboard) window.mcOnboard(); return; }
+      var want = !liked;
+      liked = want; likeN = Math.max(0, likeN + (want ? 1 : -1)); renderLike();
+      fetch(API + '/wall/like', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, post: p.id, like: want }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d && d.ok) { liked = !!d.liked; likeN = Number(d.likes) || 0; }
+          else { liked = !want; likeN = Math.max(0, likeN + (want ? -1 : 1)); }
+          renderLike();
+        })
+        .catch(function () { liked = !want; likeN = Math.max(0, likeN + (want ? -1 : 1)); renderLike(); });
+    });
+    foot.appendChild(likeBtn);
     var cn = Number(p.comments) || 0;
     var toggle = el('a', 'wall-comments-toggle', cn === 1 ? '1 comment' : cn + ' comments');
     toggle.href = '#';
@@ -5201,7 +5232,7 @@
               /* Build a local row to render immediately (author = me). */
               var row = { id: d.id, author_hash: state.myHash, nick: myNick(), avatar: myAvatar(), faith: getFaith(),
                 body: body, created_at: Math.floor(Date.now() / 1000), media_key: mediaKey || null, comments: 0,
-                posts: myPostCount() };
+                likes: 0, liked: false, posts: myPostCount() };
               if (onDone) onDone(row);
             });
         }
@@ -5448,12 +5479,14 @@
              reply/mention jump to the forum post. */
           var isDm = it.kind === 'dm';
           var isWall = it.kind === 'wall';
+          var isLike = it.kind === 'wall-like';
           var label = isDm ? (who + ' sent you a message')
-            : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-              : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+            : isLike ? (who + ' liked your post')
+              : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+                : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
           var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
           a.href = isDm ? ('messages.html?dm=' + it.actor_hash)
-            : isWall ? ('community.html?post=' + it.comment_id)
+            : (isWall || isLike) ? ('community.html?post=' + it.comment_id)
               : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
