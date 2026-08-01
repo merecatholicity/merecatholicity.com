@@ -594,6 +594,13 @@
     if (state.profileLoaded) return state.myAdmin;
     return state.myAdmin || ADMIN_HASHES.indexOf(state.myHash) !== -1;
   }
+  /* A resolved, logged-in member (key + hash). Single-sources the "is member"
+     decision (Domain.Auth.isMember) that was inlined as the raw key-and-hash
+     conjunction across the board; the classic conjunction is the no-bundle fallback. */
+  function isMember() {
+    if (window.mcCore) return window.mcCore.authIsMember(authSig());
+    return !!(state.key && state.myHash);
+  }
 
   /* Callbacks waiting on the reader's own profile fetch, so a view that renders
      before admin status is known can redraw once it lands. */
@@ -2610,7 +2617,7 @@
   /* Authenticate the live socket for this member so DM/notif pushes arrive. */
   function enableMemberLive() {
     ensureMyPubkey();   // publish this identity's DM public key once it is live
-    if (state.key && state.myHash && window.mcLive && window.mcLive.member) {
+    if (isMember() && window.mcLive && window.mcLive.member) {
       window.mcLive.member.enable(state.key, state.myHash);
     }
   }
@@ -2651,7 +2658,7 @@
     /* The -in / -out modifier lets the mobile CSS hide the redundant logged-in nav
        line (every link is in the tab bar / app-bar / settings sheet) while keeping
        the logged-out create line, which is the only join path on article pages. */
-    var loggedIn = !!(state.key && state.myHash);
+    var loggedIn = !!(isMember());
     var line = el('p', 'identity-line ' + (loggedIn ? 'identity-line-in' : 'identity-line-out'));
     if (loggedIn) {
       /* First line: where to go, grouped — your activity (the two badge feeds),
@@ -2919,7 +2926,7 @@
   function renderButtons() {
     var row = section.querySelector('.comment-buttons');
     row.textContent = '';
-    if (state.key && state.myHash) {
+    if (isMember()) {
       var keyed = el('button', 'btn btn-send', 'Post as ' + (state.myNick || displayName(state.myHash)).split(' ')[0]);
       keyed.type = 'button';
       keyed.addEventListener('click', function () { post(true); });
@@ -3002,7 +3009,7 @@
     var row = section.querySelector('.comment-buttons');
     if (!row) return;
     row.textContent = '';
-    var keyed = state.key && state.myHash;
+    var keyed = isMember();
     var label = keyed ? labelBase + ' as ' + (state.myNick || displayName(state.myHash)).split(' ')[0] : labelBase;
     var button = el('button', 'btn btn-send', label);
     button.type = 'button';
@@ -3138,7 +3145,7 @@
     new MutationObserver(ensureAuditLink)
       .observe(section.querySelector('.comment-identity'), { childList: true });
     /* Search is a members' feature, so the box only shows once you are logged in. */
-    if (state.key && state.myHash) section.appendChild(indexSearchBox());
+    if (isMember()) section.appendChild(indexSearchBox());
     var wrap = el('div', 'board-cats');
     var stats = {}, catNames = {};
     CATS.forEach(function (cat) {
@@ -3300,7 +3307,7 @@
     var cat = catByKey(key);
     if (!cat) return viewIndex();
     /* the back room shows nothing to a keyless visitor — not even its name */
-    if (key === 'adminsonly' && !(state.key && state.myHash)) return viewIndex();
+    if (key === 'adminsonly' && !(isMember())) return viewIndex();
     /* Ported (Wave B2): the Lit view renders when the bundle stands. */
     if (window.mcViews && window.mcViews.boardCat) return window.mcViews.boardCat(section, window.mcKit, key);
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
@@ -4310,7 +4317,7 @@
       edit.type = 'button';
       edit.addEventListener('click', function () { editProfile(card, p); });
       card.appendChild(edit);
-    } else if (state.key && state.myHash && p.hash !== state.myHash) {
+    } else if (isMember() && p.hash !== state.myHash) {
       /* The librarian gets neither door: no DMs (it holds no inbox) and no
          mute (it speaks only when summoned). */
       if (p.hash !== MERECAT_BOT_HASH) {
@@ -5385,7 +5392,7 @@
     crumb([['Catholicity Board', 'community.html'], ['Search']]);
     /* Search is for logged-in members only. A logged-out visitor who lands on a
        shared ?q= link is told to log in rather than shown the search UI. */
-    if (!(state.key && state.myHash)) {
+    if (!(isMember())) {
       section.appendChild(el('p', 'comments-status',
         'Search is for logged-in members. Create an identity or paste your key above, then search the board.'));
       return;
@@ -5614,7 +5621,7 @@
     }
     /* The page is open to everyone; asking needs a free identity, made in
        one click right above the question box. */
-    var loggedIn = !!(state.key && state.myHash);
+    var loggedIn = !!(isMember());
     ensureMerecatStyles();
 
     var intro = el('div', 'merecat-intro');
@@ -5869,7 +5876,7 @@
       var mkIdBox = section.querySelector('.comment-identity');
       if (mkIdBox) {
         new MutationObserver(function () {
-          if (!(state.key && state.myHash)) return;
+          if (!(isMember())) return;
           q.disabled = false;
           send.disabled = false;
           q.placeholder = askPlaceholder;
@@ -7200,7 +7207,7 @@
       case 'Dm': return viewDm(r.s);
       /* The mobile Profile tab lands here: your own profile when signed in, else
          the board front where the identity line offers "Create an identity". */
-      case 'Me': return (state.key && state.myHash) ? viewProfile(state.myHash) : viewIndex();
+      case 'Me': return (isMember()) ? viewProfile(state.myHash) : viewIndex();
       case 'Profile': return viewProfile(r.s);
       case 'Audit': return viewAudit();
       case 'Topic': return viewTopic(r.n);
