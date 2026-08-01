@@ -17,6 +17,7 @@ import * as Board from '../../purescript/output/Domain.Board/index.js';
 import * as Emoji from '../../purescript/output/Domain.Emoji/index.js';
 import * as Presence from '../../purescript/output/Domain.Presence/index.js';
 import * as Handle from '../../purescript/output/Domain.Handle/index.js';
+import * as Links from '../../purescript/output/Domain.Links/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
@@ -1565,7 +1566,7 @@ async function handleProfileGet(request, env, url) {
     if (!hash) return json({ ok: false, error: 'No such profile.' }, 404, cacheHeader(url));
   }
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith, handle FROM profiles WHERE hash = ?1').bind(hash).first();
+  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith, handle, links FROM profiles WHERE hash = ?1').bind(hash).first();
   const counts = await postCountsFor(env, [hash]);
   return json({
     ok: true,
@@ -1577,6 +1578,7 @@ async function handleProfileGet(request, env, url) {
       avatar: row ? (row.avatar || null) : null,
       faith: row ? (row.faith || null) : null,
       handle: row ? (row.handle || null) : null,
+      links: row && row.links ? safeParseLinks(row.links) : null,
       posts: counts[hash] || 0,
       rank: rankFor(counts[hash] || 0),
       assigned: displayName(hash),
@@ -1593,6 +1595,27 @@ function cleanField(raw, max) {
   if (v.length > max) return { error: true };
   if (CONTROL_RE.test(v)) return { error: true };
   return { value: v || null };
+}
+
+/* Parse the stored offsite-links JSON back to an object for the client. */
+function safeParseLinks(s) {
+  try { const o = JSON.parse(s); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null; } catch { return null; }
+}
+
+/* Sanitize a client-supplied links object to a JSON string of ONLY safe,
+   normalized https URLs — Domain.Links drops anything that is not an http(s) URL
+   or a normalizable handle. Returns the JSON string, or null when nothing valid
+   remains (which clears the column). */
+function normalizeLinks(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const plat of Links.platforms) {
+    const v = src[plat];
+    if (v == null || String(v).trim() === '') continue;
+    const n = Links.normalize(plat)(String(v));
+    if (n.ok && n.url) out[plat] = n.url;
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : null;
 }
 
 /* Owner-writable profile: the key must hash to the profile's own hash, so a
@@ -1644,6 +1667,10 @@ async function handleProfileSave(request, env) {
       handleVal = v.handle;
     }
   }
+  /* Offsite links (website + socials) sanitized to safe https URLs (invalid ones
+     dropped). Absent key = leave unchanged; an all-empty object clears them. */
+  const linksProvided = Object.prototype.hasOwnProperty.call(data, 'links');
+  const linksVal = linksProvided ? normalizeLinks(data.links) : null;
   const blob = [nick.value, bio.value, signature.value].filter(Boolean).join('\n');
   if (blob) {
     const { status, verdict } = await screen(env, blob, await isTrusted(env, authorHash));
@@ -1668,13 +1695,19 @@ async function handleProfileSave(request, env) {
       return json({ ok: false, error: 'That @handle is taken. Pick another.', handle_error: 'taken' }, 409);
     }
   }
+  /* Links written separately (an absent key leaves them untouched). */
+  if (linksProvided) {
+    await env.DB.prepare('UPDATE profiles SET links = ?2, updated_at = ?3 WHERE hash = ?1')
+      .bind(authorHash, linksVal, now).run();
+  }
   /* The text upsert leaves the avatar and faith columns as they stand when not
-     given; read them back (with the handle) so the client's re-render keeps them. */
-  const av = await env.DB.prepare('SELECT avatar, faith, handle FROM profiles WHERE hash = ?1').bind(authorHash).first();
+     given; read them back (with the handle + links) so the client's re-render keeps them. */
+  const av = await env.DB.prepare('SELECT avatar, faith, handle, links FROM profiles WHERE hash = ?1').bind(authorHash).first();
   return json({
     ok: true,
     profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
       avatar: av && av.avatar || null, faith: av && av.faith || null, handle: av && av.handle || null,
+      links: av && av.links ? safeParseLinks(av.links) : null,
       assigned: displayName(authorHash), admin: await isAdminHash(env, authorHash) },
   }, 200);
 }

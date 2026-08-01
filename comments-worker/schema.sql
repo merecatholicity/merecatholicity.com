@@ -184,7 +184,13 @@ CREATE TABLE IF NOT EXISTS profiles (
   -- free-form display `nick`. NULL = none (the URL falls back to ?u=<hash>). The
   -- format rules live in Domain.Handle; uniqueness is the index below.
   -- (Existing DBs: ALTER TABLE profiles ADD COLUMN handle TEXT;)
-  handle         TEXT
+  handle         TEXT,
+  -- Offsite links (public): a JSON object {website,x,facebook,instagram,tiktok} of
+  -- already-normalized https URLs. Each is sanitized by Domain.Links before store
+  -- (only http(s) URLs / normalized handle-URLs — never javascript:/data:), since
+  -- the value is rendered as an href. NULL = none.
+  -- (Existing DBs: ALTER TABLE profiles ADD COLUMN links TEXT;)
+  links          TEXT
 );
 -- One holder per handle (case-insensitive: handles are stored already-lowered).
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_handle ON profiles(handle);
