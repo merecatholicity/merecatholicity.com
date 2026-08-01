@@ -23,11 +23,11 @@ class McAdminHome extends LitElement {
   static properties = { g: { attribute: false } };
   constructor() { super(); this.kit = null; this.g = ''; }
   createRenderRoot() { return this; }
-  connectedCallback() { super.connectedCallback(); document.title = 'Administrative options | Catholicity Board'; }
+  connectedCallback() { super.connectedCallback(); document.title = 'Administrative options | Community'; }
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Catholicity Board', 'community.html'], ['Administrative options']]);
+    const head = crumbTpl([['Community', 'community.html'], ['Administrative options']]);
     const g = gate(kit, this);
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
@@ -53,7 +53,7 @@ class McMerecatThreads extends LitElement {
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
-    document.title = 'merecat Q&A at a glance | Catholicity Board';
+    document.title = 'merecat Q&A at a glance | Community';
     this.maybeLoad();
   }
   maybeLoad() {
@@ -74,7 +74,7 @@ class McMerecatThreads extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
+    const head = crumbTpl([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
     const g = gate(kit, this);
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
@@ -102,7 +102,7 @@ class McMerecatThread extends LitElement {
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
-    document.title = 'Observing a conversation | Catholicity Board';
+    document.title = 'Observing a conversation | Community';
     this.maybeLoad();
   }
   maybeLoad() {
@@ -159,7 +159,7 @@ class McMerecatThread extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + this.tid]]);
+    const head = crumbTpl([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + this.tid]]);
     const g = gate(kit, this);
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;

@@ -25,7 +25,7 @@ class McProfile extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     const kit = this.kit;
-    document.title = 'Profile | Catholicity Board';
+    document.title = 'Profile | Community';
     if (!/^[0-9a-f]{64}$/.test(String(this.hash))) { this.err = 'bad'; return; }
     kit.cachedJson(kit.API + '/profile?hash=' + this.hash + kit.freshParam('&'), kit.freshOpts(), 30000)
       .then((d) => {
@@ -53,7 +53,7 @@ class McProfile extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Catholicity Board', 'community.html'], ['Profile']]);
+    const head = crumbTpl([['Community', 'community.html'], ['Profile']]);
     if (this.err === 'bad') return html`${head}<p class="comments-status">No such profile.</p>`;
     if (this.err === 'load') return html`${head}<p class="comments-status">The profile could not be loaded. Check your connection and reload the page.</p>`;
     if (!this.profile) return html`${head}<p class="comments-status">Loading profile...</p>`;
@@ -73,7 +73,7 @@ class McInbox extends LitElement {
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
-    document.title = 'Inbox | Catholicity Board';
+    document.title = 'Inbox | Community';
     if (!this.kit.state.key) { this.err = 'gate'; return; }
     this.load();
     /* Live: a DM pushed over the private user scope bumps its thread to the top
@@ -127,7 +127,7 @@ class McInbox extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Catholicity Board', 'community.html'], ['Inbox']]);
+    const head = crumbTpl([['Community', 'community.html'], ['Inbox']]);
     if (this.err === 'gate') return html`${head}<p class="comments-status">Messages need an identity. Create one on the board front page.</p>`;
     if (this.err === 'load') return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">The inbox could not be loaded. Check your connection and reload the page.</p>`;
     if (!this.d) return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">Loading messages...</p>`;

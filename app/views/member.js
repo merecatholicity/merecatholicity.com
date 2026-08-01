@@ -25,7 +25,7 @@ class McUsers extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     const kit = this.kit;
-    document.title = 'Members | Catholicity Board';
+    document.title = 'Members | Community';
     this.page = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     kit.cachedJson(kit.API + '/dm/directory' + kit.freshParam('?'), kit.freshOpts(), 45000)
       .then((d) => {
@@ -52,7 +52,7 @@ class McUsers extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = html`${crumbTpl([['Catholicity Board', 'community.html'], ['Members']])}
+    const head = html`${crumbTpl([['Community', 'community.html'], ['Members']])}
       <p class="board-intro">Everyone on the board, newest first. Search by nickname or assigned name to find who is who, then open a profile.</p>
       <div class="key-row"><input class="key-input mc-userq" type="text" placeholder="Search members by name..." .value=${this.q} @input=${(e) => this.onSearch(e)}></div>`;
     if (this.err) return html`${head}<p class="comments-status">${this.err}</p>`;
@@ -95,7 +95,7 @@ class McNotifications extends LitElement {
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
-    document.title = 'Notifications | Catholicity Board';
+    document.title = 'Notifications | Community';
     if (!this.kit.state.key) { this.err = 'gate'; return; }
     this.load();
     /* Live: a notification pushed over the private user scope reloads the list
@@ -127,7 +127,7 @@ class McNotifications extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Catholicity Board', 'community.html'], ['Notifications']]);
+    const head = crumbTpl([['Community', 'community.html'], ['Notifications']]);
     if (this.err === 'gate') return html`${head}<p class="comments-status">Notifications need an identity. Create one on the board front page.</p>`;
     if (this.err === 'load') return html`${head}<p class="comments-status">Notifications could not be loaded. Check your connection and reload the page.</p>`;
     if (!this.d) return html`${head}<p class="comments-status">Loading notifications...</p>`;

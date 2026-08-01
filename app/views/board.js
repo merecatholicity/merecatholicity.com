@@ -35,7 +35,7 @@ class McBoardIndex extends LitElement {
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
-    document.title = 'Catholicity Board | Mere Catholicity';
+    document.title = 'Community | Mere Catholicity';
     const kit = this.kit;
     this.adminOn = kit.isAdmin();
     kit.cachedJson(kit.API + '/board' + kit.freshParam('?'), kit.freshOpts(), 45000)
@@ -194,7 +194,7 @@ class McBoardCat extends LitElement {
     super.connectedCallback();
     const kit = this.kit;
     const cat = kit.catByKey(this.catKey);
-    document.title = cat[1] + ' | Catholicity Board';
+    document.title = cat[1] + ' | Community';
     this.pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     (this.catKey === 'adminsonly'
       ? kit.cachedJson(kit.API + '/board/admin', {
@@ -349,7 +349,7 @@ class McBoardCat extends LitElement {
     const cat = kit.catByKey(this.catKey);
     const hrefFor = (i) => 'community.html?cat=' + this.catKey + '&p=' + i;
     return html`
-      <p class="board-crumb"><a href="community.html">Catholicity Board</a> › <span>${cat[1]}</span>
+      <p class="board-crumb"><a href="community.html">Community</a> › <span>${cat[1]}</span>
         ${this.catKey === 'adminsonly' ? nothing : html` <a class="comments-rss" href=${kit.API + '/feed?cat=' + this.catKey} title="Follow this category with a feed reader">RSS</a>`}</p>
       <h1 class="mc-screen-title">${cat[1]}</h1>
       <p class="board-cat-desc">${cat[2]}${cat[3] ? html`<a href=${cat[4]}>${cat[3]}</a>.` : nothing}</p>

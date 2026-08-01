@@ -2686,11 +2686,8 @@
       var searchLink = el('a', 'identity-action', 'Search');
       searchLink.href = 'community.html?q=';
       line.appendChild(searchLink);
-      line.appendChild(document.createTextNode(' · '));
-      var merecatLink = el('a', 'identity-action', '🐈 merecat');
-      merecatLink.href = 'community.html?merecat=1';
-      merecatLink.title = 'Ask the librarian';
-      line.appendChild(merecatLink);
+      /* merecat is NOT listed here — it has its own tab in the app rail / bottom
+         bar and is clearly marked there; a second entry on this line is redundant. */
       /* The platform-level identity controls (who you are, Show my key, Logout)
          moved OUT of the forum line into the platform chrome / Settings gear, now
          that the site is a platform and not only a forum. Forum controls stay. */
@@ -2952,7 +2949,7 @@
     if (pv) row.appendChild(pv);
   }
 
-  /* ---- The Catholicity Board ---- */
+  /* ---- The Community ---- */
 
   function crumb(parts) {
     var p = el('p', 'board-crumb');
@@ -3117,7 +3114,7 @@
     /* Ported (Wave B1): the Lit view renders when the bundle stands; this
        body remains the no-shell fallback and the one-line revert. */
     if (window.mcViews && window.mcViews.boardIndex) return window.mcViews.boardIndex(section, window.mcKit);
-    document.title = 'Catholicity Board | Mere Catholicity';
+    document.title = 'Community | Mere Catholicity';
     /* A muted word on who we are, for the newcomer who lands here. One paragraph. */
     var introP = el('p', 'board-intro');
     introP.appendChild(el('small', null,
@@ -3311,8 +3308,8 @@
     /* Ported (Wave B2): the Lit view renders when the bundle stands. */
     if (window.mcViews && window.mcViews.boardCat) return window.mcViews.boardCat(section, window.mcKit, key);
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-    document.title = cat[1] + ' | Catholicity Board';
-    var head = crumb([['Catholicity Board', 'community.html'], [cat[1]]]);
+    document.title = cat[1] + ' | Community';
+    var head = crumb([['Community', 'community.html'], [cat[1]]]);
     var rss = el('a', 'comments-rss', 'RSS');
     rss.href = API + '/feed?cat=' + key;
     rss.title = 'Follow this category with a feed reader';
@@ -3458,13 +3455,13 @@
         if (!d.ok) throw new Error(d.error || 'failed');
         var cat = catByKey(d.cat);
         state.anonAllowed = !!d.anon;
-        document.title = d.topic.title + ' | Catholicity Board';
+        document.title = d.topic.title + ' | Community';
         /* Opening a thread marks it read for the "new since last visit" state
            AND reads its notifications — however you got here. Deduped so paging
            within the thread does not re-write each turn; the reply's fresh unread
            count corrects the badge on this very page. */
         if (state.key) markThreadRead(d.topic.id);
-        crumb([['Catholicity Board', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
+        crumb([['Community', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]]);
         var headEl = el('h2', 'board-topic-head', d.topic.title);
         if (d.topic.sticky) headEl.appendChild(el('span', 'board-sticky', '(sticky)'));
         if (d.topic.locked) headEl.appendChild(el('span', 'board-locked', '(locked)'));
@@ -3541,7 +3538,7 @@
         annotateMeta('board:' + d.cat);
       })
       .catch(function (err) {
-        crumb([['Catholicity Board', 'community.html'], ['Topic']]);
+        crumb([['Community', 'community.html'], ['Topic']]);
         section.appendChild(el('p', 'comments-status',
           err.message === 'No such topic.' ? 'No such topic. It may have been removed.'
             : 'The topic could not be loaded. Check your connection and reload the page.'));
@@ -3558,8 +3555,8 @@
      so a member of staff picks a task rather than hunting scattered links. */
   function viewAdminHome() {
     if (window.mcViews && window.mcViews.adminHome) return window.mcViews.adminHome(section, window.mcKit);
-    document.title = 'Administrative options | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options']]);
+    document.title = 'Administrative options | Community';
+    crumb([['Community', 'community.html'], ['Administrative options']]);
     if (adminGate(viewAdminHome)) return;
     section.appendChild(el('p', 'board-intro',
       'Everything that governs the board sits behind these doors. Each is admin-only, here and at the server.'));
@@ -3590,8 +3587,8 @@
      observes; there is no composer, no way to ask or reply, nothing to change. */
   function viewMerecatThreads() {
     if (window.mcViews && window.mcViews.merecatThreads) return window.mcViews.merecatThreads(section, window.mcKit);
-    document.title = 'merecat Q&A at a glance | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
+    document.title = 'merecat Q&A at a glance | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
     if (adminGate(viewMerecatThreads)) return;
     section.appendChild(el('p', 'board-intro',
       'Every question put to the librarian in the last thirty days, newest first, read-only. Open one to observe the whole exchange. A thread a member deletes leaves here too, and one saved past thirty days still ages off this view. This is for improving the service, not participating. You cannot ask or reply here.'));
@@ -3641,8 +3638,8 @@
      same as everywhere), sources shown. No composer, no forward, no controls. */
   function viewMerecatThread(id) {
     if (window.mcViews && window.mcViews.merecatThread) return window.mcViews.merecatThread(section, window.mcKit, id);
-    document.title = 'Observing a conversation | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'],
+    document.title = 'Observing a conversation | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'],
       ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + id]]);
     if (adminGate(function () { viewMerecatThread(id); })) return;
     if (!Number.isInteger(id) || id < 1) { section.appendChild(el('p', 'comments-status', 'No such conversation.')); return; }
@@ -3707,8 +3704,8 @@
      everyone else carries a (remove). Adding is by the same @-mention picker as
      the rest of the site: type a name, pick a member, add. */
   function viewAdmins() {
-    document.title = 'Add / Remove Admins | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Add / Remove Admins']]);
+    document.title = 'Add / Remove Admins | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Add / Remove Admins']]);
     if (adminGate(viewAdmins)) return;
     section.appendChild(el('p', 'board-intro',
       'An admin can moderate every post, manage IP bans, and manage this list. All admins are equal: any admin can add or remove any other, yourself included. The board keeps at least one admin, so the last one cannot be removed until another is added.'));
@@ -3785,8 +3782,8 @@
   }
 
   function viewAudit() {
-    document.title = 'Activity audit | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Activity audit']]);
+    document.title = 'Activity audit | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Activity audit']]);
     if (adminGate(viewAudit)) return;
     section.appendChild(el('p', 'board-intro',
       'The moderation console. Reported posts first, flagged by members and still live until you rule on them. Then the review queue the automated screen held back. Then the last two weeks of activity across the site pages, the book, and the forums, newest first, every line a link to that exact comment and actionable from here.'));
@@ -4020,8 +4017,8 @@
   /* The admin IP-ban list: add or remove IPv4/IPv6 entries by hand, beside the
      one-click bans from the fingerprint dropdown. */
   function viewIpBans() {
-    document.title = 'IP ban list | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['IP ban list']]);
+    document.title = 'IP ban list | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['IP ban list']]);
     if (adminGate(viewIpBans)) return;
     var addBox = el('div', 'key-box');
     addBox.hidden = false;
@@ -4122,8 +4119,8 @@
      is reached from the View-profile link and from every clickable username. */
   function viewProfile(hash) {
     if (window.mcViews && window.mcViews.profile) return window.mcViews.profile(section, window.mcKit, hash);
-    document.title = 'Profile | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Profile']]);
+    document.title = 'Profile | Community';
+    crumb([['Community', 'community.html'], ['Profile']]);
     if (!/^[0-9a-f]{64}$/.test(String(hash))) {
       section.appendChild(el('p', 'comments-status', 'No such profile.'));
       return;
@@ -4762,8 +4759,8 @@
      in place). Twenty to a page, click a name to open the profile. */
   function viewUsers() {
     if (window.mcViews && window.mcViews.users) return window.mcViews.users(section, window.mcKit);
-    document.title = 'Members | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Members']]);
+    document.title = 'Members | Community';
+    crumb([['Community', 'community.html'], ['Members']]);
     section.appendChild(el('p', 'board-intro',
       'Everyone on the board, newest first. Search by nickname or assigned name to find who is who, then open a profile.'));
     var searchRow = el('div', 'key-row');
@@ -4853,8 +4850,8 @@
       section.appendChild(dmE2eBadge());
       return window.mcViews.inbox(section, window.mcKit);
     }
-    document.title = 'Inbox | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Inbox']]);
+    document.title = 'Inbox | Community';
+    crumb([['Community', 'community.html'], ['Inbox']]);
     if (!state.key) {
       section.appendChild(el('p', 'comments-status', 'Messages need an identity. Create one on the board front page.'));
       return;
@@ -4929,8 +4926,8 @@
      permalink. Newest first, twenty to a page. */
   function viewNotifications() {
     if (window.mcViews && window.mcViews.notifications) return window.mcViews.notifications(section, window.mcKit);
-    document.title = 'Notifications | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Notifications']]);
+    document.title = 'Notifications | Community';
+    crumb([['Community', 'community.html'], ['Notifications']]);
     if (!state.key) {
       section.appendChild(el('p', 'comments-status', 'Notifications need an identity. Create one on the board front page.'));
       return;
@@ -5024,17 +5021,17 @@
 
   function viewDm(other) {
     if (!/^[0-9a-f]{64}$/.test(String(other))) {
-      crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+      crumb([['Community', 'community.html'], ['Messages']]);
       section.appendChild(el('p', 'comments-status', 'No such member.'));
       return;
     }
     if (!state.key) {
-      crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+      crumb([['Community', 'community.html'], ['Messages']]);
       section.appendChild(el('p', 'comments-status', 'Messages need an identity. Create one on the board front page.'));
       return;
     }
     if (other === state.myHash) {
-      crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+      crumb([['Community', 'community.html'], ['Messages']]);
       section.appendChild(el('p', 'comments-status', 'That would be a soliloquy. Pick another member.'));
       return;
     }
@@ -5059,7 +5056,7 @@
         var label = dmLabel(other, d.other.nick);
         var shortName = d.other.nick || displayName(other);
         document.title = shortName + ' | Inbox';
-        crumb([['Catholicity Board', 'community.html'], ['Inbox', 'community.html?inbox=1'], [shortName]]);
+        crumb([['Community', 'community.html'], ['Inbox', 'community.html?inbox=1'], [shortName]]);
         var headEl = el('h2', 'board-topic-head');
         var nameLink = el('a', null, label);
         nameLink.href = profileHref(other);
@@ -5282,7 +5279,7 @@
         }
       })
       .catch(function () {
-        crumb([['Catholicity Board', 'community.html'], ['Messages']]);
+        crumb([['Community', 'community.html'], ['Messages']]);
         section.appendChild(el('p', 'comments-status', 'The conversation could not be loaded. Check your connection and reload the page.'));
       });
   }
@@ -5389,8 +5386,8 @@
     var cat0 = qs.get('cat') || '';
     var author0 = qs.get('author') || '';
     var sort0 = qs.get('sort') || '';
-    document.title = 'Search | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Search']]);
+    document.title = 'Search | Community';
+    crumb([['Community', 'community.html'], ['Search']]);
     /* Search is for logged-in members only. A logged-out visitor who lands on a
        shared ?q= link is told to log in rather than shown the search UI. */
     if (!(isMember())) {
@@ -5596,16 +5593,16 @@
 
   function viewMerecat() {
     document.title = 'Ask Merecat AI | Mere Catholicity';
-    var crumbP = crumb([['Catholicity Board', 'community.html'], ['merecat']]);
+    var crumbP = crumb([['Community', 'community.html'], ['merecat']]);
     /* Inside a conversation the trail grows a third step naming the thread —
-       Catholicity Board › merecat › <the question that opened it> — and
+       Community › merecat › <the question that opened it> — and
        "merecat" becomes the way back to the main page. The tail updates as
        the truth arrives: a placeholder from the URL, the stored title when a
        reopened thread loads, the question itself when a fresh thread mints. */
     function setCrumb(tail) {
       crumbP.textContent = '';
       var short = tail ? (tail.length > 48 ? tail.slice(0, 48) + '…' : tail) : '';
-      var parts = [['Catholicity Board', 'community.html']];
+      var parts = [['Community', 'community.html']];
       if (short) { parts.push(['merecat', 'community.html?merecat=1']); parts.push([short]); }
       else parts.push(['merecat']);
       parts.forEach(function (part, i) {
@@ -5635,10 +5632,24 @@
     var libLink = el('a', 'body-link', 'Library page');
     libLink.href = 'library.html';
     p1.appendChild(libLink);
-    p1.appendChild(document.createTextNode(
-      '. It answers Orthodox, Roman Catholic, and Protestant questions alike from a merely catholic ground. ' +
+    p1.appendChild(document.createTextNode('. '));
+    /* The rest is folded behind a "read more" so the intro stays a single tidy
+       line until the reader asks for the whole thing. */
+    var more = el('span', 'merecat-intro-more');
+    more.appendChild(document.createTextNode(
+      'It answers Orthodox, Roman Catholic, and Protestant questions alike from a merely catholic ground. ' +
       'merecat specializes in theology and the contents of our Library. ' +
-      'Anything off-topic will be of a substantially lower quality.'));
+      'Anything off-topic will be of a substantially lower quality. '));
+    var moreTgl = el('a', 'merecat-intro-toggle', 'read more');
+    moreTgl.href = '#';
+    moreTgl.addEventListener('click', function (e) {
+      e.preventDefault();
+      var open = more.style.display === 'inline';
+      more.style.display = open ? 'none' : 'inline';
+      moreTgl.textContent = open ? 'read more' : 'read less';
+    });
+    p1.appendChild(more);
+    p1.appendChild(moreTgl);
     ib.appendChild(p1);
     intro.appendChild(ib);
     section.appendChild(intro);
@@ -6967,8 +6978,8 @@
   /* The growing platform-settings page: media sharing controls + the disappearing-
      message defaults + a purge-all-media button. Admin-only, server-enforced. */
   function viewPlatformSettings() {
-    document.title = 'Platform settings | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Platform settings']]);
+    document.title = 'Platform settings | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Platform settings']]);
     if (adminGate(viewPlatformSettings)) return;
     ensureDmStyles();
     var wrap = el('div', 'admin-settings');
@@ -7053,8 +7064,8 @@
       .catch(function () { wrap.textContent = 'The settings could not be loaded.'; });
   }
   function viewMerecatAdmin() {
-    document.title = 'merecat administration | Catholicity Board';
-    crumb([['Catholicity Board', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat']]);
+    document.title = 'merecat administration | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat']]);
     if (adminGate(viewMerecatAdmin)) return;
     ensureMerecatStyles();
     var box = el('div', 'merecat-about');

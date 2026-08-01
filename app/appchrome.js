@@ -41,7 +41,7 @@ const TABS = [
 const HOME_FEATURES = [
   { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
   { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
-  { icon: '💬', title: 'Community', sub: 'The Catholicity Board — join the conversation', href: 'community.html' },
+  { icon: '💬', title: 'Community', sub: 'Join the conversation', href: 'community.html' },
   { icon: '🐈', title: 'Ask Merecat', sub: 'Put a question to the librarian AI', href: 'community.html?merecat=1' },
 ];
 /* The reading shelf, grouped the way a newcomer reads it. Surfaces the whole
@@ -78,6 +78,22 @@ function activeTab() {
     return 'community';
   }
   return '';
+}
+
+/* The current page/view title for the top bar. Home shows the brand; every other
+   page uses document.title with the trailing " | site" / " — site" suffix stripped
+   (each forum view + content page keeps document.title current, and a title
+   MutationObserver re-syncs the bar whenever an async view updates it). */
+function pageTitle() {
+  if (activeTab() === 'home') return 'Mere Catholicity';
+  var t = String(document.title || '').split(/\s+[|—–]\s+/)[0].trim();
+  return t || 'Mere Catholicity';
+}
+
+/* Board search only belongs where the board is — on community.html. Elsewhere the
+   top-bar search magnifier is hidden (a content page has nothing to search here). */
+function onCommunity() {
+  return (location.pathname.split('/').pop() || '') === 'community.html';
 }
 
 /* Unread counts, read from the caches the comments client keeps current (live
@@ -127,12 +143,13 @@ customElements.define('mc-tabbar', McTabbar);
    you are); the div stays as the flex:1 spacer that pins the two icon clusters to
    the edges. */
 class McAppbar extends LitElement {
-  static properties = { canBack: { attribute: false }, notif: { attribute: false } };
-  constructor() { super(); this.canBack = false; this.notif = 0; }
+  static properties = { canBack: { attribute: false }, notif: { attribute: false }, title: { attribute: false } };
+  constructor() { super(); this.canBack = false; this.notif = 0; this.title = ''; }
   createRenderRoot() { return this; }
   sync() {
     this.canBack = history.length > 1;   // dim < at the very start of history
     this.notif = badgeCount('notif');
+    this.title = pageTitle();             // the current page/view title, shown centered
   }
   goBack(e) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
   goFwd(e) { e.preventDefault(); history.forward(); }
@@ -142,9 +159,9 @@ class McAppbar extends LitElement {
       <div class="mc-appbar-side mc-appbar-l">
         <button class=${'mc-ab-btn' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e) => this.goBack(e)} aria-label="Back">${ICON.back}</button>
       </div>
-      <div class="mc-appbar-title"></div>
+      <div class="mc-appbar-title" title=${this.title}>${this.title}</div>
       <div class="mc-appbar-side mc-appbar-r">
-        <a class="mc-ab-btn" href="community.html?q=" aria-label="Search">${ICON.search}</a>
+        ${onCommunity() ? html`<a class="mc-ab-btn" href="community.html?q=" aria-label="Search">${ICON.search}</a>` : ''}
         <a class="mc-ab-btn mc-ab-bell" href="community.html?notifications=1" aria-label="Notifications">${ICON.bell}${this.notif
           ? html`<span class="mc-tab-badge">${badgeText(this.notif)}</span>` : ''}</a>
         <button class="mc-ab-btn" @click=${(e) => this.settings(e)} aria-label="Settings">${ICON.gear}</button>
@@ -392,8 +409,8 @@ class McHome extends LitElement {
   render() {
     return html`<div class="mc-home">
       <div class="mc-home-hero"><span class="mc-home-cross">✝</span>
-        <h1>Mere Catholicity</h1>
         <p>One, holy, catholic, and apostolic.</p></div>
+      <hr class="mc-home-rule">
       <div class="mc-home-feats">${HOME_FEATURES.map((f) => html`
         <a class="mc-home-feat" href=${f.href}>
           <span class="mc-home-feat-ico">${f.icon}</span>
@@ -405,7 +422,6 @@ class McHome extends LitElement {
           <a class="mc-home-row" href=${s.href}>
             <span class="mc-home-row-txt"><strong>${s.title}</strong>${s.sub ? html`<small>${s.sub}</small>` : ''}</span>
             <span class="mc-home-go">›</span></a>`)}</div>`)}
-      <button class="mc-home-settings" @click=${() => window.mcSheet && window.mcSheet.settings()}>⚙ Settings</button>
     </div>`;
   }
 }
@@ -659,6 +675,15 @@ export function installChrome() {
      lands. */
   document.addEventListener('mc-badge', function () { tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); });
 
+  /* The top bar names the current page/view. Its title is set (often async, after
+     a fetch) by each view via document.title, so re-sync the bars the moment the
+     <title> changes — the bar then always matches where you are, even for a topic
+     whose title arrives with the data. */
+  var titleEl = document.querySelector('title');
+  if (titleEl && window.MutationObserver) {
+    new MutationObserver(function () { appbar.sync(); deskbar.sync(); }).observe(titleEl, { childList: true });
+  }
+
   /* Keyboard-aware composer. A position:fixed composer anchored to the layout
      viewport bottom (the sticky merecat ask box) hides BEHIND the soft keyboard
      on phones — the classic iOS quirk. Track the visual viewport, publish the
@@ -701,7 +726,7 @@ export function installChrome() {
     if (!isMobile() || !window.mcKit || !window.mcOnboard) { onboardLatch = ''; return; }
     if (readKey()) { onboardLatch = ''; return; }               // logged in — nothing to do
     var tab = activeTab();
-    var gated = tab === 'messages' || tab === 'profile' || /[?&]notifications=1\b/.test(location.search);
+    var gated = tab === 'messages' || tab === 'profile' || tab === 'merecat' || /[?&]notifications=1\b/.test(location.search);
     if (!gated) { onboardLatch = ''; return; }
     var routeKey = location.pathname + location.search;
     if (onboardLatch === routeKey) return;                       // already offered here
