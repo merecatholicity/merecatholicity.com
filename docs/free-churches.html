@@ -193,21 +193,34 @@ second motion, and the churches being asked to make it.</p>
 <div class="table-wrap" style="text-align:center">
 <svg viewBox="0 0 1050 615" style="max-width:1050px;width:100%;height:auto" role="img" aria-label="A family tree of the schisms, from the undivided Church to the free churches, with the Eastern sister churches shown in communion">
 <style>
-.nd { font-family: Georgia, serif; font-size: 15px; fill: #1a1a1a; }
-.yr { font-family: Georgia, serif; font-size: 11px; fill: #757068; }
-.cap { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: #8b1a1a; }
-.cap2 { font-family: Georgia, serif; font-size: 12px; font-style: italic; fill: #57524a; }
-.ln { stroke: #b9a58c; stroke-width: 1; fill: none; }
-.ring { stroke: #6d4b8b; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
-.ring2 { stroke: #8b1a1a; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
-.sd { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: #8b1a1a; }
-.ring3 { stroke: #31567b; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
-.pu { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: #31567b; }
-.sp { font-family: Georgia, serif; font-size: 12.5px; fill: #1a1a1a; }
-.cm { font-family: Georgia, serif; font-size: 12.5px; fill: #2f6b2f; }
-.pc { font-family: Georgia, serif; font-size: 12.5px; font-style: italic; fill: #57524a; }
-.sv { stroke: #2f6b2f; stroke-width: 1; stroke-dasharray: 3 4; fill: none; }
-.fc { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: #6d4b8b; }
+.nd { font-family: Georgia, serif; font-size: 15px; fill: var(--c-nd,#1a1a1a); }
+.yr { font-family: Georgia, serif; font-size: 11px; fill: var(--c-yr,#757068); }
+.cap { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: var(--c-mar,#8b1a1a); }
+.cap2 { font-family: Georgia, serif; font-size: 12px; font-style: italic; fill: var(--c-mut,#57524a); }
+.ln { stroke: var(--c-ln,#b9a58c); stroke-width: 1; fill: none; }
+.ring { stroke: var(--c-pur,#6d4b8b); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+.ring2 { stroke: var(--c-mar,#8b1a1a); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+.sd { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: var(--c-mar,#8b1a1a); }
+.ring3 { stroke: var(--c-blu,#31567b); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+.pu { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: var(--c-blu,#31567b); }
+.sp { font-family: Georgia, serif; font-size: 12.5px; fill: var(--c-nd,#1a1a1a); }
+.cm { font-family: Georgia, serif; font-size: 12.5px; fill: var(--c-grn,#2f6b2f); }
+.pc { font-family: Georgia, serif; font-size: 12.5px; font-style: italic; fill: var(--c-mut,#57524a); }
+.sv { stroke: var(--c-grn,#2f6b2f); stroke-width: 1; stroke-dasharray: 3 4; fill: none; }
+.fc { font-family: Georgia, serif; font-size: 13px; font-style: italic; fill: var(--c-pur,#6d4b8b); }
+/* Dark mode: the chart's fills are near-black/dark accents, illegible on the
+   dark page. Remap each to a light equivalent (mirrors the site's dark tokens).
+   Both the explicit data-theme="dark" choice and system-dark-before-JS. */
+:root[data-theme="dark"] {
+  --c-nd:#e6e8ea; --c-yr:#9aa1a9; --c-mar:#ef6b6b; --c-mut:#a1a7ae;
+  --c-ln:#c9b596; --c-pur:#c79ae0; --c-blu:#7ea6d8; --c-grn:#6cc47a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-nd:#e6e8ea; --c-yr:#9aa1a9; --c-mar:#ef6b6b; --c-mut:#a1a7ae;
+    --c-ln:#c9b596; --c-pur:#c79ae0; --c-blu:#7ea6d8; --c-grn:#6cc47a;
+  }
+}
 </style>
 <text class="nd" x="430" y="28" text-anchor="middle" font-weight="bold">The Church of the first millennium</text>
 <line class="ln" x1="430" y1="52" x2="80" y2="88"/>
@@ -2234,7 +2247,7 @@ unless otherwise noted.</p>
 <script defer src="comments.js?v=197"></script>
 </main>
 <footer>
-merecatholicity.com &middot; <a href="terms.html">terms &amp; conds</a>
+merecatholicity.com &middot; <a href="terms.html">terms &amp; conds</a> &middot; <a href="privacy.html">privacy</a>
 </footer>
 </body>
 </html>
