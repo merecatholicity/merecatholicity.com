@@ -58,16 +58,16 @@ const TABS: Tab[] = [
 const HOME_FEATURES = [
   { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
   { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
-  { icon: '📜', title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
   { icon: '📚', title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
+  { icon: 'ℹ️', title: 'About', sub: 'The project', href: 'about.html' },
 ];
 /* The reading shelf, grouped the way a newcomer reads it. Surfaces the rest of
    the site nav (Contact lives only in the footer, kept quiet by design — not
-   here; Credo + Library are up in the feature cards, not repeated here). */
+   here; Library + About are up in the feature cards, not repeated here). */
 const HOME_SECTIONS = [
   { heading: 'Start here', items: [
+    { title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
     { title: 'Lex orandi, lex credendi', sub: 'The rule of prayer', href: 'lex-orandi.html' },
-    { title: 'About', sub: 'The project', href: 'about.html' },
   ] },
   { heading: 'The papers', items: [
     { title: 'Charting: the historic communions', sub: 'Rome, the Orthodox, the confessional churches', href: 'charting-communions.html' },
