@@ -23,7 +23,7 @@ NAV_YML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nav.yml")
 # home page (its <head> carries og/twitter meta), the contact form (an async
 # Turnstile script the extractor can't see), the dynamic board SPA, and the
 # off-site interstitial.
-PAGES = ["index.html", "contact.html", "community.html", "admin.html", "feed.html", "messages.html", "profile.html", "merecat-ai.html", "away.html", "kjv.html", "douay-rheims.html", "where-to-begin.html", "the-book.html"]
+PAGES = ["index.html", "contact.html", "community.html", "admin.html", "journal.html", "feed.html", "messages.html", "profile.html", "merecat-ai.html", "away.html", "kjv.html", "douay-rheims.html", "where-to-begin.html", "the-book.html"]
 # The Makefile runs this from the repo root (`python scripts/nav.py`), so these
 # paths are relative to the root: docs/ holds the built PAGES, and the generated
 # nav fragment lives in partials/. (nav.yml is the exception — see NAV_YML above,

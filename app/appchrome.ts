@@ -59,11 +59,11 @@ const HOME_FEATURES = [
   { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
   { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
   { icon: '📚', title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
-  { icon: 'ℹ️', title: 'About', sub: 'The project', href: 'about.html' },
+  { icon: '📰', title: 'Journal', sub: 'The Mere Catholicity Journal', href: 'journal.html' },
 ];
 /* The reading shelf, grouped the way a newcomer reads it. Surfaces the rest of
    the site nav (Contact lives only in the footer, kept quiet by design — not
-   here; Library + About are up in the feature cards, not repeated here). */
+   here; Library + Journal are up in the feature cards, not repeated here). */
 const HOME_SECTIONS = [
   { heading: 'Start here', items: [
     { title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
@@ -77,6 +77,7 @@ const HOME_SECTIONS = [
   ] },
   { heading: 'Explore', items: [
     { title: 'Sources', sub: 'The primary texts, Newman included', href: 'resources.html' },
+    { title: 'About', sub: 'The project', href: 'about.html' },
   ] },
 ];
 

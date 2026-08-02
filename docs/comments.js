@@ -3627,6 +3627,8 @@
       admin.appendChild(document.createTextNode(" "));
       admin.appendChild(modLinkEl(topic.id, topic.locked ? "unlock" : "lock", topic.locked ? "(unlock)" : "(lock)"));
       admin.appendChild(document.createTextNode(" "));
+      admin.appendChild(modLinkEl(topic.id, topic.readonly ? "unreadonly" : "readonly", topic.readonly ? "(un-read-only)" : "(read-only)"));
+      admin.appendChild(document.createTextNode(" "));
       admin.appendChild(modLinkEl(topic.id, "delete", "(delete)"));
       return admin;
     }
@@ -3711,6 +3713,7 @@
           titlesByTopic[t.id] = title;
           if (t.sticky) left.appendChild(el("span", "board-sticky", "(sticky)"));
           if (t.locked) left.appendChild(el("span", "board-locked", "(locked)"));
+          if (t.readonly) left.appendChild(el("span", "board-locked", "(read only)"));
           var tPager = pageBar(t.replies, 20, 0, function(i) {
             return "community.html?topic=" + t.id + "&p=" + i;
           });
@@ -3790,6 +3793,7 @@
         var headEl = el("h2", "board-topic-head", d.topic.title);
         if (d.topic.sticky) headEl.appendChild(el("span", "board-sticky", "(sticky)"));
         if (d.topic.locked) headEl.appendChild(el("span", "board-locked", "(locked)"));
+        if (d.topic.readonly) headEl.appendChild(el("span", "board-locked", "(read only)"));
         var topicRss = el("a", "comments-rss", "RSS");
         topicRss.href = API + "/feed?topic=" + d.topic.id;
         topicRss.title = "Follow this topic with a feed reader";
@@ -3820,6 +3824,15 @@
           if (/^#comment-\d+$/.test(location.hash)) {
             var lockedTarget = document.getElementById(location.hash.slice(1));
             if (lockedTarget) lockedTarget.scrollIntoView();
+          }
+          annotateMeta("board:" + d.cat);
+          return;
+        }
+        if (d.topic.readonly && !isAdmin()) {
+          section.appendChild(el("p", "comments-status", "This is a read-only topic. Only the site can post here."));
+          if (/^#comment-\d+$/.test(location.hash)) {
+            var roTarget = document.getElementById(location.hash.slice(1));
+            if (roTarget) roTarget.scrollIntoView();
           }
           annotateMeta("board:" + d.cat);
           return;
@@ -3885,6 +3898,7 @@
       [
         ["Activity audit", "admin.html?audit=1", "Reported posts, the review queue, and the last two weeks of activity, every row actionable."],
         ["IP ban list", "admin.html?ipbans=1", "Every banned address, added and removed by hand."],
+        ["Shadow bans", "admin.html?shadowbans=1", "Quiet mutes: a member keeps posting but no one else sees it. Add, review, and lift."],
         ["Add / Remove Admins", "admin.html?admins=1", "Grant a member admin powers, or take them back."],
         ["Platform settings", "admin.html?settings=1", "Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button."],
         ["Discord webhooks", "admin.html?discord=1", "Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel."],
@@ -4488,6 +4502,234 @@
         });
       });
       load2();
+    }
+    function viewShadowbans() {
+      document.title = "Shadow bans | Community";
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["Shadow bans"]]);
+      if (adminGate(viewShadowbans)) return;
+      section.appendChild(el(
+        "p",
+        "board-intro",
+        "A shadow-banned member keeps posting and is never told, but their posts are hidden from everyone else \u2014 a quiet mute for someone not worth a full ban. It is fully reversible, and can also be toggled from any of their posts. Admins and the librarian cannot be shadow banned."
+      ));
+      var addBox = el("div", "key-box");
+      addBox.hidden = false;
+      addBox.appendChild(el("p", "key-note", "Shadow ban a member. Type @ and a name to find them, then pick them."));
+      var row = el("div", "key-row");
+      var input = el("input", "key-input");
+      input.type = "text";
+      input.placeholder = "@name";
+      row.appendChild(input);
+      var addBtn = el("button", "btn btn-send", "Shadow ban");
+      addBtn.type = "button";
+      row.appendChild(addBtn);
+      addBox.appendChild(row);
+      var addNote = el("p", "form-status");
+      addBox.appendChild(addNote);
+      section.appendChild(addBox);
+      var picker = attachAuthorPicker(input, "shadowban");
+      var list = el("div", "board-topics");
+      list.textContent = "Loading...";
+      section.appendChild(list);
+      function load2() {
+        fetchRetry(API + "/shadowban/list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: state.key })
+        }, [1e3, 3e3]).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          if (!d.ok) throw new Error(d.error || "failed");
+          list.textContent = "";
+          if (!d.bans.length) {
+            list.appendChild(el("p", "comments-status", "No one is shadow banned."));
+            return;
+          }
+          d.bans.forEach(function(b) {
+            var r = el("div", "board-topic");
+            var who = el("a", "board-topic-title", b.nick);
+            who.href = profileHref(b.hash);
+            r.appendChild(who);
+            r.appendChild(el("span", "board-cat-desc", " muted " + fmtDateTime(b.created_at)));
+            var rm = el("a", "trust-toggle", "(un-shadowban)");
+            rm.href = "#";
+            rm.addEventListener("click", function(e) {
+              e.preventDefault();
+              fetch(API + "/shadowban", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: state.key, hash: b.hash, on: false })
+              }).then(function(x) {
+                return x.json();
+              }).then(function(x) {
+                if (x.ok) load2();
+              }).catch(function() {
+              });
+            });
+            r.appendChild(document.createTextNode(" "));
+            r.appendChild(rm);
+            list.appendChild(r);
+          });
+        }).catch(function() {
+          list.textContent = "";
+          list.appendChild(el("p", "comments-status", "The list could not be loaded."));
+        });
+      }
+      addBtn.addEventListener("click", function() {
+        var hash = picker.hash();
+        if (!/^[0-9a-f]{64}$/.test(hash)) {
+          addNote.textContent = "Type @ and pick a member from the list first.";
+          return;
+        }
+        addNote.textContent = "Shadow banning...";
+        fetch(API + "/shadowban", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: state.key, hash, on: true })
+        }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          if (!d.ok) {
+            addNote.textContent = d.error || "Could not shadow ban that member.";
+            return;
+          }
+          input.value = "";
+          addNote.textContent = "Done.";
+          load2();
+        }).catch(function() {
+          addNote.textContent = "Network error. Try again.";
+        });
+      });
+      load2();
+    }
+    function journalDateLine(a) {
+      var meta = el("div", "journal-meta");
+      meta.appendChild(el("time", "journal-date", fmtDateTime(a.created_at)));
+      if (a.author) meta.appendChild(el("span", "journal-by", " \xB7 " + a.author));
+      if (a.edited_at && a.edited_at > a.created_at) meta.appendChild(el("span", "journal-edited", " \xB7 updated"));
+      return meta;
+    }
+    function journalShare(id) {
+      var wrap = el("div", "journal-share");
+      var perma = el("a", "journal-permalink", "Permalink");
+      perma.href = "journal.html?a=" + id;
+      wrap.appendChild(perma);
+      var copy = el("button", "journal-copy", "Copy link");
+      copy.type = "button";
+      copy.addEventListener("click", function() {
+        var url = location.origin + "/journal.html?a=" + id;
+        var done = function() {
+          copy.textContent = "Copied";
+          setTimeout(function() {
+            copy.textContent = "Copy link";
+          }, 1500);
+        };
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done, function() {
+            });
+            return;
+          }
+        } catch (e) {
+        }
+        var ta = document.createElement("textarea");
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy");
+          done();
+        } catch (e) {
+        }
+        document.body.removeChild(ta);
+      });
+      wrap.appendChild(copy);
+      return wrap;
+    }
+    function journalEntry(a, full) {
+      var art = el("article", full ? "journal-entry journal-full" : "journal-entry");
+      art.appendChild(journalDateLine(a));
+      var titleText = a.title || "Journal entry";
+      var h = el(full ? "h1" : "h2", "journal-entry-title");
+      if (full) {
+        h.textContent = titleText;
+      } else {
+        var link = el("a", null, titleText);
+        link.href = "journal.html?a=" + a.id;
+        h.appendChild(link);
+      }
+      art.appendChild(h);
+      var bodyEl = el("div", "journal-body prose");
+      fillBody(bodyEl, a.body);
+      art.appendChild(bodyEl);
+      art.appendChild(journalShare(a.id));
+      return art;
+    }
+    function viewJournal() {
+      document.title = "Journal | Mere Catholicity";
+      var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get("p")) || 1));
+      var wrap = el("div", "journal");
+      section.appendChild(wrap);
+      wrap.appendChild(el("p", "comments-status", "Loading the journal\u2026"));
+      fetchRetry(API + "/journal?p=" + pageNum, {}, [1e3, 3e3]).then(function(r) {
+        return r.json();
+      }).then(function(d) {
+        wrap.textContent = "";
+        if (!d.ok) {
+          wrap.appendChild(el("p", "comments-status", d.error || "The journal could not be loaded."));
+          return;
+        }
+        document.title = (d.journal || "Journal") + " | Mere Catholicity";
+        var head = el("header", "journal-masthead");
+        head.appendChild(el("h1", "journal-title", d.journal || "Journal"));
+        head.appendChild(el("p", "journal-tagline", "Essays and notes from Mere Catholicity."));
+        wrap.appendChild(head);
+        if (!d.articles || !d.articles.length) {
+          wrap.appendChild(el("p", "comments-status", "No entries yet."));
+          return;
+        }
+        d.articles.forEach(function(a) {
+          wrap.appendChild(journalEntry(a, false));
+        });
+        var bar = pageBar(d.total, d.per, d.page, function(i) {
+          return "journal.html?p=" + i;
+        });
+        if (bar) wrap.appendChild(bar);
+      }).catch(function() {
+        wrap.textContent = "";
+        wrap.appendChild(el("p", "comments-status", "The journal could not be loaded."));
+      });
+    }
+    function viewJournalArticle(id) {
+      document.title = "Journal | Mere Catholicity";
+      var wrap = el("div", "journal journal-single");
+      section.appendChild(wrap);
+      wrap.appendChild(el("p", "comments-status", "Loading\u2026"));
+      if (!Number.isInteger(id) || id < 1) {
+        wrap.textContent = "";
+        wrap.appendChild(el("p", "comments-status", "That entry could not be found."));
+        return;
+      }
+      fetchRetry(API + "/journal?id=" + id, {}, [1e3, 3e3]).then(function(r) {
+        return r.json();
+      }).then(function(d) {
+        wrap.textContent = "";
+        var back = el("a", "journal-back", "\u2190 " + (d && d.journal || "The Journal"));
+        back.href = "journal.html";
+        wrap.appendChild(back);
+        if (!d.ok || !d.article) {
+          wrap.appendChild(el("p", "comments-status", d && d.error || "That entry could not be found."));
+          return;
+        }
+        document.title = (d.article.title || "Journal entry") + " \u2014 " + (d.journal || "Journal");
+        wrap.appendChild(journalEntry(d.article, true));
+        var more = el("a", "journal-back journal-back-foot", "Read more entries \u2192");
+        more.href = "journal.html";
+        wrap.appendChild(more);
+      }).catch(function() {
+        wrap.textContent = "";
+        wrap.appendChild(el("p", "comments-status", "That entry could not be loaded."));
+      });
     }
     function loadMyProfile() {
       if (!state.myHash) return;
@@ -8511,6 +8753,20 @@
       }
       draw();
     }
+    function dangerBox(title, explain, btnLabel, run) {
+      var box = el("div", "admin-danger");
+      box.appendChild(el("div", "admin-danger-title", title));
+      box.appendChild(el("p", "admin-danger-explain", explain));
+      var btn = el("button", "btn admin-danger-btn", btnLabel);
+      btn.type = "button";
+      var note = el("span", "form-status admin-danger-note");
+      btn.addEventListener("click", function() {
+        run(btn, note);
+      });
+      box.appendChild(btn);
+      box.appendChild(note);
+      return box;
+    }
     function viewPlatformSettings() {
       document.title = "Platform settings | Community";
       crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["Platform settings"]]);
@@ -8530,19 +8786,20 @@
         wrap.textContent = "";
         var s = d.settings || {};
         var cap = Number(d.cap_bytes) || 10 * 1024 * 1024 * 1024;
-        wrap.appendChild(el("h3", null, "Direct-message media"));
+        wrap.appendChild(el("p", "board-intro", "Each area below is self-contained: its settings and any one-time cleanup for it sit together. Private direct-message media and the public feed are two separate stores \u2014 a control in one never touches the other."));
+        wrap.appendChild(el("h3", null, "Direct messages"));
+        wrap.appendChild(el("p", "board-cat-desc", "Private, end-to-end encrypted messages between members, and the photos, audio, and video attached to them. These controls affect DM attachments only \u2014 the public feed is a separate store, further down."));
         var used = Number(s.dm_media_bytes) || 0;
-        var usage = el("p", "board-cat-desc", "Storage in use: " + fmtBytes(used) + " of " + fmtBytes(cap) + " (" + Math.round(used / cap * 100) + "%).");
-        wrap.appendChild(usage);
+        wrap.appendChild(el("p", "board-cat-desc", "Attachment storage in use: " + fmtBytes(used) + " of " + fmtBytes(cap) + " (" + Math.round(used / cap * 100) + "%)."));
         var enRow = el("p", "admin-set-row");
         var enCb = el("input");
         enCb.type = "checkbox";
         enCb.checked = s.media_enabled === "1";
         enRow.appendChild(enCb);
-        enRow.appendChild(document.createTextNode(" Allow members to share photos, audio, and video"));
+        enRow.appendChild(document.createTextNode(" Let members attach photos, audio, and video to DMs"));
         wrap.appendChild(enRow);
         var szRow = el("p", "admin-set-row");
-        szRow.appendChild(document.createTextNode("Max upload size (MB): "));
+        szRow.appendChild(document.createTextNode("Largest attachment (MB): "));
         var szInp = el("input");
         szInp.type = "number";
         szInp.min = "1";
@@ -8561,8 +8818,9 @@
         });
         ttlRow.appendChild(ttlSel);
         wrap.appendChild(ttlRow);
+        wrap.appendChild(el("p", "board-cat-desc", "Messages disappear this long after the recipient first opens them. A member can change it per conversation or save a single message from disappearing."));
         var bsRow = el("p", "admin-set-row");
-        bsRow.appendChild(document.createTextNode("Unopened-message backstop (days): "));
+        bsRow.appendChild(document.createTextNode("Backstop for unopened messages (days): "));
         var bsInp = el("input");
         bsInp.type = "number";
         bsInp.min = "1";
@@ -8570,7 +8828,34 @@
         bsInp.value = String(Number(s.dm_backstop_days) || 30);
         bsRow.appendChild(bsInp);
         wrap.appendChild(bsRow);
-        wrap.appendChild(el("h3", null, "Public posts (walls & feed)"));
+        wrap.appendChild(el("p", "board-cat-desc", "A never-opened message is deleted after this many days regardless, so nothing lingers forever."));
+        wrap.appendChild(dangerBox(
+          "Purge all DM attachments now",
+          "Immediately and permanently delete every photo, audio, and video from every private conversation, of any age (opened, unopened, and saved alike). Message text is kept. This is a one-time cleanup \u2014 it does not change the settings above \u2014 and cannot be undone.",
+          "Purge all DM attachments",
+          function(btn, note) {
+            appConfirm("Delete EVERY attachment from ALL private conversations, of any age? Message text is kept. This cannot be undone.", { okLabel: "Purge all", danger: true }, function(ok) {
+              if (!ok) return;
+              btn.disabled = true;
+              note.textContent = " Purging\u2026";
+              fetch(API + "/dm/media/purge", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: state.key })
+              }).then(function(r) {
+                return r.json();
+              }).then(function(d3) {
+                btn.disabled = false;
+                note.textContent = d3 && d3.ok ? " Purged " + d3.deleted + " files." : " Purge failed.";
+              }).catch(function() {
+                btn.disabled = false;
+                note.textContent = " Purge failed.";
+              });
+            });
+          }
+        ));
+        wrap.appendChild(el("h3", null, "Public feed & member walls"));
+        wrap.appendChild(el("p", "board-cat-desc", "The public posts anyone can see \u2014 the community feed and members\u2019 own walls \u2014 together with any images attached to them. Separate from the private DM store above. (Forum topics are kept permanently and are not affected here.)"));
         var wpEnRow = el("p", "admin-set-row");
         var wpEn = el("input");
         wpEn.type = "checkbox";
@@ -8579,23 +8864,69 @@
         wpEnRow.appendChild(document.createTextNode(" Automatically delete old public posts (off = keep forever)"));
         wrap.appendChild(wpEnRow);
         var wpRow = el("p", "admin-set-row");
-        wpRow.appendChild(document.createTextNode("Delete public posts older than: "));
+        wpRow.appendChild(document.createTextNode("Retention \u2014 delete public posts older than: "));
         var wpSel = el("select");
         (d.wall_prune_options || [90, 180, 365]).forEach(function(n) {
-          var o = el("option", null, n + " days");
+          var label = n === 365 ? "1 year" : n === 180 ? "6 months" : n === 90 ? "3 months" : n + " days";
+          var o = el("option", null, label);
           o.value = String(n);
           if (Number(s.wall_prune_days) === n) o.selected = true;
           wpSel.appendChild(o);
         });
         wpRow.appendChild(wpSel);
         wrap.appendChild(wpRow);
-        var dcP = el("p", "board-cat-desc");
-        dcP.appendChild(document.createTextNode("Discord announcements have their own page: "));
-        var dcLink = el("a", "body-link", "Discord webhooks");
-        dcLink.href = "admin.html?discord=1";
-        dcP.appendChild(dcLink);
-        dcP.appendChild(document.createTextNode("."));
-        wrap.appendChild(dcP);
+        wrap.appendChild(el("p", "board-cat-desc", "This retention drives both the automatic sweep above and the button below. Save your choice first if you changed it and want the sweep to use it."));
+        wrap.appendChild(dangerBox(
+          "Prune old public posts now",
+          "Delete public feed and wall posts \u2014 and their images \u2014 older than the retention chosen just above, right now. Posts newer than that stay. This runs once; it does not require the automatic sweep to be on. Cannot be undone.",
+          "Prune old public posts",
+          function(btn, note) {
+            var days = Number(wpSel.value) || 365;
+            var human = days === 365 ? "a year" : days === 180 ? "6 months" : days === 90 ? "3 months" : days + " days";
+            appConfirm("Delete public feed and wall posts (and their images) older than " + human + " right now? Newer posts stay. This cannot be undone.", { okLabel: "Prune now", danger: true }, function(ok) {
+              if (!ok) return;
+              btn.disabled = true;
+              note.textContent = " Pruning\u2026";
+              fetch(API + "/wall/prune", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ key: state.key, days })
+              }).then(function(r) {
+                return r.json();
+              }).then(function(d4) {
+                btn.disabled = false;
+                note.textContent = d4 && d4.ok ? " Deleted " + d4.deleted + " posts." : " Prune failed.";
+              }).catch(function() {
+                btn.disabled = false;
+                note.textContent = " Prune failed.";
+              });
+            });
+          }
+        ));
+        wrap.appendChild(el("h3", null, "The Mere Catholicity Journal"));
+        wrap.appendChild(el("p", "board-cat-desc", "The public Journal page turns the posts of one forum topic into journal articles. Point it at a topic here, then open that topic and mark it read-only (from its admin controls) so only the site can post into it."));
+        var jEnRow = el("p", "admin-set-row");
+        var jEn = el("input");
+        jEn.type = "checkbox";
+        jEn.checked = s.journal_enabled !== "0";
+        jEnRow.appendChild(jEn);
+        jEnRow.appendChild(document.createTextNode(" Journal page is live"));
+        wrap.appendChild(jEnRow);
+        var jRow = el("p", "admin-set-row");
+        jRow.appendChild(document.createTextNode("Journal source topic (its numeric id): "));
+        var jInp = el("input");
+        jInp.type = "number";
+        jInp.min = "1";
+        jInp.value = String(Number(s.journal_topic) || 219);
+        jRow.appendChild(jInp);
+        wrap.appendChild(jRow);
+        var jLinkP = el("p", "board-cat-desc");
+        jLinkP.appendChild(document.createTextNode("View it at "));
+        var jLink = el("a", "body-link", "the Journal");
+        jLink.href = "journal.html";
+        jLinkP.appendChild(jLink);
+        jLinkP.appendChild(document.createTextNode("."));
+        wrap.appendChild(jLinkP);
         var saveBtn = el("button", "btn btn-send", "Save settings");
         saveBtn.type = "button";
         var saveStatus = el("p", "form-status");
@@ -8611,7 +8942,9 @@
               dm_default_ttl: ttlSel.value,
               dm_backstop_days: bsInp.value,
               wall_prune_enabled: wpEn.checked ? "1" : "0",
-              wall_prune_days: wpSel.value
+              wall_prune_days: wpSel.value,
+              journal_enabled: jEn.checked ? "1" : "0",
+              journal_topic: jInp.value
             } })
           }).then(function(r) {
             return r.json();
@@ -8623,46 +8956,9 @@
             saveStatus.textContent = "Save failed.";
           });
         });
+        wrap.appendChild(el("hr", "admin-set-rule"));
         wrap.appendChild(saveBtn);
         wrap.appendChild(saveStatus);
-        wrap.appendChild(el("h3", null, "Danger zone"));
-        var purgeP = el("p", "board-audit-link");
-        purgeP.appendChild(identityAction("Purge ALL direct-message media", function() {
-          appConfirm("Delete EVERY shared photo, audio, and video from all conversations? Message text is kept; the attachments are permanently removed for everyone. This cannot be undone.", { okLabel: "Purge all media", danger: true }, function(ok) {
-            if (!ok) return;
-            usage.textContent = "Purging\u2026";
-            fetch(API + "/dm/media/purge", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ key: state.key })
-            }).then(function(r) {
-              return r.json();
-            }).then(function(d3) {
-              usage.textContent = d3 && d3.ok ? "Purged " + d3.deleted + " files. Storage in use: 0 B of " + fmtBytes(cap) + "." : "Purge failed.";
-            }).catch(function() {
-              usage.textContent = "Purge failed.";
-            });
-          });
-        }));
-        wrap.appendChild(purgeP);
-        var wprP = el("p", "board-audit-link");
-        wprP.appendChild(identityAction("Prune public posts now", function() {
-          appConfirm("Delete public posts and their media older than the retention set above, right now? This cannot be undone.", { okLabel: "Prune now", danger: true }, function(ok) {
-            if (!ok) return;
-            fetch(API + "/wall/prune", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ key: state.key })
-            }).then(function(r) {
-              return r.json();
-            }).then(function(d4) {
-              wprP.appendChild(el("span", "form-status", d4 && d4.ok ? " Deleted " + d4.deleted + " posts." : " Prune failed."));
-            }).catch(function() {
-              wprP.appendChild(el("span", "form-status", " Prune failed."));
-            });
-          });
-        }));
-        wrap.appendChild(wprP);
       }).catch(function() {
         wrap.textContent = "The settings could not be loaded.";
       });
@@ -8988,6 +9284,7 @@
       if (params.get("admins")) return { tag: "Admins" };
       if (params.get("admin")) return { tag: "AdminHome" };
       if (params.get("discord")) return { tag: "Discord" };
+      if (params.get("shadowbans")) return { tag: "Shadowbans" };
       if (params.get("merecatadmin")) return { tag: "MerecatAdmin" };
       if (params.get("merecatthread")) return { tag: "MerecatThread", s: params.get("merecatthread") };
       if (params.get("merecatthreads") !== null) return { tag: "MerecatThreads" };
@@ -9055,6 +9352,10 @@
         if (!isMember()) return viewJoin("see and post to the community feed");
         return viewFeed();
       }
+      if (page === "journal.html") {
+        var jart = params.get("a");
+        return jart ? viewJournalArticle(Number(jart)) : viewJournal();
+      }
       var r = window.mcCore ? window.mcCore.parseRoute(function(k) {
         return params.get(k);
       }) : classicRoute(params);
@@ -9085,6 +9386,8 @@
           return viewAdminHome();
         case "Discord":
           return viewDiscordHooks();
+        case "Shadowbans":
+          return viewShadowbans();
         case "MerecatAdmin":
           return viewMerecatAdmin();
         case "MerecatThread":

@@ -292,10 +292,10 @@ class McBoardCat extends LitElement {
       /* a whole topic removed from, or moved out of, this category */
       if (!p.topics.some((t: any) => t.id === m.id)) return;
       this.payload = { ...p, topics: p.topics.filter((t: any) => t.id !== m.id), total: Math.max(0, (p.total || 1) - 1) };
-    } else if (m.t === 'moderation' && (m.act === 'lock' || m.act === 'unlock' || m.act === 'sticky' || m.act === 'unsticky')) {
+    } else if (m.t === 'moderation' && (m.act === 'lock' || m.act === 'unlock' || m.act === 'sticky' || m.act === 'unsticky' || m.act === 'readonly' || m.act === 'unreadonly')) {
       if (!p.topics.some((t: any) => t.id === m.topic_id)) return;
       const topics = p.topics.map((t: any) => t.id === m.topic_id
-        ? { ...t, locked: m.locked != null ? m.locked : t.locked, sticky: m.sticky != null ? m.sticky : t.sticky }
+        ? { ...t, locked: m.locked != null ? m.locked : t.locked, sticky: m.sticky != null ? m.sticky : t.sticky, readonly: m.readonly != null ? m.readonly : t.readonly }
         : t);
       this.payload = { ...p, topics: sortTopics(topics) };
     }
@@ -364,6 +364,7 @@ class McBoardCat extends LitElement {
            href=${'community.html?topic=' + t.id}>${t.title}</a>${isNew ? html`<span class="dm-unread"> ● new</span>` : nothing}
         ${t.sticky ? html`<span class="board-sticky">(sticky)</span>` : nothing}
         ${t.locked ? html`<span class="board-locked">(locked)</span>` : nothing}
+        ${t.readonly ? html`<span class="board-locked">(read only)</span>` : nothing}
         ${pagerTpl(t.replies, 20, 0, (i) => 'community.html?topic=' + t.id + '&p=' + i, 'board-pages topic-pages')}
       </div>
       <div class="board-stats">

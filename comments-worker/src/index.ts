@@ -125,6 +125,7 @@ import {
   parseFeedScope,
   scopeLabel,
   isTrusted,
+  journalArticle,
   json,
   keyed,
   keyedGated,
@@ -370,17 +371,19 @@ async function handlePost(request: any, env: any, ctx: any) {
   let parentId = null;
   let title = null;
   let topicAuthorHash = null;
+  let topicReadonly = false;
   if (data.topic != null) {
     const topicId = Number(data.topic);
     if (!Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
     const topic = await env.DB.prepare(
-      "SELECT id, page, locked, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+      "SELECT id, page, locked, COALESCE(readonly, 0) AS readonly, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
     ).bind(topicId).first();
     if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
     if (topic.locked) return json({ ok: false, error: 'This topic is locked.' }, 403);
     page = topic.page;
     parentId = topic.id;
     topicAuthorHash = topic.author_hash;
+    topicReadonly = !!topic.readonly;   // gated below, once the author's admin status is known
   } else if (data.cat != null) {
     page = boardKey('board:' + String(data.cat));
     if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
@@ -429,6 +432,12 @@ async function handlePost(request: any, env: any, ctx: any) {
      admin identity. The public can neither see it nor post into it. */
   if (page === ADMIN_CAT && !(await isAdminHash(env, authorHash))) {
     return json({ ok: false, error: 'That room is for admins only.' }, 403);
+  }
+
+  /* A read-only topic accepts replies from admins alone (the Journal is one).
+     Unlike lock, which closes a thread to everyone, this keeps admins posting. */
+  if (topicReadonly && !(await isAdminHash(env, authorHash))) {
+    return json({ ok: false, error: 'This topic is read-only.' }, 403);
   }
 
   /* A topic's title is screened with its body, one judgment for the pair. */
@@ -712,6 +721,74 @@ async function handleFeed(request: any, env: any, url: any) {
   });
 }
 
+/* The Mere Catholicity Journal: the posts of one configured forum topic
+   (app_settings.journal_topic, default 219) presented as journal articles.
+   PUBLIC + cacheable — anyone can read and share an entry — so the admin marks
+   that topic read-only to keep members from posting into it. Two shapes:
+     ?id=<n>  -> one article (for the shareable journal.html?a=<n> permalink)
+     (else)   -> the articles newest-first, paginated (the journal index).
+   The topic head and every reply are entries; each body is split into an
+   optional leading-heading title + the rest (journalArticle). */
+const JOURNAL_PER_PAGE = 6;
+async function handleJournal(request: any, env: any, url: any) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const s = await getAppSettings(env);
+  const topicId = Math.floor(Number(s.journal_topic) || 0);
+  if (s.journal_enabled !== '1' || topicId < 1) {
+    return json({ ok: false, error: 'The journal is not available.' }, 404, cacheHeader(url));
+  }
+  const topic = await env.DB.prepare(
+    "SELECT c.id, c.title, c.body, c.created_at FROM comments c " +
+    "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
+  ).bind(topicId).first();
+  if (!topic || !boardKey(await journalTopicPage(env, topicId))) {
+    return json({ ok: false, error: 'The journal is not available.' }, 404, cacheHeader(url));
+  }
+  const artId = Number(url.searchParams.get('id'));
+  if (Number.isInteger(artId) && artId > 0) {
+    const row = await env.DB.prepare(
+      "SELECT c.id, c.author_hash, pr.nick, c.body, c.created_at, c.edited_at FROM comments c " +
+      "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+      "WHERE c.id = ?1 AND (c.id = ?2 OR c.parent_id = ?2) AND c.status = 'live' AND " + shadowExcl('c')
+    ).bind(artId, topicId).first();
+    if (!row) return json({ ok: false, error: 'No such entry.' }, 404, cacheHeader(url));
+    const a = journalArticle(row.body);
+    return json({
+      ok: true, journal: topic.title,
+      article: { id: row.id, title: a.title, body: a.body, author: row.nick || displayName(row.author_hash),
+        created_at: row.created_at, edited_at: row.edited_at },
+    }, 200, cacheHeader(url));
+  }
+  const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
+  const totalRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM comments c WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' AND " + shadowExcl('c')
+  ).bind(topicId).first();
+  const rows = await env.DB.prepare(
+    "SELECT c.id, c.author_hash, pr.nick, c.body, c.created_at, c.edited_at FROM comments c " +
+    "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
+    "WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' AND " + shadowExcl('c') +
+    " ORDER BY c.id DESC LIMIT ?2 OFFSET ?3"
+  ).bind(topicId, JOURNAL_PER_PAGE, (p - 1) * JOURNAL_PER_PAGE).all();
+  const articles = (rows.results || []).map((r: any) => {
+    const a = journalArticle(r.body);
+    return { id: r.id, title: a.title, body: a.body, author: r.nick || displayName(r.author_hash),
+      created_at: r.created_at, edited_at: r.edited_at };
+  });
+  return json({ ok: true, journal: topic.title, articles, total: totalRow.n, page: p, per: JOURNAL_PER_PAGE },
+    200, cacheHeader(url));
+}
+
+/* The journal topic must be a real board topic (never an article page or the
+   back room); returns its page so boardKey can vet it. */
+async function journalTopicPage(env: any, topicId: number) {
+  const r = await env.DB.prepare(
+    "SELECT page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+  ).bind(topicId).first();
+  return r && r.page !== ADMIN_CAT ? r.page : '';
+}
+
 /* Author-only editing. The key must hash to the comment's own author,
    admins included only for their own comments. Every edit passes the same
    screen as a new post, or a clean comment could be edited into filth
@@ -977,7 +1054,7 @@ async function handleTopicView(request: any, env: any, url: any) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, c.replies " +
+    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
   ).bind(id).first();
@@ -1001,7 +1078,7 @@ async function handleBoardAdmin(request: any, env: any) {
     const id = Number(data.id);
     if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
     const topic = await env.DB.prepare(
-      "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, c.replies " +
+      "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies " +
       "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
       "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
     ).bind(id).first();
@@ -1027,7 +1104,7 @@ async function handleModerate(request: any, env: any, ctx: any) {
   const key = String(data.key || '');
   const id = Number(data.id);
   const act = String(data.act || '');
-  if (!key || !Number.isInteger(id) || id < 1 || !['lock', 'unlock', 'delete', 'sticky', 'unsticky'].includes(act)) {
+  if (!key || !Number.isInteger(id) || id < 1 || !['lock', 'unlock', 'delete', 'sticky', 'unsticky', 'readonly', 'unreadonly'].includes(act)) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
@@ -1050,6 +1127,13 @@ async function handleModerate(request: any, env: any, ctx: any) {
     emit({ v: 1, t: 'moderation', act, id, topic_id: id, cat: catKey, sticky,
       scopes: ['cat:' + catKey, 'board:index'] });
     return json({ ok: true, sticky: sticky }, 200);
+  }
+  if (act === 'readonly' || act === 'unreadonly') {
+    const readonly = act === 'readonly' ? 1 : 0;
+    await env.DB.prepare('UPDATE comments SET readonly = ?1 WHERE id = ?2').bind(readonly, id).run();
+    emit({ v: 1, t: 'moderation', act, id, topic_id: id, cat: catKey, readonly,
+      scopes: ['topic:' + id, 'cat:' + catKey] });
+    return json({ ok: true, readonly: readonly }, 200);
   }
   const locked = act === 'lock' ? 1 : 0;
   await env.DB.prepare('UPDATE comments SET locked = ?1 WHERE id = ?2').bind(locked, id).run();
@@ -1917,7 +2001,7 @@ async function handleAdminSettings(request: any, env: any) {
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
     const me = await sha256hex(key);
-    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1 };
+    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, journal_topic: 1, journal_enabled: 1 };
     const stmts = [];
     for (const k of Object.keys(data.set)) {
       if (!allowed[k]) continue;
@@ -1927,6 +2011,8 @@ async function handleAdminSettings(request: any, env: any) {
       else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : Dm.defaultTtl);
       else if (k === 'dm_backstop_days') v = String(Math.max(1, Math.min(365, Math.floor(Number(v)) || 30)));
       else if (k === 'wall_prune_days') v = String(Wall.clampPruneDays(Math.floor(Number(v)) || 365));
+      else if (k === 'journal_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
+      else if (k === 'journal_topic') v = String(Math.max(0, Math.floor(Number(v)) || 0));
       else if (k === 'discord_forum_webhook' || k === 'discord_feed_webhook') {
         /* Empty clears (turns the webhook off); anything else must be a genuine
            Discord webhook URL, so a typo or hostile value is never stored/POSTed. */
@@ -2894,6 +2980,23 @@ async function handleShadowban(request: any, env: any) {
     await env.DB.prepare('DELETE FROM shadowbans WHERE hash = ?1').bind(hash).run();
   }
   return json({ ok: true, shadowbanned: on }, 200);
+}
+
+/* The whole shadow-ban roster, for the management page on admin.html (the twin
+   of the IP ban list). Admin-only. Each row carries the muted identity's
+   assigned/chosen name and when it was muted, so an admin can lift a mute
+   without hunting for the post that set it. */
+async function handleShadowbanList(request: any, env: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  const rows = await env.DB.prepare(
+    'SELECT s.hash, s.created_at, pr.nick FROM shadowbans s LEFT JOIN profiles pr ON pr.hash = s.hash ORDER BY s.created_at DESC'
+  ).all();
+  const bans = (rows.results || []).map((r: any) => ({
+    hash: r.hash, nick: r.nick || displayName(r.hash), created_at: r.created_at,
+  }));
+  return json({ ok: true, bans }, 200);
 }
 
 /* Delete a user and all their public posts: comments go to 'deleted', the
@@ -3930,6 +4033,7 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/moderate', fn: (request, env, ctx, url) => handleModerate(request, env, ctx) },
   { m: 'POST', p: '/api/comments/move', fn: (request, env, ctx, url) => handleMove(request, env, ctx) },
   { m: 'GET', p: '/api/comments/feed', fn: (request, env, ctx, url) => handleFeed(request, env, url) },
+  { m: 'GET', p: '/api/comments/journal', fn: (request, env, ctx, url) => handleJournal(request, env, url) },
   { m: 'GET', p: '/api/comments/board', fn: (request, env, ctx, url) => handleBoardIndex(request, env, url) },
   { m: 'GET', p: '/api/comments/board/cat', fn: (request, env, ctx, url) => handleBoardCat(request, env, url) },
   { m: 'GET', p: '/api/comments/board/author', fn: (request, env, ctx, url) => handleAuthorPosts(request, env, url) },
@@ -3986,6 +4090,7 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/wall', fn: (request, env, ctx, url) => handleWall(request, env) },
   { m: 'POST', p: '/api/comments/lock', fn: (request, env, ctx, url) => handleLock(request, env) },
   { m: 'POST', p: '/api/comments/shadowban', fn: (request, env, ctx, url) => handleShadowban(request, env) },
+  { m: 'POST', p: '/api/comments/shadowban/list', fn: (request, env, ctx, url) => handleShadowbanList(request, env) },
   { m: 'POST', p: '/api/comments/deleteuser', fn: (request, env, ctx, url) => handleDeleteUser(request, env) },
   { m: 'POST', p: '/api/comments/ipban', fn: (request, env, ctx, url) => handleIpBan(request, env) },
   { m: 'POST', p: '/api/comments/ipbans', fn: (request, env, ctx, url) => handleIpBans(request, env) },
