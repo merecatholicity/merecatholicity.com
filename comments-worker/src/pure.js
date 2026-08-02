@@ -157,6 +157,71 @@ export function isDiscordWebhook(u) {
   return /^https:\/\/(?:discord|discordapp)\.com\/api\/webhooks\/\d+\/[A-Za-z0-9_-]+$/.test(u.trim());
 }
 
+/* ================= Per-feed Discord subscriptions (pure) =================
+   parseFeedScope turns one of OUR feed URLs — the exact thing an admin pastes
+   when creating a per-feed Discord subscription — into the normalized trigger
+   scope a fresh post is matched against. It accepts only our /api/comments/feed
+   endpoint (absolute or relative) and reads the same selectors handleFeed serves:
+     ?topic=<id>   -> 'topic:<id>'   (a single thread: fires on its replies)
+     ?cat=<key>    -> 'cat:<key>'    (a board category: topics + replies)
+     ?page=<page>  -> 'page:<page>'  (one article page's comments)
+   Anything else (a non-feed URL, a bogus selector, an external host) returns null
+   so the add is refused — the worker only ever fans out our own board activity.
+   Pure + tested because it is the gate on what an admin can subscribe to. */
+export function parseFeedScope(raw) {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s) return null;
+  let u;
+  try {
+    /* Relative paste ("/api/comments/feed?topic=219") resolves against a
+       throwaway base; an absolute paste keeps its own host. */
+    u = new URL(s, 'https://merecatholicity.com');
+  } catch (e) { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  if (u.pathname.replace(/\/+$/, '') !== '/api/comments/feed') return null;
+  const topic = u.searchParams.get('topic');
+  if (topic != null && /^\d+$/.test(topic) && Number(topic) > 0) {
+    return 'topic:' + Number(topic);
+  }
+  const cat = u.searchParams.get('cat');
+  if (cat != null) {
+    const key = cat.trim().toLowerCase();
+    if (/^[a-z0-9-]{1,40}$/.test(key)) return 'cat:' + key;
+    return null;
+  }
+  const page = u.searchParams.get('page');
+  if (page != null) {
+    const p = page.trim();
+    if (/^\/[A-Za-z0-9._/-]{1,120}$/.test(p)) return 'page:' + p;
+    return null;
+  }
+  return null;
+}
+
+/* A human label for a scope, used in the admin list and the Discord embed footer
+   so a subscription reads plainly ("Topic #219", "Category: general"). */
+export function scopeLabel(scope) {
+  if (typeof scope !== 'string') return '';
+  if (scope.indexOf('topic:') === 0) return 'Topic #' + scope.slice(6);
+  if (scope.indexOf('cat:') === 0) return 'Category: ' + scope.slice(4);
+  if (scope.indexOf('page:') === 0) return 'Page: ' + scope.slice(5);
+  return scope;
+}
+
+/* ================= Shadow ban (global mute) — read filter =================
+   shadowExcl builds the ONE SQL fragment that hides a shadowbanned identity's
+   public content from every other reader. Appended to a query's WHERE, it drops
+   rows whose <alias>.author_hash is in the shadowbans table. SECURITY/behaviour
+   note: this is what makes the mute real, so a typo (wrong alias, wrong table,
+   dropped NOT) would silently un-mute everyone — hence it is pure and tested.
+   The per-call subquery alias (sb_<alias>) lets two of these coexist in one
+   query, e.g. a reply AND its topic owner. */
+export function shadowExcl(alias) {
+  return 'NOT EXISTS (SELECT 1 FROM shadowbans sb_' + alias +
+    ' WHERE sb_' + alias + '.hash = ' + alias + '.author_hash)';
+}
+
 export function discordSnippet(body, max = 500) {
   let s = String(body == null ? '' : body)
     .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '')   // control chars, keep \n (U+000A)

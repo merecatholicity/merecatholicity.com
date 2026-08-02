@@ -984,6 +984,10 @@ section.comments.board { min-height: 100vh; }
 .board-group-head:first-child { margin-top: 0.6rem; }
 /* an empty room's stat cell reads as an invitation, not a dead-end (P4) */
 .board-stats-empty { color: var(--maroon); }
+/* merecat past-conversations group headers (Saved / Kept thirty days), above the
+   card rows that reuse the community/inbox .board-topics + .mc-cardnav look. */
+.mc-past-head { margin: 1.1rem 0 0.4rem; color: var(--muted-c); font-size: 0.92rem; }
+.mc-past-head:first-child { margin-top: 0.3rem; }
 .board-cat, .board-topic { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; padding: 0.65em 0.9em; border-top: 1px solid var(--rule); }
 .board-cat:first-child, .board-topic:first-child { border-top: 0; }
 /* The back room's tile: deliberately off-shade from its siblings (--cream sits a

@@ -758,7 +758,7 @@ class McSettings extends LitElement {
       ` : ''}
 
       ${isAdmin() ? html`<h3 class="mc-set-sec">Administration</h3>
-      ${link('community.html?admin=1', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
+      ${link('admin.html', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
     </div>`;
   }
 }
