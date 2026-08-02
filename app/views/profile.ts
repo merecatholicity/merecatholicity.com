@@ -133,6 +133,15 @@ class McInbox extends LitElement {
     if (window.mcConfirm) window.mcConfirm(msg, { okLabel: 'Delete', danger: true }).then(go);
     else go(confirm(msg));
   }
+  /* The whole inbox row is a click target into the conversation, exactly like a
+     community board row: a nested link/button (the title, Delete) still wins, and
+     a text selection never navigates. */
+  _dmNav(e: Event) {
+    if ((e.target as HTMLElement).closest('a, button, select, input, label')) return;
+    if (window.getSelection && String(window.getSelection()).length) return;
+    const a = (e.currentTarget as HTMLElement).querySelector('.board-topic-title');
+    if (a) (a as HTMLElement).click();
+  }
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
@@ -148,7 +157,7 @@ class McInbox extends LitElement {
       <div class="board-topics">
         ${!d.threads.length
           ? html`<p class="comments-status mc-empty" data-ico="✉️">No messages yet. Find a member above, or press Direct Message on any post.</p>`
-          : d.threads.map((t: any) => html`<div class="board-topic">
+          : d.threads.map((t: any) => html`<div class="board-topic mc-cardnav" @click=${this._dmNav}>
               <div class="board-topic-left">
                 <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}
               </div>

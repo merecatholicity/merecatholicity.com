@@ -2685,8 +2685,8 @@
       localStorage.setItem('mc-flash', window.mcCore
         ? window.mcCore.blockedMessage(d.blocked)
         : (d.blocked === 'ipban'
-          ? 'Your network is banned from merecatholicity.com for violating the terms and conditions.'
-          : 'This identity has been locked by the moderators for violating the terms and conditions.'));
+          ? 'Your network is banned from merecatholicity.com for violating the Terms and Conditions.'
+          : 'This identity has been locked by the moderators for violating the Terms and Conditions.'));
     } catch (e) {}
     clearKey();
     state.key = '';
@@ -2784,7 +2784,7 @@
     check.type = 'checkbox';
     label.appendChild(check);
     label.appendChild(document.createTextNode(' I agree to the '));
-    var terms = el('a', null, 'terms & conds');
+    var terms = el('a', null, 'Terms & Conditions');
     terms.href = 'terms.html';
     terms.target = '_blank';
     label.appendChild(terms);
@@ -6559,7 +6559,6 @@
       pastLoaded = true;
       loadList(0);
     });
-    section.appendChild(past);
 
     var log = el('div', 'merecat-log');
     section.appendChild(log);
@@ -6592,6 +6591,13 @@
     send.type = 'submit';
     form.appendChild(send);
     section.appendChild(form);
+    /* Past conversations sit BELOW the ask box now, and open by default on the
+       overview so they never hide behind a click. Auto-loading costs one /chats
+       read (shared with the resume poll's budget), so only expand it on the
+       overview — inside an open thread it stays a collapsed, click-to-load panel
+       that never competes with an active generation. */
+    section.appendChild(past);
+    if (loggedIn && !chatId) { past.open = true; pastLoaded = true; loadList(0); }
     /* An empty log on a fresh thread gets an app blank slate on phones (CSS-gated,
        desktop never shows it): a few example questions that fill the box on tap.
        It removes itself the moment a question is asked and never shows when

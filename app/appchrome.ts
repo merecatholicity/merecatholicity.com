@@ -825,16 +825,15 @@ customElements.define('mc-notifs', McNotifs);
    (CSS-gated). The dropdown closes on outside-click, Escape, AND any soft-nav
    (the mc-navigate signal) so a chosen link never loads behind an open menu. */
 class McDeskbar extends LitElement {
-  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false }, notifMenu: { attribute: false }, searchMenu: { attribute: false } };
+  static properties = { notif: { attribute: false }, canBack: { attribute: false }, menu: { attribute: false }, title: { attribute: false }, notifMenu: { attribute: false } };
   declare notif: number;
   declare canBack: boolean;
   declare menu: boolean;
   declare notifMenu: boolean;
-  declare searchMenu: boolean;
   declare _onDoc: (e: Event) => void;
   declare _onKey: (e: KeyboardEvent) => void;
   declare _onNav: () => void;
-  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; this.notifMenu = false; this.searchMenu = false; }
+  constructor() { super(); this.notif = 0; this.canBack = false; this.menu = false; this.title = ''; this.notifMenu = false; }
   createRenderRoot() { return this; }
   sync() { this.notif = badgeCount('notif'); this.canBack = history.length > 1; this.title = pageTitle(); }
   connectedCallback() {
@@ -842,10 +841,9 @@ class McDeskbar extends LitElement {
     this._onDoc = (e) => {
       if (this.menu && !(e.target as HTMLElement).closest('.mc-db-acct')) this.menu = false;
       if (this.notifMenu && !(e.target as HTMLElement).closest('.mc-db-notif')) this.notifMenu = false;
-      if (this.searchMenu && !(e.target as HTMLElement).closest('.mc-db-searchwrap')) this.searchMenu = false;
     };
-    this._onKey = (e) => { if (e.key === 'Escape') { this.menu = false; this.notifMenu = false; this.searchMenu = false; } };
-    this._onNav = () => { this.menu = false; this.notifMenu = false; this.searchMenu = false; };
+    this._onKey = (e) => { if (e.key === 'Escape') { this.menu = false; this.notifMenu = false; } };
+    this._onNav = () => { this.menu = false; this.notifMenu = false; };
     document.addEventListener('click', this._onDoc);
     document.addEventListener('keydown', this._onKey);
     document.addEventListener('mc-navigate', this._onNav);
@@ -856,16 +854,10 @@ class McDeskbar extends LitElement {
     document.removeEventListener('keydown', this._onKey);
     document.removeEventListener('mc-navigate', this._onNav);
   }
-  toggleMenu(e: Event) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; this.searchMenu = false; }
-  toggleNotif(e: Event) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; this.searchMenu = false; }
-  toggleSearch(e: Event) { e.preventDefault(); e.stopPropagation(); this.searchMenu = !this.searchMenu; this.menu = false; this.notifMenu = false; }
+  toggleMenu(e: Event) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; }
+  toggleNotif(e: Event) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; }
   goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
   goFwd(e: Event) { e.preventDefault(); history.forward(); }
-  search(e: Event) {
-    e.preventDefault();
-    const input = this.querySelector('.mc-db-searchwrap input') as HTMLInputElement | null;
-    location.href = 'community.html?q=' + encodeURIComponent((input && input.value.trim()) || '');
-  }
   render() {
     const badge = (n: number) => n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : '';
     return html`<div class="mc-deskbar">
@@ -878,13 +870,6 @@ class McDeskbar extends LitElement {
         ? html`<span class="mc-db-center"></span>`
         : html`<div class="mc-db-center mc-db-title" title=${this.title}>${this.title}</div>`}
       <nav class="mc-db-cluster" aria-label="Account">
-        <div class="mc-db-searchwrap">
-          <button class="mc-db-ico" @click=${(e: Event) => this.toggleSearch(e)} aria-label="Search the board" title="Search the board" aria-expanded=${this.searchMenu ? 'true' : 'false'}>${ICON.search}</button>
-          ${this.searchMenu ? html`<form class="mc-db-searchpop" @submit=${(e: Event) => this.search(e)} role="search">
-            <span class="mc-db-searchico">${ICON.search}</span>
-            <input type="search" placeholder="Search the board…" aria-label="Search the board">
-          </form>` : ''}
-        </div>
         <div class="mc-db-notif">
           <button class="mc-db-ico" @click=${(e: Event) => this.toggleNotif(e)} aria-label="Notifications" title="Notifications" aria-expanded=${this.notifMenu ? 'true' : 'false'}>${ICON.bell}${badge(this.notif)}</button>
           ${this.notifMenu ? html`<div class="mc-db-menu mc-db-notifmenu"></div>` : ''}
@@ -901,7 +886,6 @@ class McDeskbar extends LitElement {
     if (menu && !menu.firstChild) menu.appendChild(document.createElement('mc-settings'));
     const nmenu = this.querySelector('.mc-db-notifmenu');
     if (nmenu && !nmenu.firstChild) nmenu.appendChild(document.createElement('mc-notifs'));
-    if (this.searchMenu) { const si = this.querySelector('.mc-db-searchpop input') as HTMLInputElement | null; if (si && document.activeElement !== si) si.focus(); }
   }
 }
 customElements.define('mc-deskbar', McDeskbar);
@@ -961,7 +945,7 @@ class McFooter extends LitElement {
     const year = new Date().getFullYear();
     return html`<div class="mc-footer">
       <a href="index.html">© ${year} merecatholicity.com</a><span class="mc-foot-sep">·</span>
-      <a href="terms.html">Terms &amp; conditions</a><span class="mc-foot-sep">·</span>
+      <a href="terms.html">Terms &amp; Conditions</a><span class="mc-foot-sep">·</span>
       <a href="privacy.html">Privacy</a><span class="mc-foot-sep">·</span>
       <a href="contact.html">Contact</a>
     </div>`;

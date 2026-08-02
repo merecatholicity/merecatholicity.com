@@ -2779,7 +2779,7 @@
     function blockedOut(d) {
       if (!d || !d.blocked) return false;
       try {
-        localStorage.setItem("mc-flash", window.mcCore ? window.mcCore.blockedMessage(d.blocked) : d.blocked === "ipban" ? "Your network is banned from merecatholicity.com for violating the terms and conditions." : "This identity has been locked by the moderators for violating the terms and conditions.");
+        localStorage.setItem("mc-flash", window.mcCore ? window.mcCore.blockedMessage(d.blocked) : d.blocked === "ipban" ? "Your network is banned from merecatholicity.com for violating the Terms and Conditions." : "This identity has been locked by the moderators for violating the Terms and Conditions.");
       } catch (e) {
       }
       clearKey();
@@ -2867,7 +2867,7 @@
       check.type = "checkbox";
       label.appendChild(check);
       label.appendChild(document.createTextNode(" I agree to the "));
-      var terms = el("a", null, "terms & conds");
+      var terms = el("a", null, "Terms & Conditions");
       terms.href = "terms.html";
       terms.target = "_blank";
       label.appendChild(terms);
@@ -7013,7 +7013,6 @@
         pastLoaded = true;
         loadList(0);
       });
-      section.appendChild(past);
       var log = el("div", "merecat-log");
       section.appendChild(log);
       if (!loggedIn) {
@@ -7042,6 +7041,12 @@
       send.type = "submit";
       form.appendChild(send);
       section.appendChild(form);
+      section.appendChild(past);
+      if (loggedIn && !chatId) {
+        past.open = true;
+        pastLoaded = true;
+        loadList(0);
+      }
       if (loggedIn && !chatId) {
         var starter = el("div", "mc-cat-starter");
         starter.appendChild(el("span", "mc-cat-starter-ico", "\u{1F408}"));
