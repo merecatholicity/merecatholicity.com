@@ -94,6 +94,41 @@ function activeTab() {
   return '';
 }
 
+/* The sacred-art theme accent: each primary feature carries a background painting
+   (see styles/main.css `body[data-art]`). The art key mostly follows the active
+   tab, with two remaps: Inbox uses the Pietà (`inbox`), and the forum's admin
+   pages (admin.html) share Community's Last Supper. Set on <body> so CSS can key
+   the fixed, faded, edge-masked accent; re-run on every soft-nav via sync(). */
+const ART_BY_PAGE: Record<string, string> = {
+  'admin.html': 'community',
+  // content pages reuse the six feature paintings, plus a few of their own
+  'where-to-begin.html': 'inbox',
+  'the-book.html': 'home',
+  'library.html': 'merecat',
+  'about.html': 'feed',
+  'credo.html': 'credo',
+  'lex-orandi.html': 'lexorandi',
+  'charting-communions.html': 'communions',
+  'free-churches.html': 'freechurches',
+  'bishop-presbyter.html': 'geneva',
+  'objections.html': 'luther',
+  'resources.html': 'merecat',
+};
+function themeArt(): string {
+  const path = location.pathname.split('/').pop() || 'index.html';
+  if (ART_BY_PAGE[path]) return ART_BY_PAGE[path];
+  const t = activeTab();
+  if (t === 'messages') return 'inbox';
+  return t;   // 'home' | 'merecat' | 'feed' | 'community' | 'profile' | ''
+}
+function syncThemeArt() {
+  try {
+    const a = themeArt();
+    if (a) document.body.dataset.art = a;
+    else delete document.body.dataset.art;
+  } catch (e) { /* storage/DOM blocked — no accent, no harm */ }
+}
+
 /* The current page/view title for the top bar. Home shows the brand; every other
    page uses document.title with the trailing " | site" / " — site" suffix stripped
    (each forum view + content page keeps document.title current, and a title
@@ -1293,7 +1328,7 @@ export function installChrome() {
     if (main) mountLibrary(main);
   }
 
-  function sync() { tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); mountHome(); mountLibraryHook(); }
+  function sync() { syncThemeArt(); tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); mountHome(); mountLibraryHook(); }
   sync();
   /* boots()/chrome.sync() only fire on soft-nav; on a DIRECT initial load the
      onboarding trigger needs one sync once the client has booted (window.mcKit

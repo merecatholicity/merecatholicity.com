@@ -1,9 +1,8 @@
 /* Light/dark theme: a reader's choice, saved in a year-long cookie, defaulting
-   to the operating system's preference when nothing is saved. The stylesheet
-   already answers prefers-color-scheme before any script runs, so a system-dark
-   reader sees dark from first paint; this only records and re-applies an explicit
-   choice. data-theme goes on <html>. The reader toggles the theme from the
-   platform Settings (the gear → Appearance); there is no longer a corner widget. */
+   to CHARCOAL DARK for everyone when nothing is saved (system preference no
+   longer decides the default). An explicit mc-theme=light choice always wins.
+   data-theme goes on <html>. The reader toggles the theme from the platform
+   Settings (the gear → Appearance); there is no longer a corner widget. */
 (function () {
   function readCookie() {
     var m = document.cookie.match(/(?:^|;\s*)mc-theme=(light|dark)\b/);
@@ -23,11 +22,11 @@
     var m = document.cookie.match(/(?:^|;\s*)mc-light=(paper|mist|sepia)\b/);
     return m ? m[1] : 'paper';
   }
-  function systemDark() {
-    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  }
   function effective() {
-    return readCookie() || (systemDark() ? 'dark' : 'light');
+    /* Charcoal dark is the default for everyone now; the reader can still opt
+       into light (an explicit mc-theme=light choice always wins). System
+       preference no longer decides the default. */
+    return readCookie() || 'dark';
   }
   function apply(theme) {
     document.documentElement.setAttribute('data-theme', theme);
@@ -238,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=73';
+    s.src = 'app.js?v=74';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

@@ -2257,3 +2257,108 @@ mc-library { display: block; }
   --color-accent-fill: var(--accent-fill);
   --color-accent-on: var(--accent-on);
 }
+
+/* ===================== Sacred-art theme accents ======================= */
+/* Each of the six primary features carries a faded background painting, set as
+   body[data-art="…"] by app/appchrome.ts (syncThemeArt). The accent is a fixed,
+   edge-masked, low-opacity layer BEHIND the content — a margin accent, never a
+   full-bleed backdrop. The base page colour moves to <html> so an art page's
+   <body> can go transparent and reveal the accent through the centred column. */
+html { background: var(--bg); }
+
+body[data-art] { background: transparent; }
+body[data-art]::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;                 /* behind body content, above the html base */
+  pointer-events: none;
+  background-image: var(--art-img);
+  background-repeat: no-repeat;
+  opacity: var(--art-op, 0.30);
+  filter: saturate(0.9);
+  /* The soft edge is BAKED INTO THE IMAGE (a feathered alpha border), NOT a CSS
+     mask — so the feather is fixed to the image and identical at every window
+     size. CSS only places the whole image and sets its strength (opacity).
+     Mobile-first: the full painting sits at the bottom, contained so all four of
+     its feathered edges stay on-screen. */
+  background-position: center bottom;
+  background-size: contain;
+}
+
+/* per-feature image — mobile file by default */
+body[data-art="home"]      { --art-img: url(theme/home-m.webp); }
+body[data-art="merecat"]   { --art-img: url(theme/merecat-m.webp); }
+body[data-art="feed"]      { --art-img: url(theme/feed-m.webp); }
+body[data-art="community"] { --art-img: url(theme/community-m.webp); }
+body[data-art="inbox"]     { --art-img: url(theme/inbox-m.webp); }
+body[data-art="profile"]   { --art-img: url(theme/profile-m.webp); }
+body[data-art="credo"]     { --art-img: url(theme/credo-m.webp); }
+body[data-art="lexorandi"] { --art-img: url(theme/lexorandi-m.webp); }
+body[data-art="geneva"]    { --art-img: url(theme/geneva-m.webp); }
+body[data-art="luther"]    { --art-img: url(theme/luther-m.webp); }
+
+/* Two-image pages: each image carries its own baked feather, so where they meet
+   in the middle they blend softly. One in a top-left, one in a bottom-right —
+   opposite corners, so on a scrunched mobile screen they never hard-overlap.
+   communions = East/West (St Peter's Square upper-left, Hagia Sophia lower-right);
+   freechurches = the Reformation Wall (upper-left) and St Giles' (lower-right). */
+body[data-art="communions"]::before {
+  background-image: url(theme/peter-m.webp), url(theme/hagia-m.webp);
+  background-position: left top, right bottom;
+  background-size: 74vw auto, 74vw auto;
+  background-repeat: no-repeat, no-repeat;
+}
+body[data-art="freechurches"]::before {
+  background-image: url(theme/geneva-m.webp), url(theme/stgiles-m.webp);
+  background-position: left top, right bottom;
+  background-size: 74vw auto, 74vw auto;
+  background-repeat: no-repeat, no-repeat;
+}
+
+/* desktop: the margins open up beside the centred column — the higher-res files,
+   portraits in the right margin, the two wide paintings in the bottom-right.
+   Sizing is height-/width-based (never viewport-relative masks), so the feather
+   is unchanged whether the window is small or maximised. */
+@media (min-width: 900px) {
+  body[data-art="home"]      { --art-img: url(theme/home-d.webp); }
+  body[data-art="merecat"]   { --art-img: url(theme/merecat-d.webp); }
+  body[data-art="feed"]      { --art-img: url(theme/feed-d.webp); }
+  body[data-art="community"] { --art-img: url(theme/community-d.webp); }
+  body[data-art="inbox"]     { --art-img: url(theme/inbox-d.webp); }
+  body[data-art="profile"]   { --art-img: url(theme/profile-d.webp); }
+  body[data-art="credo"]     { --art-img: url(theme/credo-d.webp); }
+  body[data-art="lexorandi"] { --art-img: url(theme/lexorandi-d.webp); }
+  body[data-art="geneva"]    { --art-img: url(theme/geneva-d.webp); }
+  body[data-art="luther"]    { --art-img: url(theme/luther-d.webp); }
+
+  body[data-art]::before {
+    opacity: var(--art-op-d, 0.32);
+    background-position: right center;
+    background-size: auto 88vh;   /* whole feathered portrait on the right */
+  }
+  body[data-art="merecat"]::before,
+  body[data-art="community"]::before,
+  body[data-art="geneva"]::before {
+    background-position: right bottom;
+    background-size: min(58vw, 920px) auto;   /* whole feathered wide, bottom-right */
+  }
+  /* two-image pages on desktop: opposite corners, blending across the middle */
+  body[data-art="communions"]::before {
+    background-image: url(theme/peter-d.webp), url(theme/hagia-d.webp);
+    background-position: left top, right bottom;
+    background-size: min(50vw, 700px) auto, min(50vw, 700px) auto;
+  }
+  body[data-art="freechurches"]::before {
+    background-image: url(theme/geneva-d.webp), url(theme/stgiles-d.webp);
+    background-position: left top, right bottom;
+    background-size: min(50vw, 700px) auto, min(50vw, 700px) auto;
+  }
+}
+
+/* dark mode: sacred art on charcoal wants a little more presence */
+:root[data-theme="dark"] body[data-art]::before,
+:root[data-dark] body[data-art]::before { --art-op: 0.17; --art-op-d: 0.18; filter: saturate(0.95) brightness(1.06); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body[data-art]::before { --art-op: 0.17; --art-op-d: 0.18; }
+}
