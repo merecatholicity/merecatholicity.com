@@ -4419,7 +4419,7 @@
   function journalEntry(a: any, full: any) {
     var art = el('article', full ? 'journal-entry journal-full' : 'journal-entry');
     art.appendChild(journalDateLine(a));
-    var titleText = a.title || 'Journal entry';
+    var titleText = a.title || fmtDateTime(a.created_at);
     var h = el(full ? 'h1' : 'h2', 'journal-entry-title');
     if (full) { h.textContent = titleText; }
     else { var link = el('a', null, titleText); link.href = 'journal.html?a=' + a.id; h.appendChild(link); }
@@ -6656,7 +6656,7 @@
       '.merecat-note{color:var(--maroon)}' +
       '.merecat-srcs{margin-top:.55rem;padding-top:.45rem;border-top:1px dashed var(--rule);font-size:.84rem}' +
       '.merecat-srcs a{display:block;margin:.15rem 0}' +
-      '.merecat-about{border:1px solid var(--rule);border-radius:6px;background:var(--surface);margin:.6rem 0;padding:.1rem .9rem}' +
+      '.merecat-about{border:1px solid var(--rule);border-radius:6px;background:color-mix(in srgb,var(--surface) 80%,transparent);margin:.6rem 0;padding:.1rem .9rem}' +
       '.merecat-about>summary{cursor:pointer;padding:.5rem 0;color:var(--maroon);font-size:.92rem}' +
       '.merecat-about-body{padding:.1rem 0 .8rem}' +
       '.merecat-about-body h3{margin:1em 0 .3em;font-size:1rem}' +

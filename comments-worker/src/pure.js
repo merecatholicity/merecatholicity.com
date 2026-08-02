@@ -199,6 +199,33 @@ export function parseFeedScope(raw) {
   return null;
 }
 
+/* Turn a Journal post body into { title, body }. The Journal shows forum posts
+   as articles, but posts carry no title, so it is derived:
+     - an explicit leading markdown heading (#, ##, ###) is the title, stripped;
+     - else a SHORT first line is the title verbatim and dropped from the body;
+     - else a LONG first line yields a trimmed, word-boundary excerpt + ellipsis,
+       and the whole body is kept (nothing is lost).
+   Pure + tested; returns title:null only for an empty body. */
+export function journalArticle(body) {
+  const src = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
+  const lines = src.split('\n');
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;      // skip leading blank lines
+  const firstRaw = i < lines.length ? lines[i] : '';
+  const rest = () => lines.slice(i + 1).join('\n').replace(/^\n+/, '');
+  const m = firstRaw.match(/^#{1,3}\s+(.+?)\s*#*\s*$/);
+  if (m) return { title: m[1].trim().slice(0, 160), body: rest() };
+  const first = firstRaw.trim();
+  if (!first) return { title: null, body: src };
+  const MAX = 70;
+  if (first.length <= MAX) return { title: first, body: rest() };
+  let cut = first.slice(0, MAX);
+  const sp = cut.lastIndexOf(' ');
+  if (sp > 40) cut = cut.slice(0, sp);
+  cut = cut.replace(/[\s,.;:!?—–-]+$/, '');
+  return { title: cut + '…', body: src };
+}
+
 /* A human label for a scope, used in the admin list and the Discord embed footer
    so a subscription reads plainly ("Topic #219", "Category: general"). */
 export function scopeLabel(scope) {
