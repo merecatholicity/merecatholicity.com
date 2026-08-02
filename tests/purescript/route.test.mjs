@@ -15,7 +15,7 @@ function psRoute(qs) {
   const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
   const g = (k) => params.get(k);
   return Route.routeTag(Route.parseRoute({
-    ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'), discord: g('discord'),
+    ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'), discord: g('discord'), shadowbans: g('shadowbans'),
     merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),
     merecat: g('merecat'), feed: g('feed'), notifications: g('notifications'), inbox: g('inbox'), users: g('users'),
     q: g('q'), dm: g('dm'), me: g('me'), profile: g('profile'), post: g('post'), audit: g('audit'), topic, cat: g('cat'),
@@ -30,6 +30,7 @@ test('the common views resolve from their params', () => {
   assert.equal(psRoute('topic=42').n, 42);
   assert.equal(psRoute('ipbans=1').tag, 'IpBans');
   assert.equal(psRoute('discord=1').tag, 'Discord');
+  assert.equal(psRoute('shadowbans=1').tag, 'Shadowbans');
   assert.equal(psRoute('admin=1').tag, 'AdminHome', 'admin beats discord in the ladder');
   assert.equal(psRoute('dm=abc').tag, 'Dm');
   assert.equal(psRoute('dm=abc').s, 'abc');

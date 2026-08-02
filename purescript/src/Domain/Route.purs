@@ -23,6 +23,7 @@ type Params =
   , admins :: Nullable String
   , admin :: Nullable String
   , discord :: Nullable String
+  , shadowbans :: Nullable String
   , merecatadmin :: Nullable String
   , merecatthread :: Nullable String
   , merecatthreads :: Nullable String
@@ -47,6 +48,7 @@ data Route
   | RAdmins
   | RAdminHome
   | RDiscord
+  | RShadowbans
   | RMerecatAdmin
   | RMerecatThread String
   | RMerecatThreads
@@ -86,6 +88,7 @@ parseRoute p =
   else if truthy p.admins then RAdmins
   else if truthy p.admin then RAdminHome
   else if truthy p.discord then RDiscord
+  else if truthy p.shadowbans then RShadowbans
   else if truthy p.merecatadmin then RMerecatAdmin
   else if truthy p.merecatthread then RMerecatThread (str p.merecatthread)
   else if present p.merecatthreads then RMerecatThreads
@@ -113,6 +116,7 @@ routeTag r = case r of
   RAdmins -> t "Admins"
   RAdminHome -> t "AdminHome"
   RDiscord -> t "Discord"
+  RShadowbans -> t "Shadowbans"
   RMerecatAdmin -> t "MerecatAdmin"
   RMerecatThread s -> ts "MerecatThread" s
   RMerecatThreads -> t "MerecatThreads"

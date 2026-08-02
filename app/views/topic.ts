@@ -117,6 +117,8 @@ class McTopic extends LitElement {
         else { const node = this.querySelector('#comment-' + m.id); if (node) node.remove(); }
       } else if (m.act === 'lock' || m.act === 'unlock') {
         this.d = { ...d, topic: { ...d.topic, locked: m.act === 'lock' ? 1 : 0 } };
+      } else if (m.act === 'readonly' || m.act === 'unreadonly') {
+        this.d = { ...d, topic: { ...d.topic, readonly: m.act === 'readonly' ? 1 : 0 } };
       }
       /* sticky/unsticky change nothing visible inside the thread */
     } else if (m.t === 'edited') {
@@ -166,7 +168,9 @@ class McTopic extends LitElement {
     /* the watch toggle (kit machinery) */
     const watchSlot = this.querySelector('.mc-watch-slot');
     if (watchSlot && kit.state.key) watchSlot.appendChild(kit.watchToggle(d.topic.id));
-    if (d.topic.locked) {
+    /* Locked closes the thread to everyone; read-only closes it to non-admins
+       only (admins fall through to the composer, as on the classic path). */
+    if (d.topic.locked || (d.topic.readonly && !kit.isAdmin())) {
       this.scrollToHash();
       kit.annotateMeta('board:' + d.cat);
       return;
@@ -226,13 +230,14 @@ class McTopic extends LitElement {
     const href = (i: number) => 'community.html?topic=' + this.topicId + '&p=' + i;
     return html`
       ${crumbTpl([['Community', 'community.html'], [cat[1], 'community.html?cat=' + d.cat], [d.topic.title]])}
-      <h2 class="board-topic-head">${d.topic.title}${d.topic.sticky ? html`<span class="board-sticky">(sticky)</span>` : nothing}${d.topic.locked ? html`<span class="board-locked">(locked)</span>` : nothing}${d.cat === 'adminsonly' ? nothing : html`<a class="comments-rss" href=${kit.API + '/feed?topic=' + d.topic.id} title="Follow this topic with a feed reader">RSS</a>`}</h2>
+      <h2 class="board-topic-head">${d.topic.title}${d.topic.sticky ? html`<span class="board-sticky">(sticky)</span>` : nothing}${d.topic.locked ? html`<span class="board-locked">(locked)</span>` : nothing}${d.topic.readonly ? html`<span class="board-locked">(read only)</span>` : nothing}${d.cat === 'adminsonly' ? nothing : html`<a class="comments-rss" href=${kit.API + '/feed?topic=' + d.topic.id} title="Follow this topic with a feed reader">RSS</a>`}</h2>
       ${kit.state.key ? html`<p class="board-intro mc-watch-slot"></p>` : nothing}
       ${this.newAway ? html`<a class="mc-live-pill" href=${href(this.newLastPage)}>↓ ${this.newAway} new repl${this.newAway === 1 ? 'y' : 'ies'} — go to page ${this.newLastPage}</a>` : nothing}
       ${pagerTpl(d.total, d.per, d.page, href)}
       <div class="comments-list"></div>
       ${pagerTpl(d.total, d.per, d.page, href)}
       ${d.topic.locked ? html`<p class="comments-status">This topic is locked. No new replies.</p>` : nothing}
+      ${!d.topic.locked && d.topic.readonly && !kit.isAdmin() ? html`<p class="comments-status">This is a read-only topic. Only the site can post here.</p>` : nothing}
     `;
   }
 }

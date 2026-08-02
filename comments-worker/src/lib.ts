@@ -689,7 +689,7 @@ export async function boardCatPayload(env: any, page: any, p: any, q: any) {
     'SELECT COUNT(*) AS n FROM comments c WHERE ' + where
   ).bind(...binds).first();
   const rows = await env.DB.prepare(
-    'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, c.sticky, ' +
+    'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, ' +
     'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last, ' +
     "(SELECT MAX(m.id) FROM comments m WHERE (m.id = c.id OR m.parent_id = c.id) AND m.status = 'live' AND " + shadowExcl('m') + ') AS last_id ' +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
@@ -744,12 +744,28 @@ export async function topicViewPayload(env: any, topic: any, pRaw: any, findRaw:
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0 }, counts[topic.author_hash] || 0),
+    topic: withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0 }, counts[topic.author_hash] || 0),
     replies: (replies.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0)),
     total: topic.replies || 0,
     page: p,
     per: TOPICS_PER_PAGE,
   };
+}
+
+/* Turn a Journal post body into { title, body }. A leading markdown heading
+   (#, ##, or ###) becomes the article title and is stripped from the body, so
+   an admin titles an entry by opening it with "# My Title". With no leading
+   heading there is no title and the client heads the article with its date. */
+export function journalArticle(body: any) {
+  const src = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
+  const lines = src.split('\n');
+  let i = 0;
+  while (i < lines.length && !lines[i].trim()) i++;      // skip leading blank lines
+  const m = i < lines.length ? lines[i].match(/^#{1,3}\s+(.+?)\s*#*\s*$/) : null;
+  if (m) {
+    return { title: m[1].trim().slice(0, 160), body: lines.slice(i + 1).join('\n').replace(/^\n+/, '') };
+  }
+  return { title: null, body: src };
 }
 
 /* The admins' door to the back room: the same listing and topic payloads the
@@ -841,6 +857,8 @@ export const APP_SETTING_DEFAULTS = {
   wall_prune_days: '365',                       // retention when pruning is enabled
   discord_forum_webhook: '',                    // optional Discord webhook for new forum posts (empty = off)
   discord_feed_webhook: '',                     // optional Discord webhook for new feed posts (empty = off)
+  journal_topic: '219',                         // the forum topic whose posts become Journal articles
+  journal_enabled: '1',                         // whether the Mere Catholicity Journal page is live
 };
 export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
 export async function getAppSettings(env: any) {

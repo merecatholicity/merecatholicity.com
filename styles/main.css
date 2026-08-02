@@ -2362,3 +2362,48 @@ body[data-art="freechurches"]::before {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) body[data-art]::before { --art-op: 0.17; --art-op-d: 0.18; }
 }
+
+/* ===================== The Mere Catholicity Journal ===================== */
+/* A quiet, modern reading surface. Scoped under .journal so its headings win
+   over the reading-prose defaults (equal-specificity, but ancestor-scoped to be
+   safe). Theme-aware via the design tokens — reads in light and dark alike. */
+.journal { max-width: 46rem; margin: 0 auto; }
+.journal-masthead { text-align: center; padding: 0.5rem 0 1.75rem; margin-bottom: 0.5rem; border-bottom: 2px solid var(--rule); }
+.journal .journal-title { font-size: clamp(2rem, 5vw, 2.9rem); line-height: 1.1; margin: 0.2rem 0 0.35rem; color: var(--maroon); letter-spacing: -0.01em; }
+.journal-tagline { color: var(--faint); font-style: italic; margin: 0; font-size: 1.05rem; }
+
+.journal-entry { padding: 2.2rem 0; border-top: 1px solid var(--rule); }
+.journal-entry:first-of-type { border-top: 0; }
+.journal-full { border-top: 0; padding-top: 0.75rem; }
+.journal-meta { font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--faint); margin-bottom: 0.35rem; }
+.journal-date { color: var(--maroon); font-weight: 600; }
+.journal-edited { font-style: italic; }
+.journal .journal-entry-title { font-size: clamp(1.5rem, 3.5vw, 2.05rem); line-height: 1.18; margin: 0 0 0.75rem; letter-spacing: -0.01em; }
+.journal .journal-entry-title a { color: var(--ink); text-decoration: none; background: none; }
+.journal .journal-entry-title a:hover { color: var(--maroon); }
+.journal-body { font-size: 1.08rem; }
+.journal-body > :first-child { margin-top: 0; }
+
+/* share footer: a subtle permalink + a copy-link button */
+.journal-share { display: flex; gap: 0.85rem; align-items: center; margin-top: 1.4rem; font-size: 0.9rem; }
+.journal-permalink { color: var(--faint); text-decoration: none; background: none; }
+.journal-permalink:hover { color: var(--maroon); }
+.journal-copy { font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--maroon); background: transparent; border: 1px solid var(--rule); border-radius: 999px; padding: 0.2rem 0.8rem; transition: background 0.15s, color 0.15s; }
+.journal-copy:hover { background: var(--maroon); color: #fff; border-color: var(--maroon); }
+
+.journal-back { display: inline-block; color: var(--maroon); text-decoration: none; background: none; font-size: 0.95rem; margin-bottom: 1.25rem; }
+.journal-back:hover { text-decoration: underline; }
+.journal-back-foot { margin-top: 2.25rem; margin-bottom: 0; }
+.journal-single .journal-full { padding-top: 0; }
+
+/* ===================== Admin settings: danger boxes ===================== */
+/* A destructive one-time action framed with its explanation, sitting under the
+   settings it relates to. Muted until hovered, so it never shouts on the page. */
+.admin-set-rule { border: 0; border-top: 1px solid var(--rule); margin: 1.75rem 0 1.25rem; }
+.admin-danger { border: 1px solid var(--rule); border-left: 3px solid var(--maroon); border-radius: 8px; padding: 0.85rem 1rem; margin: 1rem 0 1.5rem; background: color-mix(in srgb, var(--maroon) 4%, transparent); }
+.admin-danger-title { font-weight: 700; color: var(--maroon); margin-bottom: 0.25rem; }
+.admin-danger-explain { color: var(--faint); font-size: 0.92rem; margin: 0 0 0.7rem; }
+.admin-danger-btn { background: transparent; color: var(--maroon); border: 1px solid var(--maroon); }
+.admin-danger-btn:hover:not(:disabled) { background: var(--maroon); color: #fff; }
+.admin-danger-btn:disabled { opacity: 0.6; cursor: default; }
+.admin-danger-note { margin-left: 0.6rem; }
