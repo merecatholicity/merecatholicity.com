@@ -280,7 +280,7 @@ async function notifyDiscordFeed(env: any, p: {
   if (!isDiscordWebhook(hook)) return;
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first();
   const name = (prof && prof.nick) || displayName(p.authorHash);
-  const link = siteBase(env) + '/community.html?post=' + p.postId;
+  const link = siteBase(env) + '/feed.html?post=' + p.postId;
   await sendDiscord(hook, {
     title: 'New post in the feed',
     url: link,
@@ -1842,17 +1842,31 @@ async function handleWall(request: any, env: any) {
 }
 
 /* One post plus all its live comments (the ?post=<id> detail + mention target). */
+/* A single post is PUBLIC (unlike the feed listing, which stays members-only via
+   wallReader): anyone may read a post and its likes/comments so a shared
+   feed.html?post=<id> link works logged-out. Rate-limited by IP. A key is
+   OPTIONAL — when supplied it resolves the reader's like-state and is still
+   refused if blocked; without one, me is null (no personal like flags). Returns
+   only public post/comment content (no IPs, no keys). */
 async function handleWallPostGet(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const r = await wallReader(request, env, data);
-  if (r.resp) return r.resp;
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  let me = null;
+  const key = String((data && data.key) || '');
+  if (key) {
+    me = await sha256hex(key);
+    const gate = await blockedReason(env, me, ip);
+    if (gate) return blockedJson(gate);
+  }
   const id = Math.floor(Number(data.id) || 0);
   const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live'").bind(id).first();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
   const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' ORDER BY c.id").bind(id).all();
-  const enriched = await wallEnrich(env, [post].concat(crows.results || []), r.me);
-  return json({ ok: true, post: enriched[0], comments: enriched.slice(1), me: r.me }, 200);
+  const enriched = await wallEnrich(env, [post].concat(crows.results || []), me);
+  return json({ ok: true, post: enriched[0], comments: enriched.slice(1), me }, 200);
 }
 
 /* Like or unlike a public post — a lightweight toggle: READ_LIMIT (not the post

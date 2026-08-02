@@ -1063,7 +1063,7 @@ export async function deliverWallNotifications(env: any, o: any) {
   }
   if (stmts.length) await env.DB.batch(stmts);
   if (live.length) await publishUser(env, live);
-  const postUrl = '/community.html?post=' + o.postId;
+  const postUrl = '/feed.html?post=' + o.postId;
   if (pushComment.size) {
     await deliverPush(env, [...pushComment], { kind: 'wall', title: 'New comment', body: 'Someone commented on your post', url: postUrl });
   }

@@ -5449,7 +5449,7 @@
       return node;
     }
     function wallShareControl(p) {
-      var shareUrl = location.origin + "/community.html?post=" + p.id;
+      var shareUrl = location.origin + "/feed.html?post=" + p.id;
       var box = el("span", "wall-share");
       var btn = el("a", "wall-comments-toggle wall-share-btn", "\u{1F517} Share");
       btn.href = "#";
@@ -5512,6 +5512,15 @@
       box.appendChild(menu);
       return box;
     }
+    function loginToInteract(what) {
+      var p = el("p", "comments-status");
+      var a = identityAction("Create an identity", function() {
+        if (window.mcOnboard) window.mcOnboard();
+      });
+      p.appendChild(document.createTextNode("Sign in to " + what + ". "));
+      p.appendChild(a);
+      return p;
+    }
     function wallPostNode(p, expand) {
       ensureDmStyles();
       var node = el("article", "comment wall-post" + (expand ? " wall-post-detail" : ""));
@@ -5521,7 +5530,7 @@
         node.addEventListener("click", function(e) {
           if (e.target.closest("a, button, video, audio, input, textarea, label, .wall-comments, .wall-media")) return;
           if (window.getSelection && String(window.getSelection())) return;
-          location.href = "community.html?post=" + p.id;
+          location.href = "feed.html?post=" + p.id;
         });
       }
       var head = el("div", "comment-head");
@@ -5529,7 +5538,7 @@
       head.appendChild(authorNode(p.author_hash, p.nick, true, p.faith, p.posts));
       if (p.author_hash && ADMIN_HASHES.indexOf(p.author_hash) !== -1) head.appendChild(el("span", "comment-admin", "(admin)"));
       var permalink = el("a", "comment-date", " " + fmtDateTime(p.created_at));
-      permalink.href = "community.html?post=" + p.id;
+      permalink.href = "feed.html?post=" + p.id;
       head.appendChild(permalink);
       if (p.author_hash && state.myHash && p.author_hash !== state.myHash && p.author_hash !== MERECAT_BOT_HASH) {
         var dm = el("a", "comment-dm", "Direct Message");
@@ -5608,7 +5617,7 @@
         fetch(API + "/wall/post/get", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: state.key, id: p.id })
+          body: JSON.stringify({ key: state.key || "", id: p.id })
         }).then(function(r) {
           return r.json();
         }).then(function(d) {
@@ -5623,6 +5632,7 @@
           if (state.myHash) box.appendChild(wallComposer("comment", { post: p.id }, function(added) {
             if (added) list.appendChild(wallCommentNode(added));
           }));
+          else box.appendChild(loginToInteract("comment on this post"));
         }).catch(function() {
           list.textContent = "";
           list.appendChild(el("p", "comments-status", "Could not load comments."));
@@ -5895,23 +5905,19 @@
     }
     function viewPost(id) {
       if (!(id > 0)) {
-        crumb([["Community", "community.html"], ["Feed", "community.html?feed=1"]]);
+        crumb([["Community", "community.html"], ["Feed", "feed.html"]]);
         section.appendChild(el("p", "comments-status", "No such post."));
         return;
       }
-      if (!isMember()) {
-        viewJoin("view this post");
-        return;
-      }
       document.title = "Post | Community";
-      crumb([["Community", "community.html"], ["Feed", "community.html?feed=1"], ["Post"]]);
+      crumb([["Community", "community.html"], ["Feed", "feed.html"], ["Post"]]);
       var holder = el("div", "wall-list");
       section.appendChild(holder);
       holder.appendChild(el("p", "comments-status", "Loading\u2026"));
       fetch(API + "/wall/post/get", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: state.key, id })
+        body: JSON.stringify({ key: state.key || "", id })
       }).then(function(r) {
         return r.json();
       }).then(function(d) {
@@ -6107,7 +6113,7 @@
           var isLike = it.kind === "wall-like";
           var label = isDm ? who + " sent you a message" : isLike ? who + " liked your post" : isWall ? who + (it.topic_id === 1 ? " commented on your post" : " mentioned you in a post") : who + (it.kind === "mention" ? " mentioned you in " : " replied in ") + (it.topic_title || "a thread");
           var a = el("a", "board-topic-title" + (it.read_at ? "" : " dm-unread"), label);
-          a.href = isDm ? "messages.html?dm=" + it.actor_hash : isWall || isLike ? "community.html?post=" + it.comment_id : "community.html?topic=" + it.topic_id + "#comment-" + it.comment_id;
+          a.href = isDm ? "messages.html?dm=" + it.actor_hash : isWall || isLike ? "feed.html?post=" + it.comment_id : "community.html?topic=" + it.topic_id + "#comment-" + it.comment_id;
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el("span", "dm-unread", " \u25CF new"));
           if (it.snippet && !isDm) left.appendChild(el("div", "board-intro", it.snippet));
@@ -8656,6 +8662,12 @@
         if (!isMember()) return viewJoin("ask the librarian");
         return viewMerecat();
       }
+      if (page === "feed.html") {
+        var fpost = params.get("post");
+        if (fpost) return viewPost(Number(fpost));
+        if (!isMember()) return viewJoin("see and post to the community feed");
+        return viewFeed();
+      }
       var r = window.mcCore ? window.mcCore.parseRoute(function(k) {
         return params.get(k);
       }) : classicRoute(params);
@@ -8698,9 +8710,11 @@
         case "Audit":
           return viewAudit();
         case "Feed":
-          return isMember() ? viewFeed() : viewJoin("see and post to the community feed");
+          location.replace("feed.html" + location.hash);
+          return;
         case "Post":
-          return isMember() ? viewPost(Number(r.s)) : viewJoin("view this post");
+          location.replace("feed.html?post=" + encodeURIComponent(r.s) + location.hash);
+          return;
         case "Topic":
           return viewTopic(r.n);
         case "Cat":

@@ -44,7 +44,7 @@ interface Tab {
 const TABS: Tab[] = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
   { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
-  { key: 'feed', label: 'Feed', svg: 'feed', href: 'community.html?feed=1' },
+  { key: 'feed', label: 'Feed', svg: 'feed', href: 'feed.html' },
   { key: 'community', label: 'Community', svg: 'community', href: 'community.html', hero: true },
   { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'messages.html', badge: 'dm' },
   { key: 'profile', label: 'Profile', svg: 'profile', href: 'profile.html' },
@@ -89,7 +89,8 @@ function activeTab() {
   if (path === 'merecat-ai.html') return 'merecat';
   if (path === 'messages.html') return 'messages';
   if (path === 'profile.html') return 'profile';
-  if (path === 'community.html') return /[?&]feed=1\b/.test(location.search) ? 'feed' : 'community';
+  if (path === 'feed.html') return 'feed';
+  if (path === 'community.html') return 'community';
   return '';
 }
 
@@ -807,7 +808,7 @@ class McNotifs extends LitElement {
           : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
             : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
       const to = isDm ? ('messages.html?dm=' + it.actor_hash)
-        : (isWall || isLike) ? ('community.html?post=' + it.comment_id)
+        : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
           : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
       return html`<a class=${'mc-notifs-row' + (it.read_at ? '' : ' mc-notifs-new')} href=${to}>${label}</a>`;
     })}`);
