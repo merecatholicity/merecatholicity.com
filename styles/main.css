@@ -965,6 +965,15 @@ a.comment-edit { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; }
 /* ============================ 08-board.css ============================ */
 /* The Catholicity Board */
 section.comments.board { margin-top: 1rem; }
+/* Perf/CLS: the platform pages (community/feed/inbox/profile/merecat all mount
+   into section.comments.board) fetch their content after first paint, and the
+   growing section shoved the shell footer down the page — the dominant layout
+   shift (Lighthouse CLS 0.12-0.25, the sole thing holding these pages under 99).
+   Reserving a viewport of height keeps the footer below the fold from first
+   paint, so the async fill grows into reserved space instead of moving visible
+   content. Scoped to .board so short article comment threads (data-comments) are
+   untouched. */
+section.comments.board { min-height: 100vh; }
 .board-intro { color: var(--muted-c); margin: 0.4em 0; }
 .board-crumb { color: var(--muted-c); font-size: 0.95rem; }
 .board-crumb a { color: var(--maroon); }
