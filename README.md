@@ -482,7 +482,7 @@ anything else not called out below.
 - `docs/Mere_Catholicity.pdf` and `docs/Mere_Catholicity_Paperback.pdf` (the PDF renders)
 - `docs/book.html` and `docs/bishop-presbyter.html` (the web editions)
 - `docs/Mere_Catholicity_Logos.docx` (the Logos/Verbum edition)
-- `docs/cover.jpg` and `docs/book_cover.png` (the cover images)
+- `docs/cover.jpg` and `docs/book_cover.webp` (the cover images)
 
 **Everything else in the library is already public domain.** The Fathers, the councils,
 the Schaff corpus, Newman, the Summa, the Douay-Rheims and King James Bibles, the Catena
