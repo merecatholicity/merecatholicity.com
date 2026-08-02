@@ -128,6 +128,16 @@ function syncThemeArt() {
     if (a) document.body.dataset.art = a;
     else delete document.body.dataset.art;
   } catch (e) { /* storage/DOM blocked — no accent, no harm */ }
+  applyArt();
+}
+
+/* Whether the sacred-art page accents are on (Settings → Appearance). Default on;
+   a reader who finds them distracting turns them off, remembered per browser. */
+function artOn(): boolean {
+  try { return localStorage.getItem('mc-art') !== '0'; } catch (e) { return true; }
+}
+function applyArt() {
+  try { document.body.classList.toggle('mc-no-art', !artOn()); } catch (e) { /* blocked */ }
 }
 
 /* The current page/view title for the top bar. Home shows the brand; every other
@@ -383,9 +393,10 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
   declare keyShown: boolean;
   declare theme: string;
+  declare art: boolean;
   declare copied: boolean;
   declare dark: string;
   declare light: string;
@@ -401,7 +412,7 @@ class McSettings extends LitElement {
   declare _onInstall: () => void;
   constructor() {
     super();
-    this.keyShown = false; this.theme = this._theme(); this.copied = false;
+    this.keyShown = false; this.theme = this._theme(); this.art = artOn(); this.copied = false;
     this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal';
     this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence();
     this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null; this.muted = null;
@@ -620,6 +631,12 @@ class McSettings extends LitElement {
     this.presence = n;
   }
   _theme() { return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'; }
+  toggleArt() {
+    const off = this.art;   // currently on → turning off
+    try { localStorage.setItem('mc-art', off ? '0' : '1'); } catch (e) { /* blocked */ }
+    applyArt();
+    this.art = artOn();
+  }
   toggleTheme() {
     const n = this.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', n);
@@ -776,6 +793,7 @@ class McSettings extends LitElement {
           <button class=${'mc-set-pal mc-pal-' + p[0] + (this.light === p[0] ? ' on' : '')} @click=${() => this.setLight(p[0])} aria-label=${p[1]}>
             <span class="mc-pal-sw"></span><span class="mc-pal-name">${p[1]}</span></button>`)}
       </div>`}
+      ${this._switch('Background images', 'Sacred-art page accents', this.art, () => this.toggleArt())}
 
       ${this._homeScreenSection()}
 

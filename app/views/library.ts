@@ -71,8 +71,11 @@ export function parseLibrary(main: Element): LibraryModel {
 
 class McLibrary extends LitElement {
   static properties = { cat: { attribute: false } };
-  model: LibraryModel;
-  cat: string;
+  /* `declare` (not a class field): a real field would shadow Lit's reactive
+     accessor, so setting `this.cat` on a card click would not re-render — the
+     bug where the URL changed to #cat but the view only updated on refresh. */
+  declare model: LibraryModel;
+  declare cat: string;
   _onPop!: () => void;
   constructor() { super(); this.model = { intro: '', cats: [] }; this.cat = ''; }
   createRenderRoot() { return this; }

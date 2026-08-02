@@ -23,9 +23,9 @@ import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 // there or client-side; imported here only what index.js calls directly.)
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
-  isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel,
+  isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel, journalArticle,
 } from './pure.js';
-export { isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel };   // re-exported so index.ts imports them from here
+export { isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel, journalArticle };   // re-exported so index.ts imports them from here
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 import { createPusher } from './webpush.js';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
@@ -750,22 +750,6 @@ export async function topicViewPayload(env: any, topic: any, pRaw: any, findRaw:
     page: p,
     per: TOPICS_PER_PAGE,
   };
-}
-
-/* Turn a Journal post body into { title, body }. A leading markdown heading
-   (#, ##, or ###) becomes the article title and is stripped from the body, so
-   an admin titles an entry by opening it with "# My Title". With no leading
-   heading there is no title and the client heads the article with its date. */
-export function journalArticle(body: any) {
-  const src = String(body == null ? '' : body).replace(/\r\n?/g, '\n');
-  const lines = src.split('\n');
-  let i = 0;
-  while (i < lines.length && !lines[i].trim()) i++;      // skip leading blank lines
-  const m = i < lines.length ? lines[i].match(/^#{1,3}\s+(.+?)\s*#*\s*$/) : null;
-  if (m) {
-    return { title: m[1].trim().slice(0, 160), body: lines.slice(i + 1).join('\n').replace(/^\n+/, '') };
-  }
-  return { title: null, body: src };
 }
 
 /* The admins' door to the back room: the same listing and topic payloads the

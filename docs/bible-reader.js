@@ -167,6 +167,10 @@
       return null;
     }
 
+    /* Continuous ("keep reading") play, shared with the shell's audio dock via
+       localStorage so the one setting governs both. Default on. */
+    function contOn() { try { return localStorage.getItem("mc-audio-continuous") !== "0"; } catch (e) { return true; } }
+
     function buildPlayer() {
       var wrap = el("div", "bible-player");
       /* The dock owns the ELEMENT when the shell is present, so the sound
@@ -196,12 +200,21 @@
       audio.addEventListener("pause", function () { play.textContent = "▶"; }, { signal: sig });
       audio.addEventListener("ended", function () {
         play.textContent = "▶";
+        if (!contOn()) return;   // continuous play off: stop at the end of this chapter
         var book = data.books[cur.b];
         if (cur.c < book.chapters.length) go(cur.b, cur.c + 1, 0, true);
         else if (cur.b < data.books.length - 1) go(cur.b + 1, 1, 0, true);
       }, { signal: sig });
+      var cont = el("button", "bp-cont" + (contOn() ? " on" : ""), "🔁"); cont.type = "button";
+      cont.title = "Continuous play — keep reading into the next chapter"; cont.setAttribute("aria-label", "Continuous play");
+      cont.setAttribute("aria-pressed", contOn() ? "true" : "false");
+      cont.addEventListener("click", function () {
+        var next = !contOn();
+        try { localStorage.setItem("mc-audio-continuous", next ? "1" : "0"); } catch (e) { /* blocked */ }
+        cont.classList.toggle("on", next); cont.setAttribute("aria-pressed", next ? "true" : "false");
+      });
       var row = el("div", "bp-row");
-      [play, back, seek, fwd, time].forEach(function (n) { row.appendChild(n); });
+      [play, back, seek, fwd, cont, time].forEach(function (n) { row.appendChild(n); });
       wrap.appendChild(label); wrap.appendChild(row);
       return {
         el: wrap,

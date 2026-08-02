@@ -105,22 +105,30 @@ customElements.define('mc-progress', McProgress);
 const dockAudio = new Audio();
 dockAudio.preload = 'none';
 
+/* Continuous ("keep reading") play: when on, a finished chapter auto-advances to
+   the next. Default ON. Shared (via localStorage) between this dock and the Bible
+   reader's own player, so the one toggle governs both. */
+function continuousOn(): boolean {
+  try { return localStorage.getItem('mc-audio-continuous') !== '0'; } catch (e) { return true; }
+}
+
 /* The dock is a FULL mini-player. The reader hands it a context (the whole
    book table + audio base + reader page + current position), so once the
    reader page is swapped away the dock can still step chapters, auto-advance,
    label itself, and link back to the exact chapter in the reader — all on its
-   own. It is draggable anywhere over the app (position persisted). */
+   own. It sits in a fixed corner (not draggable), with a continuous-play toggle
+   that keeps reading into the next chapter when a file ends. */
 class McAudioDock extends LitElement {
   static properties = {
     label: { type: String }, playing: { type: Boolean }, shown: { type: Boolean },
-    href: { type: String }, canStep: { type: Boolean }, pos: { state: true },
+    href: { type: String }, canStep: { type: Boolean }, cont: { state: true },
   };
   declare label: string;
   declare playing: boolean;
   declare shown: boolean;
   declare href: string;
   declare canStep: boolean;
-  declare pos: { left: number; top: number } | null;
+  declare cont: boolean;
   declare claimed: boolean;
   declare ctx: any;
   constructor() {
@@ -128,11 +136,15 @@ class McAudioDock extends LitElement {
     this.label = ''; this.playing = false; this.shown = false;
     this.href = ''; this.canStep = false; this.claimed = false;
     this.ctx = null;    // { books:[{slug,name,chapters}], audioBase, page, reader, b, c }
-    this.pos = null;    // dragged {left,top}, or null for the default corner
-    try { var p = localStorage.getItem('mc-dock-pos'); if (p) this.pos = JSON.parse(p); } catch (e) { /* no storage */ }
+    this.cont = continuousOn();   // keep-reading toggle, shared with the reader
     dockAudio.addEventListener('play', () => this.sync());
     dockAudio.addEventListener('pause', () => this.sync());
     dockAudio.addEventListener('ended', () => this.onEnded());
+  }
+  toggleCont() {
+    const next = !continuousOn();
+    try { localStorage.setItem('mc-audio-continuous', next ? '1' : '0'); } catch (e) { /* blocked */ }
+    this.cont = next;
   }
   createRenderRoot() { return this; }
   sync() {
@@ -177,37 +189,14 @@ class McAudioDock extends LitElement {
     this.sync();
   }
   onEnded() {
-    if (!this.claimed && this.ctx && this.ctx.books) this.step(1);   // the reader advances when it is present
+    /* auto-advance only when the reader is gone (it advances when present) AND
+       continuous play is on; otherwise just settle the controls. */
+    if (!this.claimed && this.ctx && this.ctx.books && continuousOn()) this.step(1);
     else this.sync();
-  }
-  startDrag(e: PointerEvent) {
-    if ((e.target as HTMLElement).closest('button, a')) return;   // let the controls take their own clicks
-    var box = this.querySelector('.mc-dock');
-    if (!box) return;
-    var r = box.getBoundingClientRect();
-    var offX = e.clientX - r.left, offY = e.clientY - r.top, w = r.width, h = r.height;
-    var self = this;
-    function move(ev: PointerEvent) {
-      self.pos = {
-        left: Math.max(4, Math.min(window.innerWidth - w - 4, ev.clientX - offX)),
-        top: Math.max(4, Math.min(window.innerHeight - h - 4, ev.clientY - offY)),
-      };
-    }
-    function up() {
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', up);
-      try { localStorage.setItem('mc-dock-pos', JSON.stringify(self.pos)); } catch (x) { /* no storage */ }
-    }
-    document.addEventListener('pointermove', move);
-    document.addEventListener('pointerup', up);
-    e.preventDefault();
   }
   render() {
     if (!this.shown) return html``;
-    var p = this.pos;
-    var style = p ? ('left:' + Math.min(p.left, window.innerWidth - 60) + 'px;top:'
-      + Math.min(p.top, window.innerHeight - 30) + 'px;right:auto;bottom:auto') : '';
-    return html`<div class="mc-dock" style=${style} @pointerdown=${(e: PointerEvent) => this.startDrag(e)}>
+    return html`<div class="mc-dock">
       <button type="button" class="mc-dock-btn" @click=${() => this.step(-1)} ?disabled=${!this.canStep}
         title="Previous chapter" aria-label="Previous chapter">⏮</button>
       <button type="button" class="mc-dock-btn" @click=${() => this.skip(-10)}
@@ -218,6 +207,9 @@ class McAudioDock extends LitElement {
         title="Forward 10 seconds" aria-label="Forward 10 seconds">10»</button>
       <button type="button" class="mc-dock-btn" @click=${() => this.step(1)} ?disabled=${!this.canStep}
         title="Next chapter" aria-label="Next chapter">⏭</button>
+      <button type="button" class=${'mc-dock-btn mc-dock-cont' + (this.cont ? ' on' : '')} @click=${() => this.toggleCont()}
+        title=${this.cont ? 'Continuous play is on — keep reading into the next chapter' : 'Continuous play is off — stop at the end of this chapter'}
+        aria-label="Continuous play" aria-pressed=${this.cont ? 'true' : 'false'}>🔁</button>
       <a class="mc-dock-label" href=${this.href || '#'} title="Open this chapter in the reader">${this.label}</a>
       <button type="button" class="mc-dock-x" @click=${() => this.dismiss()}
         title="Stop listening" aria-label="Stop listening">×</button>
@@ -260,6 +252,8 @@ customElements.define('mc-audio-dock', McAudioDock);
     '.mc-dock-label{font-size:.85rem;color:var(--maroon,#8b1a1a);text-decoration:none;white-space:nowrap;' +
     'overflow:hidden;text-overflow:ellipsis;max-width:11rem}' +
     '.mc-dock-label:hover{text-decoration:underline}' +
+    '.mc-dock-cont{font-size:.9rem}' +
+    '.mc-dock-cont.on{background:var(--maroon,#8b1a1a);color:#fff;border-color:var(--maroon,#8b1a1a)}' +
     '.mc-dock-x{font:inherit;cursor:pointer;border:0;background:none;color:var(--faint,#8a7f6a);font-size:1.1rem;flex:none}';
   document.head.appendChild(style);
 
