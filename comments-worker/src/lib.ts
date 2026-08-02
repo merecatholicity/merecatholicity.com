@@ -23,9 +23,9 @@ import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 // there or client-side; imported here only what index.js calls directly.)
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
-  isDiscordWebhook, discordSnippet,
+  isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel,
 } from './pure.js';
-export { isDiscordWebhook, discordSnippet };   // re-exported so index.ts imports them from here
+export { isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel };   // re-exported so index.ts imports them from here
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 import { createPusher } from './webpush.js';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
@@ -285,15 +285,34 @@ export async function verifyTurnstile(env: any, token: any, ip: any, key: any) {
   }
 }
 
+/* ---- Shadow ban (admin global mute) -------------------------------------
+   A shadowbanned identity keeps posting (submits succeed, rows store
+   status='live'), but its public content is excluded from every OTHER reader's
+   view, and it fans out nothing (no live broadcast, notification, Discord, or
+   @merecat). It is NOT a blockedReason — the author is never logged out or
+   refused — so they are not really aware of it. shadowExcl(alias) is the ONE
+   read-side filter, appended to a query's WHERE to drop rows whose <alias>.author_hash
+   is shadowbanned; the per-call subquery table alias (sb_<alias>) keeps two of
+   them side by side (a reply AND its topic owner). shadowExcl is the pure SQL
+   builder (in pure.js, unit-tested — a typo there would silently un-mute
+   everyone); isShadowBanned is the write-side point check. Both hit the tiny
+   PK-indexed shadowbans table. */
+export async function isShadowBanned(env: any, hash: any) {
+  if (!hash) return false;
+  const row = await env.DB.prepare('SELECT 1 AS s FROM shadowbans WHERE hash = ?1').bind(hash).first();
+  return !!row;
+}
+
 /* The topic row carries denormalized replies and last_at so category
    pages read topic rows alone. Recomputed, never incremented, from the
    indexed replies whenever anything in the thread mutates, so the numbers
-   cannot drift. */
+   cannot drift. A shadowbanned author's replies are excluded here too, so a
+   muted reply never bumps a thread's count or last-activity for anyone. */
 export async function refreshTopicStats(env: any, topicId: any) {
   await env.DB.prepare(
     'UPDATE comments SET ' +
-    "replies = (SELECT COUNT(*) FROM comments r WHERE r.parent_id = ?1 AND r.status = 'live'), " +
-    "last_at = (SELECT MAX(c2.created_at) FROM comments c2 WHERE (c2.id = ?1 OR c2.parent_id = ?1) AND c2.status = 'live') " +
+    "replies = (SELECT COUNT(*) FROM comments r WHERE r.parent_id = ?1 AND r.status = 'live' AND " + shadowExcl('r') + '), ' +
+    "last_at = (SELECT MAX(c2.created_at) FROM comments c2 WHERE (c2.id = ?1 OR c2.parent_id = ?1) AND c2.status = 'live' AND " + shadowExcl('c2') + ') ' +
     'WHERE id = ?1'
   ).bind(topicId).run();
 }
@@ -618,7 +637,8 @@ export async function metaForHash(env: any, hash: any) {
   ).bind(hash).first();
   const flags = await env.DB.prepare(
     'SELECT (SELECT 1 FROM trusted WHERE hash = ?1) AS trusted, ' +
-    '(SELECT 1 FROM locks WHERE hash = ?1) AS locked'
+    '(SELECT 1 FROM locks WHERE hash = ?1) AS locked, ' +
+    '(SELECT 1 FROM shadowbans WHERE hash = ?1) AS shadowbanned'
   ).bind(hash).first();
   /* Only the recent window shows, banned keys always. */
   const ipRows = await env.DB.prepare(
@@ -644,6 +664,7 @@ export async function metaForHash(env: any, hash: any) {
     author_hash: hash,
     trusted: flags && flags.trusted ? 1 : 0,
     locked: flags && flags.locked ? 1 : 0,
+    shadowbanned: flags && flags.shadowbanned ? 1 : 0,
     ipbanned,
   };
   return json({ ok: true, meta: [row], identities }, 200);
@@ -657,7 +678,8 @@ export async function boardCatPayload(env: any, page: any, p: any, q: any) {
      topic rows, so a two-topic room and a two-thousand-topic room both
      answer as one twenty-row page — a client never pulls the whole list. */
   const toks = String(q || '').slice(0, 120).split(/\s+/).filter(Boolean).slice(0, 5);
-  let where = "c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live'";
+  /* Shadowbanned authors' topics never list for anyone (shadowExcl). */
+  let where = "c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c');
   const binds = [page];
   for (const t of toks) {
     binds.push('%' + t.replace(/[\\%_]/g, '\\$&') + '%');
@@ -669,7 +691,7 @@ export async function boardCatPayload(env: any, page: any, p: any, q: any) {
   const rows = await env.DB.prepare(
     'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, c.sticky, ' +
     'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last, ' +
-    "(SELECT MAX(m.id) FROM comments m WHERE (m.id = c.id OR m.parent_id = c.id) AND m.status = 'live') AS last_id " +
+    "(SELECT MAX(m.id) FROM comments m WHERE (m.id = c.id OR m.parent_id = c.id) AND m.status = 'live' AND " + shadowExcl('m') + ') AS last_id ' +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     'WHERE ' + where + ' ' +
     'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
@@ -706,14 +728,14 @@ export async function topicViewPayload(env: any, topic: any, pRaw: any, findRaw:
   const find = Number(findRaw);
   if (Number.isInteger(find) && find > 0 && !pRaw) {
     const pos = await env.DB.prepare(
-      "SELECT COUNT(*) AS n FROM comments WHERE parent_id = ?1 AND status = 'live' AND id < ?2"
+      "SELECT COUNT(*) AS n FROM comments c WHERE c.parent_id = ?1 AND c.status = 'live' AND c.id < ?2 AND " + shadowExcl('c')
     ).bind(id, find).first();
     p = Math.floor(pos.n / TOPICS_PER_PAGE) + 1;
   }
   const replies = await env.DB.prepare(
     "SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at FROM comments c " +
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
-    "WHERE c.parent_id = ?1 AND c.status = 'live' ORDER BY c.id LIMIT ?2 OFFSET ?3"
+    "WHERE c.parent_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id LIMIT ?2 OFFSET ?3"
   ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
   /* Each post carries its author's total forum-post count, for the rank the
      client shows under the name. One grouped query for every author on the page. */

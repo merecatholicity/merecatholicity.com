@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import {
   ipFamily, ipv6Groups, ipv6Prefix64, ipv6Full, ipKey, toBanKey,
   isSharedV4, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
+  shadowExcl,
 } from '../../comments-worker/src/pure.js';
 
 test('ipFamily distinguishes v4 / v6 / neither', () => {
@@ -117,4 +118,21 @@ test('sanitizeScopes: the WebSocket allowlist — the private-scope guard holds'
   assert.equal(san(['board:index', 'cat:pub', 'cat:rc', 'topic:1', 'topic:2', 'topic:3'], ME).length, 5, 'at most 5 scopes');
   assert.deepEqual(san('not-an-array', ME), []);
   assert.deepEqual(san([42, {}, null, 'board:index'], ME), ['board:index'], 'non-string entries ignored');
+});
+
+test('shadowExcl builds the mute filter — the guard that keeps the mute real', () => {
+  // The fragment must reference the shadowbans table, correlate on the SAME
+  // alias's author_hash, and be a NOT EXISTS — a broken one silently un-mutes.
+  const f = shadowExcl('c');
+  assert.match(f, /NOT EXISTS/, 'must exclude, not include');
+  assert.match(f, /FROM shadowbans /, 'must read the shadowbans table');
+  assert.match(f, /c\.author_hash/, "must correlate on the given alias's author_hash");
+  // Two side-by-side filters (a reply AND its topic owner) must not collide on
+  // the inner subquery table alias.
+  const c = shadowExcl('c'), p = shadowExcl('p');
+  assert.ok(c.includes('sb_c') && p.includes('sb_p'), 'per-alias subquery alias');
+  assert.notEqual(c, p, 'distinct aliases yield distinct fragments');
+  // A different outer alias correlates on that alias's column, nothing leaks 'c'.
+  assert.ok(!shadowExcl('pt').includes('c.author_hash'));
+  assert.match(shadowExcl('pt'), /pt\.author_hash/);
 });

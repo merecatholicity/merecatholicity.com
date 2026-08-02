@@ -34,11 +34,13 @@ class McAdminHome extends LitElement {
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
     const doors = [
-      ['Activity audit', 'community.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
-      ['IP ban list', 'community.html?ipbans=1', 'Every banned address, added and removed by hand.'],
-      ['Add / Remove Admins', 'community.html?admins=1', 'Grant a member admin powers, or take them back.'],
-      ['merecat administration', 'community.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
-      ['merecat Q&A at a glance', 'community.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.'],
+      ['Activity audit', 'admin.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
+      ['IP ban list', 'admin.html?ipbans=1', 'Every banned address, added and removed by hand.'],
+      ['Add / Remove Admins', 'admin.html?admins=1', 'Grant a member admin powers, or take them back.'],
+      ['Platform settings', 'admin.html?settings=1', 'Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button.'],
+      ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
+      ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
+      ['merecat Q&A at a glance', 'admin.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.'],
     ];
     return html`${head}
       <p class="board-intro">Everything that governs the board sits behind these doors. Each is admin-only, here and at the server.</p>
@@ -80,7 +82,7 @@ class McMerecatThreads extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
+    const head = crumbTpl([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['merecat Q&A']]);
     const g = gate(kit, this);
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
@@ -88,12 +90,12 @@ class McMerecatThreads extends LitElement {
     if (this.err) return html`${head}${intro}<p class="comments-status">${this.err}</p>`;
     if (!this.d) return html`${head}${intro}<p class="comments-status">Loading…</p>`;
     if (!this.d.threads.length) return html`${head}${intro}<p class="comments-status">No conversations yet.</p>`;
-    const href = (i: number) => 'community.html?merecatthreads=1&p=' + i;
+    const href = (i: number) => 'admin.html?merecatthreads=1&p=' + i;
     return html`${head}${intro}
       <div class="board-topics">${this.d.threads.map((t: any) => {
         const q = Math.max(0, Math.ceil((t.msgs || 0) / 2));
         return html`<div class="board-topic"><div class="board-topic-left">
-          <a class="board-topic-title" href=${'community.html?merecatthread=' + t.id}>${t.title || ('Conversation ' + t.id)}</a>${t.saved ? html`<span class="board-sticky"> (saved)</span>` : nothing}
+          <a class="board-topic-title" href=${'admin.html?merecatthread=' + t.id}>${t.title || ('Conversation ' + t.id)}</a>${t.saved ? html`<span class="board-sticky"> (saved)</span>` : nothing}
           <div class="board-cat-desc">asked by <a class="body-link" href=${kit.profileHref(t.hash)}>${t.nick || kit.displayName(t.hash)}</a></div>
           </div><div class="board-stats">${q + (q === 1 ? ' question · ' : ' questions · ') + kit.fmtDateTime(t.last_at)}</div></div>`;
       })}</div>
@@ -171,7 +173,7 @@ class McMerecatThread extends LitElement {
   render() {
     const kit = this.kit;
     if (!kit) return nothing;
-    const head = crumbTpl([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + this.tid]]);
+    const head = crumbTpl([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['merecat Q&A', 'admin.html?merecatthreads=1'], ['Conversation ' + this.tid]]);
     const g = gate(kit, this);
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;

@@ -122,6 +122,8 @@ import {
   gzipBytes,
   isAdminHash,
   isDiscordWebhook,
+  parseFeedScope,
+  scopeLabel,
   isTrusted,
   json,
   keyed,
@@ -170,6 +172,8 @@ import {
   refreshTopicStats,
   requireAdmin,
   rootAdmins,
+  shadowExcl,
+  isShadowBanned,
   runBackup,
   runWallPrune,
   safeParseLinks,
@@ -230,7 +234,7 @@ async function handleGet(request: any, env: any, url: any) {
   const rows = await env.DB.prepare(
     'SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at ' +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
-    "WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id LIMIT 500"
+    "WHERE c.page = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id LIMIT 500"
   ).bind(page).all();
   const counts = await postCountsFor(env, (rows.results || []).map((r: any) => r.author_hash));
   const comments = (rows.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0));
@@ -290,6 +294,57 @@ async function notifyDiscordFeed(env: any, p: {
     footer: { text: 'Mere Catholicity · Feed' },
     timestamp: new Date(p.createdAt * 1000).toISOString(),
   });
+}
+
+/* Fan a fresh LIVE post out to every PER-FEED Discord subscription that matches
+   it (the discord_hooks table). A board reply matches its thread's `topic:<id>`
+   AND its `cat:<key>`; a new topic matches its `cat:<key>`; an article-page
+   comment matches `page:<page>`. Independent of the two coarse global webhooks
+   above — a post can announce to both. The back room is excluded by the caller.
+   Fire-and-forget per subscription so one bad webhook never blocks the others or
+   the poster's response. */
+async function deliverDiscordFeedHooks(env: any, p: {
+  commentId: number; parentId: any; page: string; isReply: boolean;
+  title: any; authorHash: any; nick: any; body: any; hasMedia: boolean; createdAt: number;
+}) {
+  const scopes: string[] = [];
+  const topicId = p.isReply ? Number(p.parentId) : p.commentId;
+  if (topicId) scopes.push('topic:' + topicId);
+  if (boardKey(p.page)) scopes.push('cat:' + p.page.slice(6));
+  else scopes.push('page:' + p.page);
+  if (!scopes.length) return;
+  const rows = await env.DB.prepare(
+    'SELECT id, scope, hook_url FROM discord_hooks WHERE scope IN (' +
+    scopes.map((_, i) => '?' + (i + 1)).join(',') + ')'
+  ).bind(...scopes).all();
+  const hooks = (rows && rows.results) || [];
+  if (!hooks.length) return;
+  const name = p.nick || (p.authorHash ? displayName(p.authorHash) : 'Anonymous');
+  const isBoard = boardKey(p.page);
+  let topicTitle = p.title;
+  if (isBoard && (p.isReply || !topicTitle)) {
+    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(topicId).first();
+    topicTitle = (t && t.title) || 'a thread';
+  }
+  const link = viewLink(env, p.page, p.commentId, p.isReply ? p.parentId : null);
+  const heading = isBoard
+    ? (p.isReply ? (name + ' replied in “' + topicTitle + '”') : (name + ' started a new topic'))
+    : (name + ' commented');
+  /* Dedupe by hook URL so two overlapping subscriptions (e.g. topic AND its
+     category) pointing at the SAME channel post only once. */
+  const seen = new Set<string>();
+  const jobs = hooks
+    .filter((h: any) => { if (seen.has(h.hook_url)) return false; seen.add(h.hook_url); return true; })
+    .map((h: any) => sendDiscord(h.hook_url, {
+      title: (isBoard ? (topicTitle || 'New forum post') : 'New comment').slice(0, 240),
+      url: link,
+      description: discordSnippet(p.body) || (p.hasMedia ? '(shared an attachment)' : (p.isReply ? '(reply)' : '')),
+      author: { name: heading.slice(0, 240) },
+      color: 0x7a1f2b,
+      footer: { text: 'Mere Catholicity · ' + scopeLabel(h.scope) },
+      timestamp: new Date(p.createdAt * 1000).toISOString(),
+    }).catch((e: any) => console.log(JSON.stringify({ event: 'discord_hook_failed', id: h.id, error: String(e) }))));
+  await Promise.all(jobs);
 }
 
 async function handlePost(request: any, env: any, ctx: any) {
@@ -363,6 +418,13 @@ async function handlePost(request: any, env: any, ctx: any) {
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
 
+  /* Shadow ban (global mute): a muted author posts normally (this succeeds, the
+     row stores live), but nothing about the post reaches anyone else — no live
+     broadcast, no notification/mention, no Discord, no @merecat. The read paths
+     hide the post itself; these gates keep it from ANNOUNCING itself. They are
+     never told they are muted. */
+  const muted = authorHash ? await isShadowBanned(env, authorHash) : false;
+
   /* The back room: writing anywhere in it — a topic or a reply — needs an
      admin identity. The public can neither see it nor post into it. */
   if (page === ADMIN_CAT && !(await isAdminHash(env, authorHash))) {
@@ -398,8 +460,10 @@ async function handlePost(request: any, env: any, ctx: any) {
 
   /* Notifications ride the board only: the author quietly watches the thread,
      @mentions and (for a reply) the topic author and every watcher are told.
-     Deferred so a wide fan-out never delays the poster's response. */
-  if (boardKey(page)) {
+     Deferred so a wide fan-out never delays the poster's response. A muted
+     author notifies no one — else the notification would point at a post the
+     recipient cannot find, betraying the mute. */
+  if (boardKey(page) && !muted) {
     ctx.waitUntil(deliverNotifications(env, {
       authorHash, status, page,
       topicId: parentId || inserted.id,
@@ -414,7 +478,7 @@ async function handlePost(request: any, env: any, ctx: any) {
      real identity only (a held post that is later approved can be re-summoned
      with the admin /api/merecat/mention lever). Deferred: the reply arrives a
      few seconds behind the post. */
-  if (status === 'live' && authorHash && authorHash !== MERECAT_BOT.hash &&
+  if (status === 'live' && !muted && authorHash && authorHash !== MERECAT_BOT.hash &&
       merecatMentioned(body)) {
     ctx.waitUntil(merecatMentionReply(env, inserted.id)
       .catch((e) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e) }))));
@@ -443,7 +507,7 @@ async function handlePost(request: any, env: any, ctx: any) {
   /* Live push: broadcast the fresh post to everyone watching this scope through
      the one board sink (broadcastBoard gates the back room). Only a live post is
      announced; the builder queries the topic's stats for a reply. */
-  if (status === 'live') {
+  if (status === 'live' && !muted) {
     const catKey = page.slice(6);
     const topicId = parentId || inserted.id;
     const nick = prof && prof.nick || null;
@@ -469,11 +533,20 @@ async function handlePost(request: any, env: any, ctx: any) {
   /* Mirror a live forum post to Discord if a forum webhook is configured — topics
      and replies both, never the back room. Deferred so a webhook never delays the
      poster's response. */
-  if (status === 'live' && boardKey(page) && page !== ADMIN_CAT) {
+  if (status === 'live' && !muted && boardKey(page) && page !== ADMIN_CAT) {
     ctx.waitUntil(notifyDiscordForum(env, {
       page, commentId: inserted.id, topicId: parentId || inserted.id, isReply: parentId != null,
       title, authorHash, nick: prof && prof.nick || null, body, createdAt,
     }).catch((e) => console.log(JSON.stringify({ event: 'discord_forum_failed', error: String(e) }))));
+  }
+
+  /* Fan a live post out to any matching PER-FEED Discord subscription (board
+     topics/replies AND article-page comments; never the back room). */
+  if (status === 'live' && !muted && page !== ADMIN_CAT) {
+    ctx.waitUntil(deliverDiscordFeedHooks(env, {
+      commentId: inserted.id, parentId, page, isReply: parentId != null,
+      title, authorHash, nick: prof && prof.nick || null, body, hasMedia: false, createdAt,
+    }).catch((e) => console.log(JSON.stringify({ event: 'discord_hooks_failed', error: String(e) }))));
   }
 
   return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
@@ -584,7 +657,7 @@ async function handleFeed(request: any, env: any, url: any) {
     /* A single thread's feed: the topic and its live replies, so anyone
        can follow one conversation, their own included. */
     topicRow = await env.DB.prepare(
-      "SELECT id, page, title FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+      "SELECT c.id, c.page, c.title FROM comments c WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
     ).bind(topicParam).first();
     if (!topicRow || !boardKey(topicRow.page) || topicRow.page === ADMIN_CAT) {
       return new Response('No such topic.', { status: 404 });
@@ -593,7 +666,7 @@ async function handleFeed(request: any, env: any, url: any) {
     const rows = await env.DB.prepare(
       "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
       "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
-      "WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' ORDER BY c.id DESC LIMIT 50"
+      "WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id DESC LIMIT 50"
     ).bind(topicParam).all();
     results = rows.results;
   } else {
@@ -601,7 +674,9 @@ async function handleFeed(request: any, env: any, url: any) {
     if (!page || page === ADMIN_CAT) return new Response('Unknown page.', { status: 400 });
     const rows = await env.DB.prepare(
       "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
-      "LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.page = ?1 AND c.status = 'live' ORDER BY c.id DESC LIMIT 50"
+      "LEFT JOIN comments pt ON pt.id = c.parent_id " +
+      "LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.page = ?1 AND c.status = 'live' AND " + shadowExcl('c') +
+      " AND (c.parent_id IS NULL OR " + shadowExcl('pt') + ") ORDER BY c.id DESC LIMIT 50"
     ).bind(page).all();
     results = rows.results;
   }
@@ -674,7 +749,8 @@ async function handleEdit(request: any, env: any, ctx: any) {
   /* Live: an edit to a live PUBLIC board post updates its text for everyone
      watching the thread at once. A re-screen that held the edit (pending) never
      broadcasts, and the back room never crosses the wire. */
-  if (env.HUB && status === 'live' && boardKey(row.page) && row.page !== ADMIN_CAT) {
+  if (env.HUB && status === 'live' && boardKey(row.page) && row.page !== ADMIN_CAT &&
+      !(await isShadowBanned(env, authorHash))) {
     const topicId = row.parent_id || id;
     publishLive(env, ctx, { v: 1, t: 'edited', topic_id: topicId, id, body, edited_at: editedAt,
       scopes: ['topic:' + topicId] });
@@ -711,9 +787,11 @@ async function handleMeta(request: any, env: any) {
     'SELECT c.id, c.status, c.ai_verdict, c.ip, c.ua, c.os, c.tz, c.lang, c.author_hash, ' +
     'CASE WHEN t.hash IS NULL THEN 0 ELSE 1 END AS trusted, ' +
     'CASE WHEN lk.hash IS NULL THEN 0 ELSE 1 END AS locked, ' +
+    'CASE WHEN sh.hash IS NULL THEN 0 ELSE 1 END AS shadowbanned, ' +
     'CASE WHEN ib.ip IS NULL THEN 0 ELSE 1 END AS ipbanned ' +
     'FROM comments c LEFT JOIN trusted t ON t.hash = c.author_hash ' +
     'LEFT JOIN locks lk ON lk.hash = c.author_hash ' +
+    'LEFT JOIN shadowbans sh ON sh.hash = c.author_hash ' +
     'LEFT JOIN ip_bans ib ON ib.ip = c.ip ' +
     'WHERE c.page = ?1 ORDER BY c.id LIMIT 500'
   ).bind(page).all();
@@ -773,7 +851,10 @@ async function handleBoardIndex(request: any, env: any, url: any) {
     '  FROM comments c LEFT JOIN comments p ON p.id = c.parent_id ' +
     '         LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "  WHERE c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
-    "    AND (c.parent_id IS NULL OR p.status = 'live')" +
+    "    AND (c.parent_id IS NULL OR p.status = 'live') " +
+    /* Muted authors, and every post under a muted author's thread, vanish from
+       the index counts and the latest-poster for everyone. */
+    '    AND ' + shadowExcl('c') + ' AND (c.parent_id IS NULL OR ' + shadowExcl('p') + ')' +
     ') WHERE rn = 1'
   ).all();
   const cats: any = {};
@@ -810,9 +891,11 @@ async function handleAuthorPosts(request: any, env: any, url: any) {
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
   const per = 20;
+  /* A muted author's post history reads as empty to everyone (shadowExcl on
+     c.author_hash, which IS the queried hash, yields nothing when muted). */
   const where =
     "WHERE c.author_hash = ?1 AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
-    "AND (c.parent_id IS NULL OR t.status = 'live')";
+    "AND (c.parent_id IS NULL OR t.status = 'live') AND " + shadowExcl('c');
   const total = await env.DB.prepare(
     'SELECT COUNT(*) AS n FROM comments c LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' + where
   ).bind(hash).first();
@@ -856,7 +939,9 @@ async function handleSearch(request: any, env: any, url: any) {
   if (author) { binds.push(author); filters.push('AND c.author_hash = ?' + binds.length); }
   const where =
     "WHERE comments_fts MATCH ?1 AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
-    "AND (c.parent_id IS NULL OR pt.status = 'live') " + filters.join(' ');
+    "AND (c.parent_id IS NULL OR pt.status = 'live') " +
+    /* Muted authors' posts, and posts under a muted author's thread, never match. */
+    'AND ' + shadowExcl('c') + ' AND (c.parent_id IS NULL OR ' + shadowExcl('pt') + ') ' + filters.join(' ');
 
   try {
     const rows = await env.DB.prepare(
@@ -894,8 +979,9 @@ async function handleTopicView(request: any, env: any, url: any) {
   const topic = await env.DB.prepare(
     "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, c.replies " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
-    "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
+    "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
   ).bind(id).first();
+  /* A muted author's whole thread reads as absent to everyone else. */
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   /* answer exactly as if the topic did not exist: a prober learns nothing */
   if (topic.page === ADMIN_CAT) return json({ ok: false, error: 'No such topic.' }, 404, cacheHeader(url));
@@ -1479,7 +1565,7 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
-    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, m.opened_at, m.expires_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
+    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
     ' AND m.created_at > ?5 AND ' + dmLive(now) + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
   ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
@@ -1669,6 +1755,89 @@ async function handleDmSave(request: any, env: any) {
   return json({ ok: true, saved, expires_at: expires }, 200);
 }
 
+/* Edit one of your OWN messages. DMs are end-to-end encrypted, so the server is
+   blind: the client re-encrypts the new plaintext to the same pair secret and
+   sends the fresh ciphertext, which simply replaces the stored body; edited_at
+   is stamped so both sides show an "(edited)" marker. Everything else — the
+   expiry clock, opened_at, saved, any media pointer — is untouched. Only the
+   sender may edit, only a live (unexpired), un-redacted, non-system message. */
+async function handleDmEdit(request: any, env: any, ctx: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
+  const key = String(data.key || '');
+  const other = String(data.with || '');
+  const id = Math.floor(Number(data.id) || 0);
+  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const enc = (data.enc === 1 || data.enc === true) ? 1 : 0;
+  const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
+  if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
+  if (body.length > (enc ? DM_ENC_MAX : MAX_BODY)) return json({ ok: false, error: 'The message is too long.' }, 400);
+  if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const [a, b] = dmPair(me, other);
+  const now = Math.floor(Date.now() / 1000);
+  /* Mine, in this pair's thread, still live, not redacted, not a system notice. */
+  const row = await env.DB.prepare(
+    'SELECT d.id, d.thread_id, COALESCE(d.enc, 0) AS enc, COALESCE(d.redacted, 0) AS redacted, d.expires_at ' +
+    'FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
+    'WHERE d.id = ?1 AND d.sender_hash = ?2 AND t.a_hash = ?3 AND t.b_hash = ?4'
+  ).bind(id, me, a, b).first();
+  if (!row) return json({ ok: false, error: 'No such message.' }, 404);
+  if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
+  if (Number(row.enc) === 2) return json({ ok: false, error: 'That message cannot be edited.' }, 403);
+  if (row.expires_at != null && row.expires_at <= now) return json({ ok: false, error: 'That message has expired.' }, 410);
+  await env.DB.prepare('UPDATE dms SET body = ?1, enc = ?2, edited_at = ?3 WHERE id = ?4').bind(body, enc, now, id).run();
+  /* Push the new ciphertext to the recipient's open thread so their bubble
+     re-renders (decrypts) live and shows "(edited)". */
+  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-edit', scopes: ['user:' + other], from: me, thread_id: row.thread_id,
+    message: { id, body, enc, edited_at: now } });
+  return json({ ok: true, id, edited_at: now }, 200);
+}
+
+/* Delete (redact) one of your OWN messages. Not a hard delete: the ciphertext
+   body and any media are cleared and a redacted flag is set, but the row is KEPT
+   with its ORIGINAL expires_at, so a "<redacted>" placeholder stands where the
+   message was until the moment it would have disappeared anyway — then the
+   ordinary sweep removes it. Only the sender may redact, and only once. */
+async function handleDmRedact(request: any, env: any, ctx: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Wait a minute and try again.' }, 429);
+  const key = String(data.key || '');
+  const other = String(data.with || '');
+  const id = Math.floor(Number(data.id) || 0);
+  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const [a, b] = dmPair(me, other);
+  const row = await env.DB.prepare(
+    'SELECT d.id, d.thread_id, d.media_key, COALESCE(d.redacted, 0) AS redacted ' +
+    'FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
+    'WHERE d.id = ?1 AND d.sender_hash = ?2 AND t.a_hash = ?3 AND t.b_hash = ?4'
+  ).bind(id, me, a, b).first();
+  if (!row) return json({ ok: false, error: 'No such message.' }, 404);
+  if (row.redacted) return json({ ok: true, id, redacted: true }, 200);   // already gone; idempotent
+  /* Reclaim any R2 media at once (D1 can't cascade to R2); the byte counter
+     self-heals on the next hourly sweep, exactly as conversation-delete does. */
+  if (row.media_key) await purgeMediaKeys(env, [row.media_key]);
+  await env.DB.prepare(
+    "UPDATE dms SET redacted = 1, body = '', enc = 0, media_key = NULL, media_size = NULL WHERE id = ?1"
+  ).bind(id).run();
+  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-redact', scopes: ['user:' + other], from: me, thread_id: row.thread_id,
+    message: { id } });
+  return json({ ok: true, id, redacted: true }, 200);
+}
+
 /* Delete a set of media objects from R2 and their dm_media rows. R2 delete takes
    up to 1000 keys per call; the D1 delete is chunked to stay under the 50-subrequest
    budget. Keys are opaque server-minted ids. */
@@ -1774,6 +1943,72 @@ async function handleAdminSettings(request: any, env: any) {
   return json({ ok: true, settings, cap_bytes: MEDIA_CAP_BYTES, ttls: DM_TTLS, wall_prune_options: Wall.pruneDayOptions }, 200);
 }
 
+/* ================= Per-feed Discord subscriptions (admin CRUD) =================
+   Admin-only. A subscription maps one of our feed URLs (parsed to a scope) to a
+   Discord channel webhook; deliverDiscordFeedHooks fires it on a matching live
+   post. Both the feed URL and the webhook URL are validated before storage — the
+   webhook by isDiscordWebhook (the SSRF gate), the feed by parseFeedScope (only
+   our own /api/comments/feed, only a real selector). */
+async function handleAdminDiscordList(request: any, env: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  const rows = await env.DB.prepare(
+    'SELECT id, scope, feed_url, hook_url, label, created_at FROM discord_hooks ORDER BY id DESC'
+  ).all();
+  const hooks = ((rows && rows.results) || []).map((h: any) => ({
+    id: h.id, scope: h.scope, scope_label: scopeLabel(h.scope), feed_url: h.feed_url,
+    /* Never echo the full webhook (it is a bearer secret); a masked tail is
+       enough for an admin to tell two subscriptions apart. */
+    hook_hint: maskWebhook(h.hook_url), label: h.label || '', created_at: h.created_at,
+  }));
+  return json({ ok: true, hooks }, 200);
+}
+
+async function handleAdminDiscordAdd(request: any, env: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  const feedUrl = String(data.feed_url || '').trim();
+  const hookUrl = String(data.hook_url || '').trim();
+  const label = String(data.label || '').trim().slice(0, 120);
+  const scope = parseFeedScope(feedUrl);
+  if (!scope) return json({ ok: false, error: 'That is not one of our feed URLs. Paste a /api/comments/feed link with a ?topic=, ?cat=, or ?page= selector.' }, 400);
+  if (!isDiscordWebhook(hookUrl)) return json({ ok: false, error: 'That is not a valid Discord webhook URL.' }, 400);
+  const now = Math.floor(Date.now() / 1000);
+  const me = await sha256hex(key);
+  /* An exact (scope + webhook) pair twice is pointless; refuse the duplicate. */
+  const dup = await env.DB.prepare('SELECT id FROM discord_hooks WHERE scope = ?1 AND hook_url = ?2').bind(scope, hookUrl).first();
+  if (dup) return json({ ok: false, error: 'That feed already posts to that Discord channel.' }, 409);
+  await env.DB.prepare(
+    'INSERT INTO discord_hooks (scope, feed_url, hook_url, label, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6)'
+  ).bind(scope, feedUrl, hookUrl, label || null, now, me).run();
+  return json({ ok: true, scope, scope_label: scopeLabel(scope) }, 200);
+}
+
+async function handleAdminDiscordDelete(request: any, env: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  const id = Math.floor(Number(data.id) || 0);
+  if (id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  await env.DB.prepare('DELETE FROM discord_hooks WHERE id = ?1').bind(id).run();
+  return json({ ok: true, id }, 200);
+}
+
+/* Mask a webhook URL for display: keep the host + a short tail of the token,
+   hide the id and the rest of the secret. Never returns the full URL. */
+function maskWebhook(u: any) {
+  const s = String(u || '');
+  const m = s.match(/^https:\/\/(discord|discordapp)\.com\/api\/webhooks\/(\d+)\/([A-Za-z0-9_-]+)/);
+  if (!m) return 'webhook';
+  const tail = m[3].slice(-6);
+  return 'discord.com/…/…' + tail;
+}
+
 /* Purge ALL DM media from the bucket (admin, destructive). Cursor-paginated list +
    batched delete, then clear the pointers and the usage counter. Message text is
    untouched; only the shared attachments are removed. */
@@ -1814,9 +2049,10 @@ async function handleWallFeed(request: any, env: any) {
   const r = await wallReader(request, env, data);
   if (r.resp) return r.resp;
   const cursor = Math.floor(Number(data.cursor) || 0);
+  /* Muted authors' posts never appear in anyone else's feed. */
   const rows = cursor > 0
-    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND p.id < ?1 ORDER BY p.id DESC LIMIT ?2").bind(cursor, WALL_PER_PAGE).all()
-    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' ORDER BY p.id DESC LIMIT ?1").bind(WALL_PER_PAGE).all();
+    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND " + shadowExcl('p') + " AND p.id < ?1 ORDER BY p.id DESC LIMIT ?2").bind(cursor, WALL_PER_PAGE).all()
+    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND " + shadowExcl('p') + " ORDER BY p.id DESC LIMIT ?1").bind(WALL_PER_PAGE).all();
   const list = rows.results || [];
   const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
@@ -1832,9 +2068,10 @@ async function handleWall(request: any, env: any) {
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'No such member.' }, 400);
   const cursor = Math.floor(Number(data.cursor) || 0);
+  /* A muted member's own wall reads as empty to everyone else. */
   const rows = cursor > 0
-    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND p.id < ?2 ORDER BY p.id DESC LIMIT ?3").bind(hash, cursor, WALL_PER_PAGE).all()
-    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' ORDER BY p.id DESC LIMIT ?2").bind(hash, WALL_PER_PAGE).all();
+    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND " + shadowExcl('p') + " AND p.id < ?2 ORDER BY p.id DESC LIMIT ?3").bind(hash, cursor, WALL_PER_PAGE).all()
+    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND " + shadowExcl('p') + " ORDER BY p.id DESC LIMIT ?2").bind(hash, WALL_PER_PAGE).all();
   const list = rows.results || [];
   const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
@@ -1862,9 +2099,11 @@ async function handleWallPostGet(request: any, env: any) {
     if (gate) return blockedJson(gate);
   }
   const id = Math.floor(Number(data.id) || 0);
-  const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live'").bind(id).first();
+  /* A muted author's post reads as gone to everyone else; and any muted
+     commenter's comments are dropped from a post others can still see. */
+  const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live' AND " + shadowExcl('p')).bind(id).first();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
-  const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' ORDER BY c.id").bind(id).all();
+  const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id").bind(id).all();
   const enriched = await wallEnrich(env, [post].concat(crows.results || []), me);
   return json({ ok: true, post: enriched[0], comments: enriched.slice(1), me }, 200);
 }
@@ -1892,8 +2131,10 @@ async function handleWallLike(request: any, env: any, ctx: any) {
   if (want) {
     const r = await env.DB.prepare('INSERT OR IGNORE INTO wall_likes (post_id, author_hash, created_at) VALUES (?1, ?2, ?3)').bind(postId, me, now).run();
     /* Notify only on a genuinely NEW like (changes>0, not a repeat), never for
-       your own post, never the bot. */
-    if (r.meta && r.meta.changes > 0 && post.author_hash && post.author_hash !== me && post.author_hash !== MERECAT_BOT.hash) {
+       your own post, never the bot — and never from a muted (shadowbanned)
+       liker, whose engagement must reach no one. */
+    if (r.meta && r.meta.changes > 0 && post.author_hash && post.author_hash !== me && post.author_hash !== MERECAT_BOT.hash &&
+        !(await isShadowBanned(env, me))) {
       if (ctx) ctx.waitUntil(notifyWallLike(env, post.author_hash, me, postId));
       else await notifyWallLike(env, post.author_hash, me, postId);
     }
@@ -1940,7 +2181,9 @@ async function handleWallPost(request: any, env: any, ctx: any) {
     'INSERT INTO wall_posts (author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id'
   ).bind(me, body, now, status, media ? media.key : null, media ? media.size : null).first();
   if (media) await env.DB.prepare("UPDATE wall_media SET ref_type = 'post', ref_id = ?1 WHERE key = ?2").bind(ins.id, media.key).run();
-  if (status === 'live') {
+  /* A muted author's wall post is stored live but reaches no one: no feed
+     broadcast, no @mention notifications, no Discord (the feed reads hide it). */
+  if (status === 'live' && !(await isShadowBanned(env, me))) {
     if (ctx) ctx.waitUntil(deliverWallNotifications(env, { authorHash: me, postId: ins.id, mentions: data.mentions }));
     publishLive(env, ctx, { v: 1, t: 'wall-post', scopes: ['feed:global'], id: ins.id });
     if (ctx) ctx.waitUntil(notifyDiscordFeed(env, {
@@ -1980,7 +2223,10 @@ async function handleWallComment(request: any, env: any, ctx: any) {
     'INSERT INTO wall_comments (post_id, author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id'
   ).bind(postId, me, body, now, status, media ? media.key : null, media ? media.size : null).first();
   if (media) await env.DB.prepare("UPDATE wall_media SET ref_type = 'comment', ref_id = ?1 WHERE key = ?2").bind(ins.id, media.key).run();
-  if (status === 'live') {
+  /* A muted commenter's comment is stored live but invisible to others: it must
+     not bump the post's comment count (a ghost count betrays the mute), notify,
+     or broadcast. The post-detail read hides the comment itself. */
+  if (status === 'live' && !(await isShadowBanned(env, me))) {
     await env.DB.prepare('UPDATE wall_posts SET comments = comments + 1 WHERE id = ?1').bind(postId).run();
     if (ctx) ctx.waitUntil(deliverWallNotifications(env, { authorHash: me, postId: postId, mentions: data.mentions, postAuthorHash: post.author_hash }));
     publishLive(env, ctx, { v: 1, t: 'wall-comment', scopes: ['feed:global'], post: postId });
@@ -2618,6 +2864,38 @@ async function handleLock(request: any, env: any) {
   return json({ ok: true, locked: !!data.locked }, 200);
 }
 
+/* Shadow ban (global mute), the quiet cousin of lock: on inserts a shadowbans
+   row, off deletes it. A muted identity keeps posting (never logged out, never
+   refused — this is NOT a blockedReason), but the read paths hide its public
+   content from everyone else and the write paths announce nothing on its behalf.
+   Refreshing every affected topic's denormalized stats is unnecessary: the read
+   filters recompute visibility live, and refreshTopicStats already re-excludes a
+   muted author whenever the thread next mutates. Admin-only, like lock. */
+async function handleShadowban(request: any, env: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  const key = String(data.key || '');
+  const hash = String(data.hash || '');
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  /* Never mute the librarian, and never mute an admin (a mute an admin can't
+     see would be a foot-gun); the roster stays legible. */
+  if (hash === MERECAT_BOT.hash || (await isAdminHash(env, hash))) {
+    return json({ ok: false, error: 'That identity cannot be shadow banned.' }, 400);
+  }
+  const on = !!(data.on === true || data.on === 1 || data.on === '1' || data.shadowbanned);
+  if (on) {
+    await env.DB.prepare('INSERT OR IGNORE INTO shadowbans (hash, created_at, added_by) VALUES (?1, ?2, ?3)')
+      .bind(hash, Math.floor(Date.now() / 1000), await sha256hex(key)).run();
+  } else {
+    await env.DB.prepare('DELETE FROM shadowbans WHERE hash = ?1').bind(hash).run();
+  }
+  return json({ ok: true, shadowbanned: on }, 200);
+}
+
 /* Delete a user and all their public posts: comments go to 'deleted', the
    profile and avatar are removed, and the identity is locked so the same key
    cannot post again. Private DMs are left untouched. */
@@ -2773,6 +3051,9 @@ async function handleApprove(request: any, env: any, ctx: any) {
         'c.body, c.created_at FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.id = ?1'
       ).bind(id).first();
       if (!c) return [];
+      /* A muted author's approved post enters the stream silently — the read
+         paths already hide it; it must not announce itself either. */
+      if (await isShadowBanned(env, c.author_hash)) return [];
       const catKey = c.page.slice(6);
       const topicId = c.parent_id || c.id;
       if (c.parent_id == null) {
@@ -3673,10 +3954,15 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/dm/pubkey', fn: (request, env, ctx, url) => handleDmPubkey(request, env) },
   { m: 'POST', p: '/api/comments/dm/ttl', fn: (request, env, ctx, url) => handleDmTtl(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/save', fn: (request, env, ctx, url) => handleDmSave(request, env) },
+  { m: 'POST', p: '/api/comments/dm/edit', fn: (request, env, ctx, url) => handleDmEdit(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/redact', fn: (request, env, ctx, url) => handleDmRedact(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/media', fn: (request, env, ctx, url) => handleDmMediaUpload(request, env) },
   { m: 'POST', p: '/api/comments/dm/media/get', fn: (request, env, ctx, url) => handleDmMediaGet(request, env) },
   { m: 'POST', p: '/api/comments/dm/media/purge', fn: (request, env, ctx, url) => handleDmMediaPurge(request, env) },
   { m: 'POST', p: '/api/comments/admin/settings', fn: (request, env, ctx, url) => handleAdminSettings(request, env) },
+  { m: 'POST', p: '/api/comments/admin/discord/list', fn: (request, env, ctx, url) => handleAdminDiscordList(request, env) },
+  { m: 'POST', p: '/api/comments/admin/discord/add', fn: (request, env, ctx, url) => handleAdminDiscordAdd(request, env) },
+  { m: 'POST', p: '/api/comments/admin/discord/delete', fn: (request, env, ctx, url) => handleAdminDiscordDelete(request, env) },
   { m: 'POST', p: '/api/comments/notifications/unread', fn: (request, env, ctx, url) => handleNotifUnread(request, env) },
   { m: 'POST', p: '/api/comments/notifications/read', fn: (request, env, ctx, url) => handleNotifRead(request, env) },
   { m: 'POST', p: '/api/comments/notifications', fn: (request, env, ctx, url) => handleNotifList(request, env) },
@@ -3699,6 +3985,7 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaUpload(request, env) },
   { m: 'POST', p: '/api/comments/wall', fn: (request, env, ctx, url) => handleWall(request, env) },
   { m: 'POST', p: '/api/comments/lock', fn: (request, env, ctx, url) => handleLock(request, env) },
+  { m: 'POST', p: '/api/comments/shadowban', fn: (request, env, ctx, url) => handleShadowban(request, env) },
   { m: 'POST', p: '/api/comments/deleteuser', fn: (request, env, ctx, url) => handleDeleteUser(request, env) },
   { m: 'POST', p: '/api/comments/ipban', fn: (request, env, ctx, url) => handleIpBan(request, env) },
   { m: 'POST', p: '/api/comments/ipbans', fn: (request, env, ctx, url) => handleIpBans(request, env) },

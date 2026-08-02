@@ -927,8 +927,11 @@
     return node;
   }
   /* Render one decrypted DM message: text via dmMsgNode, media via dmMediaNode,
-     with the per-message save control attached. Shared by history + live paths. */
+     with the per-message controls (save, and — on your own — edit + delete)
+     attached. Shared by history + live paths. A deleted message renders as the
+     "<redacted>" placeholder with no controls. */
   function dmRenderMsg(m: any, otherPub: any, shortName: any, other: any) {
+    if (m.redacted) return dmRedactedNode(m, shortName);
     var e = Number(m.enc || 0);
     var lbl = shortName;
     var node;
@@ -946,9 +949,102 @@
       else if (e === 2) lbl = '⚙️ Automated notice';
       node = dmMsgNode(m, lbl);
     }
+    dmAppendControls(m, node, otherPub, shortName, other);
+    return node;
+  }
+  /* Append the per-message controls to a rendered bubble: the save toggle for
+     any message, and — only on your OWN, non-system, non-redacted messages — an
+     edit link (text messages) and a delete link. Editing re-encrypts a new body
+     to the same pair secret; deleting redacts it (a "<redacted>" note both sides
+     keep until it would have expired). */
+  function dmAppendControls(m: any, node: any, otherPub: any, shortName: any, other: any) {
     var sv = dmSaveControl(m, other);
     if (sv) node.appendChild(sv);
-    return node;
+    var mine = m.sender_hash === state.myHash;
+    if (!mine || m.redacted || Number(m.enc || 0) === 2 || !m.id) return;
+    var row = el('div', 'dm-msg-actions');
+    if (!m.media_key) {   // a media caption is not separately editable
+      var ed = el('a', null, 'edit');
+      ed.href = '#';
+      ed.addEventListener('click', function (e: any) { e.preventDefault(); dmStartEdit(m, node, otherPub, shortName, other); });
+      row.appendChild(ed);
+    }
+    var del = el('a', 'dm-del', 'delete');
+    del.href = '#';
+    del.addEventListener('click', function (e: any) {
+      e.preventDefault();
+      appConfirm('Delete this message? A “<redacted>” note stands in its place for both of you until it would have disappeared anyway.', { okLabel: 'Delete', danger: true }, function (ok: any) {
+        if (!ok) return;
+        fetch(API + '/dm/redact', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, with: other, id: m.id }) })
+          .then(function (r) { return r.json(); }).then(function (d) {
+            if (blockedOut(d)) return;
+            if (d && d.ok) { m.redacted = 1; dmMakeRedacted(node, true); }
+          }).catch(function () {});
+      });
+    });
+    row.appendChild(del);
+    node.appendChild(row);
+  }
+  /* Turn a live text bubble into an in-place editor. Saving re-encrypts and
+     posts /dm/edit; on success the body re-renders and an "(edited)" marker is
+     added (the other side is told live). The current plaintext is m.body, which
+     dmRenderMsg has already decrypted into place. */
+  function dmStartEdit(m: any, node: any, otherPub: any, shortName: any, other: any) {
+    if (node.querySelector('.dm-edit-box')) return;
+    var bodyEl = node.querySelector('.comment-body');
+    var actions = node.querySelector('.dm-msg-actions');
+    if (bodyEl) bodyEl.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+    var box = el('div', 'dm-edit-box');
+    var ta = el('textarea', 'comment-text');
+    ta.rows = 3;
+    ta.maxLength = 4000;
+    ta.value = m.body || '';
+    box.appendChild(ta);
+    var btns = el('div', 'comment-buttons');
+    var save = el('button', 'btn btn-send', 'Save'); save.type = 'button';
+    var cancel = el('button', 'btn', 'Cancel'); cancel.type = 'button';
+    btns.appendChild(save); btns.appendChild(cancel);
+    box.appendChild(btns);
+    var st = el('p', 'form-status');
+    box.appendChild(st);
+    node.appendChild(box);
+    ta.focus();
+    function done() { box.remove(); if (bodyEl) bodyEl.style.display = ''; if (actions) actions.style.display = ''; }
+    cancel.addEventListener('click', done);
+    save.addEventListener('click', function () {
+      var nv = ta.value.replace(/\s+$/, '');
+      if (!nv.trim()) { ta.focus(); return; }
+      if (nv === (m.body || '')) { done(); return; }
+      save.disabled = true; st.textContent = 'Saving…';
+      fetch(API + '/dm/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, with: other, id: m.id, body: dmEncrypt(nv, otherPub), enc: 1 }) })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          if (blockedOut(d)) return;
+          if (!d || !d.ok) { st.textContent = (d && d.error) || 'Could not save.'; save.disabled = false; return; }
+          m.body = nv; m.edited_at = d.edited_at || Math.floor(Date.now() / 1000);
+          if (bodyEl) { bodyEl.textContent = ''; fillBody(bodyEl, nv); }
+          var head = node.querySelector('.comment-head');
+          if (head && !head.querySelector('.dm-edited')) head.appendChild(el('span', 'dm-edited', ' (edited)'));
+          done();
+        }).catch(function () { st.textContent = 'Network error. Try again.'; save.disabled = false; });
+    });
+  }
+  /* Mutate a bubble in place into the "<redacted>" placeholder, stripping its
+     body/media and every control. Used by my own delete and by the live redact
+     push from the other side. */
+  function dmMakeRedacted(node: any, mine: any) {
+    node.classList.add('dm-redacted-msg');
+    var body = node.querySelector('.comment-body');
+    if (body) {
+      body.textContent = '';
+      body.className = 'comment-body';
+      body.appendChild(el('span', 'dm-redacted', mine ? '<redacted> — you deleted this message' : '<redacted>'));
+    }
+    ['.dm-msg-actions', '.dm-save', '.dm-edit-box', '.dm-receipt'].forEach(function (sel) {
+      var n = node.querySelector(sel); if (n) n.remove();
+    });
   }
   /* One injected style block for the disappearing/media/settings UI — kept out of
      the shared stylesheets (like the emoji CSS) so it never collides. */
@@ -988,6 +1084,15 @@
       '.wall-newpill{display:inline-block;margin:0.4em 0;padding:0.3em 0.85em;border-radius:14px;background:var(--maroon,#8b1a1a);color:#fff;font-size:0.85em;cursor:pointer;text-decoration:none}' +
       '.wall-composer{margin:0.6em 0 1.1em}.wall-del{color:var(--maroon,#8b1a1a);opacity:0.7}' +
       '.wall-sentinel{height:1px}' +
+      '.dm-edited{font-size:0.72em;opacity:0.5;font-style:italic}' +
+      '.dm-redacted{font-style:italic;opacity:0.6}' +
+      '.dm-redacted-msg .comment-body{opacity:0.9}' +
+      '.dm-msg-actions{margin-top:2px}' +
+      '.dm-msg-actions a{font-size:0.78em;opacity:0.5;margin-right:10px;cursor:pointer;white-space:nowrap}' +
+      '.dm-msg-actions a:hover{opacity:0.9}' +
+      '.dm-del{color:var(--maroon,#8b1a1a)}' +
+      '.dm-edit-box textarea{width:100%;box-sizing:border-box}' +
+      '.dm-edit-box{margin-top:3px}' +
       '.admin-set-row{margin:0.6em 0}' +
       '.admin-set-row input[type=number]{width:6em}';
     var st = el('style');
@@ -2285,6 +2390,7 @@
       renderTrustLine(line, m.author_hash, !!m.trusted);
       details.appendChild(line);
       details.appendChild(modLockLine(m.author_hash, !!m.locked));
+      details.appendChild(modShadowLine(m.author_hash, !!m.shadowbanned));
       var ips = (identities && identities[m.author_hash]) || [];
       if (!ips.length && m.ip) ips = [{ ip_display: m.ip, ip_key: m.ip,
         family: m.ip.indexOf(':') !== -1 ? 6 : 4, source: 'seen', banned: !!m.ipbanned }];
@@ -2376,6 +2482,39 @@
       else appConfirm('Lock this identity? They will be logged out and unable to interact until you unlock them.', { okLabel: 'Lock', danger: true }, function (ok: any) { if (ok) doLock(); });
     });
     line.appendChild(a);
+    return line;
+  }
+
+  /* Shadow ban: a quiet global mute. Their posts keep succeeding and they are
+     never logged out or told, but their public content is hidden from everyone
+     else and announces nothing. Toggles in place (no reload) so nothing about
+     the admin's own view flashes. The author never sees any of this. */
+  function modShadowLine(hash: any, shadowbanned: any) {
+    var line = el('div', 'trust-line');
+    function render(on: any) {
+      line.textContent = '';
+      line.appendChild(document.createTextNode(on
+        ? 'Shadow banned. Their posts are muted globally — hidden from everyone else, and they are not told. '
+        : 'Not shadow banned. '));
+      var a = el('a', 'trust-toggle', on ? '(un-shadowban)' : '(shadow ban)');
+      a.href = '#';
+      a.addEventListener('click', function (e: any) {
+        e.preventDefault();
+        var doShadow = function () {
+          fetch(API + '/shadowban', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, hash: hash, on: !on }),
+          }).then(function (r) { return r.json(); }).then(function (d) {
+            if (d && d.ok) render(!!d.shadowbanned);
+          }).catch(function () {});
+        };
+        if (on) doShadow();
+        else appConfirm('Shadow ban this identity? Their posts will be hidden from everyone else site-wide, but they can keep posting and will not be told. Undo it here any time.', { okLabel: 'Shadow ban', danger: true }, function (ok: any) { if (ok) doShadow(); });
+      });
+      line.appendChild(a);
+    }
+    render(shadowbanned);
     return line;
   }
 
@@ -2623,6 +2762,16 @@
     var openDm = new URLSearchParams(location.search).get('dm');
     if (state.dmView && openDm && openDm === m.from && state.dmView.setTtl) state.dmView.setTtl(m.ttl);
   }
+  /* The other party edited a message they sent me: re-render that bubble live. */
+  function onLiveDmEdit(m: any) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.editMsg) state.dmView.editMsg(m.message);
+  }
+  /* The other party deleted a message they sent me: replace it with "<redacted>". */
+  function onLiveDmRedact(m: any) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.redactMsg) state.dmView.redactMsg(m.message.id);
+  }
   function onLiveNotif() {
     /* The notifications list (McNotifications) reloads itself and marks read;
        elsewhere, just ring the badge. */
@@ -2669,6 +2818,8 @@
     var m = (ev as CustomEvent).detail; if (!m) return;
     if (m.t === 'dm') onLiveDm(m);
     else if (m.t === 'dm-ttl') onLiveDmTtl(m);
+    else if (m.t === 'dm-edit') onLiveDmEdit(m);
+    else if (m.t === 'dm-redact') onLiveDmRedact(m);
     else if (m.t === 'dm-read') onLiveDmRead(m);
     else if (m.t === 'typing') onLiveTyping(m);
     else if (m.t === 'presence') onLivePresence(m);
@@ -3623,12 +3774,13 @@
       'Everything that governs the board sits behind these doors. Each is admin-only, here and at the server.'));
     var wrap = el('div', 'board-cats');
     [
-      ['Activity audit', 'community.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
-      ['IP ban list', 'community.html?ipbans=1', 'Every banned address, added and removed by hand.'],
-      ['Add / Remove Admins', 'community.html?admins=1', 'Grant a member admin powers, or take them back.'],
-      ['Platform settings', 'community.html?settings=1', 'Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button.'],
-      ['merecat administration', 'community.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
-      ['merecat Q&A at a glance', 'community.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
+      ['Activity audit', 'admin.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
+      ['IP ban list', 'admin.html?ipbans=1', 'Every banned address, added and removed by hand.'],
+      ['Add / Remove Admins', 'admin.html?admins=1', 'Grant a member admin powers, or take them back.'],
+      ['Platform settings', 'admin.html?settings=1', 'Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button.'],
+      ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
+      ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
+      ['merecat Q&A at a glance', 'admin.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
     ].forEach(function (opt) {
       var row = el('div', 'board-cat');
       var left = el('div', 'board-cat-left');
@@ -3649,7 +3801,7 @@
   function viewMerecatThreads() {
     if (window.mcViews && window.mcViews.merecatThreads) return window.mcViews.merecatThreads(section, window.mcKit);
     document.title = 'merecat Q&A at a glance | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat Q&A']]);
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['merecat Q&A']]);
     if (adminGate(viewMerecatThreads)) return;
     section.appendChild(el('p', 'board-intro',
       'Every question put to the librarian in the last thirty days, newest first, read-only. Open one to observe the whole exchange. A thread a member deletes leaves here too, and one saved past thirty days still ages off this view. This is for improving the service, not participating. You cannot ask or reply here.'));
@@ -3700,7 +3852,7 @@
   function viewMerecatThread(id: any) {
     if (window.mcViews && window.mcViews.merecatThread) return window.mcViews.merecatThread(section, window.mcKit, id);
     document.title = 'Observing a conversation | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'],
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'],
       ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + id]]);
     if (adminGate(function () { viewMerecatThread(id); })) return;
     if (!Number.isInteger(id) || id < 1) { section.appendChild(el('p', 'comments-status', 'No such conversation.')); return; }
@@ -3766,7 +3918,7 @@
      the rest of the site: type a name, pick a member, add. */
   function viewAdmins() {
     document.title = 'Add / Remove Admins | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Add / Remove Admins']]);
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['Add / Remove Admins']]);
     if (adminGate(viewAdmins)) return;
     section.appendChild(el('p', 'board-intro',
       'An admin can moderate every post, manage IP bans, and manage this list. All admins are equal: any admin can add or remove any other, yourself included. The board keeps at least one admin, so the last one cannot be removed until another is added.'));
@@ -3844,7 +3996,7 @@
 
   function viewAudit() {
     document.title = 'Activity audit | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Activity audit']]);
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['Activity audit']]);
     if (adminGate(viewAudit)) return;
     section.appendChild(el('p', 'board-intro',
       'The moderation console. Reported posts first, flagged by members and still live until you rule on them. Then the review queue the automated screen held back. Then the last two weeks of activity across the site pages, the book, and the forums, newest first, every line a link to that exact comment and actionable from here.'));
@@ -4079,7 +4231,7 @@
      one-click bans from the fingerprint dropdown. */
   function viewIpBans() {
     document.title = 'IP ban list | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['IP ban list']]);
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['IP ban list']]);
     if (adminGate(viewIpBans)) return;
     var addBox = el('div', 'key-box');
     addBox.hidden = false;
@@ -5706,11 +5858,29 @@
   function dmMsgNode(m: any, otherLabel: any) {
     var mine = m.sender_hash === state.myHash;
     var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
+    if (m.id) node.setAttribute('data-dmid', String(m.id));
+    var head = el('div', 'comment-head');
+    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
+    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    if (m.edited_at) head.appendChild(el('span', 'dm-edited', ' (edited)'));
+    node.appendChild(head);
+    node.appendChild(fillBody(el('div', 'comment-body'), m.body));
+    return node;
+  }
+  /* A deleted (redacted) message: the ciphertext is gone server-side, and both
+     sides see a "<redacted>" placeholder standing in its place until the moment
+     the message would have expired anyway. Built from text nodes only. */
+  function dmRedactedNode(m: any, otherLabel: any) {
+    var mine = m.sender_hash === state.myHash;
+    var node = el('div', 'dm-msg dm-redacted-msg' + (mine ? ' dm-mine' : ''));
+    if (m.id) node.setAttribute('data-dmid', String(m.id));
     var head = el('div', 'comment-head');
     head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
     head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
     node.appendChild(head);
-    node.appendChild(fillBody(el('div', 'comment-body'), m.body));
+    var body = el('div', 'comment-body');
+    body.appendChild(el('span', 'dm-redacted', mine ? '<redacted> — you deleted this message' : '<redacted>'));
+    node.appendChild(body);
     return node;
   }
 
@@ -5827,6 +5997,26 @@
             } else {
               liveDmBadge();
             }
+          },
+          /* The other party edited a message they sent me: re-render its body
+             (decrypting) and mark it "(edited)". Only its text body changes. */
+          editMsg: function (msg: any) {
+            if (!msg || !msg.id) return;
+            var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
+            if (!bubble || bubble.classList.contains('dm-redacted-msg') || bubble.querySelector('.dm-media')) return;
+            var body = bubble.querySelector('.comment-body');
+            if (body) {
+              var text = Number(msg.enc || 0) === 1 ? (dmDecrypt(msg.body, otherPub) || '⚠️ could not decrypt') : (msg.body || '');
+              body.textContent = ''; fillBody(body, text);
+            }
+            var head = bubble.querySelector('.comment-head');
+            if (head && !head.querySelector('.dm-edited')) head.appendChild(el('span', 'dm-edited', ' (edited)'));
+          },
+          /* The other party deleted a message they sent me: show "<redacted>". */
+          redactMsg: function (id: any) {
+            if (!id) return;
+            var bubble = list.querySelector('[data-dmid="' + String(id).replace(/"/g, '') + '"]');
+            if (bubble) dmMakeRedacted(bubble, false);
           } };
         /* Watch the other party's online state live (the DO seeds it now). */
         if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + other]);
@@ -5962,15 +6152,14 @@
               d.total += 1;
               var node;
               if (sending && d2._media_key) {
-                var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0 };
+                var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0, enc: 1 };
                 node = dmMediaNode(mecho, shortName, other, d2._env);
-                var sv2 = dmSaveControl(mecho, other);
-                if (sv2) node.appendChild(sv2);
+                dmAppendControls(mecho, node, otherPub, shortName, other);   // save + delete (edit not offered for media)
               } else {
-                var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0 };
-                node = dmMsgNode(echo, shortName);
-                var sv = dmSaveControl(echo, other);
-                if (sv) node.appendChild(sv);
+                /* Route the text echo through dmRenderMsg so my just-sent
+                   message carries edit/delete at once (body is already plaintext). */
+                var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0, enc: 0 };
+                node = dmRenderMsg(echo, otherPub, shortName, other);
               }
               list.appendChild(node);
               status.textContent = 'Sent.';
@@ -6459,14 +6648,19 @@
           }).catch(function () {});
         }
         function chatRow(c: any) {
-          var row = el('p');
-          var a = el('a', 'body-link', c.title || ('Conversation ' + c.id));
+          /* A community/inbox-style card row: the whole tile opens the thread
+             (mc-cardnav + the row click below), save/delete sit in the corner. */
+          var row = el('div', 'board-topic mc-cardnav');
+          var left = el('div', 'board-topic-left');
+          var a = el('a', 'board-topic-title', c.title || ('Conversation ' + c.id));
           a.href = 'merecat-ai.html?chat=' + c.id;
-          row.appendChild(a);
-          row.appendChild(document.createTextNode(
-            ' · ' + c.msgs + (c.msgs === 1 ? ' message · ' : ' messages · ') +
-            new Date(c.last_at * 1000).toLocaleDateString() + ' · '));
-          var sv = el('a', 'body-link', c.saved ? 'unsave' : 'save');
+          left.appendChild(a);
+          row.appendChild(left);
+          row.appendChild(el('div', 'board-stats',
+            c.msgs + (c.msgs === 1 ? ' message · ' : ' messages · ') +
+            new Date(c.last_at * 1000).toLocaleDateString()));
+          var corner = el('div', 'board-admin-corner');
+          var sv = el('a', 'trust-toggle', c.saved ? 'unsave' : 'save');
           sv.href = '#';
           sv.title = c.saved ? 'Return this conversation to the thirty-day keeping'
             : 'Keep this conversation permanently';
@@ -6498,9 +6692,9 @@
             if (expired) appConfirm('This conversation is older than thirty days. Unsaving lets it expire, and it may be removed at once. Continue?', { okLabel: 'Unsave' }, function (ok: any) { if (ok) proceed(); });
             else proceed();
           });
-          row.appendChild(sv);
-          row.appendChild(document.createTextNode(' · '));
-          var del = el('a', 'body-link', 'delete');
+          corner.appendChild(sv);
+          corner.appendChild(document.createTextNode(' · '));
+          var del = el('a', 'trust-toggle danger', 'delete');
           del.href = '#';
           del.addEventListener('click', function (e: any) {
             e.preventDefault();
@@ -6524,29 +6718,36 @@
             });
             });
           });
-          row.appendChild(del);
+          corner.appendChild(del);
+          row.appendChild(corner);
+          /* The whole tile opens the conversation — a nested link (title, save,
+             delete) still wins, and a text selection never navigates. */
+          row.addEventListener('click', function (e: any) {
+            if (e.target.closest('a, button')) return;
+            if (window.getSelection && String(window.getSelection()).length) return;
+            a.click();
+          });
           return row;
         }
         function renderChats() {
           pastBody.textContent = '';
           if (!chats.length) {
-            pastBody.appendChild(el('p', null, 'No conversations yet. Threads appear here as you ask, and expire thirty days after their last message unless you save them.'));
+            pastBody.appendChild(el('p', 'comments-status', 'No conversations yet. Threads appear here as you ask, and expire thirty days after their last message unless you save them.'));
             return;
           }
           var saved = chats.filter(function (c: any) { return c.saved; });
           var recent = chats.filter(function (c: any) { return !c.saved; });
-          if (saved.length) {
-            var sh = el('p');
-            sh.appendChild(el('strong', null, 'Saved conversations (kept permanently)'));
-            pastBody.appendChild(sh);
-            saved.forEach(function (c: any) { pastBody.appendChild(chatRow(c)); });
+          function group(label: any, list: any) {
+            if (!list.length) return;
+            var h = el('p', 'mc-past-head');
+            h.appendChild(el('strong', null, label));
+            pastBody.appendChild(h);
+            var wrap = el('div', 'board-topics');
+            list.forEach(function (c: any) { wrap.appendChild(chatRow(c)); });
+            pastBody.appendChild(wrap);
           }
-          if (recent.length) {
-            var rh = el('p');
-            rh.appendChild(el('strong', null, 'Kept thirty days'));
-            pastBody.appendChild(rh);
-            recent.forEach(function (c: any) { pastBody.appendChild(chatRow(c)); });
-          }
+          group('Saved conversations (kept permanently)', saved);
+          group('Kept thirty days', recent);
         }
         renderChats();
       }).catch(function () {
@@ -7728,7 +7929,7 @@
      message defaults + a purge-all-media button. Admin-only, server-enforced. */
   function viewPlatformSettings() {
     document.title = 'Platform settings | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['Platform settings']]);
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['Platform settings']]);
     if (adminGate(viewPlatformSettings)) return;
     ensureDmStyles();
     var wrap = el('div', 'admin-settings');
@@ -7794,24 +7995,13 @@
         });
         wpRow.appendChild(wpSel);
         wrap.appendChild(wpRow);
-        /* Discord notifications: paste a channel webhook URL to mirror new posts
-           there; clear it to turn it off. One for the forum, one for the feed. */
-        wrap.appendChild(el('h3', null, 'Discord notifications'));
-        wrap.appendChild(el('p', 'board-cat-desc', 'Paste a Discord channel webhook URL to announce new posts there. Leave a box empty to turn that one off. Create one in Discord under Server Settings → Integrations → Webhooks.'));
-        var dfRow = el('p', 'admin-set-row mc-set-key');
-        dfRow.appendChild(el('label', null, 'Forum posts webhook (new topics & replies):'));
-        var dfInp = el('input');
-        dfInp.type = 'url'; dfInp.placeholder = 'https://discord.com/api/webhooks/…';
-        dfInp.value = String(s.discord_forum_webhook || '');
-        dfRow.appendChild(dfInp);
-        wrap.appendChild(dfRow);
-        var dgRow = el('p', 'admin-set-row mc-set-key');
-        dgRow.appendChild(el('label', null, 'Feed posts webhook:'));
-        var dgInp = el('input');
-        dgInp.type = 'url'; dgInp.placeholder = 'https://discord.com/api/webhooks/…';
-        dgInp.value = String(s.discord_feed_webhook || '');
-        dgRow.appendChild(dgInp);
-        wrap.appendChild(dgRow);
+        /* Discord lives on its own admin page now (globals + per-feed list). */
+        var dcP = el('p', 'board-cat-desc');
+        dcP.appendChild(document.createTextNode('Discord announcements have their own page: '));
+        var dcLink = el('a', 'body-link', 'Discord webhooks'); dcLink.href = 'admin.html?discord=1';
+        dcP.appendChild(dcLink);
+        dcP.appendChild(document.createTextNode('.'));
+        wrap.appendChild(dcP);
         var saveBtn = el('button', 'btn btn-send', 'Save settings');
         saveBtn.type = 'button';
         var saveStatus = el('p', 'form-status');
@@ -7826,8 +8016,6 @@
               dm_backstop_days: bsInp.value,
               wall_prune_enabled: wpEn.checked ? '1' : '0',
               wall_prune_days: wpSel.value,
-              discord_forum_webhook: dfInp.value.trim(),
-              discord_feed_webhook: dgInp.value.trim(),
             } }) }).then(function (r) { return r.json(); }).then(function (d2) {
             saveBtn.disabled = false;
             saveStatus.textContent = d2 && d2.ok ? 'Saved.' : ((d2 && d2.error) || 'Save failed.');
@@ -7862,9 +8050,159 @@
       })
       .catch(function () { wrap.textContent = 'The settings could not be loaded.'; });
   }
+
+  /* Discord webhooks — the one place to wire the site into Discord. Two parts:
+     the two GLOBAL webhooks (every forum post / every feed post), and the
+     PER-FEED subscriptions (paste one of our feed URLs — ?topic=, ?cat=, or
+     ?page= — and a Discord channel webhook, and that feed alone posts there).
+     Admin-only, server-enforced. */
+  function viewDiscordHooks() {
+    document.title = 'Discord webhooks | Community';
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['Discord webhooks']]);
+    if (adminGate(viewDiscordHooks)) return;
+    var wrap = el('div', 'admin-settings');
+    section.appendChild(wrap);
+    wrap.appendChild(el('p', 'board-intro',
+      'Announce community activity to Discord. Create a channel webhook in Discord under Server Settings → Integrations → Webhooks, then paste it here.'));
+
+    /* --- The two coarse global webhooks (app_settings). --- */
+    wrap.appendChild(el('h3', null, 'Global webhooks'));
+    wrap.appendChild(el('p', 'board-cat-desc', 'Fire on EVERY new post. Leave a box empty to turn that one off.'));
+    var gBox = el('div');
+    gBox.textContent = 'Loading…';
+    wrap.appendChild(gBox);
+    fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }) })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        if (!d.ok) throw new Error(d.error || 'failed');
+        gBox.textContent = '';
+        var s = d.settings || {};
+        var dfRow = el('p', 'admin-set-row mc-set-key');
+        dfRow.appendChild(el('label', null, 'Forum posts webhook (new topics & replies):'));
+        var dfInp = el('input') as HTMLInputElement;
+        dfInp.type = 'url'; dfInp.placeholder = 'https://discord.com/api/webhooks/…';
+        dfInp.value = String(s.discord_forum_webhook || '');
+        dfRow.appendChild(dfInp);
+        gBox.appendChild(dfRow);
+        var dgRow = el('p', 'admin-set-row mc-set-key');
+        dgRow.appendChild(el('label', null, 'Feed posts webhook:'));
+        var dgInp = el('input') as HTMLInputElement;
+        dgInp.type = 'url'; dgInp.placeholder = 'https://discord.com/api/webhooks/…';
+        dgInp.value = String(s.discord_feed_webhook || '');
+        dgRow.appendChild(dgInp);
+        gBox.appendChild(dgRow);
+        var gSave = el('button', 'btn btn-send', 'Save global webhooks') as HTMLButtonElement;
+        gSave.type = 'button';
+        var gStatus = el('p', 'form-status');
+        gSave.addEventListener('click', function () {
+          gSave.disabled = true; gStatus.textContent = 'Saving…';
+          fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, set: {
+              discord_forum_webhook: dfInp.value.trim(),
+              discord_feed_webhook: dgInp.value.trim(),
+            } }) }).then(function (r) { return r.json(); }).then(function (d2) {
+            gSave.disabled = false;
+            gStatus.textContent = d2 && d2.ok ? 'Saved.' : ((d2 && d2.error) || 'Save failed.');
+          }).catch(function () { gSave.disabled = false; gStatus.textContent = 'Save failed.'; });
+        });
+        gBox.appendChild(gSave);
+        gBox.appendChild(gStatus);
+      })
+      .catch(function () { gBox.textContent = 'The global webhooks could not be loaded.'; });
+
+    /* --- Per-feed subscriptions (discord_hooks). --- */
+    wrap.appendChild(el('h3', null, 'Per-feed subscriptions'));
+    wrap.appendChild(el('p', 'board-cat-desc',
+      'Post one feed to one Discord channel. Paste one of our feed URLs — for example ' +
+      'https://merecatholicity.com/api/comments/feed?topic=219 for a single thread, ' +
+      '?cat=general for a whole category, or ?page=/credo.html for a page’s comments — ' +
+      'and the channel’s webhook. Every new post in that feed is posted to the channel automatically.'));
+
+    var listBox = el('div', 'discord-hooks-list');
+    wrap.appendChild(listBox);
+
+    /* The add form. */
+    var form = el('div', 'admin-settings');
+    var fRow = el('p', 'admin-set-row mc-set-key');
+    fRow.appendChild(el('label', null, 'Feed URL:'));
+    var feedInp = el('input') as HTMLInputElement;
+    feedInp.type = 'url'; feedInp.placeholder = 'https://merecatholicity.com/api/comments/feed?topic=219';
+    fRow.appendChild(feedInp);
+    form.appendChild(fRow);
+    var hRow = el('p', 'admin-set-row mc-set-key');
+    hRow.appendChild(el('label', null, 'Discord webhook URL:'));
+    var hookInp = el('input') as HTMLInputElement;
+    hookInp.type = 'url'; hookInp.placeholder = 'https://discord.com/api/webhooks/…';
+    hRow.appendChild(hookInp);
+    form.appendChild(hRow);
+    var lRow = el('p', 'admin-set-row mc-set-key');
+    lRow.appendChild(el('label', null, 'Label (optional):'));
+    var labelInp = el('input') as HTMLInputElement;
+    labelInp.type = 'text'; labelInp.placeholder = 'e.g. #announcements';
+    lRow.appendChild(labelInp);
+    form.appendChild(lRow);
+    var addBtn = el('button', 'btn btn-send', 'Add subscription') as HTMLButtonElement;
+    addBtn.type = 'button';
+    var addStatus = el('p', 'form-status');
+    addBtn.addEventListener('click', function () {
+      var feed = feedInp.value.trim(), hook = hookInp.value.trim();
+      if (!feed || !hook) { addStatus.textContent = 'Both a feed URL and a Discord webhook are required.'; return; }
+      addBtn.disabled = true; addStatus.textContent = 'Adding…';
+      fetch(API + '/admin/discord/add', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, feed_url: feed, hook_url: hook, label: labelInp.value.trim() }) })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          addBtn.disabled = false;
+          if (d && d.ok) {
+            addStatus.textContent = 'Added: ' + (d.scope_label || d.scope) + '.';
+            feedInp.value = ''; hookInp.value = ''; labelInp.value = '';
+            loadHooks();
+          } else { addStatus.textContent = (d && d.error) || 'Could not add.'; }
+        }).catch(function () { addBtn.disabled = false; addStatus.textContent = 'Could not add.'; });
+    });
+    form.appendChild(addBtn);
+    form.appendChild(addStatus);
+    wrap.appendChild(form);
+
+    function loadHooks() {
+      listBox.textContent = 'Loading subscriptions…';
+      fetch(API + '/admin/discord/list', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key }) })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          if (!d.ok) throw new Error(d.error || 'failed');
+          listBox.textContent = '';
+          var hooks = d.hooks || [];
+          if (!hooks.length) { listBox.appendChild(el('p', 'board-cat-desc', 'No per-feed subscriptions yet.')); return; }
+          hooks.forEach(function (h: any) {
+            var row = el('div', 'board-cat');
+            var left = el('div', 'board-cat-left');
+            left.appendChild(el('div', 'board-cat-name', (h.label ? (h.label + ' — ') : '') + (h.scope_label || h.scope)));
+            left.appendChild(el('div', 'board-cat-desc', 'Feed: ' + h.feed_url));
+            left.appendChild(el('div', 'board-cat-desc', 'Channel: ' + (h.hook_hint || 'webhook')));
+            row.appendChild(left);
+            var rm = el('button', 'btn btn-plain', 'Remove') as HTMLButtonElement;
+            rm.type = 'button';
+            rm.addEventListener('click', function () {
+              appConfirm('Stop posting this feed to Discord?', { okLabel: 'Remove', danger: true }, function (ok: any) {
+                if (!ok) return;
+                rm.disabled = true;
+                fetch(API + '/admin/discord/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ key: state.key, id: h.id }) })
+                  .then(function (r) { return r.json(); }).then(function () { loadHooks(); })
+                  .catch(function () { rm.disabled = false; });
+              });
+            });
+            row.appendChild(rm);
+            listBox.appendChild(row);
+          });
+        })
+        .catch(function () { listBox.textContent = 'The subscriptions could not be loaded.'; });
+    }
+    loadHooks();
+  }
+
   function viewMerecatAdmin() {
     document.title = 'merecat administration | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'community.html?admin=1'], ['merecat']]);
+    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['merecat']]);
     if (adminGate(viewMerecatAdmin)) return;
     ensureMerecatStyles();
     var box = el('div', 'merecat-about');
@@ -7978,6 +8316,7 @@
     if (params.get('settings')) return { tag: 'Settings' };
     if (params.get('admins')) return { tag: 'Admins' };
     if (params.get('admin')) return { tag: 'AdminHome' };
+    if (params.get('discord')) return { tag: 'Discord' };
     if (params.get('merecatadmin')) return { tag: 'MerecatAdmin' };
     if (params.get('merecatthread')) return { tag: 'MerecatThread', s: params.get('merecatthread') };
     if (params.get('merecatthreads') !== null) return { tag: 'MerecatThreads' };
@@ -8080,6 +8419,10 @@
     var r = window.mcCore
       ? window.mcCore.parseRoute(function (k) { return params.get(k); })
       : classicRoute(params);
+    /* admin.html is the administration area's own page: bare admin.html is the
+       hub, and its ?settings=/?discord=/… sub-params route as usual. (Old
+       community.html?admin=1 links still resolve to the hub too.) */
+    if (page === 'admin.html' && r.tag === 'Index') r = { tag: 'AdminHome' };
     switch (r.tag) {
       case 'Dm': location.replace('messages.html?dm=' + encodeURIComponent(r.s) + location.hash); return;
       case 'Inbox': location.replace('messages.html'); return;
@@ -8090,6 +8433,7 @@
       case 'Settings': return viewPlatformSettings();
       case 'Admins': return viewAdmins();
       case 'AdminHome': return viewAdminHome();
+      case 'Discord': return viewDiscordHooks();
       case 'MerecatAdmin': return viewMerecatAdmin();
       case 'MerecatThread': return viewMerecatThread(Number(r.s));
       case 'MerecatThreads': return viewMerecatThreads();

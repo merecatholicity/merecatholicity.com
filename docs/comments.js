@@ -903,6 +903,7 @@
       return node;
     }
     function dmRenderMsg(m, otherPub, shortName, other) {
+      if (m.redacted) return dmRedactedNode(m, shortName);
       var e = Number(m.enc || 0);
       var lbl = shortName;
       var node;
@@ -936,13 +937,135 @@
         else if (e === 2) lbl = "\u2699\uFE0F Automated notice";
         node = dmMsgNode(m, lbl);
       }
+      dmAppendControls(m, node, otherPub, shortName, other);
+      return node;
+    }
+    function dmAppendControls(m, node, otherPub, shortName, other) {
       var sv = dmSaveControl(m, other);
       if (sv) node.appendChild(sv);
-      return node;
+      var mine = m.sender_hash === state.myHash;
+      if (!mine || m.redacted || Number(m.enc || 0) === 2 || !m.id) return;
+      var row = el("div", "dm-msg-actions");
+      if (!m.media_key) {
+        var ed = el("a", null, "edit");
+        ed.href = "#";
+        ed.addEventListener("click", function(e) {
+          e.preventDefault();
+          dmStartEdit(m, node, otherPub, shortName, other);
+        });
+        row.appendChild(ed);
+      }
+      var del = el("a", "dm-del", "delete");
+      del.href = "#";
+      del.addEventListener("click", function(e) {
+        e.preventDefault();
+        appConfirm("Delete this message? A \u201C<redacted>\u201D note stands in its place for both of you until it would have disappeared anyway.", { okLabel: "Delete", danger: true }, function(ok) {
+          if (!ok) return;
+          fetch(API + "/dm/redact", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: state.key, with: other, id: m.id })
+          }).then(function(r) {
+            return r.json();
+          }).then(function(d) {
+            if (blockedOut(d)) return;
+            if (d && d.ok) {
+              m.redacted = 1;
+              dmMakeRedacted(node, true);
+            }
+          }).catch(function() {
+          });
+        });
+      });
+      row.appendChild(del);
+      node.appendChild(row);
+    }
+    function dmStartEdit(m, node, otherPub, shortName, other) {
+      if (node.querySelector(".dm-edit-box")) return;
+      var bodyEl = node.querySelector(".comment-body");
+      var actions = node.querySelector(".dm-msg-actions");
+      if (bodyEl) bodyEl.style.display = "none";
+      if (actions) actions.style.display = "none";
+      var box = el("div", "dm-edit-box");
+      var ta = el("textarea", "comment-text");
+      ta.rows = 3;
+      ta.maxLength = 4e3;
+      ta.value = m.body || "";
+      box.appendChild(ta);
+      var btns = el("div", "comment-buttons");
+      var save = el("button", "btn btn-send", "Save");
+      save.type = "button";
+      var cancel = el("button", "btn", "Cancel");
+      cancel.type = "button";
+      btns.appendChild(save);
+      btns.appendChild(cancel);
+      box.appendChild(btns);
+      var st = el("p", "form-status");
+      box.appendChild(st);
+      node.appendChild(box);
+      ta.focus();
+      function done() {
+        box.remove();
+        if (bodyEl) bodyEl.style.display = "";
+        if (actions) actions.style.display = "";
+      }
+      cancel.addEventListener("click", done);
+      save.addEventListener("click", function() {
+        var nv = ta.value.replace(/\s+$/, "");
+        if (!nv.trim()) {
+          ta.focus();
+          return;
+        }
+        if (nv === (m.body || "")) {
+          done();
+          return;
+        }
+        save.disabled = true;
+        st.textContent = "Saving\u2026";
+        fetch(API + "/dm/edit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: state.key, with: other, id: m.id, body: dmEncrypt(nv, otherPub), enc: 1 })
+        }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          if (blockedOut(d)) return;
+          if (!d || !d.ok) {
+            st.textContent = d && d.error || "Could not save.";
+            save.disabled = false;
+            return;
+          }
+          m.body = nv;
+          m.edited_at = d.edited_at || Math.floor(Date.now() / 1e3);
+          if (bodyEl) {
+            bodyEl.textContent = "";
+            fillBody(bodyEl, nv);
+          }
+          var head = node.querySelector(".comment-head");
+          if (head && !head.querySelector(".dm-edited")) head.appendChild(el("span", "dm-edited", " (edited)"));
+          done();
+        }).catch(function() {
+          st.textContent = "Network error. Try again.";
+          save.disabled = false;
+        });
+      });
+    }
+    function dmMakeRedacted(node, mine) {
+      node.classList.add("dm-redacted-msg");
+      var body = node.querySelector(".comment-body");
+      if (body) {
+        body.textContent = "";
+        body.className = "comment-body";
+        body.appendChild(el("span", "dm-redacted", mine ? "<redacted> \u2014 you deleted this message" : "<redacted>"));
+      }
+      [".dm-msg-actions", ".dm-save", ".dm-edit-box", ".dm-receipt"].forEach(function(sel) {
+        var n = node.querySelector(sel);
+        if (n) n.remove();
+      });
     }
     function ensureDmStyles() {
       if (document.getElementById("mc-dm-css")) return;
-      var css = ".dm-expiry{font-size:0.85em;opacity:0.72;margin:0.15em 0 0.5em}.dm-expiry a{cursor:pointer}.dm-save{font-size:0.78em;opacity:0.55;margin-left:10px;cursor:pointer;white-space:nowrap}.dm-save:hover{opacity:0.9}.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}.btn-attach{margin-left:6px}.dm-media{margin:0.1em 0}.dm-media-status{opacity:0.6;font-size:0.9em}.dm-media-img,.dm-media-vid{max-width:100%;max-height:60vh;border-radius:8px;display:block}.dm-media-aud{width:100%;max-width:320px}.dm-media-caption{margin-top:0.35em}.dm-media-expired{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px dashed var(--rule,#cbb);border-radius:10px;opacity:0.78}.dm-media-expired-icon{font-size:1.25em;filter:grayscale(1);opacity:0.7}.dm-media-expired-text{font-size:0.9em;font-style:italic;opacity:0.85}.dm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;background:#c8c8c8}.dm-dot-on{background:#3ba55d;box-shadow:0 0 0 2px rgba(59,165,93,0.22)}.dm-dot-off{background:#c0c0c0}.dm-dot-unknown{background:#dcdcdc}.dm-typing{font-size:0.85em;opacity:0.7;font-style:italic;margin:0.25em 0.2em}.dm-receipt{display:block;font-size:0.72em;opacity:0.5;margin-top:2px}.dm-receipt-seen{opacity:0.8;color:var(--maroon,#8b1a1a)}.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}.wall-media{margin:0.45em 0}.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}.wall-post-detail .wall-media-el{max-height:85vh}.wall-share{position:relative;display:inline-flex;align-items:center}.wall-share-menu{display:inline-flex;flex-wrap:wrap;gap:0.7em;margin-left:0.7em}.wall-media-gone{opacity:0.6;font-size:0.9em;font-style:italic}.wall-foot{margin-top:0.45em;font-size:0.9em}.wall-comments-toggle{cursor:pointer;opacity:0.78}.wall-comments-toggle:hover{opacity:1}.wall-comments{margin:0.55em 0 0.2em 0.9em;border-left:2px solid var(--rule,#e6e0d5);padding-left:0.85em}.wall-comment{margin:0.45em 0}.wall-newpill{display:inline-block;margin:0.4em 0;padding:0.3em 0.85em;border-radius:14px;background:var(--maroon,#8b1a1a);color:#fff;font-size:0.85em;cursor:pointer;text-decoration:none}.wall-composer{margin:0.6em 0 1.1em}.wall-del{color:var(--maroon,#8b1a1a);opacity:0.7}.wall-sentinel{height:1px}.admin-set-row{margin:0.6em 0}.admin-set-row input[type=number]{width:6em}";
+      var css = ".dm-expiry{font-size:0.85em;opacity:0.72;margin:0.15em 0 0.5em}.dm-expiry a{cursor:pointer}.dm-save{font-size:0.78em;opacity:0.55;margin-left:10px;cursor:pointer;white-space:nowrap}.dm-save:hover{opacity:0.9}.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}.btn-attach{margin-left:6px}.dm-media{margin:0.1em 0}.dm-media-status{opacity:0.6;font-size:0.9em}.dm-media-img,.dm-media-vid{max-width:100%;max-height:60vh;border-radius:8px;display:block}.dm-media-aud{width:100%;max-width:320px}.dm-media-caption{margin-top:0.35em}.dm-media-expired{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px dashed var(--rule,#cbb);border-radius:10px;opacity:0.78}.dm-media-expired-icon{font-size:1.25em;filter:grayscale(1);opacity:0.7}.dm-media-expired-text{font-size:0.9em;font-style:italic;opacity:0.85}.dm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;background:#c8c8c8}.dm-dot-on{background:#3ba55d;box-shadow:0 0 0 2px rgba(59,165,93,0.22)}.dm-dot-off{background:#c0c0c0}.dm-dot-unknown{background:#dcdcdc}.dm-typing{font-size:0.85em;opacity:0.7;font-style:italic;margin:0.25em 0.2em}.dm-receipt{display:block;font-size:0.72em;opacity:0.5;margin-top:2px}.dm-receipt-seen{opacity:0.8;color:var(--maroon,#8b1a1a)}.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}.wall-media{margin:0.45em 0}.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}.wall-post-detail .wall-media-el{max-height:85vh}.wall-share{position:relative;display:inline-flex;align-items:center}.wall-share-menu{display:inline-flex;flex-wrap:wrap;gap:0.7em;margin-left:0.7em}.wall-media-gone{opacity:0.6;font-size:0.9em;font-style:italic}.wall-foot{margin-top:0.45em;font-size:0.9em}.wall-comments-toggle{cursor:pointer;opacity:0.78}.wall-comments-toggle:hover{opacity:1}.wall-comments{margin:0.55em 0 0.2em 0.9em;border-left:2px solid var(--rule,#e6e0d5);padding-left:0.85em}.wall-comment{margin:0.45em 0}.wall-newpill{display:inline-block;margin:0.4em 0;padding:0.3em 0.85em;border-radius:14px;background:var(--maroon,#8b1a1a);color:#fff;font-size:0.85em;cursor:pointer;text-decoration:none}.wall-composer{margin:0.6em 0 1.1em}.wall-del{color:var(--maroon,#8b1a1a);opacity:0.7}.wall-sentinel{height:1px}.dm-edited{font-size:0.72em;opacity:0.5;font-style:italic}.dm-redacted{font-style:italic;opacity:0.6}.dm-redacted-msg .comment-body{opacity:0.9}.dm-msg-actions{margin-top:2px}.dm-msg-actions a{font-size:0.78em;opacity:0.5;margin-right:10px;cursor:pointer;white-space:nowrap}.dm-msg-actions a:hover{opacity:0.9}.dm-del{color:var(--maroon,#8b1a1a)}.dm-edit-box textarea{width:100%;box-sizing:border-box}.dm-edit-box{margin-top:3px}.admin-set-row{margin:0.6em 0}.admin-set-row input[type=number]{width:6em}";
       var st = el("style");
       st.id = "mc-dm-css";
       st.textContent = css;
@@ -2352,6 +2475,7 @@
         renderTrustLine(line, m.author_hash, !!m.trusted);
         details.appendChild(line);
         details.appendChild(modLockLine(m.author_hash, !!m.locked));
+        details.appendChild(modShadowLine(m.author_hash, !!m.shadowbanned));
         var ips = identities && identities[m.author_hash] || [];
         if (!ips.length && m.ip) ips = [{
           ip_display: m.ip,
@@ -2448,6 +2572,37 @@
         });
       });
       line.appendChild(a);
+      return line;
+    }
+    function modShadowLine(hash, shadowbanned) {
+      var line = el("div", "trust-line");
+      function render(on) {
+        line.textContent = "";
+        line.appendChild(document.createTextNode(on ? "Shadow banned. Their posts are muted globally \u2014 hidden from everyone else, and they are not told. " : "Not shadow banned. "));
+        var a = el("a", "trust-toggle", on ? "(un-shadowban)" : "(shadow ban)");
+        a.href = "#";
+        a.addEventListener("click", function(e) {
+          e.preventDefault();
+          var doShadow = function() {
+            fetch(API + "/shadowban", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ key: state.key, hash, on: !on })
+            }).then(function(r) {
+              return r.json();
+            }).then(function(d) {
+              if (d && d.ok) render(!!d.shadowbanned);
+            }).catch(function() {
+            });
+          };
+          if (on) doShadow();
+          else appConfirm("Shadow ban this identity? Their posts will be hidden from everyone else site-wide, but they can keep posting and will not be told. Undo it here any time.", { okLabel: "Shadow ban", danger: true }, function(ok) {
+            if (ok) doShadow();
+          });
+        });
+        line.appendChild(a);
+      }
+      render(shadowbanned);
       return line;
     }
     function modIpBlock(rows) {
@@ -2728,6 +2883,14 @@
       var openDm = new URLSearchParams(location.search).get("dm");
       if (state.dmView && openDm && openDm === m.from && state.dmView.setTtl) state.dmView.setTtl(m.ttl);
     }
+    function onLiveDmEdit(m) {
+      var openDm = new URLSearchParams(location.search).get("dm");
+      if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.editMsg) state.dmView.editMsg(m.message);
+    }
+    function onLiveDmRedact(m) {
+      var openDm = new URLSearchParams(location.search).get("dm");
+      if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.redactMsg) state.dmView.redactMsg(m.message.id);
+    }
     function onLiveNotif() {
       if (new URLSearchParams(location.search).get("notifications") === "1") return;
       liveNotifBadge();
@@ -2768,6 +2931,8 @@
       if (!m) return;
       if (m.t === "dm") onLiveDm(m);
       else if (m.t === "dm-ttl") onLiveDmTtl(m);
+      else if (m.t === "dm-edit") onLiveDmEdit(m);
+      else if (m.t === "dm-redact") onLiveDmRedact(m);
       else if (m.t === "dm-read") onLiveDmRead(m);
       else if (m.t === "typing") onLiveTyping(m);
       else if (m.t === "presence") onLivePresence(m);
@@ -3718,12 +3883,13 @@
       ));
       var wrap = el("div", "board-cats");
       [
-        ["Activity audit", "community.html?audit=1", "Reported posts, the review queue, and the last two weeks of activity, every row actionable."],
-        ["IP ban list", "community.html?ipbans=1", "Every banned address, added and removed by hand."],
-        ["Add / Remove Admins", "community.html?admins=1", "Grant a member admin powers, or take them back."],
-        ["Platform settings", "community.html?settings=1", "Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button."],
-        ["merecat administration", "community.html?merecatadmin=1", "The librarian\u2019s dials: the per-member daily cap, on or off, and how many."],
-        ["merecat Q&A at a glance", "community.html?merecatthreads=1", "Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next."]
+        ["Activity audit", "admin.html?audit=1", "Reported posts, the review queue, and the last two weeks of activity, every row actionable."],
+        ["IP ban list", "admin.html?ipbans=1", "Every banned address, added and removed by hand."],
+        ["Add / Remove Admins", "admin.html?admins=1", "Grant a member admin powers, or take them back."],
+        ["Platform settings", "admin.html?settings=1", "Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button."],
+        ["Discord webhooks", "admin.html?discord=1", "Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel."],
+        ["merecat administration", "admin.html?merecatadmin=1", "The librarian\u2019s dials: the per-member daily cap, on or off, and how many."],
+        ["merecat Q&A at a glance", "admin.html?merecatthreads=1", "Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next."]
       ].forEach(function(opt) {
         var row = el("div", "board-cat");
         var left = el("div", "board-cat-left");
@@ -3739,7 +3905,7 @@
     function viewMerecatThreads() {
       if (window.mcViews && window.mcViews.merecatThreads) return window.mcViews.merecatThreads(section, window.mcKit);
       document.title = "merecat Q&A at a glance | Community";
-      crumb([["Community", "community.html"], ["Administrative options", "community.html?admin=1"], ["merecat Q&A"]]);
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["merecat Q&A"]]);
       if (adminGate(viewMerecatThreads)) return;
       section.appendChild(el(
         "p",
@@ -3802,7 +3968,7 @@
       document.title = "Observing a conversation | Community";
       crumb([
         ["Community", "community.html"],
-        ["Administrative options", "community.html?admin=1"],
+        ["Administrative options", "admin.html"],
         ["merecat Q&A", "community.html?merecatthreads=1"],
         ["Conversation " + id]
       ]);
@@ -3879,7 +4045,7 @@
     }
     function viewAdmins() {
       document.title = "Add / Remove Admins | Community";
-      crumb([["Community", "community.html"], ["Administrative options", "community.html?admin=1"], ["Add / Remove Admins"]]);
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["Add / Remove Admins"]]);
       if (adminGate(viewAdmins)) return;
       section.appendChild(el(
         "p",
@@ -3989,7 +4155,7 @@
     }
     function viewAudit() {
       document.title = "Activity audit | Community";
-      crumb([["Community", "community.html"], ["Administrative options", "community.html?admin=1"], ["Activity audit"]]);
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["Activity audit"]]);
       if (adminGate(viewAudit)) return;
       section.appendChild(el(
         "p",
@@ -4233,7 +4399,7 @@
     }
     function viewIpBans() {
       document.title = "IP ban list | Community";
-      crumb([["Community", "community.html"], ["Administrative options", "community.html?admin=1"], ["IP ban list"]]);
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["IP ban list"]]);
       if (adminGate(viewIpBans)) return;
       var addBox = el("div", "key-box");
       addBox.hidden = false;
@@ -6168,11 +6334,26 @@
     function dmMsgNode(m, otherLabel) {
       var mine = m.sender_hash === state.myHash;
       var node = el("div", "dm-msg" + (mine ? " dm-mine" : ""));
+      if (m.id) node.setAttribute("data-dmid", String(m.id));
+      var head = el("div", "comment-head");
+      head.appendChild(el("span", "comment-author", mine ? "You" : otherLabel));
+      head.appendChild(el("span", "comment-date", " " + fmtDateTime(m.created_at)));
+      if (m.edited_at) head.appendChild(el("span", "dm-edited", " (edited)"));
+      node.appendChild(head);
+      node.appendChild(fillBody(el("div", "comment-body"), m.body));
+      return node;
+    }
+    function dmRedactedNode(m, otherLabel) {
+      var mine = m.sender_hash === state.myHash;
+      var node = el("div", "dm-msg dm-redacted-msg" + (mine ? " dm-mine" : ""));
+      if (m.id) node.setAttribute("data-dmid", String(m.id));
       var head = el("div", "comment-head");
       head.appendChild(el("span", "comment-author", mine ? "You" : otherLabel));
       head.appendChild(el("span", "comment-date", " " + fmtDateTime(m.created_at)));
       node.appendChild(head);
-      node.appendChild(fillBody(el("div", "comment-body"), m.body));
+      var body = el("div", "comment-body");
+      body.appendChild(el("span", "dm-redacted", mine ? "<redacted> \u2014 you deleted this message" : "<redacted>"));
+      node.appendChild(body);
       return node;
     }
     function viewDm(other) {
@@ -6295,6 +6476,27 @@
             } else {
               liveDmBadge();
             }
+          },
+          /* The other party edited a message they sent me: re-render its body
+             (decrypting) and mark it "(edited)". Only its text body changes. */
+          editMsg: function(msg) {
+            if (!msg || !msg.id) return;
+            var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, "") + '"]');
+            if (!bubble || bubble.classList.contains("dm-redacted-msg") || bubble.querySelector(".dm-media")) return;
+            var body = bubble.querySelector(".comment-body");
+            if (body) {
+              var text = Number(msg.enc || 0) === 1 ? dmDecrypt(msg.body, otherPub) || "\u26A0\uFE0F could not decrypt" : msg.body || "";
+              body.textContent = "";
+              fillBody(body, text);
+            }
+            var head = bubble.querySelector(".comment-head");
+            if (head && !head.querySelector(".dm-edited")) head.appendChild(el("span", "dm-edited", " (edited)"));
+          },
+          /* The other party deleted a message they sent me: show "<redacted>". */
+          redactMsg: function(id) {
+            if (!id) return;
+            var bubble = list.querySelector('[data-dmid="' + String(id).replace(/"/g, "") + '"]');
+            if (bubble) dmMakeRedacted(bubble, false);
           }
         };
         if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(["presence:" + other]);
@@ -6454,15 +6656,12 @@
               d.total += 1;
               var node;
               if (sending && d2._media_key) {
-                var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0 };
+                var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0, enc: 1 };
                 node = dmMediaNode(mecho, shortName, other, d2._env);
-                var sv2 = dmSaveControl(mecho, other);
-                if (sv2) node.appendChild(sv2);
+                dmAppendControls(mecho, node, otherPub, shortName, other);
               } else {
-                var echo = { id: d2.id, sender_hash: state.myHash, body, created_at: d2.created_at, saved: 0 };
-                node = dmMsgNode(echo, shortName);
-                var sv = dmSaveControl(echo, other);
-                if (sv) node.appendChild(sv);
+                var echo = { id: d2.id, sender_hash: state.myHash, body, created_at: d2.created_at, saved: 0, enc: 0 };
+                node = dmRenderMsg(echo, otherPub, shortName, other);
               }
               list.appendChild(node);
               status.textContent = "Sent.";
@@ -6899,14 +7098,19 @@
             });
           }
           function chatRow(c) {
-            var row = el("p");
-            var a = el("a", "body-link", c.title || "Conversation " + c.id);
+            var row = el("div", "board-topic mc-cardnav");
+            var left = el("div", "board-topic-left");
+            var a = el("a", "board-topic-title", c.title || "Conversation " + c.id);
             a.href = "merecat-ai.html?chat=" + c.id;
-            row.appendChild(a);
-            row.appendChild(document.createTextNode(
-              " \xB7 " + c.msgs + (c.msgs === 1 ? " message \xB7 " : " messages \xB7 ") + new Date(c.last_at * 1e3).toLocaleDateString() + " \xB7 "
+            left.appendChild(a);
+            row.appendChild(left);
+            row.appendChild(el(
+              "div",
+              "board-stats",
+              c.msgs + (c.msgs === 1 ? " message \xB7 " : " messages \xB7 ") + new Date(c.last_at * 1e3).toLocaleDateString()
             ));
-            var sv = el("a", "body-link", c.saved ? "unsave" : "save");
+            var corner = el("div", "board-admin-corner");
+            var sv = el("a", "trust-toggle", c.saved ? "unsave" : "save");
             sv.href = "#";
             sv.title = c.saved ? "Return this conversation to the thirty-day keeping" : "Keep this conversation permanently";
             sv.addEventListener("click", function(e) {
@@ -6939,9 +7143,9 @@
               });
               else proceed();
             });
-            row.appendChild(sv);
-            row.appendChild(document.createTextNode(" \xB7 "));
-            var del = el("a", "body-link", "delete");
+            corner.appendChild(sv);
+            corner.appendChild(document.createTextNode(" \xB7 "));
+            var del = el("a", "trust-toggle danger", "delete");
             del.href = "#";
             del.addEventListener("click", function(e) {
               e.preventDefault();
@@ -6970,13 +7174,19 @@
                 });
               });
             });
-            row.appendChild(del);
+            corner.appendChild(del);
+            row.appendChild(corner);
+            row.addEventListener("click", function(e) {
+              if (e.target.closest("a, button")) return;
+              if (window.getSelection && String(window.getSelection()).length) return;
+              a.click();
+            });
             return row;
           }
           function renderChats() {
             pastBody.textContent = "";
             if (!chats.length) {
-              pastBody.appendChild(el("p", null, "No conversations yet. Threads appear here as you ask, and expire thirty days after their last message unless you save them."));
+              pastBody.appendChild(el("p", "comments-status", "No conversations yet. Threads appear here as you ask, and expire thirty days after their last message unless you save them."));
               return;
             }
             var saved = chats.filter(function(c) {
@@ -6985,22 +7195,19 @@
             var recent = chats.filter(function(c) {
               return !c.saved;
             });
-            if (saved.length) {
-              var sh = el("p");
-              sh.appendChild(el("strong", null, "Saved conversations (kept permanently)"));
-              pastBody.appendChild(sh);
-              saved.forEach(function(c) {
-                pastBody.appendChild(chatRow(c));
+            function group(label, list) {
+              if (!list.length) return;
+              var h = el("p", "mc-past-head");
+              h.appendChild(el("strong", null, label));
+              pastBody.appendChild(h);
+              var wrap = el("div", "board-topics");
+              list.forEach(function(c) {
+                wrap.appendChild(chatRow(c));
               });
+              pastBody.appendChild(wrap);
             }
-            if (recent.length) {
-              var rh = el("p");
-              rh.appendChild(el("strong", null, "Kept thirty days"));
-              pastBody.appendChild(rh);
-              recent.forEach(function(c) {
-                pastBody.appendChild(chatRow(c));
-              });
-            }
+            group("Saved conversations (kept permanently)", saved);
+            group("Kept thirty days", recent);
           }
           renderChats();
         }).catch(function() {
@@ -8306,7 +8513,7 @@
     }
     function viewPlatformSettings() {
       document.title = "Platform settings | Community";
-      crumb([["Community", "community.html"], ["Administrative options", "community.html?admin=1"], ["Platform settings"]]);
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["Platform settings"]]);
       if (adminGate(viewPlatformSettings)) return;
       ensureDmStyles();
       var wrap = el("div", "admin-settings");
@@ -8382,24 +8589,13 @@
         });
         wpRow.appendChild(wpSel);
         wrap.appendChild(wpRow);
-        wrap.appendChild(el("h3", null, "Discord notifications"));
-        wrap.appendChild(el("p", "board-cat-desc", "Paste a Discord channel webhook URL to announce new posts there. Leave a box empty to turn that one off. Create one in Discord under Server Settings \u2192 Integrations \u2192 Webhooks."));
-        var dfRow = el("p", "admin-set-row mc-set-key");
-        dfRow.appendChild(el("label", null, "Forum posts webhook (new topics & replies):"));
-        var dfInp = el("input");
-        dfInp.type = "url";
-        dfInp.placeholder = "https://discord.com/api/webhooks/\u2026";
-        dfInp.value = String(s.discord_forum_webhook || "");
-        dfRow.appendChild(dfInp);
-        wrap.appendChild(dfRow);
-        var dgRow = el("p", "admin-set-row mc-set-key");
-        dgRow.appendChild(el("label", null, "Feed posts webhook:"));
-        var dgInp = el("input");
-        dgInp.type = "url";
-        dgInp.placeholder = "https://discord.com/api/webhooks/\u2026";
-        dgInp.value = String(s.discord_feed_webhook || "");
-        dgRow.appendChild(dgInp);
-        wrap.appendChild(dgRow);
+        var dcP = el("p", "board-cat-desc");
+        dcP.appendChild(document.createTextNode("Discord announcements have their own page: "));
+        var dcLink = el("a", "body-link", "Discord webhooks");
+        dcLink.href = "admin.html?discord=1";
+        dcP.appendChild(dcLink);
+        dcP.appendChild(document.createTextNode("."));
+        wrap.appendChild(dcP);
         var saveBtn = el("button", "btn btn-send", "Save settings");
         saveBtn.type = "button";
         var saveStatus = el("p", "form-status");
@@ -8415,9 +8611,7 @@
               dm_default_ttl: ttlSel.value,
               dm_backstop_days: bsInp.value,
               wall_prune_enabled: wpEn.checked ? "1" : "0",
-              wall_prune_days: wpSel.value,
-              discord_forum_webhook: dfInp.value.trim(),
-              discord_feed_webhook: dgInp.value.trim()
+              wall_prune_days: wpSel.value
             } })
           }).then(function(r) {
             return r.json();
@@ -8473,9 +8667,196 @@
         wrap.textContent = "The settings could not be loaded.";
       });
     }
+    function viewDiscordHooks() {
+      document.title = "Discord webhooks | Community";
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["Discord webhooks"]]);
+      if (adminGate(viewDiscordHooks)) return;
+      var wrap = el("div", "admin-settings");
+      section.appendChild(wrap);
+      wrap.appendChild(el(
+        "p",
+        "board-intro",
+        "Announce community activity to Discord. Create a channel webhook in Discord under Server Settings \u2192 Integrations \u2192 Webhooks, then paste it here."
+      ));
+      wrap.appendChild(el("h3", null, "Global webhooks"));
+      wrap.appendChild(el("p", "board-cat-desc", "Fire on EVERY new post. Leave a box empty to turn that one off."));
+      var gBox = el("div");
+      gBox.textContent = "Loading\u2026";
+      wrap.appendChild(gBox);
+      fetch(API + "/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: state.key })
+      }).then(function(r) {
+        return r.json();
+      }).then(function(d) {
+        if (!d.ok) throw new Error(d.error || "failed");
+        gBox.textContent = "";
+        var s = d.settings || {};
+        var dfRow = el("p", "admin-set-row mc-set-key");
+        dfRow.appendChild(el("label", null, "Forum posts webhook (new topics & replies):"));
+        var dfInp = el("input");
+        dfInp.type = "url";
+        dfInp.placeholder = "https://discord.com/api/webhooks/\u2026";
+        dfInp.value = String(s.discord_forum_webhook || "");
+        dfRow.appendChild(dfInp);
+        gBox.appendChild(dfRow);
+        var dgRow = el("p", "admin-set-row mc-set-key");
+        dgRow.appendChild(el("label", null, "Feed posts webhook:"));
+        var dgInp = el("input");
+        dgInp.type = "url";
+        dgInp.placeholder = "https://discord.com/api/webhooks/\u2026";
+        dgInp.value = String(s.discord_feed_webhook || "");
+        dgRow.appendChild(dgInp);
+        gBox.appendChild(dgRow);
+        var gSave = el("button", "btn btn-send", "Save global webhooks");
+        gSave.type = "button";
+        var gStatus = el("p", "form-status");
+        gSave.addEventListener("click", function() {
+          gSave.disabled = true;
+          gStatus.textContent = "Saving\u2026";
+          fetch(API + "/admin/settings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ key: state.key, set: {
+              discord_forum_webhook: dfInp.value.trim(),
+              discord_feed_webhook: dgInp.value.trim()
+            } })
+          }).then(function(r) {
+            return r.json();
+          }).then(function(d2) {
+            gSave.disabled = false;
+            gStatus.textContent = d2 && d2.ok ? "Saved." : d2 && d2.error || "Save failed.";
+          }).catch(function() {
+            gSave.disabled = false;
+            gStatus.textContent = "Save failed.";
+          });
+        });
+        gBox.appendChild(gSave);
+        gBox.appendChild(gStatus);
+      }).catch(function() {
+        gBox.textContent = "The global webhooks could not be loaded.";
+      });
+      wrap.appendChild(el("h3", null, "Per-feed subscriptions"));
+      wrap.appendChild(el(
+        "p",
+        "board-cat-desc",
+        "Post one feed to one Discord channel. Paste one of our feed URLs \u2014 for example https://merecatholicity.com/api/comments/feed?topic=219 for a single thread, ?cat=general for a whole category, or ?page=/credo.html for a page\u2019s comments \u2014 and the channel\u2019s webhook. Every new post in that feed is posted to the channel automatically."
+      ));
+      var listBox = el("div", "discord-hooks-list");
+      wrap.appendChild(listBox);
+      var form = el("div", "admin-settings");
+      var fRow = el("p", "admin-set-row mc-set-key");
+      fRow.appendChild(el("label", null, "Feed URL:"));
+      var feedInp = el("input");
+      feedInp.type = "url";
+      feedInp.placeholder = "https://merecatholicity.com/api/comments/feed?topic=219";
+      fRow.appendChild(feedInp);
+      form.appendChild(fRow);
+      var hRow = el("p", "admin-set-row mc-set-key");
+      hRow.appendChild(el("label", null, "Discord webhook URL:"));
+      var hookInp = el("input");
+      hookInp.type = "url";
+      hookInp.placeholder = "https://discord.com/api/webhooks/\u2026";
+      hRow.appendChild(hookInp);
+      form.appendChild(hRow);
+      var lRow = el("p", "admin-set-row mc-set-key");
+      lRow.appendChild(el("label", null, "Label (optional):"));
+      var labelInp = el("input");
+      labelInp.type = "text";
+      labelInp.placeholder = "e.g. #announcements";
+      lRow.appendChild(labelInp);
+      form.appendChild(lRow);
+      var addBtn = el("button", "btn btn-send", "Add subscription");
+      addBtn.type = "button";
+      var addStatus = el("p", "form-status");
+      addBtn.addEventListener("click", function() {
+        var feed = feedInp.value.trim(), hook = hookInp.value.trim();
+        if (!feed || !hook) {
+          addStatus.textContent = "Both a feed URL and a Discord webhook are required.";
+          return;
+        }
+        addBtn.disabled = true;
+        addStatus.textContent = "Adding\u2026";
+        fetch(API + "/admin/discord/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: state.key, feed_url: feed, hook_url: hook, label: labelInp.value.trim() })
+        }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          addBtn.disabled = false;
+          if (d && d.ok) {
+            addStatus.textContent = "Added: " + (d.scope_label || d.scope) + ".";
+            feedInp.value = "";
+            hookInp.value = "";
+            labelInp.value = "";
+            loadHooks();
+          } else {
+            addStatus.textContent = d && d.error || "Could not add.";
+          }
+        }).catch(function() {
+          addBtn.disabled = false;
+          addStatus.textContent = "Could not add.";
+        });
+      });
+      form.appendChild(addBtn);
+      form.appendChild(addStatus);
+      wrap.appendChild(form);
+      function loadHooks() {
+        listBox.textContent = "Loading subscriptions\u2026";
+        fetch(API + "/admin/discord/list", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: state.key })
+        }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          if (!d.ok) throw new Error(d.error || "failed");
+          listBox.textContent = "";
+          var hooks = d.hooks || [];
+          if (!hooks.length) {
+            listBox.appendChild(el("p", "board-cat-desc", "No per-feed subscriptions yet."));
+            return;
+          }
+          hooks.forEach(function(h) {
+            var row = el("div", "board-cat");
+            var left = el("div", "board-cat-left");
+            left.appendChild(el("div", "board-cat-name", (h.label ? h.label + " \u2014 " : "") + (h.scope_label || h.scope)));
+            left.appendChild(el("div", "board-cat-desc", "Feed: " + h.feed_url));
+            left.appendChild(el("div", "board-cat-desc", "Channel: " + (h.hook_hint || "webhook")));
+            row.appendChild(left);
+            var rm = el("button", "btn btn-plain", "Remove");
+            rm.type = "button";
+            rm.addEventListener("click", function() {
+              appConfirm("Stop posting this feed to Discord?", { okLabel: "Remove", danger: true }, function(ok) {
+                if (!ok) return;
+                rm.disabled = true;
+                fetch(API + "/admin/discord/delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ key: state.key, id: h.id })
+                }).then(function(r) {
+                  return r.json();
+                }).then(function() {
+                  loadHooks();
+                }).catch(function() {
+                  rm.disabled = false;
+                });
+              });
+            });
+            row.appendChild(rm);
+            listBox.appendChild(row);
+          });
+        }).catch(function() {
+          listBox.textContent = "The subscriptions could not be loaded.";
+        });
+      }
+      loadHooks();
+    }
     function viewMerecatAdmin() {
       document.title = "merecat administration | Community";
-      crumb([["Community", "community.html"], ["Administrative options", "community.html?admin=1"], ["merecat"]]);
+      crumb([["Community", "community.html"], ["Administrative options", "admin.html"], ["merecat"]]);
       if (adminGate(viewMerecatAdmin)) return;
       ensureMerecatStyles();
       var box = el("div", "merecat-about");
@@ -8606,6 +8987,7 @@
       if (params.get("settings")) return { tag: "Settings" };
       if (params.get("admins")) return { tag: "Admins" };
       if (params.get("admin")) return { tag: "AdminHome" };
+      if (params.get("discord")) return { tag: "Discord" };
       if (params.get("merecatadmin")) return { tag: "MerecatAdmin" };
       if (params.get("merecatthread")) return { tag: "MerecatThread", s: params.get("merecatthread") };
       if (params.get("merecatthreads") !== null) return { tag: "MerecatThreads" };
@@ -8676,6 +9058,7 @@
       var r = window.mcCore ? window.mcCore.parseRoute(function(k) {
         return params.get(k);
       }) : classicRoute(params);
+      if (page === "admin.html" && r.tag === "Index") r = { tag: "AdminHome" };
       switch (r.tag) {
         case "Dm":
           location.replace("messages.html?dm=" + encodeURIComponent(r.s) + location.hash);
@@ -8700,6 +9083,8 @@
           return viewAdmins();
         case "AdminHome":
           return viewAdminHome();
+        case "Discord":
+          return viewDiscordHooks();
         case "MerecatAdmin":
           return viewMerecatAdmin();
         case "MerecatThread":
