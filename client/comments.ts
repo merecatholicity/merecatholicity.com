@@ -5194,7 +5194,7 @@
      Facebook, plus the native OS share sheet when available (that path covers
      Instagram / TikTok / WhatsApp, which have no web share-URL). */
   function wallShareControl(p: any) {
-    var shareUrl = location.origin + '/community.html?post=' + p.id;
+    var shareUrl = location.origin + '/feed.html?post=' + p.id;
     var box = el('span', 'wall-share');
     var btn = el('a', 'wall-comments-toggle wall-share-btn', '🔗 Share');
     btn.href = '#';
@@ -5231,6 +5231,16 @@
     box.appendChild(btn); box.appendChild(menu);
     return box;
   }
+  /* A quiet prompt shown to a logged-out reader on a PUBLIC post, in place of the
+     control they cannot use yet — the interaction opens onboarding, never a wall. */
+  function loginToInteract(what: any) {
+    var p = el('p', 'comments-status');
+    var a = identityAction('Create an identity', function () { if (window.mcOnboard) window.mcOnboard(); });
+    p.appendChild(document.createTextNode('Sign in to ' + what + '. '));
+    p.appendChild(a);
+    return p;
+  }
+
   function wallPostNode(p: any, expand?: boolean) {
     ensureDmStyles();
     var node = el('article', 'comment wall-post' + (expand ? ' wall-post-detail' : ''));
@@ -5243,7 +5253,7 @@
       node.addEventListener('click', function (e: any) {
         if (e.target.closest('a, button, video, audio, input, textarea, label, .wall-comments, .wall-media')) return;
         if (window.getSelection && String(window.getSelection())) return;
-        location.href = 'community.html?post=' + p.id;
+        location.href = 'feed.html?post=' + p.id;
       });
     }
     var head = el('div', 'comment-head');
@@ -5251,7 +5261,7 @@
     head.appendChild(authorNode(p.author_hash, p.nick, true, p.faith, p.posts));
     if (p.author_hash && ADMIN_HASHES.indexOf(p.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
     var permalink = el('a', 'comment-date', ' ' + fmtDateTime(p.created_at));
-    permalink.href = 'community.html?post=' + p.id;
+    permalink.href = 'feed.html?post=' + p.id;
     head.appendChild(permalink);
     if (p.author_hash && state.myHash && p.author_hash !== state.myHash && p.author_hash !== MERECAT_BOT_HASH) {
       var dm = el('a', 'comment-dm', 'Direct Message'); dm.href = 'messages.html?dm=' + p.author_hash; head.appendChild(dm);
@@ -5310,7 +5320,7 @@
       list.appendChild(el('p', 'comments-status', 'Loading…'));
       box.appendChild(list);
       fetch(API + '/wall/post/get', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, id: p.id }) })
+        body: JSON.stringify({ key: state.key || '', id: p.id }) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           list.textContent = '';
@@ -5319,6 +5329,7 @@
           if (state.myHash) box.appendChild(wallComposer('comment', { post: p.id }, function (added: any) {
             if (added) list.appendChild(wallCommentNode(added));
           }));
+          else box.appendChild(loginToInteract('comment on this post'));
         }).catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'Could not load comments.')); });
     }
     toggle.addEventListener('click', function (e: any) { e.preventDefault(); if (box.style.display === 'none') openComments(); else box.style.display = 'none'; });
@@ -5471,14 +5482,15 @@
   }
 
   function viewPost(id: any) {
-    if (!(id > 0)) { crumb([['Community', 'community.html'], ['Feed', 'community.html?feed=1']]); section.appendChild(el('p', 'comments-status', 'No such post.')); return; }
-    if (!isMember()) { viewJoin('view this post'); return; }
+    if (!(id > 0)) { crumb([['Community', 'community.html'], ['Feed', 'feed.html']]); section.appendChild(el('p', 'comments-status', 'No such post.')); return; }
+    /* A single post is PUBLIC: no identity needed to read it and its interactions.
+       Liking/commenting is gated inside wallPostNode (it opens onboarding). */
     document.title = 'Post | Community';
-    crumb([['Community', 'community.html'], ['Feed', 'community.html?feed=1'], ['Post']]);
+    crumb([['Community', 'community.html'], ['Feed', 'feed.html'], ['Post']]);
     var holder = el('div', 'wall-list'); section.appendChild(holder);
     holder.appendChild(el('p', 'comments-status', 'Loading…'));
     fetch(API + '/wall/post/get', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, id: id }) })
+      body: JSON.stringify({ key: state.key || '', id: id }) })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         holder.textContent = '';
@@ -5647,7 +5659,7 @@
                 : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
           var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
           a.href = isDm ? ('messages.html?dm=' + it.actor_hash)
-            : (isWall || isLike) ? ('community.html?post=' + it.comment_id)
+            : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
               : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
@@ -8045,6 +8057,16 @@
       if (!isMember()) return viewJoin('ask the librarian');
       return viewMerecat();
     }
+    if (page === 'feed.html') {
+      /* A single post (?post=<id>) is PUBLIC — anyone may read it and its likes and
+         comments; liking or commenting still needs an identity (wallPostNode gates
+         the controls). The feed LISTING itself is members-only, guarded like Inbox
+         and Profile. */
+      var fpost = params.get('post');
+      if (fpost) return viewPost(Number(fpost));
+      if (!isMember()) return viewJoin('see and post to the community feed');
+      return viewFeed();
+    }
 
     /* community.html — the forum + its administration. Legacy ?dm/?inbox/?me/
        ?profile/?merecat links (old bookmarks, already-delivered notifications)
@@ -8069,8 +8091,8 @@
       case 'Users': return viewUsers();
       case 'Search': return viewSearch();
       case 'Audit': return viewAudit();
-      case 'Feed': return isMember() ? viewFeed() : viewJoin('see and post to the community feed');
-      case 'Post': return isMember() ? viewPost(Number(r.s)) : viewJoin('view this post');
+      case 'Feed': location.replace('feed.html' + location.hash); return;
+      case 'Post': location.replace('feed.html?post=' + encodeURIComponent(r.s) + location.hash); return;
       case 'Topic': return viewTopic(r.n);
       case 'Cat': return viewCat(r.s);
       default: return viewIndex();
