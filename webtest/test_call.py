@@ -30,6 +30,15 @@ Scenarios (each runnable alone: python3 webtest/test_call.py [p2p|stun|block|tab
          sees NO call-offer frame; unblock, offer again, the frame arrives.
   tabs   Multi-tab hush: bob open twice; both tabs ring; one answers; the
          other's banner resolves 'taken' (answered on another device).
+  idle   The silence watch (2026-08-03): /config's calls.idle_* fields, the
+         admin clamp at the wire (set 7 → stored 15, restored after), and the
+         two-phase live proof — the browsers' /config fetch is patched to a
+         15 s window (prod settings untouched, no cache races); the fake mic's
+         TONE holds the call Active past the window (voice resets the clock,
+         and proves headless stats DO carry audioLevel — a silent disarm would
+         fail phase 2), then muting BOTH sides ends the call by itself with
+         reason 'idle' on the firing side ('hangup' on the side that lost the
+         race and just saw the peer's end signal).
 
 Needs webtest/.testkeys (alice/bob) and the mic-capable Flow kit. Calls are
 deliberately NOT Turnstile-gated, so no MC_TEST_TOKEN is required. Residue per
@@ -238,6 +247,68 @@ def scenario_tabs(checks, fails):
             fails.extend(['%s: %s' % (u.name, x) for x in u.failures])
 
 
+IDLE_CONFIG_PATCH = (
+    "if(!window.__cfgPatched){window.__cfgPatched=1;var of=window.fetch;"
+    "window.fetch=function(u,o){if(String(u).indexOf('/api/comments/config')!==-1){"
+    "return Promise.resolve(new Response(JSON.stringify({ok:true,calls:{enabled:true,idle_hangup:true,idle_seconds:15}}),"
+    "{status:200,headers:{'Content-Type':'application/json'}}));}"
+    "return of.apply(this,arguments);};} return 1;"
+)
+
+
+def scenario_idle(checks, fails):
+    # Wire: /config carries the silence-watch fields (defaults 1/60).
+    import urllib.request
+    with urllib.request.urlopen('https://merecatholicity.com/api/comments/config') as r:
+        cfg = json.loads(r.read())
+    calls = cfg.get('calls') or {}
+    checks.append(('idle: /config serves idle_hangup (default on)', calls.get('idle_hangup') is True))
+    checks.append(('idle: /config serves idle_seconds int within clamp',
+                   isinstance(calls.get('idle_seconds'), int) and 15 <= calls['idle_seconds'] <= 600))
+    # Wire: the admin save clamps through Domain.Call (7 → 15), then restore.
+    # The set response carries the post-save settings from the same isolate
+    # (cache busted there), so it is the authoritative readback.
+    import os
+    keypath = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'librarian', '.key')
+    try:
+        with open(keypath) as fh:
+            admin_key = fh.read().strip()
+    except OSError:
+        admin_key = ''
+    if admin_key:
+        try:
+            d = api('/api/comments/admin/settings', {'key': admin_key, 'set': {'calls_idle_seconds': '7'}})
+            stored = (d.get('settings') or {}).get('calls_idle_seconds')
+            checks.append(('idle: admin save clamps 7 up to 15 (Domain.Call rule at the wire)', stored == '15'))
+        finally:
+            api('/api/comments/admin/settings', {'key': admin_key, 'set': {'calls_idle_seconds': '60'}})
+    # Live: a 15 s window via a patched /config fetch — prod settings untouched.
+    with Party(LiveUser('A', ALICE, 9618, mic='fake'), LiveUser('B', BOB, 9619, mic='fake')) as (A, B):
+        B.nav('community.html')
+        A.nav('community.html?dm=' + B_HASH)
+        A.js(IDLE_CONFIG_PATCH)
+        B.js(IDLE_CONFIG_PATCH)
+        if run_call(A, B, checks, 'idle'):
+            # Phase 1: the fake mic's tone IS a voice — 18 s past the 15 s
+            # window the call must still stand (the clock resets on sound).
+            time.sleep(18)
+            checks.append(('idle: sound holds the call open past the window',
+                           call_state(A) == 'Active' and call_state(B) == 'Active'))
+            # Phase 2: total silence — mute BOTH mics; the watch ends the call
+            # on its own. One side fires 'idle', the other may just see the
+            # peer's end signal ('hangup'); both must leave the call cleanly.
+            click_panel_btn(A, 'Mute')
+            click_panel_btn(B, 'Mute')
+            a_done = A.wait("window.__mcCall.state==='Ended'||window.__mcCall.state==='Idle'", timeout=35)
+            b_done = B.wait("window.__mcCall.state==='Ended'||window.__mcCall.state==='Idle'", timeout=15)
+            reasons = [A.js("return window.__mcCall.reason;"), B.js("return window.__mcCall.reason;")]
+            checks.append(('idle: silence ends the call by itself (both sides)', a_done and b_done))
+            checks.append(('idle: an end reason is the honest “idle” (%s)' % '/'.join(map(str, reasons)),
+                           'idle' in reasons and all(x in ('idle', 'hangup', '') for x in reasons)))
+        for u in (A, B):
+            fails.extend(['%s: %s' % (u.name, x) for x in u.failures])
+
+
 def main():
     which = sys.argv[1] if len(sys.argv) > 1 else 'all'
     checks, fails = [], []
@@ -249,6 +320,8 @@ def main():
         scenario_block(checks, fails)
     if which in ('all', 'tabs'):
         scenario_tabs(checks, fails)
+    if which in ('all', 'idle'):
+        scenario_idle(checks, fails)
     for x in fails:
         print('FAIL', x)
     for n, p in checks:
