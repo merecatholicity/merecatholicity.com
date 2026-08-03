@@ -22,27 +22,50 @@ DESC = 'A primary source in the Mere Catholicity Library.'
 
 TITLE_RE = re.compile(r'<title>(.*?)</title>', re.S)
 
-# A tiny SYNCHRONOUS head script that kills the two load flashes:
+# A tiny SYNCHRONOUS head script that kills the load flashes:
 #  1) Theme: set data-theme (+ palette) from the cookie BEFORE first paint, so a
 #     page never renders in the wrong theme and then flip (the "dark flash").
 #     Default dark, matching nav.js's effective() — nav.js re-applies it later.
+#     The theme background is ALSO painted inline on <html> so no paintable
+#     moment is ever white (an installed-app cold start once showed seconds of
+#     white between the splash and the stylesheet).
 #  2) Home: on index.html (app mode), hide the static book-promo content until the
 #     <mc-home> launcher mounts, so the home page doesn't flash its static markup
 #     ("The Book" flash) first. A 2.5s safety reveals it if the launcher never
 #     mounts OR mounted empty (a broken bundle must never hold the page blank —
 #     the flash-guard is cosmetic, the content is the point; the old 4s absent-only
 #     check once left a cold PWA start on a white screen).
+#  3) A LAUNCH INDICATOR rides the gate (2026-08-02, the owner's ask): while
+#     html.mc-home-boot stands and the launcher has not yet rendered, a pure-CSS
+#     "Mere Catholicity" wordmark + spinner shows (style node injected beside the
+#     gate class, hardcoded colors — style.css may not have arrived). It dies the
+#     instant the launcher renders (:has(mc-home>*), with main.mc-app-home as the
+#     insert-time fallback for :has-less engines), when the 2.5s safety reveals
+#     the static content, or when the shell clears the gate on navigation — the
+#     same class governs all of it, so there is no JS lifecycle to leak.
 # Injected right after <head> so it runs before the stylesheet paints. Replaced
 # in place when the template changes, and re-applied on every `make html`.
 FLASH_SCRIPT = (
     '<script id="mc-fout">(function(){var e=document.documentElement;'
     "function c(n){var m=document.cookie.match('(?:^|; )'+n+'=([^;]*)');return m?m[1]:''}"
     "try{var t=c('mc-theme')||'dark';e.setAttribute('data-theme',t);"
+    "e.style.background=t==='light'?'#fffdf7':'#0f1113';"
     "var d=c('mc-dark');if(t==='dark'&&(d==='slate'||d==='ink'))e.setAttribute('data-dark',d);"
     "var l=c('mc-light');if(t==='light'&&(l==='mist'||l==='sepia'))e.setAttribute('data-light',l)}catch(x){}"
     "try{var a=true;try{a=localStorage.getItem('mc-app')!=='0'}catch(z){a=false}"
     "var p=location.pathname;if(a&&(p==='/'||p===''||p.slice(-11)==='/index.html')){"
     "e.classList.add('mc-home-boot');"
+    "var s=document.createElement('style');s.id='mc-boot-css';s.textContent="
+    '\'html.mc-home-boot main::before{content:"Mere Catholicity";position:fixed;top:42%;left:0;right:0;'
+    "z-index:9990;text-align:center;font:1.45rem/1.4 Georgia,serif;letter-spacing:.05em;color:#e8e2d5}'+"
+    "'html.mc-home-boot main::after{content:\"\";position:fixed;top:51%;left:calc(50% - 13px);z-index:9990;"
+    "width:26px;height:26px;border:3px solid rgba(139,26,26,.3);border-top-color:#a03535;border-radius:50%;"
+    "animation:mc-bootspin .8s linear infinite}'+"
+    "'@keyframes mc-bootspin{to{transform:rotate(360deg)}}'+"
+    "'html.mc-home-boot[data-theme=light] main::before{color:#3a3226}'+"
+    "'html.mc-home-boot main:has(mc-home>*)::before,html.mc-home-boot main:has(mc-home>*)::after,"
+    "html.mc-home-boot main.mc-app-home::before,html.mc-home-boot main.mc-app-home::after{display:none;animation:none}';"
+    "document.head.appendChild(s);"
     "setTimeout(function(){var h=document.querySelector('mc-home');"
     "if(!h||!h.firstChild)e.classList.remove('mc-home-boot')},2500)}}catch(x){}"
     '})();</script>'
