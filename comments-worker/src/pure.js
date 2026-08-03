@@ -141,6 +141,15 @@ export function sanitizeScopes(raw, me, boardCats) {
     if (s.startsWith('user:')) {
       const h = s.slice(5);
       if (me && h === me && /^[0-9a-f]{64}$/.test(h)) out.push(s);   // only your own
+      continue;
+    }
+    if (s.startsWith('dmview:')) {
+      /* "I have the DM thread with <hash> on screen right now" — an authed
+         member's claim about their OWN viewport, used only to keep their own
+         bell quiet while they watch a message arrive (handleDmSend asks the
+         hub before notifying). Refused on an unauthenticated socket. */
+      const h = s.slice(7);
+      if (me && /^[0-9a-f]{64}$/.test(h)) out.push(s);
     }
   }
   return out;

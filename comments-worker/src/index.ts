@@ -1677,21 +1677,33 @@ async function handleDmSend(request: any, env: any, ctx: any) {
       publishLive(env, ctx, { v: 1, t: 'dm', scopes: ['user:' + to], from: me, thread_id: thread.id,
         message: { id: msg.id, sender_hash: me, body: body, created_at: now, enc: enc, media_key: mediaKey } });
     }
-    /* A DM also lands in the recipient's notifications list (the inbox badge is
-       not the only place it should show). */
-    await notifyDm(env, to, me);
-    /* Native push nudge, DEFERRED (like the reply/mention/wall paths) so a slow
-       push service never delays the sender's response — but only if the recipient
-       hasn't turned DM notifications off ("the bell only — messages still
-       arrive"); a push is the loudest bell, so it honors that opt-out too. Carries
-       NO message content (DMs are E2E; the server never sees the plaintext). */
-    const pushDm = async () => {
-      const dmPref = (await notifyPrefsFor(env, [to]))[to];
-      if (notifyEnabled(dmPref, 'dm')) {
-        await deliverPush(env, [to], { kind: 'dm', title: 'New message', body: 'You have a new message', url: '/community.html?dm=' + me });
-      }
-    };
-    if (ctx) ctx.waitUntil(pushDm()); else await pushDm();
+    /* The quiet bell: when the recipient has THIS conversation on screen right
+       now (their live socket carries dmview:<me> — a sub the client holds only
+       while that thread is mounted, on a socket that closes the moment the tab
+       hides), the message lands in front of their eyes via the live push above,
+       so neither the notification row nor the OS push fires. Any doubt — hub
+       error, no socket — rings the bell as before. */
+    let onScreen = false;
+    if (ctx && env.HUB) {
+      try { onScreen = !!(await env.HUB.get(env.HUB.idFromName('board')).dmViewing(to, me)); } catch { onScreen = false; }
+    }
+    if (!onScreen) {
+      /* A DM also lands in the recipient's notifications list (the inbox badge
+         is not the only place it should show). */
+      await notifyDm(env, to, me);
+      /* Native push nudge, DEFERRED (like the reply/mention/wall paths) so a slow
+         push service never delays the sender's response — but only if the recipient
+         hasn't turned DM notifications off ("the bell only — messages still
+         arrive"); a push is the loudest bell, so it honors that opt-out too. Carries
+         NO message content (DMs are E2E; the server never sees the plaintext). */
+      const pushDm = async () => {
+        const dmPref = (await notifyPrefsFor(env, [to]))[to];
+        if (notifyEnabled(dmPref, 'dm')) {
+          await deliverPush(env, [to], { kind: 'dm', title: 'New message', body: 'You have a new message', url: '/community.html?dm=' + me });
+        }
+      };
+      if (ctx) ctx.waitUntil(pushDm()); else await pushDm();
+    }
   }
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
 }
@@ -1790,9 +1802,19 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
-    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
+    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at, COALESCE(m.liked_a, 0) AS liked_a, COALESCE(m.liked_b, 0) AS liked_b FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
     ' AND m.created_at > ?5 AND ' + dmLive(now) + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
   ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
+  /* Per-message likes, told from the viewer's seat: liked_me is MY heart on the
+     message, liked_other is the other party's (the raw a/b columns stay ours). */
+  const iAmA = me === a;
+  const messages = (msgs.results || []).map((m: any) => {
+    const out: any = Object.assign({}, m);
+    out.liked_me = iAmA ? m.liked_a : m.liked_b;
+    out.liked_other = iAmA ? m.liked_b : m.liked_a;
+    delete out.liked_a; delete out.liked_b;
+    return out;
+  });
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
   /* One conditional write: only when a visible word from the other side is
      newer than my stamp. Held and cleared words never trigger it. */
@@ -1824,7 +1846,7 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   }
   return json({ ok: true, thread_id: thread.id, ttl,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
-    messages: msgs.results, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
+    messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
 }
 
 /* The badge count: unread threads, one indexed COUNT. The client asks at most
@@ -1991,6 +2013,88 @@ async function handleDmSave(request: any, env: any) {
   const expires = saved ? null : (row.opened_at ? (row.opened_at + ttl) : (row.created_at + dmBackstopSeconds(settings)));
   await env.DB.prepare('UPDATE dms SET saved = ?1, expires_at = ?2 WHERE id = ?3').bind(saved, expires, id).run();
   return json({ ok: true, saved, expires_at: expires }, 200);
+}
+
+/* Like (or unlike) ONE message in a 1v1 thread. Either party may like any
+   message they can SEE — their pair's thread, not held from them, not expired,
+   not redacted, not behind their own delete-conversation stamp. The flag is
+   per-side metadata beside opened_at (liked_a/liked_b on the canonical pair);
+   the plaintext stays sealed. The other side's open thread hears it live. */
+async function handleDmLike(request: any, env: any, ctx: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const other = String(data.with || '');
+  const id = Math.floor(Number(data.id) || 0);
+  const like = data.like ? 1 : 0;
+  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const [a, b] = dmPair(me, other);
+  const now = Math.floor(Date.now() / 1000);
+  const row = await env.DB.prepare(
+    'SELECT d.id, d.thread_id, COALESCE(d.redacted, 0) AS redacted FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
+    'WHERE d.id = ?4 AND t.a_hash = ?2 AND t.b_hash = ?3 ' +
+    'AND (COALESCE(d.held, 0) = 0 OR d.sender_hash = ?1) ' +
+    'AND (d.expires_at IS NULL OR d.expires_at > ?5) ' +
+    'AND d.created_at > COALESCE(CASE WHEN ?1 = t.a_hash THEN t.a_cleared_at ELSE t.b_cleared_at END, 0)'
+  ).bind(me, a, b, id, now).first();
+  if (!row) return json({ ok: false, error: 'No such message.' }, 404);
+  if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
+  const col = me === a ? 'liked_a' : 'liked_b';
+  await env.DB.prepare('UPDATE dms SET ' + col + ' = ?1 WHERE id = ?2').bind(like, id).run();
+  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-like', scopes: ['user:' + other], from: me, thread_id: row.thread_id, message: { id, like } });
+  return json({ ok: true, id, like }, 200);
+}
+
+/* "I watched it arrive": the open thread acknowledges a live-delivered message
+   so the read stamp, the disappearing clock, the sender's Seen receipt, and any
+   already-rung dm notification settle exactly as a thread (re)load would set
+   them — without refetching the thread. The same three writes handleDmThread
+   makes on open, kept in step with it. */
+async function handleDmSeen(request: any, env: any, ctx: any) {
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const other = String(data.with || '');
+  if (!/^[0-9a-f]{64}$/.test(other) || me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  const [a, b] = dmPair(me, other);
+  const thread = await env.DB.prepare(
+    'SELECT id, ttl, a_cleared_at, b_cleared_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
+  ).bind(a, b).first();
+  if (!thread) return json({ ok: true }, 200);
+  const now = Math.floor(Date.now() / 1000);
+  const settings = await getAppSettings(env);
+  const ttl = thread.ttl || dmDefaultTtl(settings);
+  const myCleared = (me === a ? thread.a_cleared_at : thread.b_cleared_at) || 0;
+  const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
+  await env.DB.prepare(
+    'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?3 AND EXISTS(' +
+    'SELECT 1 FROM dms m WHERE m.thread_id = ?3 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
+    'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
+  ).bind(me, now, thread.id, myCleared).run();
+  const openRes = await env.DB.prepare(
+    'UPDATE dms SET opened_at = ?2, expires_at = ?2 + ?5 WHERE thread_id = ?3 AND sender_hash != ?1 ' +
+    'AND COALESCE(held, 0) = 0 AND opened_at IS NULL AND COALESCE(saved, 0) = 0 AND created_at > ?4'
+  ).bind(me, now, thread.id, myCleared, ttl).run();
+  if (openRes && openRes.meta && openRes.meta.changes > 0) {
+    const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first();
+    if (Prefs.receiptsOn((myPref && myPref.receipts_mode) || 'auto')) {
+      const ev = { v: 1, t: 'dm-read', scopes: ['user:' + other], thread_id: thread.id, reader: me, at: now };
+      if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+    }
+  }
+  /* Belt for the race where the bell rang in the instant before the on-screen
+     sub registered: reading the words on screen reads the notification too. */
+  await env.DB.prepare(
+    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind = 'dm' AND actor_hash = ?2 AND read_at IS NULL"
+  ).bind(me, other, now).run();
+  return json({ ok: true }, 200);
 }
 
 /* Edit one of your OWN messages. DMs are end-to-end encrypted, so the server is
@@ -4742,6 +4846,8 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/dm/pubkey', fn: (request, env, ctx, url) => handleDmPubkey(request, env) },
   { m: 'POST', p: '/api/comments/dm/ttl', fn: (request, env, ctx, url) => handleDmTtl(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/save', fn: (request, env, ctx, url) => handleDmSave(request, env) },
+  { m: 'POST', p: '/api/comments/dm/like', fn: (request, env, ctx, url) => handleDmLike(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/seen', fn: (request, env, ctx, url) => handleDmSeen(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/edit', fn: (request, env, ctx, url) => handleDmEdit(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/redact', fn: (request, env, ctx, url) => handleDmRedact(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/media', fn: (request, env, ctx, url) => handleDmMediaUpload(request, env) },
