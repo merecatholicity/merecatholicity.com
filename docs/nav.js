@@ -358,6 +358,22 @@ document.addEventListener('DOMContentLoaded', function () {
      when onmessage is assigned or startMessages() is called) — without this
      the stale-skeleton signal would never arrive. */
   try { if (sw.startMessages) sw.startMessages(); } catch (e) { /* older engine */ }
+  /* Report this deploy's ACTUAL asset URLs so the worker can prime its cache —
+     only the page knows the current ?v= keys (sw v5 never intercepts what it
+     has not positively cached, so priming is what turns the cache on). Idle-
+     deferred; priming is an optimization and nothing depends on it. */
+  window.setTimeout(function () {
+    try {
+      var urls = ['nav.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+      document.querySelectorAll('script[src], link[rel="stylesheet"][href]').forEach(function (el) {
+        var u = el.getAttribute('src') || el.getAttribute('href') || '';
+        if (/(^|\/)(app\.js|deeplink\.js|style\.css)([?#]|$)/.test(u)) urls.push(u);
+      });
+      sw.ready.then(function (reg) {
+        if (reg && reg.active) reg.active.postMessage({ t: 'mc-prime', urls: urls });
+      }).catch(function () { /* no registration: nothing to prime */ });
+    } catch (e) { /* fine */ }
+  }, 2500);
 })();
 
 /* ?debug=1: a small diagnostic overlay for the next "the app is acting up"
@@ -369,9 +385,30 @@ document.addEventListener('DOMContentLoaded', function () {
    any of this without the query flag. Tap the overlay to dismiss. */
 (function () {
   var errs = [];
+  var painting = false;
+  var dismissed = false;
+  var forced = false;
+  try { forced = /[?&]debug=1\b/.test(location.search); } catch (e) { forced = false; }
+  function standaloneMode() {
+    try {
+      return navigator.standalone === true ||
+        (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+    } catch (e) { return false; }
+  }
+  function start() {
+    if (painting || dismissed) return;
+    painting = true;
+    function go() { paint(); setInterval(paint, 2000); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+    else go();
+  }
   function note(m) {
     errs.push(new Date().toISOString().slice(11, 19) + ' ' + String(m).slice(0, 160));
     if (errs.length > 12) errs.shift();
+    /* An installed app has no URL bar to reach ?debug=1 with — so in
+       STANDALONE mode an uncaught error paints the overlay by itself: the
+       broken state carries its own diagnosis. Browser tabs stay quiet. */
+    if (standaloneMode()) start();
   }
   window.addEventListener('error', function (e) {
     note((e.message || 'error') + ' @ ' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || 0));
@@ -380,18 +417,17 @@ document.addEventListener('DOMContentLoaded', function () {
     var r = e.reason;
     note('unhandled: ' + ((r && (r.message || r)) || 'rejection'));
   });
-  if (!/[?&]debug=1\b/.test(location.search)) return;
+  if (forced) start();
   function paint() {
+    if (dismissed || !document.body) return;
     var el = document.getElementById('mc-debug') || document.createElement('pre');
     el.id = 'mc-debug';
     el.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;' +
       'background:rgba(15,17,19,.94);color:#e8e2d5;font:11px/1.5 monospace;' +
       'padding:10px;border-radius:8px;max-height:45vh;overflow:auto;white-space:pre-wrap;margin:0';
-    el.onclick = function () { el.remove(); };
+    el.onclick = function () { dismissed = true; el.remove(); };
     var lines = [];
-    var stand = false;
-    try { stand = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); } catch (e) { /* n/a */ }
-    lines.push('mode: ' + (stand ? 'standalone (installed app)' : 'browser tab'));
+    lines.push('mode: ' + (standaloneMode() ? 'standalone (installed app)' : 'browser tab'));
     var scripts = [];
     try {
       document.querySelectorAll('script[src]').forEach(function (s) {
@@ -414,7 +450,4 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (!el.parentNode) document.body.appendChild(el);
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { paint(); setInterval(paint, 2000); });
-  } else { paint(); setInterval(paint, 2000); }
 })();

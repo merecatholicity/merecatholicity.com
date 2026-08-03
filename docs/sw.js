@@ -6,67 +6,68 @@
    fetches fresh, so the site's standing cache-busting discipline is untouched.
    Bump VERSION to sweep the cache wholesale.
 
-   v4 (2026-08-02, the installed-app staleness postmortem): a cached skeleton
-   carries a literal comments.js?v=NN from the deploy it was cached under — an
-   installed app launching on yesterday's skeleton ran a mixed-version client
-   that painted the shell and never the content. So: (1) every fetch this
-   worker makes rides cache:'no-cache' where freshness matters — the 10-min
-   browser HTTP cache no longer masquerades as revalidation (Pages answers 304
-   cheaply); (2) a skeleton served from cache is byte-compared against the
-   fresh copy in the background, and when they differ the cache is updated and
-   every open page is told (mc-page-updated) so a just-launched page can heal
-   itself with one reload (nav.js owns that policy); (3) a cache+network double
-   miss REJECTS honestly — the old `hit || refresh` resolved respondWith with
-   undefined, a silent NetworkError the shell could not distinguish from a
-   dead network; (4) a non-ok network answer falls back to the cache instead
-   of being served over it; (5) fetches are re-issued by URL, never by
-   re-dispatching the Request object (a WebKit navigation-request trap); and
-   (6) cache.put can never raise an unhandled rejection (iOS private mode /
-   quota). Truly versioned URLs (?v=N) skip background revalidation outright —
-   their URL is their freshness, and refetching them doubled bandwidth. */
-var VERSION = 'mc-shell-v4';
+   v5 (2026-08-02, the standalone postmortem): the SW's OWN network path is
+   unreliable inside iOS home-screen app containers — a first launch with an
+   empty cache white-screened (the intercepted navigation never produced a
+   document) and every uncached tab died the same way, in BOTH the v3
+   fetch(e.request) and v4 fetch-by-URL forms, while Safari on the same phone
+   was fine. So the worker now takes a request ONLY when it positively holds
+   the answer: a SYNCHRONOUS known-cached gate (`known`, a Set of exact cache
+   keys primed at startup and maintained on every put) decides inside the
+   fetch handler — an unknown URL is never respondWith'd at all, and the
+   browser handles it exactly as if no SW existed. A worker defect can now
+   cost only an optimization, never a page. Skeletons are primed in activate
+   (background, failure-tolerant); the versioned shell assets are primed via
+   an mc-prime message from nav.js, which alone knows the current ?v= URLs
+   (older same-basename keys are evicted as new ones arrive).
+
+   Kept from v4: cache-hit serves revalidate against ORIGIN (cache:'no-cache';
+   the 10-min browser HTTP cache never masquerades as freshness) and when the
+   bytes differ the cache is updated and every open page told (mc-page-updated)
+   so a young page can heal with one reload (nav.js owns that policy); a newly
+   activated worker announces itself (mc-sw-updated) — the message channel,
+   not controllerchange, which provably fails to fire on claim in some
+   engines; messages are re-sent 4x over ~4.5s (a send racing document
+   creation reaches nobody) and pages dedupe; cache.put never raises an
+   unhandled rejection; truly ?v=-versioned URLs skip revalidation outright. */
+var VERSION = 'mc-shell-v5';
 var SHELL = {
   'app.js': 1, 'nav.js': 1, 'deeplink.js': 1, 'style.css': 1,
   'manifest.webmanifest': 1, 'icon-192.png': 1, 'icon-512.png': 1,
 };
 /* The app's own screens: the tab destinations' static skeletons, cached by
    PATHNAME (their query string is client-side routing and their live content
-   is API-driven, so nothing dynamic is ever served stale). Serving the cached
-   skeleton at once and revalidating in the background is what lets a
-   cold-started installed app open and hop tabs without seconds of network
-   blank — every OTHER document (the books, the papers) and all /api/* traffic
-   still always ride the network. */
+   is API-driven, so nothing dynamic is ever served stale). A cached skeleton
+   is served at once — a cold-started installed app paints instantly — and
+   revalidated in the background; every OTHER document and all /api/* traffic
+   always ride the network untouched. */
 var PAGES = {
   '/': 1, '/index.html': 1, '/community.html': 1, '/feed.html': 1,
   '/messages.html': 1, '/profile.html': 1, '/merecat-ai.html': 1,
 };
 
-self.addEventListener('install', function () {
-  self.skipWaiting();
-});
-self.addEventListener('activate', function (e) {
-  e.waitUntil(
-    caches.keys().then(function (keys) {
-      return Promise.all(keys.filter(function (k) { return k !== VERSION; })
-        .map(function (k) { return caches.delete(k); }));
-    }).then(function () { return self.clients.claim(); }).then(function () {
-      /* Every activation announces itself; each PAGE decides relevance — one
-         born controlled is living through an UPDATE and may heal-reload, one
-         born uncontrolled just witnessed the first install and ignores it.
-         (The SW cannot make that call: a pre-claim matchAll from the NEW
-         worker lists only clients it already controls — none — and the
-         controllerchange event provably fails to fire on claim in some
-         engines. Both found headless, 2026-08-02.) */
-      return tellClients({ t: 'mc-sw-updated', v: VERSION });
-    })
-  );
-});
+/* The synchronous gate: exact cache-key URLs this worker POSITIVELY holds.
+   null until primed from the cache at startup — and until then every request
+   passes by untouched (native is the safe default). Maintained on every put
+   and eviction, so the fetch handler can decide without awaiting anything. */
+var known = null;
+function primeKnown() {
+  return caches.open(VERSION).then(function (c) { return c.keys(); }).then(function (reqs) {
+    var s = new Set();
+    reqs.forEach(function (r) { s.add(r.url); });
+    known = s;
+  }).catch(function () { if (!known) known = new Set(); });
+}
+primeKnown();
 
-/* Best-effort put: a full or refusing cache (iOS private mode, quota) must
-   never surface as an unhandled rejection in the worker. */
-function putSafe(cache, key, res) {
+/* Best-effort put + gate bookkeeping: a full or refusing cache (iOS private
+   mode, quota) must never surface as an unhandled rejection in the worker. */
+function putKnown(cache, key, res) {
+  var keyUrl = typeof key === 'string' ? key : key.url;
   try {
-    return cache.put(key, res).catch(function () { /* cache refused */ });
+    return cache.put(key, res).then(function () {
+      if (known) known.add(keyUrl);
+    }).catch(function () { /* cache refused */ });
   } catch (err) { return Promise.resolve(); }
 }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -79,7 +80,7 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
    sessionStorage stamp, so the resends cost nothing. */
 function tellClients(msg) {
   function send() {
-    return self.clients.matchAll({ type: 'window' }).then(function (cs) {
+    return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
       cs.forEach(function (c) { try { c.postMessage(msg); } catch (err) { /* gone */ } });
     }).catch(function () { /* no clients */ });
   }
@@ -89,93 +90,158 @@ function tellClients(msg) {
     .then(function () { return wait(2500); }).then(send);
 }
 
-self.addEventListener('fetch', function (e) {
-  if (e.request.method !== 'GET') return;
-  var url;
-  try { url = new URL(e.request.url); } catch (err) { return; }
-  if (url.origin !== self.location.origin) return;
-  if (url.pathname.indexOf('/api/') === 0) return;
+/* Prime one URL into the cache (and the gate). Failures are silent — priming
+   is an optimization pass; the site runs natively without it. */
+function primeUrl(cache, keyUrl, fetchUrl) {
+  return fetch(fetchUrl, { cache: 'no-cache' }).then(function (res) {
+    if (res && res.ok) return putKnown(cache, keyUrl, res);
+  }).catch(function () { /* offline or refused: native serving continues */ });
+}
 
-  if (PAGES[url.pathname]) {
-    /* one skeleton per page: the cache key strips the query, so
-       community.html?topic=N and ?cat=X share the one cached document */
-    var pageKey = url.origin + url.pathname;
-    e.respondWith(
-      caches.open(VERSION).then(function (cache) {
-        return cache.match(pageKey).then(function (hit) {
-          var net = fetch(url.pathname + url.search, { cache: 'no-cache' });
-          if (!hit) {
-            /* nothing cached: the network IS the answer (cached for the next
-               launch); a failure rejects honestly so the shell's retry and
-               full-load fallback see a real error, never a silent undefined */
-            return net.then(function (res) {
-              if (res && res.ok) putSafe(cache, pageKey, res.clone());
-              return res;
-            });
-          }
-          /* cached: serve instantly, revalidate + stale-notify in the
-             background. Clone the hit BEFORE returning it — a Response whose
-             body the page has consumed can no longer be cloned. */
-          var hitCmp = hit.clone();
-          e.waitUntil(net.then(function (res) {
-            if (!(res && res.ok)) return;
-            var forPut = res.clone();
-            return res.text().then(function (fresh) {
-              return hitCmp.text().then(function (stale) {
-                if (fresh === stale) return;
-                return putSafe(cache, pageKey, forPut).then(function () {
-                  return tellClients({ t: 'mc-page-updated', path: url.pathname });
+self.addEventListener('install', function () {
+  self.skipWaiting();
+});
+self.addEventListener('activate', function (e) {
+  e.waitUntil(
+    caches.keys().then(function (keys) {
+      return Promise.all(keys.filter(function (k) { return k !== VERSION; })
+        .map(function (k) { return caches.delete(k); }));
+    }).then(function () { return self.clients.claim(); }).then(function () {
+      /* Every activation announces itself; each PAGE decides relevance — one
+         born controlled is living through an UPDATE and may heal-reload, one
+         born uncontrolled just witnessed the first install and ignores it. */
+      return Promise.all([
+        tellClients({ t: 'mc-sw-updated', v: VERSION }),
+        caches.open(VERSION).then(function (cache) {
+          return primeKnown().then(function () {
+            return Promise.all(Object.keys(PAGES).map(function (path) {
+              return primeUrl(cache, self.location.origin + path, path);
+            }));
+          });
+        }),
+      ]);
+    })
+  );
+});
+
+/* nav.js reports the CURRENT versioned asset URLs (only it knows this
+   deploy's ?v= keys). Constrained to our own origin and our own asset names —
+   nothing else is cacheable by message. A newly-keyed asset evicts its
+   same-basename predecessors so the cache never hoards dead versions. */
+self.addEventListener('message', function (e) {
+  var d = e.data || {};
+  if (!d || d.t !== 'mc-prime' || !Array.isArray(d.urls)) return;
+  e.waitUntil(caches.open(VERSION).then(function (cache) {
+    return primeKnown().then(function () {
+      return Promise.all(d.urls.slice(0, 16).map(function (u) {
+        var url;
+        try { url = new URL(u, self.location.origin); } catch (err) { return Promise.resolve(); }
+        if (url.origin !== self.location.origin) return Promise.resolve();
+        if (PAGES[url.pathname]) {
+          var pageKey = url.origin + url.pathname;
+          if (known && known.has(pageKey)) return Promise.resolve();
+          return primeUrl(cache, pageKey, url.pathname);
+        }
+        var name = url.pathname.split('/').pop();
+        if (!SHELL[name]) return Promise.resolve();
+        if (known && known.has(url.href)) return Promise.resolve();
+        return cache.keys().then(function (reqs) {
+          return Promise.all(reqs.filter(function (r) {
+            var p;
+            try { p = new URL(r.url); } catch (err) { return false; }
+            return p.pathname.split('/').pop() === name && r.url !== url.href;
+          }).map(function (r) {
+            return cache.delete(r).then(function () { if (known) known.delete(r.url); })
+              .catch(function () { /* fine */ });
+          }));
+        }).then(function () { return primeUrl(cache, url.href, url.href); });
+      }));
+    });
+  }).catch(function () { /* priming is best-effort */ }));
+});
+
+self.addEventListener('fetch', function (e) {
+  try {
+    if (e.request.method !== 'GET') return;
+    var url;
+    try { url = new URL(e.request.url); } catch (err) { return; }
+    if (url.origin !== self.location.origin) return;
+    if (url.pathname.indexOf('/api/') === 0) return;
+
+    if (PAGES[url.pathname]) {
+      /* one skeleton per page: the cache key strips the query, so
+         community.html?topic=N and ?cat=X share the one cached document */
+      var pageKey = url.origin + url.pathname;
+      if (!known || !known.has(pageKey)) return;        // not ours: fully native
+      e.respondWith(
+        caches.open(VERSION).then(function (cache) {
+          return cache.match(pageKey).then(function (hit) {
+            if (!hit) {
+              /* the gate lied (evicted underneath us): repair it and step
+                 aside as nearly as an in-flight respondWith allows */
+              if (known) known.delete(pageKey);
+              return fetch(e.request);
+            }
+            /* serve instantly; revalidate + stale-notify in the background.
+               Clone BEFORE returning — a consumed body can't be cloned. */
+            var hitCmp = hit.clone();
+            e.waitUntil(fetch(url.pathname + url.search, { cache: 'no-cache' }).then(function (res) {
+              if (!(res && res.ok)) return;
+              var forPut = res.clone();
+              return res.text().then(function (fresh) {
+                return hitCmp.text().then(function (stale) {
+                  if (fresh === stale) return;
+                  return putKnown(cache, pageKey, forPut).then(function () {
+                    return tellClients({ t: 'mc-page-updated', path: url.pathname });
+                  });
                 });
               });
-            });
-          }).catch(function () { /* offline: the cached copy stands */ }));
-          return hit;
+            }).catch(function () { /* offline: the cached copy stands */ }));
+            return hit;
+          });
+        })
+      );
+      return;
+    }
+
+    var name = url.pathname.split('/').pop();
+    if (!SHELL[name]) return;
+    if (!known || !known.has(url.href)) return;         // not ours: fully native
+    /* nav.js and style.css are UNVERSIONED and decide which ?v= keys the
+       session runs: when cached they go network-first (2.5s race, cache as
+       the fallback). ?v=-versioned assets are immutable by law: cache-first,
+       no revalidation. The unversioned rest (manifest, icons) serve from
+       cache with a background refresh. */
+    var networkFirst = name === 'nav.js' || name === 'style.css';
+    var versioned = /(^|[?&])v=\d/.test(url.search);
+    e.respondWith(
+      caches.open(VERSION).then(function (cache) {
+        return cache.match(e.request).then(function (hit) {
+          if (!hit) {
+            if (known) known.delete(url.href);
+            return fetch(e.request);
+          }
+          if (!networkFirst && versioned) return hit;
+          var net = fetch(url.href, { cache: 'no-cache' }).then(function (res) {
+            if (res && res.ok) {
+              putKnown(cache, e.request, res.clone());
+              return res;
+            }
+            return hit;                 // a 5xx never outranks a good cached copy
+          }, function () { return hit; });
+          if (!networkFirst) {
+            /* stale-while-revalidate: serve now, net refreshed the cache */
+            net.catch(function () { /* fine */ });
+            return hit;
+          }
+          var settle = new Promise(function (resolve) {
+            setTimeout(function () { resolve(null); }, 2500);
+          });
+          return Promise.race([net, settle]).then(function (winner) { return winner || hit; });
         });
       })
     );
-    return;
-  }
-
-  var name = url.pathname.split('/').pop();
-  if (!SHELL[name]) return;
-  /* nav.js and style.css are UNVERSIONED, and nav.js decides which app.js?v=N
-     the whole session runs — serving them stale-while-revalidate meant every
-     installed-app launch after a deploy ran yesterday's bundle against
-     today's markup (a whole-launch staleness window, seen as PWA gremlins).
-     They go network-first: a short race keeps a dead network from stalling
-     the launch, and the cache stays the offline fallback. Versioned assets
-     keep cache-first — their ?v= URL IS their freshness — and the unversioned
-     rest (manifest, icons) keep stale-while-revalidate. */
-  var networkFirst = name === 'nav.js' || name === 'style.css';
-  var versioned = /(^|[?&])v=\d/.test(url.search);
-  e.respondWith(
-    caches.open(VERSION).then(function (cache) {
-      return cache.match(e.request).then(function (hit) {
-        if (hit && !networkFirst && versioned) return hit;   // immutable by law
-        var net = fetch(url.href, { cache: networkFirst ? 'no-cache' : 'default' })
-          .then(function (res) {
-            if (res && res.ok) {
-              putSafe(cache, e.request, res.clone());
-              return res;
-            }
-            return hit || res;      // a 5xx never outranks a good cached copy
-          }, function (err) {
-            if (hit) return hit;
-            throw err;              // double miss: an honest network error
-          });
-        if (!hit) return net;
-        if (!networkFirst) {
-          /* stale-while-revalidate: serve the hit now; net refreshed the cache */
-          net.catch(function () { /* offline: fine */ });
-          return hit;
-        }
-        var settle = new Promise(function (resolve) {
-          setTimeout(function () { resolve(null); }, 2500);
-        });
-        return Promise.race([net, settle]).then(function (winner) { return winner || hit; });
-      });
-    })
-  );
+  } catch (err) { /* an internal fault must never take over a request */ }
 });
 
 /* Web Push: show the notification the worker sent (title/body/url only — never
