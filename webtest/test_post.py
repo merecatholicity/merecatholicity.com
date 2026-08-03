@@ -55,6 +55,7 @@ def main():
           return JSON.stringify({
             faith:(n.querySelector('.comment-faith')||{}).textContent||'',
             rank:(n.querySelector('.comment-rank')||{}).textContent||'',
+            tip:(n.querySelector('a.comment-author-link')||{getAttribute:function(){return ''}}).getAttribute('title')||'',
             date:(n.querySelector('a.comment-date')||{}).getAttribute('href'),
             scripture:!!n.querySelector('.comment-body a.scripture-link'),
             emoji:!!n.querySelector('.comment-body img.mc-emoji'),
@@ -63,7 +64,10 @@ def main():
             edit:!!n.querySelector('.comment-edit'), del:!!n.querySelector('.comment-delete'),
             quote:!!n.querySelector('.comment-quote-link'), dm:!!n.querySelector('.comment-dm')});"""
           % json.dumps(fixture(myhash))).replace("__OWNER__", myhash))
-        checks.append(('own: faith+rank+permalink', own['faith'] == 'Nicene' and 'post' in own['rank'] and own['date'] == '#comment-4242'))
+        # Readability standard (2026-08-03): the inline rank is the LABEL alone;
+        # the exact post count rides the author link's tooltip.
+        checks.append(('own: faith+rank+permalink', own['faith'] == 'Nicene' and own['rank'] != ''
+                       and 'post' not in own['rank'] and 'posts' in own['tip'] and own['date'] == '#comment-4242'))
         checks.append(('own: scripture+emoji+literal+sig', own['scripture'] and own['emoji'] and own['nope'] and own['sig']))
         checks.append(('own: edit+delete+quote, no DM', own['edit'] and own['del'] and own['quote'] and not own['dm']))
 

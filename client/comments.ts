@@ -994,7 +994,9 @@
     if (m.id) node.setAttribute('data-dmid', String(m.id));   // likes/receipts address bubbles by id
     var head = el('div', 'comment-head');
     head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    var mdt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
+    mdt.title = fmtDateTime(m.created_at);
+    head.appendChild(mdt);
     node.appendChild(head);
     var bodyEl = el('div', 'comment-body dm-media-body');
     var holder = el('div', 'dm-media');
@@ -1033,7 +1035,9 @@
     var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
     var head = el('div', 'comment-head');
     head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    var mdt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
+    mdt.title = fmtDateTime(m.created_at);
+    head.appendChild(mdt);
     node.appendChild(head);
     var bodyEl = el('div', 'comment-body dm-media-body');
     var ph = el('div', 'dm-media-expired');
@@ -1076,34 +1080,41 @@
      to the same pair secret; deleting redacts it (a "<redacted>" note both sides
      keep until it would have expired). */
   function dmAppendControls(m: any, node: any, otherPub: any, shortName: any, other: any) {
-    var sv = dmSaveControl(m, other);
-    if (sv) node.appendChild(sv);
+    /* The like ♡ stays a subtle inline affordance (the readability standard);
+       save/edit/delete fold into the bubble head's ⋯ menu. */
     dmLikeControl(m, node, other);
+    var items: any[] = [];
+    var sv = dmSaveControl(m, other);
+    if (sv) items.push(sv);
     var mine = m.sender_hash === state.myHash;
-    if (!mine || m.redacted || Number(m.enc || 0) === 2 || !m.id) return;
-    var row = el('div', 'dm-msg-actions');
-    if (!m.media_key) {   // a media caption is not separately editable
-      var ed = el('a', null, 'edit');
-      ed.href = '#';
-      ed.addEventListener('click', function (e: any) { e.preventDefault(); dmStartEdit(m, node, otherPub, shortName, other); });
-      row.appendChild(ed);
-    }
-    var del = el('a', 'dm-del', 'delete');
-    del.href = '#';
-    del.addEventListener('click', function (e: any) {
-      e.preventDefault();
-      appConfirm('Delete this message? A “<redacted>” note stands in its place for both of you until it would have disappeared anyway.', { okLabel: 'Delete', danger: true }, function (ok: any) {
-        if (!ok) return;
-        fetch(API + '/dm/redact', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, with: other, id: m.id }) })
-          .then(function (r) { return r.json(); }).then(function (d) {
-            if (blockedOut(d)) return;
-            if (d && d.ok) { m.redacted = 1; dmMakeRedacted(node, true); }
-          }).catch(function () {});
+    if (mine && !m.redacted && Number(m.enc || 0) !== 2 && m.id) {
+      if (!m.media_key) {   // a media caption is not separately editable
+        var ed = el('a', 'dm-edit', 'edit');
+        ed.href = '#';
+        ed.addEventListener('click', function (e: any) { e.preventDefault(); dmStartEdit(m, node, otherPub, shortName, other); });
+        items.push(ed);
+      }
+      var del = el('a', 'dm-del', 'delete');
+      del.href = '#';
+      del.addEventListener('click', function (e: any) {
+        e.preventDefault();
+        appConfirm('Delete this message? A “<redacted>” note stands in its place for both of you until it would have disappeared anyway.', { okLabel: 'Delete', danger: true }, function (ok: any) {
+          if (!ok) return;
+          fetch(API + '/dm/redact', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, with: other, id: m.id }) })
+            .then(function (r) { return r.json(); }).then(function (d) {
+              if (blockedOut(d)) return;
+              if (d && d.ok) { m.redacted = 1; dmMakeRedacted(node, true); }
+            }).catch(function () {});
+        });
       });
-    });
-    row.appendChild(del);
-    node.appendChild(row);
+      items.push(del);
+    }
+    if (items.length) {
+      var head = node.querySelector('.comment-head');
+      if (head) head.appendChild(postMenu({ items: items }));
+      else node.appendChild(postMenu({ items: items }));
+    }
   }
   /* Turn a live text bubble into an in-place editor. Saving re-encrypts and
      posts /dm/edit; on success the body re-renders and an "(edited)" marker is
@@ -7168,7 +7179,9 @@
     if (m.id) node.setAttribute('data-dmid', String(m.id));
     var head = el('div', 'comment-head');
     head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    var dt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
+    dt.title = fmtDateTime(m.created_at);
+    head.appendChild(dt);
     if (m.edited_at) head.appendChild(el('span', 'dm-edited', ' (edited)'));
     node.appendChild(head);
     node.appendChild(fillBody(el('div', 'comment-body'), m.body));
@@ -7183,7 +7196,9 @@
     if (m.id) node.setAttribute('data-dmid', String(m.id));
     var head = el('div', 'comment-head');
     head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
+    var mdt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
+    mdt.title = fmtDateTime(m.created_at);
+    head.appendChild(mdt);
     node.appendChild(head);
     var body = el('div', 'comment-body');
     body.appendChild(el('span', 'dm-redacted', mine ? '<redacted> — you deleted this message' : '<redacted>'));
