@@ -69,9 +69,12 @@ const END_COPY: Record<string, string> = {
 /* ---- UI sounds (docs/sounds/, CC0 — see _readme_and_license.txt there).
    The ONE sound engine, shell-owned like the call engine so the ring can
    sound on any page; comments.js delegates its bell through window.mcSound.
-   Sounds fire only from live socket events (never polls or page arrival) and
-   honor the gear's per-device "Sound effects" switch (mc-sounds). Autoplay
-   refusals before the first user gesture are swallowed. */
+   Sounds fire only from live socket events or the member's own call actions
+   (never polls or page arrival) and honor the gear's per-device "Sound
+   effects" switch (mc-sounds). The ring is shared by BOTH sides of a call:
+   looped for the callee while the banner stands, and as the caller's ringback
+   while Outgoing (their 📞 tap is the autoplay gesture). Autoplay refusals
+   before the first user gesture are swallowed. */
 const SOUND_SRC: Record<string, string> = { bell: 'sounds/notify.mp3', ring: 'sounds/ring.mp3', end: 'sounds/hangup.mp3' };
 const soundCache: Record<string, any> = {};
 function soundsOn() {
@@ -330,6 +333,10 @@ export function installCall() {
           .then((d: any) => {
             if (CALL.state !== 'Outgoing' || CALL.id !== id) return;
             if (!d || !d.ok) { end('Failure'); return; }
+            /* Ringback: the caller hears the SAME looped ring the callee does,
+               from the moment the offer is delivered — stopped on answer
+               (onAnswer) and by every teardown path (cleanup). */
+            playSound('ring', true);
             CALL.iceT = setInterval(flushIce, 250);
             CALL.ringT = setTimeout(() => {
               if (CALL.state === 'Outgoing' && CALL.id === id) end('Timeout', true);
@@ -413,6 +420,7 @@ export function installCall() {
 
   function onAnswer(m: any) {
     if (!m || CALL.state !== 'Outgoing' || m.call !== CALL.id || m.from !== CALL.peer) return;
+    stopSound('ring');   // they picked up — the ringback yields to the call
     clearTimeout(CALL.ringT);
     const pc = CALL.pc;
     if (!pc) { end('Failure', true); return; }
