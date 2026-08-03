@@ -257,9 +257,12 @@ IDLE_CONFIG_PATCH = (
 
 
 def scenario_idle(checks, fails):
-    # Wire: /config carries the silence-watch fields (defaults 1/60).
+    # Wire: /config carries the silence-watch fields (defaults 1/60). The UA
+    # matters: Cloudflare's edge 403s bare Python-urllib (the ingest lesson).
     import urllib.request
-    with urllib.request.urlopen('https://merecatholicity.com/api/comments/config') as r:
+    req = urllib.request.Request('https://merecatholicity.com/api/comments/config',
+                                 headers={'User-Agent': 'Mozilla/5.0 (webtest)'})
+    with urllib.request.urlopen(req) as r:
         cfg = json.loads(r.read())
     calls = cfg.get('calls') or {}
     checks.append(('idle: /config serves idle_hangup (default on)', calls.get('idle_hangup') is True))
