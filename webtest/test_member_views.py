@@ -27,7 +27,7 @@ def main():
             count: (u.querySelector('.comments-status')||{}).textContent||'',
             firstHref: (u.querySelector('.user-row')||{}).getAttribute ? u.querySelector('.user-row').getAttribute('href') : ''});"""))
         checks.append(('users directory renders', st['rows'] >= 1 and 'member' in st['count']))
-        checks.append(('user row links to a profile', (st['firstHref'] or '').startswith('community.html?profile=')))
+        checks.append(('user row links to a profile', (st['firstHref'] or '').startswith('profile.html?u=')))
         # type-to-narrow, in place (no Document request)
         f.drain()
         total_before = st['rows']

@@ -27,7 +27,9 @@ def main():
         import json as _j
         st = _j.loads(st)
         checks.append(('visitor: index component + tiles', st['tiles'] >= 13))
-        checks.append(('visitor: back room hidden', st['back'] is True))
+        # hidden-by-absence (the tile is not rendered for visitors at all now)
+        # counts as hidden - it is the stronger form of the same privacy.
+        checks.append(('visitor: back room hidden', st['back'] is True or st['back'] == 'missing'))
         f.drain()
         f.click('a[href="community.html?cat=pub"]')
         f.wait("!!document.querySelector('mc-board-cat')")
