@@ -1126,11 +1126,10 @@ class McHome extends LitElement {
       <div class="mc-home-hero"><span class="mc-home-cross">✝</span>
         <p>One, holy, catholic, and apostolic.</p></div>
       <hr class="mc-home-rule">
-      ${cont ? html`<div class="mc-home-feats"><a class="mc-home-feat" href=${cont.href}>
+      <div class="mc-home-feats">${cont ? html`<a class="mc-home-feat" href=${cont.href}>
         <span class="mc-home-feat-ico">📖</span>
         <span class="mc-home-feat-txt"><strong>Continue reading</strong><small>${cont.title}</small></span>
-        <span class="mc-home-go">›</span></a></div>` : ''}
-      <div class="mc-home-feats">${HOME_FEATURES.map((f) => html`
+        <span class="mc-home-go">›</span></a>` : ''}${HOME_FEATURES.map((f) => html`
         <a class="mc-home-feat" href=${f.href}>
           <span class="mc-home-feat-ico">${f.icon}</span>
           <span class="mc-home-feat-txt"><strong>${f.title}</strong><small>${f.sub}</small></span>
