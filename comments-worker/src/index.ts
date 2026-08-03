@@ -586,12 +586,13 @@ async function handlePost(request: any, env: any, ctx: any) {
 
   /* @merecat summons the librarian to answer in the thread — live posts by a
      real identity only (a held post that is later approved can be re-summoned
-     with the admin /api/merecat/mention lever). Deferred: the reply arrives a
-     few seconds behind the post. */
+     with the admin /api/merecat/mention lever). Deferred, and kicked into the
+     ChatRoom DO: the generation must NOT run in this waitUntil, which the
+     runtime cancels ~30s after the response while a local-backend answer takes
+     minutes (the 2026-08-03 lost-mention postmortem). */
   if (status === 'live' && !muted && authorHash && authorHash !== MERECAT_BOT.hash &&
       merecatMentioned(body)) {
-    ctx.waitUntil(merecatMentionReply(env, inserted.id)
-      .catch((e) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e) }))));
+    ctx.waitUntil(merecatMentionKick(env, inserted.id));
   }
 
   /* Log the IPs behind this identity for the fingerprint drawer and paired
@@ -4415,6 +4416,27 @@ async function handleMerecatIngest(request: any, env: any) {
    identity, and the cost lands on the mentioner's own daily count (admins
    uncapped as everywhere). */
 
+/* Hand a mention reply to the ChatRoom DO (a dedicated 'mention:<id>'
+   instance) and return on its ack. The generation itself outlives this call
+   on the DO's own lifetime — a stateless invocation's waitUntil is cancelled
+   ~30s after the response, far short of a local-backend generation. The
+   direct call survives only as the no-binding fallback. */
+async function merecatMentionKick(env: any, id: any) {
+  try {
+    if (env.CHAT) {
+      const r = await env.CHAT.get(env.CHAT.idFromName('mention:' + id)).fetch('https://do/mention', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+      });
+      if (r.ok) return true;
+    }
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'merecat_mention_kick_failed', error: String(e), id }));
+  }
+  await merecatMentionReply(env, id)
+    .catch((e) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e), id })));
+  return false;
+}
+
 /* The bot's whole public profile is hardcoded here (the avatar object sits in
    R2 under its hash like anyone's): Nicene by confession, bio and signature
    fixed, upserted on every reply so this code stays the source of truth. The
@@ -4425,8 +4447,8 @@ async function handleMerecatMention(request: any, env: any) {
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const id = Number(data.id);
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const replied = await merecatMentionReply(env, id);
-  return json({ ok: true, replied: replied || null }, 200);
+  const queued = await merecatMentionKick(env, id);
+  return json({ ok: true, queued }, 200);
 }
 
 /* Forward one private answer to a public topic, by the thread's owner and
