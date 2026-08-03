@@ -121,6 +121,13 @@ class Flow:
         self._wd('POST', '/session/%s/url' % self.sid, {'url': BASE + '/' + page})
         time.sleep(1.5)
 
+    def shot(self, path):
+        """Save a PNG screenshot of the current viewport to `path`."""
+        import base64
+        d = self._wd('GET', '/session/%s/screenshot' % self.sid, None)
+        with open(path, 'wb') as fh:
+            fh.write(base64.b64decode(d['value']))
+
     def login(self, key=None):
         self.goto('community.html')
         self.js("localStorage.setItem('mc-comment-key', %s); return 1;"
