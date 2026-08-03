@@ -1430,7 +1430,10 @@
      may not, and a query that throws just proceeds) catches the
      denied-without-a-prompt case up front. */
   function startVoiceRecorder(form: any, cfg: any, sec: any, statusEl: any, takeFile: any) {
-    if (form.querySelector('.mc-rec-row')) return;
+    /* Block a second recorder while a take or preview is up — but NOT for the
+       fallback row (also classed mc-rec-row), or one failed attempt would
+       silently kill the 🎙 button for the rest of the page's life. */
+    if (form.querySelector('.mc-rec-row:not(.mc-voice-fallback)')) return;
     var maxSecs = Number(sec && sec.audio_max_seconds) || Number(cfg.audio_max_seconds) || 180;
     var maxBytes = Number(sec && sec.max_bytes && sec.max_bytes.audio) || 5242880;
     var nav: any = navigator;
@@ -1444,6 +1447,10 @@
         return;
       }
       navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream: any) {
+      /* The mic works (again) — a fallback row from an earlier failure is
+         stale chrome now. */
+      var fb = form.querySelectorAll('.mc-voice-fallback');
+      for (var fi = 0; fi < fb.length; fi++) fb[fi].remove();
       var MR: any = (window as any).MediaRecorder;
       var mt = voiceMime();
       var opts: any = { audioBitsPerSecond: 64000 };
@@ -9242,7 +9249,12 @@
               fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d3) {
                 btn.disabled = false;
-                note.textContent = d3 && d3.ok ? (' Purged ' + d3.deleted + ' files.') : ' Purge failed.';
+                if (!d3 || !d3.ok) { note.textContent = ' Purge failed.'; return; }
+                /* A big store purges in bounded bites (free-tier budget) —
+                   the server reports what is left, the admin clicks on. */
+                note.textContent = (d3.remaining > 0)
+                  ? (' Purged ' + d3.deleted + ' files — ' + d3.remaining + ' remain, click again to continue.')
+                  : (' Purged ' + d3.deleted + ' files.');
               }).catch(function () { btn.disabled = false; note.textContent = ' Purge failed.'; });
             });
           });

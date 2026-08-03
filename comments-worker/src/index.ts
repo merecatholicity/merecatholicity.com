@@ -2722,13 +2722,19 @@ async function handleWallDelete(request: any, env: any) {
   const admin = await isAdminHash(env, me);
   const id = Math.floor(Number(data.id) || 0);
   if (data.kind === 'comment') {
-    const row = await env.DB.prepare('SELECT post_id, author_hash, media_key FROM wall_comments WHERE id = ?1').bind(id).first();
+    const row = await env.DB.prepare('SELECT post_id, author_hash, media_key, status FROM wall_comments WHERE id = ?1').bind(id).first();
     if (!row) return json({ ok: true }, 200);
     if (!Wall.canDelete(row.author_hash)(me)(admin)) return json({ ok: false, error: 'No.' }, 403);
     if (row.media_key) await purgeWallMedia(env, [row.media_key]);
     await env.DB.prepare('DELETE FROM wall_comments WHERE id = ?1').bind(id).run();
     await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id = ?1').bind(id).run();
-    await env.DB.prepare('UPDATE wall_posts SET comments = MAX(0, comments - 1) WHERE id = ?1').bind(row.post_id).run();
+    /* Decrement ONLY what was counted: the increment fires for a live,
+       non-shadowbanned comment alone (handleWallComment / handleApprove), so
+       discarding a held one — the pending_wall queue's routine action — must
+       not steal a live comment from the post's count. */
+    if (row.status === 'live' && !(await isShadowBanned(env, row.author_hash))) {
+      await env.DB.prepare('UPDATE wall_posts SET comments = MAX(0, comments - 1) WHERE id = ?1').bind(row.post_id).run();
+    }
     return json({ ok: true }, 200);
   }
   const row = await env.DB.prepare('SELECT author_hash, media_key FROM wall_posts WHERE id = ?1').bind(id).first();
@@ -2883,39 +2889,58 @@ async function handleWallPrune(request: any, env: any) {
    media-carrying parent row in the section's own tables is exact. The R2
    prefix is shared ('wall/'), so keys come from D1, not a bucket listing.
    Posts and their text stay — this retracts the BYTES, with the honest
-   media_expired placeholder left behind. Safe to re-click: R2 deletes are
-   idempotent, so an interrupted run's remainder is finished by the next one.
-   Edge/browser caches may serve purged bytes up to a day, the standing
-   property of every delete path. */
+   media_expired placeholder left behind. Progress commits PER BATCH (rows are
+   deleted only after their R2 batch succeeded — an R2 failure keeps the D1
+   handle, so nothing can leak unrecoverably), and each click is BOUNDED to
+   stay inside the free-tier subrequest budget: a huge section reports
+   `remaining` and the admin clicks again, each click making real progress.
+   Parents are stamped and the counter zeroed only once the section is empty
+   (a partial run must not orphan the surviving rows' pointers). Edge/browser
+   caches may serve purged bytes up to a day, the standing property of every
+   delete path. */
 async function handleWallMediaPurge(request: any, env: any, section: string) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   let deleted = 0;
-  for (;;) {
+  /* ~12 subrequests per 500-key batch (1 SELECT + 1 R2 delete + 10 row
+     DELETEs); two batches per click keeps the whole request — including the
+     final click's parent stamps — comfortably under the ~50 free-tier wall. */
+  for (let round = 0; round < 2; round++) {
     const batch = await env.DB.prepare(
-      "SELECT key FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 ORDER BY key LIMIT 1000 OFFSET ?2"
-    ).bind(section, deleted).all();
+      "SELECT key FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 ORDER BY key LIMIT 500"
+    ).bind(section).all();
     const keys = (batch.results || []).map((o: any) => o.key);
     if (!keys.length) break;
-    if (env.WALLMEDIA) { try { await env.WALLMEDIA.delete(keys); } catch (e) { /* keep going; the row delete below re-orphans nothing */ } }
+    try { if (env.WALLMEDIA) await env.WALLMEDIA.delete(keys); }
+    catch (e) { break; /* keep these rows — the D1 handle IS the retry state */ }
+    for (let i = 0; i < keys.length; i += 50) {
+      const chunk = keys.slice(i, i + 50);
+      const ph = inList(chunk.length);
+      try { await env.DB.prepare('DELETE FROM wall_media WHERE key IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* re-tried next click */ }
+    }
     deleted += keys.length;
   }
-  await env.DB.prepare("DELETE FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1").bind(section).run();
-  if (section === 'board') {
-    await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
-  } else {
-    await env.DB.prepare('UPDATE wall_posts SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
-    await env.DB.prepare('UPDATE wall_comments SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
+  const left = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1"
+  ).bind(section).first();
+  const remaining = (left && left.n) || 0;
+  if (!remaining) {
+    if (section === 'board') {
+      await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
+    } else {
+      await env.DB.prepare('UPDATE wall_posts SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
+      await env.DB.prepare('UPDATE wall_comments SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
+    }
+    const counter = section === 'board' ? 'board_media_bytes' : 'wall_media_bytes';
+    try {
+      await env.DB.prepare(
+        'INSERT INTO app_settings (k, v, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3'
+      ).bind(counter, '0', Math.floor(Date.now() / 1000)).run();
+    } catch (e) { /* display-only */ }
+    appSettingsCache.at = 0; appSettingsCache.s = null;
   }
-  const counter = section === 'board' ? 'board_media_bytes' : 'wall_media_bytes';
-  try {
-    await env.DB.prepare(
-      'INSERT INTO app_settings (k, v, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3'
-    ).bind(counter, '0', Math.floor(Date.now() / 1000)).run();
-  } catch (e) { /* display-only */ }
-  appSettingsCache.at = 0; appSettingsCache.s = null;
-  return json({ ok: true, deleted }, 200);
+  return json({ ok: true, deleted, remaining }, 200);
 }
 
 /* The notification badge count: unread rows for this reader, one indexed COUNT.
