@@ -114,6 +114,13 @@ def run_call(A, B, checks, tag, patch_turn=False):
     rang = B.wait("!!document.querySelector('#mc-call-ui .mc-call-who')", timeout=20)
     checks.append((tag + ': callee banner rings (global, off the DM page)', rang))
     checks.append((tag + ': callee state Incoming', wait_state(B, 'Incoming', 10)))
+    # Ringback (2026-08-03): the caller hears the same ring while Outgoing.
+    # Audibility is unassertable headless, but the sound STARTING is — the
+    # page fetches sounds/ring.mp3 the first time it plays (Resource Timing).
+    ringback = A.wait(
+        "performance.getEntriesByType('resource').some(function(e){return e.name.indexOf('sounds/ring.mp3')!==-1;})",
+        timeout=10)
+    checks.append((tag + ': caller starts the ringback (ring.mp3 fetched)', ringback))
     click_panel_btn(B, 'Answer')
     checks.append((tag + ': callee reaches Active', wait_state(B, 'Active', 30)))
     checks.append((tag + ': caller reaches Active', wait_state(A, 'Active', 15)))
