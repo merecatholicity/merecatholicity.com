@@ -1092,6 +1092,13 @@ section.board { max-width: 52rem; }
 @media (max-width: 600px) {
   .board-cat, .board-topic { flex-direction: column; gap: 0.15rem; }
   .board-stats { text-align: left; white-space: normal; }
+  /* Column direction keeps the row layout's align-items: baseline, which on
+     the cross axis means SHRINK-WRAP: a nowrap .board-row-sub (latest-post
+     title · author) then sizes .board-stats to the full unwrapped line,
+     poking out of the card and dragging the whole page into horizontal
+     scroll (live iPhone report, 2026-08-03). Cap the chain at the card so
+     the sub-line's own overflow/ellipsis can do its job. */
+  .board-stats, .board-row-sub { max-width: 100%; }
   /* A clear, tappable pager on phones: page numbers as roomy targets in the link
      colour (not muted), so jumping to page 1/2/3 and seeing how many pages a
      thread has is as obvious as on desktop. */
