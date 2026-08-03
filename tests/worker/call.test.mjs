@@ -83,3 +83,19 @@ test('blocked offer keeps the fake-success shape; relay branch keeps its guards 
   assert.ok(doSrc.includes("['ice', 'end', 'decline', 'busy', 'taken'].indexOf(kind) === -1"), 'relay kind whitelist');
   assert.ok(doSrc.includes('msg.length > 4096'), 'relay size cap');
 });
+
+test("the member's calls-off pref gets the SAME fake success as a block (drift guard + 0010)", () => {
+  const { db, files } = freshDb();
+  assert.ok(files.some((f) => f.startsWith('0010_')), 'migration 0010 present');
+  const cols = db.prepare('PRAGMA table_info(profiles)').all().map((c) => c.name);
+  assert.ok(cols.includes('calls_ok'), 'profiles.calls_ok');
+  db.close();
+  const at = idxSrc.indexOf('handleCallOffer');
+  const body = idxSrc.slice(at, idxSrc.indexOf('handleCallAnswer'));
+  assert.ok(body.includes('SELECT calls_ok FROM profiles WHERE hash = ?1'), 'pref read');
+  assert.ok(body.includes('if (prefRow && prefRow.calls_ok === 0) return json({ ok: true }, 200);'),
+    'fake success — "not taking calls" indistinguishable from "did not pick up"');
+  /* And the prefs endpoint round-trips it: write branch + served field. */
+  assert.ok(idxSrc.includes("if ('calls' in set) { parts.push('calls_ok = ?');"), 'prefs write');
+  assert.ok(idxSrc.includes('calls: onOff(row && row.calls_ok)'), 'prefs read-back');
+});

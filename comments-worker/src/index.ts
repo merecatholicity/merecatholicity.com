@@ -1886,6 +1886,9 @@ async function handlePrefs(request: any, env: any) {
       const sk = 'notify_' + k;
       if (sk in set) { parts.push(sk + ' = ?'); vals.push((set[sk] === false || set[sk] === 0 || set[sk] === '0') ? 0 : 1); }
     }
+    /* Voice calls on/off (the gear's Privacy switch). NULL/1 = takes calls;
+       0 = every offer to this member fake-succeeds like a block. */
+    if ('calls' in set) { parts.push('calls_ok = ?'); vals.push((set.calls === false || set.calls === 0 || set.calls === '0') ? 0 : 1); }
     /* The mute list follows the member across devices (the client merges and
        writes through). Hashes only, clamped, stored as a JSON array. */
     if ('muted' in set && Array.isArray(set.muted)) {
@@ -1897,7 +1900,7 @@ async function handlePrefs(request: any, env: any) {
       await env.DB.prepare('UPDATE profiles SET ' + parts.join(', ') + ' WHERE hash = ?').bind(...vals, me).run();
     }
   }
-  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm, muted FROM profiles WHERE hash = ?1').bind(me).first();
+  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm, calls_ok, muted FROM profiles WHERE hash = ?1').bind(me).first();
   const onOff = (v: any) => (v == null ? 1 : (v ? 1 : 0));
   let muted: any = [];
   try { muted = row && row.muted ? JSON.parse(row.muted) : []; } catch { muted = []; }
@@ -1906,6 +1909,7 @@ async function handlePrefs(request: any, env: any) {
     notify_reply: onOff(row && row.notify_reply),
     notify_mention: onOff(row && row.notify_mention),
     notify_dm: onOff(row && row.notify_dm),
+    calls: onOff(row && row.calls_ok),
     muted: Array.isArray(muted) ? muted : [],
   } }, 200);
 }
@@ -2186,6 +2190,10 @@ async function handleCallOffer(request: any, env: any, ctx: any) {
   if (!(await isEstablished(env, me))) return json({ ok: false, error: 'Calls unlock after your first post or profile save.' }, 403);
   const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(to, me).first();
   if (blockRow) return json({ ok: true }, 200);
+  /* The callee's own Privacy switch (profiles.calls_ok = 0): the SAME fake
+     success — "not taking calls" is indistinguishable from "did not pick up". */
+  const prefRow = await env.DB.prepare('SELECT calls_ok FROM profiles WHERE hash = ?1').bind(to).first();
+  if (prefRow && prefRow.calls_ok === 0) return json({ ok: true }, 200);
   await publishUser(env, [{ v: 1, t: 'call-offer', scopes: ['user:' + to], from: me, call, sdp }]);
   if (ctx) ctx.waitUntil(notifyCall(env, to, me, call));
   return json({ ok: true }, 200);

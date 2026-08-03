@@ -32,6 +32,7 @@ import * as store from './store.ts';
 import * as api from './api.ts';
 import * as core from './core.ts';
 import { installLive } from './live.ts';
+import { installCall } from './call.ts';
 import { installChrome } from './appchrome.ts';
 import './richtext.js';
 import './views/board.js';
@@ -318,6 +319,11 @@ customElements.define('mc-audio-dock', McAudioDock);
   /* Live updates: the shell-owned WebSocket to the board hub (window.mcLive).
      Forum views subscribe on mount; idle tabs close it and reopen on return. */
   installLive();
+
+  /* Voice calls: the shell-owned engine (banner/answer/decline on ANY page —
+     it self-enables the member's live socket wherever a key exists). The DM
+     composer's 📞 button delegates here via window.mcCall.place(). */
+  installCall();
 
   /* The mobile app chrome: the persistent bottom tab bar, top app bar, sheet,
      and Home launcher. Phones only (CSS-gated); desktop renders none of it.

@@ -3291,370 +3291,27 @@
       .catch(function () {});
   }
   /* ================= 1v1 voice calls =================
-     Media is peer-to-peer DTLS-SRTP (genuinely end-to-end; even a TURN relay
-     carries only ciphertext) — the operator sees setup metadata alone. All
-     state lives in the window singleton `__mcCall`, NOT per-boot, so a
-     soft-navigation's epoch bump never orphans a live peer connection; each
-     boot re-binds its listeners against the singleton with bootSig. Every
-     state change flows through the Domain.Call kernel (mcCore.callStep):
-     Ended is absorbing, a stale ring timer is a no-op in Active, and NOTHING
-     here listens to socket-close — an Active call rides through the live
-     layer's hidden/idle socket closes untouched (a remote hangup during a
-     gap surfaces as pc failure within seconds). A full page reload kills the
-     pc and the call ends: that is the honest story. */
-  var CALL: any = (window as any).__mcCall;
-  if (!CALL) {
-    CALL = { state: 'Idle', reason: '', id: '', peer: '', peerLabel: '', dir: '',
-      pc: null, stream: null, pendingSdp: '', iceIn: [], iceOut: [],
-      iceT: 0, ringT: 0, setupT: 0, tickT: 0, graceT: 0, startedAt: 0, muted: false };
-    (window as any).__mcCall = CALL;
-  }
-  var CALL_STUN = [{ urls: ['stun:stun.cloudflare.com:3478'] }, { urls: ['stun:stun.l.google.com:19302'] }];
+     The ENGINE lives in the shell bundle now (app/call.ts, 2026-08-03) so a
+     receiver rings on ANY page — not just the ones this client boots on, and
+     not subject to this boot's teardown cycle. This file keeps only the 📞
+     buttons, which delegate to window.mcCall.place(), and the /config gate
+     that decides whether to render them. */
   function callsCfg() {
     return cachedJson(API + '/config', undefined, 300000)
       .then(function (d: any) { return { enabled: !(d && d.ok && d.calls && d.calls.enabled === false) }; })
       .catch(function () { return { enabled: true }; });   // server refuses regardless
   }
-  function callKernelStep(ev: string) {
-    var core: any = window.mcCore;
-    var r = core.callStep(CALL.state, CALL.reason, ev);
-    var changed = r.state !== CALL.state || r.reason !== CALL.reason;
-    CALL.state = r.state; CALL.reason = r.reason;
-    callRender();
-    return changed;
-  }
-  function ensureCallStyles() {
-    if (document.getElementById('mc-call-css')) return;
-    var s = el('style');
-    s.id = 'mc-call-css';
-    s.textContent =
-      '#mc-call-ui{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:99997;width:min(92vw,430px)}' +
-      '.mc-call-panel{background:var(--card,var(--bg,#17191c));color:var(--ink,#eee);border:1px solid var(--rule,#3a3a3a);border-radius:14px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.4);display:flex;align-items:center;gap:10px;flex-wrap:wrap}' +
-      '.mc-call-who{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-      '.mc-call-note{font-size:.78em;opacity:.7;width:100%;margin:2px 0 0}' +
-      '.mc-call-time{font-variant-numeric:tabular-nums;opacity:.85}' +
-      '.mc-call-panel .btn{margin:0}' +
-      '.mc-call-btn{margin-left:.5em;font-size:.62em;vertical-align:middle}' +
-      '@keyframes mc-call-pulse{0%,100%{opacity:1}50%{opacity:.45}}' +
-      '.mc-call-ring{animation:mc-call-pulse 1.6s infinite}';
-    document.head.appendChild(s);
-  }
-  function ensureCallUi(): any {
-    var ui: any = document.getElementById('mc-call-ui');
-    if (!ui) { ui = el('div'); ui.id = 'mc-call-ui'; document.body.appendChild(ui); }
-    return ui;
-  }
-  function callAudioEl(): any {
-    var au: any = document.getElementById('mc-call-audio');
-    if (!au) { au = el('audio'); au.id = 'mc-call-audio'; au.autoplay = true; au.style.display = 'none'; document.body.appendChild(au); }
-    return au;
-  }
-  function callRandId() {
-    var b = new Uint8Array(16);
-    crypto.getRandomValues(b);
-    var out = '';
-    for (var i = 0; i < b.length; i++) out += ('0' + b[i].toString(16)).slice(-2);
-    return out;
-  }
-  function callIceServers() {
-    return fetchRetry(API + '/call/turn', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key }) }, [800])
-      .then(function (r: any) { return r.json(); })
-      .then(function (d: any) { return (d && d.ok && d.iceServers && d.iceServers.length) ? d.iceServers : CALL_STUN; })
-      .catch(function () { return CALL_STUN; });
-  }
-  function callSigSend(to: string, f: any) {
-    try { return !!(window.mcLive && (window.mcLive.member as any).callSig && (window.mcLive.member as any).callSig(to, f)); }
-    catch (e) { return false; }
-  }
-  function callFlushIce() {
-    if (!CALL.iceOut.length || !CALL.peer || !CALL.id) return;
-    var batch = CALL.iceOut.splice(0, 12);
-    if (!callSigSend(CALL.peer, { call: CALL.id, kind: 'ice', payload: { cand: batch } })) {
-      CALL.iceOut = batch.concat(CALL.iceOut);   // socket down: keep buffering; resync re-flushes
-    } else if (CALL.iceOut.length) callFlushIce();
-  }
-  function callAddRemoteIce(pc: any, c: any) {
-    if (!c) return;
-    try {
-      if (c.eoc) pc.addIceCandidate(null).catch(function () { /* some engines refuse the null sentinel */ });
-      else pc.addIceCandidate(c).catch(function () { /* a malformed/racing candidate is survivable */ });
-    } catch (e) { /* same */ }
-  }
-  function callClearTimers() {
-    clearTimeout(CALL.ringT); clearTimeout(CALL.setupT); clearTimeout(CALL.graceT);
-    clearInterval(CALL.iceT); clearInterval(CALL.tickT);
-    CALL.ringT = CALL.setupT = CALL.graceT = CALL.iceT = CALL.tickT = 0;
-  }
-  function callCleanup() {
-    callClearTimers();
-    try { if (CALL.pc) CALL.pc.close(); } catch (e) { /* already */ }
-    CALL.pc = null;
-    try { if (CALL.stream) CALL.stream.getTracks().forEach(function (t: any) { t.stop(); }); } catch (e) { /* fine */ }
-    CALL.stream = null; CALL.muted = false;
-    var au: any = document.getElementById('mc-call-audio');
-    if (au) { try { au.srcObject = null; } catch (e) { /* fine */ } }
-    CALL.iceIn = []; CALL.iceOut = []; CALL.pendingSdp = '';
-  }
-  /* End a call through the kernel; the Ended panel flashes its reason, then
-     the singleton resets to Idle. sendEnd tells the other side (best-effort —
-     their own pc failure detection is the backstop). */
-  function callEnd(ev: string, sendEnd?: boolean) {
-    if (sendEnd && CALL.peer && CALL.id) callSigSend(CALL.peer, { call: CALL.id, kind: 'end' });
-    callKernelStep(ev);
-    callCleanup();
-    var endedId = CALL.id;
-    setTimeout(function () {
-      if (CALL.state === 'Ended' && CALL.id === endedId) {
-        CALL.state = 'Idle'; CALL.reason = ''; CALL.id = ''; CALL.peer = ''; CALL.peerLabel = '';
-        callRender();
-      }
-    }, 2600);
-  }
-  function callMakePc(iceServers: any) {
-    var W: any = window;
-    var pc = new W.RTCPeerConnection({ iceServers: iceServers });
-    CALL.pc = pc;
-    pc.onicecandidate = function (ev: any) {
-      CALL.iceOut.push(ev.candidate ? JSON.parse(JSON.stringify(ev.candidate)) : { eoc: true });
-    };
-    pc.ontrack = function (ev: any) {
-      var au = callAudioEl();
-      try { au.srcObject = ev.streams[0]; var p = au.play(); if (p && p.catch) p.catch(function () { /* gesture already given */ }); } catch (e) { /* fine */ }
-    };
-    pc.onconnectionstatechange = function () {
-      if (CALL.pc !== pc) return;
-      var st = pc.connectionState;
-      if (st === 'connected') {
-        clearTimeout(CALL.setupT); clearTimeout(CALL.graceT);
-        if (CALL.state === 'Connecting') { CALL.startedAt = Date.now(); callKernelStep('Connected'); }
-      } else if (st === 'failed') callEnd('Failure');
-      else if (st === 'disconnected') {
-        /* 10 s grace: transient network blips recover on their own; ICE
-           restart is deliberately out of scope in v1, so past the grace the
-           call ends honestly. */
-        clearTimeout(CALL.graceT);
-        CALL.graceT = setTimeout(function () {
-          if (CALL.pc === pc && pc.connectionState !== 'connected') callEnd('Failure');
-        }, 10000);
-      }
-    };
-    return pc;
-  }
   function placeCall(other: string, label: string) {
-    var core: any = window.mcCore;
-    if (!state.key || !state.myHash || !core) return;
-    if (core.callInCall(CALL.state)) return;
-    if (!(navigator as any).mediaDevices || !(window as any).RTCPeerConnection) return;
-    ensureCallStyles(); ensureCallUi();
-    CALL.dir = 'out'; CALL.peer = other; CALL.peerLabel = label || dmLabel(other, null);
-    CALL.reason = ''; CALL.id = callRandId(); CALL.iceIn = []; CALL.iceOut = [];
-    var id = CALL.id;
-    callKernelStep('Place');
-    Promise.all([(navigator as any).mediaDevices.getUserMedia({ audio: true }), callIceServers()])
-      .then(function (rr: any) {
-        if (CALL.state !== 'Outgoing' || CALL.id !== id) { try { rr[0].getTracks().forEach(function (t: any) { t.stop(); }); } catch (e) { /* fine */ } return; }
-        CALL.stream = rr[0];
-        var pc = callMakePc(rr[1]);
-        CALL.stream.getTracks().forEach(function (t: any) { pc.addTrack(t, CALL.stream); });
-        return pc.createOffer()
-          .then(function (o: any) { return pc.setLocalDescription(o); })
-          .then(function () {
-            return fetchRetry(API + '/call/offer', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, to: other, call: id, sdp: pc.localDescription.sdp }) }, [1200]);
-          })
-          .then(function (r: any) { return r.json(); })
-          .then(function (d: any) {
-            if (CALL.state !== 'Outgoing' || CALL.id !== id) return;
-            if (!d || !d.ok) { callEnd('Failure'); return; }
-            CALL.iceT = setInterval(callFlushIce, 250);
-            CALL.ringT = setTimeout(function () {
-              if (CALL.state === 'Outgoing' && CALL.id === id) callEnd('Timeout', true);
-            }, core.callRingSecs * 1000);
-          });
-      })
-      .catch(function (e: any) {
-        if (CALL.id !== id) return;
-        CALL.reason = '';
-        callEnd('Failure');
-        var note = document.querySelector('#mc-call-ui .mc-call-note');
-        if (note) note.textContent = voiceFailMessage(e);
-      });
+    var mc: any = (window as any).mcCall;
+    if (mc && mc.place) mc.place(other, label);
   }
-  function answerCall() {
-    var core: any = window.mcCore;
-    if (CALL.state !== 'Incoming') return;
-    clearTimeout(CALL.ringT);
-    var id = CALL.id;
-    callKernelStep('Answer');
-    Promise.all([(navigator as any).mediaDevices.getUserMedia({ audio: true }), callIceServers()])
-      .then(function (rr: any) {
-        if (CALL.state !== 'Connecting' || CALL.id !== id) { try { rr[0].getTracks().forEach(function (t: any) { t.stop(); }); } catch (e) { /* fine */ } return; }
-        CALL.stream = rr[0];
-        var pc = callMakePc(rr[1]);
-        return pc.setRemoteDescription({ type: 'offer', sdp: CALL.pendingSdp })
-          .then(function () {
-            CALL.stream.getTracks().forEach(function (t: any) { pc.addTrack(t, CALL.stream); });
-            CALL.iceIn.splice(0).forEach(function (c: any) { callAddRemoteIce(pc, c); });
-            return pc.createAnswer();
-          })
-          .then(function (a: any) { return pc.setLocalDescription(a); })
-          .then(function () {
-            return fetchRetry(API + '/call/answer', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, to: CALL.peer, call: id, sdp: pc.localDescription.sdp }) }, [1200]);
-          })
-          .then(function (r: any) { return r.json(); })
-          .then(function (d: any) {
-            if (CALL.state !== 'Connecting' || CALL.id !== id) return;
-            if (!d || !d.ok) { callEnd('Failure', true); return; }
-            callSigSend(state.myHash, { call: id, kind: 'taken' });   // hush my other tabs
-            CALL.iceT = setInterval(callFlushIce, 250);
-            CALL.setupT = setTimeout(function () {
-              if (CALL.state === 'Connecting' && CALL.id === id) callEnd('Timeout', true);
-            }, core.callSetupSecs * 1000);
-          });
-      })
-      .catch(function (e: any) {
-        if (CALL.id !== id) return;
-        callEnd('Failure', true);
-        var note = document.querySelector('#mc-call-ui .mc-call-note');
-        if (note) note.textContent = voiceFailMessage(e);
-      });
+  function callButton(other: string, label: string) {
+    var b = el('button', 'btn btn-attach mc-call-btn', '📞 Call');
+    b.type = 'button';
+    b.title = 'Voice call (end-to-end encrypted)';
+    b.addEventListener('click', function () { placeCall(other, label); });
+    return b;
   }
-  function onCallOffer(m: any) {
-    var core: any = window.mcCore;
-    if (!core || !state.myHash || !m || !m.from || !m.call || !m.sdp) return;
-    if (core.callInCall(CALL.state)) {
-      if (CALL.state === 'Outgoing' && m.from === CALL.peer) {
-        /* Glare — we called each other at once. Deterministic: the lower hash's
-           offer wins; the loser silently folds its own offer and takes the ring. */
-        if (core.callGlareWins(state.myHash, m.from)) {
-          callSigSend(m.from, { call: m.call, kind: 'busy' });
-          return;
-        }
-        callSigSend(CALL.peer, { call: CALL.id, kind: 'end' });
-        callCleanup();
-        CALL.state = 'Idle'; CALL.reason = '';
-      } else {
-        callSigSend(m.from, { call: m.call, kind: 'busy' });
-        return;
-      }
-    }
-    ensureCallStyles(); ensureCallUi();
-    CALL.dir = 'in'; CALL.peer = m.from; CALL.id = m.call; CALL.pendingSdp = m.sdp;
-    CALL.iceIn = []; CALL.iceOut = []; CALL.reason = '';
-    CALL.peerLabel = dmLabel(m.from, null);
-    callKernelStep('Ring');
-    /* The pretty name, async — hash-derived pseudonym renders immediately. */
-    cachedJson(API + '/profile?hash=' + m.from, undefined, 300000).then(function (d: any) {
-      if (d && d.ok && d.profile && d.profile.nick && CALL.id === m.call) {
-        CALL.peerLabel = d.profile.nick;
-        var who = document.querySelector('#mc-call-ui .mc-call-who');
-        if (who && CALL.state === 'Incoming') who.textContent = '📞 ' + CALL.peerLabel + ' is calling';
-      }
-    }).catch(function () { /* pseudonym stands */ });
-    CALL.ringT = setTimeout(function () {
-      if (CALL.state === 'Incoming' && CALL.id === m.call) callEnd('Timeout');
-    }, core.callRingSecs * 1000);
-  }
-  function onCallAnswer(m: any) {
-    if (!m || CALL.state !== 'Outgoing' || m.call !== CALL.id || m.from !== CALL.peer) return;
-    clearTimeout(CALL.ringT);
-    var core: any = window.mcCore;
-    var pc = CALL.pc;
-    if (!pc) { callEnd('Failure', true); return; }
-    callKernelStep('RemoteAnswer');
-    pc.setRemoteDescription({ type: 'answer', sdp: m.sdp })
-      .then(function () { CALL.iceIn.splice(0).forEach(function (c: any) { callAddRemoteIce(pc, c); }); })
-      .catch(function () { callEnd('Failure', true); });
-    CALL.setupT = setTimeout(function () {
-      if (CALL.state === 'Connecting' && CALL.id === m.call) callEnd('Timeout', true);
-    }, core.callSetupSecs * 1000);
-  }
-  function onCallSig(m: any) {
-    if (!m) return;
-    if (m.kind === 'taken') {
-      /* Another of MY tabs answered: hush this one's banner. The answering tab
-         is no longer Incoming, so its own echo is a no-op. */
-      if (m.from === state.myHash && CALL.state === 'Incoming' && m.call === CALL.id) callEnd('Taken');
-      return;
-    }
-    if (m.call !== CALL.id || m.from !== CALL.peer) return;   // stale/foreign call: drop
-    if (m.kind === 'ice') {
-      var cands = (m.payload && m.payload.cand) || [];
-      if (CALL.pc && CALL.pc.remoteDescription) cands.forEach(function (c: any) { callAddRemoteIce(CALL.pc, c); });
-      else CALL.iceIn = CALL.iceIn.concat(cands);
-    } else if (m.kind === 'end') callEnd('RemoteEnd');
-    else if (m.kind === 'decline') callEnd('RemoteDecline');
-    else if (m.kind === 'busy') callEnd('RemoteBusy');
-  }
-  function callFmtElapsed() {
-    var s = Math.max(0, Math.floor((Date.now() - (CALL.startedAt || Date.now())) / 1000));
-    return Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
-  }
-  var CALL_END_COPY: any = {
-    hangup: 'Call ended', declined: 'Call declined', busy: 'They are on another call',
-    canceled: 'Call canceled', noanswer: 'No answer — they will see a missed call',
-    missed: 'Missed call', taken: 'Answered on another device', failed: 'The call could not be completed',
-  };
-  function callRender() {
-    var ui: any = document.getElementById('mc-call-ui');
-    if (!ui) { if (CALL.state === 'Idle') return; ensureCallStyles(); ui = ensureCallUi(); }
-    ui.textContent = '';
-    clearInterval(CALL.tickT); CALL.tickT = 0;
-    if (CALL.state === 'Idle') return;
-    var panel = el('div', 'mc-call-panel');
-    ui.appendChild(panel);
-    function btn(label: string, cls: string, fn: any) {
-      var b = el('button', 'btn ' + cls, label);
-      b.type = 'button';
-      b.addEventListener('click', fn);
-      panel.appendChild(b);
-      return b;
-    }
-    if (CALL.state === 'Outgoing') {
-      panel.appendChild(el('span', 'mc-call-who mc-call-ring', '📞 Calling ' + CALL.peerLabel + '…'));
-      btn('Cancel', '', function () { callEnd('HangUp', true); });
-      panel.appendChild(el('p', 'mc-call-note', ''));
-    } else if (CALL.state === 'Incoming') {
-      panel.appendChild(el('span', 'mc-call-who mc-call-ring', '📞 ' + CALL.peerLabel + ' is calling'));
-      btn('Answer', 'btn-send', function () { answerCall(); });
-      btn('Decline', '', function () {
-        callSigSend(CALL.peer, { call: CALL.id, kind: 'decline' });
-        callEnd('LocalDecline');
-      });
-      panel.appendChild(el('p', 'mc-call-note', 'Voice call · end-to-end encrypted'));
-    } else if (CALL.state === 'Connecting') {
-      panel.appendChild(el('span', 'mc-call-who mc-call-ring', 'Connecting…'));
-      btn('Hang up', '', function () { callEnd('HangUp', true); });
-      panel.appendChild(el('p', 'mc-call-note', ''));
-    } else if (CALL.state === 'Active') {
-      panel.appendChild(el('span', 'mc-call-who', '📞 ' + CALL.peerLabel));
-      var time = el('span', 'mc-call-time', callFmtElapsed());
-      panel.appendChild(time);
-      CALL.tickT = setInterval(function () { time.textContent = callFmtElapsed(); }, 1000);
-      btn(CALL.muted ? 'Unmute' : 'Mute', '', function (ev: any) {
-        CALL.muted = !CALL.muted;
-        try { CALL.stream.getAudioTracks().forEach(function (t: any) { t.enabled = !CALL.muted; }); } catch (e) { /* fine */ }
-        ev.target.textContent = CALL.muted ? 'Unmute' : 'Mute';
-      });
-      btn('Hang up', '', function () { callEnd('HangUp', true); });
-      panel.appendChild(el('p', 'mc-call-note', 'End-to-end encrypted. Keep this screen open — locking the phone pauses the call.'));
-    } else if (CALL.state === 'Ended') {
-      panel.appendChild(el('span', 'mc-call-who', CALL_END_COPY[CALL.reason] || 'Call ended'));
-    }
-  }
-  /* Re-attach the UI after a soft navigation replaced the document section
-     (the container lives on <body>, but a hard route swap may have removed
-     it), and give a mid-flight call its panel back. */
-  if (CALL.state !== 'Idle') { ensureCallStyles(); callRender(); }
-  document.addEventListener('mc-live-resync', function () { callFlushIce(); }, { signal: bootSig });
-  window.addEventListener('pagehide', function () {
-    var core: any = window.mcCore;
-    if (core && core.callInCall(CALL.state) && CALL.peer && CALL.id) {
-      callSigSend(CALL.peer, { call: CALL.id, kind: 'end' });
-    }
-  }, { signal: bootSig });
 
   document.addEventListener('mc-live', function (ev) {
     var m = (ev as CustomEvent).detail; if (!m) return;
@@ -3666,9 +3323,6 @@
     else if (m.t === 'typing') onLiveTyping(m);
     else if (m.t === 'presence') onLivePresence(m);
     else if (m.t === 'notification') onLiveNotif();
-    else if (m.t === 'call-offer') onCallOffer(m);
-    else if (m.t === 'call-answer') onCallAnswer(m);
-    else if (m.t === 'call-sig') onCallSig(m);
     else if (m.t === 'wall-post' || m.t === 'wall-comment') { if (state.onLiveWall) state.onLiveWall(m); }
   }, { signal: bootSig });
 
@@ -7415,22 +7069,6 @@
         var nameLink = el('a', null, label);
         nameLink.href = profileHref(other);
         headEl.appendChild(nameLink);
-        /* 1v1 voice call — rendered only when the platform switch is on (the
-           worker refuses regardless) and the browser can do WebRTC; the bot
-           has no ears. Presence-aware title: an offline callee still gets the
-           missed-call bell + push nudge. */
-        if (other !== MERECAT_BOT_HASH && (window as any).RTCPeerConnection
-          && (navigator as any).mediaDevices && (navigator as any).mediaDevices.getUserMedia) {
-          callsCfg().then(function (cc: any) {
-            if (!cc.enabled) return;
-            ensureCallStyles();
-            var callBtn = el('button', 'btn btn-attach mc-call-btn', '📞 Call');
-            callBtn.type = 'button';
-            callBtn.title = 'Voice call (end-to-end encrypted)';
-            callBtn.addEventListener('click', function () { placeCall(other, label); });
-            headEl.appendChild(callBtn);
-          });
-        }
         section.appendChild(headEl);
         /* The encrypted-inbox assurance: a quiet badge, the honest explainer one
            tap away, and the optional safety-number verify — no PIN, no friction. */
@@ -7597,9 +7235,20 @@
            the DM section's own kinds, 🎙 behind its voice flag. */
         mediaCfg().then(function (cfg: any) {
           var sec = cfg.sections.dm;
-          if (!cfg.enabled || !sec.kinds.length) { attach.style.display = 'none'; return; }
-          fileInput.accept = window.mcCore ? (window.mcCore as any).mediaAcceptFor(sec.kinds) : 'image/*,video/*,audio/*';
-          if (sec.voice && sec.kinds.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, sec, status, takeDmFile));
+          if (cfg.enabled && sec.kinds.length) {
+            fileInput.accept = window.mcCore ? (window.mcCore as any).mediaAcceptFor(sec.kinds) : 'image/*,video/*,audio/*';
+            if (sec.voice && sec.kinds.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, sec, status, takeDmFile));
+          } else attach.style.display = 'none';
+          /* 📞 lives HERE, beside 🎙 — reachable from the bottom of a long
+             thread where the composer already is (the header scrolled away
+             long ago). Gated on the platform switch + WebRTC support; the
+             bot has no ears. */
+          if (other !== MERECAT_BOT_HASH && (window as any).RTCPeerConnection
+            && (navigator as any).mediaDevices && (navigator as any).mediaDevices.getUserMedia) {
+            callsCfg().then(function (cc: any) {
+              if (cc.enabled) btnRow.appendChild(callButton(other, label));
+            });
+          }
         });
         form.appendChild(mediaChip);
         form.appendChild(fileInput);
