@@ -14,10 +14,12 @@ import {
   MERECAT_WINDOW,
   blockedReason,
   isAdminHash,
+  json,
   merecatConfig,
   merecatDay,
   merecatFold,
   merecatLocalFetch,
+  merecatMentionReply,
   merecatPrompt,
   merecatThinkStripper,
   publishUser,
@@ -213,12 +215,14 @@ export class ChatRoom extends DurableObject<Env> {
   declare phase: any;
   declare chatId: any;
   declare gen: any;
+  declare mentionsPending: any;
 
   constructor(ctx: any, env: any) {
     super(ctx, env);
     this.phase = 'idle';
     this.chatId = 0;
     this.gen = null;   // in-flight: { userMsgId, answer, sources, used, startedAtMs, backend }
+    this.mentionsPending = 0;
     this.ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair(JSON.stringify({ t: 'ping' }), JSON.stringify({ t: 'pong' })));
   }
@@ -238,6 +242,24 @@ export class ChatRoom extends DurableObject<Env> {
   }
 
   async fetch(request: any) {
+    /* The internal mention lane ('mention:<comment id>' instances): the ack
+       returns at once and the generation runs on the DO's own lifetime. A
+       stateless worker's waitUntil is cancelled ~30 seconds after its response,
+       so running merecatMentionReply there silently lost every local-backend
+       mention (the generation takes minutes) — the DO is the one place a long
+       generation legitimately lives. Only worker code can reach a DO stub, so
+       this needs no auth of its own; the kickers gate. */
+    if (request.method === 'POST' && new URL(request.url).pathname === '/mention') {
+      let id = 0;
+      try { id = Number((await request.json()).id) || 0; } catch { /* bad body */ }
+      if (!id) return json({ ok: false, error: 'Bad request.' }, 400);
+      this.mentionsPending += 1;
+      this.ctx.storage.setAlarm(Date.now() + 30000);   // keep-alive while it works
+      merecatMentionReply(this.env, id)
+        .catch((e: any) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e), id })))
+        .finally(() => { this.mentionsPending -= 1; });
+      return json({ ok: true });
+    }
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') return new Response('expected websocket', { status: 426 });
     const cid = Number(new URL(request.url).searchParams.get('chat')) || 0;
     /* CF-Connecting-IP survives the forward from handleMerecatLive (stub.fetch
@@ -554,8 +576,10 @@ export class ChatRoom extends DurableObject<Env> {
 
   async alarm() {
     /* Keep the object alive through silent generation gaps (it idle-evicts at
-       ~70-140s); clear once done/error so it hibernates at zero cost. */
-    if (this.phase === 'thinking' || this.phase === 'streaming' || this.phase === 'queued') {
+       ~70-140s); clear once done/error so it hibernates at zero cost. A
+       pending mention reply holds it alive the same way. */
+    if (this.phase === 'thinking' || this.phase === 'streaming' || this.phase === 'queued' ||
+        this.mentionsPending > 0) {
       this.ctx.storage.setAlarm(Date.now() + 30000);
     }
   }
