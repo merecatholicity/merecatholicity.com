@@ -48,6 +48,20 @@ def main():
                 composer: !!t.querySelector('textarea')});"""))
             checks.append(('conversation renders messages', obs['msgs'] >= 1))
             checks.append(('observe note present, no composer', obs['observeNote'] and not obs['composer']))
+        # --- platform usage (the free-tier health bars) ---
+        f.goto('admin.html?usage=1')
+        f.wait("!!document.querySelector('mc-usage')", timeout=15)
+        f.wait("document.querySelectorAll('mc-usage .mc-usage-bar').length>0"
+               " || !!document.querySelector('mc-usage .mc-usage-setup')"
+               " || ((document.querySelector('mc-usage .comments-status')||{}).textContent||'').indexOf('could not')!==-1", timeout=30)
+        time.sleep(1)
+        us = json.loads(f.js1("""var t=document.querySelector('mc-usage');
+          return JSON.stringify({bars: t.querySelectorAll('.mc-usage-bar').length,
+            setup: !!t.querySelector('.mc-usage-setup'),
+            groups: t.querySelectorAll('.mc-usage-group').length});"""))
+        checks.append(('usage page: health bars or the setup card', us['bars'] > 0 or us['setup']))
+        if us['bars']:
+            checks.append(('usage page: meters grouped by product', us['groups'] >= 5))
         checks.append(('admin console clean', f.assert_console_clean('admin')))
         fails = list(f.failures)
     # --- visitor gate ---
@@ -62,6 +76,11 @@ def main():
         time.sleep(1)
         g2 = f.js1("return (document.querySelector('mc-merecat-threads .comments-status')||{}).textContent||'';")
         checks.append(('visitor: Q&A gated', 'for the admins' in g2))
+        f.goto('admin.html?usage=1')
+        f.wait("!!document.querySelector('mc-usage')", timeout=15)
+        time.sleep(1)
+        g3 = f.js1("return (document.querySelector('mc-usage .comments-status')||{}).textContent||'';")
+        checks.append(('visitor: usage gated', 'for the admins' in g3))
         fails += list(f.failures)
     for x in fails:
         print('FAIL', x)

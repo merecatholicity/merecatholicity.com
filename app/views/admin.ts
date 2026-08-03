@@ -39,6 +39,7 @@ class McAdminHome extends LitElement {
       ['Shadow bans', 'admin.html?shadowbans=1', 'Quiet mutes: a member keeps posting but no one else sees it. Add, review, and lift.'],
       ['Add / Remove Admins', 'admin.html?admins=1', 'Grant a member admin powers, or take them back.'],
       ['Platform settings', 'admin.html?settings=1', 'Per-area media controls — what the feed, forum, and DMs each accept, sizes, voice notes, AI screening, storage budgets, retention, and one-time purges.'],
+      ['Platform usage', 'admin.html?usage=1', 'Cloudflare free-tier health bars — every meter the platform rides and how close each is to its wall, checked daily with DM alerts past 80%.'],
       ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
       ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
       ['merecat Q&A at a glance', 'admin.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.'],
@@ -193,6 +194,118 @@ class McMerecatThread extends LitElement {
 }
 customElements.define('mc-merecat-thread', McMerecatThread);
 
+/* The Cloudflare free-tier health bars (admin.html?usage=1). Live numbers from
+   POST /admin/usage — every product's meters as bars banded ok/watch/hot/over
+   (the same 80/100 scale the daily 23:30 UTC check alerts on), per-script/
+   model/database/bucket detail, and the one-time setup card until the
+   read-only analytics token is installed. Pure read; Refresh re-asks. */
+
+const USAGE_GROUPS = ['workers', 'ai', 'd1', 'do', 'r2', 'vectorize', 'turn', 'turnstile', 'cron'];
+
+function fmtQty(n: number, unit: string): string {
+  if (unit === 'bytes') {
+    if (n >= 1e9) return (n / 1e9).toFixed(2) + ' GB';
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + ' MB';
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + ' KB';
+    return n + ' B';
+  }
+  if (unit === 'gbs') return n.toLocaleString() + ' GB-s';
+  const words: Record<string, string> = { req: 'requests', ops: 'operations', rows: 'rows', neurons: 'neurons', dims: 'dimensions', count: '' };
+  const w = words[unit] != null ? words[unit] : unit;
+  return n.toLocaleString() + (w ? ' ' + w : '');
+}
+
+class McUsage extends LitElement {
+  static properties = { d: { attribute: false }, err: { attribute: false } };
+  declare kit: any;
+  declare d: any;
+  declare err: string;
+  declare _loading: boolean;
+  constructor() { super(); this.kit = null; this.d = null; this.err = ''; }
+  createRenderRoot() { return this; }
+  connectedCallback() {
+    super.connectedCallback();
+    document.title = 'Platform usage | Community';
+    this.maybeLoad();
+  }
+  maybeLoad() {
+    const kit = this.kit;
+    if (this._loading) return;
+    if (!kit.isAdmin()) {
+      if (kit.state.profileLoaded || !kit.state.key) return;
+      kit.onProfile(() => { this.requestUpdate(); this.maybeLoad(); });
+      return;
+    }
+    this._loading = true;
+    kit.fetchRetry(kit.API + '/admin/usage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: kit.state.key }),
+    }, [1500, 4000]).then((r: Response) => r.json()).then((d: any) => {
+      if (kit.blockedOut(d)) return;
+      this._loading = false;
+      if (!d.ok) { this.err = d.error === 'No.' ? 'This is for admins alone.' : 'The usage report could not be loaded.'; return; }
+      this.d = d;
+    }).catch(() => { this._loading = false; this.err = 'The usage report could not be loaded.'; });
+  }
+  refresh() { if (this._loading) return; this.d = null; this.err = ''; this.maybeLoad(); }
+  rowTpl(r: any) {
+    if (r.error) {
+      return html`<div class="mc-usage-row na"><div class="mc-usage-head"><span>${r.label}</span>
+        <span class="mc-usage-val">unavailable — ${r.error}</span></div></div>`;
+    }
+    const over = r.pct != null && r.pct >= 100;
+    const width = r.pct == null ? 0 : Math.max(0.5, Math.min(100, r.pct));
+    return html`<div class="mc-usage-row ${r.band || 'na'}">
+      <div class="mc-usage-head"><span>${r.label}</span>
+        <span class="mc-usage-val">${r.limit
+          ? html`${fmtQty(r.used, r.unit)} of ${fmtQty(r.limit, r.unit)} · <strong>${r.pct}%</strong>${over ? html` <em class="mc-usage-over">OVER</em>` : nothing}`
+          : html`${fmtQty(r.used, r.unit)} · unmetered`}</span></div>
+      ${r.limit ? html`<div class="mc-usage-bar"><span style="width:${width}%"></span></div>` : nothing}
+      ${r.detail ? html`<div class="mc-usage-details">${r.detail.map((dd: any) =>
+        html`<div class="mc-usage-detail">${dd.label} — ${fmtQty(dd.used, r.unit)}${dd.limit
+          ? html` of ${fmtQty(dd.limit, r.unit)} (<strong class=${dd.pct >= 80 ? 'hotpct' : ''}>${dd.pct}%</strong>)` : nothing}</div>`)}</div>` : nothing}
+      ${r.note ? html`<div class="mc-usage-note">${r.note}</div>` : nothing}
+    </div>`;
+  }
+  setupTpl() {
+    return html`<p class="board-intro">The monitor reads the account's own usage through the Cloudflare analytics API with a READ-ONLY token. That token is not set yet — three steps, once:</p>
+      <ol class="mc-usage-setup">
+        <li>In the Cloudflare dashboard open <strong>Manage account → Account API tokens → Create token → Custom token</strong>.</li>
+        <li>Give it the single permission <strong>Account · Account Analytics · Read</strong>, include this account, and create it.</li>
+        <li>Where the worker deploys from, run <code>cd comments-worker && npx wrangler secret put CF_USAGE_TOKEN</code> and paste the token.</li>
+      </ol>
+      <p class="board-intro">No redeploy needed — reload this page and the bars appear, and the daily 23:30 UTC check starts alerting the same moment. The token can read usage numbers and nothing else; revoke it in the dashboard any time.</p>`;
+  }
+  render() {
+    const kit = this.kit;
+    if (!kit) return nothing;
+    const head = crumbTpl([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['Platform usage']]);
+    const g = gate(kit, this);
+    if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
+    if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
+    if (this.err) return html`${head}<p class="comments-status">${this.err}${this.err === 'This is for admins alone.' ? nothing : retryTpl(this, { kit: this.kit })}</p>`;
+    if (!this.d) return html`${head}<p class="comments-status">Reading the meters…</p>`;
+    const d = this.d;
+    if (!d.configured) return html`${head}${this.setupTpl()}`;
+    const rows = d.rows || [];
+    const worst = rows.reduce((w: any, r: any) => (r.pct != null && (!w || r.pct > w.pct) ? r : w), null);
+    const hotN = rows.filter((r: any) => r.pct != null && r.pct >= 80).length;
+    return html`${head}
+      <p class="board-intro">Every Cloudflare free-tier meter the platform rides, live from the analytics API.
+        ${hotN ? html`<strong>${hotN} meter${hotN === 1 ? ' is' : 's are'} at 80% or beyond.</strong>`
+          : worst ? 'All inside the free tier — the closest to its wall is ' + worst.label.toLowerCase() + ' at ' + worst.pct + '%.' : ''}
+        <a class="body-link mc-usage-refresh" href="admin.html?usage=1"
+          @click=${(e: Event) => { e.preventDefault(); this.refresh(); }}>Refresh</a></p>
+      ${USAGE_GROUPS.filter((p) => rows.some((r: any) => r.product === p)).map((p) => html`
+        <div class="mc-usage-group">
+          <h3>${(d.products && d.products[p]) || p}</h3>
+          ${rows.filter((r: any) => r.product === p).map((r: any) => this.rowTpl(r))}
+        </div>`)}
+      <p class="mc-usage-foot">Daily meters reset at 00:00 UTC; monthly ones follow the calendar month; “stored” bars are standing totals. A check runs daily at ${d.check_utc || '23:30'} UTC and DMs every admin when a meter crosses 80% or its ceiling — escalations at once, standing warnings weekly. Unmetered on the free plan and so not barred here: CDN bandwidth in front of GitHub Pages, Email Routing, rate-limit bindings, and WebSocket traffic. Free-plan ceilings as published ${d.free_as_of || ''}.</p>`;
+  }
+}
+customElements.define('mc-usage', McUsage);
+
 window.mcViews = window.mcViews || {};
 window.mcViews.adminHome = function (section, kit) {
   const n = document.createElement('mc-admin-home') as any; n.kit = kit; section.appendChild(n);
@@ -202,4 +315,7 @@ window.mcViews.merecatThreads = function (section, kit) {
 };
 window.mcViews.merecatThread = function (section, kit, id) {
   const n = document.createElement('mc-merecat-thread') as any; n.kit = kit; n.tid = id; section.appendChild(n);
+};
+window.mcViews.usage = function (section, kit) {
+  const n = document.createElement('mc-usage') as any; n.kit = kit; section.appendChild(n);
 };

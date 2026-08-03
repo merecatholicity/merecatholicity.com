@@ -16,7 +16,7 @@ function psRoute(qs) {
   const g = (k) => params.get(k);
   return Route.routeTag(Route.parseRoute({
     ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'), discord: g('discord'), shadowbans: g('shadowbans'),
-    merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),
+    usage: g('usage'), merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),
     merecat: g('merecat'), feed: g('feed'), notifications: g('notifications'), inbox: g('inbox'), users: g('users'),
     q: g('q'), dm: g('dm'), me: g('me'), profile: g('profile'), post: g('post'), audit: g('audit'), topic, cat: g('cat'),
   }));
@@ -50,6 +50,14 @@ test('presence is by truthy value; a bare empty param does not select', () => {
 
 test('priority ladder: an earlier param wins over a later one', () => {
   assert.equal(psRoute('merecat=1&topic=5').tag, 'Merecat');
+});
+
+test('the usage monitor routes as an admin door', () => {
+  assert.equal(psRoute('usage=1').tag, 'Usage');
+  assert.equal(psRoute('usage').tag, 'Index', 'bare ?usage (empty value) is falsy -> not usage');
+  assert.equal(psRoute('shadowbans=1&usage=1').tag, 'Shadowbans', 'ladder: shadowbans sits above usage');
+  assert.equal(psRoute('usage=1&merecatadmin=1').tag, 'Usage', 'ladder: usage sits above merecatadmin');
+  assert.equal(psRoute('usage=1&topic=7').tag, 'Usage', 'an admin door beats a topic id');
 });
 
 test('the public posting routes: feed and single post', () => {

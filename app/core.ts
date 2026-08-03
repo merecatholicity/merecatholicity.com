@@ -151,7 +151,7 @@ export const parseRoute = (get: (k: string) => string | null): { tag: string; s:
   const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
   return Route.routeTag(Route.parseRoute({
     ipbans: get('ipbans'), settings: get('settings'), admins: get('admins'),
-    admin: get('admin'), discord: get('discord'), shadowbans: get('shadowbans'), merecatadmin: get('merecatadmin'), merecatthread: get('merecatthread'),
+    admin: get('admin'), discord: get('discord'), shadowbans: get('shadowbans'), usage: get('usage'), merecatadmin: get('merecatadmin'), merecatthread: get('merecatthread'),
     merecatthreads: get('merecatthreads'), merecat: get('merecat'), feed: get('feed'),
     notifications: get('notifications'), inbox: get('inbox'), users: get('users'), q: get('q'),
     dm: get('dm'), me: get('me'), profile: get('profile'), post: get('post'),

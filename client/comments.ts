@@ -4491,6 +4491,14 @@
      review queue, and recent activity — each row governable in place, so an
      admin never has to leave to act. The in-context controls on the board stay;
      this is the one place that gathers everything waiting on a moderator. */
+  /* Platform usage & limits: the Cloudflare free-tier health bars. A
+     bundle-only Lit view (mc-usage in app/views/admin.ts) — admin pages
+     require the app anyway, so there is no classic body to fall back to. */
+  function viewUsage() {
+    if (window.mcViews && window.mcViews.usage) return window.mcViews.usage(section, window.mcKit);
+    section.appendChild(el('p', 'comments-status', 'This page needs the app to finish loading. Refresh to try again.'));
+  }
+
   /* The admin hub: one door from the board that gathers the three admin pages,
      so a member of staff picks a task rather than hunting scattered links. */
   function viewAdminHome() {
@@ -4507,6 +4515,7 @@
       ['Shadow bans', 'admin.html?shadowbans=1', 'Quiet mutes: a member keeps posting but no one else sees it. Add, review, and lift.'],
       ['Add / Remove Admins', 'admin.html?admins=1', 'Grant a member admin powers, or take them back.'],
       ['Platform settings', 'admin.html?settings=1', 'Per-area media controls — what the feed, forum, and DMs each accept, sizes, voice notes, AI screening, storage budgets, retention, and one-time purges.'],
+      ['Platform usage', 'admin.html?usage=1', 'Cloudflare free-tier health bars — every meter the platform rides and how close each is to its wall, checked daily with DM alerts past 80%.'],
       ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
       ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
       ['merecat Q&A at a glance', 'admin.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
@@ -9989,6 +9998,7 @@
     if (params.get('admin')) return { tag: 'AdminHome' };
     if (params.get('discord')) return { tag: 'Discord' };
     if (params.get('shadowbans')) return { tag: 'Shadowbans' };
+    if (params.get('usage')) return { tag: 'Usage' };
     if (params.get('merecatadmin')) return { tag: 'MerecatAdmin' };
     if (params.get('merecatthread')) return { tag: 'MerecatThread', s: params.get('merecatthread') };
     if (params.get('merecatthreads') !== null) return { tag: 'MerecatThreads' };
@@ -10247,6 +10257,7 @@
       case 'AdminHome': return viewAdminHome();
       case 'Discord': return viewDiscordHooks();
       case 'Shadowbans': return viewShadowbans();
+      case 'Usage': return viewUsage();
       case 'MerecatAdmin': return viewMerecatAdmin();
       case 'MerecatThread': return viewMerecatThread(Number(r.s));
       case 'MerecatThreads': return viewMerecatThreads();

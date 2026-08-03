@@ -94,8 +94,11 @@
     // same-origin like avatars; random opaque keys). Admin-prunable, not backed up.
     { "binding": "WALLMEDIA", "bucket_name": "merecatholicity-wall-media" }
   ],
-  // Monthly: the full backup/prune chain. Hourly: sweep expired DMs + their media.
-  "triggers": { "crons": ["0 0 1 * *", "0 * * * *"] },
+  // Monthly: the full backup/prune chain. Hourly: sweep expired DMs + their
+  // media. Daily 23:30 UTC: the Cloudflare free-tier usage check (usage.ts) —
+  // health data for admin.html?usage=1 and DM alerts past 80%. Three of the
+  // five crons the free account allows.
+  "triggers": { "crons": ["0 0 1 * *", "0 * * * *", "30 23 * * *"] },
   "ratelimits": [
     // Writes. These pass Turnstile + AI moderation before they land, so the
     // limiter is only an abuse backstop, not the primary gate. 30/min/IP lets an
@@ -169,7 +172,15 @@
     // STUN-only fallback and calls still mostly work (P2P). Free pool:
     // 1,000 GB/month relayed egress, $0.05/GB past it with NO spend cap —
     // deleting this var is the kill switch back to free STUN-only.
-    "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d"
+    "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d",
+    // The free-tier usage monitor (admin.html?usage=1 + the daily 23:30 UTC
+    // check): the account whose analytics are read. The matching
+    // CF_USAGE_TOKEN SECRET (`cd comments-worker && wrangler secret put
+    // CF_USAGE_TOKEN`) is a READ-ONLY API token with the ONE scope
+    // "Account Analytics: Read" on this account. Until both stand, the usage
+    // page shows setup steps and the daily check no-ops. Account ids are not
+    // secret (they ride every deploy log).
+    "CF_ACCOUNT_ID": "6093bc0889c95a08f0a92a8df6750c66"
   },
   // A staging deployment: `wrangler deploy --env staging`. Distinct rate-limit
   // namespace ids so it never shares the production per-IP buckets, and its own
@@ -192,7 +203,9 @@
         "VAPID_PUBLIC_KEY": "BGu90jVwRuyDpx_lnCMDdsuvF-1mHEHSS1IunwbOdhTq7f1G4ImfS0DFZac3ikV8a-sGQFqSaVuXLu67wBPS-uQ",
         "VAPID_SUBJECT": "mailto:admin@merecatholicity.com",
         // Same TURN key as prod; set TURN_KEY_SECRET --env staging too.
-        "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d"
+        "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d",
+        // Same account as prod; set CF_USAGE_TOKEN --env staging for the monitor.
+        "CF_ACCOUNT_ID": "6093bc0889c95a08f0a92a8df6750c66"
       }
     }
   }

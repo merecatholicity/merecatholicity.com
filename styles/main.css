@@ -2665,3 +2665,36 @@ body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-li
   .board-search input, .board-search select,
   .contact-form input, .contact-form textarea { font-size: 16px; }
 }
+
+/* ============ Platform usage (admin.html?usage=1): free-tier health bars ====
+   The admin monitor's meters. Band colors are deliberate constants, not theme
+   tokens (green/amber/orange/red must read as themselves in both themes); the
+   text beside every bar carries the exact numbers so color is never the only
+   signal. Served band names: ok / watch / hot / over / na. */
+.mc-usage-group { margin: 1.1rem 0 1.5rem; }
+.mc-usage-group h3 { margin: 0 0 0.3rem; font-size: 1.02rem; color: var(--maroon); }
+.mc-usage-row { padding: 0.5rem 0 0.3rem; border-top: 1px solid var(--rule); }
+.mc-usage-head { display: flex; justify-content: space-between; gap: 0.6rem 1.2rem; flex-wrap: wrap; font-size: 0.95rem; }
+.mc-usage-val { color: var(--faint); }
+.mc-usage-val strong { color: inherit; }
+.mc-usage-bar {
+  height: 8px; border-radius: 4px; overflow: hidden;
+  background: color-mix(in srgb, var(--rule) 55%, transparent);
+  margin: 0.32rem 0 0.1rem;
+}
+.mc-usage-bar span { display: block; height: 100%; border-radius: 4px; background: #2f7d4f; }
+.mc-usage-row.watch .mc-usage-bar span { background: #b8860b; }
+.mc-usage-row.hot .mc-usage-bar span { background: #c05a1e; }
+.mc-usage-row.over .mc-usage-bar span { background: #a02020; }
+.mc-usage-over { font-style: normal; font-weight: 700; color: #a02020; letter-spacing: 0.04em; }
+.mc-usage-details { margin: 0.28rem 0 0; font-size: 0.85rem; color: var(--faint); }
+.mc-usage-detail strong.hotpct { color: #c05a1e; }
+.mc-usage-note { margin: 0.28rem 0 0; font-size: 0.85rem; color: var(--faint); font-style: italic; }
+.mc-usage-foot { margin-top: 1.4rem; font-size: 0.88rem; color: var(--faint); }
+.mc-usage-refresh { margin-left: 0.5rem; }
+.mc-usage-setup { margin: 0.6rem 0 1rem 1.4rem; }
+.mc-usage-setup li { margin: 0.4rem 0; }
+.mc-usage-setup code {
+  background: color-mix(in srgb, var(--rule) 40%, transparent);
+  padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.88em;
+}

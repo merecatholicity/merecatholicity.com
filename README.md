@@ -373,6 +373,22 @@ R2 is reached S3-style for bulk work (e.g. the audio upload script uses
 `wrangler r2 object put … --remote` — the `--remote` is essential, or it writes to a local
 simulated store). Identity is a browser-generated key; the server stores only its SHA-256.
 
+### Watching the free tier
+
+`admin.html?usage=1` (the **Platform usage** door in Administrative options) draws a live
+health bar for every free-plan meter the platform rides — Workers requests, Workers AI
+neurons, D1 rows and storage (per database, against the 500 MB free wall), R2 operations
+and storage (per bucket), Durable Objects compute and SQLite storage, Vectorize
+dimensions, Realtime TURN egress — banded green / amber / orange / red with over-the-line
+shown honestly. The worker reads the account's own GraphQL Analytics with a **read-only**
+API token: create one with the single permission *Account · Account Analytics · Read* and
+install it with `cd comments-worker && npx wrangler secret put CF_USAGE_TOKEN` (the page
+shows these steps itself until the token stands). A daily cron (23:30 UTC) runs the same
+report and DMs every admin — as merecat, an automated notice — when any meter crosses 80%
+or its ceiling: escalations at once, standing warnings weekly. The limits table lives in
+`comments-worker/src/usagecalc.ts` (pure, unit-tested); when Cloudflare moves a free
+limit, that one table is the edit.
+
 ### merecat, the librarian
 
 merecat is a members-open RAG chat (`community.html?merecat=1`) living in the comments
