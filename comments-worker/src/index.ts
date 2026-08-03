@@ -209,6 +209,7 @@ import {
   wallReader,
   xmlEscape,
 } from './lib.js';
+import { handleAdminUsage, runUsageCheck } from './usage.js';
 
 interface Env {
   [key: string]: any;
@@ -4887,6 +4888,7 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/admin/discord/list', fn: (request, env, ctx, url) => handleAdminDiscordList(request, env) },
   { m: 'POST', p: '/api/comments/admin/discord/add', fn: (request, env, ctx, url) => handleAdminDiscordAdd(request, env) },
   { m: 'POST', p: '/api/comments/admin/discord/delete', fn: (request, env, ctx, url) => handleAdminDiscordDelete(request, env) },
+  { m: 'POST', p: '/api/comments/admin/usage', fn: (request, env, ctx, url) => handleAdminUsage(request, env) },
   { m: 'POST', p: '/api/comments/notifications/unread', fn: (request, env, ctx, url) => handleNotifUnread(request, env) },
   { m: 'POST', p: '/api/comments/notifications/read', fn: (request, env, ctx, url) => handleNotifRead(request, env) },
   { m: 'POST', p: '/api/comments/notifications', fn: (request, env, ctx, url) => handleNotifList(request, env) },
@@ -5002,6 +5004,14 @@ export default {
         .then(() => sweepWallOrphanMedia(env))
         .then(() => sweepMediaRetention(env))
         .then(() => enforceWallMediaCap(env)));
+      return;
+    }
+    /* Daily (23:30 UTC — late in the UTC day, so the day-quota meters read
+       near-complete): the Cloudflare free-tier usage check. DMs every admin
+       (as merecat, an Automated notice) when a meter crosses 80% or its
+       ceiling; no-ops until the CF_USAGE_TOKEN secret is set. */
+    if (event && event.cron === '30 23 * * *') {
+      ctx.waitUntil(runUsageCheck(env));
       return;
     }
     ctx.waitUntil(
