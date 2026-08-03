@@ -275,6 +275,44 @@ document.addEventListener('DOMContentLoaded', function () {
   } catch (e) { /* storage blocked: the site stays a website */ }
 })();
 
+/* Breadcrumbs + the submit backstop (2026-08-03, born of a live report:
+   hitting Post occasionally refreshed the page without posting — the draft
+   survived, the second click worked, and nothing recorded WHY).
+   1. window.mcCrumb(msg) appends to a small persistent ring (localStorage —
+      unlike the in-page error ring it SURVIVES the very reload it is there
+      to explain) shown in the ?debug=1 overlay. Every real unload leaves a
+      'pagehide' crumb, so after an incident the ring distinguishes a
+      graceful navigation/reload (crumb present, cause named by its
+      neighbors) from an engine crash-reload (no crumb at all).
+   2. The backstop: every action-less <form> on this site is JS-handled
+      (search boxes, the merecat ask box) — its native submission is never
+      right, only a same-URL GET that reloads the page and posts nothing.
+      If a submit reaches the document unhandled (a handler lost to a
+      mid-build error, a not-yet-booted view), swallow it and record it
+      instead of letting the browser refresh. Forms with a real action
+      (the contact form) are left alone. */
+(function () {
+  function crumb(msg) {
+    try {
+      var ring = JSON.parse(localStorage.getItem('mc-crumbs') || '[]');
+      ring.push(new Date().toISOString().slice(5, 19) + ' ' + String(msg).slice(0, 120));
+      if (ring.length > 20) ring = ring.slice(ring.length - 20);
+      localStorage.setItem('mc-crumbs', JSON.stringify(ring));
+    } catch (e) { /* storage blocked: crumbs are diagnosis, never load-bearing */ }
+  }
+  window.mcCrumb = crumb;
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f || f.tagName !== 'FORM' || e.defaultPrevented) return;
+    if (f.getAttribute('action')) return;
+    e.preventDefault();
+    crumb('swallowed native submit: ' + (f.className || f.id || 'form') + ' @ ' + location.pathname);
+  });
+  window.addEventListener('pagehide', function () {
+    crumb('pagehide ' + location.pathname + ' age=' + Math.round(window.performance.now() / 1000) + 's');
+  });
+})();
+
 /* The installed app's self-update lifecycle (2026-08-02, born of a live
    report: an installed iOS app ran days-old code and never healed). The SW is
    registered here — the FIRST script every page carries, never cached under a
@@ -315,13 +353,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
   var reloaded = false;
   function young() {
-    try { return window.performance.now() < 30000; } catch (e) { return false; }
+    /* WALL-CLOCK age, not performance.now(): on iOS the monotonic clock can
+       exclude time suspended, so a resumed installed app read as seconds old
+       hours after its real load — reopening the heal window exactly when the
+       reader came back to act (and a heal firing as they hit Post killed the
+       submit). Date.now() minus the document's birth cannot be fooled. */
+    try {
+      var t0 = window.performance.timeOrigin ||
+        (window.performance.timing && window.performance.timing.navigationStart) || 0;
+      if (t0) return Date.now() - t0 < 30000;
+      return window.performance.now() < 30000;
+    } catch (e) { return false; }
   }
   function typing() {
     var el = document.activeElement;
-    return !!(el && (el.tagName === 'TEXTAREA' || el.isContentEditable ||
+    if (el && (el.tagName === 'TEXTAREA' || el.isContentEditable ||
       (el.tagName === 'INPUT' && el.type !== 'submit' && el.type !== 'button')) &&
-      (el.value || el.textContent || '').length > 0);
+      (el.value || el.textContent || '').length > 0) return true;
+    /* A non-empty composer ANYWHERE is mid-use even when focus has moved on —
+       the reader may be one click from posting it (tapping Post moves focus
+       to the button, which is precisely when the old focused-element check
+       went blind and a heal could eat the submit). Textareas only: text
+       inputs are routinely prefilled by code (the search box echoes ?q=),
+       and a composer is a textarea everywhere on this site. */
+    var tas = document.querySelectorAll('textarea');
+    for (var i = 0; i < tas.length; i++) {
+      if (tas[i].value && tas[i].value.length > 0) return true;
+    }
+    return false;
   }
   /* key names the CAUSE ('page:/feed.html', 'sw') — the worker resends each
      signal several times (single sends race document creation and reach
@@ -345,6 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
       sessionStorage.setItem('mc-heal:' + key, String(now));
     } catch (e) { /* still reload */ }
     reloaded = true;
+    if (window.mcCrumb) window.mcCrumb('heal-reload ' + key);
     location.reload();
   }
   /* bornControlled tells an UPDATE apart from the first install: a page whose
@@ -416,6 +476,9 @@ document.addEventListener('DOMContentLoaded', function () {
   function note(m) {
     errs.push(new Date().toISOString().slice(11, 19) + ' ' + String(m).slice(0, 160));
     if (errs.length > 12) errs.shift();
+    /* Mirror into the persistent ring: an error that precedes a reload (the
+       very state that disarms a form's submit handler) must outlive it. */
+    if (window.mcCrumb) window.mcCrumb('err: ' + String(m).slice(0, 100));
     /* An installed app has no URL bar to reach ?debug=1 with — so in
        STANDALONE mode an uncaught error paints the overlay by itself: the
        broken state carries its own diagnosis. Browser tabs stay quiet. */
@@ -452,11 +515,17 @@ document.addEventListener('DOMContentLoaded', function () {
     } else lines.push('sw: unsupported');
     lines.push('page age: ' + Math.round(window.performance.now() / 1000) + 's  path: ' + location.pathname);
     var head = lines.join('\n');
-    el.textContent = head + '\ncaches: …\n' + (errs.length ? 'errors:\n' + errs.join('\n') : 'errors: none');
+    /* The persistent breadcrumb ring (window.mcCrumb): pagehides, heal-reload
+       causes, swallowed native submits — the story of the last few unloads,
+       readable AFTER the reload that would have erased an in-page log. */
+    var crumbs = [];
+    try { crumbs = JSON.parse(localStorage.getItem('mc-crumbs') || '[]'); } catch (e) { /* fine */ }
+    var tail = (crumbs.length ? 'crumbs:\n' + crumbs.slice(-8).join('\n') + '\n' : '') +
+      (errs.length ? 'errors:\n' + errs.join('\n') : 'errors: none');
+    el.textContent = head + '\ncaches: …\n' + tail;
     if (window.caches && window.caches.keys) {
       window.caches.keys().then(function (ks) {
-        el.textContent = head + '\ncaches: ' + (ks.join(', ') || 'none') + '\n' +
-          (errs.length ? 'errors:\n' + errs.join('\n') : 'errors: none');
+        el.textContent = head + '\ncaches: ' + (ks.join(', ') || 'none') + '\n' + tail;
       }).catch(function () {});
     }
     if (!el.parentNode) document.body.appendChild(el);
