@@ -233,7 +233,7 @@ resource), `413` (avatar too large), `429` (rate limit), `500` (server), `503`
 | `GET /api/comments/profile` | `hash` (required), `fresh` | `{ok, profile:{hash,nick,bio,signature,avatar,faith,posts,assigned,admin}}`. `assigned` is the **server-computed pseudonym**; `admin` is public. |
 | `GET /api/comments/dm/directory` | `fresh` | `{ok, users:[{hash, joined, nick}]}` — up to 2000, newest first. Bot and any `merecat…` nick excluded. All fuzzy matching is client-side. |
 | `GET /api/comments/feed` | `topic` \| `cat` \| `page` (precedence in that order) | RSS 2.0 XML. Renders `displayName` server-side. |
-| `GET /api/comments/config` | — | `{ok, apiVersion, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}}` — the shared constants a native client would otherwise triplicate. Cacheable. |
+| `GET /api/comments/config` | — | `{ok, apiVersion, media:{enabled, kinds:{dm,wall,board}, max_bytes:{image,video,audio}, audio_max_seconds, autocompress}, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}}` — the shared constants a native client would otherwise triplicate. `media` is the SERVED upload policy: gate client-side from it, never a literal (the caps are admin-tunable). Cacheable. |
 | `GET /api/comments/avatar` | `hash` (required), `v` (cache-buster) | Raw JPEG bytes, `max-age=86400`, `nosniff`, `CSP default-src 'none'`. **No rate limit.** |
 
 **Row shapes.** A comment/reply row is `{id, author_hash, nick, assigned,
@@ -264,14 +264,19 @@ Target is exactly one of three shapes:
 - new topic: `{cat:<key>, title:<string>}` — title trimmed, 3–120 chars.
 - page comment: `{page:<whitelisted path>}`.
 
-Common fields: `body` (required, ≤4000), `token` (Turnstile, required), `key`,
-and optional `faith` (fill-only into your profile), `mentions` (array of
-64-hex hashes, ≤10 — see the honor-system note in §6), `tz` (IANA-ish string,
-display-only), `ipv4`/`ipv6` (client-fetched opposite-family address for
-ban coverage, §6), and **never** `website` (honeypot, §0.3).
+Common fields: `body` (required unless a valid `media_key` rides along, ≤4000),
+`token` (Turnstile, required), `key`, and optional `media_key` (a board
+attachment from `POST /board/media` — **board topics and replies only**: an
+article page refuses it, the back room refuses it outright, and the claim
+re-checks the board kinds mask + per-kind cap, so an upload smuggled through
+another context still fails here), `faith` (fill-only into your profile),
+`mentions` (array of 64-hex hashes, ≤10 — see the honor-system note in §6),
+`tz` (IANA-ish string, display-only), `ipv4`/`ipv6` (client-fetched
+opposite-family address for ban coverage, §6), and **never** `website`
+(honeypot, §0.3).
 
 Returns `200 {ok:true, status:"live"|"pending", comment:{id,title,author_hash,
-nick,signature,avatar,faith,body,created_at}}`. `status` is `pending` when the
+nick,signature,avatar,faith,body,created_at,media_key}}`. `status` is `pending` when the
 AI screen (or the ≥3-links rule, or `MODERATION_MODE=hold-all`, or an AI
 error) holds it — a `pending` post is invisible to others until an admin
 approves it. There is **no `held` status for comments**; `pending` *is* held.
@@ -280,9 +285,28 @@ mention + reply notifications, `@merecat` auto-reply if the unquoted body
 contains `@merecat`, dual-stack IP capture, and a **live broadcast** to the
 board WebSocket (§5.1).
 
+**Media uploads** (`POST /api/comments/wall/media` and `POST
+/api/comments/board/media`) — `multipart/form-data` with `key` + `file`.
+`POST_LIMIT`, gated, **no Turnstile** (the linking post is the Turnstile gate),
+and the identity must be ESTABLISHED (a saved profile, a comment, or a wall
+post — i.e. has passed Turnstile at least once; a fresh key gets `403
+"Attachments unlock after your first post or profile save."`). The two routes
+differ only in the admin kinds mask they enforce (`media_kinds_wall` vs
+`media_kinds_board`). Images are magic-byte-sniffed (jpeg/png/webp only) and
+LLaVA-screened; video/audio validate against the exact whitelist (video:
+mp4/quicktime/webm; audio: mpeg/mp3/mp4/x-m4a/aac/webm/ogg/wav — Domain.Media
+is the source). Per-kind byte caps from `/config`; the store budget is checked
+with a live SUM (90% of `media_cap_wall_bytes` → `507`). Returns `{ok,
+media_key:"wall/<i|v|a>/<64hex>", size, kind}`; the key is UNLINKED until a
+post claims it (unlinked orphans sweep after ~15 minutes). Serve with
+`GET /api/comments/wall/media?key=…` — keyless, public, cacheable a day,
+`nosniff` + deny-all CSP + CORP; a key linked into the back room answers the
+byte-identical 404 a missing object gets.
+
 **`POST /api/comments/edit`** — `{id, key, body}`. `POST_LIMIT`, gated, **no
 Turnstile** (despite older docs; the web SDK sends a `token` the server
-ignores). Author-only, even for admins. Re-screens; a flagged edit drops the
+ignores). An attachment survives a body edit untouched; a media-only post
+(empty body) cannot be edited at all. Author-only, even for admins. Re-screens; a flagged edit drops the
 post to `pending`. Returns `{ok, status, edited_at}`. `403 "Not yours, or
 already gone."` otherwise.
 
@@ -622,6 +646,7 @@ All require the caller's hash in the `admins` table; all refuse non-admins with
 | `POST /api/comments/admins` · `/admin` | `{key}` · `{key,hash,admin}` | List the flat roster (with `assigned` names) · grant/revoke any admin (last-admin removal refused). |
 | `POST /api/comments/meta` · `/audit` · `/trust` | `{key,hash\|page}` · `{key}` · `{key,hash,trusted}` | Per-identity/per-page fingerprint + known-IP drawer · 14-day activity audit (reports/pages/topics) · grant/revoke AI-screen-skip. |
 | `POST /api/comments/backup` | `{key}` | Force a mid-month D1→R2 backup (check `backup.error`). |
+| `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB), `media_audio_max_seconds` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` (100 MB–9 GB store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`). `media_max_bytes` stays the absolute per-file ceiling over the per-kind caps. |
 
 **merecat admin/tooling** (all `requireAdmin`): `POST /api/merecat/about`
 (model/persona/works roster — url-less rows are the private shelves, render as

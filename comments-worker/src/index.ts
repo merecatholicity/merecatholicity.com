@@ -316,6 +316,29 @@ async function notifyDiscordFeed(env: any, p: {
   });
 }
 
+/* Announce a fresh LIVE comment on a feed post to Discord — only when the feed
+   webhook is set AND the admin opted in (discord_feed_comments). Handy early on,
+   deliberately off by default because it gets noisy as the platform grows. */
+async function notifyDiscordFeedComment(env: any, p: {
+  postId: number; authorHash: string; body: string; createdAt: number;
+}) {
+  const s = await getAppSettings(env);
+  const hook = s.discord_feed_webhook;
+  if (s.discord_feed_comments !== '1' || !isDiscordWebhook(hook)) return;
+  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first();
+  const name = (prof && prof.nick) || displayName(p.authorHash);
+  const link = siteBase(env) + '/feed.html?post=' + p.postId;
+  await sendDiscord(hook, {
+    title: 'New comment in the feed',
+    url: link,
+    description: discordSnippet(p.body) || '(a comment)',
+    author: { name: (name + ' commented').slice(0, 240) },
+    color: 0x7a1f2b,
+    footer: { text: 'Mere Catholicity · Feed' },
+    timestamp: new Date(p.createdAt * 1000).toISOString(),
+  });
+}
+
 /* Fan a fresh LIVE post out to every PER-FEED Discord subscription that matches
    it (the discord_hooks table). A board reply matches its thread's `topic:<id>`
    AND its `cat:<key>`; a new topic matches its `cat:<key>`; an article-page
@@ -1113,7 +1136,7 @@ async function handleTopicView(request: any, env: any, url: any) {
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
-    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies " +
+    "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies, c.media_key, c.media_expired " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
   ).bind(id).first();
@@ -1137,7 +1160,7 @@ async function handleBoardAdmin(request: any, env: any) {
     const id = Number(data.id);
     if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
     const topic = await env.DB.prepare(
-      "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies " +
+      "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies, c.media_key, c.media_expired " +
       "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
       "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
     ).bind(id).first();
@@ -1349,7 +1372,7 @@ async function handleAudit(request: any, env: any) {
   ).bind(since).all();
   const topics = await env.DB.prepare(
     "SELECT c.id, c.page, c.author_hash, pr.nick, c.created_at, c.status, substr(c.body, 1, 160) AS snippet, " +
-    "c.locked, c.sticky, COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
+    "c.locked, c.sticky, c.media_key, COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
     "WHERE c.page LIKE 'board:%' AND c.status != 'deleted' AND c.created_at > ?1 " +
@@ -1361,7 +1384,7 @@ async function handleAudit(request: any, env: any) {
   const reports = await env.DB.prepare(
     "SELECT r.comment_id AS id, COUNT(*) AS report_count, GROUP_CONCAT(r.reason, ' | ') AS reasons, " +
     "MAX(r.created_at) AS last_reported, c.page, c.author_hash, pr.nick, c.status, " +
-    "substr(c.body, 1, 160) AS snippet, c.locked, c.sticky, COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
+    "substr(c.body, 1, 160) AS snippet, c.locked, c.sticky, c.media_key, COALESCE(c.parent_id, c.id) AS topic_id, COALESCE(c.title, t.title) AS title " +
     "FROM reports r JOIN comments c ON c.id = r.comment_id " +
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
@@ -2102,7 +2125,7 @@ async function handleAdminSettings(request: any, env: any) {
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
     const me = await sha256hex(key);
-    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, journal_topic: 1, journal_enabled: 1,
+    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, discord_feed_comments: 1, journal_topic: 1, journal_enabled: 1,
       media_image_max_bytes: 1, media_video_max_bytes: 1, media_audio_max_bytes: 1, media_audio_max_seconds: 1,
       media_kinds_dm: 1, media_kinds_wall: 1, media_kinds_board: 1, media_image_autocompress: 1,
       media_cap_dm_bytes: 1, media_cap_wall_bytes: 1 };
@@ -2116,14 +2139,14 @@ async function handleAdminSettings(request: any, env: any) {
          kinds masks all clamp/normalize through the Domain.Media kernel — the
          same rules the client reads via mcCore, single-sourced. An empty kinds
          mask is legal (= that context's uploads are off). */
-      else if (k === 'media_image_max_bytes' || k === 'media_video_max_bytes' || k === 'media_audio_max_bytes') v = String(Media.clampKindBytes(Math.floor(Number(v)) || 0));
-      else if (k === 'media_audio_max_seconds') v = String(Media.clampAudioSeconds(Math.floor(Number(v)) || 0));
-      else if (k === 'media_cap_dm_bytes' || k === 'media_cap_wall_bytes') v = String(Media.clampCapBytes(Math.floor(Number(v)) || 0));
+      else if (k === 'media_image_max_bytes' || k === 'media_video_max_bytes' || k === 'media_audio_max_bytes') v = String(Media.clampKindBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
+      else if (k === 'media_audio_max_seconds') v = String(Media.clampAudioSeconds(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
+      else if (k === 'media_cap_dm_bytes' || k === 'media_cap_wall_bytes') v = String(Media.clampCapBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
       else if (k === 'media_kinds_dm' || k === 'media_kinds_wall' || k === 'media_kinds_board') v = Media.serializeKinds(Media.parseKinds(v));
       else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : Dm.defaultTtl);
       else if (k === 'dm_backstop_days') v = String(Math.max(1, Math.min(365, Math.floor(Number(v)) || 30)));
       else if (k === 'wall_prune_days') v = String(Wall.clampPruneDays(Math.floor(Number(v)) || 365));
-      else if (k === 'journal_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
+      else if (k === 'journal_enabled' || k === 'discord_feed_comments') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'journal_topic') v = String(Math.max(0, Math.floor(Number(v)) || 0));
       else if (k === 'discord_forum_webhook' || k === 'discord_feed_webhook') {
         /* Empty clears (turns the webhook off); anything else must be a genuine
@@ -2504,6 +2527,9 @@ async function handleWallComment(request: any, env: any, ctx: any) {
     await env.DB.prepare('UPDATE wall_posts SET comments = comments + 1 WHERE id = ?1').bind(postId).run();
     if (ctx) ctx.waitUntil(deliverWallNotifications(env, { authorHash: me, postId: postId, mentions: data.mentions, postAuthorHash: post.author_hash }));
     publishLive(env, ctx, { v: 1, t: 'wall-comment', scopes: ['feed:global'], post: postId });
+    /* opt-in: mirror feed-post comments to the Discord feed webhook too */
+    if (ctx) ctx.waitUntil(notifyDiscordFeedComment(env, { postId, authorHash: me, body, createdAt: now })
+      .catch((e) => console.log(JSON.stringify({ event: 'discord_feed_comment_failed', error: String(e) }))));
   }
   return json({ ok: true, id: ins.id, status }, 200);
 }
@@ -2617,19 +2643,40 @@ async function mediaUpload(request: any, env: any, ctxKind: string) {
   return json({ ok: true, media_key: objKey, size: bytes.length, kind: word }, 200);
 }
 
-/* Serve public post media, keyless + cacheable, same-origin (like avatars). */
-async function handleWallMediaGet(request: any, env: any, url: any) {
+/* Serve public post media, keyless + cacheable, same-origin (like avatars).
+   Board attachments ride the same door with one gate: a key whose linked
+   comment sits in the back room answers the BYTE-IDENTICAL 404 a missing
+   object gets (the standing indistinguishability law) — defense-in-depth, since
+   handlePost refuses back-room attachments and a move-in purges, so normally no
+   such key exists. caches.default saves R2 reads/CPU/latency on repeats (NOT
+   worker invocations — a route's worker runs in front of the cache; the request
+   budget's real protector is the browser cache via max-age). Only gate-passing
+   2xx responses are ever put, so a cache hit can never leak a gated object. */
+async function handleWallMediaGet(request: any, env: any, url: any, ctx?: any) {
   if (!env.WALLMEDIA) return new Response('gone', { status: 404 });
   const k = String(url.searchParams.get('key') || '');
   if (!WALL_MEDIA_RE.test(k)) return new Response('bad request', { status: 400 });
+  const notFound = () => new Response('not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });
+  const cache = (caches as any).default;
+  try { const hit = await cache.match(request); if (hit) return hit; } catch (e) { /* cache is best-effort */ }
   const obj = await env.WALLMEDIA.get(k);
-  if (!obj) return new Response('not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });
-  return new Response(obj.body, { headers: {
+  if (!obj) return notFound();
+  try {
+    const lk = await env.DB.prepare('SELECT ref_type, ref_id FROM wall_media WHERE key = ?1').bind(k).first();
+    if (lk && lk.ref_type === 'board' && lk.ref_id != null) {
+      const c = await env.DB.prepare('SELECT page FROM comments WHERE id = ?1').bind(lk.ref_id).first();
+      if (c && c.page === ADMIN_CAT) return notFound();
+    }
+  } catch (e) { /* a failed linkage read must not take public media down */ }
+  const resp = new Response(obj.body, { headers: {
     'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'application/octet-stream',
     'Cache-Control': 'public, max-age=86400',
     'X-Content-Type-Options': 'nosniff',
     'Content-Security-Policy': "default-src 'none'",
+    'Cross-Origin-Resource-Policy': 'same-origin',
   } });
+  if (ctx) { try { ctx.waitUntil(cache.put(request, resp.clone())); } catch (e) { /* best-effort */ } }
+  return resp;
 }
 
 /* Delete public posts/comments older than `days` and purge their media. Shared by
@@ -3233,6 +3280,18 @@ async function handleDeleteUser(request: any, env: any) {
     "SELECT DISTINCT COALESCE(parent_id, id) AS topic FROM comments " +
     "WHERE author_hash = ?1 AND page LIKE 'board:%' AND status != 'deleted'"
   ).bind(hash).all();
+  /* Their attachments' bytes go with them (retraction semantics, same as a
+     single delete); the hourly sweep is the backstop if this purge fails. */
+  try {
+    const mk = await env.DB.prepare(
+      'SELECT media_key FROM comments WHERE author_hash = ?1 AND media_key IS NOT NULL'
+    ).bind(hash).all();
+    const keys = (mk.results || []).map((r: any) => r.media_key).filter(Boolean);
+    if (keys.length) {
+      await purgeWallMedia(env, keys);
+      await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL WHERE author_hash = ?1').bind(hash).run();
+    }
+  } catch (e) { /* the sweep reclaims it */ }
   await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE author_hash = ?1 AND status != 'deleted'")
     .bind(hash).run();
   await env.DB.prepare('DELETE FROM profiles WHERE hash = ?1').bind(hash).run();
@@ -3368,7 +3427,7 @@ async function handleApprove(request: any, env: any, ctx: any) {
     broadcastBoard(env, ctx, row.page, async () => {
       const c = await env.DB.prepare(
         'SELECT c.id, c.page, c.parent_id, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, ' +
-        'c.body, c.created_at FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.id = ?1'
+        'c.body, c.created_at, c.media_key FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.id = ?1'
       ).bind(id).first();
       if (!c) return [];
       /* A muted author's approved post enters the stream silently — the read
@@ -3387,7 +3446,8 @@ async function handleApprove(request: any, env: any, ctx: any) {
       return [
         { v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
           comment: { id: c.id, author_hash: c.author_hash, nick: c.nick || null, signature: c.signature || null,
-            avatar: c.avatar || null, faith: c.faith || null, body: c.body, created_at: c.created_at } },
+            avatar: c.avatar || null, faith: c.faith || null, body: c.body, created_at: c.created_at,
+            media_key: c.media_key || null } },
         { v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
           topic_id: topicId, title: (t && t.title) || null, replies: (t && t.replies) || 0,
           last: (t && t.last) || c.created_at, last_id: c.id, author_hash: c.author_hash, nick: c.nick || null },
@@ -3406,7 +3466,7 @@ async function handlePending(request: any, env: any) {
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const rows = await env.DB.prepare(
-    "SELECT c.id, c.page, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at, c.ai_verdict " +
+    "SELECT c.id, c.page, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at, c.ai_verdict, c.media_key " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.status = 'pending' ORDER BY c.id DESC LIMIT 200"
   ).all();
@@ -4304,8 +4364,9 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/wall/comment/like', fn: (request, env, ctx, url) => handleWallCommentLike(request, env) },
   { m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleWallLikers(request, env) },
   { m: 'POST', p: '/api/comments/wall/prune', fn: (request, env, ctx, url) => handleWallPrune(request, env) },
-  { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url) },
-  { m: 'POST', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaUpload(request, env) },
+  { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url, ctx) },
+  { m: 'POST', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => mediaUpload(request, env, 'wall') },
+  { m: 'POST', p: '/api/comments/board/media', fn: (request, env, ctx, url) => mediaUpload(request, env, 'board') },
   { m: 'POST', p: '/api/comments/wall', fn: (request, env, ctx, url) => handleWall(request, env) },
   { m: 'POST', p: '/api/comments/lock', fn: (request, env, ctx, url) => handleLock(request, env) },
   { m: 'POST', p: '/api/comments/shadowban', fn: (request, env, ctx, url) => handleShadowban(request, env) },
@@ -4389,7 +4450,9 @@ export default {
        the reclamation pass behind the instant read-time hiding). Monthly (any
        other schedule): the sweep plus the full housekeeping + backup chain. */
     if (event && event.cron === '0 * * * *') {
-      ctx.waitUntil(sweepExpiredDms(env).then(() => sweepWallOrphanMedia(env)));
+      ctx.waitUntil(sweepExpiredDms(env)
+        .then(() => sweepWallOrphanMedia(env))
+        .then(() => enforceWallMediaCap(env)));
       return;
     }
     ctx.waitUntil(
@@ -4400,6 +4463,7 @@ export default {
         .then(() => pruneNotifications(env))
         .then(() => pruneMerecatChats(env))
         .then(() => sweepWallOrphanMedia(env))
+        .then(() => enforceWallMediaCap(env))
         .then(() => pruneWallPosts(env))
         .then(() => runBackup(env))
     );

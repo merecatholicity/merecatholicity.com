@@ -156,6 +156,14 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
     article.appendChild(body);
     if (c.signature) article.appendChild(window.mcRich!.fillBody(el('div', 'comment-sig'), c.signature,
       c.author_hash === kit.MERECAT_BOT_HASH));
+    /* Board attachments render through the kit's wall media node (post=null =
+       the plain viewer); an attachment the sweep has taken leaves a muted note. */
+    if (c.media_key && kit.wallMediaNode) {
+      var media = kit.wallMediaNode(c.media_key, null);
+      if (media) article.appendChild(media);
+    } else if (c.media_expired) {
+      article.appendChild(el('p', 'comment-note wall-media-gone', 'The attachment expired.'));
+    }
     if (pending) {
       article.appendChild(el('p', 'comment-note',
         'Held for review. It will appear here once approved.'));
