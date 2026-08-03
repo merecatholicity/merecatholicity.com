@@ -29,6 +29,13 @@
     return readCookie() || 'dark';
   }
   function apply(theme) {
+    /* The mc-fout gate pre-paints <html> with an INLINE background from the
+       cookie so a dark reader never sees a white flash before the stylesheet
+       arrives. Inline beats every stylesheet rule, so once WE run (deferred =
+       CSS is parsed) it must be cleared or a later live toggle flips every
+       token EXCEPT the page background — the "background stays the old theme
+       until a hard refresh" bug. html{background:var(--bg)} owns it from here. */
+    document.documentElement.style.background = '';
     document.documentElement.setAttribute('data-theme', theme);
     /* charcoal is the base [data-theme="dark"] block (no attribute); slate/ink are
        delta blocks keyed on data-dark. Cleared in light mode so nothing lingers. */
@@ -64,6 +71,10 @@
     document.cookie = 'mc-light=' + v + ';path=/;max-age=31536000;samesite=lax';
     apply(effective());
   };
+  /* The settings gear's light/dark toggle drives THIS (write the mc-theme
+     cookie, then call it) so the whole application — attributes, palette
+     variants, the inline pre-paint clear — lives in one engine. */
+  window.mcApplyTheme = function () { apply(effective()); };
 
   /* The floating corner light/dark toggle was RETIRED — the theme now lives in
      the platform Settings (gear → Appearance), which drives the same engine via
@@ -258,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=3843339012';
+    s.src = 'app.js?v=1212846526';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

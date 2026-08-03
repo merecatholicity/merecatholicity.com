@@ -747,11 +747,23 @@ class McSettings extends LitElement {
   }
   toggleTheme() {
     const n = this.theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', n);
     try { document.cookie = 'mc-theme=' + n + ';path=/;max-age=31536000;samesite=lax'; } catch (e) { /* blocked */ }
-    /* keep the chosen dark palette applied when turning dark on, cleared for light */
-    if (n === 'dark' && (this.dark === 'slate' || this.dark === 'ink')) document.documentElement.setAttribute('data-dark', this.dark);
-    else document.documentElement.removeAttribute('data-dark');
+    /* Route through the nav.js engine: it applies data-theme AND the palette
+       variants (data-dark/data-light, both directions) AND clears the mc-fout
+       gate's inline <html> pre-paint — which inline-shadows the stylesheet and
+       once left the page background stuck in the old theme until a hard
+       refresh. The fallback (a cached pre-engine nav.js, ~10 min TTL) does the
+       same by hand. */
+    if ((window as any).mcApplyTheme) (window as any).mcApplyTheme();
+    else {
+      const e = document.documentElement;
+      e.style.background = '';
+      e.setAttribute('data-theme', n);
+      if (n === 'dark' && (this.dark === 'slate' || this.dark === 'ink')) e.setAttribute('data-dark', this.dark);
+      else e.removeAttribute('data-dark');
+      if (n === 'light' && (this.light === 'mist' || this.light === 'sepia')) e.setAttribute('data-light', this.light);
+      else e.removeAttribute('data-light');
+    }
     this.theme = n;
   }
   setDark(p: string) { if (window.mcSetDark) window.mcSetDark(p); this.dark = p; }
