@@ -1040,7 +1040,13 @@ section.comments.board { min-height: 100vh; }
 a.board-cat-name { font-weight: bold; color: var(--maroon); text-decoration: none; }
 a.board-cat-name:hover { text-decoration: underline; }
 .board-cat-desc { color: var(--muted-b); font-size: 0.92rem; }
-.board-stats { color: var(--muted-d); font-size: 0.85rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
+.board-stats { color: var(--faintest); font-size: 0.8rem; text-align: right; white-space: nowrap; flex-shrink: 0; }
+/* The one dim secondary line under a list row's title (the readability
+   standard): "lastposter · Jul 31" — quiet, single-line, ellipsized. */
+.board-row-sub { color: var(--faintest); font-size: 0.8rem; margin-top: 0.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30rem; }
+.board-row-sub a { color: var(--faintest); text-decoration: none; }
+.board-row-sub a:hover { color: var(--maroon); text-decoration: underline; }
+.board-topic .board-pages { font-size: 0.75rem; }
 a.board-topic-title { color: var(--ink); text-decoration: none; font-weight: bold; overflow-wrap: anywhere; }
 a.board-topic-title:hover { color: var(--maroon); text-decoration: underline; }
 /* The whole category tile / topic row is a click target into the category or

@@ -348,7 +348,7 @@ class McSearch extends LitElement {
     return html`<div class="board-topic"><div class="board-topic-left">
       <a class="board-topic-title" href=${'community.html?topic=' + it.topic_id + '#comment-' + it.comment_id}>${it.title || 'a thread'}</a>
       ${it.snip ? html`<div class="mc-snip" data-snip=${it.snip}></div>` : nothing}
-      </div><div class="board-stats">${who + ' · ' + (ce ? ce[1] : it.cat) + ' · ' + kit.fmtDateTime(it.created_at)}</div></div>`;
+      </div><div class="board-stats" title=${kit.fmtDateTime(it.created_at)}>${who + ' · ' + (ce ? ce[1] : it.cat) + ' · ' + kit.fmtTimeCompact(it.created_at)}</div></div>`;
   }
   render() {
     const kit = this.kit;

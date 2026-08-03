@@ -160,8 +160,9 @@ class McInbox extends LitElement {
           : d.threads.map((t: any) => html`<div class="board-topic mc-cardnav" @click=${this._dmNav}>
               <div class="board-topic-left">
                 <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}
+                <div class="board-row-sub" title=${kit.fmtDateTime(t.last_at)}>${kit.fmtTimeCompact(t.last_at)}</div>
               </div>
-              <div class="board-stats">${t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + kit.fmtDateTime(t.last_at)}</div>
+              <div class="board-stats" title=${kit.fmtDateTime(t.last_at)}>${t.msgs + (t.msgs === 1 ? ' message' : ' messages')}</div>
               <div class="board-admin-corner"><a class="trust-toggle" href="#" @click=${(e: Event) => this.del(e, t.other_hash, (e.target as HTMLElement).closest('.board-topic') as HTMLElement)}>Delete</a></div>
             </div>`)}
       </div>
