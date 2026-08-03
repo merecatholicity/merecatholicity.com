@@ -1086,11 +1086,357 @@
     }
     function ensureDmStyles() {
       if (document.getElementById("mc-dm-css")) return;
-      var css = ".dm-expiry{font-size:0.85em;opacity:0.72;margin:0.15em 0 0.5em}.dm-expiry a{cursor:pointer}.dm-save{font-size:0.78em;opacity:0.55;margin-left:10px;cursor:pointer;white-space:nowrap}.dm-save:hover{opacity:0.9}.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}.btn-attach{margin-left:6px}.dm-media{margin:0.1em 0}.dm-media-status{opacity:0.6;font-size:0.9em}.dm-media-img,.dm-media-vid{max-width:100%;max-height:60vh;border-radius:8px;display:block}.dm-media-aud{width:100%;max-width:320px}.dm-media-caption{margin-top:0.35em}.dm-media-expired{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px dashed var(--rule,#cbb);border-radius:10px;opacity:0.78}.dm-media-expired-icon{font-size:1.25em;filter:grayscale(1);opacity:0.7}.dm-media-expired-text{font-size:0.9em;font-style:italic;opacity:0.85}.dm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;background:#c8c8c8}.dm-dot-on{background:#3ba55d;box-shadow:0 0 0 2px rgba(59,165,93,0.22)}.dm-dot-off{background:#c0c0c0}.dm-dot-unknown{background:#dcdcdc}.dm-typing{font-size:0.85em;opacity:0.7;font-style:italic;margin:0.25em 0.2em}.dm-receipt{display:block;font-size:0.72em;opacity:0.5;margin-top:2px}.dm-receipt-seen{opacity:0.8;color:var(--maroon,#8b1a1a)}.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}.wall-media{margin:0.45em 0}.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}.wall-post-detail .wall-media-el{max-height:85vh}.wall-share{position:relative;display:inline-flex;align-items:center}.wall-share-menu{display:inline-flex;flex-wrap:wrap;gap:0.7em;margin-left:0.7em}.wall-media-gone{opacity:0.6;font-size:0.9em;font-style:italic}.wall-foot{margin-top:0.45em;font-size:0.9em}.wall-comments-toggle{cursor:pointer;opacity:0.78}.wall-comments-toggle:hover{opacity:1}.wall-comments{margin:0.55em 0 0.2em 0.9em;border-left:2px solid var(--rule,#e6e0d5);padding-left:0.85em}.wall-comment{margin:0.45em 0}.wall-newpill{display:inline-block;margin:0.4em 0;padding:0.3em 0.85em;border-radius:14px;background:var(--maroon,#8b1a1a);color:#fff;font-size:0.85em;cursor:pointer;text-decoration:none}.wall-composer{margin:0.6em 0 1.1em}.wall-del{color:var(--maroon,#8b1a1a);opacity:0.7}.wall-sentinel{height:1px}.dm-edited{font-size:0.72em;opacity:0.5;font-style:italic}.dm-redacted{font-style:italic;opacity:0.6}.dm-redacted-msg .comment-body{opacity:0.9}.dm-msg-actions{margin-top:2px}.dm-msg-actions a{font-size:0.78em;opacity:0.5;margin-right:10px;cursor:pointer;white-space:nowrap}.dm-msg-actions a:hover{opacity:0.9}.dm-del{color:var(--maroon,#8b1a1a)}.dm-edit-box textarea{width:100%;box-sizing:border-box}.dm-edit-box{margin-top:3px}.admin-set-row{margin:0.6em 0}.admin-set-row input[type=number]{width:6em}";
+      var css = ".dm-expiry{font-size:0.85em;opacity:0.72;margin:0.15em 0 0.5em}.dm-expiry a{cursor:pointer}.dm-save{font-size:0.78em;opacity:0.55;margin-left:10px;cursor:pointer;white-space:nowrap}.dm-save:hover{opacity:0.9}.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}.btn-attach{margin-left:6px}.dm-media{margin:0.1em 0}.dm-media-status{opacity:0.6;font-size:0.9em}.dm-media-img,.dm-media-vid{max-width:100%;max-height:60vh;border-radius:8px;display:block}.dm-media-aud{width:100%;max-width:320px}.dm-media-caption{margin-top:0.35em}.dm-media-expired{display:flex;align-items:center;gap:8px;padding:12px 14px;border:1px dashed var(--rule,#cbb);border-radius:10px;opacity:0.78}.dm-media-expired-icon{font-size:1.25em;filter:grayscale(1);opacity:0.7}.dm-media-expired-text{font-size:0.9em;font-style:italic;opacity:0.85}.dm-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;background:#c8c8c8}.dm-dot-on{background:#3ba55d;box-shadow:0 0 0 2px rgba(59,165,93,0.22)}.dm-dot-off{background:#c0c0c0}.dm-dot-unknown{background:#dcdcdc}.dm-typing{font-size:0.85em;opacity:0.7;font-style:italic;margin:0.25em 0.2em}.dm-receipt{display:block;font-size:0.72em;opacity:0.5;margin-top:2px}.dm-receipt-seen{opacity:0.8;color:var(--maroon,#8b1a1a)}.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}.wall-media{margin:0.45em 0}.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}.wall-post-detail .wall-media-el{max-height:85vh}.wall-share{position:relative;display:inline-flex;align-items:center}.wall-share-menu{display:inline-flex;flex-wrap:wrap;gap:0.7em;margin-left:0.7em}.wall-media-gone{opacity:0.6;font-size:0.9em;font-style:italic}.wall-foot{margin-top:0.45em;font-size:0.9em}.wall-comments-toggle{cursor:pointer;opacity:0.78}.wall-comments-toggle:hover{opacity:1}.wall-comments{margin:0.55em 0 0.2em 0.9em;border-left:2px solid var(--rule,#e6e0d5);padding-left:0.85em}.wall-comment{margin:0.45em 0}.wall-newpill{display:inline-block;margin:0.4em 0;padding:0.3em 0.85em;border-radius:14px;background:var(--maroon,#8b1a1a);color:#fff;font-size:0.85em;cursor:pointer;text-decoration:none}.wall-composer{margin:0.6em 0 1.1em}.wall-del{color:var(--maroon,#8b1a1a);opacity:0.7}.wall-sentinel{height:1px}.dm-edited{font-size:0.72em;opacity:0.5;font-style:italic}.dm-redacted{font-style:italic;opacity:0.6}.dm-redacted-msg .comment-body{opacity:0.9}.dm-msg-actions{margin-top:2px}.dm-msg-actions a{font-size:0.78em;opacity:0.5;margin-right:10px;cursor:pointer;white-space:nowrap}.dm-msg-actions a:hover{opacity:0.9}.dm-del{color:var(--maroon,#8b1a1a)}.dm-edit-box textarea{width:100%;box-sizing:border-box}.dm-edit-box{margin-top:3px}.admin-set-row{margin:0.6em 0}.admin-set-row input[type=number]{width:6em}.mc-media-row{margin:0.5em 0}.mc-media-note{font-size:0.85em;opacity:0.75;margin-left:8px}.mc-rec-row{display:flex;align-items:center;gap:10px;margin:0.5em 0;flex-wrap:wrap}.mc-rec-dot{width:10px;height:10px;border-radius:50%;background:#c0392b;animation:mc-rec-pulse 1.1s ease-in-out infinite}@keyframes mc-rec-pulse{0%,100%{opacity:1}50%{opacity:0.25}}.mc-rec-time{font-variant-numeric:tabular-nums;font-size:0.9em;opacity:0.85}.mc-rec-audio{max-width:280px}";
       var st = el("style");
       st.id = "mc-dm-css";
       st.textContent = css;
       document.head.appendChild(st);
+    }
+    var _mediaCfgP = null;
+    function mediaCfgFallback() {
+      var core = window.mcCore;
+      var d = core.mediaDefaults;
+      return {
+        enabled: true,
+        kinds: { dm: core.mediaParseKinds(d.kindsDm), wall: core.mediaParseKinds(d.kindsWall), board: core.mediaParseKinds(d.kindsBoard) },
+        max_bytes: { image: Number(d.imageMaxBytes), video: Number(d.videoMaxBytes), audio: Number(d.audioMaxBytes) },
+        audio_max_seconds: Number(d.audioMaxSeconds),
+        autocompress: true
+      };
+    }
+    function mediaCfg() {
+      if (_mediaCfgP) return _mediaCfgP;
+      _mediaCfgP = cachedJson(API + "/config", void 0, 3e5).then(function(d) {
+        if (d && d.ok && d.media && d.media.kinds && d.media.max_bytes) return d.media;
+        return mediaCfgFallback();
+      }).catch(function() {
+        return mediaCfgFallback();
+      });
+      return _mediaCfgP;
+    }
+    function mkFile(parts, name, type) {
+      var F = window.File;
+      try {
+        return new F(parts, name, { type });
+      } catch (e) {
+        var b = new Blob(parts, { type });
+        b.name = name;
+        return b;
+      }
+    }
+    function compressImage(file, cfg) {
+      if (!/^image\//.test(String(file.type || ""))) return Promise.resolve(file);
+      if (!cfg || cfg.autocompress === false) return Promise.resolve(file);
+      if (file.size <= 524288 && file.type === "image/jpeg") return Promise.resolve(file);
+      var cib = window.createImageBitmap;
+      if (typeof cib !== "function") return Promise.resolve(file);
+      var limit = Number(cfg.max_bytes && cfg.max_bytes.image) || 10485760;
+      return cib(file).then(function(bmp) {
+        var scale = Math.min(1, 2048 / Math.max(bmp.width || 1, bmp.height || 1));
+        if (scale === 1 && file.type === "image/jpeg" && file.size <= limit) {
+          try {
+            bmp.close();
+          } catch (e) {
+          }
+          return file;
+        }
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(bmp.width * scale));
+        canvas.height = Math.max(1, Math.round(bmp.height * scale));
+        var ctx = canvas.getContext("2d");
+        if (!ctx) {
+          try {
+            bmp.close();
+          } catch (e) {
+          }
+          return file;
+        }
+        ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        try {
+          bmp.close();
+        } catch (e) {
+        }
+        function encode(q) {
+          return new Promise(function(resolve) {
+            canvas.toBlob(resolve, "image/jpeg", q);
+          });
+        }
+        return encode(0.8).then(function(blob) {
+          if (blob && blob.size > limit) return encode(0.65);
+          return blob;
+        }).then(function(blob) {
+          if (!blob) return file;
+          var name = String(file.name || "image").replace(/\.[A-Za-z0-9]+$/, "") + ".jpg";
+          return mkFile([blob], name, "image/jpeg");
+        });
+      }, function() {
+        return null;
+      });
+    }
+    function mediaGateFile(f, cfg, kinds, statusEl) {
+      var core = window.mcCore;
+      var kind = core ? core.mediaKindOfMime(String(f.type || "")) : null;
+      if (!cfg.enabled) {
+        statusEl.textContent = "Media sharing is turned off.";
+        return Promise.resolve(null);
+      }
+      if (!kind || (kinds || []).indexOf(kind) === -1) {
+        statusEl.textContent = "That file type cannot be shared here" + (kinds && kinds.length ? " \u2014 only " + kinds.join(", ") + "." : ".");
+        return Promise.resolve(null);
+      }
+      var p = kind === "image" ? compressImage(f, cfg) : Promise.resolve(f);
+      return p.then(function(out) {
+        if (!out) {
+          statusEl.textContent = "That image could not be read.";
+          return null;
+        }
+        var limit = Number(cfg.max_bytes && cfg.max_bytes[kind]) || 0;
+        if (limit && out.size > limit) {
+          statusEl.textContent = "That " + kind + " is too large \u2014 the limit is " + Math.round(limit / 1048576) + " MB.";
+          return null;
+        }
+        return out;
+      });
+    }
+    var LAME_SRC = "lamejs.min.js?v=1";
+    var _lameP = null;
+    function ensureLame() {
+      var w = window;
+      if (w.lamejs) return Promise.resolve(w.lamejs);
+      if (_lameP) return _lameP;
+      _lameP = new Promise(function(resolve, reject) {
+        var s = document.createElement("script");
+        s.src = LAME_SRC;
+        s.async = true;
+        s.onload = function() {
+          if (w.lamejs) resolve(w.lamejs);
+          else {
+            _lameP = null;
+            reject(new Error("lamejs"));
+          }
+        };
+        s.onerror = function() {
+          _lameP = null;
+          reject(new Error("lamejs load failed"));
+        };
+        document.head.appendChild(s);
+      });
+      return _lameP;
+    }
+    function voiceSupported() {
+      var w = window;
+      var nav = navigator;
+      return !!(nav.mediaDevices && nav.mediaDevices.getUserMedia && w.MediaRecorder && w.MediaRecorder.isTypeSupported);
+    }
+    function voiceMime() {
+      var MR = window.MediaRecorder;
+      var list = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/ogg;codecs=opus", ""];
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] === "" || MR.isTypeSupported(list[i])) return list[i];
+      }
+      return "";
+    }
+    function fmtSecs(s) {
+      s = Math.max(0, Math.floor(Number(s) || 0));
+      return Math.floor(s / 60) + ":" + ("0" + s % 60).slice(-2);
+    }
+    function voiceRawFile(blob) {
+      var t = String(blob.type || "");
+      var ext = t.indexOf("mp4") !== -1 ? "m4a" : t.indexOf("ogg") !== -1 ? "ogg" : "webm";
+      return mkFile([blob], "voice-note." + ext, t || "audio/webm");
+    }
+    function voiceMp3Encode(blob) {
+      return ensureLame().then(function(lame) {
+        return blob.arrayBuffer().then(function(buf) {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) throw new Error("no audio context");
+          var ctx = new AC();
+          return new Promise(function(resolve, reject) {
+            ctx.decodeAudioData(buf, resolve, reject);
+          }).then(function(audio) {
+            try {
+              ctx.close();
+            } catch (e) {
+            }
+            var chs = audio.numberOfChannels || 1;
+            var len = audio.length;
+            var mono = new Float32Array(len);
+            for (var c = 0; c < chs; c++) {
+              var data = audio.getChannelData(c);
+              for (var i = 0; i < len; i++) mono[i] += data[i];
+            }
+            if (chs > 1) for (var j = 0; j < len; j++) mono[j] /= chs;
+            var pcm = new Int16Array(len);
+            for (var k = 0; k < len; k++) {
+              var v = Math.max(-1, Math.min(1, mono[k]));
+              pcm[k] = Math.round(v * 32767);
+            }
+            var enc = new lame.Mp3Encoder(1, audio.sampleRate, 64);
+            var parts = [];
+            var pos = 0;
+            function step() {
+              var n = 0;
+              while (pos < len && n < 64) {
+                var out = enc.encodeBuffer(pcm.subarray(pos, Math.min(pos + 1152, len)));
+                if (out && out.length) parts.push(out);
+                pos += 1152;
+                n++;
+              }
+              if (pos < len) return new Promise(function(r) {
+                setTimeout(r, 0);
+              }).then(step);
+              var tail = enc.flush();
+              if (tail && tail.length) parts.push(tail);
+              return mkFile(parts, "voice-note.mp3", "audio/mpeg");
+            }
+            return step();
+          });
+        });
+      });
+    }
+    function startVoiceRecorder(form, cfg, statusEl, takeFile) {
+      if (form.querySelector(".mc-rec-row")) return;
+      var maxSecs = Number(cfg.audio_max_seconds) || 180;
+      var maxBytes = Number(cfg.max_bytes && cfg.max_bytes.audio) || 5242880;
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+        var MR = window.MediaRecorder;
+        var mt = voiceMime();
+        var opts = { audioBitsPerSecond: 64e3 };
+        if (mt) opts.mimeType = mt;
+        var rec;
+        try {
+          rec = new MR(stream, opts);
+        } catch (e) {
+          stream.getTracks().forEach(function(t) {
+            t.stop();
+          });
+          statusEl.textContent = "Recording is not available in this browser.";
+          return;
+        }
+        var row = el("div", "mc-rec-row");
+        row.appendChild(el("span", "mc-rec-dot"));
+        var time = el("span", "mc-rec-time", "0:00 / " + fmtSecs(maxSecs));
+        row.appendChild(time);
+        var stopBtn = el("button", "btn", "Stop");
+        stopBtn.type = "button";
+        row.appendChild(stopBtn);
+        form.appendChild(row);
+        var chunks = [];
+        var bytes = 0;
+        var startedAt = Date.now();
+        var stopped = false;
+        function stopNow() {
+          if (stopped) return;
+          stopped = true;
+          clearInterval(tick);
+          try {
+            rec.stop();
+          } catch (e) {
+          }
+        }
+        var tick = setInterval(function() {
+          var s = Math.floor((Date.now() - startedAt) / 1e3);
+          time.textContent = fmtSecs(Math.min(s, maxSecs)) + " / " + fmtSecs(maxSecs);
+          if (s >= maxSecs) stopNow();
+        }, 250);
+        stopBtn.addEventListener("click", stopNow);
+        rec.ondataavailable = function(ev) {
+          if (ev.data && ev.data.size) {
+            chunks.push(ev.data);
+            bytes += ev.data.size;
+            if (bytes > maxBytes) stopNow();
+          }
+        };
+        rec.onstop = function() {
+          stream.getTracks().forEach(function(t) {
+            t.stop();
+          });
+          row.remove();
+          var blob = new Blob(chunks, { type: rec.mimeType || mt || "audio/webm" });
+          if (!blob.size) {
+            statusEl.textContent = "Nothing was recorded.";
+            return;
+          }
+          voicePreview(form, cfg, statusEl, blob, takeFile);
+        };
+        try {
+          rec.start(1e3);
+        } catch (e) {
+          stopNow();
+        }
+      }).catch(function() {
+        statusEl.textContent = "Microphone access was refused.";
+      });
+    }
+    function voicePreview(form, cfg, statusEl, blob, takeFile) {
+      var row = el("div", "mc-rec-row mc-rec-preview");
+      var url = URL.createObjectURL(blob);
+      var player = el("audio", "mc-rec-audio");
+      player.src = url;
+      player.controls = true;
+      row.appendChild(player);
+      var use = el("button", "btn btn-send", "Use this");
+      use.type = "button";
+      var redo = el("button", "btn", "Re-record");
+      redo.type = "button";
+      var drop = el("button", "btn", "Discard");
+      drop.type = "button";
+      row.appendChild(use);
+      row.appendChild(redo);
+      row.appendChild(drop);
+      form.appendChild(row);
+      function cleanup() {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (e) {
+        }
+        row.remove();
+      }
+      drop.addEventListener("click", function() {
+        cleanup();
+      });
+      redo.addEventListener("click", function() {
+        cleanup();
+        startVoiceRecorder(form, cfg, statusEl, takeFile);
+      });
+      use.addEventListener("click", function() {
+        use.disabled = true;
+        redo.disabled = true;
+        drop.disabled = true;
+        statusEl.textContent = "Preparing\u2026";
+        voiceMp3Encode(blob).catch(function() {
+          return voiceRawFile(blob);
+        }).then(function(f) {
+          statusEl.textContent = "";
+          cleanup();
+          takeFile(f);
+        });
+      });
+    }
+    function voiceControl(form, cfg, statusEl, takeFile) {
+      var btn = el("button", "btn btn-attach mc-voice-btn", "\u{1F399} Voice");
+      btn.type = "button";
+      if (!voiceSupported()) {
+        var fi = el("input", "mc-voice-input");
+        fi.type = "file";
+        fi.accept = "audio/*";
+        fi.setAttribute("capture", "");
+        fi.style.display = "none";
+        fi.addEventListener("change", function() {
+          var f = fi.files && fi.files[0];
+          if (f) takeFile(f);
+          fi.value = "";
+        });
+        form.appendChild(fi);
+        btn.addEventListener("click", function() {
+          fi.click();
+        });
+        return btn;
+      }
+      btn.addEventListener("click", function() {
+        startVoiceRecorder(form, cfg, statusEl, takeFile);
+      });
+      return btn;
     }
     var section = document.querySelector("section[data-comments], section[data-board]");
     if (!section) return;
@@ -2329,6 +2675,14 @@
         c.signature,
         c.author_hash === MERECAT_BOT_HASH
       ));
+      if (c.media_key) {
+        ensureDmStyles();
+        var media = wallMediaNode(c.media_key, null);
+        if (media) article.appendChild(media);
+      } else if (c.media_expired) {
+        ensureDmStyles();
+        article.appendChild(el("p", "comment-note wall-media-gone", "The attachment expired."));
+      }
       if (pending) {
         article.appendChild(el(
           "p",
@@ -3343,6 +3697,7 @@
       form.appendChild(el("div", "ts-slot"));
       form.appendChild(el("div", "comment-buttons"));
       form.appendChild(el("p", "form-status"));
+      attachBoardMedia(form);
       section.appendChild(form);
       return form;
     }
@@ -3383,6 +3738,7 @@
         payload.mentions = collectMentions(payload.body || "");
         payload.ipv4 = state.altIps.ipv4 || "";
         payload.ipv6 = state.altIps.ipv6 || "";
+        if (state.boardMedia && state.boardMedia.key) payload.media_key = state.boardMedia.key;
         return fetchRetry(API, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -3397,6 +3753,7 @@
         if (!d.ok) throw new Error(d.error || "Something went wrong. Please try again.");
         stampFresh();
         status.textContent = "";
+        if (state.boardMedia && state.boardMedia.key) state.boardMedia.clear();
         onSuccess(d);
       }).catch(function(err) {
         status.textContent = err.message || "Could not reach the server. Please try again.";
@@ -3405,6 +3762,83 @@
           b.disabled = false;
         });
         if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+      });
+    }
+    function attachBoardMedia(form) {
+      state.boardMedia = null;
+      if (new URLSearchParams(location.search).get("cat") === "adminsonly") return;
+      mediaCfg().then(function(cfg) {
+        if (!cfg.enabled || !cfg.kinds.board.length) return;
+        var core = window.mcCore;
+        var row = el("div", "mc-media-row");
+        var fileInput = el("input", "mc-board-file");
+        fileInput.type = "file";
+        fileInput.accept = core.mediaAcceptFor(cfg.kinds.board);
+        fileInput.style.display = "none";
+        var chip = el("span", "dm-attach-chip");
+        chip.style.display = "none";
+        var note = el("span", "mc-media-note");
+        var held = { key: "", clear: clearHeld };
+        function clearHeld() {
+          held.key = "";
+          fileInput.value = "";
+          chip.style.display = "none";
+          chip.textContent = "";
+        }
+        state.boardMedia = held;
+        var attach = el("button", "btn btn-attach", "\u{1F4CE} Attach");
+        attach.type = "button";
+        attach.addEventListener("click", function() {
+          fileInput.click();
+        });
+        function takeFile(f) {
+          note.textContent = "";
+          mediaGateFile(f, cfg, cfg.kinds.board, note).then(function(out) {
+            if (!out) {
+              fileInput.value = "";
+              return;
+            }
+            note.textContent = "Uploading\u2026";
+            var fd = new FormData();
+            fd.append("key", state.key || "");
+            fd.append("file", out);
+            fetchRetry(API + "/board/media", { method: "POST", body: fd }, [1500]).then(function(r) {
+              return r.json();
+            }).then(function(d) {
+              if (blockedOut(d)) return;
+              if (!d || !d.ok) {
+                note.textContent = d && d.error || "Upload failed.";
+                return;
+              }
+              note.textContent = "";
+              held.key = d.media_key;
+              chip.textContent = "";
+              chip.appendChild(document.createTextNode("\u{1F4CE} " + (out.name || "attachment") + " \xB7 " + fmtBytes(out.size) + "  "));
+              var x = el("a", null, "\u2715");
+              x.href = "#";
+              x.addEventListener("click", function(e) {
+                e.preventDefault();
+                clearHeld();
+              });
+              chip.appendChild(x);
+              chip.style.display = "";
+            }).catch(function() {
+              note.textContent = "Upload failed. Try again.";
+            });
+          });
+        }
+        fileInput.addEventListener("change", function() {
+          var f = fileInput.files && fileInput.files[0];
+          if (f) takeFile(f);
+        });
+        row.appendChild(attach);
+        if (cfg.kinds.board.indexOf("audio") !== -1) row.appendChild(voiceControl(form, cfg, note, takeFile));
+        row.appendChild(chip);
+        row.appendChild(note);
+        form.appendChild(fileInput);
+        var btnRow = form.querySelector(".comment-buttons");
+        if (btnRow) form.insertBefore(row, btnRow);
+        else form.appendChild(row);
       });
     }
     function armBoardForm() {
@@ -6169,6 +6603,7 @@
     }
     function wallMediaNode(mediaKey, post2) {
       if (!mediaKey) return null;
+      ensureDmStyles();
       var kind = String(mediaKey).split("/")[1];
       var src = API + "/wall/media?key=" + encodeURIComponent(mediaKey);
       var holder = el("div", "wall-media wall-media-" + (kind === "v" ? "video" : kind === "a" ? "audio" : "img"));
@@ -6436,22 +6871,37 @@
       attach.addEventListener("click", function() {
         fileInput.click();
       });
+      function takeWallFile(f) {
+        mediaCfg().then(function(cfg) {
+          mediaGateFile(f, cfg, cfg.kinds.wall, status).then(function(out) {
+            if (!out) {
+              fileInput.value = "";
+              return;
+            }
+            pendingFile = out;
+            status.textContent = "";
+            chip.textContent = "";
+            chip.appendChild(document.createTextNode("\u{1F4CE} " + (out.name || "attachment") + " \xB7 " + fmtBytes(out.size) + "  "));
+            var x = el("a", null, "\u2715");
+            x.href = "#";
+            x.addEventListener("click", function(e) {
+              e.preventDefault();
+              clearAttach();
+            });
+            chip.appendChild(x);
+            chip.style.display = "";
+          });
+        });
+      }
       fileInput.addEventListener("change", function() {
         var f = fileInput.files && fileInput.files[0];
         if (!f) return;
-        pendingFile = f;
-        chip.textContent = "";
-        chip.appendChild(document.createTextNode("\u{1F4CE} " + f.name + " \xB7 " + fmtBytes(f.size) + "  "));
-        var x = el("a", null, "\u2715");
-        x.href = "#";
-        x.addEventListener("click", function(e) {
-          e.preventDefault();
-          clearAttach();
-        });
-        chip.appendChild(x);
-        chip.style.display = "";
+        takeWallFile(f);
       });
       btnRow.appendChild(attach);
+      mediaCfg().then(function(cfg) {
+        if (cfg.enabled && cfg.kinds.wall.indexOf("audio") !== -1) btnRow.appendChild(voiceControl(form, cfg, status, takeWallFile));
+      });
       form.appendChild(chip);
       form.appendChild(fileInput);
       form.appendChild(btnRow);
@@ -7181,28 +7631,37 @@
         attach.addEventListener("click", function() {
           fileInput.click();
         });
+        function takeDmFile(f) {
+          mediaCfg().then(function(cfg) {
+            mediaGateFile(f, cfg, cfg.kinds.dm, status).then(function(out) {
+              if (!out) {
+                fileInput.value = "";
+                return;
+              }
+              pendingFile = out;
+              status.textContent = "";
+              mediaChip.textContent = "";
+              mediaChip.appendChild(document.createTextNode("\u{1F4CE} " + (out.name || "attachment") + " \xB7 " + fmtBytes(out.size) + "  "));
+              var x = el("a", null, "\u2715");
+              x.href = "#";
+              x.addEventListener("click", function(ev) {
+                ev.preventDefault();
+                clearAttach();
+              });
+              mediaChip.appendChild(x);
+              mediaChip.style.display = "";
+            });
+          });
+        }
         fileInput.addEventListener("change", function() {
           var f = fileInput.files && fileInput.files[0];
           if (!f) return;
-          if (f.size > 60 * 1024 * 1024) {
-            fileInput.value = "";
-            status.textContent = "That file is too large to share here.";
-            return;
-          }
-          pendingFile = f;
-          status.textContent = "";
-          mediaChip.textContent = "";
-          mediaChip.appendChild(document.createTextNode("\u{1F4CE} " + f.name + " \xB7 " + fmtBytes(f.size) + "  "));
-          var x = el("a", null, "\u2715");
-          x.href = "#";
-          x.addEventListener("click", function(ev) {
-            ev.preventDefault();
-            clearAttach();
-          });
-          mediaChip.appendChild(x);
-          mediaChip.style.display = "";
+          takeDmFile(f);
         });
         btnRow.appendChild(attach);
+        mediaCfg().then(function(cfg) {
+          if (cfg.enabled && cfg.kinds.dm.indexOf("audio") !== -1) btnRow.appendChild(voiceControl(form, cfg, status, takeDmFile));
+        });
         form.appendChild(mediaChip);
         form.appendChild(fileInput);
         form.appendChild(btnRow);
@@ -9311,6 +9770,88 @@
         jLinkP.appendChild(jLink);
         jLinkP.appendChild(document.createTextNode("."));
         wrap.appendChild(jLinkP);
+        wrap.appendChild(el("h3", null, "Media & uploads"));
+        wrap.appendChild(el(
+          "p",
+          "board-cat-desc",
+          "What members may attach and how large, everywhere media is allowed. The \u201CLargest attachment\u201D above is the overall ceiling \u2014 a per-kind limit never rises past it."
+        ));
+        var mdefs = window.mcCore.mediaDefaults;
+        function mediaMbRow(label, key, defBytes) {
+          var r = el("p", "admin-set-row");
+          r.appendChild(document.createTextNode(label + " (MB): "));
+          var inp = el("input");
+          inp.type = "number";
+          inp.min = "1";
+          inp.max = "100";
+          inp.value = String(Math.round((Number(s[key]) || defBytes) / 1048576));
+          r.appendChild(inp);
+          wrap.appendChild(r);
+          return inp;
+        }
+        var miImg = mediaMbRow("Largest image", "media_image_max_bytes", Number(mdefs.imageMaxBytes));
+        var miVid = mediaMbRow("Largest video", "media_video_max_bytes", Number(mdefs.videoMaxBytes));
+        var miAud = mediaMbRow("Largest audio", "media_audio_max_bytes", Number(mdefs.audioMaxBytes));
+        var vsRow = el("p", "admin-set-row");
+        vsRow.appendChild(document.createTextNode("Voice note limit (seconds): "));
+        var vsInp = el("input");
+        vsInp.type = "number";
+        vsInp.min = "30";
+        vsInp.max = "600";
+        vsInp.value = String(Number(s.media_audio_max_seconds) || Number(mdefs.audioMaxSeconds));
+        vsRow.appendChild(vsInp);
+        wrap.appendChild(vsRow);
+        var acRow = el("p", "admin-set-row");
+        var acCb = el("input");
+        acCb.type = "checkbox";
+        acCb.checked = s.media_image_autocompress == null ? true : s.media_image_autocompress === "1";
+        acRow.appendChild(acCb);
+        acRow.appendChild(document.createTextNode(" Auto-compress images in the browser before upload"));
+        wrap.appendChild(acRow);
+        wrap.appendChild(el("p", "board-cat-desc", "What each surface accepts. Unticking everything turns that surface\u2019s uploads off."));
+        function mediaKindsRow(label, key, defMask) {
+          var r = el("p", "admin-set-row");
+          r.appendChild(document.createTextNode(label + ": "));
+          var cur = window.mcCore.mediaParseKinds(s[key] == null ? defMask : s[key]);
+          var boxes = [];
+          ["image", "video", "audio"].forEach(function(kn) {
+            var cb = el("input");
+            cb.type = "checkbox";
+            cb.checked = cur.indexOf(kn) !== -1;
+            cb.value = kn;
+            r.appendChild(cb);
+            r.appendChild(document.createTextNode(" " + kn + "  "));
+            boxes.push(cb);
+          });
+          wrap.appendChild(r);
+          return { csv: function() {
+            return boxes.filter(function(b) {
+              return b.checked;
+            }).map(function(b) {
+              return b.value;
+            }).join(",");
+          } };
+        }
+        var mkDm = mediaKindsRow("Direct messages", "media_kinds_dm", mdefs.kindsDm);
+        var mkWall = mediaKindsRow("Feed & walls", "media_kinds_wall", mdefs.kindsWall);
+        var mkBoard = mediaKindsRow("Forum board", "media_kinds_board", mdefs.kindsBoard);
+        function mediaGbRow(label, key, defBytes, usedBytes) {
+          var r = el("p", "admin-set-row");
+          r.appendChild(document.createTextNode(label + " (GB): "));
+          var inp = el("input");
+          inp.type = "number";
+          inp.min = "1";
+          inp.max = "9";
+          inp.step = "0.5";
+          var curB = Number(s[key]) || defBytes;
+          inp.value = String(Math.round(curB / 1073741824 * 10) / 10);
+          r.appendChild(inp);
+          r.appendChild(document.createTextNode("  \u2014 " + fmtBytes(usedBytes) + " of " + fmtBytes(curB) + " used"));
+          wrap.appendChild(r);
+          return inp;
+        }
+        var mcDm = mediaGbRow("Direct-message media budget", "media_cap_dm_bytes", Number(mdefs.capDmBytes), Number(s.dm_media_bytes) || 0);
+        var mcWall = mediaGbRow("Feed, wall & board media budget", "media_cap_wall_bytes", Number(mdefs.capWallBytes), Number(s.wall_media_bytes) || 0);
         var saveBtn = el("button", "btn btn-send", "Save settings");
         saveBtn.type = "button";
         var saveStatus = el("p", "form-status");
@@ -9328,7 +9869,17 @@
               wall_prune_enabled: wpEn.checked ? "1" : "0",
               wall_prune_days: wpSel.value,
               journal_enabled: jEn.checked ? "1" : "0",
-              journal_topic: jInp.value
+              journal_topic: jInp.value,
+              media_image_max_bytes: String(Math.round((Number(miImg.value) || Number(mdefs.imageMaxBytes) / 1048576) * 1048576)),
+              media_video_max_bytes: String(Math.round((Number(miVid.value) || Number(mdefs.videoMaxBytes) / 1048576) * 1048576)),
+              media_audio_max_bytes: String(Math.round((Number(miAud.value) || Number(mdefs.audioMaxBytes) / 1048576) * 1048576)),
+              media_audio_max_seconds: String(Math.floor(Number(vsInp.value) || Number(mdefs.audioMaxSeconds))),
+              media_image_autocompress: acCb.checked ? "1" : "0",
+              media_kinds_dm: mkDm.csv(),
+              media_kinds_wall: mkWall.csv(),
+              media_kinds_board: mkBoard.csv(),
+              media_cap_dm_bytes: String(Math.round((Number(mcDm.value) || Number(mdefs.capDmBytes) / 1073741824) * 1073741824)),
+              media_cap_wall_bytes: String(Math.round((Number(mcWall.value) || Number(mdefs.capWallBytes) / 1073741824) * 1073741824))
             } })
           }).then(function(r) {
             return r.json();
@@ -9389,6 +9940,13 @@
         dgInp.value = String(s.discord_feed_webhook || "");
         dgRow.appendChild(dgInp);
         gBox.appendChild(dgRow);
+        var fcRow = el("p", "admin-set-row");
+        var fcCb = el("input");
+        fcCb.type = "checkbox";
+        fcCb.checked = s.discord_feed_comments === "1";
+        fcRow.appendChild(fcCb);
+        fcRow.appendChild(document.createTextNode(" Also notify on comments to feed posts (noisier as the community grows)"));
+        gBox.appendChild(fcRow);
         var gSave = el("button", "btn btn-send", "Save global webhooks");
         gSave.type = "button";
         var gStatus = el("p", "form-status");
@@ -9400,7 +9958,8 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ key: state.key, set: {
               discord_forum_webhook: dfInp.value.trim(),
-              discord_feed_webhook: dgInp.value.trim()
+              discord_feed_webhook: dgInp.value.trim(),
+              discord_feed_comments: fcCb.checked ? "1" : "0"
             } })
           }).then(function(r) {
             return r.json();
@@ -9938,6 +10497,8 @@
       },
       /* topic + search views (Wave B4/B5) */
       commentNode,
+      wallMediaNode,
+      // board attachments in the Lit post renderer
       watchToggle,
       annotateMeta,
       searchSnippet,

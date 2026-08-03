@@ -29,6 +29,7 @@ const browserGlobals = {
   Audio: 'readonly', Event: 'readonly', addEventListener: 'readonly',
   WebSocket: 'readonly', removeEventListener: 'readonly',
   nacl: 'readonly',   // vendored tweetnacl.min.js (E2E DM crypto), loaded on demand
+  lamejs: 'readonly', // vendored lamejs.min.js (voice-note MP3 encode), loaded on demand
 };
 export default [
   // Generated PureScript codegen is never linted (see CLAUDE.md). The

@@ -843,6 +843,7 @@ export const APP_SETTING_DEFAULTS = {
   wall_prune_days: '365',                       // retention when pruning is enabled
   discord_forum_webhook: '',                    // optional Discord webhook for new forum posts (empty = off)
   discord_feed_webhook: '',                     // optional Discord webhook for new feed posts (empty = off)
+  discord_feed_comments: '0',                   // also send comments on feed posts to the feed webhook (noisy at scale)
   journal_topic: '219',                         // the forum topic whose posts become Journal articles
   journal_enabled: '1',                         // whether the Mere Catholicity Journal page is live
   /* Per-type / per-context media limits (Phase A, single-sourced in Domain.Media).
