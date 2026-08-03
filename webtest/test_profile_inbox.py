@@ -36,7 +36,7 @@ def main():
             name: !!p.querySelector('.profile-name'),
             rank: !!p.querySelector('.profile-rank'),
             edit: !!Array.prototype.find.call(p.querySelectorAll('button'), function(b){return b.textContent==='Edit profile';}),
-            recent: !!Array.prototype.find.call(p.querySelectorAll('a'), function(a){return a.textContent==='Show recent posts';})});"""))
+            recent: !!Array.prototype.find.call(p.querySelectorAll('a,button'), function(a){return (a.textContent||'').indexOf('Show recent posts')!==-1;})});"""))
         checks.append(('own profile card renders (name+rank)', st['name'] and st['rank']))
         checks.append(('own profile has Edit + recent-posts', st['edit'] and st['recent']))
         # opening Edit swaps in the editor (reused write machinery still wires)
@@ -48,7 +48,7 @@ def main():
         # recent posts reveal (re-navigate since Edit consumed the card)
         f.goto('community.html?profile=%s' % myhash)
         f.wait("!!document.querySelector('mc-profile .profile .profile-name')", timeout=20)
-        f.js1("""var a=Array.prototype.find.call(document.querySelectorAll('mc-profile a'),function(x){return x.textContent==='Show recent posts';}); if(a) a.click(); return 1;""")
+        f.js1("""var a=Array.prototype.find.call(document.querySelectorAll('mc-profile a,mc-profile button'),function(x){return (x.textContent||'').indexOf('Show recent posts')!==-1;}); if(a) a.click(); return 1;""")
         got_posts = f.wait("document.querySelectorAll('mc-profile .profile-posts .board-topic').length>0 || (document.querySelector('mc-profile .profile-posts .comments-status')||{}).textContent", timeout=15)
         checks.append(('recent posts load on reveal', bool(got_posts)))
         checks.append(('profile console clean', f.assert_console_clean('profile')))
@@ -68,18 +68,22 @@ def main():
     # --- logged-out profile is read-only; inbox gated ---
     with Flow(port=9594) as f:
         f.goto('community.html?profile=%s' % myhash)
-        f.wait("!!document.querySelector('mc-profile .profile .profile-name')", timeout=20)
+        # Profiles are members-only now (the discovery wave): a visitor gets the
+        # join gate, never the read card - assert the gate, not the old card.
+        f.wait("(document.body.textContent||'').indexOf('Create an identity') !== -1", timeout=20)
         time.sleep(1)
-        vo = json.loads(f.js1("""var p=document.querySelector('mc-profile');
-          return JSON.stringify({
-            name: !!p.querySelector('.profile-name'),
-            edit: !!Array.prototype.find.call(p.querySelectorAll('button'), function(b){return b.textContent==='Edit profile';})});"""))
-        checks.append(('visitor sees profile read card, no Edit', vo['name'] and not vo['edit']))
+        vo = json.loads(f.js1("""return JSON.stringify({
+            gate: (document.body.textContent||'').indexOf('Create an identity') !== -1,
+            name: !!document.querySelector('mc-profile .profile-name')});"""))
+        checks.append(('visitor gets the join gate, no profile card', vo['gate'] and not vo['name']))
         f.goto('community.html?inbox=1')
-        f.wait("!!document.querySelector('mc-inbox')", timeout=15)
+        # The inbox is behind the join gate for visitors now (the discovery
+        # wave): no mc-inbox mounts, the create-identity invitation stands.
+        f.wait("(document.body.textContent||'').indexOf('Create an identity') !== -1", timeout=15)
         time.sleep(1)
-        gate = f.js1("return (document.querySelector('mc-inbox .comments-status')||{}).textContent||'';")
-        checks.append(('visitor inbox gated', 'need an identity' in gate))
+        gate = f.js1("return document.body.textContent||'';")
+        checks.append(('visitor inbox gated', 'Create an identity' in gate
+                       and not f.js('return !!document.querySelector(\'mc-inbox .dm-search\');')))
         fails += list(f.failures)
     for x in fails:
         print('FAIL', x)
