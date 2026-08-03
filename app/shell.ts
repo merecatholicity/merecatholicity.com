@@ -485,6 +485,15 @@ customElements.define('mc-audio-dock', McAudioDock);
   }
 
   function boots() {
+    /* The Home FOUT gate (html.mc-home-boot, an inline <head> script on the
+       index) hides main's non-launcher children and deliberately PERSISTS on
+       a healthy Home — but <html> survives every soft swap, so carried into
+       any other page it hid that page's entire content (live 2026-08-02:
+       "shell only, no content" on every tab after launching from Home, cured
+       only by a hard refresh). The shell owns navigation, so it clears the
+       launch gate on every swap; Home's own hiding is re-applied per-swap by
+       mountHome's main.mc-app-home. */
+    document.documentElement.classList.remove('mc-home-boot');
     if (window.mcDeeplink) {
       window.mcDeeplink.run();
       if (location.hash) window.mcDeeplink.reveal();
