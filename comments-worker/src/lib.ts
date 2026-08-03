@@ -1319,8 +1319,12 @@ export async function enforceWallMediaCap(env: any) {
       const kill: any[] = [];
       for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
       if (kill.length) {
-        await purgeWallMedia(env, kill.map((r) => r.key));
+        /* Stamp FIRST, purge second: a stamped parent whose object still
+           exists self-heals next hour (the row is re-selected and finished),
+           while a purged object with no stamp is a permanent broken tile —
+           the exact artifact media_expired exists to prevent. */
         await stampWallMediaExpired(env, kill);
+        await purgeWallMedia(env, kill.map((r) => r.key));
       }
     }
     try {
@@ -1338,8 +1342,12 @@ export async function enforceWallMediaCap(env: any) {
    stay (that is wall_prune's separate job). Pending media is deliberately NOT
    spared here (unlike the orphan sweep's evidence-sparing branch): retention is
    a time policy the owner sets, the held TEXT survives for the queue, and the
-   parent gets the honest placeholder. LIMIT 500/section keeps a first-enable
-   backlog hour inside the subrequest budget; the backlog self-drains hourly. */
+   parent gets the honest placeholder. LIMIT 200/section keeps a first-enable
+   backlog hour inside the shared ~50-subrequest cron budget (the hourly chain
+   also runs the DM and orphan sweeps); the backlog self-drains hourly. Stamp
+   BEFORE purge: a stamped parent whose object still exists is re-selected and
+   finished next hour, while a purged object with no stamp would be a
+   permanent broken tile. */
 export async function sweepMediaRetention(env: any) {
   const s = await getAppSettings(env);
   const now = Math.floor(Date.now() / 1000);
@@ -1348,12 +1356,12 @@ export async function sweepMediaRetention(env: any) {
     if (!days) continue;
     try {
       const old = await env.DB.prepare(
-        "SELECT key, ref_type, ref_id FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 AND created_at < ?2 ORDER BY created_at ASC LIMIT 500"
+        "SELECT key, ref_type, ref_id FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 AND created_at < ?2 ORDER BY created_at ASC LIMIT 200"
       ).bind(ctx, now - days * 86400).all();
       const rows = old.results || [];
       if (!rows.length) continue;
-      await purgeWallMedia(env, rows.map((r: any) => r.key));
       await stampWallMediaExpired(env, rows);
+      await purgeWallMedia(env, rows.map((r: any) => r.key));
     } catch (e) { console.log(JSON.stringify({ event: 'sweep_retention_failed', ctx, error: String(e) })); }
   }
 }

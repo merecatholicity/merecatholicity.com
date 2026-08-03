@@ -154,7 +154,7 @@ test('all three link SQLs carry the double-claim guard AND the ctx re-stamp (dri
 
 /* The retention sweep's SELECT, reassembled and drift-guarded like the orphan
  * sweep's — then exercised against the real schema. */
-const RETENTION_SQL = "SELECT key, ref_type, ref_id FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 AND created_at < ?2 ORDER BY created_at ASC LIMIT 500";
+const RETENTION_SQL = "SELECT key, ref_type, ref_id FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 AND created_at < ?2 ORDER BY created_at ASC LIMIT 200";
 
 test('retention sweep SQL matches lib.ts verbatim (drift guard)', () => {
   assert.ok(libSrc.includes(RETENTION_SQL), 'lib.ts still carries the retention SELECT');
