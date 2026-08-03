@@ -2361,7 +2361,8 @@
       '.btn-preview{background:transparent;border-color:var(--maroon);color:var(--maroon);font:inherit;cursor:pointer}' +
       '.btn-preview:hover{background:var(--maroon);color:var(--bg,#fff)}' +
       '.btn-preview:disabled{opacity:.6;cursor:default}' +
-      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em}}';
+      // scripture-sel 16px on phones: a sub-16px focused control zooms the iOS viewport (and the zoom outlives it)
+      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em;font-size:16px}}';
     var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
     document.head.appendChild(st);
   }
@@ -6648,11 +6649,30 @@
     ov.appendChild(inner);
     var x = el('button', 'wall-lb-x'); x.type = 'button'; x.appendChild(mcIcon('close')); x.title = 'Close';
     ov.appendChild(x);
-    function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); try { if (mel.pause) mel.pause(); } catch (e) { /* fine */ } }
+    /* The theater must never feel like leaving the app: it joins history (the
+       shell treats a same-URL popstate as hash-only travel and stays put), so
+       the app bar's back button, the phone's back gesture, and the browser back
+       all close it in place; a soft navigation (a tab tap, any in-app link)
+       closes it too. With the scrim gap and the ✕ that is five ways out. */
+    var pushed = false;
+    function close(fromHistory?: any) {
+      if (!ov.parentNode) return;
+      ov.parentNode.removeChild(ov);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('popstate', onPop);
+      document.removeEventListener('mc-navigate', onNav);
+      try { if (mel.pause) mel.pause(); } catch (e) { /* fine */ }
+      if (pushed && !fromHistory) { pushed = false; try { history.back(); } catch (e) { /* fine */ } }
+    }
+    function onPop() { close(true); }
+    function onNav() { close(true); }   // the navigation owns history; never history.back() over it
     function onKey(e: any) { if (e.key === 'Escape') close(); }
     ov.addEventListener('click', function (e: any) { if (e.target === ov || e.target === inner || e.target === stage) close(); });
     x.addEventListener('click', function (e: any) { e.stopPropagation(); close(); });
     document.addEventListener('keydown', onKey);
+    window.addEventListener('popstate', onPop);
+    document.addEventListener('mc-navigate', onNav);
+    try { history.pushState({ mcTheater: 1 }, '', location.href); pushed = true; } catch (e) { /* private mode etc.: ✕/scrim/Esc still close */ }
     document.body.appendChild(ov);
   }
   /* One media element for a post/comment. Sizes are STANDARDISED: small media

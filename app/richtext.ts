@@ -330,7 +330,8 @@ function el(tag: string, cls?: string | null, text?: string | null): HTMLElement
       '.btn-preview{background:transparent;border-color:var(--maroon);color:var(--maroon);font:inherit;cursor:pointer}' +
       '.btn-preview:hover{background:var(--maroon);color:var(--bg,#fff)}' +
       '.btn-preview:disabled{opacity:.6;cursor:default}' +
-      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em}}';
+      // scripture-sel 16px on phones: a sub-16px focused control zooms the iOS viewport (and the zoom outlives it)
+      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em;font-size:16px}}';
     var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
     document.head.appendChild(st);
   }

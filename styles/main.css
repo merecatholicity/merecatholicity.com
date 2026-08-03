@@ -1652,7 +1652,7 @@ body.mc-app main.prose > #title-block-header {
   .key-box { border-radius: 14px; padding: 1rem; }
   .key-note { font-size: 0.95rem; }
   .key-row { gap: 0.5rem; }
-  .key-input { font-size: 15px; padding: 0.75rem; border-radius: 10px; }
+  .key-input { font-size: 16px; padding: 0.75rem; border-radius: 10px; }  /* 16px floor: sub-16 zooms iOS */
   .key-copy { min-height: 46px; font-size: 1rem; padding-left: 1.2rem; padding-right: 1.2rem; }
   .agree-row { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.6rem 0; font-size: 0.98rem; }
   .agree-row input[type="checkbox"] { width: 1.35rem; height: 1.35rem; flex: none; accent-color: var(--maroon); margin-top: 0.05rem; }
@@ -2533,4 +2533,46 @@ body[data-art="freechurches"]::before {
   .wall-lb-stage { flex: 0 0 auto; max-height: 56vh; padding: 0.6rem; background: #000; }
   .wall-lb-rail { flex: 1 1 auto; max-width: none; width: 100%; }
   .wall-lightbox-bare .wall-lb-stage { max-height: 82vh; }
+}
+
+/* Phones under the app chrome: the theater stays INSIDE the app — a floating
+   card between the top and bottom bars (both remain visible and tappable), a
+   scrim gap around it that closes on tap, ✕ still there, and the back button /
+   Feed tab / browser back all work (history integration in comments.ts). It
+   must never feel like leaving the app. */
+@media (max-width: 600px) {
+  body.mc-app .wall-lightbox {
+    top: calc(var(--mc-appbar-h) + env(safe-area-inset-top, 0px));
+    bottom: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px));
+    z-index: 39;                       /* just under the bars (40) */
+    background: rgba(0, 0, 0, 0.72);
+    padding: 0.8rem 0.7rem;
+  }
+  body.mc-app .wall-lightbox .wall-lb-inner {
+    height: auto; max-height: 100%; width: 100%;
+    border-radius: 14px; overflow: hidden;
+    background: var(--bg);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+  }
+  body.mc-app .wall-lightbox .wall-lb-stage { max-height: 46vh; }
+  body.mc-app .wall-lightbox .wall-lb-rail {
+    overflow-y: auto; -webkit-overflow-scrolling: touch; min-height: 0;
+  }
+  body.mc-app .wall-lightbox-bare .wall-lb-stage { max-height: 60vh; }
+  body.mc-app .wall-lightbox .wall-lb-x { top: 1.2rem; right: 1.1rem; }
+}
+
+/* iOS zooms the whole viewport when a focused control renders under 16px, and
+   the zoom OUTLIVES the focus: every page then pans horizontally until a manual
+   pinch-out — worst in the installed app, which has no URL bar to reset. Under
+   the SPA shell the zoom even survives navigation (one document). So on touch
+   devices every focusable control gets a 16px floor. The element rule catches
+   unstyled controls; the class list pins the known composers/pickers above any
+   earlier styling (this block is last in the sheet, so ties resolve here). */
+@media (hover: none) and (pointer: coarse) {
+  input, select, textarea { font-size: max(16px, 1em); }
+  .comment-text, .key-input, .merecat-q, input.mc-userq, .board-title,
+  .emoji-search, select.scripture-sel,
+  .board-search input, .board-search select,
+  .contact-form input, .contact-form textarea { font-size: 16px; }
 }
