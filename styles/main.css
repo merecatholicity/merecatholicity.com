@@ -94,8 +94,13 @@
   --glass: rgba(30, 34, 39, 0.86);
   --creed-bg: #16241c;
   --creed-head: #a6d3b2;
-  --accent-fill: #d13b34;
-  --accent-on: #ffffff;
+  /* Dark FILLS are the soft rose (the same tone dark --maroon gives the
+     Preview button's outline) carrying a deep red-black ink — the inverse of
+     the outline buttons, so filled and outline read as one family. The old
+     #d13b34 alarm red made every "Post as"/"Reply as" a danger button and a
+     mine-bubble a wall of it (live iPhone report, 2026-08-03). */
+  --accent-fill: #ef6b6b;
+  --accent-on: #2a1113;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
@@ -123,8 +128,9 @@
     --glass: rgba(30, 34, 39, 0.86);
     --creed-bg: #16241c;
     --creed-head: #a6d3b2;
-    --accent-fill: #d13b34;
-    --accent-on: #ffffff;
+    /* Same soft-rose fill + dark ink as the explicit dark block above. */
+    --accent-fill: #ef6b6b;
+    --accent-on: #2a1113;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.5);
   }
@@ -930,6 +936,12 @@ a.comment-quote-link:hover { text-decoration: underline; color: var(--maroon); }
 .comment-form .ts-slot { margin: 0.6em 0; }
 /* Markdown compose: a button row above the plain-text box, a legend below. */
 .md-toolbar { display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0 0 0.45em; }
+/* The markdown helpers (B / I / Quote / List / Link / Emoji / Scripture) are
+   DESKTOP-ONLY, sitewide (the owner's ruling, 2026-08-03: too much noise on a
+   phone). Every composer builds through mdEditor, so this one gate is the
+   whole policy; typed markdown, :emoji: autocomplete, and @mentions still
+   work on phones — only the button row goes. */
+@media (max-width: 600px) { .md-toolbar { display: none; } }
 .md-btn {
   font: inherit;
   font-size: 0.85rem;
@@ -1666,6 +1678,22 @@ body.mc-app main.prose > #title-block-header {
   }
   /* composer toolbar buttons reach the 44px touch target on phones */
   .md-btn { min-height: 44px; }
+  /* The composer button row, organized (the owner's 2026-08-03 ruling: five
+     different-sized buttons wrapping onto two lines felt cluttered). On
+     phones: Preview is desktop-only like the rest of the markdown helpers,
+     the utilities (📎 attach, 🎙 voice, 📞 call) become EQUAL round icon
+     buttons (comments.ts labels them icon-only on phones; the word lives in
+     the title/aria-label), and a row that carries utilities holds ONE line —
+     Send grows to fill what remains. Rows without utilities (the article
+     pages' Post / Post-anonymously pair) keep their wrap. */
+  .btn-preview { display: none; }
+  .comment-buttons:has(.btn-attach) { flex-wrap: nowrap; align-items: center; gap: 0.5em; }
+  .comment-buttons:has(.btn-attach) .btn-send { flex: 1 1 auto; min-width: 0; }
+  .comment-buttons .btn-attach, .mc-media-row .btn-attach {
+    flex: none; width: 46px; min-height: 46px; padding: 0; margin-left: 0;
+    border-radius: 50%; display: inline-flex; align-items: center;
+    justify-content: center; font-size: 1.25rem;
+  }
 }
 
 /* ---- Onboarding / faith cards — BOTH breakpoints (P2-e) ----
@@ -1771,15 +1799,19 @@ body.mc-app main.prose > #title-block-header {
      `.merecat-msg.you{background:var(--cream)}` (appended to <head> after style.css,
      equal specificity, later-wins). Without the extra ancestor the injected cream
      background survived while our white text did not → white-on-cream in light mode. */
-  /* --accent-fill (NOT var(--maroon), which is lightened in dark mode → white
-     text would go low-contrast): the fill token is a deep red in light and a
-     brighter red in dark, always readable with --accent-on. DM bubbles ride the
-     same iMessage treatment (the readability standard). */
-  .merecat-log .merecat-msg.you, .dm-msg.dm-mine { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); border-bottom-right-radius: 5px; }
-  .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
-  /* Everything inside a mine bubble must read on the red fill — maroon/muted
-     inks go low-contrast there. Load-bearing; covers head, meta, controls. */
-  .dm-msg.dm-mine :is(.comment-author, .comment-date, .dm-edited, .dm-receipt, .dm-save, .dm-like-chip, .comment-menu, a) { color: rgba(255, 255, 255, 0.85); }
+  /* The iMessage red fill is a LIGHT-mode treatment: in dark even the softened
+     fill read as a wall of button red on a phone (live iPhone report,
+     2026-08-03 — "make it like desktop"), so dark phones take the desktop
+     bubble palette instead: mine on --cream, theirs on --cream-2, every ink
+     its normal self. The base rule here is the dark path — data-theme is
+     stamped on <html> before any bubble renders, and the site defaults dark. */
+  .merecat-log .merecat-msg.you, .dm-msg.dm-mine { background: var(--cream); border-bottom-right-radius: 5px; }
+  html[data-theme="light"] .merecat-log .merecat-msg.you, html[data-theme="light"] .dm-msg.dm-mine { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); }
+  html[data-theme="light"] .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
+  /* Everything inside a LIGHT mine bubble must read on the red fill —
+     maroon/muted inks go low-contrast there. Load-bearing; covers head, meta,
+     controls. Dark bubbles keep the normal inks, exactly as on desktop. */
+  html[data-theme="light"] .dm-msg.dm-mine :is(.comment-author, .comment-date, .dm-edited, .dm-receipt, .dm-save, .dm-like-chip, .comment-menu, a) { color: rgba(255, 255, 255, 0.85); }
   .merecat-log .merecat-msg.cat, .dm-msg:not(.dm-mine) { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
 
