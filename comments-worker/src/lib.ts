@@ -832,7 +832,13 @@ export const DM_CLEARED = 'm.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN 
    behind them (app_settings). A missing key falls back to these defaults; the
    admin console (Phase 3) edits the table and busts this per-isolate cache. */
 export const DM_TTLS = Dm.ttlOptions.map((o) => o.secs);   // single-sourced from Domain.Dm
-export const MEDIA_CAP_BYTES = 10 * 1024 * 1024 * 1024;   // R2 free tier: 10 GB
+/* The old MEDIA_CAP_BYTES (a flat 10 GB) is GONE: R2's free 10 GB is
+   ACCOUNT-WIDE (the audio Bible alone holds ~3.55 GB), so treating the whole
+   allowance as a media cap could legally breach the $0 law. Storage is
+   bounded by the per-section budgets below (Media.defaults: DM 2 GB + feed
+   3 GB + board 1 GB = 6 GB, sized against ~6.3 GB measured headroom on
+   2026-08-02) — re-measure with `wrangler r2 bucket info` before raising any
+   of them. */
 export const APP_SETTING_DEFAULTS = {
   media_enabled: '1',
   media_max_bytes: String(25 * 1024 * 1024),   // 25 MB per upload

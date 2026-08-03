@@ -66,7 +66,6 @@ import {
   MAX_NICK,
   MAX_SIG,
   MAX_TITLE,
-  MEDIA_CAP_BYTES,
   MERECAT_BIBLE,
   MERECAT_BOT,
   MERECAT_CHAT_DAYS,
@@ -2226,7 +2225,7 @@ async function handleAdminSettings(request: any, env: any) {
     if (stmts.length) { await env.DB.batch(stmts); appSettingsCache.at = 0; appSettingsCache.s = null; }
   }
   const settings = await getAppSettings(env);
-  return json({ ok: true, settings, cap_bytes: MEDIA_CAP_BYTES, ttls: DM_TTLS, wall_prune_options: Wall.pruneDayOptions }, 200);
+  return json({ ok: true, settings, ttls: DM_TTLS, wall_prune_options: Wall.pruneDayOptions }, 200);
 }
 
 /* ================= Per-feed Discord subscriptions (admin CRUD) =================
