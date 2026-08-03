@@ -3468,6 +3468,20 @@
        the logged-out create line, which is the only join path on article pages. */
     var loggedIn = !!(isMember());
     var line = el('p', 'identity-line ' + (loggedIn ? 'identity-line-in' : 'identity-line-out'));
+    if (loggedIn && !box.classList.contains('comment-identity-nav')) {
+      /* Readability standard: the logged-in five-link utilities row renders
+         ONLY into the box the board index marks (comment-identity-nav). Every
+         other page already reaches those doors through the deskbar/tab-bar and
+         the gear, and the duplicated pill rows were half the visual noise on
+         category/topic pages. A hidden stamp keeps every standing
+         MutationObserver on .comment-identity firing on login/logout; the
+         logged-out create-identity branch below is untouched everywhere (it is
+         the one join path on article pages). */
+      var stamp = el('span', 'identity-stamp');
+      stamp.hidden = true;
+      box.appendChild(stamp);
+      return;
+    }
     if (loggedIn) {
       /* First line: where to go, grouped — your activity (the two badge feeds),
          then people (you, then the roster), then search over it all. */
@@ -4023,8 +4037,10 @@
       'A board for exploring what it means to be merely catholic.'));
     section.appendChild(introP);
     /* The identity drawer lives on the front page too, so a reader can
-       create, show, or swap a key before ever entering a room. */
-    section.appendChild(el('div', 'comment-identity'));
+       create, show, or swap a key before ever entering a room. The board
+       index is the ONE page that keeps the logged-in utilities row
+       (comment-identity-nav — see renderIdentity). */
+    section.appendChild(el('div', 'comment-identity comment-identity-nav'));
     var keyBox = el('div', 'key-box');
     keyBox.hidden = true;
     section.appendChild(keyBox);
@@ -4121,17 +4137,18 @@
           cell.appendChild(el('div', null,
             c.topics + (c.topics === 1 ? ' topic · ' : ' topics · ') + c.posts + (c.posts === 1 ? ' post' : ' posts')));
           if (c.latest && c.latest.title) {
-            var line = el('div', 'board-latest');
+            /* The one dim secondary line (the readability standard): latest
+               title + poster as one anchor to the newest post, compact time. */
+            var line = el('div', 'board-row-sub');
             var t = String(c.latest.title);
-            /* Title and last poster together as one plain anchor jumping to
-               that most-recent post, never to a profile or the thread top. */
             var titleText = t.length > 42 ? t.slice(0, 42) + '…' : t;
             var who = c.latest.author_hash ? (c.latest.nick || displayName(c.latest.author_hash)) : 'Anonymous';
             var a = el('a', null, titleText + ' · ' + who);
             a.href = 'community.html?topic=' + c.latest.topic_id +
               (c.latest.id ? '#comment-' + c.latest.id : '');
             line.appendChild(a);
-            line.appendChild(document.createTextNode(' · ' + fmtDateTime(c.latest.created_at)));
+            line.appendChild(document.createTextNode(' · ' + fmtTimeCompact(c.latest.created_at)));
+            line.title = fmtDateTime(c.latest.created_at);
             cell.appendChild(line);
           }
         });
@@ -4191,16 +4208,18 @@
       });
     });
     moveSel.setAttribute('aria-label', 'Move to category');
-    admin.appendChild(moveSel);
+    /* The whole governance kit folds into one row-level ⋯ (the readability
+       standard) — the Move select and every mod link keep their classes and
+       handlers, they just live in the menu now. mcSelectSheet wraps the select
+       AFTER it is parented inside the menu. */
+    admin.appendChild(postMenu({ items: [
+      moveSel,
+      modLinkEl(topic.id, topic.sticky ? 'unsticky' : 'sticky', topic.sticky ? '(unsticky)' : '(sticky)'),
+      modLinkEl(topic.id, topic.locked ? 'unlock' : 'lock', topic.locked ? '(unlock)' : '(lock)'),
+      modLinkEl(topic.id, topic.readonly ? 'unreadonly' : 'readonly', topic.readonly ? '(un-read-only)' : '(read-only)'),
+      modLinkEl(topic.id, 'delete', '(delete)'),
+    ] }));
     if (window.mcSelectSheet) window.mcSelectSheet(moveSel);
-    admin.appendChild(document.createTextNode(' '));
-    admin.appendChild(modLinkEl(topic.id, topic.sticky ? 'unsticky' : 'sticky', topic.sticky ? '(unsticky)' : '(sticky)'));
-    admin.appendChild(document.createTextNode(' '));
-    admin.appendChild(modLinkEl(topic.id, topic.locked ? 'unlock' : 'lock', topic.locked ? '(unlock)' : '(lock)'));
-    admin.appendChild(document.createTextNode(' '));
-    admin.appendChild(modLinkEl(topic.id, topic.readonly ? 'unreadonly' : 'readonly', topic.readonly ? '(un-read-only)' : '(read-only)'));
-    admin.appendChild(document.createTextNode(' '));
-    admin.appendChild(modLinkEl(topic.id, 'delete', '(delete)'));
     return admin;
   }
 
@@ -4291,16 +4310,20 @@
             tPager.className = 'board-pages topic-pages';
             left.appendChild(tPager);
           }
-          row.appendChild(left);
-          var tstat = el('div', 'board-stats');
-          /* The last poster's name jumps to the newest post in the thread,
-             not to a profile. */
+          /* The one dim secondary line under the title: last poster (a jump to
+             the newest post, never a profile) · compact time. The right column
+             keeps only the count. */
+          var sub = el('div', 'board-row-sub');
           var who = t.author_hash ? (t.nick || displayName(t.author_hash)) : 'Anonymous';
           var wholink = el('a', null, who);
           wholink.href = 'community.html?topic=' + t.id + '#comment-' + (t.last_id || t.id);
-          tstat.appendChild(wholink);
-          tstat.appendChild(document.createTextNode(' · ' +
-            t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + fmtDateTime(t.last)));
+          sub.appendChild(wholink);
+          sub.appendChild(document.createTextNode(' · ' + fmtTimeCompact(t.last)));
+          sub.title = fmtDateTime(t.last);
+          left.appendChild(sub);
+          row.appendChild(left);
+          var tstat = el('div', 'board-stats', t.replies + (t.replies === 1 ? ' reply' : ' replies'));
+          tstat.title = fmtDateTime(t.last);
           row.appendChild(tstat);
           /* Admin controls ride the bottom-right corner of the row, well clear
              of the title, pager, and author links, against fat-finger taps. */
@@ -5389,7 +5412,9 @@
             if (it.snippet) left.appendChild(el('div', 'board-intro', it.snippet));
             row.appendChild(left);
             var ce = catByKey(it.cat);
-            row.appendChild(el('div', 'board-stats', (ce ? ce[1] : it.cat) + ' · ' + fmtDateTime(it.created_at)));
+            var rcs = el('div', 'board-stats', (ce ? ce[1] : it.cat) + ' · ' + fmtTimeCompact(it.created_at));
+            rcs.title = fmtDateTime(it.created_at);
+            row.appendChild(rcs);
             list.appendChild(row);
           });
           var bar = pageBar(d.total, d.per, d.page, null, function (n) { st.page = n; draw(); window.scrollTo(0, 0); });
@@ -7025,9 +7050,13 @@
           a.href = 'messages.html?dm=' + t.other_hash;
           left.appendChild(a);
           if (t.unread) left.appendChild(el('span', 'dm-unread', ' ● new'));
+          var isub = el('div', 'board-row-sub', fmtTimeCompact(t.last_at));
+          isub.title = fmtDateTime(t.last_at);
+          left.appendChild(isub);
           row.appendChild(left);
-          row.appendChild(el('div', 'board-stats',
-            t.msgs + (t.msgs === 1 ? ' message · ' : ' messages · ') + fmtDateTime(t.last_at)));
+          var istat = el('div', 'board-stats', t.msgs + (t.msgs === 1 ? ' message' : ' messages'));
+          istat.title = fmtDateTime(t.last_at);
+          row.appendChild(istat);
           /* A quiet Delete in the corner: clears my side, keeps the other's. */
           var delWrap = el('div', 'board-admin-corner');
           var del = el('a', 'trust-toggle', 'Delete');
@@ -7135,7 +7164,9 @@
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
           if (it.snippet && !isDm) left.appendChild(el('div', 'board-intro', it.snippet));
           row.appendChild(left);
-          row.appendChild(el('div', 'board-stats', fmtDateTime(it.created_at)));
+          var nstat = el('div', 'board-stats', fmtTimeCompact(it.created_at));
+          nstat.title = fmtDateTime(it.created_at);
+          row.appendChild(nstat);
           list.appendChild(row);
         });
         function notifHref(i: any) { return 'community.html?notifications=1&p=' + i; }
@@ -7780,7 +7811,9 @@
           rowEl.appendChild(left);
           var who = it.nick || (it.author_hash ? displayName(it.author_hash) : 'Anonymous');
           var ce = catByKey(it.cat);
-          rowEl.appendChild(el('div', 'board-stats', who + ' · ' + (ce ? ce[1] : it.cat) + ' · ' + fmtDateTime(it.created_at)));
+          var sstat = el('div', 'board-stats', who + ' · ' + (ce ? ce[1] : it.cat) + ' · ' + fmtTimeCompact(it.created_at));
+          sstat.title = fmtDateTime(it.created_at);
+          rowEl.appendChild(sstat);
           list.appendChild(rowEl);
         });
         var top = pageBar(d.total, d.per, d.page, pageHref);
@@ -10063,7 +10096,9 @@
         left.appendChild(el('div', 'board-cat-desc', who + (it.parent_id ? ' replied' : ' opened the topic')));
         if (it.body) left.appendChild(el('div', 'board-intro', String(it.body).slice(0, 160)));
         row.appendChild(left);
-        row.appendChild(el('div', 'board-stats', fmtDateTime(it.created_at)));
+        var svs = el('div', 'board-stats', fmtTimeCompact(it.created_at));
+        svs.title = fmtDateTime(it.created_at);
+        row.appendChild(svs);
         box.appendChild(row);
       });
       var pager = el('p', 'board-pages');

@@ -165,7 +165,7 @@ class McNotifications extends LitElement {
         return html`<div class="board-topic"><div class="board-topic-left">
           <a class=${'board-topic-title' + (it.read_at ? '' : ' dm-unread')} href=${to}>${label}</a>${it.read_at ? nothing : html`<span class="dm-unread"> ● new</span>`}
           ${it.snippet && !isDm ? html`<div class="board-intro">${it.snippet}</div>` : nothing}
-          </div><div class="board-stats">${kit.fmtDateTime(it.created_at)}</div></div>`;
+          </div><div class="board-stats" title=${kit.fmtDateTime(it.created_at)}>${kit.fmtTimeCompact(it.created_at)}</div></div>`;
       })}</div>
       ${pagerTpl(d.total, d.per, d.page, href)}`;
   }

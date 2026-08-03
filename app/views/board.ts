@@ -150,7 +150,7 @@ class McBoardIndex extends LitElement {
       const who = c.latest.author_hash ? (c.latest.nick || kit.displayName(c.latest.author_hash)) : 'Anonymous';
       const href = 'community.html?topic=' + c.latest.topic_id +
         (c.latest.id ? '#comment-' + c.latest.id : '');
-      return html`<div class="board-latest"><a href=${href}>${titleText + ' · ' + who}</a> · ${kit.fmtDateTime(c.latest.created_at)}</div>`;
+      return html`<div class="board-row-sub" title=${kit.fmtDateTime(c.latest.created_at)}><a href=${href}>${titleText + ' · ' + who}</a> · ${kit.fmtTimeCompact(c.latest.created_at)}</div>`;
     })() : nothing;
     return html`<div class="board-stats">
       <div>${c.topics + (c.topics === 1 ? ' topic · ' : ' topics · ') + c.posts + (c.posts === 1 ? ' post' : ' posts')}</div>
@@ -161,7 +161,7 @@ class McBoardIndex extends LitElement {
     if (!kit) return nothing;
     return html`
       <p class="board-intro"><small>A board for exploring what it means to be merely catholic.</small></p>
-      <div class="comment-identity"></div>
+      <div class="comment-identity comment-identity-nav"></div>
       <div class="key-box" hidden></div>
       <div class="mc-index-search"></div>
       <p class="board-intro"><a class="identity-action" href="community.html?recent=1">Recent activity</a> across every room.</p>
@@ -367,11 +367,11 @@ class McBoardCat extends LitElement {
         ${t.locked ? html`<span class="board-locked">(locked)</span>` : nothing}
         ${t.readonly ? html`<span class="board-locked">(read only)</span>` : nothing}
         ${pagerTpl(t.replies, 20, 0, (i) => 'community.html?topic=' + t.id + '&p=' + i, 'board-pages topic-pages')}
+        <div class="board-row-sub" title=${kit.fmtDateTime(t.last)}>
+          <a href=${'community.html?topic=' + t.id + '#comment-' + (t.last_id || t.id)}>${who}</a>${' · ' + kit.fmtTimeCompact(t.last)}
+        </div>
       </div>
-      <div class="board-stats">
-        <a href=${'community.html?topic=' + t.id + '#comment-' + (t.last_id || t.id)}>${who}</a>
-        ${' · ' + t.replies + (t.replies === 1 ? ' reply · ' : ' replies · ') + kit.fmtDateTime(t.last)}
-      </div>
+      <div class="board-stats" title=${kit.fmtDateTime(t.last)}>${t.replies + (t.replies === 1 ? ' reply' : ' replies')}</div>
     </div>`;
   }
   render() {
