@@ -230,6 +230,7 @@ const CALL_EVENTS: Record<string, unknown> = {
   LocalDecline: Call.LocalDecline.value, RemoteDecline: Call.RemoteDecline.value,
   RemoteBusy: Call.RemoteBusy.value, Timeout: Call.Timeout.value,
   Failure: Call.Failure.value, Taken: Call.Taken.value,
+  IdleHangUp: Call.IdleHangUp.value,
 };
 const callStateOf = (tag: string, reason: string): any =>
   tag === 'Ended' ? Call.Ended.create(String(reason || '')) : (CALL_STATES[tag] || Call.Idle.value);
@@ -242,4 +243,7 @@ export function callStep(tag: string, reason: string, eventTag: string): { state
 export const callInCall = (tag: string): boolean => !!Call.inCall(callStateOf(String(tag || 'Idle'), ''));
 export const callRingSecs: number = Call.ringTimeoutSecs;
 export const callSetupSecs: number = Call.setupTimeoutSecs;
+export const callIdleDefaultSecs: number = Call.idleDefaultSecs;
+export const callIdleClampSecs = (n: number): number => Call.idleClampSecs(Math.floor(Number(n) || Call.idleDefaultSecs));
+export const callVoiceFloor: number = Call.voiceFloor;
 export const callGlareWins = (me: string, other: string): boolean => Call.glareWins(String(me || ''))(String(other || ''));

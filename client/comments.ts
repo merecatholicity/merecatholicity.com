@@ -385,18 +385,21 @@
     var wrap = el('span', 'comment-author');
     var primary = el('a', 'comment-author-link', nick || displayName(hash));
     primary.href = profileHref(hash);
+    /* ONE quiet line (the readability standard): the assigned pseudonym and
+       the exact post count ride the link's title (and the profile page) —
+       the old stacked sub/faith/rank lines are gone. withSub now gates only
+       the tooltip's pseudonym half. */
+    var tip: string[] = [];
+    if (withSub && nick) tip.push(displayName(hash));
+    if (posts != null) tip.push((Number(posts) || 0) + ' posts');
+    if (tip.length) primary.title = tip.join(' · ');
     wrap.appendChild(primary);
-    if (withSub && nick) {
-      var sub = el('a', 'comment-author-sub', displayName(hash));
-      sub.href = profileHref(hash);
-      wrap.appendChild(sub);
-    }
-    /* The faith declaration sits under the name on every post. */
+    /* Faith + rank: dim inline suffixes beside the name (CSS supplies the `·`
+       separators as pseudo-content, so textContent stays clean). Rank shows
+       the LABEL alone — the count lives in the tooltip. */
     var fl = faith && faithLabel(faith);
     if (fl) wrap.appendChild(el('span', 'comment-faith', fl));
-    /* The rank and post count sit under that, when the caller has the count (a
-       post or comment). Reuses the muted faith-line styling. */
-    if (posts != null) wrap.appendChild(el('span', 'comment-faith comment-rank', rankLine(Number(posts) || 0)));
+    if (posts != null) wrap.appendChild(el('span', 'comment-faith comment-rank', rankFor(Number(posts) || 0)));
     return wrap;
   }
 
@@ -2638,8 +2641,8 @@
       var av = el('img', 'comment-avatar');
       av.src = API + '/avatar?hash=' + c.author_hash + '&v=' + encodeURIComponent(c.avatar);
       av.alt = '';
-      av.width = 32;
-      av.height = 32;
+      av.width = 20;
+      av.height = 20;
       avLink.appendChild(av);
       head.appendChild(avLink);
     }
@@ -2650,6 +2653,17 @@
     if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) {
       head.appendChild(el('span', 'comment-admin', '(admin)'));
     }
+    if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
+    /* The date doubles as the comment's shareable permalink — compact form,
+       the full wording on hover (the readability standard). */
+    var date = el('a', 'comment-date', fmtTimeCompact(c.created_at));
+    date.title = fmtDateTime(c.created_at);
+    date.href = '#comment-' + c.id;
+    head.appendChild(date);
+    /* Every action folds into the ⋯ menu (the owner's ruling): the head keeps
+       only author + time + ⋯. The links are built EXACTLY as before — same
+       classes, same handlers — only their home moved. */
+    var items: any[] = [];
     /* A door to a private word with the author, for keyed readers only.
        The librarian holds no inbox: its posts carry no DM link. */
     if (c.author_hash && state.myHash && c.author_hash !== state.myHash &&
@@ -2657,7 +2671,7 @@
       var dm = el('a', 'comment-dm', 'Direct Message');
       dm.href = 'messages.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
-      head.appendChild(dm);
+      items.push(dm);
       /* Mute this member's posts for yourself. Reloading re-renders the view so
          the mute takes at once, everywhere they appear. */
       var muteLink = el('a', 'comment-quote-link', isMuted(c.author_hash) ? 'unmute' : 'mute');
@@ -2668,7 +2682,7 @@
         toggleMute(c.author_hash);
         location.reload();
       });
-      head.appendChild(muteLink);
+      items.push(muteLink);
       /* Members flag a post for the moderators; admins act directly and don't
          see this. Reporting never hides the post — it only queues it for review. */
       if (!isAdmin()) {
@@ -2688,27 +2702,21 @@
             reportLink.title = d.ok ? 'Reported to the moderators. Thank you.' : (d.error || 'Could not report.');
           }).catch(function () {});
         });
-        head.appendChild(reportLink);
+        items.push(reportLink);
       }
     }
-    /* The date doubles as the comment's shareable permalink. */
-    var date = el('a', 'comment-date', fmtDateTime(c.created_at));
-    date.href = '#comment-' + c.id;
-    head.appendChild(date);
     /* Anyone may quote any post into the reply box, so unlike edit/delete this
-       is ungated. The selection is grabbed on mousedown, before the click can
-       clear it; with none, the whole post (trimmed) is quoted. */
+       is ungated. The selection grab moved to the ⋯ MOUSEDOWN (postMenu's
+       onOpen) — opening the menu is now the click that would have cleared it. */
     var quote = el('a', 'comment-quote-link', 'quote');
     quote.href = '#';
-    quote.addEventListener('mousedown', function () { quotedSelection = selectionInPost(c); });
     quote.addEventListener('click', function (e: any) {
       e.preventDefault();
       var excerpt = quotedSelection || truncate(c.body, 400);
       quotedSelection = '';
       quoteInto(c, excerpt, permalinkFor(c, quoteCtx));
     });
-    head.appendChild(quote);
-    if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
+    items.push(quote);
     if (c.author_hash && c.author_hash === state.myHash) {
       var ed = el('a', 'comment-edit', 'edit');
       ed.href = '#';
@@ -2716,7 +2724,7 @@
         e.preventDefault();
         startEdit(c, article);
       });
-      head.appendChild(ed);
+      items.push(ed);
     }
     if (state.myHash && (c.author_hash === state.myHash || isAdmin())) {
       var del = el('a', 'comment-delete', 'delete');
@@ -2741,7 +2749,10 @@
           });
         });
       });
-      head.appendChild(del);
+      items.push(del);
+    }
+    if (items.length) {
+      head.appendChild(postMenu({ items: items, onOpen: function () { quotedSelection = selectionInPost(c); } }));
     }
     article.appendChild(head);
     var body = fillBody(el('div', 'comment-body'), c.body,
@@ -6609,9 +6620,13 @@
     wallAvatarInto(head, c.author_hash, c.avatar);
     head.appendChild(authorNode(c.author_hash, c.nick, true, c.faith, c.posts));
     if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
-    head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(c.created_at)));
-    if (c.author_hash && state.myHash && c.author_hash === state.myHash) head.appendChild(wallEditLink(c, 'comment', node));
-    if (wallCanDelete(c.author_hash)) head.appendChild(wallDeleteLink(c.id, 'comment', node));
+    var cdate = el('a', 'comment-date', fmtTimeCompact(c.created_at));
+    cdate.title = fmtDateTime(c.created_at);
+    head.appendChild(cdate);
+    var citems: any[] = [];
+    if (c.author_hash && state.myHash && c.author_hash === state.myHash) citems.push(wallEditLink(c, 'comment', node));
+    if (wallCanDelete(c.author_hash)) citems.push(wallDeleteLink(c.id, 'comment', node));
+    if (citems.length) head.appendChild(postMenu({ items: citems }));
     node.appendChild(head);
     node.appendChild(fillBody(el('div', 'comment-body'), c.body));
     if (c.media_key) { var m = wallMediaNode(c.media_key, null); if (m) node.appendChild(m); }
@@ -6668,14 +6683,17 @@
     wallAvatarInto(head, p.author_hash, p.avatar);
     head.appendChild(authorNode(p.author_hash, p.nick, true, p.faith, p.posts));
     if (p.author_hash && ADMIN_HASHES.indexOf(p.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
-    var permalink = el('a', 'comment-date', ' ' + fmtDateTime(p.created_at));
+    var permalink = el('a', 'comment-date', fmtTimeCompact(p.created_at));
+    permalink.title = fmtDateTime(p.created_at);
     permalink.href = 'feed.html?post=' + p.id;
     head.appendChild(permalink);
+    var pitems: any[] = [];
     if (p.author_hash && state.myHash && p.author_hash !== state.myHash && p.author_hash !== MERECAT_BOT_HASH) {
-      var dm = el('a', 'comment-dm', 'Direct Message'); dm.href = 'messages.html?dm=' + p.author_hash; head.appendChild(dm);
+      var dm = el('a', 'comment-dm', 'Direct Message'); dm.href = 'messages.html?dm=' + p.author_hash; pitems.push(dm);
     }
-    if (p.author_hash && state.myHash && p.author_hash === state.myHash) head.appendChild(wallEditLink(p, 'post', node));
-    if (wallCanDelete(p.author_hash)) head.appendChild(wallDeleteLink(p.id, 'post', node));
+    if (p.author_hash && state.myHash && p.author_hash === state.myHash) pitems.push(wallEditLink(p, 'post', node));
+    if (wallCanDelete(p.author_hash)) pitems.push(wallDeleteLink(p.id, 'post', node));
+    if (pitems.length) head.appendChild(postMenu({ items: pitems }));
     node.appendChild(head);
     if (p.body) {
       var bodyEl = fillBody(el('div', 'comment-body'), p.body);
@@ -9570,6 +9588,9 @@
         var vcEn = checkRow(wrap, 'Voice calls are on (off refuses every call server-side and hides the Call button)', s.calls_enabled !== '0');
         var vcTurn = checkRow(wrap, 'Use the TURN relay for strict networks (~15–20% of calls need it to connect)', s.calls_turn !== '0');
         desc(wrap, 'TURN relays encrypted call traffic through Cloudflare when a direct connection is impossible. Free up to 1,000 GB per month (roughly a million relayed call-minutes); past that it bills per GB with no cap — turning it off removes ALL billing exposure, at the price of calls failing on the strictest networks (they will say so honestly).');
+        var vcIdle = checkRow(wrap, 'End a call automatically when nobody has spoken for a while (a forgotten call should not run all night)', s.calls_idle_hangup !== '0');
+        var vcIdleSecs = numRow(wrap, 'Silence before auto-hangup (seconds, 15–600)', Number(s.calls_idle_seconds) || 60, 15, 600);
+        desc(wrap, 'Both phones watch the call’s own audio levels — either side speaking resets the clock, and the check never leaves the devices (the server cannot hear a call).');
 
         wrap.appendChild(el('h3', null, 'The Mere Catholicity Journal'));
         wrap.appendChild(el('p', 'board-cat-desc', 'The public Journal page turns the posts of one forum topic into journal articles. Point it at a topic here, then open that topic and mark it read-only (from its admin controls) so only the site can post into it.'));
@@ -9625,6 +9646,8 @@
             dm_backstop_days: bsInp.value,
             calls_enabled: vcEn.checked ? '1' : '0',
             calls_turn: vcTurn.checked ? '1' : '0',
+            calls_idle_hangup: vcIdle.checked ? '1' : '0',
+            calls_idle_seconds: vcIdleSecs.value,
             journal_enabled: jEn.checked ? '1' : '0',
             journal_topic: jInp.value,
           };

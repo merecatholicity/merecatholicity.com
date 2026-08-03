@@ -15,7 +15,8 @@ const STATES = {
   Active: Call.Active.value,
 };
 const EVENTS = ['Place', 'Ring', 'Answer', 'RemoteAnswer', 'Connected', 'HangUp',
-  'RemoteEnd', 'LocalDecline', 'RemoteDecline', 'RemoteBusy', 'Timeout', 'Failure', 'Taken'];
+  'RemoteEnd', 'LocalDecline', 'RemoteDecline', 'RemoteBusy', 'Timeout', 'Failure', 'Taken',
+  'IdleHangUp'];
 
 const tagOf = (st) => [Call.stateTag(st), Call.endReason(st)].join('|');
 const step = (evName, st) => tagOf(Call.step(Call[evName].value)(st));
@@ -36,7 +37,8 @@ const TABLE = {
     Connected: 'Active|', HangUp: 'Ended|hangup', RemoteEnd: 'Ended|hangup',
     Timeout: 'Ended|failed', Failure: 'Ended|failed',
   },
-  Active: { HangUp: 'Ended|hangup', RemoteEnd: 'Ended|hangup', Failure: 'Ended|failed' },
+  Active: { HangUp: 'Ended|hangup', RemoteEnd: 'Ended|hangup', Failure: 'Ended|failed',
+    IdleHangUp: 'Ended|idle' },
 };
 
 test('step: the whole live-state table, exhaustively vs the oracle', () => {
@@ -70,6 +72,18 @@ test('inCall: Outgoing/Incoming/Connecting/Active occupy the line; Idle/Ended do
 test('timeouts: 30 s ring, 20 s setup watchdog', () => {
   assert.equal(Call.ringTimeoutSecs, 30);
   assert.equal(Call.setupTimeoutSecs, 20);
+});
+
+test('silence watch: 60 s default, clamp 15–600, voice floor under speech and over hum', () => {
+  assert.equal(Call.idleDefaultSecs, 60);
+  assert.equal(Call.idleClampSecs(60), 60);
+  assert.equal(Call.idleClampSecs(1), 15, 'floor');
+  assert.equal(Call.idleClampSecs(15), 15);
+  assert.equal(Call.idleClampSecs(600), 600);
+  assert.equal(Call.idleClampSecs(9999), 600, 'ceiling');
+  /* audioLevel is 0..1: background hum reads well under the floor, speech an
+     order of magnitude above it — both clients hang up only past the floor. */
+  assert.ok(Call.voiceFloor > 0 && Call.voiceFloor < 0.05, 'floor sits between hum and speech');
 });
 
 test('glareWins: lower hash wins, antisymmetric, irreflexive', () => {

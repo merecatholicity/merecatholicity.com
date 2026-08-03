@@ -19,6 +19,9 @@ module Domain.Call
   , inCall
   , ringTimeoutSecs
   , setupTimeoutSecs
+  , idleDefaultSecs
+  , idleClampSecs
+  , voiceFloor
   , glareWins
   , stateTag
   , endReason
@@ -28,7 +31,7 @@ import Prelude
 
 -- | The call lifecycle. Ended carries the reason tag the UI speaks from:
 -- | "hangup" | "declined" | "busy" | "canceled" | "noanswer" | "missed"
--- | | "taken" | "failed".
+-- | | "taken" | "failed" | "idle".
 data CallState
   = Idle
   | Outgoing
@@ -54,6 +57,7 @@ data CallEvent
   | Timeout        -- ring timer / setup watchdog fired
   | Failure        -- pc failed / mic refused / wire error
   | Taken          -- another of MY tabs answered this ring
+  | IdleHangUp     -- the silence watch: nobody spoke for the admin-set window
 
 derive instance eqCallEvent :: Eq CallEvent
 
@@ -93,6 +97,7 @@ step ev st = case st of
     HangUp -> Ended "hangup"
     RemoteEnd -> Ended "hangup"
     Failure -> Ended "failed"
+    IdleHangUp -> Ended "idle"      -- the silence watch — legal ONLY here
     _ -> Active                     -- Timeout is a NO-OP here, by design
 
 -- | Whether a state occupies the line (drives auto-busy replies to a second
@@ -112,6 +117,22 @@ ringTimeoutSecs = 30
 -- | How long Connecting may take before the watchdog calls it failed.
 setupTimeoutSecs :: Int
 setupTimeoutSecs = 20
+
+-- | The silence auto-hangup window when the admin has not set one, and the
+-- | clamp both the worker (settings save + /config) and the client apply to
+-- | whatever is stored — one rule, one source.
+idleDefaultSecs :: Int
+idleDefaultSecs = 60
+
+idleClampSecs :: Int -> Int
+idleClampSecs n = max 15 (min 600 n)
+
+-- | The WebRTC stats audioLevel (0..1) above which a sample counts as a
+-- | voice. Background hum and comfort noise sit well under 0.01; speech
+-- | registers an order of magnitude above it. Either side clearing this
+-- | floor resets the silence clock on both ends.
+voiceFloor :: Number
+voiceFloor = 0.01
 
 -- | Glare: both members called each other at once. Deterministic tie-break —
 -- | the LOWER hash's offer wins (hex strings order lexically); the other side

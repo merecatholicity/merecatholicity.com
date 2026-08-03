@@ -18,6 +18,7 @@ import * as Links from '../../purescript/output/Domain.Links/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
+import * as CallK from '../../purescript/output/Domain.Call/index.js';
 import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
@@ -936,6 +937,11 @@ export const APP_SETTING_DEFAULTS = {
      past its 1,000 GB/month free pool bills per GB with no cap. */
   calls_enabled: '1',
   calls_turn: '1',
+  /* Silence auto-hangup: an Active call where NEITHER side clears the voice
+     floor for this many seconds ends itself (both clients run the watch off
+     /config; the default and clamp are Domain.Call's). */
+  calls_idle_hangup: '1',
+  calls_idle_seconds: String(CallK.idleDefaultSecs),
 };
 export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
 export async function getAppSettings(env: any) {

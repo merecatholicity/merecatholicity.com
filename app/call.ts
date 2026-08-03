@@ -63,6 +63,7 @@ const END_COPY: Record<string, string> = {
   hangup: 'Call ended', declined: 'Call declined', busy: 'They are on another call',
   canceled: 'Call canceled', noanswer: 'No answer — they will see a missed call',
   missed: 'Missed call', taken: 'Answered on another device', failed: 'The call could not be completed',
+  idle: 'Call ended after a long silence',
 };
 
 /* ---- UI sounds (docs/sounds/, CC0 — see _readme_and_license.txt there).
@@ -97,7 +98,7 @@ function freshCall() {
   return { state: 'Idle', reason: '', id: '', peer: '', peerLabel: '', dir: '',
     pc: null as any, stream: null as any, pendingSdp: '', iceIn: [] as any[], iceOut: [] as any[],
     iceT: 0 as any, ringT: 0 as any, setupT: 0 as any, tickT: 0 as any, graceT: 0 as any,
-    startedAt: 0, muted: false };
+    idleT: 0 as any, lastVoice: 0, startedAt: 0, muted: false };
 }
 
 export function installCall() {
@@ -202,8 +203,8 @@ export function installCall() {
   }
   function clearTimers() {
     clearTimeout(CALL.ringT); clearTimeout(CALL.setupT); clearTimeout(CALL.graceT);
-    clearInterval(CALL.iceT); clearInterval(CALL.tickT);
-    CALL.ringT = CALL.setupT = CALL.graceT = CALL.iceT = CALL.tickT = 0;
+    clearInterval(CALL.iceT); clearInterval(CALL.tickT); clearInterval(CALL.idleT);
+    CALL.ringT = CALL.setupT = CALL.graceT = CALL.iceT = CALL.tickT = CALL.idleT = 0;
   }
   function cleanup() {
     stopSound('ring');   // every teardown path silences the ring
@@ -248,7 +249,7 @@ export function installCall() {
       const st = pc.connectionState;
       if (st === 'connected') {
         clearTimeout(CALL.setupT); clearTimeout(CALL.graceT);
-        if (CALL.state === 'Connecting') { CALL.startedAt = Date.now(); step('Connected'); }
+        if (CALL.state === 'Connecting') { CALL.startedAt = Date.now(); step('Connected'); startIdleWatch(pc); }
       } else if (st === 'failed') end('Failure');
       else if (st === 'disconnected') {
         /* 10 s grace for transient blips; ICE restart is v1-out-of-scope, so
@@ -260,6 +261,49 @@ export function installCall() {
       }
     };
     return pc;
+  }
+
+  /* The silence watch (admin-toggleable, /config calls.idle_*): WebRTC stats
+     already carry a per-second audioLevel (0..1) for the local mic
+     (media-source) and the remote track (inbound-rtp) — no audio graph, and
+     nothing leaves the device. Either side clearing the Domain.Call voiceFloor
+     resets the clock; past the admin's window the call ends itself through the
+     kernel's IdleHangUp (legal ONLY in Active, so a stale interval can never
+     kill anything else). A browser that never reports a numeric audioLevel
+     disarms the watch — missing data must never hang up a call. Both ends run
+     this and race to the same verdict; Ended is absorbing, and the loser of
+     the race just sees the other's plain 'end' signal. */
+  function startIdleWatch(pc: any) {
+    fetch(API + '/config').then((r) => r.json()).then((cfg: any) => {
+      const c = (cfg && cfg.calls) || {};
+      if (!c.idle_hangup) return;
+      if (CALL.pc !== pc || CALL.state !== 'Active') return;
+      const limitMs = (core as any).callIdleClampSecs(c.idle_seconds) * 1000;
+      CALL.lastVoice = Date.now();
+      let sawLevel = false;
+      let blanks = 0;
+      clearInterval(CALL.idleT);
+      CALL.idleT = setInterval(() => {
+        if (CALL.pc !== pc || CALL.state !== 'Active') { clearInterval(CALL.idleT); CALL.idleT = 0; return; }
+        pc.getStats().then((report: any) => {
+          if (CALL.pc !== pc || CALL.state !== 'Active') return;
+          let heard = false;
+          let seen = false;
+          report.forEach((st: any) => {
+            if (st.kind !== 'audio' && st.mediaType !== 'audio') return;
+            if (st.type !== 'media-source' && st.type !== 'inbound-rtp') return;
+            if (typeof st.audioLevel === 'number') {
+              seen = true;
+              if (st.audioLevel > (core as any).callVoiceFloor) heard = true;
+            }
+          });
+          if (seen) sawLevel = true;
+          else if (!sawLevel && ++blanks > 10) { clearInterval(CALL.idleT); CALL.idleT = 0; return; }
+          if (heard) CALL.lastVoice = Date.now();
+          else if (sawLevel && Date.now() - CALL.lastVoice >= limitMs) end('IdleHangUp', true);
+        }).catch(() => { /* stats refused this tick — the next may answer */ });
+      }, 1000);
+    }).catch(() => { /* no config = no watch; the call stands */ });
   }
 
   function place(other: string, prettyLabel?: string) {
