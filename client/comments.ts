@@ -3899,6 +3899,53 @@
     });
   }
 
+  /* ---- The attachment stash: a picked or RECORDED file survives a reload.
+     Born of a live loss (2026-08-03): a voice note rode a new-topic composer,
+     the page died at Post (an iOS engine reload no page script can prevent),
+     and the recording — already uploaded, its media_key held only in JS
+     memory — was orphaned and swept. Text drafts survive via attachDraft;
+     this is the same covenant for media. IndexedDB, because a blob has no
+     place in localStorage: one record per composer place {blob, name, type,
+     size, key, at}. A stashed upload key is reused while the server's
+     unlinked-orphan window (15 min) can still hold the row; past that the
+     kept blob re-uploads through the normal gate. Cleared by ✕, by a
+     successful post, and by age (24 h). Board + feed/wall composers; the DM
+     composer is deliberately out (its media rides the E2E envelope, a
+     different custody story). Best-effort throughout: no IndexedDB = exactly
+     the old behavior. */
+  var stashDbP: any = null;
+  function mediaStashDb() {
+    if (stashDbP) return stashDbP;
+    stashDbP = new Promise(function (resolve) {
+      try {
+        var req = indexedDB.open('mc-media-stash', 1);
+        req.onupgradeneeded = function () { try { req.result.createObjectStore('stash'); } catch (e) { /* raced */ } };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+    return stashDbP;
+  }
+  function mediaStash(op: any, place: any, rec?: any) {
+    return mediaStashDb().then(function (db: any) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction('stash', op === 'get' ? 'readonly' : 'readwrite');
+          var st = tx.objectStore('stash');
+          var r = op === 'get' ? st.get(place) : op === 'del' ? st.delete(place) : st.put(rec, place);
+          r.onsuccess = function () { resolve(op === 'get' ? r.result : true); };
+          r.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    }).catch(function () { return null; });
+  }
+  /* The board composer's place, in attachDraft's own key grammar. */
+  function boardMediaPlace() {
+    var qs = new URLSearchParams(location.search);
+    return qs.get('topic') ? 'reply:' + qs.get('topic') : 'topic:' + (qs.get('cat') || '');
+  }
+
   /* The board composer's attach controls (📎 + 🎙), added asynchronously once
      the served settings say the board takes attachments at all. The pick path
      gates kind + size (images downscaled first), uploads at once to
@@ -3921,17 +3968,28 @@
       var chip = el('span', 'dm-attach-chip');
       chip.style.display = 'none';
       var note = el('span', 'mc-media-note');
+      var place = boardMediaPlace();
       var held: any = { key: '', clear: clearHeld };
       function clearHeld() {
         held.key = '';
         fileInput.value = '';
         chip.style.display = 'none';
         chip.textContent = '';
+        mediaStash('del', place);
       }
       state.boardMedia = held;
       var attach = el('button', 'btn btn-attach', '📎 Attach');
       attach.type = 'button';
       attach.addEventListener('click', function () { fileInput.click(); });
+      function showChip(name: any, size: any) {
+        chip.textContent = '';
+        chip.appendChild(document.createTextNode('📎 ' + (name || 'attachment') + ' · ' + fmtBytes(size) + '  '));
+        var x = el('a', null, '✕');
+        x.href = '#';
+        x.addEventListener('click', function (e: any) { e.preventDefault(); clearHeld(); });
+        chip.appendChild(x);
+        chip.style.display = '';
+      }
       function takeFile(f: any) {
         note.textContent = '';
         mediaGateFile(f, cfg, sec, note).then(function (out: any) {
@@ -3947,17 +4005,29 @@
               if (!d || !d.ok) { note.textContent = (d && d.error) || 'Upload failed.'; return; }
               note.textContent = '';
               held.key = d.media_key;
-              chip.textContent = '';
-              chip.appendChild(document.createTextNode('📎 ' + (out.name || 'attachment') + ' · ' + fmtBytes(out.size) + '  '));
-              var x = el('a', null, '✕');
-              x.href = '#';
-              x.addEventListener('click', function (e: any) { e.preventDefault(); clearHeld(); });
-              chip.appendChild(x);
-              chip.style.display = '';
+              showChip(out.name, out.size);
+              /* The stash keeps BOTH the key (instant reuse) and the bytes
+                 (re-upload once the server's orphan window has passed). */
+              mediaStash('put', place, { blob: out, name: out.name || 'attachment',
+                type: out.type || '', size: out.size, key: d.media_key, at: Date.now() });
             })
             .catch(function () { note.textContent = 'Upload failed. Try again.'; });
         });
       }
+      /* A reload (or the iOS engine dying at Post) rebuilds the composer:
+         re-adopt what the stash holds so the recording is still attached. */
+      mediaStash('get', place).then(function (rec: any) {
+        if (!rec || !rec.at || held.key || fileInput.value) return;
+        if (Date.now() - rec.at > 86400000) { mediaStash('del', place); return; }
+        if (rec.key && Date.now() - rec.at < 12 * 60000) {
+          held.key = rec.key;
+          showChip(rec.name, rec.size);
+        } else if (rec.blob) {
+          try {
+            takeFile(new File([rec.blob], rec.name || 'attachment', { type: rec.type || rec.blob.type || '' }));
+          } catch (e) { /* File ctor unavailable: stash stays for a newer engine */ }
+        }
+      });
       fileInput.addEventListener('change', function () {
         var f = fileInput.files && fileInput.files[0];
         if (f) takeFile(f);
@@ -6788,24 +6858,41 @@
     btnRow.appendChild(send);
     var pv = previewButton(ta); if (pv) btnRow.appendChild(pv);
     var pendingFile: any = null;
+    var wplace = kind === 'comment' ? 'wallc:' + (extra.post || 0) : 'wall:' + location.pathname;
     var fileInput = el('input'); fileInput.type = 'file'; fileInput.style.display = 'none';
     var attach = el('button', 'btn btn-attach', '📎 Attach'); attach.type = 'button';
     var chip = el('span', 'dm-attach-chip'); chip.style.display = 'none';
-    function clearAttach() { pendingFile = null; fileInput.value = ''; chip.style.display = 'none'; chip.textContent = ''; }
+    function clearAttach() { pendingFile = null; fileInput.value = ''; chip.style.display = 'none'; chip.textContent = ''; mediaStash('del', wplace); }
     attach.addEventListener('click', function () { fileInput.click(); });
+    function holdWallFile(out: any) {
+      pendingFile = out; chip.textContent = '';
+      chip.appendChild(document.createTextNode('📎 ' + (out.name || 'attachment') + ' · ' + fmtBytes(out.size) + '  '));
+      var x = el('a', null, '✕'); x.href = '#'; x.addEventListener('click', function (e: any) { e.preventDefault(); clearAttach(); });
+      chip.appendChild(x); chip.style.display = '';
+    }
     /* Gate + hold one picked (or recorded) file: kind and size from the FEED
-       section's served settings, images downscaled in the browser first. */
+       section's served settings, images downscaled in the browser first. The
+       held file also enters the media stash so a reload cannot lose it (the
+       wall uploads at post time, so only the bytes are kept). */
     function takeWallFile(f: any) {
       mediaCfg().then(function (cfg: any) {
         mediaGateFile(f, cfg, cfg.sections.wall, status).then(function (out: any) {
           if (!out) { fileInput.value = ''; return; }
-          pendingFile = out; status.textContent = ''; chip.textContent = '';
-          chip.appendChild(document.createTextNode('📎 ' + (out.name || 'attachment') + ' · ' + fmtBytes(out.size) + '  '));
-          var x = el('a', null, '✕'); x.href = '#'; x.addEventListener('click', function (e: any) { e.preventDefault(); clearAttach(); });
-          chip.appendChild(x); chip.style.display = '';
+          status.textContent = '';
+          holdWallFile(out);
+          mediaStash('put', wplace, { blob: out, name: out.name || 'attachment',
+            type: out.type || '', size: out.size, at: Date.now() });
         });
       });
     }
+    mediaStash('get', wplace).then(function (rec: any) {
+      if (!rec || !rec.at || pendingFile || fileInput.value) return;
+      if (Date.now() - rec.at > 86400000) { mediaStash('del', wplace); return; }
+      if (!rec.blob) return;
+      try {
+        holdWallFile(new File([rec.blob], rec.name || 'attachment', { type: rec.type || rec.blob.type || '' }));
+      } catch (e) { /* File ctor unavailable: stash stays for a newer engine */ }
+    });
     fileInput.addEventListener('change', function () {
       var f = fileInput.files && fileInput.files[0]; if (!f) return;
       takeWallFile(f);
