@@ -19,7 +19,7 @@ import flows
 from flows import Flow
 
 H3S = ['Media platform (global)', 'Feed & member walls', 'Community forum',
-       'Inbox (direct messages)', 'The Mere Catholicity Journal']
+       'Inbox (direct messages)', 'Voice calls', 'The Mere Catholicity Journal']
 PURGES = ['Purge all feed & wall media now', 'Purge all forum attachments now',
           'Purge all DM attachments now']
 
@@ -44,7 +44,7 @@ def main():
         f.goto('community.html')
         f.wait("!!(window.mcKit && window.mcKit.isAdmin && window.mcKit.isAdmin())", timeout=20)
         f.goto('community.html?settings=1')
-        f.wait("document.querySelectorAll('.admin-settings h3').length >= 5", timeout=25)
+        f.wait("document.querySelectorAll('.admin-settings h3').length >= 6", timeout=25)
         r = json.loads(f.js1("""
           var w = document.querySelector('.admin-settings');
           var h3s = [].map.call(w.querySelectorAll('h3'), function(h){ return h.textContent; });
