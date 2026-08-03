@@ -2422,3 +2422,93 @@ body[data-art="freechurches"]::before {
 .admin-danger-btn:hover:not(:disabled) { background: var(--maroon); color: #fff; }
 .admin-danger-btn:disabled { opacity: 0.6; cursor: default; }
 .admin-danger-note { margin-left: 0.6rem; }
+
+/* ===================== Feed / wall: Facebook-style cards ===================== */
+/* Inline-SVG icons in the action bar, share menu, and media controls. */
+.mc-ic { width: 1.15em; height: 1.15em; display: inline-block; vertical-align: -0.2em; flex: none; }
+
+/* The action bar under each post: a summary row (counts) then a button row. */
+.wall-actions { margin-top: 0.5rem; }
+.wall-summary { display: flex; justify-content: space-between; align-items: center; font-size: 0.86rem; color: var(--faint); padding: 0.1rem 0.1rem 0.45rem; }
+.wall-sum-likes, .wall-sum-comments { background: none; border: 0; font: inherit; color: var(--faint); cursor: pointer; padding: 0.1rem 0.2rem; display: inline-flex; align-items: center; gap: 0.25rem; border-radius: 6px; }
+.wall-sum-likes:hover, .wall-sum-comments:hover { color: var(--maroon); text-decoration: underline; }
+.wall-sum-likes .mc-ic { color: var(--maroon); }
+.wall-btnrow { display: flex; border-top: 1px solid var(--rule); }
+.wall-act { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; background: none; border: 0; font: inherit; font-size: 0.92rem; font-weight: 600; color: var(--muted-c); cursor: pointer; padding: 0.55rem 0.3rem; margin-top: 0.25rem; border-radius: 8px; transition: background var(--tap), color var(--tap); }
+.wall-act:hover { background: color-mix(in srgb, var(--maroon) 8%, transparent); color: var(--maroon); }
+.wall-act .mc-ic { transition: transform var(--tap); }
+.wall-act.wall-like.on { color: var(--maroon); }
+.wall-act.wall-like.on .mc-ic-heart { fill: var(--maroon); stroke: var(--maroon); }
+.wall-act.wall-like.on .mc-ic { transform: scale(1.08); }
+.wall-act-lbl { white-space: nowrap; }
+@media (max-width: 520px) { .wall-act-lbl { font-size: 0.86rem; } .wall-act { gap: 0.3rem; } }
+
+/* Standardised media sizing: small shows natural, large caps so one giant image
+   never dominates the scroll. The holder is relative for the expand button. */
+.wall-media-img, .wall-media-video { position: relative; margin: 0.5rem 0 0.2rem; line-height: 0; }
+.wall-media-img .wall-media-el, .wall-media-video .wall-media-el { display: block; max-width: 100%; max-height: 30rem; width: auto; height: auto; margin: 0 auto; border-radius: 10px; }
+.wall-media-video .wall-media-el { background: #000; width: 100%; }
+.wall-media-audio .wall-media-el { width: 100%; max-width: 420px; }
+.wall-media-img .wall-media-el { cursor: pointer; }
+.wall-post-detail .wall-media-img .wall-media-el, .wall-post-detail .wall-media-video .wall-media-el { max-height: 40rem; }
+.wall-media-expand { position: absolute; top: 0.5rem; right: 0.5rem; width: 2rem; height: 2rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: rgba(0,0,0,0.5); color: #fff; cursor: pointer; opacity: 0; transition: opacity var(--tap); }
+.wall-media-img:hover .wall-media-expand, .wall-media-video:hover .wall-media-expand, .wall-media-expand:focus-visible { opacity: 1; }
+@media (hover: none) { .wall-media-expand { opacity: 0.85; } }
+.wall-media-expand .mc-ic { width: 1rem; height: 1rem; }
+
+/* Read-more clamp: media posts clamp tight (media is the focus), text posts get a
+   longer read. See-more expands in place. */
+.wall-clamp { display: -webkit-box; -webkit-line-clamp: var(--wall-lines, 8); line-clamp: var(--wall-lines, 8); -webkit-box-orient: vertical; overflow: hidden; }
+.wall-seemore { background: none; border: 0; font: inherit; font-weight: 600; color: var(--maroon); cursor: pointer; padding: 0.1rem 0; margin-top: 0.15rem; }
+.wall-seemore:hover { text-decoration: underline; }
+
+/* Comment like (compact, Facebook-style under each comment). */
+.wall-comment-actions { margin-top: 0.2rem; font-size: 0.82rem; }
+.wall-clike-wrap { display: inline-flex; align-items: center; gap: 0.5rem; }
+.wall-clike { background: none; border: 0; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--faint); cursor: pointer; padding: 0; }
+.wall-clike.on { color: var(--maroon); }
+.wall-clike:hover { text-decoration: underline; }
+.wall-clike-count { background: none; border: 0; font: inherit; font-size: 0.8rem; color: var(--maroon); cursor: pointer; padding: 0; }
+
+/* Popovers: who-liked + share menu. */
+.wall-pop { z-index: 3200; min-width: 12rem; max-width: 15rem; max-height: 60vh; overflow: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow-2); padding: 0.5rem; }
+.wall-pop-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--faint); padding: 0.2rem 0.4rem 0.4rem; }
+.wall-pop-load, .wall-pop-empty, .wall-pop-more { color: var(--faint); font-size: 0.85rem; padding: 0.35rem 0.4rem; }
+.wall-likers-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.4rem; border-radius: 8px; text-decoration: none; color: var(--ink); background: none; }
+.wall-likers-row:hover { background: color-mix(in srgb, var(--maroon) 8%, transparent); }
+.wall-likers-row .comment-avatar, .wall-likers-row .comment-avatar-fallback { width: 1.6rem; height: 1.6rem; }
+.wall-likers-name { font-size: 0.9rem; }
+.wall-share-item { display: flex; align-items: center; gap: 0.6rem; width: 100%; text-align: left; background: none; border: 0; font: inherit; font-size: 0.92rem; color: var(--ink); cursor: pointer; padding: 0.5rem 0.55rem; border-radius: 8px; text-decoration: none; }
+.wall-share-item:hover { background: color-mix(in srgb, var(--maroon) 8%, transparent); color: var(--maroon); }
+.wall-share-item .mc-ic { color: var(--maroon); }
+
+/* The download control (feed + DM). */
+.wall-act-dl { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--maroon); text-decoration: none; }
+.dm-media-dl { margin-top: 0.35rem; }
+.dm-dl { font-size: 0.85rem; font-weight: 600; }
+
+/* Live-arrived post highlight + endless-scroll wrap marker. */
+.wall-live-new { animation: wallLiveIn 2s ease; }
+@keyframes wallLiveIn { 0% { background: color-mix(in srgb, var(--maroon) 14%, transparent); } 100% { background: transparent; } }
+.wall-loopmark { text-align: center; color: var(--faint); font-size: 0.82rem; letter-spacing: 0.03em; margin: 1.4rem 0; opacity: 0.7; }
+
+/* The media THEATER (lightbox). Desktop: media left, engagement rail right; mobile:
+   media on top, rail below. Click the scrim / ✕ / Esc closes. */
+.wall-lightbox { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; padding: 0; }
+.wall-lb-inner { display: flex; width: 100%; height: 100%; max-width: 100vw; }
+.wall-lb-stage { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.wall-lb-media { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+.wall-lb-audio { width: min(90vw, 480px); }
+.wall-lb-rail { flex: 0 0 22rem; max-width: 22rem; background: var(--bg); overflow-y: auto; padding: 1.1rem 1.15rem 2rem; }
+.wall-lb-rail .comment-head { margin-bottom: 0.4rem; }
+.wall-lb-rail .wall-comments { display: block; }
+.wall-lb-mini { padding: 0.5rem 0; }
+.wall-lb-x { position: absolute; top: 0.7rem; right: 0.9rem; width: 2.4rem; height: 2.4rem; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff; cursor: pointer; z-index: 2; }
+.wall-lb-x:hover { background: rgba(0,0,0,0.8); }
+.wall-lightbox-bare .wall-lb-rail { flex-basis: auto; background: transparent; }
+@media (max-width: 800px) {
+  .wall-lb-inner { flex-direction: column; }
+  .wall-lb-stage { flex: 0 0 auto; max-height: 56vh; padding: 0.6rem; background: #000; }
+  .wall-lb-rail { flex: 1 1 auto; max-width: none; width: 100%; }
+  .wall-lightbox-bare .wall-lb-stage { max-height: 82vh; }
+}

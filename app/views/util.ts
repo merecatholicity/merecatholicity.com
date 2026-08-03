@@ -30,3 +30,18 @@ export function crumbTpl(parts: Crumb[]): TemplateResult {
     ? html`<a href=${part[1]}>${part[0]}</a>`
     : html`<span>${part[0]}</span>`}`)}</p>`;
 }
+
+/* A terminal load failure must offer a way back that is not "reload the
+   page". The retry swaps in a FRESH instance of the same element carrying
+   the same wiring props — connectedCallback re-runs the whole load exactly
+   as the router mounted it, listeners re-attach cleanly, and any wedged
+   in-flight flag on the old instance is discarded with it. */
+export function retryTpl(host: HTMLElement, props: Record<string, unknown>): TemplateResult {
+  const again = (e: Event) => {
+    e.preventDefault();
+    const fresh = document.createElement(host.tagName.toLowerCase()) as any;
+    Object.keys(props).forEach((k) => { fresh[k] = props[k]; });
+    host.replaceWith(fresh);
+  };
+  return html` <a class="mc-retry" href="#" @click=${again}>Try again</a>`;
+}

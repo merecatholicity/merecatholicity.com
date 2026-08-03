@@ -11,7 +11,7 @@
    knocks once and the server judges. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl } from './util.ts';
 import * as Core from '../core.ts';
 
 class McTopic extends LitElement {
@@ -219,7 +219,7 @@ class McTopic extends LitElement {
       return html`${crumbTpl([['Community', 'community.html'], ['Topic']])}
         <p class="comments-status">${this.err === 'No such topic.'
           ? 'No such topic. It may have been removed.'
-          : 'The topic could not be loaded. Check your connection and reload the page.'}</p>`;
+          : html`The topic could not be loaded.${retryTpl(this, { kit: this.kit, topicId: this.topicId })}`}</p>`;
     }
     if (!this.d) {
       return html`${crumbTpl([['Community', 'community.html'], ['Topic']])}
@@ -380,7 +380,7 @@ class McSearch extends LitElement {
       ${status}
       <div class="board-topics">
         ${d && d.items && d.items.length ? d.items.map((it: any) => this.resultRow(it)) : nothing}
-        ${this.d && this.d.error ? html`<p class="comments-status">Search could not be run. Check your connection and reload the page.</p>` : nothing}
+        ${this.d && this.d.error ? html`<p class="comments-status">Search could not be run.${retryTpl(this, { kit: this.kit })}</p>` : nothing}
       </div>
       ${d && d.items && d.items.length ? pagerTpl(d.total, d.per, d.page, href) : nothing}
     `;

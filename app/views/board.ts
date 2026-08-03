@@ -9,7 +9,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { pagerTpl } from './util.ts';
+import { pagerTpl, retryTpl } from './util.ts';
 import * as Core from '../core.ts';
 
 /* The six confessional "in-house talk for [tradition]" rooms, grouped apart from
@@ -247,7 +247,7 @@ class McBoardCat extends LitElement {
           }).catch(() => {});
         }
       })
-      .catch(() => { this.err = 'Could not load the topics. Reload to retry.'; });
+      .catch(() => { this.err = 'Could not load the topics.'; });
     /* Live: new topics appear and rows re-sort as posts happen (page 1 only —
        new activity always lands on the first page). The back room isn't broadcast. */
     if (window.mcLive && this.catKey !== 'adminsonly') window.mcLive.board.sub(['cat:' + this.catKey]);
@@ -385,7 +385,7 @@ class McBoardCat extends LitElement {
       <p class="board-cat-desc">${cat[2]}${cat[3] ? html`<a href=${cat[4]}>${cat[3]}</a>.` : nothing}</p>
       ${this.payload ? pagerTpl(this.payload.total, this.payload.per, this.payload.page, hrefFor) : nothing}
       <div class="board-topics">
-        ${this.err ? html`<p class="comments-status">${this.err}</p>`
+        ${this.err ? html`<p class="comments-status">${this.err}${retryTpl(this, { kit: this.kit, catKey: this.catKey })}</p>`
         : !this.payload ? html`<p class="comments-status">Loading topics...</p>`
         : this.payload.topics.length === 0
           ? html`<p class="comments-status">No topics yet. Yours can be the first.</p>`

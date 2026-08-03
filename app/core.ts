@@ -30,6 +30,7 @@ import * as Blocked from '../purescript/output/Domain.Blocked/index.js';
 import * as Compose from '../purescript/output/Domain.Compose/index.js';
 import * as Handle from '../purescript/output/Domain.Handle/index.js';
 import * as Links from '../purescript/output/Domain.Links/index.js';
+import * as Media from '../purescript/output/Domain.Media/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -184,3 +185,30 @@ export const blockedMessage = (reason: string): string => Blocked.messageFor(rea
    still stands in the body, deduped, in order (Domain.Compose; collectMentions).
    `picks` is [{token, hash}]. Returns a plain string array. */
 export const mentionsIn = (text: string, picks: Array<{ token: string; hash: string }>): string[] => Compose.mentionsIn(text || '')(picks || []);
+
+/* Media platform settings (Domain.Media), single-sourced with the worker's
+   upload/claim gates. mediaDefaults = the settings record the admin overrides
+   (byte values as Numbers — 2 GB+ exceeds Int); the clamps bound admin-supplied
+   values; parse/serializeKinds round-trip the stored kinds masks (canonical
+   image,video,audio order); kindOfKey parses an R2 key `wall/<i|v|a>/<64hex>`
+   strictly (the claim-time mask enforcement); the MIME helpers carry the exact
+   whitelist (case-insensitive, ;codecs stripped). Maybe erased to value|null. */
+export const mediaDefaults = Media.defaults;
+export const mediaClampKindBytes = (n: number): number => Media.clampKindBytes(Number(n) || 0);
+export const mediaClampAudioSeconds = (n: number): number => Media.clampAudioSeconds(Number(n) || 0);
+export const mediaClampCapBytes = (n: number): number => Media.clampCapBytes(Number(n) || 0);
+export const mediaParseKinds = (mask: string): string[] => Media.parseKinds(String(mask == null ? '' : mask));
+export const mediaSerializeKinds = (kinds: string[]): string => Media.serializeKinds(kinds || []);
+export const mediaKindLetter = (kind: string): string | null => Maybe.maybe(null)((s: string) => s)(Media.kindLetter(kind || ''));
+export const mediaLetterKind = (letter: string): string | null => Maybe.maybe(null)((s: string) => s)(Media.letterKind(letter || ''));
+export const mediaKindOfKey = (key: string): string | null => Maybe.maybe(null)((s: string) => s)(Media.kindOfKey(key || ''));
+export const mediaMimesFor = (kind: string): string[] => Media.mimesFor(kind || '');
+export const mediaMimeAllowed = (kind: string, mime: string): boolean => Media.mimeAllowed(kind || '')(mime || '');
+export const mediaKindOfMime = (mime: string): string | null => Maybe.maybe(null)((s: string) => s)(Media.kindOfMime(mime || ''));
+export const mediaAcceptFor = (kinds: string[]): string => Media.acceptFor(kinds || []);
+export const mediaMaxBytesFor = (kind: string, limits: { image: number; video: number; audio: number }): number | null =>
+  Maybe.maybe(null)((n: number) => n)(Media.maxBytesFor(kind || '')({
+    image: Number(limits && limits.image) || 0,
+    video: Number(limits && limits.video) || 0,
+    audio: Number(limits && limits.audio) || 0,
+  }));
