@@ -15,19 +15,14 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
 }
 
   function commentNode(kit: any, c: any, pending?: boolean, quoteCtx?: any, reveal?: boolean): HTMLElement {
-    /* A muted member's post shows only a slim line until you choose to see it. */
+    /* A BLOCKED member's post does not exist for you (the 2026-08-03 block
+       unification: no collapse, no "show"). The hidden stub keeps every
+       caller's append/anchor bookkeeping intact. */
     if (!reveal && c.author_hash && c.author_hash !== kit.state.myHash && kit.isMuted(c.author_hash)) {
-      var ph = el('div', 'board-intro comment-muted');
+      var ph = el('div', 'comment-blocked');
       ph.id = 'comment-' + c.id;
-      ph.appendChild(document.createTextNode('A muted member posted here. '));
-      var show = el('a', 'comment-quote-link', 'show') as HTMLAnchorElement;
-      show.href = '#';
-      show.addEventListener('click', function (e: Event) {
-        e.preventDefault();
-        var full = commentNode(kit, c, pending, quoteCtx, true);
-        if (ph.parentNode) ph.parentNode.replaceChild(full, ph);
-      });
-      ph.appendChild(show);
+      ph.style.display = 'none';
+      ph.hidden = true;
       return ph;
     }
     var article = el('article', 'comment' + (pending ? ' comment-pending' : ''));
@@ -75,18 +70,21 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
       dm.href = 'community.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
       items.push(dm);
-      /* Mute this member's posts for yourself. Re-routing re-renders the view
-         in place so the mute takes at once, everywhere they appear — a full
-         page reload inside the SPA was jarring on phones. */
-      var muteLink = el('a', 'comment-quote-link', kit.isMuted(c.author_hash) ? 'unmute' : 'mute') as HTMLAnchorElement;
-      muteLink.href = '#';
-      muteLink.title = 'Hide this member’s posts, for you only';
-      muteLink.addEventListener('click', function (e: Event) {
+      /* Block, the one member control (2026-08-03): their posts vanish for
+         you and their messages stop. Re-routing re-renders the view in place
+         so it takes at once, everywhere they appear. */
+      var blockLink = el('a', 'comment-quote-link', kit.isBlocked(c.author_hash) ? 'unblock' : 'block') as HTMLAnchorElement;
+      blockLink.href = '#';
+      blockLink.title = 'Block this member: hide their posts and stop their messages';
+      blockLink.addEventListener('click', function (e: Event) {
         e.preventDefault();
-        kit.toggleMute(c.author_hash);
-        if (kit.reroute) kit.reroute(); else location.reload();
+        var settle = function () { if (kit.reroute) kit.reroute(); else location.reload(); };
+        if (kit.isBlocked(c.author_hash)) { kit.setBlock(c.author_hash, false, settle); return; }
+        kit.appConfirm(kit.BLOCK_CONFIRM, { okLabel: 'Block', danger: true }, function (ok: boolean) {
+          if (ok) kit.setBlock(c.author_hash, true, settle);
+        });
       });
-      items.push(muteLink);
+      items.push(blockLink);
       /* Members flag a post for the moderators; admins act directly and don't
          see this. Reporting never hides the post — it only queues it for review.
          The reason is asked in an app sheet (window.prompt is suppressed in some

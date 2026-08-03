@@ -144,7 +144,8 @@ class McBoardIndex extends LitElement {
     const c = this.stats && this.stats[catKey];
     if (this.stats === null) return html`<div class="board-stats">—</div>`;
     if (!c) return html`<div class="board-stats board-stats-empty">Be the first to post →</div>`;
-    const latest = c.latest && c.latest.title ? (() => {
+    const latest = c.latest && c.latest.title
+      && !(c.latest.author_hash && kit.isMuted(c.latest.author_hash)) ? (() => {
       const t = String(c.latest.title);
       const titleText = t.length > 42 ? t.slice(0, 42) + '…' : t;
       const who = c.latest.author_hash ? (c.latest.nick || kit.displayName(c.latest.author_hash)) : 'Anonymous';
@@ -357,6 +358,8 @@ class McBoardCat extends LitElement {
   }
   topicRow(t: any) {
     const kit = this.kit;
+    /* A blocked member's topics do not exist for you (block unification). */
+    if (t.author_hash && kit.isMuted(t.author_hash)) return nothing;
     const isNew = this.unread && this.unread.indexOf(t.id) !== -1;
     const who = t.author_hash ? (t.nick || kit.displayName(t.author_hash)) : 'Anonymous';
     return html`<div class="board-topic mc-cardnav" data-tid=${t.id} @click=${this._topicNav}>

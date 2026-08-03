@@ -343,6 +343,8 @@ class McSearch extends LitElement {
   }
   resultRow(it: any) {
     const kit = this.kit;
+    /* A blocked member's posts do not surface in search (block unification). */
+    if (it.author_hash && kit.isMuted(it.author_hash)) return nothing;
     const who = it.nick || (it.author_hash ? kit.displayName(it.author_hash) : 'Anonymous');
     const ce = kit.catByKey(it.cat);
     return html`<div class="board-topic"><div class="board-topic-left">
