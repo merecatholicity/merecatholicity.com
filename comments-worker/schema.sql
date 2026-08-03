@@ -494,3 +494,54 @@ ALTER TABLE comments ADD COLUMN media_size INTEGER;
 ALTER TABLE comments ADD COLUMN media_expired INTEGER;
 ALTER TABLE wall_posts ADD COLUMN media_expired INTEGER;
 ALTER TABLE wall_comments ADD COLUMN media_expired INTEGER;
+-- Per-section media accounting (2026-08-02): which SECTION a wall_media upload
+-- belongs to — 'wall' (the public feed + member walls) or 'board' (the
+-- community forum). Stamped at upload from the route (/wall/media vs
+-- /board/media), RE-STAMPED at claim/link time to follow the claiming parent,
+-- so for every linked row ctx = 'board' ⇔ ref_type = 'board' and
+-- ctx = 'wall' ⇔ ref_type ∈ ('post','comment'). ref_type stays the visibility
+-- truth; ctx is the accounting dimension — per-section storage budgets,
+-- purge-all, and age retention all scope on it. Readers COALESCE(ctx, 'wall')
+-- for belt-and-braces robustness.
+ALTER TABLE wall_media ADD COLUMN ctx TEXT;
+UPDATE wall_media SET ctx = CASE WHEN ref_type = 'board' THEN 'board' ELSE 'wall' END;
+CREATE INDEX IF NOT EXISTS wall_media_ctx_idx ON wall_media(ctx, created_at);
+-- Mutes follow the member (like blocks): the client's device-local mute list
+-- gains a server copy on the profiles row, merged by the client on load and
+-- written through on every toggle. A JSON array of 64-hex hashes, capped
+-- client-side and clamped server-side.
+ALTER TABLE profiles ADD COLUMN muted TEXT;
+
+-- Wall comments become editable by their author like posts (wall_posts carried
+-- edited_at from the baseline; wall_comments lacked it).
+ALTER TABLE wall_comments ADD COLUMN edited_at INTEGER;
+
+-- Saved posts: the save-for-later idiom (DM save, merecat saved threads)
+-- extended to the two main content surfaces. kind 'topic' refs a forum topic
+-- id, kind 'wall' refs a wall post id. One row per member per item.
+CREATE TABLE IF NOT EXISTS bookmarks (
+  hash       TEXT    NOT NULL,
+  kind       TEXT    NOT NULL CHECK (kind IN ('topic','wall')),
+  ref        INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (hash, kind, ref)
+);
+-- Add 'merecat' to the notifications kind CHECK (the answer-ready bell: the
+-- librarian finished a long generation while the asker was away). SQLite
+-- cannot ALTER a CHECK, so this is the table-swap idiom the 'dm' kind used,
+-- all rows preserved.
+CREATE TABLE notifications_new (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  recipient_hash TEXT NOT NULL,
+  kind           TEXT NOT NULL CHECK (kind IN ('reply','mention','dm','wall','wall-like','merecat')),
+  topic_id       INTEGER NOT NULL,
+  comment_id     INTEGER NOT NULL,
+  actor_hash     TEXT,
+  created_at     INTEGER NOT NULL,
+  read_at        INTEGER
+);
+INSERT INTO notifications_new (id, recipient_hash, kind, topic_id, comment_id, actor_hash, created_at, read_at)
+  SELECT id, recipient_hash, kind, topic_id, comment_id, actor_hash, created_at, read_at FROM notifications;
+DROP TABLE notifications;
+ALTER TABLE notifications_new RENAME TO notifications;
+CREATE INDEX IF NOT EXISTS notifications_recipient_idx ON notifications(recipient_hash, id);

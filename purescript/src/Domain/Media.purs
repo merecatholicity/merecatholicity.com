@@ -10,10 +10,19 @@ module Domain.Media
   , parseKind
   , printKind
   , kindNames
+  , sectionNames
+  , parseSection
+  , sectionKindBytesKey
+  , sectionScanKey
+  , sectionVoiceKey
+  , sectionAudioSecondsKey
+  , sectionRetentionKey
   , defaults
   , clampKindBytes
   , clampAudioSeconds
   , clampCapBytes
+  , clampRetentionDays
+  , clampDmRetentionDays
   , parseKinds
   , serializeKinds
   , kindLetter
@@ -62,6 +71,71 @@ parseKind s = case s of
 kindNames :: Array String
 kindNames = map printKind allKinds
 
+-- | The three media sections — the surfaces attachments live on. The wire form
+-- | is the lowercase name ("dm" = the Inbox, "wall" = the Feed and member
+-- | walls, "board" = the community forum); like Kind, the ADT never crosses
+-- | the JS boundary.
+data Section = SDm | SWall | SBoard
+
+printSection :: Section -> String
+printSection s = case s of
+  SDm -> "dm"
+  SWall -> "wall"
+  SBoard -> "board"
+
+parseSection' :: String -> Maybe Section
+parseSection' s = case s of
+  "dm" -> Just SDm
+  "wall" -> Just SWall
+  "board" -> Just SBoard
+  _ -> Nothing
+
+-- | The section names in canonical order (dm, wall, board).
+sectionNames :: Array String
+sectionNames = map printSection [ SDm, SWall, SBoard ]
+
+-- | Normalize a section string — Just the canonical name, or Nothing for junk.
+parseSection :: String -> Maybe String
+parseSection s = map printSection (parseSection' s)
+
+-- | The app_settings key grammar for the per-section knobs — the ONE place the
+-- | key names live, so the worker membrane and the admin UI can never drift.
+-- | Each builder answers Nothing for an unknown section (or kind), and the
+-- | worker treats Nothing as "no such knob".
+
+-- | `media_<section>_<kind>_max_bytes` — the per-section per-kind size limit
+-- | (an OVERRIDE: absent means inherit the legacy global `media_<kind>_max_bytes`).
+sectionKindBytesKey :: String -> String -> Maybe String
+sectionKindBytesKey sec kind = case parseSection' sec, parseKind kind of
+  Just s, Just k -> Just ("media_" <> printSection s <> "_" <> printKind k <> "_max_bytes")
+  _, _ -> Nothing
+
+-- | `media_scan_<section>` — the per-section AI image screen toggle. THE DM
+-- | CASE IS Nothing BY CONSTRUCTION: DM media is end-to-end encrypted, the
+-- | server holds only ciphertext, and scanning it is structurally impossible —
+-- | so no key exists for anyone to flip. The E2E law, in the type.
+sectionScanKey :: String -> Maybe String
+sectionScanKey sec = case parseSection' sec of
+  Just SWall -> Just "media_scan_wall"
+  Just SBoard -> Just "media_scan_board"
+  _ -> Nothing
+
+-- | `media_voice_<section>` — the per-section voice-recorder feature flag
+-- | (client-advisory: the server cannot tell a voice note from a file upload).
+sectionVoiceKey :: String -> Maybe String
+sectionVoiceKey sec = map (\s -> "media_voice_" <> printSection s) (parseSection' sec)
+
+-- | `media_audio_max_seconds_<section>` — the per-section voice-note length
+-- | (an OVERRIDE: absent means inherit the legacy global `media_audio_max_seconds`).
+sectionAudioSecondsKey :: String -> Maybe String
+sectionAudioSecondsKey sec = map (\s -> "media_audio_max_seconds_" <> printSection s) (parseSection' sec)
+
+-- | `media_<section>_retention_days` — the per-section media age retention.
+-- | For wall/board 0 means keep forever (the default); the DM knob replaces the
+-- | old hardcoded 30-day cap and can never be "forever" (ephemeral by contract).
+sectionRetentionKey :: String -> Maybe String
+sectionRetentionKey sec = map (\s -> "media_" <> printSection s <> "_retention_days") (parseSection' sec)
+
 -- | The platform defaults an admin's app_settings override. Byte values are
 -- | Number (2 GB / 3 GB exceed the 32-bit Int range); the kinds masks are the
 -- | serialized form `parseKinds` reads back.
@@ -75,7 +149,15 @@ defaults ::
   , kindsBoard :: String
   , capDmBytes :: Number
   , capWallBytes :: Number
+  , capBoardBytes :: Number
   , autocompress :: Boolean
+  , scanWall :: Boolean
+  , scanBoard :: Boolean
+  , voiceDm :: Boolean
+  , voiceWall :: Boolean
+  , voiceBoard :: Boolean
+  , retentionWallDays :: Int
+  , retentionBoardDays :: Int
   }
 defaults =
   { imageMaxBytes: 10485760.0    -- 10 MB
@@ -84,10 +166,18 @@ defaults =
   , audioMaxSeconds: 180
   , kindsDm: "image,video,audio"
   , kindsWall: "image,video,audio"
-  , kindsBoard: "image,audio"
+  , kindsBoard: "image,video,audio"
   , capDmBytes: 2147483648.0     -- 2 GB
-  , capWallBytes: 3221225472.0   -- 3 GB
+  , capWallBytes: 3221225472.0   -- 3 GB, the feed's own budget (board split out)
+  , capBoardBytes: 1073741824.0  -- 1 GB, the forum's budget
   , autocompress: true
+  , scanWall: true               -- AI image screen on the feed (today's behavior)
+  , scanBoard: true              -- and on the forum; DMs have NO flag — E2E, unscannable
+  , voiceDm: true                -- the 🎙 recorder, per section
+  , voiceWall: true
+  , voiceBoard: true
+  , retentionWallDays: 0         -- media age retention; 0 = keep forever
+  , retentionBoardDays: 0        -- (the DM default rides Dm.mediaMaxSeconds)
   }
 
 -- | Clamp an admin-supplied per-kind upload limit: floor 64 KB, ceiling 100 MB
@@ -103,6 +193,16 @@ clampAudioSeconds n = max 30.0 (min 600.0 n)
 -- | free-tier 10 GB, leaving headroom for the DM media bucket's own sweep lag).
 clampCapBytes :: Number -> Number
 clampCapBytes n = max 104857600.0 (min 9663676416.0 n)
+
+-- | Clamp a wall/board media retention setting: 0 (= keep forever, and the
+-- | floor — 0 must SURVIVE the clamp) .. 3650 days.
+clampRetentionDays :: Number -> Number
+clampRetentionDays n = max 0.0 (min 3650.0 n)
+
+-- | Clamp the DM media retention setting: 1 .. 90 days — DM media is ephemeral
+-- | by contract and can never be set to "forever".
+clampDmRetentionDays :: Number -> Number
+clampDmRetentionDays n = max 1.0 (min 90.0 n)
 
 -- | Parse a stored kinds mask ("image, video", "audio,image,image", …): split
 -- | on commas, trim, keep only real kinds, dedupe — always emitting canonical

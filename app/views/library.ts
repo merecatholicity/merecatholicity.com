@@ -69,15 +69,21 @@ export function parseLibrary(main: Element): LibraryModel {
   return { intro: intro, cats: cats };
 }
 
+interface FlatWork { w: Work; cat: Cat; group: Group; }
+
 class McLibrary extends LitElement {
-  static properties = { cat: { attribute: false } };
+  static properties = { cat: { attribute: false }, filter: { attribute: false } };
   /* `declare` (not a class field): a real field would shadow Lit's reactive
      accessor, so setting `this.cat` on a card click would not re-render — the
      bug where the URL changed to #cat but the view only updated on refresh. */
   declare model: LibraryModel;
   declare cat: string;
+  declare filter: string;
   _onPop!: () => void;
-  constructor() { super(); this.model = { intro: '', cats: [] }; this.cat = ''; }
+  _typed = '';
+  _deb: number | undefined;
+  _flatCache: FlatWork[] | undefined;
+  constructor() { super(); this.model = { intro: '', cats: [] }; this.cat = ''; this.filter = ''; }
   createRenderRoot() { return this; }
   connectedCallback() {
     super.connectedCallback();
@@ -90,6 +96,27 @@ class McLibrary extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('popstate', this._onPop);
     window.removeEventListener('hashchange', this._onPop);
+    clearTimeout(this._deb);
+  }
+  /* The whole catalog as one flat list, built once (the model never mutates
+     after mount): the filter searches titles and shelf names across every
+     category at zero API cost. */
+  _flat(): FlatWork[] {
+    if (!this._flatCache) {
+      const out: FlatWork[] = [];
+      this.model.cats.forEach((c: Cat) => {
+        c.groups.forEach((g: Group) => {
+          g.works.forEach((w: Work) => { out.push({ w, cat: c, group: g }); });
+        });
+      });
+      this._flatCache = out;
+    }
+    return this._flatCache;
+  }
+  _onFilter(e: Event) {
+    this._typed = (e.target as HTMLInputElement).value;
+    clearTimeout(this._deb);
+    this._deb = window.setTimeout(() => { this.filter = this._typed; }, 150);
   }
   /* Resolve the current hash to a category id: a category id opens it; a sub-shelf
      id opens its parent; anything else is the top-level grid. */
@@ -118,13 +145,46 @@ class McLibrary extends LitElement {
       })}${w.note ? html`<span class="mc-lib-work-note">${w.note}</span>` : nothing}</span>
     </div>`;
   }
+  /* A filtered row is the normal work row plus a faint shelf label, so the
+     reader knows where each match lives. */
+  flatTpl(f: FlatWork) {
+    const shelf = f.group.name ? f.cat.name + ' · ' + f.group.name : f.cat.name;
+    return html`<div class="mc-lib-work">
+      <span class="mc-lib-work-title">${f.w.title}</span>
+      <span class="mc-lib-work-links">${f.w.links.map(function (l: WorkLink) {
+        return html`<a href=${l.href}>${l.label}</a>`;
+      })}<span class="mc-lib-work-note mc-lib-work-shelf">${shelf}</span></span>
+    </div>`;
+  }
+  filterBarTpl() {
+    return html`<input type="search" class="mc-lib-filter" placeholder="Filter by title"
+        aria-label="Filter works by title" .value=${this._typed}
+        style="display:block;width:100%;max-width:26rem;margin:0.3rem 0 0.2rem;padding:0.45rem 0.7rem;font:inherit;border:1px solid var(--rule);border-radius:8px;background:var(--surface);color:var(--ink)"
+        @input=${(e: Event) => this._onFilter(e)}>
+      <p class="mc-lib-intro mc-lib-ai"><a href="merecat-ai.html">You can also ask merecat, the site librarian, to search inside every work.</a></p>`;
+  }
   render() {
     const cats = this.model.cats;
+    const q = (this.filter || '').trim().toLowerCase();
+    if (q) {
+      const hits = this._flat().filter((f: FlatWork) =>
+        f.w.title.toLowerCase().indexOf(q) !== -1 ||
+        f.cat.name.toLowerCase().indexOf(q) !== -1 ||
+        (f.group.name && f.group.name.toLowerCase().indexOf(q) !== -1));
+      return html`<div class="mc-lib">
+        <h1 class="mc-lib-title">Library</h1>
+        ${this.filterBarTpl()}
+        ${hits.length
+          ? html`<div class="mc-lib-works">${hits.map((f: FlatWork) => this.flatTpl(f))}</div>`
+          : html`<p class="mc-lib-intro">No works match that filter.</p>`}
+      </div>`;
+    }
     const active = cats.find((c: Cat) => c.id === this.cat);
     if (!active) {
       return html`<div class="mc-lib">
         <h1 class="mc-lib-title">Library</h1>
         ${this.model.intro ? html`<p class="mc-lib-intro">${this.model.intro}</p>` : nothing}
+        ${this.filterBarTpl()}
         <div class="mc-lib-grid">${cats.map((c: Cat) => html`
           <a class="mc-lib-card" href=${'#' + c.id} @click=${(e: Event) => this.open(e, c.id)}>
             <span class="mc-lib-card-body">
@@ -141,6 +201,7 @@ class McLibrary extends LitElement {
       </div>
       <h1 class="mc-lib-title">${active.name}</h1>
       ${active.desc ? html`<p class="mc-lib-intro">${active.desc}</p>` : nothing}
+      ${this.filterBarTpl()}
       ${active.groups.map((g: Group) => html`
         ${g.name ? html`<h2 class="mc-lib-shelf" id=${g.id}>${g.name}</h2>` : nothing}
         <div class="mc-lib-works">${g.works.map((w: Work) => this.workTpl(w))}</div>`)}

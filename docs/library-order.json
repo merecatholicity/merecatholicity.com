@@ -1,0 +1,1264 @@
+{
+ "works": [
+  {
+   "href": "book.html",
+   "title": "Mere Catholicity (the book)",
+   "shelf": "Our own papers"
+  },
+  {
+   "href": "bishop-presbyter.html",
+   "title": "The bishop and the presbyter",
+   "shelf": "Our own papers"
+  },
+  {
+   "href": "charting-communions.html",
+   "title": "Charting, part 1: the historic communions",
+   "shelf": "Our own papers"
+  },
+  {
+   "href": "free-churches.html",
+   "title": "Charting, part 2: the free churches",
+   "shelf": "Our own papers"
+  },
+  {
+   "href": "objections.html",
+   "title": "Charting, part 3: fifty objections",
+   "shelf": "Our own papers"
+  },
+  {
+   "href": "douay-rheims.html",
+   "title": "The Holy Bible, Douay-Rheims (Challoner)",
+   "shelf": "Holy Scripture"
+  },
+  {
+   "href": "kjv.html",
+   "title": "The Holy Bible, King James Version",
+   "shelf": "Holy Scripture"
+  },
+  {
+   "href": "creeds1.html",
+   "title": "Vol. I. The History of Creeds",
+   "shelf": "The creeds and confessions of Christendom"
+  },
+  {
+   "href": "creeds2.html",
+   "title": "Vol. II. The Greek and Latin Creeds, with Translations",
+   "shelf": "The creeds and confessions of Christendom"
+  },
+  {
+   "href": "creeds3.html",
+   "title": "Vol. III. The Evangelical Protestant Creeds, with Translations",
+   "shelf": "The creeds and confessions of Christendom"
+  },
+  {
+   "href": "trent.html",
+   "title": "The Canons and Dogmatic Decrees of the Council of Trent",
+   "shelf": "The creeds and confessions of Christendom"
+  },
+  {
+   "href": "articles1571.html",
+   "title": "The Thirty-Nine Articles of Religion, 1571",
+   "shelf": "The creeds and confessions of Christendom"
+  },
+  {
+   "href": "concord.html",
+   "title": "The Book of Concord, the Lutheran confessions entire",
+   "shelf": "The creeds and confessions of Christendom"
+  },
+  {
+   "href": "westminster.html",
+   "title": "The Westminster Confession of Faith, with the Shorter Catechism",
+   "shelf": "The creeds and confessions of Christendom"
+  },
+  {
+   "href": "councils.html",
+   "title": "The Seven Ecumenical Councils of the Undivided Church",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "ravenna.html",
+   "title": "The Ravenna Document",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "chieti.html",
+   "title": "The Chieti Document",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "encyclical1848.html",
+   "title": "Encyclical of the Eastern Patriarchs, 1848",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "encyclical1895.html",
+   "title": "Patriarchal and Synodical Encyclical of 1895, the reply to Leo XIII",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "apostolicae.html",
+   "title": "Apostolicae Curae, by Pope Leo XIII, 1896",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "saepius.html",
+   "title": "Saepius Officio, the Answer of the Archbishops of England, 1897",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "guettee.html",
+   "title": "The Papacy: Its Historic Origin and Primitive Relations with the Eastern Churches, by the Abbé Guettée",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "scranton.html",
+   "title": "The Declaration of Scranton",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "jddj.html",
+   "title": "Joint Declaration on the Doctrine of Justification",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "bishop-of-rome.html",
+   "title": "The Bishop of Rome, both roads in their own voices",
+   "shelf": "The councils, and the roads of the schism"
+  },
+  {
+   "href": "commonitory.html",
+   "title": "The Commonitory, by Vincent of Lérins",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "ignatius.html",
+   "title": "The Epistles of St. Ignatius of Antioch",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "clement.html",
+   "title": "The First Epistle of Clement to the Corinthians",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "justin.html",
+   "title": "The First Apology of St. Justin Martyr",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "didache.html",
+   "title": "The Didache",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "irenaeus3.html",
+   "title": "Against Heresies, Book III, by St. Irenaeus",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "baptism.html",
+   "title": "On Baptism, by Tertullian",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "unity.html",
+   "title": "On the Unity of the Church, by St. Cyprian",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "cyril.html",
+   "title": "The Catechetical Lectures of St. Cyril of Jerusalem",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "gregory.html",
+   "title": "The Great Catechism of St. Gregory of Nyssa",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "soulres.html",
+   "title": "On the Soul and the Resurrection, by St. Gregory of Nyssa",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "incarnation.html",
+   "title": "On the Incarnation of the Word, by St. Athanasius",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "festal39.html",
+   "title": "The Thirty-Ninth Festal Letter of St. Athanasius",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "tome.html",
+   "title": "The Tome of St. Leo",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "cityofgod.html",
+   "title": "The City of God, by St. Augustine",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "ondoctrine.html",
+   "title": "On Christian Doctrine, by St. Augustine",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "enchiridion.html",
+   "title": "The Enchiridion on Faith, Hope, and Love, by St. Augustine",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "onbaptism.html",
+   "title": "On Baptism, Against the Donatists, by St. Augustine",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "cassian-prayer.html",
+   "title": "The Conferences on Prayer, by St. John Cassian",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "benedict-rule.html",
+   "title": "The Holy Rule of St. Benedict",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "gregory-letters.html",
+   "title": "Letters of St. Gregory the Great on the Title Universal Bishop",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "damascus.html",
+   "title": "An Exact Exposition of the Orthodox Faith, by St. John of Damascus",
+   "shelf": "The consensus of the Fathers"
+  },
+  {
+   "href": "anf01.html",
+   "title": "Vol. I. The Apostolic Fathers with Justin Martyr and Irenæus",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf02.html",
+   "title": "Vol. II. Fathers of the Second Century",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf03.html",
+   "title": "Vol. III. Latin Christianity: Its Founder, Tertullian",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf04.html",
+   "title": "Vol. IV. Fathers of the Third Century",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf05.html",
+   "title": "Vol. V. Fathers of the Third Century",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf06.html",
+   "title": "Vol. VI. Fathers of the Third Century",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf07.html",
+   "title": "Vol. VII. Fathers of the Third and Fourth Centuries",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf08.html",
+   "title": "Vol. VIII. The Twelve Patriarchs, Excerpts and Epistles, and the Ancient Remains",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "anf09.html",
+   "title": "Vol. IX. Recently Discovered Additions, with Origen’s Commentaries",
+   "shelf": "Ante-Nicene Fathers"
+  },
+  {
+   "href": "npnf101.html",
+   "title": "Vol. I. Prolegomena: St. Augustine’s Life and Work, the Confessions, and the Letters",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf102.html",
+   "title": "Vol. II. St. Augustine: The City of God and On Christian Doctrine",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf103.html",
+   "title": "Vol. III. St. Augustine: On the Holy Trinity, and the Doctrinal and Moral Treatises",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf104.html",
+   "title": "Vol. IV. St. Augustine: The Anti-Manichaean and Anti-Donatist Writings",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf105.html",
+   "title": "Vol. V. St. Augustine: The Anti-Pelagian Writings",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf106.html",
+   "title": "Vol. VI. St. Augustine: Sermon on the Mount, Harmony of the Gospels, and Homilies on the Gospels",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf107.html",
+   "title": "Vol. VII. St. Augustine: Homilies on the Gospel of John, the First Epistle of John, and the Soliloquies",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf108.html",
+   "title": "Vol. VIII. St. Augustine: Expositions on the Book of Psalms",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf109.html",
+   "title": "Vol. IX. St. Chrysostom: On the Priesthood, Ascetic Treatises, Select Homilies and Letters, and Homilies on the Statutes",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf110.html",
+   "title": "Vol. X. St. Chrysostom: Homilies on the Gospel of St. Matthew",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf111.html",
+   "title": "Vol. XI. St. Chrysostom: Homilies on the Acts of the Apostles and the Epistle to the Romans",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf112.html",
+   "title": "Vol. XII. St. Chrysostom: Homilies on First and Second Corinthians",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf113.html",
+   "title": "Vol. XIII. St. Chrysostom: Homilies on the Epistles to the Galatians through Philemon",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf114.html",
+   "title": "Vol. XIV. St. Chrysostom: Homilies on the Gospel of St. John and the Epistle to the Hebrews",
+   "shelf": "Nicene and Post-Nicene Fathers, First Series"
+  },
+  {
+   "href": "npnf201.html",
+   "title": "Vol. I. Eusebius: Church History, Life of Constantine, and Oration in Praise of Constantine",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf202.html",
+   "title": "Vol. II. Socrates and Sozomenus: Ecclesiastical Histories",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf203.html",
+   "title": "Vol. III. Theodoret, Jerome and Gennadius, Rufinus and Jerome",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf204.html",
+   "title": "Vol. IV. Athanasius: Select Works and Letters",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf205.html",
+   "title": "Vol. V. Gregory of Nyssa: Dogmatic Treatises, and Select Writings and Letters",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf206.html",
+   "title": "Vol. VI. Jerome: Letters and Select Works",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf207.html",
+   "title": "Vol. VII. Cyril of Jerusalem and Gregory Nazianzen",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf208.html",
+   "title": "Vol. VIII. Basil: Letters and Select Works",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf209.html",
+   "title": "Vol. IX. Hilary of Poitiers, and John of Damascus",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf210.html",
+   "title": "Vol. X. Ambrose: Select Works and Letters",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf211.html",
+   "title": "Vol. XI. Sulpitius Severus, Vincent of Lérins, and John Cassian",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf212.html",
+   "title": "Vol. XII. Leo the Great and Gregory the Great",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "npnf213.html",
+   "title": "Vol. XIII. Gregory the Great (Part II), Ephraim Syrus, and Aphrahat",
+   "shelf": "Nicene and Post-Nicene Fathers, Second Series"
+  },
+  {
+   "href": "hcc1.html",
+   "title": "Vol. I. Apostolic Christianity, A.D. 1–100",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "hcc2.html",
+   "title": "Vol. II. Ante-Nicene Christianity, A.D. 100–325",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "hcc3.html",
+   "title": "Vol. III. Nicene and Post-Nicene Christianity, A.D. 311–600",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "hcc4.html",
+   "title": "Vol. IV. Mediaeval Christianity, A.D. 590–1073",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "hcc5.html",
+   "title": "Vol. V. The Middle Ages, A.D. 1049–1294",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "hcc6.html",
+   "title": "Vol. VI. The Middle Ages, A.D. 1294–1517",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "hcc7.html",
+   "title": "Vol. VII. Modern Christianity: The German Reformation",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "hcc8.html",
+   "title": "Vol. VIII. Modern Christianity: The Swiss Reformation",
+   "shelf": "The history of the Church"
+  },
+  {
+   "href": "antiquities.html",
+   "title": "The Antiquities of the Jews, by Flavius Josephus",
+   "shelf": "Josephus entire"
+  },
+  {
+   "href": "wars.html",
+   "title": "The Wars of the Jews, by Flavius Josephus",
+   "shelf": "Josephus entire"
+  },
+  {
+   "href": "josephus-minor.html",
+   "title": "The Life of Flavius Josephus, with Against Apion and the Discourse on Hades",
+   "shelf": "Josephus entire"
+  },
+  {
+   "href": "philo1.html",
+   "title": "The Works of Philo Judaeus, Vol. 1: On the Creation, and the Allegorical Commentary",
+   "shelf": "Philo of Alexandria entire"
+  },
+  {
+   "href": "philo2.html",
+   "title": "The Works of Philo Judaeus, Vol. 2: The Exposition of the Law",
+   "shelf": "Philo of Alexandria entire"
+  },
+  {
+   "href": "philo3.html",
+   "title": "The Works of Philo Judaeus, Vol. 3: The Philosophical and Historical Treatises",
+   "shelf": "Philo of Alexandria entire"
+  },
+  {
+   "href": "philo4.html",
+   "title": "The Works of Philo Judaeus, Vol. 4: Questions and Answers on Genesis, with the Fragments",
+   "shelf": "Philo of Alexandria entire"
+  },
+  {
+   "href": "enoch.html",
+   "title": "The Book of Enoch, translated by R. H. Charles",
+   "shelf": "The apocalyptic books"
+  },
+  {
+   "href": "jubilees.html",
+   "title": "The Book of Jubilees, translated by R. H. Charles",
+   "shelf": "The apocalyptic books"
+  },
+  {
+   "href": "testaments.html",
+   "title": "The Testaments of the Twelve Patriarchs",
+   "shelf": "The apocalyptic books"
+  },
+  {
+   "href": "annals.html",
+   "title": "The Annals, by Tacitus",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "histories.html",
+   "title": "The Histories, by Tacitus",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "suetonius.html",
+   "title": "The Lives of the Twelve Caesars, by Suetonius",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "dio1.html",
+   "title": "Roman History, Vol. 1: The Fragments, by Cassius Dio",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "dio2.html",
+   "title": "Roman History, Vol. 2: Books XXXVI–LX, by Cassius Dio",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "dio3.html",
+   "title": "Roman History, Vol. 3: The Epitomes, by Cassius Dio",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "ammianus.html",
+   "title": "The Roman History of Ammianus Marcellinus",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "zosimus.html",
+   "title": "The New History, by Count Zosimus",
+   "shelf": "The Roman Empire, the world of the early Church"
+  },
+  {
+   "href": "burlat.html",
+   "title": "History of the Later Roman Empire, by J. B. Bury",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon1.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 1",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon2.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 2",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon3.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 3",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon4.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 4",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon5.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 5",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon6.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 6",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon7.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 7",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon8.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 8",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon9.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 9",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon10.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 10",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon11.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 11",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "gibbon12.html",
+   "title": "The Decline and Fall of the Roman Empire, Vol. 12",
+   "shelf": "Bury, and Gibbon in Bury’s edition"
+  },
+  {
+   "href": "iliad.html",
+   "title": "The Iliad, by Homer",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "odyssey.html",
+   "title": "The Odyssey, by Homer",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "hesiod.html",
+   "title": "Hesiod, the Homeric Hymns, and Homerica",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "herodotus.html",
+   "title": "The History of Herodotus",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "thucydides.html",
+   "title": "The History of the Peloponnesian War, by Thucydides",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "republic.html",
+   "title": "The Republic, by Plato",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "timaeus.html",
+   "title": "Timaeus, by Plato",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "phaedo.html",
+   "title": "Phaedo, by Plato",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "ethics.html",
+   "title": "The Nicomachean Ethics of Aristotle",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "politics.html",
+   "title": "Politics: A Treatise on Government, by Aristotle",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "metaphysics.html",
+   "title": "The Metaphysics of Aristotle",
+   "shelf": "The Greek foundations"
+  },
+  {
+   "href": "polybius.html",
+   "title": "The Histories of Polybius",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "livy1.html",
+   "title": "The History of Rome, Vol. 1: Books I–VIII, by Livy",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "livy2.html",
+   "title": "The History of Rome, Vol. 2: Books IX–XXVI, by Livy",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "livy3.html",
+   "title": "The History of Rome, Vol. 3: Books XXVII–XXXVI, by Livy",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "livy4.html",
+   "title": "The History of Rome, Vol. 4: Books XXXVII to the end, by Livy",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "caesar.html",
+   "title": "The Commentaries of Julius Caesar: the War in Gaul and the Civil War",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "sallust.html",
+   "title": "Conspiracy of Catiline and the Jugurthine War, by Sallust",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "plutarch.html",
+   "title": "Plutarch’s Lives, entire",
+   "shelf": "The Roman republic and empire"
+  },
+  {
+   "href": "cicero.html",
+   "title": "Cicero: Tusculan Disputations, On the Nature of the Gods, and On the Commonwealth",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "cicero-div.html",
+   "title": "On Divination, by Cicero",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "lucretius.html",
+   "title": "On the Nature of Things, by Lucretius",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "aeneid.html",
+   "title": "The Aeneid of Virgil",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "metam.html",
+   "title": "The Metamorphoses of Ovid",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "seneca.html",
+   "title": "Moral Letters to Lucilius, by Seneca",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "epictetus.html",
+   "title": "The Discourses of Epictetus, with the Manual and Fragments",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "marcus.html",
+   "title": "The Meditations of Marcus Aurelius",
+   "shelf": "The philosophers, and the religion of Rome"
+  },
+  {
+   "href": "pliny.html",
+   "title": "The Letters of Pliny the Younger, with the Trajan correspondence",
+   "shelf": "The old religion and the new faith"
+  },
+  {
+   "href": "lucian.html",
+   "title": "The Works of Lucian of Samosata",
+   "shelf": "The old religion and the new faith"
+  },
+  {
+   "href": "julian.html",
+   "title": "Against the Galileans, by Julian the Apostate",
+   "shelf": "The old religion and the new faith"
+  },
+  {
+   "href": "apuleius.html",
+   "title": "The Golden Asse, by Apuleius",
+   "shelf": "The old religion and the new faith"
+  },
+  {
+   "href": "boethius.html",
+   "title": "The Consolation of Philosophy, by Boethius",
+   "shelf": "The old religion and the new faith"
+  },
+  {
+   "href": "rigveda.html",
+   "title": "The Hymns of the Rigveda",
+   "shelf": "The Indo-European inheritance: the religion before Christendom"
+  },
+  {
+   "href": "agricola.html",
+   "title": "The Agricola and Germania, by Tacitus",
+   "shelf": "The Indo-European inheritance: the religion before Christendom"
+  },
+  {
+   "href": "eddas.html",
+   "title": "The Elder Eddas and the Younger Eddas",
+   "shelf": "The Indo-European inheritance: the religion before Christendom"
+  },
+  {
+   "href": "beowulf.html",
+   "title": "Beowulf",
+   "shelf": "The Indo-European inheritance: the religion before Christendom"
+  },
+  {
+   "href": "frazer.html",
+   "title": "The Golden Bough, by J. G. Frazer",
+   "shelf": "The Indo-European inheritance: the religion before Christendom"
+  },
+  {
+   "href": "confessions.html",
+   "title": "The Confessions of St. Augustine",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "liturgies.html",
+   "title": "The Early Liturgies of St. James, St. Mark, and the Holy Apostles",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "bcp1559.html",
+   "title": "The Book of Common Prayer, 1559, the Elizabethan book",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "bcp1662.html",
+   "title": "The Book of Common Prayer, 1662",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "bcp1928.html",
+   "title": "The Book of Common Prayer, 1928, American",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "andrewes-devotions.html",
+   "title": "The Private Devotions of Lancelot Andrewes",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "keble-year.html",
+   "title": "The Christian Year, by John Keble",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "altar.html",
+   "title": "Worship at the altar",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "hours.html",
+   "title": "The hours of prayer",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "jesus-prayer.html",
+   "title": "The Jesus Prayer",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "lectio-divina.html",
+   "title": "Lectio divina",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "confession-fasting.html",
+   "title": "Confession and fasting",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "theotokos.html",
+   "title": "Mary the Theotokos",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "mary.html",
+   "title": "The Mother of God",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "rosary.html",
+   "title": "The Rosary",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "rule-of-benedict.html",
+   "title": "A rule of life from St. Benedict",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "law.html",
+   "title": "The Treatise on Law, by St. Thomas Aquinas",
+   "shelf": "The rule of prayer, and the devotional life"
+  },
+  {
+   "href": "summa-fp.html",
+   "title": "The First Part",
+   "shelf": "The Summa Theologica"
+  },
+  {
+   "href": "summa-fs.html",
+   "title": "The First Part of the Second Part",
+   "shelf": "The Summa Theologica"
+  },
+  {
+   "href": "summa-ss.html",
+   "title": "The Second Part of the Second Part",
+   "shelf": "The Summa Theologica"
+  },
+  {
+   "href": "summa-tp.html",
+   "title": "The Third Part",
+   "shelf": "The Summa Theologica"
+  },
+  {
+   "href": "summa-xp.html",
+   "title": "The Supplement",
+   "shelf": "The Summa Theologica"
+  },
+  {
+   "href": "catena-matthew.html",
+   "title": "Catena Aurea on St. Matthew",
+   "shelf": "The Catena Aurea"
+  },
+  {
+   "href": "catena-mark.html",
+   "title": "Catena Aurea on St. Mark",
+   "shelf": "The Catena Aurea"
+  },
+  {
+   "href": "catena-luke.html",
+   "title": "Catena Aurea on St. Luke",
+   "shelf": "The Catena Aurea"
+  },
+  {
+   "href": "catena-john.html",
+   "title": "Catena Aurea on St. John",
+   "shelf": "The Catena Aurea"
+  },
+  {
+   "href": "luther-primary.html",
+   "title": "The Ninety-Five Theses, with Concerning Christian Liberty, by Martin Luther",
+   "shelf": "The divines of the Reformation"
+  },
+  {
+   "href": "bondage.html",
+   "title": "The Bondage of the Will, by Martin Luther",
+   "shelf": "The divines of the Reformation"
+  },
+  {
+   "href": "luther-galatians.html",
+   "title": "Commentary on the Epistle to the Galatians, by Martin Luther",
+   "shelf": "The divines of the Reformation"
+  },
+  {
+   "href": "institutes.html",
+   "title": "Institutes of the Christian Religion, by John Calvin",
+   "shelf": "The divines of the Reformation"
+  },
+  {
+   "href": "jewel.html",
+   "title": "An Apology of the Church of England, by John Jewel",
+   "shelf": "The divines of the Reformation"
+  },
+  {
+   "href": "hooker.html",
+   "title": "Of the Laws of Ecclesiastical Polity, by Richard Hooker",
+   "shelf": "The divines of the Reformation"
+  },
+  {
+   "href": "oxford-sermons.html",
+   "title": "Fifteen Sermons Preached before the University of Oxford",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "miracles.html",
+   "title": "Two Essays on Biblical and on Ecclesiastical Miracles",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "arians.html",
+   "title": "The Arians of the Fourth Century",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "tracts-times.html",
+   "title": "Tracts for the Times",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial1.html",
+   "title": "Parochial and Plain Sermons, Volume 1",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial2.html",
+   "title": "Parochial and Plain Sermons, Volume 2",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial3.html",
+   "title": "Parochial and Plain Sermons, Volume 3",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial4.html",
+   "title": "Parochial and Plain Sermons, Volume 4",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial5.html",
+   "title": "Parochial and Plain Sermons, Volume 5",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial6.html",
+   "title": "Parochial and Plain Sermons, Volume 6",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial7.html",
+   "title": "Parochial and Plain Sermons, Volume 7",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "parochial8.html",
+   "title": "Parochial and Plain Sermons, Volume 8",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "british-critic.html",
+   "title": "Essays from the British Critic",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "viamedia1.html",
+   "title": "The Via Media, Volume 1: The Prophetical Office of the Church",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "justification.html",
+   "title": "Lectures on the Doctrine of Justification",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "english-saints.html",
+   "title": "Lives of the English Saints",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "subjects.html",
+   "title": "Sermons Bearing on Subjects of the Day",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "development.html",
+   "title": "An Essay on the Development of Christian Doctrine",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "viamedia2.html",
+   "title": "The Via Media, Volume 2",
+   "shelf": "The Anglican years, 1826–1845"
+  },
+  {
+   "href": "loss-and-gain.html",
+   "title": "Loss and Gain: The Story of a Convert",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "discourses.html",
+   "title": "Discourses to Mixed Congregations",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "sermon-notes.html",
+   "title": "Sermon Notes",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "anglicans1.html",
+   "title": "Certain Difficulties Felt by Anglicans in Catholic Teaching, Volume 1",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "present-position.html",
+   "title": "The Present Position of Catholics in England",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "idea.html",
+   "title": "The Idea of a University",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "cathedra.html",
+   "title": "Cathedra Sempiterna",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "callista.html",
+   "title": "Callista: A Tale of the Third Century",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "occasions.html",
+   "title": "Sermons Preached on Various Occasions",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "consulting.html",
+   "title": "On Consulting the Faithful in Matters of Doctrine",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "pusey.html",
+   "title": "A Letter to the Rev. E. B. Pusey on his Recent Eirenicon",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "apologia.html",
+   "title": "Apologia Pro Vita Sua",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "gerontius.html",
+   "title": "The Dream of Gerontius",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "grammar.html",
+   "title": "An Essay in Aid of a Grammar of Assent",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "norfolk.html",
+   "title": "A Letter to the Duke of Norfolk",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "five-letters.html",
+   "title": "Five Letters",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "athanasius1.html",
+   "title": "Select Treatises of St. Athanasius, Volume 1",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "athanasius2.html",
+   "title": "Select Treatises of St. Athanasius, Volume 2",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "inspiration.html",
+   "title": "On the Inspiration of Scripture",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "religious-error.html",
+   "title": "The Development of Religious Error",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "meditations.html",
+   "title": "Meditations and Devotions",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "faith-prejudice.html",
+   "title": "Faith and Prejudice, and Other Sermons",
+   "shelf": "The Catholic years, 1848–1885"
+  },
+  {
+   "href": "froude-remains.html",
+   "title": "Froude’s Remains",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "hymni.html",
+   "title": "Hymni Ecclesiae",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "library-fathers.html",
+   "title": "The Library of the Fathers",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "athanasius-tracts.html",
+   "title": "Historical Tracts of St. Athanasius",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "verses.html",
+   "title": "Verses on Various Occasions",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "essays1.html",
+   "title": "Essays Critical and Historical, Volume 1",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "essays2.html",
+   "title": "Essays Critical and Historical, Volume 2",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "tracts-theological.html",
+   "title": "Tracts Theological and Ecclesiastical",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "arguments.html",
+   "title": "Discussions and Arguments on Various Subjects",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "historical1.html",
+   "title": "Historical Sketches, Volume 1",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "historical2.html",
+   "title": "Historical Sketches, Volume 2",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "historical3.html",
+   "title": "Historical Sketches, Volume 3",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "church-empires.html",
+   "title": "The Church and the Empires",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "russian-church.html",
+   "title": "Notes of a Visit to the Russian Church",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "sayings.html",
+   "title": "Sayings of Cardinal Newman",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "addresses.html",
+   "title": "Addresses to Cardinal Newman with His Replies",
+   "shelf": "Collected essays, sketches, and verse"
+  },
+  {
+   "href": "heretics.html",
+   "title": "Heretics, by G. K. Chesterton",
+   "shelf": "The faith commended"
+  },
+  {
+   "href": "orthodoxy.html",
+   "title": "Orthodoxy, by G. K. Chesterton",
+   "shelf": "The faith commended"
+  },
+  {
+   "href": "everlasting.html",
+   "title": "The Everlasting Man, by G. K. Chesterton",
+   "shelf": "The faith commended"
+  },
+  {
+   "href": "gibbons.html",
+   "title": "The Faith of Our Fathers, by James Cardinal Gibbons",
+   "shelf": "The faith commended"
+  }
+ ]
+}

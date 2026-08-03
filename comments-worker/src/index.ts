@@ -122,9 +122,12 @@ import {
   ensureAdminsSeeded,
   getAppSettings,
   isEstablished,
+  mediaAudioSeconds,
   mediaKindMax,
   mediaKindsFor,
   mediaMaxAcross,
+  mediaScanEnabled,
+  mediaVoiceEnabled,
   gzipBytes,
   isAdminHash,
   isDiscordWebhook,
@@ -195,6 +198,7 @@ import {
   sqlLit,
   sweepDms,
   sweepExpiredDms,
+  sweepMediaRetention,
   sweepWallOrphanMedia,
   topicViewPayload,
   verifyTurnstile,
@@ -225,11 +229,33 @@ async function handleConfig(request: any, env: any, url: any) {
     ok: true,
     apiVersion: 1,
     media: {
+      /* Legacy fields — computed EXACTLY as before the per-section split (no
+         ctx passed), kept so an older cached client keeps working one deploy. */
       enabled: s.media_enabled === '1',
       kinds: { dm: mediaKindsFor(s, 'dm'), wall: mediaKindsFor(s, 'wall'), board: mediaKindsFor(s, 'board') },
       max_bytes: { image: mediaKindMax(s, 'image'), video: mediaKindMax(s, 'video'), audio: mediaKindMax(s, 'audio') },
       audio_max_seconds: Number(s.media_audio_max_seconds) || Number(Media.defaults.audioMaxSeconds),
       autocompress: s.media_image_autocompress === '1',
+      /* The per-section policy — the current client reads ONLY this. dm carries
+         NO scan field: its media is E2E ciphertext, structurally unscannable —
+         the absence IS the statement. */
+      sections: {
+        dm: {
+          kinds: mediaKindsFor(s, 'dm'), voice: mediaVoiceEnabled(s, 'dm'),
+          max_bytes: { image: mediaKindMax(s, 'image', 'dm'), video: mediaKindMax(s, 'video', 'dm'), audio: mediaKindMax(s, 'audio', 'dm') },
+          audio_max_seconds: mediaAudioSeconds(s, 'dm'),
+        },
+        wall: {
+          kinds: mediaKindsFor(s, 'wall'), voice: mediaVoiceEnabled(s, 'wall'), scan: mediaScanEnabled(s, 'wall'),
+          max_bytes: { image: mediaKindMax(s, 'image', 'wall'), video: mediaKindMax(s, 'video', 'wall'), audio: mediaKindMax(s, 'audio', 'wall') },
+          audio_max_seconds: mediaAudioSeconds(s, 'wall'),
+        },
+        board: {
+          kinds: mediaKindsFor(s, 'board'), voice: mediaVoiceEnabled(s, 'board'), scan: mediaScanEnabled(s, 'board'),
+          max_bytes: { image: mediaKindMax(s, 'image', 'board'), video: mediaKindMax(s, 'video', 'board'), audio: mediaKindMax(s, 'audio', 'board') },
+          audio_max_seconds: mediaAudioSeconds(s, 'board'),
+        },
+      },
     },
     cats: CAT_META.filter((c) => BOARD_CATS.includes(c[0])).map((c, i) => {
       const o: any = { key: c[0], label: c[1], blurb: c[2], order: i };
@@ -454,7 +480,7 @@ async function handlePost(request: any, env: any, ctx: any) {
     if (!boardKey(page)) return json({ ok: false, error: 'Attachments live on the forum only.' }, 400);
     if (page === ADMIN_CAT) return json({ ok: false, error: 'No attachments in this room.' }, 400);
     const settings = await getAppSettings(env);
-    media = await wallClaimMedia(env, data.media_key, mediaKindsFor(settings, 'board'), settings);
+    media = await wallClaimMedia(env, data.media_key, mediaKindsFor(settings, 'board'), settings, 'board');
     if (!media) return json({ ok: false, error: 'That attachment is gone, too large, or not allowed here.' }, 400);
   }
   if (!body && !media) return json({ ok: false, error: 'The comment is empty.' }, 400);
@@ -514,7 +540,7 @@ async function handlePost(request: any, env: any, ctx: any) {
      silently carries no media. */
   if (media) {
     const link = await env.DB.prepare(
-      "UPDATE wall_media SET ref_type = 'board', ref_id = ?1 WHERE key = ?2 AND ref_id IS NULL"
+      "UPDATE wall_media SET ref_type = 'board', ref_id = ?1, ctx = 'board' WHERE key = ?2 AND ref_id IS NULL"
     ).bind(inserted.id, media.key).run();
     if (!link.meta || !link.meta.changes) {
       media = null;
@@ -1857,18 +1883,27 @@ async function handlePrefs(request: any, env: any) {
       const sk = 'notify_' + k;
       if (sk in set) { parts.push(sk + ' = ?'); vals.push((set[sk] === false || set[sk] === 0 || set[sk] === '0') ? 0 : 1); }
     }
+    /* The mute list follows the member across devices (the client merges and
+       writes through). Hashes only, clamped, stored as a JSON array. */
+    if ('muted' in set && Array.isArray(set.muted)) {
+      const clean = set.muted.filter((h: any) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 300);
+      parts.push('muted = ?'); vals.push(JSON.stringify(clean));
+    }
     if (parts.length) {
       parts.push('updated_at = ?'); vals.push(now);
       await env.DB.prepare('UPDATE profiles SET ' + parts.join(', ') + ' WHERE hash = ?').bind(...vals, me).run();
     }
   }
-  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm FROM profiles WHERE hash = ?1').bind(me).first();
+  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm, muted FROM profiles WHERE hash = ?1').bind(me).first();
   const onOff = (v: any) => (v == null ? 1 : (v ? 1 : 0));
+  let muted: any = [];
+  try { muted = row && row.muted ? JSON.parse(row.muted) : []; } catch { muted = []; }
   return json({ ok: true, prefs: {
     receipts: (row && row.receipts_mode === 'off') ? 'off' : 'auto',
     notify_reply: onOff(row && row.notify_reply),
     notify_mention: onOff(row && row.notify_mention),
     notify_dm: onOff(row && row.notify_dm),
+    muted: Array.isArray(muted) ? muted : [],
   } }, 200);
 }
 
@@ -2050,7 +2085,7 @@ async function handleDmMediaUpload(request: any, env: any) {
      served via /config. An empty DM kinds mask turns attachments off. */
   const dmKinds = mediaKindsFor(settings, 'dm');
   if (!dmKinds.length) return json({ ok: false, error: 'Media sharing is turned off.' }, 403);
-  const maxBytes = mediaMaxAcross(settings, dmKinds) + 4096;
+  const maxBytes = mediaMaxAcross(settings, dmKinds, 'dm') + 4096;
   const declared = Number(request.headers.get('Content-Length') || 0);
   if (declared && declared > maxBytes + 8192) return json({ ok: false, error: 'That file is too large.' }, 413);
   let form;
@@ -2128,20 +2163,50 @@ async function handleAdminSettings(request: any, env: any) {
     const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, discord_feed_comments: 1, journal_topic: 1, journal_enabled: 1,
       media_image_max_bytes: 1, media_video_max_bytes: 1, media_audio_max_bytes: 1, media_audio_max_seconds: 1,
       media_kinds_dm: 1, media_kinds_wall: 1, media_kinds_board: 1, media_image_autocompress: 1,
-      media_cap_dm_bytes: 1, media_cap_wall_bytes: 1 };
+      media_cap_dm_bytes: 1, media_cap_wall_bytes: 1, media_cap_board_bytes: 1,
+      media_scan_wall: 1, media_scan_board: 1, media_voice_dm: 1, media_voice_wall: 1, media_voice_board: 1,
+      media_wall_retention_days: 1, media_board_retention_days: 1, media_dm_retention_days: 1,
+      media_dm_image_max_bytes: 1, media_dm_video_max_bytes: 1, media_dm_audio_max_bytes: 1,
+      media_wall_image_max_bytes: 1, media_wall_video_max_bytes: 1, media_wall_audio_max_bytes: 1,
+      media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
+      media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1 };
+    /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
+       back to "inherit the legacy global" — because absence is what the
+       fallback chain reads. Without this the chain would be one-way. */
+    const overrideKeys: any = {
+      media_dm_image_max_bytes: 1, media_dm_video_max_bytes: 1, media_dm_audio_max_bytes: 1,
+      media_wall_image_max_bytes: 1, media_wall_video_max_bytes: 1, media_wall_audio_max_bytes: 1,
+      media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
+      media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1 };
     const stmts = [];
     for (const k of Object.keys(data.set)) {
       if (!allowed[k]) continue;
       let v = String(data.set[k]);
-      if (k === 'media_enabled' || k === 'wall_prune_enabled' || k === 'media_image_autocompress') v = (v === '1' || v === 'true') ? '1' : '0';
+      if (overrideKeys[k] && v.trim() === '') {
+        stmts.push(env.DB.prepare('DELETE FROM app_settings WHERE k = ?1').bind(k));
+        continue;
+      }
+      if (k === 'media_enabled' || k === 'wall_prune_enabled' || k === 'media_image_autocompress'
+        || k === 'media_scan_wall' || k === 'media_scan_board'
+        || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
-      /* Per-kind caps, the recorder stop, the store budgets, and the context
-         kinds masks all clamp/normalize through the Domain.Media kernel — the
-         same rules the client reads via mcCore, single-sourced. An empty kinds
-         mask is legal (= that context's uploads are off). */
+      /* Per-kind caps, the recorder stop, the store budgets, the retention
+         windows, and the context kinds masks all clamp/normalize through the
+         Domain.Media kernel — the same rules the client reads via mcCore,
+         single-sourced. An empty kinds mask is legal (= that context's uploads
+         are off). NOTE the retention clamps use `|| 0`, NOT a defaults
+         fallback: 0 is a legal, meaningful value (keep forever). */
       else if (k === 'media_image_max_bytes' || k === 'media_video_max_bytes' || k === 'media_audio_max_bytes') v = String(Media.clampKindBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
-      else if (k === 'media_audio_max_seconds') v = String(Media.clampAudioSeconds(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
-      else if (k === 'media_cap_dm_bytes' || k === 'media_cap_wall_bytes') v = String(Media.clampCapBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
+      else if (overrideKeys[k] && k.indexOf('_max_bytes') !== -1) {
+        /* Garbage input on a per-section byte override falls back to ITS kind's
+           legacy global default (the key ends media_<ctx>_<kind>_max_bytes). */
+        const kindWord = k.split('_').slice(-3)[0];
+        v = String(Media.clampKindBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)['media_' + kindWord + '_max_bytes']) || Number(APP_SETTING_DEFAULTS.media_image_max_bytes)));
+      }
+      else if (k === 'media_audio_max_seconds' || k.indexOf('media_audio_max_seconds_') === 0) v = String(Media.clampAudioSeconds(Math.floor(Number(v)) || Number(APP_SETTING_DEFAULTS.media_audio_max_seconds)));
+      else if (k === 'media_cap_dm_bytes' || k === 'media_cap_wall_bytes' || k === 'media_cap_board_bytes') v = String(Media.clampCapBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
+      else if (k === 'media_wall_retention_days' || k === 'media_board_retention_days') v = String(Media.clampRetentionDays(Math.floor(Number(v)) || 0));
+      else if (k === 'media_dm_retention_days') v = String(Media.clampDmRetentionDays(Math.floor(Number(v)) || Number(APP_SETTING_DEFAULTS.media_dm_retention_days)));
       else if (k === 'media_kinds_dm' || k === 'media_kinds_wall' || k === 'media_kinds_board') v = Media.serializeKinds(Media.parseKinds(v));
       else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : Dm.defaultTtl);
       else if (k === 'dm_backstop_days') v = String(Math.max(1, Math.min(365, Math.floor(Number(v)) || 30)));
@@ -2461,7 +2526,7 @@ async function handleWallPost(request: any, env: any, ctx: any) {
   if (!key) return json({ ok: false, error: 'Sign in to post.' }, 401);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   const wallSettings = await getAppSettings(env);
-  const media = await wallClaimMedia(env, data.media_key, mediaKindsFor(wallSettings, 'wall'), wallSettings);
+  const media = await wallClaimMedia(env, data.media_key, mediaKindsFor(wallSettings, 'wall'), wallSettings, 'wall');
   if (!body && !media) return json({ ok: false, error: 'Say something or attach something.' }, 400);
   if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -2476,7 +2541,18 @@ async function handleWallPost(request: any, env: any, ctx: any) {
   const ins = await env.DB.prepare(
     'INSERT INTO wall_posts (author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id'
   ).bind(me, body, now, status, media ? media.key : null, media ? media.size : null).first();
-  if (media) await env.DB.prepare("UPDATE wall_media SET ref_type = 'post', ref_id = ?1 WHERE key = ?2").bind(ins.id, media.key).run();
+  if (media) {
+    /* ref_id IS NULL closes the double-claim race (the board path's guard, now
+       uniform); ctx re-stamps to follow the claiming parent, so accounting
+       always tracks where the media actually lives. The race loser clears its
+       own pointer rather than pointing at media it does not own. */
+    const link = await env.DB.prepare(
+      "UPDATE wall_media SET ref_type = 'post', ref_id = ?1, ctx = 'wall' WHERE key = ?2 AND ref_id IS NULL"
+    ).bind(ins.id, media.key).run();
+    if (!link.meta || !link.meta.changes) {
+      await env.DB.prepare('UPDATE wall_posts SET media_key = NULL, media_size = NULL WHERE id = ?1').bind(ins.id).run();
+    }
+  }
   /* A muted author's wall post is stored live but reaches no one: no feed
      broadcast, no @mention notifications, no Discord (the feed reads hide it). */
   if (status === 'live' && !(await isShadowBanned(env, me))) {
@@ -2504,7 +2580,7 @@ async function handleWallComment(request: any, env: any, ctx: any) {
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   const wallSettings = await getAppSettings(env);
-  const media = await wallClaimMedia(env, data.media_key, mediaKindsFor(wallSettings, 'wall'), wallSettings);
+  const media = await wallClaimMedia(env, data.media_key, mediaKindsFor(wallSettings, 'wall'), wallSettings, 'wall');
   if (!body && !media) return json({ ok: false, error: 'Say something or attach something.' }, 400);
   if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -2519,7 +2595,15 @@ async function handleWallComment(request: any, env: any, ctx: any) {
   const ins = await env.DB.prepare(
     'INSERT INTO wall_comments (post_id, author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id'
   ).bind(postId, me, body, now, status, media ? media.key : null, media ? media.size : null).first();
-  if (media) await env.DB.prepare("UPDATE wall_media SET ref_type = 'comment', ref_id = ?1 WHERE key = ?2").bind(ins.id, media.key).run();
+  if (media) {
+    /* Same double-claim guard + ctx re-stamp as the post path above. */
+    const link = await env.DB.prepare(
+      "UPDATE wall_media SET ref_type = 'comment', ref_id = ?1, ctx = 'wall' WHERE key = ?2 AND ref_id IS NULL"
+    ).bind(ins.id, media.key).run();
+    if (!link.meta || !link.meta.changes) {
+      await env.DB.prepare('UPDATE wall_comments SET media_key = NULL, media_size = NULL WHERE id = ?1').bind(ins.id).run();
+    }
+  }
   /* A muted commenter's comment is stored live but invisible to others: it must
      not bump the post's comment count (a ghost count betrays the mute), notify,
      or broadcast. The post-detail read hides the comment itself. */
@@ -2532,6 +2616,95 @@ async function handleWallComment(request: any, env: any, ctx: any) {
       .catch((e) => console.log(JSON.stringify({ event: 'discord_feed_comment_failed', error: String(e) }))));
   }
   return json({ ok: true, id: ins.id, status }, 200);
+}
+
+/* Edit your own wall post or comment in place (the forum and even the E2E DMs
+   already edit; delete-only walls were the inconsistency). Same re-screen as a
+   fresh post, so an edit cannot smuggle past the safety check. */
+async function handleWallEdit(request: any, env: any) {
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const id = Math.floor(Number(data.id) || 0);
+  const isComment = !!data.comment;
+  if (id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
+  if (!body) return json({ ok: false, error: 'The post is empty.' }, 400);
+  if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
+  if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const table = isComment ? 'wall_comments' : 'wall_posts';
+  const row = await env.DB.prepare(
+    'SELECT id FROM ' + table + " WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
+  ).bind(id, me).first();
+  if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+  const { status } = await screen(env, body, await isTrusted(env, me));
+  const editedAt = Math.floor(Date.now() / 1000);
+  await env.DB.prepare(
+    'UPDATE ' + table + ' SET body = ?1, status = ?2, edited_at = ?3 WHERE id = ?4'
+  ).bind(body, status, editedAt, id).run();
+  return json({ ok: true, status, edited_at: editedAt }, 200);
+}
+
+/* Saved posts: one row per member per item, toggled on and off. kind 'topic'
+   is a forum topic, 'wall' a feed post. The list joins the source tables so
+   dead items fall away naturally. */
+async function handleBookmark(request: any, env: any) {
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const kind = String(data.kind || '');
+  const ref = Math.floor(Number(data.ref) || 0);
+  if ((kind !== 'topic' && kind !== 'wall') || ref < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (data.on) {
+    await env.DB.prepare(
+      'INSERT OR IGNORE INTO bookmarks (hash, kind, ref, created_at) VALUES (?1, ?2, ?3, ?4)'
+    ).bind(me, kind, ref, Math.floor(Date.now() / 1000)).run();
+  } else {
+    await env.DB.prepare('DELETE FROM bookmarks WHERE hash = ?1 AND kind = ?2 AND ref = ?3').bind(me, kind, ref).run();
+  }
+  return json({ ok: true, on: !!data.on }, 200);
+}
+
+async function handleBookmarks(request: any, env: any) {
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const p = Math.max(1, Math.floor(Number(data.p) || 1));
+  const PER = 20;
+  const rows = await env.DB.prepare(
+    'SELECT b.kind, b.ref, b.created_at, ' +
+    "  CASE b.kind WHEN 'topic' THEN c.title ELSE substr(w.body, 1, 140) END AS label " +
+    'FROM bookmarks b ' +
+    "LEFT JOIN comments c ON b.kind = 'topic' AND c.id = b.ref AND c.status = 'live' " +
+    "LEFT JOIN wall_posts w ON b.kind = 'wall' AND w.id = b.ref AND w.status = 'live' " +
+    'WHERE b.hash = ?1 AND (c.id IS NOT NULL OR w.id IS NOT NULL) ' +
+    'ORDER BY b.created_at DESC LIMIT ?2 OFFSET ?3'
+  ).bind(me, PER + 1, (p - 1) * PER).all();
+  const items = (rows.results || []).slice(0, PER);
+  return json({ ok: true, items, page: p, more: (rows.results || []).length > PER }, 200);
+}
+
+/* A member-safe recent-activity window: the last live forum posts across the
+   PUBLIC rooms (never the back room), each under its topic's title. Cacheable,
+   keyless, one query — "what happened since I left" for everyone. */
+async function handleRecent(request: any, env: any, url: any) {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const p = Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1));
+  const PER = 20;
+  const rows = await env.DB.prepare(
+    'SELECT c.id, c.page, c.parent_id, c.author_hash, c.created_at, substr(c.body, 1, 200) AS body, ' +
+    '  COALESCE(t.title, c.title) AS topic_title, COALESCE(t.id, c.id) AS topic_id ' +
+    'FROM comments c LEFT JOIN comments t ON t.id = c.parent_id ' +
+    "WHERE c.page LIKE 'board:%' AND c.page != ?1 AND c.status = 'live' " +
+    "  AND (c.parent_id IS NULL OR t.status = 'live') " +
+    'ORDER BY c.id DESC LIMIT ?2 OFFSET ?3'
+  ).bind(ADMIN_CAT, PER + 1, (p - 1) * PER).all();
+  let items = (rows.results || []).slice(0, PER);
+  items = await withNames(env, items);
+  return json({ ok: true, items, page: p, more: (rows.results || []).length > PER },
+    200, cacheHeader(url));
 }
 
 /* Delete a post (and its comments + all their media) or a single comment. Author
@@ -2574,16 +2747,19 @@ async function handleWallDelete(request: any, env: any) {
 }
 
 /* Upload public post/comment/board media — ONE handler, parameterized by the
-   upload context ('wall' | 'board'), each with its own admin kinds mask; the
-   per-kind byte caps are global. Images are magic-byte-sniffed + AI-screened
-   (LLaVA, like avatars); video/audio are validated against the Domain.Media
-   exact-mime whitelist (declared type — a container cannot be cheaply sniffed;
-   the serving path defends with nosniff + a deny-all CSP). Stored UNencrypted
-   under wall/<i|v|a>/<64hex>; the kind letter is what clients render from and
-   what claim-time mask checks parse. Hardening (all of it load-bearing): the
-   uploader must be an ESTABLISHED identity (uploads are not Turnstile-gated —
-   the linking post is), and the store budget is checked with a LIVE SUM so a
-   flood is refused rather than discovered by a stale counter an hour later. */
+   upload context ('wall' | 'board'), each with its own admin kinds mask,
+   per-kind byte caps (per-section override → legacy global), storage budget,
+   and AI-scan toggle. Images are magic-byte-sniffed and — when the section's
+   media_scan_* setting stands — AI-screened (LLaVA, like avatars, fail-open);
+   video/audio are validated against the Domain.Media exact-mime whitelist
+   (declared type — a container cannot be cheaply sniffed; the serving path
+   defends with nosniff + a deny-all CSP). Stored UNencrypted under
+   wall/<i|v|a>/<64hex> with the section stamped in wall_media.ctx (the
+   accounting dimension; re-stamped at claim to follow the parent). Hardening
+   (all of it load-bearing): the uploader must be an ESTABLISHED identity
+   (uploads are not Turnstile-gated — the linking post is), and the store
+   budget is checked with a LIVE per-section SUM so a flood is refused rather
+   than discovered by a stale counter an hour later. */
 async function mediaUpload(request: any, env: any, ctxKind: string) {
   if (!env.WALLMEDIA) return json({ ok: false, error: 'Media is unavailable.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2595,7 +2771,7 @@ async function mediaUpload(request: any, env: any, ctxKind: string) {
   if (!allowed.length) return json({ ok: false, error: 'Media uploads are turned off here.' }, 403);
   /* Pre-parse gate on the declared length: the kind is unknown until the form
      parses, so the ceiling is the largest cap among this context's kinds. */
-  const maxPre = mediaMaxAcross(settings, allowed);
+  const maxPre = mediaMaxAcross(settings, allowed, ctxKind);
   const clen = Number(request.headers.get('Content-Length') || 0);
   if (clen && clen > maxPre + 8192) return json({ ok: false, error: 'That file is too large.' }, 413);
   let form;
@@ -2617,7 +2793,12 @@ async function mediaUpload(request: any, env: any, ctxKind: string) {
   let kind = '', word = '', mime = '';
   const img = sniffImage(bytes);
   if (img && (!declared || declared.startsWith('image/'))) {
-    if (!(await screenImage(env, bytes))) return json({ ok: false, error: 'That image was declined by the safety check.' }, 422);
+    /* The AI screen is a per-section admin toggle (media_scan_wall/_board; on
+       by default). Fail-open inside screenImage is unchanged — the toggle only
+       decides whether the screen runs at all. */
+    if (mediaScanEnabled(settings, ctxKind) && !(await screenImage(env, bytes))) {
+      return json({ ok: false, error: 'That image was declined by the safety check.' }, 422);
+    }
     kind = 'i'; word = 'image'; mime = img.mime;
   } else if (Media.mimeAllowed('video')(declared)) { kind = 'v'; word = 'video'; mime = declared.slice(0, 60); }
   else if (Media.mimeAllowed('audio')(declared)) { kind = 'a'; word = 'audio'; mime = declared.slice(0, 60); }
@@ -2625,21 +2806,26 @@ async function mediaUpload(request: any, env: any, ctxKind: string) {
   if (allowed.indexOf(word) === -1) {
     return json({ ok: false, error: 'Only ' + allowed.join(', ') + ' can be shared here.' }, 400);
   }
-  if (bytes.length > mediaKindMax(settings, word)) {
-    return json({ ok: false, error: 'That ' + word + ' is over the ' + Math.floor(mediaKindMax(settings, word) / (1024 * 1024)) + ' MB limit.' }, 413);
+  if (bytes.length > mediaKindMax(settings, word, ctxKind)) {
+    return json({ ok: false, error: 'That ' + word + ' is over the ' + Math.floor(mediaKindMax(settings, word, ctxKind) / (1024 * 1024)) + ' MB limit.' }, 413);
   }
-  /* LIVE store-budget check (wall + board share one wall_media SUM). Refusal is
-     the policy; the 95% valve in enforceWallMediaCap is only the emergency. */
-  const used = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM wall_media').first();
-  const capWall = Number(settings.media_cap_wall_bytes) || Number(Media.defaults.capWallBytes);
-  if ((used.total || 0) + bytes.length > Math.floor(capWall * 0.90)) {
+  /* LIVE store-budget check, scoped to THIS section's budget (the feed and the
+     forum each own one since the 2026-08-02 split). Refusal is the policy; the
+     95% valve in enforceWallMediaCap is only the emergency. */
+  const used = await env.DB.prepare(
+    "SELECT COALESCE(SUM(size), 0) AS total FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1"
+  ).bind(ctxKind).first();
+  const cap = ctxKind === 'board'
+    ? (Number(settings.media_cap_board_bytes) || Number(Media.defaults.capBoardBytes))
+    : (Number(settings.media_cap_wall_bytes) || Number(Media.defaults.capWallBytes));
+  if ((used.total || 0) + bytes.length > Math.floor(cap * 0.90)) {
     return json({ ok: false, error: 'Media storage is full right now. Try again later.' }, 507);
   }
   const objKey = 'wall/' + kind + '/' + randomHex(32);
   try { await env.WALLMEDIA.put(objKey, bytes, { httpMetadata: { contentType: mime } }); }
   catch { return json({ ok: false, error: 'Upload failed.' }, 500); }
-  await env.DB.prepare('INSERT INTO wall_media (key, size, created_at) VALUES (?1, ?2, ?3)')
-    .bind(objKey, bytes.length, Math.floor(Date.now() / 1000)).run();
+  await env.DB.prepare('INSERT INTO wall_media (key, size, created_at, ctx) VALUES (?1, ?2, ?3, ?4)')
+    .bind(objKey, bytes.length, Math.floor(Date.now() / 1000), ctxKind).run();
   return json({ ok: true, media_key: objKey, size: bytes.length, kind: word }, 200);
 }
 
@@ -2687,6 +2873,48 @@ async function handleWallPrune(request: any, env: any) {
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const s = await getAppSettings(env);
   const deleted = await runWallPrune(env, Number(data.days) || Number(s.wall_prune_days) || 365);
+  return json({ ok: true, deleted }, 200);
+}
+
+/* Admin: purge EVERY media object belonging to one public section — 'wall'
+   (the feed + member walls) or 'board' (the forum) — the sibling of the DM
+   purge-all. The route names the section (no typo'd string ever reaches SQL),
+   and because claim-time re-stamps ctx to follow ref_type, stamping every
+   media-carrying parent row in the section's own tables is exact. The R2
+   prefix is shared ('wall/'), so keys come from D1, not a bucket listing.
+   Posts and their text stay — this retracts the BYTES, with the honest
+   media_expired placeholder left behind. Safe to re-click: R2 deletes are
+   idempotent, so an interrupted run's remainder is finished by the next one.
+   Edge/browser caches may serve purged bytes up to a day, the standing
+   property of every delete path. */
+async function handleWallMediaPurge(request: any, env: any, section: string) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  let deleted = 0;
+  for (;;) {
+    const batch = await env.DB.prepare(
+      "SELECT key FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 ORDER BY key LIMIT 1000 OFFSET ?2"
+    ).bind(section, deleted).all();
+    const keys = (batch.results || []).map((o: any) => o.key);
+    if (!keys.length) break;
+    if (env.WALLMEDIA) { try { await env.WALLMEDIA.delete(keys); } catch (e) { /* keep going; the row delete below re-orphans nothing */ } }
+    deleted += keys.length;
+  }
+  await env.DB.prepare("DELETE FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1").bind(section).run();
+  if (section === 'board') {
+    await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
+  } else {
+    await env.DB.prepare('UPDATE wall_posts SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
+    await env.DB.prepare('UPDATE wall_comments SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE media_key IS NOT NULL').run();
+  }
+  const counter = section === 'board' ? 'board_media_bytes' : 'wall_media_bytes';
+  try {
+    await env.DB.prepare(
+      'INSERT INTO app_settings (k, v, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3'
+    ).bind(counter, '0', Math.floor(Date.now() / 1000)).run();
+  } catch (e) { /* display-only */ }
+  appSettingsCache.at = 0; appSettingsCache.s = null;
   return json({ ok: true, deleted }, 200);
 }
 
@@ -3415,6 +3643,33 @@ async function handleApprove(request: any, env: any, ctx: any) {
   const id = Number(data.id);
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  /* Held FEED content (wall_posts / wall_comments — surfaced in the queue as
+     pending_wall since 2026-08-02; before that a held wall post vanished into
+     limbo, stored pending but shown nowhere). kind names the table; absent =
+     the classic comments path below, byte-identical. Approval mirrors the
+     posting path exactly: the comment-count bump and the live broadcast fire
+     only for a live, non-shadowbanned author (a muted bump betrays the mute),
+     reusing the same wall-post/wall-comment events open feeds already merge. */
+  const wkind = String(data.kind || '');
+  if (wkind === 'wall-post' || wkind === 'wall-comment') {
+    if (wkind === 'wall-comment') {
+      const row = await env.DB.prepare(
+        "UPDATE wall_comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING id, post_id, author_hash"
+      ).bind(id).first();
+      if (row && !(await isShadowBanned(env, row.author_hash))) {
+        await env.DB.prepare('UPDATE wall_posts SET comments = comments + 1 WHERE id = ?1').bind(row.post_id).run();
+        publishLive(env, ctx, { v: 1, t: 'wall-comment', scopes: ['feed:global'], post: row.post_id });
+      }
+      return json({ ok: true, approved: !!row }, 200);
+    }
+    const row = await env.DB.prepare(
+      "UPDATE wall_posts SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING id, author_hash"
+    ).bind(id).first();
+    if (row && !(await isShadowBanned(env, row.author_hash))) {
+      publishLive(env, ctx, { v: 1, t: 'wall-post', scopes: ['feed:global'], id });
+    }
+    return json({ ok: true, approved: !!row }, 200);
+  }
   const row = await env.DB.prepare(
     "UPDATE comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING page, parent_id"
   ).bind(id).first();
@@ -3470,7 +3725,21 @@ async function handlePending(request: any, env: any) {
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.status = 'pending' ORDER BY c.id DESC LIMIT 200"
   ).all();
-  return json({ ok: true, pending: rows.results }, 200);
+  /* Held FEED content rides beside (never inside) `pending`: an old cached
+     client ignores the unknown field, while merging wall rows into `pending`
+     would send their ids down the comments approve path — a cross-table id
+     collision. kind 'post'|'comment' names the wall table; approve takes it
+     back as 'wall-post'/'wall-comment', delete rides the existing /wall/delete. */
+  const wp = await env.DB.prepare(
+    "SELECT id, kind, post_id, author_hash, nick, body, created_at, media_key FROM (" +
+    "SELECT p.id, 'post' AS kind, NULL AS post_id, p.author_hash, pr.nick, p.body, p.created_at, p.media_key " +
+    "FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'pending' " +
+    "UNION ALL " +
+    "SELECT c.id, 'comment' AS kind, c.post_id, c.author_hash, pr.nick, c.body, c.created_at, c.media_key " +
+    "FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.status = 'pending'" +
+    ") ORDER BY created_at DESC LIMIT 200"
+  ).all();
+  return json({ ok: true, pending: rows.results, pending_wall: wp.results || [] }, 200);
 }
 
 /* The admin roster for the console: every admin, equal, each removable, carried
@@ -3545,13 +3814,9 @@ async function handleAdmin(request: any, env: any) {
    usage tables hold counters only. All of LIBDB is derived data rebuilt by
    librarian/ingest.py, which is why the backup cron ignores it. */
 
-async function handleMerecatStore(request: any, env: any) {
-  /* Retired: the ChatRoom Durable Object is the sole D1 writer now (the WS
-     path calls serve.py without chat/msg, so serve.py never calls back
-     here). Kept as a no-op so any in-flight callback from a pre-cutover
-     request 200s instead of erroring; removable in a later deploy. */
-  return json({ ok: true });
-}
+/* /api/merecat/store was the HTTP era's answer callback. The ChatRoom Durable
+   Object has been the sole D1 writer since 2026-07-30; the kept-for-one-deploy
+   no-op is now deleted and the route 404s like any unknown path. */
 
 /* ---- Admin observation of merecat Q&A (2026-07-29). The terms disclose that
    questions may be reviewed for the improvement of the service; these two
@@ -4360,6 +4625,10 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/wall/post/get', fn: (request, env, ctx, url) => handleWallPostGet(request, env) },
   { m: 'POST', p: '/api/comments/wall/comment', fn: (request, env, ctx, url) => handleWallComment(request, env, ctx) },
   { m: 'POST', p: '/api/comments/wall/delete', fn: (request, env, ctx, url) => handleWallDelete(request, env) },
+  { m: 'POST', p: '/api/comments/wall/edit', fn: (request, env, ctx, url) => handleWallEdit(request, env) },
+  { m: 'POST', p: '/api/comments/bookmark', fn: (request, env, ctx, url) => handleBookmark(request, env) },
+  { m: 'POST', p: '/api/comments/bookmarks', fn: (request, env, ctx, url) => handleBookmarks(request, env) },
+  { m: 'GET', p: '/api/comments/recent', fn: (request, env, ctx, url) => handleRecent(request, env, url) },
   { m: 'POST', p: '/api/comments/wall/like', fn: (request, env, ctx, url) => handleWallLike(request, env, ctx) },
   { m: 'POST', p: '/api/comments/wall/comment/like', fn: (request, env, ctx, url) => handleWallCommentLike(request, env) },
   { m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleWallLikers(request, env) },
@@ -4367,6 +4636,8 @@ const ROUTES: Route[] = [
   { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url, ctx) },
   { m: 'POST', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => mediaUpload(request, env, 'wall') },
   { m: 'POST', p: '/api/comments/board/media', fn: (request, env, ctx, url) => mediaUpload(request, env, 'board') },
+  { m: 'POST', p: '/api/comments/wall/media/purge', fn: (request, env, ctx, url) => handleWallMediaPurge(request, env, 'wall') },
+  { m: 'POST', p: '/api/comments/board/media/purge', fn: (request, env, ctx, url) => handleWallMediaPurge(request, env, 'board') },
   { m: 'POST', p: '/api/comments/wall', fn: (request, env, ctx, url) => handleWall(request, env) },
   { m: 'POST', p: '/api/comments/lock', fn: (request, env, ctx, url) => handleLock(request, env) },
   { m: 'POST', p: '/api/comments/shadowban', fn: (request, env, ctx, url) => handleShadowban(request, env) },
@@ -4387,7 +4658,6 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/merecat/ask-init', fn: (request, env, ctx, url) => handleMerecatAskInit(request, env) },
   { m: 'POST', p: '/api/merecat/about', fn: (request, env, ctx, url) => handleMerecatAbout(request, env) },
   { m: 'POST', p: '/api/merecat/backends', fn: (request, env, ctx, url) => handleMerecatBackends(request, env) },
-  { m: 'POST', p: '/api/merecat/store', fn: (request, env, ctx, url) => handleMerecatStore(request, env) },
   { m: 'POST', p: '/api/merecat/usage', fn: (request, env, ctx, url) => handleMerecatUsage(request, env) },
   { m: 'POST', p: '/api/merecat/forward', fn: (request, env, ctx, url) => handleMerecatForward(request, env) },
   { m: 'POST', p: '/api/merecat/mention', fn: (request, env, ctx, url) => handleMerecatMention(request, env) },
@@ -4452,6 +4722,7 @@ export default {
     if (event && event.cron === '0 * * * *') {
       ctx.waitUntil(sweepExpiredDms(env)
         .then(() => sweepWallOrphanMedia(env))
+        .then(() => sweepMediaRetention(env))
         .then(() => enforceWallMediaCap(env)));
       return;
     }
@@ -4463,6 +4734,7 @@ export default {
         .then(() => pruneNotifications(env))
         .then(() => pruneMerecatChats(env))
         .then(() => sweepWallOrphanMedia(env))
+        .then(() => sweepMediaRetention(env))
         .then(() => enforceWallMediaCap(env))
         .then(() => pruneWallPosts(env))
         .then(() => runBackup(env))

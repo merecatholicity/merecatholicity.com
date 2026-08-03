@@ -859,8 +859,29 @@ export const APP_SETTING_DEFAULTS = {
   media_kinds_board: Media.defaults.kindsBoard,
   media_image_autocompress: '1',                // client-side canvas downscale before upload
   media_cap_dm_bytes: String(Media.defaults.capDmBytes),     // DM media store budget (was a hardcoded 10 GB fantasy)
-  media_cap_wall_bytes: String(Media.defaults.capWallBytes), // wall + board media store budget (shared wall_media SUM)
-  wall_media_bytes: '0',                        // sweep-maintained total, display-only
+  media_cap_wall_bytes: String(Media.defaults.capWallBytes), // the FEED's media store budget (board split out 2026-08-02)
+  media_cap_board_bytes: String(Media.defaults.capBoardBytes), // the forum's own budget
+  wall_media_bytes: '0',                        // sweep-maintained totals, display-only
+  board_media_bytes: '0',
+  /* Per-section knobs (2026-08-02; key grammar single-sourced in Domain.Media's
+     section*Key builders). Scan = the LLaVA image screen per PUBLIC section —
+     there is deliberately NO media_scan_dm key: DM media is E2E ciphertext and
+     scanning it is structurally impossible. Voice = the 🎙 recorder feature
+     flag (client-advisory — the server cannot tell a voice note from a file).
+     Retention = media-only age pruning; 0 = keep forever for the public
+     sections, while the DM knob (1..90) replaces the old hardcoded 30-day cap.
+     The 12 per-section OVERRIDE keys (media_<ctx>_<kind>_max_bytes and
+     media_audio_max_seconds_<ctx>) are deliberately NOT seeded here: absence
+     means "inherit the legacy global", and seeding them would freeze that
+     fallback chain dead. */
+  media_scan_wall: '1',
+  media_scan_board: '1',
+  media_voice_dm: '1',
+  media_voice_wall: '1',
+  media_voice_board: '1',
+  media_wall_retention_days: String(Media.defaults.retentionWallDays),
+  media_board_retention_days: String(Media.defaults.retentionBoardDays),
+  media_dm_retention_days: String(Dm.mediaMaxSeconds / 86400),   // '30', single-sourced from Domain.Dm
 };
 export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
 export async function getAppSettings(env: any) {
@@ -884,11 +905,19 @@ const psOrNull = (m: any) => MaybeM.maybe(null)((x: any) => x)(m);
 /* The kind ('image'|'video'|'audio') encoded in a wall/<i|v|a>/<64hex> object
    key, or null for anything malformed. Strictness lives in the kernel. */
 export function mediaKindOfKey(key: any) { return psOrNull(Media.kindOfKey(String(key || ''))); }
-/* Effective per-file cap for one kind: the admin's per-kind setting, bounded by
-   the legacy media_max_bytes ceiling (safe-by-default: raising a kind past the
-   ceiling needs both knobs, and the settings page says so). */
-export function mediaKindMax(s: any, kind: string) {
-  const stored = Math.floor(Number(s['media_' + kind + '_max_bytes'])) || 0;
+/* Effective per-file cap for one kind: the per-SECTION override when ctx is
+   given and its key is stored, else the admin's legacy global per-kind setting,
+   else the kernel default — always bounded by the media_max_bytes ceiling
+   (safe-by-default: raising a kind past the ceiling needs both knobs, and the
+   settings page says so). Called WITHOUT ctx it behaves exactly as before the
+   per-section split — that is what keeps the legacy /config block honest. */
+export function mediaKindMax(s: any, kind: string, ctx?: string) {
+  let stored = 0;
+  if (ctx) {
+    const sk = psOrNull(Media.sectionKindBytesKey(ctx)(kind));
+    if (sk && s[sk] != null) stored = Math.floor(Number(s[sk])) || 0;
+  }
+  if (!(stored > 0)) stored = Math.floor(Number(s['media_' + kind + '_max_bytes'])) || 0;
   const fallback = Number((Media.defaults as any)[kind + 'MaxBytes']) || (10 * 1024 * 1024);
   const ceiling = Number(s.media_max_bytes) || (25 * 1024 * 1024);
   return Math.min(stored > 0 ? stored : fallback, ceiling);
@@ -901,10 +930,43 @@ export function mediaKindsFor(s: any, ctx: string) {
 /* The largest per-file cap across a context's allowed kinds — the pre-parse
    Content-Length gate (the kind is unknown before the form parses) and the DM
    ciphertext cap (E2E blinds the server to the kind, so the max is the wall). */
-export function mediaMaxAcross(s: any, kinds: string[]) {
+export function mediaMaxAcross(s: any, kinds: string[], ctx?: string) {
   let m = 0;
-  for (const k of kinds) m = Math.max(m, mediaKindMax(s, k));
+  for (const k of kinds) m = Math.max(m, mediaKindMax(s, k, ctx));
   return m;
+}
+/* Whether a section's image uploads pass the AI screen. The kernel returns no
+   key for 'dm' — E2E ciphertext is structurally unscannable — so this is false
+   there by construction, not by configuration. */
+export function mediaScanEnabled(s: any, ctx: string) {
+  const k = psOrNull(Media.sectionScanKey(String(ctx || '')));
+  return k ? s[k] !== '0' : false;
+}
+/* The per-section 🎙 voice-recorder feature flag (served in /config; enforced
+   client-side — the server cannot tell a voice note from any other audio). */
+export function mediaVoiceEnabled(s: any, ctx: string) {
+  const k = psOrNull(Media.sectionVoiceKey(String(ctx || '')));
+  return k ? s[k] !== '0' : false;
+}
+/* The voice-note length limit for a section: per-section override, else the
+   legacy global, else the kernel default. Client-advisory, like the global. */
+export function mediaAudioSeconds(s: any, ctx?: string) {
+  if (ctx) {
+    const k = psOrNull(Media.sectionAudioSecondsKey(ctx));
+    const sec = k && s[k] != null ? Math.floor(Number(s[k])) || 0 : 0;
+    if (sec > 0) return sec;
+  }
+  return Number(s.media_audio_max_seconds) || Number(Media.defaults.audioMaxSeconds);
+}
+/* A section's media age retention in days. wall/board: 0 = keep forever (the
+   default). dm: the knob replaces the old hardcoded Dm.mediaMaxSeconds 30-day
+   hard cap and is clamped 1..90 — DM media can never be "forever". */
+export function mediaRetentionDays(s: any, ctx: string) {
+  const k = psOrNull(Media.sectionRetentionKey(String(ctx || '')));
+  if (!k) return 0;
+  const n = Math.floor(Number(s[k])) || 0;
+  if (ctx === 'dm') return Number(Media.clampDmRetentionDays(n || (Dm.mediaMaxSeconds / 86400)));
+  return n > 0 ? Number(Media.clampRetentionDays(n)) : 0;
 }
 
 /* An upload needs an ESTABLISHED identity — one that has passed Turnstile at
@@ -1038,6 +1100,7 @@ export async function enforceMediaCap(env: any) {
    the rest. */
 export async function sweepExpiredDms(env: any) {
   const now = Math.floor(Date.now() / 1000);
+  const settings = await getAppSettings(env);
   try {
     const gone = await env.DB.prepare(
       'SELECT media_key FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0 AND media_key IS NOT NULL LIMIT 5000'
@@ -1049,11 +1112,12 @@ export async function sweepExpiredDms(env: any) {
     ).bind(now).run();
   } catch (e) { console.log(JSON.stringify({ event: 'sweep_expired_failed', error: String(e) })); }
   try {
-    // Hard media cap (Domain.Dm.mediaMaxSeconds): NO media attachment persists
-    // beyond 30 days, even inside a SAVED message. On a surviving message whose
-    // media has aged out, purge the R2 object + row and mark the message
-    // media_expired so the client shows a placeholder over any saved text/caption.
-    const cap = now - Dm.mediaMaxSeconds;
+    // Hard media cap (media_dm_retention_days, clamped 1..90, default = the old
+    // Dm.mediaMaxSeconds 30 days): NO media attachment persists beyond it, even
+    // inside a SAVED message. On a surviving message whose media has aged out,
+    // purge the R2 object + row and mark the message media_expired so the
+    // client shows a placeholder over any saved text/caption.
+    const cap = now - mediaRetentionDays(settings, 'dm') * 86400;
     const capped = await env.DB.prepare(
       'SELECT md.key AS key, md.msg_id AS msg_id FROM dm_media md JOIN dms d ON d.id = md.msg_id ' +
       'WHERE md.created_at < ?1 AND d.media_key IS NOT NULL LIMIT 5000'
@@ -1181,6 +1245,27 @@ export async function purgeWallMedia(env: any, keys: any) {
   }
 }
 
+/* Null the parent pointer + stamp media_expired for a set of wall_media rows
+   ({ref_type, ref_id}), batched per table — the one place the shared table
+   costs a branch. Shared by the cap valve, the retention sweep, and the
+   purge-all endpoints; rows with no known ref_type are skipped (an unlinked
+   orphan has no parent to stamp). */
+export async function stampWallMediaExpired(env: any, rows: any) {
+  const tableFor: any = { post: 'wall_posts', comment: 'wall_comments', board: 'comments' };
+  const byTable: any = { wall_posts: [], wall_comments: [], comments: [] };
+  for (const r of (rows || [])) { const t = tableFor[r.ref_type]; if (t) byTable[t].push(r.ref_id); }
+  for (const t of Object.keys(byTable)) {
+    const ids = byTable[t];
+    for (let i = 0; i < ids.length; i += 50) {
+      const chunk = ids.slice(i, i + 50);
+      const ph = inList(chunk.length);
+      try {
+        await env.DB.prepare('UPDATE ' + t + ' SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + ph + ')').bind(...chunk).run();
+      } catch (e) { /* keep going */ }
+    }
+  }
+}
+
 /* Reclaim public-media objects with no live owner: an upload that was never
    attached to a post (older than an hour), or one whose post/comment is gone. */
 export async function sweepWallOrphanMedia(env: any) {
@@ -1203,52 +1288,74 @@ export async function sweepWallOrphanMedia(env: any) {
   } catch (e) { /* keep going */ }
 }
 
-/* The wall/board media store's byte accounting and emergency valve. Normal
-   pressure is handled at UPLOAD time (a live SUM refuses at 90% of the admin's
-   media_cap_wall_bytes); this hourly pass keeps the display total fresh and,
-   only past 95%, evicts the oldest LINKED media — stamping media_expired on the
-   parent row so the client shows an honest placeholder, never a broken tile.
-   Public posts are content, not cache: silent LRU is content loss, which is why
-   the valve is a last resort and the refusal is the policy (DM media differs —
+/* The public media stores' byte accounting and emergency valve, PER SECTION
+   since the 2026-08-02 split: the feed (ctx 'wall' → media_cap_wall_bytes →
+   wall_media_bytes) and the forum (ctx 'board' → media_cap_board_bytes →
+   board_media_bytes) each have their own budget over the shared wall_media
+   table. Normal pressure is handled at UPLOAD time (a live per-ctx SUM refuses
+   at 90%); this hourly pass keeps the display totals fresh and, only past 95%,
+   evicts a section's oldest LINKED media — stamping media_expired on the parent
+   row so the client shows an honest placeholder, never a broken tile. Public
+   posts are content, not cache: silent LRU is content loss, which is why the
+   valve is a last resort and the refusal is the policy (DM media differs —
    ephemeral by contract, so its LRU in enforceMediaCap is honest). */
 export async function enforceWallMediaCap(env: any) {
   const s = await getAppSettings(env);
-  const capBytes = Number(s.media_cap_wall_bytes) || Number(Media.defaults.capWallBytes);
-  const totalRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM wall_media').first();
-  let total = totalRow.total || 0;
-  const EMERGENCY = Math.floor(capBytes * 0.95);
-  if (total > EMERGENCY) {
-    const TARGET = Math.floor(capBytes * 0.90);
-    const old = await env.DB.prepare(
-      'SELECT key, size, ref_type, ref_id FROM wall_media WHERE ref_id IS NOT NULL ORDER BY created_at ASC LIMIT 200'
-    ).all();
-    const kill: any[] = [];
-    for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
-    if (kill.length) {
-      await purgeWallMedia(env, kill.map((r) => r.key));
-      /* Null the parent pointer + stamp the placeholder, batched per table —
-         the one place the shared wall_media table costs a branch. */
-      const tableFor: any = { post: 'wall_posts', comment: 'wall_comments', board: 'comments' };
-      const byTable: any = { wall_posts: [], wall_comments: [], comments: [] };
-      for (const r of kill) { const t = tableFor[r.ref_type]; if (t) byTable[t].push(r.ref_id); }
-      for (const t of Object.keys(byTable)) {
-        const ids = byTable[t];
-        for (let i = 0; i < ids.length; i += 50) {
-          const chunk = ids.slice(i, i + 50);
-          const ph = inList(chunk.length);
-          try {
-            await env.DB.prepare('UPDATE ' + t + ' SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + ph + ')').bind(...chunk).run();
-          } catch (e) { /* keep going */ }
-        }
+  const sections = [
+    { ctx: 'wall', cap: Number(s.media_cap_wall_bytes) || Number(Media.defaults.capWallBytes), counter: 'wall_media_bytes' },
+    { ctx: 'board', cap: Number(s.media_cap_board_bytes) || Number(Media.defaults.capBoardBytes), counter: 'board_media_bytes' },
+  ];
+  for (const sec of sections) {
+    const totalRow = await env.DB.prepare(
+      "SELECT COALESCE(SUM(size), 0) AS total FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1"
+    ).bind(sec.ctx).first();
+    let total = totalRow.total || 0;
+    const EMERGENCY = Math.floor(sec.cap * 0.95);
+    if (total > EMERGENCY) {
+      const TARGET = Math.floor(sec.cap * 0.90);
+      const old = await env.DB.prepare(
+        "SELECT key, size, ref_type, ref_id FROM wall_media WHERE ref_id IS NOT NULL AND COALESCE(ctx, 'wall') = ?1 ORDER BY created_at ASC LIMIT 200"
+      ).bind(sec.ctx).all();
+      const kill: any[] = [];
+      for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
+      if (kill.length) {
+        await purgeWallMedia(env, kill.map((r) => r.key));
+        await stampWallMediaExpired(env, kill);
       }
     }
+    try {
+      await env.DB.prepare(
+        'INSERT INTO app_settings (k, v, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3'
+      ).bind(sec.counter, String(total), Math.floor(Date.now() / 1000)).run();
+    } catch (e) { /* display-only cache; ignore */ }
   }
-  try {
-    await env.DB.prepare(
-      "INSERT INTO app_settings (k, v, updated_at) VALUES ('wall_media_bytes', ?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?1, updated_at = ?2"
-    ).bind(String(total), Math.floor(Date.now() / 1000)).run();
-    appSettingsCache.at = 0; appSettingsCache.s = null;
-  } catch (e) { /* display-only cache; ignore */ }
+  appSettingsCache.at = 0; appSettingsCache.s = null;
+}
+
+/* Media-only age retention for the public sections (media_wall_retention_days /
+   media_board_retention_days; 0 = keep forever, the default). Purges the R2
+   object + row and stamps media_expired on the parent — the post and its TEXT
+   stay (that is wall_prune's separate job). Pending media is deliberately NOT
+   spared here (unlike the orphan sweep's evidence-sparing branch): retention is
+   a time policy the owner sets, the held TEXT survives for the queue, and the
+   parent gets the honest placeholder. LIMIT 500/section keeps a first-enable
+   backlog hour inside the subrequest budget; the backlog self-drains hourly. */
+export async function sweepMediaRetention(env: any) {
+  const s = await getAppSettings(env);
+  const now = Math.floor(Date.now() / 1000);
+  for (const ctx of ['wall', 'board']) {
+    const days = mediaRetentionDays(s, ctx);
+    if (!days) continue;
+    try {
+      const old = await env.DB.prepare(
+        "SELECT key, ref_type, ref_id FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 AND created_at < ?2 ORDER BY created_at ASC LIMIT 500"
+      ).bind(ctx, now - days * 86400).all();
+      const rows = old.results || [];
+      if (!rows.length) continue;
+      await purgeWallMedia(env, rows.map((r: any) => r.key));
+      await stampWallMediaExpired(env, rows);
+    } catch (e) { console.log(JSON.stringify({ event: 'sweep_retention_failed', ctx, error: String(e) })); }
+  }
 }
 
 /* Read gate shared by the members-only feed/wall/post reads. Returns the member
@@ -1309,14 +1416,14 @@ export async function notifyWallLike(env: any, toHash: any, fromHash: any, postI
    Claim-time enforcement is what stops a wall-context upload from smuggling a
    video onto a board whose mask excludes it: upload cannot know its destination.
    Returns { key, size, kind } or null. */
-export async function wallClaimMedia(env: any, mediaKey: any, allowedKinds?: any, settings?: any) {
+export async function wallClaimMedia(env: any, mediaKey: any, allowedKinds?: any, settings?: any, ctx?: string) {
   if (!mediaKey || !WALL_MEDIA_RE.test(String(mediaKey))) return null;
   const kind = mediaKindOfKey(mediaKey);
   if (!kind) return null;
   if (allowedKinds && allowedKinds.indexOf(kind) === -1) return null;
   const mr = await env.DB.prepare('SELECT size FROM wall_media WHERE key = ?1 AND ref_id IS NULL').bind(String(mediaKey)).first();
   if (!mr) return null;
-  if (settings && (mr.size || 0) > mediaKindMax(settings, kind)) return null;
+  if (settings && (mr.size || 0) > mediaKindMax(settings, kind, ctx)) return null;
   return { key: String(mediaKey), size: mr.size, kind };
 }
 

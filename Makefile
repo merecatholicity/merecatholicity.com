@@ -22,6 +22,7 @@ jscheck:
 # committed like every built artifact. Pages carrying it load app.js?v=N (nav.js).
 bundle: jscheck
 	npm run build:js
+	python scripts/stamp_versions.py
 
 # The PureScript domain layer (see PURESCRIPT.md). The compiler (purs) and spago
 # are npm devDependencies like the rest of the toolchain: `npm ci` restores them
@@ -121,8 +122,24 @@ html:
 	    -o ../docs/bishop-presbyter.html
 	$(MAKE) -C resources html
 	python scripts/inject_social.py
+	$(MAKE) strip-nav sync-index library-order sitemap
 	@echo "built book.html"
 	$(MAKE) check
+
+# Site metadata derived from the served tree: the retired-nav sweep (+ the
+# visible foot-nav), the sitemap (+ robots pointer), the Library reading order
+# (deeplink.js's end-of-work nav), and index.html re-synced from its two source
+# pages (where-to-begin.html, the-book.html). Run at the end of `html`, before
+# the linkcheck, so the checked tree is final.
+.PHONY: sitemap library-order sync-index strip-nav
+sitemap:
+	python scripts/gen_sitemap.py
+library-order:
+	python scripts/library_order.py
+sync-index:
+	python scripts/sync_index.py
+strip-nav:
+	python scripts/strip_dead_nav.py
 
 # Logos/Verbum Personal Book edition: a .docx from the same .tex, using the
 # same preprocessing as the html target. Word heading styles carry the

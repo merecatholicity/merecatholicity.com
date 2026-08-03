@@ -59,8 +59,28 @@ const HOME_FEATURES = [
   { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
   { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
   { icon: '📚', title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
+  { icon: '🎧', title: 'The audio Bible', sub: 'The King James Version read aloud, chapter by chapter', href: 'kjv.html' },
   { icon: '📰', title: 'Journal', sub: 'The Mere Catholicity Journal', href: 'journal.html' },
 ];
+
+/* The reader's way back into whatever they were last reading: deeplink.js
+   stores mc-readpos:<path> = {id, title, at} as corpus pages scroll. The most
+   recent one becomes a "Continue reading" chip atop the Home launcher. */
+function lastReadPos(): { href: string; title: string } | null {
+  try {
+    let best: { at: number; href: string; title: string } | null = null;
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = localStorage.key(i) || '';
+      if (k.indexOf('mc-readpos:') !== 0) continue;
+      const v = JSON.parse(localStorage.getItem(k) as string);
+      if (!v || !v.at) continue;
+      const path = k.slice('mc-readpos:'.length);
+      const title = String(v.title || '').split(/\s+[|—–]\s+/)[0].trim() || path;
+      if (!best || v.at > best.at) best = { at: v.at, href: path + (v.id ? '#' + v.id : ''), title };
+    }
+    return best ? { href: best.href, title: best.title } : null;
+  } catch (e) { return null; }
+}
 /* The reading shelf, grouped the way a newcomer reads it. Surfaces the rest of
    the site nav (Contact lives only in the footer, kept quiet by design — not
    here; Library + Journal are up in the feature cards, not repeated here). */
@@ -196,6 +216,70 @@ function sameBytes(a: Uint8Array | null, b: Uint8Array | null) {
   if (!a || !b || a.length !== b.length) return false;
   for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
   return true;
+}
+
+/* ---- key backup + device linking helpers (the key-loss cliff work) ---- */
+
+/* Save the identity key as a small text file the reader can file away. */
+function downloadKeyFile(key: string) {
+  try {
+    const body = 'Your merecatholicity.com identity key. Keep this file private.\n' +
+      'Paste the key into "I already have a key" on any device to sign in.\n\n' + key + '\n';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([body], { type: 'text/plain' }));
+    a.download = 'merecatholicity-key.txt';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) { /* gone */ } a.remove(); }, 2000);
+  } catch (e) { /* blocked: the copy button still stands */ }
+}
+
+/* The vendored QR encoder (docs/qr.min.js, qrcode-generator 1.4.4, MIT),
+   lazy-injected same-origin like tweetnacl so script-src 'self' holds. */
+declare global { interface Window { qrcode?: any } }
+let qrLoading: Promise<any> | null = null;
+function ensureQr(): Promise<any> {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (qrLoading) return qrLoading;
+  qrLoading = new Promise(function (resolve, reject) {
+    const s = document.createElement('script');
+    s.src = 'qr.min.js';
+    s.onload = function () { window.qrcode ? resolve(window.qrcode) : reject(new Error('no qrcode')); };
+    s.onerror = function () { qrLoading = null; reject(new Error('qr load failed')); };
+    document.head.appendChild(s);
+  });
+  return qrLoading;
+}
+
+/* Render text as a QR into an SVG built node-by-node (no innerHTML, CSP-clean,
+   theme-safe: dark cells use currentColor on a white tile). */
+function qrSvg(text: string): SVGSVGElement | null {
+  try {
+    const qr = window.qrcode!(0, 'M');
+    qr.addData(text);
+    qr.make();
+    const n = qr.getModuleCount();
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '-2 -2 ' + (n + 4) + ' ' + (n + 4));
+    svg.setAttribute('shape-rendering', 'crispEdges');
+    const bg = document.createElementNS(NS, 'rect');
+    bg.setAttribute('x', '-2'); bg.setAttribute('y', '-2');
+    bg.setAttribute('width', String(n + 4)); bg.setAttribute('height', String(n + 4));
+    bg.setAttribute('fill', '#fff');
+    svg.appendChild(bg);
+    let d = '';
+    for (let r = 0; r < n; r += 1) {
+      for (let c = 0; c < n; c += 1) {
+        if (qr.isDark(r, c)) d += 'M' + c + ' ' + r + 'h1v1h-1z';
+      }
+    }
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', '#111');
+    svg.appendChild(path);
+    return svg;
+  } catch (e) { return null; }
 }
 
 /* ---- the bottom tab bar ---- */
@@ -623,6 +707,20 @@ class McSettings extends LitElement {
     this.pushMsg = ''; this.pushOn = false;
   }
 
+  /* Fill the QR box once the panel is open: the QR encodes a sign-in link
+     (profile.html#key=…) the phone camera opens; the fragment never reaches
+     the server and the client strips it on arrival. */
+  updated() {
+    const box = this.querySelector('.mc-set-qrbox');
+    if (!box || box.firstChild) return;
+    const k = readKey();
+    if (!k) return;
+    ensureQr().then(() => {
+      if (box.firstChild) return;
+      const svg = qrSvg(location.origin + '/profile.html#key=' + encodeURIComponent(k));
+      if (svg) { svg.style.width = '100%'; svg.style.height = 'auto'; box.appendChild(svg); }
+    }).catch(() => { /* no QR: the copy and download paths still stand */ });
+  }
   _presence() { try { return localStorage.getItem('mc-presence') === 'off' ? 'off' : 'auto'; } catch (e) { return 'auto'; } }
   togglePresence() {
     const n = this.presence === 'off' ? 'auto' : 'off';
@@ -769,11 +867,18 @@ class McSettings extends LitElement {
       <h3 class="mc-set-sec">Account</h3>
       ${k ? html`
         ${link('profile.html', 'My profile', 'Edit your name, faith, avatar')}
+        ${link('community.html?saved=1', 'Saved posts', 'Topics and feed posts you saved')}
         <button class="mc-set-row mc-set-btn" @click=${() => { this.keyShown = !this.keyShown; }}>
           <span>Show my key<small>Your one login secret — save it somewhere safe</small></span><span class="mc-set-go">${this.keyShown ? '▾' : '›'}</span></button>
         ${this.keyShown ? html`<div class="mc-set-key">
           <input class="mc-set-keyin" readonly .value=${k} @focus=${(e: Event) => (e.target as HTMLInputElement).select()}>
           <button class="btn btn-send mc-set-copy" @click=${() => this.copyKey()}>${this.copied ? 'Copied' : 'Copy'}</button>
+        </div>
+        <div class="mc-set-key" style="flex-direction:column;gap:0.5rem;align-items:stretch">
+          <button class="btn" style="align-self:flex-start" @click=${() => downloadKeyFile(k)}>Download key file</button>
+          <div class="mc-set-qrbox" style="max-width:220px"></div>
+          <p style="margin:0;font-size:0.85em;opacity:0.75">Scan with your phone camera to sign in there.
+            Anyone who scans this owns the identity, so show it to no one else.</p>
         </div>` : ''}
         <button class="mc-set-row mc-set-btn mc-set-danger" @click=${() => this.logout()}>
           <span>Log out</span><span class="mc-set-go">›</span></button>
@@ -802,7 +907,9 @@ class McSettings extends LitElement {
         ${this._switch("Show when I'm online", this.presence === 'off' ? 'Appear offline' : 'Automatic', this.presence !== 'off', () => this.togglePresence())}
         ${this._switch('Read receipts', this._receiptsOn() ? 'On' : 'Off — you send none and see none', this._receiptsOn(), () => this._setPref({ receipts: this._receiptsOn() ? 'off' : 'auto' }))}
         ${this._managedList('blocked', 'Blocked members', blockedRows ? blockedRows.length : null, blockedRows, (h) => this._unblock(h), 'Unblock')}
+        <div class="mc-set-note" style="padding:0 0.95rem 0.4rem;font-size:0.85em;opacity:0.7">Blocking stops their direct messages. Their public posts stay visible.</div>
         ${this._managedList('muted', 'Muted members', this.muted ? this.muted.length : null, this.muted, (h) => this._unmute(h), 'Unmute')}
+        <div class="mc-set-note" style="padding:0 0.95rem 0.4rem;font-size:0.85em;opacity:0.7">Muting hides their posts for you wherever you are signed in.</div>
 
         <h3 class="mc-set-sec">Notifications</h3>
         ${this._switch('Replies', null, this._notifyOn('reply'), () => this._setPref({ notify_reply: this._notifyOn('reply') ? 0 : 1 }))}
@@ -856,14 +963,17 @@ class McNotifs extends LitElement {
       const isDm = it.kind === 'dm';
       const isWall = it.kind === 'wall';
       const isLike = it.kind === 'wall-like';
+      const isCat = it.kind === 'merecat';
       const who = name(it);
       const label = isDm ? (who + ' sent you a message')
-        : isLike ? (who + ' liked your post')
-          : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-            : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+        : isCat ? 'merecat finished answering your question'
+          : isLike ? (who + ' liked your post')
+            : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+              : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
       const to = isDm ? ('messages.html?dm=' + it.actor_hash)
-        : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
-          : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+        : isCat ? ('merecat-ai.html?chat=' + it.topic_id)
+          : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
+            : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
       return html`<a class=${'mc-notifs-row' + (it.read_at ? '' : ' mc-notifs-new')} href=${to}>${label}</a>`;
     })}`);
   }
@@ -1011,10 +1121,15 @@ customElements.define('mc-footer', McFooter);
 class McHome extends LitElement {
   createRenderRoot() { return this; }
   render() {
+    const cont = lastReadPos();
     return html`<div class="mc-home">
       <div class="mc-home-hero"><span class="mc-home-cross">✝</span>
         <p>One, holy, catholic, and apostolic.</p></div>
       <hr class="mc-home-rule">
+      ${cont ? html`<div class="mc-home-feats"><a class="mc-home-feat" href=${cont.href}>
+        <span class="mc-home-feat-ico">📖</span>
+        <span class="mc-home-feat-txt"><strong>Continue reading</strong><small>${cont.title}</small></span>
+        <span class="mc-home-go">›</span></a></div>` : ''}
       <div class="mc-home-feats">${HOME_FEATURES.map((f) => html`
         <a class="mc-home-feat" href=${f.href}>
           <span class="mc-home-feat-ico">${f.icon}</span>
@@ -1204,16 +1319,36 @@ function mcOnboard(onDone?: any, opts?: any) {
   function revealKey(key: string) {
     wrap.textContent = '';
     const h = document.createElement('p'); h.className = 'mc-onboard-intro';
-    h.textContent = 'You’re in. Save your key — it is the only way back to this identity.';
+    h.textContent = 'You’re in. Save your key now. It is the only way back to this identity, and there is no recovery if it is lost.';
     wrap.appendChild(h);
     const keyRow = document.createElement('div'); keyRow.className = 'mc-set-key';
     const keyIn = document.createElement('input'); keyIn.className = 'mc-set-keyin'; keyIn.readOnly = true; keyIn.value = key || '';
     keyIn.addEventListener('focus', function () { keyIn.select(); });
     const copyBtn = document.createElement('button'); copyBtn.type = 'button'; copyBtn.className = 'btn btn-send mc-set-copy'; copyBtn.textContent = 'Copy';
-    copyBtn.addEventListener('click', function () { try { if (navigator.clipboard) { navigator.clipboard.writeText(key); copyBtn.textContent = 'Copied'; } } catch (e) { /* no clipboard */ } });
     keyRow.appendChild(keyIn); keyRow.appendChild(copyBtn);
     wrap.appendChild(keyRow);
+    /* The save gate: Continue stays disabled until the reader has actually
+       copied or downloaded the key (or sworn to the checkbox). Tapping
+       Continue past an unsaved key was the whole account-loss cliff. */
+    const dlRow = document.createElement('div'); dlRow.className = 'mc-onboard-paste';
+    const dlBtn = document.createElement('button'); dlBtn.type = 'button'; dlBtn.className = 'btn'; dlBtn.textContent = 'Download key file';
+    dlRow.appendChild(dlBtn);
+    wrap.appendChild(dlRow);
+    const savedRow = document.createElement('label'); savedRow.className = 'agree-row mc-onboard-agree';
+    const savedCk = document.createElement('input'); savedCk.type = 'checkbox';
+    const savedTxt = document.createElement('span'); savedTxt.textContent = 'I have saved my key somewhere safe.';
+    savedRow.appendChild(savedCk); savedRow.appendChild(savedTxt);
+    wrap.appendChild(savedRow);
     const cont = document.createElement('button'); cont.type = 'button'; cont.className = 'btn btn-send mc-onboard-create'; cont.textContent = 'Continue';
+    cont.disabled = true;
+    let saved = false;
+    const markSaved = function () { saved = true; cont.disabled = false; };
+    copyBtn.addEventListener('click', function () {
+      try { if (navigator.clipboard) { navigator.clipboard.writeText(key); copyBtn.textContent = 'Copied'; } } catch (e) { /* no clipboard */ }
+      markSaved();
+    });
+    dlBtn.addEventListener('click', function () { downloadKeyFile(key); dlBtn.textContent = 'Downloaded'; markSaved(); });
+    savedCk.addEventListener('change', function () { if (savedCk.checked) markSaved(); else if (!saved) cont.disabled = true; });
     cont.addEventListener('click', done);
     wrap.appendChild(cont);
   }

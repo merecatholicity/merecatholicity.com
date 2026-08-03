@@ -16,7 +16,7 @@
     "tsc": "tsc -p tsconfig.json && tsc -p comments-worker/tsconfig.json && tsc -p contact-worker/tsconfig.json",
     "build": "npm run lint && npm run build:js && npm run build:css",
     "worker:deploy": "cd comments-worker && wrangler deploy",
-    "build:client": "esbuild client/comments.ts --outfile=docs/comments.js --log-level=warning"
+    "build:client": "esbuild client/comments.ts --minify --outfile=docs/comments.js --log-level=warning"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260801.1",
