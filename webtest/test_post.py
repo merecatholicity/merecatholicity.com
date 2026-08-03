@@ -106,15 +106,17 @@ def main():
 
         # The 2026-08-03 block unification: a blocked author's post renders as
         # a HIDDEN stub (no collapse, no reveal) — it does not exist for you.
+        # Set the hide-list EXPLICITLY (toggleMute is server-synced: a prior
+        # run's list can merge back down and invert a toggle — seen live).
         blocked = json.loads(f.js1("""
-          window.mcKit.toggleMute('cd'.repeat(32));
+          try { localStorage.setItem('mc-muted', JSON.stringify(['cd'.repeat(32)].map(function(x){return x;}))); } catch (e) {}
           var box = document.createElement('div'); box.id='mute-box'; document.body.appendChild(box);
           var n = window.mcViews.commentNode(window.mcKit, %s, false, {page:'/credo.html'});
           box.appendChild(n);
           var stub = box.querySelector('.comment-blocked');
           var hidden = stub && getComputedStyle(stub).display === 'none';
           var noBody = !box.querySelector('article.comment');
-          window.mcKit.toggleMute('cd'.repeat(32));
+          try { localStorage.setItem('mc-muted', '[]'); } catch (e) {}
           return JSON.stringify({hidden:!!hidden, noBody:noBody});"""
           % json.dumps(fixture('cd' * 32))))
         checks.append(('blocked post is fully hidden', blocked['hidden'] and blocked['noBody']))
