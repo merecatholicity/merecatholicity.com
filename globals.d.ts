@@ -68,6 +68,7 @@ declare global {
       board: { sub: (scopes: string[]) => void; leave: () => void };
       member: { enable: (key: string, hash: string) => void; disable: () => void;
                 typing?: (to: string, state?: string) => void; setPresence?: (mode: string) => void;
+                callSig?: (to: string, f: { call?: string; kind?: string; payload?: unknown }) => boolean;
                 presenceMode?: () => string };
       chat: (chatId: string | number, key: string, onFrame: (m: any) => void) =>
             { send: (o: any) => boolean; ready: () => boolean; close: () => void };

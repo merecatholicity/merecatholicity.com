@@ -520,6 +520,7 @@ class McSettings extends LitElement {
     fetch(this._api() + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, set: patch }) }).catch(() => { /* best effort */ });
   }
   _notifyOn(kind: string) { return !this.prefs || this.prefs['notify_' + kind] !== 0; }
+  _callsOn() { return !this.prefs || this.prefs.calls !== 0; }
   _receiptsOn() { return !(this.prefs && this.prefs.receipts === 'off'); }
   _openPanel(which: string) {
     this.panel = this.panel === which ? '' : which;
@@ -906,6 +907,7 @@ class McSettings extends LitElement {
         <h3 class="mc-set-sec">Privacy &amp; safety</h3>
         ${this._switch("Show when I'm online", this.presence === 'off' ? 'Appear offline' : 'Automatic', this.presence !== 'off', () => this.togglePresence())}
         ${this._switch('Read receipts', this._receiptsOn() ? 'On' : 'Off — you send none and see none', this._receiptsOn(), () => this._setPref({ receipts: this._receiptsOn() ? 'off' : 'auto' }))}
+        ${this._switch('Voice calls', this._callsOn() ? 'Members can call you' : 'Off — callers just hear ringing, like no answer', this._callsOn(), () => this._setPref({ calls: this._callsOn() ? 0 : 1 }))}
         ${this._managedList('blocked', 'Blocked members', blockedRows ? blockedRows.length : null, blockedRows, (h) => this._unblock(h), 'Unblock')}
         <div class="mc-set-note" style="padding:0 0.95rem 0.4rem;font-size:0.85em;opacity:0.7">Blocking stops their direct messages. Their public posts stay visible.</div>
         ${this._managedList('muted', 'Muted members', this.muted ? this.muted.length : null, this.muted, (h) => this._unmute(h), 'Unmute')}

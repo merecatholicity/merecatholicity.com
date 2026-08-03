@@ -118,7 +118,10 @@ def run_call(A, B, checks, tag, patch_turn=False):
 
 def scenario_p2p(checks, fails):
     with Party(LiveUser('A', ALICE, 9610, mic='fake'), LiveUser('B', BOB, 9611, mic='fake')) as (A, B):
-        B.nav('community.html')
+        # The receiver sits on a BUNDLE-ONLY page (library.html carries no
+        # comments.js at all): the ring must come from the shell engine
+        # (app/call.ts), which self-enables the member socket everywhere.
+        B.nav('library.html')
         A.nav('community.html?dm=' + B_HASH)
         # Drain the log buffers so the console/network gate judges only the
         # call itself — login + nav span three documents, and the duplicate-
@@ -197,9 +200,23 @@ def scenario_block(checks, fails):
             frame = B.wait_live(lambda e: e.get('t') == 'call-offer', timeout=10)
             checks.append(('block: unblocked offer frame arrives', bool(frame)))
             click_panel_btn(B, 'Decline')   # tidy the control ring away
+            # The member Privacy switch (gear → Voice calls off): the SAME
+            # fake success as a block, indistinguishable at the wire.
+            d = api('/api/comments/prefs', {'key': BOB, 'set': {'calls': 0}})
+            checks.append(('pref: bob turns calls off (prefs round-trip)',
+                           bool(d.get('ok')) and d.get('prefs', {}).get('calls') == 0))
+            B.clear_live()
+            offed = api('/api/comments/call/offer', {'key': ALICE, 'to': B_HASH,
+                                                     'call': 'c' * 32, 'sdp': 'v=0\r\ns=-\r\n'})
+            time.sleep(5)
+            checks.append(('pref: calls-off offer answers plain {ok:true}', offed == {'ok': True}))
+            checks.append(('pref: no frame reaches the callee',
+                           not B.saw_live(lambda e: e.get('t') == 'call-offer')))
+            api('/api/comments/prefs', {'key': BOB, 'set': {'calls': 1}})
             fails.extend(['B: %s' % x for x in B.failures])
     finally:
         api('/api/comments/dm/block', {'key': BOB, 'hash': A_HASH, 'blocked': False})
+        api('/api/comments/prefs', {'key': BOB, 'set': {'calls': 1}})
 
 
 def scenario_tabs(checks, fails):

@@ -607,8 +607,9 @@ export async function notifyCall(env: any, toHash: any, fromHash: any, callId: a
     }
     let online = false;
     try {
+      /* presenceOf returns the ONLINE SUBSET as an array. */
       const p = await env.HUB.get(env.HUB.idFromName('board')).presenceOf([toHash]);
-      online = !!(p && p[toHash]);
+      online = Array.isArray(p) ? p.indexOf(toHash) !== -1 : false;
     } catch (e) { /* hub unreachable => treat as away, send the nudge */ }
     if (!online) {
       await deliverPush(env, [toHash], { kind: 'call', title: 'Incoming call',
