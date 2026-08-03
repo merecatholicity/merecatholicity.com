@@ -2466,6 +2466,29 @@ body[data-art="freechurches"]::before {
   :root:not([data-theme="light"]) body[data-art]::before { --art-op: 0.17; --art-op-d: 0.18; }
 }
 
+/* The READING SHEET (2026-08-03 readability standard): on art pages the prose
+   column sits on a near-solid panel, so body text never fights the painting —
+   the art keeps the margins. Article pages only: every APP page hosts
+   section.comments.BOARD (excluded — its post CARDS are its ground), and the
+   app's Home/Library mounts are excluded the same way; an article page's own
+   comment thread sits INSIDE main.prose, so one selector covers text and
+   thread alike. mc-no-art pages are already solid --bg. */
+body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-library)) {
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1.25rem clamp(1rem, 4vw, 2.25rem) 2rem;
+}
+@media (max-width: 600px) {
+  /* the art is bottom-anchored on phones; the sheet goes edge-to-edge so it
+     reads as the page, not a floating panel */
+  body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-library)) {
+    border-radius: 0; border-left: 0; border-right: 0;
+    margin-inline: -1rem;
+    padding: 1rem;
+  }
+}
+
 /* ===================== The Mere Catholicity Journal ===================== */
 /* A quiet, modern reading surface. Scoped under .journal so its headings win
    over the reading-prose defaults (equal-specificity, but ancestor-scoped to be
