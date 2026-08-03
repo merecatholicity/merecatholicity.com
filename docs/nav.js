@@ -380,6 +380,15 @@ document.addEventListener('DOMContentLoaded', function () {
     for (var i = 0; i < tas.length; i++) {
       if (tas[i].value && tas[i].value.length > 0) return true;
     }
+    /* A media post can ride an EMPTY body: a filled topic title or a visible
+       attachment chip (a picked photo, a recorded voice note) is mid-use
+       every bit as much as typed text. */
+    var title = document.querySelector('input.board-title');
+    if (title && title.value) return true;
+    var chips = document.querySelectorAll('.dm-attach-chip');
+    for (var j = 0; j < chips.length; j++) {
+      if (chips[j].textContent && chips[j].offsetParent !== null) return true;
+    }
     return false;
   }
   /* key names the CAUSE ('page:/feed.html', 'sw') — the worker resends each
