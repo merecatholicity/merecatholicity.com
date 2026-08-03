@@ -308,6 +308,28 @@ where the media actually lives). Serve with
 `nosniff` + deny-all CSP + CORP; a key linked into the back room answers the
 byte-identical 404 a missing object gets.
 
+**1v1 voice calls (2026-08-03).** Media is peer-to-peer DTLS-SRTP (genuinely
+E2E — the operator relays only setup metadata; a TURN relay carries opaque
+ciphertext). Setup rides two keyed POSTs, **no Turnstile** (ring-spam is fenced
+by keyedGated + POST_LIMIT + the ESTABLISHED-identity gate + block-with-fake-
+success; the remedy is block, the Signal semantic):
+`POST /call/offer {key, to, call, sdp}` (`to` 64-hex, `call` 16–64 hex minted
+by the caller, sdp `v=`-prefixed ≤32 KB; refuses self/bot; **a dm_blocks row
+answers a fake `{ok:true}`** — the caller rings out to silence,
+indistinguishable; else fans `{t:'call-offer', from, call, sdp}` to
+`user:<to>` and fires the coalesced `'call'` notification + a Web-Push nudge
+when the callee has no live socket). `POST /call/answer {key, to, call, sdp}`
+(symmetric; also read-marks the caller's missed-call row, targeted).
+`POST /call/turn {key}` (READ_LIMIT + established) → `{ok, iceServers, relay}`
+— short-TTL Cloudflare TURN credentials when the TURN key pair AND the
+`calls_turn` admin toggle stand, else the free STUN-only fallback
+(`relay:false`). Transient signaling (ICE batches + end/decline/busy/taken)
+rides the live socket's `t:'call-sig'` frame `{to, call, kind, payload}` —
+relayed to `user:<to>` tagged with the authenticated sender, ≤4 KB, no
+storage. `GET /config` serves `calls:{enabled}`; app_settings `calls_enabled`
+(global kill switch, server-enforced) and `calls_turn` are admin-set in
+`/admin/settings`. Notification kind `'call'` (migration 0009).
+
 **`POST /api/comments/edit`** — `{id, key, body}`. `POST_LIMIT`, gated, **no
 Turnstile** (despite older docs; the web SDK sends a `token` the server
 ignores). An attachment survives a body edit untouched; a media-only post

@@ -76,6 +76,26 @@ export class BoardHub extends DurableObject<Env> {
       this.#fan('user:' + to, JSON.stringify({ v: 1, t: 'typing', from: me, state: m.state === 'stop' ? 'stop' : 'start' }));
       return;
     }
+    /* Transient 1v1 call signaling (client → client, no storage): the ICE
+       trickle and the end/decline/busy/taken control words — typing's exact
+       contract, fanned only to the recipient's own sockets, tagged with the
+       authenticated sender. SDP never rides here (the gated /call/offer and
+       /call/answer POSTs carry it, where the block rules live); 'taken' goes
+       to one's OWN hash to hush the other tabs after answering. Size-capped:
+       an ICE batch is a few hundred bytes — anything past 4 KB is not call
+       signaling. */
+    if (m.t === 'call-sig') {
+      const me = (a && a.me) || '';
+      const to = String(m.to || '');
+      const call = String(m.call || '');
+      const kind = String(m.kind || '');
+      if (!me || !/^[0-9a-f]{64}$/.test(to)) return;
+      if (!/^[0-9a-f]{16,64}$/.test(call)) return;
+      if (['ice', 'end', 'decline', 'busy', 'taken'].indexOf(kind) === -1) return;
+      if (typeof msg !== 'string' || msg.length > 4096) return;
+      this.#fan('user:' + to, JSON.stringify({ v: 1, t: 'call-sig', from: me, call, kind, payload: m.payload }));
+      return;
+    }
     if (m.t !== 'sub') return;
     const me = (a && a.me) || '';
     const subs = sanitizeScopes(m.scope, me, BOARD_CATS);

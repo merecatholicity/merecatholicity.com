@@ -580,6 +580,45 @@ export async function notifyDm(env: any, toHash: any, fromHash: any) {
   }
 }
 
+/* The missed-call bell (notifyDm's sibling): one coalesced UNREAD 'call' row
+   per (recipient, caller) — a ring-burst never piles up rows — plus the live
+   badge ping, and a Web Push nudge ONLY when the callee has no live socket
+   (presenceOf; an open tab already rings over the wire, and the push is the
+   loudest bell). Rides the notify_dm pref in v1 — calls are the DM circle's
+   loudest form, and a dedicated notify_call pref is one profiles column away.
+   The push carries no names (the DM-push privacy idiom); its URL lands on the
+   conversation with the missed-call record — never an answerable ring (the
+   offer is transient). A ring must never fail because its bell did, so this
+   never throws out. */
+export async function notifyCall(env: any, toHash: any, fromHash: any, callId: any) {
+  try {
+    if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
+    const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
+    if (!notifyEnabled(pref, 'dm')) return;
+    const now = Math.floor(Date.now() / 1000);
+    const r = await env.DB.prepare(
+      "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
+      "SELECT ?1, 'call', 0, 0, ?2, ?3 WHERE NOT EXISTS (" +
+      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'call' AND actor_hash = ?2 AND read_at IS NULL)"
+    ).bind(toHash, fromHash, now).run();
+    if (r.meta && r.meta.changes > 0) {
+      await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
+        kind: 'call', topic_id: 0, comment_id: 0, actor_hash: fromHash, created_at: now }]);
+    }
+    let online = false;
+    try {
+      const p = await env.HUB.get(env.HUB.idFromName('board')).presenceOf([toHash]);
+      online = !!(p && p[toHash]);
+    } catch (e) { /* hub unreachable => treat as away, send the nudge */ }
+    if (!online) {
+      await deliverPush(env, [toHash], { kind: 'call', title: 'Incoming call',
+        body: 'Someone is calling you', url: '/messages.html?dm=' + fromHash + '&call=' + String(callId || '') });
+    }
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'notify_call_failed', error: String(e) }));
+  }
+}
+
 /* Best-effort push fan-out — real Web Push (VAPID + aes128gcm) over crypto.subtle,
    no external service (see webpush.js). A NO-OP unless PUSH_ENABLED === 'true'
    AND the VAPID keypair is configured (VAPID_PRIVATE_KEY secret + VAPID_PUBLIC_KEY
@@ -888,6 +927,14 @@ export const APP_SETTING_DEFAULTS = {
   media_wall_retention_days: String(Media.defaults.retentionWallDays),
   media_board_retention_days: String(Media.defaults.retentionBoardDays),
   media_dm_retention_days: String(Dm.mediaMaxSeconds / 86400),   // '30', single-sourced from Domain.Dm
+  /* 1v1 voice calls (2026-08-03). calls_enabled is the global kill switch —
+     off refuses every /call/* endpoint and hides the 📞 button (served in
+     /config). calls_turn governs the TURN relay leg only: off = /call/turn
+     serves the free STUN-only fallback (most calls still connect P2P; strict
+     networks fail honestly) — the zero-billing-exposure position, since TURN
+     past its 1,000 GB/month free pool bills per GB with no cap. */
+  calls_enabled: '1',
+  calls_turn: '1',
 };
 export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
 export async function getAppSettings(env: any) {

@@ -183,10 +183,11 @@ _COLLECTOR = (
 
 
 class LiveUser(Flow):
-    """A logged-in browser user with the live-event collector armed."""
+    """A logged-in browser user with the live-event collector armed.
+    mic='fake' grants a fake microphone with no prompt (the call tests)."""
 
-    def __init__(self, name, key, port):
-        super().__init__(port=port)
+    def __init__(self, name, key, port, mic=None):
+        super().__init__(port=port, mic=mic)
         self.name = name
         self.key = key
         self.hash = hash_of(key)

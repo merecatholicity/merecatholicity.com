@@ -31,6 +31,7 @@ import * as Compose from '../purescript/output/Domain.Compose/index.js';
 import * as Handle from '../purescript/output/Domain.Handle/index.js';
 import * as Links from '../purescript/output/Domain.Links/index.js';
 import * as Media from '../purescript/output/Domain.Media/index.js';
+import * as Call from '../purescript/output/Domain.Call/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -212,3 +213,33 @@ export const mediaMaxBytesFor = (kind: string, limits: { image: number; video: n
     video: Number(limits && limits.video) || 0,
     audio: Number(limits && limits.audio) || 0,
   }));
+
+/* Voice-call state machine (Domain.Call): the 1v1 call lifecycle both ends
+   run. The membrane speaks string tags only — callStep(tag, reason, event)
+   returns the next {state, reason}; the ADT never crosses. Ended is absorbing,
+   Timeout is a no-op in Active (a stale ring timer can never kill a live
+   call), and there is deliberately no socket-close event. */
+const CALL_STATES: Record<string, unknown> = {
+  Idle: Call.Idle.value, Outgoing: Call.Outgoing.value, Incoming: Call.Incoming.value,
+  Connecting: Call.Connecting.value, Active: Call.Active.value,
+};
+const CALL_EVENTS: Record<string, unknown> = {
+  Place: Call.Place.value, Ring: Call.Ring.value, Answer: Call.Answer.value,
+  RemoteAnswer: Call.RemoteAnswer.value, Connected: Call.Connected.value,
+  HangUp: Call.HangUp.value, RemoteEnd: Call.RemoteEnd.value,
+  LocalDecline: Call.LocalDecline.value, RemoteDecline: Call.RemoteDecline.value,
+  RemoteBusy: Call.RemoteBusy.value, Timeout: Call.Timeout.value,
+  Failure: Call.Failure.value, Taken: Call.Taken.value,
+};
+const callStateOf = (tag: string, reason: string): any =>
+  tag === 'Ended' ? Call.Ended.create(String(reason || '')) : (CALL_STATES[tag] || Call.Idle.value);
+export function callStep(tag: string, reason: string, eventTag: string): { state: string; reason: string } {
+  const ev = CALL_EVENTS[String(eventTag || '')];
+  if (!ev) return { state: String(tag || 'Idle'), reason: String(reason || '') };
+  const next = Call.step(ev)(callStateOf(String(tag || 'Idle'), String(reason || '')));
+  return { state: Call.stateTag(next), reason: Call.endReason(next) };
+}
+export const callInCall = (tag: string): boolean => !!Call.inCall(callStateOf(String(tag || 'Idle'), ''));
+export const callRingSecs: number = Call.ringTimeoutSecs;
+export const callSetupSecs: number = Call.setupTimeoutSecs;
+export const callGlareWins = (me: string, other: string): boolean => Call.glareWins(String(me || ''))(String(other || ''));
