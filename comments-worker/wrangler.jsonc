@@ -161,7 +161,15 @@
     // VAPID_PRIVATE_KEY secret (never in source). Rotate BOTH together.
     "VAPID_PUBLIC_KEY": "BGu90jVwRuyDpx_lnCMDdsuvF-1mHEHSS1IunwbOdhTq7f1G4ImfS0DFZac3ikV8a-sGQFqSaVuXLu67wBPS-uQ",
     // The VAPID JWT "sub" claim: a mailto: (or https:) the push service can reach.
-    "VAPID_SUBJECT": "mailto:admin@merecatholicity.com"
+    "VAPID_SUBJECT": "mailto:admin@merecatholicity.com",
+    // Cloudflare Realtime TURN for 1v1 calls: the TURN key's public id. The
+    // matching TURN_KEY_SECRET is a secret (`cd comments-worker && wrangler
+    // secret put TURN_KEY_SECRET`). /call/turn mints short-lived per-call ICE
+    // credentials from the pair; with either half absent it serves the
+    // STUN-only fallback and calls still mostly work (P2P). Free pool:
+    // 1,000 GB/month relayed egress, $0.05/GB past it with NO spend cap —
+    // deleting this var is the kill switch back to free STUN-only.
+    "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d"
   },
   // A staging deployment: `wrangler deploy --env staging`. Distinct rate-limit
   // namespace ids so it never shares the production per-IP buckets, and its own
@@ -182,7 +190,9 @@
         // Same VAPID public key as prod; the VAPID_PRIVATE_KEY secret must also be
         // set for the staging env (`wrangler secret put VAPID_PRIVATE_KEY --env staging`).
         "VAPID_PUBLIC_KEY": "BGu90jVwRuyDpx_lnCMDdsuvF-1mHEHSS1IunwbOdhTq7f1G4ImfS0DFZac3ikV8a-sGQFqSaVuXLu67wBPS-uQ",
-        "VAPID_SUBJECT": "mailto:admin@merecatholicity.com"
+        "VAPID_SUBJECT": "mailto:admin@merecatholicity.com",
+        // Same TURN key as prod; set TURN_KEY_SECRET --env staging too.
+        "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d"
       }
     }
   }

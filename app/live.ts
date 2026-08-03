@@ -202,6 +202,19 @@ const memberApi = {
     if (!/^[0-9a-f]{64}$/.test(String(to))) return;
     try { board.ws.send(JSON.stringify({ t: 'typing', to: to, state: state === 'stop' ? 'stop' : 'start' })); } catch (e) { /* dropped */ }
   },
+  /* Transient 1v1 call-signaling frame (ICE batches + end/decline/busy/taken),
+     typing's sibling — no HTTP, no bucket, relayed by the hub to the
+     recipient's own sockets only. Returns false when the socket is down so
+     the call shell can decide: mid-setup it keeps buffering and re-flushes on
+     mc-live-resync; mid-call it does not care (media is peer-to-peer). */
+  callSig: function (to: string, f: { call?: string; kind?: string; payload?: unknown }): boolean {
+    if (!board.ws || board.ws.readyState !== 1) return false;
+    if (!/^[0-9a-f]{64}$/.test(String(to))) return false;
+    try {
+      board.ws.send(JSON.stringify({ t: 'call-sig', to: to, call: String((f && f.call) || ''), kind: String((f && f.kind) || ''), payload: f ? f.payload : undefined }));
+      return true;
+    } catch (e) { return false; }
+  },
   /* Change my presence mode ('auto'|'off'), persist it, and re-auth so the DO
      broadcasts the change to anyone watching me. */
   setPresence: function (mode: string) {

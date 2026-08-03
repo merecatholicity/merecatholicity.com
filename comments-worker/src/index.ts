@@ -159,6 +159,7 @@ import {
   metaForHash,
   normalizeLinks,
   normalizePage,
+  notifyCall,
   notifyDm,
   notifyEnabled,
   notifyPrefsFor,
@@ -256,6 +257,9 @@ async function handleConfig(request: any, env: any, url: any) {
         },
       },
     },
+    /* 1v1 voice calls: the 📞 button renders only when enabled (the worker
+       refuses /call/* regardless — this is the client's courtesy copy). */
+    calls: { enabled: s.calls_enabled === '1' },
     cats: CAT_META.filter((c) => BOARD_CATS.includes(c[0])).map((c, i) => {
       const o: any = { key: c[0], label: c[1], blurb: c[2], order: i };
       if (c[3]) o.link = { text: c[3], url: c[4] };
@@ -2149,6 +2153,107 @@ async function handleDmMediaGet(request: any, env: any) {
   });
 }
 
+/* ================= 1v1 voice calls =================
+   Media is peer-to-peer DTLS-SRTP (genuinely end-to-end — the operator relays
+   only setup metadata; even a TURN relay carries opaque ciphertext). Setup
+   rides these gated POSTs, where the DM privacy rules already live; the
+   transient ICE/end/decline words ride the BoardHub 'call-sig' relay
+   (durable.ts). No storage, no call log — the only record is the coalesced
+   missed-call notification. calls_enabled (app_settings) is the global kill
+   switch, enforced here, server-authoritative. */
+
+/* Place a call: validate, refuse the bot and self, and enforce dm_blocks with
+   FAKE SUCCESS — a blocked caller gets {ok:true} and rings out to silence,
+   byte-identical to calling someone who does not pick up (the standing
+   indistinguishability law). Else the offer fans to the callee's live sockets
+   and the missed-call bell/push rides waitUntil (a slow bell must never delay
+   the ring). */
+async function handleCallOffer(request: any, env: any, ctx: any) {
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const settings = await getAppSettings(env);
+  if (settings.calls_enabled !== '1') return json({ ok: false, error: 'Calls are turned off.' }, 403);
+  const to = String(data.to || '');
+  const call = String(data.call || '');
+  const sdp = String(data.sdp || '');
+  if (!/^[0-9a-f]{64}$/.test(to) || !/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
+  if (to === MERECAT_BOT.hash) return json({ ok: false, error: 'merecat is a librarian — it has no ears. Mention @merecat in a post instead.' }, 400);
+  if (!sdp || sdp.length > 32768 || sdp.slice(0, 2) !== 'v=') return json({ ok: false, error: 'Bad request.' }, 400);
+  /* The media-upload fence, same reason: a drive-by throwaway key must not be
+     able to ring members (or, via /call/turn, mint relay credentials). */
+  if (!(await isEstablished(env, me))) return json({ ok: false, error: 'Calls unlock after your first post or profile save.' }, 403);
+  const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(to, me).first();
+  if (blockRow) return json({ ok: true }, 200);
+  await publishUser(env, [{ v: 1, t: 'call-offer', scopes: ['user:' + to], from: me, call, sdp }]);
+  if (ctx) ctx.waitUntil(notifyCall(env, to, me, call));
+  return json({ ok: true }, 200);
+}
+
+/* Answer a call: symmetric relay of the SDP answer back to the caller. No
+   block/bot gate — the offer was the invitation. The waitUntil marks THIS
+   call's missed-call row read, TARGETED (kind+actor), never the nuke-all
+   /notifications/read. */
+async function handleCallAnswer(request: any, env: any, ctx: any) {
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const settings = await getAppSettings(env);
+  if (settings.calls_enabled !== '1') return json({ ok: false, error: 'Calls are turned off.' }, 403);
+  const to = String(data.to || '');
+  const call = String(data.call || '');
+  const sdp = String(data.sdp || '');
+  if (!/^[0-9a-f]{64}$/.test(to) || !/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!sdp || sdp.length > 32768 || sdp.slice(0, 2) !== 'v=') return json({ ok: false, error: 'Bad request.' }, 400);
+  await publishUser(env, [{ v: 1, t: 'call-answer', scopes: ['user:' + to], from: me, call, sdp }]);
+  if (ctx) {
+    ctx.waitUntil(env.DB.prepare(
+      "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind = 'call' AND actor_hash = ?2 AND read_at IS NULL"
+    ).bind(me, to, Math.floor(Date.now() / 1000)).run().catch(() => {}));
+  }
+  return json({ ok: true }, 200);
+}
+
+/* Mint short-lived per-call ICE servers. TURN (the ~15-20% strict-network
+   relay leg) needs the TURN key pair AND the calls_turn admin toggle; any
+   absence or failure degrades to the free STUN-only list — calls still mostly
+   connect, and the degradation IS the no-billing-exposure kill switch. */
+async function handleCallTurn(request: any, env: any) {
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const settings = await getAppSettings(env);
+  if (settings.calls_enabled !== '1') return json({ ok: false, error: 'Calls are turned off.' }, 403);
+  /* TURN credentials relay real bandwidth from the free pool — established
+     identities only (the drive-by fence; STUN-only needs no fence but there
+     is no reason to answer a throwaway key at all). */
+  if (!(await isEstablished(env, pre.me))) return json({ ok: false, error: 'Calls unlock after your first post or profile save.' }, 403);
+  const fallback = () => json({ ok: true, iceServers: [
+    { urls: ['stun:stun.cloudflare.com:3478'] },
+    { urls: ['stun:stun.l.google.com:19302'] },
+  ], relay: false }, 200);
+  if (settings.calls_turn !== '1' || !env.TURN_KEY_ID || !env.TURN_KEY_SECRET) return fallback();
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 3000);
+  try {
+    const r = await fetch('https://rtc.live.cloudflare.com/v1/turn/keys/' + env.TURN_KEY_ID + '/credentials/generate-ice-servers', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + env.TURN_KEY_SECRET, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ttl: 7200 }),
+      signal: ctl.signal,
+    });
+    if (!r.ok) return fallback();
+    const d: any = await r.json();
+    const servers = d && d.iceServers ? (Array.isArray(d.iceServers) ? d.iceServers : [d.iceServers]) : null;
+    if (!servers || !servers.length) return fallback();
+    return json({ ok: true, iceServers: servers, relay: true }, 200);
+  } catch (e) {
+    return fallback();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* Admin platform settings: read them (with the current media usage), and set the
    tunable ones with sanity clamps. The growing home for site-wide toggles. */
 async function handleAdminSettings(request: any, env: any) {
@@ -2168,7 +2273,8 @@ async function handleAdminSettings(request: any, env: any) {
       media_dm_image_max_bytes: 1, media_dm_video_max_bytes: 1, media_dm_audio_max_bytes: 1,
       media_wall_image_max_bytes: 1, media_wall_video_max_bytes: 1, media_wall_audio_max_bytes: 1,
       media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
-      media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1 };
+      media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1,
+      calls_enabled: 1, calls_turn: 1 };
     /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
        back to "inherit the legacy global" — because absence is what the
        fallback chain reads. Without this the chain would be one-way. */
@@ -2187,7 +2293,8 @@ async function handleAdminSettings(request: any, env: any) {
       }
       if (k === 'media_enabled' || k === 'wall_prune_enabled' || k === 'media_image_autocompress'
         || k === 'media_scan_wall' || k === 'media_scan_board'
-        || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board') v = (v === '1' || v === 'true') ? '1' : '0';
+        || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board'
+        || k === 'calls_enabled' || k === 'calls_turn') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
       /* Per-kind caps, the recorder stop, the store budgets, the retention
          windows, and the context kinds masks all clamp/normalize through the
@@ -4618,6 +4725,9 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/dm/presence', fn: (request, env, ctx, url) => handleDmPresence(request, env) },
   { m: 'POST', p: '/api/comments/dm/blocked', fn: (request, env, ctx, url) => handleDmBlocked(request, env) },
   { m: 'POST', p: '/api/comments/prefs', fn: (request, env, ctx, url) => handlePrefs(request, env) },
+  { m: 'POST', p: '/api/comments/call/offer', fn: (request, env, ctx, url) => handleCallOffer(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/call/answer', fn: (request, env, ctx, url) => handleCallAnswer(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/call/turn', fn: (request, env, ctx, url) => handleCallTurn(request, env) },
   { m: 'POST', p: '/api/comments/dm/block', fn: (request, env, ctx, url) => handleDmBlock(request, env) },
   { m: 'POST', p: '/api/comments/dm/delete', fn: (request, env, ctx, url) => handleDmDelete(request, env) },
   { m: 'GET', p: '/api/comments/dm/directory', fn: (request, env, ctx, url) => handleDmDirectory(request, env, url) },
