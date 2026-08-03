@@ -34,6 +34,9 @@ var bad = [];
 document.querySelectorAll('input, textarea, select').forEach(function (el) {
   var cs = getComputedStyle(el);
   if (cs.display === 'none' || cs.visibility === 'hidden') return;
+  if (parseFloat(cs.opacity) === 0) return;                    // honeypots etc.
+  var r = el.getBoundingClientRect();
+  if (r.right <= 0 || r.bottom <= 0) return;                   // offscreen-by-design
   if (el.type === 'hidden' || el.type === 'checkbox' || el.type === 'radio' || el.type === 'file') return;
   var fs = parseFloat(cs.fontSize);
   if (fs < 15.95) {
