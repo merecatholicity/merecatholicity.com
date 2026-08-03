@@ -164,6 +164,7 @@ class McBoardIndex extends LitElement {
       <div class="comment-identity"></div>
       <div class="key-box" hidden></div>
       <div class="mc-index-search"></div>
+      <p class="board-intro"><a class="identity-action" href="community.html?recent=1">Recent activity</a> across every room.</p>
       ${this.unreadTotal > 0 ? html`<p class="board-intro">
           ${this.unreadTotal + (this.unreadTotal === 1 ? ' new thread since your last visit. ' : ' new threads since your last visit. ')}
           <a class="identity-action" href="#" @click=${this.markAllRead}>Mark all read</a></p>` : nothing}

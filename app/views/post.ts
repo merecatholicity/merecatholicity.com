@@ -64,35 +64,42 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
       dm.href = 'community.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
       head.appendChild(dm);
-      /* Mute this member's posts for yourself. Reloading re-renders the view so
-         the mute takes at once, everywhere they appear. */
+      /* Mute this member's posts for yourself. Re-routing re-renders the view
+         in place so the mute takes at once, everywhere they appear — a full
+         page reload inside the SPA was jarring on phones. */
       var muteLink = el('a', 'comment-quote-link', kit.isMuted(c.author_hash) ? 'unmute' : 'mute') as HTMLAnchorElement;
       muteLink.href = '#';
       muteLink.title = 'Hide this member’s posts, for you only';
       muteLink.addEventListener('click', function (e: Event) {
         e.preventDefault();
         kit.toggleMute(c.author_hash);
-        location.reload();
+        if (kit.reroute) kit.reroute(); else location.reload();
       });
       head.appendChild(muteLink);
       /* Members flag a post for the moderators; admins act directly and don't
-         see this. Reporting never hides the post — it only queues it for review. */
+         see this. Reporting never hides the post — it only queues it for review.
+         The reason is asked in an app sheet (window.prompt is suppressed in some
+         in-app browsers, which silently killed reporting there). */
       if (!kit.isAdmin()) {
         var reportLink = el('a', 'comment-quote-link', 'report') as HTMLAnchorElement;
         reportLink.href = '#';
         reportLink.title = 'Report this post to the moderators';
         reportLink.addEventListener('click', function (e: Event) {
           e.preventDefault();
-          var reason = prompt('Report this post to the moderators.\nOptionally, a short reason:');
-          if (reason === null) return;
-          fetch(kit.API + '/report', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: kit.state.key, id: c.id, reason: reason }),
-          }).then(function (r: Response) { return r.json(); }).then(function (d: any) {
-            if (kit.blockedOut(d)) return;
-            reportLink.textContent = d.ok ? 'reported' : 'report';
-            reportLink.title = d.ok ? 'Reported to the moderators. Thank you.' : (d.error || 'Could not report.');
-          }).catch(function () {});
+          var ask = kit.promptSheet
+            ? kit.promptSheet('Report this post to the moderators. Optionally, a short reason:', 'Reason (optional)')
+            : Promise.resolve(prompt('Report this post to the moderators.\nOptionally, a short reason:'));
+          ask.then(function (reason: any) {
+            if (reason === null) return;
+            fetch(kit.API + '/report', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: kit.state.key, id: c.id, reason: reason }),
+            }).then(function (r: Response) { return r.json(); }).then(function (d: any) {
+              if (kit.blockedOut(d)) return;
+              reportLink.textContent = d.ok ? 'reported' : 'report';
+              reportLink.title = d.ok ? 'Reported to the moderators. Thank you.' : (d.error || 'Could not report.');
+            }).catch(function () {});
+          });
         });
         head.appendChild(reportLink);
       }

@@ -152,13 +152,16 @@ class McNotifications extends LitElement {
         const isDm = it.kind === 'dm';
         const isWall = it.kind === 'wall';
         const isLike = it.kind === 'wall-like';
+        const isCat = it.kind === 'merecat';
         const label = isDm ? (who + ' sent you a message')
-          : isLike ? (who + ' liked your post')
-            : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-              : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+          : isCat ? 'merecat finished answering your question'
+            : isLike ? (who + ' liked your post')
+              : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+                : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
         const to = isDm ? ('messages.html?dm=' + it.actor_hash)
-          : (isWall || isLike) ? ('community.html?post=' + it.comment_id)
-            : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+          : isCat ? ('merecat-ai.html?chat=' + it.topic_id)
+            : (isWall || isLike) ? ('community.html?post=' + it.comment_id)
+              : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
         return html`<div class="board-topic"><div class="board-topic-left">
           <a class=${'board-topic-title' + (it.read_at ? '' : ' dm-unread')} href=${to}>${label}</a>${it.read_at ? nothing : html`<span class="dm-unread"> ● new</span>`}
           ${it.snippet && !isDm ? html`<div class="board-intro">${it.snippet}</div>` : nothing}

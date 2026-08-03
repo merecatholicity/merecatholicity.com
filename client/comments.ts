@@ -41,8 +41,9 @@
   var SITEKEY = '0x4AAAAAAD8IYH9_xQ0HE0yB';
   var STORAGE = 'mc-comment-key';
   /* The faith declaration a member picks at signup and may change in their
-     profile. Codes are stored; these are the words shown. Kept identical to
-     the FAITHS list in comments-worker/src/index.js. */
+     profile. Codes are stored; labels and order come from the PureScript
+     kernel (Domain.Faith via window.mcCore), the same source the worker
+     reads — single-sourced, nothing to keep in step by hand. */
   var FAITH_STORE = 'mc-faith';
 
   /* Faith code↔label + display order, single-sourced from the PureScript
@@ -423,17 +424,32 @@
     if (hash === MERECAT_BOT_HASH) return false;
     return !!hash && getMuted().indexOf(hash) !== -1;
   }
+  /* Mutes follow the member now: the list rides the prefs row server-side
+     (like blocks), so a second device sees the same quiet. localStorage stays
+     the fast local truth; the server copy is merged in by loadPrefs and
+     written through here, best effort. */
+  function syncMutedUp() {
+    if (!state.key) return;
+    fetch(API + '/prefs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, set: { muted: getMuted().slice(0, 200) } }),
+    }).catch(function () { /* best effort */ });
+  }
   function toggleMute(hash: any) {
     if (!hash) return false;
+    var added;
     if (window.mcCore) {
       var r = window.mcCore.toggleMute(hash, getMuted());
       try { localStorage.setItem(MUTED_STORE, JSON.stringify(r.list)); } catch (e) {}
-      return r.added;
+      added = r.added;
+    } else {
+      var a = getMuted(), i = a.indexOf(hash);
+      if (i === -1) a.push(hash); else a.splice(i, 1);
+      try { localStorage.setItem(MUTED_STORE, JSON.stringify(a)); } catch (e) {}
+      added = i === -1;
     }
-    var a = getMuted(), i = a.indexOf(hash);
-    if (i === -1) a.push(hash); else a.splice(i, 1);
-    try { localStorage.setItem(MUTED_STORE, JSON.stringify(a)); } catch (e) {}
-    return i === -1;
+    syncMutedUp();
+    return added;
   }
   /* The "I hold to:" radio group, one row per faith, used at signup and in the
      profile editor. onChange fires with the chosen code. */
@@ -1139,25 +1155,54 @@
      real bug). On any failure the kernel's Domain.Media defaults stand in, so
      the gates always have a shape to read. ---- */
   var _mediaCfgP: any = null;
-  function mediaCfgFallback() {
+  /* Normalize whatever the server sent (the per-section `sections` shape, an
+     older worker's flat legacy fields, or nothing at all) into ONE shape every
+     gate below reads: { enabled, autocompress, kinds, max_bytes,
+     audio_max_seconds, sections: { dm|wall|board: { kinds, voice, scan,
+     max_bytes:{image,video,audio}, audio_max_seconds } } }. The ladder per
+     field: served section value → served legacy value → kernel default. dm's
+     scan is ALWAYS false — E2E ciphertext is structurally unscannable. */
+  function mediaCfgNormalize(m: any) {
     var core: any = window.mcCore;
     var d = core.mediaDefaults;
-    return {
-      enabled: true,
-      kinds: { dm: core.mediaParseKinds(d.kindsDm), wall: core.mediaParseKinds(d.kindsWall), board: core.mediaParseKinds(d.kindsBoard) },
-      max_bytes: { image: Number(d.imageMaxBytes), video: Number(d.videoMaxBytes), audio: Number(d.audioMaxBytes) },
-      audio_max_seconds: Number(d.audioMaxSeconds),
-      autocompress: true,
+    m = m || {};
+    var defKinds: any = { dm: d.kindsDm, wall: d.kindsWall, board: d.kindsBoard };
+    var defBytes: any = { image: Number(d.imageMaxBytes), video: Number(d.videoMaxBytes), audio: Number(d.audioMaxBytes) };
+    function sec(ctx: any) {
+      var s = (m.sections && m.sections[ctx]) || {};
+      var kinds = Array.isArray(s.kinds) ? s.kinds
+        : (m.kinds && Array.isArray(m.kinds[ctx]) ? m.kinds[ctx] : core.mediaParseKinds(defKinds[ctx]));
+      var mb: any = {};
+      for (var k in defBytes) {
+        mb[k] = Number(s.max_bytes && s.max_bytes[k]) || Number(m.max_bytes && m.max_bytes[k]) || defBytes[k];
+      }
+      return {
+        kinds: kinds,
+        voice: typeof s.voice === 'boolean' ? s.voice : true,
+        scan: ctx === 'dm' ? false : (typeof s.scan === 'boolean' ? s.scan : true),
+        max_bytes: mb,
+        audio_max_seconds: Number(s.audio_max_seconds) || Number(m.audio_max_seconds) || Number(d.audioMaxSeconds),
+      };
+    }
+    var out: any = {
+      enabled: m.enabled !== false,
+      autocompress: m.autocompress !== false,
+      max_bytes: { image: Number(m.max_bytes && m.max_bytes.image) || defBytes.image,
+        video: Number(m.max_bytes && m.max_bytes.video) || defBytes.video,
+        audio: Number(m.max_bytes && m.max_bytes.audio) || defBytes.audio },
+      audio_max_seconds: Number(m.audio_max_seconds) || Number(d.audioMaxSeconds),
+      sections: { dm: sec('dm'), wall: sec('wall'), board: sec('board') },
     };
+    out.kinds = { dm: out.sections.dm.kinds, wall: out.sections.wall.kinds, board: out.sections.board.kinds };
+    return out;
   }
   function mediaCfg() {
     if (_mediaCfgP) return _mediaCfgP;
     _mediaCfgP = cachedJson(API + '/config', undefined, 300000)
       .then(function (d: any) {
-        if (d && d.ok && d.media && d.media.kinds && d.media.max_bytes) return d.media;
-        return mediaCfgFallback();
+        return mediaCfgNormalize(d && d.ok ? d.media : null);
       })
-      .catch(function () { return mediaCfgFallback(); });
+      .catch(function () { return mediaCfgNormalize(null); });
     return _mediaCfgP;
   }
   /* File via window so the built classic script never names a bare DOM global
@@ -1172,13 +1217,13 @@
      `autocompress` switch): long edge capped at 2048, JPEG at 0.8 (one retry at
      0.65 when still over the image cap). Small JPEGs and non-images pass through
      untouched; resolves null only when the image cannot be decoded at all. */
-  function compressImage(file: any, cfg: any) {
+  function compressImage(file: any, cfg: any, imageLimit?: any) {
     if (!/^image\//.test(String(file.type || ''))) return Promise.resolve(file);
     if (!cfg || cfg.autocompress === false) return Promise.resolve(file);
     if (file.size <= 524288 && file.type === 'image/jpeg') return Promise.resolve(file);
     var cib: any = (window as any).createImageBitmap;
     if (typeof cib !== 'function') return Promise.resolve(file);
-    var limit = Number(cfg.max_bytes && cfg.max_bytes.image) || 10485760;
+    var limit = Number(imageLimit) || Number(cfg.max_bytes && cfg.max_bytes.image) || 10485760;
     return cib(file).then(function (bmp: any) {
       var scale = Math.min(1, 2048 / Math.max(bmp.width || 1, bmp.height || 1));
       if (scale === 1 && file.type === 'image/jpeg' && file.size <= limit) {
@@ -1205,22 +1250,24 @@
       });
     }, function () { return null; });
   }
-  /* Gate one picked (or recorded) file for a surface: kind whitelisted for that
-     surface, per-kind size cap from the served settings, images downscaled
-     first. Resolves the File to hold, or null after writing a friendly line to
+  /* Gate one picked (or recorded) file for a SECTION (a cfg.sections.* object):
+     kind whitelisted for that section, per-section per-kind size cap from the
+     served settings, images downscaled first (against the section's own image
+     cap). Resolves the File to hold, or null after writing a friendly line to
      statusEl. Shared by the DM, wall, and board attach paths. */
-  function mediaGateFile(f: any, cfg: any, kinds: any, statusEl: any) {
+  function mediaGateFile(f: any, cfg: any, sec: any, statusEl: any) {
     var core: any = window.mcCore;
     var kind = core ? core.mediaKindOfMime(String(f.type || '')) : null;
+    var kinds = (sec && sec.kinds) || [];
     if (!cfg.enabled) { statusEl.textContent = 'Media sharing is turned off.'; return Promise.resolve(null); }
-    if (!kind || (kinds || []).indexOf(kind) === -1) {
-      statusEl.textContent = 'That file type cannot be shared here' + (kinds && kinds.length ? ' — only ' + kinds.join(', ') + '.' : '.');
+    if (!kind || kinds.indexOf(kind) === -1) {
+      statusEl.textContent = 'That file type cannot be shared here' + (kinds.length ? ' — only ' + kinds.join(', ') + '.' : '.');
       return Promise.resolve(null);
     }
-    var p = kind === 'image' ? compressImage(f, cfg) : Promise.resolve(f);
+    var p = kind === 'image' ? compressImage(f, cfg, sec.max_bytes && sec.max_bytes.image) : Promise.resolve(f);
     return p.then(function (out: any) {
       if (!out) { statusEl.textContent = 'That image could not be read.'; return null; }
-      var limit = Number(cfg.max_bytes && cfg.max_bytes[kind]) || 0;
+      var limit = Number(sec.max_bytes && sec.max_bytes[kind]) || 0;
       if (limit && out.size > limit) {
         statusEl.textContent = 'That ' + kind + ' is too large — the limit is ' + Math.round(limit / 1048576) + ' MB.';
         return null;
@@ -1256,7 +1303,12 @@
     var nav: any = navigator;
     return !!(nav.mediaDevices && nav.mediaDevices.getUserMedia && w.MediaRecorder && w.MediaRecorder.isTypeSupported);
   }
-  /* First recordable type the browser admits to; '' lets it pick its default. */
+  /* First recordable type the browser admits to; '' lets it pick its default.
+     INVARIANT: every named entry must be decodable by the SAME browser's
+     decodeAudioData (Safari records+decodes mp4/AAC; Chrome mp4 [126+] or
+     webm/opus, decodes both; Firefox webm/ogg opus, decodes both) — that is
+     what makes voiceMp3Encode same-browser-safe. The '' tail is the one
+     unproven pair, and voicePreview's raw-file catch covers it. */
   function voiceMime() {
     var MR: any = (window as any).MediaRecorder;
     var list = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/ogg;codecs=opus', ''];
@@ -1321,14 +1373,77 @@
       });
     });
   }
+  /* The OS-layer recording fallback: a hidden capture file input riding the
+     composer's normal attach path. The road that always exists — used where
+     MediaRecorder is missing AND offered inline after any getUserMedia
+     failure, so a blocked/absent/busy microphone never dead-ends a voice note
+     (on phones `capture` opens the OS recorder; on desktop it is an honest
+     audio-file pick). */
+  function voiceFallbackInput(form: any, takeFile: any) {
+    var fi = form.querySelector('input.mc-voice-input');
+    if (fi) return fi;
+    fi = el('input', 'mc-voice-input');
+    fi.type = 'file';
+    fi.accept = 'audio/*';
+    fi.setAttribute('capture', '');
+    fi.style.display = 'none';
+    fi.addEventListener('change', function () {
+      var f = fi.files && fi.files[0];
+      if (f) takeFile(f);
+      fi.value = '';
+    });
+    form.appendChild(fi);
+    return fi;
+  }
+  /* After a failed getUserMedia: one idempotent row offering the OS-layer
+     road. Sits under the honest error line statusEl just carried. */
+  function voiceOfferFallback(form: any, takeFile: any) {
+    if (form.querySelector('.mc-voice-fallback')) return;
+    var row = el('div', 'mc-rec-row mc-voice-fallback');
+    var btn = el('button', 'btn btn-attach', 'Record with your device instead');
+    btn.type = 'button';
+    btn.addEventListener('click', function () { voiceFallbackInput(form, takeFile).click(); });
+    row.appendChild(btn);
+    form.appendChild(row);
+  }
+  /* Honest per-cause failure copy. NotAllowedError covers BOTH a user "Block"
+     and a Permissions-Policy denial (the header case rejects instantly with no
+     prompt — the live 2026-08-02 report); the message points at the site
+     permission and the fallback row carries the working road either way. */
+  function voiceFailMessage(e: any) {
+    var name = String((e && e.name) || '');
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
+      return 'No microphone was found on this device — you can record with your device below.';
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+      return 'The microphone is busy — another app or tab may be using it. You can record with your device below.';
+    }
+    if (name === 'SecurityError') {
+      return 'Recording is blocked in this browser context — you can record with your device below.';
+    }
+    return 'Microphone access is blocked. Check this site’s microphone permission (the icon by the address bar), or record with your device below.';
+  }
   /* The live recorder row: pulsing dot, elapsed / cap countdown, Stop. Stops
-     itself at the served seconds cap or when the raw bytes pass the audio size
-     cap, then offers the preview row (listen / Use this / Re-record / Discard). */
-  function startVoiceRecorder(form: any, cfg: any, statusEl: any, takeFile: any) {
+     itself at the section's seconds cap or when the raw bytes pass its audio
+     size cap, then offers the preview row (listen / Use this / Re-record /
+     Discard). A permissions preflight (where the browser has the API — Safari
+     may not, and a query that throws just proceeds) catches the
+     denied-without-a-prompt case up front. */
+  function startVoiceRecorder(form: any, cfg: any, sec: any, statusEl: any, takeFile: any) {
     if (form.querySelector('.mc-rec-row')) return;
-    var maxSecs = Number(cfg.audio_max_seconds) || 180;
-    var maxBytes = Number(cfg.max_bytes && cfg.max_bytes.audio) || 5242880;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream: any) {
+    var maxSecs = Number(sec && sec.audio_max_seconds) || Number(cfg.audio_max_seconds) || 180;
+    var maxBytes = Number(sec && sec.max_bytes && sec.max_bytes.audio) || 5242880;
+    var nav: any = navigator;
+    var pre = (nav.permissions && nav.permissions.query)
+      ? Promise.resolve().then(function () { return nav.permissions.query({ name: 'microphone' }); }).catch(function () { return null; })
+      : Promise.resolve(null);
+    pre.then(function (st: any) {
+      if (st && st.state === 'denied') {
+        statusEl.textContent = voiceFailMessage({ name: 'NotAllowedError' });
+        voiceOfferFallback(form, takeFile);
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream: any) {
       var MR: any = (window as any).MediaRecorder;
       var mt = voiceMime();
       var opts: any = { audioBitsPerSecond: 64000 };
@@ -1376,14 +1491,16 @@
         row.remove();
         var blob = new Blob(chunks, { type: rec.mimeType || mt || 'audio/webm' });
         if (!blob.size) { statusEl.textContent = 'Nothing was recorded.'; return; }
-        voicePreview(form, cfg, statusEl, blob, takeFile);
+        voicePreview(form, cfg, sec, statusEl, blob, takeFile);
       };
       try { rec.start(1000); } catch (e) { stopNow(); }
-    }).catch(function () {
-      statusEl.textContent = 'Microphone access was refused.';
+      }).catch(function (e: any) {
+        statusEl.textContent = voiceFailMessage(e);
+        voiceOfferFallback(form, takeFile);
+      });
     });
   }
-  function voicePreview(form: any, cfg: any, statusEl: any, blob: any, takeFile: any) {
+  function voicePreview(form: any, cfg: any, sec: any, statusEl: any, blob: any, takeFile: any) {
     var row = el('div', 'mc-rec-row mc-rec-preview');
     var url = URL.createObjectURL(blob);
     var player = el('audio', 'mc-rec-audio');
@@ -1402,7 +1519,7 @@
     form.appendChild(row);
     function cleanup() { try { URL.revokeObjectURL(url); } catch (e) { /* fine */ } row.remove(); }
     drop.addEventListener('click', function () { cleanup(); });
-    redo.addEventListener('click', function () { cleanup(); startVoiceRecorder(form, cfg, statusEl, takeFile); });
+    redo.addEventListener('click', function () { cleanup(); startVoiceRecorder(form, cfg, sec, statusEl, takeFile); });
     use.addEventListener('click', function () {
       use.disabled = true; redo.disabled = true; drop.disabled = true;
       statusEl.textContent = 'Preparing…';
@@ -1412,27 +1529,17 @@
     });
   }
   /* The 🎙 button a composer places beside its 📎: real recorder where the
-     browser has one, otherwise a capture file input riding the same attach
-     path (takeFile = that composer's own picked-file handler). */
-  function voiceControl(form: any, cfg: any, statusEl: any, takeFile: any) {
+     browser has one, otherwise the capture file input riding the same attach
+     path (takeFile = that composer's own picked-file handler). `sec` is the
+     composer's own cfg.sections.* — its caps and its voice flag govern. */
+  function voiceControl(form: any, cfg: any, sec: any, statusEl: any, takeFile: any) {
     var btn = el('button', 'btn btn-attach mc-voice-btn', '🎙 Voice');
     btn.type = 'button';
     if (!voiceSupported()) {
-      var fi = el('input', 'mc-voice-input');
-      fi.type = 'file';
-      fi.accept = 'audio/*';
-      fi.setAttribute('capture', '');
-      fi.style.display = 'none';
-      fi.addEventListener('change', function () {
-        var f = fi.files && fi.files[0];
-        if (f) takeFile(f);
-        fi.value = '';
-      });
-      form.appendChild(fi);
-      btn.addEventListener('click', function () { fi.click(); });
+      btn.addEventListener('click', function () { voiceFallbackInput(form, takeFile).click(); });
       return btn;
     }
-    btn.addEventListener('click', function () { startVoiceRecorder(form, cfg, statusEl, takeFile); });
+    btn.addEventListener('click', function () { startVoiceRecorder(form, cfg, sec, statusEl, takeFile); });
     return btn;
   }
 
@@ -3156,7 +3263,23 @@
     if (!state.key) return;
     fetch(API + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) })
       .then(function (r) { return r.json(); })
-      .then(function (d) { if (d && d.ok) { state.prefs = d.prefs; window.mcPrefs = d.prefs; } })
+      .then(function (d) {
+        if (!d || !d.ok) return;
+        state.prefs = d.prefs; window.mcPrefs = d.prefs;
+        /* Merge the server's mute list with this device's (union), and push
+           the union back up when this device knew someone the server did not,
+           so every device converges on the same list. */
+        try {
+          var server = Array.isArray(d.prefs && d.prefs.muted) ? d.prefs.muted : [];
+          var local = getMuted();
+          var union = local.slice();
+          server.forEach(function (h: any) {
+            if (/^[0-9a-f]{64}$/.test(String(h)) && union.indexOf(h) === -1) union.push(h);
+          });
+          if (union.length !== local.length) localStorage.setItem(MUTED_STORE, JSON.stringify(union));
+          if (union.length !== server.length) syncMutedUp();
+        } catch (e) { /* storage blocked */ }
+      })
       .catch(function () {});
   }
   document.addEventListener('mc-live', function (ev) {
@@ -3632,12 +3755,13 @@
     state.boardMedia = null;
     if (new URLSearchParams(location.search).get('cat') === 'adminsonly') return;
     mediaCfg().then(function (cfg: any) {
-      if (!cfg.enabled || !cfg.kinds.board.length) return;
+      var sec = cfg.sections.board;
+      if (!cfg.enabled || !sec.kinds.length) return;
       var core: any = window.mcCore;
       var row = el('div', 'mc-media-row');
       var fileInput = el('input', 'mc-board-file');
       fileInput.type = 'file';
-      fileInput.accept = core.mediaAcceptFor(cfg.kinds.board);
+      fileInput.accept = core.mediaAcceptFor(sec.kinds);
       fileInput.style.display = 'none';
       var chip = el('span', 'dm-attach-chip');
       chip.style.display = 'none';
@@ -3655,7 +3779,7 @@
       attach.addEventListener('click', function () { fileInput.click(); });
       function takeFile(f: any) {
         note.textContent = '';
-        mediaGateFile(f, cfg, cfg.kinds.board, note).then(function (out: any) {
+        mediaGateFile(f, cfg, sec, note).then(function (out: any) {
           if (!out) { fileInput.value = ''; return; }
           note.textContent = 'Uploading…';
           var fd = new FormData();
@@ -3684,7 +3808,7 @@
         if (f) takeFile(f);
       });
       row.appendChild(attach);
-      if (cfg.kinds.board.indexOf('audio') !== -1) row.appendChild(voiceControl(form, cfg, note, takeFile));
+      if (sec.voice && sec.kinds.indexOf('audio') !== -1) row.appendChild(voiceControl(form, cfg, sec, note, takeFile));
       row.appendChild(chip);
       row.appendChild(note);
       form.appendChild(fileInput);
@@ -4218,7 +4342,7 @@
       ['IP ban list', 'admin.html?ipbans=1', 'Every banned address, added and removed by hand.'],
       ['Shadow bans', 'admin.html?shadowbans=1', 'Quiet mutes: a member keeps posting but no one else sees it. Add, review, and lift.'],
       ['Add / Remove Admins', 'admin.html?admins=1', 'Grant a member admin powers, or take them back.'],
-      ['Platform settings', 'admin.html?settings=1', 'Media sharing on or off, the upload size limit, the default disappear time, and a purge-all-media button.'],
+      ['Platform settings', 'admin.html?settings=1', 'Per-area media controls — what the feed, forum, and DMs each accept, sizes, voice notes, AI screening, storage budgets, retention, and one-time purges.'],
       ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
       ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
       ['merecat Q&A at a glance', 'admin.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
@@ -4623,20 +4747,26 @@
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
         box.textContent = '';
-        if (onCount) onCount(d.pending.length);
-        if (!d.pending.length) { box.appendChild(el('p', 'comments-status', 'Nothing held. All clear.')); return; }
-        d.pending.forEach(function (c: any) {
+        var wallRows = d.pending_wall || [];
+        if (onCount) onCount(d.pending.length + wallRows.length);
+        if (!d.pending.length && !wallRows.length) { box.appendChild(el('p', 'comments-status', 'Nothing held. All clear.')); return; }
+        /* One row builder for both queues. The admin sees WHAT is held — the
+           attachment renders inline via wallMediaNode (the sweep spares
+           pending-linked media precisely so this evidence exists). approve/del
+           are the wire calls that clear the row. */
+        function pendingRow(c: any, where: any, approve: any, delOpts: any) {
           var row = el('div', 'board-topic pending-row');
           var left = el('div', 'board-topic-left');
-          var where = c.page.indexOf('board:') === 0
-            ? ((catByKey(c.page.slice(6)) || [])[1] || c.page) + (c.title ? ' › ' + c.title : '')
-            : c.page;
           var whereEl = el('div', 'audit-where');
           whereEl.appendChild(authorNode(c.author_hash, c.nick, false));
           whereEl.appendChild(document.createTextNode(' · ' + where + ' · ' + fmtDateTime(c.created_at) +
             (c.ai_verdict ? ' · ' + c.ai_verdict : '')));
           left.appendChild(whereEl);
           left.appendChild(el('div', 'pending-body', c.body));
+          if (c.media_key) {
+            var mn = wallMediaNode(c.media_key, null);
+            if (mn) left.appendChild(mn);
+          }
           row.appendChild(left);
           var acts = el('div', 'board-admin-links');
           var app = el('a', 'trust-toggle', '(approve)');
@@ -4644,17 +4774,17 @@
           app.addEventListener('click', function (e: any) {
             e.preventDefault();
             fetch(API + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, id: c.id }) })
+              body: JSON.stringify(Object.assign({ key: state.key, id: c.id }, approve)) })
               .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
           });
           var del = el('a', 'trust-toggle danger', '(delete)');
           del.href = '#';
           del.addEventListener('click', function (e: any) {
             e.preventDefault();
-            appConfirm('Delete this held comment?', { okLabel: 'Delete', danger: true }, function (ok: any) {
+            appConfirm('Delete this held ' + (delOpts.what || 'comment') + '?', { okLabel: 'Delete', danger: true }, function (ok: any) {
               if (!ok) return;
-              fetch(API + '/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: state.key, id: c.id }) })
+              fetch(API + delOpts.path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ key: state.key, id: c.id }, delOpts.body || {})) })
                 .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
             });
           });
@@ -4663,6 +4793,23 @@
           acts.appendChild(del);
           row.appendChild(acts);
           box.appendChild(row);
+        }
+        d.pending.forEach(function (c: any) {
+          var where = c.page.indexOf('board:') === 0
+            ? ((catByKey(c.page.slice(6)) || [])[1] || c.page) + (c.title ? ' › ' + c.title : '')
+            : c.page;
+          pendingRow(c, where, {}, { path: '/delete', what: 'comment' });
+        });
+        /* Held FEED posts/comments (pending_wall, 2026-08-02 — before this a
+           held wall post was stored pending but shown NOWHERE). Approve rides
+           the same /approve with a kind discriminator; delete rides the
+           existing /wall/delete, which already purges media and fixes counts. */
+        wallRows.forEach(function (c: any) {
+          var where = c.kind === 'comment' ? 'Feed comment' : 'Feed post';
+          pendingRow(c, where,
+            { kind: c.kind === 'comment' ? 'wall-comment' : 'wall-post' },
+            { path: '/wall/delete', what: c.kind === 'comment' ? 'feed comment' : 'feed post',
+              body: { kind: c.kind === 'comment' ? 'comment' : 'post' } });
         });
       })
       .catch(function () { if (onCount) onCount(0); box.textContent = ''; box.appendChild(el('p', 'comments-status', 'The pending queue could not be loaded.')); });
@@ -5963,11 +6110,33 @@
     anchor.addEventListener('click', function (e: any) { e.preventDefault(); e.stopPropagation(); showLikers(anchor, getParams()); });
   }
 
+  /* Saved posts: one POST toggles a bookmark row; the Saved list
+     (community.html?saved=1) is the reader's own shelf of them. */
+  function bookmarkToggle(kind: any, ref: any, on: any) {
+    if (!state.key) return Promise.resolve({ ok: false });
+    return fetch(API + '/bookmark', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, kind: kind, ref: ref, on: !!on }),
+    }).then(function (r) { return r.json(); }).catch(function () { return { ok: false }; });
+  }
+
   /* The share popover: Copy link, X, Facebook, an optional media Download, and the
      native OS share sheet where available. Proper icons, not text links. */
-  function showShareMenu(anchor: any, shareUrl: any, mediaDl: any) {
+  function showShareMenu(anchor: any, shareUrl: any, mediaDl: any, saveRef?: any) {
     closePop();
     var pop = el('div', 'wall-pop wall-share-pop');
+    if (saveRef && state.key) {
+      var sv = el('button', 'wall-share-item'); sv.type = 'button';
+      var svl = el('span', null, 'Save post'); sv.appendChild(svl);
+      sv.addEventListener('click', function (e: any) {
+        e.stopPropagation();
+        bookmarkToggle(saveRef.kind, saveRef.ref, true).then(function (d: any) {
+          svl.textContent = d && d.ok ? 'Saved ✓' : 'Could not save';
+          setTimeout(closePop, 900);
+        });
+      });
+      pop.appendChild(sv);
+    }
     var copy = el('button', 'wall-share-item'); copy.type = 'button';
     copy.appendChild(mcIcon('copy')); var cl = el('span', null, 'Copy link'); copy.appendChild(cl);
     copy.addEventListener('click', function (e: any) {
@@ -6093,7 +6262,7 @@
       var focusComposer = function () { var ta = cs.wrap.querySelector('.comment-form .comment-text') as HTMLElement; if (ta) ta.focus(); };
       acts.cmtBtn.addEventListener('click', focusComposer);
       acts.cmtSum.addEventListener('click', focusComposer);
-      acts.shareBtn.addEventListener('click', function (e: any) { e.stopPropagation(); showShareMenu(acts.shareBtn, location.origin + '/feed.html?post=' + post.id, { url: src, filename: mediaFilename(mediaKey) }); });
+      acts.shareBtn.addEventListener('click', function (e: any) { e.stopPropagation(); showShareMenu(acts.shareBtn, location.origin + '/feed.html?post=' + post.id, { url: src, filename: mediaFilename(mediaKey) }, { kind: 'wall', ref: post.id }); });
     } else {
       var mini = el('div', 'wall-lb-mini');
       mini.appendChild(mediaDownloadLink(src, mediaFilename(mediaKey), 'Download', 'btn btn-anon'));
@@ -6164,6 +6333,53 @@
     });
     return a;
   }
+  /* Edit your own wall post or comment in place (the server re-screens like a
+     fresh post). Swaps the rendered body for a small editor and back. */
+  function wallEditLink(item: any, kind: any, node: any) {
+    var a = el('a', 'comment-quote-link wall-del', 'edit');
+    a.href = '#';
+    a.addEventListener('click', function (e: any) {
+      e.preventDefault();
+      var bodyEl = node.querySelector('.comment-body');
+      if (!bodyEl || node.querySelector('.wall-edit-box')) return;
+      var box = el('div', 'comment-form wall-edit-box');
+      var ta = el('textarea', 'comment-text');
+      ta.maxLength = 4000; ta.rows = 3; ta.value = String(item.body || '');
+      box.appendChild(ta);
+      var row = el('div', 'comment-buttons');
+      var save = el('button', 'btn btn-send', 'Save'); save.type = 'button';
+      var cancel = el('button', 'btn', 'Cancel'); cancel.type = 'button';
+      var status = el('p', 'form-status');
+      row.appendChild(save); row.appendChild(cancel);
+      box.appendChild(row); box.appendChild(status);
+      bodyEl.style.display = 'none';
+      bodyEl.parentNode.insertBefore(box, bodyEl.nextSibling);
+      function closeBox() { box.remove(); (bodyEl as any).style.display = ''; }
+      cancel.addEventListener('click', closeBox);
+      save.addEventListener('click', function () {
+        var body = ta.value.replace(/\s+$/, '');
+        if (!body.trim()) { ta.focus(); return; }
+        save.disabled = true; status.textContent = 'Saving…';
+        fetch(API + '/wall/edit', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, id: item.id, comment: kind === 'comment' ? 1 : 0, body: body }),
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          save.disabled = false;
+          if (blockedOut(d)) return;
+          if (!d || !d.ok) { status.textContent = (d && d.error) || 'Could not save.'; return; }
+          item.body = body;
+          bodyEl.textContent = '';
+          fillBody(bodyEl, body);
+          closeBox();
+          if (d.status === 'pending') {
+            node.appendChild(el('p', 'comments-status', 'Held for review. It will reappear once approved.'));
+          }
+        }).catch(function () { save.disabled = false; status.textContent = 'Could not save. Try again.'; });
+      });
+      ta.focus();
+    });
+    return a;
+  }
   /* One comment on a public post. */
   /* A compact like control for a COMMENT (Facebook style: a "Like" text button and
      a small heart count that reveals who liked on hover / long-press). */
@@ -6196,6 +6412,7 @@
     head.appendChild(authorNode(c.author_hash, c.nick, true, c.faith, c.posts));
     if (c.author_hash && ADMIN_HASHES.indexOf(c.author_hash) !== -1) head.appendChild(el('span', 'comment-admin', '(admin)'));
     head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(c.created_at)));
+    if (c.author_hash && state.myHash && c.author_hash === state.myHash) head.appendChild(wallEditLink(c, 'comment', node));
     if (wallCanDelete(c.author_hash)) head.appendChild(wallDeleteLink(c.id, 'comment', node));
     node.appendChild(head);
     node.appendChild(fillBody(el('div', 'comment-body'), c.body));
@@ -6259,6 +6476,7 @@
     if (p.author_hash && state.myHash && p.author_hash !== state.myHash && p.author_hash !== MERECAT_BOT_HASH) {
       var dm = el('a', 'comment-dm', 'Direct Message'); dm.href = 'messages.html?dm=' + p.author_hash; head.appendChild(dm);
     }
+    if (p.author_hash && state.myHash && p.author_hash === state.myHash) head.appendChild(wallEditLink(p, 'post', node));
     if (wallCanDelete(p.author_hash)) head.appendChild(wallDeleteLink(p.id, 'post', node));
     node.appendChild(head);
     if (p.body) {
@@ -6281,7 +6499,8 @@
     acts.shareBtn.addEventListener('click', function (e: any) {
       e.stopPropagation();
       showShareMenu(acts.shareBtn, location.origin + '/feed.html?post=' + p.id,
-        p.media_key ? { url: API + '/wall/media?key=' + encodeURIComponent(p.media_key), filename: mediaFilename(p.media_key) } : null);
+        p.media_key ? { url: API + '/wall/media?key=' + encodeURIComponent(p.media_key), filename: mediaFilename(p.media_key) } : null,
+        { kind: 'wall', ref: p.id });
     });
     if (expand) cs.load();
     return node;
@@ -6297,9 +6516,10 @@
     ta.maxLength = 4000; ta.rows = kind === 'comment' ? 2 : 3;
     ta.placeholder = kind === 'comment' ? 'Write a comment…' : 'Share something with the community…';
     form.appendChild(mdEditor(ta));
-    /* No draft autosave for the wall/feed: what you type here on your profile wall
-       or the global Feed is NOT remembered by the browser. Draft-remembering is
-       deliberately limited to the Community forum and page/article comment boxes. */
+    /* The wall/feed composer keeps a draft like every other composer now: a
+       long post must survive a crashed tab. Keyed per place, so the feed box,
+       a wall box, and each comment box restore to their own spots. */
+    attachDraft(ta, kind === 'comment' ? 'wallc:' + (extra.post || 0) : 'wall:' + location.pathname);
     attachMentions(ta);
     form.appendChild(el('div', 'ts-slot'));
     var btnRow = el('div', 'comment-buttons');
@@ -6307,16 +6527,16 @@
     btnRow.appendChild(send);
     var pv = previewButton(ta); if (pv) btnRow.appendChild(pv);
     var pendingFile: any = null;
-    var fileInput = el('input'); fileInput.type = 'file'; fileInput.accept = 'image/*,video/*,audio/*'; fileInput.style.display = 'none';
+    var fileInput = el('input'); fileInput.type = 'file'; fileInput.style.display = 'none';
     var attach = el('button', 'btn btn-attach', '📎 Attach'); attach.type = 'button';
     var chip = el('span', 'dm-attach-chip'); chip.style.display = 'none';
     function clearAttach() { pendingFile = null; fileInput.value = ''; chip.style.display = 'none'; chip.textContent = ''; }
     attach.addEventListener('click', function () { fileInput.click(); });
-    /* Gate + hold one picked (or recorded) file: kind and size from the served
-       settings, images downscaled in the browser first. */
+    /* Gate + hold one picked (or recorded) file: kind and size from the FEED
+       section's served settings, images downscaled in the browser first. */
     function takeWallFile(f: any) {
       mediaCfg().then(function (cfg: any) {
-        mediaGateFile(f, cfg, cfg.kinds.wall, status).then(function (out: any) {
+        mediaGateFile(f, cfg, cfg.sections.wall, status).then(function (out: any) {
           if (!out) { fileInput.value = ''; return; }
           pendingFile = out; status.textContent = ''; chip.textContent = '';
           chip.appendChild(document.createTextNode('📎 ' + (out.name || 'attachment') + ' · ' + fmtBytes(out.size) + '  '));
@@ -6330,8 +6550,14 @@
       takeWallFile(f);
     });
     btnRow.appendChild(attach);
+    /* One config tap governs the whole attach row: hidden outright when the
+       feed takes no media (the board composer always behaved this way), accept
+       derived from the section's own kinds, 🎙 behind its voice flag. */
     mediaCfg().then(function (cfg: any) {
-      if (cfg.enabled && cfg.kinds.wall.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, status, takeWallFile));
+      var sec = cfg.sections.wall;
+      if (!cfg.enabled || !sec.kinds.length) { attach.style.display = 'none'; return; }
+      fileInput.accept = window.mcCore ? (window.mcCore as any).mediaAcceptFor(sec.kinds) : 'image/*,video/*,audio/*';
+      if (sec.voice && sec.kinds.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, sec, status, takeWallFile));
     });
     form.appendChild(chip); form.appendChild(fileInput); form.appendChild(btnRow);
     var status = el('p', 'form-status'); form.appendChild(status);
@@ -6664,14 +6890,17 @@
           var isDm = it.kind === 'dm';
           var isWall = it.kind === 'wall';
           var isLike = it.kind === 'wall-like';
+          var isCat = it.kind === 'merecat';
           var label = isDm ? (who + ' sent you a message')
-            : isLike ? (who + ' liked your post')
-              : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-                : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+            : isCat ? 'merecat finished answering your question'
+              : isLike ? (who + ' liked your post')
+                : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+                  : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
           var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
           a.href = isDm ? ('messages.html?dm=' + it.actor_hash)
-            : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
-              : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+            : isCat ? ('merecat-ai.html?chat=' + it.topic_id)
+              : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
+                : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
           if (it.snippet && !isDm) left.appendChild(el('div', 'board-intro', it.snippet));
@@ -6916,7 +7145,6 @@
         var pendingFile: any = null;
         var fileInput = el('input', 'dm-file-input');
         fileInput.type = 'file';
-        fileInput.accept = 'image/*,video/*,audio/*';
         fileInput.style.display = 'none';
         var attach = el('button', 'btn btn-attach', '📎 Attach');
         attach.type = 'button';
@@ -6930,7 +7158,7 @@
            browser BEFORE the E2E encrypt, so only the small ciphertext uploads. */
         function takeDmFile(f: any) {
           mediaCfg().then(function (cfg: any) {
-            mediaGateFile(f, cfg, cfg.kinds.dm, status).then(function (out: any) {
+            mediaGateFile(f, cfg, cfg.sections.dm, status).then(function (out: any) {
               if (!out) { fileInput.value = ''; return; }
               pendingFile = out;
               status.textContent = '';
@@ -6950,8 +7178,13 @@
           takeDmFile(f);
         });
         btnRow.appendChild(attach);
+        /* One config tap: hide 📎 when the Inbox takes no media, accept from
+           the DM section's own kinds, 🎙 behind its voice flag. */
         mediaCfg().then(function (cfg: any) {
-          if (cfg.enabled && cfg.kinds.dm.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, status, takeDmFile));
+          var sec = cfg.sections.dm;
+          if (!cfg.enabled || !sec.kinds.length) { attach.style.display = 'none'; return; }
+          fileInput.accept = window.mcCore ? (window.mcCore as any).mediaAcceptFor(sec.kinds) : 'image/*,video/*,audio/*';
+          if (sec.voice && sec.kinds.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, sec, status, takeDmFile));
         });
         form.appendChild(mediaChip);
         form.appendChild(fileInput);
@@ -7665,6 +7898,37 @@
     send.type = 'submit';
     form.appendChild(send);
     section.appendChild(form);
+    /* The ask box keeps a draft like every other composer on the site; a
+       half-typed question must survive a crashed tab or a stray navigation. */
+    attachDraft(q, 'merecat');
+    /* The reader-to-librarian bridge: a corpus page's Ask-merecat selection
+       chip (deeplink.js) leaves the question here. It wins over any draft —
+       it is the most recent deliberate act — and the slot is cleared only
+       when consumed, so a visitor who must first create an identity finds
+       the question still waiting after the gate lifts. */
+    try {
+      var pre = JSON.parse(localStorage.getItem('mc-merecat-prefill') as string);
+      if (pre && pre.q && Date.now() - (pre.at || 0) < 600000) {
+        q.value = String(pre.q);
+        q.dispatchEvent(new Event('input', { bubbles: true }));
+        if (loggedIn) {
+          localStorage.removeItem('mc-merecat-prefill');
+          setTimeout(function () { try { q.focus(); } catch (e2) {} }, 50);
+        }
+      }
+    } catch (e) { /* no prefill */ }
+    /* Refill the box with the words of a failed ask, one tap. */
+    function askAgainLink(prev: any) {
+      var again = el('a', 'body-link', 'Ask again');
+      again.setAttribute('href', '#');
+      again.addEventListener('click', function (ev: any) {
+        ev.preventDefault();
+        q.value = String(prev || '');
+        q.dispatchEvent(new Event('input', { bubbles: true }));
+        try { q.focus(); } catch (e2) {}
+      });
+      return again;
+    }
     /* Past conversations sit BELOW the ask box now, and open by default on the
        overview so they never hide behind a click. Auto-loading costs one /chats
        read (shared with the resume poll's budget), so only expand it on the
@@ -7676,7 +7940,7 @@
        desktop never shows it): a few example questions that fill the box on tap.
        It removes itself the moment a question is asked and never shows when
        reopening an existing thread. */
-    if (loggedIn && !chatId) {
+    if (!chatId) {
       var starter = el('div', 'mc-cat-starter');
       starter.appendChild(el('span', 'mc-cat-starter-ico', '🐈'));
       starter.appendChild(el('h3', null, 'Ask the librarian'));
@@ -7839,6 +8103,26 @@
       if (!state.key) return;
       var whoDiv = bubbleMsg.querySelector('.merecat-who');
       if (!whoDiv) return;
+      /* One-tap copy of the answer text (the rendered words, without the
+         sources footer) — quoting the librarian should never mean hand
+         selecting inside a styled bubble on a phone. */
+      whoDiv.appendChild(document.createTextNode(' · '));
+      var cp = el('a', 'identity-action', 'copy');
+      cp.href = '#';
+      cp.addEventListener('click', function (e: any) {
+        e.preventDefault();
+        var bodyEl = bubbleMsg.querySelector('.merecat-body');
+        var text = bodyEl ? bodyEl.textContent : '';
+        try {
+          if (navigator.clipboard && text) {
+            navigator.clipboard.writeText(text).then(function () {
+              cp.textContent = 'copied';
+              setTimeout(function () { cp.textContent = 'copy'; }, 1500);
+            });
+          }
+        } catch (e2) { /* no clipboard */ }
+      });
+      whoDiv.appendChild(cp);
       whoDiv.appendChild(document.createTextNode(' · '));
       var f = el('a', 'identity-action', 'forward to the board');
       f.href = '#';
@@ -8177,7 +8461,7 @@
     /* A live "working" indicator: a bobbing merecat, a spinner, and a seconds
        counter that ticks up while the librarian thinks (deep reasoning can run a
        minute or more), so the wait feels alive rather than stalled. */
-    function startWorking(body: any, startMs?: any) {
+    function startWorking(body: any, startMs?: any, onStop?: any) {
       body.textContent = '';
       var wrap = el('div', 'merecat-working');
       wrap.appendChild(el('span', 'mc-cat-work', '🐈'));
@@ -8188,6 +8472,20 @@
       var start = startMs || Date.now();
       var secs = el('span', 'mc-secs', Math.max(0, Math.round((Date.now() - start) / 1000)) + 's');
       wrap.appendChild(status); wrap.appendChild(secs);
+      /* Stop, the standard streaming-AI control: ends the generation at the
+         server (the DO cancels its model read and keeps what streamed), which
+         also spares the budget and frees the single local GPU for others. */
+      if (onStop) {
+        wrap.appendChild(document.createTextNode(' · '));
+        var st = el('a', 'body-link', 'stop');
+        st.setAttribute('href', '#');
+        st.addEventListener('click', function (ev: any) {
+          ev.preventDefault();
+          st.textContent = 'stopping…';
+          try { onStop(); } catch (e) { /* socket gone: the watchdogs recover */ }
+        });
+        wrap.appendChild(st);
+      }
       body.appendChild(wrap);
       var timer: any = setInterval(function () {
         secs.textContent = Math.round((Date.now() - start) / 1000) + 's';
@@ -8279,7 +8577,7 @@
       var acc = (partialRow && partialRow.body) ? String(partialRow.body) : '';
       var shown = 0, flowTimer: any = null, painted = false, settled = false, streamDone = false;
       var sources: any = null, handle: any = null, idleChecked = false;
-      var working = startWorking(cat.body, startMs);
+      var working = startWorking(cat.body, startMs, function () { if (handle) handle.send({ t: 'stop' }); });
       working.setStatus('rejoining the librarian…');
       function endTurn() {
         if (settled) return; settled = true;
@@ -8379,11 +8677,11 @@
       fillBody(youB.body, text);
       if (!chatId) setCrumb(text);
       var cat = bubble('cat');
-      var working = startWorking(cat.body);
+      var handle: any = null, openTimer: any = null;
+      var working = startWorking(cat.body, 0, function () { if (handle) handle.send({ t: 'stop' }); });
       var sticky = stickyFollow();
       var acc = '', shown = 0, flowTimer: any = null, sources: any = null;
       var streamDone = false, painted = false, settled = false, asked = false, fellBack = false;
-      var handle: any = null, openTimer: any = null;
       var mode = modeSel.value || 'high';
 
       function endTurn() {
@@ -8415,7 +8713,8 @@
         acc = acc.replace(/\s+$/, '');
         if (!acc) {
           cat.body.textContent = '';
-          cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing.'));
+          cat.body.appendChild(el('span', 'merecat-note', 'merecat had nothing to say. Try rephrasing. '));
+          cat.body.appendChild(askAgainLink(text));
         } else {
           var rr = citeRenumber(acc, sources || []);
           cat.body.textContent = '';
@@ -8433,6 +8732,12 @@
         cat.body.appendChild(el('span', 'merecat-note',
           (d.resting ? '🐈 ' : '') + (d.error || 'merecat could not answer. Try again shortly.') +
           (d.resting || d.capped ? ' That is ' + merecatResetLocal() + ' your time.' : '')));
+        /* A capped refusal cannot be retried today; anything else earns a
+           one-tap way to put the same words back in the box. */
+        if (!d.capped && !d.resting) {
+          cat.body.appendChild(document.createTextNode(' '));
+          cat.body.appendChild(askAgainLink(text));
+        }
         endTurn();
       }
       /* WebSocket unavailable or unreachable: hand the SAME question to the
@@ -8535,6 +8840,7 @@
       var text = q.value.trim();
       if (!text) return;
       q.value = '';
+      if ((q as any).mcDraftDone) (q as any).mcDraftDone();
       enqueue(text);
     });
     q.addEventListener('keydown', function (e: any) {
@@ -8798,8 +9104,13 @@
     draw();
   }
 
-  /* The growing platform-settings page: media sharing controls + the disappearing-
-     message defaults + a purge-all-media button. Admin-only, server-enforced. */
+  /* The platform-settings page, per-SECTION since 2026-08-02: a global panel
+     (master switch, absolute ceiling, autocompress, the honest AI notes) and
+     one self-contained panel each for the Feed, the Community forum, and the
+     Inbox — kinds, voice recorder, AI image screening (the DM box is disabled
+     with the honest E2E note: ciphertext cannot be scanned), per-kind sizes,
+     voice-note seconds, storage budget with live usage, retention, and a
+     one-time purge button per store. Admin-only, server-enforced. */
   /* A labelled danger box: an explanation and the destructive action together,
      so the button sits with the setting that governs it and reads clearly. */
   function dangerBox(title: any, explain: any, btnLabel: any, run: any) {
@@ -8828,25 +9139,181 @@
         if (!d.ok) throw new Error(d.error || 'failed');
         wrap.textContent = '';
         var s = d.settings || {};
-        var cap = Number(d.cap_bytes) || (10 * 1024 * 1024 * 1024);
-        wrap.appendChild(el('p', 'board-intro', 'Each area below is self-contained: its settings and any one-time cleanup for it sit together. Private direct-message media and the public feed are two separate stores — a control in one never touches the other.'));
+        var mdefs: any = (window.mcCore as any).mediaDefaults;
+        wrap.appendChild(el('p', 'board-intro', 'Three separate media stores — the public feed, the community forum, and private direct messages — each with its own panel below: what it accepts, size limits, AI screening, its storage budget, retention, and a one-time purge. A control in one never touches the others.'));
 
-        /* ---- Private direct messages ---- */
-        wrap.appendChild(el('h3', null, 'Direct messages'));
-        wrap.appendChild(el('p', 'board-cat-desc', 'Private, end-to-end encrypted messages between members, and the photos, audio, and video attached to them. These controls affect DM attachments only — the public feed is a separate store, further down.'));
-        var used = Number(s.dm_media_bytes) || 0;
-        wrap.appendChild(el('p', 'board-cat-desc', 'Attachment storage in use: ' + fmtBytes(used) + ' of ' + fmtBytes(cap) + ' (' + Math.round(used / cap * 100) + '%).'));
-        var enRow = el('p', 'admin-set-row');
-        var enCb = el('input'); enCb.type = 'checkbox'; enCb.checked = s.media_enabled === '1';
-        enRow.appendChild(enCb);
-        enRow.appendChild(document.createTextNode(' Let members attach photos, audio, and video to DMs'));
-        wrap.appendChild(enRow);
-        var szRow = el('p', 'admin-set-row');
-        szRow.appendChild(document.createTextNode('Largest attachment (MB): '));
-        var szInp = el('input'); szInp.type = 'number'; szInp.min = '1'; szInp.max = '100';
-        szInp.value = String(Math.round((Number(s.media_max_bytes) || 26214400) / 1048576));
-        szRow.appendChild(szInp);
-        wrap.appendChild(szRow);
+        /* ---- Shared row builders (each appends into the given parent). ---- */
+        function checkRow(parent: any, label: any, checked: any, disabled?: any) {
+          var r = el('p', 'admin-set-row');
+          var cb = el('input'); cb.type = 'checkbox'; cb.checked = !!checked;
+          if (disabled) cb.disabled = true;
+          r.appendChild(cb);
+          r.appendChild(document.createTextNode(' ' + label));
+          parent.appendChild(r);
+          return cb;
+        }
+        function numRow(parent: any, label: any, value: any, min: any, max: any, step?: any) {
+          var r = el('p', 'admin-set-row');
+          r.appendChild(document.createTextNode(label + ': '));
+          var inp = el('input'); inp.type = 'number'; inp.min = String(min); inp.max = String(max);
+          if (step) inp.step = String(step);
+          inp.value = String(value);
+          r.appendChild(inp);
+          parent.appendChild(r);
+          return inp;
+        }
+        function desc(parent: any, text: any) { parent.appendChild(el('p', 'board-cat-desc', text)); }
+        function kindsRow(parent: any, key: any, defMask: any) {
+          var r = el('p', 'admin-set-row');
+          r.appendChild(document.createTextNode('Allowed kinds: '));
+          var cur = (window.mcCore as any).mediaParseKinds(s[key] == null ? defMask : s[key]);
+          var boxes: any[] = [];
+          ['image', 'video', 'audio'].forEach(function (kn) {
+            var cb = el('input');
+            cb.type = 'checkbox';
+            cb.checked = cur.indexOf(kn) !== -1;
+            cb.value = kn;
+            r.appendChild(cb);
+            r.appendChild(document.createTextNode(' ' + kn + '  '));
+            boxes.push(cb);
+          });
+          parent.appendChild(r);
+          return { csv: function () { return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; }).join(','); } };
+        }
+        /* One per-section media panel: kinds, voice, scan (null = the DM case —
+           rendered disabled+unchecked with the honest E2E note, never saved),
+           the three per-kind size inputs (prefilled with the EFFECTIVE value:
+           section override → legacy global → kernel default; saving writes the
+           section keys), the voice-note seconds, the storage budget with live
+           usage, and the retention days. Returns getters for the save payload. */
+        function mediaPanel(ctx: any, usedBytes: any) {
+          var defKinds: any = { dm: mdefs.kindsDm, wall: mdefs.kindsWall, board: mdefs.kindsBoard };
+          var defCap: any = { dm: Number(mdefs.capDmBytes), wall: Number(mdefs.capWallBytes), board: Number(mdefs.capBoardBytes) };
+          var kinds = kindsRow(wrap, 'media_kinds_' + ctx, defKinds[ctx]);
+          desc(wrap, 'Unticking everything turns this area’s uploads off.');
+          var voice = checkRow(wrap, 'Voice notes (the 🎙 recorder in this area’s composers)', s['media_voice_' + ctx] !== '0');
+          var scan: any = null;
+          if (ctx === 'dm') {
+            checkRow(wrap, 'AI-screen images before they are stored', false, true);
+            desc(wrap, 'Not possible here, by design: direct-message attachments are end-to-end encrypted — the server holds only ciphertext and can never see, let alone scan, what is inside.');
+          } else {
+            scan = checkRow(wrap, 'AI-screen images before they are stored (flagged images are refused at upload)', s['media_scan_' + ctx] !== '0');
+            desc(wrap, 'Uses the same vision model as avatar screening. If the screen itself cannot run, the image passes (fail-open). Video and audio are never scanned — they are size-capped and passed through.');
+          }
+          function effBytes(kind: any) {
+            return Number(s['media_' + ctx + '_' + kind + '_max_bytes'])
+              || Number(s['media_' + kind + '_max_bytes'])
+              || Number(mdefs[kind + 'MaxBytes']);
+          }
+          var img = numRow(wrap, 'Largest image (MB)', Math.round(effBytes('image') / 1048576), 1, 100);
+          var vid = numRow(wrap, 'Largest video (MB)', Math.round(effBytes('video') / 1048576), 1, 100);
+          var aud = numRow(wrap, 'Largest audio (MB)', Math.round(effBytes('audio') / 1048576), 1, 100);
+          if (ctx === 'dm') desc(wrap, 'Advisory for DMs: the server sees only ciphertext bytes, so the strict wall is the largest of these plus a small allowance.');
+          var secs = numRow(wrap, 'Voice note limit (seconds)',
+            Math.floor(Number(s['media_audio_max_seconds_' + ctx]) || Number(s.media_audio_max_seconds) || Number(mdefs.audioMaxSeconds)), 30, 600);
+          var curCap = Number(s['media_cap_' + ctx + '_bytes']) || defCap[ctx];
+          var capR = el('p', 'admin-set-row');
+          capR.appendChild(document.createTextNode('Storage budget (GB): '));
+          var capInp = el('input'); capInp.type = 'number'; capInp.min = '0.1'; capInp.max = '9'; capInp.step = '0.1';
+          capInp.value = String(Math.round(curCap / 1073741824 * 10) / 10);
+          capR.appendChild(capInp);
+          capR.appendChild(document.createTextNode('  — ' + fmtBytes(usedBytes) + ' of ' + fmtBytes(curCap) + ' used'));
+          wrap.appendChild(capR);
+          desc(wrap, 'Uploads are refused near this budget; it never deletes existing media on its own.');
+          var ret;
+          if (ctx === 'dm') {
+            ret = numRow(wrap, 'Attachments always expire after (days)', Math.floor(Number(s.media_dm_retention_days) || 30), 1, 90);
+            desc(wrap, 'The hard cap on any DM attachment’s life — even inside a saved message (1–90 days; message text follows its own disappear timer).');
+          } else {
+            ret = numRow(wrap, 'Delete this area’s media older than (days, 0 = keep forever)', Math.floor(Number(s['media_' + ctx + '_retention_days']) || 0), 0, 3650);
+            desc(wrap, 'Media-only retention: the post and its text stay, with an honest “attachment expired” note where the file was. 0 keeps media as long as its post lives.');
+          }
+          return { kinds: kinds, voice: voice, scan: scan, img: img, vid: vid, aud: aud, secs: secs, cap: capInp, ret: ret };
+        }
+
+        /* One shared purge-all builder: section name → dangerBox wired to that
+           section's own purge endpoint. Text is kept everywhere; only media
+           bytes are retracted (parents get the honest expired placeholder). */
+        function purgeBox(title: any, explain: any, confirmText: any, path: any) {
+          return dangerBox(title, explain, title, function (btn: any, note: any) {
+            appConfirm(confirmText, { okLabel: 'Purge all', danger: true }, function (ok: any) {
+              if (!ok) return;
+              btn.disabled = true; note.textContent = ' Purging…';
+              fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d3) {
+                btn.disabled = false;
+                note.textContent = d3 && d3.ok ? (' Purged ' + d3.deleted + ' files.') : ' Purge failed.';
+              }).catch(function () { btn.disabled = false; note.textContent = ' Purge failed.'; });
+            });
+          });
+        }
+
+        /* ---- Media platform (global) ---- */
+        wrap.appendChild(el('h3', null, 'Media platform (global)'));
+        var enCb = checkRow(wrap, 'Media sharing is on — the master switch for attachments everywhere (feed, forum, and direct messages)', s.media_enabled === '1');
+        var szInp = numRow(wrap, 'Absolute per-file ceiling (MB)', Math.round((Number(s.media_max_bytes) || 26214400) / 1048576), 1, 100);
+        desc(wrap, 'No per-area size limit below can rise past this ceiling — raising an area past it takes both knobs.');
+        var acCb = checkRow(wrap, 'Auto-compress images in the browser before upload', s.media_image_autocompress == null ? true : s.media_image_autocompress === '1');
+        desc(wrap, 'How the screening fits together: images on the public feed and forum can be AI-screened before they are stored (per-area toggles below; fail-open if the screen itself cannot run). Video and audio are never scanned — they are size-capped and passed through. Direct-message attachments are end-to-end encrypted: the server holds only ciphertext and can never scan them.');
+
+        /* ---- Feed & member walls (ctx wall) ---- */
+        wrap.appendChild(el('h3', null, 'Feed & member walls'));
+        desc(wrap, 'The public posts anyone can see — the community feed and members’ own walls — and everything attached to them. Its media store and controls are its own.');
+        var pWall = mediaPanel('wall', Number(s.wall_media_bytes) || 0);
+        var wpEnRow = el('p', 'admin-set-row');
+        var wpEn = el('input'); wpEn.type = 'checkbox'; wpEn.checked = s.wall_prune_enabled === '1';
+        wpEnRow.appendChild(wpEn);
+        wpEnRow.appendChild(document.createTextNode(' Automatically delete old public POSTS, text and all (off = keep forever)'));
+        wrap.appendChild(wpEnRow);
+        var wpRow = el('p', 'admin-set-row');
+        wpRow.appendChild(document.createTextNode('Post retention — delete public posts older than: '));
+        var wpSel = el('select');
+        (d.wall_prune_options || [90, 180, 365]).forEach(function (n: any) {
+          var label = n === 365 ? '1 year' : (n === 180 ? '6 months' : (n === 90 ? '3 months' : n + ' days'));
+          var o = el('option', null, label); o.value = String(n);
+          if (Number(s.wall_prune_days) === n) o.selected = true;
+          wpSel.appendChild(o);
+        });
+        wpRow.appendChild(wpSel);
+        wrap.appendChild(wpRow);
+        desc(wrap, 'Post pruning deletes whole posts (text AND media); the media retention above deletes only aged attachments. This choice drives both the automatic sweep and the button below — save first if you changed it.');
+        wrap.appendChild(dangerBox(
+          'Prune old public posts now',
+          'Delete public feed and wall posts — and their media — older than the retention chosen just above, right now. Posts newer than that stay. This runs once; it does not require the automatic sweep to be on. Cannot be undone.',
+          'Prune old public posts',
+          function (btn: any, note: any) {
+            var days = Number(wpSel.value) || 365;
+            var human = days === 365 ? 'a year' : (days === 180 ? '6 months' : (days === 90 ? '3 months' : days + ' days'));
+            appConfirm('Delete public feed and wall posts (and their media) older than ' + human + ' right now? Newer posts stay. This cannot be undone.', { okLabel: 'Prune now', danger: true }, function (ok: any) {
+              if (!ok) return;
+              btn.disabled = true; note.textContent = ' Pruning…';
+              fetch(API + '/wall/prune', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, days: days }) }).then(function (r) { return r.json(); }).then(function (d4) {
+                btn.disabled = false;
+                note.textContent = d4 && d4.ok ? (' Deleted ' + d4.deleted + ' posts.') : ' Prune failed.';
+              }).catch(function () { btn.disabled = false; note.textContent = ' Prune failed.'; });
+            });
+          }));
+        wrap.appendChild(purgeBox(
+          'Purge all feed & wall media now',
+          'Immediately and permanently delete every image, video, and audio file attached to feed and wall posts, of any age. Post text is kept, with an “attachment expired” note where each file was. One-time cleanup; cannot be undone.',
+          'Delete EVERY attachment from ALL feed and wall posts, of any age? Post text is kept. This cannot be undone.',
+          '/wall/media/purge'));
+
+        /* ---- Community forum (ctx board) ---- */
+        wrap.appendChild(el('h3', null, 'Community forum'));
+        desc(wrap, 'Attachments on forum topics and replies. Forum posts themselves are kept permanently — only their media is governed here.');
+        var pBoard = mediaPanel('board', Number(s.board_media_bytes) || 0);
+        wrap.appendChild(purgeBox(
+          'Purge all forum attachments now',
+          'Immediately and permanently delete every attachment on every forum topic and reply, of any age. The posts and their text are kept, with an “attachment expired” note where each file was. One-time cleanup; cannot be undone.',
+          'Delete EVERY attachment from ALL forum topics and replies, of any age? The posts and their text are kept. This cannot be undone.',
+          '/board/media/purge'));
+
+        /* ---- Inbox (ctx dm) ---- */
+        wrap.appendChild(el('h3', null, 'Inbox (direct messages)'));
+        desc(wrap, 'Private, end-to-end encrypted messages between members, and the media attached to them. A separate, opaque store: the server never sees what is inside an attachment.');
+        var pDm = mediaPanel('dm', Number(s.dm_media_bytes) || 0);
         var ttlRow = el('p', 'admin-set-row');
         ttlRow.appendChild(document.createTextNode('Default disappear time for new conversations: '));
         var ttlSel = el('select');
@@ -8857,67 +9324,14 @@
         });
         ttlRow.appendChild(ttlSel);
         wrap.appendChild(ttlRow);
-        wrap.appendChild(el('p', 'board-cat-desc', 'Messages disappear this long after the recipient first opens them. A member can change it per conversation or save a single message from disappearing.'));
-        var bsRow = el('p', 'admin-set-row');
-        bsRow.appendChild(document.createTextNode('Backstop for unopened messages (days): '));
-        var bsInp = el('input'); bsInp.type = 'number'; bsInp.min = '1'; bsInp.max = '365';
-        bsInp.value = String(Number(s.dm_backstop_days) || 30);
-        bsRow.appendChild(bsInp);
-        wrap.appendChild(bsRow);
-        wrap.appendChild(el('p', 'board-cat-desc', 'A never-opened message is deleted after this many days regardless, so nothing lingers forever.'));
-        wrap.appendChild(dangerBox(
+        desc(wrap, 'Messages disappear this long after the recipient first opens them. A member can change it per conversation or save a single message from disappearing.');
+        var bsInp = numRow(wrap, 'Backstop for unopened messages (days)', Number(s.dm_backstop_days) || 30, 1, 365);
+        desc(wrap, 'A never-opened message is deleted after this many days regardless, so nothing lingers forever.');
+        wrap.appendChild(purgeBox(
           'Purge all DM attachments now',
-          'Immediately and permanently delete every photo, audio, and video from every private conversation, of any age (opened, unopened, and saved alike). Message text is kept. This is a one-time cleanup — it does not change the settings above — and cannot be undone.',
-          'Purge all DM attachments',
-          function (btn: any, note: any) {
-            appConfirm('Delete EVERY attachment from ALL private conversations, of any age? Message text is kept. This cannot be undone.', { okLabel: 'Purge all', danger: true }, function (ok: any) {
-              if (!ok) return;
-              btn.disabled = true; note.textContent = ' Purging…';
-              fetch(API + '/dm/media/purge', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d3) {
-                btn.disabled = false;
-                note.textContent = d3 && d3.ok ? (' Purged ' + d3.deleted + ' files.') : ' Purge failed.';
-              }).catch(function () { btn.disabled = false; note.textContent = ' Purge failed.'; });
-            });
-          }));
-
-        /* ---- Public feed & member walls ---- */
-        wrap.appendChild(el('h3', null, 'Public feed & member walls'));
-        wrap.appendChild(el('p', 'board-cat-desc', 'The public posts anyone can see — the community feed and members’ own walls — together with any images attached to them. Separate from the private DM store above. (Forum topics are kept permanently and are not affected here.)'));
-        var wpEnRow = el('p', 'admin-set-row');
-        var wpEn = el('input'); wpEn.type = 'checkbox'; wpEn.checked = s.wall_prune_enabled === '1';
-        wpEnRow.appendChild(wpEn);
-        wpEnRow.appendChild(document.createTextNode(' Automatically delete old public posts (off = keep forever)'));
-        wrap.appendChild(wpEnRow);
-        var wpRow = el('p', 'admin-set-row');
-        wpRow.appendChild(document.createTextNode('Retention — delete public posts older than: '));
-        var wpSel = el('select');
-        (d.wall_prune_options || [90, 180, 365]).forEach(function (n: any) {
-          var label = n === 365 ? '1 year' : (n === 180 ? '6 months' : (n === 90 ? '3 months' : n + ' days'));
-          var o = el('option', null, label); o.value = String(n);
-          if (Number(s.wall_prune_days) === n) o.selected = true;
-          wpSel.appendChild(o);
-        });
-        wpRow.appendChild(wpSel);
-        wrap.appendChild(wpRow);
-        wrap.appendChild(el('p', 'board-cat-desc', 'This retention drives both the automatic sweep above and the button below. Save your choice first if you changed it and want the sweep to use it.'));
-        wrap.appendChild(dangerBox(
-          'Prune old public posts now',
-          'Delete public feed and wall posts — and their images — older than the retention chosen just above, right now. Posts newer than that stay. This runs once; it does not require the automatic sweep to be on. Cannot be undone.',
-          'Prune old public posts',
-          function (btn: any, note: any) {
-            var days = Number(wpSel.value) || 365;
-            var human = days === 365 ? 'a year' : (days === 180 ? '6 months' : (days === 90 ? '3 months' : days + ' days'));
-            appConfirm('Delete public feed and wall posts (and their images) older than ' + human + ' right now? Newer posts stay. This cannot be undone.', { okLabel: 'Prune now', danger: true }, function (ok: any) {
-              if (!ok) return;
-              btn.disabled = true; note.textContent = ' Pruning…';
-              fetch(API + '/wall/prune', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: state.key, days: days }) }).then(function (r) { return r.json(); }).then(function (d4) {
-                btn.disabled = false;
-                note.textContent = d4 && d4.ok ? (' Deleted ' + d4.deleted + ' posts.') : ' Prune failed.';
-              }).catch(function () { btn.disabled = false; note.textContent = ' Prune failed.'; });
-            });
-          }));
+          'Immediately and permanently delete every photo, audio, and video from every private conversation, of any age (opened, unopened, and saved alike). Message text is kept. One-time cleanup; cannot be undone.',
+          'Delete EVERY attachment from ALL private conversations, of any age? Message text is kept. This cannot be undone.',
+          '/dm/media/purge'));
 
         /* ---- The Journal ---- */
         wrap.appendChild(el('h3', null, 'The Mere Catholicity Journal'));
@@ -8939,106 +9353,45 @@
         jLinkP.appendChild(jLink); jLinkP.appendChild(document.createTextNode('.'));
         wrap.appendChild(jLinkP);
 
-        /* ---- Media & uploads (per-kind caps, contexts, and store budgets) ---- */
-        wrap.appendChild(el('h3', null, 'Media & uploads'));
-        wrap.appendChild(el('p', 'board-cat-desc',
-          'What members may attach and how large, everywhere media is allowed. The “Largest attachment” above is the overall ceiling — a per-kind limit never rises past it.'));
-        var mdefs: any = (window.mcCore as any).mediaDefaults;
-        function mediaMbRow(label: any, key: any, defBytes: any) {
-          var r = el('p', 'admin-set-row');
-          r.appendChild(document.createTextNode(label + ' (MB): '));
-          var inp = el('input');
-          inp.type = 'number'; inp.min = '1'; inp.max = '100';
-          inp.value = String(Math.round((Number(s[key]) || defBytes) / 1048576));
-          r.appendChild(inp);
-          wrap.appendChild(r);
-          return inp;
+        /* ---- Save (all tunables above; each panel contributes its own keys —
+           the legacy global per-kind size keys are no longer written and stand
+           only as server-side fallbacks for areas never saved here). ---- */
+        function panelKeys(ctx: any, p: any) {
+          var defBytes: any = { image: Number(mdefs.imageMaxBytes), video: Number(mdefs.videoMaxBytes), audio: Number(mdefs.audioMaxBytes) };
+          var defCap: any = { dm: Number(mdefs.capDmBytes), wall: Number(mdefs.capWallBytes), board: Number(mdefs.capBoardBytes) };
+          var out: any = {};
+          out['media_kinds_' + ctx] = p.kinds.csv();
+          out['media_voice_' + ctx] = p.voice.checked ? '1' : '0';
+          if (p.scan) out['media_scan_' + ctx] = p.scan.checked ? '1' : '0';
+          out['media_' + ctx + '_image_max_bytes'] = String(Math.round((Number(p.img.value) || (defBytes.image / 1048576)) * 1048576));
+          out['media_' + ctx + '_video_max_bytes'] = String(Math.round((Number(p.vid.value) || (defBytes.video / 1048576)) * 1048576));
+          out['media_' + ctx + '_audio_max_bytes'] = String(Math.round((Number(p.aud.value) || (defBytes.audio / 1048576)) * 1048576));
+          out['media_audio_max_seconds_' + ctx] = String(Math.floor(Number(p.secs.value) || Number(mdefs.audioMaxSeconds)));
+          out['media_cap_' + ctx + '_bytes'] = String(Math.round((Number(p.cap.value) || (defCap[ctx] / 1073741824)) * 1073741824));
+          out[ctx === 'dm' ? 'media_dm_retention_days' : 'media_' + ctx + '_retention_days'] =
+            ctx === 'dm' ? String(Math.floor(Number(p.ret.value) || 30)) : String(Math.max(0, Math.floor(Number(p.ret.value) || 0)));
+          return out;
         }
-        var miImg = mediaMbRow('Largest image', 'media_image_max_bytes', Number(mdefs.imageMaxBytes));
-        var miVid = mediaMbRow('Largest video', 'media_video_max_bytes', Number(mdefs.videoMaxBytes));
-        var miAud = mediaMbRow('Largest audio', 'media_audio_max_bytes', Number(mdefs.audioMaxBytes));
-        var vsRow = el('p', 'admin-set-row');
-        vsRow.appendChild(document.createTextNode('Voice note limit (seconds): '));
-        var vsInp = el('input');
-        vsInp.type = 'number'; vsInp.min = '30'; vsInp.max = '600';
-        vsInp.value = String(Number(s.media_audio_max_seconds) || Number(mdefs.audioMaxSeconds));
-        vsRow.appendChild(vsInp);
-        wrap.appendChild(vsRow);
-        var acRow = el('p', 'admin-set-row');
-        var acCb = el('input');
-        acCb.type = 'checkbox';
-        acCb.checked = s.media_image_autocompress == null ? true : s.media_image_autocompress === '1';
-        acRow.appendChild(acCb);
-        acRow.appendChild(document.createTextNode(' Auto-compress images in the browser before upload'));
-        wrap.appendChild(acRow);
-        /* Which kinds each surface accepts; an empty row = that surface's
-           uploads are off. Serialized as the stored CSV mask on save. */
-        wrap.appendChild(el('p', 'board-cat-desc', 'What each surface accepts. Unticking everything turns that surface’s uploads off.'));
-        function mediaKindsRow(label: any, key: any, defMask: any) {
-          var r = el('p', 'admin-set-row');
-          r.appendChild(document.createTextNode(label + ': '));
-          var cur = (window.mcCore as any).mediaParseKinds(s[key] == null ? defMask : s[key]);
-          var boxes: any[] = [];
-          ['image', 'video', 'audio'].forEach(function (kn) {
-            var cb = el('input');
-            cb.type = 'checkbox';
-            cb.checked = cur.indexOf(kn) !== -1;
-            cb.value = kn;
-            r.appendChild(cb);
-            r.appendChild(document.createTextNode(' ' + kn + '  '));
-            boxes.push(cb);
-          });
-          wrap.appendChild(r);
-          return { csv: function () { return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; }).join(','); } };
-        }
-        var mkDm = mediaKindsRow('Direct messages', 'media_kinds_dm', mdefs.kindsDm);
-        var mkWall = mediaKindsRow('Feed & walls', 'media_kinds_wall', mdefs.kindsWall);
-        var mkBoard = mediaKindsRow('Forum board', 'media_kinds_board', mdefs.kindsBoard);
-        /* Store budgets, with the live usage beside each so the number means
-           something (the sweeps prune toward these). */
-        function mediaGbRow(label: any, key: any, defBytes: any, usedBytes: any) {
-          var r = el('p', 'admin-set-row');
-          r.appendChild(document.createTextNode(label + ' (GB): '));
-          var inp = el('input');
-          inp.type = 'number'; inp.min = '1'; inp.max = '9'; inp.step = '0.5';
-          var curB = Number(s[key]) || defBytes;
-          inp.value = String(Math.round(curB / 1073741824 * 10) / 10);
-          r.appendChild(inp);
-          r.appendChild(document.createTextNode('  — ' + fmtBytes(usedBytes) + ' of ' + fmtBytes(curB) + ' used'));
-          wrap.appendChild(r);
-          return inp;
-        }
-        var mcDm = mediaGbRow('Direct-message media budget', 'media_cap_dm_bytes', Number(mdefs.capDmBytes), Number(s.dm_media_bytes) || 0);
-        var mcWall = mediaGbRow('Feed, wall & board media budget', 'media_cap_wall_bytes', Number(mdefs.capWallBytes), Number(s.wall_media_bytes) || 0);
-
-        /* ---- Save (all tunables above) ---- */
         var saveBtn = el('button', 'btn btn-send', 'Save settings');
         saveBtn.type = 'button';
         var saveStatus = el('p', 'form-status');
         saveBtn.addEventListener('click', function () {
           saveBtn.disabled = true;
           saveStatus.textContent = 'Saving…';
+          var set: any = {
+            media_enabled: enCb.checked ? '1' : '0',
+            media_max_bytes: String(Math.round((Number(szInp.value) || 25) * 1048576)),
+            media_image_autocompress: acCb.checked ? '1' : '0',
+            wall_prune_enabled: wpEn.checked ? '1' : '0',
+            wall_prune_days: wpSel.value,
+            dm_default_ttl: ttlSel.value,
+            dm_backstop_days: bsInp.value,
+            journal_enabled: jEn.checked ? '1' : '0',
+            journal_topic: jInp.value,
+          };
+          Object.assign(set, panelKeys('wall', pWall), panelKeys('board', pBoard), panelKeys('dm', pDm));
           fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: state.key, set: {
-              media_enabled: enCb.checked ? '1' : '0',
-              media_max_bytes: String(Math.round((Number(szInp.value) || 25) * 1048576)),
-              dm_default_ttl: ttlSel.value,
-              dm_backstop_days: bsInp.value,
-              wall_prune_enabled: wpEn.checked ? '1' : '0',
-              wall_prune_days: wpSel.value,
-              journal_enabled: jEn.checked ? '1' : '0',
-              journal_topic: jInp.value,
-              media_image_max_bytes: String(Math.round((Number(miImg.value) || (Number(mdefs.imageMaxBytes) / 1048576)) * 1048576)),
-              media_video_max_bytes: String(Math.round((Number(miVid.value) || (Number(mdefs.videoMaxBytes) / 1048576)) * 1048576)),
-              media_audio_max_bytes: String(Math.round((Number(miAud.value) || (Number(mdefs.audioMaxBytes) / 1048576)) * 1048576)),
-              media_audio_max_seconds: String(Math.floor(Number(vsInp.value) || Number(mdefs.audioMaxSeconds))),
-              media_image_autocompress: acCb.checked ? '1' : '0',
-              media_kinds_dm: mkDm.csv(),
-              media_kinds_wall: mkWall.csv(),
-              media_kinds_board: mkBoard.csv(),
-              media_cap_dm_bytes: String(Math.round((Number(mcDm.value) || (Number(mdefs.capDmBytes) / 1073741824)) * 1073741824)),
-              media_cap_wall_bytes: String(Math.round((Number(mcWall.value) || (Number(mdefs.capWallBytes) / 1073741824)) * 1073741824)),
-            } }) }).then(function (r) { return r.json(); }).then(function (d2) {
+            body: JSON.stringify({ key: state.key, set: set }) }).then(function (r) { return r.json(); }).then(function (d2) {
             saveBtn.disabled = false;
             saveStatus.textContent = d2 && d2.ok ? 'Saved.' : ((d2 && d2.error) || 'Save failed.');
           }).catch(function () { saveBtn.disabled = false; saveStatus.textContent = 'Save failed.'; });
@@ -9372,6 +9725,128 @@
     }));
     wrap.appendChild(have);
     section.appendChild(wrap);
+    /* The librarian's gate is an informed choice, not a bare wall: a visitor
+       sees what an answer looks like and what asking costs before creating
+       anything. A tapped example is remembered (the same prefill slot the
+       reader chip uses) so it is waiting in the box once they join. */
+    if ((location.pathname.split('/').pop() || '') === 'merecat-ai.html') {
+      var starter = el('div', 'mc-cat-starter');
+      starter.appendChild(el('span', 'mc-cat-starter-ico', '🐈'));
+      starter.appendChild(el('h3', null, 'Ask the librarian'));
+      starter.appendChild(el('p', null,
+        'A question about the Fathers, the councils, Newman, or anything in our Library.'));
+      var chips = el('div', 'mc-cat-chips');
+      ['What do the Fathers make of John 6:53?',
+        'How does Newman describe the development of doctrine?',
+        'What did the Council of Nicaea settle?'].forEach(function (ex) {
+        var chip = el('button', 'mc-cat-chip', ex);
+        chip.type = 'button';
+        chip.addEventListener('click', function () {
+          try { localStorage.setItem('mc-merecat-prefill', JSON.stringify({ q: ex, at: Date.now() })); } catch (e2) {}
+          if (window.mcOnboard) window.mcOnboard();
+        });
+        chips.appendChild(chip);
+      });
+      starter.appendChild(chips);
+      var sample = el('div', 'mc-cat-sample');
+      sample.appendChild(el('p', 'mc-cat-sample-q', 'Asked: What did the Council of Nicaea settle?'));
+      sample.appendChild(el('p', 'mc-cat-sample-a',
+        '🐈 The council confessed that the Son is of one substance with the Father, ' +
+        'against Arius, and gave the Church the creed we still say. Every answer cites ' +
+        'the Library, with links into the very texts.'));
+      sample.appendChild(el('p', 'mc-cat-sample-note',
+        'Members may ask ten questions a day. Joining is one tap and needs no email.'));
+      starter.appendChild(sample);
+      section.appendChild(starter);
+    }
+  }
+
+  /* Recent activity: the last live posts across every public room, newest
+     first — "what happened since I left" for members and visitors alike.
+     One cacheable keyless GET. */
+  function viewRecent(p: any) {
+    section.textContent = '';
+    document.title = 'Recent activity | Community';
+    section.appendChild(crumb([['Community', 'community.html'], ['Recent activity']]));
+    section.appendChild(el('p', 'board-intro', 'The latest posts across every room, newest first.'));
+    var box = el('div', 'board-topics');
+    box.appendChild(el('p', 'comments-status', 'Loading…'));
+    section.appendChild(box);
+    cachedJson(API + '/recent?p=' + p, undefined, 45000).then(function (d: any) {
+      if (!d || !d.ok) throw new Error((d && d.error) || 'failed');
+      box.textContent = '';
+      if (!d.items.length) { box.appendChild(el('p', 'comments-status', 'Nothing here yet.')); return; }
+      d.items.forEach(function (it: any) {
+        var row = el('div', 'board-topic');
+        var left = el('div', 'board-topic-left');
+        var a = el('a', 'board-topic-title', it.topic_title || 'A topic');
+        a.href = 'community.html?topic=' + it.topic_id + (it.parent_id ? '#comment-' + it.id : '');
+        left.appendChild(a);
+        var who = it.nick || (it.author_hash ? displayName(it.author_hash) : 'Anonymous');
+        left.appendChild(el('div', 'board-cat-desc', who + (it.parent_id ? ' replied' : ' opened the topic')));
+        if (it.body) left.appendChild(el('div', 'board-intro', String(it.body).slice(0, 160)));
+        row.appendChild(left);
+        row.appendChild(el('div', 'board-stats', fmtDateTime(it.created_at)));
+        box.appendChild(row);
+      });
+      var pager = el('p', 'board-pages');
+      if (p > 1) { var pv = el('a', null, '‹ Newer'); pv.href = 'community.html?recent=1&p=' + (p - 1); pager.appendChild(pv); pager.appendChild(document.createTextNode(' ')); }
+      if (d.more) { var nx = el('a', null, 'Older ›'); nx.href = 'community.html?recent=1&p=' + (p + 1); pager.appendChild(nx); }
+      if (pager.firstChild) section.appendChild(pager);
+    }).catch(function () {
+      box.textContent = '';
+      box.appendChild(el('p', 'comments-status', 'Recent activity could not be loaded. Reload to retry.'));
+    });
+  }
+
+  /* Saved posts: the reader's bookmarks — forum topics and feed posts on one
+     shelf, each removable. */
+  function viewSaved(p: any) {
+    section.textContent = '';
+    document.title = 'Saved posts | Community';
+    section.appendChild(crumb([['Community', 'community.html'], ['Saved posts']]));
+    var box = el('div', 'board-topics');
+    box.appendChild(el('p', 'comments-status', 'Loading…'));
+    section.appendChild(box);
+    fetchRetry(API + '/bookmarks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, p: p }),
+    }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d: any) {
+      if (blockedOut(d)) return;
+      if (!d || !d.ok) throw new Error((d && d.error) || 'failed');
+      box.textContent = '';
+      if (!d.items.length) {
+        box.appendChild(el('p', 'comments-status',
+          'Nothing saved yet. Use the save link on a topic, or Save post in a feed post’s share menu.'));
+        return;
+      }
+      d.items.forEach(function (it: any) {
+        var row = el('div', 'board-topic');
+        var left = el('div', 'board-topic-left');
+        var a = el('a', 'board-topic-title', it.label || (it.kind === 'topic' ? 'A topic' : 'A feed post'));
+        a.href = it.kind === 'topic' ? ('community.html?topic=' + it.ref) : ('feed.html?post=' + it.ref);
+        left.appendChild(a);
+        left.appendChild(el('div', 'board-cat-desc', it.kind === 'topic' ? 'Forum topic' : 'Feed post'));
+        row.appendChild(left);
+        var right = el('div', 'board-stats');
+        var un = el('a', 'identity-action', 'remove');
+        un.href = '#';
+        un.addEventListener('click', function (ev: any) {
+          ev.preventDefault();
+          bookmarkToggle(it.kind, it.ref, false).then(function () { row.remove(); });
+        });
+        right.appendChild(un);
+        row.appendChild(right);
+        box.appendChild(row);
+      });
+      var pager = el('p', 'board-pages');
+      if (p > 1) { var pv = el('a', null, '‹ Back'); pv.href = 'community.html?saved=1&p=' + (p - 1); pager.appendChild(pv); pager.appendChild(document.createTextNode(' ')); }
+      if (d.more) { var nx = el('a', null, 'More ›'); nx.href = 'community.html?saved=1&p=' + (p + 1); pager.appendChild(nx); }
+      if (pager.firstChild) section.appendChild(pager);
+    }).catch(function () {
+      box.textContent = '';
+      box.appendChild(el('p', 'comments-status', 'Saved posts could not be loaded. Reload to retry.'));
+    });
   }
 
   function route() {
@@ -9426,6 +9901,16 @@
          ?a=<id> is one article's permalink; bare journal.html is the index. */
       var jart = params.get('a');
       return jart ? viewJournalArticle(Number(jart)) : viewJournal();
+    }
+
+    /* Recent activity: the member-safe what-happened-since-I-left list. Routed
+       here (a plain query flag) rather than through Domain.Route so the kernel
+       stays untouched by a single read-only listing. */
+    if (params.get('recent')) return viewRecent(Math.max(1, Math.floor(Number(params.get('p')) || 1)));
+    /* Saved posts: the reader's bookmarks, forum topics and feed posts together. */
+    if (params.get('saved')) {
+      if (!isMember()) return viewJoin('see your saved posts');
+      return viewSaved(Math.max(1, Math.floor(Number(params.get('p')) || 1)));
     }
 
     /* community.html — the forum + its administration. Legacy ?dm/?inbox/?me/
@@ -9484,6 +9969,62 @@
     }
   }
 
+  /* Device linking: the Settings QR encodes profile.html#key=… — the fragment
+     never reaches the server, and it is stripped from the URL the instant we
+     read it here. A confirm gates the sign-in so a mis-scanned or hostile link
+     never silently replaces the identity on this device. */
+  function keyFromFragment() {
+    var m = /^#key=([^&]+)/.exec(location.hash || '');
+    if (!m) return;
+    history.replaceState(history.state, '', location.pathname + location.search);
+    var key = '';
+    try { key = decodeURIComponent(m[1]).trim(); } catch (e) { return; }
+    if (!key || key.length < 16) return;
+    if (state.key === key) { if (window.mcToast) window.mcToast('Already signed in on this device.'); return; }
+    var msg = state.key
+      ? 'Sign in with the scanned key? This device is already signed in as another identity, which will be signed out.'
+      : 'Sign in with the scanned key on this device?';
+    var confirmFn = window.mcConfirm || function (m2: string) { return Promise.resolve(window.confirm(m2)); };
+    confirmFn(msg, { okLabel: 'Sign in' }).then(function (ok: any) {
+      if (!ok) return;
+      loginWithKey(key).then(function (good: any) {
+        if (good) location.reload();
+        else if (window.mcToast) window.mcToast('That key was not recognized.');
+      });
+    });
+  }
+
+  /* One quiet, one-time reminder to save the key: a member on their third
+     visit who has never opened Show-my-key or saved at onboarding gets a
+     dismissible line above the board. Loss is unrecoverable by design, so
+     the platform owes the reader one more chance to hear that in time. */
+  function keyNudge() {
+    if (!state.key) return;
+    try {
+      if (localStorage.getItem('mc-key-nudged') === '1') return;
+      var boots = Number(localStorage.getItem('mc-key-boots') || 0) + 1;
+      localStorage.setItem('mc-key-boots', String(boots));
+      if (boots < 3) return;
+      localStorage.setItem('mc-key-nudged', '1');
+    } catch (e) { return; }
+    var bar = el('p', 'comments-status');
+    bar.appendChild(document.createTextNode('Have you saved your key? It is the only way back into this identity. '));
+    var show = el('a', 'body-link', 'Show my key');
+    show.setAttribute('href', '#');
+    show.addEventListener('click', function (ev: any) {
+      ev.preventDefault();
+      if (window.mcSheet && window.mcSheet.settings) window.mcSheet.settings();
+      bar.remove();
+    });
+    bar.appendChild(show);
+    bar.appendChild(document.createTextNode(' · '));
+    var dis = el('a', 'body-link', 'Dismiss');
+    dis.setAttribute('href', '#');
+    dis.addEventListener('click', function (ev: any) { ev.preventDefault(); bar.remove(); });
+    bar.appendChild(dis);
+    section.parentNode!.insertBefore(bar, section);
+  }
+
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
     collectAltIps();
@@ -9497,6 +10038,8 @@
       dmUnreadCheck();
       notifUnreadCheck();
       routeSafe();
+      keyFromFragment();
+      keyNudge();
     });
   }
 
@@ -9617,6 +10160,36 @@
     /* admin read/observe cluster (Wave C-reads 3) */
     MERECAT_API: MERECAT_API,
     onProfile: function (cb: any) { profileWaiters.push(cb); },
+    /* re-render the current view in place (mute and friends must not force a
+       full page reload inside the SPA) */
+    reroute: function () { if (BOARD) routeSafe(); else location.reload(); },
+    bookmarkToggle: bookmarkToggle,
+    /* an app-sheet replacement for window.prompt (suppressed in some in-app
+       browsers): resolves the entered string, or null on cancel */
+    promptSheet: function (message: string, placeholder?: string) {
+      if (!window.mcSheet) return Promise.resolve(window.prompt(message));
+      return new Promise(function (resolve: any) {
+        var done = false;
+        var finish = function (v: any) { if (done) return; done = true; window.mcSheet!.close(); resolve(v); };
+        var wrap = el('div', 'mc-confirm');
+        wrap.appendChild(el('p', 'mc-confirm-msg', message));
+        var ta = el('textarea', 'comment-text');
+        ta.rows = 3;
+        if (placeholder) ta.placeholder = placeholder;
+        wrap.appendChild(ta);
+        var row = el('div', 'mc-confirm-row');
+        var cancel = el('button', 'mc-confirm-btn mc-confirm-cancel', 'Cancel');
+        cancel.type = 'button';
+        cancel.addEventListener('click', function () { finish(null); });
+        var ok = el('button', 'mc-confirm-btn mc-confirm-ok', 'Send');
+        ok.type = 'button';
+        ok.addEventListener('click', function () { finish(ta.value); });
+        row.appendChild(cancel); row.appendChild(ok);
+        wrap.appendChild(row);
+        window.mcSheet!.open('', wrap, function () { finish(null); });
+        setTimeout(function () { try { ta.focus(); } catch (e) {} }, 60);
+      });
+    },
   };
 
   if (BOARD) {

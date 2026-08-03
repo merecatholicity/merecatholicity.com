@@ -48,13 +48,23 @@ def api(path, body, ua='curl/8.14.1'):
 
 
 class Flow:
-    def __init__(self, port=9560, autoplay=False, hover=False):
+    def __init__(self, port=9560, autoplay=False, hover=False, mic=None):
         self.port = port
         args = ['--headless=new', '--no-sandbox', '--disable-gpu',
                 '--disable-dev-shm-usage', '--window-size=1280,900',
                 '--user-data-dir=/tmp/mc-flow-%d-%d' % (port, int(time.time()))]
         if autoplay:
             args.append('--autoplay-policy=no-user-gesture-required')
+        if mic == 'fake':
+            # getUserMedia yields a fake tone track with no permission prompt
+            args += ['--use-fake-device-for-media-stream',
+                     '--use-fake-ui-for-media-stream']
+        elif mic == 'deny':
+            # fake device but NO fake-ui: headless=new auto-denies the
+            # permission prompt, so getUserMedia rejects NotAllowedError
+            # deterministically (prod's Permissions-Policy microphone=()
+            # header forces the same denial today regardless)
+            args.append('--use-fake-device-for-media-stream')
         if hover:
             # headless=new reports (hover: none) by default; desktop probes
             # (the scripture tips) need an emulated fine pointer

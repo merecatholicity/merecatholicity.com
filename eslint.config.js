@@ -43,7 +43,10 @@ export default [
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },
   {
-    files: ['docs/comments.js', 'docs/nav.js', 'docs/deeplink.js', 'docs/flash.js', 'docs/contact.js', 'docs/bible-reader.js', 'docs/away.js', 'docs/index.js'],
+    /* docs/comments.js is BUILT (minified) from client/comments.ts now — tsc
+       strict covers the source, so the generated file left the lint list when
+       minification made it unlintable. */
+    files: ['docs/nav.js', 'docs/deeplink.js', 'docs/flash.js', 'docs/contact.js', 'docs/bible-reader.js', 'docs/away.js', 'docs/index.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: browserGlobals },
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },

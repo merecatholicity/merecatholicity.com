@@ -221,7 +221,7 @@ document.addEventListener('DOMContentLoaded', function () {
    rebuilding any of them; the script itself no-ops on the hand-authored pages. */
 (function () {
   var s = document.createElement('script');
-  s.src = 'deeplink.js?v=2';
+  s.src = 'deeplink.js?v=2297687171';
   document.head.appendChild(s);
 })();
 
@@ -258,8 +258,163 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=78';
+    s.src = 'app.js?v=2365348449';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }
+})();
+
+/* The installed app's self-update lifecycle (2026-08-02, born of a live
+   report: an installed iOS app ran days-old code and never healed). The SW is
+   registered here — the FIRST script every page carries, never cached under a
+   version key — so even a page running a stale bundle still pumps updates:
+   1. iOS checks sw.js for byte changes only on a NAVIGATION, and an installed
+      app is usually RESUMED, not relaunched — so every return to the
+      foreground (and a slow hourly tick) asks the browser to re-check
+      (registration.update()), throttled to one check per 5 minutes;
+   2. when a NEW worker takes control mid-life (an update landing — NOT the
+      first install claiming the page), or the worker reports this very page's
+      cached skeleton was stale (mc-page-updated from sw.js), a YOUNG page
+      reloads once: a page seconds into its life is a launch that painted
+      yesterday's markup, and healing it costs a blink. An older page is
+      mid-use — never yank it; the fresh copy serves the next navigation.
+      Guards: once per page life, never while the reader is mid-typing, at
+      most twice per 5 minutes across reloads (sessionStorage), so a surprise
+      can never become a reload loop. */
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  try { if (localStorage.getItem('mc-app') === '0') return; } catch (e) { /* latch unreadable: proceed */ }
+  var sw = navigator.serviceWorker;
+  try { sw.register('sw.js', { updateViaCache: 'none' }).catch(function () {}); } catch (e) { return; }
+
+  var lastCheck = 0;
+  function check() {
+    var now = Date.now();
+    if (now - lastCheck < 300000) return;
+    lastCheck = now;
+    sw.getRegistration().then(function (r) {
+      if (r) r.update().catch(function () {});
+    }).catch(function () {});
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') check();
+  });
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) check(); });
+  setInterval(check, 3600000);
+
+  var reloaded = false;
+  function young() {
+    try { return window.performance.now() < 30000; } catch (e) { return false; }
+  }
+  function typing() {
+    var el = document.activeElement;
+    return !!(el && (el.tagName === 'TEXTAREA' || el.isContentEditable ||
+      (el.tagName === 'INPUT' && el.type !== 'submit' && el.type !== 'button')) &&
+      (el.value || el.textContent || '').length > 0);
+  }
+  /* key names the CAUSE ('page:/feed.html', 'sw') — the worker resends each
+     signal several times (single sends race document creation and reach
+     nobody), and the same cause may arrive over two channels, so a stamp in
+     sessionStorage swallows repeats for 20s (it survives the reload; the
+     resends land on the healed page and do nothing). The rolling 2-per-5min
+     cap is the reload-loop backstop. */
+  function healReload(key) {
+    if (reloaded || !young() || typing()) return;
+    var now = Date.now(), hist = [];
+    try {
+      var last = Number(sessionStorage.getItem('mc-heal:' + key) || 0);
+      if (now - last < 20000) return;
+      hist = JSON.parse(sessionStorage.getItem('mc-sw-heal') || '[]');
+    } catch (e) { hist = []; }
+    hist = hist.filter(function (t) { return now - t < 300000; });
+    if (hist.length >= 2) return;
+    hist.push(now);
+    try {
+      sessionStorage.setItem('mc-sw-heal', JSON.stringify(hist));
+      sessionStorage.setItem('mc-heal:' + key, String(now));
+    } catch (e) { /* still reload */ }
+    reloaded = true;
+    location.reload();
+  }
+  /* bornControlled tells an UPDATE apart from the first install: a page whose
+     very load was served under a worker is living through an update when a new
+     worker announces itself; a page born uncontrolled just witnessed its
+     first install — nothing it runs is stale. controllerchange stays as belt
+     and braces where it fires; the worker's own mc-sw-updated message is the
+     reliable channel (same 'sw' key, so never both). */
+  var bornControlled = !!sw.controller;
+  var hadController = bornControlled;
+  sw.addEventListener('controllerchange', function () {
+    if (!hadController) { hadController = true; return; }   // first install claiming the page
+    healReload('sw');
+  });
+  sw.addEventListener('message', function (ev) {
+    var d = ev.data || {};
+    if (!d) return;
+    if (d.t === 'mc-page-updated' && d.path === location.pathname) healReload('page:' + d.path);
+    else if (d.t === 'mc-sw-updated' && bornControlled) healReload('sw');
+  });
+  /* addEventListener alone leaves client messages QUEUED (delivery starts only
+     when onmessage is assigned or startMessages() is called) — without this
+     the stale-skeleton signal would never arrive. */
+  try { if (sw.startMessages) sw.startMessages(); } catch (e) { /* older engine */ }
+})();
+
+/* ?debug=1: a small diagnostic overlay for the next "the app is acting up"
+   report — shows what a phone cannot otherwise say: which bundle versions this
+   page is actually running, whether a service worker controls it and under
+   which cache VERSION, standalone or browser, and the last JS errors. The
+   error ring buffer records from first script on every page (nav.js loads
+   first) so the overlay can be consulted after the fact; readers never see
+   any of this without the query flag. Tap the overlay to dismiss. */
+(function () {
+  var errs = [];
+  function note(m) {
+    errs.push(new Date().toISOString().slice(11, 19) + ' ' + String(m).slice(0, 160));
+    if (errs.length > 12) errs.shift();
+  }
+  window.addEventListener('error', function (e) {
+    note((e.message || 'error') + ' @ ' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || 0));
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason;
+    note('unhandled: ' + ((r && (r.message || r)) || 'rejection'));
+  });
+  if (!/[?&]debug=1\b/.test(location.search)) return;
+  function paint() {
+    var el = document.getElementById('mc-debug') || document.createElement('pre');
+    el.id = 'mc-debug';
+    el.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;' +
+      'background:rgba(15,17,19,.94);color:#e8e2d5;font:11px/1.5 monospace;' +
+      'padding:10px;border-radius:8px;max-height:45vh;overflow:auto;white-space:pre-wrap;margin:0';
+    el.onclick = function () { el.remove(); };
+    var lines = [];
+    var stand = false;
+    try { stand = navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); } catch (e) { /* n/a */ }
+    lines.push('mode: ' + (stand ? 'standalone (installed app)' : 'browser tab'));
+    var scripts = [];
+    try {
+      document.querySelectorAll('script[src]').forEach(function (s) {
+        var m = (s.getAttribute('src') || '').match(/(app|comments|bible-reader)\.js\?v=\d+/);
+        if (m) scripts.push(m[0]);
+      });
+    } catch (e) { /* fine */ }
+    lines.push('scripts: ' + (scripts.join(' ') || 'none versioned yet'));
+    if ('serviceWorker' in navigator) {
+      lines.push('sw controller: ' + (navigator.serviceWorker.controller ? 'yes' : 'NO'));
+    } else lines.push('sw: unsupported');
+    lines.push('page age: ' + Math.round(window.performance.now() / 1000) + 's  path: ' + location.pathname);
+    var head = lines.join('\n');
+    el.textContent = head + '\ncaches: …\n' + (errs.length ? 'errors:\n' + errs.join('\n') : 'errors: none');
+    if (window.caches && window.caches.keys) {
+      window.caches.keys().then(function (ks) {
+        el.textContent = head + '\ncaches: ' + (ks.join(', ') || 'none') + '\n' +
+          (errs.length ? 'errors:\n' + errs.join('\n') : 'errors: none');
+      }).catch(function () {});
+    }
+    if (!el.parentNode) document.body.appendChild(el);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { paint(); setInterval(paint, 2000); });
+  } else { paint(); setInterval(paint, 2000); }
 })();

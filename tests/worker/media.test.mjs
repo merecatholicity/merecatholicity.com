@@ -5,8 +5,11 @@
  *   1. the hourly orphan sweep must never reclaim a live/pending board
  *      attachment, and must never confuse a board ref with a wall-comment ref
  *      that happens to share the same integer id;
- *   2. the migration ledger (0000..0005) must actually build — the sweep runs
- *      against the REAL schema here, not a hand-drawn copy.
+ *   2. the migration ledger (0000..0006) must actually build — the sweep runs
+ *      against the REAL schema here, not a hand-drawn copy;
+ *   3. (0006) wall_media.ctx — the per-section accounting dimension — must
+ *      backfill correctly, keep budgets/purges/retention scoped per section,
+ *      and re-stamp at claim time so ctx always follows ref_type.
  * The sweep SQL is asserted against comments-worker/src/lib.ts source text, so
  * the copy exercised here cannot drift from the copy that ships. The DB-coupled
  * upload/claim handlers themselves are exercised live (webtest) — the pure
@@ -33,16 +36,20 @@ const SWEEP_FRAGMENTS = [
 ];
 const SWEEP_SQL = SWEEP_FRAGMENTS.join('');
 
-function freshDb() {
+/* Build the real schema from the ledger. `upTo` applies only migrations whose
+ * number is <= the prefix — how the 0006 backfill is tested against a genuinely
+ * pre-0006 database. */
+function freshDb(upTo) {
   const db = new DatabaseSync(':memory:');
-  const files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+  let files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
+  if (upTo) files = files.filter((f) => f.slice(0, 4) <= upTo);
   for (const f of files) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
   return { db, files };
 }
 
-test('the migration ledger (0000..0005) builds a working schema', () => {
+test('the migration ledger (0000..0006) builds a working schema', () => {
   const { db, files } = freshDb();
-  assert.ok(files.some((f) => f.startsWith('0005_')), 'migration 0005 present');
+  assert.ok(files.some((f) => f.startsWith('0006_')), 'migration 0006 present');
   // The three media_expired columns and the comments media pointer exist.
   for (const t of ['comments', 'wall_posts', 'wall_comments']) {
     const cols = db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c.name);
@@ -50,6 +57,28 @@ test('the migration ledger (0000..0005) builds a working schema', () => {
   }
   const cCols = db.prepare('PRAGMA table_info(comments)').all().map((c) => c.name);
   assert.ok(cCols.includes('media_key') && cCols.includes('media_size'), 'comments media pointer');
+  // 0006: the per-section accounting column + its sweep/budget index.
+  const wmCols = db.prepare('PRAGMA table_info(wall_media)').all().map((c) => c.name);
+  assert.ok(wmCols.includes('ctx'), 'wall_media.ctx');
+  const idx = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'wall_media_ctx_idx'").get();
+  assert.ok(idx, 'wall_media_ctx_idx exists');
+  db.close();
+});
+
+test('0006 backfill: board-linked rows become ctx board, everything else the feed', () => {
+  const { db } = freshDb('0005');
+  const hex = (c) => c.repeat(64);
+  const ins = db.prepare('INSERT INTO wall_media (key, size, created_at, ref_type, ref_id) VALUES (?, 100, 1, ?, ?)');
+  ins.run(`wall/i/${hex('a')}`, 'board', 11);
+  ins.run(`wall/i/${hex('b')}`, 'post', 1);
+  ins.run(`wall/i/${hex('c')}`, 'comment', 1);
+  ins.run(`wall/i/${hex('d')}`, null, null); // unlinked upload: attributed to the feed
+  db.exec(readFileSync(join(migrationsDir, '0006_media_sections.sql'), 'utf8'));
+  const ctxOf = (k) => db.prepare('SELECT ctx FROM wall_media WHERE key = ?').get(k).ctx;
+  assert.equal(ctxOf(`wall/i/${hex('a')}`), 'board');
+  assert.equal(ctxOf(`wall/i/${hex('b')}`), 'wall');
+  assert.equal(ctxOf(`wall/i/${hex('c')}`), 'wall');
+  assert.equal(ctxOf(`wall/i/${hex('d')}`), 'wall');
   db.close();
 });
 
@@ -101,11 +130,67 @@ test('the orphan sweep spares live/pending board media and never cross-wires wal
   db.close();
 });
 
-test('handlePost link SQL uses ref_type board with the double-claim guard (drift guard)', () => {
+test('all three link SQLs carry the double-claim guard AND the ctx re-stamp (drift guard)', () => {
   const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
-  assert.ok(idxSrc.includes("UPDATE wall_media SET ref_type = 'board', ref_id = ?1 WHERE key = ?2 AND ref_id IS NULL"),
-    'the board link keeps the ref_id IS NULL race guard');
-  // Live-SUM cap checks at upload time (never the stale sweep counter).
-  assert.ok(idxSrc.includes('SELECT COALESCE(SUM(size), 0) AS total FROM wall_media'), 'wall upload live SUM');
+  /* ctx follows ref_type at link time — the invariant the per-section purge
+     endpoints' wholesale parent-stamping relies on. The ref_id IS NULL guard
+     (once board-only; the wall paths gained it 2026-08-02) closes the
+     double-claim race on every path. */
+  assert.ok(idxSrc.includes("UPDATE wall_media SET ref_type = 'board', ref_id = ?1, ctx = 'board' WHERE key = ?2 AND ref_id IS NULL"),
+    'board link: guard + ctx re-stamp');
+  assert.ok(idxSrc.includes("UPDATE wall_media SET ref_type = 'post', ref_id = ?1, ctx = 'wall' WHERE key = ?2 AND ref_id IS NULL"),
+    'wall post link: guard + ctx re-stamp');
+  assert.ok(idxSrc.includes("UPDATE wall_media SET ref_type = 'comment', ref_id = ?1, ctx = 'wall' WHERE key = ?2 AND ref_id IS NULL"),
+    'wall comment link: guard + ctx re-stamp');
+  // Live-SUM cap checks at upload time (never the stale sweep counter), now
+  // scoped to the uploading SECTION's own budget.
+  assert.ok(idxSrc.includes("SELECT COALESCE(SUM(size), 0) AS total FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1"),
+    'wall/board upload live SUM is ctx-scoped');
   assert.ok(idxSrc.includes('SELECT COALESCE(SUM(size), 0) AS total FROM dm_media'), 'dm upload live SUM');
+  // Upload stamps the section it arrived through.
+  assert.ok(idxSrc.includes('INSERT INTO wall_media (key, size, created_at, ctx) VALUES (?1, ?2, ?3, ?4)'),
+    'upload INSERT stamps ctx');
+});
+
+/* The retention sweep's SELECT, reassembled and drift-guarded like the orphan
+ * sweep's — then exercised against the real schema. */
+const RETENTION_SQL = "SELECT key, ref_type, ref_id FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 AND created_at < ?2 ORDER BY created_at ASC LIMIT 500";
+
+test('retention sweep SQL matches lib.ts verbatim (drift guard)', () => {
+  assert.ok(libSrc.includes(RETENTION_SQL), 'lib.ts still carries the retention SELECT');
+  // The per-section cap valve reads per-ctx SUM and eviction candidates.
+  assert.ok(libSrc.includes("SELECT COALESCE(SUM(size), 0) AS total FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1"),
+    'cap valve SUM is ctx-scoped');
+  assert.ok(libSrc.includes("WHERE ref_id IS NOT NULL AND COALESCE(ctx, 'wall') = ?1 ORDER BY created_at ASC"),
+    'cap valve eviction is ctx-scoped');
+});
+
+test('retention selects per-section by age — and deliberately does NOT spare pending', () => {
+  /* Retention is a time policy the owner sets, and it is MEDIA-only: the held
+     TEXT survives for the admin queue, the parent gets the honest
+     media_expired placeholder. Sparing pending here would let held content
+     hold bytes indefinitely — the orphan sweep's evidence-sparing branch is a
+     different rule for a different job. Asserted on purpose. */
+  const { db } = freshDb();
+  const now = Math.floor(Date.now() / 1000);
+  const hex = (c) => c.repeat(64);
+  db.prepare("INSERT INTO comments (id, page, author_hash, body, status, created_at) VALUES (21, 'board:themes', ?, 'held', 'pending', ?)").run(hex('f'), now);
+  const ins = db.prepare('INSERT INTO wall_media (key, size, created_at, ref_type, ref_id, ctx) VALUES (?, 100, ?, ?, ?, ?)');
+  const media = [
+    // [key, created_at, ref_type, ref_id, ctx, sweptBy: 'wall' | 'board' | null]
+    [`wall/i/${hex('a')}`, now - 90 * 86400, 'post', 1, 'wall', 'wall'],     // old feed media: swept by the wall pass
+    [`wall/i/${hex('b')}`, now - 3600, 'post', 2, 'wall', null],             // young feed media: kept
+    [`wall/i/${hex('c')}`, now - 90 * 86400, 'board', 11, 'board', 'board'], // old forum media: only the board pass takes it
+    [`wall/i/${hex('d')}`, now - 90 * 86400, 'board', 21, 'board', 'board'], // old PENDING forum media: NOT spared
+  ];
+  for (const [k, at, rt, ri, ctx] of media) ins.run(k, at, rt, ri, ctx);
+  const days = 30;
+  for (const pass of ['wall', 'board']) {
+    const got = new Set(db.prepare(RETENTION_SQL).all(pass, now - days * 86400).map((r) => r.key));
+    for (const [k, , , , , sweptBy] of media) {
+      assert.equal(got.has(k), sweptBy === pass,
+        `${k} should ${sweptBy === pass ? '' : 'NOT '}be selected by the ${pass} pass`);
+    }
+  }
+  db.close();
 });

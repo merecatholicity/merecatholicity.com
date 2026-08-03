@@ -15,3 +15,5 @@ Allow: /
 User-agent: *
 Disallow: /community.html
 Disallow: /api/
+
+Sitemap: https://merecatholicity.com/sitemap.xml

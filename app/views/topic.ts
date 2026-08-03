@@ -165,9 +165,27 @@ class McTopic extends LitElement {
     const list = this.querySelector('.comments-list') as HTMLElement;
     if (d.page === 1) list.appendChild(kit.commentNode(d.topic, false, { topicId: id }));
     d.replies.forEach((c: any) => list.appendChild(kit.commentNode(c, false, { topicId: id })));
-    /* the watch toggle (kit machinery) */
+    /* the watch toggle (kit machinery) + the save-for-later toggle */
     const watchSlot = this.querySelector('.mc-watch-slot');
-    if (watchSlot && kit.state.key) watchSlot.appendChild(kit.watchToggle(d.topic.id));
+    if (watchSlot && kit.state.key) {
+      watchSlot.appendChild(kit.watchToggle(d.topic.id));
+      if (kit.bookmarkToggle) {
+        watchSlot.appendChild(document.createTextNode(' · '));
+        const sv = kit.el('a', 'identity-action', 'save') as HTMLAnchorElement;
+        sv.href = '#';
+        sv.title = 'Save this topic to your saved posts';
+        let on = false;
+        sv.addEventListener('click', (e: Event) => {
+          e.preventDefault();
+          on = !on;
+          sv.textContent = on ? 'saved ✓' : 'save';
+          kit.bookmarkToggle('topic', d.topic.id, on).then((r: any) => {
+            if (!r || !r.ok) { on = !on; sv.textContent = on ? 'saved ✓' : 'save'; }
+          });
+        });
+        watchSlot.appendChild(sv);
+      }
+    }
     /* Locked closes the thread to everyone; read-only closes it to non-admins
        only (admins fall through to the composer, as on the classic path). */
     if (d.topic.locked || (d.topic.readonly && !kit.isAdmin())) {

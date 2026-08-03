@@ -22,11 +22,64 @@ test('defaults: the platform settings an admin overrides', () => {
     audioMaxSeconds: 180,
     kindsDm: 'image,video,audio',
     kindsWall: 'image,video,audio',
-    kindsBoard: 'image,audio', // no video on the board by default
+    kindsBoard: 'image,video,audio', // video shipped on for the forum (2026-08-02)
     capDmBytes: 2147483648, // 2 GB
-    capWallBytes: 3221225472, // 3 GB
+    capWallBytes: 3221225472, // 3 GB — the feed's own budget (board split out)
+    capBoardBytes: 1073741824, // 1 GB — the forum's budget
     autocompress: true,
+    scanWall: true, // AI image screen per public section — today's behavior kept
+    scanBoard: true,
+    voiceDm: true, // the 🎙 recorder feature flag, per section
+    voiceWall: true,
+    voiceBoard: true,
+    retentionWallDays: 0, // media age retention; 0 = keep forever
+    retentionBoardDays: 0,
   });
+});
+
+test('sectionNames / parseSection: dm, wall, board — lowercase-exact', () => {
+  assert.deepEqual(Media.sectionNames, ['dm', 'wall', 'board']);
+  for (const s of Media.sectionNames) assert.equal(orNull(Media.parseSection(s)), s);
+  assert.equal(orNull(Media.parseSection('feed')), null, 'the UI word, not the wire word');
+  assert.equal(orNull(Media.parseSection('DM')), null, 'case-exact');
+  assert.equal(orNull(Media.parseSection('')), null);
+});
+
+test('section settings-key grammar: the one place the key names live', () => {
+  assert.equal(orNull(Media.sectionKindBytesKey('board')('image')), 'media_board_image_max_bytes');
+  assert.equal(orNull(Media.sectionKindBytesKey('dm')('video')), 'media_dm_video_max_bytes');
+  assert.equal(orNull(Media.sectionKindBytesKey('wall')('audio')), 'media_wall_audio_max_bytes');
+  assert.equal(orNull(Media.sectionKindBytesKey('feed')('image')), null, 'bad section');
+  assert.equal(orNull(Media.sectionKindBytesKey('wall')('gif')), null, 'bad kind');
+  assert.equal(orNull(Media.sectionVoiceKey('dm')), 'media_voice_dm');
+  assert.equal(orNull(Media.sectionVoiceKey('board')), 'media_voice_board');
+  assert.equal(orNull(Media.sectionVoiceKey('x')), null);
+  assert.equal(orNull(Media.sectionAudioSecondsKey('wall')), 'media_audio_max_seconds_wall');
+  assert.equal(orNull(Media.sectionRetentionKey('wall')), 'media_wall_retention_days');
+  assert.equal(orNull(Media.sectionRetentionKey('dm')), 'media_dm_retention_days');
+});
+
+test('sectionScanKey: dm is null BY CONSTRUCTION — E2E ciphertext is unscannable', () => {
+  /* DM media is end-to-end encrypted; the server holds only ciphertext, so an
+     AI scan of it is structurally impossible. There is no key for anyone to
+     flip — the admin UI shows a disabled, unchecked box with the honest note. */
+  assert.equal(orNull(Media.sectionScanKey('wall')), 'media_scan_wall');
+  assert.equal(orNull(Media.sectionScanKey('board')), 'media_scan_board');
+  assert.equal(orNull(Media.sectionScanKey('dm')), null, 'the E2E law, in the type');
+  assert.equal(orNull(Media.sectionScanKey('bogus')), null);
+});
+
+test('clampRetentionDays: 0 = keep forever SURVIVES the clamp; 3650 ceiling', () => {
+  assert.equal(Media.clampRetentionDays(0), 0, 'the default must pass through');
+  assert.equal(Media.clampRetentionDays(-5), 0, 'floor');
+  assert.equal(Media.clampRetentionDays(99999), 3650, 'ceiling');
+  assert.equal(Media.clampRetentionDays(365), 365);
+});
+
+test('clampDmRetentionDays: 1..90 — DM media can never be "forever"', () => {
+  assert.equal(Media.clampDmRetentionDays(0), 1, 'floor');
+  assert.equal(Media.clampDmRetentionDays(365), 90, 'ceiling');
+  assert.equal(Media.clampDmRetentionDays(30), 30, 'the default passes');
 });
 
 test('defaults: every mask is already in canonical serialized form', () => {

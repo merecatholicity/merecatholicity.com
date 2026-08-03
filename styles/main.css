@@ -1292,9 +1292,31 @@ a.body-link { color: var(--maroon); overflow-wrap: anywhere; }
    with data-mc-app), but are hidden everywhere by default; the phone media query
    turns them on. So desktop never shows them. */
 mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
-/* The merecat starter is a phones-only blank slate; hidden on desktop (the
-   media query below turns it on). */
-.mc-cat-starter { display: none; }
+/* The merecat starter blank slate shows on EVERY breakpoint now (first-use
+   guidance was phones-only, which hid it from the two audiences that most
+   need it: visitors and desktop readers). The phone media query keeps its
+   own layout tweaks. */
+.mc-cat-starter { display: block; text-align: center; padding: 1.2rem 1rem 0.4rem; }
+.mc-cat-starter-ico { font-size: 2.4rem; display: block; }
+.mc-cat-starter h3 { margin: 0.4rem 0 0.2rem; font-size: 1.15rem; color: var(--ink); }
+.mc-cat-starter p { margin: 0 0 0.8rem; color: var(--faint); font-size: 0.92rem; }
+.mc-cat-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; }
+.mc-cat-chip {
+  font: inherit; font-size: 0.9rem; cursor: pointer; text-align: left;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 999px; padding: 0.45rem 0.9rem;
+}
+.mc-cat-chip::before { content: "🐈 "; }
+.mc-cat-chip:hover { background: var(--rule); }
+/* The visitor sample: one canned exchange plus the quota terms, so joining is
+   an informed choice. */
+.mc-cat-sample { max-width: 34rem; margin: 1rem auto 0; text-align: left; }
+.mc-cat-sample-q { margin: 0 0 0.3rem; font-weight: 600; color: var(--ink); font-size: 0.92rem; }
+.mc-cat-sample-a {
+  margin: 0 0 0.5rem; padding: 0.6rem 0.8rem; font-size: 0.92rem; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+}
+.mc-cat-sample-note { margin: 0; color: var(--faint); font-size: 0.88rem; text-align: center; }
 /* The mobile screen-title replaces the breadcrumb on phones; it is in the shared
    Lit template, so it must be hidden on desktop (the media query turns it on). */
 .mc-screen-title { display: none; }

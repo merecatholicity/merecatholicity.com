@@ -57,6 +57,267 @@
     setTimeout(function () { t.classList.remove("dl-target"); }, 2600);
   }
 
+  // --- corpus reader extras: ask-merecat selection chip, reading-position
+  //     tracker, end-of-work nav. All re-runnable under the app shell:
+  //     cleanupExtras() tears the per-page observers down at the top of every
+  //     run() (including the early-returning non-corpus runs), the document
+  //     and window listeners bind once behind extrasBound, and the
+  //     selectionchange handler self-gates on the corpus marker each time. ---
+  var chipEl = null, chipQ = "", selDebT = null;
+  var extrasBound = false;
+  var posTargets = null, posCurId = null, posSaveT = null, posScanT = null;
+  var endObserver = null;
+  var orderPromise = null;
+
+  function extrasCss() {
+    if (document.getElementById("mc-askchip-css")) return;
+    var s = el("style");
+    s.id = "mc-askchip-css";
+    s.textContent =
+      ".mc-askchip{position:absolute;z-index:120;background:var(--maroon,#8b1a1a);" +
+      "color:#fff;font-family:inherit;font-size:.85rem;font-weight:600;border:0;" +
+      "border-radius:999px;padding:.4em .9em;box-shadow:0 2px 10px rgba(0,0,0,.25);cursor:pointer}" +
+      ".mc-askchip[hidden]{display:none}" +
+      ".mc-endnav{margin-top:2.5em;padding-top:1em;border-top:1px solid var(--rule,#d9cfb8);" +
+      "color:var(--faint,#8a7f6a);font-size:.95em}";
+    document.head.appendChild(s);
+  }
+
+  // --- feature 1: the ask-merecat selection chip -----------------------
+  function hideChip() {
+    if (chipEl) chipEl.hidden = true;
+    chipQ = "";
+  }
+
+  function ensureChip() {
+    if (chipEl && document.body.contains(chipEl)) return chipEl;
+    chipEl = el("button", "mc-askchip");
+    chipEl.type = "button";
+    chipEl.textContent = "Ask merecat";
+    chipEl.hidden = true;
+    var keep = function (e) { e.preventDefault(); };   // a tap must not collapse the selection
+    chipEl.addEventListener("mousedown", keep);
+    chipEl.addEventListener("touchstart", keep);
+    chipEl.addEventListener("click", function () {
+      if (!chipQ) return;
+      try {
+        localStorage.setItem("mc-merecat-prefill",
+          JSON.stringify({ q: chipQ, at: Date.now() }));
+      } catch (_) {}
+      location.href = "merecat-ai.html";
+    });
+    document.body.appendChild(chipEl);
+    return chipEl;
+  }
+
+  function onSelection() {
+    if (!document.querySelector(".unnumbered")) { hideChip(); return; }
+    var sel = window.getSelection && window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) { hideChip(); return; }
+    var text = String(sel).replace(/\s+/g, " ").trim();
+    if (!text) { hideChip(); return; }
+    var range = sel.getRangeAt(0);
+    var scope = range.commonAncestorContainer;
+    if (scope && scope.nodeType !== 1) scope = scope.parentElement;
+    var main = document.querySelector("main.prose");
+    if (!scope || !main || !main.contains(scope) || inChrome(scope)) { hideChip(); return; }
+    var rect = range.getBoundingClientRect();
+    if (!rect || (!rect.width && !rect.height)) { hideChip(); return; }
+
+    // Build the question now, so a click that collapses the selection still works.
+    var h1 = main.querySelector("h1.title");
+    var title = (h1 && h1.textContent.trim()) || document.title;
+    var start = range.startContainer;
+    if (start && start.nodeType !== 1) start = start.parentElement;
+    var anchored = start && start.closest && start.closest("[id]");
+    var link = location.origin + location.pathname;
+    if (anchored && main.contains(anchored) && anchored.id) link += "#" + anchored.id;
+    chipQ = "In " + title + ', what is meant by this passage? "' +
+      text.slice(0, 400) + '" ' + link;
+
+    var chip = ensureChip();
+    chip.hidden = false;
+    var w = chip.offsetWidth || 120;
+    var x = rect.left + rect.width / 2 - w / 2 + window.scrollX;
+    var lo = window.scrollX + 8;
+    var hi = window.scrollX + window.innerWidth - w - 8;
+    if (x > hi) x = hi;
+    if (x < lo) x = lo;
+    chip.style.left = x + "px";
+    chip.style.top = (rect.bottom + 10 + window.scrollY) + "px";
+  }
+
+  // --- feature 2: reading position (contract: key and shape exact) -----
+  function savePos() {
+    if (!posCurId || !document.querySelector(".unnumbered")) return;
+    try {
+      localStorage.setItem("mc-readpos:" + location.pathname,
+        JSON.stringify({ id: posCurId, title: document.title, at: Date.now() }));
+    } catch (_) {}
+  }
+
+  function schedulePos() {
+    if (posSaveT) return;
+    // Capture the key at schedule time: a soft navigation can change
+    // location.pathname before this trailing save fires.
+    var key = "mc-readpos:" + location.pathname;
+    var title = document.title;
+    posSaveT = setTimeout(function () {
+      posSaveT = null;
+      if (!posCurId) return;
+      try {
+        localStorage.setItem(key,
+          JSON.stringify({ id: posCurId, title: title, at: Date.now() }));
+      } catch (_) {}
+    }, 2000);
+  }
+
+  function initPos() {
+    var main = document.querySelector("main.prose");
+    if (!main) return;
+    // Headings only: the KJV carries ~31k verse paragraphs and the big
+    // Fathers volumes thousands of stamped paragraphs; chapter and section
+    // headings are the honest continue-reading anchor and keep the scan
+    // small. A throttled position scan, not an IntersectionObserver:
+    // observers fire on boundary CROSSINGS, so an instant jump (End key,
+    // find-in-page, a deep link) moved headings past the viewport without
+    // ever intersecting it and the position never updated.
+    var heads = main.querySelectorAll("h1.unnumbered, h2, h3, h4, h5, h6");
+    posTargets = [];
+    for (var i = 0; i < heads.length; i++) {
+      if (heads[i].id && !inChrome(heads[i])) posTargets.push(heads[i]);
+    }
+    if (!posTargets.length) return;
+    samplePos();
+  }
+  function samplePos() {
+    if (!posTargets || !posTargets.length) return;
+    var band = window.innerHeight * 0.4;
+    var best = null;
+    for (var i = 0; i < posTargets.length; i++) {
+      var top = posTargets[i].getBoundingClientRect().top;
+      if (top < band) best = posTargets[i].id;
+      else break;   // document order: past the band, the rest are lower still
+    }
+    // Before the first heading enters the band the honest position is the
+    // page top: remember the work with its first anchor so Continue reading
+    // can still offer it.
+    posCurId = best || posTargets[0].id;
+    schedulePos();
+  }
+
+  // --- feature 3: end-of-work nav --------------------------------------
+  function loadOrder() {
+    if (!orderPromise) {
+      orderPromise = fetch("library-order.json")
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+    }
+    return orderPromise;
+  }
+
+  function basename(p) {
+    return String(p || "").split("/").pop().split("#")[0].split("?")[0];
+  }
+
+  function renderEndnav() {
+    var main = document.querySelector("main.prose");
+    if (!main || document.getElementById("mc-endnav")) return;
+    loadOrder().then(function (data) {
+      // The fetch may resolve after a soft navigation replaced the page.
+      if (!main.isConnected || document.getElementById("mc-endnav")) return;
+      if (!document.querySelector(".unnumbered")) return;
+      var next = null;
+      if (data && Array.isArray(data.works)) {
+        var here = basename(location.pathname);
+        for (var i = 0; i < data.works.length; i++) {
+          var w = data.works[i] || {};
+          if (basename(w.href) === here) {
+            var n = data.works[i + 1];
+            // "This shelf" must be true: suppress a cross-shelf neighbor.
+            if (n && n.shelf === w.shelf && n.href && n.title) next = n;
+            break;
+          }
+        }
+      }
+      var nav = el("nav", "mc-endnav");
+      nav.id = "mc-endnav";
+      if (next) {
+        var p1 = el("p");
+        p1.appendChild(document.createTextNode("Next on this shelf: "));
+        var a1 = el("a");
+        a1.href = String(next.href);
+        a1.textContent = String(next.title);
+        p1.appendChild(a1);
+        p1.appendChild(document.createTextNode("."));
+        nav.appendChild(p1);
+      }
+      var p2 = el("p");
+      var a2 = el("a");
+      a2.href = "library.html";
+      a2.textContent = "Back to the Library";
+      p2.appendChild(a2);
+      p2.appendChild(document.createTextNode("."));
+      nav.appendChild(p2);
+      main.appendChild(nav);
+    });
+  }
+
+  function initEndnav() {
+    if (!("IntersectionObserver" in window)) return;
+    var main = document.querySelector("main.prose");
+    var target = (main && main.lastElementChild) || document.querySelector("footer");
+    if (!target) return;
+    endObserver = new IntersectionObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].isIntersecting) {
+          if (endObserver) { endObserver.disconnect(); endObserver = null; }
+          renderEndnav();
+          return;
+        }
+      }
+    }, { rootMargin: "600px 0px" });
+    endObserver.observe(target);
+  }
+
+  // --- extras lifecycle -------------------------------------------------
+  function cleanupExtras() {
+    posTargets = null;
+    if (endObserver) { endObserver.disconnect(); endObserver = null; }
+    if (posSaveT) { clearTimeout(posSaveT); posSaveT = null; }
+    if (posScanT) { clearTimeout(posScanT); posScanT = null; }
+    if (selDebT) { clearTimeout(selDebT); selDebT = null; }
+    posCurId = null;
+    hideChip();
+    var stale = document.getElementById("mc-endnav");
+    if (stale && stale.parentNode) stale.parentNode.removeChild(stale);
+  }
+
+  function bindExtras() {
+    if (extrasBound) return;
+    extrasBound = true;
+    document.addEventListener("selectionchange", function () {
+      if (selDebT) clearTimeout(selDebT);
+      selDebT = setTimeout(function () { selDebT = null; onSelection(); }, 250);
+    });
+    window.addEventListener("scroll", hideChip, { passive: true });
+    window.addEventListener("scroll", function () {
+      if (posScanT) return;
+      posScanT = setTimeout(function () { posScanT = null; samplePos(); }, 1500);
+    }, { passive: true });
+    window.addEventListener("pagehide", savePos);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") savePos();
+    });
+  }
+
+  function initExtras() {
+    extrasCss();
+    bindExtras();
+    initPos();
+    initEndnav();
+  }
+
   var listening = false;
   function listen() {
     if (listening) return;
@@ -78,6 +339,7 @@
   }
 
   function run() {
+    cleanupExtras();   // per-page observers and chip die before any early return
     if (!document.querySelector(".unnumbered")) return;  // hand-authored page
     var isKJV = /(^|\/)kjv\.html$/.test(location.pathname);
 
@@ -150,6 +412,7 @@
       it.el.appendChild(a);
     }
     listen();
+    initExtras();
     // ids were just assigned, so the browser hasn't scrolled — do it now.
     if (location.hash) setTimeout(reveal, 0);
   }

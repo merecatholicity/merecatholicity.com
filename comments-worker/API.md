@@ -233,7 +233,7 @@ resource), `413` (avatar too large), `429` (rate limit), `500` (server), `503`
 | `GET /api/comments/profile` | `hash` (required), `fresh` | `{ok, profile:{hash,nick,bio,signature,avatar,faith,posts,assigned,admin}}`. `assigned` is the **server-computed pseudonym**; `admin` is public. |
 | `GET /api/comments/dm/directory` | `fresh` | `{ok, users:[{hash, joined, nick}]}` — up to 2000, newest first. Bot and any `merecat…` nick excluded. All fuzzy matching is client-side. |
 | `GET /api/comments/feed` | `topic` \| `cat` \| `page` (precedence in that order) | RSS 2.0 XML. Renders `displayName` server-side. |
-| `GET /api/comments/config` | — | `{ok, apiVersion, media:{enabled, kinds:{dm,wall,board}, max_bytes:{image,video,audio}, audio_max_seconds, autocompress}, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}}` — the shared constants a native client would otherwise triplicate. `media` is the SERVED upload policy: gate client-side from it, never a literal (the caps are admin-tunable). Cacheable. |
+| `GET /api/comments/config` | — | `{ok, apiVersion, media:{enabled, kinds:{dm,wall,board}, max_bytes:{image,video,audio}, audio_max_seconds, autocompress, sections:{dm,wall,board}}, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}}` — the shared constants a native client would otherwise triplicate. `media.sections.<ctx>` is the per-SECTION policy (2026-08-02): `{kinds, voice, max_bytes:{image,video,audio}, audio_max_seconds}` plus `scan` on `wall`/`board` only — `dm` carries **no** `scan` field because DM media is E2E ciphertext and structurally unscannable; the absence is the statement. The flat legacy fields beside `sections` are kept for older clients. Gate client-side from the served policy, never a literal (everything is admin-tunable). Cacheable. |
 | `GET /api/comments/avatar` | `hash` (required), `v` (cache-buster) | Raw JPEG bytes, `max-age=86400`, `nosniff`, `CSP default-src 'none'`. **No rate limit.** |
 
 **Row shapes.** A comment/reply row is `{id, author_hash, nick, assigned,
@@ -290,15 +290,20 @@ board WebSocket (§5.1).
 `POST_LIMIT`, gated, **no Turnstile** (the linking post is the Turnstile gate),
 and the identity must be ESTABLISHED (a saved profile, a comment, or a wall
 post — i.e. has passed Turnstile at least once; a fresh key gets `403
-"Attachments unlock after your first post or profile save."`). The two routes
-differ only in the admin kinds mask they enforce (`media_kinds_wall` vs
-`media_kinds_board`). Images are magic-byte-sniffed (jpeg/png/webp only) and
-LLaVA-screened; video/audio validate against the exact whitelist (video:
-mp4/quicktime/webm; audio: mpeg/mp3/mp4/x-m4a/aac/webm/ogg/wav — Domain.Media
-is the source). Per-kind byte caps from `/config`; the store budget is checked
-with a live SUM (90% of `media_cap_wall_bytes` → `507`). Returns `{ok,
+"Attachments unlock after your first post or profile save."`). The two routes enforce their own SECTION's
+policy (2026-08-02): kinds mask (`media_kinds_wall` vs `media_kinds_board`),
+per-section per-kind byte caps (from `/config` `media.sections.*`), each
+section's own storage budget (live per-`ctx` SUM; 90% of
+`media_cap_wall_bytes`/`media_cap_board_bytes` → `507`), and each section's AI
+image screen toggle (`media_scan_wall`/`media_scan_board`, on by default —
+flagged images get `422`; fail-open when the model itself errs). Images are
+magic-byte-sniffed (jpeg/png/webp only); video/audio validate against the exact
+whitelist (video: mp4/quicktime/webm; audio: mpeg/mp3/mp4/x-m4a/aac/webm/ogg/wav
+— Domain.Media is the source). Returns `{ok,
 media_key:"wall/<i|v|a>/<64hex>", size, kind}`; the key is UNLINKED until a
-post claims it (unlinked orphans sweep after ~15 minutes). Serve with
+post claims it (unlinked orphans sweep after ~15 minutes; the claiming post
+re-stamps the row's accounting section, so budgets and purges always follow
+where the media actually lives). Serve with
 `GET /api/comments/wall/media?key=…` — keyless, public, cacheable a day,
 `nosniff` + deny-all CSP + CORP; a key linked into the back room answers the
 byte-identical 404 a missing object gets.
@@ -638,7 +643,7 @@ All require the caller's hash in the `admins` table; all refuse non-admins with
 | `POST /api/comments/moderate` | `{key,id,act:lock\|unlock\|delete\|sticky\|unsticky}` | Govern a topic. Delete is soft and does **not** cascade to replies (cron sweeps orphans). |
 | `POST /api/comments/move` | `{key,id,cat,catName?}` | Move a topic + all replies to another cat; DMs the OP (skipped into the back room). |
 | `POST /api/comments/board/admin` | `{key,p?,q?}` or `{key,id,p?,find?}` | The **only** door to the back room; same payload shapes as the public cat/topic reads, never cached. |
-| `POST /api/comments/approve` · `/pending` | `{key,id}` · `{key}` | Approve one AI-held post (broadcasts it live) · list the pending queue. |
+| `POST /api/comments/approve` · `/pending` | `{key,id,kind?}` · `{key}` | Approve one AI-held post (broadcasts it live) · list the pending queue. `/pending` returns `pending` (comments rows, unchanged) **plus `pending_wall`** (2026-08-02): held FEED posts/comments as `[{id, kind:'post'\|'comment', post_id, author_hash, nick, body, created_at, media_key}]` — a separate array, never merged (the id spaces differ). Approve a wall row with `kind:'wall-post'`\|`'wall-comment'` (comment-count bump + live broadcast fire only for a non-shadowbanned author, mirroring the posting path); delete one via the existing `/wall/delete {key,id,kind}`. |
 | `POST /api/comments/report/dismiss` | `{key,id}` | Clear all of a post's flags. |
 | `POST /api/comments/lock` · `/deleteuser` | `{key,hash,locked}` · `{key,hash}` | Lock/unlock an identity · soft-delete a user + all posts, drop profile/avatar, lock forever. |
 | `POST /api/comments/ipban` · `/ipbans` · `/rdns` | `{key,ip\|ips,banned}` · `{key}` · `{key,ips}` | Ban/unban one or many normalized IP keys (v6 folded to /64) · list bans · reverse-DNS (≤8, via DoH). |
@@ -646,7 +651,8 @@ All require the caller's hash in the `admins` table; all refuse non-admins with
 | `POST /api/comments/admins` · `/admin` | `{key}` · `{key,hash,admin}` | List the flat roster (with `assigned` names) · grant/revoke any admin (last-admin removal refused). |
 | `POST /api/comments/meta` · `/audit` · `/trust` | `{key,hash\|page}` · `{key}` · `{key,hash,trusted}` | Per-identity/per-page fingerprint + known-IP drawer · 14-day activity audit (reports/pages/topics) · grant/revoke AI-screen-skip. |
 | `POST /api/comments/backup` | `{key}` | Force a mid-month D1→R2 backup (check `backup.error`). |
-| `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB), `media_audio_max_seconds` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` (100 MB–9 GB store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`). `media_max_bytes` stays the absolute per-file ceiling over the per-kind caps. |
+| `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB legacy globals, now the FALLBACK layer), the 9 per-section overrides `media_<dm\|wall\|board>_<image\|video\|audio>_max_bytes` (same clamp; **an empty string DELETES the override** — back to inheriting the global), `media_audio_max_seconds` + `media_audio_max_seconds_<ctx>` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_scan_wall`/`media_scan_board` (0/1, the per-section AI image screen; there is NO `media_scan_dm` — E2E ciphertext is unscannable), `media_voice_dm/wall/board` (0/1, the 🎙 feature flag, client-advisory), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` + `media_cap_board_bytes` (100 MB–9 GB per-section store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`/`board_media_bytes`), and media age retention `media_wall_retention_days`/`media_board_retention_days` (0–3650; 0 = keep forever) + `media_dm_retention_days` (1–90, the DM hard cap, default 30). `media_max_bytes` stays the absolute per-file ceiling over every per-kind cap. |
+| `POST /api/comments/wall/media/purge` · `/board/media/purge` | `{key}` | Purge EVERY media object in that public section (feed+walls · forum) — R2 objects + rows deleted, every media-carrying parent stamped `media_expired` (text kept), that section's usage meter zeroed. `{ok, deleted}`. Safe to re-click; the DM sibling is `/dm/media/purge`. |
 
 **merecat admin/tooling** (all `requireAdmin`): `POST /api/merecat/about`
 (model/persona/works roster — url-less rows are the private shelves, render as

@@ -20,6 +20,7 @@ import {
   merecatLocalFetch,
   merecatPrompt,
   merecatThinkStripper,
+  publishUser,
   sha256hex,
 } from './lib.js';
 
@@ -220,6 +221,18 @@ export class ChatRoom extends DurableObject<Env> {
     if (!m) return;
     if (m.t === 'auth') return this.#auth(ws, m);
     if (m.t === 'ask') return this.#ask(ws, m);
+    if (m.t === 'stop') return this.#stop(ws);
+  }
+
+  /* Stop a running generation at the asker's word: the loops see the flag,
+     cancel their model reads, and the finalize path keeps whatever streamed
+     (done=1), so a stop is just an early, honest end — and an economy win
+     (cloud neurons and the single local GPU stop burning). */
+  #stop(ws: any) {
+    let a; try { a = ws.deserializeAttachment(); } catch { a = null; }
+    if (!a || a.auth !== true) return;
+    if (!this.gen || (this.phase !== 'thinking' && this.phase !== 'streaming' && this.phase !== 'queued')) return;
+    this.gen.stopped = true;
   }
 
   webSocketError(ws: any, err: any) { console.log(JSON.stringify({ event: 'chat_ws_error', error: String(err) })); }
@@ -383,10 +396,14 @@ export class ChatRoom extends DurableObject<Env> {
       sources = built.sources; this.gen.sources = sources;
       this.gen._msgLen = JSON.stringify(built.messages).length;
       this.#emit({ t: 'meta', sources, used: this.gen.used, rv: MERECAT_RV, backend: 'cloudflare', chatId: this.chatId });
+      if (this.gen.stopped) {
+        /* stopped during retrieval: no model call at all */
+      } else {
       const aiStream = await this.env.AI.run(cfg.model, { messages: built.messages, stream: true, max_tokens: cfg.max_tokens, temperature: 0.35 });
       const strip = merecatThinkStripper();
       const reader = aiStream.getReader(); const dec = new TextDecoder(); let buf = '';
       for (;;) {
+        if (this.gen.stopped) { try { reader.cancel(); } catch { /* done */ } break; }
         const { done, value } = await reader.read();
         if (done) break;
         buf += dec.decode(value, { stream: true });
@@ -404,9 +421,11 @@ export class ChatRoom extends DurableObject<Env> {
         }
       }
       const tail = strip(null); if (tail) await onToken(tail);
+      }
     }
 
     sendBatch();
+    if (this.gen.stopped && !this.gen.answer.trim()) this.gen.answer = 'Stopped at your request.';
     if (!this.gen.answer.trim()) this.gen.answer = 'The librarian could not draw an answer this time. Ask again shortly.';
 
     /* Finalize: one authoritative write (done=1), tally (cloud only), fold. */
@@ -429,7 +448,32 @@ export class ChatRoom extends DurableObject<Env> {
     }
     await this.env.LIBDB.batch(stmts);
     this.phase = 'done';
-    this.#emit({ t: 'state', phase: 'done', chatId: this.chatId });
+    const wasStopped = !!this.gen.stopped;
+    this.#emit({ t: 'state', phase: 'done', chatId: this.chatId, stopped: wasStopped });
+    /* Answer-ready bell: a long generation that finished with NOBODY attached
+       (the asker walked away, as the disconnect contract invites) rings the
+       ordinary in-app notification, one unread row per conversation, linking
+       back to the thread. A stop is the asker's own act and rings nothing. */
+    if (!wasStopped) {
+      let attached = 0;
+      for (const s of this.ctx.getWebSockets()) {
+        let at; try { at = s.deserializeAttachment(); } catch { at = null; }
+        if (at && at.auth === true) attached += 1;
+      }
+      if (!attached && me) {
+        try {
+          const r = await this.env.DB.prepare(
+            "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
+            "SELECT ?1, 'merecat', ?2, 0, NULL, ?3 WHERE NOT EXISTS (" +
+            "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'merecat' AND topic_id = ?2 AND read_at IS NULL)"
+          ).bind(me, this.chatId, nowS).run();
+          if (r.meta && r.meta.changes > 0) {
+            await publishUser(this.env, [{ v: 1, t: 'notification', scopes: ['user:' + me],
+              kind: 'merecat', topic_id: this.chatId, comment_id: 0, actor_hash: null, created_at: nowS }]);
+          }
+        } catch (e) { console.log(JSON.stringify({ event: 'chat_notify_failed', error: String(e) })); }
+      }
+    }
     try { await merecatFold(this.env, cfg, this.chatId); } catch { /* fold waits for next turn */ }
   }
 
@@ -442,6 +486,7 @@ export class ChatRoom extends DurableObject<Env> {
     const dec = new TextDecoder();
     let buf = ''; let headerDone = false;
     for (;;) {
+      if (this.gen && this.gen.stopped) { try { reader.cancel(); } catch { /* severed */ } return { ok: true }; }
       let deadTimer: any;
       const step = await Promise.race([
         reader.read().then((x: any) => ({ read: x }), (e: any) => ({ err: e })),
