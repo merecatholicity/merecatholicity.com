@@ -21,6 +21,7 @@ import * as core from './core.ts';
 declare global {
   interface Window {
     mcCall?: { place: (other: string, label?: string) => void; inCall: () => boolean };
+    mcSound?: { play: (name: string, loop?: boolean) => void; stop: (name: string) => void };
     __mcCall?: any;
   }
 }
@@ -63,6 +64,32 @@ const END_COPY: Record<string, string> = {
   canceled: 'Call canceled', noanswer: 'No answer — they will see a missed call',
   missed: 'Missed call', taken: 'Answered on another device', failed: 'The call could not be completed',
 };
+
+/* ---- UI sounds (docs/sounds/, CC0 — see _readme_and_license.txt there).
+   The ONE sound engine, shell-owned like the call engine so the ring can
+   sound on any page; comments.js delegates its bell through window.mcSound.
+   Sounds fire only from live socket events (never polls or page arrival) and
+   honor the gear's per-device "Sound effects" switch (mc-sounds). Autoplay
+   refusals before the first user gesture are swallowed. */
+const SOUND_SRC: Record<string, string> = { bell: 'sounds/notify.mp3', ring: 'sounds/ring.mp3', end: 'sounds/hangup.mp3' };
+const soundCache: Record<string, any> = {};
+function soundsOn() {
+  try { return localStorage.getItem('mc-sounds') !== 'off'; } catch (e) { return true; }
+}
+function playSound(name: string, loop?: boolean) {
+  if (!soundsOn() || !SOUND_SRC[name]) return;
+  try {
+    const a = soundCache[name] || (soundCache[name] = new Audio(SOUND_SRC[name]));
+    a.loop = !!loop;
+    a.currentTime = 0;
+    const p = a.play();
+    if (p && p.catch) p.catch(() => { /* no gesture yet — stay silent */ });
+  } catch (e) { /* no Audio / blocked — silence is fine */ }
+}
+function stopSound(name: string) {
+  const a = soundCache[name];
+  if (a) { try { a.pause(); a.currentTime = 0; } catch (e) { /* fine */ } }
+}
 
 /* The singleton — on window so a dev console can inspect it and the webtests
    can assert it; ONE per page lifetime (the shell never reboots). */
@@ -179,6 +206,7 @@ export function installCall() {
     CALL.ringT = CALL.setupT = CALL.graceT = CALL.iceT = CALL.tickT = 0;
   }
   function cleanup() {
+    stopSound('ring');   // every teardown path silences the ring
     clearTimers();
     try { if (CALL.pc) CALL.pc.close(); } catch (e) { /* already */ }
     CALL.pc = null;
@@ -189,9 +217,14 @@ export function installCall() {
     CALL.iceIn = []; CALL.iceOut = []; CALL.pendingSdp = '';
   }
   function end(ev: string, sendEnd?: boolean) {
+    /* A CONNECTED call ending is audible on BOTH sides (the local hang-up and
+       the remote 'end' signal both come through here); declines, timeouts, and
+       failed setups stay silent — the ring stopping is their signal. */
+    const wasActive = CALL.state === 'Active';
     if (sendEnd && CALL.peer && CALL.id) sig(CALL.peer, { call: CALL.id, kind: 'end' });
     step(ev);
     cleanup();
+    if (wasActive) playSound('end');
     const endedId = CALL.id;
     setTimeout(() => {
       if (CALL.state === 'Ended' && CALL.id === endedId) {
@@ -269,6 +302,7 @@ export function installCall() {
 
   function answer() {
     if (CALL.state !== 'Incoming') return;
+    stopSound('ring');
     clearTimeout(CALL.ringT);
     const id = CALL.id;
     step('Answer');
@@ -326,6 +360,7 @@ export function installCall() {
     CALL.iceIn = []; CALL.iceOut = []; CALL.reason = '';
     CALL.peerLabel = label(m.from);
     step('Ring');
+    playSound('ring', true);   // looped while the Incoming panel stands; every exit stops it
     fetchNick(m.from, m.call);
     CALL.ringT = setTimeout(() => {
       if (CALL.state === 'Incoming' && CALL.id === m.call) end('Timeout');
@@ -430,4 +465,5 @@ export function installCall() {
   ensureMember();
   if (CALL.state !== 'Idle') { ensureStyles(); render(); }
   window.mcCall = { place, inCall: () => !!(core as any).callInCall(CALL.state) };
+  window.mcSound = { play: playSound, stop: stopSound };   // comments.js rings its bell through this
 }

@@ -477,7 +477,7 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
   declare keyShown: boolean;
   declare theme: string;
   declare art: boolean;
@@ -485,6 +485,7 @@ class McSettings extends LitElement {
   declare dark: string;
   declare light: string;
   declare presence: string;
+  declare sounds: boolean;
   declare prefs: any;
   declare panel: string;
   declare blocked: Array<{ hash: string; nick?: string; assigned?: string }> | null;
@@ -498,7 +499,7 @@ class McSettings extends LitElement {
     super();
     this.keyShown = false; this.theme = this._theme(); this.art = artOn(); this.copied = false;
     this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal';
-    this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence();
+    this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence(); this.sounds = this._sounds();
     this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null; this.muted = null;
     this.canInstall = !!(window.mcInstall && window.mcInstall.evt);
     this.pushOn = null; this.pushBusy = false; this.pushMsg = '';   // null = state not yet reflected
@@ -723,6 +724,14 @@ class McSettings extends LitElement {
     }).catch(() => { /* no QR: the copy and download paths still stand */ });
   }
   _presence() { try { return localStorage.getItem('mc-presence') === 'off' ? 'off' : 'auto'; } catch (e) { return 'auto'; } }
+  /* UI sounds (bell + call ring/hang-up, played by comments.js): a per-device
+     switch — 'off' in localStorage silences them, anything else is on. */
+  _sounds() { try { return localStorage.getItem('mc-sounds') !== 'off'; } catch (e) { return true; } }
+  toggleSounds() {
+    const on = !this.sounds;
+    try { localStorage.setItem('mc-sounds', on ? 'on' : 'off'); } catch (e) { /* blocked */ }
+    this.sounds = on;
+  }
   togglePresence() {
     const n = this.presence === 'off' ? 'auto' : 'off';
     try { localStorage.setItem('mc-presence', n); } catch (e) { /* blocked */ }
@@ -917,6 +926,7 @@ class McSettings extends LitElement {
         ${this._switch('Replies', null, this._notifyOn('reply'), () => this._setPref({ notify_reply: this._notifyOn('reply') ? 0 : 1 }))}
         ${this._switch('Mentions', null, this._notifyOn('mention'), () => this._setPref({ notify_mention: this._notifyOn('mention') ? 0 : 1 }))}
         ${this._switch('Direct messages', 'The bell only — messages still arrive', this._notifyOn('dm'), () => this._setPref({ notify_dm: this._notifyOn('dm') ? 0 : 1 }))}
+        ${this._switch('Sound effects', 'Bell and call sounds on this device', this.sounds, () => this.toggleSounds())}
         ${this._pushRow()}
       ` : ''}
 

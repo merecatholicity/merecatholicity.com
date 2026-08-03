@@ -165,6 +165,21 @@ export class BoardHub extends DurableObject<Env> {
     return (Array.isArray(hashes) ? hashes : []).filter((h) => live.has(h));
   }
 
+  /* RPC for the quiet-bell check: does `recipient` have the DM thread with
+     `sender` ON SCREEN right now? True only when one of the recipient's own
+     authenticated sockets carries the dmview:<sender> sub — the client sets it
+     while that thread is mounted, and the socket closes on a hidden tab, so a
+     backgrounded or navigated-away reader still gets the bell. */
+  async dmViewing(recipient: any, sender: any) {
+    const want = 'dmview:' + sender;
+    for (const s of this.ctx.getWebSockets()) {
+      let a;
+      try { a = s.deserializeAttachment(); } catch { a = null; }
+      if (a && a.me === recipient && Array.isArray(a.subs) && a.subs.includes(want)) return true;
+    }
+    return false;
+  }
+
   /* RPC, called by the worker on every live public board mutation. */
   async publish(event: any) {
     if (!event || !Array.isArray(event.scopes)) return;

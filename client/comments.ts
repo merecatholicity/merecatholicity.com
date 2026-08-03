@@ -870,6 +870,66 @@
     });
     return a;
   }
+  /* ---- UI sounds: ONE engine, shell-owned in app/call.ts (window.mcSound —
+     it must live in the bundle so an incoming call rings on any page). This
+     client only delegates its bell dings; no bundle = no sounds, which is the
+     honest no-app posture. ---- */
+  function playSound(name: any, loop?: any) {
+    try { if ((window as any).mcSound) (window as any).mcSound.play(name, loop); } catch (e) { /* silent */ }
+  }
+  /* ❤ per message: on the OTHER party's bubbles a toggle, on your own a passive
+     heart that lights when they like it (live or on load). The flag rides
+     /dm/like — metadata only, the plaintext stays sealed. */
+  function dmLikeControl(m: any, node: any, other: any) {
+    if (!m || !m.id || m.redacted) return;
+    var mine = m.sender_hash === state.myHash;
+    var wrap = el('div', 'dm-like-row');
+    var btn: any = null;
+    var chip = el('span', 'dm-like-chip');
+    function paint() {
+      var meL = Number(m.liked_me || 0) ? 1 : 0;
+      var themL = Number(m.liked_other || 0) ? 1 : 0;
+      chip.style.display = (meL || themL) ? '' : 'none';
+      chip.textContent = (meL + themL) > 1 ? '❤ 2' : '❤';
+      chip.title = themL ? (meL ? 'Liked by both of you' : 'Liked') : 'You liked this';
+      if (btn) {
+        btn.textContent = meL ? '❤' : '♡';
+        btn.title = meL ? 'Unlike' : 'Like';
+        btn.classList.toggle('on', !!meL);
+      }
+    }
+    if (!mine) {
+      btn = el('button', 'dm-like-btn');
+      btn.type = 'button';
+      btn.addEventListener('click', function () {
+        var want = Number(m.liked_me || 0) ? 0 : 1;
+        m.liked_me = want; paint();   // optimistic; revert on refusal
+        fetch(API + '/dm/like', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, with: other, id: m.id, like: want }) })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { if (blockedOut(d)) return; if (!d || !d.ok) { m.liked_me = want ? 0 : 1; paint(); } })
+          .catch(function () { m.liked_me = want ? 0 : 1; paint(); });
+      });
+      wrap.appendChild(btn);
+    }
+    wrap.appendChild(chip);
+    node.appendChild(wrap);
+    (node as any).mcLikePaint = function (like: any) { m.liked_other = like ? 1 : 0; paint(); };
+    paint();
+  }
+  /* "I watched it arrive": debounced acknowledgment for a live-delivered message
+     in the OPEN thread — stamps the read state, starts the disappearing clock,
+     sends the Seen receipt, and clears any raced dm notification, exactly as a
+     thread reload would, without refetching it. */
+  var dmSeenT: any = 0;
+  function dmSeenPing(other: any) {
+    clearTimeout(dmSeenT);
+    dmSeenT = setTimeout(function () {
+      try { localStorage.removeItem(DM_CACHE); } catch (e) { /* fine */ }
+      fetch(API + '/dm/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, with: other }) }).catch(function () { /* next open settles it */ });
+    }, 1200);
+  }
   /* ---- E2E media: encrypt a file with AES-256-GCM (a fresh key per file), carry
      the key/iv/meta inside the nacl.box message body, upload only ciphertext, and
      lazily fetch + decrypt + blob-render it on the other side. ---- */
@@ -915,6 +975,7 @@
   function dmMediaNode(m: any, otherLabel: any, other: any, envInfo: any) {
     var mine = m.sender_hash === state.myHash;
     var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
+    if (m.id) node.setAttribute('data-dmid', String(m.id));   // likes/receipts address bubbles by id
     var head = el('div', 'comment-head');
     head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
     head.appendChild(el('span', 'comment-date', ' ' + fmtDateTime(m.created_at)));
@@ -1001,6 +1062,7 @@
   function dmAppendControls(m: any, node: any, otherPub: any, shortName: any, other: any) {
     var sv = dmSaveControl(m, other);
     if (sv) node.appendChild(sv);
+    dmLikeControl(m, node, other);
     var mine = m.sender_hash === state.myHash;
     if (!mine || m.redacted || Number(m.enc || 0) === 2 || !m.id) return;
     var row = el('div', 'dm-msg-actions');
@@ -1096,6 +1158,10 @@
       '.dm-expiry a{cursor:pointer}' +
       '.dm-save{font-size:0.78em;opacity:0.55;margin-left:10px;cursor:pointer;white-space:nowrap}' +
       '.dm-save:hover{opacity:0.9}' +
+      '.dm-like-row{display:flex;align-items:center;gap:0.45em;margin-top:0.25em;min-height:1.2em}' +
+      '.dm-like-btn{background:none;border:0;cursor:pointer;font:inherit;font-size:1.05em;line-height:1;color:var(--faint);padding:0.1em 0.35em;border-radius:8px}' +
+      '.dm-like-btn.on,.dm-like-btn:hover{color:var(--maroon)}' +
+      '.dm-like-chip{font-size:0.8em;color:var(--maroon);border:1px solid var(--rule);border-radius:999px;padding:0.05em 0.5em;background:var(--surface)}' +
       '.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}' +
       '.btn-attach{margin-left:6px}' +
       '.dm-media{margin:0.1em 0}' +
@@ -3205,8 +3271,10 @@
   var dmBadgeT = 0, notifBadgeT = 0;
   /* Refresh a badge from the server, debounced so a burst of events (and the
      shared read budget) coalesce into one fresh read. */
-  function liveDmBadge() { clearTimeout(dmBadgeT); dmBadgeT = setTimeout(function () { dmUnreadCheck(true); }, 300); }
-  function liveNotifBadge() { clearTimeout(notifBadgeT); notifBadgeT = setTimeout(function () { notifUnreadCheck(true); }, 300); }
+  /* Both are reached ONLY from live socket events (never the 90s polls or page
+     boot), so the bell sound obeys the "already on the site" rule for free. */
+  function liveDmBadge() { playSound('bell'); clearTimeout(dmBadgeT); dmBadgeT = setTimeout(function () { dmUnreadCheck(true); }, 300); }
+  function liveNotifBadge() { playSound('bell'); clearTimeout(notifBadgeT); notifBadgeT = setTimeout(function () { notifUnreadCheck(true); }, 300); }
 
   function onLiveDm(m: any) {
     var openDm = new URLSearchParams(location.search).get('dm');
@@ -3231,6 +3299,12 @@
   function onLiveDmRedact(m: any) {
     var openDm = new URLSearchParams(location.search).get('dm');
     if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.redactMsg) state.dmView.redactMsg(m.message.id);
+  }
+  /* The other party liked (or unliked) a message in the open conversation:
+     light the heart on that bubble. Quiet by design — no badge, no sound. */
+  function onLiveDmLike(m: any) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.likeMsg) state.dmView.likeMsg(m.message);
   }
   function onLiveNotif() {
     /* The notifications list (McNotifications) reloads itself and marks read;
@@ -3319,6 +3393,7 @@
     else if (m.t === 'dm-ttl') onLiveDmTtl(m);
     else if (m.t === 'dm-edit') onLiveDmEdit(m);
     else if (m.t === 'dm-redact') onLiveDmRedact(m);
+    else if (m.t === 'dm-like') onLiveDmLike(m);
     else if (m.t === 'dm-read') onLiveDmRead(m);
     else if (m.t === 'typing') onLiveTyping(m);
     else if (m.t === 'presence') onLivePresence(m);
@@ -7135,8 +7210,11 @@
               var node = renderMsg(msg);
               list.appendChild(node);
               node.scrollIntoView();
+              /* Watched it arrive: settle read state + receipt server-side
+                 (the send-side quiet bell already skipped the notification). */
+              dmSeenPing(other);
             } else {
-              liveDmBadge();
+              liveDmBadge();   // in the thread but paged back in history — still a bell
             }
           },
           /* The other party edited a message they sent me: re-render its body
@@ -7158,9 +7236,19 @@
             if (!id) return;
             var bubble = list.querySelector('[data-dmid="' + String(id).replace(/"/g, '') + '"]');
             if (bubble) dmMakeRedacted(bubble, false);
+          },
+          /* The other party liked/unliked one of these bubbles: repaint it. */
+          likeMsg: function (msg: any) {
+            if (!msg || !msg.id) return;
+            var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
+            if (bubble && (bubble as any).mcLikePaint) (bubble as any).mcLikePaint(msg.like);
           } };
-        /* Watch the other party's online state live (the DO seeds it now). */
-        if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + other]);
+        /* Watch the other party's online state live (the DO seeds it now), and
+           carry the on-screen claim (dmview:<other>) that keeps THIS thread's
+           incoming messages off the bell while it is mounted — the sub is
+           replaced by the next view's sub() and the socket closes on a hidden
+           tab, so the claim is only ever true while the reader truly looks. */
+        if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + other, 'dmview:' + other]);
         var dmPages = Math.max(1, Math.ceil(d.total / d.per));
         function dmHref(i: any) { return 'messages.html?dm=' + other + '&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, dmHref);
