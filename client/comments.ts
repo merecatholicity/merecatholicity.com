@@ -1632,8 +1632,21 @@
      browser has one, otherwise the capture file input riding the same attach
      path (takeFile = that composer's own picked-file handler). `sec` is the
      composer's own cfg.sections.* — its caps and its voice flag govern. */
+  /* Phone composers show the utility buttons (📎 🎙 📞) as icon-only circles
+     (the mobile CSS sizes them equal); the word survives in title +
+     aria-label. Desktop keeps "icon word". Decided at build time — composers
+     are rebuilt on every view, so a rotated/resized session heals itself. */
+  function utilBtnLabel(btn: any, icon: string, word: string) {
+    var phone = false;
+    try { phone = window.matchMedia('(max-width: 600px)').matches; } catch (e) { /* desktop */ }
+    btn.textContent = phone ? icon : icon + ' ' + word;
+    btn.title = word;
+    btn.setAttribute('aria-label', word);
+    return btn;
+  }
+
   function voiceControl(form: any, cfg: any, sec: any, statusEl: any, takeFile: any) {
-    var btn = el('button', 'btn btn-attach mc-voice-btn', '🎙 Voice');
+    var btn = utilBtnLabel(el('button', 'btn btn-attach mc-voice-btn'), '🎙', 'Voice');
     btn.type = 'button';
     if (!voiceSupported()) {
       btn.addEventListener('click', function () { voiceFallbackInput(form, takeFile).click(); });
@@ -3415,7 +3428,7 @@
     if (mc && mc.place) mc.place(other, label);
   }
   function callButton(other: string, label: string) {
-    var b = el('button', 'btn btn-attach mc-call-btn', '📞 Call');
+    var b = utilBtnLabel(el('button', 'btn btn-attach mc-call-btn'), '📞', 'Call');
     b.type = 'button';
     b.title = 'Voice call (end-to-end encrypted)';
     b.addEventListener('click', function () { placeCall(other, label); });
@@ -3978,7 +3991,7 @@
         mediaStash('del', place);
       }
       state.boardMedia = held;
-      var attach = el('button', 'btn btn-attach', '📎 Attach');
+      var attach = utilBtnLabel(el('button', 'btn btn-attach'), '📎', 'Attach');
       attach.type = 'button';
       attach.addEventListener('click', function () { fileInput.click(); });
       function showChip(name: any, size: any) {
@@ -6860,7 +6873,7 @@
     var pendingFile: any = null;
     var wplace = kind === 'comment' ? 'wallc:' + (extra.post || 0) : 'wall:' + location.pathname;
     var fileInput = el('input'); fileInput.type = 'file'; fileInput.style.display = 'none';
-    var attach = el('button', 'btn btn-attach', '📎 Attach'); attach.type = 'button';
+    var attach = utilBtnLabel(el('button', 'btn btn-attach'), '📎', 'Attach'); attach.type = 'button';
     var chip = el('span', 'dm-attach-chip'); chip.style.display = 'none';
     function clearAttach() { pendingFile = null; fileInput.value = ''; chip.style.display = 'none'; chip.textContent = ''; mediaStash('del', wplace); }
     attach.addEventListener('click', function () { fileInput.click(); });
@@ -7520,7 +7533,7 @@
         var fileInput = el('input', 'dm-file-input');
         fileInput.type = 'file';
         fileInput.style.display = 'none';
-        var attach = el('button', 'btn btn-attach', '📎 Attach');
+        var attach = utilBtnLabel(el('button', 'btn btn-attach'), '📎', 'Attach');
         attach.type = 'button';
         var mediaChip = el('span', 'dm-attach-chip');
         mediaChip.style.display = 'none';
