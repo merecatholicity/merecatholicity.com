@@ -8,7 +8,7 @@
    never a false refusal, exactly as the old adminGate did. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl } from './util.ts';
 
 /* Shared admin gate for a component: returns 'ok' | 'wait' | 'no', and
    registers a re-render for when the profile (hence admin status) lands. */
@@ -76,9 +76,10 @@ class McMerecatThreads extends LitElement {
       body: JSON.stringify({ key: kit.state.key, p: pageNum }),
     }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
       if (kit.blockedOut(d)) return;
+      this._loading = false;
       if (!d.ok) { this.err = d.error === 'No.' ? 'This is for admins alone.' : 'Could not load.'; return; }
       this.d = d;
-    }).catch(() => { this.err = 'Could not load the list. Reload to retry.'; });
+    }).catch(() => { this._loading = false; this.err = 'Could not load the list.'; });
   }
   render() {
     const kit = this.kit;
@@ -88,7 +89,7 @@ class McMerecatThreads extends LitElement {
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
     const intro = html`<p class="board-intro">Every question put to the librarian in the last thirty days, newest first, read-only. Open one to observe the whole exchange. A thread a member deletes leaves here too, and one saved past thirty days still ages off this view. This is for improving the service, not participating. You cannot ask or reply here.</p>`;
-    if (this.err) return html`${head}${intro}<p class="comments-status">${this.err}</p>`;
+    if (this.err) return html`${head}${intro}<p class="comments-status">${this.err}${this.err === 'This is for admins alone.' ? nothing : retryTpl(this, { kit: this.kit })}</p>`;
     if (!this.d) return html`${head}${intro}<p class="comments-status">Loading…</p>`;
     if (!this.d.threads.length) return html`${head}${intro}<p class="comments-status">No conversations yet.</p>`;
     const href = (i: number) => 'admin.html?merecatthreads=1&p=' + i;
@@ -135,9 +136,10 @@ class McMerecatThread extends LitElement {
       body: JSON.stringify({ key: kit.state.key, id: this.tid }),
     }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
       if (kit.blockedOut(d)) return;
+      this._loading = false;
       if (!d.ok) { this.err = d.error === 'No.' ? 'This is for admins alone.' : 'That conversation is gone.'; return; }
       this.d = d;
-    }).catch(() => { this.err = 'That conversation could not be loaded.'; });
+    }).catch(() => { this._loading = false; this.err = 'That conversation could not be loaded.'; });
   }
   updated() {
     if (!this.d || this._painted) return;
@@ -178,7 +180,7 @@ class McMerecatThread extends LitElement {
     const g = gate(kit, this);
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
-    if (this.err) return html`${head}<p class="comments-status">${this.err}</p>`;
+    if (this.err) return html`${head}<p class="comments-status">${this.err}${this.err === 'That conversation could not be loaded.' ? retryTpl(this, { kit: this.kit, tid: this.tid }) : nothing}</p>`;
     if (!this.d) return html`${head}<p class="board-intro">Observing only. You cannot ask or reply in this conversation.</p><p class="comments-status">Loading…</p>`;
     const d = this.d;
     const who = d.chat.nick || kit.displayName(d.chat.hash);

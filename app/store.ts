@@ -29,7 +29,18 @@ export function invalidate(prefix?: string) {
    transport (comments.js hands its fetchRetry so retry semantics stay
    exactly what they were); opts: { ttl (ms), key, bypass }. Only 2xx JSON
    with ok !== false is cached; refusals and errors pass through uncached so
-   a rate-limited answer can never be memoized. */
+   a rate-limited answer can never be memoized.
+
+   A THROTTLED read self-heals here, in the one place every cached read
+   passes: the server's 429 rides a rolling per-IP minute, so a rapid
+   navigator's burst frees tokens within seconds — two quiet waits and
+   re-asks turn "Too many requests" from a dead 'could not be loaded' page
+   into a briefly-late render. Bounded (each re-ask draws the bucket too);
+   past the ladder the refusal reaches the view as before. */
+const THROTTLE_WAITS = [1600, 3500];
+function throttled(json: { ok?: boolean; error?: unknown } | null | undefined) {
+  return !!(json && json.ok === false && /too many|slow down/i.test(String(json.error || '')));
+}
 export function fetchJson(
   fetcher: (url: string, init?: RequestInit) => Promise<Response> | Response,
   url: string,
@@ -47,8 +58,17 @@ export function fetchJson(
   const flying = inflight.get(key);
   if (flying) { metrics.dedup++; return flying; }
   metrics.misses++;
-  const p = Promise.resolve(fetcher(url, init))
-    .then((r) => r.json())
+  const ask = (attempt: number): Promise<any> =>
+    Promise.resolve(fetcher(url, init))
+      .then((r) => r.json())
+      .then((json) => {
+        if (throttled(json) && attempt < THROTTLE_WAITS.length) {
+          return new Promise((res) => setTimeout(res, THROTTLE_WAITS[attempt]))
+            .then(() => ask(attempt + 1));
+        }
+        return json;
+      });
+  const p = ask(0)
     .then((json) => {
       inflight.delete(key);
       if (json && json.ok !== false) entries.set(key, { at: now(), ttl, json });

@@ -462,3 +462,35 @@ CREATE INDEX IF NOT EXISTS discord_hooks_scope_idx ON discord_hooks (scope);
 -- closes a thread to EVERYONE). Used by the Mere Catholicity Journal, whose
 -- entries are admin posts to one read-only topic.
 ALTER TABLE comments ADD COLUMN readonly INTEGER DEFAULT 0;
+-- Likes on public feed/wall COMMENTS (Facebook-style), the twin of wall_likes on
+-- posts: one row per member per comment, composite PK makes the toggle idempotent
+-- and indexes both hot paths (per-comment count, "did I like it"). Public and
+-- unencrypted; the count is computed, not stored. Swept with its comment/post by
+-- the delete/prune paths (no FK cascade in D1 — deletes are explicit).
+CREATE TABLE IF NOT EXISTS wall_comment_likes (
+  comment_id  INTEGER NOT NULL,
+  author_hash TEXT NOT NULL,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (comment_id, author_hash)
+);
+-- Forum attachments + the wall-media emergency valve (media platform Phase A/D).
+--
+-- comments.media_key/media_size: one optional media object per board comment
+-- (topic head or reply), riding the EXISTING wall media pipeline — the
+-- wall_media table and the WALLMEDIA bucket — linked as ref_type = 'board'
+-- (NOT 'comment', which means a wall comment). The columns are the denormalized
+-- read-side pointer, exactly the shape wall_posts/wall_comments carry; NULL =
+-- no attachment (every existing row). The FTS5 triggers reference title/body
+-- and are untouched by ADD COLUMN.
+--
+-- media_expired on all three parent tables: stamped by enforceWallMediaCap's
+-- 95% emergency valve when it must evict the oldest linked media, so the client
+-- renders an honest placeholder instead of a broken tile (the dms.media_expired
+-- precedent).
+--
+-- Additive only; safe to apply under the running worker.
+ALTER TABLE comments ADD COLUMN media_key TEXT;
+ALTER TABLE comments ADD COLUMN media_size INTEGER;
+ALTER TABLE comments ADD COLUMN media_expired INTEGER;
+ALTER TABLE wall_posts ADD COLUMN media_expired INTEGER;
+ALTER TABLE wall_comments ADD COLUMN media_expired INTEGER;

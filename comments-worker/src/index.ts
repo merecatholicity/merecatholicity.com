@@ -20,6 +20,7 @@ import * as Handle from '../../purescript/output/Domain.Handle/index.js';
 import * as Links from '../../purescript/output/Domain.Links/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
+import * as Media from '../../purescript/output/Domain.Media/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
@@ -117,8 +118,13 @@ import {
   enc,
   discordSnippet,
   enforceMediaCap,
+  enforceWallMediaCap,
   ensureAdminsSeeded,
   getAppSettings,
+  isEstablished,
+  mediaKindMax,
+  mediaKindsFor,
+  mediaMaxAcross,
   gzipBytes,
   isAdminHash,
   isDiscordWebhook,
@@ -209,9 +215,22 @@ async function handleConfig(request: any, env: any, url: any) {
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const custom: any = {};
   for (const k of Object.keys(EMOJI_PACKS)) for (const [code, path] of (EMOJI_PACKS as any)[k]) custom[code] = path;
+  /* The served media limits: every composer gates client-side from THIS (never a
+     hardcoded number — the old 60 MB client gate vs 25 MB server refusal bug).
+     Cacheable ~5 min like the worker's own settings cache, so a settings change
+     converges quickly. DM per-kind limits are advisory (E2E — the server only
+     ever sees ciphertext bytes); the wall/board ones are server-enforced too. */
+  const s = await getAppSettings(env);
   return json({
     ok: true,
     apiVersion: 1,
+    media: {
+      enabled: s.media_enabled === '1',
+      kinds: { dm: mediaKindsFor(s, 'dm'), wall: mediaKindsFor(s, 'wall'), board: mediaKindsFor(s, 'board') },
+      max_bytes: { image: mediaKindMax(s, 'image'), video: mediaKindMax(s, 'video'), audio: mediaKindMax(s, 'audio') },
+      audio_max_seconds: Number(s.media_audio_max_seconds) || Number(Media.defaults.audioMaxSeconds),
+      autocompress: s.media_image_autocompress === '1',
+    },
     cats: CAT_META.filter((c) => BOARD_CATS.includes(c[0])).map((c, i) => {
       const o: any = { key: c[0], label: c[1], blurb: c[2], order: i };
       if (c[3]) o.link = { text: c[3], url: c[4] };
@@ -250,7 +269,7 @@ async function handleGet(request: any, env: any, url: any) {
    swallowed, so Discord being down or misconfigured never touches the post. */
 async function notifyDiscordForum(env: any, p: {
   page: string; commentId: number; topicId: number; isReply: boolean;
-  title: any; authorHash: any; nick: any; body: any; createdAt: number;
+  title: any; authorHash: any; nick: any; body: any; hasMedia?: boolean; createdAt: number;
 }) {
   const s = await getAppSettings(env);
   const hook = s.discord_forum_webhook;
@@ -267,7 +286,7 @@ async function notifyDiscordForum(env: any, p: {
   await sendDiscord(hook, {
     title: (topicTitle || 'New forum post').slice(0, 240),
     url: link,
-    description: discordSnippet(p.body) || (p.isReply ? '(reply)' : '(new topic)'),
+    description: discordSnippet(p.body) || (p.hasMedia ? '(shared an attachment)' : (p.isReply ? '(reply)' : '(new topic)')),
     author: { name: heading.slice(0, 240) },
     color: 0x7a1f2b,
     footer: { text: 'Mere Catholicity · Community' },
@@ -401,7 +420,21 @@ async function handlePost(request: any, env: any, ctx: any) {
   }
 
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
-  if (!body) return json({ ok: false, error: 'The comment is empty.' }, 400);
+  /* An optional attachment — board topics and replies only in v1: never an
+     article page (no render surface there yet) and never the back room (no
+     board media key may EVER be back-room-linked, which is what lets the public
+     media GET stay keyless). Claimed before Turnstile like the wall's, and
+     validated against the BOARD mask + per-kind caps AT CLAIM TIME — the upload
+     context cannot be trusted, since an upload does not know its destination. */
+  let media: any = null;
+  if (String(data.media_key || '')) {
+    if (!boardKey(page)) return json({ ok: false, error: 'Attachments live on the forum only.' }, 400);
+    if (page === ADMIN_CAT) return json({ ok: false, error: 'No attachments in this room.' }, 400);
+    const settings = await getAppSettings(env);
+    media = await wallClaimMedia(env, data.media_key, mediaKindsFor(settings, 'board'), settings);
+    if (!media) return json({ ok: false, error: 'That attachment is gone, too large, or not allowed here.' }, 400);
+  }
+  if (!body && !media) return json({ ok: false, error: 'The comment is empty.' }, 400);
   if (body.length > MAX_BODY) return json({ ok: false, error: 'The comment is too long.' }, 400);
   /* Control characters other than newline and tab are nothing a person types. */
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -440,15 +473,31 @@ async function handlePost(request: any, env: any, ctx: any) {
     return json({ ok: false, error: 'This topic is read-only.' }, 403);
   }
 
-  /* A topic's title is screened with its body, one judgment for the pair. */
-  const { status, verdict } = await screen(env, title ? title + '\n\n' + body : body,
+  /* A topic's title is screened with its body, one judgment for the pair. A
+     media-only post screens the wall's '(media post)' placeholder. */
+  const screenText = body || '(media post)';
+  const { status, verdict } = await screen(env, title ? title + '\n\n' + screenText : screenText,
     await isTrusted(env, authorHash));
   const createdAt = Math.floor(Date.now() / 1000);
   const inserted = await env.DB.prepare(
-    'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ai_verdict, ip, ua, os, tz, lang) ' +
-    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) RETURNING id'
+    'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ai_verdict, ip, ua, os, tz, lang, media_key, media_size) ' +
+    'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15) RETURNING id'
   ).bind(page, parentId, title, authorHash, body, status, createdAt, verdict, ip || null, ua || null, os || null,
-    tz || null, lang || null).first();
+    tz || null, lang || null, media ? media.key : null, media ? media.size : null).first();
+
+  /* Link the attachment as ref_type 'board' ('comment' means a WALL comment —
+     the two id spaces are unrelated). The ref_id IS NULL guard closes the
+     double-claim race: when two concurrent posts claim one upload, the loser
+     silently carries no media. */
+  if (media) {
+    const link = await env.DB.prepare(
+      "UPDATE wall_media SET ref_type = 'board', ref_id = ?1 WHERE key = ?2 AND ref_id IS NULL"
+    ).bind(inserted.id, media.key).run();
+    if (!link.meta || !link.meta.changes) {
+      media = null;
+      await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL WHERE id = ?1').bind(inserted.id).run();
+    }
+  }
 
   if (boardKey(page)) {
     const topicId = parentId || inserted.id;
@@ -531,7 +580,8 @@ async function handlePost(request: any, env: any, ctx: any) {
         { v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
           comment: { id: inserted.id, author_hash: authorHash, nick,
             signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
-            faith: prof && prof.faith || null, body, created_at: createdAt } },
+            faith: prof && prof.faith || null, body, created_at: createdAt,
+            media_key: media ? media.key : null } },
         { v: 1, t: 'topic-stats', scopes: ['cat:' + catKey, 'board:index'], cat: catKey,
           topic_id: topicId, title: (stat && stat.title) || null, replies: (stat && stat.replies) || 0,
           last: createdAt, last_id: inserted.id, author_hash: authorHash, nick },
@@ -545,7 +595,7 @@ async function handlePost(request: any, env: any, ctx: any) {
   if (status === 'live' && !muted && boardKey(page) && page !== ADMIN_CAT) {
     ctx.waitUntil(notifyDiscordForum(env, {
       page, commentId: inserted.id, topicId: parentId || inserted.id, isReply: parentId != null,
-      title, authorHash, nick: prof && prof.nick || null, body, createdAt,
+      title, authorHash, nick: prof && prof.nick || null, body, hasMedia: !!media, createdAt,
     }).catch((e) => console.log(JSON.stringify({ event: 'discord_forum_failed', error: String(e) }))));
   }
 
@@ -554,14 +604,14 @@ async function handlePost(request: any, env: any, ctx: any) {
   if (status === 'live' && !muted && page !== ADMIN_CAT) {
     ctx.waitUntil(deliverDiscordFeedHooks(env, {
       commentId: inserted.id, parentId, page, isReply: parentId != null,
-      title, authorHash, nick: prof && prof.nick || null, body, hasMedia: false, createdAt,
+      title, authorHash, nick: prof && prof.nick || null, body, hasMedia: !!media, createdAt,
     }).catch((e) => console.log(JSON.stringify({ event: 'discord_hooks_failed', error: String(e) }))));
   }
 
   return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
     nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
     faith: prof && prof.faith || null,
-    body, created_at: createdAt } }, 200);
+    body, created_at: createdAt, media_key: media ? media.key : null } }, 200);
 }
 
 /* Fan notifications out from a fresh board post. The author always comes to
@@ -633,12 +683,21 @@ async function handleSelfDelete(request: any, env: any, ctx: any) {
   const isAdmin = await isAdminHash(env, authorHash);
   const row = isAdmin
     ? await env.DB.prepare(
-        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted' RETURNING page, parent_id"
+        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted' RETURNING page, parent_id, media_key"
       ).bind(id).first()
     : await env.DB.prepare(
-        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted' RETURNING page, parent_id"
+        "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted' RETURNING page, parent_id, media_key"
       ).bind(id, authorHash).first();
   if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+  /* Retraction semantics: the attachment's bytes go NOW, not at the row's
+     30-day hard prune (the soft-deleted text row never renders anyway). The
+     hourly board orphan sweep is the backstop if this purge fails. */
+  if (row.media_key) {
+    try {
+      await purgeWallMedia(env, [row.media_key]);
+      await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL WHERE id = ?1').bind(id).run();
+    } catch (e) { /* the sweep reclaims it */ }
+  }
   if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
   /* Live push of the removal (Phase 1b): a reply vanishes from its thread; a
      whole topic drops from its category and the index. Back room stays silent. */
@@ -1116,6 +1175,19 @@ async function handleModerate(request: any, env: any, ctx: any) {
   const catKey = topic.page.slice(6);
   const emit = (ev: any) => { if (topic.page !== ADMIN_CAT) publishLive(env, ctx, ev); };
   if (act === 'delete') {
+    /* A topic delete leaves its replies as live orphans (existing behavior),
+       but every attachment in the thread — head and replies — is purged now:
+       nothing in the thread will ever render again from the public board. */
+    try {
+      const mk = await env.DB.prepare(
+        'SELECT media_key FROM comments WHERE (id = ?1 OR parent_id = ?1) AND media_key IS NOT NULL'
+      ).bind(id).all();
+      const keys = (mk.results || []).map((r: any) => r.media_key).filter(Boolean);
+      if (keys.length) {
+        await purgeWallMedia(env, keys);
+        await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL WHERE id = ?1 OR parent_id = ?1').bind(id).run();
+      }
+    } catch (e) { /* the hourly sweep reclaims it */ }
     await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
     emit({ v: 1, t: 'moderation', act: 'delete', id, topic_id: id, cat: catKey,
       scopes: ['topic:' + id, 'cat:' + catKey, 'board:index'] });
@@ -1167,6 +1239,23 @@ async function handleMove(request: any, env: any, ctx: any) {
   ).bind(id).first();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   if (topic.page === newPage) return json({ ok: false, error: 'It is already in that category.' }, 400);
+  /* Moving INTO the back room is a retraction from public view, and the back
+     room carries no attachments by rule (handlePost refuses them there) — so
+     the thread's media is purged outright rather than left fetchable at its
+     capability URL from browser/edge caches' long tail. Moving back out later
+     simply has no media to relight. */
+  if (newPage === ADMIN_CAT) {
+    try {
+      const mk = await env.DB.prepare(
+        'SELECT media_key FROM comments WHERE (id = ?1 OR parent_id = ?1) AND media_key IS NOT NULL'
+      ).bind(id).all();
+      const keys = (mk.results || []).map((r: any) => r.media_key).filter(Boolean);
+      if (keys.length) {
+        await purgeWallMedia(env, keys);
+        await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL WHERE id = ?1 OR parent_id = ?1').bind(id).run();
+      }
+    } catch (e) { /* the GET's back-room gate still refuses; the sweep reclaims */ }
+  }
   await env.DB.prepare('UPDATE comments SET page = ?1 WHERE id = ?2 OR parent_id = ?2').bind(newPage, id).run();
   /* Notify the poster, unless the mover is the poster or the topic is anonymous.
      The display name is admin-supplied (untrusted text, so scrubbed and capped);
@@ -1932,7 +2021,13 @@ async function handleDmMediaUpload(request: any, env: any) {
   if (!success) return json({ ok: false, error: 'Too many uploads at once. Wait a minute.' }, 429);
   const settings = await getAppSettings(env);
   if (settings.media_enabled !== '1') return json({ ok: false, error: 'Media sharing is turned off.' }, 403);
-  const maxBytes = Number(settings.media_max_bytes) || (25 * 1024 * 1024);
+  /* The bytes are E2E ciphertext, so the server can never know the KIND — the
+     enforceable wall is the largest per-kind cap the DM context allows (plus a
+     small ciphertext allowance); per-kind DM limits are client-side advisory,
+     served via /config. An empty DM kinds mask turns attachments off. */
+  const dmKinds = mediaKindsFor(settings, 'dm');
+  if (!dmKinds.length) return json({ ok: false, error: 'Media sharing is turned off.' }, 403);
+  const maxBytes = mediaMaxAcross(settings, dmKinds) + 4096;
   const declared = Number(request.headers.get('Content-Length') || 0);
   if (declared && declared > maxBytes + 8192) return json({ ok: false, error: 'That file is too large.' }, 413);
   let form;
@@ -1942,11 +2037,17 @@ async function handleDmMediaUpload(request: any, env: any) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
+  if (!(await isEstablished(env, me))) {
+    return json({ ok: false, error: 'Attachments unlock after your first post or profile save.' }, 403);
+  }
   const file = form.get('file');
   if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: 'No file.' }, 400);
   if (file.size > maxBytes) return json({ ok: false, error: 'That file is too large.' }, 413);
-  const usedNow = Number(settings.dm_media_bytes) || 0;
-  if (usedNow + file.size > Math.floor(MEDIA_CAP_BYTES * 0.90)) {
+  /* LIVE byte accounting at upload time — the sweep-maintained counter is up to
+     an hour stale, which a flood laughs at. One cheap indexed SUM. */
+  const usedRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM dm_media').first();
+  const capDm = Number(settings.media_cap_dm_bytes) || Number(Media.defaults.capDmBytes);
+  if ((usedRow.total || 0) + file.size > Math.floor(capDm * 0.90)) {
     return json({ ok: false, error: 'Media storage is full right now — older files clear soon, try again later.' }, 507);
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -2001,13 +2102,24 @@ async function handleAdminSettings(request: any, env: any) {
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
     const me = await sha256hex(key);
-    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, journal_topic: 1, journal_enabled: 1 };
+    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, journal_topic: 1, journal_enabled: 1,
+      media_image_max_bytes: 1, media_video_max_bytes: 1, media_audio_max_bytes: 1, media_audio_max_seconds: 1,
+      media_kinds_dm: 1, media_kinds_wall: 1, media_kinds_board: 1, media_image_autocompress: 1,
+      media_cap_dm_bytes: 1, media_cap_wall_bytes: 1 };
     const stmts = [];
     for (const k of Object.keys(data.set)) {
       if (!allowed[k]) continue;
       let v = String(data.set[k]);
-      if (k === 'media_enabled' || k === 'wall_prune_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
+      if (k === 'media_enabled' || k === 'wall_prune_enabled' || k === 'media_image_autocompress') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
+      /* Per-kind caps, the recorder stop, the store budgets, and the context
+         kinds masks all clamp/normalize through the Domain.Media kernel — the
+         same rules the client reads via mcCore, single-sourced. An empty kinds
+         mask is legal (= that context's uploads are off). */
+      else if (k === 'media_image_max_bytes' || k === 'media_video_max_bytes' || k === 'media_audio_max_bytes') v = String(Media.clampKindBytes(Math.floor(Number(v)) || 0));
+      else if (k === 'media_audio_max_seconds') v = String(Media.clampAudioSeconds(Math.floor(Number(v)) || 0));
+      else if (k === 'media_cap_dm_bytes' || k === 'media_cap_wall_bytes') v = String(Media.clampCapBytes(Math.floor(Number(v)) || 0));
+      else if (k === 'media_kinds_dm' || k === 'media_kinds_wall' || k === 'media_kinds_board') v = Media.serializeKinds(Media.parseKinds(v));
       else if (k === 'dm_default_ttl') v = String(DM_TTLS.indexOf(Math.floor(Number(v))) !== -1 ? Math.floor(Number(v)) : Dm.defaultTtl);
       else if (k === 'dm_backstop_days') v = String(Math.max(1, Math.min(365, Math.floor(Number(v)) || 30)));
       else if (k === 'wall_prune_days') v = String(Wall.clampPruneDays(Math.floor(Number(v)) || 365));
@@ -2191,7 +2303,18 @@ async function handleWallPostGet(request: any, env: any) {
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
   const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id").bind(id).all();
   const enriched = await wallEnrich(env, [post].concat(crows.results || []), me);
-  return json({ ok: true, post: enriched[0], comments: enriched.slice(1), me }, 200);
+  const comments = enriched.slice(1);
+  /* Comment likes: each comment carries its `clikes` count; add the viewer's own
+     like flag with one batched point-lookup, and normalise to {likes, liked} like
+     a post so the client renders the two the same way. */
+  let cliked: Set<any> = new Set();
+  if (me && comments.length) {
+    const cids = comments.map((c: any) => c.id);
+    const lr = await env.DB.prepare('SELECT comment_id FROM wall_comment_likes WHERE author_hash = ?1 AND comment_id IN (' + inList(cids.length, 2) + ')').bind(me, ...cids).all();
+    cliked = new Set((lr.results || []).map((x: any) => x.comment_id));
+  }
+  comments.forEach((c: any) => { c.likes = Number(c.clikes) || 0; c.liked = cliked.has(c.id) ? 1 : 0; delete c.clikes; });
+  return json({ ok: true, post: enriched[0], comments, me }, 200);
 }
 
 /* Like or unlike a public post — a lightweight toggle: READ_LIMIT (not the post
@@ -2237,6 +2360,69 @@ async function handleWallLike(request: any, env: any, ctx: any) {
   return json({ ok: true, liked: want ? 1 : 0, likes: (c && c.n) || 0 }, 200);
 }
 
+/* Like or unlike a public COMMENT — the twin of handleWallLike over
+   wall_comment_likes. No notification (kept lightweight; the count updates in
+   place). Returns the fresh {liked, likes}. */
+async function handleWallCommentLike(request: any, env: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Sign in to like.' }, 401);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const commentId = Math.floor(Number(data.comment || data.id) || 0);
+  const cm = await env.DB.prepare("SELECT id FROM wall_comments WHERE id = ?1 AND status = 'live'").bind(commentId).first();
+  if (!cm) return json({ ok: false, error: 'That comment is gone.' }, 404);
+  const want = !(data.like === false || data.like === 0 || data.like === 'false');
+  const now = Math.floor(Date.now() / 1000);
+  if (want) {
+    await env.DB.prepare('INSERT OR IGNORE INTO wall_comment_likes (comment_id, author_hash, created_at) VALUES (?1, ?2, ?3)').bind(commentId, me, now).run();
+  } else {
+    await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id = ?1 AND author_hash = ?2').bind(commentId, me).run();
+  }
+  const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM wall_comment_likes WHERE comment_id = ?1').bind(commentId).first();
+  return json({ ok: true, liked: want ? 1 : 0, likes: (c && c.n) || 0 }, 200);
+}
+
+/* Who liked a public post or comment (the "who liked it" popover). Public read —
+   anyone can see the likers of a public post — capped so a viral post never
+   returns thousands. Muted (shadowbanned) likers are hidden from everyone but
+   themselves, like all their public activity. Returns display names + avatars. */
+async function handleWallLikers(request: any, env: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const postId = Math.floor(Number(data.post) || 0);
+  const commentId = Math.floor(Number(data.comment) || 0);
+  const LIMIT = 60;
+  let rows;
+  if (commentId > 0) {
+    rows = await env.DB.prepare(
+      'SELECT l.author_hash, pr.nick, pr.avatar FROM wall_comment_likes l LEFT JOIN profiles pr ON pr.hash = l.author_hash ' +
+      'WHERE l.comment_id = ?1 AND ' + shadowExcl('l') + ' ORDER BY l.created_at DESC LIMIT ?2'
+    ).bind(commentId, LIMIT + 1).all();
+  } else if (postId > 0) {
+    rows = await env.DB.prepare(
+      'SELECT l.author_hash, pr.nick, pr.avatar FROM wall_likes l LEFT JOIN profiles pr ON pr.hash = l.author_hash ' +
+      'WHERE l.post_id = ?1 AND ' + shadowExcl('l') + ' ORDER BY l.created_at DESC LIMIT ?2'
+    ).bind(postId, LIMIT + 1).all();
+  } else {
+    return json({ ok: false, error: 'Bad request.' }, 400);
+  }
+  const all = rows.results || [];
+  const more = all.length > LIMIT;
+  const likers = all.slice(0, LIMIT).map((r: any) => ({
+    hash: r.author_hash, nick: r.nick || displayName(r.author_hash), avatar: r.avatar || null,
+  }));
+  return json({ ok: true, likers, more }, 200);
+}
+
 /* Coalesced like-notification (mirror of notifyDm): one unread row per
    (recipient, actor, post), so re-liking while unread never duplicates, but two
    different posts liked by the same person are two rows. Bell rings only on a
@@ -2251,7 +2437,8 @@ async function handleWallPost(request: any, env: any, ctx: any) {
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Sign in to post.' }, 401);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
-  const media = await wallClaimMedia(env, data.media_key);
+  const wallSettings = await getAppSettings(env);
+  const media = await wallClaimMedia(env, data.media_key, mediaKindsFor(wallSettings, 'wall'), wallSettings);
   if (!body && !media) return json({ ok: false, error: 'Say something or attach something.' }, 400);
   if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -2293,7 +2480,8 @@ async function handleWallComment(request: any, env: any, ctx: any) {
   const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
-  const media = await wallClaimMedia(env, data.media_key);
+  const wallSettings = await getAppSettings(env);
+  const media = await wallClaimMedia(env, data.media_key, mediaKindsFor(wallSettings, 'wall'), wallSettings);
   if (!body && !media) return json({ ok: false, error: 'Say something or attach something.' }, 400);
   if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -2340,6 +2528,7 @@ async function handleWallDelete(request: any, env: any) {
     if (!Wall.canDelete(row.author_hash)(me)(admin)) return json({ ok: false, error: 'No.' }, 403);
     if (row.media_key) await purgeWallMedia(env, [row.media_key]);
     await env.DB.prepare('DELETE FROM wall_comments WHERE id = ?1').bind(id).run();
+    await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id = ?1').bind(id).run();
     await env.DB.prepare('UPDATE wall_posts SET comments = MAX(0, comments - 1) WHERE id = ?1').bind(row.post_id).run();
     return json({ ok: true }, 200);
   }
@@ -2351,26 +2540,38 @@ async function handleWallDelete(request: any, env: any) {
   const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE post_id = ?1 AND media_key IS NOT NULL').bind(id).all();
   (cm.results || []).forEach((r: any) => keys.push(r.media_key));
   if (keys.length) await purgeWallMedia(env, keys);
+  await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id IN (SELECT id FROM wall_comments WHERE post_id = ?1)').bind(id).run();
   await env.DB.prepare('DELETE FROM wall_comments WHERE post_id = ?1').bind(id).run();
   await env.DB.prepare('DELETE FROM wall_likes WHERE post_id = ?1').bind(id).run();
   await env.DB.prepare('DELETE FROM wall_posts WHERE id = ?1').bind(id).run();
   return json({ ok: true }, 200);
 }
 
-/* Upload public post/comment media. Images are AI-screened (LLaVA, like avatars);
-   video/audio are validated by declared type + size only. Stored UNencrypted; the
-   object key encodes the kind so the client can render it. Linked to its post/
-   comment by handleWallPost/Comment; orphans (unlinked) are pruned. */
-async function handleWallMediaUpload(request: any, env: any) {
+/* Upload public post/comment/board media — ONE handler, parameterized by the
+   upload context ('wall' | 'board'), each with its own admin kinds mask; the
+   per-kind byte caps are global. Images are magic-byte-sniffed + AI-screened
+   (LLaVA, like avatars); video/audio are validated against the Domain.Media
+   exact-mime whitelist (declared type — a container cannot be cheaply sniffed;
+   the serving path defends with nosniff + a deny-all CSP). Stored UNencrypted
+   under wall/<i|v|a>/<64hex>; the kind letter is what clients render from and
+   what claim-time mask checks parse. Hardening (all of it load-bearing): the
+   uploader must be an ESTABLISHED identity (uploads are not Turnstile-gated —
+   the linking post is), and the store budget is checked with a LIVE SUM so a
+   flood is refused rather than discovered by a stale counter an hour later. */
+async function mediaUpload(request: any, env: any, ctxKind: string) {
   if (!env.WALLMEDIA) return json({ ok: false, error: 'Media is unavailable.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const settings = await getAppSettings(env);
   if (settings.media_enabled !== '1') return json({ ok: false, error: 'Media uploads are turned off.' }, 403);
-  const maxBytes = Number(settings.media_max_bytes) || (25 * 1024 * 1024);
+  const allowed = mediaKindsFor(settings, ctxKind);
+  if (!allowed.length) return json({ ok: false, error: 'Media uploads are turned off here.' }, 403);
+  /* Pre-parse gate on the declared length: the kind is unknown until the form
+     parses, so the ceiling is the largest cap among this context's kinds. */
+  const maxPre = mediaMaxAcross(settings, allowed);
   const clen = Number(request.headers.get('Content-Length') || 0);
-  if (clen && clen > maxBytes + 8192) return json({ ok: false, error: 'That file is too large.' }, 413);
+  if (clen && clen > maxPre + 8192) return json({ ok: false, error: 'That file is too large.' }, 413);
   let form;
   try { form = await request.formData(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(form.get('key') || '');
@@ -2378,26 +2579,42 @@ async function handleWallMediaUpload(request: any, env: any) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
+  if (!(await isEstablished(env, me))) {
+    return json({ ok: false, error: 'Attachments unlock after your first post or profile save.' }, 403);
+  }
   const file = form.get('file');
   if (!file || typeof file === 'string') return json({ ok: false, error: 'No file.' }, 400);
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (!bytes.length) return json({ ok: false, error: 'Empty file.' }, 400);
-  if (bytes.length > maxBytes) return json({ ok: false, error: 'That file is too large.' }, 413);
+  if (bytes.length > maxPre) return json({ ok: false, error: 'That file is too large.' }, 413);
   const declared = String(file.type || '');
-  let kind = '', mime = '';
+  let kind = '', word = '', mime = '';
   const img = sniffImage(bytes);
   if (img && (!declared || declared.startsWith('image/'))) {
     if (!(await screenImage(env, bytes))) return json({ ok: false, error: 'That image was declined by the safety check.' }, 422);
-    kind = 'i'; mime = img.mime;
-  } else if (declared.startsWith('video/')) { kind = 'v'; mime = declared.slice(0, 60); }
-  else if (declared.startsWith('audio/')) { kind = 'a'; mime = declared.slice(0, 60); }
-  else return json({ ok: false, error: 'Only images, video, and audio can be shared.' }, 400);
+    kind = 'i'; word = 'image'; mime = img.mime;
+  } else if (Media.mimeAllowed('video')(declared)) { kind = 'v'; word = 'video'; mime = declared.slice(0, 60); }
+  else if (Media.mimeAllowed('audio')(declared)) { kind = 'a'; word = 'audio'; mime = declared.slice(0, 60); }
+  else return json({ ok: false, error: 'That file type cannot be shared here.' }, 400);
+  if (allowed.indexOf(word) === -1) {
+    return json({ ok: false, error: 'Only ' + allowed.join(', ') + ' can be shared here.' }, 400);
+  }
+  if (bytes.length > mediaKindMax(settings, word)) {
+    return json({ ok: false, error: 'That ' + word + ' is over the ' + Math.floor(mediaKindMax(settings, word) / (1024 * 1024)) + ' MB limit.' }, 413);
+  }
+  /* LIVE store-budget check (wall + board share one wall_media SUM). Refusal is
+     the policy; the 95% valve in enforceWallMediaCap is only the emergency. */
+  const used = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM wall_media').first();
+  const capWall = Number(settings.media_cap_wall_bytes) || Number(Media.defaults.capWallBytes);
+  if ((used.total || 0) + bytes.length > Math.floor(capWall * 0.90)) {
+    return json({ ok: false, error: 'Media storage is full right now. Try again later.' }, 507);
+  }
   const objKey = 'wall/' + kind + '/' + randomHex(32);
   try { await env.WALLMEDIA.put(objKey, bytes, { httpMetadata: { contentType: mime } }); }
   catch { return json({ ok: false, error: 'Upload failed.' }, 500); }
   await env.DB.prepare('INSERT INTO wall_media (key, size, created_at) VALUES (?1, ?2, ?3)')
     .bind(objKey, bytes.length, Math.floor(Date.now() / 1000)).run();
-  return json({ ok: true, media_key: objKey, size: bytes.length }, 200);
+  return json({ ok: true, media_key: objKey, size: bytes.length, kind: word }, 200);
 }
 
 /* Serve public post media, keyless + cacheable, same-origin (like avatars). */
@@ -4084,6 +4301,8 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/wall/comment', fn: (request, env, ctx, url) => handleWallComment(request, env, ctx) },
   { m: 'POST', p: '/api/comments/wall/delete', fn: (request, env, ctx, url) => handleWallDelete(request, env) },
   { m: 'POST', p: '/api/comments/wall/like', fn: (request, env, ctx, url) => handleWallLike(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/wall/comment/like', fn: (request, env, ctx, url) => handleWallCommentLike(request, env) },
+  { m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleWallLikers(request, env) },
   { m: 'POST', p: '/api/comments/wall/prune', fn: (request, env, ctx, url) => handleWallPrune(request, env) },
   { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url) },
   { m: 'POST', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaUpload(request, env) },

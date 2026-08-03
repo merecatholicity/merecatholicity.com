@@ -17,6 +17,8 @@ import * as Handle from '../../purescript/output/Domain.Handle/index.js';
 import * as Links from '../../purescript/output/Domain.Links/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
+import * as Media from '../../purescript/output/Domain.Media/index.js';
+import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
@@ -733,7 +735,7 @@ export async function topicViewPayload(env: any, topic: any, pRaw: any, findRaw:
     p = Math.floor(pos.n / TOPICS_PER_PAGE) + 1;
   }
   const replies = await env.DB.prepare(
-    "SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at FROM comments c " +
+    "SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.media_key, c.media_expired FROM comments c " +
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.parent_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id LIMIT ?2 OFFSET ?3"
   ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
@@ -744,7 +746,7 @@ export async function topicViewPayload(env: any, topic: any, pRaw: any, findRaw:
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0 }, counts[topic.author_hash] || 0),
+    topic: withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0),
     replies: (replies.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0)),
     total: topic.replies || 0,
     page: p,
@@ -843,6 +845,21 @@ export const APP_SETTING_DEFAULTS = {
   discord_feed_webhook: '',                     // optional Discord webhook for new feed posts (empty = off)
   journal_topic: '219',                         // the forum topic whose posts become Journal articles
   journal_enabled: '1',                         // whether the Mere Catholicity Journal page is live
+  /* Per-type / per-context media limits (Phase A, single-sourced in Domain.Media).
+     media_max_bytes above stays as the absolute per-file ceiling: the effective
+     cap for a kind is min(per-kind, ceiling). Kinds masks are CSV of
+     image,video,audio; an empty mask turns uploads off for that context. */
+  media_image_max_bytes: String(Media.defaults.imageMaxBytes),
+  media_video_max_bytes: String(Media.defaults.videoMaxBytes),
+  media_audio_max_bytes: String(Media.defaults.audioMaxBytes),
+  media_audio_max_seconds: String(Media.defaults.audioMaxSeconds),   // recorder stop; client-advisory (the server cannot decode audio — its wall is bytes)
+  media_kinds_dm: Media.defaults.kindsDm,
+  media_kinds_wall: Media.defaults.kindsWall,
+  media_kinds_board: Media.defaults.kindsBoard,
+  media_image_autocompress: '1',                // client-side canvas downscale before upload
+  media_cap_dm_bytes: String(Media.defaults.capDmBytes),     // DM media store budget (was a hardcoded 10 GB fantasy)
+  media_cap_wall_bytes: String(Media.defaults.capWallBytes), // wall + board media store budget (shared wall_media SUM)
+  wall_media_bytes: '0',                        // sweep-maintained total, display-only
 };
 export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
 export async function getAppSettings(env: any) {
@@ -858,6 +875,50 @@ export async function getAppSettings(env: any) {
 }
 export function dmDefaultTtl(s: any) { return Number(s.dm_default_ttl) || Dm.defaultTtl; }
 export function dmBackstopSeconds(s: any) { return (Number(s.dm_backstop_days) || 30) * 86400; }
+
+/* ---- Per-kind media limits and context masks (single-sourced in Domain.Media).
+   This is the worker-side membrane over the kernel: Maybe is erased here and
+   nowhere else, mirroring app/core.ts on the client side. ---- */
+const psOrNull = (m: any) => MaybeM.maybe(null)((x: any) => x)(m);
+/* The kind ('image'|'video'|'audio') encoded in a wall/<i|v|a>/<64hex> object
+   key, or null for anything malformed. Strictness lives in the kernel. */
+export function mediaKindOfKey(key: any) { return psOrNull(Media.kindOfKey(String(key || ''))); }
+/* Effective per-file cap for one kind: the admin's per-kind setting, bounded by
+   the legacy media_max_bytes ceiling (safe-by-default: raising a kind past the
+   ceiling needs both knobs, and the settings page says so). */
+export function mediaKindMax(s: any, kind: string) {
+  const stored = Math.floor(Number(s['media_' + kind + '_max_bytes'])) || 0;
+  const fallback = Number((Media.defaults as any)[kind + 'MaxBytes']) || (10 * 1024 * 1024);
+  const ceiling = Number(s.media_max_bytes) || (25 * 1024 * 1024);
+  return Math.min(stored > 0 ? stored : fallback, ceiling);
+}
+/* The kinds an upload context (dm | wall | board) accepts. Empty = off. */
+export function mediaKindsFor(s: any, ctx: string) {
+  const raw = s['media_kinds_' + ctx];
+  return Media.parseKinds(String(raw == null ? '' : raw));
+}
+/* The largest per-file cap across a context's allowed kinds — the pre-parse
+   Content-Length gate (the kind is unknown before the form parses) and the DM
+   ciphertext cap (E2E blinds the server to the kind, so the max is the wall). */
+export function mediaMaxAcross(s: any, kinds: string[]) {
+  let m = 0;
+  for (const k of kinds) m = Math.max(m, mediaKindMax(s, k));
+  return m;
+}
+
+/* An upload needs an ESTABLISHED identity — one that has passed Turnstile at
+   least once (a saved profile, a comment, or a wall post). Uploads themselves
+   are not Turnstile-gated (the linking send/post is), so without this a
+   drive-by random key could store megabytes in R2 unchallenged. */
+export async function isEstablished(env: any, hash: any) {
+  if (!hash) return false;
+  const p = await env.DB.prepare('SELECT hash FROM profiles WHERE hash = ?1').bind(hash).first();
+  if (p) return true;
+  const c = await env.DB.prepare('SELECT id FROM comments WHERE author_hash = ?1 LIMIT 1').bind(hash).first();
+  if (c) return true;
+  const w = await env.DB.prepare('SELECT id FROM wall_posts WHERE author_hash = ?1 LIMIT 1').bind(hash).first();
+  return !!w;
+}
 
 /* ================= Discord webhook fan-out =================
    Two OPTIONAL webhooks (forum posts, feed posts) live in app_settings as full
@@ -936,10 +997,15 @@ export async function purgeMediaKeys(env: any, keys: any) {
    oldest media (LRU) until back under 90%, nulling the message's media pointer so
    the client shows it as expired. Normal message-expiry keeps us far from this. */
 export async function enforceMediaCap(env: any) {
+  const s = await getAppSettings(env);
+  /* The DM store's own budget (admin-set), NOT the whole R2 free tier: the
+     account's 10 GB is shared with the KJV audio, backups, avatars, and wall
+     media, so the old MEDIA_CAP_BYTES-based gate could legally overrun it. */
+  const capBytes = Number(s.media_cap_dm_bytes) || Number(Media.defaults.capDmBytes);
   const totalRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM dm_media').first();
   let total = totalRow.total || 0;
-  const EMERGENCY = Math.floor(MEDIA_CAP_BYTES * 0.95);
-  const TARGET = Math.floor(MEDIA_CAP_BYTES * 0.90);
+  const EMERGENCY = Math.floor(capBytes * 0.95);
+  const TARGET = Math.floor(capBytes * 0.90);
   if (total > EMERGENCY) {
     const old = await env.DB.prepare(
       'SELECT key, size, msg_id FROM dm_media WHERE msg_id IS NOT NULL ORDER BY created_at ASC LIMIT 1000'
@@ -1005,9 +1071,12 @@ export async function sweepExpiredDms(env: any) {
     }
   } catch (e) { console.log(JSON.stringify({ event: 'sweep_media_cap_failed', error: String(e) })); }
   try {
+    /* 15 minutes, not an hour: a real send links its upload within seconds, so
+       anything unlinked that long is an abandoned draft or a flood — and the
+       shorter window is what makes an upload flood self-cleaning. */
     const orphan = await env.DB.prepare(
       'SELECT key FROM dm_media WHERE (msg_id IS NULL AND created_at < ?1) OR (msg_id IS NOT NULL AND msg_id NOT IN (SELECT id FROM dms)) LIMIT 2000'
-    ).bind(now - 3600).all();
+    ).bind(now - 900).all();
     await purgeMediaKeys(env, (orphan.results || []).map((r: any) => r.key));
   } catch (e) { /* keep going */ }
   try { await sweepDms(env); } catch (e) { /* empty-thread tidy */ }
@@ -1032,8 +1101,8 @@ export const WALL_PER_PAGE = 20;
 // Object-key shape: wall/<kind>/<64hex>, kind i=image v=video a=audio (the client
 // picks <img>/<video>/<audio> from the kind — no mime column or JOIN needed).
 export const WALL_MEDIA_RE = /^wall\/[iva]\/[0-9a-f]{64}$/;
-export const WALL_POST_COLS = 'p.id, p.author_hash, pr.nick, pr.avatar, pr.faith, p.body, p.created_at, p.edited_at, p.media_key, p.media_size, p.comments, (SELECT COUNT(*) FROM wall_likes wl WHERE wl.post_id = p.id) AS likes';
-export const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.avatar, pr.faith, c.body, c.created_at, c.media_key, c.media_size';
+export const WALL_POST_COLS = 'p.id, p.author_hash, pr.nick, pr.avatar, pr.faith, p.body, p.created_at, p.edited_at, p.media_key, p.media_size, p.media_expired, p.comments, (SELECT COUNT(*) FROM wall_likes wl WHERE wl.post_id = p.id) AS likes';
+export const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.avatar, pr.faith, c.body, c.created_at, c.media_key, c.media_size, c.media_expired, (SELECT COUNT(*) FROM wall_comment_likes wcl WHERE wcl.comment_id = c.id) AS clikes';
 
 /* Add the author display fields (assigned pseudonym + rank) the client renders,
    mirroring the forum's withNames. nick/avatar/faith are already joined in. */
@@ -1116,13 +1185,69 @@ export async function purgeWallMedia(env: any, keys: any) {
 export async function sweepWallOrphanMedia(env: any) {
   const now = Math.floor(Date.now() / 1000);
   try {
+    /* ref_type 'board' = a FORUM comment's attachment (comments.id); 'comment'
+       means a WALL comment — the two id spaces are unrelated, so the ref_type
+       namespace is load-bearing here. A board attachment outlives only a live
+       or pending owner: pending keeps the admin queue's evidence, and a
+       soft-deleted or hard-pruned comment's media is reclaimed within the hour
+       even when the immediate purge in the delete handler failed. Unlinked
+       orphans age out at 15 minutes (a real post links within seconds). */
     const orphan = await env.DB.prepare(
       'SELECT key FROM wall_media WHERE (ref_id IS NULL AND created_at < ?1) ' +
       "OR (ref_type = 'post' AND ref_id NOT IN (SELECT id FROM wall_posts)) " +
-      "OR (ref_type = 'comment' AND ref_id NOT IN (SELECT id FROM wall_comments)) LIMIT 2000"
-    ).bind(now - 3600).all();
+      "OR (ref_type = 'comment' AND ref_id NOT IN (SELECT id FROM wall_comments)) " +
+      "OR (ref_type = 'board' AND ref_id NOT IN (SELECT id FROM comments WHERE status IN ('live', 'pending'))) LIMIT 2000"
+    ).bind(now - 900).all();
     await purgeWallMedia(env, (orphan.results || []).map((r: any) => r.key));
   } catch (e) { /* keep going */ }
+}
+
+/* The wall/board media store's byte accounting and emergency valve. Normal
+   pressure is handled at UPLOAD time (a live SUM refuses at 90% of the admin's
+   media_cap_wall_bytes); this hourly pass keeps the display total fresh and,
+   only past 95%, evicts the oldest LINKED media — stamping media_expired on the
+   parent row so the client shows an honest placeholder, never a broken tile.
+   Public posts are content, not cache: silent LRU is content loss, which is why
+   the valve is a last resort and the refusal is the policy (DM media differs —
+   ephemeral by contract, so its LRU in enforceMediaCap is honest). */
+export async function enforceWallMediaCap(env: any) {
+  const s = await getAppSettings(env);
+  const capBytes = Number(s.media_cap_wall_bytes) || Number(Media.defaults.capWallBytes);
+  const totalRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM wall_media').first();
+  let total = totalRow.total || 0;
+  const EMERGENCY = Math.floor(capBytes * 0.95);
+  if (total > EMERGENCY) {
+    const TARGET = Math.floor(capBytes * 0.90);
+    const old = await env.DB.prepare(
+      'SELECT key, size, ref_type, ref_id FROM wall_media WHERE ref_id IS NOT NULL ORDER BY created_at ASC LIMIT 200'
+    ).all();
+    const kill: any[] = [];
+    for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
+    if (kill.length) {
+      await purgeWallMedia(env, kill.map((r) => r.key));
+      /* Null the parent pointer + stamp the placeholder, batched per table —
+         the one place the shared wall_media table costs a branch. */
+      const tableFor: any = { post: 'wall_posts', comment: 'wall_comments', board: 'comments' };
+      const byTable: any = { wall_posts: [], wall_comments: [], comments: [] };
+      for (const r of kill) { const t = tableFor[r.ref_type]; if (t) byTable[t].push(r.ref_id); }
+      for (const t of Object.keys(byTable)) {
+        const ids = byTable[t];
+        for (let i = 0; i < ids.length; i += 50) {
+          const chunk = ids.slice(i, i + 50);
+          const ph = inList(chunk.length);
+          try {
+            await env.DB.prepare('UPDATE ' + t + ' SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + ph + ')').bind(...chunk).run();
+          } catch (e) { /* keep going */ }
+        }
+      }
+    }
+  }
+  try {
+    await env.DB.prepare(
+      "INSERT INTO app_settings (k, v, updated_at) VALUES ('wall_media_bytes', ?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?1, updated_at = ?2"
+    ).bind(String(total), Math.floor(Date.now() / 1000)).run();
+    appSettingsCache.at = 0; appSettingsCache.s = null;
+  } catch (e) { /* display-only cache; ignore */ }
 }
 
 /* Read gate shared by the members-only feed/wall/post reads. Returns the member
@@ -1177,12 +1302,21 @@ export async function notifyWallLike(env: any, toHash: any, fromHash: any, postI
   }
 }
 
-/* Validate an attached media_key: it must be an unlinked wall_media row. Returns
-   { key, size } or null. */
-export async function wallClaimMedia(env: any, mediaKey: any) {
+/* Validate an attached media_key: it must be an unlinked wall_media row, and —
+   when the DESTINATION context's mask/settings are given — its kind (encoded in
+   the key) must be allowed there and its stored size inside that kind's cap.
+   Claim-time enforcement is what stops a wall-context upload from smuggling a
+   video onto a board whose mask excludes it: upload cannot know its destination.
+   Returns { key, size, kind } or null. */
+export async function wallClaimMedia(env: any, mediaKey: any, allowedKinds?: any, settings?: any) {
   if (!mediaKey || !WALL_MEDIA_RE.test(String(mediaKey))) return null;
+  const kind = mediaKindOfKey(mediaKey);
+  if (!kind) return null;
+  if (allowedKinds && allowedKinds.indexOf(kind) === -1) return null;
   const mr = await env.DB.prepare('SELECT size FROM wall_media WHERE key = ?1 AND ref_id IS NULL').bind(String(mediaKey)).first();
-  return mr ? { key: String(mediaKey), size: mr.size } : null;
+  if (!mr) return null;
+  if (settings && (mr.size || 0) > mediaKindMax(settings, kind)) return null;
+  return { key: String(mediaKey), size: mr.size, kind };
 }
 
 /* Create a post on my own wall (author = me), which also lands it in the feed.
@@ -1196,6 +1330,7 @@ export async function runWallPrune(env: any, days: any) {
     const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE media_key IS NOT NULL AND (created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)) LIMIT 5000').bind(cutoff).all();
     (cm.results || []).forEach((r: any) => keys.push(r.media_key));
     if (keys.length) await purgeWallMedia(env, keys);
+    await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id IN (SELECT id FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1))').bind(cutoff).run();
     await env.DB.prepare('DELETE FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
     await env.DB.prepare('DELETE FROM wall_likes WHERE post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
     const del = await env.DB.prepare('DELETE FROM wall_posts WHERE created_at < ?1').bind(cutoff).run();

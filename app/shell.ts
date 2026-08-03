@@ -230,15 +230,30 @@ customElements.define('mc-audio-dock', McAudioDock);
 
   var SIZE_CAP = 2000000;         // volumes past ~2 MB take the ordinary road
   var cache = new Map();          // pathname -> html text
-  var CACHE_MAX = 8;
+  /* 12, not 8: the six tab destinations plus a handful of content pages — a
+     round-robin power user must never evict their own loop mid-lap. */
+  var CACHE_MAX = 12;
 
   var style = document.createElement('style');
   style.id = 'mc-app-css';
   style.textContent =
-    '.mc-progress-bar{position:fixed;top:0;left:0;height:2px;width:0;' +
+    '.mc-progress-bar{position:fixed;top:env(safe-area-inset-top,0px);left:0;height:2px;width:0;' +
     'background:var(--maroon,#8b1a1a);z-index:9999;opacity:0;' +
     'transition:width .3s ease,opacity .3s ease}' +
     '.mc-progress-bar.on{opacity:1;width:70%;transition:width 8s cubic-bezier(.1,.7,.1,1),opacity .2s ease}' +
+    /* The visible "we're on it" pill: a slow navigation must never look like a
+       dead page. Shown ~300ms into a fetch (fast hops never see it), cleared on
+       swap or fallback. Safe-area aware so iOS standalone doesn't hide it. */
+    '.mc-navload{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);' +
+    'transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:.5rem;' +
+    'background:var(--surface,#fffdf7);border:1px solid var(--rule,#d9cfb8);border-radius:999px;' +
+    'padding:.4rem .9rem;box-shadow:0 2px 12px rgba(0,0,0,.18);font-size:.85rem;' +
+    'color:var(--maroon,#8b1a1a);opacity:0;pointer-events:none;transition:opacity .15s ease}' +
+    '.mc-navload.on{opacity:1}' +
+    '.mc-navload-spin{width:14px;height:14px;border:2px solid var(--rule,#d9cfb8);' +
+    'border-top-color:var(--maroon,#8b1a1a);border-radius:50%;flex:none;' +
+    'animation:mc-navspin .7s linear infinite}' +
+    '@keyframes mc-navspin{to{transform:rotate(360deg)}}' +
     '.mc-dock{position:fixed;right:12px;bottom:12px;z-index:9998;display:flex;align-items:center;gap:.3rem;' +
     'background:var(--surface,#fffdf7);border:1px solid var(--rule,#d9cfb8);border-radius:8px;' +
     'padding:.4rem .5rem;box-shadow:0 2px 10px rgba(0,0,0,.15);max-width:min(94vw,34rem);' +
@@ -265,6 +280,29 @@ customElements.define('mc-audio-dock', McAudioDock);
   var progress = document.createElement('mc-progress') as McProgress;
   progress.setAttribute('data-mc-app', '');
   document.body.appendChild(progress);
+
+  /* The loading pill: visible feedback for any navigation that takes real time.
+     Armed on every soft-nav, it appears only after a 300ms grace (instant hops
+     never flash it) and stands until the swap lands or the fallback takes over. */
+  var navload = document.createElement('div');
+  navload.className = 'mc-navload';
+  navload.setAttribute('data-mc-app', '');
+  navload.setAttribute('role', 'status');
+  navload.setAttribute('aria-live', 'polite');
+  var navloadSpin = document.createElement('span');
+  navloadSpin.className = 'mc-navload-spin';
+  navload.appendChild(navloadSpin);
+  navload.appendChild(document.createTextNode('Loading…'));
+  document.body.appendChild(navload);
+  var navloadTimer = 0;
+  function armNavload() {
+    if (navloadTimer) clearTimeout(navloadTimer);
+    navloadTimer = window.setTimeout(function () { navload.classList.add('on'); }, 300);
+  }
+  function disarmNavload() {
+    if (navloadTimer) { clearTimeout(navloadTimer); navloadTimer = 0; }
+    navload.classList.remove('on');
+  }
 
   var dock = document.createElement('mc-audio-dock') as McAudioDock;
   dock.setAttribute('data-mc-app', '');
@@ -368,7 +406,20 @@ customElements.define('mc-audio-dock', McAudioDock);
     var jobs = pageScripts(doc).map(function (want) {
       if (!loadedScripts[want.name]) {
         loadedScripts[want.name] = true;
-        return loadScript(want.src);   // a fresh script self-boots on load
+        /* A fresh script self-boots on load. A failed load must NOT be
+           remembered as loaded — that once left every later visit to the page
+           with a silent, empty section until a hard refresh. Retry once after a
+           breath; still failing, clear the flag so the next navigation tries
+           again from scratch. */
+        return loadScript(want.src).then(function (ok) {
+          if (ok) return true;
+          return new Promise(function (r) { setTimeout(r, 500); }).then(function () {
+            return loadScript(want.src);
+          }).then(function (ok2) {
+            if (!ok2) delete loadedScripts[want.name];
+            return ok2;
+          });
+        });
       }
       var reg = REG[want.name];
       if (reg && typeof (window as any)[reg.boot] === 'function') {
@@ -447,29 +498,98 @@ customElements.define('mc-audio-dock', McAudioDock);
     if (swapped) swapped.classList.add('mc-swapin');
   }
 
-  var navigating = false;
+  /* ---- robust document fetch: per-attempt timeout + retries ----
+     A phone's network hangs and drops; a navigation must survive both. Each
+     attempt is aborted after TIMEOUT ms (a stalled fetch once froze the whole
+     shell forever — every later tap silently dropped); a network failure, a
+     timeout, or a 429/5xx retries after a short breath. `outer` is the
+     navigation's own abort (a newer click supersedes this one): it cancels the
+     in-flight attempt and stops the retry ladder cold. */
+  var NAV_WAITS = [400, 1200];
+  var NAV_TIMEOUT = 9000;
+  function navSleep(ms: number) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function fetchDoc(path: string, outer: AbortSignal | null): Promise<string> {
+    function attempt(i: number): Promise<string> {
+      if (outer && outer.aborted) return Promise.reject(new Error('superseded'));
+      var ctrl: AbortController | null = null;
+      var timer = 0;
+      var onOuter: (() => void) | null = null;
+      var init: RequestInit = {};
+      if (typeof AbortController === 'function') {
+        ctrl = new AbortController();
+        init.signal = ctrl.signal;
+        timer = window.setTimeout(function () { if (ctrl) ctrl.abort(); }, NAV_TIMEOUT);
+        if (outer) {
+          onOuter = function () { if (ctrl) ctrl.abort(); };
+          outer.addEventListener('abort', onOuter);
+        }
+      }
+      var cleanup = function () {
+        if (timer) { clearTimeout(timer); timer = 0; }
+        if (outer && onOuter) { outer.removeEventListener('abort', onOuter); onOuter = null; }
+      };
+      return fetch(path, init).then(function (res) {
+        if (!res.ok) {
+          var httpErr = new Error('status ' + res.status) as Error & { retryable?: boolean };
+          httpErr.retryable = res.status === 429 || res.status >= 500;
+          throw httpErr;
+        }
+        var len = Number(res.headers.get('Content-Length') || 0);
+        if (len > SIZE_CAP) {
+          var big = new Error('oversize') as Error & { terminal?: boolean };
+          big.terminal = true;
+          throw big;
+        }
+        /* the timer stays armed through the body read so a stalled body is a
+           timeout too, not a forever-hang */
+        return res.text().then(function (t) { cleanup(); return t; });
+      }).catch(function (err: Error & { retryable?: boolean; terminal?: boolean }) {
+        cleanup();
+        if (err && err.terminal) throw err;                    // oversize: ordinary road now
+        if (outer && outer.aborted) throw err;                 // superseded: stop cold
+        var httpish = err && /^status /.test(err.message || '');
+        var retryable = httpish ? !!err.retryable : true;      // network/timeout always retries
+        if (retryable && i < NAV_WAITS.length) {
+          return navSleep(NAV_WAITS[i]).then(function () { return attempt(i + 1); });
+        }
+        throw err;
+      });
+    }
+    return attempt(0);
+  }
+
+  /* ---- latest-wins navigation ----
+     Every click starts a navigation; a newer click supersedes an older one
+     (aborting its fetch) instead of being dropped. The old model swallowed any
+     tap made while a navigation was in flight — preventDefault had already
+     fired, so fast tapping "did nothing" — and a hung fetch wedged the flag
+     forever. seq guards every mutation: a superseded navigation never touches
+     the DOM, history, or the spinner. On any terminal failure the ordinary
+     road (a full page load) takes over — the shell never strands an empty or
+     stale page. */
+  var navSeq = 0;
+  var navCtrl: AbortController | null = null;
   var lastPath = location.pathname;
   var lastSearch = location.search;
   function softNav(url: URL, push: boolean) {
-    if (navigating) return;
-    navigating = true;
+    var seq = ++navSeq;
+    if (navCtrl) { try { navCtrl.abort(); } catch (e) { /* already done */ } }
+    navCtrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var signal = navCtrl ? navCtrl.signal : null;
     /* Any navigation closes the app menus/sheets so a chosen link never loads
        behind an open one (the mobile Settings sheet + the desktop account
        dropdown, which its own outside-click can't catch for an in-menu link). */
     try { if (window.mcSheet) window.mcSheet.close(); } catch (e) { /* ignore */ }
     try { document.dispatchEvent(new Event('mc-navigate')); } catch (e) { /* ignore */ }
     progress.active = true;
+    armNavload();
     var key = url.pathname;
     var cached = cache.get(key);
     (cached
       ? Promise.resolve(cached)
-      : fetch(url.pathname).then(function (res) {
-          if (!res.ok) throw new Error('status ' + res.status);
-          var len = Number(res.headers.get('Content-Length') || 0);
-          if (len > SIZE_CAP) throw new Error('oversize');
-          return res.text();
-        })
+      : fetchDoc(url.pathname, signal)
     ).then(function (text) {
+      if (seq !== navSeq) return;               // a newer navigation owns the page
       var doc = new DOMParser().parseFromString(text, 'text/html');
       if (noShell(doc)) throw new Error('noshell');
       if (!cached) {
@@ -484,14 +604,16 @@ customElements.define('mc-audio-dock', McAudioDock);
       lastSearch = location.search;
       if (!url.hash) window.scrollTo(0, 0);
       return bootPage(doc).then(function () {
+        if (seq !== navSeq) return;             // superseded mid-boot: the newer nav repaints
         boots();
         progress.active = false;
-        navigating = false;
+        disarmNavload();
       });
     }).catch(function () {
-      /* any doubt at all: the ordinary road */
+      if (seq !== navSeq) return;               // superseded: the newer nav owns the UI
       progress.active = false;
-      navigating = false;
+      disarmNavload();
+      /* any doubt at all: the ordinary road */
       location.href = url.href;
     });
   }

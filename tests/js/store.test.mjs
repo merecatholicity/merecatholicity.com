@@ -52,6 +52,42 @@ test('two concurrent identical reads share ONE in-flight request', async () => {
   assert.deepEqual(r1, r2);
 });
 
+test('a throttled read quietly re-asks and settles on the freed answer', async () => {
+  invalidate();
+  // The server's 429 rides a rolling minute, so the store waits and re-asks
+  // (bounded) instead of handing the view a dead "could not be loaded".
+  // Collapse the real waits so the test stays instant.
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn) => realSetTimeout(fn, 0);
+  try {
+    let calls = 0;
+    const answers = [
+      { ok: false, error: 'Too many requests.' },
+      { ok: false, error: 'Too many requests. Slow down.' },
+      { ok: true, v: 7 },
+    ];
+    const fn = () => { const a = answers[calls]; calls++; return { json: () => Promise.resolve(a) }; };
+    const d = await fetchJson(fn, '/u6', undefined, { ttl: 10000 });
+    assert.equal(calls, 3, 'the two 429s each earned a quiet re-ask');
+    assert.deepEqual(d, { ok: true, v: 7 });
+    const d2 = await fetchJson(fn, '/u6', undefined, { ttl: 10000 });
+    assert.equal(calls, 3, 'the freed answer was cached like any success');
+    assert.deepEqual(d2, d);
+  } finally { globalThis.setTimeout = realSetTimeout; }
+});
+
+test('a throttle past the bounded ladder reaches the caller as the refusal', async () => {
+  invalidate();
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn) => realSetTimeout(fn, 0);
+  try {
+    const { fn, rec } = mkFetcher({ ok: false, error: 'Too many requests.' });
+    const d = await fetchJson(fn, '/u7', undefined, { ttl: 10000 });
+    assert.equal(rec.calls, 3, 'bounded: the first ask plus two re-asks, never a loop');
+    assert.equal(d.ok, false, 'the refusal still reaches the view (uncached, as ever)');
+  } finally { globalThis.setTimeout = realSetTimeout; }
+});
+
 test('bypass skips the cache read but still refreshes', async () => {
   invalidate();
   const { fn, rec } = mkFetcher({ ok: true, v: 1 });

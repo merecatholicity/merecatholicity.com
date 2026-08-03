@@ -28,10 +28,12 @@ TITLE_RE = re.compile(r'<title>(.*?)</title>', re.S)
 #     Default dark, matching nav.js's effective() — nav.js re-applies it later.
 #  2) Home: on index.html (app mode), hide the static book-promo content until the
 #     <mc-home> launcher mounts, so the home page doesn't flash its static markup
-#     ("The Book" flash) first. A 4s safety reveals it if the launcher never mounts
-#     (JS error / ?app=0 is handled by the localStorage check).
-# Injected right after <head> so it runs before the stylesheet paints. Idempotent
-# via the id, and re-applied on every `make html`.
+#     ("The Book" flash) first. A 2.5s safety reveals it if the launcher never
+#     mounts OR mounted empty (a broken bundle must never hold the page blank —
+#     the flash-guard is cosmetic, the content is the point; the old 4s absent-only
+#     check once left a cold PWA start on a white screen).
+# Injected right after <head> so it runs before the stylesheet paints. Replaced
+# in place when the template changes, and re-applied on every `make html`.
 FLASH_SCRIPT = (
     '<script id="mc-fout">(function(){var e=document.documentElement;'
     "function c(n){var m=document.cookie.match('(?:^|; )'+n+'=([^;]*)');return m?m[1]:''}"
@@ -41,16 +43,21 @@ FLASH_SCRIPT = (
     "try{var a=true;try{a=localStorage.getItem('mc-app')!=='0'}catch(z){a=false}"
     "var p=location.pathname;if(a&&(p==='/'||p===''||p.slice(-11)==='/index.html')){"
     "e.classList.add('mc-home-boot');"
-    "setTimeout(function(){if(!document.querySelector('mc-home'))e.classList.remove('mc-home-boot')},4000)}}catch(x){}"
+    "setTimeout(function(){var h=document.querySelector('mc-home');"
+    "if(!h||!h.firstChild)e.classList.remove('mc-home-boot')},2500)}}catch(x){}"
     '})();</script>'
 )
 
+FLASH_RE = re.compile(r'<script id="mc-fout">.*?</script>', re.S)
+
 
 def inject_flash(html):
-    """Add the anti-flash head script right after <head>, unless already there."""
-    if 'id="mc-fout"' in html:
-        return html
-    return re.sub(r'(<head[^>]*>)', lambda m: m.group(1) + '\n' + FLASH_SCRIPT, html, count=1)
+    """Add the anti-flash head script right after <head>; replace a stale copy."""
+    m = FLASH_RE.search(html)
+    if m:
+        return html if m.group(0) == FLASH_SCRIPT else FLASH_RE.sub(
+            lambda _: FLASH_SCRIPT, html, count=1)
+    return re.sub(r'(<head[^>]*>)', lambda m2: m2.group(1) + '\n' + FLASH_SCRIPT, html, count=1)
 
 
 def esc(s):

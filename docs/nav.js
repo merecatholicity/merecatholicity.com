@@ -225,6 +225,27 @@ document.addEventListener('DOMContentLoaded', function () {
   document.head.appendChild(s);
 })();
 
+/* The installable face's identity, declared HERE — the first script every page
+   carries — not from the app bundle: iOS captures the manifest at the moment
+   the reader taps Add to Home Screen, and a tap in the seconds before app.js
+   arrived over the network produced a manifest-less white web clip (seen live
+   2026-08-02). The shell's own injection stays as a guard; both are idempotent.
+   apple-touch-icon gives iOS a real icon even for a pre-manifest capture. */
+(function () {
+  if (!document.querySelector('link[rel="manifest"]')) {
+    var mf = document.createElement('link');
+    mf.rel = 'manifest';
+    mf.href = 'manifest.webmanifest';
+    document.head.appendChild(mf);
+  }
+  if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+    var ti = document.createElement('link');
+    ti.rel = 'apple-touch-icon';
+    ti.href = 'icon-192.png';
+    document.head.appendChild(ti);
+  }
+})();
+
 /* The app shell (Lit soft-navigation) — THE DEFAULT since 2026-07-30:
    every reader gets soft navigation, the persistent audio dock, and the
    installable face. ?app=0 is the standing opt-out latch (sticky per
@@ -237,7 +258,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=76';
+    s.src = 'app.js?v=77';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

@@ -51,7 +51,7 @@ export default [
     files: ['docs/sw.js'],
     languageOptions: {
       ecmaVersion: 2023, sourceType: 'script',
-      globals: { self: 'readonly', caches: 'readonly', fetch: 'readonly', URL: 'readonly', Promise: 'readonly', console: 'readonly', Response: 'readonly' },
+      globals: { self: 'readonly', caches: 'readonly', fetch: 'readonly', URL: 'readonly', Promise: 'readonly', console: 'readonly', Response: 'readonly', setTimeout: 'readonly' },
     },
     rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
   },

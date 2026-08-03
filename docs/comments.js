@@ -423,9 +423,23 @@
       var m = /^(\d{1,3})\.(\d{1,3})\./.exec(ip || "");
       return !!m && +m[1] === 100 && +m[2] >= 64 && +m[2] <= 127;
     }
+    var FETCH_TIMEOUT = 15e3;
     function fetchRetry(url, opts, delays, onRetry) {
       function attempt(i) {
-        return fetch(url, opts).catch(function(err) {
+        var init = opts;
+        var timer = 0;
+        if (typeof AbortController === "function" && !(opts && opts.signal)) {
+          var ctrl = new AbortController();
+          init = Object.assign({}, opts, { signal: ctrl.signal });
+          timer = window.setTimeout(function() {
+            ctrl.abort();
+          }, FETCH_TIMEOUT);
+        }
+        return fetch(url, init).then(function(res) {
+          if (timer) clearTimeout(timer);
+          return res;
+        }, function(err) {
+          if (timer) clearTimeout(timer);
           if (i >= delays.length) throw new Error("Network error. Check your connection and try again.");
           if (onRetry) onRetry();
           return new Promise(function(resolve) {
@@ -861,6 +875,7 @@
         holder.textContent = "";
         var mime = envInfo && envInfo.mime || "";
         var mel;
+        var isFile = false;
         if (/^image\//.test(mime)) {
           mel = el("img", "dm-media-img");
           mel.src = url;
@@ -875,11 +890,17 @@
           mel.src = url;
           mel.controls = true;
         } else {
+          isFile = true;
           mel = el("a", "dm-media-file", (envInfo.name || "download") + " \xB7 " + fmtBytes(envInfo.size));
           mel.href = url;
           mel.download = envInfo.name || "file";
         }
         holder.appendChild(mel);
+        if (!isFile) {
+          var dlRow = el("div", "dm-media-dl");
+          dlRow.appendChild(mediaDownloadLink(url, envInfo.name || "download", "Download", "wall-act wall-act-dl dm-dl"));
+          holder.appendChild(dlRow);
+        }
       }).catch(function() {
         holder.textContent = "";
         holder.appendChild(el("span", "dm-media-status", "\u26A0\uFE0F media unavailable (it may have expired)"));
@@ -5750,28 +5771,394 @@
       link.appendChild(img);
       head.appendChild(link);
     }
-    function mcLightbox(src) {
-      var ov = el("div", "mc-lightbox");
-      ov.style.cssText = "position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:1rem;cursor:zoom-out";
-      var img = el("img");
-      img.src = src;
-      img.alt = "";
-      img.style.cssText = "max-width:100%;max-height:100%;border-radius:6px;box-shadow:0 4px 30px rgba(0,0,0,0.5)";
-      var x = el("button", null, "\u2715");
+    function mcIcon(name) {
+      var P = {
+        heart: "M12 20.5S3.5 15 3.5 8.9C3.5 6.3 5.5 4.5 7.9 4.5c1.6 0 3.1.9 3.8 2.3l.3.6.3-.6c.7-1.4 2.2-2.3 3.8-2.3 2.4 0 4.4 1.8 4.4 4.4C20.5 15 12 20.5 12 20.5z",
+        comment: "M20 4H4a1 1 0 00-1 1v11a1 1 0 001 1h3v4l5-4h8a1 1 0 001-1V5a1 1 0 00-1-1z",
+        share: "M18 8a2.5 2.5 0 10-2.4-3.2L9 8.2a2.5 2.5 0 100 4.6l6.6 3.4A2.5 2.5 0 1018 15l-6.6-3.4a2.5 2.5 0 000-1.6L18 6.6A2.5 2.5 0 0018 8z",
+        download: "M12 3v11m0 0l4.5-4.5M12 14l-4.5-4.5M4.5 19.5h15",
+        copy: "M15.5 8.5v-2a2 2 0 00-2-2h-7a2 2 0 00-2 2v7a2 2 0 002 2h2M10.5 8.5h7a2 2 0 012 2v7a2 2 0 01-2 2h-7a2 2 0 01-2-2v-7a2 2 0 012-2z",
+        expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
+        close: "M6 6l12 12M18 6L6 18",
+        x: "M18.9 2.5H22l-7.6 8.6L23 21.5h-6.9l-5.4-7-6.2 7H1.4l8.1-9.2L1 2.5h7l4.9 6.4L18.9 2.5z",
+        facebook: "M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.8 3.7-3.8 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.5V12h2.7l-.4 2.9h-2.3v7A10 10 0 0022 12z"
+      };
+      var ns = "http://www.w3.org/2000/svg";
+      var svg = document.createElementNS(ns, "svg");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("class", "mc-ic mc-ic-" + name);
+      svg.setAttribute("aria-hidden", "true");
+      var pth = document.createElementNS(ns, "path");
+      pth.setAttribute("d", P[name] || "");
+      if (name === "x" || name === "facebook") {
+        pth.setAttribute("fill", "currentColor");
+      } else {
+        pth.setAttribute("fill", "none");
+        pth.setAttribute("stroke", "currentColor");
+        pth.setAttribute("stroke-width", "2");
+        pth.setAttribute("stroke-linecap", "round");
+        pth.setAttribute("stroke-linejoin", "round");
+      }
+      svg.appendChild(pth);
+      return svg;
+    }
+    function mediaFilename(mediaKey) {
+      var k = String(mediaKey).split("/")[1];
+      var ext = k === "v" ? "mp4" : k === "a" ? "mp3" : "jpg";
+      return "merecatholicity-" + String(mediaKey).replace(/[^a-z0-9]/gi, "").slice(-8) + "." + ext;
+    }
+    function mediaDownloadLink(url, filename, label, cls) {
+      var a = el("a", cls || "wall-act wall-act-dl");
+      a.href = url;
+      a.download = filename || "download";
+      a.title = "Download";
+      a.setAttribute("aria-label", "Download");
+      a.appendChild(mcIcon("download"));
+      if (label) a.appendChild(el("span", "wall-act-lbl", label));
+      a.addEventListener("click", function(e) {
+        e.stopPropagation();
+      });
+      return a;
+    }
+    var mcPop = null;
+    function closePop() {
+      if (mcPop && mcPop.parentNode) mcPop.parentNode.removeChild(mcPop);
+      mcPop = null;
+      document.removeEventListener("click", popOutside, true);
+      window.removeEventListener("scroll", closePop, true);
+    }
+    function popOutside(e) {
+      if (mcPop && !mcPop.contains(e.target)) closePop();
+    }
+    function placePop(pop, anchor) {
+      var r = anchor.getBoundingClientRect();
+      pop.style.position = "absolute";
+      pop.style.left = Math.max(8, Math.min(window.innerWidth - 244, r.left)) + "px";
+      pop.style.top = window.scrollY + r.bottom + 6 + "px";
+    }
+    function showLikers(anchor, params) {
+      closePop();
+      var pop = el("div", "wall-pop wall-likers-pop");
+      pop.appendChild(el("div", "wall-pop-load", "Loading\u2026"));
+      document.body.appendChild(pop);
+      mcPop = pop;
+      placePop(pop, anchor);
+      setTimeout(function() {
+        document.addEventListener("click", popOutside, true);
+        window.addEventListener("scroll", closePop, true);
+      }, 0);
+      fetch(API + "/wall/likers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(params) }).then(function(r) {
+        return r.json();
+      }).then(function(d) {
+        if (mcPop !== pop) return;
+        pop.textContent = "";
+        if (!d || !d.ok || !(d.likers && d.likers.length)) {
+          pop.appendChild(el("div", "wall-pop-empty", "No likes yet"));
+          return;
+        }
+        pop.appendChild(el("div", "wall-pop-title", "Liked by"));
+        d.likers.forEach(function(u) {
+          var row = el("a", "wall-likers-row");
+          row.href = profileHref(u.hash);
+          wallAvatarInto(row, u.hash, u.avatar);
+          row.appendChild(el("span", "wall-likers-name", u.nick));
+          pop.appendChild(row);
+        });
+        if (d.more) pop.appendChild(el("div", "wall-pop-more", "and more\u2026"));
+        placePop(pop, anchor);
+      }).catch(function() {
+        if (mcPop === pop) {
+          pop.textContent = "";
+          pop.appendChild(el("div", "wall-pop-empty", "Could not load"));
+        }
+      });
+    }
+    function attachLikers(anchor, getParams) {
+      var lpT = 0, hoverT = 0;
+      anchor.addEventListener("mouseenter", function() {
+        clearTimeout(hoverT);
+        hoverT = setTimeout(function() {
+          showLikers(anchor, getParams());
+        }, 320);
+      });
+      anchor.addEventListener("mouseleave", function() {
+        clearTimeout(hoverT);
+      });
+      anchor.addEventListener("touchstart", function() {
+        clearTimeout(lpT);
+        lpT = setTimeout(function() {
+          showLikers(anchor, getParams());
+        }, 450);
+      }, { passive: true });
+      anchor.addEventListener("touchend", function() {
+        clearTimeout(lpT);
+      }, { passive: true });
+      anchor.addEventListener("touchmove", function() {
+        clearTimeout(lpT);
+      }, { passive: true });
+      anchor.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        showLikers(anchor, getParams());
+      });
+    }
+    function showShareMenu(anchor, shareUrl, mediaDl) {
+      closePop();
+      var pop = el("div", "wall-pop wall-share-pop");
+      var copy = el("button", "wall-share-item");
+      copy.type = "button";
+      copy.appendChild(mcIcon("copy"));
+      var cl = el("span", null, "Copy link");
+      copy.appendChild(cl);
+      copy.addEventListener("click", function(e) {
+        e.stopPropagation();
+        var done = function() {
+          cl.textContent = "Copied \u2713";
+          setTimeout(function() {
+            cl.textContent = "Copy link";
+          }, 1400);
+        };
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(shareUrl).then(done).catch(function() {
+            window.prompt("Copy this link:", shareUrl);
+          });
+          else window.prompt("Copy this link:", shareUrl);
+        } catch (err) {
+          window.prompt("Copy this link:", shareUrl);
+        }
+      });
+      pop.appendChild(copy);
+      if (mediaDl) {
+        pop.appendChild(mediaDownloadLink(mediaDl.url, mediaDl.filename, "Download", "wall-share-item"));
+      }
+      var xa = el("a", "wall-share-item");
+      xa.href = "https://twitter.com/intent/tweet?url=" + encodeURIComponent(shareUrl);
+      xa.target = "_blank";
+      xa.rel = "noopener noreferrer";
+      xa.appendChild(mcIcon("x"));
+      xa.appendChild(el("span", null, "X"));
+      xa.addEventListener("click", function(e) {
+        e.stopPropagation();
+      });
+      pop.appendChild(xa);
+      var fb = el("a", "wall-share-item");
+      fb.href = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(shareUrl);
+      fb.target = "_blank";
+      fb.rel = "noopener noreferrer";
+      fb.appendChild(mcIcon("facebook"));
+      fb.appendChild(el("span", null, "Facebook"));
+      fb.addEventListener("click", function(e) {
+        e.stopPropagation();
+      });
+      pop.appendChild(fb);
+      if (navigator.share) {
+        var na = el("button", "wall-share-item");
+        na.type = "button";
+        na.appendChild(mcIcon("share"));
+        na.appendChild(el("span", null, "More\u2026"));
+        na.addEventListener("click", function(e) {
+          e.stopPropagation();
+          navigator.share({ url: shareUrl, title: "A post on Mere Catholicity" }).catch(function() {
+          });
+          closePop();
+        });
+        pop.appendChild(na);
+      }
+      document.body.appendChild(pop);
+      mcPop = pop;
+      placePop(pop, anchor);
+      setTimeout(function() {
+        document.addEventListener("click", popOutside, true);
+        window.addEventListener("scroll", closePop, true);
+      }, 0);
+    }
+    function wallActions(post2) {
+      var likeN = Number(post2.likes) || 0, liked = !!post2.liked, gen = 0, cn = Number(post2.comments) || 0;
+      var box = el("div", "wall-actions");
+      var summary = el("div", "wall-summary");
+      var likeSum = el("button", "wall-sum-likes");
+      likeSum.type = "button";
+      likeSum.appendChild(mcIcon("heart"));
+      var likeSumN = el("span", "wall-sum-n");
+      likeSum.appendChild(likeSumN);
+      var cmtSum = el("button", "wall-sum-comments");
+      cmtSum.type = "button";
+      summary.appendChild(likeSum);
+      summary.appendChild(cmtSum);
+      attachLikers(likeSum, function() {
+        return { post: post2.id };
+      });
+      var btns = el("div", "wall-btnrow");
+      var likeBtn = el("button", "wall-act wall-like");
+      likeBtn.type = "button";
+      likeBtn.appendChild(mcIcon("heart"));
+      likeBtn.appendChild(el("span", "wall-act-lbl", "Like"));
+      var cmtBtn = el("button", "wall-act");
+      cmtBtn.type = "button";
+      cmtBtn.appendChild(mcIcon("comment"));
+      cmtBtn.appendChild(el("span", "wall-act-lbl", "Comment"));
+      var shareBtn = el("button", "wall-act");
+      shareBtn.type = "button";
+      shareBtn.appendChild(mcIcon("share"));
+      shareBtn.appendChild(el("span", "wall-act-lbl", "Share"));
+      btns.appendChild(likeBtn);
+      btns.appendChild(cmtBtn);
+      btns.appendChild(shareBtn);
+      function render() {
+        likeBtn.classList.toggle("on", liked);
+        likeBtn.title = liked ? "Unlike" : "Like";
+        likeSum.classList.toggle("on", liked);
+        likeSumN.textContent = likeN > 0 ? String(likeN) : "";
+        likeSum.style.display = likeN > 0 ? "" : "none";
+        cmtSum.textContent = cn > 0 ? cn === 1 ? "1 comment" : cn + " comments" : "";
+        cmtSum.style.display = cn > 0 ? "" : "none";
+        summary.style.display = likeN > 0 || cn > 0 ? "" : "none";
+      }
+      likeBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!state.myHash) {
+          if (window.mcOnboard) window.mcOnboard();
+          return;
+        }
+        var want = !liked, myGen = ++gen;
+        liked = want;
+        likeN = Math.max(0, likeN + (want ? 1 : -1));
+        render();
+        fetch(API + "/wall/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: state.key, post: post2.id, like: want }) }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          if (myGen !== gen) return;
+          if (d && d.ok) {
+            liked = !!d.liked;
+            likeN = Number(d.likes) || 0;
+          } else {
+            liked = !want;
+            likeN = Math.max(0, likeN + (want ? -1 : 1));
+          }
+          render();
+        }).catch(function() {
+          if (myGen !== gen) return;
+          liked = !want;
+          likeN = Math.max(0, likeN + (want ? -1 : 1));
+          render();
+        });
+      });
+      box.appendChild(summary);
+      box.appendChild(btns);
+      render();
+      return { el: box, likeBtn, cmtBtn, shareBtn, cmtSum, bumpComment: function(d) {
+        cn = Math.max(0, cn + d);
+        render();
+      } };
+    }
+    function wallCommentsSection(post2, onCount) {
+      var wrap = el("div", "wall-comments");
+      var list = el("div", "wall-comment-list");
+      wrap.appendChild(list);
+      var loaded = false;
+      function load2() {
+        if (loaded) return;
+        loaded = true;
+        list.appendChild(el("p", "comments-status", "Loading\u2026"));
+        fetch(API + "/wall/post/get", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: state.key || "", id: post2.id }) }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          list.textContent = "";
+          if (!d || !d.ok) {
+            list.appendChild(el("p", "comments-status", "Could not load comments."));
+            return;
+          }
+          (d.comments || []).forEach(function(c) {
+            list.appendChild(wallCommentNode(c, post2));
+          });
+          if (state.myHash) wrap.appendChild(wallComposer("comment", { post: post2.id }, function(added) {
+            if (added) {
+              list.appendChild(wallCommentNode(added, post2));
+              if (onCount) onCount(1);
+            }
+          }));
+          else wrap.appendChild(loginToInteract("comment on this post"));
+        }).catch(function() {
+          list.textContent = "";
+          list.appendChild(el("p", "comments-status", "Could not load comments."));
+        });
+      }
+      return { wrap, load: load2 };
+    }
+    function openMedia(mediaKey, kind, post2) {
+      closePop();
+      var src = API + "/wall/media?key=" + encodeURIComponent(mediaKey);
+      var ov = el("div", "wall-lightbox" + (post2 ? "" : " wall-lightbox-bare"));
+      var inner = el("div", "wall-lb-inner");
+      var stage = el("div", "wall-lb-stage");
+      var mel;
+      if (kind === "v") {
+        mel = el("video", "wall-lb-media");
+        mel.src = src;
+        mel.controls = true;
+        mel.autoplay = true;
+        mel.playsInline = true;
+      } else if (kind === "a") {
+        mel = el("audio", "wall-lb-media wall-lb-audio");
+        mel.src = src;
+        mel.controls = true;
+        mel.autoplay = true;
+      } else {
+        mel = el("img", "wall-lb-media");
+        mel.src = src;
+        mel.alt = "";
+      }
+      stage.appendChild(mel);
+      inner.appendChild(stage);
+      var rail = el("div", "wall-lb-rail");
+      if (post2) {
+        var head = el("div", "comment-head");
+        wallAvatarInto(head, post2.author_hash, post2.avatar);
+        head.appendChild(authorNode(post2.author_hash, post2.nick, true, post2.faith, post2.posts));
+        head.appendChild(el("span", "comment-date", " " + fmtDateTime(post2.created_at)));
+        rail.appendChild(head);
+        if (post2.body) rail.appendChild(fillBody(el("div", "comment-body"), post2.body));
+        var acts = wallActions(post2);
+        rail.appendChild(acts.el);
+        var cs = wallCommentsSection(post2, acts.bumpComment);
+        rail.appendChild(cs.wrap);
+        cs.load();
+        var focusComposer = function() {
+          var ta = cs.wrap.querySelector(".comment-form .comment-text");
+          if (ta) ta.focus();
+        };
+        acts.cmtBtn.addEventListener("click", focusComposer);
+        acts.cmtSum.addEventListener("click", focusComposer);
+        acts.shareBtn.addEventListener("click", function(e) {
+          e.stopPropagation();
+          showShareMenu(acts.shareBtn, location.origin + "/feed.html?post=" + post2.id, { url: src, filename: mediaFilename(mediaKey) });
+        });
+      } else {
+        var mini = el("div", "wall-lb-mini");
+        mini.appendChild(mediaDownloadLink(src, mediaFilename(mediaKey), "Download", "btn btn-anon"));
+        rail.appendChild(mini);
+      }
+      inner.appendChild(rail);
+      ov.appendChild(inner);
+      var x = el("button", "wall-lb-x");
       x.type = "button";
-      x.style.cssText = "position:absolute;top:0.6rem;right:0.9rem;font-size:1.6rem;line-height:1;color:#fff;background:none;border:none;cursor:pointer";
-      ov.appendChild(img);
+      x.appendChild(mcIcon("close"));
+      x.title = "Close";
       ov.appendChild(x);
       function close() {
         if (ov.parentNode) ov.parentNode.removeChild(ov);
         document.removeEventListener("keydown", onKey);
+        try {
+          if (mel.pause) mel.pause();
+        } catch (e) {
+        }
       }
       function onKey(e) {
         if (e.key === "Escape") close();
       }
-      ov.addEventListener("click", close);
-      img.addEventListener("click", function(e) {
-        e.stopPropagation();
+      ov.addEventListener("click", function(e) {
+        if (e.target === ov || e.target === inner || e.target === stage) close();
       });
       x.addEventListener("click", function(e) {
         e.stopPropagation();
@@ -5780,17 +6167,25 @@
       document.addEventListener("keydown", onKey);
       document.body.appendChild(ov);
     }
-    function wallMediaNode(mediaKey) {
+    function wallMediaNode(mediaKey, post2) {
       if (!mediaKey) return null;
       var kind = String(mediaKey).split("/")[1];
       var src = API + "/wall/media?key=" + encodeURIComponent(mediaKey);
-      var holder = el("div", "wall-media");
+      var holder = el("div", "wall-media wall-media-" + (kind === "v" ? "video" : kind === "a" ? "audio" : "img"));
       var mel;
+      var open = function(e) {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        openMedia(mediaKey, kind, post2);
+      };
       if (kind === "v") {
         mel = el("video", "wall-media-el");
         mel.src = src;
         mel.controls = true;
         mel.preload = "metadata";
+        mel.playsInline = true;
       } else if (kind === "a") {
         mel = el("audio", "wall-media-el");
         mel.src = src;
@@ -5801,18 +6196,23 @@
         mel.src = src;
         mel.alt = "";
         mel.loading = "lazy";
-        mel.style.cursor = "zoom-in";
-        mel.addEventListener("click", function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          mcLightbox(src);
-        });
+        mel.style.cursor = "pointer";
+        mel.addEventListener("click", open);
       }
       mel.addEventListener("error", function() {
         holder.textContent = "";
         holder.appendChild(el("span", "wall-media-gone", "\u{1F5BC}\uFE0F media unavailable"));
       });
       holder.appendChild(mel);
+      if (kind !== "a") {
+        var exp = el("button", "wall-media-expand");
+        exp.type = "button";
+        exp.title = "Open";
+        exp.setAttribute("aria-label", "Open");
+        exp.appendChild(mcIcon("expand"));
+        exp.addEventListener("click", open);
+        holder.appendChild(exp);
+      }
       return holder;
     }
     function wallCanDelete(authorHash) {
@@ -5840,7 +6240,62 @@
       });
       return a;
     }
-    function wallCommentNode(c) {
+    function wallCommentLike(c) {
+      var wrap = el("span", "wall-clike-wrap");
+      var n = Number(c.likes) || 0, on = !!c.liked, gen = 0;
+      var btn = el("button", "wall-clike");
+      btn.type = "button";
+      var cnt = el("button", "wall-clike-count");
+      cnt.type = "button";
+      function render() {
+        btn.textContent = on ? "Liked" : "Like";
+        btn.classList.toggle("on", on);
+        if (n > 0) {
+          cnt.textContent = "\u2665 " + n;
+          cnt.style.display = "";
+        } else {
+          cnt.style.display = "none";
+        }
+      }
+      render();
+      attachLikers(cnt, function() {
+        return { comment: c.id };
+      });
+      btn.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!state.myHash) {
+          if (window.mcOnboard) window.mcOnboard();
+          return;
+        }
+        var want = !on, myGen = ++gen;
+        on = want;
+        n = Math.max(0, n + (want ? 1 : -1));
+        render();
+        fetch(API + "/wall/comment/like", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: state.key, comment: c.id, like: want }) }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          if (myGen !== gen) return;
+          if (d && d.ok) {
+            on = !!d.liked;
+            n = Number(d.likes) || 0;
+          } else {
+            on = !want;
+            n = Math.max(0, n + (want ? -1 : 1));
+          }
+          render();
+        }).catch(function() {
+          if (myGen !== gen) return;
+          on = !want;
+          n = Math.max(0, n + (want ? -1 : 1));
+          render();
+        });
+      });
+      wrap.appendChild(btn);
+      wrap.appendChild(cnt);
+      return wrap;
+    }
+    function wallCommentNode(c, post2) {
       var node = el("article", "comment wall-comment");
       var head = el("div", "comment-head");
       wallAvatarInto(head, c.author_hash, c.avatar);
@@ -5851,74 +6306,13 @@
       node.appendChild(head);
       node.appendChild(fillBody(el("div", "comment-body"), c.body));
       if (c.media_key) {
-        var m = wallMediaNode(c.media_key);
+        var m = wallMediaNode(c.media_key, null);
         if (m) node.appendChild(m);
       }
+      var actRow = el("div", "wall-comment-actions");
+      actRow.appendChild(wallCommentLike(c));
+      node.appendChild(actRow);
       return node;
-    }
-    function wallShareControl(p) {
-      var shareUrl = location.origin + "/feed.html?post=" + p.id;
-      var box = el("span", "wall-share");
-      var btn = el("a", "wall-comments-toggle wall-share-btn", "\u{1F517} Share");
-      btn.href = "#";
-      var menu = el("span", "wall-share-menu");
-      menu.style.display = "none";
-      var copy = el("a", "wall-comments-toggle", "Copy link");
-      copy.href = "#";
-      copy.addEventListener("click", function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var done = function() {
-          copy.textContent = "\u2713 Copied";
-          setTimeout(function() {
-            copy.textContent = "Copy link";
-          }, 1500);
-        };
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(shareUrl).then(done).catch(function() {
-            window.prompt("Copy this link:", shareUrl);
-          });
-          else window.prompt("Copy this link:", shareUrl);
-        } catch (err) {
-          window.prompt("Copy this link:", shareUrl);
-        }
-      });
-      menu.appendChild(copy);
-      var xa = el("a", "wall-comments-toggle", "X");
-      xa.href = "https://twitter.com/intent/tweet?url=" + encodeURIComponent(shareUrl);
-      xa.target = "_blank";
-      xa.rel = "noopener noreferrer";
-      xa.addEventListener("click", function(e) {
-        e.stopPropagation();
-      });
-      menu.appendChild(xa);
-      var fba = el("a", "wall-comments-toggle", "Facebook");
-      fba.href = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(shareUrl);
-      fba.target = "_blank";
-      fba.rel = "noopener noreferrer";
-      fba.addEventListener("click", function(e) {
-        e.stopPropagation();
-      });
-      menu.appendChild(fba);
-      if (navigator.share) {
-        var na = el("a", "wall-comments-toggle", "Share\u2026");
-        na.href = "#";
-        na.addEventListener("click", function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          navigator.share({ url: shareUrl, title: "A post on Mere Catholicity" }).catch(function() {
-          });
-        });
-        menu.appendChild(na);
-      }
-      btn.addEventListener("click", function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        menu.style.display = menu.style.display === "none" ? "" : "none";
-      });
-      box.appendChild(btn);
-      box.appendChild(menu);
-      return box;
     }
     function loginToInteract(what) {
       var p = el("p", "comments-status");
@@ -5929,14 +6323,32 @@
       p.appendChild(a);
       return p;
     }
+    function clampBody(bodyEl, lines) {
+      bodyEl.classList.add("wall-clamp");
+      bodyEl.style.setProperty("--wall-lines", String(lines));
+      var more = el("button", "wall-seemore", "See more");
+      more.type = "button";
+      more.style.display = "none";
+      more.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        bodyEl.classList.remove("wall-clamp");
+        more.style.display = "none";
+      });
+      requestAnimationFrame(function() {
+        if (bodyEl.scrollHeight > bodyEl.clientHeight + 4) more.style.display = "";
+        else bodyEl.classList.remove("wall-clamp");
+      });
+      return more;
+    }
     function wallPostNode(p, expand) {
       ensureDmStyles();
-      var node = el("article", "comment wall-post" + (expand ? " wall-post-detail" : ""));
+      var node = el("article", "comment wall-post" + (expand ? " wall-post-detail" : "") + (p.media_key ? " wall-post-media" : ""));
       node.id = "post-" + p.id;
       if (!expand) {
         node.style.cursor = "pointer";
         node.addEventListener("click", function(e) {
-          if (e.target.closest("a, button, video, audio, input, textarea, label, .wall-comments, .wall-media")) return;
+          if (e.target.closest("a, button, video, audio, input, textarea, label, .wall-comments, .wall-media, .wall-actions")) return;
           if (window.getSelection && String(window.getSelection())) return;
           location.href = "feed.html?post=" + p.id;
         });
@@ -5955,107 +6367,40 @@
       }
       if (wallCanDelete(p.author_hash)) head.appendChild(wallDeleteLink(p.id, "post", node));
       node.appendChild(head);
-      node.appendChild(fillBody(el("div", "comment-body"), p.body));
+      if (p.body) {
+        var bodyEl = fillBody(el("div", "comment-body"), p.body);
+        node.appendChild(bodyEl);
+        if (!expand) node.appendChild(clampBody(bodyEl, p.media_key ? 3 : 9));
+      }
       if (p.media_key) {
-        var mm = wallMediaNode(p.media_key);
+        var mm = wallMediaNode(p.media_key, p);
         if (mm) node.appendChild(mm);
       }
-      var foot = el("div", "wall-foot");
-      var likeN = Number(p.likes) || 0;
-      var liked = !!p.liked;
-      var likeBtn = el("a", "wall-comments-toggle wall-like");
-      likeBtn.href = "#";
-      likeBtn.style.marginRight = "1.1em";
-      function renderLike() {
-        likeBtn.textContent = (liked ? "\u2665" : "\u2661") + " " + (likeN > 0 ? likeN : "Like");
-        likeBtn.style.color = liked ? "var(--maroon)" : "";
-        likeBtn.style.fontWeight = liked ? "600" : "";
-        likeBtn.title = liked ? "Unlike this post" : "Like this post";
-      }
-      renderLike();
-      var likeGen = 0;
-      likeBtn.addEventListener("click", function(e) {
-        e.preventDefault();
-        if (!state.myHash) {
-          if (window.mcOnboard) window.mcOnboard();
-          return;
-        }
-        var want = !liked;
-        var myGen = ++likeGen;
-        liked = want;
-        likeN = Math.max(0, likeN + (want ? 1 : -1));
-        renderLike();
-        fetch(API + "/wall/like", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: state.key, post: p.id, like: want })
-        }).then(function(r) {
-          return r.json();
-        }).then(function(d) {
-          if (myGen !== likeGen) return;
-          if (d && d.ok) {
-            liked = !!d.liked;
-            likeN = Number(d.likes) || 0;
-          } else {
-            liked = !want;
-            likeN = Math.max(0, likeN + (want ? -1 : 1));
-          }
-          renderLike();
-        }).catch(function() {
-          if (myGen !== likeGen) return;
-          liked = !want;
-          likeN = Math.max(0, likeN + (want ? -1 : 1));
-          renderLike();
-        });
+      var acts = wallActions(p);
+      node.appendChild(acts.el);
+      var cs = wallCommentsSection(p, acts.bumpComment);
+      cs.wrap.style.display = expand ? "" : "none";
+      node.appendChild(cs.wrap);
+      var openComments = function() {
+        cs.wrap.style.display = "";
+        cs.load();
+        var ta = cs.wrap.querySelector(".comment-form .comment-text");
+        if (ta) ta.focus();
+      };
+      acts.cmtBtn.addEventListener("click", function() {
+        if (cs.wrap.style.display === "none") openComments();
+        else cs.wrap.style.display = "none";
       });
-      foot.appendChild(likeBtn);
-      var cn = Number(p.comments) || 0;
-      var toggle = el("a", "wall-comments-toggle", cn === 1 ? "1 comment" : cn + " comments");
-      toggle.href = "#";
-      var box = el("div", "wall-comments");
-      box.style.display = "none";
-      var loaded = false;
-      function openComments() {
-        box.style.display = "";
-        if (loaded) return;
-        loaded = true;
-        var list = el("div", "wall-comment-list");
-        list.appendChild(el("p", "comments-status", "Loading\u2026"));
-        box.appendChild(list);
-        fetch(API + "/wall/post/get", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: state.key || "", id: p.id })
-        }).then(function(r) {
-          return r.json();
-        }).then(function(d) {
-          list.textContent = "";
-          if (!d || !d.ok) {
-            list.appendChild(el("p", "comments-status", "Could not load comments."));
-            return;
-          }
-          (d.comments || []).forEach(function(c) {
-            list.appendChild(wallCommentNode(c));
-          });
-          if (state.myHash) box.appendChild(wallComposer("comment", { post: p.id }, function(added) {
-            if (added) list.appendChild(wallCommentNode(added));
-          }));
-          else box.appendChild(loginToInteract("comment on this post"));
-        }).catch(function() {
-          list.textContent = "";
-          list.appendChild(el("p", "comments-status", "Could not load comments."));
-        });
-      }
-      toggle.addEventListener("click", function(e) {
-        e.preventDefault();
-        if (box.style.display === "none") openComments();
-        else box.style.display = "none";
+      acts.cmtSum.addEventListener("click", openComments);
+      acts.shareBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        showShareMenu(
+          acts.shareBtn,
+          location.origin + "/feed.html?post=" + p.id,
+          p.media_key ? { url: API + "/wall/media?key=" + encodeURIComponent(p.media_key), filename: mediaFilename(p.media_key) } : null
+        );
       });
-      foot.appendChild(toggle);
-      foot.appendChild(wallShareControl(p));
-      node.appendChild(foot);
-      node.appendChild(box);
-      if (expand) openComments();
+      if (expand) cs.load();
       return node;
     }
     function wallComposer(kind, extra, onDone) {
@@ -6222,13 +6567,32 @@
         return 0;
       }
     }
-    function wallInfiniteList(fetcher) {
+    function wallInfiniteList(fetcher, opts) {
+      opts = opts || {};
       var wrap = el("div", "wall-list");
       var status = el("p", "comments-status");
       var sentinel = el("div", "wall-sentinel");
       wrap.appendChild(sentinel);
       wrap.appendChild(status);
       var next = 0, loading = false, done = false, any = false;
+      var MAX_NODES = 80;
+      function count() {
+        return wrap.querySelectorAll(".wall-post").length;
+      }
+      function fills() {
+        return wrap.scrollHeight > window.innerHeight * 1.3;
+      }
+      function prune() {
+        if (!opts.loop) return;
+        while (count() > MAX_NODES) {
+          var first = wrap.firstElementChild;
+          if (!first || first === sentinel || first === status) break;
+          if (first.getBoundingClientRect().bottom > 0) break;
+          var before = document.documentElement.scrollHeight;
+          wrap.removeChild(first);
+          window.scrollBy(0, document.documentElement.scrollHeight - before);
+        }
+      }
       function load2() {
         if (loading || done) return;
         loading = true;
@@ -6247,9 +6611,17 @@
           });
           next = Number(d.next) || 0;
           if (!next) {
-            done = true;
-            if (!any) status.textContent = "Nothing here yet. Be the first to post.";
+            if (!any) {
+              done = true;
+              status.textContent = "Nothing here yet. Be the first to post.";
+            } else if (opts.loop && fills()) {
+              wrap.insertBefore(el("div", "wall-loopmark", "\xB7 You\u2019re all caught up \u2014 earlier posts follow \xB7"), sentinel);
+              next = 0;
+            } else {
+              done = true;
+            }
           }
+          prune();
         }).catch(function() {
           loading = false;
           status.textContent = "Could not load. Reload the page.";
@@ -6260,7 +6632,7 @@
           if (ents.some(function(e) {
             return e.isIntersecting;
           })) load2();
-        });
+        }, { rootMargin: "600px" });
         io2.observe(sentinel);
       } else {
         var more = el("button", "btn", "Load more");
@@ -6269,10 +6641,21 @@
         wrap.appendChild(more);
       }
       load2();
-      return { wrap, prepend: function(row) {
-        any = true;
-        wrap.insertBefore(wallPostNode(row), wrap.firstChild);
-      } };
+      return {
+        wrap,
+        prepend: function(row, live) {
+          any = true;
+          var node = wallPostNode(row);
+          if (wrap.querySelector("#post-" + row.id)) return;
+          if (live) node.classList.add("wall-live-new");
+          var before = document.documentElement.scrollHeight;
+          wrap.insertBefore(node, wrap.firstChild);
+          if (live && window.scrollY > 240) window.scrollBy(0, document.documentElement.scrollHeight - before);
+          if (live) setTimeout(function() {
+            node.classList.remove("wall-live-new");
+          }, 2200);
+        }
+      };
     }
     function viewFeed() {
       document.title = "Feed | Community";
@@ -6285,14 +6668,6 @@
       section.appendChild(wallComposer("post", {}, function(row) {
         if (row && list) list.prepend(row);
       }));
-      var pill = el("a", "wall-newpill", "\u2191 New posts \u2014 tap to refresh");
-      pill.href = "#";
-      pill.style.display = "none";
-      pill.addEventListener("click", function(e) {
-        e.preventDefault();
-        route();
-      });
-      section.appendChild(pill);
       var list = wallInfiniteList(function(cursor) {
         return fetch(API + "/wall/feed", {
           method: "POST",
@@ -6301,14 +6676,23 @@
         }).then(function(r) {
           return r.json();
         });
-      });
+      }, { loop: true });
       section.appendChild(list.wrap);
-      var pillT = 0;
-      state.onLiveWall = function() {
-        clearTimeout(pillT);
-        pillT = setTimeout(function() {
-          pill.style.display = "";
-        }, 400);
+      var seenLive = {};
+      state.onLiveWall = function(m) {
+        if (!m || m.t !== "wall-post" || !m.id || seenLive[m.id]) return;
+        seenLive[m.id] = true;
+        if (list.wrap.querySelector("#post-" + m.id)) return;
+        fetch(API + "/wall/post/get", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: state.key || "", id: m.id })
+        }).then(function(r) {
+          return r.json();
+        }).then(function(d) {
+          if (d && d.ok && d.post) list.prepend(d.post, true);
+        }).catch(function() {
+        });
       };
     }
     function viewPost(id) {
@@ -9416,6 +9800,25 @@
           return viewIndex();
       }
     }
+    function routeSafe() {
+      try {
+        route();
+      } catch (e) {
+        section.textContent = "";
+        var p = document.createElement("p");
+        p.appendChild(document.createTextNode("This page could not be shown. "));
+        var again = document.createElement("a");
+        again.href = location.href;
+        again.textContent = "Try again";
+        again.addEventListener("click", function(ev) {
+          ev.preventDefault();
+          routeSafe();
+        });
+        p.appendChild(again);
+        p.appendChild(document.createTextNode("."));
+        section.appendChild(p);
+      }
+    }
     function startBoard() {
       section.setAttribute("data-nosnippet", "");
       collectAltIps();
@@ -9426,7 +9829,7 @@
         loadMyProfile();
         dmUnreadCheck();
         notifUnreadCheck();
-        route();
+        routeSafe();
       });
     }
     function start() {
@@ -9607,13 +10010,50 @@
       return;
     }
     var booted = false;
+    var attempts = 0;
     function go() {
-      if (!booted) {
-        booted = true;
+      if (booted || !window.mcCore || attempts >= 3) return;
+      attempts += 1;
+      try {
         mcBoot();
+        booted = true;
+      } catch (e) {
       }
     }
-    document.addEventListener("mc-shell-ready", go, { once: true });
-    setTimeout(go, 1500);
+    document.addEventListener("mc-shell-ready", go);
+    var waited = 0;
+    var reinjected = false;
+    var tick = setInterval(function() {
+      waited += 250;
+      if (!booted && window.mcCore) go();
+      if (booted || attempts >= 3) {
+        clearInterval(tick);
+        noteIfBlank();
+        return;
+      }
+      if (waited >= 8e3 && !reinjected && !window.mcCore) {
+        reinjected = true;
+        var prior = document.querySelector('script[src*="app.js"]');
+        if (prior && prior.getAttribute("src")) {
+          var again = document.createElement("script");
+          again.src = prior.getAttribute("src");
+          again.defer = true;
+          document.head.appendChild(again);
+        }
+      }
+      if (waited >= 45e3) {
+        clearInterval(tick);
+        noteIfBlank();
+      }
+    }, 250);
+    function noteIfBlank() {
+      if (booted) return;
+      var sec = document.querySelector(".comments");
+      if (sec && !sec.firstChild) {
+        var p = document.createElement("p");
+        p.textContent = "The app could not load. Check your connection and reload the page.";
+        sec.appendChild(p);
+      }
+    }
   })();
 })();
