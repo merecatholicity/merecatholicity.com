@@ -129,6 +129,7 @@ const ART_BY_PAGE: Record<string, string> = {
   'about.html': 'feed',
   'credo.html': 'credo',
   'lex-orandi.html': 'lexorandi',
+  'journal.html': 'lexorandi',   // the Journal shares Lex Orandi's painting (owner's call)
   'charting-communions.html': 'communions',
   'free-churches.html': 'freechurches',
   'bishop-presbyter.html': 'geneva',
