@@ -184,11 +184,10 @@ Paste the key into "I already have a key" on any device to sign in.
       <div class="mc-home-hero"><span class="mc-home-cross">✝</span>
         <p>One, holy, catholic, and apostolic.</p></div>
       <hr class="mc-home-rule">
-      ${t?u`<div class="mc-home-feats"><a class="mc-home-feat" href=${t.href}>
+      <div class="mc-home-feats">${t?u`<a class="mc-home-feat" href=${t.href}>
         <span class="mc-home-feat-ico">📖</span>
         <span class="mc-home-feat-txt"><strong>Continue reading</strong><small>${t.title}</small></span>
-        <span class="mc-home-go">›</span></a></div>`:""}
-      <div class="mc-home-feats">${F_.map(e=>u`
+        <span class="mc-home-go">›</span></a>`:""}${F_.map(e=>u`
         <a class="mc-home-feat" href=${e.href}>
           <span class="mc-home-feat-ico">${e.icon}</span>
           <span class="mc-home-feat-txt"><strong>${e.title}</strong><small>${e.sub}</small></span>
