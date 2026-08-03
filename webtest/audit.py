@@ -175,14 +175,19 @@ def main():
                 sess.logs('browser'); sess.logs('performance')   # drain
                 sess.go(base + '/' + page)
                 time.sleep(4)
+                # The skeleton contract: the nav.js script tag (the shell's
+                # content-swap anchor) + a real <main> + readable body. The
+                # retired nav.site markup was swept from every page 2026-08-02,
+                # so its presence is no longer the test.
                 probe = sess.js(
-                    "return JSON.stringify({nav: !!document.querySelector('nav.site'),"
+                    "return JSON.stringify({nav: !!document.querySelector('script[src*=\"nav.js\"]'),"
+                    " main: !!document.querySelector('main'),"
                     " body: document.body.textContent.length, title: document.title});")
                 print('   probe:', probe)
                 st = json.loads(probe)
-                if not st['nav'] or st['body'] < 200:
-                    failures.append('%s: page skeleton missing (nav=%s bytes=%d)'
-                                    % (page, st['nav'], st['body']))
+                if not st['nav'] or not st['main'] or st['body'] < 200:
+                    failures.append('%s: page skeleton missing (nav=%s main=%s bytes=%d)'
+                                    % (page, st['nav'], st['main'], st['body']))
                 audit_step(sess, base, page, failures)
         if args.journey:
             hops = [h for h in args.journey.split(',') if h]
