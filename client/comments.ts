@@ -580,6 +580,19 @@
       { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
+  /* Compact timestamps for post heads and list rows (the readability standard):
+     today -> '2:49 PM', this year -> 'Jul 31', older -> 'Jul 2025'. Consumers
+     put the full fmtDateTime on the title attribute; prose sentences keep the
+     full form. */
+  function fmtTimeCompact(epoch: any) {
+    var d = new Date(epoch * 1000), now = new Date();
+    if (d.toDateString() === now.toDateString())
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    if (d.getFullYear() === now.getFullYear())
+      return d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+    return d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  }
+
   /* Admin status comes from the server (state.myAdmin, off your own profile).
      Before that profile has loaded the built-in list is only a hint, so a known
      admin's controls are not withheld for a beat; once it loads the server is
@@ -6167,6 +6180,66 @@
     return a;
   }
 
+  /* postMenu: the one ⋯ overflow menu every post/row uses — the readability
+     standard folds ALL action links here (the owner's ruling; the merecat-
+     clean head keeps only author + time + ⋯). The items are the CALLER'S
+     prebuilt elements — the same .comment-dm/.comment-quote-link/.comment-
+     edit/... nodes as always, appended EAGERLY into the (hidden) pop, so the
+     DOM contract the standing webtests assert is unchanged: only visibility
+     moved. opts.onOpen fires on the ⋯ MOUSEDOWN, before a click can collapse
+     a text selection (the quote grab lives there). On phones the items travel
+     into the app sheet and BACK on close, so the elements and their listeners
+     stay singular. */
+  function postMenu(opts: any) {
+    var wrap = el('span', 'comment-menu-wrap');
+    var btn = el('button', 'comment-menu', '⋯');
+    btn.type = 'button';
+    btn.title = 'More';
+    btn.setAttribute('aria-label', 'More actions');
+    var pop = el('div', 'comment-menu-pop');
+    (opts.items || []).forEach(function (it: any) { if (it) pop.appendChild(it); });
+    wrap.appendChild(btn);
+    wrap.appendChild(pop);
+    function closeMenu() {
+      wrap.classList.remove('open');
+      document.removeEventListener('click', menuOutside, true);
+      document.removeEventListener('keydown', menuKey, true);
+      window.removeEventListener('scroll', closeMenu, true);
+    }
+    function menuOutside(e: any) { if (!wrap.contains(e.target)) closeMenu(); }
+    function menuKey(e: any) { if (e.key === 'Escape') closeMenu(); }
+    btn.addEventListener('mousedown', function () { if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* selection grab is best-effort */ } } });
+    btn.addEventListener('click', function (e: any) {
+      e.preventDefault(); e.stopPropagation();
+      var sheet: any = (window as any).mcSheet;
+      if (window.innerWidth <= 600 && sheet && sheet.open) {
+        var list = el('div', 'comment-menu-sheet');
+        var kids = [].slice.call(pop.childNodes);
+        kids.forEach(function (k: any) { list.appendChild(k); });
+        list.addEventListener('click', function (ev: any) {
+          var t = ev.target && ev.target.closest ? ev.target.closest('a,button') : null;
+          if (t) setTimeout(function () { try { sheet.close(); } catch (x) { /* fine */ } }, 0);
+        });
+        sheet.open('', list, function () {
+          [].slice.call(list.childNodes).forEach(function (k: any) { pop.appendChild(k); });
+        });
+        return;
+      }
+      if (wrap.classList.contains('open')) { closeMenu(); return; }
+      wrap.classList.add('open');
+      setTimeout(function () {
+        document.addEventListener('click', menuOutside, true);
+        document.addEventListener('keydown', menuKey, true);
+        window.addEventListener('scroll', closeMenu, true);
+      }, 0);
+    });
+    pop.addEventListener('click', function (ev: any) {
+      var t = ev.target && ev.target.closest ? ev.target.closest('a,button') : null;
+      if (t) closeMenu();
+    });
+    return wrap;
+  }
+
   /* Who-liked popover: hover (desktop) or long-press (mobile) the like count to
      see the likers. One at a time; closes on outside click / scroll / Esc. */
   var mcPop: any = null;
@@ -10290,7 +10363,8 @@
     isAdmin: isAdmin, catByKey: catByKey, cachedJson: cachedJson,
     freshParam: freshParam, freshOpts: freshOpts, blockedOut: blockedOut,
     renderIdentity: renderIdentity, indexSearchBox: indexSearchBox,
-    displayName: displayName, fmtDateTime: fmtDateTime, notifCacheSet: notifCacheSet,
+    displayName: displayName, fmtDateTime: fmtDateTime, fmtTimeCompact: fmtTimeCompact,
+    postMenu: postMenu, notifCacheSet: notifCacheSet,
     topicAdminCorner: topicAdminCorner, buildBoardForm: buildBoardForm,
     boardButtons: boardButtons, armBoardForm: armBoardForm,
     attachMentions: attachMentions, attachDraft: attachDraft, boardPost: boardPost,
