@@ -163,49 +163,50 @@ class McLibrary extends LitElement {
         @input=${(e: Event) => this._onFilter(e)}>
       <p class="mc-lib-intro mc-lib-ai"><a href="merecat-ai.html">You can also ask merecat, the site librarian, to search inside every work.</a></p>`;
   }
+  /* ONE stable outer template whatever the mode. The header and body swap as
+     child parts, but the filter <input> keeps its element identity across
+     renders — three sibling top-level templates here once meant the FIRST
+     keystroke (empty → filtered) rebuilt the whole subtree, so the input lost
+     focus and typing "augustine" caught only the "a". */
   render() {
     const cats = this.model.cats;
     const q = (this.filter || '').trim().toLowerCase();
+    let head;
+    let body;
     if (q) {
       const hits = this._flat().filter((f: FlatWork) =>
         f.w.title.toLowerCase().indexOf(q) !== -1 ||
         f.cat.name.toLowerCase().indexOf(q) !== -1 ||
         (f.group.name && f.group.name.toLowerCase().indexOf(q) !== -1));
-      return html`<div class="mc-lib">
-        <h1 class="mc-lib-title">Library</h1>
-        ${this.filterBarTpl()}
-        ${hits.length
-          ? html`<div class="mc-lib-works">${hits.map((f: FlatWork) => this.flatTpl(f))}</div>`
-          : html`<p class="mc-lib-intro">No works match that filter.</p>`}
-      </div>`;
-    }
-    const active = cats.find((c: Cat) => c.id === this.cat);
-    if (!active) {
-      return html`<div class="mc-lib">
-        <h1 class="mc-lib-title">Library</h1>
-        ${this.model.intro ? html`<p class="mc-lib-intro">${this.model.intro}</p>` : nothing}
-        ${this.filterBarTpl()}
-        <div class="mc-lib-grid">${cats.map((c: Cat) => html`
+      head = html`<h1 class="mc-lib-title">Library</h1>`;
+      body = hits.length
+        ? html`<div class="mc-lib-works">${hits.map((f: FlatWork) => this.flatTpl(f))}</div>`
+        : html`<p class="mc-lib-intro">No works match that filter.</p>`;
+    } else {
+      const active = cats.find((c: Cat) => c.id === this.cat);
+      if (!active) {
+        head = html`<h1 class="mc-lib-title">Library</h1>
+          ${this.model.intro ? html`<p class="mc-lib-intro">${this.model.intro}</p>` : nothing}`;
+        body = html`<div class="mc-lib-grid">${cats.map((c: Cat) => html`
           <a class="mc-lib-card" href=${'#' + c.id} @click=${(e: Event) => this.open(e, c.id)}>
             <span class="mc-lib-card-body">
               <span class="mc-lib-card-name">${c.name}</span>
               <span class="mc-lib-card-meta">${this.count(c)} ${this.count(c) === 1 ? 'work' : 'works'}</span>
             </span>
             <span class="mc-lib-go">›</span>
-          </a>`)}</div>
-      </div>`;
+          </a>`)}</div>`;
+      } else {
+        head = html`<div class="mc-lib-bar">
+            <button class="mc-lib-back" @click=${(e: Event) => this.back(e)}>‹ Library</button>
+          </div>
+          <h1 class="mc-lib-title">${active.name}</h1>
+          ${active.desc ? html`<p class="mc-lib-intro">${active.desc}</p>` : nothing}`;
+        body = html`${active.groups.map((g: Group) => html`
+          ${g.name ? html`<h2 class="mc-lib-shelf" id=${g.id}>${g.name}</h2>` : nothing}
+          <div class="mc-lib-works">${g.works.map((w: Work) => this.workTpl(w))}</div>`)}`;
+      }
     }
-    return html`<div class="mc-lib">
-      <div class="mc-lib-bar">
-        <button class="mc-lib-back" @click=${(e: Event) => this.back(e)}>‹ Library</button>
-      </div>
-      <h1 class="mc-lib-title">${active.name}</h1>
-      ${active.desc ? html`<p class="mc-lib-intro">${active.desc}</p>` : nothing}
-      ${this.filterBarTpl()}
-      ${active.groups.map((g: Group) => html`
-        ${g.name ? html`<h2 class="mc-lib-shelf" id=${g.id}>${g.name}</h2>` : nothing}
-        <div class="mc-lib-works">${g.works.map((w: Work) => this.workTpl(w))}</div>`)}
-    </div>`;
+    return html`<div class="mc-lib">${head}${this.filterBarTpl()}${body}</div>`;
   }
 }
 customElements.define('mc-library', McLibrary);
