@@ -21,6 +21,7 @@ import * as Links from '../../purescript/output/Domain.Links/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
+import * as CallK from '../../purescript/output/Domain.Call/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
@@ -258,8 +259,14 @@ async function handleConfig(request: any, env: any, url: any) {
       },
     },
     /* 1v1 voice calls: the 📞 button renders only when enabled (the worker
-       refuses /call/* regardless — this is the client's courtesy copy). */
-    calls: { enabled: s.calls_enabled === '1' },
+       refuses /call/* regardless — this is the client's courtesy copy). The
+       silence watch is client-run off these two fields, clamped through the
+       same Domain.Call rule the settings save applies. */
+    calls: {
+      enabled: s.calls_enabled === '1',
+      idle_hangup: s.calls_idle_hangup !== '0',
+      idle_seconds: CallK.idleClampSecs(Math.floor(Number(s.calls_idle_seconds)) || CallK.idleDefaultSecs),
+    },
     cats: CAT_META.filter((c) => BOARD_CATS.includes(c[0])).map((c, i) => {
       const o: any = { key: c[0], label: c[1], blurb: c[2], order: i };
       if (c[3]) o.link = { text: c[3], url: c[4] };
@@ -2387,7 +2394,7 @@ async function handleAdminSettings(request: any, env: any) {
       media_wall_image_max_bytes: 1, media_wall_video_max_bytes: 1, media_wall_audio_max_bytes: 1,
       media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
       media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1,
-      calls_enabled: 1, calls_turn: 1 };
+      calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1 };
     /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
        back to "inherit the legacy global" — because absence is what the
        fallback chain reads. Without this the chain would be one-way. */
@@ -2407,7 +2414,8 @@ async function handleAdminSettings(request: any, env: any) {
       if (k === 'media_enabled' || k === 'wall_prune_enabled' || k === 'media_image_autocompress'
         || k === 'media_scan_wall' || k === 'media_scan_board'
         || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board'
-        || k === 'calls_enabled' || k === 'calls_turn') v = (v === '1' || v === 'true') ? '1' : '0';
+        || k === 'calls_enabled' || k === 'calls_turn' || k === 'calls_idle_hangup') v = (v === '1' || v === 'true') ? '1' : '0';
+      else if (k === 'calls_idle_seconds') v = String(CallK.idleClampSecs(Math.floor(Number(v)) || CallK.idleDefaultSecs));
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
       /* Per-kind caps, the recorder stop, the store budgets, the retention
          windows, and the context kinds masks all clamp/normalize through the

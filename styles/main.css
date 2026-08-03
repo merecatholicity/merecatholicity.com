@@ -843,12 +843,53 @@ table.reception {
    never belongs in the printed editions (make chart-pdfs prints three of the
    pages that carry it). */
 section.comments { max-width: 34rem; margin: 3rem auto 1.5rem; }
-.comment { border-top: 1px solid var(--rule); padding: 0.9em 0 0.4em; }
-.comment-head { font-size: 0.92rem; }
+/* Every post is a CARD — the merecat bubble idiom generalized (2026-08-03
+   readability standard): bordered, rounded, surface-filled, with air between
+   posts, so each message is a self-contained readable unit instead of a run
+   of border-top rules. --surface sits one step off --bg in every palette
+   (verified); on base light paper the 1px rule carries the card, exactly as
+   the merecat bubble reads there. */
+.comment { border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 0.55rem 0.8rem 0.5rem; margin: 0.55rem 0; }
+/* ONE flex line: author left, compact time + the ⋯ menu pushed right. */
+.comment-head { font-size: 0.92rem; display: flex; align-items: center; gap: 0.45em; min-width: 0; }
+.comment-head > a.comment-date { margin-left: auto; }
 .comment-author { font-weight: bold; color: var(--maroon); }
-.comment-date { color: var(--muted-c); margin-left: 0.7em; font-size: 0.9em; white-space: nowrap; }
+.comment-date { color: var(--muted-c); margin-left: 0; font-size: 0.85em; white-space: nowrap; }
 a.comment-delete { color: var(--muted-c); margin-left: 0.9em; font-size: 0.85em; }
 .comment-body { white-space: pre-wrap; overflow-wrap: break-word; margin-top: 0.35em; }
+/* Nested feed comments are NOT cards-in-cards — the thread rail indents them;
+   flat and quiet inside the parent post's card. */
+.wall-comments .comment { border: 0; border-radius: 0; background: none; padding: 0.3rem 0 0.15rem; margin: 0.35rem 0; }
+
+/* The ⋯ overflow menu (postMenu): all of a post's action links live here —
+   the head keeps only author + time + ⋯. Items keep their standing classes;
+   this block restyles them as menu rows while they sit in the pop. */
+.comment-menu-wrap { position: relative; display: inline-flex; flex: none; }
+.comment-menu {
+  font: inherit; line-height: 1; background: none; border: 0; cursor: pointer;
+  color: var(--faintest); padding: 0.1em 0.45em; border-radius: 6px;
+}
+.comment-menu:hover { color: var(--maroon); background: color-mix(in srgb, var(--maroon) 8%, transparent); }
+.comment-menu-pop {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 3200;
+  min-width: 11rem; background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 12px; box-shadow: var(--shadow-2); padding: 0.35rem; display: none;
+}
+.comment-menu-wrap.open .comment-menu-pop { display: block; }
+.comment-menu-pop a, .comment-menu-pop button {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 0.92rem;
+  color: var(--ink); background: none; border: 0; cursor: pointer; text-decoration: none;
+  padding: 0.45rem 0.6rem; border-radius: 8px; margin: 0;
+}
+.comment-menu-pop a:hover, .comment-menu-pop button:hover {
+  background: color-mix(in srgb, var(--maroon) 8%, transparent); color: var(--maroon);
+}
+.comment-menu-pop a.comment-delete, .comment-menu-pop a.dm-del { color: var(--maroon); }
+.comment-menu-sheet a, .comment-menu-sheet button {
+  display: block; width: 100%; text-align: left; font: inherit; font-size: 1rem;
+  color: var(--ink); background: none; border: 0; cursor: pointer; text-decoration: none;
+  padding: 0.65rem 0.5rem; margin: 0;
+}
 /* A quoted excerpt inside a comment body: runs of ">"-prefixed lines that
    fillBody turns into a blockquote. Overrides the article blockquote look. */
 blockquote.comment-quote {
@@ -938,7 +979,9 @@ a.identity-action { color: var(--maroon); }
    comment is tinted so an arriving reader sees which one was meant. */
 a.comment-date { text-decoration: none; }
 a.comment-date:hover { text-decoration: underline; }
-.comment:target { background: var(--cream); outline: 2px solid var(--rule); outline-offset: 4px; }
+/* The cream tint alone is invisible against a white CARD in light paper —
+   the maroon outline does the pointing now. */
+.comment:target { background: var(--cream); outline: 2px solid var(--maroon); outline-offset: 2px; }
 .comment-meta { font-size: 0.78rem; color: var(--faintest); overflow-wrap: anywhere; margin-top: 0.3em; }
 .comment-meta summary { cursor: pointer; color: #b09a7a; }
 .profile .comment-meta { margin-top: 1.2rem; border-top: 1px solid var(--rule); padding-top: 0.6rem; }
@@ -1085,17 +1128,26 @@ a.user-row:hover { background: var(--cream); }
 .user-go { color: var(--faintest); font-size: 0.85rem; white-space: nowrap; }
 .trust-line { margin-top: 0.25em; }
 
-/* Profiles. Author names link to a profile; a custom nick shows first with the
-   assigned pseudonym muted beneath it, and a signature rides under each post. */
-.comment-author { display: inline-block; vertical-align: top; }
-a.comment-author-link { color: var(--maroon); font-weight: bold; text-decoration: none; }
+/* Profiles. Author names link to a profile. The head is ONE quiet line now
+   (the readability standard): name + a dim inline `· faith · rank` suffix;
+   the assigned pseudonym and exact post count ride the link's title and the
+   profile page. */
+.comment-author { display: inline-flex; align-items: baseline; gap: 0.35em; min-width: 0; overflow: hidden; font-weight: bold; color: var(--maroon); }
+a.comment-author-link { color: var(--maroon); font-weight: bold; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 a.comment-author-link:hover { text-decoration: underline; }
-a.comment-author-sub { display: block; margin-top: -0.1em; color: var(--faintest); font-weight: normal; font-size: 0.78rem; text-decoration: none; }
-a.comment-author-sub:hover { text-decoration: underline; }
+/* faith + rank: dim inline suffixes; the `· ` separators are pseudo-content so
+   textContent stays exactly what the webtests assert. */
+.comment-author .comment-faith,
+.comment-author .comment-rank {
+  display: inline; margin: 0; font-size: 0.78rem; font-weight: normal;
+  color: var(--faintest); opacity: 1; white-space: nowrap;
+}
+.comment-author .comment-faith::before,
+.comment-author .comment-rank::before { content: "· "; }
 .comment-faith { display: block; margin-top: 0.05em; color: var(--maroon); font-weight: normal; font-size: 0.72rem; opacity: 0.9; }
-.comment-sig { margin-top: 0.5em; padding-top: 0.4em; border-top: 1px solid var(--rule); color: var(--muted-d); font-size: 0.85rem; white-space: pre-wrap; overflow-wrap: break-word; }
-.comment-avatar-link { display: inline-block; vertical-align: top; margin-right: 0.5em; }
-.comment-avatar { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--rule); display: block; margin: 0; }
+.comment-sig { margin-top: 0.45em; padding-top: 0; border-top: 0; color: var(--faintest); font-size: 0.8rem; white-space: pre-wrap; overflow-wrap: break-word; }
+.comment-avatar-link { display: flex; align-items: center; margin-right: 0; flex: none; }
+.comment-avatar { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid var(--rule); display: block; margin: 0; }
 .profile { max-width: 34rem; margin: 1rem 0; }
 .profile-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
 .profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--cream-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }

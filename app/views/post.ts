@@ -45,8 +45,8 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
       var av = el('img', 'comment-avatar') as HTMLImageElement;
       av.src = kit.API + '/avatar?hash=' + c.author_hash + '&v=' + encodeURIComponent(c.avatar);
       av.alt = '';
-      av.width = 32;
-      av.height = 32;
+      av.width = 20;
+      av.height = 20;
       avLink.appendChild(av);
       head.appendChild(avLink);
     }
@@ -57,13 +57,24 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
     if (c.author_hash && kit.ADMIN_HASHES.indexOf(c.author_hash) !== -1) {
       head.appendChild(el('span', 'comment-admin', '(admin)'));
     }
+    if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
+    /* The date doubles as the comment's shareable permalink — compact form,
+       the full wording on hover (the readability standard). */
+    var date = el('a', 'comment-date', kit.fmtTimeCompact(c.created_at)) as HTMLAnchorElement;
+    date.title = kit.fmtDateTime(c.created_at);
+    date.href = '#comment-' + c.id;
+    head.appendChild(date);
+    /* Every action folds into the ⋯ menu (the owner's ruling): the head keeps
+       only author + time + ⋯. The links are built EXACTLY as before — same
+       classes, same handlers — only their home moved. */
+    var items: HTMLElement[] = [];
     /* A door to a private word with the author, for keyed readers only.
        The librarian holds no inbox: its posts carry no DM link. */
     if (Core.canInteract(c.author_hash, kit.state.myHash, kit.MERECAT_BOT_HASH)) {
       var dm = el('a', 'comment-dm', 'Direct Message') as HTMLAnchorElement;
       dm.href = 'community.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
-      head.appendChild(dm);
+      items.push(dm);
       /* Mute this member's posts for yourself. Re-routing re-renders the view
          in place so the mute takes at once, everywhere they appear — a full
          page reload inside the SPA was jarring on phones. */
@@ -75,7 +86,7 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
         kit.toggleMute(c.author_hash);
         if (kit.reroute) kit.reroute(); else location.reload();
       });
-      head.appendChild(muteLink);
+      items.push(muteLink);
       /* Members flag a post for the moderators; admins act directly and don't
          see this. Reporting never hides the post — it only queues it for review.
          The reason is asked in an app sheet (window.prompt is suppressed in some
@@ -101,25 +112,19 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
             }).catch(function () {});
           });
         });
-        head.appendChild(reportLink);
+        items.push(reportLink);
       }
     }
-    /* The date doubles as the comment's shareable permalink. */
-    var date = el('a', 'comment-date', kit.fmtDateTime(c.created_at)) as HTMLAnchorElement;
-    date.href = '#comment-' + c.id;
-    head.appendChild(date);
     /* Anyone may quote any post into the reply box, so unlike edit/delete this
-       is ungated. The selection is grabbed on mousedown, before the click can
-       clear it; with none, the whole post (trimmed) is quoted. */
+       is ungated. The selection grab moved to the ⋯ MOUSEDOWN (postMenu's
+       onOpen) — opening the menu is now the click that would have cleared it. */
     var quote = el('a', 'comment-quote-link', 'quote') as HTMLAnchorElement;
     quote.href = '#';
-    quote.addEventListener('mousedown', function () { kit.quoteGrab(c); });
     quote.addEventListener('click', function (e: Event) {
       e.preventDefault();
       kit.quoteTake(c, quoteCtx);
     });
-    head.appendChild(quote);
-    if (c.edited_at) head.appendChild(el('span', 'comment-edited', 'edited'));
+    items.push(quote);
     if (Core.canEdit(c.author_hash, kit.state.myHash)) {
       var ed = el('a', 'comment-edit', 'edit') as HTMLAnchorElement;
       ed.href = '#';
@@ -127,7 +132,7 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
         e.preventDefault();
         kit.startEdit(c, article);
       });
-      head.appendChild(ed);
+      items.push(ed);
     }
     if (Core.canDelete(c.author_hash, kit.state.myHash, kit.isAdmin())) {
       var del = el('a', 'comment-delete', 'delete') as HTMLAnchorElement;
@@ -154,7 +159,10 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
         if (window.mcConfirm) window.mcConfirm('Delete this comment?', { okLabel: 'Delete', danger: true }).then(go);
         else go(confirm('Delete this comment?'));
       });
-      head.appendChild(del);
+      items.push(del);
+    }
+    if (items.length) {
+      head.appendChild(kit.postMenu({ items: items, onOpen: function () { kit.quoteGrab(c); } }));
     }
     article.appendChild(head);
     var body = window.mcRich!.fillBody(el('div', 'comment-body'), c.body,
