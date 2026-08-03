@@ -80,11 +80,11 @@ def main():
           var n = window.mcViews.commentNode(window.mcKit, %s, false, {page:'/credo.html'});
           document.body.appendChild(n);
           return JSON.stringify({dm:!!n.querySelector('.comment-dm'),
-            mute:!!n.querySelector('a.comment-quote-link[title*="posts"]'),
+            block:!!n.querySelector('a.comment-quote-link[title*="Block"]'),
             report:!!n.querySelector('a[title*="Report"]'),
             edit:!!n.querySelector('.comment-edit'), del:!!n.querySelector('.comment-delete')});"""
           % json.dumps(fixture('ab' * 32))))
-        checks.append(('other: DM + mute present', other['dm'] and other['mute']))
+        checks.append(('other: DM + block present', other['dm'] and other['block']))
         checks.append(('other: admin-viewer sees delete not edit', other['del'] and not other['edit']))
         checks.append(('other: admin sees no report link', not other['report']))
 
@@ -104,18 +104,20 @@ def main():
           return ta.value;""")
         checks.append(('quote fills the reply box with >', '>' in (quoted or '') and 'wrote:' in (quoted or '')))
 
-        muted = json.loads(f.js1("""
+        # The 2026-08-03 block unification: a blocked author's post renders as
+        # a HIDDEN stub (no collapse, no reveal) — it does not exist for you.
+        blocked = json.loads(f.js1("""
           window.mcKit.toggleMute('cd'.repeat(32));
           var box = document.createElement('div'); box.id='mute-box'; document.body.appendChild(box);
           var n = window.mcViews.commentNode(window.mcKit, %s, false, {page:'/credo.html'});
           box.appendChild(n);
-          var collapsed = !!box.querySelector('.comment-muted');
-          if (collapsed) box.querySelector('.comment-muted a').click();
-          var revealed = !!box.querySelector('article.comment');
+          var stub = box.querySelector('.comment-blocked');
+          var hidden = stub && getComputedStyle(stub).display === 'none';
+          var noBody = !box.querySelector('article.comment');
           window.mcKit.toggleMute('cd'.repeat(32));
-          return JSON.stringify({collapsed:collapsed, revealed:revealed});"""
+          return JSON.stringify({hidden:!!hidden, noBody:noBody});"""
           % json.dumps(fixture('cd' * 32))))
-        checks.append(('mute collapses then reveals', muted['collapsed'] and muted['revealed']))
+        checks.append(('blocked post is fully hidden', blocked['hidden'] and blocked['noBody']))
         checks.append(('local console clean', f.assert_console_clean('local')))
         fails = list(f.failures)
 

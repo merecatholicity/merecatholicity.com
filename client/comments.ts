@@ -454,6 +454,30 @@
     syncMutedUp();
     return added;
   }
+  /* BLOCK is the ONE member-facing control now (the owner's 2026-08-03
+     ruling: "User can block. User can unblock. that is it."). One act closes
+     both doors — their messages to you (the DM shadow-block, server-side in
+     dm_blocks) and their posts/profile in your view (the hide-list above,
+     server-synced through /prefs). The old member-facing "mute" surface is
+     retired; the list machinery survives underneath as block's hide half.
+     Admin moderation (locks, bans, shadow bans, delete) is a separate,
+     untouched world. */
+  function isBlocked(hash: any) { return isMuted(hash); }
+  function setBlock(hash: any, on: any, done?: any) {
+    if (!hash || hash === MERECAT_BOT_HASH || hash === state.myHash) { if (done) done(); return; }
+    var a = getMuted(), i = a.indexOf(hash);
+    if (on && i === -1) a.push(hash);
+    if (!on && i !== -1) a.splice(i, 1);
+    try { localStorage.setItem(MUTED_STORE, JSON.stringify(a)); } catch (e) { /* hide-list is best effort */ }
+    syncMutedUp();
+    fetch(API + '/dm/block', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, hash: hash, blocked: !!on }),
+    }).then(function (r) { return r.json(); })
+      .catch(function () { /* the hide half already stands; the DM half heals on the next toggle */ })
+      .then(function () { if (done) done(); });
+  }
+  var BLOCK_CONFIRM = 'Block this member? They can no longer message you (they are never told), and their posts and profile are hidden from you. You can unblock them any time in Settings or from their profile.';
   /* The "I hold to:" radio group, one row per faith, used at signup and in the
      profile editor. onChange fires with the chosen code. */
   function faithRadios(current: any, onChange: any) {
@@ -2635,19 +2659,14 @@
     /* Ported (Wave B3b): the module builder renders when the bundle stands;
        this body is the no-bundle fallback (the deliberate no-bundle fallback). */
     if (window.mcViews && window.mcViews.commentNode) return window.mcViews.commentNode(window.mcKit, c, pending, quoteCtx, reveal);
-    /* A muted member's post shows only a slim line until you choose to see it. */
+    /* A BLOCKED member's post does not exist for you (the 2026-08-03 block
+       unification: no collapse, no "show" — you chose not to see them). The
+       hidden stub keeps every caller's append/anchor bookkeeping intact. */
     if (!reveal && c.author_hash && c.author_hash !== state.myHash && isMuted(c.author_hash)) {
-      var ph = el('div', 'board-intro comment-muted');
+      var ph = el('div', 'comment-blocked');
       ph.id = 'comment-' + c.id;
-      ph.appendChild(document.createTextNode('A muted member posted here. '));
-      var show = el('a', 'comment-quote-link', 'show');
-      show.href = '#';
-      show.addEventListener('click', function (e: any) {
-        e.preventDefault();
-        var full = commentNode(c, pending, quoteCtx, true);
-        if (ph.parentNode) ph.parentNode.replaceChild(full, ph);
-      });
-      ph.appendChild(show);
+      ph.style.display = 'none';
+      ph.hidden = true;
       return ph;
     }
     var article = el('article', 'comment' + (pending ? ' comment-pending' : ''));
@@ -2696,17 +2715,19 @@
       dm.href = 'messages.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
       items.push(dm);
-      /* Mute this member's posts for yourself. Reloading re-renders the view so
-         the mute takes at once, everywhere they appear. */
-      var muteLink = el('a', 'comment-quote-link', isMuted(c.author_hash) ? 'unmute' : 'mute');
-      muteLink.href = '#';
-      muteLink.title = 'Hide this member’s posts, for you only';
-      muteLink.addEventListener('click', function (e: any) {
+      /* Block, the one member control: their posts vanish for you and their
+         messages stop. Reloading re-renders the view so it takes at once. */
+      var blockLink = el('a', 'comment-quote-link', isBlocked(c.author_hash) ? 'unblock' : 'block');
+      blockLink.href = '#';
+      blockLink.title = 'Block this member: hide their posts and stop their messages';
+      blockLink.addEventListener('click', function (e: any) {
         e.preventDefault();
-        toggleMute(c.author_hash);
-        location.reload();
+        if (isBlocked(c.author_hash)) { setBlock(c.author_hash, false, function () { location.reload(); }); return; }
+        appConfirm(BLOCK_CONFIRM, { okLabel: 'Block', danger: true }, function (ok: any) {
+          if (ok) setBlock(c.author_hash, true, function () { location.reload(); });
+        });
       });
-      items.push(muteLink);
+      items.push(blockLink);
       /* Members flag a post for the moderators; admins act directly and don't
          see this. Reporting never hides the post — it only queues it for review. */
       if (!isAdmin()) {
@@ -4219,9 +4240,11 @@
           if (!c) { cell.textContent = 'quiet so far'; return; }
           cell.appendChild(el('div', null,
             c.topics + (c.topics === 1 ? ' topic · ' : ' topics · ') + c.posts + (c.posts === 1 ? ' post' : ' posts')));
-          if (c.latest && c.latest.title) {
+          if (c.latest && c.latest.title
+              && !(c.latest.author_hash && isBlocked(c.latest.author_hash))) {
             /* The one dim secondary line (the readability standard): latest
-               title + poster as one anchor to the newest post, compact time. */
+               title + poster as one anchor to the newest post, compact time.
+               A blocked member's latest never surfaces (block unification). */
             var line = el('div', 'board-row-sub');
             var t = String(c.latest.title);
             var titleText = t.length > 42 ? t.slice(0, 42) + '…' : t;
@@ -4375,6 +4398,8 @@
         }
         var titlesByTopic: Record<string, any> = {};
         d.topics.forEach(function (t: any) {
+          /* A blocked member's topics do not exist for you (block unification). */
+          if (t.author_hash && isBlocked(t.author_hash)) return;
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
           var title = el('a', 'board-topic-title', t.title);
@@ -5571,6 +5596,18 @@
 
   function renderProfile(card: any, p: any, editable: any) {
     card.textContent = '';
+    /* A blocked member's profile is closed to you — no card, no wall, no
+       posts; just the honest line and the way back (the block unification). */
+    if (!editable && p.hash !== state.myHash && isBlocked(p.hash)) {
+      card.appendChild(el('p', 'comments-status', 'You have blocked this member. Their profile and posts are hidden from you.'));
+      var ub = el('button', 'btn btn-anon', 'Unblock this member');
+      ub.type = 'button';
+      ub.addEventListener('click', function () {
+        setBlock(p.hash, false, function () { renderProfile(card, p, editable); });
+      });
+      card.appendChild(ub);
+      return;
+    }
     var headRow = el('div', 'profile-head');
     var avatar = el('div', 'profile-avatar');
     if (p.avatar) {
@@ -5655,13 +5692,14 @@
           location.href = 'messages.html?dm=' + p.hash;
         });
         card.appendChild(dmBtn);
-        var muteBtn = el('button', 'btn btn-anon', isMuted(p.hash) ? 'Unmute this member' : 'Mute this member');
-        muteBtn.type = 'button';
-        muteBtn.addEventListener('click', function () {
-          toggleMute(p.hash);
-          muteBtn.textContent = isMuted(p.hash) ? 'Unmute this member' : 'Mute this member';
+        var blockBtn = el('button', 'btn btn-anon', 'Block this member');
+        blockBtn.type = 'button';
+        blockBtn.addEventListener('click', function () {
+          appConfirm(BLOCK_CONFIRM, { okLabel: 'Block', danger: true }, function (ok: any) {
+            if (ok) setBlock(p.hash, true, function () { renderProfile(card, p, editable); });
+          });
         });
-        card.appendChild(muteBtn);
+        card.appendChild(blockBtn);
       }
     }
     /* The member's public wall — their own posts, with a composer on your own. */
@@ -6743,6 +6781,13 @@
     return wrap;
   }
   function wallCommentNode(c: any, post: any) {
+    /* A blocked author's comment does not exist for you (block unification). */
+    if (c.author_hash && c.author_hash !== state.myHash && isBlocked(c.author_hash)) {
+      var bph = el('div', 'comment-blocked');
+      bph.style.display = 'none';
+      (bph as any).hidden = true;
+      return bph;
+    }
     var node = el('article', 'comment wall-comment');
     var head = el('div', 'comment-head');
     wallAvatarInto(head, c.author_hash, c.avatar);
@@ -6792,6 +6837,15 @@
     return more;
   }
   function wallPostNode(p: any, expand?: boolean) {
+    /* A blocked author's post does not exist for you (block unification);
+       the hidden stub keeps every feed list's append/prune bookkeeping. */
+    if (p.author_hash && p.author_hash !== state.myHash && isBlocked(p.author_hash)) {
+      var bph = el('article', 'comment-blocked');
+      bph.id = 'post-' + p.id;
+      bph.style.display = 'none';
+      (bph as any).hidden = true;
+      return bph;
+    }
     ensureDmStyles();
     var node = el('article', 'comment wall-post' + (expand ? ' wall-post-detail' : '') + (p.media_key ? ' wall-post-media' : ''));
     node.id = 'post-' + p.id;
@@ -7678,20 +7732,13 @@
             if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
           });
         });
-        /* The quiet exit: block stops their future messages to you. */
+        /* The quiet exit — the ONE block (unified 2026-08-03): messages held
+           out of sight AND their posts/profile hidden from your view. */
         var blockLine = el('p', 'board-audit-link');
         blockLine.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
           var blocking = !d.blocked;
-          var doBlock = function () {
-            fetch(API + '/dm/block', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, hash: other, blocked: blocking }),
-            }).then(function (r) { return r.json(); }).then(function (d3) {
-              if (d3.ok) location.reload();
-            }).catch(function () {});
-          };
-          if (blocking) appConfirm('Block this member? Their future messages will be held out of your sight, and they will never be told. Unblocking delivers everything they wrote meanwhile.', { okLabel: 'Block', danger: true }, function (ok: any) { if (ok) doBlock(); });
+          var doBlock = function () { setBlock(other, blocking, function () { location.reload(); }); };
+          if (blocking) appConfirm('Block this member? Their future messages are held out of your sight (they are never told), and their posts and profile are hidden from you. Unblocking undoes all of it and delivers everything they wrote meanwhile.', { okLabel: 'Block', danger: true }, function (ok: any) { if (ok) doBlock(); });
           else doBlock();
         }));
         blockLine.appendChild(document.createTextNode(' · '));
@@ -7911,6 +7958,8 @@
         if (!d.items.length) { count.textContent = 'Nothing found for that search.'; return; }
         count.textContent = d.total + (d.total === 1 ? ' result.' : ' results.');
         d.items.forEach(function (it: any) {
+          /* A blocked member's posts do not surface in search (block unification). */
+          if (it.author_hash && isBlocked(it.author_hash)) return;
           var rowEl = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
           var a = el('a', 'board-topic-title', it.title || 'a thread');
@@ -10557,6 +10606,8 @@
     /* the post renderer's organs (Wave B3b) */
     fetchRetry: fetchRetry,
     isMuted: isMuted, toggleMute: toggleMute,
+    /* the unified member block (2026-08-03): one act = DM shadow-block + hide */
+    isBlocked: isBlocked, setBlock: setBlock, appConfirm: appConfirm, BLOCK_CONFIRM: BLOCK_CONFIRM,
     authorNode: authorNode, profileHref: profileHref,
     ADMIN_HASHES: ADMIN_HASHES, MERECAT_BOT_HASH: MERECAT_BOT_HASH,
     setStatus: setStatus, startEdit: startEdit,

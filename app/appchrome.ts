@@ -478,7 +478,7 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, muted: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
   declare keyShown: boolean;
   declare theme: string;
   declare art: boolean;
@@ -490,8 +490,7 @@ class McSettings extends LitElement {
   declare prefs: any;
   declare panel: string;
   declare blocked: Array<{ hash: string; nick?: string; assigned?: string }> | null;
-  declare muted: Array<{ hash: string; name: string }> | null;
-  declare canInstall: boolean;
+    declare canInstall: boolean;
   declare pushOn: boolean | null;
   declare pushBusy: boolean;
   declare pushMsg: string;
@@ -501,7 +500,7 @@ class McSettings extends LitElement {
     this.keyShown = false; this.theme = this._theme(); this.art = artOn(); this.copied = false;
     this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal';
     this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence(); this.sounds = this._sounds();
-    this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null; this.muted = null;
+    this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null;
     this.canInstall = !!(window.mcInstall && window.mcInstall.evt);
     this.pushOn = null; this.pushBusy = false; this.pushMsg = '';   // null = state not yet reflected
     this._onInstall = () => { this.canInstall = !!(window.mcInstall && window.mcInstall.evt); };
@@ -527,30 +526,39 @@ class McSettings extends LitElement {
   _openPanel(which: string) {
     this.panel = this.panel === which ? '' : which;
     if (this.panel === 'blocked' && this.blocked == null) this._loadBlocked();
-    if (this.panel === 'muted') this._loadMuted();
   }
+  /* ONE Blocked list since the 2026-08-03 block unification: the server's
+     dm_blocks roster unioned with the local hide-list (mc-muted — block's
+     other half, and where any pre-unification "mutes" still live), so every
+     blocked member appears here whichever half recorded them. */
   _loadBlocked() {
-    const k = readKey(); if (!k) { this.blocked = []; return; }
-    fetch(this._api() + '/dm/blocked', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }) })
-      .then((r) => r.json()).then((d) => { this.blocked = (d && d.ok) ? d.blocked : []; }).catch(() => { this.blocked = []; });
-  }
-  _unblock(hash: string) {
-    const k = readKey(); if (!k) return;
-    this.blocked = (this.blocked || []).filter((b) => b.hash !== hash);
-    fetch(this._api() + '/dm/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, hash, blocked: false }) }).catch(() => { /* best effort */ });
-  }
-  _loadMuted() {
-    let list: string[] = [];
-    try { list = JSON.parse(localStorage.getItem('mc-muted') as string) || []; } catch (e) { list = []; }
+    let local: string[] = [];
+    try { local = (JSON.parse(localStorage.getItem('mc-muted') as string) || []).filter(Boolean); } catch (e) { local = []; }
     const dn = (h: string) => (window.mcCore ? window.mcCore.displayName(h) : String(h).slice(0, 8));
-    this.muted = list.filter(Boolean).map((h) => ({ hash: h, name: dn(h) }));
+    const merge = (server: Array<{ hash: string; nick?: string; assigned?: string }>) => {
+      const seen: Record<string, boolean> = {};
+      const out: Array<{ hash: string; nick?: string; assigned?: string }> = [];
+      server.concat(local.map((h) => ({ hash: h, assigned: dn(h) }))).forEach((b) => {
+        if (!b.hash || seen[b.hash]) return;
+        seen[b.hash] = true; out.push(b);
+      });
+      return out;
+    };
+    const k = readKey(); if (!k) { this.blocked = merge([]); return; }
+    fetch(this._api() + '/dm/blocked', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k }) })
+      .then((r) => r.json()).then((d) => { this.blocked = merge((d && d.ok) ? d.blocked : []); }).catch(() => { this.blocked = merge([]); });
   }
-  _unmute(hash: string) {
+  /* Unblock undoes BOTH halves: the DM shadow-block and the hide-list (with
+     its /prefs write-through, so a second device unhides too). */
+  _unblock(hash: string) {
+    this.blocked = (this.blocked || []).filter((b) => b.hash !== hash);
     let list: string[] = [];
     try { list = JSON.parse(localStorage.getItem('mc-muted') as string) || []; } catch (e) { list = []; }
     list = list.filter((h) => h !== hash);
-    try { localStorage.setItem('mc-muted', JSON.stringify(list)); } catch (e) { /* blocked */ }
-    this.muted = (this.muted || []).filter((m) => m.hash !== hash);
+    try { localStorage.setItem('mc-muted', JSON.stringify(list)); } catch (e) { /* hide-list is best effort */ }
+    const k = readKey(); if (!k) return;
+    fetch(this._api() + '/dm/block', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, hash, blocked: false }) }).catch(() => { /* best effort */ });
+    fetch(this._api() + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: k, set: { muted: list.slice(0, 200) } }) }).catch(() => { /* best effort */ });
   }
   _install() { if (window.mcInstall) window.mcInstall.prompt(); this.canInstall = false; }
 
@@ -931,9 +939,7 @@ class McSettings extends LitElement {
         ${this._switch('Read receipts', this._receiptsOn() ? 'On' : 'Off — you send none and see none', this._receiptsOn(), () => this._setPref({ receipts: this._receiptsOn() ? 'off' : 'auto' }))}
         ${this._switch('Voice calls', this._callsOn() ? 'Members can call you' : 'Off — callers just hear ringing, like no answer', this._callsOn(), () => this._setPref({ calls: this._callsOn() ? 0 : 1 }))}
         ${this._managedList('blocked', 'Blocked members', blockedRows ? blockedRows.length : null, blockedRows, (h) => this._unblock(h), 'Unblock')}
-        <div class="mc-set-note" style="padding:0 0.95rem 0.4rem;font-size:0.85em;opacity:0.7">Blocking stops their direct messages. Their public posts stay visible.</div>
-        ${this._managedList('muted', 'Muted members', this.muted ? this.muted.length : null, this.muted, (h) => this._unmute(h), 'Unmute')}
-        <div class="mc-set-note" style="padding:0 0.95rem 0.4rem;font-size:0.85em;opacity:0.7">Muting hides their posts for you wherever you are signed in.</div>
+        <div class="mc-set-note" style="padding:0 0.95rem 0.4rem;font-size:0.85em;opacity:0.7">A blocked member cannot message you, their posts are hidden from your feed and community, and their profile is closed to you. They are never told.</div>
 
         <h3 class="mc-set-sec">Notifications</h3>
         ${this._switch('Replies', null, this._notifyOn('reply'), () => this._setPref({ notify_reply: this._notifyOn('reply') ? 0 : 1 }))}
