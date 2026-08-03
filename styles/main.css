@@ -1190,11 +1190,15 @@ a.dm-suggest-row { display: flex; justify-content: space-between; align-items: b
 a.dm-suggest-row:hover, .dm-suggest-sel { background: var(--cream); }
 a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
 .dm-suggest-go { color: var(--brown); font-size: 0.85em; white-space: nowrap; }
-.dm-msg { border-top: 1px solid var(--rule); padding: 0.7em 0.6em 0.5em; }
-.dm-msg:first-child { border-top: 0; }
-/* Every message reads the same — clear, separated by a rule, like a forum
-   thread; no shaded "mine vs theirs" alternation (the sender name distinguishes
-   them). .dm-mine is kept as a hook but carries no background. */
+/* DM: the merecat 1:1 alternation, via the long-standing .dm-mine hook —
+   mine right on --cream, theirs left on --surface, each message its own card
+   (the 2026-08-03 readability standard; the old flat no-alternation policy is
+   retired). */
+.dm-msg {
+  border: 1px solid var(--rule); border-radius: 6px; background: var(--surface);
+  padding: 0.55rem 0.8rem; margin: 0.55rem 0; max-width: 92%;
+}
+.dm-msg.dm-mine { margin-left: auto; background: var(--cream); }
 .dm-msg .comment-body { margin-top: 0.25em; }
 
 /* Moderation: the non-fading ban/lock banner, the danger-red controls, and the
@@ -1749,17 +1753,21 @@ body.mc-app main.prose > #title-block-header {
     min-width: 0; border-radius: 20px; padding: 0.6rem 1.15rem; min-height: 2.7rem;
     font-size: 1rem; align-self: flex-end; flex: none;
   }
-  .merecat-msg { max-width: 85%; border-radius: 16px; padding: 0.65rem 0.9rem; }
+  .merecat-msg, .dm-msg { max-width: 85%; border-radius: 16px; padding: 0.65rem 0.9rem; }
   /* Scoped under .merecat-log so these beat the runtime-injected #mc-merecat-css
      `.merecat-msg.you{background:var(--cream)}` (appended to <head> after style.css,
      equal specificity, later-wins). Without the extra ancestor the injected cream
      background survived while our white text did not → white-on-cream in light mode. */
   /* --accent-fill (NOT var(--maroon), which is lightened in dark mode → white
      text would go low-contrast): the fill token is a deep red in light and a
-     brighter red in dark, always readable with --accent-on. */
-  .merecat-log .merecat-msg.you { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); border-bottom-right-radius: 5px; }
+     brighter red in dark, always readable with --accent-on. DM bubbles ride the
+     same iMessage treatment (the readability standard). */
+  .merecat-log .merecat-msg.you, .dm-msg.dm-mine { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); border-bottom-right-radius: 5px; }
   .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
-  .merecat-log .merecat-msg.cat { background: var(--cream-2); border-bottom-left-radius: 5px; }
+  /* Everything inside a mine bubble must read on the red fill — maroon/muted
+     inks go low-contrast there. Load-bearing; covers head, meta, controls. */
+  .dm-msg.dm-mine :is(.comment-author, .comment-date, .dm-edited, .dm-receipt, .dm-save, .dm-like-chip, .comment-menu, a) { color: rgba(255, 255, 255, 0.85); }
+  .merecat-log .merecat-msg.cat, .dm-msg:not(.dm-mine) { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
 
   /* keyboard-aware composer: while the soft keyboard is up (the shell publishes
@@ -1856,7 +1864,7 @@ body.mc-app main.prose > #title-block-header {
 
   /* merecat messages pop in like a chat */
   @keyframes mc-bubblein { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
-  .merecat-msg { animation: mc-bubblein 0.22s ease; }
+  .merecat-msg, .dm-msg { animation: mc-bubblein 0.22s ease; }
 }
 
 /* ---- Phase 5: app-native content (phones only) ----
