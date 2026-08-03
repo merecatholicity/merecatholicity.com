@@ -13,12 +13,10 @@ Lit-based app shell progressively upgrades into a single-page app. Everything dy
 comments, the forum, DMs, the bot — is delegated to Cloudflare Workers so the site itself
 stays free to serve.
 
-> **New to the code?** Read **[`SPEC.md`](SPEC.md)** for the architecture and the
-> *reasoning* (why PureScript for the kernel, TypeScript/Lit for the edges, the
-> Cloudflare storage/AI split, the free-tier economics, how we relate to MVC), then
+> **New to the code?** Read
 > **[`docs/architecture/CODEBASE.md`](docs/architecture/CODEBASE.md)** for the module
-> map + measured modularity analysis. This README is *how it's built*; SPEC.md is
-> *why it's shaped this way*; CODEBASE.md is *how it's structured*.
+> map + measured modularity analysis. This README is *how it's built*; CODEBASE.md
+> is *how it's structured*.
 
 ---
 
