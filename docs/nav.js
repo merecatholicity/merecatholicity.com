@@ -482,19 +482,33 @@ document.addEventListener('DOMContentLoaded', function () {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
     else go();
   }
-  function note(m) {
+  /* Auto-show is for the OWNER'S phone, never the members' (live report
+     2026-08-03: a reader opening Feed met a wall of diagnostics because a
+     cross-origin script hiccuped). Gate: the mc-admin flag loadMyProfile
+     maintains. Anyone may still open ?debug=1 DELIBERATELY — that is how a
+     member report gets its screenshot — but an error never pushes the panel
+     at a regular reader. */
+  function adminHere() {
+    try { return localStorage.getItem('mc-admin') === '1'; } catch (e) { return false; }
+  }
+  function note(m, opaque) {
     errs.push(new Date().toISOString().slice(11, 19) + ' ' + String(m).slice(0, 160));
     if (errs.length > 12) errs.shift();
     /* Mirror into the persistent ring: an error that precedes a reload (the
        very state that disarms a form's submit handler) must outlive it. */
     if (window.mcCrumb) window.mcCrumb('err: ' + String(m).slice(0, 100));
+    if (opaque) return;   // "Script error. @ :0" (cross-origin, no detail): record, never pop
     /* An installed app has no URL bar to reach ?debug=1 with — so in
        STANDALONE mode an uncaught error paints the overlay by itself: the
        broken state carries its own diagnosis. Browser tabs stay quiet. */
-    if (standaloneMode()) start();
+    if (standaloneMode() && adminHere()) start();
   }
   window.addEventListener('error', function (e) {
-    note((e.message || 'error') + ' @ ' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || 0));
+    /* A cross-origin script's exception arrives OPAQUE — the literal message
+       "Script error." with no file and line 0 (Turnstile et al.). Nothing in
+       it is actionable, so it is recorded but never pops the panel. */
+    var opaque = /^Script error\.?$/.test(e.message || '') || (!e.filename && !e.lineno);
+    note((e.message || 'error') + ' @ ' + String(e.filename || '').split('/').pop() + ':' + (e.lineno || 0), opaque);
   });
   window.addEventListener('unhandledrejection', function (e) {
     var r = e.reason;
