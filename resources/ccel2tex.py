@@ -144,7 +144,17 @@ class Converter(HTMLParser):
         if tag == "p":
             if self.note_buf is not None:
                 if self.note_buf:
-                    self.note_buf.append("\\par ")
+                    # "\\par{}" — the empty group is load-bearing. A bare "\\par"
+                    # followed by "[" makes pandoc read the bracket as an OPTIONAL
+                    # ARGUMENT and swallow it, so an editorial note like
+                    # "\\footnote{\\par [Or of St. James, so called.]}" renders EMPTY,
+                    # and an unclosed "[" eats the rest of the file ("unexpected end
+                    # of input"). The schaff/newman html loops were immune by accident
+                    # — they sed every "[" to "{[}" — but the curated loop does not,
+                    # so liturgies, trent and didache shipped blank notes. Fixing it
+                    # here protects every work whatever loop builds it. The group is a
+                    # no-op for pdflatex, so the PDFs are unaffected.
+                    self.note_buf.append("\\par{} ")
                 return
             self.flush_paragraph()
             self.buf = []
@@ -677,6 +687,23 @@ def make_articles_heading():
     return heading
 
 
+def liturgies_post(body):
+    """Close Coxe's editorial bracket in the Lavabo note of St. James.
+
+    The ANF transcription opens "[A Lavabo: ..." and never closes it; every
+    sibling elucidation in the work closes its bracket, so this is a slip in
+    the source, not a style. It mattered far out of proportion: an unmatched
+    "[" straight after \\par sends pandoc's LaTeX reader hunting an optional
+    argument to the end of the file ("unexpected end of input"), so the whole
+    work failed to convert — silently, because the curated html loop echoed
+    "built liturgies.html" whatever pandoc's exit status was. docs/liturgies.html
+    therefore sat frozen at an older build while every rebuild reported success.
+    """
+    broken = "[A Lavabo: he prepares himself by the prayer for purification.}"
+    assert broken in body, "liturgies: the Lavabo note moved or was repaired upstream"
+    return body.replace(broken, broken[:-1] + "]}", 1)
+
+
 def articles_post(body):
     """The Articles print three parallel columns (Latin, the 1571
     English, the 1801 American revision), so each article arrives as a
@@ -868,7 +895,8 @@ EXTRA_WORKS = [
     dict(src="npnf209.xml", out="damascus-body.tex",
          heading_fn=make_damascus_heading, safe_footnotes=True),
     dict(src="anf07.xml", out="liturgies-body.tex",
-         heading_fn=make_liturgies_heading, safe_footnotes=True),
+         heading_fn=make_liturgies_heading, safe_footnotes=True,
+         post_fn=liturgies_post),
     dict(src="creeds3.xml", out="articles1571-body.tex",
          heading_fn=make_articles_heading, safe_footnotes=True,
          table_cells=True, inner_heads=True, post_fn=articles_post),

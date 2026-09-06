@@ -428,7 +428,7 @@ html:
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/$$n.html; \
+	      -o ../docs/$$n.html || exit 1; \
 	  rm $$n-body-html.tex; \
 	  echo "built $$n.html"; \
 	done
@@ -456,7 +456,7 @@ summa-html:
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	      --metadata title="Summa Theologica -- $$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/summa-$$n.html; \
+	      -o ../docs/summa-$$n.html || exit 1; \
 	  rm summa-$$n-body-html.tex; \
 	  echo "built summa-$$n.html"; \
 	done
@@ -480,7 +480,7 @@ catena-html:
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=1 \
 	      --metadata title="Catena Aurea on $$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/catena-$$n.html; \
+	      -o ../docs/catena-$$n.html || exit 1; \
 	  rm catena-$$n-body-html.tex; \
 	  echo "built catena-$$n.html"; \
 	done
@@ -503,7 +503,7 @@ schaff-html:
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/$$n.html; \
+	      -o ../docs/$$n.html || exit 1; \
 	  rm $$n-body-html.tex; \
 	  echo "built $$n.html"; \
 	done
@@ -526,7 +526,7 @@ newman-html:
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
 	      --metadata title="$$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/$$n.html; \
+	      -o ../docs/$$n.html || exit 1; \
 	  rm $$n-body-html.tex; \
 	  echo "built $$n.html"; \
 	done

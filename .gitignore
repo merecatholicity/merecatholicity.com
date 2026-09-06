@@ -14,6 +14,10 @@ book/*.toc
 book/*.pdf
 book/*.dvi
 book/memorandum-body-html.tex
+# The resources html loops write <id>-body-html.tex, convert it, then rm it.
+# Transient — but since the loops fail hard now (|| exit 1), a failed run
+# leaves one behind, and it must never be mistaken for a committed source.
+resources/*-body-html.tex
 
 # npm: the JS toolchain (Tailwind, esbuild, eslint, wrangler) is a per-project
 # devDependency set, restored from the committed package-lock.json with `npm ci`.

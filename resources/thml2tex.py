@@ -93,7 +93,17 @@ class Converter(HTMLParser):
             cls = a.get("class", "")
             if self.note_buf is not None:
                 if self.note_buf:
-                    self.note_buf.append("\\par ")
+                    # "\\par{}" — the empty group is load-bearing. A bare "\\par"
+                    # followed by "[" makes pandoc read the bracket as an OPTIONAL
+                    # ARGUMENT and swallow it, so an editorial note like
+                    # "\\footnote{\\par [Or of St. James, so called.]}" renders EMPTY,
+                    # and an unclosed "[" eats the rest of the file ("unexpected end
+                    # of input"). The schaff/newman html loops were immune by accident
+                    # — they sed every "[" to "{[}" — but the curated loop does not,
+                    # so liturgies, trent and didache shipped blank notes. Fixing it
+                    # here protects every work whatever loop builds it. The group is a
+                    # no-op for pdflatex, so the PDFs are unaffected.
+                    self.note_buf.append("\\par{} ")
                 return
             self.buf = []
             self.mode = {"subh": "subh"}.get(cls, "p")

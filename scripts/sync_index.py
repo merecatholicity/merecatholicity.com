@@ -3,7 +3,8 @@
 
 The homepage duplicates the book hero (the-book.html) and the Where-to-begin
 prose (where-to-begin.html) verbatim, and the three copies had already begun
-to drift (a missing footer Contact link, a lost img attribute). The two
+to drift (a lost img attribute; the footer belongs to partials/footer.html
+and strip_dead_nav.py, never to this script). The two
 dedicated pages are the SOURCE now: this script copies their current blocks
 into index.html, anchor-delimited and idempotent. Any block whose anchors are
 missing or ambiguous is left untouched with a warning, never guessed at.
@@ -56,10 +57,14 @@ def main():
         head = '<h2>Where to begin</h2>'
         idx = (idx[:dst[0]] + head + '\n\n' + body + '\n\n' + idx[dst[1]:])
 
-    # 3. The footer Contact link the source pages carry and index lacked.
-    foot = 'merecatholicity.com &middot; <a href="terms.html">Terms &amp; Conditions</a>'
-    if foot in idx and foot + ' &middot; <a href="contact.html">Contact</a>' not in idx:
-        idx = idx.replace(foot, foot + ' &middot; <a href="contact.html">Contact</a>', 1)
+    # The footer is deliberately NOT touched here. This script once appended a
+    # Contact link to index's footer tail, to heal a drift that was real at the
+    # time. It stopped being right: the footer moved into partials/footer.html
+    # (Terms + Privacy, with Contact already in the foot-nav directly above),
+    # and strip_dead_nav.py now syncs every page's tail from that partial. Both
+    # ran in `make html` — the sweep set the tail, then this put Contact back on
+    # index alone — so the homepage was the one page that never matched, every
+    # build, forever. One owner for the footer; that owner is the partial.
 
     if idx != orig:
         with open(os.path.join(DOCS, 'index.html'), 'w', encoding='utf-8') as f:
