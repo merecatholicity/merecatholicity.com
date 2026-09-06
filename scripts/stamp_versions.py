@@ -21,6 +21,7 @@ import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PARTIALS = os.path.join(ROOT, 'partials')
 DOCS = os.path.join(ROOT, 'docs')
 
 
@@ -57,10 +58,17 @@ def main():
         changed.append('nav.js: deeplink.js -> ' + stamps['deeplink.js'])
 
     page_hits = {'comments.js': 0, 'bible-reader.js': 0}
-    for name in sorted(os.listdir(DOCS)):
+    # partials/ too: book-tail.html carries its own comments.js?v= key, and a
+    # pandoc rebuild copies it straight into docs/book.html. Stamping only docs/
+    # meant the two fought every build — the stamp fixed the page, the next
+    # `make html` put the stale key back — and book.html shipped comments.js
+    # v=199 against a kernel many versions newer.
+    targets = [(DOCS, n) for n in sorted(os.listdir(DOCS))]
+    targets += [(PARTIALS, n) for n in sorted(os.listdir(PARTIALS))]
+    for base, name in targets:
         if not name.endswith('.html'):
             continue
-        p = os.path.join(DOCS, name)
+        p = os.path.join(base, name)
         if sub_file(p, r'comments\.js\?v=[0-9a-z]+', 'comments.js?v=' + stamps['comments.js']):
             page_hits['comments.js'] += 1
         if sub_file(p, r'bible-reader\.js\?v=[0-9a-z]+', 'bible-reader.js?v=' + stamps['bible-reader.js']):

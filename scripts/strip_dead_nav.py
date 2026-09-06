@@ -17,15 +17,34 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(ROOT, 'docs')
 
 NAV_RE = re.compile(r'<nav class="site">.*?</nav>\n?', re.S)
-FOOT_NAV = ('<p class="foot-nav"><a href="index.html">Home</a> &middot; '
-            '<a href="library.html">Library</a> &middot; '
-            '<a href="community.html">Community</a> &middot; '
-            '<a href="about.html">About</a> &middot; '
-            '<a href="contact.html">Contact</a></p>\n')
+PARTIAL = os.path.join(ROOT, 'partials', 'footer.html')
+TAIL_RE = re.compile(r'^merecatholicity\.com &middot;.*$', re.M)
+
+
+def footer_lines():
+    """The foot-nav paragraph and the site tail, READ FROM partials/footer.html.
+
+    Both were once copied into this file. That is the drift hazard the repo
+    closes everywhere else: the Privacy link was added to the partial in
+    6ca88bd and the copies here never learned it, so pages this sweep touched
+    kept a footer the partial had stopped describing. The partial is the one
+    source now — edit it, and a rebuild carries the change everywhere.
+    """
+    nav = tail = None
+    with open(PARTIAL, encoding='utf-8') as f:
+        for line in f:
+            t = line.strip()
+            if 'class="foot-nav"' in t:
+                nav = t + '\n'
+            elif t.startswith('merecatholicity.com &middot;'):
+                tail = t
+    assert nav and tail, 'partials/footer.html lost its foot-nav or site tail'
+    return nav, tail
 
 
 def main():
-    stripped = footed = 0
+    FOOT_NAV, TAIL = footer_lines()
+    stripped = footed = retailed = 0
     for name in sorted(os.listdir(DOCS)):
         if not name.endswith('.html'):
             continue
@@ -39,10 +58,20 @@ def main():
         if 'foot-nav' not in s and '<footer>\n' in s:
             s = s.replace('<footer>\n', '<footer>\n' + FOOT_NAV, 1)
             footed += 1
+        # Converge the site tail on the partial too. Hand pages carry their own
+        # literal <footer> (no pandoc include rewrites them), so without this
+        # they drift the moment the partial changes — which is exactly how the
+        # Privacy link reached 256 generated pages but no hand page.
+        if TAIL_RE.search(s):
+            s2 = TAIL_RE.sub(TAIL.replace('\\', '\\\\'), s, count=1)
+            if s2 != s:
+                retailed += 1
+            s = s2
         if s != orig:
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(s)
-    print('strip_dead_nav:', stripped, 'navs stripped;', footed, 'foot-navs added')
+    print('strip_dead_nav:', stripped, 'navs stripped;', footed,
+          'foot-navs added;', retailed, 'site tails synced to the partial')
 
 
 if __name__ == '__main__':
