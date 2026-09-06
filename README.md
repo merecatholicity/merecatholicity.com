@@ -149,8 +149,14 @@ pipeline, "from generation to our own book to all the other books and pages."
 
 The toolchain is:
 
-- **Node.js + npm** — install from the system package manager (on Arch, `pacman -S nodejs
-  npm`). The JavaScript build/lint tools — **Tailwind**, esbuild, eslint, wrangler — are
+- **Node.js ≥ 22 + npm** — on Arch, `pacman -S nodejs npm`. **On Debian/Ubuntu, do NOT use
+  the distro `nodejs` package**: its `+dfsg` build has Amaro (the TypeScript stripper)
+  compiled out, so `node --test` fails with `ERR_UNKNOWN_FILE_EXTENSION ".ts"` on every
+  test that imports a `.ts` source and `make tests` cannot pass. Install an official build
+  from nodejs.org instead — unpacking the LTS tarball under `~/.local` and putting its
+  `bin/` on PATH needs no root. Check with
+  `node -e 'console.log(process.config.variables.node_use_amaro)'`, which must print `true`.
+  The JavaScript build/lint tools — **Tailwind**, esbuild, eslint, wrangler — are
   per-project devDependencies, and **Lit** (the app shell's UI library, bundled into
   app.js) is a per-project dependency, all restored from the committed `package-lock.json`
   with `npm ci`. **Never `sudo npm`, never `npm install -g`**: everything lives in the project's
@@ -159,7 +165,9 @@ The toolchain is:
   keep working as before.
 - **pandoc** — LaTeX/Markdown/HTML/docx conversion (the book, content pages, the library).
 - **pdflatex** (TeX Live) — the PDFs. LGR/textalpha for Greek, plus the usual packages.
-- **python 3** + `pyyaml` — the build scripts and converters.
+- **python 3** + `pyyaml` — the build scripts and converters (`numpy` too, for the
+  `local/` GPU-twin tests). Both Makefiles invoke bare **`python`**, so a distro that
+  ships only `python3` needs a shim (Debian/Ubuntu: `python-is-python3`).
 - **chromium** at `/usr/bin/chromium` — chart-page PDFs and the headless test harness.
 
 ### The JavaScript toolchain (npm)

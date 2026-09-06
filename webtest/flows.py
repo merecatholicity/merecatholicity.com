@@ -35,7 +35,19 @@ BENIGN_CONSOLE = (
 
 
 def owner_key():
-    return open(os.path.join(REPO, 'librarian/.key')).read().strip()
+    """The owner's ADMIN identity key, from the git-ignored librarian/.key.
+
+    Any suite calling Flow.login() acts as an admin against the live board, so
+    this cannot be synthesized: the key's sha256 must already be a row in the
+    admins D1 table. Copy the file from the owner's machine. Suites that never
+    log in (test_richtext, test_worker_reads, test_core_rank) run without it.
+    """
+    path = os.path.join(REPO, 'librarian/.key')
+    if not os.path.exists(path):
+        raise SystemExit(
+            'webtest: missing %s — the admin identity Flow.login() uses.\n'
+            'It cannot be generated; copy it from the owner\'s machine.' % path)
+    return open(path).read().strip()
 
 
 def api(path, body, ua='curl/8.14.1'):
