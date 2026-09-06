@@ -45,7 +45,27 @@ def shared_key():
 
 
 KEY = shared_key()
-VECTORS = np.load(VEC_PATH, mmap_mode="r")
+
+_VECTORS = None
+_veclock = threading.Lock()
+
+
+def vectors():
+    """The embedded corpus, memory-mapped on first use.
+
+    Loaded lazily rather than at import time so this module can be imported on
+    a machine that has never built the index — local/data/ is derived state
+    (git-ignored, rebuilt by build_index.py), and the Layer-1 unit tests import
+    serve.py for pure helpers like ThinkStrip. main() reads it before serving,
+    so a missing index still fails the daemon fast and loudly at startup,
+    exactly as the old eager load did.
+    """
+    global _VECTORS
+    if _VECTORS is None:
+        with _veclock:
+            if _VECTORS is None:
+                _VECTORS = np.load(VEC_PATH, mmap_mode="r")
+    return _VECTORS
 
 
 # One GPU: a single generation at a time (_gpu), a bounded wait-queue behind
@@ -209,7 +229,7 @@ def build_messages(q, history, summary, context, effort):
     corpus) retrieval for the sources."""
     persona = open(PERSONA_PATH).read().strip()
     db = _db()
-    chunks = retrieve.retrieve(db, VECTORS, CFG, q)
+    chunks = retrieve.retrieve(db, vectors(), CFG, q)
     db.close()
     sources = [{"n": i + 1, "title": c["title"], "heading": c["heading"],
                 "url": retrieve.source_url(CFG, c), "tier": c["tier"], "text": c["text"]}
@@ -265,7 +285,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             rr = rerank_state()
             ready, why = backend_ready()
-            self._json(200, {"ok": True, "chunks": int(VECTORS.shape[0]),
+            self._json(200, {"ok": True, "chunks": int(vectors().shape[0]),
                              "model": CFG["chat_model"],
                              "rerank": rr["state"],
                              **({"rerank_detail": rr["detail"]}
@@ -453,7 +473,7 @@ def main():
         sys.exit("no shared key — create local/serve.key or set MERECAT_LOCAL_KEY")
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     print(f"merecat-local serving on 127.0.0.1:{PORT} "
-          f"({VECTORS.shape[0]} chunks, model {CFG['chat_model']})", flush=True)
+          f"({vectors().shape[0]} chunks, model {CFG['chat_model']})", flush=True)
     sd_notify("READY=1")
 
     def _sd_watchdog():
