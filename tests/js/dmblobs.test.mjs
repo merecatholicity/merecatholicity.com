@@ -66,3 +66,31 @@ test('attachments decrypt on approach, and hand iOS no decoder until asked', () 
   assert.ok(/if \(tries\+\+\) return;/.test(node),
     'an evicted blob must re-request once, not leave a broken bubble and not loop');
 });
+
+/* The same class, one level up: mcBoot() IS the client and re-runs on every
+ * soft navigation, so a listener bound to `document` or `window` inside it
+ * must carry the boot's AbortSignal. Without it each hop leaves another live
+ * listener holding its own closure — the leak that hid behind full page loads
+ * until navigation became soft.
+ */
+test('every document/window listener the boot installs dies with the boot', () => {
+  const boot = src.slice(bootAt);
+  const re = /(document|window)\.addEventListener\(([\s\S]{0,4000}?)\n  \}, ([^\n]*)\);/g;
+  const escapes = [];
+  let seen = 0;
+  let m;
+  while ((m = re.exec(boot))) {
+    const opts = m[3];
+    seen += 1;
+    if (/bootSig/.test(opts)) continue;
+    escapes.push(`${m[1]}.addEventListener(... , ${opts})`);
+  }
+  assert.deepEqual(escapes, [],
+    'a boot-scoped global listener with no { signal: bootSig }: mcBoot re-runs on ' +
+    'every soft navigation, so this one accumulates for the life of the document.');
+  /* The anti-vacuum guard. This shape only sees multi-line listeners closing
+     at the boot's own indent — the ones that live for a view rather than a
+     moment, which is the whole risk. If a refactor stops it matching anything
+     it has quietly stopped testing anything, and should say so. */
+  assert.ok(seen >= 3, `the listener scan matched ${seen} listeners — it has lost its grip on the file`);
+});

@@ -1118,6 +1118,9 @@
       fn();
     }, { rootMargin: '400px' });
     io.observe(node);
+    /* An attachment the reader never scrolled to leaves an observer holding
+       its element. The view is gone at teardown; the observer should be too. */
+    bootSig.addEventListener('abort', function () { io.disconnect(); }, { once: true });
   }
   /* One media bubble: the same chrome as dmMsgNode, but the body lazily loads the
      decrypted media as an <img>/<video>/<audio> (or a download link). */
@@ -2849,13 +2852,19 @@
      can reload the page. It costs one localStorage write per press, and only
      when the text actually changed since the last save. Whatever is causing
      the reload, it can no longer take the words with it. */
+  /* signal: bootSig is load-bearing, not tidiness. mcBoot() is the whole
+     client and re-runs on every soft navigation, so without it each hop left
+     ANOTHER permanent capture-phase listener on the document, each holding its
+     own draftLive array and every composer ever attached to it — a growing
+     pile of work on every finger-down, and memory that only a full page load
+     could reclaim. */
   document.addEventListener('pointerdown', function () {
     for (var i = draftLive.length - 1; i >= 0; i--) {
       var rec = draftLive[i];
       if (!rec.ta.isConnected) { draftLive.splice(i, 1); continue; }
       try { rec.flush(); } catch (e) { /* one bad composer must not stop the rest */ }
     }
-  }, true);
+  }, { capture: true, signal: bootSig });
 
   function attachDraft(ta: any, ctx: string, titleInput?: any, overwrite?: boolean) {
     var muted = false;
