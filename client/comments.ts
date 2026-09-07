@@ -1824,7 +1824,57 @@
      is loading and WAITS for the widget to be ready (up to ~10s, polling), then
      runs the challenge — so the button just works after a brief beat instead of
      failing. Only a genuine load failure or a real timeout rejects. */
+  /* ---- Warming the challenge, so it never runs at the moment of commitment.
+     The live evidence (2026-09-08, the owner's crumb ring): the FIRST submit
+     wrote `turnstile: execute`, then `turnstile: token ok` never arrived and
+     the document was replaced WITHOUT a pagehide — the signature of the
+     challenge platform navigating the web view, not of anything this code does.
+     A second press always worked, because by then the challenge had run.
+
+     So the challenge is now asked for when the reader FOCUSES a composer —
+     before a word is typed, when nothing is at stake — and the press spends the
+     token that is already waiting. If the challenge still disturbs the page it
+     does so at the harmless moment, and the draft guard covers even that.
+
+     A Turnstile token is single-use server-side, so this is a one-deep queue,
+     never a reusable cache: taking it clears it, and a fresh one is warmed
+     behind. Tokens are good for a few minutes; an older one is discarded rather
+     than spent on a request that would be refused. */
+  var TOKEN_FRESH_MS = 240000;
+  var warmTok: { token: any; at: number } | null = null;
+  var warming = false;
+  function warmToken() {
+    if (warming || !state.key) return;
+    if (warmTok && Date.now() - warmTok.at < TOKEN_FRESH_MS) return;
+    warming = true;
+    trace('turnstile: warming');
+    rawToken().then(function (t: any) {
+      warming = false;
+      warmTok = { token: t, at: Date.now() };
+      trace('turnstile: warm ready');
+    }).catch(function () { warming = false; /* the submit path will try again */ });
+  }
+  /* Focus is the earliest honest signal of intent, and the safest moment for
+     anything the challenge might do. */
+  function warmOnFocus(ta: any) {
+    if (!ta || ta.mcWarm) return;
+    ta.mcWarm = true;
+    ta.addEventListener('focus', warmToken, { once: true });
+  }
+
   function getToken() {
+    var w = warmTok;
+    if (w && Date.now() - w.at < TOKEN_FRESH_MS) {
+      warmTok = null;                 // single-use: spend it and warm another
+      trace('turnstile: spent a warm token');
+      setTimeout(warmToken, 0);
+      return Promise.resolve(w.token);
+    }
+    warmTok = null;
+    return rawToken();
+  }
+
+  function rawToken() {
     /* Turnstile is the prime suspect in "the first submit does nothing, the
        second always works": the FIRST call has to load the script, render the
        widget and solve, where later ones reuse a token. Crumbing both ends puts
@@ -2674,6 +2724,11 @@
      textarea itself is unchanged, so .comment-text lookups still resolve.
      A topic form passes its title input too, so the preview can wear it. */
   function mdEditor(textarea: any, titleInput?: any) {
+    /* EVERY composer on the site is wrapped by this, so warming here reaches
+       the forum, the feed, direct messages and the page-comment box alike —
+       nothing to remember to add at each call site. */
+    warmOnFocus(textarea);
+    if (titleInput) warmOnFocus(titleInput);
     var wrap = el('div', 'md-editor');
     var bar = el('div', 'md-toolbar');
     bar.appendChild(mdButton('B', 'Bold  **text**', 'md-b', function () { wrapSel(textarea, '**', '**'); }));
@@ -4129,7 +4184,7 @@ trace('submit: page comment');
     var status = section.querySelector('.form-status') as HTMLElement;
     var buttons = section.querySelectorAll('.comment-buttons button');
     buttons.forEach(function (b: any) { b.disabled = true; });
-trace('submit: page comment');
+trace('submit: board post');
     status.textContent = 'Verifying...';
     getToken().then(function (token) {
       status.textContent = 'Posting...';
@@ -7955,7 +8010,7 @@ trace('submit: feed post');
             return;
           }
           send.disabled = true;
-      trace('submit: page comment');
+      trace('submit: DM send');
     status.textContent = 'Verifying...';
           var sending = pendingFile;   // captured: the echo path needs the local file
           getToken().then(function (token) {
