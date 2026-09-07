@@ -436,6 +436,21 @@ customElements.define('mc-audio-dock', McAudioDock);
     return Promise.all(jobs);
   }
 
+  /* Boot the client for a LOCALLY built platform page. Every platform document
+     carries the same one script (comments.js), and on any platform hop it is
+     already loaded — so there is nothing to fetch, only a boot to call, and it
+     can happen in the click event itself. Returns false when the script has
+     never been loaded in this session (a first hop from Home, say), which is
+     the one case that still needs the real document to find the script tag. */
+  function bootLoaded() {
+    var reg = REG['comments.js'];
+    if (!loadedScripts['comments.js'] || !reg) return false;
+    var fn = (window as any)[reg.boot];
+    if (typeof fn !== 'function') return false;
+    try { fn(); } catch (e) { /* boot failed; the reconcile below still runs */ }
+    return true;
+  }
+
   function navScript(doc: Document) {
     return doc.querySelector('body script[src*="nav.js"]');
   }
@@ -469,6 +484,97 @@ customElements.define('mc-audio-dock', McAudioDock);
   }
   function noShell(doc: Document) {
     return !!doc.querySelector('.away, [data-noshell]');
+  }
+
+  /* ---- The instant destination -------------------------------------------
+     Every platform page is the SAME thin shell — an <h1> and an empty
+     <section class="comments board" data-board> that comments.js fills in.
+     They differ in exactly one string, so the destination can be built here,
+     with no network at all, and put on screen inside the click event. The
+     document is still fetched afterwards to reconcile the title and keep the
+     doc cache warm, but <main> is never re-swapped once the client has booted
+     into it.
+     `tests/js/shell_template.test.mjs` asserts the served pages still match
+     this table, so a future edit to one of them fails loudly here rather than
+     quietly serving a wrong-looking flash. */
+  var PLATFORM_PAGES: Record<string, { h1: string; title: string }> = {
+    'community.html': { h1: 'Community', title: 'Community | Mere Catholicity' },
+    'feed.html': { h1: 'Feed', title: 'Feed | Mere Catholicity' },
+    'profile.html': { h1: 'Profile', title: 'Profile | Mere Catholicity' },
+    'messages.html': { h1: 'Direct messages', title: 'Messages | Mere Catholicity' },
+    'merecat-ai.html': { h1: 'Ask Merecat', title: 'Ask Merecat | Mere Catholicity' },
+    'admin.html': { h1: 'Administration', title: 'Administration | Mere Catholicity' },
+  };
+  function platformPage(path: string) {
+    return PLATFORM_PAGES[path.split('/').pop() || ''] || null;
+  }
+  /* The shaped placeholder that stands where the content will be. Deliberately
+     NOT a spinner: a grey echo of the coming layout reads as "your page is
+     here and filling in", where a spinner reads as "wait". */
+  function skeletonInto(section: HTMLElement, kind: string) {
+    var wrap = document.createElement('div');
+    wrap.className = 'mc-skel-wrap';
+    wrap.setAttribute('role', 'status');
+    wrap.setAttribute('aria-label', 'Loading');
+    var rows = kind === 'profile' ? 1 : 5;
+    if (kind === 'profile') {
+      var card = document.createElement('div');
+      card.className = 'mc-skel mc-skel-card';
+      wrap.appendChild(card);
+    }
+    for (var i = 0; i < rows && kind !== 'profile'; i++) {
+      var row = document.createElement('div');
+      row.className = 'mc-skel mc-skel-row';
+      wrap.appendChild(row);
+    }
+    section.appendChild(wrap);
+  }
+  /* A document-driven page (a paper, the library, about…) has no local template:
+     the document IS the content. Leaving the old page up for a fast hop is
+     right — but past the point where a human reads the delay as "nothing
+     happened", show that we have left. 120ms is under the ~150ms that reads as
+     instant, and above the SW-cache hops that settle in 5-15ms. */
+  var DOC_SKEL_MS = 120;
+  var docSkelTimer = 0;
+  function armDocSkeleton(seq: number) {
+    if (docSkelTimer) clearTimeout(docSkelTimer);
+    docSkelTimer = window.setTimeout(function () {
+      docSkelTimer = 0;
+      if (seq !== navSeq) return;
+      var mine = document.querySelector('main');
+      if (!mine) return;
+      var main = document.createElement('main');
+      main.className = 'prose';
+      var holder = document.createElement('div');
+      holder.className = 'mc-skel-page';
+      skeletonInto(holder, 'page');
+      main.appendChild(holder);
+      mine.replaceWith(main);
+    }, DOC_SKEL_MS);
+  }
+  function disarmDocSkeleton() {
+    if (docSkelTimer) { clearTimeout(docSkelTimer); docSkelTimer = 0; }
+  }
+
+  function instantMain(path: string) {
+    var meta = platformPage(path);
+    if (!meta) return false;
+    var mine = document.querySelector('main');
+    if (!mine) return false;
+    var main = document.createElement('main');
+    main.className = 'prose';
+    var h1 = document.createElement('h1');
+    h1.className = 'home-title';
+    h1.textContent = meta.h1;
+    main.appendChild(h1);
+    var section = document.createElement('section');
+    section.className = 'comments board';
+    section.setAttribute('data-board', '');
+    skeletonInto(section, path.indexOf('profile.html') !== -1 ? 'profile' : 'list');
+    main.appendChild(section);
+    mine.replaceWith(main);
+    document.title = meta.title;
+    return true;
   }
   function sameOrigin(url: URL) { return url.origin === location.origin; }
   function pageish(url: URL) {
@@ -595,9 +701,54 @@ customElements.define('mc-audio-dock', McAudioDock);
        behind an open one (the mobile Settings sheet + the desktop account
        dropdown, which its own outside-click can't catch for an in-menu link). */
     try { if (window.mcSheet) window.mcSheet.close(); } catch (e) { /* ignore */ }
-    try { document.dispatchEvent(new Event('mc-navigate')); } catch (e) { /* ignore */ }
+    try { document.dispatchEvent(new CustomEvent('mc-navigate', { detail: { url: url } })); } catch (e) { /* ignore */ }
     progress.active = true;
     armNavload();
+
+    /* ---- Everything below, up to the fetch, happens INSIDE the click event.
+       This is the whole point: the app arrives where the finger asked before
+       any byte is requested. Previously nothing moved until the document AND
+       the client boot had both finished, so a tap read as "did nothing", then
+       the page jumped — the ping-pong. */
+
+    /* The chrome moves first: destination tab lit, background art cross-faded.
+       The path is passed EXPLICITLY rather than read from location, because a
+       document-driven page has not changed the URL yet at this point. */
+    try { chrome.pending(url.pathname); } catch (e) { /* courtesy only */ }
+
+    /* The content area. A platform page is a known template, so it is built
+       locally and shown at once with a shaped skeleton; the client boots
+       against it and fills it in. Anything else is document-driven (the
+       document IS the content), so we leave the old page up and arm a
+       skeleton only if the fetch is slow enough to be felt — a fast hop must
+       never flash a placeholder it did not need. */
+    /* Only worth doing when comments.js is already loaded: without it the local
+       page would stand there empty until the document arrived anyway, and the
+       real document is the honest way to discover the script. */
+    var instant = false;
+    if (platformPage(url.pathname) && loadedScripts['comments.js']) {
+      teardownPage();
+      instant = instantMain(url.pathname);
+      if (instant) {
+        /* The URL moves with the paint, never before it: this page IS on
+           screen now, so the address bar must agree and Back must return to
+           where the reader actually was. A document-driven page pushes later,
+           at ITS swap, so a navigation that never painted leaves no entry. */
+        if (push) history.pushState({ mcApp: true }, '', url.pathname + url.search + url.hash);
+        lastPath = location.pathname;
+        lastSearch = location.search;
+        if (!url.hash) window.scrollTo(0, 0);
+        /* Boot the client against the local page NOW, so its own data fetches
+           start in this same tick rather than one network round trip later. */
+        if (!bootLoaded()) instant = false;
+        if (instant) {
+          boots();
+          disarmNavload();
+        }
+      }
+    }
+    if (!instant) armDocSkeleton(seq);
+
     var key = url.pathname;
     var cached = cache.get(key);
     (cached
@@ -611,7 +762,18 @@ customElements.define('mc-audio-dock', McAudioDock);
         cache.set(key, text);
         if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
       }
+      if (instant) {
+        /* Reconcile only. The client is already live in the local <main>;
+           re-swapping it would destroy a booted view (and any data it has
+           already painted) for no gain. The served title is the authority. */
+        disarmDocSkeleton();
+        if (doc.title) document.title = doc.title;
+        progress.active = false;
+        disarmNavload();
+        return;
+      }
       teardownPage();
+      disarmDocSkeleton();
       if (!swapContent(doc)) throw new Error('no anchor');
       document.title = doc.title || document.title;
       if (push) history.pushState({ mcApp: true }, '', url.pathname + url.search + url.hash);
@@ -626,9 +788,14 @@ customElements.define('mc-audio-dock', McAudioDock);
       });
     }).catch(function () {
       if (seq !== navSeq) return;               // superseded: the newer nav owns the UI
+      disarmDocSkeleton();
       progress.active = false;
       disarmNavload();
-      /* any doubt at all: the ordinary road */
+      /* An instant page is already standing and booted: a failed RECONCILE is
+         not worth throwing the reader out of it — the title simply stays as
+         our template wrote it. Only a genuine navigation failure takes the
+         ordinary road. */
+      if (instant) return;
       location.href = url.href;
     });
   }

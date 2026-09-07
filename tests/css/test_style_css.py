@@ -116,13 +116,19 @@ class SourceNoneRegressionGuard(unittest.TestCase):
         self.assertIn(".table-note{", self.css)
 
     def test_byte_size_stays_under_ceiling(self):
-        # source(none) is what keeps the file small (~63 KB committed today).
-        # Removing it — or otherwise letting utility generation balloon — would
-        # blow well past this generous ceiling. This is a coarse tripwire, not a
-        # pin: it has ~25 KB of headroom for ordinary hand-CSS growth.
+        # source(none) is what keeps the file small. Removing it — or otherwise
+        # letting utility generation balloon — would blow well past this ceiling:
+        # Tailwind scanning ~250 pages of corpus prose adds TENS of KB, so the
+        # tripwire stays decisive with plenty of room for hand-CSS.
+        #
+        # The number tracks reality and has been raised deliberately as the
+        # hand-authored CSS grew (the original comment said "~63 KB today" long
+        # after the file had passed 89 KB — a stale ceiling comment is how a
+        # tripwire quietly turns into a nuisance). 2026-09-06: 91.5 KB after the
+        # perceived-speed block (skeletons + tap feedback), ceiling 110 KB.
         size = len(self.css)
         self.assertLess(
-            size, 90_000,
+            size, 110_000,
             f"style.css grew to {size} bytes; a source(none) removal or a utility "
             "explosion is the usual cause of a jump this large.",
         )

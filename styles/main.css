@@ -2737,3 +2737,58 @@ body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-li
   background: color-mix(in srgb, var(--rule) 40%, transparent);
   padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.88em;
 }
+
+/* ===== Perceived speed: skeletons, and controls that answer the finger =====
+   The app was fast but felt slow: a tap changed nothing until the document AND
+   the client boot had both landed, so it read as "did nothing", then jumped.
+   Two halves to the cure — the shell now paints the destination inside the
+   click event (app/shell.ts), and these are the surfaces it paints. */
+
+/* A grey echo of the layout that is coming. Deliberately not a spinner: a
+   spinner says "wait", a shaped placeholder says "your page is here, filling
+   in". Colour rides --rule, which every one of the six themes redefines, so
+   light/dark/slate/ink/mist/sepia all work with no per-theme rule. The global
+   prefers-reduced-motion guard above already flattens the shimmer to a static
+   block, which is exactly the right fallback. */
+.mc-skel {
+  background: color-mix(in srgb, var(--rule) 45%, transparent);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.mc-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--surface) 55%, transparent), transparent);
+  animation: mc-skel-sweep 1.4s ease-in-out infinite;
+}
+@keyframes mc-skel-sweep { to { transform: translateX(100%); } }
+.mc-skel-wrap { display: flex; flex-direction: column; gap: 0.7rem; margin: 0.9rem 0; }
+.mc-skel-row { height: 3.4rem; }
+/* The rows taper so the block reads as content rather than a loading bar. */
+.mc-skel-row:nth-child(2) { width: 92%; }
+.mc-skel-row:nth-child(3) { width: 97%; }
+.mc-skel-row:nth-child(4) { width: 88%; }
+.mc-skel-row:nth-child(5) { width: 94%; }
+.mc-skel-card { height: 11rem; border-radius: var(--radius-lg); }
+.mc-skel-page .mc-skel-row:first-child { height: 2.1rem; width: 60%; }
+
+/* Tap feedback. Before this, `.btn` had NO pressed state on phones at all (its
+   :active lived in the >=601px block), and only two elements in the whole
+   stylesheet suppressed the browser's blue tap flash — so a touch either did
+   nothing visible or flashed the platform default. `background: var(--rule)`
+   is the idiom already used by .mc-cardnav, .mc-cat-chip and .board-pages a. */
+.btn, .btn-send, .btn-anon, .mc-sb-item, .board-cat, .mc-cardnav,
+.mc-tab, .mc-ab-btn, .board-pages a, .identity-action, .mc-set-row {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+@media (max-width: 600px) {
+  .btn:active, .btn-send:active, .btn-anon:active { filter: brightness(0.92); }
+  .mc-sb-item:active, .identity-action:active, .mc-set-row:active {
+    background: color-mix(in srgb, var(--rule) 55%, transparent);
+  }
+}

@@ -118,8 +118,11 @@ const HOME_SECTIONS = [
 /* Which tab the current URL belongs to (the forum's views live in the query
    string). '' = a content page (a paper, the library, about…): no tab is
    active and the app bar shows a back arrow. */
-function activeTab() {
-  const path = location.pathname.split('/').pop() || 'index.html';
+/* `at` lets the shell ask "which tab WOULD this path light?" before the
+   navigation has happened, so a tap can move the chrome in its own event —
+   the whole point of the instant-nav work. Absent, it means "wherever we are". */
+function activeTab(at?: string) {
+  const path = (at == null ? location.pathname : at).split('/').pop() || 'index.html';
   if (path === 'index.html' || path === '') return 'home';
   if (path === 'merecat-ai.html') return 'merecat';
   if (path === 'messages.html') return 'messages';
@@ -150,16 +153,16 @@ const ART_BY_PAGE: Record<string, string> = {
   'objections.html': 'luther',
   'resources.html': 'merecat',
 };
-function themeArt(): string {
-  const path = location.pathname.split('/').pop() || 'index.html';
+function themeArt(at?: string): string {
+  const path = (at == null ? location.pathname : at).split('/').pop() || 'index.html';
   if (ART_BY_PAGE[path]) return ART_BY_PAGE[path];
-  const t = activeTab();
+  const t = activeTab(at);
   if (t === 'messages') return 'inbox';
   return t;   // 'home' | 'merecat' | 'feed' | 'community' | 'profile' | ''
 }
-function syncThemeArt() {
+function syncThemeArt(at?: string) {
   try {
-    const a = themeArt();
+    const a = themeArt(at);
     if (a) document.body.dataset.art = a;
     else delete document.body.dataset.art;
   } catch (e) { /* storage/DOM blocked — no accent, no harm */ }
@@ -299,21 +302,28 @@ function qrSvg(text: string): SVGSVGElement | null {
 
 /* ---- the bottom tab bar ---- */
 class McTabbar extends LitElement {
-  static properties = { active: { attribute: false }, dm: { attribute: false } };
+  static properties = { active: { attribute: false }, dm: { attribute: false }, pending: { attribute: false } };
   declare active: string;
   declare dm: number;
+  /* The tab the finger just asked for, painted before the navigation has
+     resolved. `lit()` prefers it over `active`; sync() clears it once the real
+     page stands. Without this the highlight only moved after the fetch AND the
+     boot, so a tap looked ignored for a beat — the ping-pong we are killing. */
+  declare pending: string;
   private _onSocial = () => this.requestUpdate();
-  constructor() { super(); this.active = 'home'; this.dm = 0; }
+  constructor() { super(); this.active = 'home'; this.dm = 0; this.pending = ''; }
   createRenderRoot() { return this; }
   /* The Feed tab appears or vanishes with the social switch, without a reload. */
   connectedCallback() { super.connectedCallback(); document.addEventListener('mc-social-change', this._onSocial); }
   disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-social-change', this._onSocial); }
-  sync() { this.active = activeTab(); this.dm = badgeCount('dm'); }
+  sync() { this.active = activeTab(); this.pending = ''; this.dm = badgeCount('dm'); }
+  lit() { return this.pending || this.active; }
   render() {
+    const on = this.lit();
     return html`<nav class="mc-tabbar" aria-label="Primary">
       ${visibleTabs().map((t) => html`
-        <a class=${'mc-tab' + (t.hero ? ' mc-tab-hero' : '') + (this.active === t.key ? ' mc-tab-on' : '')}
-           href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'}>
+        <a class=${'mc-tab' + (t.hero ? ' mc-tab-hero' : '') + (on === t.key ? ' mc-tab-on' : '')}
+           href=${t.href} aria-label=${t.label} aria-current=${on === t.key ? 'page' : 'false'}>
           <span class="mc-tab-ico">${t.icon ? t.icon : ICON[t.svg!]}${t.badge === 'dm' && this.dm
             ? html`<span class="mc-tab-badge">${badgeText(this.dm)}</span>` : ''}</span>
           <span class="mc-tab-lbl">${t.label}</span>
@@ -1109,13 +1119,14 @@ customElements.define('mc-deskbar', McDeskbar);
    collapses it to icons-only (persisted in localStorage). Reuses TABS / activeTab
    and the badge caches. Phones never see it (CSS-gated ≥601px). */
 class McSidebar extends LitElement {
-  static properties = { active: { attribute: false }, dm: { attribute: false }, wide: { attribute: false } };
+  static properties = { active: { attribute: false }, dm: { attribute: false }, wide: { attribute: false }, pending: { attribute: false } };
   declare active: string;
   declare dm: number;
   declare wide: boolean;
+  declare pending: string;
   constructor() {
     super();
-    this.active = 'home'; this.dm = 0;
+    this.active = 'home'; this.dm = 0; this.pending = '';
     let w = true;
     try { w = localStorage.getItem('mc-sidebar') !== 'icons'; } catch (e) { /* default wide */ }
     this.wide = w;
@@ -1131,7 +1142,7 @@ class McSidebar extends LitElement {
   /* Reflect wide/collapsed on <body> so the desktop CSS pushes the content over
      when the rail is expanded (like Facebook), and floats it back when collapsed. */
   _applyBody() { try { document.body.classList.toggle('mc-sb-wide', this.wide); } catch (e) { /* blocked */ } }
-  sync() { this.active = activeTab(); this.dm = badgeCount('dm'); }
+  sync() { this.active = activeTab(); this.pending = ''; this.dm = badgeCount('dm'); }
   toggle() {
     this.wide = !this.wide;
     try { localStorage.setItem('mc-sidebar', this.wide ? 'wide' : 'icons'); } catch (e) { /* blocked */ }
@@ -1146,10 +1157,20 @@ class McSidebar extends LitElement {
           <span class="mc-sb-lbl">${t.label}</span>`;
         /* P3-e: the active destination is rendered as a non-navigating "current"
            item (a span, not a self-link) so the rail doesn't offer "Home" while on
-           Home — the rail is a quick-switch, and you cannot switch to where you are. */
-        return this.active === t.key
-          ? html`<span class="mc-sb-item mc-tab-on mc-sb-current" aria-current="page" title=${t.label}>${inner}</span>`
-          : html`<a class="mc-sb-item" href=${t.href} aria-label=${t.label} title=${t.label}>${inner}</a>`;
+           Home — the rail is a quick-switch, and you cannot switch to where you are.
+           A PENDING tab is only ever painted, never promoted to that span: swapping
+           the element out from under the finger mid-tap would cancel the gesture
+           and drop the press state. sync() does the promotion once we have landed. */
+        const lit = this.pending || this.active;
+        /* The settled page is the non-navigating span — but ONLY while nothing
+           is pending. Mid-navigation the old page stops being "where you are"
+           (two lit rails at once reads as broken), and it becomes an ordinary
+           link again so a reader who changes their mind can go straight back. */
+        if (!this.pending && this.active === t.key) {
+          return html`<span class="mc-sb-item mc-tab-on mc-sb-current" aria-current="page" title=${t.label}>${inner}</span>`;
+        }
+        const cls = 'mc-sb-item' + (lit === t.key ? ' mc-tab-on' : '');
+        return html`<a class=${cls} href=${t.href} aria-label=${t.label} title=${t.label}>${inner}</a>`;
       })}
     </nav>`;
   }
@@ -1537,6 +1558,23 @@ export function installChrome() {
   }
 
   function sync() { syncThemeArt(); tabbar.sync(); appbar.sync(); deskbar.sync(); sidebar.sync(); mountHome(); mountLibraryHook(); }
+
+  /* Instant navigation feedback: the shell calls this INSIDE the click event,
+     before a single byte has been asked for, so the chrome is already at the
+     destination while the finger is still down. Everything here is derived from
+     the path alone — no network, no layout thrash beyond the two Lit updates.
+     `sync()` later confirms it (and clears `pending`) once the page truly stands,
+     so a failed or superseded navigation self-corrects rather than lying. */
+  function pending(path: string) {
+    try {
+      const key = activeTab(path);
+      tabbar.pending = key;
+      sidebar.pending = key;
+      /* The background painting cross-fades to the destination's (CSS handles the
+         fade); an unknown path clears it rather than keeping the old page's art. */
+      syncThemeArt(path);
+    } catch (e) { /* chrome is a courtesy — never let it break a navigation */ }
+  }
   sync();
   /* boots()/chrome.sync() only fire on soft-nav; on a DIRECT initial load the
      onboarding trigger needs one sync once the client has booted (window.mcKit
@@ -1550,5 +1588,5 @@ export function installChrome() {
       setTimeout(waitKit, 100);
     })();
   }
-  return { sync: sync };
+  return { sync: sync, pending: pending };
 }
