@@ -296,7 +296,11 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       var ring = JSON.parse(localStorage.getItem('mc-crumbs') || '[]');
       ring.push(new Date().toISOString().slice(5, 19) + ' ' + String(msg).slice(0, 120));
-      if (ring.length > 20) ring = ring.slice(ring.length - 20);
+      /* Room for a whole incident. One submit now writes several entries
+         (submit, turnstile execute, turnstile ok, then whatever unloads),
+         so a 20-deep ring showing its last 8 could push the interesting
+         part off the top before it was ever read. */
+      if (ring.length > 40) ring = ring.slice(ring.length - 40);
       localStorage.setItem('mc-crumbs', JSON.stringify(ring));
     } catch (e) { /* storage blocked: crumbs are diagnosis, never load-bearing */ }
   }
@@ -577,7 +581,7 @@ document.addEventListener('DOMContentLoaded', function () {
        readable AFTER the reload that would have erased an in-page log. */
     var crumbs = [];
     try { crumbs = JSON.parse(localStorage.getItem('mc-crumbs') || '[]'); } catch (e) { /* fine */ }
-    var tail = (crumbs.length ? 'crumbs:\n' + crumbs.slice(-8).join('\n') + '\n' : '') +
+    var tail = (crumbs.length ? 'crumbs:\n' + crumbs.slice(-16).join('\n') + '\n' : '') +
       (errs.length ? 'errors:\n' + errs.join('\n') : 'errors: none');
     /* Buttons live in their own row so the body can stay a plain <pre> that
        selects and copies cleanly. Rebuilt each paint; cheap, and it keeps the
