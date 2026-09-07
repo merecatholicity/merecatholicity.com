@@ -42,6 +42,48 @@
      page down. One widget per DOCUMENT now, in a host that survives the swap. */
   var mcTsWidget: any = null;
   var mcTsToken: { token: any; at: number } | null = null;
+  /* Decrypted DM attachments, as blob: URLs — PAGE-SCOPED, above mcBoot.
+
+     A blob URL pins its bytes in memory until something revokes it, and
+     mcBoot() is the whole client: it re-runs on EVERY soft navigation. So a
+     cache declared inside it was replaced with a fresh {} on each hop and
+     every URL it held was orphaned WITHOUT being revoked — the decrypted
+     bytes stayed resident for the life of the document, and a reader moving
+     between conversations climbed until the installed app was killed outright.
+     From the inside that looks like nothing at all: no pagehide, no
+     beforeunload, no error, then a fresh load of the same URL. Which is
+     exactly the crumb ring a reader sent on 2026-09-08.
+
+     One store for the document, oldest-untouched out past either budget, and
+     eviction actually revokes. An element whose blob was evicted re-requests
+     rather than breaking (see dmMediaNode). */
+  var MC_DM_BLOB_MAX = 16;
+  var MC_DM_BLOB_BYTES = 32 * 1024 * 1024;
+  var mcDmBlobs: { key: string; url: string; bytes: number }[] = [];
+  function mcDmBlobGet(key: string): string | null {
+    for (var i = 0; i < mcDmBlobs.length; i++) {
+      if (mcDmBlobs[i].key === key) {
+        var hit = mcDmBlobs.splice(i, 1)[0];       // wanted now: it goes to the back
+        mcDmBlobs.push(hit);
+        return hit.url;
+      }
+    }
+    return null;
+  }
+  function mcDmBlobPut(key: string, url: string, bytes: number) {
+    if (mcDmBlobGet(key)) { try { URL.revokeObjectURL(url); } catch (e) { /* fine */ } return; }
+    mcDmBlobs.push({ key: key, url: url, bytes: bytes || 0 });
+    var total = 0, i;
+    for (i = 0; i < mcDmBlobs.length; i++) total += mcDmBlobs[i].bytes;
+    /* Never evict the one just added, however large: a single attachment over
+       the whole budget must still be viewable. */
+    while (mcDmBlobs.length > 1 && (mcDmBlobs.length > MC_DM_BLOB_MAX || total > MC_DM_BLOB_BYTES)) {
+      var out = mcDmBlobs.shift()!;
+      total -= out.bytes;
+      try { URL.revokeObjectURL(out.url); } catch (e) { /* already gone */ }
+    }
+  }
+
   function mcBoot() {
   if (mcDown) { try { mcDown(); } catch (e) { /* half-torn is still torn */ } mcDown = null; }
   var epoch = ++MC_EPOCH;
@@ -1050,18 +1092,32 @@
       .then(function (k) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: dmB64uDec(envInfo.iv) }, k, ct); })
       .then(function (buf) { return new Uint8Array(buf); });
   }
-  var _mediaCache: Record<string, any> = {};
   function loadDmMedia(mediaKey: any, envInfo: any) {
-    if (_mediaCache[mediaKey]) return Promise.resolve(_mediaCache[mediaKey]);
+    var held = mcDmBlobGet(mediaKey);
+    if (held) return Promise.resolve(held);
     return fetch(API + '/dm/media/get', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key, media_key: mediaKey }) })
       .then(function (r) { if (!r.ok) throw new Error('media ' + r.status); return r.arrayBuffer(); })
       .then(function (buf) { return dmMediaDecrypt(new Uint8Array(buf), envInfo); })
       .then(function (bytes) {
         var url = URL.createObjectURL(new Blob([bytes], { type: (envInfo && envInfo.mime) || 'application/octet-stream' }));
-        _mediaCache[mediaKey] = url;
+        mcDmBlobPut(mediaKey, url, bytes.length);
         return url;
       });
+  }
+  /* Do the work when the reader is nearly looking at it, not when the page
+     draws. Every attachment in a thread used to be fetched and AES-decrypted
+     the instant the history rendered — a page of voice notes decoded all of
+     them into memory at once and handed each a live <audio>, which on iOS is a
+     decoder apiece. */
+  function whenNear(node: any, fn: () => void) {
+    if (!('IntersectionObserver' in window)) { fn(); return; }
+    var io = new IntersectionObserver(function (ents) {
+      if (!ents.some(function (e) { return e.isIntersecting; })) return;
+      io.disconnect();
+      fn();
+    }, { rootMargin: '400px' });
+    io.observe(node);
   }
   /* One media bubble: the same chrome as dmMsgNode, but the body lazily loads the
      decrypted media as an <img>/<video>/<audio> (or a download link). */
@@ -1081,27 +1137,47 @@
     bodyEl.appendChild(holder);
     if (envInfo && envInfo.caption) bodyEl.appendChild(fillBody(el('div', 'dm-media-caption'), envInfo.caption));
     node.appendChild(bodyEl);
-    loadDmMedia(m.media_key, envInfo).then(function (url) {
-      holder.textContent = '';
-      var mime = (envInfo && envInfo.mime) || '';
-      var mel;
-      var isFile = false;
-      if (/^image\//.test(mime)) { mel = el('img', 'dm-media-img'); mel.src = url; mel.alt = envInfo.name || 'image'; mel.loading = 'lazy'; }
-      else if (/^video\//.test(mime)) { mel = el('video', 'dm-media-vid'); mel.src = url; mel.controls = true; }
-      else if (/^audio\//.test(mime)) { mel = el('audio', 'dm-media-aud'); mel.src = url; mel.controls = true; }
-      else { isFile = true; mel = el('a', 'dm-media-file', (envInfo.name || 'download') + ' · ' + fmtBytes(envInfo.size)); mel.href = url; mel.download = envInfo.name || 'file'; }
-      holder.appendChild(mel);
-      /* a plain "Download" control for image/video/audio (the file case is already
-         a download link). The blob is the decrypted bytes, saved under its name. */
-      if (!isFile) {
-        var dlRow = el('div', 'dm-media-dl');
-        dlRow.appendChild(mediaDownloadLink(url, envInfo.name || 'download', 'Download', 'wall-act wall-act-dl dm-dl'));
-        holder.appendChild(dlRow);
-      }
-    }).catch(function () {
-      holder.textContent = '';
-      holder.appendChild(el('span', 'dm-media-status', '⚠️ media unavailable (it may have expired)'));
-    });
+    /* On approach, not on render: see whenNear. */
+    var tries = 0;
+    function paint() {
+      loadDmMedia(m.media_key, envInfo).then(function (url) {
+        holder.textContent = '';
+        var mime = (envInfo && envInfo.mime) || '';
+        var mel;
+        var isFile = false;
+        if (/^image\//.test(mime)) { mel = el('img', 'dm-media-img'); mel.src = url; mel.alt = envInfo.name || 'image'; mel.loading = 'lazy'; }
+        /* preload='none': a blob src is already bytes in hand, but iOS spins up
+           a media decoder per element the moment it may need one, and a thread
+           of voice notes is a thread of decoders. The reader presses play. */
+        else if (/^video\//.test(mime)) { mel = el('video', 'dm-media-vid'); mel.preload = 'none'; mel.src = url; mel.controls = true; }
+        else if (/^audio\//.test(mime)) { mel = el('audio', 'dm-media-aud'); mel.preload = 'none'; mel.src = url; mel.controls = true; }
+        else { isFile = true; mel = el('a', 'dm-media-file', (envInfo.name || 'download') + ' · ' + fmtBytes(envInfo.size)); mel.href = url; mel.download = envInfo.name || 'file'; }
+        /* The store is bounded, so a blob far up a long thread can be revoked
+           while its element still points at it. Fetch it again rather than
+           leaving a broken bubble — eviction should cost a moment, not the
+           attachment. Once, so a genuinely dead object cannot loop. */
+        if (!isFile) {
+          mel.addEventListener('error', function () {
+            if (tries++) return;
+            holder.textContent = '';
+            holder.appendChild(loadingLine('Loading ' + ((envInfo && envInfo.name) || 'media') + '…', 'dm-media-status'));
+            paint();
+          });
+        }
+        holder.appendChild(mel);
+        /* a plain "Download" control for image/video/audio (the file case is already
+           a download link). The blob is the decrypted bytes, saved under its name. */
+        if (!isFile) {
+          var dlRow = el('div', 'dm-media-dl');
+          dlRow.appendChild(mediaDownloadLink(url, envInfo.name || 'download', 'Download', 'wall-act wall-act-dl dm-dl'));
+          holder.appendChild(dlRow);
+        }
+      }).catch(function () {
+        holder.textContent = '';
+        holder.appendChild(el('span', 'dm-media-status', '⚠️ media unavailable (it may have expired)'));
+      });
+    }
+    whenNear(node, paint);
     return node;
   }
   /* An elegant stand-in for a media attachment the 30-day hard cap has swept away
@@ -7956,6 +8032,12 @@ trace('submit: feed post');
         }
         function renderMsg(m: any) { var n = dmRenderMsg(m, otherPub, shortName, other); addReceipt(n, m); return n; }
         d.messages.forEach(function (m: any) { list.appendChild(renderMsg(m)); });
+        /* What this page actually weighs. A killed web view leaves no pagehide
+           and no error, so the crumb ring can only say the app died — never
+           how much it was carrying. Now it says. */
+        trace('dm thread: ' + d.messages.length + ' msgs, '
+          + d.messages.filter(function (m: any) { return m.media_key; }).length + ' attachments, '
+          + mcDmBlobs.length + ' blobs held');
         /* The "…is typing" line, shown only while the other side is composing. */
         var typingLine = el('p', 'dm-typing', shortName + ' is typing…');
         typingLine.style.display = 'none';
@@ -8182,7 +8264,7 @@ trace('submit: feed post');
             if (ta.mcPreview) ta.mcPreview.off();
             /* Seed the media cache from the local file so our own echo renders
                instantly without a round-trip. */
-            if (sending && d2._media_key) { try { _mediaCache[d2._media_key] = URL.createObjectURL(sending); } catch (e) {} }
+            if (sending && d2._media_key) { try { mcDmBlobPut(d2._media_key, URL.createObjectURL(sending), sending.size || 0); } catch (e) {} }
             clearAttach();
             /* Newest message lands at the bottom of the last page. Show it
                inline when that page is on screen; else jump to it. */
