@@ -44,6 +44,12 @@ class McTopic extends LitElement {
     const pNum = Math.floor(Number(qs.get('p')) || 0);
     const hashMatch = /^#comment-(\d+)$/.exec(location.hash);
     const extra = pNum ? '&p=' + pNum : (hashMatch ? '&find=' + hashMatch[1] : '');
+    /* Seed from what we already hold — this tab's memory, or disk from a
+       previous visit — so the FIRST render is the real thing rather than a
+       placeholder that is replaced a moment later. The fetch below still runs
+       and patches in whatever changed. */
+    const seedT = kit.peekJson(kit.API + '/board/topic?id=' + id + extra + kit.freshParam('&'), kit.freshOpts());
+    if (seedT && seedT.ok) this.d = seedT;
     kit.cachedJson(kit.API + '/board/topic?id=' + id + extra + kit.freshParam('&'), kit.freshOpts(), 30000)
       .then((d: any) => {
         if (d && !d.ok && kit.state.key) {

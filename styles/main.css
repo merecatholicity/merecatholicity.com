@@ -2823,3 +2823,11 @@ section.comments.board:empty::after {
 section.comments.board:empty::before { top: 0.9rem; }
 section.comments.board:empty::after { top: 5.4rem; right: 8%; }
 @keyframes mc-skel-in { to { opacity: 1; } }
+
+/* Pull-to-refresh needs to own the vertical overscroll, or Chrome on Android
+   fires its OWN pull-to-refresh at the same time and the reader gets two
+   competing gestures. `contain` also stops a scroll inside a pane chaining out
+   to the document, which is what makes the "is this pane at the top?" test in
+   app/ptr.ts trustworthy. (iOS standalone has no native pull, so ours is the
+   only one there either way.) */
+html, body { overscroll-behavior-y: contain; }

@@ -23,6 +23,17 @@
      re-entering the thread resumes — a soft swap away is a refresh). */
   var MC_EPOCH = 0;
   var mcDown: any = null;
+  /* mcBoot() IS the whole client body, so everything declared inside it is
+     rebuilt on every soft navigation — which quietly made two session-stable
+     calls fire on EVERY hop: /dm/pubkey (an idempotent WRITE) and /prefs,
+     ~190ms each, measured on prod. Both answers hold for the page's life, so
+     their "already done" markers live out here, where a boot cannot reset them.
+     Deliberately page-scoped rather than persisted: a fresh load still
+     republishes once, so a pubkey row lost server-side heals on the next visit
+     instead of never. Both are keyed by identity, so switching accounts
+     re-does the work. */
+  var mcPubkeyFor: any = null;
+  var mcPrefsFor: any = null;
   function mcBoot() {
   if (mcDown) { try { mcDown(); } catch (e) { /* half-torn is still torn */ } mcDown = null; }
   var epoch = ++MC_EPOCH;
@@ -810,19 +821,19 @@
   }
   /* Publish my public key once per session (idempotent server-side). Fired when
      an identity goes live, so any active member is reachable for an encrypted DM. */
-  var _pubkeyFor: any = null;
+
   function ensureMyPubkey() {
-    if (!state.key || !state.myHash || _pubkeyFor === state.key) return;
+    if (!state.key || !state.myHash || mcPubkeyFor === state.key) return;
     var forKey = state.key;
-    _pubkeyFor = forKey;
+    mcPubkeyFor = forKey;
     ensureNacl().then(function () {
       return fetch(API + '/dm/pubkey', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: forKey, pubkey: dmB64uEnc(myDmKeypair().publicKey) }),
       });
     }).then(function (r: any) { return r.json(); })
-      .then(function (d: any) { if (!d || !d.ok) { if (_pubkeyFor === forKey) _pubkeyFor = null; } })
-      .catch(function () { if (_pubkeyFor === forKey) _pubkeyFor = null; });
+      .then(function (d: any) { if (!d || !d.ok) { if (mcPubkeyFor === forKey) mcPubkeyFor = null; } })
+      .catch(function () { if (mcPubkeyFor === forKey) mcPubkeyFor = null; });
   }
   /* Which correspondents this browser has marked "safety number verified". */
   var DM_VERIFIED = 'mc-dm-verified';
@@ -2969,6 +2980,23 @@
     return fetchRetry(url, init, [1000, 3000]).then(function (r) { return r.json(); });
   }
 
+  /* The synchronous half of cachedJson: what do we ALREADY know for this exact
+     read? Returns the stored answer (from this tab, or from disk if the reader
+     was here before) or null. A view seeds its first render from this, so a
+     revisit paints real content in the first frame instead of a placeholder
+     that is replaced a moment later — the "it was already there" feel.
+     Null whenever the bundle is absent or nothing is stored, so every caller
+     falls back to its ordinary loading state. */
+  function peekJson(url: any, init?: any) {
+    try {
+      var st: any = window.mcStore;
+      if (!st || !st.peek || !st.keyFor) return null;
+      if (freshOpts()) return null;      // the reader just wrote: never show them stale
+      var hit = st.peek(st.keyFor(url, init));
+      return hit ? hit.json : null;
+    } catch (e) { return null; }
+  }
+
   function load() {
     var list = section.querySelector('.comments-list') as HTMLElement;
     fetchRetry(API + '?page=' + encodeURIComponent(pagePath()) + freshParam('&'), freshOpts(), [1000, 3000],
@@ -3435,6 +3463,12 @@
   }
   /* Authenticate the live socket for this member so DM/notif pushes arrive. */
   function enableMemberLive() {
+    /* Bring last visit's pages back into the store the moment the identity is
+       known — before any view renders, so a revisit paints real content in its
+       first frame instead of a placeholder. Keyed by identity, and idempotent,
+       so every road that lands here (boot, sign-in, key import) is covered and
+       only the first one does work. */
+    try { if (state.myHash && window.mcStore && window.mcStore.hydrate) window.mcStore.hydrate(state.myHash); } catch (e) { /* no bundle: memory only */ }
     ensureMyPubkey();   // publish this identity's DM public key once it is live
     if (isMember() && window.mcLive && window.mcLive.member) {
       window.mcLive.member.enable(state.key, state.myHash);
@@ -3446,10 +3480,18 @@
      reciprocally; the gear reads/writes them too. */
   function loadPrefs() {
     if (!state.key) return;
+    /* Already fetched for this identity on this page: reuse the answer rather
+       than paying a round trip on every navigation. window.mcPrefs outlives the
+       boot, so this boot's state is seeded from it directly. */
+    if (mcPrefsFor === state.key && window.mcPrefs) { state.prefs = window.mcPrefs; return; }
+    mcPrefsFor = state.key;
+    var prefsForKey = state.key;
     fetch(API + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d || !d.ok) return;
+        /* A refusal must not be remembered as done, or the reader would go the
+           whole page without their prefs and never retry. */
+        if (!d || !d.ok) { if (mcPrefsFor === prefsForKey) mcPrefsFor = null; return; }
         state.prefs = d.prefs; window.mcPrefs = d.prefs;
         /* Merge the server's mute list with this device's (union), and push
            the union back up when this device knew someone the server did not,
@@ -3465,7 +3507,7 @@
           if (union.length !== server.length) syncMutedUp();
         } catch (e) { /* storage blocked */ }
       })
-      .catch(function () {});
+      .catch(function () { if (mcPrefsFor === prefsForKey) mcPrefsFor = null; });
   }
   /* ================= The social layer's global switch =================
      app_settings `social_enabled`, served in /config. Off, the Feed and every
@@ -10797,6 +10839,7 @@
     /* profile + inbox read views (Wave C-reads 2) */
     el: el,
     renderProfile: renderProfile, adminProfileEditor: adminProfileEditor,
+    peekJson: peekJson,
     loadTurnstile: loadTurnstile,
     dmSearchBox: dmSearchBox, dmLabel: dmLabel,
     dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck, markThreadRead: markThreadRead,

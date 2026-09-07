@@ -50,6 +50,12 @@ class McBoardIndex extends LitElement {
     document.title = 'Community | Mere Catholicity';
     const kit = this.kit;
     this.adminOn = kit.isAdmin();
+    /* Seed from what we already hold — this tab's memory, or disk from a
+       previous visit — so the FIRST render is the real thing rather than a
+       placeholder that is replaced a moment later. The fetch below still runs
+       and patches in whatever changed. */
+    const seedIdx = kit.peekJson(kit.API + '/board' + kit.freshParam('?'), kit.freshOpts());
+    if (seedIdx && seedIdx.ok) this.stats = seedIdx.cats;
     kit.cachedJson(kit.API + '/board' + kit.freshParam('?'), kit.freshOpts(), 45000)
       .then((d: any) => { if (d.ok) this.stats = d.cats; })
       .catch(() => {});
@@ -227,6 +233,16 @@ class McBoardCat extends LitElement {
     const cat = kit.catByKey(this.catKey);
     document.title = cat[1] + ' | Community';
     this.pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
+    /* The most-travelled hop in the forum: seed it from what we already hold so
+       the topic list is there on arrival. The back room is never seeded — it is
+       never persisted either (Domain.Cache refuses /admin), because a moderation
+       surface must not linger on a shared device. */
+    if (this.catKey !== 'adminsonly') {
+      const seedC = kit.peekJson(
+        kit.API + '/board/cat?cat=' + this.catKey + '&p=' + this.pageNum + kit.freshParam('&'),
+        kit.freshOpts());
+      if (seedC && seedC.ok) this.payload = seedC;
+    }
     (this.catKey === 'adminsonly'
       ? kit.cachedJson(kit.API + '/board/admin', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },

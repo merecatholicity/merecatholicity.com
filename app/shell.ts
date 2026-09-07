@@ -33,6 +33,7 @@ import * as api from './api.ts';
 import * as core from './core.ts';
 import { installLive } from './live.ts';
 import { installCall } from './call.ts';
+import { installPtr } from './ptr.ts';
 import { installChrome } from './appchrome.ts';
 import './richtext.js';
 import './views/board.js';
@@ -55,7 +56,8 @@ declare global {
 /* The API store rides the shell (window bridge until the interiors port):
    in-memory TTL + in-flight dedup for the views' reads, invalidated by
    writes and identity changes. See app/store.js. */
-window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, metrics: store.metrics };
+window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, metrics: store.metrics,
+  peek: store.peek, keyFor: store.keyFor, hydrate: store.hydrate, forget: store.forget };
 
 /* The PureScript domain kernel — the app/core.js barrel over the compiled
    purescript/output/. The un-bundled docs/comments.js delegates to it via
@@ -324,6 +326,10 @@ customElements.define('mc-audio-dock', McAudioDock);
      it self-enables the member's live socket wherever a key exists). The DM
      composer's 📞 button delegates here via window.mcCall.place(). */
   installCall();
+
+  /* Pull to refresh, on every page — a paper as much as the forum. Touch only;
+     an ordinary pull refetches in place, three in quick succession reload. */
+  installPtr();
 
   /* The mobile app chrome: the persistent bottom tab bar, top app bar, sheet,
      and Home launcher. Phones only (CSS-gated); desktop renders none of it.

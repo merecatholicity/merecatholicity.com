@@ -33,6 +33,8 @@ import * as Links from '../purescript/output/Domain.Links/index.js';
 import * as Media from '../purescript/output/Domain.Media/index.js';
 import * as Call from '../purescript/output/Domain.Call/index.js';
 import * as Wall from '../purescript/output/Domain.Wall/index.js';
+import * as Cache from '../purescript/output/Domain.Cache/index.js';
+import * as Ptr from '../purescript/output/Domain.Ptr/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -255,3 +257,24 @@ export const callGlareWins = (me: string, other: string): boolean => Call.glareW
    the checkbox and the server can never disagree about what '0' means. */
 export const wallEnabledDefault: boolean = Wall.enabledDefault;
 export const wallEnabledFrom = (v: any): boolean => Wall.enabledFrom(v == null ? '' : String(v));
+
+/* The disk cache's policy (Domain.Cache). `classify` is erased to its tag here
+   — 'fresh' | 'stale' | 'expired' — because the store is imperative JS and a PS
+   constructor would read as a truthy object on the other side of the boundary.
+   `persistable` is the privacy rule: it refuses every /dm/ read, so end-to-end
+   plaintext cannot reach localStorage even if a future call site asks it to. */
+export const cacheClassify = (age: number, ttl: number): string =>
+  Cache.freshnessTag(Cache.classify(Number(age) || 0)(Number(ttl) || 0));
+export const cachePersistable = (key: string): boolean => Cache.persistable(String(key || ''));
+export const cacheStaleMaxMs: number = Cache.staleMaxMs;
+export const cacheMaxBytes: number = Cache.maxBytes;
+export const cacheSchema: number = Cache.schema;
+
+/* Pull-to-refresh (Domain.Ptr). The Stage ADT is erased to its tag for the
+   same reason every other one is: a PS constructor reads as a truthy object on
+   the JS side, so `if (stage)` would always be true. */
+export const ptrTravel = (dy: number): number => Ptr.travel(Number(dy) || 0);
+export const ptrStage = (t: number): string => Ptr.stageTag(Ptr.stage(Number(t) || 0));
+export const ptrThreshold: number = Ptr.threshold;
+export const ptrEscalates = (n: number, sinceFirst: number): boolean =>
+  Ptr.escalates(Math.floor(Number(n) || 0))(Number(sinceFirst) || 0);

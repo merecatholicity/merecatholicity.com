@@ -32,6 +32,12 @@ class McProfile extends LitElement {
     const kit = this.kit;
     document.title = 'Profile | Community';
     if (!/^[0-9a-f]{64}$/.test(String(this.hash))) { this.err = 'bad'; return; }
+    /* Seed from what we already hold — this tab's memory, or disk from a
+       previous visit — so the FIRST render is the real thing rather than a
+       placeholder that is replaced a moment later. The fetch below still runs
+       and patches in whatever changed. */
+    const seedP = kit.peekJson(kit.API + '/profile?hash=' + this.hash + kit.freshParam('&'), kit.freshOpts());
+    if (seedP && seedP.ok && seedP.profile) this.profile = seedP.profile;
     kit.cachedJson(kit.API + '/profile?hash=' + this.hash + kit.freshParam('&'), kit.freshOpts(), 30000)
       .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');

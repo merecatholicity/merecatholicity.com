@@ -54,6 +54,13 @@ interface McStore {
             opts?: { ttl?: number; key?: string; bypass?: boolean }): Promise<any>;
   invalidate(prefix?: string): void;
   metrics: { hits: number; misses: number; dedup: number };
+  /* The disk tier (stale-while-revalidate). peek is SYNCHRONOUS on purpose:
+     a view seeds its first render from it, so a return visit shows real content
+     in the first frame. hydrate/forget bind the store to one identity. */
+  peek?(key: string): { json: any; stale: boolean } | null;
+  keyFor?(url: string, init?: RequestInit): string;
+  hydrate?(identity: string): void;
+  forget?(): void;
 }
 
 interface McInstall { evt: any; available?: () => boolean; prompt: () => void; }

@@ -869,6 +869,9 @@ class McSettings extends LitElement {
       const key = readKey();
       if (key && this._pushSupported()) { try { await this._disablePush(key); } catch (e) { /* ignore */ } }
       try {
+        /* The cached pages belong to the identity, not the device: the next
+           person to use this browser must inherit none of them. */
+        try { if (window.mcStore && window.mcStore.forget) window.mcStore.forget(); } catch (e) { /* ignore */ }
         localStorage.removeItem('mc-comment-key');
         localStorage.removeItem('mc-dm-unread');
         localStorage.removeItem('mc-notif-unread');

@@ -33,6 +33,12 @@ class McUsers extends LitElement {
     const kit = this.kit;
     document.title = 'Members | Community';
     this.page = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
+    /* Seed from what we already hold — this tab's memory, or disk from a
+       previous visit — so the FIRST render is the real thing rather than a
+       placeholder that is replaced a moment later. The fetch below still runs
+       and patches in whatever changed. */
+    const seedR = kit.peekJson(kit.API + '/dm/directory' + kit.freshParam('?'), kit.freshOpts());
+    if (seedR && seedR.ok) this.roster = seedR.users || [];
     kit.cachedJson(kit.API + '/dm/directory' + kit.freshParam('?'), kit.freshOpts(), 45000)
       .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
