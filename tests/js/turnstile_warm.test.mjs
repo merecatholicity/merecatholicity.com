@@ -64,7 +64,7 @@ test('a token is spent once and never reused', () => {
      exact comment string and broke the moment the wording changed, which tells
      you nothing about whether the code is right. */
   const g = src.slice(src.indexOf('function getToken()'), src.indexOf('function rawToken()'));
-  assert.ok(/warmTok = null;/.test(g), 'taking the token must clear it — they are single-use');
+  assert.ok(/mcTsToken = null;/.test(g), 'taking the token must clear it — they are single-use');
   assert.ok(/return Promise\.resolve\(w\.token\)/.test(g), 'a ready token is spent without a round trip');
   assert.ok(/ensureFreshToken/.test(g), 'and another is earned to replace it');
   assert.ok(/TOKEN_FRESH_MS = \d+/.test(src), 'a stale token must be discarded, not spent');
@@ -109,4 +109,37 @@ test('the wait for the callback is bounded', () => {
 test('a spent token is replaced by resetting the widget, not by executing', () => {
   assert.ok(/turnstile\.reset\(/.test(src),
     'reset() is how render mode earns the next single-use token');
+});
+
+test('exactly one widget per document, in a host that survives navigation', () => {
+  /* The .ts-slot mount points sit INSIDE <main>, which the shell replaces
+     wholesale on every soft navigation — so rendering there tore down a
+     Cloudflare challenge iframe and built a fresh one on every view change.
+     In an installed iOS app that churn is what takes the page down, and eager
+     warming multiplied it. One host, marked with the shell's own data-mc-app
+     so it is preserved across swaps, and a widget id ABOVE mcBoot so a new boot
+     reuses it rather than rendering another. */
+  assert.ok(/function tsHost\(\)/.test(src), 'the persistent host is gone');
+  assert.ok(/h\.setAttribute\('data-mc-app', ''\)/.test(src),
+    'the host must carry data-mc-app or the shell will swap it away');
+  const boot = src.indexOf('function mcBoot()');
+  assert.ok(src.indexOf('var mcTsWidget') < boot && src.indexOf('var mcTsToken') < boot,
+    'the widget id and token must live ABOVE mcBoot, or every soft nav renders a new widget');
+  /* Scoped to the render function: an unanchored search would match the first
+     render call against any later section.querySelector in a 11k-line file,
+     which is how the first version of this assertion failed on correct code. */
+  const rw = src.slice(src.indexOf('function renderTurnstileWidget()'));
+  const body = rw.slice(0, rw.indexOf('\n  function '));
+  assert.ok(/var slot = tsHost\(\);/.test(body),
+    'renderTurnstileWidget must mount into the persistent host');
+  assert.ok(!/section\.querySelector\('\.ts-slot'\)/.test(body),
+    'the widget must not be rendered into a per-view slot any more');
+});
+
+test('a human check can still be completed', () => {
+  /* Hidden off-screen by default, the widget would be unreachable exactly when
+     it matters — a reader asked to verify with no way to do so. */
+  assert.ok(/'before-interactive-callback'/.test(src) && /tsHost\(\)\.classList\.add\('on'\)/.test(src),
+    'an interactive challenge must bring the host into view');
+  assert.ok(/'after-interactive-callback'/.test(src), 'and hide it again afterwards');
 });

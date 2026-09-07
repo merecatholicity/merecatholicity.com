@@ -312,6 +312,28 @@ document.addEventListener('DOMContentLoaded', function () {
     e.preventDefault();
     crumb('swallowed native submit: ' + (f.className || f.id || 'form') + ' @ ' + location.pathname);
   });
+  /* HOW this document came to exist. The Navigation Timing type is the one
+     fact that separates the possibilities we are left with, and the browser
+     hands it over for free:
+       reload        — something called location.reload(), or the app/OS did
+       navigate      — a link, a location.href, or a fresh open
+       back_forward  — history travel
+     A run of `navigate` entries to the same URL is a hard link; a run of
+     `reload` is something reloading us. Crumbed at load so it sits directly
+     under the pagehide of the document it replaced. */
+  try {
+    var navEntry = (window.performance.getEntriesByType &&
+      window.performance.getEntriesByType('navigation')[0]) || null;
+    if (navEntry) crumb('load(' + navEntry.type + ') ' + location.pathname + location.search.slice(0, 30));
+  } catch (e) { /* older engines: the pagehide pair still tells a story */ }
+
+  /* beforeunload fires when the PAGE is leaving — a navigation, a reload, a
+     link. It does NOT fire when the system discards the document underneath
+     you. Pairing it with pagehide is therefore the test we cannot otherwise
+     make: both = the page went somewhere; pagehide alone = something took it. */
+  window.addEventListener('beforeunload', function () {
+    crumb('beforeunload ' + location.pathname);
+  });
   window.addEventListener('pagehide', function () {
     crumb('pagehide ' + location.pathname + ' age=' + Math.round(window.performance.now() / 1000) + 's');
   });

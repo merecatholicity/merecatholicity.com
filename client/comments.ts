@@ -34,6 +34,14 @@
      re-does the work. */
   var mcPubkeyFor: any = null;
   var mcPrefsFor: any = null;
+  /* The Turnstile widget and its token live OUT here, above mcBoot, because
+     mcBoot runs again on every soft navigation. Kept per-boot, the widget was
+     torn down and a fresh Cloudflare challenge iframe built EVERY time a view
+     changed — its mount point (.ts-slot) sits inside <main>, which the shell
+     replaces wholesale. In an installed iOS app that churn is what takes the
+     page down. One widget per DOCUMENT now, in a host that survives the swap. */
+  var mcTsWidget: any = null;
+  var mcTsToken: { token: any; at: number } | null = null;
   function mcBoot() {
   if (mcDown) { try { mcDown(); } catch (e) { /* half-torn is still torn */ } mcDown = null; }
   var epoch = ++MC_EPOCH;
@@ -1304,7 +1312,13 @@
       '.mc-rec-dot{width:10px;height:10px;border-radius:50%;background:#c0392b;animation:mc-rec-pulse 1.1s ease-in-out infinite}' +
       '@keyframes mc-rec-pulse{0%,100%{opacity:1}50%{opacity:0.25}}' +
       '.mc-rec-time{font-variant-numeric:tabular-nums;font-size:0.9em;opacity:0.85}' +
-      '.mc-rec-audio{max-width:280px}';
+      '.mc-rec-audio{max-width:280px}' +
+      /* The single Turnstile host: out of the way until a human check is
+         actually wanted, then centred where it can be reached. */
+      '.mc-ts-host{position:fixed;left:-9999px;bottom:0;opacity:0;pointer-events:none}' +
+      '.mc-ts-host.on{left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 84px);' +
+      'opacity:1;pointer-events:auto;z-index:9998;padding:10px;border-radius:12px;' +
+      'background:var(--surface,#fffdf7);box-shadow:0 4px 20px rgba(0,0,0,.3)}';
     var st = el('style');
     st.id = 'mc-dm-css';
     st.textContent = css;
@@ -1784,11 +1798,23 @@
      (widgetId=null) but window.turnstile already exists — without an explicit
      re-render here the widget was never created for the new view and every
      getToken() timed out ("Verification is taking a moment to load"). */
+  /* One host for the life of the document. `data-mc-app` is the shell's own
+     marker for furniture that must survive a <main> swap (the progress bar and
+     the audio dock use it), so the widget is built once and never churned.
+     It shows nothing unless Turnstile asks for a human check, at which point
+     before-interactive-callback brings it forward. */
+  function tsHost() {
+    var h = document.querySelector('.mc-ts-host') as HTMLElement;
+    if (h) return h;
+    h = el('div', 'mc-ts-host');
+    h.setAttribute('data-mc-app', '');
+    document.body.appendChild(h);
+    return h;
+  }
   function renderTurnstileWidget() {
     if (!window.turnstile) return;
-    var slot = section.querySelector('.ts-slot');
-    if (!slot) return;
-    if (state.widgetId !== null && slot.querySelector('iframe')) return;
+    var slot = tsHost();
+    if (mcTsWidget !== null && slot.querySelector('iframe')) { state.widgetId = mcTsWidget; return; }
     try {
       /* execution:'execute' is GONE, and that is the whole point (2026-09-08).
          With it, the challenge only ran when turnstile.execute() was called —
@@ -1805,13 +1831,21 @@
 
          appearance:'interaction-only' stays: the widget shows nothing unless a
          human check is genuinely needed, so composers look exactly as before. */
-      state.widgetId = turnstile.render(slot, {
+      state.widgetId = mcTsWidget = turnstile.render(slot, {
         sitekey: SITEKEY,
         appearance: 'interaction-only',
+        'before-interactive-callback': function () {
+          /* A human check is wanted: bring the widget where it can be reached.
+             Without this it would sit invisible at the foot of the body and the
+             reader would simply never be able to finish. */
+          trace('turnstile: interaction wanted');
+          tsHost().classList.add('on');
+        },
+        'after-interactive-callback': function () { tsHost().classList.remove('on'); },
         callback: function (token: any) {
           /* Tokens are single-use, so this is a one-deep queue: held until a
              submit spends it, after which reset() earns the next one. */
-          warmTok = { token: token, at: Date.now() };
+          mcTsToken = { token: token, at: Date.now() };
           trace('turnstile: token ready');
           if (state.tokenWait) { state.tokenWait.resolve(token); state.tokenWait = null; }
         },
@@ -1821,11 +1855,11 @@
              no trace whatsoever — and "no token and no reason" is the hardest
              possible thing to diagnose from a phone. */
           trace('turnstile: challenge refused');
-          warmTok = null;
+          mcTsToken = null;
           if (state.tokenWait) { state.tokenWait.reject(new Error('challenge failed')); state.tokenWait = null; }
           return true;
         },
-        'expired-callback': function () { warmTok = null; ensureFreshToken(); },
+        'expired-callback': function () { mcTsToken = null; ensureFreshToken(); },
       });
     } catch (e) { /* a double-render into the same slot throws; ignore */ }
   }
@@ -1865,14 +1899,12 @@
      behind. Tokens are good for a few minutes; an older one is discarded rather
      than spent on a request that would be refused. */
   var TOKEN_FRESH_MS = 240000;
-  var warmTok: { token: any; at: number } | null = null;
-  var warming = false;
   /* Warming is now just "mount the widget": in render mode that IS the
      challenge, and the token arrives on the callback. No execute(), so none of
      this can take the page down. */
   function warmToken() {
     if (!state.key) return;
-    if (warmTok && Date.now() - warmTok.at < TOKEN_FRESH_MS) return;
+    if (mcTsToken && Date.now() - mcTsToken.at < TOKEN_FRESH_MS) return;
     trace('turnstile: warming');
     loadTurnstile();
   }
@@ -1909,14 +1941,14 @@
   }, { signal: bootSig });
 
   function getToken() {
-    var w = warmTok;
+    var w = mcTsToken;
     if (w && Date.now() - w.at < TOKEN_FRESH_MS) {
-      warmTok = null;                 // single-use: spend it and earn another
+      mcTsToken = null;                 // single-use: spend it and earn another
       trace('turnstile: spent a ready token');
       setTimeout(ensureFreshToken, 0);
       return Promise.resolve(w.token);
     }
-    warmTok = null;
+    mcTsToken = null;
     return rawToken();
   }
 
@@ -1946,9 +1978,9 @@
         /* The widget is mounted and solving on its own; all that is left is to
            wait for its callback. Nothing calls execute() — that was the road
            that killed the page. */
-        if (warmTok) {
-          var t = warmTok;
-          warmTok = null;
+        if (mcTsToken) {
+          var t = mcTsToken;
+          mcTsToken = null;
           trace('turnstile: token ok (was ready)');
           setTimeout(ensureFreshToken, 0);
           resolve(t.token);
@@ -1968,8 +2000,10 @@
              waits. Telling that reader to "try again" would be useless advice
              about a control sitting right in front of them, so look at the slot
              and say the true thing. */
-          var slot: any = section.querySelector('.ts-slot');
-          var showing = !!(slot && slot.getBoundingClientRect().height > 12);
+          /* The widget lives in the one persistent host now, and it is only
+             on screen when Turnstile asked for a human check. */
+          var host: any = document.querySelector('.mc-ts-host');
+          var showing = !!(host && host.classList.contains('on'));
           trace('turnstile: token timed out' + (showing ? ' (awaiting interaction)' : ''));
           reject(new Error(showing
             ? 'Please complete the verification just above the button, then press it again.'
@@ -1979,7 +2013,7 @@
           resolve: function (v: any) {
             if (settled) return;
             settled = true; clearTimeout(timer);
-            trace('turnstile: token ok'); warmTok = null; resolve(v);
+            trace('turnstile: token ok'); mcTsToken = null; resolve(v);
           },
           reject: function (e: any) {
             if (settled) return;
