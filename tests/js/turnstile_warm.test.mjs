@@ -174,3 +174,41 @@ test('opening a view never runs a challenge on its own', () => {
   const raw = src.slice(src.indexOf('function rawToken()'), src.indexOf('function rawToken()') + 1200);
   assert.ok(/loadTurnstile\(\);/.test(raw), 'a press with no warm token must still be able to earn one');
 });
+
+test('the challenge runs in its own browsing context', () => {
+  /* The sixth attempt at one bug, and the first that does not depend on being
+   * right about the cause. Every earlier fix moved WHEN the widget mounted and
+   * the symptom moved with it; this one moves WHERE the challenge lives, so a
+   * challenge-platform navigation can only take a same-origin iframe the
+   * reader never sees. */
+  assert.ok(/function tsEnsureFrame\(\)/.test(src), 'the isolating frame is gone');
+  assert.ok(/f\.src = 'turnstile\.html\?v=' \+ TS_FRAME_V;/.test(src),
+    'the frame must load our own page, versioned by hand (it carries no stamp)');
+  const load = src.slice(src.indexOf('function loadTurnstile()'), src.indexOf('function loadTurnstile()') + 800);
+  assert.ok(/if \(!mcTsFell\) \{ tsEnsureFrame\(\); return; \}/.test(load),
+    'the parent must not load Cloudflare\'s script at all while the frame is carrying it — ' +
+    'that script is what mounts the challenge, and the challenge is what took the document');
+});
+
+test('a token from the frame is only accepted from the frame', () => {
+  /* postMessage is reachable by anything that can get a handle on the window.
+     A forged token would be spent against the worker and refused, but the
+     origin and source checks are what keep this from being a channel at all. */
+  const l = src.slice(src.indexOf("window.addEventListener('message'"), src.indexOf('function getToken()'));
+  assert.ok(/e\.origin !== location\.origin/.test(l), 'the listener must check the origin');
+  assert.ok(/e\.source !== mcTsFrame\.contentWindow/.test(l),
+    'the listener must check the message came from OUR frame, not merely a same-origin one');
+});
+
+test('the challenge never re-runs on a timer', () => {
+  /* The owner's ring showed two "token ready" entries 292 seconds apart with
+   * nobody touching the screen: refresh-expired defaults to 'auto', so the
+   * widget re-challenged every time a token aged out, for as long as the page
+   * stayed open. Every one of those was another chance to take the document. */
+  for (const [file, what] of [['client/comments.ts', 'the in-page fallback'],
+                              ['docs/turnstile.html', 'the isolated widget']]) {
+    const body = readFileSync(join(root, file), 'utf8');
+    assert.ok(/'refresh-expired': 'never'/.test(body), `${what} still auto-refreshes its token`);
+    assert.ok(/retry: 'never'/.test(body), `${what} still retries a failed challenge on a loop`);
+  }
+});

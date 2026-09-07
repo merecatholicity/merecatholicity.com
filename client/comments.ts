@@ -42,6 +42,16 @@
      page down. One widget per DOCUMENT now, in a host that survives the swap. */
   var mcTsWidget: any = null;
   var mcTsToken: { token: any; at: number } | null = null;
+  /* The challenge runs inside a same-origin iframe (docs/turnstile.html) so
+     that a challenge-platform navigation can only ever take THAT document, not
+     the app. Page-scoped like the widget id: one frame for the life of the
+     document, never rebuilt by a soft navigation. `mcTsFell` records that the
+     frame did not come up and the in-page widget is carrying it instead — the
+     old road, kept so no branch of this is worse than what shipped before. */
+  var mcTsFrame: HTMLIFrameElement | null = null;
+  var mcTsFrameReady = false;
+  var mcTsFell = false;
+  var TS_FRAME_V = 1;
   /* Decrypted DM attachments, as blob: URLs — PAGE-SCOPED, above mcBoot.
 
      A blob URL pins its bytes in memory until something revokes it, and
@@ -1403,6 +1413,8 @@
          to the bottom edge with nothing visible in it until the widget decides
          otherwise, and `.on` only lifts it clear of the composer so a human
          check can actually be reached. */
+      '.mc-ts-frame{border:0;width:300px;max-width:100vw;height:0;display:block}' +
+      '.mc-ts-host.on .mc-ts-frame{height:70px}' +
       '.mc-ts-host{position:fixed;left:50%;transform:translateX(-50%);bottom:0;' +
       'z-index:9998;line-height:0;transition:bottom .15s ease}' +
       '.mc-ts-host.on{bottom:calc(env(safe-area-inset-bottom,0px) + 84px);' +
@@ -1900,10 +1912,36 @@
     document.body.appendChild(h);
     return h;
   }
+  /* Is the challenge mounted and able to answer? Either road counts. */
+  function tsMounted() {
+    return mcTsFrameReady || (!!window.turnstile && mcTsWidget !== null);
+  }
+  /* Build the isolating frame once. If it cannot report itself ready within a
+     few seconds — blocked, offline, an engine that will not run it — the
+     in-page widget takes over, which is exactly the behaviour that shipped
+     before this, so the frame is only ever an improvement or a no-op. */
+  function tsEnsureFrame() {
+    if (mcTsFrame || mcTsFell) return;
+    var f = document.createElement('iframe');
+    f.className = 'mc-ts-frame';
+    f.title = 'Verification';
+    f.setAttribute('aria-hidden', 'true');
+    f.src = 'turnstile.html?v=' + TS_FRAME_V;
+    mcTsFrame = f;
+    tsHost().appendChild(f);
+    trace('turnstile: isolating frame requested');
+    window.setTimeout(function () {
+      if (mcTsFrameReady || mcTsFell) return;
+      trace('turnstile: frame never readied -> in-page widget');
+      mcTsFell = true;
+      renderTurnstileWidget();
+    }, 6000);
+  }
+  /* The in-page widget: the fallback road only. */
   function renderTurnstileWidget() {
     if (!window.turnstile) return;
     var slot = tsHost();
-    if (mcTsWidget !== null && slot.querySelector('iframe')) { state.widgetId = mcTsWidget; return; }
+    if (mcTsWidget !== null && slot.querySelector('iframe:not(.mc-ts-frame)')) { state.widgetId = mcTsWidget; return; }
     /* The mount is the challenge, so it is the moment worth naming. Without
        this crumb the ring showed a view rendering and a document dying a
        second later with nothing in between to connect them. */
@@ -1952,12 +1990,21 @@
           if (state.tokenWait) { state.tokenWait.reject(new Error('challenge failed')); state.tokenWait = null; }
           return true;
         },
-        'expired-callback': function () { mcTsToken = null; ensureFreshToken(); },
+        'expired-callback': function () { mcTsToken = null; },
+        /* Never re-run the challenge on a timer, and never retry a failed one
+           on a loop — see docs/turnstile.html for why. Token freshness is
+           getToken()'s business, at the moment of the press. */
+        'refresh-expired': 'never',
+        retry: 'never',
       });
     } catch (e) { /* a double-render into the same slot throws; ignore */ }
   }
 
   function loadTurnstile() {
+    /* The isolated frame is the road. The parent page never loads Cloudflare's
+       script at all unless the frame has failed — that script is what mounts
+       the challenge, and the challenge is what was taking the document. */
+    if (!mcTsFell) { tsEnsureFrame(); return; }
     if (window.turnstile) { renderTurnstileWidget(); return; }
     if (document.getElementById('mc-ts-script')) return;   // loading; onload renders
     (window as any).__mcCommentsTs = function () { renderTurnstileWidget(); };
@@ -2009,6 +2056,10 @@
      re-runs the challenge and fires `callback` again. */
   function ensureFreshToken() {
     try {
+      if (mcTsFrameReady && mcTsFrame && mcTsFrame.contentWindow) {
+        mcTsFrame.contentWindow.postMessage({ mcTs: 'reset' }, location.origin);
+        return;
+      }
       if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
     } catch (e) { /* the next warm re-renders it */ }
   }
@@ -2037,6 +2088,35 @@
     warmToken();
   }, { signal: bootSig });
 
+  /* The frame speaks; this listens. Boot-scoped, because it resolves THIS
+     boot's pending token wait — the frame itself is page-scoped and outlives
+     every one of these. */
+  window.addEventListener('message', function (e: any) {
+    if (e.origin !== location.origin) return;
+    var d = e.data;
+    if (!d || !d.mcTs) return;
+    if (!mcTsFrame || e.source !== mcTsFrame.contentWindow) return;
+    if (d.mcTs === 'ready') { mcTsFrameReady = true; trace('turnstile: frame ready'); return; }
+    if (d.mcTs === 'token') {
+      mcTsToken = { token: d.token, at: Date.now() };
+      trace('turnstile: token ready');
+      if (state.tokenWait) { state.tokenWait.resolve(d.token); state.tokenWait = null; }
+      return;
+    }
+    if (d.mcTs === 'interactive') {
+      /* A human check: bring the frame where it can actually be reached. */
+      trace('turnstile: interaction ' + (d.on ? 'wanted' : 'done'));
+      if (d.on) tsHost().classList.add('on'); else tsHost().classList.remove('on');
+      return;
+    }
+    if (d.mcTs === 'expired') { mcTsToken = null; return; }
+    if (d.mcTs === 'error') {
+      trace('turnstile: challenge refused');
+      mcTsToken = null;
+      if (state.tokenWait) { state.tokenWait.reject(new Error('challenge failed')); state.tokenWait = null; }
+    }
+  }, { signal: bootSig });
+
   function getToken() {
     var w = mcTsToken;
     if (w && Date.now() - w.at < TOKEN_FRESH_MS) {
@@ -2062,8 +2142,8 @@
           reject(new Error('Verification could not load. Check your connection and reload the page.'));
           return;
         }
-        if (window.turnstile && state.widgetId === null) renderTurnstileWidget();
-        if (!window.turnstile || state.widgetId === null) {
+        if (mcTsFell && window.turnstile && state.widgetId === null) renderTurnstileWidget();
+        if (!tsMounted()) {
           if (waited >= MAX) {
             reject(new Error('Verification is taking a moment to load. Give it a few seconds and press the button again.'));
             return;
