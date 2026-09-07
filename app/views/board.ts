@@ -320,7 +320,11 @@ class McBoardCat extends LitElement {
   }
   firstUpdated() {
     /* the composer below the listing is Wave C's machinery — mounted through
-       the kit exactly as the old view mounted it, appended after this element */
+       the kit exactly as the old view mounted it, appended after this element.
+       Only if this element is still IN the page: an instant soft navigation
+       can swap <main> away with a Lit update still queued, and a detached
+       component has no parent to append to. */
+    if (!this.isConnected || !this.parentElement) return;
     const kit = this.kit;
     const key = this.catKey;
     kit.buildBoardForm(true, 'Start a topic');
@@ -347,7 +351,7 @@ class McBoardCat extends LitElement {
       });
     });
     kit.armBoardForm();
-    const section = this.parentElement!;
+    const section = this.parentElement;
     kit.attachMentions(section.querySelector('.comment-form .comment-text'));
     kit.attachDraft(section.querySelector('.comment-form .comment-text'), 'topic:' + key,
       section.querySelector('.comment-form .board-title'));

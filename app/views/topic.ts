@@ -162,6 +162,12 @@ class McTopic extends LitElement {
   }
   updated() {
     if (!this.d || this._mounted) return;
+    /* A Lit update can still be queued when the shell swaps <main> out from
+       under this element — soft navigation is instant now, so the race is
+       real rather than theoretical. A detached component has no parent to
+       mount its composer into (that read threw here), and its work is
+       obsolete anyway: the reader is already looking at the next view. */
+    if (!this.isConnected || !this.parentElement) return;
     this._mounted = true;
     const kit = this.kit;
     const d = this.d;
@@ -201,7 +207,7 @@ class McTopic extends LitElement {
     }
     /* the reply composer (Wave C machinery) mounts into `section` via the kit,
        exactly as the board-cat view mounts its new-topic form */
-    const section = this.parentElement as HTMLElement;
+    const section = this.parentElement;
     kit.buildBoardForm(false, 'Reply');
     kit.boardButtons('Reply', () => {
       const ta = section.querySelector('.comment-form .comment-text') as any;

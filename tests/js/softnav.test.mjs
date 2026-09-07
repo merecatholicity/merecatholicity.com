@@ -93,3 +93,21 @@ test('the shell exposes the programmatic door these callers need', () => {
   assert.ok(/export function goto\(/.test(util), 'the Lit views lost their goto helper');
   assert.ok(/window\.mcNav/.test(read('client/comments.ts')), 'the classic client lost its go() bridge');
 });
+
+/* The other half of instant navigation: a view can now be swapped away with a
+ * Lit update still queued, so a lifecycle hook can run on a DETACHED element.
+ * `this.parentElement` is null there, and the composer mounts threw on it
+ * (prod, the moment DM links stopped being full page loads). Any view that
+ * mounts imperative machinery into its parent must check first.
+ */
+test('a view never mounts into a parent it no longer has', () => {
+  for (const f of ['app/views/board.ts', 'app/views/topic.ts']) {
+    const src = read(f);
+    /* Every hook that reads this.parentElement outside a click callback must
+       stand behind the connected check. */
+    assert.ok(/if \(!this\.isConnected \|\| !this\.parentElement\) return;/.test(src),
+      `${f} reads this.parentElement in a lifecycle hook with no connected guard — ` +
+      'an instant soft navigation can run that hook after the element is gone, and ' +
+      'the read throws.');
+  }
+});
