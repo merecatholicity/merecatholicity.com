@@ -115,6 +115,14 @@ BENIGN_CONSOLE = (
     # The rate limiter answering a faster-than-human test is a FEATURE working
     # (the client degrades gracefully by contract); real failures stay fatal.
     'the server responded with a status of 429',
+    # A family with no road from this machine (a v4-only box cannot reach
+    # ipv6.icanhazip.com) — the browser logs the failed load itself, so the
+    # client's own catch cannot silence it, and the alt-IP capture is
+    # best-effort by design. Listed NARROWLY on purpose: an `ipv4` failure
+    # stays FATAL, because that would mean the CSP connect-src or the URL had
+    # regressed and alt-IP capture had silently died. Do not widen this to
+    # bare 'icanhazip.com'.
+    'ipv6.icanhazip.com',
 )
 
 

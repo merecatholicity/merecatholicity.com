@@ -47,9 +47,9 @@ def config_social_enabled():
 
 def main():
     v = client_version()
-    if v < 389044044:
+    if v < 1353613342:
         print('SKIP  test_settings_page — new client not deployed yet '
-              '(prod serves comments.js?v=%d, needs v=389044044)' % v)
+              '(prod serves comments.js?v=%d, needs v=1353613342)' % v)
         sys.exit(0)
     checks = []
     with Flow(port=9604) as f:

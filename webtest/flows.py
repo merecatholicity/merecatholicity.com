@@ -31,6 +31,14 @@ BENIGN_CONSOLE = (
     'cdn-cgi/challenge-platform',
     'static.cloudflareinsights.com',
     'the server responded with a status of 429',
+    # A family with no road from this machine (a v4-only box cannot reach
+    # ipv6.icanhazip.com) — the browser logs the failed load itself, so the
+    # client's own catch cannot silence it, and the alt-IP capture is
+    # best-effort by design. Listed NARROWLY on purpose: an `ipv4` failure
+    # stays FATAL, because that would mean the CSP connect-src or the URL had
+    # regressed and alt-IP capture had silently died. Do not widen this to
+    # bare 'icanhazip.com'.
+    'ipv6.icanhazip.com',
 )
 
 

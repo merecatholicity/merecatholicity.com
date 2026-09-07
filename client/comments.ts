@@ -507,17 +507,51 @@
      Cloudflare, CORS-open) what address each family sees and send them along,
      so a ban can later close both doors. Best-effort and time-boxed: if an echo
      is slow or down we simply lack that family and the post proceeds anyway. */
+  /* One family can be genuinely absent: a v4-only network cannot reach
+     ipv6.icanhazip.com AT ALL. The browser logs that failed load as a console
+     ERROR from its own network stack, before any promise settles, so the
+     .catch below cannot silence it — every v6-less reader takes a doomed
+     DNS+connect on each boot and each post, and every headless suite's
+     console gate fails on it. So remember a family that had no road and skip
+     it for a day. Only a real refusal is remembered, never an abort (a slow
+     link must not cost a reader their address for a day); a success clears
+     the mark at once, so gaining IPv6 heals on the next successful call.
+     Blocked storage falls back to always trying — the old behaviour exactly. */
+  var ALTIP_SKIP_MS = 86400000;
+  function altIpSkipped(fam: string) {
+    try {
+      var t = Number(localStorage.getItem('mc-altip-fail:' + fam) || 0);
+      if (!t) return false;
+      if (Date.now() - t < ALTIP_SKIP_MS) return true;
+      localStorage.removeItem('mc-altip-fail:' + fam);
+    } catch (e) { /* blocked storage: always try */ }
+    return false;
+  }
+  function altIpMark(fam: string, failed: boolean) {
+    try {
+      if (failed) localStorage.setItem('mc-altip-fail:' + fam, String(Date.now()));
+      else localStorage.removeItem('mc-altip-fail:' + fam);
+    } catch (e) { /* blocked storage: nothing to remember */ }
+  }
   function collectAltIps() {
     ['ipv4', 'ipv6'].forEach(function (fam) {
+      if (altIpSkipped(fam)) return;
       var ctl = ('AbortController' in window) ? new AbortController() : null;
       var timer = ctl ? setTimeout(function () { ctl!.abort(); }, 2000) : null;
       fetch('https://' + fam + '.icanhazip.com', ctl ? { signal: ctl.signal } : {})
+        /* A non-ok RESPONSE is not a missing road — the host answered — so it
+           leaves the mark alone rather than banking a day's skip. */
         .then(function (r) { return r.ok ? r.text() : ''; })
         .then(function (txt) {
           var ip = String(txt || '').trim();
-          if (ip && ip.length <= 45 && /^[0-9a-fA-F:.]+$/.test(ip)) (state.altIps as any)[fam] = ip;
+          if (ip && ip.length <= 45 && /^[0-9a-fA-F:.]+$/.test(ip)) {
+            (state.altIps as any)[fam] = ip;
+            altIpMark(fam, false);
+          }
         })
-        .catch(function () {})
+        .catch(function (e: any) {
+          if (!e || e.name !== 'AbortError') altIpMark(fam, true);
+        })
         .finally(function () { if (timer) clearTimeout(timer); });
     });
   }
