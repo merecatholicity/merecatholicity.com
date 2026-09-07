@@ -2820,14 +2820,21 @@
           e.preventDefault();
           var reason = prompt('Report this post to the moderators.\nOptionally, a short reason:');
           if (reason === null) return;
-          fetch(API + '/report', {
+          /* The tap used to change nothing until the round trip returned, and
+             a network failure changed nothing ever — so a report that never
+             arrived looked identical to one that did. */
+          busy(reportLink, fetch(API + '/report', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, id: c.id, reason: reason }),
           }).then(function (r) { return r.json(); }).then(function (d) {
             if (blockedOut(d)) return;
-            reportLink.textContent = d.ok ? 'reported' : 'report';
+            reportLink.mcAfter = d.ok ? 'reported' : 'report';
             reportLink.title = d.ok ? 'Reported to the moderators. Thank you.' : (d.error || 'Could not report.');
-          }).catch(function () {});
+          })).then(function () {
+            if (reportLink.mcAfter) reportLink.textContent = reportLink.mcAfter;
+          }).catch(function () {
+            reportLink.title = 'Could not report — check your connection and try again.';
+          });
         });
         items.push(reportLink);
       }
@@ -4012,6 +4019,29 @@
     p.setAttribute('role', 'status');
     return p;
   }
+
+  /* An action that answers nothing while it is in flight reads as ignored, and
+     the reader taps again. `busy` is the general answer for the ones that
+     cannot be optimistic: it disables the control and shows a ring in place of
+     its label, restoring both however the promise settles — including on a
+     throw, which is where a hand-rolled version usually leaves a control dead. */
+  function busy(el: any, p: Promise<any>) {
+    if (!el || el.mcBusy) return p;
+    el.mcBusy = true;
+    var was = el.textContent;
+    var wasDisabled = !!el.disabled;
+    el.textContent = '';
+    el.appendChild(el2Spin());
+    if ('disabled' in el) el.disabled = true;
+    function done() {
+      el.mcBusy = false;
+      el.textContent = was;
+      if ('disabled' in el) el.disabled = wasDisabled;
+    }
+    return p.then(function (v: any) { done(); return v; },
+      function (e: any) { done(); throw e; });
+  }
+  function el2Spin() { return el('span', 'mc-load-in'); }
 
   function skelInto(node: any, kind?: string) {
     node.textContent = '';
@@ -5243,9 +5273,12 @@
           app.href = '#';
           app.addEventListener('click', function (e: any) {
             e.preventDefault();
-            fetch(API + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            busy(app, fetch(API + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(Object.assign({ key: state.key, id: c.id }, approve)) })
-              .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+              .then(function (r) { return r.json(); }).then(function (r) {
+                if (r.ok) { row.remove(); return; }
+                app.title = r.error || 'Could not approve.';
+              })).catch(function () { app.title = 'Could not approve — check your connection.'; });
           });
           var del = el('a', 'trust-toggle danger', '(delete)');
           del.href = '#';
@@ -5253,9 +5286,12 @@
             e.preventDefault();
             appConfirm('Delete this held ' + (delOpts.what || 'comment') + '?', { okLabel: 'Delete', danger: true }, function (ok: any) {
               if (!ok) return;
-              fetch(API + delOpts.path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              busy(del, fetch(API + delOpts.path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(Object.assign({ key: state.key, id: c.id }, delOpts.body || {})) })
-                .then(function (r) { return r.json(); }).then(function (r) { if (r.ok) row.remove(); }).catch(function () {});
+                .then(function (r) { return r.json(); }).then(function (r) {
+                  if (r.ok) { row.remove(); return; }
+                  del.title = r.error || 'Could not delete.';
+                })).catch(function () { del.title = 'Could not delete — check your connection.'; });
             });
           });
           acts.appendChild(app);
@@ -7580,8 +7616,21 @@
     call('status').then(function (d) { if (blockedOut(d)) return; if (d.ok) setLabel(d.watching); }).catch(function () {});
     a.addEventListener('click', function (e: any) {
       e.preventDefault();
-      call(a.getAttribute('data-w') === '1' ? 'unwatch' : 'watch')
-        .then(function (d) { if (blockedOut(d)) return; if (d.ok) setLabel(d.watching); }).catch(function () {});
+      /* Flip at once and put it back if the server disagrees — the same
+         generation-guarded shape the feed's like toggle uses. Before this the
+         label only moved when the round trip returned, and a refusal moved
+         nothing at all, so a failed watch looked exactly like a slow one. */
+      var want = a.getAttribute('data-w') !== '1';
+      var gen = (a.mcGen = (a.mcGen || 0) + 1);
+      setLabel(want);
+      call(want ? 'watch' : 'unwatch')
+        .then(function (d) {
+          if (gen !== a.mcGen) return;
+          if (blockedOut(d)) return;
+          if (d.ok) setLabel(d.watching);
+          else { setLabel(!want); a.title = d.error || 'That did not save.'; }
+        })
+        .catch(function () { if (gen === a.mcGen) { setLabel(!want); a.title = 'That did not save — check your connection.'; } });
     });
     return a;
   }
