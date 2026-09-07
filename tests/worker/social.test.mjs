@@ -40,8 +40,17 @@ test('an admin can actually save it: allowlist + boolean coercion', () => {
   const allowed = idxSrc.slice(idxSrc.indexOf('const allowed: any = {'));
   assert.ok(allowed.slice(0, allowed.indexOf('};')).includes('social_enabled: 1'),
     "handleAdminSettings drops any key not in `allowed` SILENTLY — the save would report success and do nothing");
-  assert.ok(idxSrc.includes("|| k === 'social_enabled') v = (v === '1' || v === 'true') ? '1' : '0';"),
-    'the value must normalise to the same 1/0 strings every other boolean setting uses');
+  /* Assert the RULE, not the line. The first version of this pinned the exact
+     coercion expression, so it broke the day a sibling boolean switch was added
+     to the same chain — a green-to-red with nothing wrong, which teaches a
+     reader to edit the test rather than read it. What matters is that
+     social_enabled goes through the shared 1/0 normalisation. */
+  const coercion = idxSrc.slice(idxSrc.indexOf("if (k === 'media_enabled'"));
+  const chain = coercion.slice(0, coercion.indexOf(';') + 1);
+  assert.ok(/k === 'social_enabled'/.test(chain),
+    'social_enabled must sit in the boolean-coercion chain');
+  assert.ok(/v = \(v === '1' \|\| v === 'true'\) \? '1' : '0';/.test(chain),
+    'that chain must normalise to the same 1/0 strings every other boolean setting uses');
 });
 
 test('the client is told, so it can hide what it cannot have', () => {

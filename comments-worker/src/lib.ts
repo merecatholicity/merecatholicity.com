@@ -16,6 +16,7 @@ import * as Presence from '../../purescript/output/Domain.Presence/index.js';
 import * as Handle from '../../purescript/output/Domain.Handle/index.js';
 import * as Links from '../../purescript/output/Domain.Links/index.js';
 import * as Wall from '../../purescript/output/Domain.Wall/index.js';
+import * as Turnstile from '../../purescript/output/Domain.Turnstile/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
@@ -266,6 +267,20 @@ export async function verifyTurnstile(env: any, token: any, ip: any, key: any) {
   if (env.MC_TEST_BYPASS && key && token === 'TEST:' + env.MC_TEST_BYPASS) {
     const h = await sha256hex(key);
     if ((env.TEST_HASHES || '').split(',').map((s: any) => s.trim()).includes(h)) return true;
+  }
+  /* No token offered? An identity that has ALREADY passed a challenge is not
+     asked again — the whole reason this path exists (Domain.Turnstile). A token
+     that IS offered is still verified normally, so nothing about the existing
+     clients changes. Every other gate stands: the key, the block/lock/ban
+     check, the per-IP rate limit, the AI screen. */
+  if (!token && key) {
+    try {
+      const s = await getAppSettings(env);
+      if (turnstileSkipEstablished(s) && await isEstablished(env, await sha256hex(key))) return true;
+    } catch (err) {
+      /* Settings or the establishment probe failed: fall through and demand a
+         token. Fails CLOSED, like everything else in here. */
+    }
   }
   try {
     const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
@@ -881,6 +896,8 @@ export const DM_TTLS = Dm.ttlOptions.map((o) => o.secs);   // single-sourced fro
    2026-08-02) — re-measure with `wrangler r2 bucket info` before raising any
    of them. */
 export const APP_SETTING_DEFAULTS = {
+  /* Spare an identity that has already passed a challenge (Domain.Turnstile). */
+  turnstile_skip_established: Turnstile.skipEstablishedDefault ? '1' : '0',
   media_enabled: '1',
   media_max_bytes: String(25 * 1024 * 1024),   // 25 MB per upload
   dm_default_ttl: String(Dm.defaultTtl),        // 30 days (single-sourced from Domain.Dm)
@@ -1021,6 +1038,11 @@ export function mediaVoiceEnabled(s: any, ctx: string) {
    polarity lives in exactly one place (Domain.Wall). Every /wall* gate and the
    /config block below go through this — never a bare string compare. */
 export function socialEnabled(s: any) { return Wall.enabledFrom(String(s.social_enabled)); }
+/* Whether an identity that has already passed a challenge is spared the next
+   one (app_settings `turnstile_skip_established`). See Domain.Turnstile for why
+   this exists at all: in the installed iOS app, mounting the widget took the
+   document down, and a challenge that cannot run is not a gate but an outage. */
+export function turnstileSkipEstablished(s: any) { return Turnstile.skipFrom(String(s.turnstile_skip_established)); }
 /* The voice-note length limit for a section: per-section override, else the
    legacy global, else the kernel default. Client-advisory, like the global. */
 export function mediaAudioSeconds(s: any, ctx?: string) {

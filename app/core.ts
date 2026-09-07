@@ -33,6 +33,7 @@ import * as Links from '../purescript/output/Domain.Links/index.js';
 import * as Media from '../purescript/output/Domain.Media/index.js';
 import * as Call from '../purescript/output/Domain.Call/index.js';
 import * as Wall from '../purescript/output/Domain.Wall/index.js';
+import * as Turnstile from '../purescript/output/Domain.Turnstile/index.js';
 import * as Cache from '../purescript/output/Domain.Cache/index.js';
 import * as Ptr from '../purescript/output/Domain.Ptr/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
@@ -257,6 +258,11 @@ export const callGlareWins = (me: string, other: string): boolean => Call.glareW
    the checkbox and the server can never disagree about what '0' means. */
 export const wallEnabledDefault: boolean = Wall.enabledDefault;
 export const wallEnabledFrom = (v: any): boolean => Wall.enabledFrom(v == null ? '' : String(v));
+/* The verification rule (Domain.Turnstile), read by the admin settings box.
+   Absent reads as ON — the same polarity as the social switch, and for the
+   same reason: getting it backwards puts every phone back in front of a
+   challenge that takes the page down. */
+export const turnstileSkipFrom = (v: any): boolean => Turnstile.skipFrom(v == null ? '' : String(v));
 
 /* The disk cache's policy (Domain.Cache). `classify` is erased to its tag here
    — 'fresh' | 'stale' | 'expired' — because the store is imperative JS and a PS

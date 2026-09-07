@@ -129,6 +129,7 @@ import {
   mediaScanEnabled,
   mediaVoiceEnabled,
   socialEnabled,
+  turnstileSkipEstablished,
   gzipBytes,
   isAdminHash,
   isDiscordWebhook,
@@ -265,6 +266,9 @@ async function handleConfig(request: any, env: any, url: any) {
        worker answers every /wall* surface the same way regardless — this field
        is the client's courtesy copy, not the enforcement. */
     social: { enabled: socialEnabled(s) },
+    /* Advisory only: it tells the client whether a challenge is worth
+       mounting. verifyTurnstile decides, every time, on the server. */
+    turnstile: { skip_established: turnstileSkipEstablished(s) },
     /* 1v1 voice calls: the 📞 button renders only when enabled (the worker
        refuses /call/* regardless — this is the client's courtesy copy). The
        silence watch is client-run off these two fields, clamped through the
@@ -2402,7 +2406,7 @@ async function handleAdminSettings(request: any, env: any) {
       media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
       media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1,
       calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1,
-      social_enabled: 1 };
+      social_enabled: 1, turnstile_skip_established: 1 };
     /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
        back to "inherit the legacy global" — because absence is what the
        fallback chain reads. Without this the chain would be one-way. */
@@ -2423,7 +2427,7 @@ async function handleAdminSettings(request: any, env: any) {
         || k === 'media_scan_wall' || k === 'media_scan_board'
         || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board'
         || k === 'calls_enabled' || k === 'calls_turn' || k === 'calls_idle_hangup'
-        || k === 'social_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
+        || k === 'social_enabled' || k === 'turnstile_skip_established') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'calls_idle_seconds') v = String(CallK.idleClampSecs(Math.floor(Number(v)) || CallK.idleDefaultSecs));
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
       /* Per-kind caps, the recorder stop, the store budgets, the retention

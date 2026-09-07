@@ -2048,7 +2048,19 @@
      opening a view. */
   function warmToken() {
     if (!state.key) return;
+    if (mcTsSpared) return;                    // nothing to warm; nothing to mount
     if (mcTsToken && Date.now() - mcTsToken.at < TOKEN_FRESH_MS) return;
+    if (mcTsSpared === null) {
+      /* First touch of a composer: ask once whether this reader needs a
+         challenge, and only mount one if the answer is yes. */
+      tsSkipCfg().then(function (spare: boolean) {
+        mcTsSpared = spare;
+        if (spare) { trace('turnstile: spared, nothing mounted'); return; }
+        trace('turnstile: warming');
+        loadTurnstile();
+      });
+      return;
+    }
     trace('turnstile: warming');
     loadTurnstile();
   }
@@ -2117,7 +2129,20 @@
     }
   }, { signal: bootSig });
 
-  function getToken() {
+  /* Once the server has said established identities are spared, remember it for
+     the page: the challenge is then never mounted at all, which is the only
+     thing that reliably stops the installed app being taken down by it. */
+  var mcTsSpared: boolean | null = null;
+  function getToken(): Promise<any> {
+    if (mcTsSpared) { trace('turnstile: not required for this identity'); return Promise.resolve(''); }
+    /* Not asked yet — a press that skipped the composer entirely (a voice note,
+       an attachment, an avatar). Settle it before mounting anything. */
+    if (mcTsSpared === null) {
+      return tsSkipCfg().then(function (spare: boolean) {
+        mcTsSpared = spare;
+        return getToken();
+      });
+    }
     var w = mcTsToken;
     if (w && Date.now() - w.at < TOKEN_FRESH_MS) {
       mcTsToken = null;                 // single-use: spend it and earn another
@@ -3957,6 +3982,14 @@
      not subject to this boot's teardown cycle. This file keeps only the 📞
      buttons, which delegate to window.mcCall.place(), and the /config gate
      that decides whether to render them. */
+  /* Does this reader need to solve a challenge at all? Shares mcStore's cached
+     /config with mediaCfg/socialCfg, so it costs no extra request. Advisory:
+     the server decides on every write, and refuses a client that guessed. */
+  function tsSkipCfg() {
+    return cachedJson(API + '/config', undefined, 300000)
+      .then(function (d: any) { return !!(d && d.ok && d.turnstile && d.turnstile.skip_established); })
+      .catch(function () { return false; });   // unknown: behave as before
+  }
   function callsCfg() {
     return cachedJson(API + '/config', undefined, 300000)
       .then(function (d: any) { return { enabled: !(d && d.ok && d.calls && d.calls.enabled === false) }; })
@@ -10390,6 +10423,14 @@ trace('submit: feed post');
           (window.mcCore as any).wallEnabledFrom(s.social_enabled));
         desc(wrap, 'Turned off, the Feed tab disappears from the menu, feed.html and any shared link to a feed post read as a page that never existed, and the wall is removed from every profile — for everyone, admins included. Nothing is deleted: every post, comment, like and saved item stays in the database and comes back exactly as it was when you switch this on again. Profiles, direct messages, and the community forum are unaffected. Allow about five minutes for a change to reach every reader.');
 
+        /* ---- Verification (Turnstile) ----
+           Above the media panels because it governs whether members can post at
+           all on some devices. Polarity from the kernel (Domain.Turnstile). */
+        wrap.appendChild(el('h3', null, 'Verification (Turnstile)'));
+        var tsCb = checkRow(wrap, 'Skip the challenge for members who have already passed one',
+          (window.mcCore as any).turnstileSkipFrom(s.turnstile_skip_established));
+        desc(wrap, 'A challenge answers one question — is a person here — and an identity with a profile, a comment or a post has already answered it. Leaving this on means such a member is not challenged again on every message; a brand-new identity still is, on its very first write. This is on because the challenge cannot be run at all inside the installed iOS app: mounting the widget there takes the whole page down (a hard reload and a white flash, with the message lost), and six attempts at moving when and where it ran did not change that. Everything else that guards a write is untouched and does the continuous work — the identity key, the block and ban gates, the per-IP rate limits, and the AI screen. Turn this off to demand a challenge on every single write, and expect the installed app to become unusable for sending.');
+
         /* ---- Media platform (global) ---- */
         wrap.appendChild(el('h3', null, 'Media platform (global)'));
         var enCb = checkRow(wrap, 'Media sharing is on — the master switch for attachments everywhere (feed, forum, and direct messages)', s.media_enabled === '1');
@@ -10539,6 +10580,7 @@ trace('submit: feed post');
             dm_default_ttl: ttlSel.value,
             dm_backstop_days: bsInp.value,
             social_enabled: socCb.checked ? '1' : '0',
+            turnstile_skip_established: tsCb.checked ? '1' : '0',
             calls_enabled: vcEn.checked ? '1' : '0',
             calls_turn: vcTurn.checked ? '1' : '0',
             calls_idle_hangup: vcIdle.checked ? '1' : '0',
