@@ -1825,6 +1825,12 @@
      runs the challenge — so the button just works after a brief beat instead of
      failing. Only a genuine load failure or a real timeout rejects. */
   function getToken() {
+    /* Turnstile is the prime suspect in "the first submit does nothing, the
+       second always works": the FIRST call has to load the script, render the
+       widget and solve, where later ones reuse a token. Crumbing both ends puts
+       that ordering in the ring next to the pagehide, so the next report either
+       implicates it or clears it. */
+    trace('turnstile: token wanted' + (window.turnstile ? '' : ' (script not loaded yet)'));
     return new Promise<any>(function (resolve, reject) {
       loadTurnstile();   // a click may be the first thing that needs it
       var waited = 0;
@@ -1844,9 +1850,13 @@
           setTimeout(run, STEP);
           return;
         }
-        state.tokenWait = { resolve: resolve, reject: reject };
-        try { turnstile.execute(state.widgetId); } catch (e) {
+        state.tokenWait = {
+          resolve: function (v: any) { trace('turnstile: token ok'); resolve(v); },
+          reject: function (e: any) { trace('turnstile: token refused'); reject(e); },
+        };
+        try { trace('turnstile: execute'); turnstile.execute(state.widgetId); } catch (e) {
           state.tokenWait = null;
+          trace('turnstile: execute threw');
           reject(e);
         }
       }
@@ -3839,7 +3849,7 @@
       try { localStorage.removeItem(DM_CACHE); } catch (e) {}
       /* On the board the cleanest login is the og one: reload, and the
          current view returns with the right name, buttons, and links. */
-      if (BOARD) { location.reload(); return; }
+      trace('key import -> reload'); if (BOARD) { location.reload(); return; }
       sha256hex(key).then(function (h) {
         state.myHash = h;
         enableMemberLive();
@@ -3907,6 +3917,7 @@
     }
     var buttons = section.querySelectorAll('.comment-buttons button');
     buttons.forEach(function (b: any) { b.disabled = true; });
+trace('submit: page comment');
     status.textContent = 'Verifying...';
     getToken().then(function (token) {
       status.textContent = 'Posting...';
@@ -4025,6 +4036,13 @@
      cannot be optimistic: it disables the control and shows a ring in place of
      its label, restoring both however the promise settles — including on a
      throw, which is where a hand-rolled version usually leaves a control dead. */
+  /* Leave a named trace before anything that unloads or replaces the page. The
+     ring already recorded THAT the page went; a live report showed it could not
+     say WHY, which is the only part that matters when a submit disappears. */
+  function trace(why: string) {
+    try { if (window.mcCrumb) window.mcCrumb(why); } catch (e) { /* diagnosis only */ }
+  }
+
   function busy(el: any, p: Promise<any>) {
     if (!el || el.mcBusy) return p;
     el.mcBusy = true;
@@ -4111,6 +4129,7 @@
     var status = section.querySelector('.form-status') as HTMLElement;
     var buttons = section.querySelectorAll('.comment-buttons button');
     buttons.forEach(function (b: any) { b.disabled = true; });
+trace('submit: page comment');
     status.textContent = 'Verifying...';
     getToken().then(function (token) {
       status.textContent = 'Posting...';
@@ -4579,7 +4598,7 @@
           ta.value = '';
           if (ta.mcPreview) ta.mcPreview.off();
         } else {
-          location.href = 'community.html?topic=' + d.comment.id;
+          trace('new topic posted -> topic'); location.href = 'community.html?topic=' + d.comment.id;
         }
       });
     });
@@ -7213,6 +7232,7 @@
     send.addEventListener('click', function () {
       var body = ta.value.replace(/\s+$/, '');
       if (!pendingFile && !body.trim()) { if (ta.mcPreview) ta.mcPreview.off(); ta.focus(); return; }
+trace('submit: feed post');
       send.disabled = true; status.textContent = 'Verifying…';
       var file = pendingFile;
       getToken().then(function (token) {
@@ -7935,7 +7955,8 @@
             return;
           }
           send.disabled = true;
-          status.textContent = 'Verifying...';
+      trace('submit: page comment');
+    status.textContent = 'Verifying...';
           var sending = pendingFile;   // captured: the echo path needs the local file
           getToken().then(function (token) {
             if (sending) {

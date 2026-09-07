@@ -96,6 +96,10 @@ declare global {
     mcGetLight?: () => string;
     mcSetLight?: (p: string) => void;
     mcDeeplink?: { run: () => void; reveal: () => void };
+    /* nav.js's persistent breadcrumb ring: it survives the very reload it
+       exists to explain, so anything that unloads or replaces the page
+       should name itself here first. */
+    mcCrumb?: (msg: string) => void;
     mcCommentsBoot?: () => void;
     mcCommentsTeardown?: () => void;
     mcSelectSheet?: (...a: any[]) => any;

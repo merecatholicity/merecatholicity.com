@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=3013389073';
+    s.src = 'app.js?v=1554446411';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }
@@ -524,14 +524,39 @@ document.addEventListener('DOMContentLoaded', function () {
     note('unhandled: ' + ((r && (r.message || r)) || 'rejection'));
   });
   if (forced) start();
+  /* The switch has to work while you are standing there, and dismissal must not
+     be a one-way door. Both were broken in the first cut: `dismissed` was a
+     latch for the life of the DOCUMENT, and the app soft-navigates, so one
+     accidental tap killed the overlay until a hard reload — turning the setting
+     off and on again did nothing either, because `forced` was read once at
+     load. Re-read the flag on a timer, and let a navigation bring a dismissed
+     panel back. */
+  function wanted() {
+    try {
+      return /[?&]debug=1\b/.test(location.search) || localStorage.getItem('mc-debug') === '1';
+    } catch (e) { return false; }
+  }
+  document.addEventListener('mc-navigate', function () { dismissed = false; });
+  setInterval(function () {
+    if (!wanted()) {
+      var gone = document.getElementById('mc-debug');
+      if (gone) gone.remove();
+      return;
+    }
+    if (!dismissed) start();
+  }, 1500);
+
   function paint() {
+    if (!wanted()) { var off = document.getElementById('mc-debug'); if (off) off.remove(); return; }
     if (dismissed || !document.body) return;
     var el = document.getElementById('mc-debug') || document.createElement('pre');
     el.id = 'mc-debug';
     el.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;' +
       'background:rgba(15,17,19,.94);color:#e8e2d5;font:11px/1.5 monospace;' +
       'padding:10px;border-radius:8px;max-height:45vh;overflow:auto;white-space:pre-wrap;margin:0';
-    el.onclick = function () { dismissed = true; el.remove(); };
+    /* Tapping the BODY does nothing now — that is how it kept vanishing. Only
+       the × hides it, and only until the next navigation. */
+    el.onclick = null;
     var lines = [];
     lines.push('mode: ' + (standaloneMode() ? 'standalone (installed app)' : 'browser tab'));
     var scripts = [];
@@ -554,10 +579,52 @@ document.addEventListener('DOMContentLoaded', function () {
     try { crumbs = JSON.parse(localStorage.getItem('mc-crumbs') || '[]'); } catch (e) { /* fine */ }
     var tail = (crumbs.length ? 'crumbs:\n' + crumbs.slice(-8).join('\n') + '\n' : '') +
       (errs.length ? 'errors:\n' + errs.join('\n') : 'errors: none');
-    el.textContent = head + '\ncaches: …\n' + tail;
+    /* Buttons live in their own row so the body can stay a plain <pre> that
+       selects and copies cleanly. Rebuilt each paint; cheap, and it keeps the
+       copy button's payload in step with what is on screen. */
+    function chrome(text) {
+      el.textContent = text;
+      var bar = document.createElement('div');
+      bar.style.cssText = 'display:flex;gap:8px;justify-content:flex-end;margin-bottom:6px';
+      var copy = document.createElement('button');
+      copy.textContent = 'Copy';
+      copy.style.cssText = 'font:11px/1 monospace;padding:5px 10px;border-radius:6px;' +
+        'border:1px solid #4a4a4a;background:#1e2126;color:#e8e2d5';
+      copy.onclick = function (ev) {
+        ev.stopPropagation();
+        var payload = text;
+        function ok() { copy.textContent = 'Copied'; setTimeout(function () { copy.textContent = 'Copy'; }, 1200); }
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(payload).then(ok, fallback);
+          } else fallback();
+        } catch (e) { fallback(); }
+        function fallback() {
+          /* iOS standalone can refuse the async clipboard; the old road works. */
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = payload;
+            ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+            ok();
+          } catch (e2) { copy.textContent = 'Select and copy'; }
+        }
+      };
+      var hide = document.createElement('button');
+      hide.textContent = '\u00d7';
+      hide.style.cssText = copy.style.cssText;
+      hide.onclick = function (ev) { ev.stopPropagation(); dismissed = true; el.remove(); };
+      bar.appendChild(copy);
+      bar.appendChild(hide);
+      el.insertBefore(bar, el.firstChild);
+    }
+    chrome(head + '\ncaches: …\n' + tail);
     if (window.caches && window.caches.keys) {
       window.caches.keys().then(function (ks) {
-        el.textContent = head + '\ncaches: ' + (ks.join(', ') || 'none') + '\n' + tail;
+        chrome(head + '\ncaches: ' + (ks.join(', ') || 'none') + '\n' + tail);
       }).catch(function () {});
     }
     if (!el.parentNode) document.body.appendChild(el);

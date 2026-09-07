@@ -151,6 +151,7 @@ export function installPtr() {
       note.textContent = 'Reloading…';
       note.classList.add('on');
       pill.classList.add('spin');
+      try { if ((window as any).mcCrumb) (window as any).mcCrumb('ptr: triple pull -> reload'); } catch (e) { /* ignore */ }
       location.reload();
       return;
     }

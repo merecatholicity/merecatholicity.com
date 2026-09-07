@@ -801,6 +801,9 @@ customElements.define('mc-audio-dock', McAudioDock);
          our template wrote it. Only a genuine navigation failure takes the
          ordinary road. */
       if (instant) return;
+      /* A full page load, and until now an anonymous one: the crumb ring showed
+         only 'pagehide' with no cause. Name it. */
+      try { if (window.mcCrumb) window.mcCrumb('shell: soft-nav failed -> hard load ' + url.pathname); } catch (e) { /* ignore */ }
       location.href = url.href;
     });
   }
