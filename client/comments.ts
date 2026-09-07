@@ -1861,6 +1861,23 @@
     ta.mcWarm = true;
     ta.addEventListener('focus', warmToken, { once: true });
   }
+  /* And the structural net, so coverage is not a list anyone has to maintain.
+     Turnstile guards SIX actions, not one: a page/book comment, a forum post,
+     a feed post, a direct message, a profile save and an avatar upload. Wiring
+     the warm into mdEditor covered the four that are composers and MISSED the
+     profile editor entirely, which is exactly the kind of gap a per-site list
+     grows. `.ts-slot` is the widget's own mount point, so its presence is the
+     honest test of "a challenge will be needed on this view" — and any gated
+     surface added later is covered the day it mounts its slot, not the day
+     someone remembers this file. */
+  document.addEventListener('focusin', function (e: any) {
+    var t = e.target;
+    if (!t || !t.tagName) return;
+    var tag = t.tagName;
+    if (tag !== 'TEXTAREA' && !(tag === 'INPUT' && /^(text|search|url|email|)$/.test(t.type || ''))) return;
+    if (!document.querySelector('.ts-slot')) return;   // nothing gated on this view
+    warmToken();
+  }, { signal: bootSig });
 
   function getToken() {
     var w = warmTok;
@@ -6020,6 +6037,11 @@ trace('submit: board post');
   /* The edit form. Every save is re-screened by the server; a flagged save is
      refused with its reason and the fields survive so nothing is retyped. */
   function editProfile(card: any, p: any) {
+    /* Both actions here are Turnstile-gated — the save AND the avatar upload —
+       and the avatar rides a file input that can be used without focusing any
+       text, so the focusin net alone would miss it. Opening the editor is
+       intent enough. */
+    warmToken();
     card.textContent = '';
     card.appendChild(el('p', 'key-note',
       'Your assigned name ' + p.assigned + ' always stays as your identifier. ' +
