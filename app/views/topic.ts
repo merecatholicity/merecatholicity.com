@@ -11,7 +11,7 @@
    knocks once and the server judges. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
 import * as Core from '../core.ts';
 
 class McTopic extends LitElement {
@@ -241,7 +241,7 @@ class McTopic extends LitElement {
     }
     if (!this.d) {
       return html`${crumbTpl([['Community', 'community.html'], ['Topic']])}
-        <p class="comments-status">Loading…</p>`;
+        ${skelTpl()}`;
     }
     const d = this.d;
     const cat = kit.catByKey(d.cat);

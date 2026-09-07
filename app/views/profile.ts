@@ -10,7 +10,7 @@
    dominated by the Turnstile-gated composer, stays kit machinery. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
 
 class McProfile extends LitElement {
   static properties = { profile: { attribute: false }, err: { attribute: false } };
@@ -61,7 +61,7 @@ class McProfile extends LitElement {
     const head = crumbTpl([['Community', 'community.html'], ['Profile']]);
     if (this.err === 'bad') return html`${head}<p class="comments-status">No such profile.</p>`;
     if (this.err === 'load') return html`${head}<p class="comments-status">The profile could not be loaded.${retryTpl(this, { kit: this.kit, hash: this.hash })}</p>`;
-    if (!this.profile) return html`${head}<p class="comments-status">Loading profile...</p>`;
+    if (!this.profile) return html`${head}${skelTpl('card')}`;
     return html`${head}<div class="mc-ts-host"></div><div class="profile"></div>`;
   }
 }
@@ -148,7 +148,7 @@ class McInbox extends LitElement {
     const head = crumbTpl([['Community', 'community.html'], ['Inbox']]);
     if (this.err === 'gate') return html`${head}<p class="comments-status">Messages need an identity. Create one on the board front page.</p>`;
     if (this.err === 'load') return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">The inbox could not be loaded.${retryTpl(this, { kit: this.kit })}</p>`;
-    if (!this.d) return html`${head}<div class="mc-dmsearch"></div><p class="comments-status">Loading messages...</p>`;
+    if (!this.d) return html`${head}<div class="mc-dmsearch"></div>${skelTpl()}`;
     const d = this.d;
     const href = (i: number) => 'messages.html&p=' + i;
     return html`${head}

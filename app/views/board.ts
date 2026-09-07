@@ -9,7 +9,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { pagerTpl, retryTpl } from './util.ts';
+import { pagerTpl, retryTpl, skelTpl } from './util.ts';
 import * as Core from '../core.ts';
 
 /* The six confessional "in-house talk for [tradition]" rooms, grouped apart from
@@ -390,7 +390,7 @@ class McBoardCat extends LitElement {
       ${this.payload ? pagerTpl(this.payload.total, this.payload.per, this.payload.page, hrefFor) : nothing}
       <div class="board-topics">
         ${this.err ? html`<p class="comments-status">${this.err}${retryTpl(this, { kit: this.kit, catKey: this.catKey })}</p>`
-        : !this.payload ? html`<p class="comments-status">Loading topics...</p>`
+        : !this.payload ? skelTpl()
         : this.payload.topics.length === 0
           ? html`<p class="comments-status">No topics yet. Yours can be the first.</p>`
           : repeat(this.payload.topics, (t: any) => t.id, (t: any) => this.topicRow(t))}

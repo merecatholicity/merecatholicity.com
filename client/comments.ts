@@ -3908,6 +3908,33 @@
     return p;
   }
 
+  /* A shaped grey echo of the content that is coming, in place of the bare
+     "Loading…" line these views used to show (and, in viewTopic and viewDm, in
+     place of NOTHING AT ALL — those two left the section blank for the whole
+     round trip, which is what made a tap feel ignored). A placeholder shaped
+     like the answer reads as "your page is here, filling in"; a spinner reads
+     as "wait". Styles live in styles/main.css (.mc-skel), and the global
+     reduced-motion guard flattens the shimmer to a static block for free. */
+  function skeleton(kind?: string) {
+    var wrap = el('div', 'mc-skel-wrap');
+    wrap.setAttribute('role', 'status');
+    wrap.setAttribute('aria-label', 'Loading');
+    if (kind === 'card') {
+      wrap.appendChild(el('div', 'mc-skel mc-skel-card'));
+      return wrap;
+    }
+    var rows = kind === 'short' ? 3 : 5;
+    for (var i = 0; i < rows; i++) wrap.appendChild(el('div', 'mc-skel mc-skel-row'));
+    return wrap;
+  }
+
+  /* Clear a container and stand a skeleton in it — the `node.textContent =
+     'Loading…'` sites, which is how most of this file announced a wait. */
+  function skelInto(node: any, kind?: string) {
+    node.textContent = '';
+    node.appendChild(skeleton(kind));
+  }
+
   function buildBoardForm(withTitle: any, heading: any) {
     var form = el('div', 'comment-form');
     form.appendChild(el('h3', 'board-form-head', heading));
@@ -4419,7 +4446,7 @@
     if (key === 'adminsonly') rss.hidden = true;
     section.appendChild(catDescNode('p', cat));
     var list = el('div', 'board-topics');
-    list.textContent = 'Loading topics...';
+    skelInto(list);
     section.appendChild(list);
     buildBoardForm(true, 'Start a topic');
     boardButtons('Post topic', function () {
@@ -4544,6 +4571,10 @@
     var pNum = Math.floor(Number(qs.get('p')) || 0);
     var hashMatch = /^#comment-(\d+)$/.exec(location.hash);
     var extra = pNum ? '&p=' + pNum : (hashMatch ? '&find=' + hashMatch[1] : '');
+    /* Stand something up BEFORE the round trip. This view used to render
+       nothing until its fetch resolved — a blank section for the whole wait. */
+    crumb([['Community', 'community.html'], ['Topic']]);
+    section.appendChild(skeleton());
     cachedJson(API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), 30000)
       .then(function (d) {
         /* A topic the public read cannot see might be an admins-only one —
@@ -4561,6 +4592,8 @@
       })
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'failed');
+        /* Drop the placeholder crumb + skeleton; the real ones follow. */
+        section.textContent = '';
         var cat = catByKey(d.cat);
         state.anonAllowed = !!d.anon;
         document.title = d.topic.title + ' | Community';
@@ -4658,6 +4691,7 @@
         annotateMeta('board:' + d.cat);
       })
       .catch(function (err) {
+        section.textContent = '';
         crumb([['Community', 'community.html'], ['Topic']]);
         section.appendChild(el('p', 'comments-status',
           err.message === 'No such topic.' ? 'No such topic. It may have been removed.'
@@ -5382,7 +5416,7 @@
     document.title = 'Journal | Mere Catholicity';
     var wrap = el('div', 'journal journal-single');
     section.appendChild(wrap);
-    wrap.appendChild(el('p', 'comments-status', 'Loading…'));
+    wrap.appendChild(skeleton('short'));
     if (!Number.isInteger(id) || id < 1) { wrap.textContent = ''; wrap.appendChild(el('p', 'comments-status', 'That entry could not be found.')); return; }
     fetchRetry(API + '/journal?id=' + id, {}, [1000, 3000])
       .then(function (r) { return r.json(); })
@@ -5443,7 +5477,7 @@
      keeps the handle so the shared link stays pretty. */
   function viewProfileByHandle(handle: any) {
     crumb([['Community', 'community.html'], ['Profile']]);
-    var status = el('p', 'comments-status', 'Loading profile...');
+    var status = skeleton('card');
     section.appendChild(status);
     fetchRetry(API + '/profile?handle=' + encodeURIComponent(handle) + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
@@ -5456,7 +5490,10 @@
         viewProfile(d.profile.hash);
       })
       .catch(function () {
-        status.textContent = 'The profile could not be loaded. Check your connection and reload the page.';
+        /* Replace the skeleton outright — writing text INTO it would leave the
+           shimmer wrapper around a sentence. */
+        status.replaceWith(el('p', 'comments-status',
+          'The profile could not be loaded. Check your connection and reload the page.'));
       });
   }
 
@@ -5471,7 +5508,7 @@
     var editable = !!state.key && hash === state.myHash;
     var card = el('div', 'profile');
     section.appendChild(card);
-    var status = el('p', 'comments-status', 'Loading profile...');
+    var status = skeleton('card');
     section.appendChild(status);
     /* Editing is a write, so it gets the same Turnstile gate as posting. The
        slot lives outside the card so it survives the read/edit toggle. */
@@ -5492,7 +5529,10 @@
         if (!editable && isAdmin()) adminProfileEditor(card, hash, d.profile || {});
       })
       .catch(function () {
-        status.textContent = 'The profile could not be loaded. Check your connection and reload the page.';
+        /* Replace the skeleton outright — writing text INTO it would leave the
+           shimmer wrapper around a sentence. */
+        status.replaceWith(el('p', 'comments-status',
+          'The profile could not be loaded. Check your connection and reload the page.'));
       });
   }
 
@@ -5581,7 +5621,7 @@
     var list: any, pagerHost: any;
     var st = { page: 1 };
     function draw() {
-      list.textContent = 'Loading...';
+      skelInto(list, 'short');
       pagerHost.textContent = '';
       fetchRetry(API + '/board/author?hash=' + hash + '&p=' + st.page + freshParam('&'), freshOpts(), [1000, 3000])
         .then(function (r) { return r.json(); })
@@ -6295,9 +6335,10 @@
     search.placeholder = 'Search members by name...';
     searchRow.appendChild(search);
     section.appendChild(searchRow);
-    var count = el('p', 'comments-status', 'Loading members...');
+    var count = el('p', 'comments-status', '');
     section.appendChild(count);
     var list = el('div', 'user-list');
+    list.appendChild(skeleton());
     section.appendChild(list);
     var pagerHost = el('div');
     section.appendChild(pagerHost);
@@ -7278,7 +7319,7 @@
     section.appendChild(dmSearchBox());
     section.appendChild(dmE2eBadge());
     var list = el('div', 'board-topics');
-    list.textContent = 'Loading messages...';
+    skelInto(list);
     section.appendChild(list);
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     fetchRetry(API + '/dm/threads', {
@@ -7373,7 +7414,7 @@
       return;
     }
     var list = el('div', 'board-topics');
-    list.textContent = 'Loading notifications...';
+    skelInto(list);
     section.appendChild(list);
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     fetchRetry(API + '/notifications', {
@@ -7515,6 +7556,10 @@
     var pNum = Math.floor(Number(qs.get('p')) || 0);
     var payload: any = { key: state.key, with: other };
     if (pNum > 0) payload.p = pNum;
+    /* Same as viewTopic: this rendered nothing at all until the thread AND the
+       crypto library had both arrived — the longest blank wait in the app. */
+    crumb([['Community', 'community.html'], ['Messages', 'messages.html'], ['Conversation']]);
+    section.appendChild(skeleton());
     Promise.all([
       ensureNacl(),
       fetchRetry(API + '/dm/thread', {
@@ -7526,6 +7571,7 @@
       .then(function (res) {
         var d = res[1];
         if (!d.ok) throw new Error(d.error || 'failed');
+        section.textContent = '';        // drop the placeholder crumb + skeleton
         /* The correspondent's public key drives both decrypt and encrypt for the
            whole thread (the shared secret is the same in both directions). */
         var otherPub = (d.other && d.other.pubkey) || null;
@@ -7857,6 +7903,7 @@
         }
       })
       .catch(function () {
+        section.textContent = '';        // drop the placeholder crumb + skeleton
         crumb([['Community', 'community.html'], ['Messages']]);
         section.appendChild(el('p', 'comments-status', 'The conversation could not be loaded. Check your connection and reload the page.'));
       });

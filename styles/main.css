@@ -2792,3 +2792,34 @@ body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-li
     background: color-mix(in srgb, var(--rule) 55%, transparent);
   }
 }
+
+/* Cold start, and any other moment the board section stands empty. The served
+   platform documents ship `<section class="comments board" data-board></section>`
+   — genuinely empty — and it stays that way until app.js and the ~280 KB client
+   have both parsed and booted. On a slow phone that is the longest blank in the
+   app, and it is the FIRST thing a reader sees, so it is the one that matters
+   most.
+   :empty does the whole job with no JavaScript: it matches the served section,
+   and stops matching the instant the client renders anything into it, so the
+   placeholder clears itself. The 150ms delay is what keeps it honest — a
+   section that is empty only for a frame (route() clears before it redraws)
+   never flashes a placeholder nobody needed. */
+section.comments.board:empty {
+  display: block;
+  min-height: 14rem;
+  position: relative;
+}
+section.comments.board:empty::before,
+section.comments.board:empty::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  height: 3.4rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--rule) 45%, transparent);
+  opacity: 0;
+  animation: mc-skel-in 0.25s ease 0.15s forwards;
+}
+section.comments.board:empty::before { top: 0.9rem; }
+section.comments.board:empty::after { top: 5.4rem; right: 8%; }
+@keyframes mc-skel-in { to { opacity: 1; } }

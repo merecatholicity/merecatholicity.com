@@ -8,7 +8,7 @@
    never a false refusal, exactly as the old adminGate did. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
 
 /* Shared admin gate for a component: returns 'ok' | 'wait' | 'no', and
    registers a re-render for when the profile (hence admin status) lands. */
@@ -91,7 +91,7 @@ class McMerecatThreads extends LitElement {
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
     const intro = html`<p class="board-intro">Every question put to the librarian in the last thirty days, newest first, read-only. Open one to observe the whole exchange. A thread a member deletes leaves here too, and one saved past thirty days still ages off this view. This is for improving the service, not participating. You cannot ask or reply here.</p>`;
     if (this.err) return html`${head}${intro}<p class="comments-status">${this.err}${this.err === 'This is for admins alone.' ? nothing : retryTpl(this, { kit: this.kit })}</p>`;
-    if (!this.d) return html`${head}${intro}<p class="comments-status">Loading…</p>`;
+    if (!this.d) return html`${head}${intro}${skelTpl('short')}`;
     if (!this.d.threads.length) return html`${head}${intro}<p class="comments-status">No conversations yet.</p>`;
     const href = (i: number) => 'admin.html?merecatthreads=1&p=' + i;
     return html`${head}${intro}
@@ -182,7 +182,7 @@ class McMerecatThread extends LitElement {
     if (g === 'wait') return html`${head}<p class="comments-status">Loading...</p>`;
     if (g === 'no') return html`${head}<p class="comments-status">This page is for the admins.</p>`;
     if (this.err) return html`${head}<p class="comments-status">${this.err}${this.err === 'That conversation could not be loaded.' ? retryTpl(this, { kit: this.kit, tid: this.tid }) : nothing}</p>`;
-    if (!this.d) return html`${head}<p class="board-intro">Observing only. You cannot ask or reply in this conversation.</p><p class="comments-status">Loading…</p>`;
+    if (!this.d) return html`${head}<p class="board-intro">Observing only. You cannot ask or reply in this conversation.</p>${skelTpl('short')}`;
     const d = this.d;
     const who = d.chat.nick || kit.displayName(d.chat.hash);
     return html`${head}

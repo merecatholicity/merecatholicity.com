@@ -6,7 +6,7 @@
    as every board view. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
 import { pagerItems } from '../core.ts';
 
 const PER_USERS = 20;
@@ -62,7 +62,7 @@ class McUsers extends LitElement {
       <p class="board-intro">Everyone on the board, newest first. Search by nickname or assigned name to find who is who, then open a profile.</p>
       <div class="key-row"><input class="key-input mc-userq" type="text" placeholder="Search members by name..." .value=${this.q} @input=${(e: Event) => this.onSearch(e)}></div>`;
     if (this.err) return html`${head}<p class="comments-status">${this.err}${retryTpl(this, { kit: this.kit })}</p>`;
-    if (this.roster === null) return html`${head}<p class="comments-status">Loading members...</p>`;
+    if (this.roster === null) return html`${head}${skelTpl()}`;
     const items = this.visible();
     const total = items.length;
     const pages = Math.max(1, Math.ceil(total / PER_USERS));
@@ -140,7 +140,7 @@ class McNotifications extends LitElement {
     const head = crumbTpl([['Community', 'community.html'], ['Notifications']]);
     if (this.err === 'gate') return html`${head}<p class="comments-status">Notifications need an identity. Create one on the board front page.</p>`;
     if (this.err === 'load') return html`${head}<p class="comments-status">Notifications could not be loaded.${retryTpl(this, { kit: this.kit })}</p>`;
-    if (!this.d) return html`${head}<p class="comments-status">Loading notifications...</p>`;
+    if (!this.d) return html`${head}${skelTpl()}`;
     const d = this.d;
     if (!d.items.length) return html`${head}<p class="comments-status mc-empty" data-ico="🔔">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`;
     const href = (i: number) => 'community.html?notifications=1&p=' + i;
