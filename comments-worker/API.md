@@ -233,7 +233,7 @@ resource), `413` (avatar too large), `429` (rate limit), `500` (server), `503`
 | `GET /api/comments/profile` | `hash` (required), `fresh` | `{ok, profile:{hash,nick,bio,signature,avatar,faith,posts,assigned,admin}}`. `assigned` is the **server-computed pseudonym**; `admin` is public. |
 | `GET /api/comments/dm/directory` | `fresh` | `{ok, users:[{hash, joined, nick}]}` — up to 2000, newest first. Bot and any `merecat…` nick excluded. All fuzzy matching is client-side. |
 | `GET /api/comments/feed` | `topic` \| `cat` \| `page` (precedence in that order) | RSS 2.0 XML. Renders `displayName` server-side. |
-| `GET /api/comments/config` | — | `{ok, apiVersion, media:{enabled, kinds:{dm,wall,board}, max_bytes:{image,video,audio}, audio_max_seconds, autocompress, sections:{dm,wall,board}}, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}}` — the shared constants a native client would otherwise triplicate. `media.sections.<ctx>` is the per-SECTION policy (2026-08-02): `{kinds, voice, max_bytes:{image,video,audio}, audio_max_seconds}` plus `scan` on `wall`/`board` only — `dm` carries **no** `scan` field because DM media is E2E ciphertext and structurally unscannable; the absence is the statement. The flat legacy fields beside `sections` are kept for older clients. Gate client-side from the served policy, never a literal (everything is admin-tunable). Cacheable. |
+| `GET /api/comments/config` | — | `{ok, apiVersion, media:{enabled, kinds:{dm,wall,board}, max_bytes:{image,video,audio}, audio_max_seconds, autocompress, sections:{dm,wall,board}}, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}, social:{enabled}}` — the shared constants a native client would otherwise triplicate. `social.enabled` is the Feed/member-wall kill switch (below): a client MUST hide the Feed and the profile wall when it is false, though the server refuses those surfaces regardless. `media.sections.<ctx>` is the per-SECTION policy (2026-08-02): `{kinds, voice, max_bytes:{image,video,audio}, audio_max_seconds}` plus `scan` on `wall`/`board` only — `dm` carries **no** `scan` field because DM media is E2E ciphertext and structurally unscannable; the absence is the statement. The flat legacy fields beside `sections` are kept for older clients. Gate client-side from the served policy, never a literal (everything is admin-tunable). Cacheable. |
 | `GET /api/comments/avatar` | `hash` (required), `v` (cache-buster) | Raw JPEG bytes, `max-age=86400`, `nosniff`, `CSP default-src 'none'`. **No rate limit.** |
 
 **Row shapes.** A comment/reply row is `{id, author_hash, nick, assigned,
@@ -329,6 +329,36 @@ relayed to `user:<to>` tagged with the authenticated sender, ≤4 KB, no
 storage. `GET /config` serves `calls:{enabled}`; app_settings `calls_enabled`
 (global kill switch, server-enforced) and `calls_turn` are admin-set in
 `/admin/settings`. Notification kind `'call'` (migration 0009).
+
+### The social layer's global kill switch
+
+`app_settings.social_enabled` ('1' default; `Domain.Wall.enabledFrom` is the
+rule, so only a literal `'0'` turns it off). Off, the Feed and every member wall
+are inaccessible **to everyone, admins included**, and each surface answers as
+though it never existed rather than announcing a switch: `/wall/feed`, `/wall`,
+`/wall/post`, `/wall/comment`, `/wall/edit`, `/wall/like`, `/wall/comment/like`
+and `POST /wall/media` return **404 `{ok:false,error:'No such page.'}`**;
+`/wall/post/get` returns the byte-identical **404 `'That post is gone.'`** a
+deleted post gives, so a shared `feed.html?post=<id>` link cannot tell the two
+apart; `/wall/likers` returns the empty `{ok:true,likers:[],more:false}` an
+unknown post already gives. Notifications of kind `'wall'`/`'wall-like'` drop
+out of the list and BOTH unread counts, and `kind:'wall'` bookmarks drop out of
+`/bookmarks` while `POST /bookmark {kind:'wall'}` falls into the pre-existing
+`'Bad request.'` — so no badge or saved row points at something unreachable.
+
+**Nothing is deleted.** Every `wall_posts`, `wall_comments`, `wall_likes`,
+`wall_comment_likes`, `bookmarks` and `notifications` row survives untouched and
+returns exactly as it was when the switch goes back on.
+
+Deliberately still open when off: **`/wall/delete`** (an author or admin must
+always be able to retract), **`GET /wall/media`** (it serves forum attachments
+too — `ref_type='board'`), the admin **`/pending` + `/approve`** wall branches
+(so held content is never stranded), and every storage sweep. The gate on the
+wall UPLOAD rides the ROUTE, not `mediaUpload`, because `POST /board/media`
+shares that handler.
+
+Propagation is up to ~5 minutes: `getAppSettings` caches per isolate for 300 s
+(the saving isolate busts only its own) and `/config` is edge-cached 300 s.
 
 **`POST /api/comments/edit`** — `{id, key, body}`. `POST_LIMIT`, gated, **no
 Turnstile** (despite older docs; the web SDK sends a `token` the server
@@ -673,7 +703,7 @@ All require the caller's hash in the `admins` table; all refuse non-admins with
 | `POST /api/comments/admins` · `/admin` | `{key}` · `{key,hash,admin}` | List the flat roster (with `assigned` names) · grant/revoke any admin (last-admin removal refused). |
 | `POST /api/comments/meta` · `/audit` · `/trust` | `{key,hash\|page}` · `{key}` · `{key,hash,trusted}` | Per-identity/per-page fingerprint + known-IP drawer · 14-day activity audit (reports/pages/topics) · grant/revoke AI-screen-skip. |
 | `POST /api/comments/backup` | `{key}` | Force a mid-month D1→R2 backup (check `backup.error`). |
-| `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB legacy globals, now the FALLBACK layer), the 9 per-section overrides `media_<dm\|wall\|board>_<image\|video\|audio>_max_bytes` (same clamp; **an empty string DELETES the override** — back to inheriting the global), `media_audio_max_seconds` + `media_audio_max_seconds_<ctx>` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_scan_wall`/`media_scan_board` (0/1, the per-section AI image screen; there is NO `media_scan_dm` — E2E ciphertext is unscannable), `media_voice_dm/wall/board` (0/1, the 🎙 feature flag, client-advisory), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` + `media_cap_board_bytes` (100 MB–9 GB per-section store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`/`board_media_bytes`), and media age retention `media_wall_retention_days`/`media_board_retention_days` (0–3650; 0 = keep forever) + `media_dm_retention_days` (1–90, the DM hard cap, default 30). `media_max_bytes` stays the absolute per-file ceiling over every per-kind cap. |
+| `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB legacy globals, now the FALLBACK layer), the 9 per-section overrides `media_<dm\|wall\|board>_<image\|video\|audio>_max_bytes` (same clamp; **an empty string DELETES the override** — back to inheriting the global), `media_audio_max_seconds` + `media_audio_max_seconds_<ctx>` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_scan_wall`/`media_scan_board` (0/1, the per-section AI image screen; there is NO `media_scan_dm` — E2E ciphertext is unscannable), `media_voice_dm/wall/board` (0/1, the 🎙 feature flag, client-advisory), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` + `media_cap_board_bytes` (100 MB–9 GB per-section store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`/`board_media_bytes`), and media age retention `media_wall_retention_days`/`media_board_retention_days` (0–3650; 0 = keep forever) + `media_dm_retention_days` (1–90, the DM hard cap, default 30). `media_max_bytes` stays the absolute per-file ceiling over every per-kind cap. Platform switches: `social_enabled` (0/1, the Feed + member-wall kill switch — see above), `calls_enabled`/`calls_turn`/`calls_idle_hangup`/`calls_idle_seconds`, `journal_enabled`/`journal_topic`, `wall_prune_enabled`/`wall_prune_days`, `discord_forum_webhook`/`discord_feed_webhook`/`discord_feed_comments`. A key absent from the handler's `allowed` map is dropped SILENTLY. |
 | `POST /api/comments/wall/media/purge` · `/board/media/purge` | `{key}` | Purge EVERY media object in that public section (feed+walls · forum) — R2 objects + rows deleted, every media-carrying parent stamped `media_expired` (text kept), that section's usage meter zeroed. `{ok, deleted}`. Safe to re-click; the DM sibling is `/dm/media/purge`. |
 | `POST /api/comments/admin/usage` | `{key}` | The Cloudflare free-tier usage monitor (`admin.html?usage=1`). Reads the account's GraphQL Analytics (Workers requests, AI neurons, D1 rows/storage, DO compute/storage, R2 ops/storage, Vectorize dims, TURN egress, Turnstile count) and answers `{ok, configured, at, rows, products, free_as_of, check_utc}` — each row `{id, product, label, used, limit, unit, period: day\|month\|total, pct, band: ok\|watch\|hot\|over\|na, detail?, note?}` or `{id, product, label, error}` when that one product's fetch failed. `configured:false` until the `CF_USAGE_TOKEN` secret (read-only, scope "Account Analytics: Read") stands beside the `CF_ACCOUNT_ID` var. A daily 23:30 UTC cron runs the same report and system-DMs every admin (as merecat) when any meter crosses 80% or its ceiling — escalations at once, standing warnings weekly (state in `app_settings.usage_alert_state`). |
 

@@ -54,6 +54,20 @@ def client_version(body):
     return int(m.group(1)) if m else 0
 
 
+def social_enabled():
+    """The Feed/wall kill switch (app_settings social_enabled, served in
+    /config). Two of the three scenarios below drive the WALL composer, which
+    does not exist when the social layer is off — they skip rather than fail,
+    and say so, because a green run that quietly stopped testing anything is
+    the worse outcome. The recorder itself is unaffected: it also rides the
+    board and DM composers."""
+    try:
+        hdrs, body = fetch_page('api/comments/config')
+        return bool((json.loads(body).get('social') or {}).get('enabled', True))
+    except Exception:
+        return True
+
+
 def click_by_text(f, scope_sel, text):
     """Click the first button under scope_sel whose text contains `text`."""
     return f.js("""var s=document.querySelector(%s); if(!s) return false;
@@ -65,6 +79,9 @@ def click_by_text(f, scope_sel, text):
 # -- (a) the denied path on prod --------------------------------------------
 
 def test_denied_path(checks, fails):
+    if not social_enabled():
+        print('SKIP  test_denied_path — the social layer is off, so there is no wall composer')
+        return
     hdrs, body = fetch_page('feed.html')
     v = client_version(body)
     if v < 205:
@@ -217,6 +234,9 @@ def test_recorder_primitives_local(checks, fails):
 # -- (c) the whole composer flow on prod --------------------------------------
 
 def test_full_composer_flow(checks, fails):
+    if not social_enabled():
+        print('SKIP  test_full_composer_flow — the social layer is off, so there is no wall composer')
+        return
     hdrs, body = fetch_page('feed.html')
     pp = hdrs.get('permissions-policy', '')
     if 'microphone=()' in pp:

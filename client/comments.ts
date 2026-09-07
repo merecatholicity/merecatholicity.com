@@ -3433,6 +3433,44 @@
       })
       .catch(function () {});
   }
+  /* ================= The social layer's global switch =================
+     app_settings `social_enabled`, served in /config. Off, the Feed and every
+     member wall are inaccessible to everyone (admins included) and read as
+     pages that never existed; nothing is deleted, and flipping it back restores
+     the whole stream untouched. The server refuses every /wall* surface on its
+     own — everything here is the client's courtesy: don't offer what cannot be
+     had.
+
+     The value is MIRRORED into localStorage because app/appchrome.ts must
+     decide whether to draw the Feed tab SYNCHRONOUSLY, on every page, before
+     any fetch — the same reason the `mc-admin` flag exists. Absence means ON,
+     so a first-time visitor gets the default; the mirror is refreshed from
+     /config on every page this client boots, and `mc-social-change` lets the
+     chrome re-render without a reload. */
+  function socialRead() {
+    try { return localStorage.getItem('mc-social') !== '0'; } catch (e) { return true; }
+  }
+  function socialMirror(on: boolean) {
+    var was = socialRead();
+    try {
+      if (on) localStorage.removeItem('mc-social');
+      else localStorage.setItem('mc-social', '0');
+    } catch (e) { /* blocked storage: the gates below still read /config */ }
+    if (was !== on) document.dispatchEvent(new CustomEvent('mc-social-change', { detail: { on: on } }));
+  }
+  /* Shares mcStore's per-URL cache with mediaCfg()/callsCfg(), so asking costs
+     no extra request — the free-tier budget law holds. Fails to the mirror (and
+     so to ON for a fresh browser), because the server is the authority. */
+  function socialCfg() {
+    return cachedJson(API + '/config', undefined, 300000)
+      .then(function (d: any) {
+        var on = !(d && d.ok && d.social && d.social.enabled === false);
+        socialMirror(on);
+        return on;
+      })
+      .catch(function () { return socialRead(); });
+  }
+
   /* ================= 1v1 voice calls =================
      The ENGINE lives in the shell bundle now (app/call.ts, 2026-08-03) so a
      receiver rings on ANY page — not just the ones this client boots on, and
@@ -7105,6 +7143,21 @@
     };
   }
 
+  /* What a reader gets where the social layer used to be: the page the site
+     never had. Deliberately says nothing about a switch — a disabled surface is
+     indistinguishable from one that never existed, which is the same posture
+     the back room and the worker's own /wall* refusals take. */
+  function viewNoSuchPage() {
+    document.title = 'Not found | Mere Catholicity';
+    crumb([['Community', 'community.html']]);
+    section.appendChild(el('p', 'comments-status', 'No such page.'));
+    var back = el('p');
+    var a = el('a', null, 'Go to Community') as HTMLAnchorElement;
+    a.href = 'community.html';
+    back.appendChild(a);
+    section.appendChild(back);
+  }
+
   function viewFeed() {
     document.title = 'Feed | Community';
     crumb([['Community', 'community.html'], ['Feed']]);
@@ -7156,15 +7209,23 @@
      it is your own profile. Called from renderProfile. */
   function renderProfileWall(card: any, hash: any, editable: any) {
     if (!isMember()) return;   // profiles are members-only now; a guest never gets here
-    card.appendChild(el('h3', null, editable ? 'Your wall' : 'Wall'));
-    if (editable) {
-      card.appendChild(wallComposer('post', {}, function (row: any) { if (row) wrap.wrap.insertBefore(wallPostNode(row), wrap.wrap.firstChild); }));
+    /* Social off: the profile keeps its identity, bio, links, rank, and Recent
+       Community Posts — it simply has no wall. Every post is still in D1 and
+       reappears, untouched, when the switch goes back on. The mirror answers
+       synchronously so the card never renders a wall it must then take away. */
+    if (!socialRead()) return;
+    function mountWall() {
+      card.appendChild(el('h3', null, editable ? 'Your wall' : 'Wall'));
+      if (editable) {
+        card.appendChild(wallComposer('post', {}, function (row: any) { if (row) wrap.wrap.insertBefore(wallPostNode(row), wrap.wrap.firstChild); }));
+      }
+      var wrap = wallInfiniteList(function (cursor: any) {
+        return fetch(API + '/wall', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, hash: hash, cursor: cursor }) }).then(function (r) { return r.json(); });
+      });
+      card.appendChild(wrap.wrap);
     }
-    var wrap = wallInfiniteList(function (cursor: any) {
-      return fetch(API + '/wall', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, hash: hash, cursor: cursor }) }).then(function (r) { return r.json(); });
-    });
-    card.appendChild(wrap.wrap);
+    socialCfg().then(function (on: boolean) { if (on) mountWall(); });
   }
 
   function viewInbox() {
@@ -9589,7 +9650,7 @@
         wrap.textContent = '';
         var s = d.settings || {};
         var mdefs: any = (window.mcCore as any).mediaDefaults;
-        wrap.appendChild(el('p', 'board-intro', 'Three separate media stores — the public feed, the community forum, and private direct messages — each with its own panel below: what it accepts, size limits, AI screening, its storage budget, retention, and a one-time purge. A control in one never touches the others.'));
+        wrap.appendChild(el('p', 'board-intro', 'First, whether the social layer runs at all. Then three separate media stores — the public feed, the community forum, and private direct messages — each with its own panel: what it accepts, size limits, AI screening, its storage budget, retention, and a one-time purge. A control in one never touches the others.'));
 
         /* ---- Shared row builders (each appends into the given parent). ---- */
         function checkRow(parent: any, label: any, checked: any, disabled?: any) {
@@ -9701,6 +9762,15 @@
             });
           });
         }
+
+        /* ---- Social (Feed & member walls) ----
+           The platform-level kill switch, kept above the media panels because it
+           governs whether those surfaces exist at all. Polarity comes from the
+           kernel (Domain.Wall), the same rule the worker applies. */
+        wrap.appendChild(el('h3', null, 'Social (Feed & member walls)'));
+        var socCb = checkRow(wrap, 'The Feed and member walls are on',
+          (window.mcCore as any).wallEnabledFrom(s.social_enabled));
+        desc(wrap, 'Turned off, the Feed tab disappears from the menu, feed.html and any shared link to a feed post read as a page that never existed, and the wall is removed from every profile — for everyone, admins included. Nothing is deleted: every post, comment, like and saved item stays in the database and comes back exactly as it was when you switch this on again. Profiles, direct messages, and the community forum are unaffected. Allow about five minutes for a change to reach every reader.');
 
         /* ---- Media platform (global) ---- */
         wrap.appendChild(el('h3', null, 'Media platform (global)'));
@@ -9850,6 +9920,7 @@
             wall_prune_days: wpSel.value,
             dm_default_ttl: ttlSel.value,
             dm_backstop_days: bsInp.value,
+            social_enabled: socCb.checked ? '1' : '0',
             calls_enabled: vcEn.checked ? '1' : '0',
             calls_turn: vcTurn.checked ? '1' : '0',
             calls_idle_hangup: vcIdle.checked ? '1' : '0',
@@ -10361,11 +10432,24 @@
       /* A single post (?post=<id>) is PUBLIC — anyone may read it and its likes and
          comments; liking or commenting still needs an identity (wallPostNode gates
          the controls). The feed LISTING itself is members-only, guarded like Inbox
-         and Profile. */
+         and Profile.
+
+         All of it sits behind the social switch. Off, this page is one the site
+         never had — no explanation to probe, matching the worker's own refusals.
+         The mirror answers instantly when it already says off (so there is never
+         a flash of feed); otherwise /config decides before anything renders —
+         one edge-cached GET, usually already in mcStore's per-URL cache. */
       var fpost = params.get('post');
-      if (fpost) return viewPost(Number(fpost));
-      if (!isMember()) return viewJoin('see and post to the community feed');
-      return viewFeed();
+      if (!socialRead()) return viewNoSuchPage();
+      section.appendChild(el('p', 'comments-status', 'Loading…'));
+      socialCfg().then(function (on: boolean) {
+        section.textContent = '';
+        if (!on) return viewNoSuchPage();
+        if (fpost) return viewPost(Number(fpost));
+        if (!isMember()) return viewJoin('see and post to the community feed');
+        return viewFeed();
+      });
+      return;
     }
     if (page === 'journal.html') {
       /* The Mere Catholicity Journal — PUBLIC and shareable (no identity gate).
@@ -10500,6 +10584,10 @@
   function startBoard() {
     section.setAttribute('data-nosnippet', '');
     collectAltIps();
+    /* Refresh the social-switch mirror on every platform page (it shares
+       mcStore's /config read with mediaCfg/callsCfg, so it costs no request),
+       keeping the shell's Feed tab honest wherever the reader goes next. */
+    socialCfg();
     /* Resolve the identity before any view renders, or a keyed visitor
        reads as anonymous and the owner's own links never appear. */
     var ready = state.key ? sha256hex(state.key) : Promise.resolve('');

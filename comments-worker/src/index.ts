@@ -128,6 +128,7 @@ import {
   mediaMaxAcross,
   mediaScanEnabled,
   mediaVoiceEnabled,
+  socialEnabled,
   gzipBytes,
   isAdminHash,
   isDiscordWebhook,
@@ -259,6 +260,11 @@ async function handleConfig(request: any, env: any, url: any) {
         },
       },
     },
+    /* The social layer (Feed + member walls). Off, the client hides the Feed tab
+       and the profile wall and renders feed.html as a page that never was; the
+       worker answers every /wall* surface the same way regardless — this field
+       is the client's courtesy copy, not the enforcement. */
+    social: { enabled: socialEnabled(s) },
     /* 1v1 voice calls: the 📞 button renders only when enabled (the worker
        refuses /call/* regardless — this is the client's courtesy copy). The
        silence watch is client-run off these two fields, clamped through the
@@ -2395,7 +2401,8 @@ async function handleAdminSettings(request: any, env: any) {
       media_wall_image_max_bytes: 1, media_wall_video_max_bytes: 1, media_wall_audio_max_bytes: 1,
       media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
       media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1,
-      calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1 };
+      calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1,
+      social_enabled: 1 };
     /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
        back to "inherit the legacy global" — because absence is what the
        fallback chain reads. Without this the chain would be one-way. */
@@ -2415,7 +2422,8 @@ async function handleAdminSettings(request: any, env: any) {
       if (k === 'media_enabled' || k === 'wall_prune_enabled' || k === 'media_image_autocompress'
         || k === 'media_scan_wall' || k === 'media_scan_board'
         || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board'
-        || k === 'calls_enabled' || k === 'calls_turn' || k === 'calls_idle_hangup') v = (v === '1' || v === 'true') ? '1' : '0';
+        || k === 'calls_enabled' || k === 'calls_turn' || k === 'calls_idle_hangup'
+        || k === 'social_enabled') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'calls_idle_seconds') v = String(CallK.idleClampSecs(Math.floor(Number(v)) || CallK.idleDefaultSecs));
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
       /* Per-kind caps, the recorder stop, the store budgets, the retention
@@ -2555,13 +2563,28 @@ async function handleDmMediaPurge(request: any, env: any) {
    member's posts together. Public + UNencrypted (unlike DMs), reusing the forum's
    Turnstile + AI screen (held-if-flagged) + @mention notifications. Media rides a
    public R2 bucket (WALLMEDIA), served same-origin like avatars. Posts persist
-   until the admin auto-prune (Phase D) removes them. All members-only to read. */
+   until the admin auto-prune (Phase D) removes them. All members-only to read.
+
+   THE WHOLE LAYER HAS A GLOBAL KILL SWITCH: app_settings `social_enabled`, read
+   through the kernel by `socialOff` below. When it is off every surface here
+   answers as though it never existed — the back room's posture, so a prober
+   learns nothing and no "turned off" copy invites a retry — while not one row is
+   deleted. Deliberately still open when off: /wall/delete (an author or admin
+   must always be able to retract), the shared GET /wall/media (it serves forum
+   attachments too), the admin pending/approve queue (so held content is never
+   stranded), and every storage sweep. */
+
+/* The refusal a disabled feed/wall surface gives: indistinguishable from a path
+   the platform never had. */
+const noSuchPage = () => json({ ok: false, error: 'No such page.' }, 404);
+async function socialOff(env: any) { return !socialEnabled(await getAppSettings(env)); }
 
 async function handleWallFeed(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
   if (r.resp) return r.resp;
+  if (await socialOff(env)) return noSuchPage();
   const cursor = Math.floor(Number(data.cursor) || 0);
   /* Muted authors' posts never appear in anyone else's feed. */
   const rows = cursor > 0
@@ -2579,6 +2602,7 @@ async function handleWall(request: any, env: any) {
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
   if (r.resp) return r.resp;
+  if (await socialOff(env)) return noSuchPage();
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'No such member.' }, 400);
   const cursor = Math.floor(Number(data.cursor) || 0);
@@ -2613,6 +2637,9 @@ async function handleWallPostGet(request: any, env: any) {
     if (gate) return blockedJson(gate);
   }
   const id = Math.floor(Number(data.id) || 0);
+  /* Switched off, a shared feed.html?post=<id> link gets the SAME refusal a
+     deleted post gives, byte for byte — the reader cannot tell which it is. */
+  if (await socialOff(env)) return json({ ok: false, error: 'That post is gone.' }, 404);
   /* A muted author's post reads as gone to everyone else; and any muted
      commenter's comments are dropped from a post others can still see. */
   const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live' AND " + shadowExcl('p')).bind(id).first();
@@ -2648,6 +2675,7 @@ async function handleWallLike(request: any, env: any, ctx: any) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
+  if (await socialOff(env)) return noSuchPage();
   const postId = Math.floor(Number(data.post || data.id) || 0);
   const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
@@ -2690,6 +2718,7 @@ async function handleWallCommentLike(request: any, env: any) {
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
+  if (await socialOff(env)) return noSuchPage();
   const commentId = Math.floor(Number(data.comment || data.id) || 0);
   const cm = await env.DB.prepare("SELECT id FROM wall_comments WHERE id = ?1 AND status = 'live'").bind(commentId).first();
   if (!cm) return json({ ok: false, error: 'That comment is gone.' }, 404);
@@ -2714,6 +2743,9 @@ async function handleWallLikers(request: any, env: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  /* An unknown post already answers with an empty list, so that is the
+     indistinguishable refusal when the social layer is off. */
+  if (await socialOff(env)) return json({ ok: true, likers: [], more: false }, 200);
   const postId = Math.floor(Number(data.post) || 0);
   const commentId = Math.floor(Number(data.comment) || 0);
   const LIMIT = 60;
@@ -2752,6 +2784,7 @@ async function handleWallPost(request: any, env: any, ctx: any) {
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Sign in to post.' }, 401);
+  if (await socialOff(env)) return noSuchPage();
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   const wallSettings = await getAppSettings(env);
   const media = await wallClaimMedia(env, data.media_key, mediaKindsFor(wallSettings, 'wall'), wallSettings, 'wall');
@@ -2803,6 +2836,7 @@ async function handleWallComment(request: any, env: any, ctx: any) {
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Sign in to comment.' }, 401);
+  if (await socialOff(env)) return noSuchPage();
   const postId = Math.floor(Number(data.post) || 0);
   const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
@@ -2853,6 +2887,7 @@ async function handleWallEdit(request: any, env: any) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
+  if (await socialOff(env)) return noSuchPage();
   const id = Math.floor(Number(data.id) || 0);
   const isComment = !!data.comment;
   if (id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -2882,7 +2917,10 @@ async function handleBookmark(request: any, env: any) {
   const { data, me } = pre;
   const kind = String(data.kind || '');
   const ref = Math.floor(Number(data.ref) || 0);
-  if ((kind !== 'topic' && kind !== 'wall') || ref < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  /* With the social layer off, 'wall' stops being a valid kind and falls into
+     the SAME 'Bad request.' an unknown kind has always got. */
+  const kindOk = kind === 'topic' || (kind === 'wall' && !(await socialOff(env)));
+  if (!kindOk || ref < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   if (data.on) {
     await env.DB.prepare(
       'INSERT OR IGNORE INTO bookmarks (hash, kind, ref, created_at) VALUES (?1, ?2, ?3, ?4)'
@@ -2899,6 +2937,7 @@ async function handleBookmarks(request: any, env: any) {
   const { data, me } = pre;
   const p = Math.max(1, Math.floor(Number(data.p) || 1));
   const PER = 20;
+  const socialOn = !(await socialOff(env));
   const rows = await env.DB.prepare(
     'SELECT b.kind, b.ref, b.created_at, ' +
     "  CASE b.kind WHEN 'topic' THEN c.title ELSE substr(w.body, 1, 140) END AS label " +
@@ -2906,6 +2945,9 @@ async function handleBookmarks(request: any, env: any) {
     "LEFT JOIN comments c ON b.kind = 'topic' AND c.id = b.ref AND c.status = 'live' " +
     "LEFT JOIN wall_posts w ON b.kind = 'wall' AND w.id = b.ref AND w.status = 'live' " +
     'WHERE b.hash = ?1 AND (c.id IS NOT NULL OR w.id IS NOT NULL) ' +
+    /* Social off: saved feed posts drop out of the list. The bookmark rows are
+       untouched in D1 and return exactly as they were with the switch. */
+    (socialOn ? '' : "AND b.kind <> 'wall' ") +
     'ORDER BY b.created_at DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, PER + 1, (p - 1) * PER).all();
   const items = (rows.results || []).slice(0, PER);
@@ -3171,6 +3213,22 @@ async function handleWallMediaPurge(request: any, env: any, section: string) {
   return json({ ok: true, deleted, remaining }, 200);
 }
 
+/* Wall notifications point at feed posts. With the social layer off those posts
+   are unreachable, so counting or listing them would leave a bell the reader can
+   never clear. Hide them from every count and from the list; the rows stay in D1
+   and come back, read-state intact, the moment the switch goes on again. */
+const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('wall','wall-like') ";
+async function notifHideWallSql(env: any, alias: string) {
+  return (await socialOff(env)) ? notifHideWall(alias) : '';
+}
+async function notifUnreadCount(env: any, me: any) {
+  const row = await env.DB.prepare(
+    'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
+    + await notifHideWallSql(env, '')
+  ).bind(me).first();
+  return (row && row.n) || 0;
+}
+
 /* The notification badge count: unread rows for this reader, one indexed COUNT.
    Like the DM poll it fires at most once per ninety seconds and doubles as the
    logout trip for a locked or banned identity. */
@@ -3178,10 +3236,7 @@ async function handleNotifUnread(request: any, env: any) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
-  const row = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
-  ).bind(me).first();
-  return json({ ok: true, unread: row.n || 0 }, 200);
+  return json({ ok: true, unread: await notifUnreadCount(env, me) }, 200);
 }
 
 /* The notification list, newest first, paged by twenty. Each row carries the
@@ -3197,6 +3252,7 @@ async function handleNotifList(request: any, env: any) {
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  const hideWall = await notifHideWallSql(env, '');
   const rows = await env.DB.prepare(
     'SELECT n.id, n.kind, n.topic_id, n.comment_id, n.actor_hash, n.created_at, n.read_at, ' +
     't.title AS topic_title, pr.nick AS actor_nick, ' +
@@ -3206,11 +3262,12 @@ async function handleNotifList(request: any, env: any) {
     "LEFT JOIN comments c ON c.id = n.comment_id AND n.kind NOT IN ('wall','wall-like') " +
     "LEFT JOIN wall_posts wp ON wp.id = n.comment_id AND n.kind IN ('wall','wall-like') " +
     'LEFT JOIN profiles pr ON pr.hash = n.actor_hash ' +
-    'WHERE n.recipient_hash = ?1 ORDER BY n.id DESC LIMIT ?2 OFFSET ?3'
+    'WHERE n.recipient_hash = ?1' + (hideWall ? notifHideWall('n.') : ' ') +
+    'ORDER BY n.id DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, NOTIF_PER_PAGE, (p - 1) * NOTIF_PER_PAGE).all();
   const totals = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END), 0) AS unread ' +
-    'FROM notifications WHERE recipient_hash = ?1'
+    'FROM notifications WHERE recipient_hash = ?1' + hideWall
   ).bind(me).first();
   const items = (rows.results || []).map((r: any) => Object.assign({}, r,
     { actor_assigned: r.actor_hash ? displayName(r.actor_hash) : null }));
@@ -3334,10 +3391,7 @@ async function handleBoardRead(request: any, env: any) {
       'UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND topic_id = ?2 AND read_at IS NULL'
     ).bind(me, topicId, now),
   ]);
-  const un = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
-  ).bind(me).first();
-  return json({ ok: true, notif_unread: (un && un.n) || 0 }, 200);
+  return json({ ok: true, notif_unread: await notifUnreadCount(env, me) }, 200);
 }
 
 /* Mark everything read: raise the floor to now and drop the per-thread rows it
@@ -4914,7 +4968,9 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleWallLikers(request, env) },
   { m: 'POST', p: '/api/comments/wall/prune', fn: (request, env, ctx, url) => handleWallPrune(request, env) },
   { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url, ctx) },
-  { m: 'POST', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => mediaUpload(request, env, 'wall') },
+  /* Gated at the ROUTE, not inside mediaUpload — the board route below shares
+     that handler and must keep working when the social layer is off. */
+  { m: 'POST', p: '/api/comments/wall/media', fn: async (request, env, ctx, url) => (await socialOff(env)) ? noSuchPage() : mediaUpload(request, env, 'wall') },
   { m: 'POST', p: '/api/comments/board/media', fn: (request, env, ctx, url) => mediaUpload(request, env, 'board') },
   { m: 'POST', p: '/api/comments/wall/media/purge', fn: (request, env, ctx, url) => handleWallMediaPurge(request, env, 'wall') },
   { m: 'POST', p: '/api/comments/board/media/purge', fn: (request, env, ctx, url) => handleWallMediaPurge(request, env, 'board') },

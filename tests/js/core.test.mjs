@@ -106,3 +106,14 @@ test('blockedMessage / mentionsIn tolerate nullish input', () => {
   assert.deepEqual(Core.mentionsIn('hi @a', [{ token: '@a', hash: 'h1' }]), ['h1']);
   assert.deepEqual(Core.mentionsIn(null, null), [], 'nullish -> []');
 });
+
+test('wallEnabledFrom survives the boundary: nullish is the default, not "off"', () => {
+  assert.equal(Core.wallEnabledDefault, true);
+  assert.equal(Core.wallEnabledFrom('0'), false);
+  assert.equal(Core.wallEnabledFrom('1'), true);
+  /* The admin settings box reads a stored value that may simply not be there.
+     A missing row means the default (ON); coercing null to the string "null"
+     would also read ON, but going through '' says so on purpose. */
+  assert.equal(Core.wallEnabledFrom(null), true, 'no stored row -> the default');
+  assert.equal(Core.wallEnabledFrom(undefined), true);
+});

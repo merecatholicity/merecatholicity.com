@@ -23,11 +23,28 @@ Run: python3 webtest/test_zoomproof.py
 import json
 import sys
 import time
+import urllib.request
 
+import flows
 from flows import Flow
 
-PAGES = ['community.html?feed=1', 'community.html', 'community.html?cat=pub',
+PAGES = ['community.html', 'community.html?cat=pub',
          'messages.html', 'merecat-ai.html', 'profile.html', 'contact.html']
+# The Feed rides the social kill switch (app_settings social_enabled). With it
+# off the page is one the site never had, so probing it would pass vacuously —
+# a check that cannot fail is worse than no check. Ask the server and say so.
+SOCIAL_PAGES = ['community.html?feed=1']
+
+
+def social_enabled():
+    try:
+        req = urllib.request.Request(flows.BASE + '/api/comments/config',
+                                     headers={'User-Agent': 'curl/8.14.1'})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.loads(r.read().decode('utf-8', 'replace'))
+        return bool((d.get('social') or {}).get('enabled', True))
+    except Exception:
+        return True      # an unreadable config must not silently drop a check
 
 FONT_PROBE = """
 var bad = [];
@@ -69,15 +86,22 @@ class PhoneFlow(Flow):
 
 def main():
     checks = []
+    social = social_enabled()
+    pages = PAGES + (SOCIAL_PAGES if social else [])
+    if not social:
+        print('  -- social layer is off: skipping %s' % ', '.join(SOCIAL_PAGES))
     with PhoneFlow() as f:
         f.login()
-        for page in PAGES:
+        for page in pages:
             f.goto(page)
             time.sleep(3)
             bad = f.js(FONT_PROBE) or []
             checks.append(('%s: all visible controls >= 16px %s' % (page, bad or ''), not bad))
-        # containment: probe on the feed page (the theater's home)
-        f.goto('community.html?feed=1')
+        # Containment: the probe injects its OWN .wall-lightbox under body.mc-app
+        # and measures pure CSS geometry, so any app page serves. It sits on
+        # community.html rather than the theater's own Feed so the check survives
+        # the social kill switch.
+        f.goto('community.html')
         time.sleep(2)
         t = f.js(THEATER_PROBE) or {}
         checks.append(('theater below the top bar (top %.0f >= 40)' % t.get('top', -1),

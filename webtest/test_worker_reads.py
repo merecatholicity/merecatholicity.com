@@ -165,9 +165,15 @@ if ok:
     check(isinstance(emoji.get('custom'), dict) and isinstance(emoji.get('named'), dict)
           and is_str(emoji.get('data_url')),
           'config: emoji.{custom,named,data_url} shaped', 'got %r' % (emoji,))
+    # The social layer's kill switch. The client hides the Feed tab and the
+    # profile wall off THIS field, so losing it would silently re-expose a
+    # surface the owner had switched off. Its VALUE is the owner's business —
+    # only its presence and type are asserted.
+    check(isinstance((d.get('social') or {}).get('enabled'), bool),
+          'config: social.enabled is a boolean', 'got %r' % (d.get('social'),))
 else:
     for n in ('config: cats', 'config: faiths', 'config: ranks', 'config: bible',
-              'config: apiVersion/bot_hash', 'config: emoji'):
+              'config: apiVersion/bot_hash', 'config: emoji', 'config: social'):
         check(False, n, 'skipped, config itself failed')
 
 # ---------------------------------------------------------------------------

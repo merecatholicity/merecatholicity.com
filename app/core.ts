@@ -32,6 +32,7 @@ import * as Handle from '../purescript/output/Domain.Handle/index.js';
 import * as Links from '../purescript/output/Domain.Links/index.js';
 import * as Media from '../purescript/output/Domain.Media/index.js';
 import * as Call from '../purescript/output/Domain.Call/index.js';
+import * as Wall from '../purescript/output/Domain.Wall/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -247,3 +248,10 @@ export const callIdleDefaultSecs: number = Call.idleDefaultSecs;
 export const callIdleClampSecs = (n: number): number => Call.idleClampSecs(Math.floor(Number(n) || Call.idleDefaultSecs));
 export const callVoiceFloor: number = Call.voiceFloor;
 export const callGlareWins = (me: string, other: string): boolean => Call.glareWins(String(me || ''))(String(other || ''));
+
+/* The social layer's global switch (Domain.Wall). The client reads the LIVE
+   state from /config; this is the rule for the raw stored app_settings string,
+   which only the admin settings box ever sees — same polarity as the worker, so
+   the checkbox and the server can never disagree about what '0' means. */
+export const wallEnabledDefault: boolean = Wall.enabledDefault;
+export const wallEnabledFrom = (v: any): boolean => Wall.enabledFrom(v == null ? '' : String(v));

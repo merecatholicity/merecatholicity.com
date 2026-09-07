@@ -32,3 +32,16 @@ test('clampPruneDays: bounded to 1..3650 days', () => {
   assert.equal(Wall.clampPruneDays(-5), 1);
   assert.equal(Wall.clampPruneDays(99999), 3650, 'ceiling (10 years)');
 });
+
+test('enabledDefault: the social layer ships ON', () => {
+  assert.equal(Wall.enabledDefault, true);
+});
+
+test("enabledFrom: only a literal '0' turns the Feed and walls off", () => {
+  assert.equal(Wall.enabledFrom('1'), true, 'the seeded default');
+  assert.equal(Wall.enabledFrom('0'), false, 'the admin switched it off');
+  assert.equal(Wall.enabledFrom(''), true, 'no stored row: the default stands');
+  assert.equal(Wall.enabledFrom('true'), true);
+  assert.equal(Wall.enabledFrom('nonsense'), true, 'garbage reads generously — the server is the authority');
+  assert.equal(Wall.enabledFrom('00'), true, 'only the exact string, so no near-miss silently darks the feed');
+});

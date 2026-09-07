@@ -41,6 +41,20 @@ interface Tab {
   hero?: boolean;
   badge?: string;
 }
+/* The social layer's mirror (written by client/comments.ts from /config, absence
+   = on). The chrome must decide whether to draw the Feed tab SYNCHRONOUSLY, on
+   every page, before any fetch — adding a /config read to the shell would put
+   API traffic on all ~270 corpus pages and break the free-tier budget law. A
+   reader who only ever opens corpus pages can hold a stale mirror; the tab then
+   leads to the same "No such page." the worker gives, and self-corrects on
+   their next platform page. */
+function socialOn(): boolean {
+  try { return localStorage.getItem('mc-social') !== '0'; } catch (e) { return true; }
+}
+/* The tabs to draw right now: Feed disappears with the social layer. */
+function visibleTabs(): Tab[] {
+  return socialOn() ? TABS : TABS.filter((t) => t.key !== 'feed');
+}
 const TABS: Tab[] = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
   { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
@@ -288,12 +302,16 @@ class McTabbar extends LitElement {
   static properties = { active: { attribute: false }, dm: { attribute: false } };
   declare active: string;
   declare dm: number;
+  private _onSocial = () => this.requestUpdate();
   constructor() { super(); this.active = 'home'; this.dm = 0; }
   createRenderRoot() { return this; }
+  /* The Feed tab appears or vanishes with the social switch, without a reload. */
+  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-social-change', this._onSocial); }
+  disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-social-change', this._onSocial); }
   sync() { this.active = activeTab(); this.dm = badgeCount('dm'); }
   render() {
     return html`<nav class="mc-tabbar" aria-label="Primary">
-      ${TABS.map((t) => html`
+      ${visibleTabs().map((t) => html`
         <a class=${'mc-tab' + (t.hero ? ' mc-tab-hero' : '') + (this.active === t.key ? ' mc-tab-on' : '')}
            href=${t.href} aria-label=${t.label} aria-current=${this.active === t.key ? 'page' : 'false'}>
           <span class="mc-tab-ico">${t.icon ? t.icon : ICON[t.svg!]}${t.badge === 'dm' && this.dm
@@ -898,7 +916,7 @@ class McSettings extends LitElement {
       <h3 class="mc-set-sec">Account</h3>
       ${k ? html`
         ${link('profile.html', 'My profile', 'Edit your name, faith, avatar')}
-        ${link('community.html?saved=1', 'Saved posts', 'Topics and feed posts you saved')}
+        ${link('community.html?saved=1', 'Saved posts', socialOn() ? 'Topics and feed posts you saved' : 'Topics you saved')}
         <button class="mc-set-row mc-set-btn" @click=${() => { this.keyShown = !this.keyShown; }}>
           <span>Show my key<small>Your one login secret — save it somewhere safe</small></span><span class="mc-set-go">${this.keyShown ? '▾' : '›'}</span></button>
         ${this.keyShown ? html`<div class="mc-set-key">
@@ -1103,7 +1121,13 @@ class McSidebar extends LitElement {
     this.wide = w;
   }
   createRenderRoot() { return this; }
-  connectedCallback() { super.connectedCallback(); this._applyBody(); }
+  private _onSocial = () => this.requestUpdate();
+  connectedCallback() {
+    super.connectedCallback();
+    this._applyBody();
+    document.addEventListener('mc-social-change', this._onSocial);
+  }
+  disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-social-change', this._onSocial); }
   /* Reflect wide/collapsed on <body> so the desktop CSS pushes the content over
      when the rail is expanded (like Facebook), and floats it back when collapsed. */
   _applyBody() { try { document.body.classList.toggle('mc-sb-wide', this.wide); } catch (e) { /* blocked */ } }
@@ -1116,7 +1140,7 @@ class McSidebar extends LitElement {
   render() {
     return html`<nav class=${'mc-sidebar' + (this.wide ? ' mc-sb-wide' : '')} aria-label="Primary">
       <button class="mc-sb-toggle" @click=${() => this.toggle()} aria-label=${this.wide ? 'Collapse menu' : 'Expand menu'} title=${this.wide ? 'Collapse' : 'Expand'}>${this.wide ? ICON.back : ICON.forward}</button>
-      ${TABS.map((t) => {
+      ${visibleTabs().map((t) => {
         const n = t.badge === 'dm' ? this.dm : 0;
         const inner = html`<span class="mc-sb-ico">${t.icon ? t.icon : ICON[t.svg!]}${n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : ''}</span>
           <span class="mc-sb-lbl">${t.label}</span>`;

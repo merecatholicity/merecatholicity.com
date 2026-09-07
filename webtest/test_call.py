@@ -240,7 +240,9 @@ def scenario_tabs(checks, fails):
                LiveUser('B1', BOB, 9616, mic='fake'),
                LiveUser('B2', BOB, 9617)) as (A, B1, B2):
         B1.nav('community.html')
-        B2.nav('feed.html')
+        # A second tab on some OTHER page — profile.html rather than the Feed,
+        # which the social kill switch can make a page that never was.
+        B2.nav('profile.html')
         A.nav('community.html?dm=' + B_HASH)
         click_call_button(A, checks, 'tabs')
         checks.append(('tabs: tab 1 rings', wait_state(B1, 'Incoming', 20)))

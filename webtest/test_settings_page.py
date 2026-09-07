@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """The per-section platform-settings page (?settings=1, media wave 2026-08-02).
 
-Pure-DOM assertions as the owner (admin): the five panel headings in order,
-the DM AI-scan checkbox rendered disabled AND unchecked beside the honest
-E2E note, three per-section storage-budget rows with live usage, the three
-per-section purge danger boxes, and the Save button. No save round-trip, no
-purge click — read-only against prod.
+Pure-DOM assertions as the owner (admin): the panel headings in order (the
+social kill switch first, then the media sections), that switch's own master
+checkbox, the DM AI-scan checkbox rendered disabled AND unchecked beside the
+honest E2E note, three per-section storage-budget rows with live usage, the
+three per-section purge danger boxes, and the Save button. No save round-trip,
+no purge click — read-only against prod. NOTE it never TOGGLES the social
+switch: that is global state real readers are living in.
 
-GATED on the v=205 client being live (the v=204 page is the old flat layout).
+GATED on the client that carries the Social panel being live.
 Run: python3 webtest/test_settings_page.py
 """
 import json
@@ -18,8 +20,10 @@ import urllib.request
 import flows
 from flows import Flow
 
-H3S = ['Media platform (global)', 'Feed & member walls', 'Community forum',
-       'Inbox (direct messages)', 'Voice calls', 'The Mere Catholicity Journal']
+H3S = ['Social (Feed & member walls)', 'Media platform (global)',
+       'Feed & member walls', 'Community forum', 'Inbox (direct messages)',
+       'Voice calls', 'The Mere Catholicity Journal']
+SOCIAL_LABEL = 'The Feed and member walls are on'
 PURGES = ['Purge all feed & wall media now', 'Purge all forum attachments now',
           'Purge all DM attachments now']
 
@@ -32,11 +36,20 @@ def client_version():
     return int(m.group(1)) if m else 0
 
 
+def config_social_enabled():
+    """What the server says right now — the page must agree with it."""
+    req = urllib.request.Request(flows.BASE + '/api/comments/config',
+                                 headers={'User-Agent': 'curl/8.14.1'})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        d = json.loads(r.read().decode('utf-8', 'replace'))
+    return bool(((d.get('social') or {}).get('enabled', True)))
+
+
 def main():
     v = client_version()
-    if v < 205:
+    if v < 389044044:
         print('SKIP  test_settings_page — new client not deployed yet '
-              '(prod serves comments.js?v=%d, needs v=205)' % v)
+              '(prod serves comments.js?v=%d, needs v=389044044)' % v)
         sys.exit(0)
     checks = []
     with Flow(port=9604) as f:
@@ -44,7 +57,7 @@ def main():
         f.goto('community.html')
         f.wait("!!(window.mcKit && window.mcKit.isAdmin && window.mcKit.isAdmin())", timeout=20)
         f.goto('community.html?settings=1')
-        f.wait("document.querySelectorAll('.admin-settings h3').length >= 6", timeout=25)
+        f.wait("document.querySelectorAll('.admin-settings h3').length >= 7", timeout=25)
         r = json.loads(f.js1("""
           var w = document.querySelector('.admin-settings');
           var h3s = [].map.call(w.querySelectorAll('h3'), function(h){ return h.textContent; });
@@ -65,9 +78,16 @@ def main():
                                     function(t){ return t.textContent; });
           var save = [].some.call(w.querySelectorAll('button'),
                                   function(b){ return b.textContent === 'Save settings'; });
+          /* The social kill switch: its own row, enabled (not the DM scan box),
+             and reflecting the LIVE state rather than a hardcoded tick. */
+          var soc = [].filter.call(w.querySelectorAll('.admin-set-row'), function(row){
+            return (row.textContent||'').indexOf('%s') !== -1; })[0];
+          var socCb = soc && soc.querySelector('input[type=checkbox]');
           return JSON.stringify({h3s: h3s, disN: dis.length,
             disUnchecked: dis.length === 1 ? !dis[0].checked : false,
-            note: note, budgets: budgets, dangers: dangers, save: save});"""))
+            note: note, budgets: budgets, dangers: dangers, save: save,
+            soc: !!socCb, socOn: !!(socCb && socCb.checked),
+            socEnabled: !!(socCb && !socCb.disabled)});""" % SOCIAL_LABEL))
         checks.append(('panel h3 order: ' + ' / '.join(r['h3s']), r['h3s'] == H3S))
         checks.append(('exactly one disabled checkbox (the DM AI-scan box), unchecked',
                        r['disN'] == 1 and r['disUnchecked']))
@@ -77,6 +97,12 @@ def main():
         checks.append(('all three purge danger boxes present',
                        all(p in r['dangers'] for p in PURGES)))
         checks.append(('Save settings button present', r['save']))
+        checks.append(('the social kill switch has its own live, operable checkbox',
+                       r['soc'] and r['socEnabled']))
+        # Its STATE is whatever the owner has set — assert only that the page
+        # agrees with the server, never that it is on.
+        checks.append(('the switch matches /config social.enabled (%s)' % r['socOn'],
+                       r['socOn'] == config_social_enabled()))
         checks.append(('console clean', f.assert_console_clean('settings-page')))
         fails = list(f.failures)
     for x in fails:

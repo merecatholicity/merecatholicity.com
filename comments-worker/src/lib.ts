@@ -886,6 +886,15 @@ export const APP_SETTING_DEFAULTS = {
   dm_default_ttl: String(Dm.defaultTtl),        // 30 days (single-sourced from Domain.Dm)
   dm_backstop_days: '30',                       // unopened-message backstop
   dm_media_bytes: '0',                          // sweep-maintained total, display-only
+  /* The social layer's global kill switch (Domain.Wall.enabledFrom is the rule,
+     so client and worker read the same polarity). '0' makes the Feed and every
+     member wall answer as though they never existed — for everyone, admins
+     included — while not one row is deleted: flip it back and the whole stream
+     returns exactly as it was. Deliberately NOT gated by it: /wall/delete (an
+     author must still be able to retract), the shared GET /wall/media (it serves
+     forum attachments too), the admin pending/approve queue, and the storage
+     sweeps. */
+  social_enabled: '1',
   wall_prune_enabled: '0',                      // public posts persist forever until this is turned on
   wall_prune_days: '365',                       // retention when pruning is enabled
   discord_forum_webhook: '',                    // optional Discord webhook for new forum posts (empty = off)
@@ -1008,6 +1017,10 @@ export function mediaVoiceEnabled(s: any, ctx: string) {
   const k = psOrNull(Media.sectionVoiceKey(String(ctx || '')));
   return k ? s[k] !== '0' : false;
 }
+/* The social layer's on/off state, read through the kernel so the '1'/'0'
+   polarity lives in exactly one place (Domain.Wall). Every /wall* gate and the
+   /config block below go through this — never a bare string compare. */
+export function socialEnabled(s: any) { return Wall.enabledFrom(String(s.social_enabled)); }
 /* The voice-note length limit for a section: per-section override, else the
    legacy global, else the kernel default. Client-advisory, like the global. */
 export function mediaAudioSeconds(s: any, ctx?: string) {
