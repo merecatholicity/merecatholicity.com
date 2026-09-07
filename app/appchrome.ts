@@ -350,7 +350,7 @@ class McAppbar extends LitElement {
     this.notif = badgeCount('notif');
     this.title = pageTitle();             // the current page/view title, shown centered
   }
-  goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
+  goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else if (window.mcNav) window.mcNav('index.html'); else { location.href = 'index.html'; } }
   goFwd(e: Event) { e.preventDefault(); history.forward(); }
   settings(e: Event) { e.preventDefault(); if (window.mcSheet) window.mcSheet.settings!(); }
   notifs(e: Event) { e.preventDefault(); if (window.mcSheet) window.mcSheet.open('', document.createElement('mc-notifs')); }
@@ -900,6 +900,9 @@ class McSettings extends LitElement {
         localStorage.removeItem('mc-notif-unread');
         localStorage.removeItem('mc-admin');
       } catch (e) { /* blocked */ }
+      /* Deliberately a FULL load: the identity everything on this page was
+         built around is gone, and only a fresh document is certain to leave
+         nothing keyed to it standing. */
       location.href = 'index.html';
     });
   }
@@ -1159,7 +1162,7 @@ class McDeskbar extends LitElement {
   }
   toggleMenu(e: Event) { e.preventDefault(); e.stopPropagation(); this.menu = !this.menu; this.notifMenu = false; }
   toggleNotif(e: Event) { e.preventDefault(); e.stopPropagation(); this.notifMenu = !this.notifMenu; this.menu = false; }
-  goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else { location.href = 'index.html'; } }
+  goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else if (window.mcNav) window.mcNav('index.html'); else { location.href = 'index.html'; } }
   goFwd(e: Event) { e.preventDefault(); history.forward(); }
   render() {
     const badge = (n: number) => n ? html`<span class="mc-tab-badge">${badgeText(n)}</span>` : '';

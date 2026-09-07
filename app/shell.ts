@@ -825,6 +825,31 @@ customElements.define('mc-audio-dock', McAudioDock);
     softNav(url, true);
   });
 
+  /* The one programmatic door into soft navigation. Code that moves the app
+     itself — after a post lands, when a conversation is opened, when a search
+     is submitted — calls this. A raw `location.href` assignment is a FULL
+     DOCUMENT LOAD: on a phone that is a white flash, a lost scroll position,
+     a dropped live socket and a re-run of every boot, which is exactly what
+     readers reported as "it reloaded the whole page when I opened my
+     messages". Anything this cannot carry (cross-origin, a file, the away
+     interstitial) falls through to the ordinary load, so a caller never has
+     to know which kind of link it is holding. */
+  window.mcNav = function (href, replace) {
+    var url;
+    try { url = new URL(String(href), location.href); } catch (e) { location.href = String(href); return; }
+    if (!sameOrigin(url) || !pageish(url) || document.querySelector('.away')) { location.href = url.href; return; }
+    if (url.pathname === location.pathname && url.search === location.search) {
+      /* The same view: at most the hash moved. Tearing the page down and
+         rebuilding it would lose exactly what the caller wants to show. */
+      if (url.hash && url.hash !== location.hash) location.hash = url.hash;
+      return;
+    }
+    if (replace) {
+      try { history.replaceState({ mcApp: true }, '', url.pathname + url.search + url.hash); } catch (e) { /* ignore */ }
+    }
+    softNav(url, !replace);
+  };
+
   window.addEventListener('popstate', function () {
     /* back/forward through ANCHOR history stays a scroll, never a swap —
        a changed pathname OR search re-enters the soft path (the board's

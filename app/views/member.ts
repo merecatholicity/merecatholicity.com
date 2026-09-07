@@ -159,14 +159,21 @@ class McNotifications extends LitElement {
         const isWall = it.kind === 'wall';
         const isLike = it.kind === 'wall-like';
         const isCat = it.kind === 'merecat';
+        /* A missed call is a notification like any other, and the wall rows
+           point at the feed's own page — this branch had drifted from the
+           classic renderer's, so a call read as "replied in a thread" and a
+           wall row took the retired community.html?post= road, which the
+           router then bounced with a second full document load. */
+        const isCall = it.kind === 'call';
         const label = isDm ? (who + ' sent you a message')
-          : isCat ? 'merecat finished answering your question'
-            : isLike ? (who + ' liked your post')
-              : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-                : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
-        const to = isDm ? ('messages.html?dm=' + it.actor_hash)
+          : isCall ? ('\u{1F4DE} ' + who + ' called you')
+            : isCat ? 'merecat finished answering your question'
+              : isLike ? (who + ' liked your post')
+                : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
+                  : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+        const to = (isDm || isCall) ? ('messages.html?dm=' + it.actor_hash)
           : isCat ? ('merecat-ai.html?chat=' + it.topic_id)
-            : (isWall || isLike) ? ('community.html?post=' + it.comment_id)
+            : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
               : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
         return html`<div class="board-topic"><div class="board-topic-left">
           <a class=${'board-topic-title' + (it.read_at ? '' : ' dm-unread')} href=${to}>${label}</a>${it.read_at ? nothing : html`<span class="dm-unread"> ● new</span>`}

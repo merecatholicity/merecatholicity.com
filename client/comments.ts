@@ -3822,6 +3822,10 @@
     state.myHash = '';
     try { localStorage.removeItem(DM_CACHE); } catch (e) {}
     try { localStorage.removeItem(NOTIF_CACHE); } catch (e) {}
+    /* Deliberately a FULL load, not go(): the identity this page was built
+       around has just been revoked, and a fresh document is the only way to
+       be sure nothing keyed to it survives — an open live socket, a cached
+       view, a half-rendered composer. Everywhere else the hop is soft. */
     location.href = 'terms.html';
     return true;
   }
@@ -4208,6 +4212,17 @@ trace('submit: page comment');
      say WHY, which is the only part that matters when a submit disappears. */
   function trace(why: string) {
     try { if (window.mcCrumb) window.mcCrumb(why); } catch (e) { /* diagnosis only */ }
+  }
+
+  /* Every hop the app makes for the reader. A bare `location.href` is a full
+     document load — the white flash, the lost scroll, the torn-down live
+     socket — and the app took that road after posting, from the member
+     picker, from the profile's Direct Message button and half a dozen other
+     places. The shell's soft navigation is the road; without the shell
+     (no bundle) the ordinary load is still correct. */
+  function go(href: string, replace?: boolean) {
+    if (window.mcNav) { window.mcNav(href, replace); return; }
+    if (replace) location.replace(href); else location.href = href;
   }
 
   function busy(el: any, p: Promise<any>) {
@@ -4765,7 +4780,7 @@ trace('submit: board post');
           ta.value = '';
           if (ta.mcPreview) ta.mcPreview.off();
         } else {
-          trace('new topic posted -> topic'); location.href = 'community.html?topic=' + d.comment.id;
+          trace('new topic posted -> topic'); go('community.html?topic=' + d.comment.id);
         }
       });
     });
@@ -4976,7 +4991,7 @@ trace('submit: board post');
               status.textContent = 'Posted.';
               node.scrollIntoView();
             } else {
-              location.href = 'community.html?topic=' + id + '&p=' + replyPage + '#comment-' + d2.comment.id;
+              go('community.html?topic=' + id + '&p=' + replyPage + '#comment-' + d2.comment.id);
             }
           });
         });
@@ -5219,7 +5234,7 @@ trace('submit: board post');
                   .then(function (x) { return x.json(); })
                   /* Removing yourself ends your access, so leave for the board as a
                      plain member rather than reload a list you can no longer see. */
-                  .then(function (x) { if (x.ok) { if (mine) { location.href = 'community.html'; } else { load(); } } else { addNote.textContent = x.error || 'Could not remove.'; } })
+                  .then(function (x) { if (x.ok) { if (mine) { go('community.html'); } else { load(); } } else { addNote.textContent = x.error || 'Could not remove.'; } })
                   .catch(function () { addNote.textContent = 'Network error. Try again.'; });
               });
             });
@@ -6106,7 +6121,7 @@ trace('submit: board post');
         var dmBtn = el('button', 'btn btn-send', 'Send a Direct Message');
         dmBtn.type = 'button';
         dmBtn.addEventListener('click', function () {
-          location.href = 'messages.html?dm=' + p.hash;
+          go('messages.html?dm=' + p.hash);
         });
         card.appendChild(dmBtn);
         var blockBtn = el('button', 'btn btn-anon', 'Block this member');
@@ -6488,7 +6503,7 @@ trace('submit: board post');
         r.appendChild(el('span', 'dm-suggest-go', 'message →'));
         r.addEventListener('mousedown', function (e: any) {
           e.preventDefault();
-          location.href = 'messages.html?dm=' + u.hash;
+          go('messages.html?dm=' + u.hash);
         });
         sug.appendChild(r);
       });
@@ -6523,7 +6538,7 @@ trace('submit: board post');
       else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); renderSug(); }
       else if (e.key === 'Enter') {
         e.preventDefault();
-        if (current[sel]) location.href = 'messages.html?dm=' + current[sel].hash;
+        if (current[sel]) go('messages.html?dm=' + current[sel].hash);
       } else if (e.key === 'Escape') { current = []; renderSug(); }
     });
     input.addEventListener('blur', function () {
@@ -7281,7 +7296,7 @@ trace('submit: board post');
       node.addEventListener('click', function (e: any) {
         if (e.target.closest('a, button, video, audio, input, textarea, label, .wall-comments, .wall-media, .wall-actions')) return;
         if (window.getSelection && String(window.getSelection())) return;
-        location.href = 'feed.html?post=' + p.id;
+        go('feed.html?post=' + p.id);
       });
     }
     var head = el('div', 'comment-head');
@@ -8189,7 +8204,7 @@ trace('submit: feed post');
               status.textContent = 'Sent.';
               node.scrollIntoView();
             } else {
-              location.href = 'messages.html?dm=' + other + '&p=' + msgPage;
+              go('messages.html?dm=' + other + '&p=' + msgPage);
             }
           }).catch(function (err) {
             status.textContent = err.message || 'Network error. Try again in a moment.';
@@ -8216,7 +8231,7 @@ trace('submit: feed post');
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ key: state.key, with: other }),
             }).then(function (r) { return r.json(); }).then(function (d3) {
-              if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} location.href = 'messages.html'; }
+              if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} go('messages.html'); }
             }).catch(function () {});
           });
         }));
@@ -8319,7 +8334,7 @@ trace('submit: feed post');
     form.appendChild(row);
     form.addEventListener('submit', function (e: any) {
       e.preventDefault();
-      location.href = 'community.html?q=' + encodeURIComponent(input.value.trim());
+      go('community.html?q=' + encodeURIComponent(input.value.trim()));
     });
     return form;
   }
@@ -8392,7 +8407,7 @@ trace('submit: feed post');
       if (catSel.value) u += '&cat=' + catSel.value;
       if (authorPicker.hash()) u += '&author=' + authorPicker.hash();
       if (sortSel.value) u += '&sort=' + sortSel.value;
-      location.href = u;
+      go(u);
     });
 
     var count = el('p', 'comments-status', '');
@@ -8732,7 +8747,7 @@ trace('submit: feed post');
               if (dd.ok) {
                 chats = chats.filter(function (x: any) { return x !== c; });
                 renderChats();
-                if (c.id === chatId) location.href = 'merecat-ai.html';
+                if (c.id === chatId) go('merecat-ai.html');
               } else {
                 actSay('Could not delete: ' + (dd.error || 'try again in a moment.'));
               }
@@ -10664,13 +10679,13 @@ trace('submit: feed post');
     btn.type = 'button';
     btn.addEventListener('click', function () {
       if (window.mcOnboard) window.mcOnboard();
-      else location.href = 'community.html';
+      else go('community.html');
     });
     wrap.appendChild(btn);
     var have = el('p', 'mc-join-havekey');
     have.appendChild(identityAction('I already have a key', function () {
       if (window.mcOnboard) window.mcOnboard(null, { key: true });
-      else location.href = 'community.html';
+      else go('community.html');
     }));
     wrap.appendChild(have);
     section.appendChild(wrap);
@@ -10888,11 +10903,11 @@ trace('submit: feed post');
        community.html?admin=1 links still resolve to the hub too.) */
     if (page === 'admin.html' && r.tag === 'Index') r = { tag: 'AdminHome' };
     switch (r.tag) {
-      case 'Dm': location.replace('messages.html?dm=' + encodeURIComponent(r.s) + location.hash); return;
-      case 'Inbox': location.replace('messages.html'); return;
-      case 'Me': location.replace('profile.html'); return;
-      case 'Profile': location.replace('profile.html?u=' + encodeURIComponent(r.s)); return;
-      case 'Merecat': location.replace('merecat-ai.html' + (params.get('chat') ? '?chat=' + encodeURIComponent(params.get('chat') as string) : '')); return;
+      case 'Dm': go('messages.html?dm=' + encodeURIComponent(r.s) + location.hash, true); return;
+      case 'Inbox': go('messages.html', true); return;
+      case 'Me': go('profile.html', true); return;
+      case 'Profile': go('profile.html?u=' + encodeURIComponent(r.s), true); return;
+      case 'Merecat': go('merecat-ai.html' + (params.get('chat') ? '?chat=' + encodeURIComponent(params.get('chat') as string) : ''), true); return;
       case 'IpBans': return viewIpBans();
       case 'Settings': return viewPlatformSettings();
       case 'Admins': return viewAdmins();
@@ -10907,8 +10922,8 @@ trace('submit: feed post');
       case 'Users': return viewUsers();
       case 'Search': return viewSearch();
       case 'Audit': return viewAudit();
-      case 'Feed': location.replace('feed.html' + location.hash); return;
-      case 'Post': location.replace('feed.html?post=' + encodeURIComponent(r.s) + location.hash); return;
+      case 'Feed': go('feed.html' + location.hash, true); return;
+      case 'Post': go('feed.html?post=' + encodeURIComponent(r.s) + location.hash, true); return;
       case 'Topic': return viewTopic(r.n);
       case 'Cat': return viewCat(r.s);
       default: return viewIndex();

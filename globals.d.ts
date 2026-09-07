@@ -96,6 +96,11 @@ declare global {
     mcGetLight?: () => string;
     mcSetLight?: (p: string) => void;
     mcDeeplink?: { run: () => void; reveal: () => void };
+    /* The shell's programmatic soft navigation. Any in-app hop written in
+       code (after posting, opening a conversation, submitting a search) must
+       go through this, not `location.href` — a raw assignment is a full
+       document load: the white flash, the lost scroll, the dropped socket. */
+    mcNav?: (href: string, replace?: boolean) => void;
     /* nav.js's persistent breadcrumb ring: it survives the very reload it
        exists to explain, so anything that unloads or replaces the page
        should name itself here first. */

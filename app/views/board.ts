@@ -9,7 +9,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import { pagerTpl, retryTpl, skelTpl } from './util.ts';
+import { pagerTpl, retryTpl, skelTpl, goto } from './util.ts';
 import * as Core from '../core.ts';
 
 /* The six confessional "in-house talk for [tradition]" rooms, grouped apart from
@@ -342,7 +342,7 @@ class McBoardCat extends LitElement {
           ta.value = '';
           if (ta.mcPreview) ta.mcPreview.off();
         } else {
-          location.href = 'community.html?topic=' + d.comment.id;
+          goto('community.html?topic=' + d.comment.id);
         }
       });
     });

@@ -67,7 +67,7 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
        The librarian holds no inbox: its posts carry no DM link. */
     if (Core.canInteract(c.author_hash, kit.state.myHash, kit.MERECAT_BOT_HASH)) {
       var dm = el('a', 'comment-dm', 'Direct Message') as HTMLAnchorElement;
-      dm.href = 'community.html?dm=' + c.author_hash;
+      dm.href = 'messages.html?dm=' + c.author_hash;
       dm.title = 'Send a direct message';
       items.push(dm);
       /* Block, the one member control (2026-08-03): their posts vanish for

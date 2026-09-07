@@ -11,7 +11,7 @@
    knocks once and the server judges. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl, goto } from './util.ts';
 import * as Core from '../core.ts';
 
 class McTopic extends LitElement {
@@ -221,7 +221,7 @@ class McTopic extends LitElement {
           status.textContent = 'Posted.';
           node.scrollIntoView();
         } else {
-          location.href = 'community.html?topic=' + id + '&p=' + replyPage + '#comment-' + d2.comment.id;
+          goto('community.html?topic=' + id + '&p=' + replyPage + '#comment-' + d2.comment.id);
         }
       });
     });
@@ -335,7 +335,7 @@ class McSearch extends LitElement {
       if ((form.querySelector('.mc-cat') as HTMLSelectElement).value) u += '&cat=' + (form.querySelector('.mc-cat') as HTMLSelectElement).value;
       if (picker.hash()) u += '&author=' + picker.hash();
       if ((form.querySelector('.mc-sort') as HTMLSelectElement).value) u += '&sort=' + (form.querySelector('.mc-sort') as HTMLSelectElement).value;
-      location.href = u;
+      goto(u);
     });
   }
   mountSnippets() {

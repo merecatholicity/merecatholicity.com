@@ -54,3 +54,14 @@ export function skelTpl(kind?: 'card' | 'short' | 'list'): TemplateResult {
   return html`<div class=${'mc-load' + (kind === 'short' ? ' mc-load-sm' : '')}
     role="status" aria-label="Loading"></div>`;
 }
+
+/* Where a view sends the reader after it has acted — a topic just posted, a
+   reply that landed on a later page, a search submitted. It must be the
+   shell's soft navigation: `location.href` is a full document load, which
+   costs a white flash, the scroll position, and the live socket, and readers
+   reported exactly that after pressing Post. The plain load stays as the
+   fallback for a page the shell will not carry. */
+export function goto(href: string): void {
+  if (window.mcNav) { window.mcNav(href); return; }
+  location.href = href;
+}
