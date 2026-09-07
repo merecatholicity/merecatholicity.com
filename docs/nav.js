@@ -269,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=2776279896';
+    s.src = 'app.js?v=3013389073';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }
@@ -467,8 +467,17 @@ document.addEventListener('DOMContentLoaded', function () {
   var errs = [];
   var painting = false;
   var dismissed = false;
+  /* Two ways in. ?debug=1 is the one-shot: what you tell someone to type once
+     so a report arrives with a screenshot. mc-debug is the STICKY one, set by
+     the Settings switch — an installed app has no address bar to type a query
+     into, and asking anyone to remember a URL every time is a poor tool. The
+     flag is per-device and set only by the person who flips it, so leaving it
+     on affects nobody else. */
   var forced = false;
-  try { forced = /[?&]debug=1\b/.test(location.search); } catch (e) { forced = false; }
+  try {
+    forced = /[?&]debug=1\b/.test(location.search) ||
+      localStorage.getItem('mc-debug') === '1';
+  } catch (e) { forced = false; }
   function standaloneMode() {
     try {
       return navigator.standalone === true ||

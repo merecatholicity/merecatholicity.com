@@ -506,7 +506,7 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false } };
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false }, debugOn: { attribute: false } };
   declare keyShown: boolean;
   declare theme: string;
   declare art: boolean;
@@ -515,6 +515,7 @@ class McSettings extends LitElement {
   declare light: string;
   declare presence: string;
   declare sounds: boolean;
+  declare debugOn: boolean;
   declare prefs: any;
   declare panel: string;
   declare blocked: Array<{ hash: string; nick?: string; assigned?: string }> | null;
@@ -528,6 +529,7 @@ class McSettings extends LitElement {
     this.keyShown = false; this.theme = this._theme(); this.art = artOn(); this.copied = false;
     this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal';
     this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence(); this.sounds = this._sounds();
+    try { this.debugOn = localStorage.getItem('mc-debug') === '1'; } catch (e) { this.debugOn = false; }
     this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null;
     this.canInstall = !!(window.mcInstall && window.mcInstall.evt);
     this.pushOn = null; this.pushBusy = false; this.pushMsg = '';   // null = state not yet reflected
@@ -827,6 +829,27 @@ class McSettings extends LitElement {
      The service worker is deliberately NOT unregistered: emptying its caches is
      what fixes stale code, and nav.js re-registers and re-primes on the next
      load anyway. Unregistering would only cost the reader their offline shell. */
+  /* The diagnostic overlay, as a switch rather than a URL you have to remember.
+     Deliberately offered to everyone: when a member reports something odd,
+     "turn this on and send me a screenshot" is a far better instruction than
+     asking them to edit an address bar — and an installed app has no address
+     bar at all. It changes nothing for anyone who leaves it off. */
+  toggleDebug() {
+    const on = !this.debugOn;
+    try {
+      if (on) localStorage.setItem('mc-debug', '1');
+      else localStorage.removeItem('mc-debug');
+    } catch (e) { /* blocked storage: nothing to remember */ }
+    this.debugOn = on;
+    /* nav.js reads the flag at load, so the panel appears or goes on the next
+       page. Say so rather than leaving a switch that looks inert. */
+    try {
+      if (window.mcToast) window.mcToast(on ? 'Debug overlay on — it appears on the next page.'
+        : 'Debug overlay off.');
+    } catch (e) { /* toast is a courtesy */ }
+    if (!on) { try { const el = document.getElementById('mc-debug'); if (el) el.remove(); } catch (e) { /* gone */ } }
+  }
+
   async clearCache() {
     const ok = await mcConfirm(
       'Clear this app\u2019s cached data and reload? Your key, your drafts, and your settings are kept.',
@@ -1030,6 +1053,9 @@ class McSettings extends LitElement {
       ${link('admin.html', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
 
       <h3 class="mc-set-sec">Troubleshooting</h3>
+      ${this._switch('Debug overlay',
+        'Shows what this device is actually running — bundle versions, service worker, recent errors. Only on this device.',
+        this.debugOn, () => this.toggleDebug())}
       <button class="mc-set-row mc-set-btn" @click=${() => this.clearCache()}>
         <span>Clear app cache<small>If the app is behaving oddly or looks out of date. Your key, drafts and settings are kept.</small></span>
         <span class="mc-set-go">›</span></button>

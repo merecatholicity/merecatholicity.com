@@ -705,7 +705,7 @@
       section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
       return true;
     }
-    section.appendChild(el('p', 'comments-status', 'Loading...'));
+    section.appendChild(skeleton());
     if (rerender) profileWaiters.push(function () { section.textContent = ''; rerender(); });
     return true;
   }
@@ -1069,7 +1069,7 @@
     node.appendChild(head);
     var bodyEl = el('div', 'comment-body dm-media-body');
     var holder = el('div', 'dm-media');
-    holder.appendChild(el('p', 'dm-media-status', 'Loading ' + ((envInfo && envInfo.name) || 'media') + '…'));
+    holder.appendChild(loadingLine('Loading ' + ((envInfo && envInfo.name) || 'media') + '…', 'dm-media-status'));
     bodyEl.appendChild(holder);
     if (envInfo && envInfo.caption) bodyEl.appendChild(fillBody(el('div', 'dm-media-caption'), envInfo.caption));
     node.appendChild(bodyEl);
@@ -2243,7 +2243,7 @@
     row.appendChild(chapSel); row.appendChild(el('span', 'scripture-colon', ':'));
     row.appendChild(v1Sel); row.appendChild(dash); row.appendChild(v2Sel);
     panel.appendChild(row);
-    var status = el('div', 'scripture-status', 'Loading the King James text…');
+    var status = loadingLine('Loading the King James text…', 'scripture-status');
     panel.appendChild(status);
     var preview = el('blockquote', 'scripture-preview'); preview.hidden = true;
     panel.appendChild(preview);
@@ -2432,7 +2432,7 @@
     function mark() { if (packs) packs.forEach(function (p: any) { tabBtns[p.slug].className = 'emoji-tab' + (p.slug === active ? ' emoji-tab-on' : ''); }); }
     function draw() {
       body.textContent = '';
-      if (!packs) { body.appendChild(el('p', 'emoji-empty', 'Loading gallery...')); return; }
+      if (!packs) { body.appendChild(skeleton('short')); return; }
       var q = search.value.trim().toLowerCase();
       if (q) {
         var res: any[] = [];
@@ -4002,6 +4002,17 @@
 
   /* Clear a container and stand a skeleton in it — the `node.textContent =
      'Loading…'` sites, which is how most of this file announced a wait. */
+  /* Where the words carry information a bare ring cannot — which text is being
+     fetched, which file is downloading — keep them and put the spinner beside
+     them rather than replacing them with a shape that says less. */
+  function loadingLine(text: string, cls?: string) {
+    var p = el('p', cls || 'comments-status');
+    p.appendChild(el('span', 'mc-load-in'));
+    p.appendChild(document.createTextNode(text));
+    p.setAttribute('role', 'status');
+    return p;
+  }
+
   function skelInto(node: any, kind?: string) {
     node.textContent = '';
     node.appendChild(skeleton(kind));
@@ -5466,7 +5477,7 @@
     var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
     var wrap = el('div', 'journal');
     section.appendChild(wrap);
-    wrap.appendChild(el('p', 'comments-status', 'Loading the journal…'));
+    wrap.appendChild(skeleton());
     fetchRetry(API + '/journal?p=' + pageNum, {}, [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -6621,7 +6632,7 @@
   function showLikers(anchor: any, params: any) {
     closePop();
     var pop = el('div', 'wall-pop wall-likers-pop');
-    pop.appendChild(el('div', 'wall-pop-load', 'Loading…'));
+    pop.appendChild(skeleton('short'));
     document.body.appendChild(pop); mcPop = pop;
     placePop(pop, anchor);
     setTimeout(function () { document.addEventListener('click', popOutside, true); window.addEventListener('scroll', closePop, true); }, 0);
@@ -6757,7 +6768,7 @@
     var loaded = false;
     function load() {
       if (loaded) return; loaded = true;
-      list.appendChild(el('p', 'comments-status', 'Loading…'));
+      list.appendChild(skeleton('short'));
       fetch(API + '/wall/post/get', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key || '', id: post.id }) })
         .then(function (r) { return r.json(); }).then(function (d) {
           list.textContent = '';
@@ -7340,7 +7351,7 @@
     document.title = 'Post | Community';
     crumb([['Community', 'community.html'], ['Feed', 'feed.html'], ['Post']]);
     var holder = el('div', 'wall-list'); section.appendChild(holder);
-    holder.appendChild(el('p', 'comments-status', 'Loading…'));
+    holder.appendChild(skeleton());
     fetch(API + '/wall/post/get', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key || '', id: id }) })
       .then(function (r) { return r.json(); })
@@ -8388,7 +8399,10 @@
        true even on failure, making "Reopen to retry" a lie that only a full
        page reload could undo. */
     function loadList(attempt: any) {
-      pastBody.textContent = attempt ? 'The desk is busy for a moment — retrying…' : 'Loading…';
+      pastBody.textContent = '';
+      pastBody.appendChild(attempt
+        ? loadingLine('The desk is busy for a moment — retrying…')
+        : skeleton('short'));
       fetchRetry(MERECAT_API + '/chats', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: state.key }),
@@ -8904,7 +8918,7 @@
         var mySeq = ++seq;
         if (!append) {
           listBox.textContent = '';
-          listBox.appendChild(el('div', 'mc-fwd-empty', 'Loading\u2026'));
+          listBox.appendChild(skeleton('short'));
         }
         fetchTopics(q, p).then(function (d) {
           if (mySeq !== seq) return;

@@ -2829,3 +2829,19 @@ section.comments.board:empty::after {
    app/ptr.ts trustworthy. (iOS standalone has no native pull, so ours is the
    only one there either way.) */
 html, body { overscroll-behavior-y: contain; }
+
+/* The inline variant: a small spinner that sits BESIDE words, for the waits
+   where the words carry information a bare ring cannot ("Loading the King James
+   text…", "Loading <filename>…"). Same ring, sized to the line. */
+.mc-load-in {
+  display: inline-block; vertical-align: -2px; margin-right: 0.5em;
+  width: 0.9em; height: 0.9em;
+  border: 2px solid color-mix(in srgb, var(--rule) 70%, transparent);
+  border-top-color: var(--maroon);
+  border-radius: 50%;
+  animation: mc-load-spin .7s linear infinite, mc-load-in-fade .18s ease both;
+}
+@keyframes mc-load-in-fade { from { opacity: 0; } to { opacity: 1; } }
+/* A smaller reserve of space for panels and popovers, where a full-page-height
+   placeholder would push the panel around. */
+.mc-load-sm { min-height: 4.5rem; }
