@@ -812,6 +812,52 @@ class McSettings extends LitElement {
       if (navigator.clipboard) { navigator.clipboard.writeText(k); this.copied = true; setTimeout(() => { this.copied = false; }, 1500); }
     } catch (e) { /* no clipboard */ }
   }
+  /* "Clear app cache" — the escape hatch for "the app is acting oddly", which
+     on a service-worker app almost always means it is serving something stale.
+     Clears the caches and the derived scraps, then reloads onto fresh bytes.
+
+     THE RULE HERE IS FAIL-SAFE: this KEEPS anything it is not certain is
+     disposable. The identity key is unrecoverable — losing it loses the account
+     outright — and unsent drafts are the reader's own writing, so both are
+     untouchable, as are preferences and reading positions. A future cache-ish
+     key is therefore NOT cleared until someone adds it to CLEARABLE
+     deliberately; the cost of forgetting is a stale scrap, the cost of guessing
+     wrong is somebody's account.
+
+     The service worker is deliberately NOT unregistered: emptying its caches is
+     what fixes stale code, and nav.js re-registers and re-primes on the next
+     load anyway. Unregistering would only cost the reader their offline shell. */
+  async clearCache() {
+    const ok = await mcConfirm(
+      'Clear this app\u2019s cached data and reload? Your key, your drafts, and your settings are kept.',
+      { okLabel: 'Clear and reload' });
+    if (!ok) return;
+    /* Exact keys, and prefixes for the families. Everything else survives. */
+    const CLEARABLE = ['mc-dm-unread', 'mc-notif-unread', 'mc-admin', 'mc-social',
+      'mc-presence', 'mc-flash', 'mc-posted-at', 'mc-merecat-prefill'];
+    const CLEARABLE_PREFIX = ['mc-altip-fail:'];
+    try {
+      const doomed: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        if (CLEARABLE.indexOf(k) !== -1 || CLEARABLE_PREFIX.some((pre) => k.indexOf(pre) === 0)) doomed.push(k);
+      }
+      doomed.forEach((k) => localStorage.removeItem(k));
+    } catch (e) { /* blocked storage: nothing to clear */ }
+    try { sessionStorage.clear(); } catch (e) { /* per-tab only, always safe */ }
+    try { if (window.mcStore) window.mcStore.invalidate(); } catch (e) { /* ignore */ }
+    /* The one that actually matters: the service worker's caches, where a stale
+       shell or a stale page skeleton lives. */
+    try {
+      if (window.caches && caches.keys) {
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      }
+    } catch (e) { /* no Cache Storage (private mode): the reload still helps */ }
+    location.reload();
+  }
+
   logout() {
     mcConfirm('Log out of this identity? Keep your key saved so you can log back in.',
       { okLabel: 'Log out', danger: true }).then(async (ok) => {
@@ -979,6 +1025,11 @@ class McSettings extends LitElement {
 
       ${isAdmin() ? html`<h3 class="mc-set-sec">Administration</h3>
       ${link('admin.html', 'Administrative options', 'Moderation, platform settings, audit')}` : ''}
+
+      <h3 class="mc-set-sec">Troubleshooting</h3>
+      <button class="mc-set-row mc-set-btn" @click=${() => this.clearCache()}>
+        <span>Clear app cache<small>If the app is behaving oddly or looks out of date. Your key, drafts and settings are kept.</small></span>
+        <span class="mc-set-go">›</span></button>
     </div>`;
   }
 }
