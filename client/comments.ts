@@ -1816,6 +1816,11 @@
           if (state.tokenWait) { state.tokenWait.resolve(token); state.tokenWait = null; }
         },
         'error-callback': function () {
+          /* Crumb it here, not only on the tokenWait path: a refusal that
+             happens while WARMING has no waiter to reject, so it used to leave
+             no trace whatsoever — and "no token and no reason" is the hardest
+             possible thing to diagnose from a phone. */
+          trace('turnstile: challenge refused');
           warmTok = null;
           if (state.tokenWait) { state.tokenWait.reject(new Error('challenge failed')); state.tokenWait = null; }
           return true;
@@ -1958,8 +1963,17 @@
           if (settled) return;
           settled = true;
           state.tokenWait = null;
-          trace('turnstile: token timed out');
-          reject(new Error('Verification is taking a moment. Give it a few seconds and press the button again.'));
+          /* interaction-only means the widget stays invisible UNLESS a human
+             check is wanted — in which case it becomes a visible checkbox and
+             waits. Telling that reader to "try again" would be useless advice
+             about a control sitting right in front of them, so look at the slot
+             and say the true thing. */
+          var slot: any = section.querySelector('.ts-slot');
+          var showing = !!(slot && slot.getBoundingClientRect().height > 12);
+          trace('turnstile: token timed out' + (showing ? ' (awaiting interaction)' : ''));
+          reject(new Error(showing
+            ? 'Please complete the verification just above the button, then press it again.'
+            : 'Verification is taking a moment. Give it a few seconds and press the button again.'));
         }, MAX);
         state.tokenWait = {
           resolve: function (v: any) {
