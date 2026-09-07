@@ -1790,18 +1790,37 @@
     if (!slot) return;
     if (state.widgetId !== null && slot.querySelector('iframe')) return;
     try {
+      /* execution:'execute' is GONE, and that is the whole point (2026-09-08).
+         With it, the challenge only ran when turnstile.execute() was called —
+         and in the installed iOS app that call took the page down: the document
+         was replaced with no pagehide, no error, and no token, which is a web
+         view being killed rather than anything navigating. Warming it earlier
+         only moved the crash to a nicer moment; it still flashed white while
+         the reader was typing.
+
+         Default execution ('render') runs the challenge as the widget MOUNTS,
+         through the ordinary embedded path rather than an on-demand
+         interstitial, and hands the token to `callback`. Nothing ever calls
+         execute() now.
+
+         appearance:'interaction-only' stays: the widget shows nothing unless a
+         human check is genuinely needed, so composers look exactly as before. */
       state.widgetId = turnstile.render(slot, {
         sitekey: SITEKEY,
-        execution: 'execute',
         appearance: 'interaction-only',
         callback: function (token: any) {
+          /* Tokens are single-use, so this is a one-deep queue: held until a
+             submit spends it, after which reset() earns the next one. */
+          warmTok = { token: token, at: Date.now() };
+          trace('turnstile: token ready');
           if (state.tokenWait) { state.tokenWait.resolve(token); state.tokenWait = null; }
         },
         'error-callback': function () {
+          warmTok = null;
           if (state.tokenWait) { state.tokenWait.reject(new Error('challenge failed')); state.tokenWait = null; }
           return true;
         },
-        'expired-callback': function () {},
+        'expired-callback': function () { warmTok = null; ensureFreshToken(); },
       });
     } catch (e) { /* a double-render into the same slot throws; ignore */ }
   }
@@ -1843,16 +1862,21 @@
   var TOKEN_FRESH_MS = 240000;
   var warmTok: { token: any; at: number } | null = null;
   var warming = false;
+  /* Warming is now just "mount the widget": in render mode that IS the
+     challenge, and the token arrives on the callback. No execute(), so none of
+     this can take the page down. */
   function warmToken() {
-    if (warming || !state.key) return;
+    if (!state.key) return;
     if (warmTok && Date.now() - warmTok.at < TOKEN_FRESH_MS) return;
-    warming = true;
     trace('turnstile: warming');
-    rawToken().then(function (t: any) {
-      warming = false;
-      warmTok = { token: t, at: Date.now() };
-      trace('turnstile: warm ready');
-    }).catch(function () { warming = false; /* the submit path will try again */ });
+    loadTurnstile();
+  }
+  /* After a token is spent (or expires) ask the widget for another. reset()
+     re-runs the challenge and fires `callback` again. */
+  function ensureFreshToken() {
+    try {
+      if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+    } catch (e) { /* the next warm re-renders it */ }
   }
   /* Focus is the earliest honest signal of intent, and the safest moment for
      anything the challenge might do. */
@@ -1882,9 +1906,9 @@
   function getToken() {
     var w = warmTok;
     if (w && Date.now() - w.at < TOKEN_FRESH_MS) {
-      warmTok = null;                 // single-use: spend it and warm another
-      trace('turnstile: spent a warm token');
-      setTimeout(warmToken, 0);
+      warmTok = null;                 // single-use: spend it and earn another
+      trace('turnstile: spent a ready token');
+      setTimeout(ensureFreshToken, 0);
       return Promise.resolve(w.token);
     }
     warmTok = null;
@@ -1892,11 +1916,8 @@
   }
 
   function rawToken() {
-    /* Turnstile is the prime suspect in "the first submit does nothing, the
-       second always works": the FIRST call has to load the script, render the
-       widget and solve, where later ones reuse a token. Crumbing both ends puts
-       that ordering in the ring next to the pagehide, so the next report either
-       implicates it or clears it. */
+    /* Both ends are crumbed: this is how the reload was traced to the challenge
+       in the first place, and it is how a future one would be. */
     trace('turnstile: token wanted' + (window.turnstile ? '' : ' (script not loaded yet)'));
     return new Promise<any>(function (resolve, reject) {
       loadTurnstile();   // a click may be the first thing that needs it
@@ -1917,15 +1938,41 @@
           setTimeout(run, STEP);
           return;
         }
-        state.tokenWait = {
-          resolve: function (v: any) { trace('turnstile: token ok'); resolve(v); },
-          reject: function (e: any) { trace('turnstile: token refused'); reject(e); },
-        };
-        try { trace('turnstile: execute'); turnstile.execute(state.widgetId); } catch (e) {
-          state.tokenWait = null;
-          trace('turnstile: execute threw');
-          reject(e);
+        /* The widget is mounted and solving on its own; all that is left is to
+           wait for its callback. Nothing calls execute() — that was the road
+           that killed the page. */
+        if (warmTok) {
+          var t = warmTok;
+          warmTok = null;
+          trace('turnstile: token ok (was ready)');
+          setTimeout(ensureFreshToken, 0);
+          resolve(t.token);
+          return;
         }
+        /* The callback is now the ONLY road a token arrives by, so this wait
+           needs its own clock: with execute() gone there is nothing to make a
+           stuck challenge fail, and an unbounded wait would hang the submit
+           with the button disabled and no way forward. */
+        var settled = false;
+        var timer = window.setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          state.tokenWait = null;
+          trace('turnstile: token timed out');
+          reject(new Error('Verification is taking a moment. Give it a few seconds and press the button again.'));
+        }, MAX);
+        state.tokenWait = {
+          resolve: function (v: any) {
+            if (settled) return;
+            settled = true; clearTimeout(timer);
+            trace('turnstile: token ok'); warmTok = null; resolve(v);
+          },
+          reject: function (e: any) {
+            if (settled) return;
+            settled = true; clearTimeout(timer);
+            trace('turnstile: token refused'); reject(e);
+          },
+        };
       }
       run();
     });
