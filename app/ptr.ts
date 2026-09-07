@@ -63,6 +63,7 @@ export function installPtr() {
   document.body.appendChild(note);
 
   let startY = 0;
+  let startX = 0;
   let pulling = false;
   let armed = false;
   let busy = false;
@@ -104,6 +105,7 @@ export function installPtr() {
   document.addEventListener('touchstart', (e: TouchEvent) => {
     if (e.touches.length !== 1 || !eligible(e.target)) { pulling = false; return; }
     startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
     pulling = true;
     armed = false;
   }, { passive: true });
@@ -112,8 +114,15 @@ export function installPtr() {
     if (!pulling || e.touches.length !== 1) return;
     const dy = e.touches[0].clientY - startY;
     if (dy <= 0) { if (armed) { hide(); armed = false; } return; }
+    /* A pull is VERTICAL. A finger travelling mostly sideways is a swipe, a
+       scrub, or a text selection — capturing it (and calling preventDefault on
+       it) would break those. */
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    if (dx > dy) return;
     const t = ptrTravel(dy);
     const stage = ptrStage(t);
+    /* Below the dead zone we do NOT preventDefault: this may still turn out to
+       be a tap, and swallowing its default can swallow the tap itself. */
     if (stage === 'idle') return;
     armed = true;
     /* Own the gesture: without this the page rubber-bands under the indicator

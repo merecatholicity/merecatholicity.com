@@ -102,7 +102,7 @@ FLASH_SCRIPT = (
     "document.head.appendChild(s);"
     "var t0=Date.now();var iv=setInterval(function(){try{"
     "var h=document.querySelector('mc-home');var m=document.querySelector('main');"
-    "var ready=(h&&h.firstChild)||(m&&m.querySelector('section.comments > *,.mc-skel'));"
+    "var ready=(h&&h.firstChild)||(m&&m.querySelector('section.comments > *,.mc-load'));"
     "var age=Date.now()-t0;if(age<500||(!ready&&age<2200))return;"
     "clearInterval(iv);e.classList.add('mc-splash-out');"
     "setTimeout(function(){e.classList.remove('mc-splash','mc-splash-out')},360)"

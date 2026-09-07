@@ -46,18 +46,11 @@ export function retryTpl(host: HTMLElement, props: Record<string, unknown>): Tem
   return html` <a class="mc-retry" href="#" @click=${again}>Try again</a>`;
 }
 
-/* A shaped grey echo of the content that is coming, in place of the bare
-   "Loading…" line every view used to write by hand. A placeholder shaped like
-   the answer reads as "your page is here, filling in"; a line of text reads as
-   "nothing happened yet". Styles are in styles/main.css (.mc-skel); the global
-   prefers-reduced-motion guard flattens the shimmer to a static block for free.
-   `rows` is the only knob: 'card' for a single block (a profile), a count for a
-   list. Mirrors the classic client's skeleton() so both roads look the same. */
+/* The placeholder a view stands up while it waits: a spinner, centred in the
+   space the content will fill. Mirrors the classic client's skeleton() so both
+   roads look alike. 'short' is the only knob (a smaller reserve of space, for
+   panels rather than pages). Styles in styles/main.css (.mc-load). */
 export function skelTpl(kind?: 'card' | 'short' | 'list'): TemplateResult {
-  const cells = kind === 'card' ? 0 : (kind === 'short' ? 3 : 5);
-  return html`<div class="mc-skel-wrap" role="status" aria-label="Loading">
-    ${kind === 'card'
-      ? html`<div class="mc-skel mc-skel-card"></div>`
-      : Array.from({ length: cells }, () => html`<div class="mc-skel mc-skel-row"></div>`)}
-  </div>`;
+  return html`<div class=${'mc-load' + (kind === 'short' ? ' mc-load-sm' : '')}
+    role="status" aria-label="Loading"></div>`;
 }

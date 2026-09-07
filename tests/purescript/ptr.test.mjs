@@ -29,10 +29,19 @@ test('travel: the threshold sits at a comfortable thumb pull', () => {
   assert.equal(stage(Ptr.travel(140)), 'ready', 'armed by 140px');
 });
 
-test('stage: a dead zone so a normal scroll from the top shows nothing', () => {
+test('stage: the dead zone is wide enough that a TAP is never captured', () => {
+  /* This is a safety rule, not a cosmetic one. The handler calls
+     preventDefault the moment the gesture engages, and preventDefault during
+     what was really a tap can swallow the tap. The zone was originally 8,
+     crossed by about 7px of finger — inside ordinary tap jitter, so a press on
+     a button near the top of the page could be eaten. It is 26 now: a
+     deliberate drag of roughly 22px, which a tap does not produce. */
+  assert.equal(Ptr.deadZone, 26);
   assert.equal(stage(0), 'idle');
-  assert.equal(stage(7), 'idle', 'a few pixels of slop is not a gesture');
-  assert.equal(stage(8), 'pulling');
+  assert.equal(stage(25), 'idle', 'still inside the zone');
+  assert.equal(stage(Ptr.travel(10)), 'idle', '10px of finger is a tap, not a pull');
+  assert.equal(stage(Ptr.travel(20)), 'idle', 'and so is 20px');
+  assert.equal(stage(26), 'pulling');
   assert.equal(stage(Ptr.threshold - 0.001), 'pulling');
   assert.equal(stage(Ptr.threshold), 'ready', 'at the threshold, release refreshes');
 });

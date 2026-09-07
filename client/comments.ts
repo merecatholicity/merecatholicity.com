@@ -2586,9 +2586,33 @@
      next real keystroke, so a teardown flush on the way to a redirect can
      never resurrect what was just posted. With overwrite set (editing an
      existing post), a differing draft wins over the prefilled body. */
+  /* Every live composer on the page, so a single listener can flush them all.
+     Held weakly by isConnected checks rather than by a WeakSet, because we need
+     to iterate. Detached composers are dropped on each sweep. */
+  var draftLive: any[] = [];
+  /* THE LOSS GUARD (2026-09-07, born of a live report: hitting Post sometimes
+     white-flashed, reloaded, posted nothing, and lost what had been typed —
+     "horrendous", and rightly).
+     Saving was debounced 400ms after the last keystroke, plus a blur. Both
+     USUALLY fire before a submit, and "usually" is exactly what was failing:
+     type fast, tap Post, and the reload could land in the gap.
+     So the draft is written the instant a finger goes DOWN on anything —
+     capture phase, before any handler, before any async work, before anything
+     can reload the page. It costs one localStorage write per press, and only
+     when the text actually changed since the last save. Whatever is causing
+     the reload, it can no longer take the words with it. */
+  document.addEventListener('pointerdown', function () {
+    for (var i = draftLive.length - 1; i >= 0; i--) {
+      var rec = draftLive[i];
+      if (!rec.ta.isConnected) { draftLive.splice(i, 1); continue; }
+      try { rec.flush(); } catch (e) { /* one bad composer must not stop the rest */ }
+    }
+  }, true);
+
   function attachDraft(ta: any, ctx: string, titleInput?: any, overwrite?: boolean) {
     var muted = false;
     var timer: any = null;
+    var lastSaved: string | null = null;
     var d = draftRead(ctx);
     if (d) {
       if (d.body && (overwrite ? d.body !== ta.value : !ta.value)) ta.value = d.body;
@@ -2598,12 +2622,24 @@
       if (muted || !ta.isConnected) return;
       var body = ta.value;
       var title = titleInput ? titleInput.value : '';
+      lastSaved = body + '\u0000' + title;
       try {
         if (!body.trim() && !title.trim()) localStorage.removeItem(DRAFT_NS + ctx);
         else localStorage.setItem(DRAFT_NS + ctx,
           JSON.stringify({ body: body, title: title || undefined, at: Date.now() }));
       } catch (e) {}
     }
+    /* Cheap enough to call on every press: it only touches storage when the
+       composer holds something that is not already saved. */
+    function flush() {
+      if (muted || !ta.isConnected) return;
+      var now = ta.value + '\u0000' + (titleInput ? titleInput.value : '');
+      if (now === lastSaved) return;
+      clearTimeout(timer);
+      save();
+    }
+    draftLive.push({ ta: ta, flush: flush });
+    ta.mcDraftFlush = flush;
     function later() { muted = false; clearTimeout(timer); timer = setTimeout(save, 400); }
     ta.addEventListener('input', later);
     ta.addEventListener('blur', save);
@@ -2617,6 +2653,7 @@
     addEventListener('pagehide', save, { signal: bootSig });
     ta.mcDraftDone = function () {
       muted = true;
+      lastSaved = null;
       clearTimeout(timer);
       draftClear(ctx);
     };
@@ -3950,23 +3987,16 @@
     return p;
   }
 
-  /* A shaped grey echo of the content that is coming, in place of the bare
-     "Loading…" line these views used to show (and, in viewTopic and viewDm, in
-     place of NOTHING AT ALL — those two left the section blank for the whole
-     round trip, which is what made a tap feel ignored). A placeholder shaped
-     like the answer reads as "your page is here, filling in"; a spinner reads
-     as "wait". Styles live in styles/main.css (.mc-skel), and the global
-     reduced-motion guard flattens the shimmer to a static block for free. */
+  /* The placeholder every view stands up while it waits: a spinner, centred in
+     the space the content will fill. It replaced shaped grey blocks, which the
+     owner reported reading as "no spinner" on exactly the screens that had
+     them — a grey block looks like content that failed, a spinner looks like
+     work in progress. The 180ms fade-in (styles/main.css .mc-load) means a fast
+     load never flickers one, at no cost to the content. */
   function skeleton(kind?: string) {
-    var wrap = el('div', 'mc-skel-wrap');
+    var wrap = el('div', 'mc-load' + (kind === 'short' ? ' mc-load-sm' : ''));
     wrap.setAttribute('role', 'status');
     wrap.setAttribute('aria-label', 'Loading');
-    if (kind === 'card') {
-      wrap.appendChild(el('div', 'mc-skel mc-skel-card'));
-      return wrap;
-    }
-    var rows = kind === 'short' ? 3 : 5;
-    for (var i = 0; i < rows; i++) wrap.appendChild(el('div', 'mc-skel mc-skel-row'));
     return wrap;
   }
 

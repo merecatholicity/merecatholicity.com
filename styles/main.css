@@ -2744,37 +2744,6 @@ body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-li
    Two halves to the cure — the shell now paints the destination inside the
    click event (app/shell.ts), and these are the surfaces it paints. */
 
-/* A grey echo of the layout that is coming. Deliberately not a spinner: a
-   spinner says "wait", a shaped placeholder says "your page is here, filling
-   in". Colour rides --rule, which every one of the six themes redefines, so
-   light/dark/slate/ink/mist/sepia all work with no per-theme rule. The global
-   prefers-reduced-motion guard above already flattens the shimmer to a static
-   block, which is exactly the right fallback. */
-.mc-skel {
-  background: color-mix(in srgb, var(--rule) 45%, transparent);
-  border-radius: 6px;
-  position: relative;
-  overflow: hidden;
-}
-.mc-skel::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent,
-    color-mix(in srgb, var(--surface) 55%, transparent), transparent);
-  animation: mc-skel-sweep 1.4s ease-in-out infinite;
-}
-@keyframes mc-skel-sweep { to { transform: translateX(100%); } }
-.mc-skel-wrap { display: flex; flex-direction: column; gap: 0.7rem; margin: 0.9rem 0; }
-.mc-skel-row { height: 3.4rem; }
-/* The rows taper so the block reads as content rather than a loading bar. */
-.mc-skel-row:nth-child(2) { width: 92%; }
-.mc-skel-row:nth-child(3) { width: 97%; }
-.mc-skel-row:nth-child(4) { width: 88%; }
-.mc-skel-row:nth-child(5) { width: 94%; }
-.mc-skel-card { height: 11rem; border-radius: var(--radius-lg); }
-.mc-skel-page .mc-skel-row:first-child { height: 2.1rem; width: 60%; }
 
 /* Tap feedback. Before this, `.btn` had NO pressed state on phones at all (its
    :active lived in the >=601px block), and only two elements in the whole
@@ -2793,6 +2762,37 @@ body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-li
   }
 }
 
+/* THE PLACEHOLDER IS A SPINNER (2026-09-07, the owner's call after living with
+   it). The first pass used shaped grey blocks — the modern skeleton idea — and
+   they were the wrong answer here: on a fast hop a grey block reads as content
+   that failed to fill in, and the owner reported "not seeing loading spinners"
+   on the very screens that had them. A spinner is unmistakably "working", which
+   is what a tap needs to answer with.
+
+   The fade-in is what keeps it honest and is doing real work: starting at
+   opacity 0 over 180ms means a load that finishes in 50ms never paints a
+   visible spinner (no flicker), while a genuine wait shows one clearly — and it
+   costs the content nothing, because nothing is delayed to achieve it. */
+.mc-load {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 8.5rem; margin: 0.6rem 0;
+}
+.mc-load::after {
+  content: "";
+  width: 26px; height: 26px;
+  border: 3px solid color-mix(in srgb, var(--rule) 70%, transparent);
+  border-top-color: var(--maroon);
+  border-radius: 50%;
+  animation: mc-load-spin .7s linear infinite, mc-load-in .18s ease both;
+}
+@keyframes mc-load-spin { to { transform: rotate(360deg); } }
+@keyframes mc-load-in { from { opacity: 0; } to { opacity: 1; } }
+/* Reduced motion: the global guard flattens the sweep, so show a steady ring
+   rather than an invisible one. */
+@media (prefers-reduced-motion: reduce) {
+  .mc-load::after { border-top-color: var(--maroon); opacity: 1; }
+}
+
 /* Cold start, and any other moment the board section stands empty. The served
    platform documents ship `<section class="comments board" data-board></section>`
    — genuinely empty — and it stays that way until app.js and the ~280 KB client
@@ -2809,19 +2809,17 @@ section.comments.board:empty {
   min-height: 14rem;
   position: relative;
 }
-section.comments.board:empty::before,
 section.comments.board:empty::after {
   content: "";
   position: absolute;
-  left: 0; right: 0;
-  height: 3.4rem;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--rule) 45%, transparent);
+  top: 3.2rem; left: calc(50% - 13px);
+  width: 26px; height: 26px;
+  border: 3px solid color-mix(in srgb, var(--rule) 70%, transparent);
+  border-top-color: var(--maroon);
+  border-radius: 50%;
   opacity: 0;
-  animation: mc-skel-in 0.25s ease 0.15s forwards;
+  animation: mc-load-spin .7s linear infinite, mc-skel-in .25s ease .12s forwards;
 }
-section.comments.board:empty::before { top: 0.9rem; }
-section.comments.board:empty::after { top: 5.4rem; right: 8%; }
 @keyframes mc-skel-in { to { opacity: 1; } }
 
 /* Pull-to-refresh needs to own the vertical overscroll, or Chrome on Android

@@ -297,10 +297,18 @@ customElements.define('mc-audio-dock', McAudioDock);
   navload.appendChild(navloadSpin);
   navload.appendChild(document.createTextNode('Loading…'));
   document.body.appendChild(navload);
+  /* The pill is now the SECOND tier, not the first. Since every navigation puts
+     a spinner in the content area immediately, showing the pill at 300ms too
+     meant two spinners on screen at once — noisier, and neither one told the
+     reader more than the other. Its original job stands, though: a navigation
+     that is genuinely stuck must not look like a dead page. So it waits until
+     the wait is abnormal and then speaks in words, which the content spinner
+     cannot. */
+  var NAVLOAD_MS = 4000;
   var navloadTimer = 0;
   function armNavload() {
     if (navloadTimer) clearTimeout(navloadTimer);
-    navloadTimer = window.setTimeout(function () { navload.classList.add('on'); }, 300);
+    navloadTimer = window.setTimeout(function () { navload.classList.add('on'); }, NAVLOAD_MS);
   }
   function disarmNavload() {
     if (navloadTimer) { clearTimeout(navloadTimer); navloadTimer = 0; }
@@ -517,30 +525,22 @@ customElements.define('mc-audio-dock', McAudioDock);
   /* The shaped placeholder that stands where the content will be. Deliberately
      NOT a spinner: a grey echo of the coming layout reads as "your page is
      here and filling in", where a spinner reads as "wait". */
-  function skeletonInto(section: HTMLElement, kind: string) {
+  function skeletonInto(section: HTMLElement, _kind?: string) {
     var wrap = document.createElement('div');
-    wrap.className = 'mc-skel-wrap';
+    wrap.className = 'mc-load';
     wrap.setAttribute('role', 'status');
     wrap.setAttribute('aria-label', 'Loading');
-    var rows = kind === 'profile' ? 1 : 5;
-    if (kind === 'profile') {
-      var card = document.createElement('div');
-      card.className = 'mc-skel mc-skel-card';
-      wrap.appendChild(card);
-    }
-    for (var i = 0; i < rows && kind !== 'profile'; i++) {
-      var row = document.createElement('div');
-      row.className = 'mc-skel mc-skel-row';
-      wrap.appendChild(row);
-    }
     section.appendChild(wrap);
   }
   /* A document-driven page (a paper, the library, about…) has no local template:
-     the document IS the content. Leaving the old page up for a fast hop is
-     right — but past the point where a human reads the delay as "nothing
-     happened", show that we have left. 120ms is under the ~150ms that reads as
-     instant, and above the SW-cache hops that settle in 5-15ms. */
-  var DOC_SKEL_MS = 120;
+     the document IS the content, so there is nothing to build locally and the
+     old page would otherwise sit there looking untouched.
+     This used to wait 120ms before showing anything, to avoid flashing a
+     placeholder on a hop that did not need one. The spinner's 180ms fade-in
+     (styles/main.css .mc-load) now does that job better — a 50ms hop never
+     paints a visible spinner — so the placeholder goes up IMMEDIATELY and a
+     tap on a book is answered in the same frame. */
+  var DOC_SKEL_MS = 0;
   var docSkelTimer = 0;
   function armDocSkeleton(seq: number) {
     if (docSkelTimer) clearTimeout(docSkelTimer);
@@ -552,8 +552,7 @@ customElements.define('mc-audio-dock', McAudioDock);
       var main = document.createElement('main');
       main.className = 'prose';
       var holder = document.createElement('div');
-      holder.className = 'mc-skel-page';
-      skeletonInto(holder, 'page');
+      skeletonInto(holder);
       main.appendChild(holder);
       mine.replaceWith(main);
     }, DOC_SKEL_MS);
@@ -576,7 +575,7 @@ customElements.define('mc-audio-dock', McAudioDock);
     var section = document.createElement('section');
     section.className = 'comments board';
     section.setAttribute('data-board', '');
-    skeletonInto(section, path.indexOf('profile.html') !== -1 ? 'profile' : 'list');
+    skeletonInto(section);
     main.appendChild(section);
     mine.replaceWith(main);
     document.title = meta.title;

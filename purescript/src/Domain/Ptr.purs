@@ -20,6 +20,7 @@
 module Domain.Ptr
   ( Stage(..)
   , stage
+  , deadZone
   , stageTag
   , travel
   , threshold
@@ -64,11 +65,18 @@ travel dy
   | dy <= 0.0 = 0.0
   | otherwise = maxTravel * (1.0 - (1.0 / (1.0 + dy / (maxTravel * 0.75))))
 
--- | A tiny dead zone below the indicator's appearance keeps a normal scroll
--- | that begins at the very top from flashing it.
+-- | The dead zone before the gesture engages at all. This is not cosmetic: the
+-- | handler calls preventDefault once it engages, and preventDefault during
+-- | what was actually a TAP can swallow the tap in some engines. At 8 the zone
+-- | was crossed by ~7px of finger — well inside ordinary tap jitter, so a tap
+-- | on a button near the top of the page could be eaten. 26 needs a deliberate
+-- | drag (~22px of finger) and leaves taps alone.
+deadZone :: Number
+deadZone = 26.0
+
 stage :: Number -> Stage
 stage t
-  | t < 8.0 = Idle
+  | t < deadZone = Idle
   | t < threshold = Pulling
   | otherwise = Ready
 
