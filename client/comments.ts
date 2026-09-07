@@ -1392,11 +1392,21 @@
       '@keyframes mc-rec-pulse{0%,100%{opacity:1}50%{opacity:0.25}}' +
       '.mc-rec-time{font-variant-numeric:tabular-nums;font-size:0.9em;opacity:0.85}' +
       '.mc-rec-audio{max-width:280px}' +
-      /* The single Turnstile host: out of the way until a human check is
-         actually wanted, then centred where it can be reached. */
-      '.mc-ts-host{position:fixed;left:-9999px;bottom:0;opacity:0;pointer-events:none}' +
-      '.mc-ts-host.on{left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 84px);' +
-      'opacity:1;pointer-events:auto;z-index:9998;padding:10px;border-radius:12px;' +
+      /* The single Turnstile host. It is REAL: on screen, laid out, opaque,
+         interactable. The previous version parked it at left:-9999px with
+         opacity:0 and pointer-events:none, which is the one thing a challenge
+         container must never be — Cloudflare's widget hides ITSELF through
+         appearance:'interaction-only', and an invisible cross-origin challenge
+         iframe in an installed iOS web view is a document that gets taken away
+         (2026-09-08: the app died about a second after every mount, with no
+         pagehide and no error). So the host is a normal fixed element pinned
+         to the bottom edge with nothing visible in it until the widget decides
+         otherwise, and `.on` only lifts it clear of the composer so a human
+         check can actually be reached. */
+      '.mc-ts-host{position:fixed;left:50%;transform:translateX(-50%);bottom:0;' +
+      'z-index:9998;line-height:0;transition:bottom .15s ease}' +
+      '.mc-ts-host.on{bottom:calc(env(safe-area-inset-bottom,0px) + 84px);' +
+      'padding:10px;border-radius:12px;line-height:normal;' +
       'background:var(--surface,#fffdf7);box-shadow:0 4px 20px rgba(0,0,0,.3)}';
     var st = el('style');
     st.id = 'mc-dm-css';
@@ -1894,6 +1904,10 @@
     if (!window.turnstile) return;
     var slot = tsHost();
     if (mcTsWidget !== null && slot.querySelector('iframe')) { state.widgetId = mcTsWidget; return; }
+    /* The mount is the challenge, so it is the moment worth naming. Without
+       this crumb the ring showed a view rendering and a document dying a
+       second later with nothing in between to connect them. */
+    trace('turnstile: mounting the widget');
     try {
       /* execution:'execute' is GONE, and that is the whole point (2026-09-08).
          With it, the challenge only ran when turnstile.execute() was called —
@@ -1978,9 +1992,13 @@
      behind. Tokens are good for a few minutes; an older one is discarded rather
      than spent on a request that would be refused. */
   var TOKEN_FRESH_MS = 240000;
-  /* Warming is now just "mount the widget": in render mode that IS the
-     challenge, and the token arrives on the callback. No execute(), so none of
-     this can take the page down. */
+  /* Warming is "mount the widget": in render mode the mount IS the challenge,
+     and the token arrives on the callback. An earlier note here claimed that
+     therefore none of this could take the page down. That was wrong, and the
+     crumb ring said so: the installed app kept dying about a second after the
+     mount. The mount is not free — it is the challenge — so it happens on the
+     reader's first touch of a composer and nowhere else. Never on merely
+     opening a view. */
   function warmToken() {
     if (!state.key) return;
     if (mcTsToken && Date.now() - mcTsToken.at < TOKEN_FRESH_MS) return;
@@ -8215,7 +8233,12 @@ trace('submit: feed post');
         var status = el('p', 'form-status');
         form.appendChild(status);
         section.appendChild(form);
-        loadTurnstile();
+        /* No challenge merely for OPENING a conversation. This called
+           loadTurnstile() unconditionally, so the widget mounted — and in
+           render mode the mount IS the challenge — for a reader who had done
+           nothing but look. On the installed app that was the moment the
+           document died. The focusin net warms it the instant they touch the
+           composer, which is the earliest honest sign they mean to send. */
         /* We can only encrypt to a member who has published a key. Until they have
            signed in once under the encrypted client, hold the send with a plain
            notice rather than silently falling back to plaintext. */

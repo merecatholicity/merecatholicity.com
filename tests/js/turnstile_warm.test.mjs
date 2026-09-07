@@ -143,3 +143,34 @@ test('a human check can still be completed', () => {
     'an interactive challenge must bring the host into view');
   assert.ok(/'after-interactive-callback'/.test(src), 'and hide it again afterwards');
 });
+
+test('the challenge container is real, not hidden off-screen', () => {
+  /* The live finding (2026-09-08): the host was parked at left:-9999px with
+   * opacity:0 and pointer-events:none. Cloudflare's widget hides ITSELF via
+   * appearance:'interaction-only'; hiding the container as well puts a
+   * cross-origin challenge iframe somewhere it can never be composited, and
+   * in the installed iOS app the document was taken away about a second after
+   * every mount — no pagehide, no error. Whatever else changes here, the
+   * container stays reachable.
+   */
+  const css = src.slice(src.indexOf(".mc-ts-host{"), src.indexOf(".mc-ts-host.on{"));
+  assert.ok(!/left:-9999px/.test(css), 'the host is off-screen again');
+  assert.ok(!/opacity:0/.test(css), 'the host is transparent again');
+  assert.ok(!/pointer-events:none/.test(css), 'the host cannot be touched again');
+  assert.ok(!/display:none/.test(css), 'a challenge cannot render into a display:none container');
+});
+
+test('opening a view never runs a challenge on its own', () => {
+  /* viewDm called loadTurnstile() unconditionally as its composer mounted, so
+   * a reader who did nothing but open a conversation ran a challenge — and on
+   * the installed app that was when the page died. Intent (a focus, or an
+   * actual press) is what may mount it. */
+  const dm = src.slice(src.indexOf('function viewDm('), src.indexOf('function viewInbox('));
+  assert.ok(!/^\s*loadTurnstile\(\);/m.test(dm),
+    'viewDm mounts the challenge just for opening a conversation again');
+  /* The two callers that may: the focus net, and a press that finds no token. */
+  const warm = src.slice(src.indexOf('function warmToken()'), src.indexOf('function ensureFreshToken'));
+  assert.ok(/loadTurnstile\(\);/.test(warm), 'the focus warm must still mount it');
+  const raw = src.slice(src.indexOf('function rawToken()'), src.indexOf('function rawToken()') + 1200);
+  assert.ok(/loadTurnstile\(\);/.test(raw), 'a press with no warm token must still be able to earn one');
+});
