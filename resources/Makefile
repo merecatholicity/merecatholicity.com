@@ -236,6 +236,15 @@ work_out  = $(lastword  $(subst =, ,$(1)))
 # The Schaff volumes reuse the very same id=Output.pdf machinery.
 PDF_TARGETS = $(foreach w,$(WORKS) $(SCHAFF_PDFS) $(NEWMAN_PDFS),../docs/$(call work_out,$(w)))
 
+# The two Bible JSON files, on their own. They are part of `body`, which
+# regenerates the ENTIRE corpus from its sources — far more than these need,
+# since they read only the committed kjv-src.html and douay-rheims-src.html.
+# The reader fetches them at runtime and the librarian ingests them, so a clean
+# tree has to produce them: they are generated, not committed.
+bible-json:
+	python kjv-json.py
+	python dr-json.py
+
 pdf: $(PDF_TARGETS)
 
 # The names of every PDF this build publishes, one per line. linkcheck reads it

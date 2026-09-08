@@ -139,6 +139,7 @@ html:
 	    --metadata title="The bishop and the presbyter, a question recorded" \
 	    --css=style.css -H ../partials/social-bishop.html -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/bishop-presbyter.html
+	$(MAKE) -C resources bible-json
 	$(MAKE) -C resources html
 	python scripts/inject_social.py
 	$(MAKE) strip-nav sync-index library-order sitemap pdf-manifest
