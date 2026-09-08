@@ -1,0 +1,152 @@
+# Build the site in CI, so a local toolchain is optional.
+#
+# The point: clone, change a line, open a PR. The pipeline builds what that
+# change actually affects and proves the result — no TeX Live, no pandoc, no
+# purs on the contributor's machine.
+#
+# Two things about this repo make that practical:
+#
+#   * It is PUBLIC, so Actions minutes are free and unlimited on standard
+#     runners. Compute is not the constraint here; wall-clock is.
+#   * The build is properly incremental now (2026-09-08). The corpus HTML used
+#     to rebuild all ~235 works on every run — about 35 minutes of pandoc —
+#     because the targets were `for` loops with no prerequisites. One target per
+#     work later, an unchanged tree rebuilds nothing in 0.08 s.
+#
+# TWO CI-SPECIFIC TRAPS, both handled below:
+#
+#   1. A fresh checkout gives every file the same mtime, so make would see a
+#      changed .tex as no newer than its .html and rebuild NOTHING. The changed
+#      files are touched forward explicitly, from the diff.
+#   2. TeX Live is ~2 GB and slow, and most changes never touch a .tex. It is
+#      installed only when the diff says LaTeX is actually involved.
+
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Two commits deep is enough to diff a push; a PR is diffed against
+          # its merge base, which the fetch below resolves.
+          fetch-depth: 0
+
+      - name: Work out what actually changed
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          # A first push to a branch has no usable base; treat that as "all".
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "no usable base — treating everything as changed"
+            echo "files=ALL" >> "$GITHUB_OUTPUT"
+            echo "latex=yes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "$base" HEAD > /tmp/changed.txt
+          echo "changed files: $(wc -l < /tmp/changed.txt)"
+          sed 's/^/  /' /tmp/changed.txt | head -40
+          echo "files=list" >> "$GITHUB_OUTPUT"
+          if grep -qE '\.(tex|sty)$|^book/|^resources/.*\.py$' /tmp/changed.txt; then
+            echo "latex=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "latex=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Teach make what changed
+        run: |
+          # THE TRAP. git writes every file at checkout time, so a modified .tex
+          # and its committed .html arrive with the same mtime and make, which
+          # rebuilds only when a prerequisite is strictly NEWER, would do
+          # nothing at all. Touching the changed files forward restores the
+          # ordering the local working tree would have had.
+          if [ "${{ steps.changed.outputs.files }}" = "ALL" ]; then
+            find . -name '*.tex' -not -path './node_modules/*' -exec touch {} +
+          else
+            while read -r f; do [ -e "$f" ] && touch "$f"; done < /tmp/changed.txt
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pandoc
+          python3 -m pip install --quiet pyyaml
+
+      - name: TeX Live (only when LaTeX is involved)
+        if: steps.changed.outputs.latex == 'yes'
+        run: |
+          sudo apt-get install -y -qq \
+            texlive-latex-recommended texlive-latex-extra \
+            texlive-fonts-recommended texlive-fonts-extra \
+            texlive-lang-greek lmodern
+          # textalpha/LGR (the Greek in the Fathers) and mathpazo, tcolorbox,
+          # titlesec, needspace, enumitem, microtype all come from those sets.
+
+      - run: npm ci
+
+      - name: Restore the PureScript output
+        uses: actions/cache@v4
+        with:
+          path: purescript/output
+          key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
+
+      - name: Build the client and the stylesheet
+        run: make bundle
+
+      - name: Build the PDFs
+        if: steps.changed.outputs.latex == 'yes'
+        run: make -C resources pdf
+
+      - name: Build the site
+        run: make html
+
+      - name: Gates
+        run: |
+          make tests
+          make jscheck
+          make check
+
+      - name: Did the build change anything the commit did not carry?
+        run: |
+          # While docs/ is still committed, a PR that edits a source without
+          # rebuilding leaves stale output. This says so plainly rather than
+          # letting a stale page ship. Once docs/ leaves git (Pages served from
+          # this workflow's artifact) the question stops existing.
+          if ! git diff --quiet -- docs/; then
+            echo "::warning::the build produced output this commit does not carry:"
+            git diff --stat -- docs/ | tail -20
+            echo "This is expected while docs/ is committed and CI does the building."
+          else
+            echo "committed output matches a fresh build"
+          fi
+
+      - name: Package the site for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
