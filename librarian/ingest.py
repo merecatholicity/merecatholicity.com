@@ -39,6 +39,33 @@ from html.parser import HTMLParser
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def src_path(rel):
+    """Resolve a works.yml `src` to a file on disk.
+
+    The manifest's public entries are written relative to the repo root as it
+    stood before 2026-07-30 — `../book.html`, `../credo.html` — because that is
+    where the built site lived. The docs/ reorg moved every built page into
+    `docs/` on 2026-07-30 and nothing updated this manifest, which was last
+    edited the day before. The result went unnoticed for six weeks: 257 of 288
+    sources stopped resolving, ingest skipped each with a mild "waiting (source
+    not yet built)", and because a skipped work is never pruned, merecat kept
+    answering from a frozen 2026-07-29 copy of the entire public shelf — the
+    site's own writings included, which the persona ranks above everything.
+
+    Rather than rewrite 257 manifest lines, the OLD spelling is honoured and
+    redirected into the built site. A path that resolves as written still wins,
+    so the private shelves (which live inside librarian/ and were never
+    affected) are untouched."""
+    direct = os.path.join(HERE, rel)
+    if os.path.exists(direct):
+        return direct
+    if rel.startswith("../") and not rel.startswith("../docs/"):
+        moved = os.path.join(HERE, "..", "docs", rel[3:])
+        if os.path.exists(moved):
+            return moved
+    return direct
 PARSER_VERSION = "1"          # bump to force a full re-ingest
 TARGET = 350                  # words a chunk aims for
 HARD_MAX = 480                # words a chunk never exceeds
@@ -423,7 +450,7 @@ def build_text(path, title, chunk_words=None):
 
 
 def build(entry):
-    path = os.path.join(HERE, entry["src"])
+    path = src_path(entry["src"])
     kind = entry["kind"]
     if kind == "pandoc":
         chunks, valid = build_pandoc(path)
@@ -455,7 +482,7 @@ def audit_library(manifest):
     """The shelf audit: warn when library.html offers a work this manifest
     lacks, so the daily push always names what the bot is still missing."""
     try:
-        src = open(os.path.join(HERE, "..", "library.html"), encoding="utf-8").read()
+        src = open(src_path("../library.html"), encoding="utf-8").read()
     except OSError:
         return
     hrefs = set(re.findall(r'<a href="([a-z0-9-]+\.html)">Read online', src))
@@ -554,10 +581,27 @@ def main():
     picked = {wid: e for wid, e in manifest.items()
               if (not only or wid in only) and (not tiers or e["tier"] in tiers)}
 
+    # A few works waiting on their build is ordinary — the Newman corpus arrived
+    # that way. MOST of the shelf missing is not ordinary, it is a broken
+    # manifest, and the only reason that went unnoticed from 2026-07-30 to
+    # 2026-09-08 is that it looked exactly like the ordinary case: 257 calm
+    # "waiting" lines and a push that pruned nothing, so six weeks of edits to
+    # the site's own works never reached the bot. Refuse to run instead.
+    missing = [w for w, e in picked.items() if not os.path.exists(src_path(e["src"]))]
+    if picked and len(missing) > max(12, len(picked) // 4):
+        print(f"REFUSING: {len(missing)} of {len(picked)} sources do not resolve.",
+              file=sys.stderr)
+        print("That is a broken manifest, not a shelf waiting on its build.",
+              file=sys.stderr)
+        for w in sorted(missing)[:5]:
+            print(f"  {w:22} {picked[w]['src']}", file=sys.stderr)
+        print("Pass --only/--tiers to work on a subset deliberately.", file=sys.stderr)
+        return 1
+
     if not args.push:
         total, vec_total, waiting = 0, 0, 0
         for wid, entry in picked.items():
-            if not os.path.exists(os.path.join(HERE, entry["src"])):
+            if not os.path.exists(src_path(entry["src"])):
                 waiting += 1
                 print(f"{wid:22} t{entry['tier']} waiting (source not yet built)")
                 continue
@@ -621,7 +665,7 @@ def main():
     spent = 0
     waiting = 0
     for wid, entry in picked.items():
-        if not os.path.exists(os.path.join(HERE, entry["src"])):
+        if not os.path.exists(src_path(entry["src"])):
             waiting += 1
             continue          # not built yet: a later daily run picks it up
         chunks, bad = build(entry)
@@ -645,4 +689,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # sys.exit(main()), not a bare main(): the refusal above returns 1, and a
+    # discarded return code would let `make librarian` report success over a
+    # manifest that resolved almost nothing — which is precisely the failure
+    # mode this guard exists to end.
+    sys.exit(main())
