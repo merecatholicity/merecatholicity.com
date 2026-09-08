@@ -251,7 +251,284 @@ $(foreach w,$(WORKS) $(SCHAFF_PDFS) $(NEWMAN_PDFS),$(eval $(call PDF_RULE,$(w)))
 # footer, like book.html. The heading macros become \section* and
 # friends so pandoc keeps them. Rebuilt by the root 'make html' so menu
 # changes reach them.
-html:
+# The 120 curated works, one target each — same reasoning as HTML_RULE
+# above, and the same shell parsing, but their own sed set (they carry
+# plain \section/\subsection as well as the \x-macros, and no bracket
+# protection). The list moved out of the recipe into CURATED_HTML so a
+# rule can be generated per work; CURATED_IDS is its whitespace-safe
+# companion, since make cannot split a list whose titles contain spaces.
+CURATED_HTML = \
+  cyril:2:"The Catechetical Lectures of S. Cyril of Jerusalem" \
+  gregory:2:"The Great Catechism of St. Gregory of Nyssa" \
+  enchiridion:2:"The Enchiridion on Faith, Hope, and Love" \
+  councils:2:"The Seven Ecumenical Councils of the Undivided Church" \
+  ignatius:1:"The Epistles of St. Ignatius of Antioch" \
+  irenaeus3:2:"Against Heresies, Book III" \
+  baptism:2:"On Baptism, by Tertullian" \
+  unity:1:"On the Unity of the Church" \
+  tome:1:"The Tome of St. Leo" \
+  clement:2:"The First Epistle of Clement to the Corinthians" \
+  justin:2:"The First Apology of St. Justin Martyr" \
+  didache:2:"The Didache" \
+  festal39:1:"The Thirty-Ninth Festal Letter of St. Athanasius" \
+  soulres:1:"On the Soul and the Resurrection" \
+  onbaptism:1:"On Baptism, Against the Donatists" \
+  ravenna:2:"The Ravenna Document" \
+  chieti:2:"The Chieti Document" \
+  jddj:2:"Joint Declaration on the Doctrine of Justification" \
+  encyclical1848:1:"Encyclical of the Eastern Patriarchs, 1848" \
+  scranton:1:"The Declaration of Scranton" \
+  encyclical1895:1:"Patriarchal and Synodical Encyclical of 1895" \
+  apostolicae:1:"Apostolicae Curae, by Pope Leo XIII" \
+  saepius:1:"Saepius Officio, the Answer of the Archbishops of England" \
+  cassian-prayer:1:"The Conferences on Prayer, by St. John Cassian" \
+  benedict-rule:1:"The Holy Rule of St. Benedict" \
+  gregory-letters:1:"Letters of St. Gregory the Great on the Title Universal Bishop" \
+  cityofgod:1:"The City of God" \
+  ondoctrine:2:"On Christian Doctrine" \
+  confessions:1:"The Confessions of St. Augustine" \
+  incarnation:1:"On the Incarnation of the Word" \
+  trent:1:"The Canons and Dogmatic Decrees of the Council of Trent" \
+  orthodoxy:1:"Orthodoxy, by G. K. Chesterton" \
+  heretics:1:"Heretics, by G. K. Chesterton" \
+  everlasting:2:"The Everlasting Man, by G. K. Chesterton" \
+  gibbons:1:"The Faith of Our Fathers, by James Cardinal Gibbons" \
+  damascus:2:"An Exact Exposition of the Orthodox Faith, by St. John of Damascus" \
+  liturgies:1:"The Early Liturgies" \
+  westminster:2:"The Westminster Confession of Faith" \
+  institutes:2:"Institutes of the Christian Religion, by John Calvin" \
+  bondage:1:"The Bondage of the Will, by Martin Luther" \
+  luther-galatians:1:"Commentary on the Epistle to the Galatians, by Martin Luther" \
+  luther-primary:1:"The Ninety-Five Theses, with Concerning Christian Liberty" \
+  jewel:1:"An Apology of the Church of England, by John Jewel" \
+  articles1571:2:"The Thirty-Nine Articles of Religion" \
+  guettee:1:"The Papacy, by the Abbe Guettee" \
+  concord:2:"The Book of Concord" \
+  bcp1559:1:"The Book of Common Prayer, 1559" \
+  bcp1662:1:"The Book of Common Prayer, 1662" \
+  bcp1928:1:"The Book of Common Prayer, 1928 (American)" \
+  hooker:1:"Of the Laws of Ecclesiastical Polity, by Richard Hooker" \
+  keble-year:1:"The Christian Year, by John Keble" \
+  andrewes-devotions:1:"The Private Devotions of Lancelot Andrewes" \
+  annals:1:"The Annals, by Tacitus" \
+  histories:1:"The Histories, by Tacitus" \
+  suetonius:1:"The Lives of the Twelve Caesars, by Suetonius" \
+  ammianus:1:"The Roman History of Ammianus Marcellinus" \
+  zosimus:1:"The New History, by Count Zosimus" \
+  dio1:1:"Roman History, Vol. 1: The Fragments, by Cassius Dio" \
+  dio2:1:"Roman History, Vol. 2: Books XXXVI-LX, by Cassius Dio" \
+  dio3:1:"Roman History, Vol. 3: The Epitomes, by Cassius Dio" \
+  burlat:1:"History of the Later Roman Empire, by J. B. Bury" \
+  gibbon1:1:"The Decline and Fall of the Roman Empire, Vol. 1" \
+  gibbon2:1:"The Decline and Fall of the Roman Empire, Vol. 2" \
+  gibbon3:1:"The Decline and Fall of the Roman Empire, Vol. 3" \
+  gibbon4:1:"The Decline and Fall of the Roman Empire, Vol. 4" \
+  gibbon5:1:"The Decline and Fall of the Roman Empire, Vol. 5" \
+  gibbon6:1:"The Decline and Fall of the Roman Empire, Vol. 6" \
+  gibbon7:1:"The Decline and Fall of the Roman Empire, Vol. 7" \
+  gibbon8:1:"The Decline and Fall of the Roman Empire, Vol. 8" \
+  gibbon9:1:"The Decline and Fall of the Roman Empire, Vol. 9" \
+  gibbon10:1:"The Decline and Fall of the Roman Empire, Vol. 10" \
+  gibbon11:1:"The Decline and Fall of the Roman Empire, Vol. 11" \
+  gibbon12:1:"The Decline and Fall of the Roman Empire, Vol. 12" \
+  iliad:1:"The Iliad, by Homer" \
+  odyssey:1:"The Odyssey, by Homer" \
+  hesiod:1:"Hesiod, the Homeric Hymns, and Homerica" \
+  herodotus:1:"The History of Herodotus" \
+  thucydides:2:"The History of the Peloponnesian War, by Thucydides" \
+  republic:1:"The Republic, by Plato" \
+  timaeus:1:"Timaeus, by Plato" \
+  ethics:1:"The Nicomachean Ethics of Aristotle" \
+  politics:1:"Politics: A Treatise on Government, by Aristotle" \
+  metaphysics:1:"The Metaphysics of Aristotle" \
+  livy1:1:"The History of Rome, Vol. 1, by Livy" \
+  livy2:1:"The History of Rome, Vol. 2, by Livy" \
+  livy3:1:"The History of Rome, Vol. 3, by Livy" \
+  livy4:1:"The History of Rome, Vol. 4, by Livy" \
+  polybius:1:"The Histories of Polybius" \
+  caesar:1:"The Commentaries of Julius Caesar" \
+  sallust:1:"Conspiracy of Catiline and the Jugurthine War, by Sallust" \
+  plutarch:1:"Plutarch's Lives" \
+  cicero:2:"Cicero: Tusculan Disputations, On the Nature of the Gods, and On the Commonwealth" \
+  cicero-div:1:"On Divination, by Cicero" \
+  lucretius:1:"On the Nature of Things, by Lucretius" \
+  aeneid:1:"The Aeneid of Virgil" \
+  metam:1:"The Metamorphoses of Ovid" \
+  seneca:2:"Moral Letters to Lucilius, by Seneca" \
+  epictetus:2:"The Discourses of Epictetus, with the Manual and Fragments" \
+  marcus:1:"The Meditations of Marcus Aurelius" \
+  pliny:2:"The Letters of Pliny the Younger" \
+  lucian:1:"The Works of Lucian of Samosata" \
+  julian:1:"Against the Galileans, by Julian the Apostate" \
+  apuleius:1:"The Golden Asse, by Apuleius" \
+  boethius:1:"The Consolation of Philosophy, by Boethius" \
+  agricola:1:"The Agricola and Germania, by Tacitus" \
+  eddas:1:"The Elder Eddas and the Younger Eddas" \
+  rigveda:1:"The Hymns of the Rigveda" \
+  beowulf:1:"Beowulf" \
+  frazer:1:"The Golden Bough, by J. G. Frazer" \
+  antiquities:1:"The Antiquities of the Jews, by Flavius Josephus" \
+  wars:1:"The Wars of the Jews, by Flavius Josephus" \
+  josephus-minor:1:"The Life of Flavius Josephus, with Against Apion" \
+  philo1:1:"The Works of Philo Judaeus, Vol. 1: The Allegorical Commentary" \
+  philo2:1:"The Works of Philo Judaeus, Vol. 2: The Exposition of the Law" \
+  philo3:1:"The Works of Philo Judaeus, Vol. 3: Philosophical and Historical Treatises" \
+  philo4:1:"The Works of Philo Judaeus, Vol. 4: Questions on Genesis, with the Fragments" \
+  enoch:1:"The Book of Enoch" \
+  jubilees:2:"The Book of Jubilees" \
+  testaments:1:"The Testaments of the Twelve Patriarchs" \
+  phaedo:1:"Phaedo, by Plato"
+
+CURATED_IDS = \
+  cyril \
+  gregory \
+  enchiridion \
+  councils \
+  ignatius \
+  irenaeus3 \
+  baptism \
+  unity \
+  tome \
+  clement \
+  justin \
+  didache \
+  festal39 \
+  soulres \
+  onbaptism \
+  ravenna \
+  chieti \
+  jddj \
+  encyclical1848 \
+  scranton \
+  encyclical1895 \
+  apostolicae \
+  saepius \
+  cassian-prayer \
+  benedict-rule \
+  gregory-letters \
+  cityofgod \
+  ondoctrine \
+  confessions \
+  incarnation \
+  trent \
+  orthodoxy \
+  heretics \
+  everlasting \
+  gibbons \
+  damascus \
+  liturgies \
+  westminster \
+  institutes \
+  bondage \
+  luther-galatians \
+  luther-primary \
+  jewel \
+  articles1571 \
+  guettee \
+  concord \
+  bcp1559 \
+  bcp1662 \
+  bcp1928 \
+  hooker \
+  keble-year \
+  andrewes-devotions \
+  annals \
+  histories \
+  suetonius \
+  ammianus \
+  zosimus \
+  dio1 \
+  dio2 \
+  dio3 \
+  burlat \
+  gibbon1 \
+  gibbon2 \
+  gibbon3 \
+  gibbon4 \
+  gibbon5 \
+  gibbon6 \
+  gibbon7 \
+  gibbon8 \
+  gibbon9 \
+  gibbon10 \
+  gibbon11 \
+  gibbon12 \
+  iliad \
+  odyssey \
+  hesiod \
+  herodotus \
+  thucydides \
+  republic \
+  timaeus \
+  ethics \
+  politics \
+  metaphysics \
+  livy1 \
+  livy2 \
+  livy3 \
+  livy4 \
+  polybius \
+  caesar \
+  sallust \
+  plutarch \
+  cicero \
+  cicero-div \
+  lucretius \
+  aeneid \
+  metam \
+  seneca \
+  epictetus \
+  marcus \
+  pliny \
+  lucian \
+  julian \
+  apuleius \
+  boethius \
+  agricola \
+  eddas \
+  rigveda \
+  beowulf \
+  frazer \
+  antiquities \
+  wars \
+  josephus-minor \
+  philo1 \
+  philo2 \
+  philo3 \
+  philo4 \
+  enoch \
+  jubilees \
+  testaments \
+  phaedo
+
+define CURATED_RULE
+../docs/$(1).html: $(1).tex $(1)-body.tex ../partials/nav.html ../partials/footer.html
+	for w in $$(CURATED_HTML); do \
+	  n=$$$${w%%:*}; [ "$$$$n" = "$(1)" ] || continue; \
+	  r=$$$${w#*:}; d=$$$${r%%:*}; t=$$$${r#*:}; \
+	  sed -e 's/\\xchapter{/\\section*{/g' \
+	      -e 's/\\xsection{/\\subsection*{/g' \
+	      -e 's/\\xsubsection{/\\paragraph{/g' \
+	      -e 's/\\section{/\\section*{/g' \
+	      -e 's/\\subsection{/\\subsection*{/g' \
+	      -e 's/\\textgreek{/{/g' \
+	      -e 's/\\texthebrew{/{/g' \
+	      $$$$n-body.tex > $$$$n-body-html.tex; \
+	  sed -e "s/{$$$$n-body.tex}/{$$$$n-body-html.tex}/" \
+	      -e 's/\\hrule height [0-9.]*pt//g' $$$$n.tex | \
+	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$$$d \
+	      --metadata title="$$$$t" \
+	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
+	      -o ../docs/$$$$n.html || exit 1; \
+	  rm $$$$n-body-html.tex; \
+	  echo "built $$$$n.html"; \
+	done
+endef
+
+CURATED_HTML_PAGES = $(foreach n,$(CURATED_IDS),../docs/$(n).html)
+$(foreach n,$(CURATED_IDS),$(eval $(call CURATED_RULE,$(n))))
+
+../docs/commonitory.html: commonitory.tex commonitory-body.tex ../partials/nav.html ../partials/footer.html
 	sed -e 's/\\commchapter{/\\section*{/g' \
 	    -e 's/\\textgreek{/{/g' \
 	    commonitory-body.tex > commonitory-body-html.tex
@@ -263,6 +540,7 @@ html:
 	    -o ../docs/commonitory.html
 	rm commonitory-body-html.tex
 	@echo "built commonitory.html"
+../docs/development.html: development.tex development-body.tex ../partials/nav.html ../partials/footer.html
 	sed -e 's/\\devchapter{/\\section*{/g' \
 	    -e 's/\\devsection{/\\subsection*{/g' \
 	    -e 's/\\devunit{/\\paragraph{/g' \
@@ -275,12 +553,14 @@ html:
 	    -o ../docs/development.html
 	rm development-body-html.tex
 	@echo "built development.html"
+../docs/consulting.html: consulting.tex ../partials/nav.html ../partials/footer.html
 	sed -e 's/\\hrule height [0-9.]*pt//g' consulting.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="On Consulting the Faithful in Matters of Doctrine" \
 	    --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
 	    -o ../docs/consulting.html
 	@echo "built consulting.html"
+../docs/law.html: law.tex law-body.tex ../partials/nav.html ../partials/footer.html
 	sed -e 's/\\lawpart{/\\section*{/g' \
 	    -e 's/\\lawquestion{/\\subsection*{/g' \
 	    -e 's/\\lawarticle{/\\subsubsection*{/g' \
@@ -294,144 +574,9 @@ html:
 	    -o ../docs/law.html
 	rm law-body-html.tex
 	@echo "built law.html"
-	for w in cyril:2:"The Catechetical Lectures of S. Cyril of Jerusalem" \
-	         gregory:2:"The Great Catechism of St. Gregory of Nyssa" \
-	         enchiridion:2:"The Enchiridion on Faith, Hope, and Love" \
-	         councils:2:"The Seven Ecumenical Councils of the Undivided Church" \
-	         ignatius:1:"The Epistles of St. Ignatius of Antioch" \
-	         irenaeus3:2:"Against Heresies, Book III" \
-	         baptism:2:"On Baptism, by Tertullian" \
-	         unity:1:"On the Unity of the Church" \
-	         tome:1:"The Tome of St. Leo" \
-	         clement:2:"The First Epistle of Clement to the Corinthians" \
-	         justin:2:"The First Apology of St. Justin Martyr" \
-	         didache:2:"The Didache" \
-	         festal39:1:"The Thirty-Ninth Festal Letter of St. Athanasius" \
-	         soulres:1:"On the Soul and the Resurrection" \
-	         onbaptism:1:"On Baptism, Against the Donatists" \
-	         ravenna:2:"The Ravenna Document" \
-	         chieti:2:"The Chieti Document" \
-	         jddj:2:"Joint Declaration on the Doctrine of Justification" \
-	         encyclical1848:1:"Encyclical of the Eastern Patriarchs, 1848" \
-	         scranton:1:"The Declaration of Scranton" \
-	         encyclical1895:1:"Patriarchal and Synodical Encyclical of 1895" \
-	         apostolicae:1:"Apostolicae Curae, by Pope Leo XIII" \
-	         saepius:1:"Saepius Officio, the Answer of the Archbishops of England" \
-	         cassian-prayer:1:"The Conferences on Prayer, by St. John Cassian" \
-	         benedict-rule:1:"The Holy Rule of St. Benedict" \
-	         gregory-letters:1:"Letters of St. Gregory the Great on the Title Universal Bishop" \
-	         cityofgod:1:"The City of God" \
-	         ondoctrine:2:"On Christian Doctrine" \
-	         confessions:1:"The Confessions of St. Augustine" \
-	         incarnation:1:"On the Incarnation of the Word" \
-	         trent:1:"The Canons and Dogmatic Decrees of the Council of Trent" \
-	         orthodoxy:1:"Orthodoxy, by G. K. Chesterton" \
-	         heretics:1:"Heretics, by G. K. Chesterton" \
-	         everlasting:2:"The Everlasting Man, by G. K. Chesterton" \
-	         gibbons:1:"The Faith of Our Fathers, by James Cardinal Gibbons" \
-	         damascus:2:"An Exact Exposition of the Orthodox Faith, by St. John of Damascus" \
-	         liturgies:1:"The Early Liturgies" \
-	         westminster:2:"The Westminster Confession of Faith" \
-	         institutes:2:"Institutes of the Christian Religion, by John Calvin" \
-	         bondage:1:"The Bondage of the Will, by Martin Luther" \
-	         luther-galatians:1:"Commentary on the Epistle to the Galatians, by Martin Luther" \
-	         luther-primary:1:"The Ninety-Five Theses, with Concerning Christian Liberty" \
-	         jewel:1:"An Apology of the Church of England, by John Jewel" \
-	         articles1571:2:"The Thirty-Nine Articles of Religion" \
-	         guettee:1:"The Papacy, by the Abbe Guettee" \
-	         concord:2:"The Book of Concord" \
-	         bcp1559:1:"The Book of Common Prayer, 1559" \
-	         bcp1662:1:"The Book of Common Prayer, 1662" \
-	         bcp1928:1:"The Book of Common Prayer, 1928 (American)" \
-	         hooker:1:"Of the Laws of Ecclesiastical Polity, by Richard Hooker" \
-	         keble-year:1:"The Christian Year, by John Keble" \
-	         andrewes-devotions:1:"The Private Devotions of Lancelot Andrewes" \
-	         annals:1:"The Annals, by Tacitus" \
-	         histories:1:"The Histories, by Tacitus" \
-	         suetonius:1:"The Lives of the Twelve Caesars, by Suetonius" \
-	         ammianus:1:"The Roman History of Ammianus Marcellinus" \
-	         zosimus:1:"The New History, by Count Zosimus" \
-	         dio1:1:"Roman History, Vol. 1: The Fragments, by Cassius Dio" \
-	         dio2:1:"Roman History, Vol. 2: Books XXXVI-LX, by Cassius Dio" \
-	         dio3:1:"Roman History, Vol. 3: The Epitomes, by Cassius Dio" \
-	         burlat:1:"History of the Later Roman Empire, by J. B. Bury" \
-	         gibbon1:1:"The Decline and Fall of the Roman Empire, Vol. 1" \
-	         gibbon2:1:"The Decline and Fall of the Roman Empire, Vol. 2" \
-	         gibbon3:1:"The Decline and Fall of the Roman Empire, Vol. 3" \
-	         gibbon4:1:"The Decline and Fall of the Roman Empire, Vol. 4" \
-	         gibbon5:1:"The Decline and Fall of the Roman Empire, Vol. 5" \
-	         gibbon6:1:"The Decline and Fall of the Roman Empire, Vol. 6" \
-	         gibbon7:1:"The Decline and Fall of the Roman Empire, Vol. 7" \
-	         gibbon8:1:"The Decline and Fall of the Roman Empire, Vol. 8" \
-	         gibbon9:1:"The Decline and Fall of the Roman Empire, Vol. 9" \
-	         gibbon10:1:"The Decline and Fall of the Roman Empire, Vol. 10" \
-	         gibbon11:1:"The Decline and Fall of the Roman Empire, Vol. 11" \
-	         gibbon12:1:"The Decline and Fall of the Roman Empire, Vol. 12" \
-	         iliad:1:"The Iliad, by Homer" \
-	         odyssey:1:"The Odyssey, by Homer" \
-	         hesiod:1:"Hesiod, the Homeric Hymns, and Homerica" \
-	         herodotus:1:"The History of Herodotus" \
-	         thucydides:2:"The History of the Peloponnesian War, by Thucydides" \
-	         republic:1:"The Republic, by Plato" \
-	         timaeus:1:"Timaeus, by Plato" \
-	         ethics:1:"The Nicomachean Ethics of Aristotle" \
-	         politics:1:"Politics: A Treatise on Government, by Aristotle" \
-	         metaphysics:1:"The Metaphysics of Aristotle" \
-	         livy1:1:"The History of Rome, Vol. 1, by Livy" \
-	         livy2:1:"The History of Rome, Vol. 2, by Livy" \
-	         livy3:1:"The History of Rome, Vol. 3, by Livy" \
-	         livy4:1:"The History of Rome, Vol. 4, by Livy" \
-	         polybius:1:"The Histories of Polybius" \
-	         caesar:1:"The Commentaries of Julius Caesar" \
-	         sallust:1:"Conspiracy of Catiline and the Jugurthine War, by Sallust" \
-	         plutarch:1:"Plutarch's Lives" \
-	         cicero:2:"Cicero: Tusculan Disputations, On the Nature of the Gods, and On the Commonwealth" \
-	         cicero-div:1:"On Divination, by Cicero" \
-	         lucretius:1:"On the Nature of Things, by Lucretius" \
-	         aeneid:1:"The Aeneid of Virgil" \
-	         metam:1:"The Metamorphoses of Ovid" \
-	         seneca:2:"Moral Letters to Lucilius, by Seneca" \
-	         epictetus:2:"The Discourses of Epictetus, with the Manual and Fragments" \
-	         marcus:1:"The Meditations of Marcus Aurelius" \
-	         pliny:2:"The Letters of Pliny the Younger" \
-	         lucian:1:"The Works of Lucian of Samosata" \
-	         julian:1:"Against the Galileans, by Julian the Apostate" \
-	         apuleius:1:"The Golden Asse, by Apuleius" \
-	         boethius:1:"The Consolation of Philosophy, by Boethius" \
-	         agricola:1:"The Agricola and Germania, by Tacitus" \
-	         eddas:1:"The Elder Eddas and the Younger Eddas" \
-	         rigveda:1:"The Hymns of the Rigveda" \
-	         beowulf:1:"Beowulf" \
-	         frazer:1:"The Golden Bough, by J. G. Frazer" \
-	         antiquities:1:"The Antiquities of the Jews, by Flavius Josephus" \
-	         wars:1:"The Wars of the Jews, by Flavius Josephus" \
-	         josephus-minor:1:"The Life of Flavius Josephus, with Against Apion" \
-	         philo1:1:"The Works of Philo Judaeus, Vol. 1: The Allegorical Commentary" \
-	         philo2:1:"The Works of Philo Judaeus, Vol. 2: The Exposition of the Law" \
-	         philo3:1:"The Works of Philo Judaeus, Vol. 3: Philosophical and Historical Treatises" \
-	         philo4:1:"The Works of Philo Judaeus, Vol. 4: Questions on Genesis, with the Fragments" \
-	         enoch:1:"The Book of Enoch" \
-	         jubilees:2:"The Book of Jubilees" \
-	         testaments:1:"The Testaments of the Twelve Patriarchs" \
-	         phaedo:1:"Phaedo, by Plato"; do \
-	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
-	  sed -e 's/\\xchapter{/\\section*{/g' \
-	      -e 's/\\xsection{/\\subsection*{/g' \
-	      -e 's/\\xsubsection{/\\paragraph{/g' \
-	      -e 's/\\section{/\\section*{/g' \
-	      -e 's/\\subsection{/\\subsection*{/g' \
-	      -e 's/\\textgreek{/{/g' \
-	      -e 's/\\texthebrew{/{/g' \
-	      $$n-body.tex > $$n-body-html.tex; \
-	  sed -e "s/{$$n-body.tex}/{$$n-body-html.tex}/" \
-	      -e 's/\\hrule height [0-9.]*pt//g' $$n.tex | \
-	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
-	      --metadata title="$$t" \
-	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/$$n.html || exit 1; \
-	  rm $$n-body-html.tex; \
-	  echo "built $$n.html"; \
-	done
+
+html: ../docs/commonitory.html ../docs/development.html ../docs/consulting.html ../docs/law.html
+	$(MAKE) $(CURATED_HTML_PAGES)
 	$(MAKE) summa-html
 	$(MAKE) catena-html
 	$(MAKE) schaff-html
@@ -439,34 +584,55 @@ html:
 
 # The Summa Theologica, five parts. Standard division-macro seds; a big TOC
 # of treatises and questions, so toc-depth 2.
-summa-html:
-	for s in fp:"The First Part" fs:"The First Part of the Second Part" \
-	         ss:"The Second Part of the Second Part" tp:"The Third Part" \
-	         xp:"The Supplement"; do \
-	  n=$${s%%:*}; t=$${s#*:}; \
+SUMMA_HTML = \
+  fp:"The First Part" \
+  fs:"The First Part of the Second Part" \
+  ss:"The Second Part of the Second Part" \
+  tp:"The Third Part" \
+  xp:"The Supplement"
+
+define SUMMA_RULE
+../docs/summa-$(1).html: summa-$(1).tex summa-$(1)-body.tex ../partials/nav.html ../partials/footer.html
+	for s in $$(SUMMA_HTML); do \
+	  n=$$$${s%%:*}; [ "$$$$n" = "$(1)" ] || continue; \
+	  t=$$$${s#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \
 	      -e 's/\\xsubsection{/\\paragraph{/g' \
 	      -e 's/\\textgreek{/{/g' \
 	      -e 's/\\texthebrew{/{/g' \
 	      -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
-	      summa-$$n-body.tex > summa-$$n-body-html.tex; \
-	  sed -e "s/{summa-$$n-body.tex}/{summa-$$n-body-html.tex}/" \
-	      summa-$$n.tex | \
+	      summa-$$$$n-body.tex > summa-$$$$n-body-html.tex; \
+	  sed -e "s/{summa-$$$$n-body.tex}/{summa-$$$$n-body-html.tex}/" \
+	      summa-$$$$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
-	      --metadata title="Summa Theologica -- $$t" \
+	      --metadata title="Summa Theologica -- $$$$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/summa-$$n.html || exit 1; \
-	  rm summa-$$n-body-html.tex; \
-	  echo "built summa-$$n.html"; \
+	      -o ../docs/summa-$$$$n.html || exit 1; \
+	  rm summa-$$$$n-body-html.tex; \
+	  echo "built summa-$$$$n.html"; \
 	done
+endef
+
+SUMMA_HTML_PAGES = $(foreach n,fp fs ss tp xp,../docs/summa-$(n).html)
+$(foreach n,fp fs ss tp xp,$(eval $(call SUMMA_RULE,$(n))))
+
+summa-html: $(SUMMA_HTML_PAGES)
 
 # Aquinas' Catena Aurea, the four Gospels. Its macros (\cachapter, \caref,
 # \calemma, \cafather) become pandoc-friendly inline markup; \cafather{X}
 # carries the trailing period into the bold attribution.
-catena-html:
-	for g in matthew:"St. Matthew" mark:"St. Mark" luke:"St. Luke" john:"St. John"; do \
-	  n=$${g%%:*}; t=$${g#*:}; \
+CATENA_HTML = \
+  matthew:"St. Matthew" \
+  mark:"St. Mark" \
+  luke:"St. Luke" \
+  john:"St. John"
+
+define CATENA_RULE
+../docs/catena-$(1).html: catena-$(1).tex catena-$(1)-body.tex ../partials/nav.html ../partials/footer.html
+	for g in $$(CATENA_HTML); do \
+	  n=$$$${g%%:*}; [ "$$$$n" = "$(1)" ] || continue; \
+	  t=$$$${g#*:}; \
 	  sed -e 's/\\cachapter{/\\section*{/g' \
 	      -e 's/\\cafather{\([^}]*\)}/\\textbf{\1.}/g' \
 	      -e 's/\\caref{/\\textbf{/g' \
@@ -474,16 +640,22 @@ catena-html:
 	      -e 's/\\textgreek{/{/g' \
 	      -e 's/\\texthebrew{/{/g' \
 	      -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
-	      catena-$$n-body.tex > catena-$$n-body-html.tex; \
-	  sed -e "s/{catena-$$n-body.tex}/{catena-$$n-body-html.tex}/" \
-	      catena-$$n.tex | \
+	      catena-$$$$n-body.tex > catena-$$$$n-body-html.tex; \
+	  sed -e "s/{catena-$$$$n-body.tex}/{catena-$$$$n-body-html.tex}/" \
+	      catena-$$$$n.tex | \
 	  pandoc -f latex -t html5 --standalone --toc --toc-depth=1 \
-	      --metadata title="Catena Aurea on $$t" \
+	      --metadata title="Catena Aurea on $$$$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/catena-$$n.html || exit 1; \
-	  rm catena-$$n-body-html.tex; \
-	  echo "built catena-$$n.html"; \
+	      -o ../docs/catena-$$$$n.html || exit 1; \
+	  rm catena-$$$$n-body-html.tex; \
+	  echo "built catena-$$$$n.html"; \
 	done
+endef
+
+CATENA_HTML_PAGES = $(foreach n,matthew mark luke john,../docs/catena-$(n).html)
+$(foreach n,matthew mark luke john,$(eval $(call CATENA_RULE,$(n))))
+
+catena-html: $(CATENA_HTML_PAGES)
 
 # The 36 Schaff volumes, same preprocessing and pandoc invocation as the
 # curated works above, driven by SCHAFF_HTML (from schaff.mk). Kept as its
