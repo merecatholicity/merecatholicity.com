@@ -91,7 +91,13 @@ jobs:
           if [ "${{ steps.changed.outputs.files }}" = "ALL" ]; then
             find . -name '*.tex' -not -path './node_modules/*' -exec touch {} +
           else
-            while read -r f; do [ -e "$f" ] && touch "$f"; done < /tmp/changed.txt
+            # `if`, not `&&`: the step runs under `bash -e`, and a diff that ends
+            # in a DELETED file made the final `[ -e "$f" ]` false, which failed the
+            # whole step. The commit that removed docs/ from git was 581 deletions,
+            # so it failed on its own success.
+            while read -r f; do
+              if [ -e "$f" ]; then touch "$f"; fi
+            done < /tmp/changed.txt
           fi
 
       - uses: actions/setup-node@v4
