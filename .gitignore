@@ -110,6 +110,11 @@ docs/*.html
 !docs/the-book.html
 !docs/turnstile.html
 !docs/where-to-begin.html
+# kjv.html and douay-rheims.html are small hand-written landing pages: the
+# Bible text itself is fetched client-side from kjv.json/dr.json by
+# bible-reader.js. The matching .tex files build the PDFs, not these.
+!docs/kjv.html
+!docs/douay-rheims.html
 docs/app.js
 docs/comments.js
 docs/style.css

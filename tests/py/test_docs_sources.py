@@ -37,10 +37,16 @@ def buildable():
     content = os.path.join(ROOT, 'content')
     if os.path.isdir(content):
         names |= {n for n in os.listdir(content) if n.endswith('.html')}
-    # the resources converters render <id>.tex into docs/<id>.html
+    # The resources converters render <id>.tex into docs/<id>.html — but NOT
+    # every .tex has an HTML stanza. kjv.tex and douay-rheims.tex build only
+    # their PDFs; the pages of those names are small hand-written landing pages
+    # whose text is fetched client-side from kjv.json/dr.json. Assuming the
+    # mapping held is how they were nearly lost.
+    PDF_ONLY = {'kjv.html', 'douay-rheims.html'}
     res = os.path.join(ROOT, 'resources')
     if os.path.isdir(res):
-        names |= {n[:-4] + '.html' for n in os.listdir(res) if n.endswith('.tex')}
+        names |= {n[:-4] + '.html' for n in os.listdir(res)
+                  if n.endswith('.tex') and n[:-4] + '.html' not in PDF_ONLY}
     # the book, the bundles, the stylesheet and the generated data files
     names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'comments.js',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
@@ -78,7 +84,8 @@ class DocsIsSourceOrOutput(unittest.TestCase):
         have = tracked()
         for page in ('index.html', 'community.html', 'messages.html', 'profile.html',
                      'feed.html', 'admin.html', 'merecat-ai.html', 'journal.html',
-                     'contact.html', 'away.html', 'turnstile.html'):
+                     'contact.html', 'away.html', 'turnstile.html',
+                     'kjv.html', 'douay-rheims.html'):
             self.assertIn(page, have, page + ' is hand-written and must stay in git')
 
     def test_the_unbundled_client_scripts_are_tracked(self):

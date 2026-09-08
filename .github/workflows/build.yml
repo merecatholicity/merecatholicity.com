@@ -146,7 +146,13 @@ jobs:
           restore-keys: site-
 
       - name: Build the client and the stylesheet
-        run: make bundle
+        run: |
+          # `make bundle` compiles PureScript, the shell and the client; the
+          # Tailwind stylesheet is its own target and was never part of it. With
+          # style.css no longer committed, a clean tree has to build it — every
+          # page links it, so linkcheck failed on all 274 at once.
+          make css
+          make bundle
 
       - name: Build the PDFs
         if: steps.changed.outputs.latex == 'yes'
