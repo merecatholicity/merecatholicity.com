@@ -125,18 +125,37 @@ package-lock.json  the app's UI library (lit, bundled into app.js), and the buil
 
 ### The `?v=N` cache law
 
-Cloudflare caches each versioned asset URL immutably. `comments.js` is included as
-`comments.js?v=NN` and `app.js` as `app.js?v=NN` (in `docs/nav.js`). **Any change to
-either file must bump its `?v=NN`**, or the edge serves the stale copy forever under the
-old key. Never fetch a freshly-bumped `?v=N` URL until Pages has finished deploying — a
-probe mid-deploy freezes the OLD bytes under the new key. To test origin freshness, fetch
-a throwaway query (`app.js?probe123`), which always misses cache. `style.css` is
-unversioned, so CSS changes propagate on Cloudflare's TTL.
+**Nothing here is done by hand.** `scripts/stamp_versions.py` (run by `make bundle` and
+again at the end of `make html`) gives every served asset a `?v=` key derived from its own
+content hash — `app.js`, `comments.js`, `nav.js`, `style.css`, the page scripts, the
+vendored lazy scripts, the Bible and emoji data. Unchanged content keeps its key, so
+rebuilds stay byte-identical; changed content gets a new URL, which is the only thing that
+reaches a phone's own cache (GitHub Pages serves everything `max-age=600`, and a Cloudflare
+purge cannot touch a browser).
+
+`docs/version.json` is the manifest of what the server currently serves —
+`{build, assets}`, content-derived with no timestamp. `docs/nav.js` fetches it `no-store`
+on the service-worker pump's schedule and compares it against **the keys the page is
+actually running**; if the device is behind it offers a Reload. Settings → About shows the
+same facts, with a Copy button.
+
+Two files deliberately carry no key: **`sw.js`** (its URL is its service-worker
+registration identity; nav.js registers it `updateViaCache: 'none'`, which bypasses the
+HTTP cache) and the HTML documents (Cloudflare answers them `cf-cache-status: DYNAMIC`, so
+they are never edge-cached). Those two are purged by
+`.github/workflows/purge-cache.yml` after every Pages publish.
+
+Still true and still load-bearing: **never fetch a freshly-bumped `?v=N` URL until Pages
+has finished deploying** — a probe mid-deploy freezes the OLD bytes under the new key. To
+test origin freshness, fetch a throwaway query (`app.js?probe123`), which always misses
+cache. The workflow above does exactly that before it purges.
 
 ### Build reproducibility
 
 LaTeX and pandoc builds are pinned to `SOURCE_DATE_EPOCH=1784160000`, and `app.js`/`style.css`
 are byte-deterministic, so a rebuild only changes git when the *content* actually changed.
+This is why `version.json` carries no build date: a timestamp would churn every rebuild and
+break the double-build check that proves reproducibility.
 
 ---
 
