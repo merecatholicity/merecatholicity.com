@@ -77,6 +77,15 @@ jobs:
           # rebuilds only when a prerequisite is strictly NEWER, would do
           # nothing at all. Touching the changed files forward restores the
           # ordering the local working tree would have had.
+          # Flatten first, THEN raise the changed files. git writes everything
+          # at checkout time but in no guaranteed order, so a .tex can land a
+          # microsecond after its .html and make — which rebuilds when a
+          # prerequisite is strictly newer — will rebuild it for no reason. The
+          # first CI run rebuilt the entire Newman corpus that way. Setting one
+          # old timestamp across the tree makes the comparison deterministic;
+          # the diff then decides what is actually new.
+          find . -path ./.git -prune -o -path ./node_modules -prune -o \
+                 -type f -exec touch -t 200001010000 {} +
           if [ "${{ steps.changed.outputs.files }}" = "ALL" ]; then
             find . -name '*.tex' -not -path './node_modules/*' -exec touch {} +
           else

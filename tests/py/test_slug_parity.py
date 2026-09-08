@@ -23,6 +23,7 @@ py==js parity would happily wave through) still fails loudly.
 
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -33,7 +34,13 @@ sys.path.insert(0, str(ROOT / "librarian"))
 
 from ingest import PandocWalk  # noqa: E402  (path set above)
 
-NODE = pathlib.Path("/usr/bin/node")
+# Whichever node is on PATH, falling back to the pacman-installed path CLAUDE.md
+# names. Pinning the absolute path made this test assert the SHAPE OF THE
+# MACHINE rather than anything about the code: it passed on the owner's box,
+# failed on CI where setup-node installs elsewhere, and would fail on any
+# contributor using nvm or Homebrew — the exact people the pipeline exists to
+# welcome. What matters is that a real node runs the parity check.
+NODE = pathlib.Path(shutil.which("node") or "/usr/bin/node")
 DEEPLINK_JS = ROOT / "docs" / "deeplink.js"
 
 # A tiny node program that reads docs/deeplink.js as TEXT, regex-extracts the
@@ -111,10 +118,10 @@ def _run_js_slugify(fixtures):
 
 class NodeAvailable(unittest.TestCase):
     def test_node_binary_is_present(self):
-        """The JS side is exercised through the real interpreter at /usr/bin/node."""
+        """The JS side is exercised through a real node, wherever it lives."""
         self.assertTrue(
             NODE.exists(),
-            "expected node at %s (CLAUDE.md pins the JS toolchain there)" % NODE,
+            "no node interpreter found on PATH (looked at %s)" % NODE,
         )
 
     def test_deeplink_js_is_present(self):
