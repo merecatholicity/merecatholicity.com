@@ -13,7 +13,14 @@ build: pdf html logos publish check
 # identifier once shipped in the worker and silenced @merecat mentions for
 # days. eslint no-undef catches that class. Runs the npm-managed eslint
 # (node_modules/, from the committed lockfile — never a global install).
-jscheck:
+# psbuild first, ALWAYS: tsc type-checks app/core.ts, which imports the compiled
+# Domain.* modules from purescript/output/ — a directory that is git-ignored and
+# therefore absent from any clean checkout. Locally it is always there from an
+# earlier build, so the missing dependency was invisible for months; the first CI
+# run on a fresh tree failed with sixteen "cannot find module
+# '../purescript/output/Domain.Board/index.js'" errors. It is a real ordering
+# bug, not a CI quirk: a newcomer's first `make jscheck` would have hit it too.
+jscheck: psbuild
 	npm run lint
 	npm run tsc
 
