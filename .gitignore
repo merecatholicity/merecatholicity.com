@@ -65,3 +65,11 @@ local/persona.local.md
 
 # Interactive test-kit identity keys (throwaway, never committed).
 webtest/.testkeys
+
+# The published PDFs live in R2 (files.merecatholicity.com) since 2026-09-08,
+# not in git and not on Pages. docs/ had reached 621 MB against a HARD 1 GB
+# GitHub Pages limit, and 293 MB of that was 244 PDFs. Every previously-shared
+# URL still works: a Cloudflare redirect rule maps /X.pdf to the bucket.
+# Rebuild them with `make -C resources pdf`; publish with
+# `npx wrangler r2 object put merecatholicity-files/<name> --file <path> --remote`.
+docs/*.pdf

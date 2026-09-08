@@ -88,6 +88,18 @@ schema-snapshot:
 	   cat comments-worker/migrations/*.sql; } > comments-worker/schema.sql
 	@echo "regenerated comments-worker/schema.sql from migrations/"
 
+# The list of PDFs the build publishes. They live in R2 rather than on disk
+# since 2026-09-08, so this is what linkcheck validates .pdf hrefs against —
+# without it, "does this PDF exist" would have stopped being checkable and the
+# dead-link class linkcheck exists for would have quietly returned.
+pdf-manifest:
+	@{ $(MAKE) -s -C resources list-pdfs; \
+	   for p in Mere_Catholicity.pdf Mere_Catholicity_Paperback.pdf \
+	            The_Bishop_and_the_Presbyter.pdf The_Bishop_of_Rome.pdf \
+	            Fifty_Objections.pdf Charting_Historic_Communions.pdf \
+	            Charting_Free_Churches.pdf; do echo $$p; done; } | sort > docs/pdfs.txt
+	@echo "pdf-manifest: $$(wc -l < docs/pdfs.txt) published PDFs"
+
 check: jscheck
 	python scripts/linkcheck.py
 

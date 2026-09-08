@@ -238,6 +238,14 @@ PDF_TARGETS = $(foreach w,$(WORKS) $(SCHAFF_PDFS) $(NEWMAN_PDFS),../docs/$(call 
 
 pdf: $(PDF_TARGETS)
 
+# The names of every PDF this build publishes, one per line. linkcheck reads it
+# to validate .pdf hrefs now that the files themselves live in R2 rather than on
+# disk — without it, "does this PDF exist" stopped being checkable at all, which
+# is the exact protection linkcheck was written for after two PDFs shipped as
+# dead links in July 2026.
+list-pdfs:
+	@for p in $(PDF_TARGETS); do basename $$p; done | sort
+
 define PDF_RULE
 ../docs/$(call work_out,$(1)): $(call work_name,$(1)).tex $(call work_name,$(1))-body.tex
 	$$(call LATEX2,$(call work_name,$(1)))
