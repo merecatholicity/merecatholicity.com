@@ -255,7 +255,7 @@ function el(tag: string, cls?: string | null, text?: string | null): HTMLElement
   var kjvData: any = null, kjvPromise: Promise<any> | null = null;
   function loadKjv() {
     if (kjvPromise) return kjvPromise;
-    kjvPromise = fetch('kjv.json').then(function (r) { return r.json(); })
+    kjvPromise = fetch(window.mcAsset ? window.mcAsset('kjv.json') : 'kjv.json').then(function (r) { return r.json(); })
       .then(function (d) { kjvData = d; return d; })
       .catch(function () { kjvData = { books: [] }; return kjvData; });
     return kjvPromise;
@@ -263,7 +263,7 @@ function el(tag: string, cls?: string | null, text?: string | null): HTMLElement
   var drData: any = null, drPromise: Promise<any> | null = null;
   function loadDr() {
     if (drPromise) return drPromise;
-    drPromise = fetch('dr.json').then(function (r) { return r.json(); })
+    drPromise = fetch(window.mcAsset ? window.mcAsset('dr.json') : 'dr.json').then(function (r) { return r.json(); })
       .then(function (d) { drData = d; return d; })
       .catch(function () { drData = { books: [] }; return drData; });
     return drPromise;

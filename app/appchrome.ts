@@ -261,7 +261,7 @@ function ensureQr(): Promise<any> {
   if (qrLoading) return qrLoading;
   qrLoading = new Promise(function (resolve, reject) {
     const s = document.createElement('script');
-    s.src = 'qr.min.js';
+    s.src = window.mcAsset ? window.mcAsset('qr.min.js') : 'qr.min.js';
     s.onload = function () { window.qrcode ? resolve(window.qrcode) : reject(new Error('no qrcode')); };
     s.onerror = function () { qrLoading = null; reject(new Error('qr load failed')); };
     document.head.appendChild(s);
@@ -506,7 +506,7 @@ customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
 class McSettings extends LitElement {
-  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false }, debugOn: { attribute: false } };
+  static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false }, debugOn: { attribute: false }, ver: { attribute: false } };
   declare keyShown: boolean;
   declare theme: string;
   declare art: boolean;
@@ -516,6 +516,7 @@ class McSettings extends LitElement {
   declare presence: string;
   declare sounds: boolean;
   declare debugOn: boolean;
+  declare ver: any;
   declare prefs: any;
   declare panel: string;
   declare blocked: Array<{ hash: string; nick?: string; assigned?: string }> | null;
@@ -530,6 +531,7 @@ class McSettings extends LitElement {
     this.dark = (window.mcGetDark && window.mcGetDark()) || 'charcoal';
     this.light = (window.mcGetLight && window.mcGetLight()) || 'paper'; this.presence = this._presence(); this.sounds = this._sounds();
     try { this.debugOn = localStorage.getItem('mc-debug') === '1'; } catch (e) { this.debugOn = false; }
+    this.ver = null;
     this.prefs = window.mcPrefs || null; this.panel = ''; this.blocked = null;
     this.canInstall = !!(window.mcInstall && window.mcInstall.evt);
     this.pushOn = null; this.pushBusy = false; this.pushMsg = '';   // null = state not yet reflected
@@ -850,6 +852,88 @@ class McSettings extends LitElement {
     if (!on) { try { const el = document.getElementById('mc-debug'); if (el) el.remove(); } catch (e) { /* gone */ } }
   }
 
+  /* Settings → About: what this device is actually running, and whether that is
+     current. The facts come from window.mcVersion (nav.js) rather than being
+     re-derived here, so the panel and the update banner can never disagree —
+     and it still works when the stale thing is this very bundle. */
+  async openAbout() {
+    const open = this.panel === 'about';
+    this._openPanel('about');
+    if (open) return;
+    const v = window.mcVersion;
+    if (!v) { this.ver = { unknown: true }; return; }
+    this.ver = { running: v.running(), served: v.served(), stale: v.stale(), checking: true };
+    /* Ask the server fresh on open — the whole reason someone opens this panel
+       is to find out whether they are behind. */
+    try { await v.check(); } catch (e) { /* offline: show what we have */ }
+    this.ver = { running: v.running(), served: v.served(), stale: v.stale(), checking: false };
+  }
+  _aboutText() {
+    const d: any = this.ver || {};
+    const served = d.served || null;
+    const run = d.running || {};
+    const lines = [];
+    lines.push('version: ' + (served ? served.build : 'unknown'));
+    const names = Object.keys(run).sort();
+    lines.push('running: ' + (names.length
+      ? names.map((n) => n + ' ' + run[n]).join('\n         ') : 'nothing versioned yet'));
+    let mode = 'browser';
+    try {
+      if (window.matchMedia('(display-mode: standalone)').matches
+        || (navigator as any).standalone) mode = 'installed app';
+    } catch (e) { /* fine */ }
+    lines.push('mode: ' + mode);
+    lines.push('service worker: ' + ('serviceWorker' in navigator
+      ? (navigator.serviceWorker.controller ? 'active' : 'not controlling') : 'unsupported'));
+    return lines.join('\n');
+  }
+  _aboutPanel() {
+    if (this.panel !== 'about') return '';
+    const d: any = this.ver || {};
+    if (d.unknown) {
+      return html`<div class="mc-set-key" style="flex-direction:column;align-items:stretch">
+        <p class="mc-about-state">Version information is not available on this page.</p></div>`;
+    }
+    const stale: string[] = d.stale || [];
+    const text = this._aboutText();
+    return html`<div class="mc-set-key" style="flex-direction:column;align-items:stretch;gap:0.5rem">
+      ${d.checking ? html`<p class="mc-about-state">Checking…</p>`
+        : stale.length
+          ? html`<p class="mc-about-state stale">This device is running an older version of the app.</p>`
+          : html`<p class="mc-about-state">This device is up to date.</p>`}
+      <pre class="mc-about-pre">${text}</pre>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+        ${stale.length ? html`<button class="btn btn-send" @click=${() => location.reload()}>Reload to update</button>` : ''}
+        <button class="btn" @click=${(e: any) => this._copyAbout(e)}>Copy</button>
+      </div></div>`;
+  }
+  _copyAbout(e: any) {
+    const btn = e && e.currentTarget;
+    const text = this._aboutText();
+    const done = () => { if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); } };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, () => this._copyFallback(text, done));
+        return;
+      }
+    } catch (err) { /* fall through */ }
+    this._copyFallback(text, done);
+  }
+  _copyFallback(text: string, done: () => void) {
+    /* execCommand is deprecated and still the only road in some in-app
+       browsers, which is exactly where a version report gets asked for. */
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      done();
+    } catch (err) { /* nothing more to try; the text is on screen to select */ }
+  }
+
   async clearCache() {
     const ok = await mcConfirm(
       'Clear this app\u2019s cached data and reload? Your key, your drafts, and your settings are kept.',
@@ -1062,6 +1146,10 @@ class McSettings extends LitElement {
       <button class="mc-set-row mc-set-btn" @click=${() => this.clearCache()}>
         <span>Clear app cache<small>If the app is behaving oddly or looks out of date. Your key, drafts and settings are kept.</small></span>
         <span class="mc-set-go">›</span></button>
+      <button class="mc-set-row mc-set-btn" @click=${() => this.openAbout()}>
+        <span>About<small>App version, and whether this device is up to date.</small></span>
+        <span class="mc-set-go">${this.panel === 'about' ? '▾' : '›'}</span></button>
+      ${this._aboutPanel()}
     </div>`;
   }
 }

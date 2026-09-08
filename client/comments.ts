@@ -51,7 +51,6 @@
   var mcTsFrame: HTMLIFrameElement | null = null;
   var mcTsFrameReady = false;
   var mcTsFell = false;
-  var TS_FRAME_V = 1;
   /* Decrypted DM attachments, as blob: URLs — PAGE-SCOPED, above mcBoot.
 
      A blob URL pins its bytes in memory until something revokes it, and
@@ -92,6 +91,16 @@
       total -= out.bytes;
       try { URL.revokeObjectURL(out.url); } catch (e) { /* already gone */ }
     }
+  }
+
+  /* A runtime-fetched asset's URL, carrying its current cache key. The keys are
+     stamped into nav.js (window.mcAssets), never into this file: a key written
+     here would change comments.js, which would change comments.js's own key.
+     Bare if nav.js has not arrived — an unkeyed URL still works, it is merely
+     cacheable, and the ten-minute Pages TTL heals it. */
+  function asset(name: string): string {
+    var f = window.mcAsset;
+    return f ? f(name) : name;
   }
 
   function mcBoot() {
@@ -805,7 +814,7 @@
      ciphertext is opened by the recipient AND re-read later by the sender. The
      server only ever holds the opaque "E1.<nonce>.<ct>" blob and cannot decrypt.
      nacl is the vendored tweetnacl.min.js, injected once on first use. */
-  var NACL_SRC = 'tweetnacl.min.js?v=1';
+  var NACL_SRC = asset('tweetnacl.min.js');
   var _naclP: any = null;
   function ensureNacl() {
     if (window.nacl) return Promise.resolve(window.nacl);
@@ -1559,7 +1568,7 @@
      path. A finished take is MP3-encoded in the browser (lamejs, lazily injected
      the same way as tweetnacl) so one small format plays everywhere; an encode
      failure falls back to the raw recording — a take is never dead-ended. ---- */
-  var LAME_SRC = 'lamejs.min.js?v=1';
+  var LAME_SRC = asset('lamejs.min.js');
   var _lameP: any = null;
   function ensureLame() {
     var w: any = window;
@@ -1926,7 +1935,7 @@
     f.className = 'mc-ts-frame';
     f.title = 'Verification';
     f.setAttribute('aria-hidden', 'true');
-    f.src = 'turnstile.html?v=' + TS_FRAME_V;
+    f.src = asset('turnstile.html');
     mcTsFrame = f;
     tsHost().appendChild(f);
     trace('turnstile: isolating frame requested');
@@ -2383,7 +2392,7 @@
   var emojiData: any = null, emojiDataPromise: any = null;
   function loadEmojiData() {
     if (emojiDataPromise) return emojiDataPromise;
-    emojiDataPromise = fetch('emoji/emoji-data.json').then(function (r) { return r.json(); })
+    emojiDataPromise = fetch(asset('emoji/emoji-data.json')).then(function (r) { return r.json(); })
       .then(function (d) {
         var flat: any[] = [];
         (d.groups || []).forEach(function (g: any) { g.e.forEach(function (e: any) { flat.push({ c: e[0], a: e[1], k: e[2] }); }); });
@@ -2402,7 +2411,7 @@
   var avatarPresetsPromise: any = null;
   function loadAvatarPresets() {
     if (avatarPresetsPromise) return avatarPresetsPromise;
-    avatarPresetsPromise = fetch('avatars/presets/index.json')
+    avatarPresetsPromise = fetch(asset('avatars/presets/index.json'))
       .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
       .then(function (d) { return (d && d.packs) || []; })
       .catch(function (e) { avatarPresetsPromise = null; throw e; });
@@ -2586,7 +2595,7 @@
   var kjvData: any = null, kjvPromise: any = null;
   function loadKjv() {
     if (kjvPromise) return kjvPromise;
-    kjvPromise = fetch('kjv.json').then(function (r) { return r.json(); })
+    kjvPromise = fetch(asset('kjv.json')).then(function (r) { return r.json(); })
       .then(function (d) { kjvData = d; return d; })
       .catch(function () { kjvData = { books: [] }; return kjvData; });
     return kjvPromise;
@@ -2594,7 +2603,7 @@
   var drData: any = null, drPromise: any = null;
   function loadDr() {
     if (drPromise) return drPromise;
-    drPromise = fetch('dr.json').then(function (r) { return r.json(); })
+    drPromise = fetch(asset('dr.json')).then(function (r) { return r.json(); })
       .then(function (d) { drData = d; return d; })
       .catch(function () { drData = { books: [] }; return drData; });
     return drPromise;

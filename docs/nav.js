@@ -227,6 +227,28 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
+/* Cache keys for everything the CLIENT fetches or injects at runtime — the
+   vendored lazy scripts, the Bible/emoji data files, the Turnstile frame.
+
+   They live here rather than in client/comments.ts for one structural reason: a
+   key written into the bundle's source would change the bundle, which would
+   change the bundle's own key, which would need re-stamping. Keeping them in
+   nav.js — which nothing else is keyed on — breaks that loop. The line below is
+   rewritten wholesale by scripts/stamp_versions.py; do not hand-edit it.
+
+   GitHub Pages serves everything max-age=600 and a Cloudflare purge cannot
+   reach a phone's own cache, so a changing URL is the only real control. Before
+   this, tweetnacl.min.js and lamejs.min.js were pinned at a hand-written ?v=1
+   that had not moved since July. */
+var MC_ASSETS = {"avatars/presets/index.json":"1133856240","dr.json":"3308964207","emoji/emoji-data.json":"295875345","kjv.json":"856040020","lamejs.min.js":"701830801","qr.min.js":"1058418721","turnstile.html":"3089112556","tweetnacl.min.js":"2537342323"};
+window.mcAssets = MC_ASSETS;
+/* `name` with its current key, or bare if we have never heard of it (which is
+   the honest fallback: an unkeyed URL still works, it is merely cacheable). */
+window.mcAsset = function (name) {
+  var v = MC_ASSETS[name];
+  return v ? name + '?v=' + v : name;
+};
+
 /* Deep-link anchors for the generated Scripture and Fathers pages. Loaded from
    here so it reaches every page (all of which already carry nav.js) without
    rebuilding any of them; the script itself no-ops on the hand-authored pages. */
@@ -238,8 +260,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 /* The installable face's identity, declared HERE — the first script every page
    carries — not from the app bundle: iOS captures the manifest at the moment
-   the reader taps Add to Home Screen, and a tap in the seconds before app.js
-   arrived over the network produced a manifest-less white web clip (seen live
+   the reader taps Add to Home Screen, and a tap in the seconds before the app
+   bundle arrived over the network produced a manifest-less white web clip (seen live
    2026-08-02). The shell's own injection stays as a guard; both are idempotent.
    apple-touch-icon gives iOS a real icon even for a pre-manifest capture. */
 (function () {
@@ -269,7 +291,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=2326350655';
+    s.src = 'app.js?v=2920300294';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }
@@ -391,6 +413,9 @@ document.addEventListener('DOMContentLoaded', function () {
       return window.performance.now() < 30000;
     } catch (e) { return false; }
   }
+  /* Shared with the update banner below via window.mcTyping — ONE definition,
+     because two copies of "is the reader mid-compose" would drift and the
+     one that drifted would be the one that ate somebody's post. */
   function typing() {
     var el = document.activeElement;
     if (el && (el.tagName === 'TEXTAREA' || el.isContentEditable ||
@@ -417,6 +442,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     return false;
   }
+  window.mcTyping = typing;
   /* key names the CAUSE ('page:/feed.html', 'sw') — the worker resends each
      signal several times (single sends race document creation and reach
      nobody), and the same cause may arrive over two channels, so a stamp in
@@ -480,6 +506,152 @@ document.addEventListener('DOMContentLoaded', function () {
       }).catch(function () { /* no registration: nothing to prime */ });
     } catch (e) { /* fine */ }
   }, 2500);
+})();
+
+/* IS THIS DEVICE RUNNING THE CURRENT APP? (2026-09-08)
+
+   Every asset now carries a content-hash key, and docs/version.json is the
+   manifest of what the server currently serves. This compares that manifest
+   against the keys THIS PAGE IS ACTUALLY RUNNING — read off the live <script>
+   and <link> URLs, not from a constant compiled in.
+
+   Comparing what is loaded rather than a stamped-in build id is the whole
+   point: the real hazard on this site is a browser- or service-worker-cached
+   HTML skeleton whose baked-in ?v= keys are older than the kernel it is
+   talking to. A constant would say "I am build X" and be right about itself
+   while the page around it was stale. The URLs cannot lie.
+
+   Lives in nav.js, like the service-worker pump and for the same reason: it is
+   the first script on every page and it keeps working when the stale thing IS
+   the app bundle.
+
+   It PROMPTS and never acts. The owner's call, and the right one — the app has
+   spent a week being reloaded out from under its reader. */
+(function () {
+  var VERSION_URL = 'version.json';
+  var manifest = null;
+
+  /* What this page is actually running: {asset: key} read from the DOM. */
+  function running() {
+    var out = {};
+    var nodes = document.querySelectorAll('script[src], link[href]');
+    for (var i = 0; i < nodes.length; i++) {
+      var raw = nodes[i].getAttribute('src') || nodes[i].getAttribute('href') || '';
+      var m = /([^/?#]+)\?v=([0-9a-z]+)/.exec(raw);
+      if (m) out[m[1]] = m[2];
+    }
+    return out;
+  }
+
+  /* Which assets this page carries that the server has since moved on from.
+     Only assets present in BOTH are compared: a page that does not load
+     comments.js is not stale for lacking it. */
+  function behind(served) {
+    var have = running(), out = [];
+    for (var k in have) {
+      if (Object.prototype.hasOwnProperty.call(have, k) &&
+          served[k] && served[k] !== have[k]) out.push(k);
+    }
+    return out;
+  }
+
+  function typingNow() {
+    /* The shared guard when it exists. It is defined inside the service-worker
+       block, which returns early where workers are unsupported or the app is
+       latched off — hence the small honest fallback rather than a second full
+       copy that could drift from the original. */
+    if (window.mcTyping) { try { return window.mcTyping(); } catch (e) { /* fall through */ } }
+    var tas = document.querySelectorAll('textarea');
+    for (var i = 0; i < tas.length; i++) if (tas[i].value) return true;
+    return false;
+  }
+
+  var bar = null;
+  function dismissed(build) {
+    try { return sessionStorage.getItem('mc-ver-hide') === build; } catch (e) { return false; }
+  }
+  function banner(build, stale) {
+    if (bar || dismissed(build)) return;
+    /* Never over a half-written post. It will be offered again on the next
+       check, which is at most five minutes away. */
+    if (typingNow()) return;
+    bar = document.createElement('div');
+    bar.className = 'mc-update-bar';
+    bar.setAttribute('role', 'status');
+    var msg = document.createElement('span');
+    msg.textContent = 'A new version of the app is ready.';
+    var go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'mc-update-go';
+    go.textContent = 'Reload';
+    go.onclick = function () {
+      if (window.mcCrumb) window.mcCrumb('update banner -> reload (' + stale.join(',') + ')');
+      location.reload();
+    };
+    var later = document.createElement('button');
+    later.type = 'button';
+    later.className = 'mc-update-later';
+    later.textContent = 'Later';
+    later.onclick = function () {
+      try { sessionStorage.setItem('mc-ver-hide', build); } catch (e) { /* fine */ }
+      if (bar && bar.parentNode) bar.parentNode.removeChild(bar);
+      bar = null;
+    };
+    bar.appendChild(msg);
+    bar.appendChild(go);
+    bar.appendChild(later);
+    /* data-mc-app marks furniture the app shell preserves across a <main>
+       swap, so a soft navigation does not silently drop the notice. */
+    bar.setAttribute('data-mc-app', '');
+    document.body.appendChild(bar);
+  }
+
+  function check() {
+    /* no-store, not no-cache: the answer to "what is current" must never come
+       from the cache being asked about. */
+    return fetch(VERSION_URL, { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.assets) return null;
+        manifest = d;
+        var stale = behind(d.assets);
+        if (stale.length) {
+          if (window.mcCrumb) window.mcCrumb('version: behind on ' + stale.join(','));
+          banner(d.build, stale);
+        }
+        return d;
+      })
+      .catch(function () { return null; });   // offline: silence, not a scare
+  }
+
+  /* Read by the Settings → About panel, so there is one source of truth about
+     what this device is running. */
+  window.mcVersion = {
+    running: running,
+    served: function () { return manifest; },
+    stale: function () { return manifest ? behind(manifest.assets) : []; },
+    check: check,
+  };
+
+  /* The same rhythm as the service-worker pump: on return to the foreground, on
+     a restored page, and an hourly tick — throttled so a busy tab-switcher asks
+     once per five minutes. version.json is a few hundred bytes of static Pages
+     content: no worker request, nothing against the free-tier budget. */
+  var last = 0;
+  function paced() {
+    var now = Date.now();
+    if (now - last < 300000) return;
+    last = now;
+    check();
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') paced();
+  });
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) paced(); });
+  setInterval(paced, 3600000);
+  /* One check shortly after load, late enough not to compete with the page's
+     own first paint and its data fetches. */
+  setTimeout(paced, 4000);
 })();
 
 /* ?debug=1: a small diagnostic overlay for the next "the app is acting up"

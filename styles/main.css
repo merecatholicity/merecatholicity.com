@@ -2845,3 +2845,33 @@ html, body { overscroll-behavior-y: contain; }
 /* A smaller reserve of space for panels and popovers, where a full-page-height
    placeholder would push the panel around. */
 .mc-load-sm { min-height: 4.5rem; }
+
+/* The "a new version is ready" notice (docs/nav.js). Deliberately plain and
+   bottom-anchored: it is a courtesy, not an interruption, and it must never
+   cover a composer's send button. Safe-area aware for the installed app. */
+.mc-update-bar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  z-index: 9997; display: flex; align-items: center; gap: 10px;
+  max-width: min(92vw, 30rem); padding: 10px 12px;
+  border: 1px solid var(--rule); border-radius: 12px;
+  background: var(--surface); color: var(--ink);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 28%); font-size: 0.9rem;
+}
+.mc-update-bar button {
+  font: inherit; cursor: pointer; border-radius: 8px; padding: 6px 12px;
+  border: 1px solid var(--rule); background: transparent; color: inherit;
+}
+.mc-update-go { background: var(--maroon) !important; color: #fff !important; border-color: var(--maroon) !important; }
+.mc-update-bar button:active { filter: brightness(0.92); }
+
+/* Settings → About. A plain readable block, and the <pre> is what the Copy
+   button hands over, so a report can be pasted instead of screenshotted. */
+.mc-about-pre {
+  margin: 0; padding: 10px; border-radius: 8px;
+  border: 1px solid var(--rule); background: var(--faint);
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+}
+.mc-about-state { margin: 0 0 8px; font-size: 0.92rem; }
+.mc-about-state.stale { color: var(--maroon); font-weight: 600; }

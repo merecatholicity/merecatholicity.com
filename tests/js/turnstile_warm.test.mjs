@@ -182,8 +182,10 @@ test('the challenge runs in its own browsing context', () => {
    * challenge-platform navigation can only take a same-origin iframe the
    * reader never sees. */
   assert.ok(/function tsEnsureFrame\(\)/.test(src), 'the isolating frame is gone');
-  assert.ok(/f\.src = 'turnstile\.html\?v=' \+ TS_FRAME_V;/.test(src),
-    'the frame must load our own page, versioned by hand (it carries no stamp)');
+  assert.ok(/f\.src = asset\('turnstile\.html'\);/.test(src),
+    "the frame must load our own page, and take its cache key from nav.js's stamped " +
+    'asset map — it was hand-versioned at ?v=1, which is exactly the kind of key ' +
+    'nobody remembers to bump (scripts/stamp_versions.py owns it now)');
   const load = src.slice(src.indexOf('function loadTurnstile()'), src.indexOf('function loadTurnstile()') + 800);
   assert.ok(/if \(!mcTsFell\) \{ tsEnsureFrame\(\); return; \}/.test(load),
     'the parent must not load Cloudflare\'s script at all while the frame is carrying it — ' +

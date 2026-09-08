@@ -123,6 +123,11 @@ html:
 	$(MAKE) -C resources html
 	python scripts/inject_social.py
 	$(MAKE) strip-nav sync-index library-order sitemap
+# The generators above (pandoc's --css=, content.py, nav.py, the resources
+# converters) emit BARE style.css / nav.js references, so the stamp has to be
+# the last word here or the two fight every build — the partials/book-tail.html
+# incident, one level up. Idempotent, so running it twice costs nothing.
+	python scripts/stamp_versions.py
 	@echo "built book.html"
 	$(MAKE) check
 

@@ -101,6 +101,21 @@ declare global {
        go through this, not `location.href` — a raw assignment is a full
        document load: the white flash, the lost scroll, the dropped socket. */
     mcNav?: (href: string, replace?: boolean) => void;
+    /* Cache keys for what the client fetches or injects at runtime, stamped
+       into nav.js by scripts/stamp_versions.py. They live there rather than in
+       this bundle's source because a key written HERE would change the bundle,
+       which would change the bundle's own key — a fixpoint with no solution. */
+    mcAssets?: Record<string, string>;
+    mcAsset?: (name: string) => string;
+    /* The version manifest and what this page is running (docs/nav.js), read
+       by Settings → About so the panel and the update banner cannot disagree. */
+    mcVersion?: {
+      running: () => Record<string, string>;
+      served: () => { build: string; assets: Record<string, string> } | null;
+      stale: () => string[];
+      check: () => Promise<any>;
+    };
+    mcTyping?: () => boolean;
     /* nav.js's persistent breadcrumb ring: it survives the very reload it
        exists to explain, so anything that unloads or replaces the page
        should name itself here first. */
