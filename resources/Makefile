@@ -488,48 +488,60 @@ catena-html:
 # The 36 Schaff volumes, same preprocessing and pandoc invocation as the
 # curated works above, driven by SCHAFF_HTML (from schaff.mk). Kept as its
 # own target so the whole corpus can be (re)built on its own.
-schaff-html:
-	for w in $(SCHAFF_HTML); do \
-	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
+# ONE TARGET PER VOLUME (2026-09-08). These were `for` loops with no
+# prerequisites, so every build re-ran pandoc over all 102 Schaff and Newman
+# works whether anything had changed or not — anf03 alone takes 25 seconds, and
+# the whole sweep runs about 35 minutes, on every single build. The PDFs beside
+# them have been properly dependency-tracked all along (PDF_RULE above); this
+# gives their HTML the same treatment, so a changed body rebuilds ONE page.
+#
+# The recipe is the loop's own body, unchanged but for an id filter. It still
+# iterates the list in shell because SCHAFF_HTML CANNOT be iterated by make: its
+# titles contain spaces, and make has no notion of the double quotes that group
+# them, so $(foreach) over it produced targets like ../docs/Vol..html. The ids
+# come from the PDF list instead, whose `id=Output.pdf` fields never contain a
+# space. CORPUS_LIST is set per-corpus below, so one rule serves both.
+#
+# nav.html and footer.html are real prerequisites: they are pandoc -B/-A
+# includes baked into every page, so `make menu` still rebuilds all of them.
+define HTML_RULE
+../docs/$(1).html: $(1).tex $(1)-body.tex ../partials/nav.html ../partials/footer.html
+	for w in $$(CORPUS_LIST); do \
+	  n=$$$${w%%:*}; [ "$$$$n" = "$(1)" ] || continue; \
+	  r=$$$${w#*:}; d=$$$${r%%:*}; t=$$$${r#*:}; \
 	  sed -e 's/\\xchapter{/\\section*{/g' \
 	      -e 's/\\xsection{/\\subsection*{/g' \
 	      -e 's/\\xsubsection{/\\paragraph{/g' \
 	      -e 's/\\textgreek{/{/g' \
 	      -e 's/\\texthebrew{/{/g' \
 	      -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
-	      $$n-body.tex > $$n-body-html.tex; \
-	  sed -e "s/{$$n-body.tex}/{$$n-body-html.tex}/" \
-	      -e 's/\\hrule height [0-9.]*pt//g' $$n.tex | \
-	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
-	      --metadata title="$$t" \
+	      $$$$n-body.tex > $$$$n-body-html.tex; \
+	  sed -e "s/{$$$$n-body.tex}/{$$$$n-body-html.tex}/" \
+	      -e 's/\\hrule height [0-9.]*pt//g' $$$$n.tex | \
+	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$$$d \
+	      --metadata title="$$$$t" \
 	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/$$n.html || exit 1; \
-	  rm $$n-body-html.tex; \
-	  echo "built $$n.html"; \
+	      -o ../docs/$$$$n.html || exit 1; \
+	  rm $$$$n-body-html.tex; \
+	  echo "built $$$$n.html"; \
 	done
+endef
+
+SCHAFF_IDS = $(foreach w,$(SCHAFF_PDFS),$(firstword $(subst =, ,$(w))))
+NEWMAN_IDS = $(foreach w,$(NEWMAN_PDFS),$(firstword $(subst =, ,$(w))))
+SCHAFF_HTML_PAGES = $(foreach n,$(SCHAFF_IDS),../docs/$(n).html)
+NEWMAN_HTML_PAGES = $(foreach n,$(NEWMAN_IDS),../docs/$(n).html)
+$(foreach n,$(SCHAFF_IDS) $(NEWMAN_IDS),$(eval $(call HTML_RULE,$(n))))
+$(SCHAFF_HTML_PAGES): CORPUS_LIST = $(SCHAFF_HTML)
+$(NEWMAN_HTML_PAGES): CORPUS_LIST = $(NEWMAN_HTML)
+
+schaff-html: $(SCHAFF_HTML_PAGES)
+
 
 # The Newman corpus, same preprocessing and pandoc invocation as the
 # curated works and Schaff volumes, driven by NEWMAN_HTML (from
 # newman.mk). Its \x-macros and note-as-footnote body come from newman.py.
-newman-html:
-	for w in $(NEWMAN_HTML); do \
-	  n=$${w%%:*}; r=$${w#*:}; d=$${r%%:*}; t=$${r#*:}; \
-	  sed -e 's/\\xchapter{/\\section*{/g' \
-	      -e 's/\\xsection{/\\subsection*{/g' \
-	      -e 's/\\xsubsection{/\\paragraph{/g' \
-	      -e 's/\\textgreek{/{/g' \
-	      -e 's/\\texthebrew{/{/g' \
-	      -e 's/\[/{[}/g' -e 's/\]/{]}/g' \
-	      $$n-body.tex > $$n-body-html.tex; \
-	  sed -e "s/{$$n-body.tex}/{$$n-body-html.tex}/" \
-	      -e 's/\\hrule height [0-9.]*pt//g' $$n.tex | \
-	  pandoc -f latex -t html5 --standalone --toc --toc-depth=$$d \
-	      --metadata title="$$t" \
-	      --css=style.css -B ../partials/nav.html -A ../partials/footer.html \
-	      -o ../docs/$$n.html || exit 1; \
-	  rm $$n-body-html.tex; \
-	  echo "built $$n.html"; \
-	done
+newman-html: $(NEWMAN_HTML_PAGES)
 
 # Re-download the NewmanReader scrape for every work in newman.py's WORKS
 # table into newman-src/ (git-ignored, reproducible); 'make body' then
