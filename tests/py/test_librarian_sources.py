@@ -33,9 +33,20 @@ sys.path.insert(0, LIB)
 import ingest  # noqa: E402
 
 
+# librarian/private/ is a SEPARATE PRIVATE REPOSITORY cloned into place, git
+# -ignored here and deliberately absent from any public checkout — including
+# CI, where it must never appear. Its 31 works are therefore expected to be
+# unresolvable when it is not present, and only then.
+HAVE_PRIVATE = os.path.isdir(os.path.join(LIB, 'private'))
+
+
 def manifest():
     with open(os.path.join(LIB, 'works.yml'), encoding='utf-8') as f:
-        return yaml.safe_load(f)['works']
+        works = yaml.safe_load(f)['works']
+    if HAVE_PRIVATE:
+        return works
+    return {w: e for w, e in works.items()
+            if not (isinstance(e, dict) and str(e.get('src', '')).startswith('private/'))}
 
 
 class Sources(unittest.TestCase):
@@ -64,6 +75,19 @@ class Sources(unittest.TestCase):
         self.assertTrue(os.path.exists(ingest.src_path('../book.html')),
                         '../book.html must resolve into docs/')
         self.assertTrue(ingest.src_path('../book.html').replace('\\', '/').endswith('docs/book.html'))
+
+    @unittest.skipUnless(HAVE_PRIVATE, 'the private shelf is not cloned here')
+    def test_the_private_shelf_is_reached_by_its_own_path(self):
+        """Its entries address files inside librarian/ and were never touched by
+        the docs/ reorg — which is exactly why 31 works kept resolving while the
+        other 257 silently did not."""
+        with open(os.path.join(LIB, 'works.yml'), encoding='utf-8') as f:
+            all_works = yaml.safe_load(f)['works']
+        priv = [e['src'] for e in all_works.values()
+                if isinstance(e, dict) and str(e.get('src', '')).startswith('private/')]
+        self.assertTrue(priv, 'no private works in the manifest at all')
+        for rel in priv:
+            self.assertTrue(os.path.exists(ingest.src_path(rel)), rel)
 
     def test_a_path_that_resolves_as_written_still_wins(self):
         """The private shelves address files inside librarian/ and must not be
