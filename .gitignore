@@ -87,8 +87,29 @@ docs/*.pdf
 #
 # A clean clone therefore has the sources but not the built pages: `make html`
 # builds them, and CI caches the result between runs.
+# The corpus pages are generated from content/ and resources/*.tex. These
+# FIFTEEN are not: they are hand-written and live nowhere else — the whole app
+# (index, community, messages, profile, feed, admin, merecat-ai, journal), the
+# contact and away pages, the two prose pages, the Turnstile iframe, and
+# Google's site-verification file. Ignoring docs/*.html without these deleted
+# every one of them and broke the build twice. A NEW hand page must be added
+# here, and tests/py/test_docs_sources.py fails if one is not.
 docs/*.html
+!docs/admin.html
+!docs/away.html
+!docs/community.html
+!docs/contact.html
+!docs/feed.html
+!docs/google6ba8200a89171ee8.html
+!docs/hours.html
+!docs/index.html
+!docs/journal.html
+!docs/merecat-ai.html
+!docs/messages.html
+!docs/profile.html
+!docs/the-book.html
 !docs/turnstile.html
+!docs/where-to-begin.html
 docs/app.js
 docs/comments.js
 docs/style.css
