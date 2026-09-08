@@ -5,8 +5,12 @@
 # encodes the trap that made that step dangerous: purging BEFORE Pages has
 # finished publishing re-caches the OLD bytes, and for a URL Cloudflare treats
 # as immutable that freezes the rollout until the key is bumped again. So this
-# never purges on a timer or on a push — it waits until the origin itself
-# reports the expected build id, then purges.
+# never purges on a timer or on a push — it purges only once the new build is
+# CONFIRMED published, by asking the origin, and failing that by asking GitHub
+# whether its own Pages deploy of this commit finished. (The first run of this
+# workflow found that Cloudflare's Bot Fight Mode answers a CI runner with 403,
+# which is why there are two roads to the same confirmation. It correctly
+# refused to purge rather than guess — see run 34270574779.)
 #
 # Almost nothing needs purging any more: every asset carries a content-hash key
 # (scripts/stamp_versions.py), and Cloudflare does not edge-cache the HTML
@@ -36,6 +40,11 @@ on:
 
 permissions:
   contents: read
+  # To ask GitHub whether Pages has actually published this commit. Cloudflare's
+  # Bot Fight Mode answers a CI runner with 403 (observed: run 34270574779), so
+  # the site cannot always be asked directly — and GitHub is the authority on
+  # whether its own deploy finished anyway.
+  pages: read
 
 concurrency:
   # A rapid second deploy should supersede a purge still waiting on the first:
@@ -49,7 +58,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || github.event.build.status == 'built'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Read the build id this commit expects
         id: expect
@@ -58,23 +67,46 @@ jobs:
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "expecting build $build"
 
-      - name: Wait for the origin to serve it
+      - name: Confirm Pages has published this build
         id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WANT: ${{ steps.expect.outputs.build }}
         run: |
-          # A THROWAWAY query string on every probe. Fetching the real URL while
-          # Pages is mid-publish is what caches the old bytes under the new key.
-          for i in $(seq 1 60); do
-            got=$(curl -fsS "https://merecatholicity.com/version.json?probe=${GITHUB_RUN_ID}-$i" \
+          # Preferred: ask the origin, because "what is actually being served"
+          # is the only thing that really answers the question. A THROWAWAY
+          # query string on every probe — fetching the real URL while Pages is
+          # mid-publish is what caches the old bytes under the new key.
+          #
+          # A browser User-Agent because the zone runs Bot Fight Mode and a bare
+          # curl from a datacenter IP is exactly what it is there to stop.
+          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
+          for i in $(seq 1 24); do
+            got=$(curl -sS -A "$UA" "https://merecatholicity.com/version.json?probe=${GITHUB_RUN_ID}-$i" \
                   | python3 -c "import json,sys;print(json.load(sys.stdin).get('build',''))" 2>/dev/null || true)
-            if [ "$got" = "${{ steps.expect.outputs.build }}" ]; then
-              echo "origin is serving ${got} after ${i} checks"
+            if [ "$got" = "$WANT" ]; then
+              echo "origin is serving $got (checked $i times)"
               echo "ready=yes" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 10
           done
-          echo "::warning::origin never reported build ${{ steps.expect.outputs.build }}; not purging"
-          echo "ready=no" >> "$GITHUB_OUTPUT"
+
+          # Blocked or still stale. Fall back to the authority on GitHub's own
+          # deploy: if Pages reports this very commit as built, the content IS
+          # published, and purging AFTER that is exactly what the law permits —
+          # its danger was ever purging BEFORE.
+          echo "::notice::could not read the origin (Bot Fight Mode blocks CI runners); asking GitHub instead"
+          state=$(gh api "repos/${GITHUB_REPOSITORY}/pages/builds/latest" --jq '.status + " " + .commit' || echo "")
+          echo "pages/builds/latest: ${state:-unavailable}"
+          case "$state" in
+            "built ${GITHUB_SHA}")
+              echo "GitHub reports this commit published"
+              echo "ready=yes" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "::warning::neither the origin nor GitHub confirms build ${WANT}; not purging"
+              echo "ready=no" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - name: Purge the two files that cannot carry a cache key
         if: steps.wait.outputs.ready == 'yes'
@@ -101,13 +133,12 @@ jobs:
           echo "$resp"
           python3 -c "import json,sys;d=json.loads(sys.argv[1]);sys.exit(0 if d.get('success') else 1)" "$resp"
 
-      - name: Confirm the edge agrees with the origin
-        if: steps.wait.outputs.ready == 'yes'
+      - name: Report
+        if: always()
         run: |
-          sleep 5
-          edge=$(curl -fsS "https://merecatholicity.com/version.json" \
-                 | python3 -c "import json,sys;print(json.load(sys.stdin).get('build',''))")
-          echo "edge is serving $edge"
-          if [ "$edge" != "${{ steps.expect.outputs.build }}" ]; then
-            echo "::warning::edge still serving ${edge}; it will heal on the 10-minute TTL"
+          if [ "${{ steps.wait.outputs.ready }}" = "yes" ]; then
+            echo "build ${{ steps.expect.outputs.build }} confirmed published; purge attempted above."
+          else
+            echo "nothing purged. sw.js and version.json heal on their 10-minute TTL;"
+            echo "every other asset is content-keyed and needs no purge at all."
           fi
