@@ -30,6 +30,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: build-${{ github.ref }}
@@ -155,7 +157,31 @@ jobs:
             echo "committed output matches a fresh build"
           fi
 
+      - name: The artifact must carry CNAME and .nojekyll
+        run: |
+          # Losing CNAME from the served folder once unbound the custom domain
+          # and 404'd the entire site ("Site not found - GitHub Pages"). When
+          # Pages is served from an artifact rather than a branch, the artifact
+          # IS the served folder, so the check belongs here.
+          test -f docs/CNAME || { echo "::error::docs/CNAME is missing"; exit 1; }
+          test -f docs/.nojekyll || { echo "::error::docs/.nojekyll is missing"; exit 1; }
+          echo "CNAME -> $(cat docs/CNAME)"
+
       - name: Package the site for Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+
+  # Deploy only from main, and only after the build above proved itself. A pull
+  # request — including one from a fork, which cannot read secrets at all —
+  # builds and is checked, and never touches production.
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
