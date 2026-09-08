@@ -88,6 +88,11 @@ comments-worker/ Cloudflare Worker: comments, forum, DMs, notifications, profile
                  moderation, AND merecat. Routes /api/comments* and /api/merecat*.
 contact-worker/  Cloudflare Worker: the contact form (contact-api.merecatholicity.com).
 
+terraform/       Infrastructure as code for the DURABLE infrastructure only: DNS, zone
+                 policy, the edge header/firewall/rate-limit rulesets, R2 buckets, D1
+                 databases, Turnstile widgets, and both GitHub repos. Deliberately does
+                 NOT touch anything wrangler deploys. State lives in R2, never in git.
+
 librarian/       merecat's "mind": works.yml (the corpus manifest), persona.md,
                  config.yml, ingest.py (builds + pushes the RAG corpus). librarian/private/
                  is a SEPARATE private repo cloned into place (never committed here).
@@ -447,6 +452,34 @@ cd contact-worker && npx wrangler deploy  # contact worker
 
 Never deploy the comments worker directly — `make worker-deploy` runs `jscheck` first,
 because an undefined identifier in plain JS ships silently otherwise.
+
+### Infrastructure as code (Terraform)
+
+`terraform/` holds the infrastructure that outlives a deploy. It was adopted by import
+from what already existed — Terraform did not create the site, and applying it changes
+nothing.
+
+**The boundary is the deploy.** `wrangler deploy` rewrites a worker's routes, cron
+triggers, bindings, vars and secrets every time it runs. If Terraform also declared
+those, the two tools would fight forever: every `make worker-deploy` would produce a
+Terraform diff and every `terraform apply` would produce a wrangler diff. So Terraform
+owns the zone, DNS, the three custom rulesets, bot management, the R2 buckets, the D1
+databases *as records that they exist*, the Turnstile widgets and both GitHub repos —
+forty resources — and wrangler keeps everything it deploys. Vectorize, the R2 custom
+domain and the TURN key cannot be managed at all (no resource, or no import support);
+`terraform/README.md` lists them and why.
+
+```sh
+. path/to/your/credentials            # CLOUDFLARE_API_TOKEN, GITHUB_TOKEN, AWS_* for R2
+terraform -chdir=terraform plan       # expect: No changes
+```
+
+State lives in the R2 bucket `merecatholicity-tfstate`, which is deliberately not
+managed by Terraform (a state store managed by its own state cannot be bootstrapped).
+**State is secret** — it carries Turnstile secret keys, and this repository is public.
+Never apply a plan that shows a destroy or a replace: a replaced D1 database destroys
+the comments database. `prevent_destroy` guards every stateful resource, but reading
+the plan is the real defence.
 
 ---
 

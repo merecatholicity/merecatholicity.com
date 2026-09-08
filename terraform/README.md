@@ -15,9 +15,9 @@ at the deploy:
 
 **Terraform owns** — the zone and three deliberate zone settings, all 18 DNS
 records, the three custom rulesets (response headers, custom firewall, rate
-limiting), bot management, Email Routing settings, the six R2 buckets, the four
-D1 databases *as records that they exist*, the two Turnstile widgets, and both
-GitHub repositories including the Pages configuration.
+limiting), bot management, the six R2 buckets, the four D1 databases *as records
+that they exist*, the two Turnstile widgets, and both GitHub repositories
+including the Pages configuration. Forty resources in all.
 
 **wrangler owns** — worker scripts and versions, all bindings, vars, secrets,
 `routes`, `triggers.crons`, and D1 migrations. None of that appears here. The
@@ -42,6 +42,12 @@ reason is the provider, not a choice:
 - **The Realtime TURN key (`merecatholicity-calls`)** — `cloudflare_calls_turn_app`
   likewise has no import. Adopting it would mint a *new* key with a new id,
   breaking `TURN_KEY_ID` and every voice call. Leave it alone.
+- **Email Routing settings** — `cloudflare_email_routing_settings` cannot be
+  read by provider 5.24.0 at all: it fails with "Struct defines fields not found
+  in object: support_subaddress", a bug in the provider's decoder rather than in
+  this config. The *DNS records* Email Routing depends on (three MX, SPF, DMARC,
+  both DKIM) are managed in `dns.tf`; only the on/off settings object is not.
+  Worth retrying on a provider bump.
 
 ## Blast radius
 

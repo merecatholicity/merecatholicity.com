@@ -81,7 +81,12 @@ jobs:
           # A browser User-Agent because the zone runs Bot Fight Mode and a bare
           # curl from a datacenter IP is exactly what it is there to stop.
           UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
-          for i in $(seq 1 24); do
+          # Six tries, not twenty-four: with Bot Fight Mode on, a CI runner is
+          # 403'd reliably rather than occasionally, so a long poll here just
+          # burns four minutes of every deploy before reaching the answer that
+          # was always going to arrive from GitHub. One minute is enough to
+          # catch the case where the origin CAN be read.
+          for i in $(seq 1 6); do
             got=$(curl -sS -A "$UA" "https://merecatholicity.com/version.json?probe=${GITHUB_RUN_ID}-$i" \
                   | python3 -c "import json,sys;print(json.load(sys.stdin).get('build',''))" 2>/dev/null || true)
             if [ "$got" = "$WANT" ]; then
