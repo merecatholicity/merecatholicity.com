@@ -74,18 +74,29 @@ webtest/.testkeys
 # `npx wrangler r2 object put merecatholicity-files/<name> --file <path> --remote`.
 docs/*.pdf
 
-# THE SERVED SITE IS BUILT, NOT COMMITTED (2026-09-08).
+# THE BUILT SITE (2026-09-08). Pages is deployed from the workflow's artifact,
+# not from this branch, so what the build WRITES is output and does not belong
+# in git. It had reached 621 MB against a hard 1 GB Pages limit, and 615 of the
+# ~800 largest blobs in history were under docs/.
 #
-# GitHub Pages is deployed from .github/workflows/build.yml's artifact, not from
-# this branch, so docs/ is output rather than source. It had reached 621 MB
-# against a hard 1 GB Pages limit and was the bulk of a 928 MB pack — 615 of the
-# ~800 largest blobs in history were under it.
+# docs/ is a MIXTURE, and the distinction is load-bearing: nav.js, sw.js, the
+# vendored libraries, turnstile.html, CNAME, .nojekyll and every image are
+# HAND-MAINTAINED SOURCE that lives nowhere else. A blanket `docs/` ignore
+# deleted them and broke the build within one commit. Only the generated set is
+# listed here — 284 files, 315 MB — and the 297 source files (10 MB) stay.
 #
-# Consequences worth knowing:
-#   * A clean clone has no docs/. `make html` builds it; CI caches it between
-#     runs so a normal change rebuilds only what it touched.
-#   * The site can no longer be recovered from a git checkout alone. It is
-#     rebuilt from source, which is the point — the sources ARE committed.
-#   * docs/CNAME and docs/.nojekyll are still generated into the artifact and
-#     the build fails without them: losing CNAME once unbound the custom domain.
-docs/
+# A clean clone therefore has the sources but not the built pages: `make html`
+# builds them, and CI caches the result between runs.
+docs/*.html
+!docs/turnstile.html
+docs/app.js
+docs/comments.js
+docs/style.css
+docs/version.json
+docs/pdfs.txt
+docs/sitemap.xml
+docs/library-order.json
+docs/kjv.json
+docs/dr.json
+docs/emoji/emoji-data.json
+docs/avatars/presets/index.json

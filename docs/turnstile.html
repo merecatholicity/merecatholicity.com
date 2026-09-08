@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Verification</title>
+<!--
+  THE CHALLENGE, IN ITS OWN BROWSING CONTEXT.
+
+  Why this page exists (2026-09-08, after five failed attempts at the same
+  bug): in the installed iOS app, the document was being replaced about one to
+  two seconds after the Turnstile widget mounted — a load(navigate) to the URL
+  already on screen, with no pagehide, no beforeunload and no JavaScript error.
+  Every fix that moved WHEN the widget mounted moved the symptom with it
+  (submit, then typing, then opening a conversation) and none of them stopped
+  it, which is the evidence that the mount itself is what takes the page.
+
+  A cross-origin challenge cannot be argued with, so it is contained instead.
+  The widget lives here, in a same-origin iframe. If the challenge platform
+  navigates its top-level document, the document it navigates is THIS one — a
+  blank 300x65 box the reader never sees — and the app above it does not so
+  much as blink. The token comes back over postMessage.
+
+  This page is deliberately standalone: no nav.js, no app shell, no service
+  worker (sw.js only ever serves what it positively holds, and it does not hold
+  this), nothing that could make it heavier than the one job it has. It is NOT
+  in nav.py's PAGES list and must never be added.
+
+  It is referenced as turnstile.html?v=N from client/comments.ts — bump that N
+  by hand if this file changes, since it carries no automatic stamp.
+-->
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  #w { line-height: 0; }
+</style>
+</head>
+<body>
+<div id="w"></div>
+<script>
+(function () {
+  'use strict';
+  /* The parent is same-origin by construction; anything else is not ours. */
+  var ORIGIN = location.origin;
+  var widgetId = null;
+
+  function tell(msg) {
+    try { if (parent && parent !== window) parent.postMessage(msg, ORIGIN); } catch (e) { /* gone */ }
+  }
+
+  function render() {
+    if (!window.turnstile) return;
+    try {
+      widgetId = window.turnstile.render('#w', {
+        sitekey: '0x4AAAAAAD8IYH9_xQ0HE0yB',
+        /* Invisible unless a human check is genuinely wanted. */
+        appearance: 'interaction-only',
+        /* Do NOT re-run the challenge on a timer. The default ('auto') fires a
+           fresh challenge every time a token expires — about every five
+           minutes, for as long as the page is open, whether or not the reader
+           is doing anything. The owner's crumb ring caught exactly that:
+           two "token ready" entries 292 seconds apart with nobody touching the
+           screen. Token freshness is the parent's business; it discards a
+           stale one and asks for another at the moment of the press. */
+        'refresh-expired': 'never',
+        /* And do not retry a failed challenge on an eight-second loop. The
+           parent's request has its own bounded wait and its own honest error. */
+        retry: 'never',
+        callback: function (token) { tell({ mcTs: 'token', token: token }); },
+        'error-callback': function () { tell({ mcTs: 'error' }); return true; },
+        'expired-callback': function () { tell({ mcTs: 'expired' }); },
+        'before-interactive-callback': function () { tell({ mcTs: 'interactive', on: true }); },
+        'after-interactive-callback': function () { tell({ mcTs: 'interactive', on: false }); },
+      });
+      tell({ mcTs: 'ready' });
+    } catch (e) {
+      tell({ mcTs: 'error' });
+    }
+  }
+  window.__mcTsOnload = render;
+
+  window.addEventListener('message', function (e) {
+    if (e.origin !== ORIGIN || !e.data || e.data.mcTs !== 'reset') return;
+    /* A spent token is single-use; reset earns the next one. */
+    try { if (window.turnstile && widgetId !== null) window.turnstile.reset(widgetId); } catch (x) { /* the parent will time out honestly */ }
+  });
+
+  var s = document.createElement('script');
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__mcTsOnload&render=explicit';
+  s.async = true;
+  s.onerror = function () { tell({ mcTs: 'error' }); };
+  document.head.appendChild(s);
+})();
+</script>
+</body>
+</html>
