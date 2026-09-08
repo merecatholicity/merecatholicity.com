@@ -31,7 +31,21 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'local'))
 
-from serve import ThinkStrip
+# local/serve.py is the GPU backend that runs on the owner's own machine, and it
+# imports numpy at module scope. That dependency belongs to that box, not to the
+# site build — CI has no GPU, no models and no reason to install numpy — so the
+# unit under test is simply unavailable there. Skip rather than fail: this is
+# the only test in the suite whose subject is optional infrastructure, and a red
+# pipeline over a missing numpy would teach people to ignore red pipelines.
+try:
+    from serve import ThinkStrip
+    WHY = ''
+except ImportError as err:                      # pragma: no cover - CI path
+    ThinkStrip, WHY = None, str(err)
+# A class decorator, not a module-level SkipTest: `make tests` runs each file
+# with `python3 <file>`, where a raised SkipTest escapes unittest.main() and
+# exits non-zero — a skip that fails the suite is just a failure with a polite
+# name.
 
 
 def strip_stream(chunks):
@@ -43,6 +57,7 @@ def strip_stream(chunks):
     return out
 
 
+@unittest.skipUnless(ThinkStrip, 'local/serve.py is unavailable here: ' + WHY)
 class CompleteSpan(unittest.TestCase):
     def test_paired_span_removed_surrounding_text_kept(self):
         """A complete <think>…</think> span is dropped; the text before and
@@ -58,6 +73,7 @@ class CompleteSpan(unittest.TestCase):
         self.assertEqual(out, "Q: A")
 
 
+@unittest.skipUnless(ThinkStrip, 'local/serve.py is unavailable here: ' + WHY)
 class PlainText(unittest.TestCase):
     def test_text_without_tags_passes_through_unchanged(self):
         """With no think tags at all, the stream is emitted verbatim."""
@@ -72,6 +88,7 @@ class PlainText(unittest.TestCase):
         self.assertEqual(out, "3 < 4 is true")
 
 
+@unittest.skipUnless(ThinkStrip, 'local/serve.py is unavailable here: ' + WHY)
 class SplitAcrossChunks(unittest.TestCase):
     def test_tag_split_across_chunk_boundaries_is_reassembled(self):
         """When the opening and closing tags arrive one or two characters at a
@@ -100,6 +117,7 @@ class SplitAcrossChunks(unittest.TestCase):
         self.assertEqual("".join(emitted), "beforeafter")
 
 
+@unittest.skipUnless(ThinkStrip, 'local/serve.py is unavailable here: ' + WHY)
 class LeadingUntaggedReasoning(unittest.TestCase):
     def test_leading_reasoning_ending_in_bare_close_tag_is_dropped(self):
         """qwen3 sometimes streams reasoning with no opening tag, terminated by
@@ -125,6 +143,7 @@ class LeadingUntaggedReasoning(unittest.TestCase):
         self.assertEqual(out, "reasoning hereanswer")
 
 
+@unittest.skipUnless(ThinkStrip, 'local/serve.py is unavailable here: ' + WHY)
 class Flush(unittest.TestCase):
     def test_unterminated_think_span_yields_nothing_after_it(self):
         """An opened <think> that never closes suppresses everything to the end
