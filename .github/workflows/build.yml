@@ -127,6 +127,18 @@ jobs:
           path: purescript/output
           key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
 
+      - name: Restore the built site
+        uses: actions/cache@v4
+        with:
+          # docs/ is no longer in git, so without this every run rebuilds the
+          # whole corpus from nothing — correct, but twenty minutes of pandoc.
+          # Restoring the previous build lets make do what it does well and
+          # touch only what changed. A MISS COSTS TIME, NEVER CORRECTNESS: the
+          # build from cold is the same build, just slower.
+          path: docs
+          key: site-${{ github.sha }}
+          restore-keys: site-
+
       - name: Build the client and the stylesheet
         run: make bundle
 

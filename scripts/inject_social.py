@@ -155,6 +155,14 @@ def main():
     for name in sorted(os.listdir(DOCS)):
         if not name.endswith('.html'):
             continue
+        # turnstile.html is not a page of the site: it is a 300x65 same-origin
+        # iframe holding nothing but the Cloudflare challenge widget, kept
+        # deliberately free of nav.js, the app shell and the service worker so
+        # that nothing can make it heavier than its one job. A theme-flash
+        # script and a set of Open Graph cards on an invisible iframe are noise
+        # at best, and the whole point of that page is that it stays minimal.
+        if name == 'turnstile.html':
+            continue
         path = os.path.join(DOCS, name)
         with open(path, encoding='utf-8') as f:
             html = f.read()
