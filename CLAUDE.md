@@ -63,6 +63,45 @@ Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` so rebuilds are byte-identic
 
 **Feed/Wall — Facebook-style overhaul (2026-08-02, shipped with the robustness wave above; verified via headless synthetic-fixture tests, API mocked).** The whole feed/wall subsystem in `client/comments.ts` was rewritten: (1) **endless scroll** — the global feed loops back to the top at the end; the live DOM is capped (~80 cards) by pruning off-screen cards with exact scroll compensation; new posts float to the top over the WebSocket (fetched by id + prepended, keeping your place); the "tap to refresh" pill is gone. (2) **Action bar** — a summary row (❤ count · N comments) over a Like / Comment / Share button row with inline-SVG icons (heart fills maroon when liked), mobile tap targets. (3) **Media download** — a download button in the share menu for feed media and on every DM attachment, saving the DECRYPTED blob under its real filename. (4) **Media theater** — click an image/video (or ⛶) for a lightbox: media large on the left (video autoplays), engagement rail right (author, full text, Like/Comment/Share, download, comments + composer); scrim/✕/Esc close; mobile stacks. The old click-to-zoom is gone. (5) **Comment likes** — every feed/wall comment has Like + count: NEW `wall_comment_likes` table (migration `0004_wall_comment_likes.sql`) + `/wall/comment/like` endpoint. (6) **Read-more clamps** — with media the text clamps to 3 lines ("See more" expands in place), solo text to 9; short posts never clamp (measured after layout). (7) **Standardized image sizes** — large images cap at 480px tall, small show natural. (8) **"Who liked it"** — hover/long-press the like count for a likers popover (avatars + names + profile links): NEW `/wall/likers` endpoint, shadowbanned likers hidden. Worker side (`index.ts`/`lib.ts`): the two new endpoints, comment-like counts + enrichment on feed payloads, delete/prune cascades for the new table. CSS in `styles/main.css` (the feed/theater block). It is a MATCHED SET: the client (COMMENTS_V 203) needs the migrated schema + deployed worker.
 
+**CI builds the site (2026-09-08) — `.github/workflows/build.yml`.** The repo is
+**public**, so Actions minutes are free and unlimited on standard runners; wall-clock is
+the only constraint. On every PR and every push to main it builds and runs `make tests`,
+`make jscheck`, `make check`, then packages `docs/` as a Pages artifact (~400 MB). It does
+**not deploy yet** — Pages still serves the branch, and flipping that before the workflow
+had proven itself would put the site behind an untested build.
+
+**What made CI practical: the build is incremental now.** The corpus HTML targets were
+`for` loops with NO prerequisites, so every build re-ran pandoc over all ~235 works —
+about 35 minutes, every time — while the PDFs beside them had been properly
+dependency-tracked all along (`PDF_RULE`). Now every work has its own target
+(`HTML_RULE`/`CURATED_RULE`/`CATENA_RULE`/`SUMMA_RULE` in `resources/Makefile`):
+**`make html` with nothing changed went 362 s → 0.08 s**, one touched body rebuilds one
+page, and touching `partials/footer.html` still rebuilds all 235 (it is a pandoc `-B`
+include on every page, so `make menu` must). **The lists CANNOT be iterated by make** —
+their titles contain spaces and make has no notion of the double quotes that group them,
+so `$(foreach)` over `SCHAFF_HTML` produced targets like `../docs/Vol..html`; the ids come
+from the PDF lists (`id=Output.pdf`, never a space) and the recipe still parses the entry
+in shell.
+
+**Two CI-specific traps, both silent, both handled in the workflow:** (1) git writes every
+file at checkout time in NO GUARANTEED ORDER, so a `.tex` can land after its `.html` and
+make rebuilds it for nothing (the first run rebuilt the whole Newman corpus) — while a
+genuinely changed `.tex` arrives with the SAME mtime as its output and make rebuilds
+nothing at all. The workflow flattens every mtime to a fixed old timestamp, then touches
+only the files in the diff. (2) TeX Live is ~2 GB and most changes never touch a `.tex`,
+so it installs only when the diff says LaTeX is involved.
+
+**Four real bugs the first CI runs surfaced, none of them CI's fault:** `make bundle`
+depended on `jscheck`, which runs `tsc` over `app/core.ts`, which imports the git-ignored
+`purescript/output/` — so **`jscheck` never declared its dependency on `psbuild`** and any
+clean clone failed (`jscheck: psbuild` now); `tests/py/test_slug_parity.py` **pinned node
+to `/usr/bin/node`**, asserting the shape of one machine and failing for anyone on nvm,
+Homebrew or CI (`shutil.which` now); `tests/py/test_serve_thinkstrip.py` imports
+`local/serve.py`, which imports **numpy** — the GPU backend's dependency, not the site's
+(class-level skip, because `make tests` runs each file directly and a module-level
+`SkipTest` exits non-zero); and `tests/py/test_librarian_sources.py` asserted the
+**private shelf** resolves, which it never can in public CI.
+
 **Navigation** is generated: `nav.yml` is the single source. `scripts/nav.py` renders `partials/nav.html` and rewrites the inline nav block in every page listed in the `PAGES` array at the top of `nav.py` (run as `python scripts/nav.py` from the repo root, so its `nav.yml`/`docs/` paths still resolve; the pandoc include is now `partials/nav.html`, likewise `partials/footer.html`/`social.html`/`book-tail.html`). A new site page must be added to that list or `make menu` will not touch it.
 
 **Resources** (`resources/`) are public-domain texts rebuilt as our own LaTeX. `*2tex.py` scripts convert preserved sources into `*-body.tex`; the `WORKS` list in `resources/Makefile` maps each source to its published root PDF, and outputs land in `docs/` (the `-o ../docs/…` and `cp … ../docs/…` targets) so Pages serves them.
