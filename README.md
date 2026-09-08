@@ -36,6 +36,7 @@ stays free to serve.
   - [Storage: D1, R2, Vectorize](#storage-d1-r2-vectorize)
   - [merecat, the librarian](#merecat-the-librarian)
   - [Deploying the workers](#deploying-the-workers)
+  - [Infrastructure as code (Terraform)](#infrastructure-as-code-terraform)
 - [Setup from a fresh clone](#setup-from-a-fresh-clone)
 - [Cookbook](#cookbook) — common tasks, with examples
 - [License](#license)
