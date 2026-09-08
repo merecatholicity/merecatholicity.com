@@ -153,7 +153,15 @@ jobs:
         run: make -C resources pdf
 
       - name: Build the site
-        run: make html
+        run: |
+          # `make content` first: it renders the ~30 hand pages (index, credo,
+          # about, objections...) out of content/ into docs/. `make html` builds
+          # the book and the corpus and then post-processes EVERY page, so on a
+          # clean tree — which is now what CI always has — sync-index reached for
+          # docs/index.html before anything had written it. Locally this never
+          # showed, because the pages were already sitting there from before.
+          make content
+          make html
 
       - name: Gates
         run: |
