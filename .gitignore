@@ -73,3 +73,19 @@ webtest/.testkeys
 # Rebuild them with `make -C resources pdf`; publish with
 # `npx wrangler r2 object put merecatholicity-files/<name> --file <path> --remote`.
 docs/*.pdf
+
+# THE SERVED SITE IS BUILT, NOT COMMITTED (2026-09-08).
+#
+# GitHub Pages is deployed from .github/workflows/build.yml's artifact, not from
+# this branch, so docs/ is output rather than source. It had reached 621 MB
+# against a hard 1 GB Pages limit and was the bulk of a 928 MB pack — 615 of the
+# ~800 largest blobs in history were under it.
+#
+# Consequences worth knowing:
+#   * A clean clone has no docs/. `make html` builds it; CI caches it between
+#     runs so a normal change rebuilds only what it touched.
+#   * The site can no longer be recovered from a git checkout alone. It is
+#     rebuilt from source, which is the point — the sources ARE committed.
+#   * docs/CNAME and docs/.nojekyll are still generated into the artifact and
+#     the build fails without them: losing CNAME once unbound the custom domain.
+docs/
