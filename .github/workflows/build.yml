@@ -163,6 +163,30 @@ jobs:
           key: site-${{ github.sha }}
           restore-keys: site-
 
+      - name: The commit wins over the cache for everything git tracks
+        run: |
+          # docs/ is a MIXTURE, and the cache is the previous build's WHOLE
+          # tree: its tar lands the previous commit's copy of every
+          # HAND-MAINTAINED file — nav.js, sw.js, turnstile.html, the images,
+          # the architecture docs — over this checkout, carrying the previous
+          # run's mtimes. An edit to any of them was silently replaced before
+          # the gates ran and before the artifact was packaged (2026-09-09: the
+          # turnstile.html fix never reached the runner, and the drift step
+          # had already warned about CODEBASE.md the run before). git rewrites
+          # only the files that differ from the commit, with a fresh mtime —
+          # exactly right, since those ARE what changed. Then anything under
+          # docs/ that is neither tracked nor ignored is a hand file this
+          # commit removed and the cache kept; it must not ship either
+          # (tests/py/test_docs_sources.py holds the tracked/ignored line).
+          git checkout -- docs
+          git clean -fd -- docs
+          if ! git diff --quiet -- docs/; then
+            echo "::error::tracked files under docs/ still differ from the commit after the restore"
+            git diff --stat -- docs/ | tail -20
+            exit 1
+          fi
+          echo "tracked files under docs/ match the commit; the cache supplied only build output"
+
       - name: Build the client and the stylesheet
         run: |
           # `make bundle` compiles PureScript, the shell and the client; the
@@ -243,14 +267,19 @@ jobs:
 
       - name: Did the build change anything the commit did not carry?
         run: |
-          # While docs/ is still committed, a PR that edits a source without
-          # rebuilding leaves stale output. This says so plainly rather than
-          # letting a stale page ship. Once docs/ leaves git (Pages served from
-          # this workflow's artifact) the question stops existing.
+          # Only the HAND-MAINTAINED half of docs/ is tracked, and the build
+          # rewrites parts of it deterministically: the stamped ?v= keys in the
+          # hand pages, nav.js's MC_ASSETS line, content.py's COMMENTS_V. A
+          # diff here means the commit's stamps are stale — someone edited a
+          # source without running `make bundle` before committing. CI is the
+          # build of record, so what ships is right either way; this names
+          # the drift so the next commit carries the true keys. (Until
+          # 2026-09-09 this step also caught the site cache clobbering tracked
+          # files — that is handled at restore time now, and would fail there.)
           if ! git diff --quiet -- docs/; then
-            echo "::warning::the build produced output this commit does not carry:"
+            echo "::warning::the build re-stamped files this commit carries with stale keys:"
             git diff --stat -- docs/ | tail -20
-            echo "This is expected while docs/ is committed and CI does the building."
+            echo "Run make bundle (and make html if the corpus changed) before committing so the tree matches."
           else
             echo "committed output matches a fresh build"
           fi

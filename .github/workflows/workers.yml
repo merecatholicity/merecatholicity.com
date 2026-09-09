@@ -111,6 +111,14 @@ jobs:
           key: site-${{ github.sha }}
           restore-keys: site-
 
+      - name: The commit wins over the cache for everything git tracks
+        run: |
+          # The cache is the previous build's whole docs/ tree, hand files
+          # included; the gates below must read THIS commit's copies (see the
+          # same step in build.yml, 2026-09-09).
+          git checkout -- docs
+          git clean -fd -- docs
+
       - name: Build what the tests read
         run: |
           make css

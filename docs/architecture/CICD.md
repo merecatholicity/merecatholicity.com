@@ -97,7 +97,12 @@ holds `pages: write` + `id-token: write`.
 3. Node 24 (official build — Ubuntu's `+dfsg` node cannot run the `.ts` tests), Python
    3.12, `pandoc`, `poppler-utils`, `pyyaml`; **TeX Live only when `latex=yes`**.
 4. `npm ci`; restore the PureScript output cache; **restore the built site cache** (`docs/`
-   keyed `site-<sha>`, fallback `site-`; a miss costs time, never correctness).
+   keyed `site-<sha>`, fallback `site-`; a miss costs time, never correctness) — then
+   **`git checkout -- docs` + `git clean -fd -- docs`, and the step fails if a tracked file
+   still differs**: the cache is the previous build's WHOLE `docs/` tree, hand files
+   included, so without this the previous commit's `nav.js`, `sw.js`, `turnstile.html`,
+   images and architecture docs silently replaced this commit's before the gates and the
+   artifact (found 2026-09-09; the same step guards `workers.yml`).
 5. `make css` + `make bundle`, then `make -C resources pdf` (latex), `make pdf publish`
    (book), `make content` + `make html` (the site, incrementally; `make html` ends with
    the version stamp, the manifest and `make check`), `make chart-pdfs` (charts, after the
@@ -136,7 +141,8 @@ has no diff base, so it redeploys BOTH workers). *Concurrency:* `workers`, **nev
 cancelled** mid-deploy.
 
 *`check`* (every event, no credentials): pandoc + pyyaml + `npm ci`; restore the PureScript
-cache; **restore the built site (read-only) and `make css`** — `make tests` is not entirely
+cache; **restore the built site (read-only), re-assert the tracked half from the commit
+(`git checkout -- docs`, as in `build.yml`) and `make css`** — `make tests` is not entirely
 hermetic (tests/css reads the stylesheet, two Python suites read the baked corpus); on a
 cold cache it builds the site; `make jscheck`, `make tests`; `wrangler deploy --dry-run`
 for both workers (needs no auth).
@@ -377,6 +383,7 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 | A workflow that "never fails" also never runs | its trigger event stopped firing (`page_build` after Pages moved to an artifact) | when a deploy mechanism changes, audit every trigger that watched the old road |
 | `linkcheck: … 246 published PDFs`, `check-pdfs` 404s two names | `make -C resources list-pdfs` under a sub-make wrote `make[2]: Entering directory` into the manifest | `--no-print-directory` + a `.pdf` filter in `pdf-manifest` |
 | `make tests` fails in CI on `docs/style.css` | the tests read built output the job never built | Workers restores the site cache and runs `make css` first |
+| a test passes locally, fails on the runner against a file in `docs/` that the commit changed; the drift step warns about a doc nobody edited | the site cache restored the previous commit's copy of a TRACKED hand file over the checkout (`docs/` is a mixture) | `git checkout -- docs` + `git clean -fd -- docs` right after the restore, failing if anything tracked still differs |
 | plan succeeded, `show` cannot find the plan file | `-chdir` resolves paths inside the directory | `tfplan`, not `terraform/tfplan` |
 | approval "failed" with a 422 but the apply ran | a fallback second POST after a jq error on the first, successful one | one JSON POST, tolerant printer |
 | purge "skipping — not set" with the secret present | the step read the zone id as a *secret*; it is a *variable* | both purge steps read `vars.CLOUDFLARE_ZONE_ID` |

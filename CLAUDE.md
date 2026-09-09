@@ -34,6 +34,9 @@ deploy (dropping a database, force-pushing history, deleting a bucket, revoking 
 3. **CI is the build of record** — the site artifact, the worker bundle and the PDFs in R2 are
    what the runner built. Local builds preview and run gates; their bytes do not ship. A local
    PDF that reads "rebuilt but unpublished" is the dev box differing from CI, not a reason to upload.
+   The restored site cache supplies ONLY build output: right after the restore the workflow
+   re-asserts every tracked file under `docs/` from the commit and fails if one still differs
+   (the cache once shipped the previous commit's hand files — 2026-09-09).
 4. **No secret is ever present on a `pull_request` event**, in any workflow.
 5. **Infrastructure is declared, never clicked.** Cloudflare and GitHub settings live in
    `terraform/`; a change is a push; the apply waits on the `terraform-production` gate.
