@@ -141,6 +141,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   overscroll, its scrim is `touch-action:none`, and it locks the document while open
   (`html.mc-sheet-open`, body fixed at the saved offset). A new overlay reuses the sheet or
   the same three layers.
+- **Nothing scrolls sideways on a phone**: `body{overflow-x:clip}` is the net, not the fix. A
+  new surface must fit 390px — a flex row wraps or its items may shrink, an edge-to-edge
+  pull uses `var(--page-pad)`, and a JS-injected style block must agree with the
+  stylesheet (it is injected later and wins). Sweep with `webtest/test_hscroll.py`.
 
 ## Architecture in brief
 
@@ -201,7 +205,7 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Hosting and delivery**: GitHub Pages serves what `.github/workflows/build.yml` deploys · Cloudflare · THE PUBLISHED PDFs LIVE IN R2, NOT ON PAGES · Deploying the site is a push to `main` · `comments.js` is BUILT from TypeScript now · Cache-busting is AUTOMATIC
 
-- **Build system**: The JS toolchain is npm · Silent build failures are impossible in the resources loops now · The stylesheet is Tailwind · The Lit interior campaign is COMPLETE · The app shell · The sheet owns the scroll while it is open · Navigation robustness + PWA hardening · The discovery + retention wave · The partials are load-bearing here · Feed/Wall · The readability makeover · DM per-message likes, the quiet bell, and UI sounds · CI builds the site · public · What made CI practical · `make html` with nothing changed went 362 s → 0.08 s · Two CI-specific traps, both silent, both handled in the workflow · Four real bugs the first CI runs surfaced, none of them CI's fault · private shelf · Navigation · Resources · The complete Schaff corpus · Curated extractions from the Schaff volumes · The schism documents · The high-church and Roman-history shelves · Project Gutenberg books · The Latin & Greek classics and Indo-European shelf · The Second Temple shelf · The Douay-Rheims Bible · The Catena Aurea · The King James Bible · The Summa Theologica · The Newman corpus · KJV Scourby audio · The Library page · Deep-linking
+- **Build system**: The JS toolchain is npm · Silent build failures are impossible in the resources loops now · The stylesheet is Tailwind · The Lit interior campaign is COMPLETE · The app shell · The sheet owns the scroll while it is open · Nothing scrolls sideways on a phone · Navigation robustness + PWA hardening · The discovery + retention wave · The partials are load-bearing here · Feed/Wall · The readability makeover · DM per-message likes, the quiet bell, and UI sounds · CI builds the site · public · What made CI practical · `make html` with nothing changed went 362 s → 0.08 s · Two CI-specific traps, both silent, both handled in the workflow · Four real bugs the first CI runs surfaced, none of them CI's fault · private shelf · Navigation · Resources · The complete Schaff corpus · Curated extractions from the Schaff volumes · The schism documents · The high-church and Roman-history shelves · Project Gutenberg books · The Latin & Greek classics and Indo-European shelf · The Second Temple shelf · The Douay-Rheims Bible · The Catena Aurea · The King James Bible · The Summa Theologica · The Newman corpus · KJV Scourby audio · The Library page · Deep-linking
 
 - **The PureScript application layer**: The site's application/domain logic IS a PureScript kernel; Lit.js is… · The seam · `app/core.js` is the TRANSLATION MEMBRANE · Toolchain · The `purs` compiler is an npm devDependency · `spago` · `make psbuild` · eslint · `?v=N` law applies to PS exactly as to any bundle change · A slice ships only when all FOUR gates pass · Lit stays presentational · The worker shares the kernel
 

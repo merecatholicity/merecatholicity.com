@@ -71,6 +71,25 @@ def zosimus():
           + (f"  LEFTOVER {left[:6]}" if left else ""))
 
 
+def drop_divs(raw, start_pat):
+    """Remove every <div> block whose opening tag matches start_pat, with its
+    nested divs, by counting opens and closes from the match forward."""
+    tag = re.compile(r"<div\b|</div\s*>", re.I)
+    while True:
+        m = re.search(start_pat, raw)
+        if not m:
+            return raw
+        depth, pos = 0, m.start()
+        for t in tag.finditer(raw, m.start()):
+            depth += 1 if t.group().lower().startswith("<div") else -1
+            if depth == 0:
+                pos = t.end()
+                break
+        else:
+            return raw          # unbalanced: leave it rather than eat the page
+        raw = raw[:m.start()] + " " + raw[pos:]
+
+
 def wikisource(kind, books, out, title):
     parts = []
     for b in books:
@@ -78,6 +97,18 @@ def wikisource(kind, books, out, title):
                    errors="replace").read()
         # mediawiki chrome: navigation header table, edit sections,
         # license and header templates
+        # (2026-09-09) Three pieces of chrome survived into the reader's text
+        # as unbreakable runs that made the phone pan sideways: the <style>
+        # element's CSS (the tag was stripped, its body kept), MediaWiki's
+        # "Saved in parser cache" HTML comments (never a tag, so never
+        # stripped), and the div-based ws-header's back/forward navigation
+        # ("Book 1 / Book 2 →"), which nests divs and so needs a balanced cut.
+        # Only the navigation goes: the same header carries the translator
+        # credit ("Translation based on Church and Brodribb"), which is text
+        # a reader should keep.
+        raw = re.sub(r"<style[^>]*>.*?</style>", " ", raw, flags=re.S)
+        raw = re.sub(r"<!--.*?-->", " ", raw, flags=re.S)
+        raw = drop_divs(raw, r'<div class="wst-header-(?:back|forward)\b[^"]*"[^>]*>')
         raw = re.sub(r"<table[^>]*>.*?</table>", " ", raw, flags=re.S)
         raw = re.sub(r"<ul class=\"plainSister\">.*?</ul>", " ", raw,
                      flags=re.S)

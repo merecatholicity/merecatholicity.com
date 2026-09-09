@@ -54,7 +54,11 @@
       var s = el("style");
       s.id = "mc-bible-css";
       s.textContent =
-        ".bible-find{font:inherit;margin-left:auto;min-width:11em;padding:.3em .6em;" +
+        /* flex + max-width (2026-09-09): an input's intrinsic size (~176px) with
+           no permission to shrink ran past a phone's edge and made every Bible
+           page pan sideways. This block is injected after style.css and wins
+           on equal specificity, so the fix has to be stated here as well. */
+        ".bible-find{font:inherit;margin-left:auto;min-width:11em;flex:1 1 11em;max-width:100%;padding:.3em .6em;" +
         "border:1px solid var(--rule,#d9cfb8);border-radius:6px;background:var(--surface,#fffdf7);color:var(--ink,#222)}" +
         ".bible-results{border:1px solid var(--rule,#d9cfb8);border-radius:8px;margin:.6rem 0;" +
         "max-height:22em;overflow-y:auto;background:var(--surface,#fffdf7)}" +

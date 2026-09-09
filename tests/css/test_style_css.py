@@ -261,5 +261,53 @@ class SheetOwnsTheScroll(unittest.TestCase):
                          "the scrim lost touch-action: none in the build")
 
 
+class NothingScrollsSideways(unittest.TestCase):
+    """No page pans sideways on a phone (2026-09-09).
+
+    The owner's report: many pages — the Bible, the articles — scrolled
+    horizontally in the installed app. html{overflow-x:hidden} stops a
+    scrollbar, not iOS's panning of an over-wide body. A phone-width sweep of
+    the built site found three sources, each fixed at its root in
+    styles/main.css; this class proves the build carries the fixes.
+    """
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    def test_body_clips_sideways_and_pads_by_variable(self):
+        # the net under everything, and the padding the edge-to-edge rule mirrors
+        body = re.search(r"(?:^|})body\{([^}]*)}", self.css)
+        self.assertIsNotNone(body, "no body rule in the build")
+        self.assertIn("overflow-x:clip", body.group(1), "the body no longer clips horizontal overflow")
+        self.assertIn("--page-pad:1rem", body.group(1), "the body's inline padding is no longer a variable")
+        self.assertIn("padding:1.25rem var(--page-pad) 3rem", body.group(1))
+        self.assertIn("--page-pad:.8rem", self.css, "the phone override of --page-pad is gone")
+
+    def test_edge_to_edge_article_pulls_out_by_the_body_padding(self):
+        # was a hard -1rem against a 0.8rem phone padding: 3px of sideways scroll on every article
+        self.assertIn("margin-inline:calc(-1 * var(--page-pad))", self.css,
+                      "the art-backed article must pull out by the body's OWN padding, not a guess")
+        self.assertNotRegex(self.css, r"main\.prose[^{]*\{[^}]*margin-inline:-1rem",
+                            "the hard -1rem edge-to-edge margin is back")
+
+    def test_reading_column_breaks_unbreakable_runs(self):
+        # dotted leaders, run-together Greek, rows of '=', a ratio string: all wider than a phone
+        self.assertRegex(self.css, r"main\.prose\{[^}]*overflow-wrap:break-word",
+                         "main.prose must carry overflow-wrap:break-word (inherited by every paragraph and footnote)")
+
+    def test_bible_bar_wraps_and_the_find_box_shrinks(self):
+        self.assertRegex(self.css, r"\.bible-bar\{[^}]*flex-wrap:wrap", "the Bible bar must wrap")
+        self.assertRegex(self.css, r"\.bp-row\{[^}]*flex-wrap:wrap", "the player row must wrap")
+        find = re.search(r"\.bible-find\{([^}]*)}", self.css)
+        self.assertIsNotNone(find, "no .bible-find rule in the build")
+        self.assertIn("max-width:100%", find.group(1))
+        self.assertIn("flex:", find.group(1), "the find box must be allowed to shrink")
+        # and the reader's own injected copy of the rule agrees (it is injected
+        # later and wins on equal specificity)
+        reader = read(ROOT / "docs" / "bible-reader.js")
+        self.assertRegex(reader, r"\.bible-find\{[^}]*flex:1 1 11em;max-width:100%",
+                         "docs/bible-reader.js injects a .bible-find rule that no longer lets it shrink")
+
+
 if __name__ == "__main__":
     unittest.main()
