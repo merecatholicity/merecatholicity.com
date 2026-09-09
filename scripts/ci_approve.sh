@@ -46,20 +46,21 @@ rm -rf "$tmp"
 
 echo "== pending environments"
 pending=$(gh api "repos/$repo/actions/runs/$run/pending_deployments")
-echo "$pending" | python3 -c '
-import json,sys
-p=json.load(sys.stdin)
-if not p: print("  (nothing pending on this run)")
+PENDING="$pending" python3 - <<'PY'
+import json, os
+p = json.loads(os.environ['PENDING'] or '[]')
+if not p:
+    print('  (nothing pending on this run)')
 for d in p:
-    e=d.get("environment",{})
-    print(f"  {e.get(\"id\")}  {e.get(\"name\")}  waiting since {d.get(\"wait_timer_started_at\")}  can approve: {d.get(\"current_user_can_approve\")}")
-'
+    e = d.get('environment', {})
+    print(f"  {e.get('id')}  {e.get('name')}  waiting since {d.get('wait_timer_started_at')}  can approve: {d.get('current_user_can_approve')}")
+PY
 
 case "$mode" in
   show) exit 0 ;;
   --approve|--reject)
     state=${mode#--}; [ "$state" = approve ] && state=approved || state=rejected
-    ids=$(echo "$pending" | python3 -c 'import json,sys;print(" ".join(str(d["environment"]["id"]) for d in json.load(sys.stdin)))')
+    ids=$(PENDING="$pending" python3 -c 'import json,os;print(" ".join(str(d["environment"]["id"]) for d in json.loads(os.environ["PENDING"] or "[]")))')
     if [ -z "$ids" ]; then echo "nothing to $state"; exit 1; fi
     args=()
     for id in $ids; do args+=(-F "environment_ids[]=$id"); done

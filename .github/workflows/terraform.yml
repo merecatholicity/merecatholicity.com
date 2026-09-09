@@ -160,7 +160,9 @@ jobs:
             2) echo "changes=yes" >> "$GITHUB_OUTPUT"; echo "plan: changes pending (see the summary)" ;;
             *) echo "::error::terraform plan failed"; grep -E '^(Error|│|╷|╵)' /tmp/plan.txt | head -60; exit 1 ;;
           esac
-          terraform -chdir=terraform show -json terraform/tfplan > /tmp/plan.json
+          # Paths given to a -chdir'd terraform resolve INSIDE that directory:
+          # the plan is terraform/tfplan on disk, so it is `tfplan` here.
+          terraform -chdir=terraform show -json tfplan > /tmp/plan.json
 
       - name: Summarise for review
         id: summary
@@ -260,7 +262,7 @@ jobs:
           code=$?
           set -e
           if [ $code -eq 1 ]; then echo "::error::terraform plan failed"; grep -E '^(Error|│|╷|╵)' /tmp/plan.txt | head -60; exit 1; fi
-          terraform -chdir=terraform show -json terraform/tfplan > /tmp/plan.json
+          terraform -chdir=terraform show -json tfplan > /tmp/plan.json
           python3 scripts/tf_plan_summary.py /tmp/plan.json --markdown >> "$GITHUB_STEP_SUMMARY"
           python3 scripts/tf_plan_summary.py /tmp/plan.json --fail-on-destroy $ALLOW
           now=$(python3 scripts/tf_plan_summary.py /tmp/plan.json --fingerprint | base64 -w0)
@@ -279,7 +281,7 @@ jobs:
         run: |
           # Output to a file, not the public log: apply echoes attribute values.
           set +e
-          terraform -chdir=terraform apply -input=false -lock-timeout=5m -no-color terraform/tfplan > /tmp/apply.txt 2>&1
+          terraform -chdir=terraform apply -input=false -lock-timeout=5m -no-color tfplan > /tmp/apply.txt 2>&1
           code=$?
           set -e
           grep -E '^(Apply complete|Error)' /tmp/apply.txt || true
