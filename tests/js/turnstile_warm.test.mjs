@@ -258,7 +258,8 @@ test('the challenge never re-runs on a timer', () => {
    * widget re-challenged every time a token aged out, for as long as the page
    * stayed open. Every one of those was another chance to take the document. */
   for (const [file, what] of [['client/comments.ts', 'the in-page fallback'],
-                              ['docs/turnstile.html', 'the isolated widget']]) {
+                              ['docs/turnstile.html', 'the isolated widget'],
+                              ['docs/contact.js', 'the contact form widget']]) {
     const body = readFileSync(join(root, file), 'utf8');
     assert.ok(/'refresh-expired': 'never'/.test(body), `${what} still auto-refreshes its token`);
     assert.ok(/retry: 'never'/.test(body), `${what} still retries a failed challenge on a loop`);
@@ -305,4 +306,32 @@ test("the frame page shares the app's colour scheme", () => {
   const page = readFileSync(join(root, 'docs', 'turnstile.html'), 'utf8');
   assert.ok(/html\s*\{[^}]*color-scheme:\s*light dark/.test(page),
     'docs/turnstile.html must declare color-scheme: light dark on html, or it paints white in a dark app');
+});
+
+test('the contact page mounts nothing on arrival', () => {
+  /* The 2025 design, found still standing on 2026-09-09: Cloudflare's api.js
+   * in the markup (the implicit render — the widget mounts the moment the page
+   * opens) and a render-on-boot for soft arrivals. The owner saw a white flash
+   * and a reload on the contact page: the mount-on-open kill in its purest
+   * form. The page has its own sitekey and nobody to spare, so the challenge
+   * must run — but on intent, and on a hard-loaded document. */
+  const page = readFileSync(join(root, 'docs', 'contact.html'), 'utf8');
+  assert.ok(!/challenges\.cloudflare\.com/.test(page),
+    'contact.html must not carry Cloudflare\'s script: the implicit render mounts on arrival');
+  assert.ok(!/class="cf-turnstile"/.test(page),
+    'the slot must not be cf-turnstile — an implicit render would scan and mount it unasked');
+  assert.ok(/class="contact-ts" data-sitekey=/.test(page), 'the explicit slot is gone');
+  const js = readFileSync(join(root, 'docs', 'contact.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(/render=explicit/.test(js), 'contact.js must load api.js with render=explicit');
+  /* the mount is reachable only through want(): focus or the press */
+  const mounts = [...js.matchAll(/\bmount\(\)/g)].length;
+  assert.ok(mounts >= 2, 'mount() must be called from the onload and from want()');
+  assert.ok(!/^\s*mount\(\);/m.test(js.slice(js.indexOf('function boot()'))),
+    'boot() must not mount the widget — that is the mount-on-open the postmortem is about');
+  assert.ok(/addEventListener\('focusin'/.test(js) && /want\(\)/.test(js.slice(js.indexOf("addEventListener('focusin'"))),
+    'the first focus of a field is the intent that mounts it');
+  assert.ok(/addEventListener\('submit'/.test(js), 'and the press covers a reader who never focused');
+  assert.ok(/'refresh-expired': 'never'/.test(js) && /retry: 'never'/.test(js),
+    'the contact widget follows the same clock rules as the other two');
+  assert.ok(/turnstile\.reset\(widgetId\)/.test(js), 'a spent or aged token is replaced by reset() at the press');
 });

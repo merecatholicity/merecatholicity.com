@@ -111,3 +111,30 @@ test('a view never mounts into a parent it no longer has', () => {
       'the read throws.');
   }
 });
+
+/* Pages that must arrive by a FULL document load, each with its reason. The
+   shell keeps them in DOCUMENT_PAGES and every door consults it. A page joins
+   this list only with an argument, because a full load is exactly what soft
+   navigation exists to avoid. */
+const DOCUMENT_PAGES = {
+  'contact.html': 'its Turnstile challenge has nobody to spare and completes only on a hard-loaded document (2026-09-09)',
+};
+
+test('the document pages are the ones argued for, and every door honours them', () => {
+  const shell = read('app/shell.ts');
+  const m = shell.match(/var DOCUMENT_PAGES = \[([^\]]*)\];/);
+  assert.ok(m, 'the shell no longer declares DOCUMENT_PAGES');
+  const declared = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]);
+  assert.deepEqual(declared.sort(), Object.keys(DOCUMENT_PAGES).sort(),
+    'the shell\'s DOCUMENT_PAGES and this table must agree — add the reason here');
+  const code = shell.replace(/\/\*[\s\S]*?\*\//g, '');
+  /* the click interceptor */
+  const click = code.slice(code.indexOf("document.addEventListener('click'"), code.indexOf('window.mcNav = '));
+  assert.ok(/if \(documentPage\(url\)\) return;/.test(click), 'the click interceptor must let a document page load natively');
+  /* the programmatic door */
+  const nav = code.slice(code.indexOf('window.mcNav = '), code.indexOf("window.addEventListener('popstate'"));
+  assert.ok(/documentPage\(url\)\) \{ location\.href = url\.href; return; \}/.test(nav), 'mcNav must fall through to a real load for a document page');
+  /* the history walk */
+  const pop = code.slice(code.indexOf("window.addEventListener('popstate'"));
+  assert.ok(/if \(documentPage\(u\)\) \{ location\.reload\(\); return; \}/.test(pop), 'back/forward into a document page must reload, not swap');
+});

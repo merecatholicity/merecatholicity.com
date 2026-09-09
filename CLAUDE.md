@@ -120,7 +120,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `loadTurnstile()` mounts, only from the focus net or a press, never because a view
   opened, never for a spared identity** — the test sweeps every call site. The host is the
   document's own (`tsHost()`, `body > .mc-ts-host[data-mc-app]`), never inside `<main>`,
-  never off-screen, never without its stylesheet.
+  never off-screen, never without its stylesheet. The contact form (`docs/contact.js`, its
+  own sitekey, nobody to spare) mounts on the first focus only, and `contact.html` is a
+  **document page** in the shell (`DOCUMENT_PAGES`): every door reaches it by a full load,
+  because the challenge completes on a hard-loaded document and killed soft-navigated ones.
 - **`READ_LIMIT` is one per-IP bucket shared by every read endpoint**; the client's read-budget
   coordinator paces every poller — never add a poller outside it.
 - **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0012),

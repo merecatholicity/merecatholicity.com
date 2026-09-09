@@ -669,7 +669,7 @@ form.contact input[type="text"], form.contact input[type="email"], form.contact 
 form.contact textarea { resize: vertical; }
 form.contact input:focus-visible, form.contact textarea:focus-visible { border-color: var(--maroon); }
 form.contact .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
-form.contact .cf-turnstile { margin: 1em 0; }
+form.contact .contact-ts { margin: 1em 0; }
 /* --accent-fill (not --maroon): a deep red that keeps white text readable in every
    theme, including dark where --maroon is lightened for text contrast. */
 .btn-send { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-on); font: inherit; letter-spacing: inherit; cursor: pointer; }

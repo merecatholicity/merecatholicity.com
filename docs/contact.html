@@ -17,10 +17,10 @@
 <meta name="twitter:description" content="Get in touch with Mere Catholicity.">
 <meta name="twitter:image" content="https://merecatholicity.com/cover.jpg">
 <link rel="icon" href="favicon.ico">
-<link rel="stylesheet" href="style.css?v=2472008489">
+<link rel="stylesheet" href="style.css?v=3004176903">
 </head>
 <body>
-<script defer src="nav.js?v=562642944"></script>
+<script defer src="nav.js?v=3229050357"></script>
 <main class="prose">
 
 <h1 class="home-title">Contact</h1>
@@ -33,13 +33,16 @@
 <label>Message<br>
 <textarea name="message" maxlength="5000" rows="8" required></textarea></label>
 <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
-<div class="cf-turnstile" data-sitekey="0x4AAAAAAD4gH6kfaUH2IRSI"></div>
+<!-- The challenge's slot. Nothing renders here on arrival: contact.js loads
+     Cloudflare's script and mounts the widget on the first focus of a field,
+     and the app reaches this page by a full document load. Not `cf-turnstile`,
+     which the implicit render would scan and mount unasked. -->
+<div class="contact-ts" data-sitekey="0x4AAAAAAD4gH6kfaUH2IRSI"></div>
 <button type="submit" class="btn btn-send">Send</button>
 <p id="contact-status" class="canon" role="status"></p>
 </form>
 
-<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-<script defer src="contact.js?v=1245278935"></script>
+<script defer src="contact.js?v=280148137"></script>
 
 </main>
 <footer>

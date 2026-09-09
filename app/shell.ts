@@ -586,6 +586,17 @@ customElements.define('mc-audio-dock', McAudioDock);
     var p = url.pathname;
     return p === '/' || /\.html$/.test(p);
   }
+  /* Pages the app reaches by a FULL document load on purpose. contact.html
+     (2026-09-09): its Turnstile challenge has nobody to spare — no identity —
+     so it must run, and the postmortem's one solid fact about the challenge is
+     that it completes on a hard-loaded document and took soft-navigated ones
+     down. A deliberate load is the same document the reader got after the
+     kill, minus the kill. Both doors (the click interceptor, mcNav) and the
+     history walk consult this, so no road arrives softly. */
+  var DOCUMENT_PAGES = ['contact.html'];
+  function documentPage(url: URL) {
+    return DOCUMENT_PAGES.indexOf(url.pathname.split('/').pop() || '') !== -1;
+  }
 
   function markHere() {
     var nav = document.querySelector('nav.site');
@@ -821,6 +832,7 @@ customElements.define('mc-audio-dock', McAudioDock);
     if (!sameOrigin(url) || !pageish(url)) return;
     if (url.pathname === location.pathname && url.search === location.search && url.hash) return;   // same-page anchor: native
     if (document.querySelector('.away')) return;     // the interstitial stays ordinary
+    if (documentPage(url)) return;                   // a page that must arrive by a full load
     e.preventDefault();
     softNav(url, true);
   });
@@ -837,7 +849,7 @@ customElements.define('mc-audio-dock', McAudioDock);
   window.mcNav = function (href, replace) {
     var url;
     try { url = new URL(String(href), location.href); } catch (e) { location.href = String(href); return; }
-    if (!sameOrigin(url) || !pageish(url) || document.querySelector('.away')) { location.href = url.href; return; }
+    if (!sameOrigin(url) || !pageish(url) || document.querySelector('.away') || documentPage(url)) { location.href = url.href; return; }
     if (url.pathname === location.pathname && url.search === location.search) {
       /* The same view: at most the hash moved. Tearing the page down and
          rebuilding it would lose exactly what the caller wants to show. */
@@ -857,6 +869,7 @@ customElements.define('mc-audio-dock', McAudioDock);
     var u = new URL(location.href);
     if (u.pathname === lastPath && u.search === lastSearch) return;   // hash-only travel
     if (document.querySelector('.away')) { location.reload(); return; }
+    if (documentPage(u)) { location.reload(); return; }   // back/forward INTO a document page arrives by a full load too
     softNav(u, false);
   });
 
