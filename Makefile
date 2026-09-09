@@ -92,6 +92,27 @@ schema-snapshot:
 # since 2026-09-08, so this is what linkcheck validates .pdf hrefs against —
 # without it, "does this PDF exist" would have stopped being checkable and the
 # dead-link class linkcheck exists for would have quietly returned.
+# The published PDFs live in R2 (files.merecatholicity.com), not in git and not
+# on Pages. `publish-pdfs` uploads every local docs/*.pdf whose MD5 differs from
+# the bucket's copy and purges the edge for exactly those URLs; `check-pdfs` is
+# the gate — every name in docs/pdfs.txt must be in the bucket and every local
+# PDF must match it, or a rebuilt PDF would keep serving its old bytes. Both need
+# CLOUDFLARE_API_TOKEN (R2 Storage:Edit + Cache Purge); without it check-pdfs can
+# only HEAD the public host, and publish-pdfs refuses. CI runs both.
+.PHONY: publish-pdfs check-pdfs
+publish-pdfs:
+	python scripts/publish_pdfs.py
+check-pdfs:
+	python scripts/publish_pdfs.py --check
+
+# The one published PDF nothing builds: The Bishop of Rome (2024) is a MIRRORED
+# document, preserved as a source in resources/docs-src/ (its history in git was
+# the only other copy, and history is rewritten now and then). Copied into docs/
+# so publish-pdfs and check-pdfs treat it like every other PDF.
+.PHONY: mirrored-pdfs
+mirrored-pdfs:
+	cp resources/docs-src/The_Bishop_of_Rome.pdf docs/The_Bishop_of_Rome.pdf
+
 pdf-manifest:
 	@{ $(MAKE) -s -C resources list-pdfs; \
 	   for p in Mere_Catholicity.pdf Mere_Catholicity_Paperback.pdf \
@@ -142,7 +163,7 @@ html:
 	$(MAKE) -C resources bible-json
 	$(MAKE) -C resources html
 	python scripts/inject_social.py
-	$(MAKE) strip-nav sync-index library-order sitemap pdf-manifest
+	$(MAKE) strip-nav sync-index library-order sitemap mirrored-pdfs pdf-manifest
 # The generators above (pandoc's --css=, content.py, nav.py, the resources
 # converters) emit BARE style.css / nav.js references, so the stamp has to be
 # the last word here or the two fight every build — the partials/book-tail.html
@@ -224,10 +245,14 @@ menu:
 	$(MAKE) html
 
 .PHONY: chart-pdfs
+# CHROMIUM: the headless browser that prints the chart pages. /usr/bin/chromium
+# on the dev box (~/bin/chromium is an emacs wrapper, not a browser); CI passes
+# CHROMIUM=/usr/bin/google-chrome, which is what a GitHub runner carries.
+CHROMIUM ?= /usr/bin/chromium
 chart-pdfs:
-	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Charting_Historic_Communions.pdf "file://$$(pwd)/docs/charting-communions.html"
-	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Charting_Free_Churches.pdf "file://$$(pwd)/docs/free-churches.html"
-	/usr/bin/chromium --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Fifty_Objections.pdf "file://$$(pwd)/docs/objections.html"
+	$(CHROMIUM) --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Charting_Historic_Communions.pdf "file://$$(pwd)/docs/charting-communions.html"
+	$(CHROMIUM) --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Charting_Free_Churches.pdf "file://$$(pwd)/docs/free-churches.html"
+	$(CHROMIUM) --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=docs/Fifty_Objections.pdf "file://$$(pwd)/docs/objections.html"
 
 .PHONY: serve
 # Local preview only. --bind 127.0.0.1 is LOAD-BEARING SECURITY: without it

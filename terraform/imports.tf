@@ -266,3 +266,50 @@ import {
   to = github_repository.private_shelf
   id = "private-shelf"
 }
+
+############################  2026-09-09: the PDF move to R2  ############################
+
+# Three things made by hand on 2026-09-08 while the PDFs moved to R2, adopted the
+# next day. Ids read from the live API (rulesets list, dns_records, r2 buckets).
+import {
+  to = cloudflare_r2_bucket.files
+  id = "6093bc0889c95a08f0a92a8df6750c66/merecatholicity-files/default"
+}
+
+import {
+  to = cloudflare_dns_record.files
+  id = "2b270ffb21b7f98a39960abb6bf953ae/f0597803fcd314af9c09b2c7516b381e"
+}
+
+# The dynamic-redirect phase: /<name>.pdf on the site hosts -> files.merecatholicity.com.
+import {
+  to = cloudflare_ruleset.redirects
+  id = "zones/2b270ffb21b7f98a39960abb6bf953ae/322a70382fdd4f14820313c0887fdf36"
+}
+
+############################  GitHub environments  ############################
+
+# The Pages environment actions/deploy-pages created for itself, and the approval
+# gate created by hand (API, 2026-09-09) before any workflow could reference it.
+import {
+  to = github_repository_environment.github_pages
+  id = "merecatholicity.com:github-pages"
+}
+
+import {
+  to = github_repository_environment.terraform_production
+  id = "merecatholicity.com:terraform-production"
+}
+
+# The "main only" branch policy on the gate; the numeric id is the policy's own.
+import {
+  to = github_repository_environment_deployment_policy.terraform_production_main
+  id = "merecatholicity.com:terraform-production:59479775"
+}
+
+# Pages itself (build_type workflow, CNAME merecatholicity.com). Its own import,
+# its own plan — getting this wrong once unbound the custom domain.
+import {
+  to = github_repository_pages.site
+  id = "merecatholicity.com"
+}

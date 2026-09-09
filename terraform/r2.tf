@@ -72,3 +72,19 @@ resource "cloudflare_r2_bucket" "wall_media" {
     prevent_destroy = true
   }
 }
+
+# The published PDFs (2026-09-08): docs/ had reached 621 MB against the 1 GB
+# Pages limit and 293 MB of it was 244 PDFs. Served at files.merecatholicity.com
+# behind the dynamic-redirect ruleset in rulesets.tf; filled by
+# scripts/publish_pdfs.py (CI and `make publish-pdfs`).
+resource "cloudflare_r2_bucket" "files" {
+  account_id    = var.account_id
+  jurisdiction  = "default"
+  location      = "WNAM"
+  name          = "merecatholicity-files"
+  storage_class = "Standard"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}

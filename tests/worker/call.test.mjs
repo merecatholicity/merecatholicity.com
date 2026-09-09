@@ -84,9 +84,11 @@ test('blocked offer keeps the fake-success shape; relay branch keeps its guards 
   assert.ok(doSrc.includes('msg.length > 4096'), 'relay size cap');
 });
 
-test("the member's calls-off pref gets the SAME fake success as a block (drift guard + 0010)", () => {
+test("the member's calls-off pref gets the SAME fake success as a block (drift guard + the calls_ok migration)", () => {
   const { db, files } = freshDb();
-  assert.ok(files.some((f) => f.startsWith('0010_')), 'migration 0010 present');
+  // By name, not number: it shipped as a second 0010 beside 0010_dm_likes and
+  // was renumbered 0011 on 2026-09-09 (the ledger row renamed to match).
+  assert.ok(files.some((f) => /^\d{4}_profile_calls_pref\.sql$/.test(f)), 'profile_calls_pref migration present');
   const cols = db.prepare('PRAGMA table_info(profiles)').all().map((c) => c.name);
   assert.ok(cols.includes('calls_ok'), 'profiles.calls_ok');
   db.close();

@@ -526,3 +526,33 @@ resource "cloudflare_ruleset" "rate_limit" {
   ]
   zone_id = var.zone_id
 }
+
+# Single Redirects: /<name>.pdf on the two SITE hosts -> files.merecatholicity.com.
+# This is what keeps every PDF URL ever shared alive after the files left Pages.
+# Scoped to the site hosts on purpose — files.* is in this same zone, and a
+# zone-wide rule redirected the bucket to itself. Created by hand on 2026-09-08
+# and adopted here the next day.
+resource "cloudflare_ruleset" "redirects" {
+  kind  = "zone"
+  name  = "default"
+  phase = "http_request_dynamic_redirect"
+  rules = [
+    {
+      action = "redirect"
+      action_parameters = {
+        from_value = {
+          preserve_query_string = false
+          status_code           = 301
+          target_url = {
+            expression = "concat(\"https://files.merecatholicity.com\", http.request.uri.path)"
+          }
+        }
+      }
+      description = "Published PDFs moved to R2 (files.merecatholicity.com) to keep the Pages site under its 1GB limit; every previously-shared URL must keep working. Scoped to the SITE hosts: files.* is in this same zone, and a zone-wide rule redirected the bucket to itself."
+      enabled     = true
+      expression  = "ends_with(http.request.uri.path, \".pdf\") and (http.host eq \"merecatholicity.com\" or http.host eq \"www.merecatholicity.com\")"
+      ref         = "805c4d0689c14433a81be95193eadfdd"
+    },
+  ]
+  zone_id = var.zone_id
+}

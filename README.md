@@ -150,21 +150,28 @@ package-lock.json  the app's UI library (lit, bundled into app.js), and the buil
   since the files are no longer on disk to look for. CI holds `docs/*.pdf` back from the
   Pages artifact — they had been riding along whenever a run rebuilt them (400 MB with,
   113 MB without), which re-inflated the artifact the move was meant to shrink.
-  **Publishing is manual and nothing automates it:** after `make -C resources pdf`, upload
-  with `npx wrangler r2 object put merecatholicity-files/<name> --file docs/<name>
-  --remote` — the `--remote` is essential, or wrangler writes to a local simulated store
-  and the real bucket is untouched. Because the manifest records what *should* be
-  published rather than what *is*, a rebuilt-but-unuploaded PDF serves its old bytes and a
-  newly-listed one 404s live while `make check` still passes. CI builds only 237 of the
-  244 (its PDF step is `make -C resources pdf`); the seven hand PDFs — the book, the
-  paperback, the two papers, the objections and the two charts — are built only by
-  `make pdf` / `make publish` / `make chart-pdfs` on a machine with TeX.
+  **Publishing is automated and verified** (`scripts/publish_pdfs.py`): `make publish-pdfs`
+  uploads only the local PDFs whose MD5 differs from the bucket's copy (R2's ETag is the
+  MD5) and purges the edge for exactly those URLs; `make check-pdfs` fails if any manifest
+  name is missing from the bucket or any local PDF differs from it. CI runs both — it builds
+  the corpus PDFs when LaTeX changed, the book/paperback/paper when `book/` changed, the
+  three charts when their pages or the stylesheet changed, then publishes, and checks on
+  every run. One PDF has no build at all: `The_Bishop_of_Rome.pdf` is a mirrored 2024
+  document kept as a source in `resources/docs-src/` and copied in by `make mirrored-pdfs`.
+  Both commands need `CLOUDFLARE_API_TOKEN` (R2 Storage:Edit + Cache Purge); without it the
+  check can only see absence, and publishing refuses. The one-off road is still
+  `npx wrangler r2 object put merecatholicity-files/<name> --file docs/<name> --remote`
+  (the `--remote` is essential).
 - **Publishing the site is still `git push`** — but the build happens in CI, not on your
   machine. A push to `main` runs the workflow: restore the previous `docs/` from cache,
   rebuild only what the diff touched, run `make tests`, `make jscheck` and `make check`,
   package `docs/`, deploy to Pages, purge the edge. A **pull request builds and is gated
   but never deploys**, so a fork's PR cannot touch production. Building locally still
   works and is useful for previewing, but nothing you build locally is what ships.
+  The same is true of the **workers** (`.github/workflows/workers.yml`: gates, the D1
+  migration ledger, `wrangler deploy`, on any push touching them) and of
+  **Terraform** (`terraform.yml`: plan on every `terraform/**` change, apply from `main`
+  behind an approval gate). See [Continuous integration](#continuous-integration).
 - **The taxonomy is: root = config/docs; other dirs = sources and tooling; `docs/` = the
   served folder** — most of it written by the build, some of it hand-maintained source
   (see the layout box above). Never hand-edit the generated half.
@@ -429,6 +436,36 @@ editing it:
 - **TeX Live is ~2 GB** and most changes never touch a `.tex`, so it is installed only when
   the diff says LaTeX is actually involved.
 
+**Four workflows, and what each owns (since 2026-09-09):**
+
+| Workflow | Fires on | Does |
+| --- | --- | --- |
+| `build.yml` | every push and PR | build the site, run the gates, build + publish + verify the PDFs, deploy Pages (`main` only), purge the edge |
+| `workers.yml` | changes under `comments-worker/`, `contact-worker/`, `purescript/`, the npm lockfile | `make jscheck` + `make tests` + `wrangler deploy --dry-run`; on `main`: apply the D1 migration ledger, `wrangler deploy` |
+| `terraform.yml` | changes under `terraform/` | `plan` with a public-safe summary; on `main`: `apply` behind the `terraform-production` approval gate — refuses any destroy/replace, refuses if the plan changed since review |
+| `purge-cache.yml` | a manual button | purge the two unkeyed files, or the whole zone |
+
+**Approving a Terraform apply:** open the run and press *Review deployments*, or from a
+shell `scripts/ci_approve.sh` (lists waiting runs), `scripts/ci_approve.sh <run-id>` (shows
+the plan summary and what is pending), `scripts/ci_approve.sh <run-id> --approve`. Because
+this repository is public, the pipeline never prints a raw plan or uploads the plan file —
+the summary it shows is `scripts/tf_plan_summary.py`'s rendering: addresses, actions,
+attribute names, and values only for attributes the provider does not mark sensitive.
+
+**Secrets** (Settings → Secrets and variables → Actions, set once by hand):
+`CLOUDFLARE_API_TOKEN` (permissions in `terraform/README.md`) and `TF_GITHUB_TOKEN`
+(a token with `repo` scope for the github provider). Every workflow skips its
+credentialed steps cleanly when they are absent, so a fork's PR still builds and gates.
+
+**Deliberately NOT in the pipeline:** worker secrets (`wrangler secret put`); the
+librarian ingest (`make librarian` — needs the private shelf and the owner's key, and the
+GPU box is a machine, not a job); the bootstrap secrets above and the Terraform state
+bucket (a credential cannot be minted by the automation it authorises); Email Routing
+settings (a provider bug); the R2 custom-domain bindings, the TURN key and Vectorize (the
+provider cannot import or represent them); the one-off KJV-audio and private-shelf
+uploads; headless verification against production (Bot Fight Mode blocks runners); and
+the history rewrite of 2026-09-09, which was a backed-up, owner-authorised act.
+
 Adding CI also surfaced four real bugs that a developer machine had been hiding — a
 `jscheck` that never declared it needed `psbuild`, a test that pinned node to
 `/usr/bin/node`, a test importing the GPU backend's numpy dependency, and one asserting the
@@ -452,7 +489,9 @@ your working tree holds that a fresh clone does not.
 | `make bundle` | Compile PureScript, then bundle `app/` → `docs/app.js` (esbuild) |
 | `make check` / `make jscheck` | Link check / JS lint |
 | `make serve` | Local preview on 127.0.0.1:8000 over `docs/` |
-| `make worker-deploy` | Lint, then deploy the comments worker |
+| `make publish-pdfs` / `make check-pdfs` | Upload the local PDFs that differ from R2 and purge their URLs / prove the bucket matches `docs/pdfs.txt` (needs `CLOUDFLARE_API_TOKEN`) |
+| `make mirrored-pdfs` | Copy the one PDF nothing builds (`resources/docs-src/The_Bishop_of_Rome.pdf`) into `docs/` (run inside `make html`) |
+| `make worker-deploy` | The MANUAL road: lint, then deploy the comments worker (CI does this on push since 2026-09-09) |
 | `make librarian` | Rebuild + push merecat's corpus/persona/config |
 | `make comments-backup` | Export the live D1 comments DB (kept out of git) |
 | `make clean` | Sweep LaTeX aux/log detritus and `__pycache__` |
@@ -559,15 +598,16 @@ domain and the TURN key cannot be managed at all (no resource, or no import supp
 terraform -chdir=terraform plan       # expect: No changes
 ```
 
-**Known drift, as of 2026-09-08:** the same-day move of the PDFs to R2 created three
-things by hand that Terraform does not yet declare — the `merecatholicity-files` bucket,
-the `files.merecatholicity.com` DNS record, and the dynamic-redirect ruleset that 301s
-`/<name>.pdf` to it (a fourth ruleset phase, `http_request_dynamic_redirect`; the three
-declared ones are firewall, response-headers and rate-limit). Nothing is broken — it is
-live and verified — but `plan` cannot see it, so do not read `No changes` as a full
-picture of the zone until it is imported. Adopting it is the documented route: an
-`import` block, `plan -generate-config-out`, fold the generated HCL into the topic file,
-iterate to `No changes`, then apply.
+**Adopted 2026-09-09:** the three things the PDF move had made by hand — the
+`merecatholicity-files` bucket, the `files.merecatholicity.com` record and the
+dynamic-redirect ruleset — plus the GitHub environments, the two public-id Actions
+variables, and GitHub Pages itself (`github_repository_pages`, `build_type = workflow`).
+`plan` is expected to say `No changes` again. **Terraform runs from CI** (`terraform.yml`):
+plan on every `terraform/**` change, apply from `main` behind the `terraform-production`
+environment's approval — see [Continuous integration](#continuous-integration) for how a
+plan is reviewed and approved. Locally the same four variables still work for a plan by
+hand; the S3 pair can be derived from the Cloudflare token (access key = the token's id,
+secret = its SHA-256), which is what CI does.
 
 State lives in the R2 bucket `merecatholicity-tfstate`, which is deliberately not
 managed by Terraform (a state store managed by its own state cannot be bootstrapped).

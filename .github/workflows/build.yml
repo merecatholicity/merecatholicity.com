@@ -66,6 +66,8 @@ jobs:
             echo "no usable base — treating everything as changed"
             echo "files=ALL" >> "$GITHUB_OUTPUT"
             echo "latex=yes" >> "$GITHUB_OUTPUT"
+            echo "book=yes" >> "$GITHUB_OUTPUT"
+            echo "charts=yes" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git diff --name-only "$base" HEAD > /tmp/changed.txt
@@ -76,6 +78,15 @@ jobs:
             echo "latex=yes" >> "$GITHUB_OUTPUT"
           else
             echo "latex=no" >> "$GITHUB_OUTPUT"
+          fi
+          # The seven hand PDFs: the book + paperback + companion paper come
+          # from book/ (TeX); the three charts are printed from their content
+          # pages by a headless browser and follow the stylesheet too.
+          if grep -qE '^book/' /tmp/changed.txt; then echo "book=yes" >> "$GITHUB_OUTPUT"; else echo "book=no" >> "$GITHUB_OUTPUT"; fi
+          if grep -qE '^content/(charting-communions|free-churches|objections)\.html$|^styles/' /tmp/changed.txt; then
+            echo "charts=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "charts=no" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Teach make what changed
@@ -164,6 +175,10 @@ jobs:
         if: steps.changed.outputs.latex == 'yes'
         run: make -C resources pdf
 
+      - name: Build the book, the paperback and the companion paper
+        if: steps.changed.outputs.book == 'yes'
+        run: make pdf publish
+
       - name: Build the site
         run: |
           # `make content` first: it renders the ~30 hand pages (index, credo,
@@ -175,11 +190,46 @@ jobs:
           make content
           make html
 
+      - name: Print the chart pages to PDF
+        if: steps.changed.outputs.charts == 'yes'
+        # The charts print the built pages, so this follows `make html`. A
+        # GitHub runner carries Google Chrome, not chromium.
+        run: make chart-pdfs CHROMIUM=/usr/bin/google-chrome
+
+      - name: The Logos edition (pandoc only — built when the book changed, or whenever it is missing)
+        run: |
+          if [ "${{ steps.changed.outputs.book }}" = "yes" ] || [ ! -f docs/Mere_Catholicity_Logos.docx ]; then
+            make logos
+          else
+            echo "docs/Mere_Catholicity_Logos.docx present and the book unchanged"
+          fi
+
+      # The PDFs are served from R2, not from Pages. Whatever this run rebuilt
+      # goes to the bucket now — only the files whose MD5 changed are uploaded,
+      # and the edge is purged for exactly those URLs (scripts/publish_pdfs.py).
+      - name: Publish the rebuilt PDFs to R2
+        if: steps.changed.outputs.latex == 'yes' || steps.changed.outputs.book == 'yes' || steps.changed.outputs.charts == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN not set — PDFs were rebuilt but NOT published. Run \`make publish-pdfs\` by hand, or add the secret."
+            exit 0
+          fi
+          make publish-pdfs
+
       - name: Gates
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           make tests
           make jscheck
           make check
+          # Every name in docs/pdfs.txt must be in the bucket, and every PDF this
+          # run holds must match the bucket's copy. With the token this is exact;
+          # without it only absence is visible (and Bot Fight Mode hides even that
+          # from a runner), so it degrades to a notice rather than a lie.
+          make check-pdfs
 
       - name: Did the build change anything the commit did not carry?
         run: |

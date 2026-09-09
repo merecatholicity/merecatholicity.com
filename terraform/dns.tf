@@ -295,3 +295,25 @@ resource "cloudflare_dns_record" "pages_aaaa_8002" {
   type    = "AAAA"
   zone_id = var.zone_id
 }
+
+# The R2 custom domain for the published PDFs (the sibling of audio above). The
+# record is managed here; the bucket-to-domain binding behind it cannot be
+# imported by the provider (README.md, "What Terraform cannot hold").
+resource "cloudflare_dns_record" "files" {
+  comment         = null
+  content         = "public.r2.dev"
+  data            = null
+  name            = "files.merecatholicity.com"
+  priority        = null
+  private_routing = null
+  proxied         = true
+  settings = {
+    flatten_cname = false
+    ipv4_only     = false
+    ipv6_only     = false
+  }
+  tags    = []
+  ttl     = 1
+  type    = "CNAME"
+  zone_id = var.zone_id
+}

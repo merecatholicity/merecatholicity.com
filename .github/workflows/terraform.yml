@@ -1,0 +1,279 @@
+# Terraform from CI: plan on every change to terraform/, apply from main behind an
+# approval gate.
+#
+# The shape, and why:
+#
+#   * It fires ONLY when terraform/ changes (path filter) or when run by hand.
+#     Nothing else in the repository touches the infrastructure it describes.
+#   * `plan` runs for pull requests AND pushes. `apply` runs only for a push to
+#     main (or a deliberate workflow_dispatch with apply=true) and waits on the
+#     `terraform-production` environment, whose required reviewer is the owner.
+#     A human approves with the "Review deployments" button on the run; the AI
+#     operator approves with scripts/ci_approve.sh, which is the same API call.
+#   * THIS REPOSITORY IS PUBLIC, so its logs, summaries and artifacts are public.
+#     Terraform state carries secrets (Turnstile keys at least), and the binary
+#     plan file embeds the prior state. So: the plan output is never printed,
+#     the plan file is never uploaded, and what reviewers see is
+#     scripts/tf_plan_summary.py — addresses, actions, attribute names, and
+#     values only for attributes the provider does not mark sensitive.
+#   * THE LAW: never apply a plan that destroys or replaces (a replaced D1
+#     database is the comments database, gone). Any delete action fails the
+#     plan job — unless run by hand with allow_destroy=true, which is the
+#     deliberate exception, made in the open.
+#   * The apply job re-plans and refuses if the set of changes differs from what
+#     was reviewed: an approval covers one plan, not whatever the world looks
+#     like by the time someone clicks.
+#   * The R2 state backend's S3 credentials are DERIVED from the Cloudflare API
+#     token (access key = the token's id, secret = SHA-256 of the token value —
+#     Cloudflare's documented scheme), so one secret serves everything. Set
+#     AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY as repository secrets to use a
+#     dedicated R2 token instead.
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   CLOUDFLARE_API_TOKEN   scoped as listed in terraform/README.md
+#   TF_GITHUB_TOKEN        for the github provider (repo scope)
+# A fork's pull request sees no secrets: it gets fmt + validate and no plan.
+
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+      - 'scripts/tf_plan_summary.py'
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+      - 'scripts/tf_plan_summary.py'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Apply after the plan (still waits for approval)"
+        type: boolean
+        default: false
+      allow_destroy:
+        description: "Permit a plan that deletes or replaces resources. Read the plan first."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# One Terraform at a time, and never cancel one mid-apply.
+concurrency:
+  group: terraform
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: 1.16.1
+  TF_IN_AUTOMATION: "1"
+  TF_INPUT: "0"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      creds: ${{ steps.creds.outputs.present }}
+      changes: ${{ steps.plan.outputs.changes }}
+      fingerprint: ${{ steps.summary.outputs.fingerprint }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Formatting
+        run: terraform -chdir=terraform fmt -check -recursive -diff
+
+      - name: Are the credentials here?
+        id: creds
+        env:
+          CF: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH: ${{ secrets.TF_GITHUB_TOKEN }}
+        run: |
+          if [ -n "$CF" ] && [ -n "$GH" ]; then
+            echo "present=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::no CLOUDFLARE_API_TOKEN / TF_GITHUB_TOKEN (a fork's PR, or not yet configured) — validating offline, no plan."
+          fi
+
+      - name: Validate (offline)
+        if: steps.creds.outputs.present == 'no'
+        run: |
+          terraform -chdir=terraform init -backend=false -input=false >/dev/null
+          terraform -chdir=terraform validate
+
+      - name: Derive the state backend's S3 credentials
+        if: steps.creds.outputs.present == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          R2_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          R2_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$R2_KEY" ] && [ -n "$R2_SECRET" ]; then
+            key="$R2_KEY"; secret="$R2_SECRET"
+          else
+            key=$(curl -fsS https://api.cloudflare.com/client/v4/user/tokens/verify \
+                    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                  | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["id"])')
+            secret=$(printf %s "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -d' ' -f1)
+          fi
+          echo "::add-mask::$key"; echo "::add-mask::$secret"
+          { echo "AWS_ACCESS_KEY_ID=$key"; echo "AWS_SECRET_ACCESS_KEY=$secret"; } >> "$GITHUB_ENV"
+
+      - name: Init + validate
+        if: steps.creds.outputs.present == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+        run: |
+          terraform -chdir=terraform init -input=false -lockfile=readonly >/dev/null
+          terraform -chdir=terraform validate
+
+      - name: Plan (output kept off the public log)
+        id: plan
+        if: steps.creds.outputs.present == 'yes'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+        run: |
+          set +e
+          terraform -chdir=terraform plan -input=false -lock-timeout=5m -detailed-exitcode \
+            -no-color -out=tfplan > /tmp/plan.txt 2>&1
+          code=$?
+          set -e
+          case $code in
+            0) echo "changes=no"  >> "$GITHUB_OUTPUT"; echo "plan: no changes" ;;
+            2) echo "changes=yes" >> "$GITHUB_OUTPUT"; echo "plan: changes pending (see the summary)" ;;
+            *) echo "::error::terraform plan failed"; grep -E '^(Error|│|╷|╵)' /tmp/plan.txt | head -60; exit 1 ;;
+          esac
+          terraform -chdir=terraform show -json terraform/tfplan > /tmp/plan.json
+
+      - name: Summarise for review
+        id: summary
+        if: steps.creds.outputs.present == 'yes'
+        env:
+          ALLOW: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_destroy && '--allow-destroy' || '' }}
+        run: |
+          mkdir -p /tmp/summary
+          python3 scripts/tf_plan_summary.py /tmp/plan.json --markdown > /tmp/summary/plan.md
+          cat /tmp/summary/plan.md >> "$GITHUB_STEP_SUMMARY"
+          fp=$(python3 scripts/tf_plan_summary.py /tmp/plan.json --fingerprint | base64 -w0)
+          echo "fingerprint=$fp" >> "$GITHUB_OUTPUT"
+          # The law, enforced: a destroy or replace fails here unless allowed by hand.
+          python3 scripts/tf_plan_summary.py /tmp/plan.json --fail-on-destroy $ALLOW
+
+      - name: Publish the summary (it is safe by construction)
+        if: steps.creds.outputs.present == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-plan-summary
+          path: /tmp/summary/plan.md
+          retention-days: 14
+
+      - name: Comment the plan on the pull request
+        if: >-
+          steps.creds.outputs.present == 'yes' && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- terraform-plan -->'
+          { echo "$marker"; echo "### Terraform plan for \`${GITHUB_SHA::7}\`"; cat /tmp/summary/plan.md; } > /tmp/comment.md
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+                       --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/comment.md >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@/tmp/comment.md >/dev/null
+          fi
+
+  apply:
+    # Only from main (or a deliberate dispatch), only with credentials, and only
+    # when there is something to apply — a no-change plan needs no approval.
+    if: >-
+      needs.plan.outputs.creds == 'yes' && needs.plan.outputs.changes == 'yes'
+      && (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        || (github.event_name == 'workflow_dispatch' && inputs.apply)
+      )
+    needs: plan
+    runs-on: ubuntu-latest
+    environment:
+      name: terraform-production
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Derive the state backend's S3 credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          R2_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          R2_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -n "$R2_KEY" ] && [ -n "$R2_SECRET" ]; then
+            key="$R2_KEY"; secret="$R2_SECRET"
+          else
+            key=$(curl -fsS https://api.cloudflare.com/client/v4/user/tokens/verify \
+                    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                  | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["id"])')
+            secret=$(printf %s "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -d' ' -f1)
+          fi
+          echo "::add-mask::$key"; echo "::add-mask::$secret"
+          { echo "AWS_ACCESS_KEY_ID=$key"; echo "AWS_SECRET_ACCESS_KEY=$secret"; } >> "$GITHUB_ENV"
+
+      - name: Re-plan, and refuse if it differs from what was reviewed
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+          REVIEWED: ${{ needs.plan.outputs.fingerprint }}
+          ALLOW: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_destroy && '--allow-destroy' || '' }}
+        run: |
+          terraform -chdir=terraform init -input=false -lockfile=readonly >/dev/null
+          set +e
+          terraform -chdir=terraform plan -input=false -lock-timeout=5m -detailed-exitcode \
+            -no-color -out=tfplan > /tmp/plan.txt 2>&1
+          code=$?
+          set -e
+          if [ $code -eq 1 ]; then echo "::error::terraform plan failed"; grep -E '^(Error|│|╷|╵)' /tmp/plan.txt | head -60; exit 1; fi
+          terraform -chdir=terraform show -json terraform/tfplan > /tmp/plan.json
+          python3 scripts/tf_plan_summary.py /tmp/plan.json --markdown >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/tf_plan_summary.py /tmp/plan.json --fail-on-destroy $ALLOW
+          now=$(python3 scripts/tf_plan_summary.py /tmp/plan.json --fingerprint | base64 -w0)
+          if [ "$now" != "$REVIEWED" ]; then
+            echo "::error::the plan changed between review and apply — nothing applied. Re-run to review the new plan."
+            echo "reviewed:"; echo "$REVIEWED" | base64 -d; echo "now:"; echo "$now" | base64 -d
+            exit 1
+          fi
+          if [ $code -eq 0 ]; then echo "nothing left to apply"; echo "SKIP=1" >> "$GITHUB_ENV"; fi
+
+      - name: Apply
+        if: env.SKIP != '1'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+        run: |
+          # Output to a file, not the public log: apply echoes attribute values.
+          set +e
+          terraform -chdir=terraform apply -input=false -lock-timeout=5m -no-color terraform/tfplan > /tmp/apply.txt 2>&1
+          code=$?
+          set -e
+          grep -E '^(Apply complete|Error)' /tmp/apply.txt || true
+          if [ $code -ne 0 ]; then
+            echo "::error::terraform apply failed"
+            grep -E '^(Error|│|╷|╵)' /tmp/apply.txt | head -80
+            exit 1
+          fi
+          grep -E '^Apply complete' /tmp/apply.txt >> "$GITHUB_STEP_SUMMARY" || true

@@ -117,6 +117,9 @@ docs/*.html
 !docs/douay-rheims.html
 docs/app.js
 docs/comments.js
+# `make logos` (pandoc, no TeX) builds this from the book; CI rebuilds it when
+# the book changes and whenever it is missing from the cached tree.
+docs/Mere_Catholicity_Logos.docx
 docs/style.css
 docs/version.json
 docs/pdfs.txt

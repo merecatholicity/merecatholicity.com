@@ -49,6 +49,7 @@ def buildable():
                   if n.endswith('.tex') and n[:-4] + '.html' not in PDF_ONLY}
     # the book, the bundles, the stylesheet and the generated data files
     names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'comments.js',
+              'Mere_Catholicity_Logos.docx',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
               'library-order.json', 'kjv.json', 'dr.json'}
     # emoji-data.json and avatars/presets/index.json are NOT here: no build

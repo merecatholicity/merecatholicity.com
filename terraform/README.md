@@ -16,11 +16,11 @@ at the deploy:
 **Terraform owns** — the zone and three deliberate zone settings, all 18 DNS
 records, the three custom rulesets (response headers, custom firewall, rate
 limiting), bot management, the six R2 buckets, the four D1 databases *as records
-that they exist*, the two Turnstile widgets, and both GitHub repositories —
-but **NOT the GitHub Pages configuration**, which is deliberately left alone
-(see the header of `github.tf`: adopting Pages means asserting config rather
-than adopting it, and getting it wrong unbinds the custom domain and 404s the
-site). Forty resources in all.
+that they exist*, the two Turnstile widgets, both GitHub repositories, the
+GitHub Pages configuration (`github_repository_pages`, adopted 2026-09-09 with
+a no-op plan), the two GitHub environments (`github-pages`, and the
+`terraform-production` approval gate with its main-only branch policy) and the
+two public-id Actions variables. Forty-eight resources in all.
 
 **wrangler owns** — worker scripts and versions, all bindings, vars, secrets,
 `routes`, `triggers.crons`, and D1 migrations. None of that appears here. The
@@ -30,25 +30,60 @@ source of truth for it stays `comments-worker/wrangler.jsonc` and
 **ingest.py owns** — the contents of the three librarian D1 rooms and the
 Vectorize index. All derived data, rebuilt by `make librarian`.
 
-## Known drift (2026-09-08)
+## Adopted 2026-09-09
 
-The move of the published PDFs to R2 created three things by hand on the day the
-state was adopted, and none of them are declared here yet:
+The move of the published PDFs to R2 created three things by hand on the day
+the state was first adopted; they are declared now, with import blocks in
+`imports.tf`: the R2 bucket `merecatholicity-files`, the
+`files.merecatholicity.com` DNS record, and the dynamic-redirect ruleset that
+301s `/<name>.pdf` to that host (`cloudflare_ruleset.redirects`, phase
+`http_request_dynamic_redirect`). Its R2 custom-domain binding is unadoptable
+for the same reason `audio.merecatholicity.com`'s is (below).
 
-- the R2 bucket **`merecatholicity-files`** — so `r2.tf` holds six buckets while
-  the account has seven adoptable ones (plus the unmanaged `merecatholicity-tfstate`);
-- the **`files.merecatholicity.com`** DNS record — so `dns.tf`'s 18 records are
-  one short;
-- the **dynamic-redirect ruleset** that 301s `/<name>.pdf` to that host — a
-  fourth ruleset phase (`http_request_dynamic_redirect`) beside the three
-  declared here.
+## Running from CI
 
-Its R2 custom-domain binding is unadoptable for the same reason
-`audio.merecatholicity.com`'s is (below). Nothing is broken — all of it is live
-and verified — but **`plan` reporting `No changes` does not currently mean the
-zone is fully described.** Adopt each the documented way: an `import` block,
-`plan -generate-config-out`, fold the HCL into the topic file, iterate to `No
-changes`, apply.
+`.github/workflows/terraform.yml` fires only when `terraform/**` changes (or by
+hand). `plan` runs on pull requests and pushes; `apply` runs from `main` and
+waits on the **`terraform-production`** environment, whose required reviewer is
+the owner. Approve in the browser (*Review deployments*) or from a shell with
+`scripts/ci_approve.sh <run-id> --approve` — the same API call.
+
+Three things the workflow will not do, on purpose:
+
+- **Print a plan or upload the plan file.** This repository is public; its logs
+  and artifacts are public; the binary plan embeds the prior state, and state
+  holds secrets. Reviewers see `scripts/tf_plan_summary.py` — resource
+  addresses, actions, changed attribute names, and values only where the
+  provider's schema does not mark them sensitive. Imports are listed as `import`.
+- **Apply a destroy or a replace.** Any delete action fails the plan job unless
+  the workflow is run by hand with `allow_destroy=true`. The same law as below,
+  enforced.
+- **Apply a plan other than the one reviewed.** The apply job re-plans and
+  compares the set of `address action` lines; a difference fails it.
+
+The S3 credentials for the state backend are derived at run time from the
+Cloudflare token — access key = the token's `id` (`/user/tokens/verify`),
+secret = SHA-256 of the token value, Cloudflare's documented scheme — so one
+secret serves everything. Set `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` as
+repository secrets to use a dedicated R2 token instead.
+
+**Secrets** (repository → Settings → Secrets and variables → Actions):
+
+- `CLOUDFLARE_API_TOKEN` — one user token. Zone (merecatholicity.com only):
+  Zone:Read, Zone Settings:Edit, DNS:Edit, Cache Purge:Purge, Bot
+  Management:Edit, Zone WAF:Edit, Transform Rules:Edit, Single Redirect:Edit,
+  Workers Routes:Edit. Account: Account Settings:Read, Account Rulesets:Read,
+  Workers R2 Storage:Edit, D1:Edit, Turnstile:Edit, Workers Scripts:Edit. The
+  same token serves the edge purge, the PDF publisher and the worker deploys.
+- `TF_GITHUB_TOKEN` — for the github provider: the owner's `gh auth token`
+  (`repo`, `workflow`, `read:org`), or a fine-grained PAT with Administration,
+  Environments and Actions-variables read/write on both repositories.
+
+**Bootstrap order, because it matters:** a workflow that names an environment
+GitHub has never seen makes GitHub create it — with no protection rules. The
+`terraform-production` environment was therefore created through the API (with
+its reviewer and branch policy) before any workflow referenced it, and then
+imported here. Do the same for any future gated environment.
 
 ## What Terraform cannot hold
 
@@ -58,10 +93,11 @@ reason is the provider, not a choice:
 - **Vectorize (`merecat-t1`)** — the Cloudflare provider has no vectorize
   resource at all (checked against 5.24.0: 259 resources, none). It stays a
   wrangler/dashboard object.
-- **`audio.merecatholicity.com`'s R2 binding** — `cloudflare_r2_custom_domain`
-  exists but does not support `terraform import`. Its DNS record IS managed
-  here; the bucket-to-domain binding behind it is not. Declaring it would try
-  to create a second one.
+- **The R2 custom-domain bindings** (`audio.` and, since 2026-09-08, `files.`)
+  — `cloudflare_r2_custom_domain` exists but does not support `terraform
+  import` (the provider's own docs say so). Their DNS records ARE managed here;
+  the bucket-to-domain bindings behind them are not. Declaring one would try to
+  create a second.
 - **The Realtime TURN key (`merecatholicity-calls`)** — `cloudflare_calls_turn_app`
   likewise has no import. Adopting it would mint a *new* key with a new id,
   breaking `TURN_KEY_ID` and every voice call. Leave it alone.

@@ -1,0 +1,155 @@
+# The two Cloudflare Workers, deployed from CI.
+#
+# Until 2026-09-09 the comments worker shipped only by `make worker-deploy` on
+# the owner's machine. This moves that road into the pipeline: any push to main
+# that touches a worker, the shared PureScript kernel, or the npm lockfile runs
+# the same gates (`make jscheck` = psbuild + eslint + tsc; `make tests`), applies
+# the D1 migration ledger, and deploys. A pull request runs the gates and a
+# `wrangler deploy --dry-run` per worker and touches nothing.
+#
+# What stays OUTSIDE the pipeline, on purpose:
+#   * worker SECRETS (`wrangler secret put`) — never in git, never in CI;
+#   * the librarian ingest (`make librarian`) — needs the private shelf and the
+#     owner's admin key;
+#   * `make worker-deploy` itself survives as the manual/emergency road.
+#
+# The migration ledger is applied BEFORE the deploy. Every migration in this
+# repository is additive (IF NOT EXISTS / ALTER / table-swap), which is what
+# makes that order safe for the worker version still running for those seconds.
+
+name: Workers
+
+on:
+  pull_request:
+    paths:
+      - 'comments-worker/**'
+      - 'contact-worker/**'
+      - 'purescript/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'globals.d.ts'
+      - 'eslint.config.js'
+      - '.github/workflows/workers.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'comments-worker/**'
+      - 'contact-worker/**'
+      - 'purescript/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'globals.d.ts'
+      - 'eslint.config.js'
+      - '.github/workflows/workers.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys queue; a deploy in flight is never cancelled.
+concurrency:
+  group: workers
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      contact_changed: ${{ steps.changed.outputs.contact }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Did the contact worker change?
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then base="${{ github.event.pull_request.base.sha }}"
+          else base="${{ github.event.before }}"; fi
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null \
+             || git diff --name-only "$base" HEAD | grep -qE '^(contact-worker/|package-lock\.json|\.github/workflows/workers\.yml)'; then
+            echo "contact=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "contact=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: npm ci
+
+      - name: Restore the PureScript output
+        uses: actions/cache@v4
+        with:
+          path: purescript/output
+          key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
+
+      - name: Gates
+        run: |
+          make jscheck
+          make tests
+
+      - name: Dry-run both deploys (no credentials needed)
+        run: |
+          (cd comments-worker && npx wrangler deploy --dry-run --outdir /tmp/cw-dry)
+          (cd contact-worker  && npx wrangler deploy --dry-run --outdir /tmp/ct-dry)
+          echo "comments worker bundle: $(du -sh /tmp/cw-dry | cut -f1)"
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Restore the PureScript output
+        uses: actions/cache@v4
+        with:
+          path: purescript/output
+          key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
+
+      - name: Compile the kernel
+        run: make psbuild
+
+      - name: Apply the D1 migration ledger, then deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '6093bc0889c95a08f0a92a8df6750c66' }}
+          CONTACT: ${{ needs.check.outputs.contact_changed }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN not set — gates passed, nothing deployed. Add the secret to enable CI deploys; until then \`make worker-deploy\` is the road."
+            exit 0
+          fi
+          cd comments-worker
+          npx wrangler d1 migrations apply merecatholicity-comments --remote
+          npx wrangler deploy
+          cd ..
+          if [ "$CONTACT" = "yes" ]; then
+            (cd contact-worker && npx wrangler deploy)
+          else
+            echo "contact worker unchanged — not redeployed"
+          fi
+
+      - name: The API still answers
+        run: |
+          code=$(curl -s -o /tmp/config.json -w '%{http_code}' -A 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128.0' https://merecatholicity.com/api/comments/config || true)
+          echo "GET /api/comments/config -> $code"
+          # Bot Fight Mode may 403 a runner; only a 5xx or a malformed body is a verdict.
+          if [ "$code" = "200" ]; then python3 -c "import json;d=json.load(open('/tmp/config.json'));assert d.get('ok') is True;print('config ok, apiVersion', d.get('apiVersion'))"; fi
+          case "$code" in 5*) echo "::error::the worker answers $code after deploy"; exit 1 ;; esac
