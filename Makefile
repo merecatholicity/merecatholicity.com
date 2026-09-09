@@ -113,12 +113,17 @@ check-pdfs:
 mirrored-pdfs:
 	cp resources/docs-src/The_Bishop_of_Rome.pdf docs/The_Bishop_of_Rome.pdf
 
+# --no-print-directory and the .pdf filter are load-bearing: under a sub-make
+# (as inside `make html` in CI) GNU make prints "make[2]: Entering directory"
+# to stdout even with -s, and two of those lines landed in the manifest on the
+# first CI run — linkcheck counted "246 published PDFs" and check-pdfs refused
+# the two phantom names. Only lines that name a .pdf may reach the file.
 pdf-manifest:
-	@{ $(MAKE) -s -C resources list-pdfs; \
+	@{ $(MAKE) -s --no-print-directory -C resources list-pdfs; \
 	   for p in Mere_Catholicity.pdf Mere_Catholicity_Paperback.pdf \
 	            The_Bishop_and_the_Presbyter.pdf The_Bishop_of_Rome.pdf \
 	            Fifty_Objections.pdf Charting_Historic_Communions.pdf \
-	            Charting_Free_Churches.pdf; do echo $$p; done; } | sort > docs/pdfs.txt
+	            Charting_Free_Churches.pdf; do echo $$p; done; } | grep '\.pdf$$' | sort > docs/pdfs.txt
 	@echo "pdf-manifest: $$(wc -l < docs/pdfs.txt) published PDFs"
 
 check: jscheck
