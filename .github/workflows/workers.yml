@@ -84,6 +84,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pandoc
+          python3 -m pip install --quiet pyyaml
+
       - run: npm ci
 
       - name: Restore the PureScript output
@@ -91,6 +97,29 @@ jobs:
         with:
           path: purescript/output
           key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
+
+      # `make tests` is not entirely hermetic: tests/css reads the built
+      # stylesheet, and tests/py/test_partials_baked + test_librarian_sources
+      # read the built corpus. build.yml builds all of that before it tests;
+      # this job restores what build.yml cached (restore-only — build.yml is the
+      # one that saves), always rebuilds the stylesheet so the freshness test
+      # compares like with like, and only on a cold cache builds the site.
+      - name: Restore the built site
+        uses: actions/cache/restore@v4
+        with:
+          path: docs
+          key: site-${{ github.sha }}
+          restore-keys: site-
+
+      - name: Build what the tests read
+        run: |
+          make css
+          if [ ! -f docs/book.html ]; then
+            echo "::notice::site cache miss — building the site so the corpus tests have something to read"
+            make bundle
+            make content
+            make html
+          fi
 
       - name: Gates
         run: |
