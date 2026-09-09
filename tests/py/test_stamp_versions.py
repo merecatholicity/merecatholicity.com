@@ -172,6 +172,51 @@ class References(unittest.TestCase):
                                  + ' — read it from window.mcAsset instead')
 
 
+class InvisibleToMake(unittest.TestCase):
+    """A stamped file keeps its modification time.
+
+    make rebuilds a target when a prerequisite is strictly newer. The stamp
+    rewrites pages, partials, nav.js and content.py for their cache keys only
+    — nothing built FROM them changes — so if the write bumped their mtimes,
+    make would take a freshly stamped corpus page for a freshly built one. It
+    did (2026-09-09): a commit changed a corpus .tex and the stylesheet, the
+    bundle's stamp touched all 272 pages, and `make html` a minute later left
+    the two changed pages unbuilt. This holds the stamp invisible to make.
+    """
+    def test_a_rewrite_keeps_the_mtime(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'page.html')
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write('<script src="nav.js?v=1"></script>')
+            old = 946684800  # 2000-01-01, the flattened mtime CI gives every file
+            os.utime(path, (old, old))
+            stamp_versions.write_keeping_mtime(path, '<script src="nav.js?v=2"></script>')
+            with open(path, encoding='utf-8') as f:
+                self.assertIn('nav.js?v=2', f.read(), 'the content must still be rewritten')
+            self.assertEqual(int(os.stat(path).st_mtime), old,
+                             'a stamped file must keep its mtime, or make mistakes it for a fresh build')
+
+    def test_sub_file_goes_through_the_keeper(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'content.py')
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write("COMMENTS_V = '111'\n")
+            old = 946684800
+            os.utime(path, (old, old))
+            self.assertTrue(stamp_versions.sub_file(path, r"COMMENTS_V = ['\"]?[0-9a-z]+['\"]?", "COMMENTS_V = '222'"))
+            self.assertEqual(int(os.stat(path).st_mtime), old)
+
+    def test_the_page_pass_uses_the_keeper_too(self):
+        src = open(os.path.join(ROOT, 'scripts', 'stamp_versions.py'), encoding='utf-8').read()
+        body = src[src.index('def main('):]
+        self.assertIn('write_keeping_mtime(path, after)', body,
+                      'the page pass must write through write_keeping_mtime')
+        self.assertNotIn("open(path, 'w'", body.split('# ---- 5.')[0],
+                         'a page write that bypasses the keeper bumps its mtime')
+
+
 class Patterns(unittest.TestCase):
     """The substitution itself, on strings small enough to read.
 

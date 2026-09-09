@@ -112,8 +112,8 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: docs
-          key: site-${{ github.sha }}
-          restore-keys: site-
+          key: site-2-${{ github.sha }}
+          restore-keys: site-2-
 
       - name: The commit wins over the cache for everything git tracks
         run: |

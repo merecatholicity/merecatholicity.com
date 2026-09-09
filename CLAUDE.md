@@ -49,8 +49,10 @@ deploy (dropping a database, force-pushing history, deleting a bucket, revoking 
    `make worker-deploy` is the emergency road; `wrangler secret put` is the only home for
    worker secrets.
 8. **Never hand-edit or commit the generated half of `docs/`**; never bump a `?v=` by hand
-   (the build stamps them); never fetch a freshly stamped `?v=N` URL mid-deploy — probe a
-   throwaway query (`app.js?probe123`) instead.
+   (the build stamps them, preserving mtimes so a stamp never hides a source change from
+   make); never fetch a freshly stamped `?v=N` URL mid-deploy — probe a throwaway query
+   (`app.js?probe123`) instead. To force a cold site rebuild in CI, bump the cache
+   generation (`site-2-`) in both workflows.
 9. Every `uses:` is SHA-pinned — the repository requires it, nested references included;
    Dependabot bumps the pins by PR; secret scanning and push protection are on.
 10. The manual exceptions are enumerated in CICD.md §10. A manual act not on that list is drift.

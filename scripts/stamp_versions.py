@@ -67,6 +67,24 @@ def key_for(path):
     return str(int(digest[:8], 16))
 
 
+def write_keeping_mtime(path, text):
+    """Rewrite a file WITHOUT touching its modification time.
+
+    The stamp changes cache keys, never content that anything downstream is
+    built from — and it updates every consumer itself, in one pass. So a
+    stamped file is exactly as fresh, relative to its sources, as it was
+    before; letting the write bump its mtime told make otherwise. The live
+    case (2026-09-09): a commit changed a corpus source AND the stylesheet,
+    `make bundle`'s stamp rewrote all 272 pages with the new style key, and
+    `make html` a minute later found the two pages whose .tex had changed
+    "up to date" — the stale pages shipped. Preserving mtimes keeps the
+    stamp invisible to make, which is what it is."""
+    st = os.stat(path)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(text)
+    os.utime(path, (st.st_atime, st.st_mtime))
+
+
 def sub_file(path, pattern, repl):
     """NOTE the replacements below use \\g<1>, never \\1. Every key here begins
     with a digit, and `\\1` followed by digits is parsed as an OCTAL ESCAPE — so
@@ -78,8 +96,7 @@ def sub_file(path, pattern, repl):
         s = f.read()
     out, n = re.subn(pattern, repl, s)
     if n and out != s:
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(out)
+        write_keeping_mtime(path, out)
         return True
     return False
 
@@ -169,8 +186,7 @@ def main():
             if after != was:
                 hits[name] = hits.get(name, 0) + 1
         if after != before:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write(after)
+            write_keeping_mtime(path, after)
     for name, n in sorted(hits.items()):
         changed.append(name + ' -> ' + stamps[name] + ' on ' + str(n) + ' pages')
 

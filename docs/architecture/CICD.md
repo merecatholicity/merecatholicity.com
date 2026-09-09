@@ -97,7 +97,8 @@ holds `pages: write` + `id-token: write`.
 3. Node 24 (official build — Ubuntu's `+dfsg` node cannot run the `.ts` tests), Python
    3.12, `pandoc`, `poppler-utils`, `pyyaml`; **TeX Live only when `latex=yes`**.
 4. `npm ci`; restore the PureScript output cache; **restore the built site cache** (`docs/`
-   keyed `site-<sha>`, fallback `site-`; a miss costs time, never correctness) — then
+   keyed `site-2-<sha>`, fallback `site-2-`; the prefix is a generation — bump it to force one
+   cold rebuild; a miss costs time, never correctness) — then
    **`git checkout -- docs` + `git clean -fd -- docs`, and the step fails if a tracked file
    still differs**: the cache is the previous build's WHOLE `docs/` tree, hand files
    included, so without this the previous commit's `nav.js`, `sw.js`, `turnstile.html`,
@@ -384,6 +385,7 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 | `linkcheck: … 246 published PDFs`, `check-pdfs` 404s two names | `make -C resources list-pdfs` under a sub-make wrote `make[2]: Entering directory` into the manifest | `--no-print-directory` + a `.pdf` filter in `pdf-manifest` |
 | `make tests` fails in CI on `docs/style.css` | the tests read built output the job never built | Workers restores the site cache and runs `make css` first |
 | a test passes locally, fails on the runner against a file in `docs/` that the commit changed; the drift step warns about a doc nobody edited | the site cache restored the previous commit's copy of a TRACKED hand file over the checkout (`docs/` is a mixture) | `git checkout -- docs` + `git clean -fd -- docs` right after the restore, failing if anything tracked still differs |
+| a corpus page whose `.tex` changed ships stale; the log says `'../docs/X.html' is up to date` | the version stamp in `make bundle` rewrote every page's `?v=` and bumped its mtime a minute before `make html`, so the cached page outranked its changed source | the stamp writes through `write_keeping_mtime` (invisible to make); the cache key prefix is a generation (`site-2-`) — bump it to force one cold rebuild of everything |
 | plan succeeded, `show` cannot find the plan file | `-chdir` resolves paths inside the directory | `tfplan`, not `terraform/tfplan` |
 | approval "failed" with a 422 but the apply ran | a fallback second POST after a jq error on the first, successful one | one JSON POST, tolerant printer |
 | purge "skipping — not set" with the secret present | the step read the zone id as a *secret*; it is a *variable* | both purge steps read `vars.CLOUDFLARE_ZONE_ID` |

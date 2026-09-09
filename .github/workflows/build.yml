@@ -159,9 +159,15 @@ jobs:
           # Restoring the previous build lets make do what it does well and
           # touch only what changed. A MISS COSTS TIME, NEVER CORRECTNESS: the
           # build from cold is the same build, just slower.
+          # The prefix is a generation: bump it to force ONE cold rebuild of
+          # the whole site from source, then leave it. site-2 (2026-09-09):
+          # the version stamp used to bump every page's mtime, so a corpus
+          # page whose .tex changed in the same commit as the stylesheet was
+          # taken for fresh and shipped stale from this cache; the stamp keeps
+          # mtimes now, and the generation bump rebuilds whatever that hid.
           path: docs
-          key: site-${{ github.sha }}
-          restore-keys: site-
+          key: site-2-${{ github.sha }}
+          restore-keys: site-2-
 
       - name: The commit wins over the cache for everything git tracks
         run: |
