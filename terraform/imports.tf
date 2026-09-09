@@ -318,3 +318,17 @@ import {
   to = github_repository_environment_deployment_policy.github_pages_main
   id = "merecatholicity.com:github-pages:54881721"
 }
+
+############################  GitHub security posture (2026-09-09 review)  ############################
+
+# Both exist as settings objects on the repository already (disabled / "all"),
+# so they are imported and then changed, rather than created.
+import {
+  to = github_repository_dependabot_security_updates.site
+  id = "merecatholicity.com"
+}
+
+import {
+  to = github_actions_repository_permissions.site
+  id = "merecatholicity.com"
+}

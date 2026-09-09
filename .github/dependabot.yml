@@ -1,0 +1,13 @@
+# Keeps the SHA-pinned actions current: with sha_pinning_required on the
+# repository, a bump is a pull request that changes a commit hash and its
+# version comment, reviewed like any other. Pull requests carry no secrets
+# (see the workflows), so a Dependabot branch cannot reach anything.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

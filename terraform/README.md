@@ -72,17 +72,36 @@ secret = SHA-256 of the token value, Cloudflare's documented scheme — so one
 secret serves everything. Set `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` as
 repository secrets to use a dedicated R2 token instead.
 
-**Secrets** (repository → Settings → Secrets and variables → Actions):
+**Secrets** (repository → Settings → Secrets and variables → Actions) — three
+Cloudflare account tokens, each holding only what its workflow needs, minted
+through the API on 2026-09-09 (a compromise of one job cannot reach the others'
+ground):
 
-- `CLOUDFLARE_API_TOKEN` — one user token. Zone (merecatholicity.com only):
-  Zone Read, Zone Settings Write, DNS Write, Cache Purge, Bot
-  Management Write, Zone WAF Write, Zone Transform Rules Write, Dynamic URL
-  Redirects Write, Workers Routes Write. Account: Account Settings Read, Account Rulesets Read,
-  Workers R2 Storage Write, D1 Write, Turnstile Sites Write, Workers Scripts Write. The
-  same token serves the edge purge, the PDF publisher and the worker deploys.
-- `TF_GITHUB_TOKEN` — for the github provider: the owner's `gh auth token`
-  (`repo`, `workflow`, `read:org`), or a fine-grained PAT with Administration,
-  Environments and Actions-variables read/write on both repositories.
+- `CLOUDFLARE_API_TOKEN` — **the terraform token** (`merecatholicity-ci-terraform`).
+  Zone (merecatholicity.com only): Zone Read, Zone Settings Write, DNS Write,
+  Bot Management Write, Zone WAF Write, Zone Transform Rules Write, Dynamic URL
+  Redirects Write. Account: Account Settings Read, Account Rulesets Read,
+  Workers R2 Storage Write (bucket management and the state backend), D1 Read
+  (the per-database GET Terraform refreshes with — the list endpoint is denied,
+  and Terraform never lists), Turnstile Sites Write. It cannot purge the
+  cache, deploy a worker, or write D1. `AWS_ACCESS_KEY_ID` /
+  `AWS_SECRET_ACCESS_KEY` are its derived R2 pair (id + SHA-256).
+- `CLOUDFLARE_SITE_TOKEN` — **build.yml and the manual purge**: Cache Purge
+  (zone) + Workers R2 Storage Write (account). Bucket-scoped R2 item
+  permissions were tried first and were refused for the API's list endpoint, so
+  this token can reach every bucket; it can do nothing else.
+- `CLOUDFLARE_WORKERS_TOKEN` — **workers.yml**: Workers Scripts Write, D1 Write,
+  Account Settings Read (account) + Workers Routes Write (zone).
+- `TF_GITHUB_TOKEN` — for the github provider. Today this is the owner's `gh`
+  CLI token (`repo`, `workflow`, `read:org`); a fine-grained PAT restricted to
+  the two repositories (Administration, Environments, Actions variables:
+  read/write; Metadata: read) is the better shape — `workflow` scope lets a
+  holder rewrite workflow files — and swapping it is one `gh secret set`.
+
+**No pull request ever sees a secret**, not even from this repository: a PR's
+HCL is what `plan` evaluates, and an `http` or `external` data source in it
+would read the tokens at plan time, before any gate. PRs get `fmt` and an
+offline `validate`; the plan that gets reviewed is the push's.
 
 **Bootstrap order, because it matters:** a workflow that names an environment
 GitHub has never seen makes GitHub create it — with no protection rules. The

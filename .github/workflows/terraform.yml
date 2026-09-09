@@ -5,7 +5,9 @@
 #
 #   * It fires ONLY when terraform/ changes (path filter) or when run by hand.
 #     Nothing else in the repository touches the infrastructure it describes.
-#   * `plan` runs for pull requests AND pushes. `apply` runs only for a push to
+#   * `plan` runs for pushes to main (and by hand). A pull request gets fmt +
+#     offline validate and NO credentials — a PR's HCL is evaluated by plan, and
+#     a data source in it could read the tokens. `apply` runs only for a push to
 #     main (or a deliberate workflow_dispatch with apply=true) and waits on the
 #     `terraform-production` environment, whose required reviewer is the owner.
 #     A human approves with the "Review deployments" button on the run; the AI
@@ -30,9 +32,10 @@
 #     dedicated R2 token instead.
 #
 # Secrets (Settings -> Secrets and variables -> Actions):
-#   CLOUDFLARE_API_TOKEN   scoped as listed in terraform/README.md
+#   CLOUDFLARE_API_TOKEN   the terraform-scoped token (terraform/README.md) —
+#                          it cannot purge, deploy workers, or write D1
 #   TF_GITHUB_TOKEN        for the github provider (repo scope)
-# A fork's pull request sees no secrets: it gets fmt + validate and no plan.
+# No pull request sees either: fmt + validate only, no plan.
 
 name: Terraform
 
@@ -61,7 +64,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 # One Terraform at a time, and never cancel one mid-apply.
 concurrency:
@@ -81,9 +83,9 @@ jobs:
       changes: ${{ steps.plan.outputs.changes }}
       fingerprint: ${{ steps.summary.outputs.fingerprint }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -91,17 +93,21 @@ jobs:
       - name: Formatting
         run: terraform -chdir=terraform fmt -check -recursive -diff
 
+      # A pull request NEVER gets the credentials, not even from this repository:
+      # `terraform plan` evaluates the PR's own HCL, and an `http` or `external`
+      # data source in it would read both tokens at plan time, before any gate.
+      # PRs get fmt + validate; the plan that gets reviewed is the push's.
       - name: Are the credentials here?
         id: creds
         env:
-          CF: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GH: ${{ secrets.TF_GITHUB_TOKEN }}
+          CF: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          GH: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
         run: |
           if [ -n "$CF" ] && [ -n "$GH" ]; then
             echo "present=yes" >> "$GITHUB_OUTPUT"
           else
             echo "present=no" >> "$GITHUB_OUTPUT"
-            echo "::notice::no CLOUDFLARE_API_TOKEN / TF_GITHUB_TOKEN (a fork's PR, or not yet configured) — validating offline, no plan."
+            echo "::notice::no credentials on this event (a pull request, or not yet configured) — validating offline, no plan."
           fi
 
       - name: Validate (offline)
@@ -158,7 +164,7 @@ jobs:
           case $code in
             0) echo "changes=no"  >> "$GITHUB_OUTPUT"; echo "plan: no changes" ;;
             2) echo "changes=yes" >> "$GITHUB_OUTPUT"; echo "plan: changes pending (see the summary)" ;;
-            *) echo "::error::terraform plan failed"; grep -E '^(Error|│|╷|╵)' /tmp/plan.txt | head -60; exit 1 ;;
+            *) echo "::error::terraform plan failed — summary lines only below; the detail is not printed to a public log, run the plan locally for it"; grep -E '^Error:' /tmp/plan.txt | head -20; exit 1 ;;
           esac
           # Paths given to a -chdir'd terraform resolve INSIDE that directory:
           # the plan is terraform/tfplan on disk, so it is `tfplan` here.
@@ -180,29 +186,11 @@ jobs:
 
       - name: Publish the summary (it is safe by construction)
         if: steps.creds.outputs.present == 'yes'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: tf-plan-summary
           path: /tmp/summary/plan.md
           retention-days: 14
-
-      - name: Comment the plan on the pull request
-        if: >-
-          steps.creds.outputs.present == 'yes' && github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name == github.repository
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          marker='<!-- terraform-plan -->'
-          { echo "$marker"; echo "### Terraform plan for \`${GITHUB_SHA::7}\`"; cat /tmp/summary/plan.md; } > /tmp/comment.md
-          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
-                       --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -F body=@/tmp/comment.md >/dev/null
-          else
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@/tmp/comment.md >/dev/null
-          fi
 
   apply:
     # Only from main (or a deliberate dispatch), only with credentials, and only
@@ -218,9 +206,9 @@ jobs:
     environment:
       name: terraform-production
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
@@ -261,7 +249,7 @@ jobs:
             -no-color -out=tfplan > /tmp/plan.txt 2>&1
           code=$?
           set -e
-          if [ $code -eq 1 ]; then echo "::error::terraform plan failed"; grep -E '^(Error|│|╷|╵)' /tmp/plan.txt | head -60; exit 1; fi
+          if [ $code -eq 1 ]; then echo "::error::terraform plan failed — summary lines only; run the plan locally for the detail"; grep -E '^Error:' /tmp/plan.txt | head -20; exit 1; fi
           terraform -chdir=terraform show -json tfplan > /tmp/plan.json
           python3 scripts/tf_plan_summary.py /tmp/plan.json --markdown >> "$GITHUB_STEP_SUMMARY"
           python3 scripts/tf_plan_summary.py /tmp/plan.json --fail-on-destroy $ALLOW
@@ -286,8 +274,8 @@ jobs:
           set -e
           grep -E '^(Apply complete|Error)' /tmp/apply.txt || true
           if [ $code -ne 0 ]; then
-            echo "::error::terraform apply failed"
-            grep -E '^(Error|│|╷|╵)' /tmp/apply.txt | head -80
+            echo "::error::terraform apply failed — summary lines only; provider errors can echo attribute values, so the detail stays off this public log"
+            grep -E '^Error:' /tmp/apply.txt | head -20
             exit 1
           fi
           grep -E '^Apply complete' /tmp/apply.txt >> "$GITHUB_STEP_SUMMARY" || true

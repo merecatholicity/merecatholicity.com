@@ -452,10 +452,15 @@ the summary it shows is `scripts/tf_plan_summary.py`'s rendering: addresses, act
 attribute names, and values only for attributes the provider does not mark sensitive.
 
 **Secrets** (Settings → Secrets and variables → Actions, set once by hand, all in place
-since 2026-09-09): `CLOUDFLARE_API_TOKEN` (an account-owned token scoped as listed in
-`terraform/README.md`), `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (its derived R2 pair)
-and `TF_GITHUB_TOKEN` (a token with `repo` scope for the github provider). The same
-values live in `~/.config/merecatholicity/ci.env` on the dev box for local use. Every workflow skips its
+since 2026-09-09): three least-privilege Cloudflare tokens — `CLOUDFLARE_API_TOKEN` for
+Terraform, `CLOUDFLARE_SITE_TOKEN` for the site build's publish and purge,
+`CLOUDFLARE_WORKERS_TOKEN` for the worker deploys (scopes in `terraform/README.md`) —
+plus `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (the Terraform token's derived R2 pair)
+and `TF_GITHUB_TOKEN` for the github provider. **No pull request ever sees any of them**:
+PRs build and gate without credentials, and Terraform gives them `fmt` + `validate` only.
+Every action is pinned to a commit SHA (the repository requires it), Dependabot keeps the
+pins current, and secret scanning + push protection are on. The same values live in
+`~/.config/merecatholicity/ci.env` on the dev box for local use. Every workflow skips its
 credentialed steps cleanly when they are absent, so a fork's PR still builds and gates.
 
 **Deliberately NOT in the pipeline:** worker secrets (`wrangler secret put`); the

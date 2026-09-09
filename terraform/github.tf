@@ -77,12 +77,16 @@ resource "github_repository" "site" {
   topics                      = []
   visibility                  = "public"
   web_commit_signoff_required = false
+  # Free on a public repository, and the one guard that stops a credential
+  # from ever landing in git: push protection refuses the push, secret
+  # scanning catches what got through before it. Both were off, and pinned off
+  # here, until 2026-09-09's security review.
   security_and_analysis {
     secret_scanning {
-      status = "disabled"
+      status = "enabled"
     }
     secret_scanning_push_protection {
-      status = "disabled"
+      status = "enabled"
     }
   }
 
@@ -101,7 +105,7 @@ resource "github_repository" "site" {
 resource "github_repository_environment" "terraform_production" {
   repository          = github_repository.site.name
   environment         = "terraform-production"
-  can_admins_bypass   = true
+  can_admins_bypass   = false # the gate is the only road; nobody walks around it
   prevent_self_review = false
 
   reviewers {
@@ -170,4 +174,29 @@ resource "github_repository_pages" "site" {
   cname          = "merecatholicity.com"
   public         = true
   https_enforced = false
+}
+
+# Dependabot security updates on the public repo (free): a vulnerable npm
+# dependency gets a fix PR. Version bumps for the pinned actions come from
+# .github/dependabot.yml, which keeps the SHA pins fresh.
+resource "github_repository_dependabot_security_updates" "site" {
+  repository = github_repository.site.name
+  enabled    = true
+}
+
+# What may run in Actions, and how it must be referenced. Every job here holds
+# or sits next to a production credential, so a hijacked tag is a route to
+# them: only GitHub-owned and verified-creator actions, and every `uses:` must
+# name a commit SHA (GitHub enforces this at run time).
+resource "github_actions_repository_permissions" "site" {
+  repository           = github_repository.site.name
+  enabled              = true
+  allowed_actions      = "selected"
+  sha_pinning_required = true
+
+  allowed_actions_config {
+    github_owned_allowed = true
+    verified_allowed     = true
+    patterns_allowed     = []
+  }
 }

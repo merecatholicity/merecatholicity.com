@@ -28,10 +28,11 @@ on:
   push:
     branches: [main]
 
+# Read-only for the build job, which executes whatever the checked-out commit
+# says (make, npm, python). The two Pages permissions live on the deploy job
+# alone, and no job that runs on a pull request holds a secret at all.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: build-${{ github.ref }}
@@ -47,7 +48,7 @@ jobs:
       # handed downstream from here instead.
       build_id: ${{ steps.buildid.outputs.build }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           # Two commits deep is enough to diff a push; a PR is diffed against
           # its merge base, which the fetch below resolves.
@@ -117,12 +118,12 @@ jobs:
             done < /tmp/changed.txt
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
 
@@ -145,13 +146,13 @@ jobs:
       - run: npm ci
 
       - name: Restore the PureScript output
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: purescript/output
           key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
 
       - name: Restore the built site
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           # docs/ is no longer in git, so without this every run rebuilds the
           # whole corpus from nothing — correct, but twenty minutes of pandoc.
@@ -211,19 +212,25 @@ jobs:
       # only what differs, so an ordinary push costs one API call — and CI is
       # the build of record now. Whatever the cached tree holds that the bucket
       # does not is exactly what should be published, whichever run built it.
+      # Only a push to main publishes: a pull request — even from this repository —
+      # must not reach production R2 or the edge. The site token can purge and
+      # write the files bucket, and nothing else.
       - name: Publish the rebuilt PDFs to R2
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_SITE_TOKEN }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::CLOUDFLARE_API_TOKEN not set — PDFs were rebuilt but NOT published. Run \`make publish-pdfs\` by hand, or add the secret."
+            echo "::warning::CLOUDFLARE_SITE_TOKEN not set — PDFs were rebuilt but NOT published. Run \`make publish-pdfs\` by hand, or add the secret."
             exit 0
           fi
           make publish-pdfs
 
       - name: Gates
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # On a pull request this is empty on purpose: check-pdfs then reads the
+          # public host only, and no PR-authored code ever sees a credential.
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name == 'push' && secrets.CLOUDFLARE_SITE_TOKEN || '' }}
         run: |
           make tests
           make jscheck
@@ -296,7 +303,7 @@ jobs:
           fi
 
       - name: Package the site for Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with:
           path: docs
 
@@ -317,12 +324,16 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
 
       # THE PURGE BELONGS HERE, and only here. It used to live in its own
       # workflow triggered by `page_build` — GitHub's signal that a BRANCH
@@ -344,13 +355,13 @@ jobs:
       # and so must never be served from the cache it describes.
       - name: Purge the two files that cannot carry a cache key
         env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TOKEN: ${{ secrets.CLOUDFLARE_SITE_TOKEN }}
           # The zone id is public: an Actions VARIABLE Terraform manages, not a secret.
           ZONE: ${{ vars.CLOUDFLARE_ZONE_ID || '2b270ffb21b7f98a39960abb6bf953ae' }}
           WANT: ${{ needs.build.outputs.build_id }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN not set — skipping the purge."
+            echo "::notice::CLOUDFLARE_SITE_TOKEN not set — skipping the purge."
             echo "Add them under Settings -> Secrets and variables -> Actions."
             echo "The token needs one permission: Zone -> Cache Purge -> Purge."
             echo "Until then sw.js and version.json heal on their 10-minute TTL,"

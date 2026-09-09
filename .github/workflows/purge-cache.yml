@@ -24,7 +24,7 @@
 #   1. Cloudflare -> My Profile -> API Tokens -> Create Token, with the single
 #      permission  Zone -> Cache Purge -> Purge  on merecatholicity.com.
 #   2. Repo -> Settings -> Secrets and variables -> Actions -> New secret:
-#        CLOUDFLARE_API_TOKEN   the token from step 1
+#        CLOUDFLARE_SITE_TOKEN  the token from step 1
 # Until both exist this skips cleanly rather than failing, so the repository is
 # never red for a feature that has not been switched on.
 
@@ -51,13 +51,13 @@ jobs:
     steps:
       - name: Purge
         env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TOKEN: ${{ secrets.CLOUDFLARE_SITE_TOKEN }}
           # The zone id is public: an Actions VARIABLE Terraform manages, not a secret.
           ZONE: ${{ vars.CLOUDFLARE_ZONE_ID || '2b270ffb21b7f98a39960abb6bf953ae' }}
           ALL: ${{ inputs.everything }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN not set — nothing purged."
+            echo "::notice::CLOUDFLARE_SITE_TOKEN not set — nothing purged."
             echo "See the setup steps at the top of this workflow file."
             exit 0
           fi

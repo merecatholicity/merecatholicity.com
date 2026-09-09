@@ -64,10 +64,22 @@ def is_destructive(c):
     return 'delete' in c['change']['actions']
 
 
+def _has_true_leaf(v):
+    if v is True:
+        return True
+    if isinstance(v, dict):
+        return any(_has_true_leaf(x) for x in v.values())
+    if isinstance(v, list):
+        return any(_has_true_leaf(x) for x in v)
+    return False
+
+
 def sensitive_keys(mark):
-    """The *_sensitive maps mirror the value shape; a truthy leaf means secret."""
+    """The *_sensitive maps mirror the value shape; a `true` LEAF means secret.
+    A nested block shows up here as an empty container even when nothing in it
+    is sensitive, so only a true somewhere inside counts."""
     if isinstance(mark, dict):
-        return {k for k, v in mark.items() if v}
+        return {k for k, v in mark.items() if _has_true_leaf(v)}
     return set()
 
 
