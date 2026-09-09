@@ -3,7 +3,8 @@
 *A newcomer's first document. It answers six questions honestly, with measured
 numbers, and lays out where every piece of logic lives (and is moving). If you
 read one file before touching the code, read this one, then `CLAUDE.md` (the
-infra bible) and `README.md` (how the site is built).*
+rulebook), `docs/architecture/INFRASTRUCTURE.md` (the infra reference) and `README.md` (how
+the site is built).*
 
 Status: this is a living document. It was written mid-refactor (the "full TypeScript
 + ORM + MVC" pass). Each metric below is tagged **[now]** (measured against the
@@ -252,7 +253,7 @@ comments-worker/src/
 **Newcomer reading order** (once the split lands; today, start at the two
 monoliths' section headers):
 
-1. **This file**, then `README.md` (build) and `CLAUDE.md` (infra).
+1. **This file**, then `README.md` (build), `CLAUDE.md` (rules) and `docs/architecture/INFRASTRUCTURE.md` (infra, long form).
 2. `purescript/src/Domain/Route.purs` + `Auth.purs` + `Access.purs` — the rules
    that decide what a URL shows and who may do what. Small, pure, readable.
 3. `app/core.ts` — how those rules cross into JS.
