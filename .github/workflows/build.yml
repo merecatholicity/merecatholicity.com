@@ -129,7 +129,7 @@ jobs:
       - name: Tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq pandoc
+          sudo apt-get install -y -qq pandoc poppler-utils
           python3 -m pip install --quiet pyyaml
 
       - name: TeX Live (only when LaTeX is involved)
@@ -207,8 +207,11 @@ jobs:
       # The PDFs are served from R2, not from Pages. Whatever this run rebuilt
       # goes to the bucket now — only the files whose MD5 changed are uploaded,
       # and the edge is purged for exactly those URLs (scripts/publish_pdfs.py).
+      # Unconditional on purpose: the script lists the bucket once and uploads
+      # only what differs, so an ordinary push costs one API call — and CI is
+      # the build of record now. Whatever the cached tree holds that the bucket
+      # does not is exactly what should be published, whichever run built it.
       - name: Publish the rebuilt PDFs to R2
-        if: steps.changed.outputs.latex == 'yes' || steps.changed.outputs.book == 'yes' || steps.changed.outputs.charts == 'yes'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |

@@ -123,8 +123,23 @@ resource "github_repository_environment_deployment_policy" "terraform_production
 # The environment actions/deploy-pages made for itself. Declared so the whole
 # set of environments is known here; it carries no protection rules.
 resource "github_repository_environment" "github_pages" {
-  repository  = github_repository.site.name
-  environment = "github-pages"
+  repository          = github_repository.site.name
+  environment         = "github-pages"
+  can_admins_bypass   = true
+  prevent_self_review = false
+
+  # deploy-pages set these up; declaring them as they stand is what makes the
+  # adoption a no-op rather than a change.
+  deployment_branch_policy {
+    protected_branches     = false
+    custom_branch_policies = true
+  }
+}
+
+resource "github_repository_environment_deployment_policy" "github_pages_main" {
+  repository     = github_repository.site.name
+  environment    = github_repository_environment.github_pages.environment
+  branch_pattern = "main"
 }
 
 # The two PUBLIC identifiers the workflows read as `vars.*` (they also carry

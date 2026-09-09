@@ -70,10 +70,10 @@ repository secrets to use a dedicated R2 token instead.
 **Secrets** (repository → Settings → Secrets and variables → Actions):
 
 - `CLOUDFLARE_API_TOKEN` — one user token. Zone (merecatholicity.com only):
-  Zone:Read, Zone Settings:Edit, DNS:Edit, Cache Purge:Purge, Bot
-  Management:Edit, Zone WAF:Edit, Transform Rules:Edit, Single Redirect:Edit,
-  Workers Routes:Edit. Account: Account Settings:Read, Account Rulesets:Read,
-  Workers R2 Storage:Edit, D1:Edit, Turnstile:Edit, Workers Scripts:Edit. The
+  Zone Read, Zone Settings Write, DNS Write, Cache Purge, Bot
+  Management Write, Zone WAF Write, Zone Transform Rules Write, Dynamic URL
+  Redirects Write, Workers Routes Write. Account: Account Settings Read, Account Rulesets Read,
+  Workers R2 Storage Write, D1 Write, Turnstile Sites Write, Workers Scripts Write. The
   same token serves the edge purge, the PDF publisher and the worker deploys.
 - `TF_GITHUB_TOKEN` — for the github provider: the owner's `gh auth token`
   (`repo`, `workflow`, `read:org`), or a fine-grained PAT with Administration,

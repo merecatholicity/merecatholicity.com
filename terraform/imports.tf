@@ -313,3 +313,8 @@ import {
   to = github_repository_pages.site
   id = "merecatholicity.com"
 }
+
+import {
+  to = github_repository_environment_deployment_policy.github_pages_main
+  id = "merecatholicity.com:github-pages:54881721"
+}
