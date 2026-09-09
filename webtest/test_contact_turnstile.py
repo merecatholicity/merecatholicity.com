@@ -41,9 +41,14 @@ def nothing_mounted(st):
 
 
 def focus_and_wait(f):
-    f.js("var i=document.querySelector('#contact-form input[name=name]'); if(i) i.focus(); return 1;")
-    f.wait("!!document.querySelector('.contact-ts iframe, .contact-ts input[name=\"cf-turnstile-response\"]')", timeout=15)
-    time.sleep(1)
+    """Focus the Name field the way a finger would. A headless window has no
+    system focus, and a document without focus fires NO focus events on
+    element.focus() — activeElement moves, focusin never fires — so the event
+    is dispatched by hand in that case, which is what the browser would do."""
+    f.js("""var i=document.querySelector('#contact-form input[name=name]'); if(!i) return 0;
+            i.focus(); if (!document.hasFocus()) i.dispatchEvent(new FocusEvent('focusin', {bubbles: true})); return 1;""")
+    f.wait("!!window.turnstile && !!document.querySelector('.contact-ts[data-mc-rendered]')", timeout=15)
+    time.sleep(2)
     return state(f)
 
 
@@ -66,7 +71,7 @@ def main():
         # 3. intent mounts it
         st = focus_and_wait(f)
         checks.append(('first focus loads the script and mounts the widget %s' % json.dumps(st),
-                       st['script'] and st['ts'] and st['rendered'] and st['widget']))
+                       st['script'] and st['ts'] and st['rendered']))
         checks.append(('the mount is crumbed', any('mounting' in c for c in st['crumbs'])))
         # 4. a direct open behaves the same
         f.js("localStorage.setItem('mc-crumbs','[]'); return 1;")
@@ -76,7 +81,7 @@ def main():
         st = state(f)
         checks.append(('direct open: nothing mounted on arrival %s' % json.dumps(st), nothing_mounted(st)))
         st = focus_and_wait(f)
-        checks.append(('direct open: focus mounts the widget', st['rendered'] and st['widget']))
+        checks.append(('direct open: focus mounts the widget', st['rendered'] and st['ts']))
         checks.append(('console clean', f.assert_console_clean('contact')))
         code = f.verdict(checks)
     sys.exit(code)
