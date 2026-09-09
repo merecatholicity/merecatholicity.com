@@ -25,7 +25,7 @@ idea holds the whole thing together and is the key to reading it:
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  PureScript kernel  purescript/src/Domain/*   │  22 modules
+            │  PureScript kernel  purescript/src/Domain/*   │  27 modules
             │  (validation, permissions, parsing, routing,  │  — the rulebook,
             │   ranks, FTS-safety, identity, …) ADTs +      │    pure, tested
             │   smart constructors, illegal states unrep.   │    1:1 in tests/
@@ -33,7 +33,7 @@ idea holds the whole thing together and is the key to reading it:
           compiled ESM      │               │   compiled ESM
                             ▼               ▼
       browser: app/core.ts (membrane,   worker: import the same
-      35 exports, erases Maybe/Either)   purescript/output/ directly
+      69 exports, erases Maybe/Either)   purescript/output/ directly
                             │               │
               ┌─────────────┴──────┐        └──────► comments-worker/src/*
               ▼                    ▼                  (D1, R2, Durable Objects,
@@ -54,30 +54,44 @@ they grew, what's duplicated, and the exact shape they're moving toward.
 
 | File | Lines | Role |
 |---|---:|---|
-| `docs/comments.js` → `client/comments.ts` | 8,245 | The whole browser client (forum, DM+E2E crypto, composer, admin, merecat chat) + the `mcKit` bridge. The no-bundle fallback. |
-| `comments-worker/src/index.js` | 6,381 | The entire backend: 94 handlers, the route dispatch, 2 Durable Objects, cron, 329 inline SQL statements. |
-| `app/appchrome.ts` | ~1,160 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
-| `app/shell.ts` | 565 | The SPA shell: soft-navigation, per-page boot registry, audio dock, PWA. |
-| `app/richtext.ts` | 431 | The one living body renderer (`window.mcRich`): markdown, scripture autolink, emoji. |
-| `app/views/board.ts` / `topic.ts` | 381 / 379 | Lit views: board index+category / topic+search. |
-| `app/live.ts` | 270 | WebSocket lifecycle (board + merecat chat conns). |
-| `docs/nav.js` | 245 | Injects the shell + deeplink on every page (served raw). |
-| `docs/bible-reader.js` | 240 | KJV/DR reader boot (served raw). |
-| `app/views/{admin,member,post,profile,library}.ts` | 137–188 ea. | One Lit view per feature. |
-| `app/{core,api,store}.ts` | 139 / 73 / 48 | Membrane / typed API client / request cache. |
+| `client/comments.ts` → `docs/comments.js` | 11,505 | The whole browser client (forum, DM+E2E crypto, composer, admin, merecat chat) + the `mcKit` bridge. The no-bundle fallback. |
+| `comments-worker/src/index.ts` | 5,093 | The handlers + the declarative `ROUTES` dispatch + cron. |
+| `comments-worker/src/lib.ts` | 2,789 | The shared core: constants, crypto, auth/validation, DB/notification/broadcast helpers. A leaf — it references no handler. |
+| `app/appchrome.ts` | 1,763 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
+| `app/shell.ts` | 868 | The SPA shell: soft-navigation (latest-wins, instant nav), per-page boot registry, audio dock, PWA. |
+| `docs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring (served raw, unversioned). |
+| `comments-worker/src/durable.ts` | 590 | The two Durable Objects (`BoardHub`, `ChatRoom`). |
+| `app/call.ts` | 521 | The 1v1 voice-call engine (shell-owned, so a call rings on any page). |
+| `docs/bible-reader.js` | 439 | KJV/DR reader boot (served raw). |
+| `app/views/board.ts` / `topic.ts` | 435 / 433 | Lit views: board index+category / topic+search. |
+| `app/richtext.ts` | 432 | The one living body renderer (`window.mcRich`): markdown, scripture autolink, emoji. |
+| `comments-worker/src/usagecalc.ts` | 327 | Pure free-tier limit maths for the usage monitor (`usage.ts`, 123, does the GraphQL). |
+| `app/live.ts` | 304 | WebSocket lifecycle (board + merecat chat conns). |
+| `app/core.ts` | 286 | The membrane — the one audited place PureScript types are erased. |
+| `comments-worker/src/{pure,webpush}.js` | 268 / 138 | Extracted pure helpers (tested) / VAPID push crypto. |
+| `app/views/{admin,library,member,post,profile}.ts` | 186–321 ea. | One Lit view per feature (`util.ts` 67). |
+| `app/{store,ptr,api}.ts` | 218 / 194 / 101 | Request cache + persisted SWR / pull-to-refresh / typed API client. |
+| `contact-worker/src/index.ts` | 138 | The contact form worker. |
+| `comments-worker/src/db.ts` | 83 | The repository layer: typed row mappers, `inList`, the `Query` builder. |
 | `docs/{deeplink,sw,away,contact,flash,index}.js` | 8–161 ea. | Small served-raw scripts. |
-| `comments-worker/src/{pure,webpush}.js` | 105 / 98 | Extracted pure helpers (tested) / VAPID push crypto. |
-| `contact-worker/src/index.js` | 124 | The contact form worker. |
-| `purescript/src/Domain/*.purs` | 22 files | The kernel (see the map). |
+| `purescript/src/Domain/*.purs` | 27 files | The kernel (see the map). |
 
-Median hand-written file (excluding the kernel): **~180 lines.** The distribution
-is bimodal — a long tail of small, single-purpose files, and **two monoliths that
-hold 60% of all the hand-written lines between them.** That bimodality *is* the
-finding. The small files are already modular; the two big ones are the work.
+Re-measured 2026-09-08 over 35 hand-written files, **29,968 lines**: the median is
+**286 lines**, and the distribution is still bimodal — a long tail of small,
+single-purpose files against a few very large ones. **`client/comments.ts` alone is
+38% of all hand-written lines; the top two are 55% and the top three 65%.** That
+bimodality *is* the finding, and it has not moved: the worker monolith was split
+(Phase 4), but the client was not, and it has since grown from 8,245 lines to
+11,505 as the platform gained calls, media, feed and readability work. The small
+files are already modular; `comments.ts` is the work that remains.
 
 ---
 
-## Duplication — measured **[now]**
+## Duplication — measured **[2026-08-01]**
+
+> *Not re-run since. The worker split (Phase 4) and the growth of `client/comments.ts`
+> have both moved these numbers; treat the figures below as the shape of the problem,
+> not today's count. The scan is the script described in the next paragraph.*
 
 No `jscpd` on this box, so this is a conservative homegrown clone scan: normalize
 each file to code lines (drop blanks/comments/brace-only), slide a 6-line window,
@@ -129,15 +143,15 @@ middleware layer, a repository layer, and finishing the component migration
 More than the two big files suggest. The **modular seams already exist and are
 proven**:
 
-- The **PureScript `Domain/*` kernel — 22 modules**, each a single rule family
+- The **PureScript `Domain/*` kernel — 27 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
   each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 22 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
   an auth state can't hold a hash without a key). This is the most modular part
   of the codebase and it is shared by both the client and the worker.
-- **`app/core.ts`** — the one audited membrane, **35 exports**, the single place
+- **`app/core.ts`** — the one audited membrane, **69 exports**, the single place
   PureScript types are erased for JS.
-- **`app/**`** — 15 files, one Lit component per view, over `app/store.ts` (cache)
+- **`app/**`** — 17 files, one Lit component per view, over `app/store.ts` (cache)
   and `app/api.ts` (typed client). Median ~150 lines. Already modular.
 - **`comments-worker/src/pure.js`** — the pure worker helpers, extracted so they
   can be unit-tested in plain Node (the stepping-stone toward the ORM).
@@ -217,7 +231,7 @@ Yes. **Target tree [target]** — every file named for its feature, none over
 ~400 lines:
 
 ```
-purescript/src/Domain/*.purs        the rulebook (22 modules) — unchanged, it's the model
+purescript/src/Domain/*.purs        the rulebook (27 modules) — unchanged, it's the model
 app/
   core.ts        membrane (PS → JS)          api.ts     typed endpoints
   store.ts       request cache               shell.ts   SPA shell

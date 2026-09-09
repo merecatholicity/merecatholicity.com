@@ -155,7 +155,10 @@ package-lock.json  the app's UI library (lit, bundled into app.js), and the buil
   --remote` — the `--remote` is essential, or wrangler writes to a local simulated store
   and the real bucket is untouched. Because the manifest records what *should* be
   published rather than what *is*, a rebuilt-but-unuploaded PDF serves its old bytes and a
-  newly-listed one 404s live while `make check` still passes.
+  newly-listed one 404s live while `make check` still passes. CI builds only 237 of the
+  244 (its PDF step is `make -C resources pdf`); the seven hand PDFs — the book, the
+  paperback, the two papers, the objections and the two charts — are built only by
+  `make pdf` / `make publish` / `make chart-pdfs` on a machine with TeX.
 - **Publishing the site is still `git push`** — but the build happens in CI, not on your
   machine. A push to `main` runs the workflow: restore the previous `docs/` from cache,
   rebuild only what the diff touched, run `make tests`, `make jscheck` and `make check`,
