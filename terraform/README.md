@@ -16,8 +16,11 @@ at the deploy:
 **Terraform owns** — the zone and three deliberate zone settings, all 18 DNS
 records, the three custom rulesets (response headers, custom firewall, rate
 limiting), bot management, the six R2 buckets, the four D1 databases *as records
-that they exist*, the two Turnstile widgets, and both GitHub repositories
-including the Pages configuration. Forty resources in all.
+that they exist*, the two Turnstile widgets, and both GitHub repositories —
+but **NOT the GitHub Pages configuration**, which is deliberately left alone
+(see the header of `github.tf`: adopting Pages means asserting config rather
+than adopting it, and getting it wrong unbinds the custom domain and 404s the
+site). Forty resources in all.
 
 **wrangler owns** — worker scripts and versions, all bindings, vars, secrets,
 `routes`, `triggers.crons`, and D1 migrations. None of that appears here. The
@@ -26,6 +29,26 @@ source of truth for it stays `comments-worker/wrangler.jsonc` and
 
 **ingest.py owns** — the contents of the three librarian D1 rooms and the
 Vectorize index. All derived data, rebuilt by `make librarian`.
+
+## Known drift (2026-09-08)
+
+The move of the published PDFs to R2 created three things by hand on the day the
+state was adopted, and none of them are declared here yet:
+
+- the R2 bucket **`merecatholicity-files`** — so `r2.tf` holds six buckets while
+  the account has seven adoptable ones (plus the unmanaged `merecatholicity-tfstate`);
+- the **`files.merecatholicity.com`** DNS record — so `dns.tf`'s 18 records are
+  one short;
+- the **dynamic-redirect ruleset** that 301s `/<name>.pdf` to that host — a
+  fourth ruleset phase (`http_request_dynamic_redirect`) beside the three
+  declared here.
+
+Its R2 custom-domain binding is unadoptable for the same reason
+`audio.merecatholicity.com`'s is (below). Nothing is broken — all of it is live
+and verified — but **`plan` reporting `No changes` does not currently mean the
+zone is fully described.** Adopt each the documented way: an `import` block,
+`plan -generate-config-out`, fold the HCL into the topic file, iterate to `No
+changes`, apply.
 
 ## What Terraform cannot hold
 

@@ -1,8 +1,12 @@
 # Both repositories.
 #
-# NOT YET MANAGED: the pages block. GitHub Pages currently serves main /docs
-# with CNAME merecatholicity.com, and terraform's config generator did not emit
-# a pages block for it. Adopting Pages means ASSERTING config against the live
+# NOT MANAGED, DELIBERATELY: the pages block. GitHub Pages is deployed from
+# .github/workflows/build.yml's artifact now (build_type: workflow, CNAME
+# merecatholicity.com); it served main /docs until 2026-09-08. Terraform's
+# config generator did not emit a pages block either way. Note the deploy method
+# is now something a `pages` block would ASSERT: declaring one with the old
+# branch source would switch Pages back to serving a branch that no longer
+# carries the built site at all. Adopting Pages means ASSERTING config against the live
 # setting rather than adopting it, and getting that wrong unbinds the custom
 # domain and 404s the entire site (it has happened once already, when the served
 # files moved out from under CNAME). Do it as its own change, with its own plan

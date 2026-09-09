@@ -40,6 +40,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      # The deploy job purges the edge and wants to name the build it is
+      # purging for. docs/version.json is no longer in git — the build writes
+      # it — so a workflow that only checks out the repo cannot read it. It is
+      # handed downstream from here instead.
+      build_id: ${{ steps.buildid.outputs.build }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -199,10 +205,57 @@ jobs:
           test -f docs/.nojekyll || { echo "::error::docs/.nojekyll is missing"; exit 1; }
           echo "CNAME -> $(cat docs/CNAME)"
 
+      - name: Name the build being shipped
+        id: buildid
+        run: |
+          build=$(python3 -c "import json;print(json.load(open('docs/version.json'))['build'])")
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "shipping build $build"
+
+      # The PDFs are served from R2 (files.merecatholicity.com), and a Cloudflare
+      # dynamic redirect sends /<name>.pdf there, so a copy sitting on Pages is
+      # unreachable by construction. Shipping it anyway is not free:
+      #
+      #   * it re-inflates the artifact 113 MB -> 400 MB, and the whole reason
+      #     the PDFs left docs/ was that the site had reached 621 MB against a
+      #     HARD 1 GB Pages limit;
+      #   * it makes the deploy non-deterministic in content, because whether
+      #     the PDFs exist depends on whether the PREVIOUS push happened to
+      #     touch a .tex (which is what decides the build-PDFs step above).
+      #
+      # They are moved aside rather than deleted, and put back below, so the
+      # docs/ cache still carries them and the next LaTeX change rebuilds one
+      # PDF instead of all 244.
+      #
+      # NOTE what this does NOT do: nothing here uploads a rebuilt PDF to R2.
+      # That is still a manual `wrangler r2 object put ... --remote`. A LaTeX
+      # change therefore builds a corrected PDF that nothing serves until it is
+      # uploaded by hand.
+      - name: Hold the PDFs back from the artifact
+        run: |
+          mkdir -p /tmp/heldpdfs
+          count=$(ls docs/*.pdf 2>/dev/null | wc -l)
+          if [ "$count" -gt 0 ]; then
+            mv docs/*.pdf /tmp/heldpdfs/
+            echo "held $count PDFs out of the artifact (they are served from R2)"
+          else
+            echo "no PDFs in docs/ — nothing to hold back"
+          fi
+
       - name: Package the site for Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+
+      # Back into docs/ so the cache saved at the end of this job keeps them.
+      - name: Return the PDFs to the cached tree
+        if: always()
+        run: |
+          count=$(ls /tmp/heldpdfs/*.pdf 2>/dev/null | wc -l)
+          if [ "$count" -gt 0 ]; then
+            mv /tmp/heldpdfs/*.pdf docs/
+            echo "returned $count PDFs to docs/ for the build cache"
+          fi
 
   # Deploy only from main, and only after the build above proved itself. A pull
   # request — including one from a fork, which cannot read secrets at all —
@@ -217,3 +270,49 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      # THE PURGE BELONGS HERE, and only here. It used to live in its own
+      # workflow triggered by `page_build` — GitHub's signal that a BRANCH
+      # build finished. Pages is deployed from this workflow's artifact now
+      # (build_type: workflow), so page_build stopped firing the moment that
+      # switch was thrown, and `pages/builds/latest` froze at the last branch
+      # build for ever. The purge went quietly dead with it.
+      #
+      # The old workflow also spent a minute confirming the origin was serving
+      # the new build, because purging BEFORE Pages publishes re-caches the OLD
+      # bytes under a key Cloudflare treats as immutable. That confirmation is
+      # free here: deploy-pages above polls until GitHub reports the deployment
+      # SUCCEEDED, so by this step the content is published by definition.
+      #
+      # Almost nothing needs purging any more — every asset carries a
+      # content-hash key (scripts/stamp_versions.py). What is left is the two
+      # files that cannot: sw.js, whose URL is its service-worker registration
+      # identity, and version.json, which is the answer to "what is current"
+      # and so must never be served from the cache it describes.
+      - name: Purge the two files that cannot carry a cache key
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          WANT: ${{ needs.build.outputs.build_id }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ZONE" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ZONE_ID not set — skipping the purge."
+            echo "Add them under Settings -> Secrets and variables -> Actions."
+            echo "The token needs one permission: Zone -> Cache Purge -> Purge."
+            echo "Until then sw.js and version.json heal on their 10-minute TTL,"
+            echo "and every other asset is content-keyed and needs no purge at all."
+            exit 0
+          fi
+          echo "purging the edge for build ${WANT:-unknown}"
+          resp=$(curl -fsS -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${ZONE}/purge_cache" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"files":[
+              "https://merecatholicity.com/sw.js",
+              "https://merecatholicity.com/version.json",
+              "https://www.merecatholicity.com/sw.js",
+              "https://www.merecatholicity.com/version.json"
+            ]}')
+          echo "$resp"
+          python3 -c "import json,sys;d=json.loads(sys.argv[1]);sys.exit(0 if d.get('success') else 1)" "$resp"

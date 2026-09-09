@@ -31,6 +31,7 @@ stays free to serve.
   - [The library (all the other books)](#the-library-all-the-other-books)
   - [Navigation, styles, and the app shell](#navigation-styles-and-the-app-shell)
   - [Verifying a build](#verifying-a-build)
+  - [Continuous integration](#continuous-integration)
   - [`make` target reference](#make-target-reference)
 - [The dynamic backend (Cloudflare, free tier)](#the-dynamic-backend-cloudflare-free-tier)
   - [Storage: D1, R2, Vectorize](#storage-d1-r2-vectorize)
@@ -49,11 +50,22 @@ The repo root holds only configuration, docs, and licenses. Everything else live
 directory that says what it is. **The served website is `docs/`** — see the next section.
 
 ```
-docs/            THE SERVED SITE. GitHub Pages serves this folder at the domain root,
-                 so docs/credo.html is https://merecatholicity.com/credo.html. Every
-                 committed *.html, *.pdf, *.json, image, client script, style.css,
-                 app.js, plus emoji/ and avatars/. All of it is BUILT OUTPUT — do not
-                 hand-edit; edit the source and rebuild. Carries CNAME and .nojekyll.
+docs/            THE SERVED SITE — what CI packages and deploys to GitHub Pages, so
+                 docs/credo.html is https://merecatholicity.com/credo.html. It is a
+                 MIXTURE, and the difference matters. MOST of it is BUILT OUTPUT and is
+                 NOT in git: the ~250 corpus pages, app.js, comments.js, style.css,
+                 version.json, sitemap.xml, kjv.json/dr.json. Never hand-edit those —
+                 edit the source and rebuild. But ~297 files here are HAND-MAINTAINED
+                 SOURCE that live nowhere else and stay committed: nav.js, sw.js,
+                 deeplink.js and the other page scripts, the vendored libraries,
+                 turnstile.html, every image, emoji/ and avatars/, CNAME, .nojekyll,
+                 and the 17 hand-written pages (index, community, feed, profile,
+                 messages, admin, merecat-ai, journal, contact, away, hours, the-book,
+                 where-to-begin, turnstile, kjv, douay-rheims, the Google verification
+                 file). .gitignore lists only the generated set and says why; a NEW
+                 hand page must be added there or tests/py/test_docs_sources.py fails.
+                 The PDFs are NOT here any more — they live in R2 (see Hosting).
+                 A fresh clone has the sources but not the built pages: `make html`.
 
 book/            Our book's LaTeX sources + its build script:
                  confession.tex (the book), memorandum-body.tex + bishop-presbyter*.tex
@@ -116,18 +128,43 @@ package-lock.json  the app's UI library (lit, bundled into app.js), and the buil
 
 ## How the site is hosted and served
 
-- **GitHub Pages** serves the **`docs/` folder** of the `main` branch, published at the
-  folder's contents = the domain root. So `docs/index.html` is the homepage,
-  `docs/kjv.html` is `/kjv.html`, `docs/emoji/…` is `/emoji/…`. There is **no server-side
-  build** — Pages just serves the committed files. `docs/.nojekyll` disables Jekyll;
-  `docs/CNAME` binds the custom domain.
+- **GitHub Pages serves an ARTIFACT built by CI, not a branch** (since 2026-09-08; the
+  Pages source is `build_type: workflow`). `.github/workflows/build.yml` builds `docs/`,
+  gates it, packages it and deploys it, published at the folder's contents = the domain
+  root. So `docs/index.html` is the homepage, `docs/kjv.html` is `/kjv.html`,
+  `docs/emoji/…` is `/emoji/…`. There is still **no server-side build** — Pages serves the
+  artifact as-is — but there is one in CI, and it is the only one. `docs/.nojekyll`
+  disables Jekyll; `docs/CNAME` binds the custom domain, and the workflow refuses to
+  package an artifact missing either, because losing CNAME from the served location once
+  unbound the domain and 404'd the entire site.
 - **Cloudflare** sits in front of Pages as DNS + CDN + edge proxy, and it also routes the
   Worker paths (`/api/*`) so the dynamic backend is **same-origin** with the site (no CORS).
   Leave the SSL mode as-is — the working configuration is deliberate.
-- **Publishing the site is `git push`.** Because Pages serves committed files, a push to
-  `main` is the deploy. Build locally, commit the changed `docs/` output, push.
-- **`docs/` is built output.** The taxonomy is: **root = config/docs; other dirs = sources
-  and tooling; `docs/` = what the build writes and Pages serves.** Never hand-edit `docs/`.
+- **The 244 published PDFs are served from R2, not Pages** (2026-09-08). `docs/` had
+  reached **621 MB against a hard 1 GB Pages limit**, and 293 MB of it was PDFs; the site
+  is 327 MB now. They live in the `merecatholicity-files` bucket behind
+  `files.merecatholicity.com`, and a Cloudflare **dynamic redirect** 301s `/<name>.pdf`
+  there — so pages still link plain `href="Mere_Catholicity.pdf"` and **every URL ever
+  shared still works**. `docs/*.pdf` is git-ignored. `docs/pdfs.txt` (`make pdf-manifest`)
+  lists what is published, and `scripts/linkcheck.py` checks every `.pdf` href against it,
+  since the files are no longer on disk to look for. CI holds `docs/*.pdf` back from the
+  Pages artifact — they had been riding along whenever a run rebuilt them (400 MB with,
+  113 MB without), which re-inflated the artifact the move was meant to shrink.
+  **Publishing is manual and nothing automates it:** after `make -C resources pdf`, upload
+  with `npx wrangler r2 object put merecatholicity-files/<name> --file docs/<name>
+  --remote` — the `--remote` is essential, or wrangler writes to a local simulated store
+  and the real bucket is untouched. Because the manifest records what *should* be
+  published rather than what *is*, a rebuilt-but-unuploaded PDF serves its old bytes and a
+  newly-listed one 404s live while `make check` still passes.
+- **Publishing the site is still `git push`** — but the build happens in CI, not on your
+  machine. A push to `main` runs the workflow: restore the previous `docs/` from cache,
+  rebuild only what the diff touched, run `make tests`, `make jscheck` and `make check`,
+  package `docs/`, deploy to Pages, purge the edge. A **pull request builds and is gated
+  but never deploys**, so a fork's PR cannot touch production. Building locally still
+  works and is useful for previewing, but nothing you build locally is what ships.
+- **The taxonomy is: root = config/docs; other dirs = sources and tooling; `docs/` = the
+  served folder** — most of it written by the build, some of it hand-maintained source
+  (see the layout box above). Never hand-edit the generated half.
 
 ### The `?v=N` cache law
 
@@ -148,13 +185,21 @@ same facts, with a Copy button.
 Two files deliberately carry no key: **`sw.js`** (its URL is its service-worker
 registration identity; nav.js registers it `updateViaCache: 'none'`, which bypasses the
 HTTP cache) and the HTML documents (Cloudflare answers them `cf-cache-status: DYNAMIC`, so
-they are never edge-cached). Those two are purged by
-`.github/workflows/purge-cache.yml` after every Pages publish.
+they are never edge-cached). `sw.js` and `version.json` are purged by the **last step of
+build.yml's `deploy` job**, which is safe precisely there: `actions/deploy-pages` polls
+until GitHub reports the deployment succeeded, so the content is published by definition
+and the one real danger — purging BEFORE publish — cannot arise. (It used to be its own
+workflow on the `page_build` event; that event is the BRANCH-build signal and stopped
+firing when Pages moved to the artifact, so the purge went silently dead until it was
+moved. `purge-cache.yml` survives as a manual button.) The purge needs
+`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ZONE_ID` repository secrets and skips cleanly
+without them — as of 2026-09-08 they are unset, so the two files simply heal on their
+10-minute TTL.
 
 Still true and still load-bearing: **never fetch a freshly-bumped `?v=N` URL until Pages
 has finished deploying** — a probe mid-deploy freezes the OLD bytes under the new key. To
 test origin freshness, fetch a throwaway query (`app.js?probe123`), which always misses
-cache. The workflow above does exactly that before it purges.
+cache. CI does not need to probe: it purges only after Pages has confirmed the deploy.
 
 ### Build reproducibility
 
@@ -354,6 +399,39 @@ python webtest/audit.py --app --journey a,b,c   # soft-navigation ("SPA") proofs
 python webtest/test_topic_search.py       # per-slice batteries (store, board, richtext, …)
 ```
 
+### Continuous integration
+
+`.github/workflows/build.yml` runs on every pull request and every push to `main`. It
+builds the site, runs the three gates above, packages `docs/` and — on `main` only —
+deploys it to GitHub Pages and purges the edge. **A local toolchain is therefore
+optional**: clone, change a line, open a PR, and the pipeline builds what that change
+actually affects and proves the result. No TeX Live, no pandoc, no `purs` on your machine.
+
+Two things make that practical. The repo is **public**, so Actions minutes are free and
+unlimited on standard runners — wall-clock is the only constraint. And the build is
+**properly incremental**: the corpus HTML targets used to be `for` loops with no
+prerequisites, so every build re-ran pandoc over all ~235 works (about 35 minutes). One
+target per work later, an unchanged tree rebuilds nothing in 0.08 s. CI also caches the
+previous `docs/`, so a run rebuilds only what the diff touched; a cache miss costs time,
+never correctness.
+
+Two CI-specific traps are handled in the workflow, and both are worth knowing before
+editing it:
+
+- **git writes every file at checkout time, in no guaranteed order.** A changed `.tex`
+  arrives with the same mtime as its output, so `make` — which rebuilds only when a
+  prerequisite is strictly *newer* — rebuilds nothing; and a `.tex` that lands microseconds
+  later rebuilds *everything* (the first run rebuilt the whole Newman corpus). The workflow
+  flattens every mtime to a fixed old timestamp, then touches only the files in the diff.
+- **TeX Live is ~2 GB** and most changes never touch a `.tex`, so it is installed only when
+  the diff says LaTeX is actually involved.
+
+Adding CI also surfaced four real bugs that a developer machine had been hiding — a
+`jscheck` that never declared it needed `psbuild`, a test that pinned node to
+`/usr/bin/node`, a test importing the GPU backend's numpy dependency, and one asserting the
+private shelf resolves (it cannot in public CI). When something "works locally", ask what
+your working tree holds that a fresh clone does not.
+
 ### `make` target reference
 
 | Target | What it does |
@@ -395,7 +473,10 @@ must stay within it. Config is each directory's `wrangler.jsonc`; secrets are se
 | **R2** | `merecatholicity-dm-media` | End-to-end-encrypted DM attachments (client-encrypted ciphertext, random opaque keys, auto-expiring) |
 | **R2** | `merecatholicity-backups` | Monthly D1 dump + avatar mirror (90-day retention) |
 | **R2** | `merecatholicity-audio` | KJV Scourby audio, MP3 per chapter, at `audio.merecatholicity.com` |
+| **R2** | `merecatholicity-wall-media` | Feed, member-wall and forum attachments (images, video, voice notes) |
+| **R2** | `merecatholicity-files` | The 244 published PDFs, at `files.merecatholicity.com` — moved off Pages 2026-09-08 |
 | **R2** | `merecatholicity-private-shelf` | Date-stamped tarballs of the private librarian shelf |
+| **R2** | `merecatholicity-tfstate` | Terraform state. Deliberately unmanaged — a state store cannot bootstrap itself. **Contains secrets; never commit it** |
 | **Vectorize** | `merecat-t1` | 1024-dim bge-m3 embeddings for merecat's semantic retrieval |
 | **Workers AI** | (shared binding) | Llama Guard (moderation), LLaVA (avatar vision), bge-m3 (embed), bge-reranker, qwen3 (the bot's chat model) |
 | **Turnstile** | — | Spam gate on every write (comments, posts, DMs, profiles) |
@@ -474,6 +555,16 @@ domain and the TURN key cannot be managed at all (no resource, or no import supp
 . path/to/your/credentials            # CLOUDFLARE_API_TOKEN, GITHUB_TOKEN, AWS_* for R2
 terraform -chdir=terraform plan       # expect: No changes
 ```
+
+**Known drift, as of 2026-09-08:** the same-day move of the PDFs to R2 created three
+things by hand that Terraform does not yet declare — the `merecatholicity-files` bucket,
+the `files.merecatholicity.com` DNS record, and the dynamic-redirect ruleset that 301s
+`/<name>.pdf` to it (a fourth ruleset phase, `http_request_dynamic_redirect`; the three
+declared ones are firewall, response-headers and rate-limit). Nothing is broken — it is
+live and verified — but `plan` cannot see it, so do not read `No changes` as a full
+picture of the zone until it is imported. Adopting it is the documented route: an
+`import` block, `plan -generate-config-out`, fold the generated HCL into the topic file,
+iterate to `No changes`, then apply.
 
 State lives in the R2 bucket `merecatholicity-tfstate`, which is deliberately not
 managed by Terraform (a state store managed by its own state cannot be bootstrapped).

@@ -1,149 +1,82 @@
-# Purge the Cloudflare edge — but only once GitHub Pages is actually serving
-# the new build.
+# A manual button to purge the Cloudflare edge.
 #
-# This replaces a manual step that was run by hand after every deploy, and it
-# encodes the trap that made that step dangerous: purging BEFORE Pages has
-# finished publishing re-caches the OLD bytes, and for a URL Cloudflare treats
-# as immutable that freezes the rollout until the key is bumped again. So this
-# never purges on a timer or on a push — it purges only once the new build is
-# CONFIRMED published, by asking the origin, and failing that by asking GitHub
-# whether its own Pages deploy of this commit finished. (The first run of this
-# workflow found that Cloudflare's Bot Fight Mode answers a CI runner with 403,
-# which is why there are two roads to the same confirmation. It correctly
-# refused to purge rather than guess — see run 34270574779.)
+# THE AUTOMATIC PURGE DOES NOT LIVE HERE ANY MORE. It is the last step of the
+# `deploy` job in build.yml, because that is the one place that knows Pages has
+# actually published — and purging BEFORE it publishes re-caches the OLD bytes
+# under a key Cloudflare treats as immutable, which freezes a rollout until the
+# key is bumped again.
 #
-# Almost nothing needs purging any more: every asset carries a content-hash key
-# (scripts/stamp_versions.py), and Cloudflare does not edge-cache the HTML
-# (cf-cache-status: DYNAMIC, measured). What is left is the two files that
-# cannot carry a key — sw.js, whose URL is its registration identity, and
-# version.json, which is the answer to "what is current" and so must never be
-# served from the cache it describes.
+# This file used to hold that purge and trigger on `page_build`. That was
+# correct while Pages was served from the branch. It stopped being correct the
+# moment Pages moved to this repository's workflow artifact (2026-09-08):
+# `page_build` is the signal for a BRANCH build and never fires again, and the
+# fallback this workflow asked instead — `pages/builds/latest` — froze at the
+# last branch build, so it could never confirm a new commit either. It also
+# read the expected build id out of `docs/version.json`, which left git in the
+# same change. Three ways dead at once, and silently, because with no
+# CLOUDFLARE_API_TOKEN set it had always been skipping cleanly anyway.
 #
-# SETUP (one time, by the repository owner):
-#   1. Cloudflare → My Profile → API Tokens → Create Token, with the single
-#      permission  Zone → Cache Purge → Purge  on merecatholicity.com.
-#   2. Repo → Settings → Secrets and variables → Actions → New secret:
+# What is left for a human to press: the rare case of wanting the edge cleared
+# without a deploy — an edge rule changed, or something is being served stale
+# that should not be. Do not run this while a Build is mid-deploy.
+#
+# SETUP (one time, by the repository owner — shared with the automatic purge):
+#   1. Cloudflare -> My Profile -> API Tokens -> Create Token, with the single
+#      permission  Zone -> Cache Purge -> Purge  on merecatholicity.com.
+#   2. Repo -> Settings -> Secrets and variables -> Actions -> New secret:
 #        CLOUDFLARE_API_TOKEN   the token from step 1
 #        CLOUDFLARE_ZONE_ID     the zone id from the Cloudflare dashboard
-# Until both exist this workflow skips cleanly rather than failing, so the
-# repository is never red for a feature that has not been switched on.
+# Until both exist this skips cleanly rather than failing, so the repository is
+# never red for a feature that has not been switched on.
 
-name: Purge Cloudflare after Pages publishes
+name: Purge the Cloudflare edge (manual)
 
 on:
-  # Pages is deployed from a branch here (main /docs), so there is no deploy
-  # workflow to chain onto. page_build is GitHub's own signal that the Pages
-  # build finished.
-  page_build:
-  # And a manual button, for the times a purge is wanted without a deploy.
   workflow_dispatch:
+    inputs:
+      everything:
+        description: "Purge the WHOLE zone instead of just sw.js and version.json"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  # To ask GitHub whether Pages has actually published this commit. Cloudflare's
-  # Bot Fight Mode answers a CI runner with 403 (observed: run 34270574779), so
-  # the site cannot always be asked directly — and GitHub is the authority on
-  # whether its own deploy finished anyway.
-  pages: read
 
 concurrency:
-  # A rapid second deploy should supersede a purge still waiting on the first:
-  # the later build is the one worth confirming.
   group: purge-cache
   cancel-in-progress: true
 
 jobs:
   purge:
-    # A failed Pages build has nothing to purge for.
-    if: github.event_name == 'workflow_dispatch' || github.event.build.status == 'built'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-
-      - name: Read the build id this commit expects
-        id: expect
-        run: |
-          build=$(python3 -c "import json;print(json.load(open('docs/version.json'))['build'])")
-          echo "build=$build" >> "$GITHUB_OUTPUT"
-          echo "expecting build $build"
-
-      - name: Confirm Pages has published this build
-        id: wait
-        env:
-          GH_TOKEN: ${{ github.token }}
-          WANT: ${{ steps.expect.outputs.build }}
-        run: |
-          # Preferred: ask the origin, because "what is actually being served"
-          # is the only thing that really answers the question. A THROWAWAY
-          # query string on every probe — fetching the real URL while Pages is
-          # mid-publish is what caches the old bytes under the new key.
-          #
-          # A browser User-Agent because the zone runs Bot Fight Mode and a bare
-          # curl from a datacenter IP is exactly what it is there to stop.
-          UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
-          # Six tries, not twenty-four: with Bot Fight Mode on, a CI runner is
-          # 403'd reliably rather than occasionally, so a long poll here just
-          # burns four minutes of every deploy before reaching the answer that
-          # was always going to arrive from GitHub. One minute is enough to
-          # catch the case where the origin CAN be read.
-          for i in $(seq 1 6); do
-            got=$(curl -sS -A "$UA" "https://merecatholicity.com/version.json?probe=${GITHUB_RUN_ID}-$i" \
-                  | python3 -c "import json,sys;print(json.load(sys.stdin).get('build',''))" 2>/dev/null || true)
-            if [ "$got" = "$WANT" ]; then
-              echo "origin is serving $got (checked $i times)"
-              echo "ready=yes" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            sleep 10
-          done
-
-          # Blocked or still stale. Fall back to the authority on GitHub's own
-          # deploy: if Pages reports this very commit as built, the content IS
-          # published, and purging AFTER that is exactly what the law permits —
-          # its danger was ever purging BEFORE.
-          echo "::notice::could not read the origin (Bot Fight Mode blocks CI runners); asking GitHub instead"
-          state=$(gh api "repos/${GITHUB_REPOSITORY}/pages/builds/latest" --jq '.status + " " + .commit' || echo "")
-          echo "pages/builds/latest: ${state:-unavailable}"
-          case "$state" in
-            "built ${GITHUB_SHA}")
-              echo "GitHub reports this commit published"
-              echo "ready=yes" >> "$GITHUB_OUTPUT" ;;
-            *)
-              echo "::warning::neither the origin nor GitHub confirms build ${WANT}; not purging"
-              echo "ready=no" >> "$GITHUB_OUTPUT" ;;
-          esac
-
-      - name: Purge the two files that cannot carry a cache key
-        if: steps.wait.outputs.ready == 'yes'
+      - name: Purge
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          ALL: ${{ inputs.everything }}
         run: |
           if [ -z "$TOKEN" ] || [ -z "$ZONE" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ZONE_ID not set — skipping the purge."
-            echo "Everything except sw.js and version.json is content-keyed, so the"
-            echo "only cost of skipping is that those two heal on their 10-minute TTL."
+            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ZONE_ID not set — nothing purged."
+            echo "See the setup steps at the top of this workflow file."
             exit 0
+          fi
+          if [ "$ALL" = "true" ]; then
+            echo "purging the entire zone"
+            body='{"purge_everything":true}'
+          else
+            echo "purging the two files that cannot carry a cache key"
+            body='{"files":[
+              "https://merecatholicity.com/sw.js",
+              "https://merecatholicity.com/version.json",
+              "https://www.merecatholicity.com/sw.js",
+              "https://www.merecatholicity.com/version.json"
+            ]}'
           fi
           resp=$(curl -fsS -X POST \
             "https://api.cloudflare.com/client/v4/zones/${ZONE}/purge_cache" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
-            --data '{"files":[
-              "https://merecatholicity.com/sw.js",
-              "https://merecatholicity.com/version.json",
-              "https://www.merecatholicity.com/sw.js",
-              "https://www.merecatholicity.com/version.json"
-            ]}')
+            --data "$body")
           echo "$resp"
           python3 -c "import json,sys;d=json.loads(sys.argv[1]);sys.exit(0 if d.get('success') else 1)" "$resp"
-
-      - name: Report
-        if: always()
-        run: |
-          if [ "${{ steps.wait.outputs.ready }}" = "yes" ]; then
-            echo "build ${{ steps.expect.outputs.build }} confirmed published; purge attempted above."
-          else
-            echo "nothing purged. sw.js and version.json heal on their 10-minute TTL;"
-            echo "every other asset is content-keyed and needs no purge at all."
-          fi
