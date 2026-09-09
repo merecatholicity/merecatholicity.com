@@ -302,10 +302,25 @@ jobs:
             echo "no PDFs in docs/ — nothing to hold back"
           fi
 
-      - name: Package the site for Pages
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+      # This is actions/upload-pages-artifact, inlined. That composite action
+      # references `actions/upload-artifact@v4` by TAG inside itself, and the
+      # repository requires every action — nested ones included — to be pinned
+      # to a commit SHA, so GitHub refused it at "Set up job" the first time the
+      # policy was live. Its two steps are just this tar and this upload; the
+      # artifact name `github-pages` is what actions/deploy-pages looks for.
+      - name: Package the site for Pages (archive)
+        run: |
+          tar --dereference --hard-dereference --directory docs \
+              -cf "$RUNNER_TEMP/artifact.tar" --exclude=.git --exclude=.github .
+          echo "artifact.tar: $(du -h "$RUNNER_TEMP/artifact.tar" | cut -f1)"
+
+      - name: Package the site for Pages (upload)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          path: docs
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
 
       # Back into docs/ so the cache saved at the end of this job keeps them.
       - name: Return the PDFs to the cached tree

@@ -112,8 +112,11 @@ holds `pages: write` + `id-token: write`.
 8. **CNAME + .nojekyll must be in the artifact** (losing CNAME once 404'd the whole site).
 9. **Name the build** (`docs/version.json` → job output `build_id`).
 10. **Hold the PDFs back** (they are served from R2; on Pages they would be unreachable
-    bytes — 400 MB vs 113 MB artifact), package `docs/`, **return the PDFs** to the cached
-    tree so the next LaTeX change rebuilds one, not 244.
+    bytes — 400 MB vs 113 MB artifact), package `docs/` — a `tar` plus a SHA-pinned
+    `actions/upload-artifact` named `github-pages`, which is `actions/upload-pages-artifact`
+    inlined: that composite references `upload-artifact@v4` by tag inside itself and the
+    repository's SHA-pinning policy refuses nested tag references too — then **return the
+    PDFs** to the cached tree so the next LaTeX change rebuilds one, not 244.
 
 *The `deploy` job* (`main` pushes only): `actions/deploy-pages`, which polls until GitHub
 reports the deployment succeeded, then **purges `sw.js` and `version.json`** at the
@@ -381,6 +384,7 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 | `gh run list --commit <sha>` returns nothing for a run that exists | the filter is flaky with short shas | list unfiltered and match `headSha` |
 | a rebuilt PDF keeps serving old bytes | the edge caches PDFs | `publish_pdfs` purges exactly the changed URLs |
 | the artifact is 400 MB, not 113 | PDFs built by a LaTeX-touching run rode along | held back at packaging, returned to the cache |
+| every Build fails at *Set up job* the moment SHA pinning is required | GitHub's own `upload-pages-artifact` composite references `upload-artifact@v4` by tag internally; the policy applies to nested references | the composite is inlined (tar + pinned upload named `github-pages`) — prefer plain actions over composites under this policy |
 
 ---
 
