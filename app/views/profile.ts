@@ -49,17 +49,22 @@ class McProfile extends LitElement {
     if (!this.profile || this._done) return;
     this._done = true;
     const kit = this.kit;
-    const editable = !!kit.state.key && this.hash === kit.state.myHash;
+    const editable = this.editable();
     const card = this.querySelector('.profile');
-    /* Editing is a write, so the Turnstile slot lives outside the card (it
-       survives the read/edit toggle) — mounted exactly as the old view did. */
-    if (editable) {
-      const slot = this.querySelector('.mc-ts-host');
-      slot!.appendChild(kit.el('div', 'ts-slot'));
-      kit.loadTurnstile();
-    }
+    /* The Turnstile slot is rendered by the template, outside the card so it
+       survives the read/edit toggle. It is only the focus net's marker: this
+       view used to render a `.mc-ts-host` of its own inside <main> and call
+       kit.loadTurnstile() as it opened, which put the challenge frame INSIDE
+       the view (unstyled, 300×150, white in a dark theme — the "out-of-place
+       white box" on the first open of Profile, 2026-09-09) and ran the
+       challenge for a member who had only arrived. The host is the document's,
+       the mount is intent's (editProfile warms; so does a focus). */
     kit.renderProfile(card, this.profile, editable);
     if (!editable && kit.isAdmin()) kit.adminProfileEditor(card, this.hash, this.profile || {});
+  }
+  editable() {
+    const kit = this.kit;
+    return !!kit.state.key && this.hash === kit.state.myHash;
   }
   render() {
     const kit = this.kit;
@@ -68,7 +73,7 @@ class McProfile extends LitElement {
     if (this.err === 'bad') return html`${head}<p class="comments-status">No such profile.</p>`;
     if (this.err === 'load') return html`${head}<p class="comments-status">The profile could not be loaded.${retryTpl(this, { kit: this.kit, hash: this.hash })}</p>`;
     if (!this.profile) return html`${head}${skelTpl('card')}`;
-    return html`${head}<div class="mc-ts-host"></div><div class="profile"></div>`;
+    return html`${head}${this.editable() ? html`<div class="ts-slot"></div>` : nothing}<div class="profile"></div>`;
   }
 }
 customElements.define('mc-profile', McProfile);

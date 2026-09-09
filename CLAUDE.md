@@ -111,7 +111,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   on navigation (only `<main>` is swapped).
 - **Turnstile**: an established identity is not challenged (`Domain.Turnstile`, app_settings
   `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing
-  context, hand-bumped `?v=`); a challenge must never be mounted in an off-screen host.
+  context; its `?v=` is stamped into nav.js's `MC_ASSETS`, never by hand). **Only
+  `loadTurnstile()` mounts, only from the focus net or a press, never because a view
+  opened, never for a spared identity** — the test sweeps every call site. The host is the
+  document's own (`tsHost()`, `body > .mc-ts-host[data-mc-app]`), never inside `<main>`,
+  never off-screen, never without its stylesheet.
 - **`READ_LIMIT` is one per-IP bucket shared by every read endpoint**; the client's read-budget
   coordinator paces every poller — never add a poller outside it.
 - **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0012),
@@ -198,4 +202,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend · The Cloudflare free-tier usage monitor · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend · The Cloudflare free-tier usage monitor · `contact-worker/`

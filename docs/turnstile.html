@@ -27,10 +27,21 @@
   this), nothing that could make it heavier than the one job it has. It is NOT
   in nav.py's PAGES list and must never be added.
 
-  It is referenced as turnstile.html?v=N from client/comments.ts — bump that N
-  by hand if this file changes, since it carries no automatic stamp.
+  Its cache key is NOT hand-kept: scripts/stamp_versions.py writes this file's
+  content hash into nav.js's MC_ASSETS, client/comments.ts reads it back through
+  window.mcAsset ('turnstile.html'), so an edit here re-keys itself on the next
+  build. There is nothing to bump.
+
+  color-scheme is load-bearing (2026-09-09). The app's root declares
+  `color-scheme: light` or `dark`; a child document whose used colour scheme
+  differs from its embedder's is painted with an OPAQUE canvas (CSS Color
+  Adjustment), so under the dark theme this "transparent" page rendered as a
+  solid white box wherever its frame had a height. Declaring both lets the
+  frame take the app's scheme, which keeps the canvas transparent and gives
+  the widget the right theme on the rare occasion a human check does show.
 -->
 <style>
+  html { color-scheme: light dark; }
   html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
   #w { line-height: 0; }
 </style>

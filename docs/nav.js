@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
    reach a phone's own cache, so a changing URL is the only real control. Before
    this, tweetnacl.min.js and lamejs.min.js were pinned at a hand-written ?v=1
    that had not moved since July. */
-var MC_ASSETS = {"avatars/presets/index.json":"1133856240","dr.json":"3308964207","emoji/emoji-data.json":"295875345","kjv.json":"856040020","lamejs.min.js":"701830801","qr.min.js":"1058418721","turnstile.html":"3089112556","tweetnacl.min.js":"2537342323"};
+var MC_ASSETS = {"avatars/presets/index.json":"1133856240","dr.json":"3308964207","emoji/emoji-data.json":"295875345","kjv.json":"856040020","lamejs.min.js":"701830801","qr.min.js":"1058418721","turnstile.html":"1895132035","tweetnacl.min.js":"2537342323"};
 window.mcAssets = MC_ASSETS;
 /* `name` with its current key, or bare if we have never heard of it (which is
    the honest fallback: an unkeyed URL still works, it is merely cacheable). */
@@ -291,7 +291,7 @@ window.mcAsset = function (name) {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=2920300294';
+    s.src = 'app.js?v=3877113496';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

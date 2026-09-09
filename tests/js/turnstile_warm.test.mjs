@@ -13,12 +13,17 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
+
+/* Code only: a comment that tells the history of a bug may name it. */
+function uncommented(s) {
+  return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
+}
 
 /* The enclosing top-level function of a given offset. */
 function enclosing(idx) {
@@ -122,6 +127,17 @@ test('exactly one widget per document, in a host that survives navigation', () =
   assert.ok(/function tsHost\(\)/.test(src), 'the persistent host is gone');
   assert.ok(/h\.setAttribute\('data-mc-app', ''\)/.test(src),
     'the host must carry data-mc-app or the shell will swap it away');
+  /* And it must be found by that mark, not by class alone: the Lit profile
+     rendered a `.mc-ts-host` of its own inside <main>, a bare querySelector
+     found it first, the frame mounted INSIDE the view — visible, unstyled — and
+     the next swap destroyed it while the page-scoped handle lived on. */
+  const th = src.slice(src.indexOf('function tsHost()'), src.indexOf('function tsFrameLive()'));
+  assert.ok(/querySelector\('body > \.mc-ts-host\[data-mc-app\]'\)/.test(th),
+    "tsHost must accept only the document's own host: body > .mc-ts-host[data-mc-app]");
+  for (const f of readdirSync(join(root, 'app', 'views')).filter((n) => n.endsWith('.ts'))) {
+    const v = uncommented(readFileSync(join(root, 'app', 'views', f), 'utf8'));
+    assert.ok(!/mc-ts-host/.test(v), `app/views/${f} renders a challenge host of its own`);
+  }
   const boot = src.indexOf('function mcBoot()');
   assert.ok(src.indexOf('var mcTsWidget') < boot && src.indexOf('var mcTsToken') < boot,
     'the widget id and token must live ABOVE mcBoot, or every soft nav renders a new widget');
@@ -163,16 +179,49 @@ test('the challenge container is real, not hidden off-screen', () => {
 test('opening a view never runs a challenge on its own', () => {
   /* viewDm called loadTurnstile() unconditionally as its composer mounted, so
    * a reader who did nothing but open a conversation ran a challenge — and on
-   * the installed app that was when the page died. Intent (a focus, or an
-   * actual press) is what may mount it. */
-  const dm = src.slice(src.indexOf('function viewDm('), src.indexOf('function viewInbox('));
-  assert.ok(!/^\s*loadTurnstile\(\);/m.test(dm),
-    'viewDm mounts the challenge just for opening a conversation again');
-  /* The two callers that may: the focus net, and a press that finds no token. */
-  const warm = src.slice(src.indexOf('function warmToken()'), src.indexOf('function ensureFreshToken'));
-  assert.ok(/loadTurnstile\(\);/.test(warm), 'the focus warm must still mount it');
-  const raw = src.slice(src.indexOf('function rawToken()'), src.indexOf('function rawToken()') + 1200);
-  assert.ok(/loadTurnstile\(\);/.test(raw), 'a press with no warm token must still be able to earn one');
+   * the installed app that was when the page died. The first cut of this test
+   * checked viewDm and nothing else, and the very next report (2026-09-09) was
+   * the same mount-on-open from the four views it had not looked at: the
+   * board form, the profile, the feed composer and the page comments. So this
+   * is a SWEEP now: every call site is found and must be one of the three
+   * that may — the focus warm, a press that finds no token, and the gate's
+   * own re-entry once the server has answered. Intent mounts it; arrival
+   * never does. */
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  const sites = [...code.matchAll(/(?<!function )loadTurnstile\(\)/g)].map((m) => {
+    const head = code.slice(0, m.index);
+    const fns = [...head.matchAll(/^ {2}function (\w+)\(/gm)];
+    return fns.length ? fns[fns.length - 1][1] : '(top level)';
+  });
+  const may = new Set(['warmToken', 'rawToken', 'loadTurnstile']);
+  for (const s of sites) {
+    assert.ok(may.has(s),
+      `${s}() mounts the challenge itself — a view that mounts on open runs a challenge for a ` +
+      'reader who has only arrived, which is what took the installed app down. Give the ' +
+      'surface a .ts-slot and let the focus net (or an explicit warmToken()) do it.');
+  }
+  assert.ok(sites.includes('warmToken'), 'the focus warm must still mount it');
+  assert.ok(sites.includes('rawToken'), 'a press with no warm token must still be able to earn one');
+  /* And no Lit view may reach it either: the kit no longer hands it out. */
+  assert.ok(!/loadTurnstile:/.test(code), 'the kit exports loadTurnstile again — a view will mount on open');
+  for (const f of readdirSync(join(root, 'app', 'views')).filter((n) => n.endsWith('.ts'))) {
+    const v = uncommented(readFileSync(join(root, 'app', 'views', f), 'utf8'));
+    assert.ok(!/loadTurnstile/.test(v), `app/views/${f} mounts the challenge itself`);
+  }
+});
+
+test('a spared reader never mounts, whoever asks', () => {
+  /* The sparing lived in warmToken() alone, so any other caller of
+   * loadTurnstile() — and there were four — ran the challenge for an identity
+   * the server would never have asked. The gate sits on the one road every
+   * mount takes now: a known-spared identity returns at once, an unknown one
+   * asks /config first and mounts only on a "no". */
+  const l = src.slice(src.indexOf('function loadTurnstile()'), src.indexOf('function loadTurnstile()') + 1500);
+  const body = l.replace(/\/\*[\s\S]*?\*\//g, '');
+  const first = body.slice(body.indexOf('{') + 1).trim().split('\n')[0];
+  assert.equal(first.trim(), 'if (mcTsSpared) return;', 'the sparing must be the FIRST thing loadTurnstile checks');
+  assert.ok(/if \(mcTsSpared === null\)/.test(body) && /tsSkipCfg\(\)/.test(body),
+    'an unknown identity must be asked about before anything mounts');
 });
 
 test('the challenge runs in its own browsing context', () => {
@@ -186,7 +235,8 @@ test('the challenge runs in its own browsing context', () => {
     "the frame must load our own page, and take its cache key from nav.js's stamped " +
     'asset map — it was hand-versioned at ?v=1, which is exactly the kind of key ' +
     'nobody remembers to bump (scripts/stamp_versions.py owns it now)');
-  const load = src.slice(src.indexOf('function loadTurnstile()'), src.indexOf('function loadTurnstile()') + 800);
+  const li = src.indexOf('function loadTurnstile()');
+  const load = src.slice(li, src.indexOf('\n  function ', li + 1));
   assert.ok(/if \(!mcTsFell\) \{ tsEnsureFrame\(\); return; \}/.test(load),
     'the parent must not load Cloudflare\'s script at all while the frame is carrying it — ' +
     'that script is what mounts the challenge, and the challenge is what took the document');
@@ -213,4 +263,46 @@ test('the challenge never re-runs on a timer', () => {
     assert.ok(/'refresh-expired': 'never'/.test(body), `${what} still auto-refreshes its token`);
     assert.ok(/retry: 'never'/.test(body), `${what} still retries a failed challenge on a loop`);
   }
+});
+
+test('the host never exists without its stylesheet', () => {
+  /* The frame is a 0-height box by rule, and the rule lived in the DM
+   * stylesheet, which only the DM, wall and board-media paths inject. On the
+   * profile view there was no rule at all, so the frame stood at the iframe
+   * default of 300×150 — the "out-of-place white box" of 2026-09-09. The host
+   * injects its own sheet as it is created; the two cannot come apart. */
+  const th = src.slice(src.indexOf('function tsHost()'), src.indexOf('function tsFrameLive()'));
+  assert.ok(/ensureTsStyles\(\);/.test(th), 'tsHost must inject the host stylesheet before anything else');
+  const sheet = src.slice(src.indexOf('function ensureTsStyles()'), src.indexOf('function tsHost()'));
+  assert.ok(/\.mc-ts-frame\{[^}]*height:0/.test(sheet), 'the frame must be collapsed to 0 height by default');
+  assert.ok(/\.mc-ts-host\.on \.mc-ts-frame\{height:\d+px\}/.test(sheet), 'and given height only for a human check');
+  assert.ok(/mc-ts-css/.test(sheet), 'the sheet needs its own id so it is injected once');
+  const dm = src.slice(src.indexOf('function ensureDmStyles()'), src.indexOf('function ensureTsStyles()'));
+  assert.ok(!/mc-ts-/.test(dm), 'the host rules are back in the DM stylesheet, where the profile view cannot see them');
+});
+
+test('a frame torn out of the document is rebuilt, not trusted', () => {
+  /* The handle is page-scoped and outlives every boot — which is right — but
+   * a frame that something removed (a swapped host, a view that owned it)
+   * left the handle pointing at nothing: "mounted", never answering, every
+   * press running to its timeout. */
+  const ef = src.slice(src.indexOf('function tsEnsureFrame()'), src.indexOf('function renderTurnstileWidget()'));
+  assert.ok(/mcTsFrame\.isConnected/.test(ef), 'tsEnsureFrame must notice a frame that is no longer in the document');
+  assert.ok(/mcTsFrame = null;/.test(ef) && /mcTsFrameReady = false;/.test(ef),
+    'and forget it so a fresh one is built');
+  const live = src.slice(src.indexOf('function tsFrameLive()'), src.indexOf('function tsMounted()'));
+  assert.ok(/isConnected/.test(live), 'liveness must include being in the document');
+  const mounted = src.slice(src.indexOf('function tsMounted()'), src.indexOf('function tsEnsureFrame()'));
+  assert.ok(/tsFrameLive\(\)/.test(mounted), 'a ready flag alone must not count as mounted');
+});
+
+test("the frame page shares the app's colour scheme", () => {
+  /* The page says background: transparent, and it was painted solid white:
+   * a child document whose used colour scheme differs from its embedder's is
+   * rendered with an opaque canvas (CSS Color Adjustment), and the app's root
+   * is color-scheme: dark under the dark theme while the page declared none.
+   * Declaring both lets the frame take the app's scheme. */
+  const page = readFileSync(join(root, 'docs', 'turnstile.html'), 'utf8');
+  assert.ok(/html\s*\{[^}]*color-scheme:\s*light dark/.test(page),
+    'docs/turnstile.html must declare color-scheme: light dark on html, or it paints white in a dark app');
 });

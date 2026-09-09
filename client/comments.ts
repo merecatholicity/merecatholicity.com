@@ -1410,25 +1410,7 @@
       '.mc-rec-dot{width:10px;height:10px;border-radius:50%;background:#c0392b;animation:mc-rec-pulse 1.1s ease-in-out infinite}' +
       '@keyframes mc-rec-pulse{0%,100%{opacity:1}50%{opacity:0.25}}' +
       '.mc-rec-time{font-variant-numeric:tabular-nums;font-size:0.9em;opacity:0.85}' +
-      '.mc-rec-audio{max-width:280px}' +
-      /* The single Turnstile host. It is REAL: on screen, laid out, opaque,
-         interactable. The previous version parked it at left:-9999px with
-         opacity:0 and pointer-events:none, which is the one thing a challenge
-         container must never be — Cloudflare's widget hides ITSELF through
-         appearance:'interaction-only', and an invisible cross-origin challenge
-         iframe in an installed iOS web view is a document that gets taken away
-         (2026-09-08: the app died about a second after every mount, with no
-         pagehide and no error). So the host is a normal fixed element pinned
-         to the bottom edge with nothing visible in it until the widget decides
-         otherwise, and `.on` only lifts it clear of the composer so a human
-         check can actually be reached. */
-      '.mc-ts-frame{border:0;width:300px;max-width:100vw;height:0;display:block}' +
-      '.mc-ts-host.on .mc-ts-frame{height:70px}' +
-      '.mc-ts-host{position:fixed;left:50%;transform:translateX(-50%);bottom:0;' +
-      'z-index:9998;line-height:0;transition:bottom .15s ease}' +
-      '.mc-ts-host.on{bottom:calc(env(safe-area-inset-bottom,0px) + 84px);' +
-      'padding:10px;border-radius:12px;line-height:normal;' +
-      'background:var(--surface,#fffdf7);box-shadow:0 4px 20px rgba(0,0,0,.3)}';
+      '.mc-rec-audio{max-width:280px}';
     var st = el('style');
     st.id = 'mc-dm-css';
     st.textContent = css;
@@ -1913,24 +1895,76 @@
      the audio dock use it), so the widget is built once and never churned.
      It shows nothing unless Turnstile asks for a human check, at which point
      before-interactive-callback brings it forward. */
+  /* The host's stylesheet, injected the moment the host exists and by nothing
+     else. It used to ride in ensureDmStyles(), which only the DM, wall and
+     board-media paths inject — so on the profile view the frame had no rule
+     at all and stood at the iframe default of 300×150, opaque white in a dark
+     theme (2026-09-09: "an out-of-place white box" on the first open of
+     Profile). A rule that can be absent while its element is present will be. */
+  function ensureTsStyles() {
+    if (document.getElementById('mc-ts-css')) return;
+    var css = '' +
+      /* The single Turnstile host. It is REAL: on screen, laid out, opaque,
+         interactable. The previous version parked it at left:-9999px with
+         opacity:0 and pointer-events:none, which is the one thing a challenge
+         container must never be — Cloudflare's widget hides ITSELF through
+         appearance:'interaction-only', and an invisible cross-origin challenge
+         iframe in an installed iOS web view is a document that gets taken away
+         (2026-09-08: the app died about a second after every mount, with no
+         pagehide and no error). So the host is a normal fixed element pinned
+         to the bottom edge with nothing visible in it until the widget decides
+         otherwise, and `.on` only lifts it clear of the composer so a human
+         check can actually be reached. */
+      '.mc-ts-frame{border:0;width:300px;max-width:100vw;height:0;display:block}' +
+      '.mc-ts-host.on .mc-ts-frame{height:70px}' +
+      '.mc-ts-host{position:fixed;left:50%;transform:translateX(-50%);bottom:0;' +
+      'z-index:9998;line-height:0;transition:bottom .15s ease}' +
+      '.mc-ts-host.on{bottom:calc(env(safe-area-inset-bottom,0px) + 84px);' +
+      'padding:10px;border-radius:12px;line-height:normal;' +
+      'background:var(--surface,#fffdf7);box-shadow:0 4px 20px rgba(0,0,0,.3)}';
+    var st = el('style');
+    st.id = 'mc-ts-css';
+    st.textContent = css;
+    document.head.appendChild(st);
+  }
   function tsHost() {
-    var h = document.querySelector('.mc-ts-host') as HTMLElement;
+    ensureTsStyles();
+    /* Only the document's own host counts. A view that rendered a
+       `.mc-ts-host` of its own inside <main> (the Lit profile did, until
+       2026-09-09) was found first, took the frame, and lost it with the next
+       swap — leaving a handle that read as mounted with nothing behind it. */
+    var h = document.querySelector('body > .mc-ts-host[data-mc-app]') as HTMLElement;
     if (h) return h;
     h = el('div', 'mc-ts-host');
     h.setAttribute('data-mc-app', '');
     document.body.appendChild(h);
     return h;
   }
+  /* The frame, if it is still in the document. A handle to an iframe that
+     something tore out is worse than none: it reads as "mounted" and every
+     wait on it runs to its timeout. */
+  function tsFrameLive() {
+    return !!(mcTsFrame && mcTsFrame.isConnected && mcTsFrame.contentWindow);
+  }
   /* Is the challenge mounted and able to answer? Either road counts. */
   function tsMounted() {
-    return mcTsFrameReady || (!!window.turnstile && mcTsWidget !== null);
+    return (mcTsFrameReady && tsFrameLive()) || (!!window.turnstile && mcTsWidget !== null);
   }
   /* Build the isolating frame once. If it cannot report itself ready within a
      few seconds — blocked, offline, an engine that will not run it — the
      in-page widget takes over, which is exactly the behaviour that shipped
      before this, so the frame is only ever an improvement or a no-op. */
   function tsEnsureFrame() {
-    if (mcTsFrame || mcTsFell) return;
+    if (mcTsFell) return;
+    if (mcTsFrame) {
+      if (mcTsFrame.isConnected) return;
+      /* Torn out of the document — a swapped host, a view that owned it. The
+         old handle would sit "ready" for ever with nobody behind it. */
+      trace('turnstile: frame was torn out -> rebuilding');
+      mcTsFrame = null;
+      mcTsFrameReady = false;
+      mcTsToken = null;
+    }
     var f = document.createElement('iframe');
     f.className = 'mc-ts-frame';
     f.title = 'Verification';
@@ -2010,6 +2044,21 @@
   }
 
   function loadTurnstile() {
+    /* The gate lives HERE, on the one road every mount takes, not only in
+       warmToken(): four views were still calling this directly as they opened
+       (the board form, the profile, the feed composer, the page comments —
+       2026-09-09), which bypassed the sparing entirely and ran the challenge
+       for a member who had merely arrived. Whoever asks, a spared identity
+       mounts nothing; an unknown one is asked about first. */
+    if (mcTsSpared) return;
+    if (mcTsSpared === null) {
+      tsSkipCfg().then(function (spare: boolean) {
+        mcTsSpared = spare;
+        if (spare) { trace('turnstile: spared, nothing mounted'); return; }
+        loadTurnstile();
+      });
+      return;
+    }
     /* The isolated frame is the road. The parent page never loads Cloudflare's
        script at all unless the frame has failed — that script is what mounts
        the challenge, and the challenge is what was taking the document. */
@@ -2059,26 +2108,15 @@
     if (!state.key) return;
     if (mcTsSpared) return;                    // nothing to warm; nothing to mount
     if (mcTsToken && Date.now() - mcTsToken.at < TOKEN_FRESH_MS) return;
-    if (mcTsSpared === null) {
-      /* First touch of a composer: ask once whether this reader needs a
-         challenge, and only mount one if the answer is yes. */
-      tsSkipCfg().then(function (spare: boolean) {
-        mcTsSpared = spare;
-        if (spare) { trace('turnstile: spared, nothing mounted'); return; }
-        trace('turnstile: warming');
-        loadTurnstile();
-      });
-      return;
-    }
     trace('turnstile: warming');
-    loadTurnstile();
+    loadTurnstile();   // which asks the server first whether this reader needs one at all
   }
   /* After a token is spent (or expires) ask the widget for another. reset()
      re-runs the challenge and fires `callback` again. */
   function ensureFreshToken() {
     try {
-      if (mcTsFrameReady && mcTsFrame && mcTsFrame.contentWindow) {
-        mcTsFrame.contentWindow.postMessage({ mcTs: 'reset' }, location.origin);
+      if (mcTsFrameReady && tsFrameLive()) {
+        mcTsFrame!.contentWindow!.postMessage({ mcTs: 'reset' }, location.origin);
         return;
       }
       if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
@@ -2128,6 +2166,9 @@
       /* A human check: bring the frame where it can actually be reached. */
       trace('turnstile: interaction ' + (d.on ? 'wanted' : 'done'));
       if (d.on) tsHost().classList.add('on'); else tsHost().classList.remove('on');
+      /* Hidden from assistive tech while it is a 0px box; a check a reader
+         must complete is not. */
+      if (mcTsFrame) mcTsFrame.setAttribute('aria-hidden', d.on ? 'false' : 'true');
       return;
     }
     if (d.mcTs === 'expired') { mcTsToken = null; return; }
@@ -4720,7 +4761,11 @@ trace('submit: board post');
     new MutationObserver(function () {
       if (state.boardBtn) boardButtons(state.boardBtn[0], state.boardBtn[1]);
     }).observe(section.querySelector('.comment-identity')!, { childList: true });
-    loadTurnstile();
+    /* No challenge for merely arriving at the board: the form's .ts-slot puts
+       it under the focus net, which mounts on the first touch of the composer
+       and only for a reader the server says needs one. This was the
+       community's "white flash" (2026-09-09) — the same mount-on-open the DM
+       view lost the day before, still here. */
   }
 
   /* A row of page links, dropped at both the top and the bottom of every
@@ -6056,11 +6101,10 @@ trace('submit: board post');
     var status = skeleton('card');
     section.appendChild(status);
     /* Editing is a write, so it gets the same Turnstile gate as posting. The
-       slot lives outside the card so it survives the read/edit toggle. */
-    if (editable) {
-      section.appendChild(el('div', 'ts-slot'));
-      loadTurnstile();
-    }
+       slot lives outside the card so it survives the read/edit toggle — and it
+       is only the net's marker: nothing mounts until the editor opens
+       (editProfile warms) or a field is focused. */
+    if (editable) section.appendChild(el('div', 'ts-slot'));
     fetchRetry(API + '/profile?hash=' + hash + freshParam('&'), freshOpts(), [1000, 3000])
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -7640,7 +7684,8 @@ trace('submit: board post');
     form.appendChild(chip); form.appendChild(fileInput); form.appendChild(btnRow);
     var status = el('p', 'form-status'); form.appendChild(status);
     ensureDmStyles();
-    loadTurnstile();
+    /* The composer's .ts-slot puts it under the focus net; opening the feed
+       mounts nothing. */
     send.addEventListener('click', function () {
       var body = ta.value.replace(/\s+$/, '');
       if (!pendingFile && !body.trim()) { if (ta.mcPreview) ta.mcPreview.off(); ta.focus(); return; }
@@ -11340,8 +11385,8 @@ trace('submit: feed post');
        the identity box for the re-renders triggered above. */
     new MutationObserver(function () { renderButtons(); })
       .observe(form.querySelector('.comment-identity'), { childList: true });
-
-    loadTurnstile();
+    /* The page comment form carries a .ts-slot, so the focus net covers it;
+       loading a page mounts nothing. */
   }
 
   /* The kit: the per-boot bridge the Lit views (app/views/*) consume — every
@@ -11386,7 +11431,6 @@ trace('submit: feed post');
     el: el,
     renderProfile: renderProfile, adminProfileEditor: adminProfileEditor,
     peekJson: peekJson,
-    loadTurnstile: loadTurnstile,
     dmSearchBox: dmSearchBox, dmLabel: dmLabel,
     dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck, markThreadRead: markThreadRead,
     mintIdentity: mintIdentity, loginWithKey: loginWithKey,
