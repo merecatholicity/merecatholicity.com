@@ -71,8 +71,14 @@ case "$mode" in
     gh api -X POST "repos/$repo/actions/runs/$run/pending_deployments" --input "$tmp.body" > "$tmp.resp" || { cat "$tmp.resp"; rm -f "$tmp.body" "$tmp.resp"; exit 1; }
     RESP="$tmp.resp" python3 - <<'PY'
 import json, os
-for d in json.load(open(os.environ['RESP'])):
-    print(f"  {d.get('environment', {}).get('name')} -> {d.get('state') or 'reviewed'} ({d.get('url', '').split('/')[-1]})")
+r = json.load(open(os.environ['RESP']))
+# The review endpoint answers with the list of deployments it created; an
+# error (or a future shape change) is a dict — print it rather than crash.
+if isinstance(r, dict):
+    print('  response:', json.dumps(r)[:300])
+else:
+    for d in r:
+        print(f"  {d.get('environment', {}).get('name')} -> {d.get('state') or 'reviewed'} ({d.get('url', '').split('/')[-1]})")
 PY
     rm -f "$tmp.body" "$tmp.resp"
     echo "== $state: $run"
