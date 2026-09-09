@@ -47,6 +47,9 @@ expected fingerprint). `plan` answers `No changes`.
 
 ## Running from CI
 
+*The full procedure — plan, review, approve, adopt-by-import, the drift check — is
+`docs/architecture/CICD.md` §3 and §5. This is the summary.*
+
 `.github/workflows/terraform.yml` fires only when `terraform/**` changes (or by
 hand). `plan` runs on pull requests and pushes; `apply` runs from `main` and
 waits on the **`terraform-production`** environment, whose required reviewer is

@@ -410,74 +410,46 @@ python webtest/test_topic_search.py       # per-slice batteries (store, board, r
 
 ### Continuous integration
 
-`.github/workflows/build.yml` runs on every pull request and every push to `main`. It
-builds the site, runs the three gates above, packages `docs/` and — on `main` only —
-deploys it to GitHub Pages and purges the edge. **A local toolchain is therefore
-optional**: clone, change a line, open a PR, and the pipeline builds what that change
-actually affects and proves the result. No TeX Live, no pandoc, no `purs` on your machine.
+**Everything ships through GitHub Actions, and `docs/architecture/CICD.md` is the
+operating manual** — the golden path, each workflow step by step, the approval gate, the
+credential inventory, the Terraform procedure, the exceptions and the traps. This section
+is the overview.
 
-Two things make that practical. The repo is **public**, so Actions minutes are free and
-unlimited on standard runners — wall-clock is the only constraint. And the build is
-**properly incremental**: the corpus HTML targets used to be `for` loops with no
-prerequisites, so every build re-ran pandoc over all ~235 works (about 35 minutes). One
-target per work later, an unchanged tree rebuilds nothing in 0.08 s. CI also caches the
-previous `docs/`, so a run rebuilds only what the diff touched; a cache miss costs time,
-never correctness.
-
-Two CI-specific traps are handled in the workflow, and both are worth knowing before
-editing it:
-
-- **git writes every file at checkout time, in no guaranteed order.** A changed `.tex`
-  arrives with the same mtime as its output, so `make` — which rebuilds only when a
-  prerequisite is strictly *newer* — rebuilds nothing; and a `.tex` that lands microseconds
-  later rebuilds *everything* (the first run rebuilt the whole Newman corpus). The workflow
-  flattens every mtime to a fixed old timestamp, then touches only the files in the diff.
-- **TeX Live is ~2 GB** and most changes never touch a `.tex`, so it is installed only when
-  the diff says LaTeX is actually involved.
-
-**Four workflows, and what each owns (since 2026-09-09):**
+**Push is the deploy.** `main` is production. A push runs the workflows the diff selects;
+a pull request runs the same gates **with no credentials and no deploy of any kind**.
 
 | Workflow | Fires on | Does |
 | --- | --- | --- |
-| `build.yml` | every push and PR | build the site, run the gates, build + publish + verify the PDFs, deploy Pages (`main` only), purge the edge |
-| `workers.yml` | changes under `comments-worker/`, `contact-worker/`, `purescript/`, the npm lockfile | `make jscheck` + `make tests` + `wrangler deploy --dry-run`; on `main`: apply the D1 migration ledger, `wrangler deploy` |
-| `terraform.yml` | changes under `terraform/` | `plan` with a public-safe summary; on `main`: `apply` behind the `terraform-production` approval gate — refuses any destroy/replace, refuses if the plan changed since review |
+| `build.yml` | every push and PR | build the site incrementally, run the gates, build + publish + verify the PDFs, deploy Pages (`main` only), purge the edge |
+| `workers.yml` | changes under `comments-worker/`, `contact-worker/`, `purescript/`, the npm lockfile and TS/eslint configs | `make jscheck` + `make tests` + `wrangler deploy --dry-run`; on `main`: apply the D1 migration ledger, `wrangler deploy` |
+| `terraform.yml` | changes under `terraform/` | `plan` with a public-safe summary; on `main`: `apply` behind the `terraform-production` approval gate — refuses any destroy/replace, refuses if the plan changed since review; PRs get `fmt` + `validate` only |
 | `purge-cache.yml` | a manual button | purge the two unkeyed files, or the whole zone |
 
 **Approving a Terraform apply:** open the run and press *Review deployments*, or from a
-shell `scripts/ci_approve.sh` (lists waiting runs), `scripts/ci_approve.sh <run-id>` (shows
-the plan summary and what is pending), `scripts/ci_approve.sh <run-id> --approve`. Because
-this repository is public, the pipeline never prints a raw plan or uploads the plan file —
-the summary it shows is `scripts/tf_plan_summary.py`'s rendering: addresses, actions,
-attribute names, and values only for attributes the provider does not mark sensitive.
+shell `scripts/ci_approve.sh` (list), `scripts/ci_approve.sh <run-id>` (summary + what is
+pending), `scripts/ci_approve.sh <run-id> --approve "why"`. Because this repository is
+public, the pipeline never prints a raw plan or uploads the plan file — reviewers see
+`scripts/tf_plan_summary.py`'s rendering.
 
-**Secrets** (Settings → Secrets and variables → Actions, set once by hand, all in place
-since 2026-09-09): three least-privilege Cloudflare tokens — `CLOUDFLARE_API_TOKEN` for
-Terraform, `CLOUDFLARE_SITE_TOKEN` for the site build's publish and purge,
-`CLOUDFLARE_WORKERS_TOKEN` for the worker deploys (scopes in `terraform/README.md`) —
-plus `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (the Terraform token's derived R2 pair)
-and `TF_GITHUB_TOKEN`, a fine-grained PAT scoped to the two repositories, for the github
-provider. **No pull request ever sees any of them**:
-PRs build and gate without credentials, and Terraform gives them `fmt` + `validate` only.
-Every action is pinned to a commit SHA (the repository requires it), Dependabot keeps the
-pins current, and secret scanning + push protection are on. The same values live in
-`~/.config/merecatholicity/ci.env` on the dev box for local use. Every workflow skips its
-credentialed steps cleanly when they are absent, so a fork's PR still builds and gates.
+**Credentials** (set once by hand, mirrored in `~/.config/merecatholicity/ci.env` on the
+dev box): three least-privilege Cloudflare tokens — `CLOUDFLARE_API_TOKEN` (Terraform),
+`CLOUDFLARE_SITE_TOKEN` (publish + purge), `CLOUDFLARE_WORKERS_TOKEN` (worker deploys) —
+their scopes in `terraform/README.md`; `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (the
+Terraform token's derived R2 pair); `TF_GITHUB_TOKEN`, a fine-grained PAT scoped to the two
+repositories. Every action is pinned to a commit SHA (the repository requires it), Dependabot
+keeps the pins current, secret scanning and push protection are on.
 
-**Deliberately NOT in the pipeline:** worker secrets (`wrangler secret put`); the
-librarian ingest (`make librarian` — needs the private shelf and the owner's key, and the
-GPU box is a machine, not a job); the bootstrap secrets above and the Terraform state
-bucket (a credential cannot be minted by the automation it authorises); Email Routing
-settings (a provider bug); the R2 custom-domain bindings, the TURN key and Vectorize (the
-provider cannot import or represent them); the one-off KJV-audio and private-shelf
-uploads; headless verification against production (Bot Fight Mode blocks runners); and
-the history rewrite of 2026-09-09, which was a backed-up, owner-authorised act.
+**Deliberately NOT in the pipeline** (the full list with reasons is the runbook's §10):
+worker secrets (`wrangler secret put`); the librarian ingest; the bootstrap secrets and the
+state bucket; the PAT and the org's PAT policy (GitHub has no API for them); Email Routing
+settings, the R2 custom-domain bindings, the TURN key and Vectorize (provider limits); the
+one-off audio and private-shelf uploads; headless verification against production; history
+rewrites; branch protection on `main`.
 
-Adding CI also surfaced four real bugs that a developer machine had been hiding — a
-`jscheck` that never declared it needed `psbuild`, a test that pinned node to
-`/usr/bin/node`, a test importing the GPU backend's numpy dependency, and one asserting the
-private shelf resolves (it cannot in public CI). When something "works locally", ask what
-your working tree holds that a fresh clone does not.
+**Why the build is practical in CI:** the repo is public (free minutes) and the build is
+incremental (one target per work; an unchanged tree rebuilds nothing). Two traps the
+workflow handles: git checks files out in no guaranteed order, so mtimes are flattened and
+only the diffed files touched; TeX Live is installed only when LaTeX is involved.
 
 ### `make` target reference
 
@@ -688,6 +660,18 @@ make librarian
 ```
 
 ---
+
+### CI/CD tasks
+
+```sh
+gh run list --limit 6                                    # what the last pushes did
+scripts/ci_approve.sh                                    # anything waiting on the Terraform gate?
+scripts/ci_approve.sh <run-id> --approve "reviewed: …"   # approve it (or --reject)
+gh workflow run workers.yml --ref main                   # redeploy both workers from CI
+gh workflow run terraform.yml --ref main -f apply=false  # a plan by hand (no changes = nothing to approve)
+terraform -chdir=terraform plan                          # drift check; expect: No changes.
+python3 scripts/publish_pdfs.py --check                  # bucket vs manifest vs local PDFs
+```
 
 ## License
 
