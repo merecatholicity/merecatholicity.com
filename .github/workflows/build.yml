@@ -345,11 +345,12 @@ jobs:
       - name: Purge the two files that cannot carry a cache key
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          ZONE: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          # The zone id is public: an Actions VARIABLE Terraform manages, not a secret.
+          ZONE: ${{ vars.CLOUDFLARE_ZONE_ID || '2b270ffb21b7f98a39960abb6bf953ae' }}
           WANT: ${{ needs.build.outputs.build_id }}
         run: |
-          if [ -z "$TOKEN" ] || [ -z "$ZONE" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN / CLOUDFLARE_ZONE_ID not set — skipping the purge."
+          if [ -z "$TOKEN" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN not set — skipping the purge."
             echo "Add them under Settings -> Secrets and variables -> Actions."
             echo "The token needs one permission: Zone -> Cache Purge -> Purge."
             echo "Until then sw.js and version.json heal on their 10-minute TTL,"

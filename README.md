@@ -202,9 +202,8 @@ and the one real danger — purging BEFORE publish — cannot arise. (It used to
 workflow on the `page_build` event; that event is the BRANCH-build signal and stopped
 firing when Pages moved to the artifact, so the purge went silently dead until it was
 moved. `purge-cache.yml` survives as a manual button.) The purge needs
-`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ZONE_ID` repository secrets and skips cleanly
-without them — as of 2026-09-08 they are unset, so the two files simply heal on their
-10-minute TTL.
+`CLOUDFLARE_API_TOKEN` repository secret and skips cleanly without it; since 2026-09-09 it
+is set, and the purge runs on every deploy.
 
 Still true and still load-bearing: **never fetch a freshly-bumped `?v=N` URL until Pages
 has finished deploying** — a probe mid-deploy freezes the OLD bytes under the new key. To
@@ -452,9 +451,11 @@ this repository is public, the pipeline never prints a raw plan or uploads the p
 the summary it shows is `scripts/tf_plan_summary.py`'s rendering: addresses, actions,
 attribute names, and values only for attributes the provider does not mark sensitive.
 
-**Secrets** (Settings → Secrets and variables → Actions, set once by hand):
-`CLOUDFLARE_API_TOKEN` (permissions in `terraform/README.md`) and `TF_GITHUB_TOKEN`
-(a token with `repo` scope for the github provider). Every workflow skips its
+**Secrets** (Settings → Secrets and variables → Actions, set once by hand, all in place
+since 2026-09-09): `CLOUDFLARE_API_TOKEN` (an account-owned token scoped as listed in
+`terraform/README.md`), `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (its derived R2 pair)
+and `TF_GITHUB_TOKEN` (a token with `repo` scope for the github provider). The same
+values live in `~/.config/merecatholicity/ci.env` on the dev box for local use. Every workflow skips its
 credentialed steps cleanly when they are absent, so a fork's PR still builds and gates.
 
 **Deliberately NOT in the pipeline:** worker secrets (`wrangler secret put`); the

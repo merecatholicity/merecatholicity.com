@@ -43,6 +43,7 @@ else
   echo "(no tf-plan-summary artifact — not a Terraform run, or the plan job has not finished)"
 fi
 rm -rf "$tmp"
+tmp=$(mktemp)
 
 echo "== pending environments"
 pending=$(gh api "repos/$repo/actions/runs/$run/pending_deployments")
@@ -62,12 +63,18 @@ case "$mode" in
     state=${mode#--}; [ "$state" = approve ] && state=approved || state=rejected
     ids=$(PENDING="$pending" python3 -c 'import json,os;print(" ".join(str(d["environment"]["id"]) for d in json.loads(os.environ["PENDING"] or "[]")))')
     if [ -z "$ids" ]; then echo "nothing to $state"; exit 1; fi
-    args=()
-    for id in $ids; do args+=(-F "environment_ids[]=$id"); done
-    gh api -X POST "repos/$repo/actions/runs/$run/pending_deployments" \
-      "${args[@]}" -f "state=$state" -f "comment=$comment" \
-      --jq '.[] | "  " + .environment.name + " -> " + .state' 2>/dev/null \
-      || gh api -X POST "repos/$repo/actions/runs/$run/pending_deployments" "${args[@]}" -f "state=$state" -f "comment=$comment"
+    # ONE request, JSON body, response parsed tolerantly. The first version
+    # chained a fallback POST after a --jq that failed on a null field — the
+    # first call had already approved, the second found nothing pending and
+    # printed a 422 that read as failure. An approval is not idempotent.
+    IDS="$ids" STATE="$state" COMMENT="$comment" python3 -c 'import json,os;print(json.dumps({"environment_ids":[int(i) for i in os.environ["IDS"].split()],"state":os.environ["STATE"],"comment":os.environ["COMMENT"]}))' > "$tmp.body"
+    gh api -X POST "repos/$repo/actions/runs/$run/pending_deployments" --input "$tmp.body" > "$tmp.resp" || { cat "$tmp.resp"; rm -f "$tmp.body" "$tmp.resp"; exit 1; }
+    RESP="$tmp.resp" python3 - <<'PY'
+import json, os
+for d in json.load(open(os.environ['RESP'])):
+    print(f"  {d.get('environment', {}).get('name')} -> {d.get('state') or 'reviewed'} ({d.get('url', '').split('/')[-1]})")
+PY
+    rm -f "$tmp.body" "$tmp.resp"
     echo "== $state: $run"
     ;;
   *) echo "unknown mode: $mode (use --approve or --reject)"; exit 2 ;;

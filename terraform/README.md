@@ -40,6 +40,11 @@ the state was first adopted; they are declared now, with import blocks in
 `http_request_dynamic_redirect`). Its R2 custom-domain binding is unadoptable
 for the same reason `audio.merecatholicity.com`'s is (below).
 
+The adoption was applied THROUGH the pipeline on 2026-09-09 (run 34316447061:
+8 imports, 2 creates, 0 changes, 0 destroys, approved with
+`scripts/ci_approve.sh` after a strict check of the summary against the
+expected fingerprint). `plan` answers `No changes`.
+
 ## Running from CI
 
 `.github/workflows/terraform.yml` fires only when `terraform/**` changes (or by
