@@ -456,7 +456,8 @@ since 2026-09-09): three least-privilege Cloudflare tokens — `CLOUDFLARE_API_T
 Terraform, `CLOUDFLARE_SITE_TOKEN` for the site build's publish and purge,
 `CLOUDFLARE_WORKERS_TOKEN` for the worker deploys (scopes in `terraform/README.md`) —
 plus `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (the Terraform token's derived R2 pair)
-and `TF_GITHUB_TOKEN` for the github provider. **No pull request ever sees any of them**:
+and `TF_GITHUB_TOKEN`, a fine-grained PAT scoped to the two repositories, for the github
+provider. **No pull request ever sees any of them**:
 PRs build and gate without credentials, and Terraform gives them `fmt` + `validate` only.
 Every action is pinned to a commit SHA (the repository requires it), Dependabot keeps the
 pins current, and secret scanning + push protection are on. The same values live in

@@ -92,11 +92,17 @@ ground):
   this token can reach every bucket; it can do nothing else.
 - `CLOUDFLARE_WORKERS_TOKEN` — **workers.yml**: Workers Scripts Write, D1 Write,
   Account Settings Read (account) + Workers Routes Write (zone).
-- `TF_GITHUB_TOKEN` — for the github provider. Today this is the owner's `gh`
-  CLI token (`repo`, `workflow`, `read:org`); a fine-grained PAT restricted to
-  the two repositories (Administration, Environments, Actions variables:
-  read/write; Metadata: read) is the better shape — `workflow` scope lets a
-  holder rewrite workflow files — and swapping it is one `gh secret set`.
+- `TF_GITHUB_TOKEN` — for the github provider: a **fine-grained PAT** (owner-
+  minted 2026-09-09, no expiry) restricted to `merecatholicity.com` and
+  `private-shelf`, with Administration, Environments, Variables and Pages read/
+  write and Metadata read — nothing else, so it cannot touch contents, secrets
+  or workflow files. It replaced the `gh` CLI token, whose `workflow` scope could
+  rewrite workflows. GitHub exposes no API for creating a PAT (classic or
+  fine-grained), so this is the one credential only the owner can mint: the
+  browser form, then one line in `~/.config/merecatholicity/ci.env` and one
+  `gh secret set`. Two org settings had to be flipped by hand for it, and
+  neither has a Terraform resource or a REST endpoint: *allow access via
+  fine-grained PATs* and *fine-grained PATs must expire* (unchecked).
 
 **No pull request ever sees a secret**, not even from this repository: a PR's
 HCL is what `plan` evaluates, and an `http` or `external` data source in it
