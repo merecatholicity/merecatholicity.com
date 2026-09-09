@@ -620,6 +620,11 @@ the plan is the real defence.
 
 ## Setup from a fresh clone
 
+> **History was rewritten on 2026-09-09** (pack 554 MB → 153 MB): every generated artifact that
+> ever sat at the root or under `docs/` was stripped from every commit, sources untouched, HEAD
+> tree identical. A clone from before that day cannot `git pull` its way forward — re-clone.
+
+
 ```sh
 git clone git@github.com:merecatholicity/merecatholicity.com.git
 cd merecatholicity.com
