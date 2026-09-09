@@ -1487,11 +1487,13 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   .mc-sheet-scrim {
     position: fixed; inset: 0; background: rgba(0, 0, 0, 0.42); z-index: 60;
     opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0.2s ease;
+    touch-action: none;
   }
   .mc-sheet-scrim.on { opacity: 1; visibility: visible; }
   .mc-sheet {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
     max-height: 86vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain; touch-action: pan-y;
     background: var(--surface); border-radius: 18px 18px 0 0;
     box-shadow: 0 -6px 30px rgba(0, 0, 0, 0.28);
     padding: 0.3rem 1rem calc(1.2rem + env(safe-area-inset-bottom, 0px));
@@ -1989,11 +1991,12 @@ mc-sidebar { display: none; }
   .mc-sheet-scrim {
     position: fixed; inset: 0; background: rgba(20, 12, 12, 0.45); z-index: 70;
     opacity: 0; visibility: hidden; transition: opacity 0.2s ease;
+    touch-action: none;
   }
   .mc-sheet-scrim.on { opacity: 1; visibility: visible; }
   .mc-sheet {
     position: fixed; left: 50%; top: 50%; transform: translate(-50%, -46%);
-    width: min(30rem, 92vw); max-height: 86vh; overflow-y: auto;
+    width: min(30rem, 92vw); max-height: 86vh; overflow-y: auto; overscroll-behavior: contain;
     background: var(--surface); border: 1px solid var(--rule); border-radius: 16px;
     box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35); padding: 1.3rem 1.5rem 1.5rem; z-index: 71;
     opacity: 0; visibility: hidden; transition: opacity 0.2s ease, transform 0.2s ease;
@@ -2002,6 +2005,23 @@ mc-sidebar { display: none; }
   .mc-sheet-grip { display: none; }
   .mc-sheet-head { margin: 0 0 0.7rem; font-size: 1.25rem; color: var(--ink); }
 }
+
+/* While a sheet is open, the sheet is the ONLY thing that scrolls (2026-09-09).
+   The live report, on phones: scrolling the Settings sheet usually moved the
+   sheet, but sometimes moved the page behind it instead. Three roads let a
+   touch through, and each is closed here or in mc-sheet:
+     - scroll CHAINING: a sheet already at its top or bottom edge (or too short
+       to scroll at all) hands the gesture to the next scroller up, which is the
+       document. `overscroll-behavior: contain` on the sheet ends the chain there.
+     - the SCRIM: a drag on the dimmed page is a drag on the document.
+       `touch-action: none` makes it inert.
+     - the DOCUMENT itself: belt and braces, and the only road iOS has always
+       honoured — while a sheet is open <mc-sheet> puts `mc-sheet-open` on
+       <html>, fixes the body in place at the offset it was scrolled to (the
+       inline `top`), and puts it back on close. There is then nothing behind
+       the sheet that CAN scroll, whatever the gesture. */
+html.mc-sheet-open, html.mc-sheet-open body { overflow: hidden; }
+html.mc-sheet-open body { position: fixed; left: 0; right: 0; width: 100%; }
 
 /* The desktop close X (P2-f) — the modal needs a visible dismissal since the grip
    is hidden on desktop; on mobile the grip + swipe-down cover it, so it stays
@@ -2124,6 +2144,7 @@ body.mc-app > footer { display: none; }
   .mc-db-notif { position: relative; }
   .mc-db-menu {
     position: absolute; top: calc(100% + 0.5rem); right: 0; width: 20rem; max-height: 80vh; overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-lg);
     box-shadow: var(--shadow-2); padding: 0.4rem 0.9rem 0.9rem; z-index: 60;
   }

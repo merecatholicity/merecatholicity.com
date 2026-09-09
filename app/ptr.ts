@@ -92,7 +92,10 @@ export function installPtr() {
     if (busy) return false;
     if (window.scrollY > 0) return false;
     const el = target as Element | null;
-    if (el && el.closest && el.closest('textarea,input,select,[data-no-ptr],.mc-dock,.wall-lightbox,.mc-sheet')) return false;
+    if (el && el.closest && el.closest('textarea,input,select,[data-no-ptr],.mc-dock,.wall-lightbox,.mc-sheet,.mc-sheet-scrim')) return false;
+    /* While a sheet holds the document lock the body is fixed and scrollY reads
+       0 whatever the page's real offset — a pull would be a lie. */
+    if (document.documentElement.classList.contains('mc-sheet-open')) return false;
     /* A scrolled inner pane owns the gesture, not us. */
     let n: any = el;
     while (n && n !== document.body) {

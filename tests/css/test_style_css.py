@@ -235,5 +235,31 @@ class NoCompileDirectivesLeak(unittest.TestCase):
         self.assertIn("table.reception", self.css)
 
 
+class SheetOwnsTheScroll(unittest.TestCase):
+    """While a sheet is open, the sheet is the only thing that scrolls (2026-09-09).
+
+    The live report, on phones: scrolling the Settings sheet sometimes scrolled
+    the page behind it. The source rules are held by tests/js/sheet_lock.test.mjs;
+    this class proves the BUILD carries them, since a Tailwind/Lightning pass
+    that dropped or rewrote them would ship the bug back silently.
+    """
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    def test_document_lock_rule_survives(self):
+        self.assertRegex(self.css, r"html\.mc-sheet-open body\{[^}]*position:fixed",
+                         "the html.mc-sheet-open body lock did not survive the build")
+
+    def test_sheet_contains_its_overscroll(self):
+        # two sheet blocks (phone + desktop) and the desktop account menu: three
+        self.assertGreaterEqual(self.css.count("overscroll-behavior:contain"), 3,
+                                "overscroll-behavior: contain is missing from a sheet or menu rule")
+
+    def test_scrim_is_inert_to_touch(self):
+        self.assertRegex(self.css, r"\.mc-sheet-scrim\{[^}]*touch-action:none",
+                         "the scrim lost touch-action: none in the build")
+
+
 if __name__ == "__main__":
     unittest.main()

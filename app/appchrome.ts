@@ -372,6 +372,37 @@ class McAppbar extends LitElement {
 }
 customElements.define('mc-appbar', McAppbar);
 
+/* ---- the document scroll lock a sheet holds while it is open ----
+   Live report (2026-09-09, phones): scrolling the Settings sheet sometimes
+   scrolled the page behind it. CSS closes the chaining and scrim roads (see
+   `.mc-sheet` / `html.mc-sheet-open` in styles/main.css); this is the third,
+   and the one every engine honours: with the body fixed in place there is
+   nothing behind the sheet that can scroll. The scroll offset is kept in the
+   body's inline `top` so the page does not visibly move, and restored on
+   unlock. One lock for the document, however many sheets ask. */
+let lockY: number | null = null;
+function lockDocument() {
+  if (lockY !== null) return;
+  lockY = window.scrollY || 0;
+  const body = document.body;
+  /* Desktop: the modal is the same element, and hiding the document's
+     scrollbar would shift the whole layout by its width. Pad it back. */
+  const gap = window.innerWidth - document.documentElement.clientWidth;
+  body.style.top = (-lockY) + 'px';
+  if (gap > 0) body.style.paddingRight = gap + 'px';
+  document.documentElement.classList.add('mc-sheet-open');
+}
+function unlockDocument() {
+  if (lockY === null) return;
+  const y = lockY; lockY = null;
+  document.documentElement.classList.remove('mc-sheet-open');
+  document.body.style.top = '';
+  document.body.style.paddingRight = '';
+  /* Instant, never smooth: this is putting the page back where it was, not
+     travelling anywhere. */
+  try { window.scrollTo({ top: y, left: 0, behavior: 'instant' as ScrollBehavior }); } catch (e) { window.scrollTo(0, y); }
+}
+
 /* ---- the reusable slide-up sheet (the app-dialog primitive) ---- */
 class McSheet extends LitElement {
   static properties = { open: { attribute: false }, heading: { attribute: false } };
@@ -401,6 +432,7 @@ class McSheet extends LitElement {
   disconnectedCallback() {
     if (this._onKey) document.removeEventListener('keydown', this._onKey, true);
     this._onKey = null;
+    if (this.open) unlockDocument();   // a sheet that leaves the document must not leave it locked
     super.disconnectedCallback();
   }
   _focusables(): HTMLElement[] {
@@ -432,6 +464,8 @@ class McSheet extends LitElement {
     if (restore && typeof restore.focus === 'function' && document.contains(restore)) { try { restore.focus(); } catch (e) { /* gone */ } }
   }
   updated(changed: Map<string, unknown>) {
+    /* The document is locked for exactly as long as the sheet is open. */
+    if (changed.has('open')) { if (this.open) lockDocument(); else unlockDocument(); }
     /* The body host is a static template node, so Lit keeps whatever we append
        into it across re-renders (the McInbox dm-search idiom). Swap on new node. */
     const body = this.querySelector('.mc-sheet-body');
