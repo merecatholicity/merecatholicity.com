@@ -129,6 +129,7 @@ jobs:
           make bundle
           if [ ! -f docs/book.html ]; then
             echo "::notice::site cache miss — building the site so the corpus tests have something to read"
+            make logos      # make html ends with linkcheck, and logos.html links the .docx (2026-09-09)
             make content
             make html
           fi
