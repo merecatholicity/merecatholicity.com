@@ -99,11 +99,15 @@ jobs:
           key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
 
       # `make tests` is not entirely hermetic: tests/css reads the built
-      # stylesheet, and tests/py/test_partials_baked + test_librarian_sources
-      # read the built corpus. build.yml builds all of that before it tests;
-      # this job restores what build.yml cached (restore-only — build.yml is the
-      # one that saves), always rebuilds the stylesheet so the freshness test
-      # compares like with like, and only on a cold cache builds the site.
+      # stylesheet, tests/py/test_partials_baked + test_librarian_sources read
+      # the built corpus, and test_stamp_versions compares the keys the commit
+      # carries against the bundles on disk. build.yml builds all of that
+      # before it tests; this job restores what build.yml cached (restore-only
+      # — build.yml is the one that saves), always rebuilds the stylesheet AND
+      # the bundles so every freshness test compares like with like (the
+      # cache's bundles are the PREVIOUS commit's, and once the tracked pages
+      # are this commit's the old keys no longer match — 2026-09-09), and only
+      # on a cold cache builds the corpus.
       - name: Restore the built site
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -122,9 +126,9 @@ jobs:
       - name: Build what the tests read
         run: |
           make css
+          make bundle
           if [ ! -f docs/book.html ]; then
             echo "::notice::site cache miss — building the site so the corpus tests have something to read"
-            make bundle
             make content
             make html
           fi
