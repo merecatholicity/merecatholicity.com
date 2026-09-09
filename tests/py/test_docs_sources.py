@@ -50,9 +50,10 @@ def buildable():
     # the book, the bundles, the stylesheet and the generated data files
     names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'comments.js',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
-              'library-order.json', 'kjv.json', 'dr.json',
-              os.path.join('emoji', 'emoji-data.json'),
-              os.path.join('avatars', 'presets', 'index.json')}
+              'library-order.json', 'kjv.json', 'dr.json'}
+    # emoji-data.json and avatars/presets/index.json are NOT here: no build
+    # target produces them. They come from one-off tooling and are regenerated
+    # by hand when the packs change, which makes them source like the images.
     return names
 
 
