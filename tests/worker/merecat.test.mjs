@@ -44,8 +44,8 @@ test('every dial is read through the kernel, so a bad row yields its default', (
 test('the write is an allowlist MAP with coercion, and only the kernel dials are in it', () => {
   const m = index.slice(index.indexOf('const MERECAT_CONFIG_KEYS'), index.indexOf('async function handleMerecatConfigSet'));
   const keys = [...m.matchAll(/^  ([a-z_]+): \(v\) =>/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(keys, ['band_weights', 'global_daily', 'max_tokens', 'mention_effort', 'model', 'persona_file_hash',
-    'reasoning_default', 'reasoning_max', 'reasoning_on', 'temperature', 'topk', 'user_cap_on', 'user_daily'].sort());
+  assert.deepEqual(keys, ['band_weights', 'global_daily', 'last_ingest', 'last_ingest_by', 'max_tokens', 'mention_effort', 'model',
+    'persona_file_hash', 'reasoning_default', 'reasoning_max', 'reasoning_on', 'temperature', 'topk', 'user_cap_on', 'user_daily'].sort());
   for (const k of ['mention_effort', 'reasoning_default', 'reasoning_max']) assert.ok(new RegExp(`${k}: \\(v\\) => Merecat\\.effortParse\\(`).test(m), k);
   assert.ok(/temperature: \(v\) => String\(Merecat\.temperatureFrom\(/.test(m));
   assert.ok(/band_weights: \(v\) => Merecat\.bandWeightsCsv\(Merecat\.bandWeightsFrom\(/.test(m));
@@ -98,4 +98,22 @@ test('the client is told, so the selector can show only what is allowed', () => 
   assert.ok(/if \(!r \|\| !r\.on\) \{ modeRow\.hidden = true; return; \}/.test(c), 'the selector hides when the admin has reasoning off');
   assert.ok(/core\.merecatEffortClamp\(cap, lv\) === lv/.test(c), 'the selector offers nothing above the ceiling');
   assert.ok(/a\.effort = mode;/.test(client) && !/a\.instant = true/.test(client), 'the ask frame sends the level, and the retired instant flag is gone');
+});
+
+test('the pipeline\'s door: the ingest key opens the three librarian endpoints and nothing else', () => {
+  const ri = lib.slice(lib.indexOf('export async function requireIngest'), lib.indexOf('export async function requireIngest') + 900);
+  assert.ok(/env\.MERECAT_INGEST_KEY/.test(ri) && /return requireAdmin\(env, k\)/.test(ri), 'the ingest key or an admin key');
+  assert.ok(/diff \|= a\[i\] \^ b\[i\]/.test(ri), 'compared in constant time');
+  for (const fn of ['handleMerecatWorks', 'handleMerecatConfigSet', 'handleMerecatIngest']) {
+    const h = index.slice(index.indexOf('async function ' + fn + '('), index.indexOf('async function ' + fn + '(') + 500);
+    assert.ok(/requireIngest\(env/.test(h), fn + ' must accept the ingest key');
+  }
+  const admins = [...index.matchAll(/requireIngest\(env/g)].length;
+  assert.equal(admins, 3, 'exactly the three librarian endpoints accept the ingest key');
+  const f = index.slice(index.indexOf('async fetch(request: Request'), index.indexOf('for (const r of ROUTES)'));
+  assert.ok(/url\.hostname\.endsWith\('\.workers\.dev'\)/.test(f) && /INGEST_DOORS\.indexOf\(path\) !== -1/.test(f),
+    'workers.dev must serve only the ingest doors');
+  assert.ok(/INGEST_DOORS = \['\/api\/merecat\/works', '\/api\/merecat\/config', '\/api\/merecat\/ingest'\]/.test(index));
+  const wr = readFileSync(join(root, 'comments-worker', 'wrangler.jsonc'), 'utf8');
+  assert.ok(/"workers_dev": true/.test(wr) && /"preview_urls": false/.test(wr), 'the workers.dev route is declared, previews are not');
 });

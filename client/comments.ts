@@ -10275,6 +10275,9 @@ trace('submit: feed post');
         wrap.appendChild(el('p', 'comments-status',
           'From librarian/config.yml, pushed by the pipeline: temperature ' + b.temperature + ', top-k ' + b.topk +
           ', answer ceiling ' + b.max_tokens + ' tokens, band weights ' + (b.band_weights || '(default)') + '.'));
+        wrap.appendChild(el('p', 'comments-status', b.last_ingest
+          ? 'Shelf last pushed ' + b.last_ingest + ' by ' + (b.last_ingest_by === 'local' ? 'a hand run' : 'pipeline run ' + b.last_ingest_by) + '.'
+          : 'The shelf has not been pushed through the pipeline yet.'));
       }).catch(function () {
         wrap.textContent = '';
         wrap.appendChild(el('p', 'comments-status', 'Could not reach the status endpoint.'));

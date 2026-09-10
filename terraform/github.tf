@@ -49,6 +49,17 @@ resource "github_repository" "private_shelf" {
   }
 }
 
+# The merecat workflow reads the private shelf with this key: read-only, one
+# repository, revocable here by emptying the variable (a destroy that the
+# plan's destroy law will ask to be argued for, as it should).
+resource "github_repository_deploy_key" "private_shelf_ci" {
+  count      = var.private_shelf_deploy_key == "" ? 0 : 1
+  repository = github_repository.private_shelf.name
+  title      = "merecatholicity.com CI: the librarian ingest (read-only)"
+  key        = var.private_shelf_deploy_key
+  read_only  = true
+}
+
 resource "github_repository" "site" {
   allow_auto_merge            = false
   allow_forking               = true

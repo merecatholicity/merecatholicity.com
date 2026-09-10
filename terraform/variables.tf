@@ -15,3 +15,15 @@ variable "github_owner" {
   type        = string
   default     = "merecatholicity"
 }
+
+variable "private_shelf_deploy_key" {
+  description = <<-EOT
+    The PUBLIC half of the read-only deploy key the merecat workflow uses to clone
+    the private shelf (2026-09-10). Empty = no key resource. The private half is the
+    Actions secret PRIVATE_SHELF_DEPLOY_KEY on the site repository; the public half
+    is public by nature and rides the Actions variable PRIVATE_SHELF_DEPLOY_PUBLIC_KEY,
+    which terraform.yml hands in as TF_VAR_private_shelf_deploy_key.
+  EOT
+  type        = string
+  default     = ""
+}

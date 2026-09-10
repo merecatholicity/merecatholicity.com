@@ -76,7 +76,7 @@ Only Terraform ever waits for a human (or the operator): see §3.
 
 ---
 
-## 2. The four workflows
+## 2. The five workflows
 
 ### 2.1 `build.yml` — **Build** (every push and PR)
 
@@ -194,6 +194,32 @@ Weekly grouped PRs bumping the SHA-pinned actions. Such a PR carries no secrets 
 so it can only fail the gates, never touch production. Merge it; the next push to `main`
 ships with the new pins.
 
+### 2.5 `merecat.yml` — **merecat** (the librarian's shelf, since 2026-09-10)
+
+*Triggers:* `push` to `main` touching what the librarian is made of — `librarian/**` (the
+manifest, persona, dials), `content/**`, `resources/**`, `book/**`, `partials/**`,
+`scripts/content.py`, `scripts/nav.py`, the workflow itself; `schedule` daily at 04:10 UTC
+(finishes a budgeted ingest, prunes works that left the manifest, takes the private shelf);
+`workflow_dispatch` (`reason`, `only`) — which is how the private shelf's own pushes arrive
+(a one-line workflow in that repository runs `gh workflow run merecat.yml`). Never on a
+`pull_request`. *Concurrency:* `merecat`, never cancelled. *Permissions:* `contents: read`,
+`actions: read` (to find the Build).
+
+*The `ingest` job:* wait for this commit's **Build** to finish (a schedule/dispatch takes the
+newest successful Build on `main` and checks out its sha); restore the built site from the
+`site-2-<sha>` cache — **an exact hit is required**, a fallback would ingest an older site;
+`git checkout -- docs` (the commit wins); clone the private shelf with the read-only deploy
+key (absent → its works are skipped, and skipping never prunes); restore the parse ledger
+(`merecat-ledger-*`); run `librarian/ingest.py --push --ledger --summary` with
+`MC_INGEST_KEY` against **the worker's workers.dev hostname** (`MERECAT_INGEST_API`
+variable, default `https://merecatholicity-comments.support-609.workers.dev/api/merecat`)
+— the zone's Bot Fight Mode turns a GitHub runner away and cannot be skipped on the Free
+plan, and that hostname serves nothing but the three librarian endpoints, each behind the
+ingest key; save the ledger. The job summary says what was pushed, skipped, pruned, and
+whether the D1 row budget stopped it (the next run resumes). **It needs no Cloudflare token.**
+Without `MC_INGEST_KEY` it exits 0 with a notice: the shelf stays a hand job (`make
+librarian`) until the secret exists.
+
 ---
 
 ## 3. The approval gate (Terraform)
@@ -246,6 +272,11 @@ are on, and would refuse the push.
 | `CLOUDFLARE_WORKERS_TOKEN` | secret | `workers.yml` | account token `merecatholicity-ci-workers` — Workers Scripts Write, D1 Write, Account Settings Read (account); Workers Routes Write (zone) |
 | `TF_GITHUB_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT**, no expiry, on `merecatholicity.com` + `private-shelf` only: Administration, Environments, Variables, Pages read/write; Metadata read |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | **variables** | all | public ids; **Terraform-managed** (`github_actions_variable`) — workflows carry hardcoded fallbacks too |
+| `MC_INGEST_KEY` | secret | `merecat.yml` | the worker secret `MERECAT_INGEST_KEY` (set with `wrangler secret put`, the same value `gh secret set` here): honoured by `/api/merecat/{works,config,ingest}` and nothing else — a leak could rewrite the shelf, never touch the platform |
+| `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf`; its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
+| `PRIVATE_SHELF_DEPLOY_PUBLIC_KEY` | **variable** | `terraform.yml` (`TF_VAR_private_shelf_deploy_key`) | the public half; empty = no key resource |
+| `MERECAT_INGEST_API` | **variable** (optional) | `merecat.yml` | overrides the ingest URL; default is the worker's workers.dev hostname |
+| `SITE_DISPATCH_TOKEN` | secret **in the private-shelf repository** | its `notify-site.yml` | fine-grained PAT on `merecatholicity.com` only, *Actions: write* + *Metadata: read* — enough to `gh workflow run merecat.yml`, nothing more |
 
 Environments: **`github-pages`** (deploy-pages' own; no rules) and
 **`terraform-production`** (§3). Repository policy (all Terraform-managed):
@@ -400,8 +431,12 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 ## 10. Exceptions — done by hand, on purpose, with the reason
 
 1. **Worker secrets** — `wrangler secret put`; a secret does not belong in git or CI.
-2. **The librarian ingest** (`make librarian`) — needs the private shelf (a separate private
-   clone) and the owner's admin key.
+2. **The pipeline's own credentials for the librarian** — the ingest is a job since
+   2026-09-10 (§2.5), but its credentials are minted by hand like every other:
+   `MERECAT_INGEST_KEY` (`wrangler secret put`, mirrored as the Actions secret
+   `MC_INGEST_KEY`), the private shelf's deploy key pair (`ssh-keygen`; the private half a
+   secret, the public half a variable Terraform declares on the private repository), and
+   the private repository's dispatch PAT. `make librarian` survives as the hand road.
 3. **The bootstrap secrets and the state bucket** — `gh secret set` for the five secrets;
    `merecatholicity-tfstate` unmanaged. A credential cannot be minted by the automation it
    authorises; a state store cannot manage itself.
@@ -439,6 +474,8 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 - **a gated environment** → create it via the API with its reviewers *before* any workflow
   names it; then import.
 - **a deploy-mechanism change** → audit every trigger (rule 9 above).
+- **a new place the librarian reads from** (a source directory, a generator) → the
+  `paths:` list in `merecat.yml`, or a change there never rebuilds the shelf.
 
 *Written 2026-09-09, the day the pipeline took over. If this document and the workflows
 disagree, the workflows are right and this document is a bug — fix it in the same commit.*

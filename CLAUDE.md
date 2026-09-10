@@ -45,7 +45,9 @@ deploy (dropping a database, force-pushing history, deleting a bucket, revoking 
    change, or a written exception.
 6. **Never a destroy or replace from CI** — the plan fails on any delete; only a
    `workflow_dispatch` with `allow_destroy=true` gets past, deliberately.
-7. **Workers ship on push** (`workers.yml`: gates → D1 ledger → `wrangler deploy`).
+7. **Workers ship on push** (`workers.yml`: gates → D1 ledger → `wrangler deploy`). **So does the
+   librarian's shelf** (`merecat.yml`: waits for the Build, ingests against its `docs/` and the
+   private shelf, incrementally, daily resume; `make librarian` is the hand road).
    `make worker-deploy` is the emergency road; `wrangler secret put` is the only home for
    worker secrets.
 8. **Never hand-edit or commit the generated half of `docs/`**; never bump a `?v=` by hand
@@ -221,4 +223,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · The Cloudflare free-tier usage monitor · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · `contact-worker/`

@@ -8,6 +8,12 @@
   "name": "merecatholicity-comments",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-18",
+  // The workers.dev hostname is the pipeline's door for the librarian ingest
+  // ONLY (the zone's Bot Fight Mode turns a GitHub runner away and cannot be
+  // skipped on the Free plan). src/index.ts answers 404 there for every path
+  // but /api/merecat/{works,config,ingest}, which demand MERECAT_INGEST_KEY.
+  "workers_dev": true,
+  "preview_urls": false,
   // D1 migrations for the persistent comments DB live in the default migrations/
   // directory (wrangler auto-discovers it — no config key needed), applied with
   // `wrangler d1 migrations apply merecatholicity-comments --remote` (see `make

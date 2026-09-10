@@ -27,11 +27,11 @@ source bytes or manifest entry changed are re-sent, so re-running is cheap
 and an interrupted run resumes where it left off. Removing an entry from
 `works.yml` prunes it from the bot on the next full push.
 
-**Change the voice or rules.** Edit `persona.md`, run `make librarian`.
+**Change the voice or rules.** Edit `persona.md`, commit, push — `merecat.yml` runs the ingest against the freshly built site (or run `make librarian` by hand).
 No redeploy: the worker reads the persona from its database (isolates pick
 the change up within five minutes).
 
-**Change the model or caps.** Edit `config.yml`, run `make librarian`.
+**Change the model, caps, temperature or band weights.** Edit `config.yml`, commit, push (or `make librarian`). The reasoning dials are set on the merecat admin page.
 The default model is the strongest answer-per-neuron on the free Workers AI
 catalog; `config.yml` explains the trade if you want a bigger one.
 
@@ -40,11 +40,13 @@ catalog; `config.yml` explains the trade if you want a bigger one.
 Works you cannot host still become part of the librarian's knowledge:
 
 1. Put the text as plain `.txt` or `.md` into `librarian/private/` — a
-   submodule of the PRIVATE repo `merecatholicity/private-shelf`, never
-   served and never carried by the public repo (which records only a
-   commit pointer), so the text lives in your private repo and inside the
-   retrieval database, where it surfaces as brief quoted excerpts with
-   attribution. Commit and push inside `librarian/private/` after adding. Lines starting `#`, `##`, or
+   SEPARATE clone of the PRIVATE repo `merecatholicity/private-shelf` (never a
+   submodule: the Pages builder refuses a tree that names a private one), never
+   served and never carried by the public repo, so the text lives in your private
+   repo and inside the retrieval database, where it surfaces as brief quoted
+   excerpts with attribution. Commit and push inside `librarian/private/` after
+   adding; the private repo's own workflow dispatches `merecat.yml`, which clones
+   the shelf with a read-only deploy key and ingests it. Lines starting `#`, `##`, or
    `###` become chapter labels for better retrieval.
 2. Add a works.yml entry whose `url` is the purchase link:
 

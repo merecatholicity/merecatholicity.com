@@ -183,6 +183,7 @@ import {
   recordIps,
   refreshTopicStats,
   requireAdmin,
+  requireIngest,
   rootAdmins,
   shadowExcl,
   isShadowBanned,
@@ -4203,7 +4204,7 @@ async function handleMerecatBackends(request: any, env: any) {
   const today = (g && g.q) || 0;
   return json({ ok: true, backend: 'cloudflare', model: cfg.model, mention_effort: cfg.mention_effort,
     reasoning: merecatReasoningView(cfg), temperature: cfg.temperature, band_weights: cfg.band_weights,
-    max_tokens: cfg.max_tokens, topk: cfg.topk,
+    max_tokens: cfg.max_tokens, topk: cfg.topk, last_ingest: cfg.last_ingest, last_ingest_by: cfg.last_ingest_by,
     cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
 }
 
@@ -4318,7 +4319,7 @@ async function handleMerecatChatSave(request: any, env: any) {
 async function handleMerecatIngest(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await requireIngest(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const mode = String(data.mode || '');
   const work = data.work || {};
   const id = String(work.id || '');
@@ -4652,7 +4653,7 @@ async function handleMerecatAbout(request: any, env: any) {
 async function handleMerecatWorks(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await requireIngest(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const works = [];
   let tb1 = 0, tb2 = 0;
   const rows = await env.LIBDB.prepare(
@@ -4700,6 +4701,8 @@ const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
   topk: (v) => String(Math.max(1, Math.min(40, Math.floor(Number(v)) || MERECAT_DEFAULTS.topk))),
   max_tokens: (v) => String(Math.max(64, Math.min(8192, Math.floor(Number(v)) || MERECAT_DEFAULTS.max_tokens))),
   persona_file_hash: (v) => String(v).slice(0, 64),
+  last_ingest: (v) => String(v).slice(0, 80),
+  last_ingest_by: (v) => String(v).slice(0, 80),
 };
 
 /* Persona / dials push: from librarian/config.yml + persona.md through the
@@ -4707,7 +4710,7 @@ const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
 async function handleMerecatConfigSet(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  if (!(await requireIngest(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const stmts: any[] = [];
   const put = (k: any, v: any) => stmts.push(env.LIBDB.prepare(
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
@@ -4895,6 +4898,8 @@ async function handleHandleCard(request: any, env: any, url: any) {
    POST origin guard, the two websocket upgrades) stay explicit in fetch. */
 type Route = { m: string; p: string;
   fn: (request: Request, env: Env, ctx: ExecutionContext, url: URL) => Promise<Response> | Response };
+const INGEST_DOORS = ['/api/merecat/works', '/api/merecat/config', '/api/merecat/ingest'];
+
 const ROUTES: Route[] = [
   { m: 'GET', p: '/api/comments', fn: (request, env, ctx, url) => handleGet(request, env, url) },
   { m: 'GET', p: '/api/comments/config', fn: (request, env, ctx, url) => handleConfig(request, env, url) },
@@ -5018,6 +5023,18 @@ export default {
     try {
       const url = new URL(request.url);
       const path = url.pathname.replace(/\/+$/, '') || '/';
+
+      /* The workers.dev hostname exists for ONE caller: the pipeline's ingest,
+         which the zone's Bot Fight Mode would turn away at merecatholicity.com
+         (it cannot be skipped by any rule on the Free plan, and a GitHub runner
+         is exactly what it fights). That second front door opens onto nothing
+         but the three librarian endpoints, each of which demands the ingest
+         key; every other path answers 404 there as though the worker did not
+         exist. The site's own origin is untouched. */
+      if (url.hostname.endsWith('.workers.dev') &&
+          !(request.method === 'POST' && INGEST_DOORS.indexOf(path) !== -1)) {
+        return json({ ok: false, error: 'Not found.' }, 404);
+      }
 
       /* Pretty profile URLs: /@handle is served by this worker — it fetches the
          static profile.html from the origin (which is NOT routed here, so no loop)

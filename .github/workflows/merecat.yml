@@ -1,0 +1,159 @@
+# merecat, the librarian, built by the pipeline.
+#
+# Until 2026-09-10 the librarian's shelf was fed by hand: `make librarian` on
+# the owner's machine, which parses the built site and the private shelf into
+# chunks and pushes only the works whose chunks changed (the server keeps a
+# hash per work). This moves that road into the pipeline. A push to main that
+# touches what merecat is made of — its mind (librarian/**: the manifest, the
+# persona, the dials) or the library it reads (the hand pages, the corpus
+# sources, the book, the partials that ride into every page) — runs the same
+# ingest here, against the site the Build workflow just produced. A daily run
+# finishes anything a day's D1 write budget cut short, prunes works that left
+# the manifest, and picks up the private shelf. The private shelf's own pushes
+# reach this workflow by `workflow_dispatch` from a one-line workflow in that
+# repository (docs/architecture/CICD.md §4 names the token).
+#
+# What makes it cheap: the parse ledger (librarian/.ledger.json, cached
+# between runs) remembers every source's signature, so an unchanged work is
+# not parsed again; the server's hash means an unchanged work is not pushed
+# again; and a run that stops at the row budget exits 0 and says so in the
+# job summary — the next run resumes for free.
+#
+# What it needs, and what it does NOT: the built docs/ tree (restored from the
+# Build workflow's cache — an EXACT hit is required; a fallback would ingest
+# an older site); the private shelf (a read-only deploy key, PRIVATE_SHELF_DEPLOY_KEY;
+# absent, its 31 works are skipped, never pruned); and MC_INGEST_KEY, the
+# worker's own credential for the three librarian endpoints. It needs no
+# Cloudflare token at all. It reaches the worker on its workers.dev hostname,
+# because the zone's Bot Fight Mode turns a GitHub runner away and cannot be
+# skipped on the Free plan; that hostname serves nothing but the ingest doors.
+# Never on a pull_request: no secret is present there (Principle 3).
+
+name: merecat
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'librarian/**'
+      - 'content/**'
+      - 'resources/**'
+      - 'book/**'
+      - 'partials/**'
+      - 'scripts/content.py'
+      - 'scripts/nav.py'
+      - '.github/workflows/merecat.yml'
+  schedule:
+    - cron: '10 4 * * *'   # 04:10 UTC daily: resume a budgeted ingest, prune, take the private shelf
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Why (e.g. private-shelf push, or a hand run)'
+        required: false
+        default: ''
+      only:
+        description: 'Comma list of work ids to ingest, or empty for the whole manifest'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: merecat
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # true/false only — the secret's presence, never its value
+      HAVE_SHELF_KEY: ${{ secrets.PRIVATE_SHELF_DEPLOY_KEY != '' }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          fetch-depth: 0
+
+      - name: Which site to ingest against
+        id: site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The ingest reads the BUILT site. On a push that is this commit's
+          # Build; wait for it (it is running alongside this workflow). On a
+          # schedule or a dispatch it is the newest successful Build on main.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            sha="${{ github.sha }}"
+            for i in $(seq 1 80); do
+              st=$(gh run list --workflow Build --branch main --limit 10 --json headSha,status,conclusion \
+                     --jq ".[] | select(.headSha==\"$sha\") | \"\(.status) \(.conclusion)\"" | head -1)
+              case "$st" in
+                "completed success") break ;;
+                completed*) echo "::error::the Build of $sha ended with: $st — nothing to ingest against"; exit 1 ;;
+              esac
+              sleep 15
+            done
+            if [ "$st" != "completed success" ]; then echo "::error::the Build of $sha did not finish in 20 minutes"; exit 1; fi
+          else
+            sha=$(gh run list --workflow Build --branch main --status success --limit 1 --json headSha --jq '.[0].headSha')
+            [ -n "$sha" ] || { echo "::error::no successful Build on main to ingest against"; exit 1; }
+            git checkout -q "$sha"
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "ingesting against the site built from $sha"
+
+      - name: Restore the built site (exact hit required)
+        id: docs
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: docs
+          key: site-2-${{ steps.site.outputs.sha }}
+
+      - name: The commit wins over the cache for everything git tracks
+        run: |
+          if [ "${{ steps.docs.outputs.cache-hit }}" != "true" ]; then
+            echo "::error::no site cache for ${{ steps.site.outputs.sha }} — the ingest reads the built pages and will not guess from an older build"
+            exit 1
+          fi
+          git checkout -- docs
+          git clean -fd -- docs
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - run: python3 -m pip install --quiet pyyaml
+
+      - name: The private shelf (read-only deploy key; skipped when absent, never pruned)
+        if: env.HAVE_SHELF_KEY == 'true'
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: merecatholicity/private-shelf
+          ssh-key: ${{ secrets.PRIVATE_SHELF_DEPLOY_KEY }}
+          path: librarian/private
+          persist-credentials: false
+
+      - name: The parse ledger
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: librarian/.ledger.json
+          key: merecat-ledger-${{ github.run_id }}
+          restore-keys: merecat-ledger-
+
+      - name: Ingest
+        env:
+          MC_INGEST_KEY: ${{ secrets.MC_INGEST_KEY }}
+          MERECAT_API: ${{ vars.MERECAT_INGEST_API || 'https://merecatholicity-comments.support-609.workers.dev/api/merecat' }}
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          if [ -z "$MC_INGEST_KEY" ]; then
+            echo "::notice::MC_INGEST_KEY is not set — the ingest stays a hand job (make librarian) until it is"
+            exit 0
+          fi
+          if [ -d librarian/private ]; then echo "private shelf present"; else echo "::notice::no private shelf: its works are skipped this run (skipping never prunes)"; fi
+          args="--push --api $MERECAT_API --ledger librarian/.ledger.json --summary $GITHUB_STEP_SUMMARY"
+          if [ -n "$ONLY" ]; then args="$args --only $ONLY"; fi
+          cd librarian && python3 ingest.py $args

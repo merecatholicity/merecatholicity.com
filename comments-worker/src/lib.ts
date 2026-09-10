@@ -1877,6 +1877,22 @@ export async function requireAdmin(env: any, key: any) {
   return !!key && (await isAdminHash(env, await sha256hex(key)));
 }
 
+/* The pipeline's credential for the three librarian endpoints (/works,
+   /config, /ingest): the worker secret MERECAT_INGEST_KEY, or an admin key as
+   before. A runner secret that leaked could at worst rewrite the shelf — it
+   opens nothing else on the platform. Compared in constant time. */
+export async function requireIngest(env: any, key: any) {
+  const k = String(key || '');
+  const want = String(env.MERECAT_INGEST_KEY || '');
+  if (want && k.length === want.length) {
+    const a = new TextEncoder().encode(k), b = new TextEncoder().encode(want);
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+    if (diff === 0) return true;
+  }
+  return requireAdmin(env, k);
+}
+
 /* Lock or unlock an identity: a reversible disable that logs the holder out
    and refuses every keyed interaction until reversed. */
 export const MERECAT_DEFAULTS = {
@@ -1895,6 +1911,8 @@ export const MERECAT_DEFAULTS = {
   reasoning_default: Merecat.reasoningDefaults.deflt,
   reasoning_max: Merecat.reasoningDefaults.max,
   mention_effort: Merecat.reasoningDefaults.mention,
+  last_ingest: '',        // stamped by ingest.py at the end of every push (ISO time)
+  last_ingest_by: '',     // the CI run id, or "local"
 };
 /* The reasoning dials as the client reads them (a courtesy copy: the
    ChatRoom clamps every ask against the same values). */
@@ -1972,6 +1990,7 @@ export async function merecatConfig(env: any) {
       else if (r.k === 'reasoning_on') cfg.reasoning_on = Merecat.reasoningOnFrom(String(r.v)) ? 1 : 0;
       else if (r.k === 'temperature') cfg.temperature = Merecat.temperatureFrom(String(r.v));
       else if (r.k === 'band_weights') cfg.band_weights = Merecat.bandWeightsCsv(Merecat.bandWeightsFrom(String(r.v)));
+      else if (r.k === 'last_ingest' || r.k === 'last_ingest_by') cfg[r.k] = String(r.v).slice(0, 80);
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
       else if (r.k in MERECAT_DEFAULTS) (cfg as any)[r.k] = Number(r.v) || (MERECAT_DEFAULTS as any)[r.k];
     }

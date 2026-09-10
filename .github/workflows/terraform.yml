@@ -71,6 +71,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # the private shelf's read-only deploy key, public half (see terraform/variables.tf)
+  TF_VAR_private_shelf_deploy_key: ${{ vars.PRIVATE_SHELF_DEPLOY_PUBLIC_KEY || '' }}
   TF_VERSION: 1.16.1
   TF_IN_AUTOMATION: "1"
   TF_INPUT: "0"

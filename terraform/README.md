@@ -225,3 +225,13 @@ terraform -chdir=terraform apply
 `cloudflare_r2_bucket` destroys its objects. `prevent_destroy` is set on every
 stateful resource as a second line of defence, but the first one is reading the
 plan.
+
+## The private shelf's deploy key (2026-09-10)
+
+`github_repository_deploy_key.private_shelf_ci` declares the read-only key the merecat
+workflow uses to clone `private-shelf` in CI. It exists only when the variable
+`private_shelf_deploy_key` (the PUBLIC half) is non-empty; `terraform.yml` hands it in
+from the Actions variable `PRIVATE_SHELF_DEPLOY_PUBLIC_KEY`. The private half is the
+Actions secret `PRIVATE_SHELF_DEPLOY_KEY` on the site repository. Generate the pair with
+`ssh-keygen -t ed25519 -N "" -f ~/.ssh/private-shelf-ci`; revoke by emptying the variable
+(the plan's destroy law then asks for the destroy to be argued for, as it should).

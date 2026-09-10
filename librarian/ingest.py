@@ -478,6 +478,29 @@ def build(entry):
     return chunks, bad
 
 
+def write_summary(path, tally, spent, budget, picked, persona_pushed):
+    """A markdown account of the run, appended to `path` (the CI step summary)."""
+    lines = ["## merecat ingest", ""]
+    lines.append(f"- works considered: **{picked}** — pushed **{len(tally['pushed'])}**, "
+                 f"unchanged {tally['unchanged']}, parse skipped by the ledger {tally['reused']}, "
+                 f"waiting on their build {tally['waiting']}, pruned {len(tally['pruned'])}")
+    lines.append(f"- estimated D1 rows written: **{spent}** of the {budget} budget"
+                 + (f" — **stopped before `{tally['stopped']}`; the next run resumes**" if tally["stopped"] else ""))
+    lines.append("- persona.md: " + ("pushed (it changed)" if persona_pushed else "left as it stands on the server"))
+    if tally["pushed"]:
+        lines.append("")
+        lines.append("| pushed | chunks |")
+        lines.append("|---|---|")
+        for wid, n in tally["pushed"]:
+            lines.append(f"| `{wid}` | {n} |")
+    if tally["pruned"]:
+        lines.append("")
+        lines.append("pruned (left works.yml): " + ", ".join(f"`{w}`" for w in tally["pruned"]))
+    lines.append("")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def audit_library(manifest):
     """The shelf audit: warn when library.html offers a work this manifest
     lacks, so the daily push always names what the bot is still missing."""
@@ -509,16 +532,71 @@ def content_hash(entry, chunks):
     return h.hexdigest()
 
 
+# --- the ledger ---------------------------------------------------------------
+# The server's `works.hash` is the authority on what was pushed; this file is
+# only a memory of what was PARSED, so an unchanged source is not parsed again.
+# Keyed by work id; each entry carries the signature of its inputs (the parser
+# version, the manifest entry, the source bytes) and the chunk hash + count that
+# signature produced. A changed signature is a fresh parse; a matching one
+# reuses the hash and skips the four minutes the full corpus costs to parse —
+# which is what makes a private-shelf-only push take seconds in the pipeline.
+# Missing or unreadable, the ledger is simply empty: today's full parse.
+def source_sig(entry, path):
+    h = hashlib.sha256()
+    h.update(PARSER_VERSION.encode())
+    h.update(json.dumps(entry, sort_keys=True).encode())
+    with open(path, "rb") as f:
+        h.update(f.read())
+    return h.hexdigest()
+
+
+def load_ledger(path):
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_ledger(path, ledger):
+    if not path:
+        return
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(ledger, f, sort_keys=True, indent=0)
+    os.replace(tmp, path)
+
+
+def ledger_lookup(ledger, wid, sig):
+    """The remembered (hash, chunks) for this work at this signature, or None."""
+    e = ledger.get(wid)
+    if isinstance(e, dict) and e.get("sig") == sig and e.get("hash"):
+        return e["hash"], int(e.get("chunks", 0))
+    return None
+
+
 # --- push -------------------------------------------------------------------
-def admin_key():
-    key = os.environ.get("MC_ADMIN_KEY", "")
+def push_key():
+    """The credential the push carries. The pipeline holds MC_INGEST_KEY — the
+    worker's MERECAT_INGEST_KEY, honoured by the three librarian endpoints and
+    nothing else, so a leaked runner secret could at worst rewrite the shelf,
+    never touch the platform. A person at the keyboard uses the admin key
+    (MC_ADMIN_KEY, or librarian/.key)."""
+    key = os.environ.get("MC_INGEST_KEY", "") or os.environ.get("MC_ADMIN_KEY", "")
     keyfile = os.path.join(HERE, ".key")
     if not key and os.path.exists(keyfile):
         key = open(keyfile).read().strip()
     if not key:
-        sys.exit("no admin key: set MC_ADMIN_KEY or write librarian/.key "
-                 "(your board key, Show my key on the Community page)")
+        sys.exit("no key: set MC_INGEST_KEY (the pipeline), MC_ADMIN_KEY, or write "
+                 "librarian/.key (your board key, Show my key on the Community page)")
     return key
+
+
+def admin_key():
+    return push_key()
 
 
 def post(api, path, body, tries=6):
@@ -573,7 +651,13 @@ def main():
     ap.add_argument("--budget-rows", type=int, default=90000,
                     help="stop before this many estimated D1 row writes")
     ap.add_argument("--api", default=API_DEFAULT)
+    ap.add_argument("--ledger", default="",
+                    help="JSON memory of parsed sources (skips the parse of an unchanged work)")
+    ap.add_argument("--summary", default="",
+                    help="append a markdown summary of the run to this file (a CI step summary)")
     args = ap.parse_args()
+    ledger = load_ledger(args.ledger)
+    tally = {"pushed": [], "unchanged": 0, "reused": 0, "waiting": 0, "pruned": [], "stopped": ""}
 
     manifest = yaml.safe_load(open(os.path.join(HERE, "works.yml")))["works"]
     only = set(x for x in args.only.split(",") if x)
@@ -623,7 +707,7 @@ def main():
     # vectorize may ride any room since the semantic leg hydrates across
     # all three databases (RV 15); the only wall is the vector budget below.
 
-    key = admin_key()
+    key = push_key()
     roster = post(args.api, "/works", {"key": key})
     # The dials ride every push. The persona rides only when persona.md
     # itself changed since its last push, so an on-the-fly edit made in the
@@ -659,33 +743,64 @@ def main():
             print(f"pruning {wid} (no longer in works.yml)")
             post(args.api, "/ingest", {"key": key, "mode": "delete",
                                        "work": {"id": wid}})
+            tally["pruned"].append(wid)
 
     vec_total = sum(server[w]["chunks"] for w in server
                     if w in manifest and manifest[w].get("vectorize"))
     spent = 0
     waiting = 0
     for wid, entry in picked.items():
-        if not os.path.exists(src_path(entry["src"])):
+        path = src_path(entry["src"])
+        if not os.path.exists(path):
             waiting += 1
             continue          # not built yet: a later daily run picks it up
-        chunks, bad = build(entry)
-        if bad:
-            sys.exit(f"{wid}: {len(bad)} bad anchors, first: {bad[:5]}")
-        chash = content_hash(entry, chunks)
+        sig = source_sig(entry, path)
+        known = ledger_lookup(ledger, wid, sig)
+        chunks = None
+        if known is not None:
+            chash, nchunks = known
+            tally["reused"] += 1
+        else:
+            chunks, bad = build(entry)
+            if bad:
+                sys.exit(f"{wid}: {len(bad)} bad anchors, first: {bad[:5]}")
+            chash = content_hash(entry, chunks)
+            nchunks = len(chunks)
+            ledger[wid] = {"sig": sig, "hash": chash, "chunks": nchunks}
         if server.get(wid, {}).get("hash") == chash:
+            tally["unchanged"] += 1
             continue
+        if chunks is None:            # remembered but not on the server: parse for real
+            chunks, bad = build(entry)
+            if bad:
+                sys.exit(f"{wid}: {len(bad)} bad anchors, first: {bad[:5]}")
         print(f"{wid}: pushing...", flush=True)
         est = len(chunks) * 5          # row + FTS shadow writes, roughly
         if spent + est > args.budget_rows:
             print(f"stopping before {wid}: {est} est. rows would pass the "
                   f"daily budget ({spent} spent). Re-run tomorrow to resume.")
+            tally["stopped"] = wid
             break
         push_work(args.api, key, wid, entry, chunks, chash)
         spent += est
+        tally["pushed"].append((wid, len(chunks)))
+        save_ledger(args.ledger, ledger)   # survive an interruption mid-run
         print(f"{wid}: pushed {len(chunks)} chunks")
+    save_ledger(args.ledger, ledger)
+    tally["waiting"] = waiting
     print(f"done ({spent} est. rows written"
           + (f", {waiting} work(s) waiting on their build" if waiting else "") + ")")
     audit_library(manifest)
+    # The shelf's own timestamp, for the admin page: when the last push ran and
+    # who ran it (a CI run id, or "local").
+    stamp = {"last_ingest": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+             "last_ingest_by": os.environ.get("GITHUB_RUN_ID", "local")}
+    try:
+        post(args.api, "/config", {"key": key, "config": stamp}, tries=2)
+    except Exception as e:
+        print(f"(could not stamp last_ingest: {e})")
+    if args.summary:
+        write_summary(args.summary, tally, spent, args.budget_rows, len(picked), "persona" in body)
 
 
 if __name__ == "__main__":

@@ -280,7 +280,7 @@ comments-backup:
 # it is cheap to run after any content edit; see librarian/README.md.
 .PHONY: librarian
 librarian:
-	cd librarian && python ingest.py --push
+	cd librarian && python ingest.py --push --ledger .ledger.json
 
 # Sweep local build detritus: the LaTeX aux/log churn in book/ and resources/,
 # the temp html-tex, and Python bytecode. Never touches committed sources, the

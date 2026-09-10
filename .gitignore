@@ -51,6 +51,8 @@ __pycache__/
 # (never a submodule: the Pages Jekyll builder cannot fetch private submodules).
 # Ignored here; restore with a second clone into this path.
 librarian/.key
+# the ingest's parse ledger: a memory of what was parsed, never a source
+librarian/.ledger.json
 librarian/private/
 
 # Interactive test-kit identity keys (throwaway, never committed).

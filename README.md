@@ -422,6 +422,7 @@ a pull request runs the same gates **with no credentials and no deploy of any ki
 | `workers.yml` | changes under `comments-worker/`, `contact-worker/`, `purescript/`, the npm lockfile and TS/eslint configs | `make jscheck` + `make tests` + `wrangler deploy --dry-run`; on `main`: apply the D1 migration ledger, `wrangler deploy` |
 | `terraform.yml` | changes under `terraform/` | `plan` with a public-safe summary; on `main`: `apply` behind the `terraform-production` approval gate — refuses any destroy/replace, refuses if the plan changed since review; PRs get `fmt` + `validate` only |
 | `purge-cache.yml` | a manual button | purge the two unkeyed files, or the whole zone |
+| `merecat.yml` | changes under `librarian/`, `content/`, `resources/`, `book/`, `partials/`; daily; a dispatch (the private shelf's pushes) | wait for the Build, restore its `docs/`, clone the private shelf (deploy key), ingest only the works whose chunks changed (parse ledger + server hash), within the day's D1 row budget |
 
 **Approving a Terraform apply:** open the run and press *Review deployments*, or from a
 shell `scripts/ci_approve.sh` (list), `scripts/ci_approve.sh <run-id>` (summary + what is
