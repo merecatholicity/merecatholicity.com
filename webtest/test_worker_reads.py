@@ -309,8 +309,10 @@ if ALICE:
     st, d, raw = post('/api/merecat/usage', {'key': ALICE})
     check(st == 200 and d is not None and d.get('ok') is True
           and is_int(d.get('cap')) and is_int(d.get('gcap')) and isinstance(d.get('admin'), bool)
-          and is_str(d.get('backend')),
-          'merecat/usage: shape (cap/gcap int, admin bool, backend str)', str(raw[:200]))
+          and is_str(d.get('backend'))
+          and isinstance(d.get('quota'), dict) and isinstance(d['quota'].get('resting'), bool)
+          and is_int(d['quota'].get('reset_in_h')) and is_str(d['quota'].get('note')),
+          'merecat/usage: shape (cap/gcap int, admin bool, backend str, quota {resting bool, reset_in_h int, note})', str(raw[:200]))
 
     st, d, raw = post('/api/comments/notifications/unread', {'key': ALICE})
     check(st == 200 and d is not None and d.get('ok') is True and is_int(d.get('unread')) and d['unread'] >= 0,

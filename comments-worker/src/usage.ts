@@ -11,34 +11,17 @@
    the endpoint answers configured:false (the page shows the setup steps) and
    the cron no-ops — nothing breaks, nothing pretends. Each product is its own
    GraphQL request so one failing dataset costs one card, never the page
-   (8 subrequests, far inside the 50 cap). */
+   (8 subrequests, far inside the 50 cap). The GraphQL glue itself is
+   analytics.ts, shared with the librarian's AI budget guard (quota.ts), which
+   reads the neurons dataset through the very same select. */
 
 import { json, requireAdmin, sendSystemDm, siteBase, MERECAT_BOT } from './lib.js';
+import { gqlSelect } from './analytics.js';
+import { aiNeuronsSelect } from './quota.js';
 import {
   buildReport, foldUsageAlerts, alertBody, worstPct,
   iso, utcDayStart, utcMonthStart, FREE, PRODUCT_LABELS,
 } from './usagecalc.js';
-
-const GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql';
-
-async function gqlSelect(env: any, sel: string) {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort('usage-timeout'), 12000);
-  try {
-    const r = await fetch(GRAPHQL, {
-      method: 'POST',
-      headers: { authorization: 'Bearer ' + env.CF_USAGE_TOKEN, 'content-type': 'application/json' },
-      body: JSON.stringify({ query: 'query { viewer { accounts(filter: {accountTag: "' + env.CF_ACCOUNT_ID + '"}) { ' + sel + ' } } }' }),
-      signal: ctl.signal,
-    });
-    const d: any = await r.json().catch(() => null);
-    if (!d) throw new Error('bad analytics response (' + r.status + ')');
-    if (d.errors && d.errors.length) throw new Error(String(d.errors[0].message || 'GraphQL error').slice(0, 200));
-    const acct = d.data && d.data.viewer && d.data.viewer.accounts && d.data.viewer.accounts[0];
-    if (!acct) throw new Error('no account data (is the token Account Analytics: Read on this account?)');
-    return acct;
-  } finally { clearTimeout(timer); }
-}
 
 export async function fetchUsageReport(env: any) {
   const now = Date.now();
@@ -49,7 +32,7 @@ export async function fetchUsageReport(env: any) {
   const snap = iso(now - 72 * 3600 * 1000);
   const Q: Record<string, string> = {
     workers: 'workersInvocationsAdaptive(limit: 1000, filter: {datetime_geq: "' + day + '"}) { dimensions { scriptName } sum { requests } }',
-    ai: 'aiInferenceAdaptiveGroups(limit: 1000, filter: {datetime_geq: "' + day + '"}) { dimensions { modelId } sum { totalNeurons } }',
+    ai: aiNeuronsSelect(day),
     d1: 'd1AnalyticsAdaptiveGroups(limit: 1000, filter: {datetime_geq: "' + day + '"}) { dimensions { databaseId } sum { rowsRead rowsWritten } } ' +
         'd1StorageAdaptiveGroups(limit: 1000, filter: {datetime_geq: "' + snap + '"}) { dimensions { databaseId } max { databaseSizeBytes } }',
     r2: 'r2OperationsAdaptiveGroups(limit: 2000, filter: {date_geq: "' + monDate + '"}) { dimensions { actionType bucketName } sum { requests } } ' +

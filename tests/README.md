@@ -37,7 +37,8 @@ tests/
   _support/ps.mjs      shared Maybe/Either erasure readers for the compiled PS output
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK)
-  worker/              the security-critical worker helpers (IP/ban keys, back-room privacy)
+  worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
+                       the usage monitor's maths, the librarian's config chain and its AI budget guard)
   py/                  the Python build tooling (nav, frontmatter, converters, slug parity, serve, llm)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```

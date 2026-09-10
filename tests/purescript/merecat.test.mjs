@@ -87,3 +87,45 @@ test('the SQL arm names every band from the ladder, else 1.0', () => {
   assert.equal(sql, '(CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 5 THEN 1.0 WHEN 6 THEN 1.4 WHEN 7 THEN 0.9 WHEN 8 THEN 1.55 WHEN 9 THEN 1.3 ELSE 1.0 END)');
   assert.equal(M.bandCaseSql([1, 2]), sql, 'a ladder of the wrong length is replaced by the default');
 });
+
+test('the budget guard is default-on: only a literal 0 turns it off, and the line rests at 95', () => {
+  assert.deepEqual(M.quotaGuardDefaults, { on: true, pct: 95 });
+  for (const v of ['', '1', 'true', 'on', 'garbage']) assert.equal(M.quotaGuardOnFrom(v), true, JSON.stringify(v));
+  assert.equal(M.quotaGuardOnFrom('0'), false);
+  assert.equal(M.quotaGuardOnFrom(' 0 '), false);
+});
+
+test('the line is a whole percent from 10 to 99, anything else the default', () => {
+  assert.equal(M.quotaGuardPctFrom('99'), 99);
+  assert.equal(M.quotaGuardPctFrom(' 80 '), 80);
+  assert.equal(M.quotaGuardPctFrom('150'), 99, 'past the wall clamps to the last line before it');
+  assert.equal(M.quotaGuardPctFrom('100'), 99, '100 is the wall itself, not a line');
+  assert.equal(M.quotaGuardPctFrom('5'), 10);
+  assert.equal(M.quotaGuardPctFrom('-3'), 10);
+  for (const bad of ['', 'abc', '95.5', '9e1']) assert.equal(M.quotaGuardPctFrom(bad), 95, JSON.stringify(bad));
+});
+
+test('a reading trips at the line, in the meter\'s own units; no limit, no trip', () => {
+  assert.equal(M.quotaTripped(95)(9500)(10000), true, 'exactly at the line rests');
+  assert.equal(M.quotaTripped(95)(9499.9)(10000), false);
+  assert.equal(M.quotaTripped(99)(9850)(10000), false);
+  assert.equal(M.quotaTripped(99)(9900)(10000), true);
+  assert.equal(M.quotaTripped(95)(12000)(10000), true, 'past the wall is still resting');
+  assert.equal(M.quotaTripped(95)(5)(0), false, 'an unmetered reading never trips');
+});
+
+test('hours until the day renews: whole hours, rounded up, from the UTC clock', () => {
+  const at = (iso) => M.hoursUntilUtcMidnight(Date.parse(iso));
+  assert.equal(at('2026-09-10T00:00:00.000Z'), 24, 'midnight itself is a whole day from the next');
+  assert.equal(at('2026-09-10T04:15:09.000Z'), 20, '19 h 44 m rounds up');
+  assert.equal(at('2026-09-10T23:00:00.000Z'), 1);
+  assert.equal(at('2026-09-10T22:59:59.999Z'), 2);
+  assert.equal(at('2026-09-10T23:59:59.999Z'), 1, 'the last millisecond is still an hour, never zero');
+});
+
+test('the resting note names the hours, and under an hour says so', () => {
+  assert.equal(M.restingNote(5), 'merecat is resting. The community has reached its shared daily limit. Come back in about 5 hours, when it renews at midnight UTC.');
+  assert.match(M.restingNote(1), /Come back in under an hour, when it renews at midnight UTC\.$/);
+  assert.match(M.restingNote(0), /in under an hour/);
+  assert.match(M.restingNote(24), /in about 24 hours/);
+});

@@ -160,6 +160,15 @@ test('buildReport: one failed product costs one card, never the report', () => {
   assert.equal(byId(rows, 'workers.requests').used, 3990, 'the rest of the report stands');
 });
 
+test('a neurons-only raw is a legal partial: the AI row stands, the rest are unavailable cards', () => {
+  const rows = buildReport({ ai: liveish().ai });
+  const ai = byId(rows, 'ai.neurons');
+  assert.equal(ai.used, 1225.2);
+  assert.equal(ai.limit, FREE.aiNeuronsDay);
+  assert.equal(ai.error, undefined);
+  assert.equal(byId(rows, 'workers.requests').error, 'unavailable', 'the guard\'s single select never pretends to know the rest');
+});
+
 test('every report row belongs to a labeled product group', () => {
   for (const r of buildReport(liveish())) {
     assert.ok(PRODUCT_LABELS[r.product], r.id + ' -> ' + r.product);

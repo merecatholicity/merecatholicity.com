@@ -155,6 +155,7 @@ import {
   merecatNames,
   merecatPhrases,
   merecatPrompt,
+  merecatQuota,
   merecatRetrieve,
   merecatScrub,
   merecatVerseSeats,
@@ -177,6 +178,7 @@ import {
   publishBoardEvents,
   publishLive,
   publishUser,
+  quotaPublic,
   purgeMediaKeys,
   purgeWallMedia,
   randomHex,
@@ -4203,7 +4205,8 @@ async function handleMerecatBackends(request: any, env: any) {
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   const today = (g && g.q) || 0;
   return json({ ok: true, backend: 'cloudflare', model: cfg.model, mention_effort: cfg.mention_effort,
-    reasoning: merecatReasoningView(cfg), temperature: cfg.temperature, band_weights: cfg.band_weights,
+    reasoning: merecatReasoningView(cfg), quota: await merecatQuota(env, cfg),
+    temperature: cfg.temperature, band_weights: cfg.band_weights,
     max_tokens: cfg.max_tokens, topk: cfg.topk, last_ingest: cfg.last_ingest, last_ingest_by: cfg.last_ingest_by,
     cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
 }
@@ -4587,6 +4590,7 @@ async function handleMerecatUsage(request: any, env: any) {
     admin: await isAdminHash(env, me),
     backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
     reasoning: merecatReasoningView(cfg),
+    quota: quotaPublic(await merecatQuota(env, cfg)),
   }, 200);
 }
 
@@ -4693,6 +4697,8 @@ const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
   reasoning_on: (v) => (String(v) === '1' || String(v) === 'true') ? '1' : '0',
   reasoning_default: (v) => Merecat.effortParse(Merecat.reasoningDefaults.deflt)(String(v)),
   reasoning_max: (v) => Merecat.effortParse(Merecat.reasoningDefaults.max)(String(v)),
+  quota_guard_on: (v) => (String(v) === '0' || String(v) === 'false') ? '0' : '1',   // default-on: only an explicit no is off
+  quota_guard_pct: (v) => String(Merecat.quotaGuardPctFrom(String(v))),
   temperature: (v) => String(Merecat.temperatureFrom(String(v))),
   band_weights: (v) => Merecat.bandWeightsCsv(Merecat.bandWeightsFrom(Array.isArray(v) ? v.join(',') : String(v))),
   user_cap_on: (v) => Number(v) ? '1' : '0',
@@ -4807,6 +4813,16 @@ async function handleMerecatAskInit(request: any, env: any) {
   if (gate) return blockedJson(gate);
   await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
     .bind(me, Math.floor(Date.now() / 1000)).run();
+  const cfg = await merecatConfig(env);
+  /* The account's own wall (quota.ts), before anything is minted and admins
+     included: a resting librarian answers 503 with the hours until the day
+     renews, and Retry-After says the same in seconds. */
+  const quota = await merecatQuota(env, cfg);
+  if (quota.resting) {
+    console.log(JSON.stringify({ event: 'merecat_quota_rest', meter_pct: quota.meter_pct, line: quota.pct }));
+    return json({ ok: false, resting: true, quota: true, reset_in_h: quota.reset_in_h, error: quota.note }, 503,
+      { 'Retry-After': String(quota.reset_in_h * 3600) });
+  }
   let chatId = Number(data.chat) || 0;
   if (chatId) {
     const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2').bind(chatId, me).first();
@@ -4819,7 +4835,6 @@ async function handleMerecatAskInit(request: any, env: any) {
     ).bind(me, title, now).first();
     chatId = ins.id;
   }
-  const cfg = await merecatConfig(env);
   const day = merecatDay();
   const admin = await isAdminHash(env, me);
   let youQ = 0; let todayQ = 0;
@@ -4830,7 +4845,8 @@ async function handleMerecatAskInit(request: any, env: any) {
     youQ = (u && u.q) || 0;
   } catch { /* preview only */ }
   return json({ ok: true, chatId, backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
-    used: { you: youQ, cap: cfg.user_daily, cap_on: cfg.user_cap_on, today: todayQ, gcap: cfg.global_daily, admin } }, 200);
+    used: { you: youQ, cap: cfg.user_daily, cap_on: cfg.user_cap_on, today: todayQ, gcap: cfg.global_daily, admin,
+      quota: quotaPublic(quota) } }, 200);
 }
 
 /* The merecat WebSocket upgrade → the per-conversation ChatRoom (getByName by id

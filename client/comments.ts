@@ -5315,7 +5315,7 @@ trace('submit: board post');
       ['Platform settings', 'admin.html?settings=1', 'Per-area media controls — what the feed, forum, and DMs each accept, sizes, voice notes, AI screening, storage budgets, retention, and one-time purges.'],
       ['Platform usage', 'admin.html?usage=1', 'Cloudflare free-tier health bars — every meter the platform rides and how close each is to its wall, checked daily with DM alerts past 80%.'],
       ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
-      ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, on or off, and how many.'],
+      ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, the reasoning ladder, and the AI budget guard that rests it before the day’s Workers AI quota is spent.'],
       ['merecat Q&A at a glance', 'admin.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
     ].forEach(function (opt) {
       var row = el('div', 'board-cat');
@@ -9178,8 +9178,8 @@ trace('submit: feed post');
       log.appendChild(starter);
       form.addEventListener('submit', function () { if (starter.parentNode) starter.remove(); }, { once: true });
     }
+    var askPlaceholder = q.placeholder;
     if (!loggedIn) {
-      var askPlaceholder = q.placeholder;
       q.disabled = true;
       send.disabled = true;
       q.placeholder = 'Create your free identity above, and ask away…';
@@ -9224,6 +9224,22 @@ trace('submit: feed post');
       try { localStorage.setItem('mc-merecat-mode', modeSel.value); } catch (e) {}
     });
     var modeShown = '';
+    /* The AI budget guard (Domain.Merecat through the worker's quota.ts):
+       once the account's Workers AI day has reached the admin's line the
+       server refuses every ask, so the box closes here too, with the note,
+       and reopens on its own when a later reading (the /usage read on open,
+       any answer's preamble) says the day has renewed. Only a member's box:
+       the identity gate above owns it until then. */
+    var guardResting = false;
+    function applyGuard(g: any) {
+      var resting = !!(g && g.on && g.resting);
+      if (resting === guardResting) return;
+      guardResting = resting;
+      if (!isMember()) return;
+      q.disabled = resting;
+      send.disabled = resting;
+      q.placeholder = resting ? 'merecat is resting until the day renews at midnight UTC.' : askPlaceholder;
+    }
     function offerModes(r: any) {
       if (!r || !r.on) { modeRow.hidden = true; return; }
       var ladder = (r.ladder || core.merecatEffortLadder).slice();
@@ -9245,8 +9261,15 @@ trace('submit: feed post');
     function renderQuota(u: any) {
       if (!u) return;
       if (u.reasoning) offerModes(u.reasoning);
+      if (u.quota) applyGuard(u.quota);
       quota.hidden = false;
       quota.textContent = '';
+      var g = u.quota;
+      if (g && g.on && g.resting) {
+        quota.appendChild(el('strong', null, '🐈 ' + (g.note || 'merecat is resting until the day renews at midnight UTC.')));
+        quota.appendChild(document.createTextNode(' That is ' + merecatResetLocal() + ' your time.'));
+        return;
+      }
       if (u.cap_on) {
         quota.appendChild(document.createTextNode('You have used '));
         quota.appendChild(el('strong', null, u.you + ' of ' + u.cap));
@@ -9260,6 +9283,10 @@ trace('submit: feed post');
         quota.appendChild(document.createTextNode(
           ' shared questions today · you have asked ' + u.you +
           ' · counters renew at ' + merecatResetLocal() + ' your time'));
+      }
+      if (g && g.on && typeof g.meter_pct === 'number') {
+        quota.appendChild(document.createTextNode(
+          ' · the day’s AI budget is ' + g.meter_pct + '% spent; merecat rests at ' + g.pct + '%'));
       }
     }
     if (loggedIn) {
@@ -9954,6 +9981,7 @@ trace('submit: feed post');
       function refuse(d: any) {
         working.stop();
         if (blockedOut(d)) { endTurn(); return; }
+        if (d.quota) applyGuard({ on: true, resting: true });
         cat.body.textContent = '';
         cat.body.appendChild(el('span', 'merecat-note',
           (d.resting ? '🐈 ' : '') + (d.error || 'merecat could not answer. Try again shortly.') +
@@ -10272,6 +10300,39 @@ trace('submit: feed post');
         wrap.appendChild(el('p', 'board-cat-desc',
           'A mention in a thread reasons at this level, under the same switch and ceiling. The ceiling clamps every ask on the ' +
           'server, whatever a reader\u2019s device remembers.'));
+        /* The AI budget guard: the account's Workers AI meter against a line,
+           on by default at 95 (Domain.Merecat). It reads through the usage
+           token; without one it has no meter, and says so. */
+        wrap.appendChild(el('h4', null, 'The AI budget guard'));
+        var g = b.quota || {};
+        var gRow = el('p', 'admin-set-row');
+        var gCb = el('input'); gCb.type = 'checkbox'; gCb.checked = !!g.on;
+        gRow.appendChild(gCb);
+        gRow.appendChild(document.createTextNode(' Rest the librarian once the day\u2019s Workers AI spend reaches '));
+        var gPct = el('input', 'key-input'); gPct.type = 'number'; gPct.min = '10'; gPct.max = '99';
+        gPct.value = String(g.pct || core.merecatQuotaGuardDefaults.pct); gPct.style.width = '4.5em';
+        gRow.appendChild(gPct);
+        gRow.appendChild(document.createTextNode('% of the free day'));
+        wrap.appendChild(gRow);
+        gCb.addEventListener('change', function () { saveCfg({ quota_guard_on: gCb.checked ? 1 : 0 }, 'Budget guard'); });
+        gPct.addEventListener('change', function () {
+          var n = core.merecatQuotaGuardPctFrom(gPct.value); gPct.value = String(n);
+          saveCfg({ quota_guard_pct: n }, 'Guard line');
+        });
+        var gStatus;
+        if (!g.configured) gStatus = 'The guard has no meter to read: the usage token is not set (CF_USAGE_TOKEN beside CF_ACCOUNT_ID; Platform usage shows the steps). Until it stands the guard does nothing and the question caps are the only wall.';
+        else if (!g.on) gStatus = 'Off: the librarian answers until Cloudflare itself refuses or bills. The question caps still apply.';
+        else if (g.unread) gStatus = 'The meter could not be read just now; the guard stands open until a read succeeds (worker log: merecat_quota_unread).';
+        else gStatus = 'Workers AI today: ' + g.meter_pct + '% of the free day\u2019s ' + Number(g.limit).toLocaleString() + ' neurons (' +
+          Math.round(Number(g.used)) + ' spent' + (g.stale ? ', from a reading up to fifteen minutes old' : '') + '). ' +
+          (g.resting ? 'merecat is resting; the day renews in about ' + g.reset_in_h + ' hours.' : 'merecat rests at ' + g.pct + '%.');
+        wrap.appendChild(el('p', 'comments-status', gStatus));
+        wrap.appendChild(el('p', 'board-cat-desc',
+          'On by default. Before every question and every @merecat mention the worker reads the account\u2019s Workers AI meter (the figure ' +
+          'Platform usage draws) and, at the line, rests the librarian and tells the asker how many hours until the day renews at midnight UTC. ' +
+          'The line is a margin, not the wall: the analytics run a minute or two behind, one plain question is about half a percent of the day ' +
+          '(several times that with reasoning on), and the board\u2019s own screening spends from the same budget. Admins are held to it too, ' +
+          'since it guards the account rather than the ration; switch it off here to ask past the line.'));
         wrap.appendChild(el('p', 'comments-status',
           'From librarian/config.yml, pushed by the pipeline: temperature ' + b.temperature + ', top-k ' + b.topk +
           ', answer ceiling ' + b.max_tokens + ' tokens, band weights ' + (b.band_weights || '(default)') + '.'));

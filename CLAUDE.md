@@ -197,7 +197,11 @@ its test in the same change; never delete a test to go green.
   reasoning ladder, temperature, the nine band weights) stored in the librarian D1 `config`
   table: the file-owned ones ride `librarian/config.yml`, the reasoning ones the merecat admin
   page. The band weighting and persona are the owner's standing law — read the merecat passage
-  in INFRASTRUCTURE.md before touching anything there.
+  in INFRASTRUCTURE.md before touching anything there. The **AI budget guard**
+  (`quota_guard_on`/`_pct`, default on at 95% of the Workers AI day, `comments-worker/src/quota.ts`)
+  reads the account's meter through `CF_USAGE_TOKEN` before every ask and mention, admins
+  included, rests merecat with the hours until midnight UTC, and stands OPEN when the meter
+  cannot be read — a margin, never the wall.
 - **Terraform** owns the zone settings, DNS, the four rulesets, bot management, the R2 buckets,
   the D1 databases (as records), the Turnstile widgets, both GitHub repos, Pages, the two
   environments, the Actions policy and variables; state is in R2 (`merecatholicity-tfstate`,
@@ -223,4 +227,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · `contact-worker/`

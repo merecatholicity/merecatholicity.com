@@ -9,7 +9,7 @@ on the Cloudflare free tier. This directory is its whole mind:
 |--------------|------------|
 | `works.yml`  | the manifest of every work the bot knows, with tiers |
 | `persona.md` | the system prompt: voice, rules, how it argues |
-| `config.yml` | model id, daily caps, retrieval dials, temperature, the nine band weights (the reasoning dials are set on the merecat admin page) |
+| `config.yml` | model id, daily caps, retrieval dials, temperature, the nine band weights (the reasoning dials and the AI budget guard are set on the merecat admin page) |
 | `extra/`     | drop-in folder for AI-only content (plain .txt/.md) |
 | `ingest.py`  | builds chunks from the sources and pushes everything |
 | `.key`       | your admin board key (git-ignored; or use `MC_ADMIN_KEY`) |
@@ -31,7 +31,7 @@ and an interrupted run resumes where it left off. Removing an entry from
 No redeploy: the worker reads the persona from its database (isolates pick
 the change up within five minutes).
 
-**Change the model, caps, temperature or band weights.** Edit `config.yml`, commit, push (or `make librarian`). The reasoning dials are set on the merecat admin page.
+**Change the model, caps, temperature or band weights.** Edit `config.yml`, commit, push (or `make librarian`). The reasoning dials and the AI budget guard are set on the merecat admin page.
 The default model is the strongest answer-per-neuron on the free Workers AI
 catalog; `config.yml` explains the trade if you want a bigger one.
 
@@ -101,7 +101,10 @@ and it resumes from the works that didn't finish. First-time full corpus:
 
 The bot rides the comments worker (`/api/merecat/*`): same identity system,
 same blocked-list gates, per-member and community daily caps, and a
-"merecat is resting" answer when the shared free budget is spent. Its data
+"merecat is resting" answer — naming the hours until midnight UTC — when the
+shared question budget is spent or when the account's Workers AI meter has
+reached the AI budget guard's line (on by default at 95% of the free day, read
+live from Cloudflare's analytics; admins are held to it too). Its data
 lives in its own D1 database (`merecat-library`) and Vectorize index
 (`merecat-t1`) — all derived from this directory, rebuildable any time,
 which is why the backup cron ignores it. Questions are never stored;

@@ -35,6 +35,11 @@ export { isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabe
 import { createPusher } from './webpush.js';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
 import { inList, rankFor, withNames, postCountsFor } from './db.js';
+/* The librarian's AI budget guard: its own module (no lib import, Node-
+   tested), re-exported below so the ChatRoom and the handlers keep one
+   import site for the librarian helpers. */
+import { merecatQuota, quotaPublic } from './quota.js';
+export { merecatQuota, quotaPublic };
 
 /* Keyed-request preamble, single-sourced. Parse the JSON body, rate-limit by IP
    on `bucket`, then require + hash the identity key. Returns the resolved
@@ -1911,6 +1916,8 @@ export const MERECAT_DEFAULTS = {
   reasoning_default: Merecat.reasoningDefaults.deflt,
   reasoning_max: Merecat.reasoningDefaults.max,
   mention_effort: Merecat.reasoningDefaults.mention,
+  quota_guard_on: Merecat.quotaGuardDefaults.on ? 1 : 0,   // rest before the Workers AI day is spent (admins too)
+  quota_guard_pct: Merecat.quotaGuardDefaults.pct,         // ...at this share of the free day
   last_ingest: '',        // stamped by ingest.py at the end of every push (ISO time)
   last_ingest_by: '',     // the CI run id, or "local"
 };
@@ -1933,6 +1940,11 @@ export function merecatThinkSuffix(effort: any) {
   return Merecat.effortThinks(String(effort)) ? '\n\n' + Merecat.effortDirective(String(effort)) + '\n/think' : '/no_think';
 }
 export function merecatHeadroom(effort: any) { return Merecat.effortHeadroom(String(effort)); }
+/* What a resting librarian says — the question cap and the budget guard
+   alike: the hours until the day renews at 00:00 UTC (Domain.Merecat). */
+export function merecatRestingNote(nowMs = Date.now()) {
+  return Merecat.restingNote(Merecat.hoursUntilUtcMidnight(nowMs));
+}
 export const MERECAT_SITE = 'https://merecatholicity.com/';
 /* Six weight bands, the site owner's own ladder: the site's works and its
    catechetical core, the Scriptures, the named works of the Fathers, the
@@ -1990,6 +2002,8 @@ export async function merecatConfig(env: any) {
       else if (r.k === 'reasoning_on') cfg.reasoning_on = Merecat.reasoningOnFrom(String(r.v)) ? 1 : 0;
       else if (r.k === 'temperature') cfg.temperature = Merecat.temperatureFrom(String(r.v));
       else if (r.k === 'band_weights') cfg.band_weights = Merecat.bandWeightsCsv(Merecat.bandWeightsFrom(String(r.v)));
+      else if (r.k === 'quota_guard_on') cfg.quota_guard_on = Merecat.quotaGuardOnFrom(String(r.v)) ? 1 : 0;
+      else if (r.k === 'quota_guard_pct') cfg.quota_guard_pct = Merecat.quotaGuardPctFrom(String(r.v));
       else if (r.k === 'last_ingest' || r.k === 'last_ingest_by') cfg[r.k] = String(r.v).slice(0, 80);
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
       else if (r.k in MERECAT_DEFAULTS) (cfg as any)[r.k] = Number(r.v) || (MERECAT_DEFAULTS as any)[r.k];
@@ -2504,7 +2518,13 @@ export async function merecatMentionReply(env: any, commentId: any) {
     MERECAT_SITE + 'merecat-ai.html) to see the renewal time on your own clock.';
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   if (!admin && g && g.q >= cfg.global_daily) {
-    refuse = 'merecat is resting. The community’s shared daily budget is spent.' + seeWhen;
+    refuse = merecatRestingNote() + seeWhen;
+  }
+  /* The account's own wall (quota.ts) binds admins too: at the line the
+     mention gets the same no-cost resting note, with the hours. */
+  if (!refuse) {
+    const quota = await merecatQuota(env, cfg);
+    if (quota.resting) refuse = quota.note + seeWhen;
   }
   if (!refuse && !admin && cfg.user_cap_on) {
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')

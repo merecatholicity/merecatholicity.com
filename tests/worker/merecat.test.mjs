@@ -28,6 +28,8 @@ test('the defaults come from the kernel, never a literal', () => {
   assert.ok(/reasoning_on: Merecat\.reasoningDefaults\.on/.test(d) && /reasoning_default: Merecat\.reasoningDefaults\.deflt/.test(d)
     && /reasoning_max: Merecat\.reasoningDefaults\.max/.test(d) && /mention_effort: Merecat\.reasoningDefaults\.mention/.test(d),
     'the four reasoning dials must default through Domain.Merecat');
+  assert.ok(/quota_guard_on: Merecat\.quotaGuardDefaults\.on \? 1 : 0/.test(d) && /quota_guard_pct: Merecat\.quotaGuardDefaults\.pct/.test(d),
+    'the budget guard must default through Domain.Merecat (on, at 95)');
 });
 
 test('every dial is read through the kernel, so a bad row yields its default', () => {
@@ -38,6 +40,8 @@ test('every dial is read through the kernel, so a bad row yields its default', (
   assert.ok(/r\.k === 'reasoning_on'\) cfg\.reasoning_on = Merecat\.reasoningOnFrom\(/.test(r), 'reasoning_on must read through Merecat.reasoningOnFrom');
   assert.ok(/r\.k === 'temperature'\) cfg\.temperature = Merecat\.temperatureFrom\(/.test(r), 'temperature must read through Merecat.temperatureFrom');
   assert.ok(/r\.k === 'band_weights'\) cfg\.band_weights = Merecat\.bandWeightsCsv\(Merecat\.bandWeightsFrom\(/.test(r), 'band_weights must read through the kernel and be stored normalised');
+  assert.ok(/r\.k === 'quota_guard_on'\) cfg\.quota_guard_on = Merecat\.quotaGuardOnFrom\(/.test(r), 'the guard switch must read through the kernel (default-on polarity)');
+  assert.ok(/r\.k === 'quota_guard_pct'\) cfg\.quota_guard_pct = Merecat\.quotaGuardPctFrom\(/.test(r), 'the guard line must read through the kernel (10..99)');
   assert.ok(!/backend|failover/.test(uncommented(r)), 'the retired backend/failover keys must not come back');
 });
 
@@ -45,7 +49,10 @@ test('the write is an allowlist MAP with coercion, and only the kernel dials are
   const m = index.slice(index.indexOf('const MERECAT_CONFIG_KEYS'), index.indexOf('async function handleMerecatConfigSet'));
   const keys = [...m.matchAll(/^  ([a-z_]+): \(v\) =>/gm)].map((x) => x[1]).sort();
   assert.deepEqual(keys, ['band_weights', 'global_daily', 'last_ingest', 'last_ingest_by', 'max_tokens', 'mention_effort', 'model',
-    'persona_file_hash', 'reasoning_default', 'reasoning_max', 'reasoning_on', 'temperature', 'topk', 'user_cap_on', 'user_daily'].sort());
+    'persona_file_hash', 'quota_guard_on', 'quota_guard_pct', 'reasoning_default', 'reasoning_max', 'reasoning_on', 'temperature',
+    'topk', 'user_cap_on', 'user_daily'].sort());
+  assert.ok(/quota_guard_pct: \(v\) => String\(Merecat\.quotaGuardPctFrom\(/.test(m), 'the line is stored only as the kernel would read it');
+  assert.ok(/quota_guard_on: \(v\) => \(String\(v\) === '0' \|\| String\(v\) === 'false'\) \? '0' : '1'/.test(m), 'only an explicit no switches the guard off');
   for (const k of ['mention_effort', 'reasoning_default', 'reasoning_max']) assert.ok(new RegExp(`${k}: \\(v\\) => Merecat\\.effortParse\\(`).test(m), k);
   assert.ok(/temperature: \(v\) => String\(Merecat\.temperatureFrom\(/.test(m));
   assert.ok(/band_weights: \(v\) => Merecat\.bandWeightsCsv\(Merecat\.bandWeightsFrom\(/.test(m));
@@ -116,4 +123,45 @@ test('the pipeline\'s door: the ingest key opens the three librarian endpoints a
   assert.ok(/INGEST_DOORS = \['\/api\/merecat\/works', '\/api\/merecat\/config', '\/api\/merecat\/ingest'\]/.test(index));
   const wr = readFileSync(join(root, 'comments-worker', 'wrangler.jsonc'), 'utf8');
   assert.ok(/"workers_dev": true/.test(wr) && /"preview_urls": false/.test(wr), 'the workers.dev route is declared, previews are not');
+});
+
+test('the budget guard binds every ask before anything is minted, admins included', () => {
+  const ask = durable.slice(durable.indexOf('async #ask('), durable.indexOf('async #generate('));
+  const gate = ask.indexOf('const quota = await merecatQuota(this.env, cfg);');
+  assert.ok(gate > 0, 'the ChatRoom reads the guard');
+  assert.ok(gate < ask.indexOf('INSERT INTO chats'), 'before the thread is minted, so a refusal leaves no empty conversation');
+  assert.ok(gate > ask.indexOf("event: 'chat_caps_failed'"), 'after the count caps and outside their try');
+  assert.ok(/if \(quota\.resting\) \{[\s\S]*?resting: true, quota: true, reset_in_h: quota\.reset_in_h, error: quota\.note/.test(ask),
+    'the refusal names the guard and the hours');
+  assert.ok(!/admin[^\n]*quota\.resting|quota\.resting[^\n]*admin/.test(ask), 'no admin bypass: the guard protects the account, not the ration');
+  assert.ok(/quota: quotaPublic\(quota\)/.test(ask), 'the used object carries the member-facing slice');
+  const init = index.slice(index.indexOf('async function handleMerecatAskInit('), index.indexOf('async function handleMerecatLive('));
+  const g2 = init.indexOf('const quota = await merecatQuota(env, cfg);');
+  assert.ok(g2 > 0 && g2 < init.indexOf('INSERT INTO chats'), 'ask-init reads the guard before minting');
+  assert.ok(/resting: true, quota: true, reset_in_h: quota\.reset_in_h, error: quota\.note \}, 503,\s*\{ 'Retry-After': String\(quota\.reset_in_h \* 3600\) \}/.test(init),
+    'a resting ask-init is a 503 with Retry-After');
+  const mention = lib.slice(lib.indexOf('export async function merecatMentionReply'), lib.indexOf('export async function merecatMentionReply') + 3000);
+  assert.ok(/if \(!refuse\) \{\s*const quota = await merecatQuota\(env, cfg\);\s*if \(quota\.resting\) refuse = quota\.note \+ seeWhen;/.test(mention),
+    'a mention at the line gets the no-cost resting note, gated by an earlier refusal only, never by admin');
+});
+
+test('a resting librarian names the hours wherever the day is spent', () => {
+  assert.ok(/export function merecatRestingNote\(nowMs = Date\.now\(\)\) \{\s*return Merecat\.restingNote\(Merecat\.hoursUntilUtcMidnight\(nowMs\)\);/.test(lib));
+  assert.ok(/todayQ >= cfg\.global_daily\) \{\s*ws\.send\(JSON\.stringify\(\{ t: 'state', phase: 'error', resting: true, error: merecatRestingNote\(\) \}\)\)/.test(durable),
+    'the question cap says the hours too');
+  assert.ok(/refuse = merecatRestingNote\(\) \+ seeWhen;/.test(lib), 'and so does the mention at the question cap');
+});
+
+test('the guard rides the wire, closes the box, and is set from the admin page', () => {
+  assert.ok(/quota: quotaPublic\(await merecatQuota\(env, cfg\)\)/.test(index), '/usage carries the member slice');
+  assert.ok(/quota: await merecatQuota\(env, cfg\)/.test(index), '/backends carries the whole view');
+  const v = client.slice(client.indexOf('function applyGuard('), client.indexOf('function offerModes('));
+  assert.ok(/q\.disabled = resting;\s*send\.disabled = resting;/.test(v), 'a resting guard closes the box');
+  assert.ok(/if \(!isMember\(\)\) return;/.test(v), 'only a member\'s box: the identity gate owns it until then');
+  assert.ok(/if \(u\.quota\) applyGuard\(u\.quota\);/.test(client) && /if \(d\.quota\) applyGuard\(\{ on: true, resting: true \}\);/.test(client),
+    'every used object and every refusal feed the guard');
+  const dials = client.slice(client.indexOf('function renderMerecatDials('), client.indexOf('function viewMerecatAdmin('));
+  assert.ok(/saveCfg\(\{ quota_guard_on: gCb\.checked \? 1 : 0 \}/.test(dials) && /saveCfg\(\{ quota_guard_pct: n \}/.test(dials), 'the admin page saves both dials');
+  assert.ok(/core\.merecatQuotaGuardPctFrom\(gPct\.value\)/.test(dials), 'the line is clamped by the kernel before it is saved');
+  assert.ok(/if \(!g\.configured\) gStatus = /.test(dials) && /else if \(g\.unread\) gStatus = /.test(dials), 'no meter, and an unread meter, are both said out loud');
 });

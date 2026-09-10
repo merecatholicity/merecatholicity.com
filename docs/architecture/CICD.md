@@ -355,7 +355,10 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   column.
 - **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `TURN_KEY_SECRET`,
   `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
-  Never in git, never in CI.
+  Never in git, never in CI. `CF_USAGE_TOKEN` (read-only, *Account Analytics: Read*)
+  feeds both the Platform usage page and the librarian's AI budget guard — without it
+  the guard has no meter and stands open, so rotating it means putting the new one
+  before revoking the old.
 
 ---
 

@@ -22,8 +22,11 @@ import {
   merecatHeadroom,
   merecatMentionReply,
   merecatPrompt,
+  merecatQuota,
+  merecatRestingNote,
   merecatThinkStripper,
   publishUser,
+  quotaPublic,
   sha256hex,
 } from './lib.js';
 
@@ -340,7 +343,7 @@ export class ChatRoom extends DurableObject<Env> {
       const g = await this.env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
       todayQ = (g && g.q) || 0;
       if (!admin && todayQ >= cfg.global_daily) {
-        ws.send(JSON.stringify({ t: 'state', phase: 'error', resting: true, error: MERECAT_RESTING })); return;
+        ws.send(JSON.stringify({ t: 'state', phase: 'error', resting: true, error: merecatRestingNote() })); return;
       }
       const u = await this.env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first();
       youQ = (u && u.q) || 0;
@@ -350,6 +353,15 @@ export class ChatRoom extends DurableObject<Env> {
         return;
       }
     } catch (err) { console.log(JSON.stringify({ event: 'chat_caps_failed', error: String(err) })); }
+    /* The account's own wall, admins included: the Workers AI meter against
+       the admin's line (Domain.Merecat through quota.ts). Checked before the
+       thread is minted, so a refused ask leaves no empty conversation. */
+    const quota = await merecatQuota(this.env, cfg);
+    if (quota.resting) {
+      console.log(JSON.stringify({ event: 'merecat_quota_rest', meter_pct: quota.meter_pct, line: quota.pct }));
+      ws.send(JSON.stringify({ t: 'state', phase: 'error', resting: true, quota: true, reset_in_h: quota.reset_in_h, error: quota.note }));
+      return;
+    }
 
     /* Mint the thread + question row BEFORE generating (the thread must outlive a
        fragile stream). A fresh conversation gets its id here and rides the first
@@ -378,7 +390,7 @@ export class ChatRoom extends DurableObject<Env> {
     /* `backend` stays in the preamble for one deploy: clients built before the
        GPU box was retired still read it to decide what to show. */
     const used = { you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
-      today: todayQ + 1, gcap: cfg.global_daily, admin, backend: 'cloudflare' };
+      today: todayQ + 1, gcap: cfg.global_daily, admin, backend: 'cloudflare', quota: quotaPublic(quota) };
     /* The reader's level is a request; the admin's switch and ceiling decide
        (Domain.Merecat, through merecatEffortFor). */
     const effort = merecatEffortFor(cfg, m.instant ? 'off' : m.effort);

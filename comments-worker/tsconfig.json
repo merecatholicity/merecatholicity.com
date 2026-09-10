@@ -5,6 +5,9 @@
   // conflict. noEmit: wrangler's esbuild does the transpile; tsc only checks.
   // checkJs off + allowJs on so index.ts may import the still-JS pure.js /
   // webpush.js and the untyped PureScript output (all typed as any).
+  // allowImportingTsExtensions (noEmit makes it legal) so the Node-tested
+  // modules (quota.ts) may import their siblings with .ts extensions, which
+  // Node's type stripping resolves and esbuild bundles like any other.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -13,6 +16,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "checkJs": false,
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2022"],

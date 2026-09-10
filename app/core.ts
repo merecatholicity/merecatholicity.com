@@ -274,6 +274,12 @@ export const merecatEffortClamp = (cap: string, level: string): string => Mereca
 export const merecatEffortLabel = (level: string): string => Merecat.effortLabel(level);
 export const merecatReasoningOnFrom = (v: any): boolean => Merecat.reasoningOnFrom(v == null ? '' : String(v));
 export const merecatReasoningDefaults: { on: boolean; deflt: string; max: string; mention: string } = Merecat.reasoningDefaults;
+/* The librarian's AI budget guard (Domain.Merecat): the resting values and
+   the line's parser, read by the admin dials. The worker decides every ask;
+   the note a resting librarian shows rides the wire, so the client composes
+   no text of its own. */
+export const merecatQuotaGuardDefaults: { on: boolean; pct: number } = Merecat.quotaGuardDefaults;
+export const merecatQuotaGuardPctFrom = (v: any): number => Merecat.quotaGuardPctFrom(v == null ? '' : String(v));
 
 /* The disk cache's policy (Domain.Cache). `classify` is erased to its tag here
    — 'fresh' | 'stale' | 'expired' — because the store is imperative JS and a PS

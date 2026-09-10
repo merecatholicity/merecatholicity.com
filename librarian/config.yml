@@ -22,3 +22,11 @@ temperature: 0.35   # sampling temperature for answers and mentions, 0-1
 # mention_effort (off|low|medium|high|xhigh|max) — are dashboard-owned: set them on
 # the merecat admin page. Put one here only to pin it from git: a key present in
 # this file overwrites the dashboard on every push.
+# The AI BUDGET GUARD — quota_guard_on (0/1, default ON) and quota_guard_pct
+# (10-99, default 95) — is dashboard-owned too. The worker reads the account's
+# Workers AI meter (the Platform usage figure) before every question and
+# mention and rests the librarian at that share of the free day, naming the
+# hours until midnight UTC; admins are held to it. The line is a margin, not
+# the wall: the analytics lag a minute or two, one question is ~0.5% of the day
+# (several times that with reasoning on), and the board's screening spends from
+# the same budget. Pin here only to fix it from git, the same overwrite rule.

@@ -66,7 +66,7 @@ they grew, what's duplicated, and the exact shape they're moving toward.
 | `docs/bible-reader.js` | 439 | KJV/DR reader boot (served raw). |
 | `app/views/board.ts` / `topic.ts` | 435 / 433 | Lit views: board index+category / topic+search. |
 | `app/richtext.ts` | 432 | The one living body renderer (`window.mcRich`): markdown, scripture autolink, emoji. |
-| `comments-worker/src/usagecalc.ts` | 327 | Pure free-tier limit maths for the usage monitor (`usage.ts`, 123, does the GraphQL). |
+| `comments-worker/src/usagecalc.ts` | 327 | Pure free-tier limit maths for the usage monitor (`usage.ts`, 106, does the fetch through `analytics.ts`, the GraphQL glue; `quota.ts`, 90, is the librarian's AI budget guard over the same neurons select — no lib import, Node-tested with a stubbed fetch). |
 | `app/live.ts` | 304 | WebSocket lifecycle (board + merecat chat conns). |
 | `app/core.ts` | 286 | The membrane — the one audited place PureScript types are erased. |
 | `comments-worker/src/{pure,webpush}.js` | 268 / 138 | Extracted pure helpers (tested) / VAPID push crypto. |

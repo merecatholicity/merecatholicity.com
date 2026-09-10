@@ -19,6 +19,18 @@
 -- | reasons at (`mention_effort`). The server clamps; the client's selector
 -- | is a courtesy copy of the same rule.
 -- |
+-- | The AI budget guard (2026-09-10). Every question spends the account's
+-- | Workers AI neurons — one shared free day the worker reads from
+-- | Cloudflare's own analytics (`comments-worker/src/quota.ts`), drawn on by
+-- | the board's screening too. The guard rests the librarian when the day's
+-- | spend reaches a share of that ceiling, so the account never crosses it:
+-- | on by default, the line at 95% (the analytics run a minute or two behind
+-- | the spend, one plain question is about half a percent of the day and
+-- | several times that with reasoning on, and the margin must cover both).
+-- | The refusal names the hours until the day renews at 00:00 UTC. The guard
+-- | binds admins too: it protects the account, not the ration, and the admin
+-- | page is where it is switched off.
+-- |
 -- | Values are the plain strings the config table stores; an unknown one
 -- | reads as a caller-supplied fallback, never as an error, because a dial
 -- | that cannot be read must not stop the librarian from answering.
@@ -40,12 +52,18 @@ module Domain.Merecat
   , bandWeightsCsv
   , bandCaseSql
   , parseDecimal
+  , quotaGuardDefaults
+  , quotaGuardOnFrom
+  , quotaGuardPctFrom
+  , quotaTripped
+  , hoursUntilUtcMidnight
+  , restingNote
   ) where
 
 import Prelude
 
 import Data.Array (elemIndex, length, mapWithIndex)
-import Data.Int (fromString, pow, toNumber) as Int
+import Data.Int (ceil, floor, fromString, pow, toNumber) as Int
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String (Pattern(..), joinWith, length, split, toLower, trim) as S
 import Data.Traversable (traverse)
@@ -185,3 +203,43 @@ parseDecimal s = case S.split (S.Pattern ".") (S.trim s) of
     if fp < 0 then Nothing
       else pure (Int.toNumber ip + Int.toNumber fp / Int.toNumber (Int.pow 10 n))
   _ -> Nothing
+
+-- | The guard's resting values: on, with the line at 95% of the day.
+quotaGuardDefaults :: { on :: Boolean, pct :: Int }
+quotaGuardDefaults = { on: true, pct: 95 }
+
+-- | The switch (config `quota_guard_on`). Default-ON polarity, the social
+-- | switch's rule: only a literal "0" turns it off, because an absent row
+-- | must mean guarded — unguarded is the expensive side.
+quotaGuardOnFrom :: String -> Boolean
+quotaGuardOnFrom v = S.trim v /= "0"
+
+-- | The line (config `quota_guard_pct`): a whole percent from 10 to 99,
+-- | anything else the default. 100 is not a line, it is the wall itself.
+quotaGuardPctFrom :: String -> Int
+quotaGuardPctFrom v = case Int.fromString (S.trim v) of
+  Just n -> if n < 10 then 10 else if n > 99 then 99 else n
+  Nothing -> quotaGuardDefaults.pct
+
+-- | Whether a meter reading has reached the line: `used` of `limit`, in the
+-- | meter's own units, against a whole percent. No limit, no trip.
+quotaTripped :: Int -> Number -> Number -> Boolean
+quotaTripped pct used limit = limit > 0.0 && used * 100.0 >= limit * Int.toNumber pct
+
+-- | Whole hours until the next 00:00 UTC, rounded up (the day meters renew
+-- | then), from milliseconds since the epoch: 24 at midnight itself, 1 in
+-- | the day's last hour.
+hoursUntilUtcMidnight :: Number -> Int
+hoursUntilUtcMidnight nowMs =
+  let dayMs = 86400000.0
+      intoDay = nowMs - Int.toNumber (Int.floor (nowMs / dayMs)) * dayMs
+  in Int.ceil ((dayMs - intoDay) / 3600000.0)
+
+-- | What the resting librarian says, given the hours until the day renews.
+-- | One sentence for both collective limits — the question cap and the
+-- | budget guard — since either is the community's shared day spent.
+restingNote :: Int -> String
+restingNote h =
+  "merecat is resting. The community has reached its shared daily limit. Come back "
+    <> (if h <= 1 then "in under an hour" else "in about " <> show h <> " hours")
+    <> ", when it renews at midnight UTC."

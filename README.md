@@ -519,7 +519,12 @@ shows these steps itself until the token stands). A daily cron (23:30 UTC) runs 
 report and DMs every admin — as merecat, an automated notice — when any meter crosses 80%
 or its ceiling: escalations at once, standing warnings weekly. The limits table lives in
 `comments-worker/src/usagecalc.ts` (pure, unit-tested); when Cloudflare moves a free
-limit, that one table is the edit.
+limit, that one table is the edit. The librarian reads the same Workers AI meter before
+every question and every `@merecat` mention (the **AI budget guard** on the merecat admin
+page, on by default at 95% of the free day, admins included) and rests when the day's
+spend reaches the line, telling the asker how many hours until midnight UTC — so merecat
+is never the reason the account crosses its quota. Without the token the guard has no
+meter and stands open, which the admin page says in words.
 
 ### merecat, the librarian
 
@@ -531,7 +536,8 @@ worker. Its corpus is **decoupled and rebuilt from `librarian/`**:
   file's header) ranks the site's own voice and the catechetical core highest, then the
   Scriptures, the Fathers, Newman, the councils, and the deep shelf beneath.
 - `librarian/persona.md` — the system prompt (also live-editable from the admin page).
-- `librarian/config.yml` — model id, caps, top-k.
+- `librarian/config.yml` — model id, caps, top-k (the reasoning dials and the AI budget
+  guard are set on the merecat admin page).
 - `librarian/ingest.py` — parses every work into anchored chunks, pushes them to the D1
   rooms + Vectorize, and prunes removed works. Retrieval is five-legged (semantic +
   weighted BM25 + raw BM25 + phrase + verse), merged and reranked.

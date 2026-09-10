@@ -174,7 +174,12 @@ reads and its moderation actions.
 
 **Application quotas** (separate from rate limits, stored in the merecat DB):
 per-member **10 questions/day** (only when `user_cap_on`), global **150/day**,
-reset at **00:00 UTC**. Admins bypass both but are still tallied.
+reset at **00:00 UTC**. Admins bypass both but are still tallied. Over both
+sits the **AI budget guard** (on by default): before every ask and every
+`@merecat` mention the worker reads the account's Workers AI meter and refuses
+at the admin's line (95% of the free day unless moved) — **admins included**.
+A guard refusal carries `quota:true` and `reset_in_h`, the whole hours until
+00:00 UTC; when the meter cannot be read the guard stands open.
 
 ### 2.5 Caching & freshness
 
@@ -200,7 +205,7 @@ shorter cache TTL.
   messages; `/chats` up to 50; audit is `300+300+200`.
 - `p` clamps to `[1, 1000]` (`min(1000, max(1, floor(Number(p)||1)))`). List
   responses carry `{items|topics|comments|threads|messages, total, page, per}`.
-- **Text caps** (all: CRLF→LF, trimmed, and `CONTROL_RE` `[ --]`
+- **Text caps** (all: CRLF→LF, trimmed, and `CONTROL_RE` `[\x00-\x08\x0b-\x1f\x7f]`
   refused — tab and newline allowed): body 4000, title 120 (min 3), nick 40,
   bio 500, signature 200, report reason 200. These control-char bars are what
   make the search-highlight sentinels (`U+0002`/`U+0003`) collision-free.
@@ -531,8 +536,11 @@ broadcast. Sockets **hibernate** when idle; there is no server heartbeat.
 chat?, q}`. `POST_LIMIT`, `blockedReason`-gated. `chat` absent/0 mints a new
 thread titled from `q` (≤90 chars); `chat` set verifies ownership (else `404
 "No such conversation."`). Returns `{ok, chatId, backend:"cloudflare"|"local",
-used:{you,cap,cap_on,today,gcap,admin}}` (pre-ask counts). **Adopt `chatId`
-into your state before connecting.**
+used:{you,cap,cap_on,today,gcap,admin,quota}}` (pre-ask counts). **Adopt `chatId`
+into your state before connecting.** When the AI budget guard is resting the
+answer is **`503 {ok:false, resting:true, quota:true, reset_in_h, error}`** with
+a `Retry-After` header (seconds to 00:00 UTC), before anything is minted —
+show `error`, disable asking, and retry after the renewal.
 
 **Step 2 — open the socket.** `GET /api/merecat/live?chat=<id>` with `Upgrade:
 websocket`. Origin-checked, `CONNECT_LIMIT`; `400` without a chat id. The DO
@@ -554,14 +562,20 @@ asking while one is in flight → `{t:'state',phase:'busy'}`.
 | `t` | Shape / meaning |
 |---|---|
 | `hello` | `{t,chatId,phase:'idle'|'queued'|'thinking'|'streaming'|'done'|'error',answer:"<so-far>",sources:[…],used:{…}|null,startedAtMs,backend}`. **This is the entire resume protocol** — on reconnect, `hello` replays phase + answer-so-far + sources. `phase:'idle'` with empty `answer` means no in-flight generation: render the finished thread from `POST /api/merecat/chat` instead. |
-| `state` | `{t,phase}` transitions: `busy` · `thinking`(+chatId,used) · `queued`(+place,backend:'local') · `streaming` · `done`(+chatId) · `error`(+error, optional `resting:true`/`capped:true`). |
+| `state` | `{t,phase}` transitions: `busy` · `thinking`(+chatId,used) · `queued`(+place,backend:'local') · `streaming` · `done`(+chatId) · `error`(+error, optional `resting:true`/`capped:true`; a budget-guard refusal adds `quota:true` and `reset_in_h`). |
 | `meta` | `{t,sources:[{n,title,heading,url}],used:{…},rv:15,backend,chatId}` — emitted when retrieval lands, before tokens. |
 | `tokens` | `{t,d:"<text delta>"}` — batched ~60 ms. May contain `U+0002` (strip) and `U+0003` (= clean end; truncate there). The DO already strips both, but strip defensively. |
 
-The `used` object is `{you,cap,cap_on,today,gcap,admin,backend}`. Quota is
-meaningful **only** when `backend==='cloudflare'` (local mode meters nothing —
-hide the quota line then). Reset time is **not served**: compute next 00:00 UTC
-in the user's local clock.
+The `used` object is `{you,cap,cap_on,today,gcap,admin,backend,quota}`, where
+`quota` is the AI budget guard's member slice
+`{on,pct,meter_pct,resting,reset_in_h,note,configured,unread}`: `on` the
+switch, `pct` the line, `meter_pct` the day's Workers AI share (null when the
+meter is unread or unconfigured), `resting` whether asks are refused right
+now, `reset_in_h` the whole hours until 00:00 UTC, `note` the sentence to show
+a resting reader. Quota is meaningful **only** when `backend==='cloudflare'`
+(local mode meters nothing — hide the quota line then). The exact renewal
+instant is still yours to render: compute next 00:00 UTC in the user's local
+clock.
 
 **Answer text format.** Bot answers (and forwarded ones) are markdown with
 `[n]` citation markers renumbered to `1..k` by first appearance, followed by
@@ -595,7 +609,7 @@ guarantees to rely on:
 | `POST /api/merecat/chat/save` | `{key, id, save}` | `{ok, id, saved:0|1}`. `saved=1` exempts from the 30-day expiry (until unsaved/deleted). `READ_LIMIT`. |
 | `POST /api/merecat/chat/delete` | `{key, id}` | `{ok, deleted:<id>}`. Hard delete. `POST_LIMIT`. |
 | `POST /api/merecat/forward` | `{key, chat, msg:<id|'last'>, topic}` | `{ok, id, topic}`. Posts one private answer into a live unlocked topic under the **bot's** name; back-room target needs admin. `POST_LIMIT`. |
-| `POST /api/merecat/usage` | `{key}` | `{ok, you, cap, cap_on, today, gcap, admin, backend}`. `READ_LIMIT`. **Not** blocked-gated (a locked identity still reads usage). |
+| `POST /api/merecat/usage` | `{key}` | `{ok, you, cap, cap_on, today, gcap, admin, backend, reasoning, quota}` (`quota` as in §5.3). `READ_LIMIT`. **Not** blocked-gated (a locked identity still reads usage). |
 
 Retention: 30 days from last message (`MERECAT_CHAT_DAYS`) unless `saved`. The
 `chats`/`chat_msgs` tables are the one non-derived part of the merecat DB and
