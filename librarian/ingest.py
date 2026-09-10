@@ -564,6 +564,8 @@ def load_ledger(path):
 def save_ledger(path, ledger):
     if not path:
         return
+    # never let the memory's own write end a run whose pushes already landed
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(ledger, f, sort_keys=True, indent=0)

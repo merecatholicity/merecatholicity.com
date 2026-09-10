@@ -154,6 +154,7 @@ jobs:
             exit 0
           fi
           if [ -d librarian/private ]; then echo "private shelf present"; else echo "::notice::no private shelf: its works are skipped this run (skipping never prunes)"; fi
-          args="--push --api $MERECAT_API --ledger librarian/.ledger.json --summary $GITHUB_STEP_SUMMARY"
+          # paths are relative to librarian/, where the script runs; the cache key above names the same file from the root
+          args="--push --api $MERECAT_API --ledger .ledger.json --summary $GITHUB_STEP_SUMMARY"
           if [ -n "$ONLY" ]; then args="$args --only $ONLY"; fi
           cd librarian && python3 ingest.py $args

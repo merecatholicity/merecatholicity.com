@@ -75,6 +75,9 @@ class Memory(unittest.TestCase):
             json.dump([1, 2], f)
         self.assertEqual(ingest.load_ledger(p), {}, 'a ledger that is not a mapping is no ledger')
         ingest.save_ledger('', {'x': 1})   # nothing to write to: a no-op, never an error
+        deep = os.path.join(d, 'not', 'yet', 'there', '.ledger.json')
+        ingest.save_ledger(deep, {'x': {'sig': 's', 'hash': 'h', 'chunks': 1}})   # a missing directory is made, not a crash
+        self.assertEqual(ingest.load_ledger(deep)['x']['hash'], 'h')
 
     def test_a_remembered_work_is_never_a_reason_to_skip_the_push(self):
         """The ledger answers 'was this parsed', never 'was this pushed': the
