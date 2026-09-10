@@ -12,4 +12,13 @@ global_daily: 150   # questions across the whole community per UTC day
 topk: 10            # retrieved chunks handed to the model: enough that the
                     # 4-8-citation rule for a long answer is a comfortable
                     # subset, not the whole list marched through
-max_tokens: 1100    # output ceiling per answer
+max_tokens: 1100    # output ceiling per answer (thinking, when allowed, gets headroom on top)
+temperature: 0.35   # sampling temperature for answers and mentions, 0-1
+# band_weights: "1.6,1.45,1.35,1.25,1.0,1.4,0.9,1.55,1.3"
+#   the weighted search leg's boost for bands 1..9 (site core, Scripture, the
+#   Fathers, councils, deep shelf, Newman, the Roman world, the worldview shelf,
+#   the scholars). Uncomment to tune from git; each 0.1-3.0, nine or nothing.
+# The REASONING dials — reasoning_on (0/1), reasoning_default, reasoning_max and
+# mention_effort (off|low|medium|high|xhigh|max) — are dashboard-owned: set them on
+# the merecat admin page. Put one here only to pin it from git: a key present in
+# this file overwrites the dashboard on every push.

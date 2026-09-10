@@ -20,6 +20,7 @@ import * as Turnstile from '../../purescript/output/Domain.Turnstile/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
+import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
@@ -1885,7 +1886,35 @@ export const MERECAT_DEFAULTS = {
   global_daily: 150,  // questions across the community per UTC day
   topk: 10,           // chunks handed to the model (the 4-8-citation rule needs headroom)
   max_tokens: 1100,
+  /* The dials below come from the kernel (Domain.Merecat), never a literal
+     here: the reasoning ladder, its resting values, the sampling temperature
+     and the nine band weights are one rule shared with the client. */
+  temperature: Merecat.temperatureDefault,
+  band_weights: Merecat.bandWeightsCsv(Merecat.bandWeightsDefault),
+  reasoning_on: Merecat.reasoningDefaults.on ? 1 : 0,
+  reasoning_default: Merecat.reasoningDefaults.deflt,
+  reasoning_max: Merecat.reasoningDefaults.max,
+  mention_effort: Merecat.reasoningDefaults.mention,
 };
+/* The reasoning dials as the client reads them (a courtesy copy: the
+   ChatRoom clamps every ask against the same values). */
+export function merecatReasoningView(cfg: any) {
+  return { on: !!cfg.reasoning_on, default: cfg.reasoning_default, max: cfg.reasoning_max,
+    mention: cfg.mention_effort, ladder: Merecat.effortLadder };
+}
+/* The level an ask may actually run at: the kill switch first, then the
+   reader's (or the mention's) choice parsed against the default and clamped
+   to the admin's ceiling. Off when the switch is off, whatever was asked. */
+export function merecatEffortFor(cfg: any, asked: any) {
+  if (!cfg.reasoning_on) return 'off';
+  return Merecat.effortClamp(String(cfg.reasoning_max))(Merecat.effortParse(String(cfg.reasoning_default))(asked == null ? '' : String(asked)));
+}
+/* The prompt's closing: the token that tells Qwen3 whether it may think, and
+   the directive for how deeply. `off` is the literal the site always sent. */
+export function merecatThinkSuffix(effort: any) {
+  return Merecat.effortThinks(String(effort)) ? '\n\n' + Merecat.effortDirective(String(effort)) + '\n/think' : '/no_think';
+}
+export function merecatHeadroom(effort: any) { return Merecat.effortHeadroom(String(effort)); }
 export const MERECAT_SITE = 'https://merecatholicity.com/';
 /* Six weight bands, the site owner's own ladder: the site's works and its
    catechetical core, the Scriptures, the named works of the Fathers, the
@@ -1919,7 +1948,7 @@ export function merecatMentioned(body: any) {
     .filter((l) => !/^\s*>/.test(l)).join('\n');
   return MERECAT_MENTION_RE.test(unquoted);
 }
-export const MERECAT_RV = 15;  // retrieval build: bump when retrieval logic changes
+export const MERECAT_RV = 16;  // retrieval build: bump when retrieval logic changes
 
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
@@ -1930,13 +1959,19 @@ export async function merecatConfig(env: any) {
   if (merecatConfigCache.cfg && Date.now() - merecatConfigCache.at < 300000) {
     return merecatConfigCache.cfg;
   }
-  const cfg = { ...MERECAT_DEFAULTS, persona: '', mention_effort: 'high' };
+  const cfg: any = { ...MERECAT_DEFAULTS, persona: '' };
   try {
     const { results } = await env.LIBDB.prepare('SELECT k, v FROM config').all();
     for (const r of results || []) {
       if (r.k === 'persona') cfg.persona = String(r.v);
       else if (r.k === 'model') cfg.model = String(r.v);
-      else if (r.k === 'mention_effort') cfg.mention_effort = String(r.v);
+      /* every dial reads through the kernel: a bad row yields its default */
+      else if (r.k === 'mention_effort') cfg.mention_effort = Merecat.effortParse(Merecat.reasoningDefaults.mention)(String(r.v));
+      else if (r.k === 'reasoning_default') cfg.reasoning_default = Merecat.effortParse(Merecat.reasoningDefaults.deflt)(String(r.v));
+      else if (r.k === 'reasoning_max') cfg.reasoning_max = Merecat.effortParse(Merecat.reasoningDefaults.max)(String(r.v));
+      else if (r.k === 'reasoning_on') cfg.reasoning_on = Merecat.reasoningOnFrom(String(r.v)) ? 1 : 0;
+      else if (r.k === 'temperature') cfg.temperature = Merecat.temperatureFrom(String(r.v));
+      else if (r.k === 'band_weights') cfg.band_weights = Merecat.bandWeightsCsv(Merecat.bandWeightsFrom(String(r.v)));
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
       else if (r.k in MERECAT_DEFAULTS) (cfg as any)[r.k] = Number(r.v) || (MERECAT_DEFAULTS as any)[r.k];
     }
@@ -2166,7 +2201,7 @@ export async function merecatRetrieve(env: any, q: any, cfg: any) {
         // beneath them, the named Fathers, the councils, the deep shelf,
         // and the Roman world at the very bottom of the totem.
         const weighted = await db.prepare(SEL +
-          'ORDER BY bm25(chunks_fts) * (CASE w.tier WHEN 1 THEN 1.6 WHEN 2 THEN 1.45 WHEN 6 THEN 1.4 WHEN 3 THEN 1.35 WHEN 4 THEN 1.25 WHEN 9 THEN 1.3 WHEN 8 THEN 1.55 WHEN 7 THEN 0.9 ELSE 1.0 END) ' +
+          'ORDER BY bm25(chunks_fts) * ' + Merecat.bandCaseSql(Merecat.bandWeightsFrom(String(cfg.band_weights || ''))) + ' ' +
           'LIMIT 18').bind(match).all();
         for (const r of weighted.results || []) add(r, false);
         const raw = await db.prepare(SEL +
@@ -2240,7 +2275,7 @@ export async function merecatRetrieve(env: any, q: any, cfg: any) {
    tail and the proxy pump's mid-flight failover, so the two can never drift:
    persona, the thread's condensed summary when one exists, the numbered
    sources, the recent turns verbatim, the question. */
-export async function merecatPrompt(env: any, q: any, history: any, summary: any, cfg: any) {
+export async function merecatPrompt(env: any, q: any, history: any, summary: any, cfg: any, effort: any = 'off') {
   const chunks = await merecatRetrieve(env, q, cfg);
   const sources = chunks.map((c, i) => ({
     n: i + 1, title: merecatScrub(c.title), heading: merecatScrub(c.heading),
@@ -2255,7 +2290,7 @@ export async function merecatPrompt(env: any, q: any, history: any, summary: any
     (summary ? '\n\nTHE CONVERSATION SO FAR, condensed (the newest turns follow verbatim):\n' + summary : '') +
     '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources this turn' +
     (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
-    '):\n\n' + (srcBlock || '(none)') + '/no_think';
+    '):\n\n' + (srcBlock || '(none)') + merecatThinkSuffix(effort);
   const messages = [{ role: 'system', content: sys }];
   for (const h of history) messages.push(h);
   messages.push({ role: 'user', content: q });
@@ -2518,6 +2553,9 @@ export async function merecatMentionReply(env: any, commentId: any) {
     'Write the single comment you will post in reply: answer what was asked, cite sources by their bracketed ' +
     'numbers like [2], stay under 250 words, no greeting and no signature.';
 
+  /* Mentions reason at the admin's mention level, under the same switch and
+     ceiling as every other ask. */
+  const mentionEffort = merecatEffortFor(cfg, cfg.mention_effort);
   let answer = '';
   let sources = [];
   const retrievalQ = ((topicTitle ? topicTitle + ' ' : '') + (c.title && c.title !== topicTitle ? c.title + ' ' : '') + asked)
@@ -2536,14 +2574,14 @@ export async function merecatMentionReply(env: any, commentId: any) {
     '\n\n' + frame +
     '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources' +
     (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
-    '):\n\n' + (srcBlock || '(none)') + '/no_think';
+    '):\n\n' + (srcBlock || '(none)') + merecatThinkSuffix(mentionEffort);
   const messages = [
     { role: 'system', content: sys },
     { role: 'user', content: userMsg },
   ];
   let res;
   try {
-    res = await env.AI.run(cfg.model, { messages, max_tokens: 900, temperature: 0.35 });
+    res = await env.AI.run(cfg.model, { messages, max_tokens: 900 + merecatHeadroom(mentionEffort), temperature: cfg.temperature });
   } catch (err) {
     console.log(JSON.stringify({ event: 'merecat_mention_ai_failed', error: String(err) }));
     return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,

@@ -9208,29 +9208,43 @@ trace('submit: feed post');
     var quota = el('p', 'merecat-quota');
     section.appendChild(quota);
 
-    /* Reasoning control. Hidden until the Cloudflare dials land (the GPU box
-       it used to drive was retired on 2026-09-10); the reader's own choice,
-       remembered on this device. */
-    var MC_MODES = [['instant', 'Instant (Cloudflare, no wait)'], ['off', 'Local · thinking off'],
-      ['low', 'Local · thinking: Low'], ['medium', 'Local · thinking: Medium'],
-      ['high', 'Local · thinking: High'], ['xhigh', 'Local · thinking: Extra high'],
-      ['max', 'Local · thinking: Max']];
+    /* Reasoning control: the kernel's ladder (Domain.Merecat via mcCore),
+       shown only while the admin has reasoning switched on, offering nothing
+       above the admin's ceiling. The reader's own choice, remembered on this
+       device; the server clamps every ask against the same rule, so this is a
+       courtesy copy, never the gate. */
+    var core: any = window.mcCore;
     var modeRow = el('p', 'merecat-quota'); modeRow.hidden = true;
     modeRow.appendChild(document.createTextNode('Reasoning: '));
     var modeSel = el('select', 'scripture-sel');
-    MC_MODES.forEach(function (m) { var o = el('option', null, m[1]); o.value = m[0]; modeSel.appendChild(o); });
-    try { modeSel.value = localStorage.getItem('mc-merecat-mode') || 'high'; } catch (e) {}
-    if (!modeSel.value) modeSel.value = 'high';
-    modeSel.addEventListener('change', function () {
-      try { localStorage.setItem('mc-merecat-mode', modeSel.value); } catch (e) {}
-    });
     modeSel.setAttribute('aria-label', 'Reasoning');
     modeRow.appendChild(modeSel);
     section.appendChild(modeRow);
-    if (window.mcSelectSheet) window.mcSelectSheet(modeSel);   // app picker on phones
+    modeSel.addEventListener('change', function () {
+      try { localStorage.setItem('mc-merecat-mode', modeSel.value); } catch (e) {}
+    });
+    var modeShown = '';
+    function offerModes(r: any) {
+      if (!r || !r.on) { modeRow.hidden = true; return; }
+      var ladder = (r.ladder || core.merecatEffortLadder).slice();
+      var cap = core.merecatEffortParse('off', r.max);
+      var offered = ladder.filter(function (lv: string) { return core.merecatEffortClamp(cap, lv) === lv; });
+      var sig = offered.join(',');
+      if (sig !== modeShown) {
+        modeShown = sig;
+        var keep = modeSel.value;
+        modeSel.textContent = '';
+        offered.forEach(function (lv: string) { var o = el('option', null, core.merecatEffortLabel(lv)); o.value = lv; modeSel.appendChild(o); });
+        var want = keep;
+        try { want = want || localStorage.getItem('mc-merecat-mode') || ''; } catch (e) {}
+        modeSel.value = core.merecatEffortClamp(cap, core.merecatEffortParse(r['default'] || 'off', want));
+        if (window.mcSelectSheet) window.mcSelectSheet(modeSel);   // app picker on phones
+      }
+      modeRow.hidden = false;
+    }
     function renderQuota(u: any) {
       if (!u) return;
-      modeRow.hidden = true;
+      if (u.reasoning) offerModes(u.reasoning);
       quota.hidden = false;
       quota.textContent = '';
       if (u.cap_on) {
@@ -9894,7 +9908,7 @@ trace('submit: feed post');
       var sticky = stickyFollow();
       var acc = '', shown = 0, flowTimer: any = null, sources: any = null;
       var streamDone = false, painted = false, settled = false, asked = false, fellBack = false;
-      var mode = modeSel.value || 'high';
+      var mode = modeRow.hidden ? 'off' : (modeSel.value || 'off');
 
       function endTurn() {
         if (settled) return; settled = true;
@@ -9974,7 +9988,7 @@ trace('submit: feed post');
             if (!asked) {
               asked = true;
               var a: any = { t: 'ask', q: text };
-              if (mode === 'instant') a.instant = true; else a.effort = mode;
+              a.effort = mode;   // a request; the ChatRoom clamps it against the admin's dials
               handle.send(a);
             }
           } else {
@@ -10197,11 +10211,14 @@ trace('submit: feed post');
      the community's shared daily budget answers for everyone. Saved through
      the admin-keyed /config, the same door the make-librarian push uses;
      other edge isolates pick a change up within about five minutes. */
-  /* The librarian's status line: which model answers, and the one dial that
-     lives here for now — how deeply a thread mention may reason. The routing
-     switch between Cloudflare and the owner's GPU box stood here until
-     2026-09-10; Cloudflare is the only backend now. */
-  function renderMerecatStatus(body: any) {
+  /* The librarian's dials (Domain.Merecat): whether readers may ask it to
+     reason, the level a new reader starts at, the highest any reader may
+     pick, and the level a thread mention reasons at — plus the file-owned
+     values (temperature, band weights) shown for the record. Saved through
+     the admin-keyed /config, the door the pipeline's push uses too; every
+     edge isolate picks a change up within about five minutes. */
+  function renderMerecatDials(body: any) {
+    var core: any = window.mcCore;
     body.appendChild(el('h3', null, 'The librarian'));
     var wrap = el('div', 'merecat-backends');
     wrap.appendChild(el('p', 'comments-status', 'Checking…'));
@@ -10215,24 +10232,49 @@ trace('submit: feed post');
             : (dd.error || 'Could not save.');
         }).catch(function () { note.textContent = 'Could not save.'; });
     }
+    function levelSelect(current: string, onPick: (lv: string) => void) {
+      var sel = el('select', 'scripture-sel');
+      core.merecatEffortLadder.forEach(function (lv: string) {
+        var op = el('option', null, core.merecatEffortLabel(lv)); op.value = lv; sel.appendChild(op);
+      });
+      sel.value = core.merecatEffortParse('off', current);
+      sel.addEventListener('change', function () { onPick(sel.value); });
+      return sel;
+    }
     fetchRetry(MERECAT_API + '/backends', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key }) }, [1000])
       .then(function (r) { return r.json(); }).then(function (b) {
         if (!b.ok) throw new Error(b.error || 'failed');
+        var r = b.reasoning || {};
         wrap.textContent = '';
         wrap.appendChild(el('p', null, 'Answers come from Cloudflare Workers AI, model ' + (b.model || '(default)') +
           '. Today: ' + b.cloudflare.today + ' of ' + b.cloudflare.gcap + ' shared questions.'));
-        var mrow = el('p');
-        mrow.appendChild(document.createTextNode('@merecat mention reasoning: '));
-        var msel = el('select', 'scripture-sel');
-        [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'],
-         ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']].forEach(function (o) {
-          var op = el('option', null, o[1]); op.value = o[0]; msel.appendChild(op);
-        });
-        msel.value = (b.mention_effort === 'instant' ? 'off' : b.mention_effort) || 'high';
-        msel.addEventListener('change', function () { saveCfg({ mention_effort: msel.value }, 'Mention reasoning'); });
-        mrow.appendChild(msel);
+        wrap.appendChild(el('h4', null, 'Reasoning'));
+        var onRow = el('p', 'admin-set-row');
+        var onCb = el('input'); onCb.type = 'checkbox'; onCb.checked = !!r.on;
+        onRow.appendChild(onCb); onRow.appendChild(document.createTextNode(' Let the librarian reason (Qwen3 thinking)'));
+        wrap.appendChild(onRow);
+        wrap.appendChild(el('p', 'board-cat-desc',
+          'Off is how the site always answered: the model is told not to think and replies at once. On, a reader may pick a level ' +
+          'from the selector under the composer, up to the ceiling below; the thinking streams inside think-tags the worker strips, ' +
+          'so nothing of it reaches a reader, but every level above Off spends more output tokens (the headroom grows with the level) ' +
+          'and more neurons from the shared daily budget. Watch Platform usage after turning it on.'));
+        onCb.addEventListener('change', function () { saveCfg({ reasoning_on: onCb.checked ? 1 : 0 }, 'Reasoning switch'); });
+        var defRow = el('p', 'admin-set-row'); defRow.appendChild(document.createTextNode('Level a new reader starts at: '));
+        defRow.appendChild(levelSelect(r['default'] || 'low', function (lv) { saveCfg({ reasoning_default: lv }, 'Default level'); }));
+        wrap.appendChild(defRow);
+        var maxRow = el('p', 'admin-set-row'); maxRow.appendChild(document.createTextNode('Highest level a reader may pick: '));
+        maxRow.appendChild(levelSelect(r.max || 'high', function (lv) { saveCfg({ reasoning_max: lv }, 'Ceiling'); }));
+        wrap.appendChild(maxRow);
+        var mrow = el('p', 'admin-set-row'); mrow.appendChild(document.createTextNode('@merecat mention reasoning: '));
+        mrow.appendChild(levelSelect(r.mention || b.mention_effort || 'high', function (lv) { saveCfg({ mention_effort: lv }, 'Mention reasoning'); }));
         wrap.appendChild(mrow);
+        wrap.appendChild(el('p', 'board-cat-desc',
+          'A mention in a thread reasons at this level, under the same switch and ceiling. The ceiling clamps every ask on the ' +
+          'server, whatever a reader\u2019s device remembers.'));
+        wrap.appendChild(el('p', 'comments-status',
+          'From librarian/config.yml, pushed by the pipeline: temperature ' + b.temperature + ', top-k ' + b.topk +
+          ', answer ceiling ' + b.max_tokens + ' tokens, band weights ' + (b.band_weights || '(default)') + '.'));
       }).catch(function () {
         wrap.textContent = '';
         wrap.appendChild(el('p', 'comments-status', 'Could not reach the status endpoint.'));
@@ -10751,7 +10793,7 @@ trace('submit: feed post');
     }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) throw new Error(d.error || 'failed');
       body.textContent = '';
-      renderMerecatStatus(body);
+      renderMerecatDials(body);
       body.appendChild(el('h3', null, 'Usage today'));
       body.appendChild(el('p', null,
         'The community has used ' + d.today + ' of its ' + d.global_daily +

@@ -17,7 +17,9 @@ import {
   json,
   merecatConfig,
   merecatDay,
+  merecatEffortFor,
   merecatFold,
+  merecatHeadroom,
   merecatMentionReply,
   merecatPrompt,
   merecatThinkStripper,
@@ -377,8 +379,10 @@ export class ChatRoom extends DurableObject<Env> {
        GPU box was retired still read it to decide what to show. */
     const used = { you: youQ + 1, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
       today: todayQ + 1, gcap: cfg.global_daily, admin, backend: 'cloudflare' };
-    this.gen = { userMsgId, answer: '', sources: [], used, startedAtMs: Date.now(),
-      effort: String(m.effort || 'high'), instant: !!m.instant };
+    /* The reader's level is a request; the admin's switch and ceiling decide
+       (Domain.Merecat, through merecatEffortFor). */
+    const effort = merecatEffortFor(cfg, m.instant ? 'off' : m.effort);
+    this.gen = { userMsgId, answer: '', sources: [], used, startedAtMs: Date.now(), effort };
     this.phase = 'thinking';
     this.#emit({ t: 'state', phase: 'thinking', chatId: this.chatId, used });
     this.ctx.storage.setAlarm(Date.now() + 30000);   // keep-alive through silent gaps
@@ -417,14 +421,15 @@ export class ChatRoom extends DurableObject<Env> {
     };
 
     let usage = null;
-    const built = await merecatPrompt(this.env, q, history, summary, cfg);
+    const built = await merecatPrompt(this.env, q, history, summary, cfg, this.gen.effort);
     sources = built.sources; this.gen.sources = sources;
     this.gen._msgLen = JSON.stringify(built.messages).length;
-    this.#emit({ t: 'meta', sources, used: this.gen.used, rv: MERECAT_RV, backend: 'cloudflare', chatId: this.chatId });
+    this.#emit({ t: 'meta', sources, used: this.gen.used, rv: MERECAT_RV, backend: 'cloudflare', effort: this.gen.effort, chatId: this.chatId });
     if (this.gen.stopped) {
       /* stopped during retrieval: no model call at all */
     } else {
-    const aiStream = await this.env.AI.run(cfg.model, { messages: built.messages, stream: true, max_tokens: cfg.max_tokens, temperature: 0.35 });
+    const aiStream = await this.env.AI.run(cfg.model, { messages: built.messages, stream: true,
+      max_tokens: cfg.max_tokens + merecatHeadroom(this.gen.effort), temperature: cfg.temperature });
     const strip = merecatThinkStripper();
     const reader = aiStream.getReader(); const dec = new TextDecoder(); let buf = '';
     for (;;) {

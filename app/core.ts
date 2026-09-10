@@ -34,6 +34,7 @@ import * as Media from '../purescript/output/Domain.Media/index.js';
 import * as Call from '../purescript/output/Domain.Call/index.js';
 import * as Wall from '../purescript/output/Domain.Wall/index.js';
 import * as Turnstile from '../purescript/output/Domain.Turnstile/index.js';
+import * as Merecat from '../purescript/output/Domain.Merecat/index.js';
 import * as Cache from '../purescript/output/Domain.Cache/index.js';
 import * as Ptr from '../purescript/output/Domain.Ptr/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
@@ -263,6 +264,16 @@ export const wallEnabledFrom = (v: any): boolean => Wall.enabledFrom(v == null ?
    same reason: getting it backwards puts every phone back in front of a
    challenge that takes the page down. */
 export const turnstileSkipFrom = (v: any): boolean => Turnstile.skipFrom(v == null ? '' : String(v));
+
+/* The librarian's reasoning ladder (Domain.Merecat), read by the reader's
+   selector and the admin dials. The server clamps every ask; these are the
+   client's courtesy copies of the same rule. */
+export const merecatEffortLadder: string[] = Merecat.effortLadder;
+export const merecatEffortParse = (fallback: string, v: any): string => Merecat.effortParse(fallback)(v == null ? '' : String(v));
+export const merecatEffortClamp = (cap: string, level: string): string => Merecat.effortClamp(cap)(level);
+export const merecatEffortLabel = (level: string): string => Merecat.effortLabel(level);
+export const merecatReasoningOnFrom = (v: any): boolean => Merecat.reasoningOnFrom(v == null ? '' : String(v));
+export const merecatReasoningDefaults: { on: boolean; deflt: string; max: string; mention: string } = Merecat.reasoningDefaults;
 
 /* The disk cache's policy (Domain.Cache). `classify` is erased to its tag here
    — 'fresh' | 'stale' | 'expired' — because the store is imperative JS and a PS

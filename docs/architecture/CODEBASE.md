@@ -26,7 +26,7 @@ idea holds the whole thing together and is the key to reading it:
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  PureScript kernel  purescript/src/Domain/*   │  27 modules
+            │  PureScript kernel  purescript/src/Domain/*   │  28 modules
             │  (validation, permissions, parsing, routing,  │  — the rulebook,
             │   ranks, FTS-safety, identity, …) ADTs +      │    pure, tested
             │   smart constructors, illegal states unrep.   │    1:1 in tests/
@@ -144,7 +144,7 @@ middleware layer, a repository layer, and finishing the component migration
 More than the two big files suggest. The **modular seams already exist and are
 proven**:
 
-- The **PureScript `Domain/*` kernel — 27 modules**, each a single rule family
+- The **PureScript `Domain/*` kernel — 28 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
   each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 22 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
@@ -232,7 +232,7 @@ Yes. **Target tree [target]** — every file named for its feature, none over
 ~400 lines:
 
 ```
-purescript/src/Domain/*.purs        the rulebook (27 modules) — unchanged, it's the model
+purescript/src/Domain/*.purs        the rulebook (28 modules) — unchanged, it's the model
 app/
   core.ts        membrane (PS → JS)          api.ts     typed endpoints
   store.ts       request cache               shell.ts   SPA shell

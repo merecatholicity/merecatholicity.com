@@ -6,6 +6,7 @@
    The only secret is TURNSTILE_SECRET, the Turnstile server key. */
 
 import { DurableObject } from 'cloudflare:workers';
+import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import * as Rank from '../../purescript/output/Domain.Rank/index.js';
 import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
 import * as Faith from '../../purescript/output/Domain.Faith/index.js';
@@ -144,6 +145,7 @@ import {
   merecatConfigCache,
   merecatDay,
   merecatEnsureProfile,
+  merecatReasoningView,
   merecatFinishAnswer,
   merecatFold,
   merecatInsertComment,
@@ -4200,6 +4202,8 @@ async function handleMerecatBackends(request: any, env: any) {
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   const today = (g && g.q) || 0;
   return json({ ok: true, backend: 'cloudflare', model: cfg.model, mention_effort: cfg.mention_effort,
+    reasoning: merecatReasoningView(cfg), temperature: cfg.temperature, band_weights: cfg.band_weights,
+    max_tokens: cfg.max_tokens, topk: cfg.topk,
     cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
 }
 
@@ -4581,6 +4585,7 @@ async function handleMerecatUsage(request: any, env: any) {
     today: (g && g.q) || 0, gcap: cfg.global_daily,
     admin: await isAdminHash(env, me),
     backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
+    reasoning: merecatReasoningView(cfg),
   }, 200);
 }
 
@@ -4676,7 +4681,29 @@ async function handleMerecatWorks(request: any, env: any) {
     persona_file_hash: (pfh && pfh.v) || '' }, 200);
 }
 
-/* Persona / model / caps push from librarian/config.yml + persona.md. */
+/* Every dial the librarian has, with its coercion — the write is trusted
+   (admin-keyed) but never raw: a value lands in the table only in the shape
+   the reader (merecatConfig) would produce from it, so the dashboard, the
+   file push and the read agree byte for byte. A key not here is dropped
+   silently, as the app_settings allowlist drops its strangers. */
+const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
+  model: (v) => String(v).trim().slice(0, 120),
+  mention_effort: (v) => Merecat.effortParse(Merecat.reasoningDefaults.mention)(String(v)),
+  reasoning_on: (v) => (String(v) === '1' || String(v) === 'true') ? '1' : '0',
+  reasoning_default: (v) => Merecat.effortParse(Merecat.reasoningDefaults.deflt)(String(v)),
+  reasoning_max: (v) => Merecat.effortParse(Merecat.reasoningDefaults.max)(String(v)),
+  temperature: (v) => String(Merecat.temperatureFrom(String(v))),
+  band_weights: (v) => Merecat.bandWeightsCsv(Merecat.bandWeightsFrom(Array.isArray(v) ? v.join(',') : String(v))),
+  user_cap_on: (v) => Number(v) ? '1' : '0',
+  user_daily: (v) => String(Math.max(1, Math.min(500, Math.floor(Number(v)) || MERECAT_DEFAULTS.user_daily))),
+  global_daily: (v) => String(Math.max(1, Math.min(100000, Math.floor(Number(v)) || MERECAT_DEFAULTS.global_daily))),
+  topk: (v) => String(Math.max(1, Math.min(40, Math.floor(Number(v)) || MERECAT_DEFAULTS.topk))),
+  max_tokens: (v) => String(Math.max(64, Math.min(8192, Math.floor(Number(v)) || MERECAT_DEFAULTS.max_tokens))),
+  persona_file_hash: (v) => String(v).slice(0, 64),
+};
+
+/* Persona / dials push: from librarian/config.yml + persona.md through the
+   pipeline, and from the merecat admin page. */
 async function handleMerecatConfigSet(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -4686,8 +4713,8 @@ async function handleMerecatConfigSet(request: any, env: any) {
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
   if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
-  for (const k of ['model', 'mention_effort', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
-    if (cfg[k] != null) put(k, cfg[k]);
+  for (const k of Object.keys(MERECAT_CONFIG_KEYS)) {
+    if (cfg[k] != null) put(k, MERECAT_CONFIG_KEYS[k](cfg[k]));
   }
   if (!stmts.length) return json({ ok: false, error: 'Nothing to set.' }, 400);
   await env.LIBDB.batch(stmts);

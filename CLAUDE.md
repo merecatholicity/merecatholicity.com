@@ -77,7 +77,7 @@ line in `.gitignore` and an entry in `scripts/nav.py`'s `PAGES`. Elsewhere: `boo
 committed `*-body.tex`, `docs-src/` preserved sources), `partials/` (pandoc includes — a
 partial carrying a versioned asset is stamped too), `scripts/`, `styles/main.css` (the one
 Tailwind v4 entry), `app/` (Lit shell + views, TS), `client/comments.ts` → `docs/comments.js`,
-`purescript/src/Domain/*.purs` (the kernel, 27 modules), `comments-worker/`, `contact-worker/`,
+`purescript/src/Domain/*.purs` (the kernel, 28 modules), `comments-worker/`, `contact-worker/`,
 `librarian/` (`librarian/private/` is a separate PRIVATE clone — never a submodule, never
 committed), `webtest/`, `tests/`, `terraform/`, `.github/workflows/`.
 
@@ -190,9 +190,12 @@ its test in the same change; never delete a test to go green.
   Vectorize; Workers AI; two Durable Objects; three crons) and `contact-worker`
   (`contact-api.merecatholicity.com`). Both TypeScript; `wrangler.jsonc` is the config truth.
 - **merecat**, the librarian bot: a WebSocket state machine in the `ChatRoom` DO, five-legged
-  retrieval over three D1 rooms + Vectorize, `librarian/` is its mind; Cloudflare Workers AI is its only backend (the GPU twin retired 2026-09-10).
-  The band weighting and persona are the owner's standing law — read the merecat passage in
-  INFRASTRUCTURE.md before touching anything there.
+  retrieval over three D1 rooms + Vectorize, `librarian/` is its mind; Cloudflare Workers AI is
+  its only backend (the GPU twin retired 2026-09-10). Its dials are `Domain.Merecat` (the
+  reasoning ladder, temperature, the nine band weights) stored in the librarian D1 `config`
+  table: the file-owned ones ride `librarian/config.yml`, the reasoning ones the merecat admin
+  page. The band weighting and persona are the owner's standing law — read the merecat passage
+  in INFRASTRUCTURE.md before touching anything there.
 - **Terraform** owns the zone settings, DNS, the four rulesets, bot management, the R2 buckets,
   the D1 databases (as records), the Turnstile widgets, both GitHub repos, Pages, the two
   environments, the Actions policy and variables; state is in R2 (`merecatholicity-tfstate`,
@@ -218,4 +221,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The Cloudflare free-tier usage monitor · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · The Cloudflare free-tier usage monitor · `contact-worker/`

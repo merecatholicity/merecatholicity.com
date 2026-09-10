@@ -9,7 +9,7 @@ on the Cloudflare free tier. This directory is its whole mind:
 |--------------|------------|
 | `works.yml`  | the manifest of every work the bot knows, with tiers |
 | `persona.md` | the system prompt: voice, rules, how it argues |
-| `config.yml` | model id, daily caps, retrieval dials |
+| `config.yml` | model id, daily caps, retrieval dials, temperature, the nine band weights (the reasoning dials are set on the merecat admin page) |
 | `extra/`     | drop-in folder for AI-only content (plain .txt/.md) |
 | `ingest.py`  | builds chunks from the sources and pushes everything |
 | `.key`       | your admin board key (git-ignored; or use `MC_ADMIN_KEY`) |
