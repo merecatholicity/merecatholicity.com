@@ -1930,14 +1930,12 @@ export async function merecatConfig(env: any) {
   if (merecatConfigCache.cfg && Date.now() - merecatConfigCache.at < 300000) {
     return merecatConfigCache.cfg;
   }
-  const cfg = { ...MERECAT_DEFAULTS, persona: '', backend: 'cloudflare', failover: 0, mention_effort: 'high' };
+  const cfg = { ...MERECAT_DEFAULTS, persona: '', mention_effort: 'high' };
   try {
     const { results } = await env.LIBDB.prepare('SELECT k, v FROM config').all();
     for (const r of results || []) {
       if (r.k === 'persona') cfg.persona = String(r.v);
       else if (r.k === 'model') cfg.model = String(r.v);
-      else if (r.k === 'backend') cfg.backend = String(r.v) === 'local' ? 'local' : 'cloudflare';
-      else if (r.k === 'failover') cfg.failover = Number(r.v) ? 1 : 0;
       else if (r.k === 'mention_effort') cfg.mention_effort = String(r.v);
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
       else if (r.k in MERECAT_DEFAULTS) (cfg as any)[r.k] = Number(r.v) || (MERECAT_DEFAULTS as any)[r.k];
@@ -1953,41 +1951,9 @@ export function merecatDay() {
   return new Date().toISOString().slice(0, 10);
 }
 
-/* Strip <think>...</think> spans from a token stream, across chunk borders.
-   qwen3 is a reasoning model with no documented off switch on Workers AI, so
-   the persona carries /no_think and this filter guarantees no reasoning ever
-   reaches the client either way. Holds back a small tail in case a tag is
-   split between deltas; flush(null) drains it. */
-export function merecatThinkStripper() {
-  let carry = '';
-  let inThink = false;
-  let started = false; // trim leading whitespace once, after any think block
-  return function feed(delta: any) {
-    if (delta != null) carry += delta;
-    let out = '';
-    for (;;) {
-      if (inThink) {
-        const close = carry.indexOf('</think>');
-        if (close === -1) { carry = carry.slice(-8); break; }
-        carry = carry.slice(close + 8);
-        inThink = false;
-        continue;
-      }
-      const open = carry.indexOf('<think>');
-      if (open !== -1) {
-        out += carry.slice(0, open);
-        carry = carry.slice(open + 7);
-        inThink = true;
-        continue;
-      }
-      if (delta == null) { out += carry; carry = ''; }
-      else { out += carry.slice(0, Math.max(0, carry.length - 7)); carry = carry.slice(-7); }
-      break;
-    }
-    if (!started && out) { out = out.replace(/^\s+/, ''); if (out) started = true; }
-    return out;
-  };
-}
+/* merecatThinkStripper lives in pure.js (plain-Node testable); re-exported here so
+   durable.ts keeps one import site for the librarian helpers. */
+export { merecatThinkStripper } from './pure.js';
 
 /* A question is not a search string. The forum's buildMatch ANDs its first
    ten tokens — right for terse searches, fatal for natural questions, whose
@@ -2296,94 +2262,6 @@ export async function merecatPrompt(env: any, q: any, history: any, summary: any
   return { sources, messages };
 }
 
-/* Local backend: proxy the question to the owner's machine over Tailscale
-   Funnel and relay its stream. The local server does retrieval + generation
-   and returns one JSON line of sources, a blank line, then answer tokens. */
-/* POST a question to the local bot over the Funnel with the shared key. Returns
-   the streaming Response, or null on any failure (offline, refused, queue full)
-   so the caller can fail over to the cloud when that is enabled. */
-export async function merecatLocalFetch(env: any, body: any, ctl?: any) {
-  const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
-  if (!base) return null;
-  // serve.py sends headers at once (before its GPU wait), so a slow header is a
-  // wedged machine, not a busy one — never let it park the worker: 15s and out.
-  // The timer is cleared the moment headers land so the body may stream for
-  // minutes. A caller needing a whole-call deadline passes its own controller.
-  /* The Funnel leg rides Starlink, where a COLD path (relay TCP+TLS setup, a
-     satellite handoff, a lost SYN) fails fast and transiently while the
-     machine is perfectly up — so a QUICK failure retries, twice, with a
-     breath between, the failed try itself having warmed the route. A SLOW
-     failure never retries: 15s of header silence is a wedged machine (cut it
-     loose — with failover on, that is the cloud's cue), an abort is never
-     ours to retry, serve.py's own non-busy 503 is the engine speaking
-     (failover now), and busy is the truth — a full queue, not a fault. A
-     5xx from the relay itself (502/504, the road not the machine) retries
-     like a quick fault. */
-  const ownCtl = ctl || new AbortController();
-  for (let attempt = 0; ; attempt++) {
-    const t0 = Date.now();
-    let retriable = false;
-    const headerTimer = setTimeout(() => { try { ownCtl.abort(); } catch { /* raced */ } }, 15000);
-    try {
-      const r = await fetch(base + '/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Merecat-Key': env.MERECAT_LOCAL_KEY || '' },
-        body: JSON.stringify(body),
-        signal: ownCtl.signal,
-      });
-      clearTimeout(headerTimer);
-      if (r.status === 503) {
-        // full queue, not a dead machine — let the caller say so honestly
-        let refuse: any = null;
-        try { refuse = await r.json(); } catch { /* not JSON */ }
-        if (refuse && refuse.busy) return { busy: true };
-        return null;
-      }
-      if (r.ok && r.body) return r;
-      retriable = r.status >= 500;
-      console.log(JSON.stringify({ event: 'merecat_local_unreachable', status: r.status, attempt }));
-    } catch (err) {
-      clearTimeout(headerTimer);
-      retriable = (Date.now() - t0) < 5000 && !(err && (err as any).name === 'AbortError');
-      console.log(JSON.stringify({ event: 'merecat_local_unreachable', error: String(err), attempt }));
-    }
-    if (!retriable || attempt >= 2) return null;
-    await new Promise((res) => setTimeout(res, 400 + attempt * 500));
-  }
-}
-
-/* Read a local answer fully — for @merecat mentions, which post a comment
-   rather than stream to a browser. Skips any leading {queue} notices, reads
-   the {sources} header, and returns { sources, answer } or null. */
-export async function merecatLocalRead(env: any, body: any) {
-  // A whole-call deadline: a mention read runs inside waitUntil, where a hung
-  // local stream would otherwise park until the runtime kills the invocation.
-  const ctl = new AbortController();
-  const resp: any = await merecatLocalFetch(env, body, ctl);
-  if (!resp || resp.busy) return resp;   // null offline, {busy} full queue
-  const deadline = setTimeout(() => { try { ctl.abort(); } catch { /* raced */ } }, 600000);
-  let full = '';
-  try {
-    const reader = resp.body.getReader();
-    const dec = new TextDecoder();
-    for (;;) { const { done, value } = await reader.read(); if (done) break; full += dec.decode(value, { stream: true }); }
-  } catch { clearTimeout(deadline); return null; }
-  clearTimeout(deadline);
-  let rest = full;
-  let sources = [];
-  for (;;) {
-    const nl = rest.indexOf('\n\n');
-    if (nl === -1) break;
-    let head; try { head = JSON.parse(rest.slice(0, nl)); } catch { break; }
-    rest = rest.slice(nl + 2);
-    if (head && head.sources) { sources = head.sources; break; }
-    // else a {queue} notice — skip and keep reading
-  }
-  rest = rest.replace(/\u0002/g, '');
-  const mark = rest.indexOf('\u0003');
-  if (mark !== -1) rest = rest.slice(0, mark);
-  return { sources, answer: rest.trim() };
-}
 
 export const MERECAT_WINDOW = 10;   // newest turns sent verbatim
 export const MERECAT_FOLD_MIN = 4;  // fold only when this many turns have aged out
@@ -2632,87 +2510,66 @@ export async function merecatMentionReply(env: any, commentId: any) {
   /* A bare "@merecat" under a question-bearing title: the title IS the ask. */
   if (!asked && topicTitle) asked = topicTitle;
   const userMsg = asked || 'Please weigh in on this thread.';
-  /* The thread/page brief, shared by both backends so the answer sees the same
-     context either way: where the mention lives, the recent conversation, and
-     the reply instructions. */
+  /* The thread/page brief: where the mention lives, the recent conversation,
+     and the reply instructions. */
   const frame = 'You were mentioned by name inside ' + where + '. The recent conversation, oldest first:\n\n' +
     (talkBlock || '(the thread starts with the comment below)') +
     '\n\nThe member ' + nameOf(c.author_hash) + ' has asked you directly, in the comment you are replying to. ' +
     'Write the single comment you will post in reply: answer what was asked, cite sources by their bracketed ' +
     'numbers like [2], stay under 250 words, no greeting and no signature.';
 
-  /* Mention reasoning is an admin setting (default high). 'instant' routes a
-     mention to the cloud even when local is the backend; otherwise local does
-     the retrieval and generation at the chosen depth, and failover (if on)
-     drops to the cloud when local is down. */
-  const mentionEffort = cfg.mention_effort || 'high';
   let answer = '';
   let sources = [];
-  if (cfg.backend === 'local' && env.MERECAT_LOCAL_URL && mentionEffort !== 'instant') {
-    const loc = await merecatLocalRead(env, { q: userMsg, context: frame, effort: mentionEffort });
-    if (loc && loc.answer) { answer = loc.answer; sources = loc.sources; }
-    else if (!cfg.failover) {
-      return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
-        loc && loc.busy
-          ? 'merecat is answering others right now. Mention me again in a few minutes.'
-          : 'merecat is resting (the local librarian is offline). Mention me again shortly.');
-    }
-    // else failover on: fall through to the cloud below
+  const retrievalQ = ((topicTitle ? topicTitle + ' ' : '') + (c.title && c.title !== topicTitle ? c.title + ' ' : '') + asked)
+    .slice(0, 2000) || 'this site';
+  const chunks = await merecatRetrieve(env, retrievalQ, cfg);
+  sources = chunks.map((cc, i) => ({
+    n: i + 1, title: merecatScrub(cc.title), heading: merecatScrub(cc.heading),
+    url: !cc.url ? '' : /^https?:\/\//.test(cc.url) ? cc.url : MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
+  }));
+  let srcBlock = '';
+  chunks.forEach((cc, i) => {
+    srcBlock += '[' + (i + 1) + '] (' + ((MERECAT_TIER_LABEL as any)[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
+      (cc.heading ? ' — ' + merecatScrub(cc.heading) : '') + '\n' + merecatScrub(cc.text.slice(0, 2800), true) + '\n\n';
+  });
+  const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
+    '\n\n' + frame +
+    '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources' +
+    (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
+    '):\n\n' + (srcBlock || '(none)') + '/no_think';
+  const messages = [
+    { role: 'system', content: sys },
+    { role: 'user', content: userMsg },
+  ];
+  let res;
+  try {
+    res = await env.AI.run(cfg.model, { messages, max_tokens: 900, temperature: 0.35 });
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_mention_ai_failed', error: String(err) }));
+    return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
+      MERECAT_RESTING + ' Mention me again then.');
   }
-  if (!answer) {
-    const retrievalQ = ((topicTitle ? topicTitle + ' ' : '') + (c.title && c.title !== topicTitle ? c.title + ' ' : '') + asked)
-      .slice(0, 2000) || 'this site';
-    const chunks = await merecatRetrieve(env, retrievalQ, cfg);
-    sources = chunks.map((cc, i) => ({
-      n: i + 1, title: merecatScrub(cc.title), heading: merecatScrub(cc.heading),
-      url: !cc.url ? '' : /^https?:\/\//.test(cc.url) ? cc.url : MERECAT_SITE + cc.url + (cc.anchor ? '#' + cc.anchor : ''),
-    }));
-    let srcBlock = '';
-    chunks.forEach((cc, i) => {
-      srcBlock += '[' + (i + 1) + '] (' + ((MERECAT_TIER_LABEL as any)[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
-        (cc.heading ? ' — ' + merecatScrub(cc.heading) : '') + '\n' + merecatScrub(cc.text.slice(0, 2800), true) + '\n\n';
-    });
-    const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
-      '\n\n' + frame +
-      '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources' +
-      (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
-      '):\n\n' + (srcBlock || '(none)') + '/no_think';
-    const messages = [
-      { role: 'system', content: sys },
-      { role: 'user', content: userMsg },
-    ];
-    let res;
-    try {
-      res = await env.AI.run(cfg.model, { messages, max_tokens: 900, temperature: 0.35 });
-    } catch (err) {
-      console.log(JSON.stringify({ event: 'merecat_mention_ai_failed', error: String(err) }));
-      return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash,
-        MERECAT_RESTING + ' Mention me again then.');
-    }
-    answer = res == null ? '' : (res.response != null ? String(res.response)
-      : (res.choices && res.choices[0] && res.choices[0].message
-        ? String(res.choices[0].message.content || '') : ''));
-    answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-  }
+  answer = res == null ? '' : (res.response != null ? String(res.response)
+    : (res.choices && res.choices[0] && res.choices[0].message
+      ? String(res.choices[0].message.content || '') : ''));
+  answer = answer.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
   if (!answer) return null;
   answer = merecatFinishAnswer(answer, sources);
   const replyId = await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, answer.slice(0, 12000));
 
-  // Mentions are tallied against the caps only in strict Cloudflare mode.
-  if (cfg.backend === 'cloudflare') {
-    const inTok = Math.ceil((frame.length + userMsg.length) / 4);
-    const outTok = Math.ceil(answer.length / 4);
-    await env.LIBDB.batch([
-      env.LIBDB.prepare(
-        'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
-        'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
-      ).bind(day, inTok, outTok),
-      env.LIBDB.prepare(
-        'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
-        'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
-      ).bind(day, c.author_hash),
-    ]);
-  }
+  // Mentions are tallied against the caps like any other question.
+  const inTok = Math.ceil((frame.length + userMsg.length) / 4);
+  const outTok = Math.ceil(answer.length / 4);
+  await env.LIBDB.batch([
+    env.LIBDB.prepare(
+      'INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ' +
+      'ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3'
+    ).bind(day, inTok, outTok),
+    env.LIBDB.prepare(
+      'INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ' +
+      'ON CONFLICT(day, hash) DO UPDATE SET q = q + 1'
+    ).bind(day, c.author_hash),
+  ]);
   return replyId;
 }
 

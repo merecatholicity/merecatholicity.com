@@ -147,8 +147,6 @@ import {
   merecatFinishAnswer,
   merecatFold,
   merecatInsertComment,
-  merecatLocalFetch,
-  merecatLocalRead,
   merecatMatch,
   merecatMentionReply,
   merecatMentioned,
@@ -157,7 +155,6 @@ import {
   merecatPrompt,
   merecatRetrieve,
   merecatScrub,
-  merecatThinkStripper,
   merecatVerseSeats,
   metaForHash,
   normalizeLinks,
@@ -4190,13 +4187,10 @@ async function handleMerecatAdminThread(request: any, env: any) {
   return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
 }
 
-/* Backend status for the admin page: is the local librarian reachable right
-   now, and where does the cloud stand against its daily budget. Admin only.
-   The probe is PATIENT: a cold Funnel path over Starlink can need seconds of
-   relay TLS setup, and the old 450ms×3 read a healthy machine as offline
-   until a refresh rode the warmed route. Escalating tries — each failure
-   warms the way for the next — and the answer carries what /health knows:
-   readiness, the reranker canary, and the measured round trip. */
+/* Status for the admin page: which model answers and where the community
+   stands against its daily budget. Admin only. The GPU box this used to probe
+   over Tailscale was retired on 2026-09-10; `backend` is kept in the answer
+   for one deploy so a client built before that still reads it. */
 async function handleMerecatBackends(request: any, env: any) {
   let data: any = {};
   try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
@@ -4205,29 +4199,8 @@ async function handleMerecatBackends(request: any, env: any) {
   const day = merecatDay();
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
   const today = (g && g.q) || 0;
-  let local: any = { online: false };
-  const base = String(env.MERECAT_LOCAL_URL || '').replace(/\/$/, '');
-  if (base) {
-    const budgets = [1500, 3000, 5000];
-    for (let i = 0; i < budgets.length && !local.online; i++) {
-      const t0 = Date.now();
-      try {
-        const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), budgets[i]);
-        const r = await fetch(base + '/health', { signal: ctl.signal });
-        clearTimeout(timer);
-        if (r.ok) {
-          const h: any = await r.json();
-          local = { online: true, ms: Date.now() - t0, tries: i + 1,
-            chunks: h.chunks || 0, model: h.model || '',
-            ready: h.ready !== false, why: h.why || '',
-            rerank: typeof h.rerank === 'string' ? h.rerank : '' };
-        }
-      } catch { /* cold or cut: escalate and try again */ }
-    }
-  }
-  return json({ ok: true, backend: cfg.backend, failover: cfg.failover, mention_effort: cfg.mention_effort,
-    configured: !!base, local, cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
+  return json({ ok: true, backend: 'cloudflare', model: cfg.model, mention_effort: cfg.mention_effort,
+    cloudflare: { online: true, today, gcap: cfg.global_daily } }, 200);
 }
 
 /* Drain the model's SSE stream into the client stream: preamble first (the
@@ -4607,7 +4580,7 @@ async function handleMerecatUsage(request: any, env: any) {
     you: (u && u.q) || 0, cap: cfg.user_daily, cap_on: cfg.user_cap_on,
     today: (g && g.q) || 0, gcap: cfg.global_daily,
     admin: await isAdminHash(env, me),
-    backend: cfg.backend,
+    backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
   }, 200);
 }
 
@@ -4653,7 +4626,7 @@ async function handleMerecatAbout(request: any, env: any) {
     ok: true,
     model: cfg.model, topk: cfg.topk,
     user_daily: cfg.user_daily, user_cap_on: cfg.user_cap_on, global_daily: cfg.global_daily,
-    backend: cfg.backend,
+    backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
     persona: cfg.persona,
     chunks: list.reduce((n: any, w: any) => n + (w.chunks || 0), 0),
     works: list,
@@ -4713,7 +4686,7 @@ async function handleMerecatConfigSet(request: any, env: any) {
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
   if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
-  for (const k of ['model', 'backend', 'failover', 'mention_effort', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
+  for (const k of ['model', 'mention_effort', 'user_cap_on', 'user_daily', 'global_daily', 'topk', 'max_tokens', 'persona_file_hash']) {
     if (cfg[k] != null) put(k, cfg[k]);
   }
   if (!stmts.length) return json({ ok: false, error: 'Nothing to set.' }, 400);
@@ -4826,7 +4799,7 @@ async function handleMerecatAskInit(request: any, env: any) {
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first();
     youQ = (u && u.q) || 0;
   } catch { /* preview only */ }
-  return json({ ok: true, chatId, backend: cfg.backend,
+  return json({ ok: true, chatId, backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
     used: { you: youQ, cap: cfg.user_daily, cap_on: cfg.user_cap_on, today: todayQ, gcap: cfg.global_daily, admin } }, 200);
 }
 

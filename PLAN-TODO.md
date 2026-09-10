@@ -32,7 +32,7 @@ interactive suite is the behavioral truth — if it's green after a deploy, the 
 - PureScript: `purescript/src/Domain/*.purs` (20 modules) — **do not port to TS**.
 - DBs: D1 `merecatholicity-comments` (bind `DB`) + `merecat-library`/`-deep`/`-deep2`
   (`LIBDB`/`LIBDB2`/`LIBDB3`). Schemas: `comments-worker/schema.sql` (22 tables),
-  `comments-worker/schema-librarian.sql` (8 tables ×3 DBs), `local/build_index.py` (divergent `chunks`).
+  `comments-worker/schema-librarian.sql` (8 tables ×3 DBs). (The divergent `local/build_index.py` copy left with the GPU backend, 2026-09-10.)
 - Live-write test path: `webtest/.testkeys` holds two identity keys + `MC_TEST_TOKEN` (worker
   `MC_TEST_BYPASS` secret). `webtest/live_kit.py` + `test_interactive.py` drive 2 real users on prod.
 
@@ -50,8 +50,8 @@ interactive suite is the behavioral truth — if it's green after a deploy, the 
    `0000_baseline_library.sql` = the library schema (applied to all 3 lib DBs).
 4. Apply: `wrangler d1 migrations apply <db> --remote` for each DB — must report 0 pending (or only
    reviewed drift). `wrangler d1 migrations list <db> --remote` shows the ledger.
-5. Reconcile the 3rd schema: change `local/build_index.py`'s `chunks` DDL to the canonical D1 shape (or make
-   it replay `0000_baseline_library.sql`). One origin for all schemas.
+5. ~~Reconcile the 3rd schema (`local/build_index.py`)~~ — done by removal: the GPU backend and its copy of
+   the `chunks` DDL were retired on 2026-09-10; `schema-librarian.sql` is the one origin.
 6. Convert `schema.sql`/`schema-librarian.sql` into generated snapshots (header: "generated from
    migrations/; do not hand-edit"). Add `make migrate` (apply all DBs) + `make migrate-status` (list).
 7. Update `CLAUDE.md`: new schema change = `wrangler d1 migrations create` → write `.sql` → `apply --remote`.

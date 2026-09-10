@@ -266,3 +266,50 @@ export function discordSnippet(body, max = 500) {
   if (s.length > max) s = s.slice(0, max - 1).trimEnd() + '\u2026';
   return s;
 }
+
+/* Strip <think>...</think> spans from a token stream, across chunk borders.
+   qwen3 reasons; the prompt decides whether it may (/think or /no_think — see
+   merecatPrompt), and this filter guarantees no reasoning ever reaches the
+   client either way. Holds back a small tail in case a tag is split between
+   deltas; feed(null) drains it. A chat template that pre-opens the think
+   block sends the reasoning with NO opening tag and a bare </think> at its
+   end: before anything visible has started, such a close tag drops all that
+   came before it (the guarantee the GPU twin carried, kept here since 2026-09-10). */
+export function merecatThinkStripper() {
+  let carry = '';
+  let inThink = false;
+  let started = false; // trim leading whitespace once, after any think block
+  return function feed(delta) {
+    if (delta != null) carry += delta;
+    let out = '';
+    for (;;) {
+      if (inThink) {
+        const close = carry.indexOf('</think>');
+        if (close === -1) { carry = carry.slice(-8); break; }
+        carry = carry.slice(close + 8);
+        inThink = false;
+        continue;
+      }
+      const open = carry.indexOf('<think>');
+      const bare = carry.indexOf('</think>');
+      if (bare !== -1 && (open === -1 || open > bare)) {
+        /* A close tag with no open before it: swallow it always; before any
+           visible text has started, drop the reasoning buffered ahead of it. */
+        if (started) out += carry.slice(0, bare);
+        carry = carry.slice(bare + 8);
+        continue;
+      }
+      if (open !== -1) {
+        out += carry.slice(0, open);
+        carry = carry.slice(open + 7);
+        inThink = true;
+        continue;
+      }
+      if (delta == null) { out += carry; carry = ''; }
+      else { out += carry.slice(0, Math.max(0, carry.length - 7)); carry = carry.slice(-7); }
+      break;
+    }
+    if (!started && out) { out = out.replace(/^\s+/, ''); if (out) started = true; }
+    return out;
+  };
+}

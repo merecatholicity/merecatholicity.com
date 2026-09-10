@@ -161,7 +161,7 @@ What is **not** yet modular: the two monoliths. **~90%** of the worker's SQL and
 request-handling still lives inline in one file; the client still carries **42**
 classic fallbacks beside the Lit components. Test layers are already modular and
 tiered: **Layer 1** unit (`tests/`, 27 node + 7 py + 22 PS specs), **Layer 2**
-headless (`webtest/`), backend (`local/tests/`).
+headless (`webtest/`).
 
 ### 3. Why do we have 6,000+-line files?
 

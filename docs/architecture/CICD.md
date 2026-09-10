@@ -322,8 +322,8 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
 - **Renaming an applied migration file** makes wrangler see it as pending: rename the row in
   `d1_migrations` too (prod AND local miniflare), or the next apply fails on a duplicate
   column.
-- **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `MERECAT_LOCAL_KEY`,
-  `TURN_KEY_SECRET`, `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
+- **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `TURN_KEY_SECRET`,
+  `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
   Never in git, never in CI.
 
 ---
@@ -401,7 +401,7 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 
 1. **Worker secrets** — `wrangler secret put`; a secret does not belong in git or CI.
 2. **The librarian ingest** (`make librarian`) — needs the private shelf (a separate private
-   clone) and the owner's admin key; the GPU box (`local/`) is a machine, not a job.
+   clone) and the owner's admin key.
 3. **The bootstrap secrets and the state bucket** — `gh secret set` for the five secrets;
    `merecatholicity-tfstate` unmanaged. A credential cannot be minted by the automation it
    authorises; a state store cannot manage itself.

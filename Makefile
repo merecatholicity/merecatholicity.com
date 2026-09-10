@@ -55,7 +55,7 @@ pstest: psbuild
 # (node:assert), Python + the CSS/build invariants via stdlib unittest. Hermetic
 # and fast — no browser, no network. psbuild first so the compiled Domain output
 # the JS/PS tests import is fresh. Layer 2 (headless render parity) is webtest/;
-# the librarian backend regression is local/tests/. See tests/README.md.
+# the headless layer is webtest/ (against prod). See tests/README.md.
 tests: psbuild
 	@echo "== PureScript + JS unit tests (node --test) =="
 	@node --test $$(find tests -name '*.test.mjs' | sort)
@@ -262,7 +262,7 @@ chart-pdfs:
 .PHONY: serve
 # Local preview only. --bind 127.0.0.1 is LOAD-BEARING SECURITY: without it
 # http.server binds 0.0.0.0 (every interface) and serves this whole working
-# tree — including the git-ignored secrets local/serve.key and librarian/.key
+# tree — including the git-ignored secret librarian/.key
 # and the private shelf — to anyone on the LAN or tailnet. A stray one ran
 # open for two days once (2026-07-29). Never remove the bind.
 serve:

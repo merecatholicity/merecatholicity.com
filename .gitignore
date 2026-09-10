@@ -53,16 +53,6 @@ __pycache__/
 librarian/.key
 librarian/private/
 
-# merecat-local: the offline GPU twin. Its CODE (local/*.py, mc_config.yml,
-# README, the systemd units) is tracked; its DERIVED state is not — the embedded
-# corpus, the sqlite index, and the reranker GGUF are rebuilt by
-# `python local/build_index.py`. The live local prompt and key are private;
-# the committed persona.local.example.md is the starter a fresh clone copies.
-local/data/
-local/models/
-local/serve.key
-local/persona.local.md
-
 # Interactive test-kit identity keys (throwaway, never committed).
 webtest/.testkeys
 

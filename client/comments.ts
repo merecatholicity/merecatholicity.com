@@ -9208,9 +9208,9 @@ trace('submit: feed post');
     var quota = el('p', 'merecat-quota');
     section.appendChild(quota);
 
-    /* Reasoning control, shown only while the local librarian is the active
-       backend. The reader's own choice, remembered on this device. Instant
-       drops the question to Cloudflare, no wait and no deep reasoning. */
+    /* Reasoning control. Hidden until the Cloudflare dials land (the GPU box
+       it used to drive was retired on 2026-09-10); the reader's own choice,
+       remembered on this device. */
     var MC_MODES = [['instant', 'Instant (Cloudflare, no wait)'], ['off', 'Local · thinking off'],
       ['low', 'Local · thinking: Low'], ['medium', 'Local · thinking: Medium'],
       ['high', 'Local · thinking: High'], ['xhigh', 'Local · thinking: Extra high'],
@@ -9230,10 +9230,7 @@ trace('submit: feed post');
     if (window.mcSelectSheet) window.mcSelectSheet(modeSel);   // app picker on phones
     function renderQuota(u: any) {
       if (!u) return;
-      if (u.backend) modeRow.hidden = (u.backend !== 'local');
-      /* Caps and the community quota belong to strict Cloudflare mode. In local
-         mode there is no rate limiting, so the quota line is hidden entirely. */
-      if (u.backend === 'local') { quota.hidden = true; quota.textContent = ''; return; }
+      modeRow.hidden = true;
       quota.hidden = false;
       quota.textContent = '';
       if (u.cap_on) {
@@ -9993,9 +9990,6 @@ trace('submit: feed post');
             var wait = (m.place > 0)
               ? (m.place + (m.place === 1 ? ' question' : ' questions') + ' ahead of you in line, please wait')
               : 'no one else is in line, answering you now';
-            if (mode === 'high') wait += ' — on High this usually takes about a minute';
-            else if (mode === 'xhigh') wait += ' — at Extra-high this can take a minute or two';
-            else if (mode === 'max') wait += ' — at Max this can take a couple of minutes';
             working.setStatus(wait);
           } else if (m.phase === 'thinking') {
             if (m.used) renderQuota(m.used);
@@ -10203,25 +10197,15 @@ trace('submit: feed post');
      the community's shared daily budget answers for everyone. Saved through
      the admin-keyed /config, the same door the make-librarian push uses;
      other edge isolates pick a change up within about five minutes. */
-  /* The routing switch: which librarian answers, Cloudflare (always on) or the
-     owner's local machine over Tailscale, with a live online/offline read from
-     a quick health ping the worker runs. A hardwire choice, no failover. */
-  function renderBackendSwitch(body: any) {
-    body.appendChild(el('h3', null, 'Which librarian answers'));
+  /* The librarian's status line: which model answers, and the one dial that
+     lives here for now — how deeply a thread mention may reason. The routing
+     switch between Cloudflare and the owner's GPU box stood here until
+     2026-09-10; Cloudflare is the only backend now. */
+  function renderMerecatStatus(body: any) {
+    body.appendChild(el('h3', null, 'The librarian'));
     var wrap = el('div', 'merecat-backends');
-    wrap.appendChild(el('p', 'comments-status', 'Checking the backends…'));
+    wrap.appendChild(el('p', 'comments-status', 'Checking…'));
     body.appendChild(wrap);
-    function save(val: any) {
-      var note = el('p', 'comments-status', 'Switching…'); wrap.appendChild(note);
-      fetchRetry(MERECAT_API + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, config: { backend: val } }) }, [1000])
-        .then(function (r) { return r.json(); }).then(function (dd) {
-          note.textContent = dd.ok
-            ? ('Now routing to ' + (val === 'local' ? 'this machine (local)' : 'Cloudflare') +
-               '. Live across the edge within about five minutes.')
-            : (dd.error || 'Could not switch.');
-        }).catch(function () { note.textContent = 'Could not switch.'; });
-    }
     function saveCfg(obj: any, label: any) {
       var note = el('p', 'comments-status', 'Saving…'); wrap.appendChild(note);
       fetchRetry(MERECAT_API + '/config', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -10231,92 +10215,28 @@ trace('submit: feed post');
             : (dd.error || 'Could not save.');
         }).catch(function () { note.textContent = 'Could not save.'; });
     }
-    function draw() {
-      fetchRetry(MERECAT_API + '/backends', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key }) }, [1000])
-        .then(function (r) { return r.json(); }).then(function (b) {
-          wrap.textContent = '';
-          if (!b.ok) { wrap.appendChild(el('p', 'comments-status', 'Could not read backend status.')); return; }
-          var cf = b.cloudflare || {}, lo = b.local || {};
-          var loLine;
-          if (!lo.online) {
-            loLine = 'offline right now — the machine, Tailscale, or the satellite link';
-          } else {
-            loLine = 'online · ' + (lo.ms != null ? lo.ms + ' ms · ' : '') +
-              (lo.chunks || 0).toLocaleString() + ' passages';
-            if (lo.tries > 1) loLine += ' · woke on try ' + lo.tries;
-            if (lo.rerank === 'degraded') loLine += ' · reranker degraded, salvage active';
-            else if (lo.rerank === 'down') loLine += ' · reranker DOWN';
-            if (lo.ready === false) loLine += ' · NOT READY: ' + (lo.why || 'engine fault — asks go to the cloud');
-          }
-          [['cloudflare', 'Cloudflare (always on)', true,
-            'online · ' + (cf.today || 0) + '/' + (cf.gcap || 0) + ' questions used today'],
-           ['local', 'This machine, over Tailscale', !!lo.online, loLine]
-          ].forEach(function (o) {
-            var row = el('label'); row.style.display = 'block'; row.style.margin = '.35em 0';
-            var radio = el('input'); radio.type = 'radio'; radio.name = 'mc-backend'; radio.value = o[0];
-            radio.checked = (b.backend === o[0]);
-            radio.addEventListener('change', function () { if (radio.checked) { applyGate(o[0] === 'local'); save(o[0]); } });
-            row.appendChild(radio);
-            row.appendChild(el('strong', null, ' ' + o[1] + '  '));
-            var dot = el('span', null, o[2] ? '● ' : '○ '); dot.style.color = o[2] ? '#2e7d32' : '#b00';
-            row.appendChild(dot);
-            row.appendChild(el('span', 'comments-status', o[3] as string));
-            wrap.appendChild(row);
-          });
-          var rp = el('p', 'comments-status');
-          var refresh = el('a', 'body-link', 'refresh status'); refresh.href = '#';
-          refresh.addEventListener('click', function (e: any) {
-            e.preventDefault(); wrap.textContent = '';
-            wrap.appendChild(el('p', 'comments-status', 'Checking…')); draw();
-          });
-          rp.appendChild(refresh); wrap.appendChild(rp);
-
-          var frow = el('p');
-          var fchk = el('input'); fchk.type = 'checkbox'; fchk.id = 'mc-failover'; fchk.checked = !!b.failover;
-          fchk.addEventListener('change', function () {
-            saveCfg({ failover: fchk.checked ? 1 : 0 }, 'Failover ' + (fchk.checked ? 'on' : 'off'));
-          });
-          frow.appendChild(fchk);
-          var flbl = el('label', null, ' Fail over to Cloudflare if the local librarian is offline');
-          flbl.htmlFor = 'mc-failover';
-          frow.appendChild(flbl);
-          wrap.appendChild(frow);
-
-          var mrow = el('p');
-          mrow.appendChild(document.createTextNode('@merecat mention reasoning: '));
-          var msel = el('select', 'scripture-sel');
-          [['instant', 'Instant (Cloudflare)'], ['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'],
-           ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']].forEach(function (o) {
-            var op = el('option', null, o[1]); op.value = o[0]; msel.appendChild(op);
-          });
-          msel.value = b.mention_effort || 'high';
-          msel.addEventListener('change', function () { saveCfg({ mention_effort: msel.value }, 'Mention reasoning'); });
-          mrow.appendChild(msel);
-          wrap.appendChild(mrow);
-
-          /* The backend is the top-level gate: on Cloudflare the site behaves
-             exactly as it always has, and the settings below (which only shape
-             the local librarian) gray out to make that plain. */
-          var gateNote = el('p', 'comments-status', '');
-          wrap.appendChild(gateNote);
-          function applyGate(isLocal: any) {
-            fchk.disabled = !isLocal; msel.disabled = !isLocal;
-            frow.style.opacity = isLocal ? '' : '0.45';
-            mrow.style.opacity = isLocal ? '' : '0.45';
-            gateNote.textContent = isLocal
-              ? 'Local is the active backend. The settings below apply.'
-              : 'Cloudflare is the active backend — the site behaves exactly as before, and the settings below do not apply.';
-          }
-          applyGate(b.backend === 'local');
-
-          if (!b.configured) wrap.appendChild(el('p', 'comments-status', 'No local URL is configured on the worker yet.'));
-        }).catch(function () {
-          wrap.textContent = '';
-          wrap.appendChild(el('p', 'comments-status', 'Could not reach the status endpoint.'));
+    fetchRetry(MERECAT_API + '/backends', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }) }, [1000])
+      .then(function (r) { return r.json(); }).then(function (b) {
+        if (!b.ok) throw new Error(b.error || 'failed');
+        wrap.textContent = '';
+        wrap.appendChild(el('p', null, 'Answers come from Cloudflare Workers AI, model ' + (b.model || '(default)') +
+          '. Today: ' + b.cloudflare.today + ' of ' + b.cloudflare.gcap + ' shared questions.'));
+        var mrow = el('p');
+        mrow.appendChild(document.createTextNode('@merecat mention reasoning: '));
+        var msel = el('select', 'scripture-sel');
+        [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'],
+         ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max']].forEach(function (o) {
+          var op = el('option', null, o[1]); op.value = o[0]; msel.appendChild(op);
         });
-    }
-    draw();
+        msel.value = (b.mention_effort === 'instant' ? 'off' : b.mention_effort) || 'high';
+        msel.addEventListener('change', function () { saveCfg({ mention_effort: msel.value }, 'Mention reasoning'); });
+        mrow.appendChild(msel);
+        wrap.appendChild(mrow);
+      }).catch(function () {
+        wrap.textContent = '';
+        wrap.appendChild(el('p', 'comments-status', 'Could not reach the status endpoint.'));
+      });
   }
 
   /* The platform-settings page, per-SECTION since 2026-08-02: a global panel
@@ -10831,7 +10751,7 @@ trace('submit: feed post');
     }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) throw new Error(d.error || 'failed');
       body.textContent = '';
-      renderBackendSwitch(body);
+      renderMerecatStatus(body);
       body.appendChild(el('h3', null, 'Usage today'));
       body.appendChild(el('p', null,
         'The community has used ' + d.today + ' of its ' + d.global_daily +
@@ -10847,7 +10767,7 @@ trace('submit: feed post');
       var num = el('input', 'key-input'); num.type = 'number'; num.min = '1'; num.max = '500';
       num.value = d.user_daily; num.style.width = '5em';
       row.appendChild(num);
-      row.appendChild(document.createTextNode(' questions per day. Unchecked, members draw freely until the community budget is spent. Admins are never capped either way. These caps guard the Cloudflare budget and apply only when Cloudflare answers; questions answered by the local librarian are never capped.'));
+      row.appendChild(document.createTextNode(' questions per day. Unchecked, members draw freely until the community budget is spent. Admins are never capped either way. These caps guard the community’s Workers AI budget.'));
       body.appendChild(row);
       var save = el('button', 'btn btn-send', 'Save');
       save.type = 'button';
@@ -10869,13 +10789,6 @@ trace('submit: feed post');
       });
       body.appendChild(save);
       body.appendChild(note);
-      /* Caps are a strict-Cloudflare-mode concept: when Local is the active
-         backend they do not apply, so the whole setting grays out. */
-      if (d.backend === 'local') {
-        chk.disabled = true; num.disabled = true; save.disabled = true;
-        row.style.opacity = '0.5';
-        note.textContent = 'Local mode is active — these Cloudflare caps and the community quota do not apply. They govern strict Cloudflare mode only.';
-      }
       body.appendChild(el('p', 'comments-status',
         'Note: caps changed here also govern @merecat mentions in threads. The librarian’s open-book panel updates itself to match.'));
 

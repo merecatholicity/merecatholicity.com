@@ -24,7 +24,6 @@ reads as that rule's spec.
 |---|---|---|---|
 | **1 — unit** | `tests/` (this dir) | pure functions, hermetic, `make tests` | ms |
 | **2 — integration / render** | `webtest/` | headless Chromium, real DOM/soft-nav parity, mostly vs prod | slow |
-| **backend regression** | `local/tests/` | the librarian RAG backend, spins up real model servers | heavy |
 
 A pure function (validation, permissions, parsing, math, a state transition, a
 formatting rule) → Layer 1, here. Something that only shows up when client JS

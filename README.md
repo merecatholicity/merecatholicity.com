@@ -110,8 +110,6 @@ librarian/       merecat's "mind": works.yml (the corpus manifest), persona.md,
                  config.yml, ingest.py (builds + pushes the RAG corpus). librarian/private/
                  is a SEPARATE private repo cloned into place (never committed here).
 
-local/           merecat-local: the optional offline GPU backend (serve.py + systemd
-                 units) the bot can be switched to. Its models/index are derived, ignored.
 
 webtest/         Headless-Chromium verification harness (audit.py + flows.py + test_*.py).
 tests/           The unit suite (`make tests`): PureScript + JS via `node --test`,
@@ -244,9 +242,9 @@ The toolchain is:
   keep working as before.
 - **pandoc** — LaTeX/Markdown/HTML/docx conversion (the book, content pages, the library).
 - **pdflatex** (TeX Live) — the PDFs. LGR/textalpha for Greek, plus the usual packages.
-- **python 3** + `pyyaml` — the build scripts and converters (`numpy` too, for the
-  `local/` GPU-twin tests). Both Makefiles invoke bare **`python`**, so a distro that
-  ships only `python3` needs a shim (Debian/Ubuntu: `python-is-python3`).
+- **python 3** + `pyyaml` — the build scripts and converters. Both Makefiles invoke bare
+  **`python`**, so a distro that ships only `python3` needs a shim (Debian/Ubuntu:
+  `python-is-python3`).
 - **chromium** at `/usr/bin/chromium` — chart-page PDFs and the headless test harness.
 
 ### The JavaScript toolchain (npm)
@@ -542,9 +540,8 @@ make librarian          # = cd librarian && python ingest.py --push   (increment
 ```
 
 `librarian/private/` is a **separate private git repo** cloned into place — its texts are
-never committed to this public repo. An optional offline GPU backend lives in `local/`
-(`serve.py`, reached over Tailscale Funnel); the bot switches between the Cloudflare model
-and the local one from the admin page, with automatic failover.
+never committed to this public repo. The bot answers from Cloudflare Workers AI only; the
+offline GPU backend that once lived in `local/` was retired on 2026-09-10.
 
 ### Deploying the workers
 
