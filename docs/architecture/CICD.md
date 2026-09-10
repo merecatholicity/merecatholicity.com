@@ -273,7 +273,7 @@ are on, and would refuse the push.
 | `TF_GITHUB_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT**, no expiry, on `merecatholicity.com` + `private-shelf` only: Administration, Environments, Variables, Pages read/write; Metadata read |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | **variables** | all | public ids; **Terraform-managed** (`github_actions_variable`) — workflows carry hardcoded fallbacks too |
 | `MC_INGEST_KEY` | secret | `merecat.yml` | the worker secret `MERECAT_INGEST_KEY` (set with `wrangler secret put`, the same value `gh secret set` here): honoured by `/api/merecat/{works,config,ingest}` and nothing else — a leak could rewrite the shelf, never touch the platform |
-| `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf`; its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
+| `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf` (dev-box copy: `~/.ssh/private-shelf-ci`); its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
 | `PRIVATE_SHELF_DEPLOY_PUBLIC_KEY` | **variable** | `terraform.yml` (`TF_VAR_private_shelf_deploy_key`) | the public half; empty = no key resource |
 | `MERECAT_INGEST_API` | **variable** (optional) | `merecat.yml` | overrides the ingest URL; default is the worker's workers.dev hostname |
 | `SITE_DISPATCH_TOKEN` | secret **in the private-shelf repository** | its `notify-site.yml` | fine-grained PAT on `merecatholicity.com` only, *Actions: write* + *Metadata: read* — enough to `gh workflow run merecat.yml`, nothing more |
@@ -442,7 +442,12 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
    authorises; a state store cannot manage itself.
 4. **The PAT and the org's PAT policy** — GitHub offers no API for either; browser-only
    owner acts (Administration/Environments/Variables/Pages RW on the two repos; org allows
-   fine-grained PATs; expiry not required).
+   fine-grained PATs; expiry not required). **The org's deploy-key policy** is an API
+   toggle with no Terraform resource: `deploy_keys_enabled_for_repositories` was `false`
+   (the private shelf's key failed with "Deploy keys are disabled for this repository") and
+   was set `true` on 2026-09-10 with `gh api -X PATCH /orgs/merecatholicity
+   -F deploy_keys_enabled_for_repositories=true`. Flip it back and the merecat workflow
+   loses the shelf (skips it; never prunes).
 5. **Email Routing settings** — provider decoder bug (#7301/#7302/#7304); its DNS is managed.
 6. **R2 custom-domain bindings** (`audio.`, `files.`) and **the TURN key** — no provider
    import; declaring would create duplicates. **Vectorize** — no resource at all.

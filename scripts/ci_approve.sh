@@ -78,6 +78,9 @@ if isinstance(r, dict):
     print('  response:', json.dumps(r)[:300])
 else:
     for d in r:
+        # 2026-09-10: the endpoint answered a list of plain strings once; print
+        # whatever shape arrives, the approval itself had already gone through.
+        if not isinstance(d, dict): print('  response:', str(d)[:300]); continue
         print(f"  {d.get('environment', {}).get('name')} -> {d.get('state') or 'reviewed'} ({d.get('url', '').split('/')[-1]})")
 PY
     rm -f "$tmp.body" "$tmp.resp"
