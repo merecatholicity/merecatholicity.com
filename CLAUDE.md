@@ -173,6 +173,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   on a phone the emoji picker and the keyboard never share the screen (opening the picker
   blurs the field; a pick hands the keyboard back). An element toggled by `hidden` needs
   a `[hidden]{display:none}` rule if it carries its own `display`.
+- **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"]) mc-footer`;
+  the shell stamps `data-mc-tab` on every navigation); the footer's information lives in
+  Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on the
+  window so the sheet under it stays). `FOOTER_LINKS` is the one list — a new footer door goes there.
+  Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the document's.
 - **Nothing scrolls sideways on a phone**: `body{overflow-x:clip}` is the net, not the fix. A
   new surface must fit 390px — a flex row wraps or its items may shrink, an edge-to-edge
   pull uses `var(--page-pad)`, and a JS-injected style block must agree with the
@@ -252,4 +257,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · `contact-worker/`

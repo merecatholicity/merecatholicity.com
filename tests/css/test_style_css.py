@@ -278,6 +278,27 @@ class DmBubbleIsTheMount(unittest.TestCase):
         self.assertRegex(self.css, r"\.dm-msg \.comment-body\{margin-top:0\}")
 
 
+class PhonesShowNoFooterAndAboutIsADialog(unittest.TestCase):
+    """Phones show no footer except on the home tab (2026-09-11): the footer's
+    information lives in Settings → About, a themed dialog that keeps the
+    overlay's three layers. Both must survive the build."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    def test_phone_footer_rule_survives(self):
+        self.assertRegex(self.css, r'body\.mc-app:not\(\[data-mc-tab="?home"?\]\) mc-footer\{display:none\}',
+                         "the phone rule hiding mc-footer off the home tab did not survive the build")
+
+    def test_desktop_footer_base_rule_survives(self):
+        self.assertIn("mc-footer{display:block}", self.css)
+
+    def test_dialog_scrim_is_inert_and_contained(self):
+        self.assertRegex(self.css, r"\.mc-dialog-scrim\{[^}]*touch-action:none")
+        self.assertRegex(self.css, r"\.mc-dialog-scrim\{[^}]*overscroll-behavior:contain")
+        self.assertRegex(self.css, r"\.mc-dialog\{[^}]*user-select:text")
+
+
 class NothingScrollsSideways(unittest.TestCase):
     """No page pans sideways on a phone (2026-09-09).
 

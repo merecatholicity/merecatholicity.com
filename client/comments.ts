@@ -8915,14 +8915,19 @@ trace('submit: feed post');
         trace('dm thread: ' + d.messages.length + ' msgs, '
           + d.messages.filter(function (m: any) { return m.media_key; }).length + ' attachments, '
           + mcDmBlobs.length + ' blobs held');
-        /* The newest word sits at the foot, just above the composer. */
+        /* The newest word sits at the foot, just above the composer. The foot
+           of the THREAD — the last bubble against the fixed bar — never of the
+           document: on desktop the footer follows the thread and must stay
+           below the bar, not be pulled up into view (the owner's report,
+           2026-09-11). The spacer stands behind the bar; its top is where the
+           bubbles end. (spacer and form are the composer's, built below.) */
+        function endGap() { return spacer.getBoundingClientRect().top - (form.getBoundingClientRect().top - 8); }
         function scrollToEnd() {
-          var top = document.documentElement.scrollHeight;
-          try { window.scrollTo({ top: top, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollTo(0, top); }
+          var delta = endGap();
+          if (delta <= 0) return;
+          try { window.scrollBy({ top: delta, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollBy(0, delta); }
         }
-        function nearEnd() {
-          return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 240;
-        }
+        function nearEnd() { return endGap() < 240; }
         /* Live drop-in + presence/typing/receipt updates for this open thread.
            A message pushed over the private user scope from THIS other party lands
            at once (their own echo is ignored); presence and typing paint the

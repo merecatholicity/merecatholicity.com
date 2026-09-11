@@ -2118,6 +2118,12 @@ mc-footer { display: block; }
 /* the shell footer is canonical; hide any page's own static footer under it so
    they don't stack (the static one still shows under ?app=0, no shell) */
 body.mc-app > footer { display: none; }
+/* Phones show NO footer except on the home tab (the owner's 2026-09-11 ruling):
+   its information lives in Settings → About. The shell stamps the tab on <body>
+   (data-mc-tab) with the art on every navigation. Desktop keeps the footer. */
+@media (max-width: 600px) {
+  body.mc-app:not([data-mc-tab="home"]) mc-footer { display: none; }
+}
 
 @media (min-width: 601px) {
   :root { --mc-deskbar-h: 3.25rem; }
@@ -2922,13 +2928,44 @@ html, body { overscroll-behavior-y: contain; }
 .mc-update-go { background: var(--maroon) !important; color: #fff !important; border-color: var(--maroon) !important; }
 .mc-update-bar button:active { filter: brightness(0.92); }
 
-/* Settings → About. A plain readable block, and the <pre> is what the Copy
-   button hands over, so a report can be pasted instead of screenshotted. */
-.mc-about-pre {
-  margin: 0; padding: 10px; border-radius: 8px;
-  border: 1px solid var(--rule); background: var(--faint);
-  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+/* ---- the themed pop-up dialog (mcDialog: Settings → About, and any card of
+   information): a scrim, a centered card in the site's own palette, the body
+   selectable so it can be copied. Layers over an open sheet (the sheet's scrim
+   is 60/70); keeps the overlay's three layers — contained overscroll, an inert
+   scrim, the document lock (taken in appchrome only when no sheet holds it). */
+.mc-dialog-scrim {
+  position: fixed; inset: 0; z-index: 4300; background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+  touch-action: none; overscroll-behavior: contain;
 }
-.mc-about-state { margin: 0 0 8px; font-size: 0.92rem; }
+.mc-dialog {
+  width: min(34rem, 100%); max-height: min(86vh, 100%); overflow: auto; overscroll-behavior: contain; touch-action: pan-y;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 14px;
+  box-shadow: var(--shadow-2); font-family: var(--font-sans);
+  -webkit-user-select: text; user-select: text;
+}
+.mc-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.9rem 1rem 0.3rem; }
+.mc-dialog-title { margin: 0; font-size: 1.08rem; color: var(--maroon); font-family: var(--font-sans); }
+.mc-dialog-x { font: inherit; font-size: 1.55rem; line-height: 1; background: none; border: 0; color: var(--faint); cursor: pointer; padding: 0.1rem 0.45rem; border-radius: 8px; }
+.mc-dialog-x:hover { color: var(--maroon); background: var(--cream-2); }
+.mc-dialog-body { padding: 0.2rem 1rem 0.5rem; font-size: 0.95rem; line-height: 1.5; }
+.mc-dialog-body a { color: var(--maroon); }
+.mc-dialog-acts { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end; padding: 0.4rem 1rem 1rem; }
+
+/* Settings → About, inside the dialog. The <pre> is the device facts the Copy
+   button hands over (with the site's doors), so a report can be pasted instead
+   of screenshotted — in the theme's own inks, not gray on white. */
+.mc-about-pre {
+  margin: 0.35rem 0 0.9rem; padding: 0.7rem 0.85rem; border-radius: 10px;
+  border: 1px solid var(--rule); background: var(--cream-2); color: var(--ink);
+  font: 0.82rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: auto;
+}
+.mc-about-state { margin: 0 0 8px; font-size: 0.92rem; color: var(--ink); }
 .mc-about-state.stale { color: var(--maroon); font-weight: 600; }
+.mc-about-site h3 { margin: 0.5rem 0 0.15rem; font-size: 0.98rem; color: var(--ink); font-family: var(--font-sans); }
+.mc-about-copy { margin: 0 0 0.45rem; color: var(--faint); font-size: 0.88rem; }
+.mc-about-site ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; }
+.mc-about-site li { margin: 0; }
+.mc-about-site a { color: var(--maroon); text-decoration: none; }
+.mc-about-site a:hover { text-decoration: underline; }

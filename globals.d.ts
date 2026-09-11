@@ -100,6 +100,7 @@ declare global {
     mcInstall?: McInstall;
     mcOnboard?: (onDone?: any, opts?: any) => void;
     mcConfirm?: (msg: string, opts?: any) => Promise<boolean>;
+    mcDialog?: (opts: { title: string; body: Node; actions?: HTMLElement[] }) => { close: () => void; body: HTMLElement };
     mcToast?: (msg: string, opts?: any) => void;
     mcSheet?: { open: (...a: any[]) => void; settings?: () => void; close: () => void; lock?: () => boolean | void; unlock?: () => void };
     mcGetDark?: () => string;

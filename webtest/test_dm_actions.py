@@ -124,7 +124,9 @@ SHAPE = """return JSON.stringify((function(){
     flushBottom: q('.dm-composer') && Math.abs(q('.dm-composer').getBoundingClientRect().bottom - window.innerHeight) < 2,
     alignedLeft: q('.dm-composer') && Math.abs(q('.dm-composer').getBoundingClientRect().left - q('section[data-board], section[data-comments]').getBoundingClientRect().left) < 2,
     nameShown: q('.dm-head-name') && getComputedStyle(q('.dm-head-name')).display !== 'none',
-    lastAboveBar: (function(){ var bs = document.querySelectorAll('.dm-msg[data-dmid]'); var last = bs[bs.length-1]; return last && last.getBoundingClientRect().bottom <= q('.dm-composer').getBoundingClientRect().top + 1; })(),
+    lastAboveBar: (function(){ var bs = document.querySelectorAll('.dm-msg[data-dmid]'); var last = bs[bs.length-1]; var gap = q('.dm-composer').getBoundingClientRect().top - last.getBoundingClientRect().bottom; return gap >= -1 && gap <= 40; })(),
+    footerBelowBar: !q('mc-footer') || q('mc-footer').getBoundingClientRect().top >= q('.dm-composer').getBoundingClientRect().top - 1,
+    footerShown: !!q('mc-footer') && getComputedStyle(q('mc-footer')).display !== 'none',
     note: (q('.dm-note')||{}).textContent || '',
     oldChrome: !!(q('.board-topic-head') || q('.dm-e2e') || q('.board-audit-link') || q('.dm-expiry:not(.dm-info .dm-expiry)')),
     writes: (window.__mcDmWrites||[]).length
@@ -152,7 +154,8 @@ def main():
         checks.append(('the reply strip is mounted above the field and truly hidden until a reply is armed', st.get('replyBarHidden')))
         checks.append(('a sticky header: avatar, the lock subtitle, the ⓘ', st.get('head') and st.get('headSticky') and st.get('subLock')))
         checks.append(('a fixed composer at the foot: +, the field, emoji, Send; the spacer reserves its height', st.get('composer') and st.get('composerFixed') and st.get('spacerLast')))
-        checks.append(('on open the bar is flush with the viewport bottom, aligned to the column, and the last bubble sits above it', st.get('flushBottom') and st.get('alignedLeft') and st.get('lastAboveBar')))
+        checks.append(('on open the bar is flush with the viewport bottom, aligned to the column, and the last bubble sits just above it', st.get('flushBottom') and st.get('alignedLeft') and st.get('lastAboveBar')))
+        checks.append(('desktop keeps the footer, and it stays below the bar on open (the thread scrolls to its own foot)', st.get('footerShown') and st.get('footerBelowBar')))
         checks.append(('desktop shows the name in the header', st.get('nameShown')))
         checks.append(('the ⏳ chip names the lifetime', str(st.get('note') or '').startswith('⏳ Messages disappear ') and 'after they are opened' in st.get('note')))
         checks.append(('the old thread chrome is gone (title line, badge, expiry note, block/delete links)', not st.get('oldChrome')))
@@ -263,12 +266,14 @@ def main():
                    fullWidth: c.getBoundingClientRect().width >= document.documentElement.clientWidth - 1,   // clientWidth: headless Chrome's classic scrollbar is outside the layout viewport
                    headUnderBar: Math.abs(h.getBoundingClientRect().top - ab.getBoundingClientRect().bottom) < 2,
                    nameHidden: getComputedStyle(q('.dm-head-name')).display === 'none',
-                   lastAboveBar: last.getBoundingClientRect().bottom <= c.getBoundingClientRect().top + 1,
-                   scrolledToEnd: window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2 };
+                   lastAboveBar: (function(){ var gap = c.getBoundingClientRect().top - last.getBoundingClientRect().bottom; return gap >= -1 && gap <= 40; })(),
+                   footerHidden: !q('mc-footer') || getComputedStyle(q('mc-footer')).display === 'none',
+                   tab: document.body.dataset.mcTab || '' };
         })());""")
         checks.append(('phone, on open: the bar sits flush on the tab bar, full width, before any scroll', bars.get('flushTab') and bars.get('fullWidth')))
         checks.append(('phone: the header sits flush under the app bar and the app bar carries the name', bars.get('headUnderBar') and bars.get('nameHidden')))
-        checks.append(('phone: the thread opens at its end with the last bubble above the bar', bars.get('scrolledToEnd') and bars.get('lastAboveBar')))
+        checks.append(('phone: the thread opens at its foot, the last bubble just above the bar', bars.get('lastAboveBar')))
+        checks.append(('phone: no footer under the thread (the tab is stamped, the footer hidden)', bars.get('tab') == 'messages' and bars.get('footerHidden')))
         pk = jsj(f, """return JSON.stringify((function(){
           var q = function(s){ return document.querySelector(s); };
           var ta = q('.dm-c-ta'), btn = q('.dm-c-emoji'), panel = q('.dm-c-emoji-panel');

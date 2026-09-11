@@ -165,6 +165,10 @@ function syncThemeArt(at?: string) {
     const a = themeArt(at);
     if (a) document.body.dataset.art = a;
     else delete document.body.dataset.art;
+    /* The tab, for CSS that keys on it: phones show no footer except on the
+       home tab (the owner's 2026-09-11 ruling). Re-stamped with the art on
+       every soft navigation. */
+    document.body.dataset.mcTab = activeTab(at) || 'page';
   } catch (e) { /* storage/DOM blocked — no accent, no harm */ }
   applyArt();
 }
@@ -543,6 +547,70 @@ class McSheet extends LitElement {
 customElements.define('mc-sheet', McSheet);
 
 /* ---- the settings sheet content (relocated identity/account line) ---- */
+/* Everything the site footer says, as data. The shell footer (desktop) renders
+   its short form; Settings → About lists it all — on phones the footer is gone
+   everywhere but the home tab (2026-09-11), so About is where it lives. */
+const FOOTER_LINKS: Array<[string, string]> = [
+  ['Home', 'index.html'], ['Library', 'library.html'], ['Community', 'community.html'],
+  ['About the project', 'about.html'], ['Contact', 'contact.html'],
+  ['Terms & Conditions', 'terms.html'], ['Privacy', 'privacy.html'],
+];
+
+/* ---- the themed pop-up dialog: a card of information (Settings → About),
+   not a list of controls, which is the sheet's job. A scrim, a centered card
+   in the site's own palette, dismissable by ✕, Close, the scrim or Escape;
+   the body is selectable so it can be copied. It layers OVER an open sheet
+   (z above it; Escape is taken on the window, before the sheet's own
+   listener) and keeps the overlay's three layers: contained overscroll, an
+   inert scrim, and the document lock — taken only when no sheet holds it,
+   and released only when it was taken. A link inside it is a navigation, so
+   it closes itself and any sheet under it. ---- */
+function mcDialog(opts: { title: string; body: Node; actions?: HTMLElement[] }): { close: () => void; body: HTMLElement } {
+  const scrim = document.createElement('div');
+  scrim.className = 'mc-dialog-scrim'; scrim.setAttribute('data-mc-app', '');
+  const card = document.createElement('div');
+  card.className = 'mc-dialog'; card.setAttribute('role', 'dialog'); card.setAttribute('aria-modal', 'true'); card.tabIndex = -1;
+  const head = document.createElement('div'); head.className = 'mc-dialog-head';
+  const h = document.createElement('h2'); h.className = 'mc-dialog-title'; h.textContent = opts.title; head.appendChild(h);
+  const x = document.createElement('button');
+  x.type = 'button'; x.className = 'mc-dialog-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×'; head.appendChild(x);
+  card.appendChild(head);
+  const body = document.createElement('div'); body.className = 'mc-dialog-body'; body.appendChild(opts.body); card.appendChild(body);
+  const acts = document.createElement('div'); acts.className = 'mc-dialog-acts';
+  (opts.actions || []).forEach((a) => acts.appendChild(a));
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button'; closeBtn.className = 'btn mc-dialog-close'; closeBtn.textContent = 'Close'; acts.appendChild(closeBtn);
+  card.appendChild(acts);
+  scrim.appendChild(card);
+  const took = !!lockDocument();
+  const restore = document.activeElement as HTMLElement | null;
+  function onKey(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    close();
+  }
+  function close() {
+    if (!scrim.parentNode) return;
+    scrim.remove();
+    if (took) unlockDocument();
+    window.removeEventListener('keydown', onKey, true);
+    if (restore && typeof restore.focus === 'function' && document.contains(restore)) { try { restore.focus(); } catch (e) { /* gone */ } }
+  }
+  scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
+  x.addEventListener('click', close);
+  closeBtn.addEventListener('click', close);
+  body.addEventListener('click', (e) => {
+    const a = (e.target as Element).closest ? (e.target as Element).closest('a[href]') : null;
+    if (!a) return;
+    close();
+    try { if (window.mcSheet) window.mcSheet.close(); } catch (err) { /* no sheet */ }
+  });
+  window.addEventListener('keydown', onKey, true);
+  document.body.appendChild(scrim);
+  try { closeBtn.focus(); } catch (e) { /* fine */ }
+  return { close, body };
+}
+
 class McSettings extends LitElement {
   static properties = { keyShown: { attribute: false }, theme: { attribute: false }, art: { attribute: false }, copied: { attribute: false }, dark: { attribute: false }, light: { attribute: false }, presence: { attribute: false }, sounds: { attribute: false }, prefs: { attribute: false }, panel: { attribute: false }, blocked: { attribute: false }, canInstall: { attribute: false }, pushOn: { attribute: false }, pushBusy: { attribute: false }, pushMsg: { attribute: false }, debugOn: { attribute: false }, ver: { attribute: false } };
   declare keyShown: boolean;
@@ -890,21 +958,62 @@ class McSettings extends LitElement {
     if (!on) { try { const el = document.getElementById('mc-debug'); if (el) el.remove(); } catch (e) { /* gone */ } }
   }
 
-  /* Settings → About: what this device is actually running, and whether that is
-     current. The facts come from window.mcVersion (nav.js) rather than being
-     re-derived here, so the panel and the update banner can never disagree —
-     and it still works when the stale thing is this very bundle. */
+  /* Settings → About: what this device is actually running, whether that is
+     current, and everything the site footer says (on phones the footer is gone
+     everywhere but the home tab, so this is where its links live). A themed
+     dialog (mcDialog) over the settings, selectable and copyable — not the
+     gray inline block it was. The facts come from window.mcVersion (nav.js)
+     rather than being re-derived here, so the dialog and the update banner
+     can never disagree — and it still works when the stale thing is this
+     very bundle. */
   async openAbout() {
-    const open = this.panel === 'about';
-    this._openPanel('about');
-    if (open) return;
     const v = window.mcVersion;
-    if (!v) { this.ver = { unknown: true }; return; }
-    this.ver = { running: v.running(), served: v.served(), stale: v.stale(), checking: true };
-    /* Ask the server fresh on open — the whole reason someone opens this panel
-       is to find out whether they are behind. */
+    const wrap = document.createElement('div'); wrap.className = 'mc-about';
+    const state = document.createElement('p'); state.className = 'mc-about-state';
+    const pre = document.createElement('pre'); pre.className = 'mc-about-pre';
+    wrap.appendChild(state); wrap.appendChild(pre); wrap.appendChild(this._aboutSite());
+    const reload = document.createElement('button');
+    reload.type = 'button'; reload.className = 'btn btn-send'; reload.textContent = 'Reload to update'; reload.hidden = true;
+    reload.addEventListener('click', () => location.reload());
+    const copy = document.createElement('button');
+    copy.type = 'button'; copy.className = 'btn mc-about-copy-btn'; copy.textContent = 'Copy';
+    copy.addEventListener('click', (e: any) => this._copyAbout(e));
+    const paint = () => {
+      const d: any = this.ver || {};
+      const stale = !!(d.stale && d.stale.length);
+      state.textContent = d.unknown ? 'Version information is not available on this page.'
+        : d.checking ? 'Checking…'
+          : stale ? 'This device is running an older version of the app.' : 'This device is up to date.';
+      state.classList.toggle('stale', stale);
+      pre.textContent = d.unknown ? '' : this._aboutText();
+      pre.hidden = !!d.unknown;
+      reload.hidden = !stale;
+    };
+    if (!v) this.ver = { unknown: true };
+    else this.ver = { running: v.running(), served: v.served(), stale: v.stale(), checking: true };
+    paint();
+    mcDialog({ title: 'About this app', body: wrap, actions: [reload, copy] });
+    if (!v) return;
+    /* Ask the server fresh on open — the whole reason someone opens this is
+       to find out whether they are behind. */
     try { await v.check(); } catch (e) { /* offline: show what we have */ }
     this.ver = { running: v.running(), served: v.served(), stale: v.stale(), checking: false };
+    paint();
+  }
+  /* The footer's information, as links: the © line and the seven doors. */
+  _aboutSite() {
+    const year = new Date().getFullYear();
+    const box = document.createElement('div'); box.className = 'mc-about-site';
+    const h = document.createElement('h3'); h.textContent = 'merecatholicity.com'; box.appendChild(h);
+    const c = document.createElement('p'); c.className = 'mc-about-copy'; c.textContent = '© ' + year + ' merecatholicity.com'; box.appendChild(c);
+    const ul = document.createElement('ul');
+    FOOTER_LINKS.forEach(([label, href]) => {
+      const li = document.createElement('li');
+      const a = document.createElement('a'); a.href = href; a.textContent = label;
+      li.appendChild(a); ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    return box;
   }
   _aboutText() {
     const d: any = this.ver || {};
@@ -925,29 +1034,17 @@ class McSettings extends LitElement {
       ? (navigator.serviceWorker.controller ? 'active' : 'not controlling') : 'unsupported'));
     return lines.join('\n');
   }
-  _aboutPanel() {
-    if (this.panel !== 'about') return '';
-    const d: any = this.ver || {};
-    if (d.unknown) {
-      return html`<div class="mc-set-key" style="flex-direction:column;align-items:stretch">
-        <p class="mc-about-state">Version information is not available on this page.</p></div>`;
-    }
-    const stale: string[] = d.stale || [];
-    const text = this._aboutText();
-    return html`<div class="mc-set-key" style="flex-direction:column;align-items:stretch;gap:0.5rem">
-      ${d.checking ? html`<p class="mc-about-state">Checking…</p>`
-        : stale.length
-          ? html`<p class="mc-about-state stale">This device is running an older version of the app.</p>`
-          : html`<p class="mc-about-state">This device is up to date.</p>`}
-      <pre class="mc-about-pre">${text}</pre>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-        ${stale.length ? html`<button class="btn btn-send" @click=${() => location.reload()}>Reload to update</button>` : ''}
-        <button class="btn" @click=${(e: any) => this._copyAbout(e)}>Copy</button>
-      </div></div>`;
+  /* What Copy hands over: the device facts and the site's doors, as text a
+     report or a note can hold. */
+  _aboutCopyText() {
+    const year = new Date().getFullYear();
+    const site = ['', 'merecatholicity.com — © ' + year]
+      .concat(FOOTER_LINKS.map(([label, href]) => label + ': ' + new URL(href, location.href).href));
+    return this._aboutText() + '\n' + site.join('\n');
   }
   _copyAbout(e: any) {
     const btn = e && e.currentTarget;
-    const text = this._aboutText();
+    const text = this._aboutCopyText();
     const done = () => { if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); } };
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1184,10 +1281,9 @@ class McSettings extends LitElement {
       <button class="mc-set-row mc-set-btn" @click=${() => this.clearCache()}>
         <span>Clear app cache<small>If the app is behaving oddly or looks out of date. Your key, drafts and settings are kept.</small></span>
         <span class="mc-set-go">›</span></button>
-      <button class="mc-set-row mc-set-btn" @click=${() => this.openAbout()}>
-        <span>About<small>App version, and whether this device is up to date.</small></span>
-        <span class="mc-set-go">${this.panel === 'about' ? '▾' : '›'}</span></button>
-      ${this._aboutPanel()}
+      <button class="mc-set-row mc-set-btn mc-set-about" @click=${() => this.openAbout()}>
+        <span>About this app<small>Version, whether this device is up to date, and the site's pages: terms, privacy, contact.</small></span>
+        <span class="mc-set-go">›</span></button>
     </div>`;
   }
 }
@@ -1706,6 +1802,7 @@ export function installChrome() {
   /* App controls for the whole client to reach (phones only; desktop no-ops to
      the native control). Phase 2 of the appification. */
   window.mcConfirm = mcConfirm;
+  window.mcDialog = mcDialog;
   window.mcToast = mcToast;
   window.mcSelectSheet = mcSelectSheet;
   window.mcOnboard = mcOnboard;
