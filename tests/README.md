@@ -35,6 +35,8 @@ Layer 2, `webtest/`.
 ```
 tests/
   _support/ps.mjs      shared Maybe/Either erasure readers for the compiled PS output
+  _support/client.mjs  the browser client's sources for the source-rule tests (the root and the
+                       seven feature modules of client/, as one text or one at a time)
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
                        the build ↔ kernel parity of the commentable pages, and the DM press-and-hold

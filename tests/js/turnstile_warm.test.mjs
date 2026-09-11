@@ -18,7 +18,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const src = readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
+import { clientAll } from '../_support/client.mjs';
+const src = clientAll();
 
 /* Code only: a comment that tells the history of a bug may name it. */
 function uncommented(s) {

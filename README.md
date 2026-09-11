@@ -255,14 +255,15 @@ restores the exact toolchain into `node_modules/`.
 ```sh
 npm ci             # restore Tailwind, esbuild, eslint, wrangler, tsc from the lockfile
 npm run build      # lint + tsc, then bundle app.js + comments.js, then build style.css
-npm run build:js   # esbuild  app/shell.ts -> docs/app.js  +  client/comments.ts -> docs/comments.js
+npm run build:js   # esbuild  app/shell.ts -> docs/app.js  +  client/comments.ts (+ its feature modules) -> docs/comments.js
 npm run build:css  # tailwindcss  styles/main.css -> docs/style.css   (= make css)
 npm run tsc        # strict type-check: client + both workers (part of make jscheck)
 npm run lint       # eslint over the still-JS worker/client files       (= make jscheck = lint + tsc)
 ```
 
 **The whole hand-written surface is TypeScript** (2026-08-01): the app bundle
-(`app/**`), the served client (`client/comments.ts` → `docs/comments.js`), and both
+(`app/**`), the served client (`client/comments.ts`, the boot, plus the feature modules
+`client/{composer,profile,board,wall,dm,merecat,admin}.ts`, bundled → `docs/comments.js`), and both
 Cloudflare Workers (`comments-worker/`, `contact-worker/`). Three separate `tsconfig`
 projects — the client one uses the browser DOM lib, each worker one uses the Cloudflare
 Worker globals (`@cloudflare/workers-types`); the two lib sets conflict, so they can't

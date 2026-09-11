@@ -16,7 +16,8 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const css = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
-const src = readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
+import { clientAll } from '../_support/client.mjs';
+const src = clientAll();
 /* The injected block as the browser receives it: the source fragments joined
    at their `' +` seams (a regex over the raw source stops at the first quote). */
 const injectedRaw = src.slice(src.indexOf("'.merecat-form{display:flex"), src.indexOf("mc-merecat-css", src.indexOf("'.merecat-form{display:flex")));

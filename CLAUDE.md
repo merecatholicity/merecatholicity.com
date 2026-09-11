@@ -78,7 +78,9 @@ line in `.gitignore` and an entry in `scripts/nav.py`'s `PAGES`. Elsewhere: `boo
 `build-confession.sh`), `content/` (hand-page sources), `resources/` (corpus converters, the
 committed `*-body.tex`, `docs-src/` preserved sources), `partials/` (pandoc includes — a
 partial carrying a versioned asset is stamped too), `scripts/`, `styles/main.css` (the one
-Tailwind v4 entry), `app/` (Lit shell + views, TS), `client/comments.ts` → `docs/comments.js`,
+Tailwind v4 entry), `app/` (Lit shell + views, TS), `client/` (the classic client: `comments.ts` is the boot — core helpers,
+the router, the kit — and `composer.ts` · `profile.ts` · `board.ts` · `wall.ts` · `dm.ts` · `merecat.ts` ·
+`admin.ts` are feature modules installed per boot; bundled to `docs/comments.js`),
 `purescript/src/Domain/*.purs` (the kernel, 29 modules), `comments-worker/`, `contact-worker/`,
 `librarian/` (`librarian/private/` is a separate PRIVATE clone — never a submodule, never
 committed), `webtest/`, `tests/`, `terraform/`, `.github/workflows/`.
@@ -115,7 +117,14 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client)
   re-runs on every soft navigation, so anything inside it that owns a resource leaks per hop —
   keep page-scoped state above it, and every document/window listener it installs carries
-  the boot signal. Page-scoped state stamped on `<html>`/`<body>` must be cleared by the shell
+  the boot signal. Since 2026-09-11 the boot installs the feature modules (`client/*.ts`, each
+  an `install<Feature>(B)` factory) per boot: a module's body is boot-scoped exactly as before,
+  its cross-module names are bound from the boot object `B` after every module is installed
+  (`bind()`), and what ran at the boot's top level runs in its `run()` — so a module-level
+  `var` may not call another module's or a page-scoped helper in its initializer (it is not
+  bound yet; the generator deferred such initializers to `run()`), and state more than one
+  module writes lives on `B` (`B.quotedSelection` and friends), never in a copied binding. A
+  new feature is a new `client/<feature>.ts` factory wired in the root's install list. Page-scoped state stamped on `<html>`/`<body>` must be cleared by the shell
   on navigation (only `<main>` is swapped).
 - **Turnstile**: an established identity is not challenged (`Domain.Turnstile`, app_settings
   `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing
@@ -264,4 +273,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · An unread inbox row draws the eye · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · An unread inbox row draws the eye · Wave F: the classic client is feature modules · `contact-worker/`

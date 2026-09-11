@@ -18,6 +18,7 @@ Two real defects prompted it, one shipped and one caught in the act:
 """
 import hashlib
 import json
+import glob
 import os
 import re
 import sys
@@ -163,8 +164,8 @@ class References(unittest.TestCase):
         """The circularity guard. A key written into client/comments.ts changes
         comments.js, which changes comments.js's own key — a fixpoint with no
         solution. Those keys live in nav.js's MC_ASSETS and are read at runtime."""
-        for rel in ('client/comments.ts', 'app/appchrome.ts', 'app/richtext.ts'):
-            with open(os.path.join(ROOT, rel), encoding='utf-8') as f:
+        for rel in sorted(glob.glob(os.path.join(ROOT, 'client', '*.ts'))) + [os.path.join(ROOT, 'app', 'appchrome.ts'), os.path.join(ROOT, 'app', 'richtext.ts')]:
+            with open(rel, encoding='utf-8') as f:
                 src = f.read()
             for name in stamp_versions.RUNTIME_ASSETS:
                 self.assertNotIn(name + '?v=', src,

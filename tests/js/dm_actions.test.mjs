@@ -18,7 +18,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const src = readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
+import { clientAll } from '../_support/client.mjs';
+const src = clientAll();
 const mainCss = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
 
 const fn = (name, next) => {
@@ -93,7 +94,7 @@ test('a downward swipe over the page dismisses the keyboard; the thread names On
   assert.ok(/document\.activeElement !== ta/.test(helper), 'live only while the field has the keyboard');
   assert.ok(/composer\.contains\(t\)\) \? -1 :/.test(helper), 'a swipe that starts inside the composer is left alone');
   assert.ok(/clientY - y0 > 48\) \{ y0 = -1; try \{ ta\.blur\(\); \}/.test(helper), '48px downward blurs the field once');
-  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function ', src.indexOf('function viewDm(') + 10));
   assert.ok(/swipeDismissesKeyboard\(ta, form\);/.test(view), 'the DM composer takes it');
   assert.ok(/swipeDismissesKeyboard\(q, form\);/.test(src.slice(src.indexOf('function viewMerecat('))), 'so does the merecat ask box');
   assert.ok(/if \(presOn === false\) \{[\s\S]*?seenAt \? 'Last seen ' \+ dmSeenLabel\(seenAt\) : 'Offline'/.test(view),
@@ -101,7 +102,7 @@ test('a downward swipe over the page dismisses the keyboard; the thread names On
   assert.ok(/var seenAt: number = Number\(\(d\.other && d\.other\.last_seen\) \|\| 0\);/.test(view), 'the stamp arrives with the thread');
   assert.ok(/if \(presOn === true && !on && seenAt !== -1\) seenAt = Math\.floor\(Date\.now\(\) \/ 1000\);/.test(view), 'an offline seen live is "just now"');
   assert.ok(/bootSig\.addEventListener\('abort', function \(\) \{ clearInterval\(seenTick\); \}, \{ once: true \}\);/.test(view), 'the minute repaint dies with the boot');
-  const label = src.slice(src.indexOf('function dmSeenLabel('), src.indexOf('/* Compact timestamps for post heads'));
+  const label = fn('dmSeenLabel');
   for (const step of ["'just now'", "' min ago'", "'today at '", "'yesterday at '", "' at ' + time", "month: 'short', day: 'numeric', year: 'numeric'"]) {
     assert.ok(label.includes(step), 'the last-seen ladder has ' + step);
   }
@@ -133,7 +134,7 @@ test('the picker and the keyboard never share a phone screen', () => {
   const panel = src.slice(src.indexOf('function buildEmojiPanel('), src.indexOf('function loadKjv('));
   assert.ok(/if \(onPick\) return;\s*try \{ if \(window\.matchMedia && window\.matchMedia\('\(hover: none\)'\)\.matches\) search\.focus\(\);/.test(panel),
     'the search takes focus on touch only for the toolbar\'s own picker — a caller with onPick owns the keyboard');
-  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function ', src.indexOf('function viewDm(') + 10));
   assert.ok(/function openPicker\(\) \{ if \(touchUi\) ta\.blur\(\); emojiPanel\.openPanel\(\); setEmojiFace\(true\); \}/.test(view), 'opening the picker dismisses the keyboard');
   assert.ok(/insertEmojiItem\(ta, it\);\s*if \(touchUi\) closePicker\(\);\s*ta\.focus\(\);/.test(view), 'a pick inserts, closes the picker on touch, and hands the keyboard back');
   assert.ok(/ta\.addEventListener\('focus', function \(\) \{ if \(touchUi && !emojiPanel\.hidden\) closePicker\(\); \}\)/.test(view), 'a tap into the field closes the picker');
@@ -156,7 +157,7 @@ test('the conversation is a chat screen: the header sticks, the composer is fixe
      and floats a gap over the tab bar until a scroll re-sticks it. */
   assert.ok(/\.dm-composer\{position:fixed;left:0;right:0;bottom:0/.test(dmCss), 'the composer is fixed');
   assert.ok(!/\.dm-composer\{position:sticky/.test(dmCss), 'never sticky');
-  const view0 = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  const view0 = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function ', src.indexOf('function viewDm(') + 10));
   assert.ok(/spacer\.style\.height = \(form\.offsetHeight \+ 8\) \+ 'px'/.test(view0), 'a spacer reserves the bar\'s height under the last bubble');
   assert.ok(/ro\.observe\(form\); ro\.observe\(section\);/.test(view0), 'remeasured as the bar or the column changes');
   assert.ok(/form\.style\.left = Math\.round\(r\.left\)/.test(view0), 'on desktop the bar is aligned to the content column');
@@ -166,7 +167,7 @@ test('the conversation is a chat screen: the header sticks, the composer is fixe
     'the thread re-lands its end after the load event, with a listener that dies with the boot');
   assert.ok(/body\.mc-app \.dm-composer\{bottom:calc\(var\(--mc-tabbar-h/.test(dmCss), 'above the phone tab bar');
   assert.ok(/body\.mc-app\.mc-kb-open \.dm-composer\{bottom:var\(--mc-kb,0px\)/.test(dmCss), 'and above the soft keyboard, as the merecat composer does');
-  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function ', src.indexOf('function viewDm(') + 10));
   assert.ok(/warmOnFocus\(ta\)/.test(view), 'the composer is under the Turnstile focus net by hand (it is not wrapped by mdEditor)');
   assert.ok(/form\.appendChild\(el\('div', 'ts-slot'\)\)/.test(view), 'and carries the widget\'s mount point');
   assert.ok(/if \(mic\) \{ mic\.hidden = has; send\.hidden = !has; \}/.test(view), 'mic while empty, Send once there is something to send');
@@ -201,7 +202,7 @@ test('the reply envelope: sentinel + JSON round-trips, and plain text is itself'
 });
 
 test('a reply rides inside the ciphertext, and the media envelope carries its own', () => {
-  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function ', src.indexOf('function viewDm(') + 10));
   assert.ok(/dmEncrypt\(dmWrapText\(body, replyAt\), otherPub\)/.test(view), 'the text send wraps the quote INSIDE the E2E plaintext');
   assert.ok(/if \(replyAt\) mm\.env\.reply = replyAt;/.test(view), 'a media reply rides in the (encrypted) media envelope');
   assert.ok(!/reply_to/.test(src), 'the server never learns what answers what');

@@ -44,10 +44,12 @@ idea holds the whole thing together and is the key to reading it:
                               via window.mcCore)
 ```
 
-The two "how is this one file 6,000 lines?" cases are **`docs/comments.js`**
+The two "how is this one file 6,000 lines?" cases were **`docs/comments.js`**
 (the browser client) and **`comments-worker/src/index.js`** (the backend). Both
-are being dissolved into feature files; the rest of this document explains why
-they grew, what's duplicated, and the exact shape they're moving toward.
+have been dissolved into feature files — the worker in Phase 4, the client in
+Wave F (2026-09-11: `client/comments.ts` is the boot, `client/<feature>.ts` the
+modules it installs); the rest of this document explains why they grew, what's
+duplicated, and the shape they moved toward.
 
 ---
 
@@ -55,7 +57,15 @@ they grew, what's duplicated, and the exact shape they're moving toward.
 
 | File | Lines | Role |
 |---|---:|---|
-| `client/comments.ts` → `docs/comments.js` | 11,505 | The whole browser client (forum, DM+E2E crypto, composer, admin, merecat chat) + the `mcKit` bridge. The no-bundle fallback. |
+| `client/comments.ts` | 2,049 | The client's ROOT: pre-boot page state, the core helpers (fetch/read pacing, formatting, `el`, Turnstile, identity), the router, `start()`, the `mcKit` assembly; installs the modules below per boot. |
+| `client/dm.ts` | 2,304 | E2E crypto + media, the bubbles, the message surface, the chat screen, the inbox, presence, the live DM frames, calls. |
+| `client/merecat.ts` | 1,924 | The librarian's chat client. |
+| `client/board.ts` | 1,718 | The forum views, the comment renderer, quoting/editing, the board form, the journal, search, the post menu. |
+| `client/admin.ts` | 1,628 | The acting consoles. |
+| `client/composer.ts` | 1,607 | The markdown editor, emoji, Scripture, drafts, the media gate + compression + voice, mentions, the stash. |
+| `client/profile.ts` | 1,449 | Identity, faith, mute/block, prefs, the profile card and editor, avatars, notifications. |
+| `client/wall.ts` | 844 | Feed + walls. |
+| `client/boot.ts` | 6 | The `Boot` bag type the factories take. (All of `client/` bundles to `docs/comments.js`, 349 KB.) |
 | `comments-worker/src/index.ts` | 5,093 | The handlers + the declarative `ROUTES` dispatch + cron. |
 | `comments-worker/src/lib.ts` | 2,789 | The shared core: constants, crypto, auth/validation, DB/notification/broadcast helpers. A leaf — it references no handler. |
 | `app/appchrome.ts` | 1,763 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
@@ -79,12 +89,19 @@ they grew, what's duplicated, and the exact shape they're moving toward.
 
 Re-measured 2026-09-08 over 35 hand-written files, **29,968 lines**: the median is
 **286 lines**, and the distribution is still bimodal — a long tail of small,
-single-purpose files against a few very large ones. **`client/comments.ts` alone is
-38% of all hand-written lines; the top two are 55% and the top three 65%.** That
-bimodality *is* the finding, and it has not moved: the worker monolith was split
-(Phase 4), but the client was not, and it has since grown from 8,245 lines to
-11,505 as the platform gained calls, media, feed and readability work. The small
-files are already modular; `comments.ts` is the work that remains.
+single-purpose files against a few very large ones. **`client/comments.ts` alone was
+38% of all hand-written lines; the top two were 55% and the top three 65%.** That
+bimodality *was* the finding: the worker monolith was split (Phase 4), but the
+client was not, and it had grown from 8,245 lines to 12,584 as the platform gained
+calls, media, feed, DM and readability work.
+
+**Re-measured 2026-09-11, after Wave F**: the client is nine files (the census
+above), the largest 2,304 lines; no hand-written file is over 5,100 lines now and
+the largest three are the worker's `index.ts`, `lib.ts` and the DM module. The
+split was mechanical — every statement of the old boot moved verbatim into the
+module that owns it (the mechanism is the Wave F passage in INFRASTRUCTURE.md) —
+so the *lines* moved but the *duplication* did not; the classic-vs-Lit dual
+paths measured below are unchanged and remain the next target.
 
 ---
 
@@ -157,9 +174,11 @@ proven**:
 - **`comments-worker/src/pure.js`** — the pure worker helpers, extracted so they
   can be unit-tested in plain Node (the stepping-stone toward the ORM).
 
-What is **not** yet modular: the two monoliths. **~90%** of the worker's SQL and
-request-handling still lives inline in one file; the client still carries **42**
-classic fallbacks beside the Lit components. Test layers are already modular and
+What is **not** yet modular: the worker's SQL and request-handling (**~90%**
+still inline in `index.ts`, the `db.ts` foundation notwithstanding), and the
+client's **42** classic fallbacks beside the Lit components — the client is
+feature files now (Wave F), but each feature file still carries its classic
+render path. Test layers are already modular and
 tiered: **Layer 1** unit (`tests/`, 27 node + 7 py + 22 PS specs), **Layer 2**
 headless (`webtest/`).
 
@@ -223,7 +242,9 @@ Yes — the natural division is **by feature**, and it maps cleanly:
   compose middleware, mount the route tables.
 - **Client →** one Lit component per view under `app/views/*` (already true for
   reads), `app/api.ts` (all endpoints), `app/core.ts` (the membrane); the write
-  paths move out of `comments.ts` into their views until `comments.ts` dissolves.
+  paths live in `client/<feature>.ts` now (Wave F), each a per-boot factory over
+  the boot object `B` — the further step is moving them into their Lit views
+  until the classic render paths dissolve.
 - **Rules →** already one `Domain/*` module per rule family.
 
 ### 6. Is there a natural division for human approachability?
@@ -239,7 +260,11 @@ app/
   richtext.ts    THE body renderer           live.ts    WebSocket lifecycle
   appchrome/     sidebar · deskbar · home · settings · footer (split from appchrome.ts)
   views/         board · topic · post · member · profile · admin · library
-                 + composer · dm · avatar · admin-consoles (Wave F: moved out of comments.ts)
+client/                              the classic client (Wave F, shipped 2026-09-11)
+  comments.ts    the boot: page state · core helpers · router · start() · the kit
+  boot.ts        the Boot bag type
+  composer.ts · profile.ts · board.ts · wall.ts · dm.ts · merecat.ts · admin.ts
+                 install<Feature>(B) factories: bind() · run() · exports
 comments-worker/src/
   index.ts       thin composition root  (~150 lines)
   middleware/    withJson · withRateLimit · withKey · withBlockGate · originOk
@@ -273,6 +298,7 @@ monoliths' section headers):
 | 2B | `app/**` → TypeScript, strict-green; byte-identical bundle | — | ✅ |
 | 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ✅ |
 | 2D | Both workers → TypeScript (`Env`, typed rows) | — | ✅ |
+| F | **Wave F: the classic client is feature modules** — `client/comments.ts` (12,584 lines, one boot function) → the root + seven `install<Feature>(B)` factories, every statement moved verbatim, names bound from the boot object after install, top-level effects in `run()`; `build:client` bundles; source-rule tests read `tests/_support/client.mjs` | — (lines moved, not deduplicated; the classic-vs-Lit clone is the remaining target) | ✅ |
 | 3 | **`db.ts` repository** — foundation shipped (`inList` retires the 13 hand-rolled `?N` loops, the `Query` builder, the `rankFor`/`withNames`/`postCountsFor` mappers moved in, unit-tested); routing the remaining trivial one-off `.prepare()` sites + the profile-join/DM-fragment consolidation is a further slice | −13 `?N` loops; mappers single-sourced | ◑ |
 | 4 | **Middleware + declarative routes + file-split** — the 91-branch chain is a declarative `ROUTES` table (route-parity diff = identical); `keyed`/`keyedGated` middleware on the byte-exact handlers; and the 6,359-line worker monolith is **split into 4 modules**: `index.ts` (handlers + dispatch, 3,708), `lib.ts` (shared core — constants/crypto/auth/DB/notification/broadcast, 2,388), `durable.ts` (the two Durable Objects, 486), + the existing `db.ts`/`pure.js`/`webpush.js`. Each split behavior-proven: tsc-clean, the wrangler bundle's function set + code line-set unchanged bar cosmetic esbuild renames, live suites green. **Handler-group route files** (`routes/merecat` etc.) were attempted and reverted: extracting a group whose helpers are reached only through a Durable-Object re-export triggers an esbuild cross-module tree-shake that drops live code, and merecat generation isn't covered by the regression suite — so it isn't safely verifiable and is left for a pass that first extends coverage. | monolith → 4 modules; declarative dispatch; core/handler/DO seams | ◑ |
 | 5 | **Finish single-sourcing** — the owner ruled the bundle required, so `client/comments.ts` drops its no-bundle-fallback constant copies (FAITH/RANKS/NAMED_EMOJI/EMOJI_PACKS/CATS/pseudonym wordlists) and reads them UNCONDITIONALLY from the kernel via `window.mcCore` — drift now impossible. (The larger read-view component-vs-classic fallback deletion is the remaining Wave-F surgery.) | client↔kernel constant duplication removed | ◑ |

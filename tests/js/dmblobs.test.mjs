@@ -18,7 +18,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const src = readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
+import { clientRoot, clientModule, CLIENT_MODULES } from '../_support/client.mjs';
+const src = clientRoot();
+const dmSrc = clientModule('dm');
 const bootAt = src.indexOf('function mcBoot()');
 
 test('the blob store outlives the boot that fills it', () => {
@@ -47,7 +49,7 @@ test('every blob the store drops is revoked', () => {
 test('nothing creates a DM blob outside the store', () => {
   /* A createObjectURL that bypasses mcDmBlobPut is a leak by construction:
      nothing is tracking it, so nothing will ever revoke it. */
-  const dm = src.slice(src.indexOf('function dmMediaDecrypt'), src.indexOf('function dmRenderMsg'));
+  const dm = dmSrc.slice(dmSrc.indexOf('function dmMediaDecrypt'), dmSrc.indexOf('function dmRenderMsg'));
   for (const m of dm.matchAll(/URL\.createObjectURL\(/g)) {
     const after = dm.slice(m.index, m.index + 400);
     assert.ok(/mcDmBlobPut\(/.test(after),
@@ -57,7 +59,7 @@ test('nothing creates a DM blob outside the store', () => {
 });
 
 test('attachments decrypt on approach, and hand iOS no decoder until asked', () => {
-  const node = src.slice(src.indexOf('function dmMediaNode'), src.indexOf('function dmMediaExpiredNode'));
+  const node = dmSrc.slice(dmSrc.indexOf('function dmMediaNode'), dmSrc.indexOf('function dmMediaExpiredNode'));
   assert.ok(/whenNear\(node, paint\)/.test(node),
     'every attachment on the page used to fetch and AES-decrypt the moment the thread drew');
   assert.ok((node.match(/preload = 'none'/g) || []).length === 2,
@@ -74,7 +76,17 @@ test('attachments decrypt on approach, and hand iOS no decoder until asked', () 
  * until navigation became soft.
  */
 test('every document/window listener the boot installs dies with the boot', () => {
-  const boot = src.slice(bootAt);
+  /* The boot's own body, and every feature module's run() — the module's
+     share of what was the boot's top level, installed per boot (Wave F,
+     2026-09-11). A run() body sits one indent deeper; it is de-indented so the
+     boot-level shape below reads it exactly as it read the old file, and never
+     sweeps a listener nested inside a function. */
+  const runBody = (text) => {
+    const i = text.indexOf('\n  function run() {');
+    const j = text.indexOf('\n  }\n  return { bind, run', i);
+    return i < 0 || j < 0 ? '' : text.slice(i, j).split('\n').map((l) => l.replace(/^  /, '')).join('\n');
+  };
+  const boot = src.slice(bootAt) + '\n' + CLIENT_MODULES.map((m) => runBody(clientModule(m))).join('\n');
   const re = /(document|window)\.addEventListener\(([\s\S]{0,4000}?)\n  \}, ([^\n]*)\);/g;
   const escapes = [];
   let seen = 0;

@@ -24,7 +24,7 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 
 /* Files that navigate on the reader's behalf. */
 const SOURCES = [
-  'client/comments.ts',
+  'client/comments.ts', 'client/composer.ts', 'client/profile.ts', 'client/board.ts', 'client/wall.ts', 'client/dm.ts', 'client/merecat.ts', 'client/admin.ts',
   ...readdirSync(join(root, 'app', 'views')).filter((f) => f.endsWith('.ts')).map((f) => 'app/views/' + f),
   'app/appchrome.ts',
 ];

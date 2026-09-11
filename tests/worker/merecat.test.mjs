@@ -18,7 +18,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
 const index = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
 const durable = readFileSync(join(root, 'comments-worker', 'src', 'durable.ts'), 'utf8');
-const client = readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
+import { clientAll } from '../_support/client.mjs';
+const client = clientAll();
 const uncommented = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
 
 test('the defaults come from the kernel, never a literal', () => {
