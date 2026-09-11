@@ -39,14 +39,20 @@ tests/
                        seven feature modules of client/, as one text or one at a time)
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
-                       the build ↔ kernel parity of the commentable pages, and the DM press-and-hold
-                       surface's laws (the overlay's three layers, the reply envelope round trip)
+                       the build ↔ kernel parity of the commentable pages, the DM press-and-hold
+                       surface's laws (the overlay's three layers, the reply envelope round trip),
+                       and the classic client's module wiring (client_modules: every binding
+                       filled and provided, no var initializer before bind, shared state on B only)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
                        the comments switches and the journal sweep's SQL on real migrations,
-                       the DM reaction ledger — 0012's backfill and the handler's kernel gate)
-  py/                  the Python build tooling (nav, frontmatter, converters, slug parity, serve, llm,
-                       the writings detector behind the comments switches)
+                       the DM reaction ledger — 0012's backfill and the handler's kernel gate —
+                       and the last-seen stamp — 0013, the hub as its one writer; plus the db
+                       builder, calls, media, webpush, the social switch, the Discord bridge)
+  py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
+                       slug parity, the docs/ source-vs-generated split and its orphans, the version
+                       stamp, the boot splash, the baked partials, the librarian's sources and ingest
+                       ledger, the writings detector behind the comments switches
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 

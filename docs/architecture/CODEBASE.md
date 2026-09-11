@@ -34,14 +34,14 @@ idea holds the whole thing together and is the key to reading it:
           compiled ESM      │               │   compiled ESM
                             ▼               ▼
       browser: app/core.ts (membrane,   worker: import the same
-      69 exports, erases Maybe/Either)   purescript/output/ directly
+      88 exports, erases Maybe/Either)   purescript/output/ directly
                             │               │
               ┌─────────────┴──────┐        └──────► comments-worker/src/*
               ▼                    ▼                  (D1, R2, Durable Objects,
-        app/**  (Lit views,   docs/comments.js         Vectorize, Workers AI)
-        the bundle app.js)    (no-bundle fallback
-                              client, same rules
-                              via window.mcCore)
+        app/**  (Lit views,   client/*.ts →            Vectorize, Workers AI)
+        the bundle app.js)    docs/comments.js (the
+                              classic client, same
+                              rules via window.mcCore)
 ```
 
 The two "how is this one file 6,000 lines?" cases were **`docs/comments.js`**
@@ -163,11 +163,11 @@ proven**:
 
 - The **PureScript `Domain/*` kernel — 29 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
-  each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 22 of them).
+  each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 29 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
   an auth state can't hold a hash without a key). This is the most modular part
   of the codebase and it is shared by both the client and the worker.
-- **`app/core.ts`** — the one audited membrane, **69 exports**, the single place
+- **`app/core.ts`** — the one audited membrane, **88 exports** (2026-09-11), the single place
   PureScript types are erased for JS.
 - **`app/**`** — 17 files, one Lit component per view, over `app/store.ts` (cache)
   and `app/api.ts` (typed client). Median ~150 lines. Already modular.
@@ -179,7 +179,7 @@ still inline in `index.ts`, the `db.ts` foundation notwithstanding), and the
 client's **42** classic fallbacks beside the Lit components — the client is
 feature files now (Wave F), but each feature file still carries its classic
 render path. Test layers are already modular and
-tiered: **Layer 1** unit (`tests/`, 27 node + 7 py + 22 PS specs), **Layer 2**
+tiered: **Layer 1** unit (`tests/`, 29 PS + 15 js + 16 worker node specs, 12 py + 1 css unittest files — 2026-09-11), **Layer 2**
 headless (`webtest/`).
 
 ### 3. Why do we have 6,000+-line files?
@@ -275,17 +275,20 @@ comments-worker/src/
   pure.ts        pure helpers (already extracted)
 ```
 
-**Newcomer reading order** (once the split lands; today, start at the two
-monoliths' section headers):
+**Newcomer reading order** (the worker's `routes/` · `services/` · `durable/`
+split above is the target shape; today its write path is `index.ts` → `lib.ts` → `db.ts`):
 
 1. **This file**, then `README.md` (build), `CLAUDE.md` (rules) and `docs/architecture/INFRASTRUCTURE.md` (infra, long form).
 2. `purescript/src/Domain/Route.purs` + `Auth.purs` + `Access.purs` — the rules
    that decide what a URL shows and who may do what. Small, pure, readable.
 3. `app/core.ts` — how those rules cross into JS.
 4. `app/shell.ts` → `app/views/board.ts` → `topic.ts` — one full read path.
-5. Worker `index.ts` (composition root) → `routes/comments.ts` → `db.ts` — one
+5. `client/comments.ts` (`mcBoot`: the boot object `B`, the install list, `start()`)
+   → `client/board.ts` (the board form → `/api/comments`) — one classic write path,
+   and how a feature module binds its names.
+6. Worker `index.ts` (the `ROUTES` table + the handlers) → `lib.ts` → `db.ts` — one
    full write path, from HTTP to SQL.
-6. `durable/board-hub.ts` — how live updates fan out.
+7. `durable.ts` (`BoardHub`) — how live updates fan out.
 
 ---
 
