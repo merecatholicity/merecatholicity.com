@@ -1290,6 +1290,16 @@
      appears on hover is the pointer's road. A press that moves is a scroll, not
      a hold; the click that follows a hold is swallowed so a link under the
      finger does not also navigate. */
+  /* A short haptic where the device has one. Chrome refuses (and logs an
+     intervention for) a vibrate before the frame's first real tap, so ask
+     userActivation first where it exists. */
+  function dmBuzz(ms: number) {
+    try {
+      var ua: any = (navigator as any).userActivation;
+      if (ua && !ua.hasBeenActive) return;
+      if (navigator.vibrate) navigator.vibrate(ms);
+    } catch (e) { /* fine */ }
+  }
   function dmArmGestures(m: any, node: any, ctx: any) {
     var lpT: any = 0, sx = 0, sy = 0, held = false, swiping = false, dx = 0;
     function cancelHold() { if (lpT) { clearTimeout(lpT); lpT = 0; } }
@@ -1301,7 +1311,7 @@
       cancelHold();
       lpT = setTimeout(function () {
         lpT = 0; held = true;
-        try { if (navigator.vibrate) navigator.vibrate(12); } catch (x) { /* fine */ }
+        dmBuzz(12);
         dmOpenActions(m, node, ctx, null);
       }, 430);
     }, { passive: true });
@@ -1328,7 +1338,7 @@
       swiping = false;
       node.classList.remove('dm-swiping'); node.classList.remove('dm-swipe-armed');
       node.style.transform = '';
-      if (fire) { try { if (navigator.vibrate) navigator.vibrate(8); } catch (x) { /* fine */ } ctx.reply(m); }
+      if (fire) { dmBuzz(8); ctx.reply(m); }
     }
     node.addEventListener('touchend', endTouch, { passive: true });
     node.addEventListener('touchcancel', endTouch, { passive: true });
