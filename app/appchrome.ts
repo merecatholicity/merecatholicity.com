@@ -576,11 +576,13 @@ function mcDialog(opts: { title: string; body: Node; actions?: HTMLElement[] }):
   x.type = 'button'; x.className = 'mc-dialog-x'; x.setAttribute('aria-label', 'Close'); x.textContent = '×'; head.appendChild(x);
   card.appendChild(head);
   const body = document.createElement('div'); body.className = 'mc-dialog-body'; body.appendChild(opts.body); card.appendChild(body);
-  const acts = document.createElement('div'); acts.className = 'mc-dialog-acts';
-  (opts.actions || []).forEach((a) => acts.appendChild(a));
-  const closeBtn = document.createElement('button');
-  closeBtn.type = 'button'; closeBtn.className = 'btn mc-dialog-close'; closeBtn.textContent = 'Close'; acts.appendChild(closeBtn);
-  card.appendChild(acts);
+  /* ✕, the scrim and Escape dismiss; there is no bottom Close (the owner's
+     ruling) — an actions row exists only when the caller brings actions. */
+  if (opts.actions && opts.actions.length) {
+    const acts = document.createElement('div'); acts.className = 'mc-dialog-acts';
+    opts.actions.forEach((a) => acts.appendChild(a));
+    card.appendChild(acts);
+  }
   scrim.appendChild(card);
   const took = !!lockDocument();
   const restore = document.activeElement as HTMLElement | null;
@@ -598,7 +600,6 @@ function mcDialog(opts: { title: string; body: Node; actions?: HTMLElement[] }):
   }
   scrim.addEventListener('click', (e) => { if (e.target === scrim) close(); });
   x.addEventListener('click', close);
-  closeBtn.addEventListener('click', close);
   body.addEventListener('click', (e) => {
     const a = (e.target as Element).closest ? (e.target as Element).closest('a[href]') : null;
     if (!a) return;
@@ -607,7 +608,7 @@ function mcDialog(opts: { title: string; body: Node; actions?: HTMLElement[] }):
   });
   window.addEventListener('keydown', onKey, true);
   document.body.appendChild(scrim);
-  try { closeBtn.focus(); } catch (e) { /* fine */ }
+  try { x.focus(); } catch (e) { /* fine */ }
   return { close, body };
 }
 
@@ -961,8 +962,8 @@ class McSettings extends LitElement {
   /* Settings → About: what this device is actually running, whether that is
      current, and everything the site footer says (on phones the footer is gone
      everywhere but the home tab, so this is where its links live). A themed
-     dialog (mcDialog) over the settings, selectable and copyable — not the
-     gray inline block it was. The facts come from window.mcVersion (nav.js)
+     dialog (mcDialog) over the settings, its text selectable — no Copy button,
+     no bottom Close, the owner's ruling: ✕, the scrim and Escape dismiss. The facts come from window.mcVersion (nav.js)
      rather than being re-derived here, so the dialog and the update banner
      can never disagree — and it still works when the stale thing is this
      very bundle. */
@@ -975,9 +976,6 @@ class McSettings extends LitElement {
     const reload = document.createElement('button');
     reload.type = 'button'; reload.className = 'btn btn-send'; reload.textContent = 'Reload to update'; reload.hidden = true;
     reload.addEventListener('click', () => location.reload());
-    const copy = document.createElement('button');
-    copy.type = 'button'; copy.className = 'btn mc-about-copy-btn'; copy.textContent = 'Copy';
-    copy.addEventListener('click', (e: any) => this._copyAbout(e));
     const paint = () => {
       const d: any = this.ver || {};
       const stale = !!(d.stale && d.stale.length);
@@ -992,7 +990,7 @@ class McSettings extends LitElement {
     if (!v) this.ver = { unknown: true };
     else this.ver = { running: v.running(), served: v.served(), stale: v.stale(), checking: true };
     paint();
-    mcDialog({ title: 'About this app', body: wrap, actions: [reload, copy] });
+    mcDialog({ title: 'About this app', body: wrap, actions: [reload] });
     if (!v) return;
     /* Ask the server fresh on open — the whole reason someone opens this is
        to find out whether they are behind. */
@@ -1033,40 +1031,6 @@ class McSettings extends LitElement {
     lines.push('service worker: ' + ('serviceWorker' in navigator
       ? (navigator.serviceWorker.controller ? 'active' : 'not controlling') : 'unsupported'));
     return lines.join('\n');
-  }
-  /* What Copy hands over: the device facts and the site's doors, as text a
-     report or a note can hold. */
-  _aboutCopyText() {
-    const year = new Date().getFullYear();
-    const site = ['', 'merecatholicity.com — © ' + year]
-      .concat(FOOTER_LINKS.map(([label, href]) => label + ': ' + new URL(href, location.href).href));
-    return this._aboutText() + '\n' + site.join('\n');
-  }
-  _copyAbout(e: any) {
-    const btn = e && e.currentTarget;
-    const text = this._aboutCopyText();
-    const done = () => { if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy'; }, 1200); } };
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, () => this._copyFallback(text, done));
-        return;
-      }
-    } catch (err) { /* fall through */ }
-    this._copyFallback(text, done);
-  }
-  _copyFallback(text: string, done: () => void) {
-    /* execCommand is deprecated and still the only road in some in-app
-       browsers, which is exactly where a version report gets asked for. */
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      ta.remove();
-      done();
-    } catch (err) { /* nothing more to try; the text is on screen to select */ }
   }
 
   async clearCache() {

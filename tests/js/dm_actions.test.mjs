@@ -85,6 +85,25 @@ test('the bubble is the mount the pill and the ⌄ hang from', () => {
   assert.ok(/\.dm-msg\.dm-saved\{border-color:color-mix\(in srgb,var\(--dm-saved\)/.test(dmCss), 'and the bubble\'s own border takes the tint');
 });
 
+test('a downward swipe over the page dismisses the keyboard; the thread names Online or Offline; a profile shows presence', () => {
+  const helper = src.slice(src.indexOf('function swipeDismissesKeyboard('), src.indexOf('function dmArmGestures('));
+  assert.ok(/document\.addEventListener\('touchstart'[\s\S]*\{ passive: true, signal: bootSig \}\)/.test(helper)
+    && /document\.addEventListener\('touchmove'[\s\S]*\{ passive: true, signal: bootSig \}\)/.test(helper),
+    'the document listeners are passive and die with the boot');
+  assert.ok(/document\.activeElement !== ta/.test(helper), 'live only while the field has the keyboard');
+  assert.ok(/composer\.contains\(t\)\) \? -1 :/.test(helper), 'a swipe that starts inside the composer is left alone');
+  assert.ok(/clientY - y0 > 48\) \{ y0 = -1; try \{ ta\.blur\(\); \}/.test(helper), '48px downward blurs the field once');
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  assert.ok(/swipeDismissesKeyboard\(ta, form\);/.test(view), 'the DM composer takes it');
+  assert.ok(/swipeDismissesKeyboard\(q, form\);/.test(src.slice(src.indexOf('function viewMerecat('))), 'so does the merecat ask box');
+  assert.ok(/if \(presOn === false\) \{ sub\.appendChild\(el\('span', 'dm-dot dm-dot-off'\)\); sub\.appendChild\(document\.createTextNode\('Offline'\)\)/.test(view),
+    'the thread header says Offline once the hub has answered, the lock only while unknown');
+  const prof = src.slice(src.indexOf('function profilePresenceInto('), src.indexOf('function renderProfile('));
+  assert.ok(/hash === state\.myHash \|\| hash === MERECAT_BOT_HASH/.test(prof), 'not for yourself, not for the bot');
+  assert.ok(/API \+ '\/dm\/presence'/.test(prof) && /board\.sub\(\['presence:' \+ hash\]\)/.test(prof), 'one keyed read, then the live frames');
+  assert.ok(/if \(state\.profilePresence\) state\.profilePresence\(m\.hash, !!m\.online\);/.test(src), 'the live frame reaches the open profile');
+});
+
 test('the picker and the keyboard never share a phone screen', () => {
   const panel = src.slice(src.indexOf('function buildEmojiPanel('), src.indexOf('function loadKjv('));
   assert.ok(/if \(onPick\) return;\s*try \{ if \(window\.matchMedia && window\.matchMedia\('\(hover: none\)'\)\.matches\) search\.focus\(\);/.test(panel),

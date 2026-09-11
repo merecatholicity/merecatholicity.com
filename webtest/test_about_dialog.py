@@ -55,7 +55,7 @@ def main():
         d = jsj(f, INSPECT)
         checks.append(('About opens a themed dialog over the settings: title, version block, state line', d.get('title') == 'About this app' and d.get('pre') and 'version:' in d.get('preText', '') and bool(d.get('state'))))
         checks.append(('the dialog carries the footer\'s information: the © line and the seven doors', d.get('copyLine', '').startswith('© ') and d.get('hrefs') == DOORS))
-        checks.append(('Copy, Close and ✕ are there; the body is selectable; the scrim is inert to touch', d.get('copyBtn') and d.get('closeBtn') and d.get('x') and d.get('selectable') and d.get('scrimTouch') == 'none'))
+        checks.append(('✕ is the only button (no Copy, no bottom Close); the body is selectable; the scrim is inert to touch', not d.get('copyBtn') and not d.get('closeBtn') and d.get('x') and d.get('selectable') and d.get('scrimTouch') == 'none'))
         checks.append(('it is themed (a painted surface, not the browser\'s gray)', bool(d.get('bg')) and d.get('bg') not in ('rgba(0, 0, 0, 0)', 'transparent')))
         after = jsj(f, """window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true, cancelable:true}));
           return JSON.stringify({ gone: !document.querySelector('.mc-dialog'), sheetOpen: !!document.querySelector('mc-sheet .mc-sheet.on') });""")
@@ -82,9 +82,9 @@ def main():
         d = jsj(f, INSPECT)
         checks.append(('phone: the dialog opens over the settings sheet and fits the screen', d.get('title') == 'About this app' and d.get('fits') and d.get('sheetOpen')))
         checks.append(('phone: the seven doors are there', d.get('hrefs') == DOORS))
-        closed = jsj(f, """document.querySelector('.mc-dialog-close').click();
+        closed = jsj(f, """document.querySelector('.mc-dialog-x').click();
           return JSON.stringify({ gone: !document.querySelector('.mc-dialog'), sheetOpen: !!document.querySelector('mc-sheet .mc-sheet.on'), locked: document.documentElement.classList.contains('mc-sheet-open') });""")
-        checks.append(('phone: Close closes the dialog and the sheet keeps its lock', closed.get('gone') and closed.get('sheetOpen') and closed.get('locked')))
+        checks.append(('phone: ✕ closes the dialog and the sheet keeps its lock', closed.get('gone') and closed.get('sheetOpen') and closed.get('locked')))
         f.js1("window.mcSheet.close(); return 1;")
         f.goto('index.html')
         f.wait('!!document.querySelector("mc-footer")', timeout=20)

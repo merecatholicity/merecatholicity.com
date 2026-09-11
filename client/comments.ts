@@ -1285,6 +1285,23 @@
     } };
     if (!phone) { var first = menu.querySelector('button'); if (first) first.focus(); }
   }
+  /* A downward swipe over the page while a composer has the keyboard up
+     dismisses it (the owner's report: the page scrolled under a keyboard that
+     stayed, with no easy way out). Touch only, passive, live only while the
+     field is focused; a swipe that starts inside the composer itself is left
+     alone. The listeners die with the boot. */
+  function swipeDismissesKeyboard(ta: any, composer: any) {
+    var y0 = -1;
+    document.addEventListener('touchstart', function (e: any) {
+      if (document.activeElement !== ta || e.touches.length !== 1) { y0 = -1; return; }
+      var t = e.target;
+      y0 = (t && t.closest && composer.contains(t)) ? -1 : e.touches[0].clientY;
+    }, { passive: true, signal: bootSig });
+    document.addEventListener('touchmove', function (e: any) {
+      if (y0 < 0 || document.activeElement !== ta) return;
+      if (e.touches[0].clientY - y0 > 48) { y0 = -1; try { ta.blur(); } catch (x) { /* fine */ } }
+    }, { passive: true, signal: bootSig });
+  }
   /* Arm a rendered bubble with the gestures: press-and-hold (touch) and
      right-click open the surface; a swipe to the right replies; the ⌄ that
      appears on hover is the pointer's road. A press that moves is a scroll, not
@@ -1892,6 +1909,8 @@
       '.dm-dot-on{background:#3ba55d;box-shadow:0 0 0 2px rgba(59,165,93,0.22)}' +
       '.dm-dot-off{background:#c0c0c0}.dm-dot-unknown{background:#dcdcdc}' +
       '.dm-typing{font-size:0.85em;opacity:0.7;font-style:italic;margin:0.25em 0.2em}' +
+      '.profile-presence{display:flex;align-items:center;gap:.35em;font-size:.86rem;color:var(--faint);margin:.1rem 0 .2rem}' +
+      '.profile-presence .dm-dot{margin-right:0}' +
       '.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}' +
       '.wall-media{margin:0.45em 0}' +
       '.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}' +
@@ -2379,6 +2398,7 @@
     anonAllowed: false,
     altIps: { ipv4: '', ipv6: '' },
     dmView: null,   // set by viewDm: the open thread's live drop-in hook
+    profilePresence: null,   // set by renderProfile: the open profile's presence line
   };
 
   /* Reverse-DNS results, cached per address across drawers so a fingerprint
@@ -4459,6 +4479,7 @@
   function onLivePresence(m: any) {
     if (state.dmView && state.dmView.other === m.hash && state.dmView.setPresence) state.dmView.setPresence(!!m.online);
     if (state.inboxPresence) state.inboxPresence(m.hash, !!m.online);
+    if (state.profilePresence) state.profilePresence(m.hash, !!m.online);
   }
   /* Authenticate the live socket for this member so DM/notif pushes arrive. */
   function enableMemberLive() {
@@ -6843,6 +6864,31 @@ trace('submit: board post');
   var SOCIAL_ORDER = ['website', 'x', 'facebook', 'instagram', 'tiktok'];
   var SOCIAL_LABEL: Record<string, string> = { website: 'Website', x: 'X (Twitter)', facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' };
 
+  /* Online or offline, under another member's name (2026-09-11): one keyed
+     read of /dm/presence on open, then the live presence:<hash> frames the
+     hub seeds and fans. Not for yourself, not for the bot, never without an
+     identity. A member who chose "appear offline" reads Offline — the hub
+     honours the choice before it answers, so nothing here can leak it. */
+  function profilePresenceInto(names: any, hash: any) {
+    if (!state.key || !hash || hash === state.myHash || hash === MERECAT_BOT_HASH || !/^[0-9a-f]{64}$/.test(String(hash))) return;
+    ensureDmStyles();
+    var line = el('div', 'profile-presence');
+    line.hidden = true;
+    names.appendChild(line);
+    function paint(on: boolean) {
+      line.textContent = '';
+      line.appendChild(el('span', 'dm-dot ' + (on ? 'dm-dot-on' : 'dm-dot-off')));
+      line.appendChild(document.createTextNode(on ? 'Online' : 'Offline'));
+      line.hidden = false;
+    }
+    state.profilePresence = function (h: any, on: any) { if (h === hash && line.isConnected) paint(!!on); };
+    fetch(API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, hashes: [hash] }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d && d.ok && Array.isArray(d.online) && line.isConnected) paint(d.online.indexOf(hash) !== -1); })
+      .catch(function () { /* no line, no harm */ });
+    if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + hash]);
+  }
   function renderProfile(card: any, p: any, editable: any) {
     card.textContent = '';
     /* A blocked member's profile is closed to you — no card, no wall, no
@@ -6870,6 +6916,7 @@ trace('submit: board post');
     headRow.appendChild(avatar);
     var names = el('div', 'profile-names');
     names.appendChild(el('div', 'profile-name', p.nick || p.assigned));
+    profilePresenceInto(names, p.hash);
     if (p.nick) names.appendChild(el('div', 'profile-assigned', p.assigned));
     if (p.handle) names.appendChild(el('div', 'profile-assigned profile-handle', '@' + p.handle));
     if (p.admin) names.appendChild(el('span', 'comment-admin', '(admin)'));
@@ -8773,11 +8820,15 @@ trace('submit: feed post');
         var acts = el('div', 'dm-head-acts');
         headEl.appendChild(acts);
         section.appendChild(headEl);
-        var presOn = false, typingOn = false, typingHideT: any = 0;
+        /* presOn: null until the hub seeds it (then the lock line stands), true
+           = Online, false = Offline — which is also what a member who chose
+           "appear offline" reads as; the hub honours that before it answers. */
+        var presOn: boolean | null = null, typingOn = false, typingHideT: any = 0;
         function paintSub() {
           sub.textContent = '';
           if (typingOn) { sub.appendChild(el('span', 'dm-sub-typing', 'typing…')); return; }
-          if (presOn) { sub.appendChild(el('span', 'dm-dot dm-dot-on')); sub.appendChild(document.createTextNode('Online')); return; }
+          if (presOn === true) { sub.appendChild(el('span', 'dm-dot dm-dot-on')); sub.appendChild(document.createTextNode('Online')); return; }
+          if (presOn === false) { sub.appendChild(el('span', 'dm-dot dm-dot-off')); sub.appendChild(document.createTextNode('Offline')); return; }
           sub.appendChild(document.createTextNode('🔒 End-to-end encrypted'));
         }
         paintSub();
@@ -9143,6 +9194,7 @@ trace('submit: feed post');
         attachDraft(ta, 'dm:' + other);
         attachEmoji(ta);
         attachMentions(ta);
+        swipeDismissesKeyboard(ta, form);
         grow(); refresh();
         /* Sparing typing signal: a "start" at most once per 3s while composing,
            a "stop" 4s after the last keystroke. WebSocket only — no HTTP. */
@@ -9949,6 +10001,7 @@ trace('submit: feed post');
       q.style.height = Math.min(q.scrollHeight + (q.offsetHeight - q.clientHeight), 168) + 'px';
     };
     q.addEventListener('input', q.mcGrow);
+    swipeDismissesKeyboard(q, form);
     var send = el('button', 'btn btn-send');
     send.type = 'submit';
     send.title = 'Ask'; send.setAttribute('aria-label', 'Ask');

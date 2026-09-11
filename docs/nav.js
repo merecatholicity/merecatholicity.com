@@ -291,7 +291,7 @@ window.mcAsset = function (name) {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=1935469629';
+    s.src = 'app.js?v=2146773598';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }

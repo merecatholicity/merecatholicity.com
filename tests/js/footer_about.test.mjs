@@ -44,9 +44,9 @@ test('the dialog keeps the three overlay layers and never releases a lock it did
   assert.ok(/closest\('a\[href\]'\)/.test(dlg) && /window\.mcSheet\.close\(\)/.test(dlg), 'a link inside is a navigation: the dialog and the sheet under it close');
 });
 
-test('About is the dialog, carries every footer door, and copies them', () => {
-  const about = chrome.slice(chrome.indexOf('async openAbout()'), chrome.indexOf('_copyFallback(text: string'));
-  assert.ok(/mcDialog\(\{ title: 'About this app', body: wrap, actions: \[reload, copy\] \}\)/.test(about), 'About opens the dialog');
+test('About is the dialog, carries every footer door, and is dismissed by ✕ alone', () => {
+  const about = chrome.slice(chrome.indexOf('async openAbout()'), chrome.indexOf('_aboutText() {'));
+  assert.ok(/mcDialog\(\{ title: 'About this app'/.test(about), 'About opens the dialog');
   assert.ok(!/_aboutPanel/.test(chrome), 'the gray inline panel is gone');
   const links = /const FOOTER_LINKS: Array<\[string, string\]> = \[([\s\S]*?)\];/.exec(chrome);
   assert.ok(links, 'FOOTER_LINKS is the data');
@@ -56,7 +56,11 @@ test('About is the dialog, carries every footer door, and copies them', () => {
   /* The static footer partial names the same doors — About must not fall behind it. */
   const partial = readFileSync(join(root, 'partials', 'footer.html'), 'utf8');
   for (const m of partial.matchAll(/href="([a-z-]+\.html)"/g)) assert.ok(links[1].includes(`'${m[1]}'`), `the partial's ${m[1]} is in About`);
-  assert.ok(/_aboutCopyText\(\) \{[\s\S]*FOOTER_LINKS\.map\(\(\[label, href\]\) => label \+ ': ' \+ new URL\(href, location\.href\)\.href\)/.test(about),
-    'Copy hands over the doors as absolute URLs');
-  assert.ok(/const text = this\._aboutCopyText\(\);/.test(chrome), 'the Copy button copies that text');
+  /* The owner's ruling (2026-09-11): no Copy button, no bottom Close — ✕, the
+     scrim and Escape dismiss, and the selectable body is what copies. */
+  assert.ok(!/_copyAbout|_aboutCopyText|mc-about-copy-btn/.test(chrome), 'no Copy button, no copy plumbing left behind');
+  assert.ok(/mcDialog\(\{ title: 'About this app', body: wrap, actions: \[reload\] \}\)/.test(about), 'the only action is Reload to update, shown when stale');
+  const dlg = chrome.slice(chrome.indexOf('function mcDialog('), chrome.indexOf('class McSettings extends LitElement'));
+  assert.ok(!/mc-dialog-close/.test(dlg), 'the dialog adds no bottom Close button of its own');
+  assert.ok(/x\.focus\(\)/.test(dlg), 'focus lands on the ✕, the one control');
 });

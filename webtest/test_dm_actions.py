@@ -116,7 +116,7 @@ SHAPE = """return JSON.stringify((function(){
     replyBarHidden: !!q('.dm-reply-bar') && getComputedStyle(q('.dm-reply-bar')).display === 'none',
     head: !!q('.dm-head .dm-head-avatar') && !!q('.dm-head .dm-head-sub') && !!q('.dm-head .dm-head-info'),
     headSticky: q('.dm-head') && getComputedStyle(q('.dm-head')).position === 'sticky',
-    subLock: (q('.dm-head-sub')||{}).textContent === '🔒 End-to-end encrypted',
+    subLock: ['🔒 End-to-end encrypted', 'Offline'].indexOf((q('.dm-head-sub')||{}).textContent) !== -1,   // the lock until the hub seeds presence; then Offline for a hash nobody holds
     composer: !!q('.dm-composer .dm-c-ta') && !!q('.dm-composer .dm-c-send') && !!q('.dm-composer .dm-c-plus') && !!q('.dm-composer .dm-c-emoji'),
     composerFixed: q('.dm-composer') && getComputedStyle(q('.dm-composer')).position === 'fixed',
     spacerLast: !!q('.dm-c-space') && q('.dm-c-space').parentNode.lastElementChild === q('.dm-c-space') && q('.dm-c-space').previousElementSibling === q('.dm-composer')
@@ -152,7 +152,7 @@ def main():
         checks.append(('an edited message says so in its meta', st.get('edited103')))
         checks.append(('a reply carries the quote block naming them and their words', st.get('quote104')))
         checks.append(('the reply strip is mounted above the field and truly hidden until a reply is armed', st.get('replyBarHidden')))
-        checks.append(('a sticky header: avatar, the lock subtitle, the ⓘ', st.get('head') and st.get('headSticky') and st.get('subLock')))
+        checks.append(('a sticky header: avatar, the subtitle (the lock, or Offline once seeded), the ⓘ', st.get('head') and st.get('headSticky') and st.get('subLock')))
         checks.append(('a fixed composer at the foot: +, the field, emoji, Send; the spacer reserves its height', st.get('composer') and st.get('composerFixed') and st.get('spacerLast')))
         checks.append(('on open the bar is flush with the viewport bottom, aligned to the column, and the last bubble sits just above it', st.get('flushBottom') and st.get('alignedLeft') and st.get('lastAboveBar')))
         checks.append(('desktop keeps the footer, and it stays below the bar on open (the thread scrolls to its own foot)', st.get('footerShown') and st.get('footerBelowBar')))
@@ -295,6 +295,29 @@ def main():
                        pk.get('focusedBefore') and pk.get('opened') and pk.get('blurred') and pk.get('searchIdle') and pk.get('face') == 'Keyboard'))
         checks.append(('phone: a pick inserts the emoji, closes the picker, and hands the keyboard back',
                        pk.get('closedAfterPick') and pk.get('inserted') and pk.get('refocused') and pk.get('faceBack') == 'Emoji'))
+        sw = jsj(f, """return JSON.stringify((function(){
+          var ta = document.querySelector('.dm-c-ta'); ta.focus();
+          var b = document.querySelector('[data-dmid="101"]');
+          var r = b.getBoundingClientRect();
+          function touch(type, y) { var t = new Touch({identifier: 9, target: b, clientX: r.left + 30, clientY: y});
+            b.dispatchEvent(new TouchEvent(type, {touches: type === 'touchend' ? [] : [t], targetTouches: type === 'touchend' ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true})); }
+          var focusedBefore = document.activeElement === ta;
+          touch('touchstart', r.top + 10); touch('touchmove', r.top + 30);
+          var stillAfterSmall = document.activeElement === ta;
+          touch('touchmove', r.top + 70); touch('touchend', r.top + 70);
+          var blurred = document.activeElement !== ta;
+          var c = document.querySelector('.dm-composer'); ta.focus();
+          var ct = c.getBoundingClientRect();
+          var t2 = new Touch({identifier: 10, target: ta, clientX: ct.left + 40, clientY: ct.top + 10});
+          ta.dispatchEvent(new TouchEvent('touchstart', {touches:[t2], targetTouches:[t2], changedTouches:[t2], bubbles:true}));
+          var t3 = new Touch({identifier: 10, target: ta, clientX: ct.left + 40, clientY: ct.top + 90});
+          ta.dispatchEvent(new TouchEvent('touchmove', {touches:[t3], targetTouches:[t3], changedTouches:[t3], bubbles:true}));
+          var keptInComposer = document.activeElement === ta;
+          ta.blur();
+          return { focusedBefore: focusedBefore, stillAfterSmall: stillAfterSmall, blurred: blurred, keptInComposer: keptInComposer };
+        })());""")
+        checks.append(('phone: a downward swipe over the thread while typing dismisses the keyboard; a small move or a swipe inside the composer does not',
+                       sw.get('focusedBefore') and sw.get('stillAfterSmall') and sw.get('blurred') and sw.get('keptInComposer')))
         ph = jsj(f, """return JSON.stringify((function(){
           var b = document.querySelector('[data-dmid="103"]');
           var r = b.getBoundingClientRect();
