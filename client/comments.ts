@@ -9310,8 +9310,22 @@ trace('submit: feed post');
           });
         });
         /* Open a conversation at its newest word: on the last page, the foot of
-           the thread, just above the composer. */
-        if (d.messages.length && d.page >= dmPages) scrollToEnd();
+           the thread, just above the composer. Chrome resets the scroll position
+           at the window load event (its restoration for a fresh entry), and on a
+           real network the thread renders BEFORE load — the first cut opened at
+           the top on prod and at the foot on a local serve, where load had long
+           fired. When load is still to come, re-land the foot for a beat after
+           it (the reader has had no time to scroll away). */
+        if (d.messages.length && d.page >= dmPages) {
+          scrollToEnd();
+          if (document.readyState !== 'complete') {
+            window.addEventListener('load', function () {
+              var n = 0;
+              var settle = function () { if (!nearEnd()) scrollToEnd(); if (++n < 6) setTimeout(settle, 50); };
+              settle();
+            }, { once: true, signal: bootSig });
+          }
+        }
       })
       .catch(function () {
         section.textContent = '';        // drop the placeholder crumb + skeleton

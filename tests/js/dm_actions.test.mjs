@@ -116,6 +116,10 @@ test('the conversation is a chat screen: the header sticks, the composer is fixe
   assert.ok(/spacer\.style\.height = \(form\.offsetHeight \+ 8\) \+ 'px'/.test(view0), 'a spacer reserves the bar\'s height under the last bubble');
   assert.ok(/ro\.observe\(form\); ro\.observe\(section\);/.test(view0), 'remeasured as the bar or the column changes');
   assert.ok(/form\.style\.left = Math\.round\(r\.left\)/.test(view0), 'on desktop the bar is aligned to the content column');
+  /* Chrome resets the scroll position at the load event; a thread rendered
+     before load (a real network) must re-land its foot after it. */
+  assert.ok(/if \(document\.readyState !== 'complete'\) \{\s*window\.addEventListener\('load', function \(\) \{[\s\S]*?if \(!nearEnd\(\)\) scrollToEnd\(\);[\s\S]*?\}, \{ once: true, signal: bootSig \}\);/.test(view0),
+    'the thread re-lands its end after the load event, with a listener that dies with the boot');
   assert.ok(/body\.mc-app \.dm-composer\{bottom:calc\(var\(--mc-tabbar-h/.test(dmCss), 'above the phone tab bar');
   assert.ok(/body\.mc-app\.mc-kb-open \.dm-composer\{bottom:var\(--mc-kb,0px\)/.test(dmCss), 'and above the soft keyboard, as the merecat composer does');
   const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
