@@ -78,7 +78,31 @@ test('the bubble is the mount the pill and the ⌄ hang from', () => {
   assert.ok(/\.dm-msg \{\s*position: relative;/.test(mainCss), 'main.css .dm-msg must be position: relative');
   assert.ok(/\.dm-react-pill\{position:absolute/.test(dmCss) && /\.dm-more\{position:absolute/.test(dmCss));
   assert.ok(/\.dm-msg\.dm-has-react\{margin-bottom/.test(dmCss), 'a bubble with a pill leaves room for it below');
-  assert.ok(/\.dm-msg\.dm-saved\{box-shadow:0 0 0 2px var\(--dm-saved\)/.test(dmCss), 'a saved bubble is lit for both sides');
+  /* The saved mark is quiet (the owner's second look, 2026-09-11): a small
+     star in the meta's own ink — never a ring, never a second color. */
+  assert.ok(!/\.dm-msg\.dm-saved\{[^}]*box-shadow/.test(dmCss), 'a saved bubble carries no ring');
+  assert.ok(/\.dm-savedmark\{color:inherit/.test(dmCss), 'the saved star takes the meta row\'s own ink');
+});
+
+test('an element toggled by its hidden attribute stays hidden', () => {
+  /* The reply strip once leaked as an empty box above the field: its
+     display:flex rule beat the UA's [hidden]. Same class for the bar and the
+     menu behind the picker, the mic/send swap, the attach chip. */
+  assert.ok(/\.dm-reply-bar\[hidden\],\.dm-act-bar\[hidden\],\.dm-act-menu\[hidden\],\.dm-c-btn\[hidden\],\.dm-c-send\[hidden\],\.dm-attach-chip\[hidden\]\{display:none!important\}/.test(dmCss));
+});
+
+test('the conversation is a chat screen: header and composer stay in view, the composer rides the keyboard', () => {
+  assert.ok(/\.dm-head\{position:sticky;top:0/.test(dmCss), 'the header is sticky');
+  assert.ok(/body\.mc-app \.dm-head\{top:var\(--mc-deskbar-h/.test(dmCss), 'under the desktop bar');
+  assert.ok(/body\.mc-app \.dm-head\{top:calc\(var\(--mc-appbar-h/.test(dmCss), 'under the phone app bar');
+  assert.ok(/\.dm-composer\{position:sticky;bottom:0/.test(dmCss), 'the composer is sticky');
+  assert.ok(/body\.mc-app \.dm-composer\{bottom:calc\(var\(--mc-tabbar-h/.test(dmCss), 'above the phone tab bar');
+  assert.ok(/body\.mc-app\.mc-kb-open \.dm-composer\{bottom:var\(--mc-kb,0px\)/.test(dmCss), 'and above the soft keyboard, as the merecat composer does');
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  assert.ok(/warmOnFocus\(ta\)/.test(view), 'the composer is under the Turnstile focus net by hand (it is not wrapped by mdEditor)');
+  assert.ok(/form\.appendChild\(el\('div', 'ts-slot'\)\)/.test(view), 'and carries the widget\'s mount point');
+  assert.ok(/if \(mic\) \{ mic\.hidden = has; send\.hidden = !has; \}/.test(view), 'mic while empty, Send once there is something to send');
+  assert.ok(/!finePointer\) return;\s*e\.preventDefault\(\);\s*send\.click\(\);/.test(view), 'Enter sends only where there is a pointer and a keyboard');
 });
 
 test('the reply envelope: sentinel + JSON round-trips, and plain text is itself', () => {

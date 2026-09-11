@@ -982,7 +982,7 @@
       ? window.mcCore.dmTtlOptions.map(function (o) { return [o.secs, o.label]; })
       : [[86400, '24 hours'], [604800, '7 days'], [2592000, '30 days']];
   }
-  function dmExpiryNode(other: any, ttl: any, isNew: any) {
+  function dmExpiryNode(other: any, ttl: any, isNew: any, onChange?: (t: number) => void) {
     var p = el('p', 'dm-expiry');
     var cur = Number(ttl) || 2592000;   // Domain.Dm.defaultTtl (30 days)
     function paint() {
@@ -1004,7 +1004,7 @@
           fetch(API + '/dm/ttl', { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, with: other, ttl: opt[0] }) })
             .then(function (r) { return r.json(); })
-            .then(function (d) { if (d && d.ok) { cur = opt[0] as number; isNew = false; paint(); } })
+            .then(function (d) { if (d && d.ok) { cur = opt[0] as number; isNew = false; paint(); if (onChange) onChange(cur); } })
             .catch(function () {});
         });
         p.appendChild(a);
@@ -1764,8 +1764,12 @@
       '.dm-edited{font-style:italic;opacity:.85}' +
       '.dm-receipt{opacity:.85;letter-spacing:-.08em}' +
       '.dm-receipt-seen{color:var(--maroon,#8b1a1a);opacity:1}' +
-      '.dm-savedmark{color:var(--dm-saved);font-size:1.1em;line-height:1}' +
-      '.dm-msg.dm-saved{box-shadow:0 0 0 2px var(--dm-saved);border-color:var(--dm-saved)}' +
+      /* The saved mark is QUIET (the owner's 2026-09-11 ruling: the ring and
+         the gold star shouted): a small star in the meta's own faint ink. */
+      '.dm-savedmark{color:inherit;opacity:.9;font-size:1em;line-height:1}' +
+      /* An element toggled by its hidden attribute must not be revived by its
+         own display rule (author display beats the UA's [hidden]). */
+      '.dm-reply-bar[hidden],.dm-act-bar[hidden],.dm-act-menu[hidden],.dm-c-btn[hidden],.dm-c-send[hidden],.dm-attach-chip[hidden]{display:none!important}' +
       '.dm-quote{display:block;border-left:3px solid var(--maroon,#8b1a1a);background:color-mix(in srgb,var(--ink,#000) 7%,transparent);border-radius:6px;padding:.3em .6em;margin:0 0 .35em;cursor:pointer;font-size:.9em;max-width:100%;overflow:hidden}' +
       '.dm-quote:focus-visible{outline:2px solid var(--maroon,#8b1a1a);outline-offset:1px}' +
       '.dm-quote-who{display:block;font-weight:600;color:var(--maroon,#8b1a1a);font-size:.85em}' +
@@ -1813,6 +1817,57 @@
       '.dm-reply-body .dm-quote-text{-webkit-line-clamp:2}' +
       '.dm-reply-x{flex:none;font:inherit;background:none;border:0;cursor:pointer;color:var(--faint);font-size:1.1em;padding:.2em .45em;border-radius:6px}' +
       '.dm-reply-x:hover{color:var(--maroon,#8b1a1a)}' +
+      /* the chat screen: a sticky header over the words, a sticky composer under them */
+      '.dm-head{position:sticky;top:0;z-index:38;display:flex;align-items:center;gap:.65rem;padding:.45rem 0;margin:0 0 .3rem;background:var(--surface,#fff);border-bottom:1px solid var(--rule)}' +
+      'body.mc-app .dm-head{top:var(--mc-deskbar-h,0px)}' +
+      '.dm-head-avatar{flex:none;width:2.5rem;height:2.5rem;border-radius:50%;overflow:hidden;background:var(--cream-2,#faf6ee);display:inline-flex;align-items:center;justify-content:center;color:var(--maroon,#8b1a1a);font-weight:700;text-decoration:none}' +
+      '.dm-head-img{width:100%;height:100%;object-fit:cover;display:block;margin:0}' +
+      '.dm-head-text{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:.12em;background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer}' +
+      '.dm-head-name{font-weight:600;font-size:1.02rem;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}' +
+      '.dm-head-sub{font-size:.8rem;color:var(--faint);display:inline-flex;align-items:center;gap:.3em;white-space:nowrap;max-width:100%;overflow:hidden}' +
+      '.dm-head-sub .dm-dot{margin-right:0}' +
+      '.dm-sub-typing{color:#3ba55d;font-style:italic}' +
+      '.dm-head-acts{flex:none;display:inline-flex;gap:.1rem}' +
+      '.dm-head-btn,.dm-c-btn,.dm-c-send,.dm-c-emoji{font:inherit;line-height:1;background:none;border:0;cursor:pointer;color:var(--maroon,#8b1a1a);width:2.6rem;height:2.6rem;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;padding:0;flex:none}' +
+      '.dm-head-btn:hover,.dm-c-btn:hover,.dm-c-emoji:hover{background:color-mix(in srgb,var(--maroon,#8b1a1a) 8%,transparent)}' +
+      '.dm-head-btn .mc-ic,.dm-c-btn .mc-ic,.dm-c-send .mc-ic{width:1.45rem;height:1.45rem;vertical-align:0}' +
+      '.dm-c-emoji .mc-ic{width:1.35rem;height:1.35rem;vertical-align:0}' +
+      '.dm-note{display:block;width:max-content;max-width:92%;margin:.6em auto .4em;font:inherit;font-size:.74em;color:var(--faint);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;padding:.25em .8em;text-align:center;cursor:pointer}' +
+      '.dm-composer{position:sticky;bottom:0;z-index:37;margin:.6rem 0 0;padding:.45rem 0 .3rem;background:var(--bg,#fff);border-top:1px solid var(--rule)}' +
+      '.dm-c-row{display:flex;align-items:flex-end;gap:.3rem}' +
+      '.dm-c-field{flex:1;min-width:0;display:flex;align-items:flex-end;background:var(--surface,#fff);border:1px solid var(--rule);border-radius:22px;padding:.15rem .15rem .15rem .9rem}' +
+      '.dm-c-field:focus-within{border-color:var(--maroon,#8b1a1a)}' +
+      '.dm-c-ta{flex:1;min-width:0;width:auto;border:0;background:none;padding:.55rem 0;margin:0;font:inherit;color:var(--ink);resize:none;line-height:1.35;max-height:168px;outline:none;border-radius:0;box-shadow:none}' +
+      '.dm-c-ta:disabled{color:var(--faint)}' +
+      '.dm-c-emoji{width:2.3rem;height:2.3rem;color:var(--faint)}' +
+      '.dm-c-send{background:var(--accent-fill,#8b1a1a);color:var(--accent-on,#fff)}' +
+      '.dm-c-send:hover{filter:brightness(1.07)}' +
+      '.dm-c-send.dm-c-idle{opacity:.45}' +
+      '.dm-c-send:disabled{opacity:.4;cursor:not-allowed;filter:none}' +
+      '.dm-c-emoji-panel{margin:0 0 .4rem}' +
+      '.dm-c-status{margin:.2rem .2rem 0;font-size:.85rem;min-height:0}' +
+      '.dm-c-status:empty{display:none}' +
+      '.dm-composer .dm-attach-chip{margin:.1rem 0 .35rem}' +
+      '.dm-composer .mc-rec-row{margin:.4rem 0 .1rem}' +
+      '@media (max-width:600px){' +
+        'body.mc-app .dm-head{top:calc(var(--mc-appbar-h,3rem) + env(safe-area-inset-top,0px));margin-left:calc(-1 * var(--page-pad,.8rem));margin-right:calc(-1 * var(--page-pad,.8rem));padding-left:var(--page-pad,.8rem);padding-right:var(--page-pad,.8rem)}' +
+        'body.mc-app .dm-head-name{display:none}' +   /* the app bar carries the name on phones */
+        'body.mc-app .dm-composer{bottom:calc(var(--mc-tabbar-h,3.6rem) + env(safe-area-inset-bottom,0px));margin-left:calc(-1 * var(--page-pad,.8rem));margin-right:calc(-1 * var(--page-pad,.8rem));padding-left:var(--page-pad,.8rem);padding-right:var(--page-pad,.8rem)}' +
+        'body.mc-app.mc-kb-open .dm-composer{bottom:var(--mc-kb,0px);transition:bottom .18s ease}' +
+        '.dm-c-ta{font-size:16px}' +   /* zoom-proof, as every phone text control here */
+      '}' +
+      /* conversation info (the ⓘ sheet) */
+      '.dm-info-card{text-align:center;padding:.4rem 0 .9rem}' +
+      '.dm-info-avatar{width:4.5rem;height:4.5rem;border-radius:50%;margin:0 auto .5rem;overflow:hidden;background:var(--cream-2,#faf6ee);display:flex;align-items:center;justify-content:center;font-size:1.8rem;font-weight:700;color:var(--maroon,#8b1a1a)}' +
+      '.dm-info-avatar .dm-head-img{width:100%;height:100%}' +
+      '.dm-info-name{font-weight:600;font-size:1.1rem}' +
+      '.dm-info-link{font-size:.9rem}' +
+      '.dm-info-row{padding:.75rem 0;border-top:1px solid var(--rule)}' +
+      '.dm-info-row-title{font-weight:600;margin-bottom:.3rem}' +
+      '.dm-info-row-text{margin:0;font-size:.92rem;color:var(--ink-soft,#333)}' +
+      '.dm-info-row .dm-expiry{margin:0;font-size:.92rem;opacity:.9}' +
+      '.dm-info-danger .identity-action{display:block;padding:.45rem 0;color:var(--maroon,#8b1a1a)}' +
+      '.dm-info-inline{margin:0 0 .8rem;padding:0 .2rem;border-bottom:1px solid var(--rule)}' +
       '.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}' +
       '.btn-attach{margin-left:6px}' +
       '.dm-media{margin:0.1em 0}' +
@@ -7510,6 +7565,13 @@ trace('submit: board post');
       copy: 'M15.5 8.5v-2a2 2 0 00-2-2h-7a2 2 0 00-2 2v7a2 2 0 002 2h2M10.5 8.5h7a2 2 0 012 2v7a2 2 0 01-2 2h-7a2 2 0 01-2-2v-7a2 2 0 012-2z',
       expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
       close: 'M6 6l12 12M18 6L6 18',
+      /* the DM chat screen's line icons (Feather-shaped, hand-drawn) */
+      plus: 'M12 5v14M5 12h14',
+      send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+      mic: 'M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3zM19 10v2a7 7 0 01-14 0v-2M12 19v3',
+      phone: 'M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.6a2 2 0 01-.5 2.1L8.1 9.7a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.8.3 1.7.6 2.6.7a2 2 0 011.7 2z',
+      info: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 16v-4M12 8h.01',
+      smile: 'M12 22a10 10 0 100-20 10 10 0 000 20zM8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01',
       x: 'M18.9 2.5H22l-7.6 8.6L23 21.5h-6.9l-5.4-7-6.2 7H1.4l8.1-9.2L1 2.5h7l4.9 6.4L18.9 2.5z',
       facebook: 'M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.8 3.7-3.8 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.5V12h2.7l-.4 2.9h-2.3v7A10 10 0 0022 12z',
     };
@@ -8607,6 +8669,23 @@ trace('submit: feed post');
     return node;
   }
 
+  /* The conversation: a chat SCREEN (WhatsApp-shaped, the owner's 2026-09-11
+     ruling). A sticky header — the correspondent's avatar, name (the app bar
+     carries it on phones), a subtitle that reads Online / typing… / the lock,
+     the call button, and ⓘ — over the messages, with a sticky composer at the
+     foot: + attach, the rounded field with its emoji button, the mic that
+     becomes Send the moment there is something to send. Everything about the
+     conversation that is not a message — encryption and the safety number,
+     the disappearing-message lifetime, block, delete — lives in the ⓘ sheet
+     (tap the header, the ⓘ, or the ⏳ chip); the thread itself is only words. */
+  function iconBtn(name: string, label: string, cls: string) {
+    var b = el('button', cls);
+    b.type = 'button';
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.appendChild(mcIcon(name));
+    return b;
+  }
   function viewDm(other: any) {
     if (!/^[0-9a-f]{64}$/.test(String(other))) {
       crumb([['Community', 'community.html'], ['Messages']]);
@@ -8643,6 +8722,7 @@ trace('submit: feed post');
         var d = res[1];
         if (!d.ok) throw new Error(d.error || 'failed');
         section.textContent = '';        // drop the placeholder crumb + skeleton
+        ensureDmStyles();
         /* The correspondent's public key drives both decrypt and encrypt for the
            whole thread (the shared secret is the same in both directions). */
         var otherPub = (d.other && d.other.pubkey) || null;
@@ -8650,26 +8730,129 @@ trace('submit: feed post');
         var shortName = d.other.nick || displayName(other);
         document.title = shortName + ' | Inbox';
         crumb([['Community', 'community.html'], ['Inbox', 'messages.html'], [shortName]]);
-        var headEl = el('h2', 'board-topic-head');
-        var presDot = el('span', 'dm-dot dm-dot-unknown');
-        headEl.appendChild(presDot);
-        var nameLink = el('a', null, label);
-        nameLink.href = profileHref(other);
-        headEl.appendChild(nameLink);
+        var curTtl = Number(d.ttl) || 2592000;   // Domain.Dm.defaultTtl
+        var isNew = !d.messages.length;
+        /* ---- the header ---- */
+        var headEl = el('div', 'dm-head');
+        var avatarLink = el('a', 'dm-head-avatar');
+        avatarLink.href = profileHref(other);
+        avatarLink.setAttribute('aria-label', 'Profile');
+        function avatarInto(host: any, size: number) {
+          if (d.other.avatar) {
+            var im = el('img', 'dm-head-img');
+            im.src = API + '/avatar?hash=' + other + '&v=' + encodeURIComponent(d.other.avatar);
+            im.alt = ''; im.width = size; im.height = size;
+            host.appendChild(im);
+          } else host.appendChild(el('span', 'dm-head-initial', (shortName.charAt(0) || '?').toUpperCase()));
+        }
+        avatarInto(avatarLink, 40);
+        headEl.appendChild(avatarLink);
+        var headText = el('button', 'dm-head-text');
+        headText.type = 'button';
+        headText.title = 'Conversation info';
+        headText.appendChild(el('span', 'dm-head-name', label));
+        var sub = el('span', 'dm-head-sub');
+        headText.appendChild(sub);
+        headEl.appendChild(headText);
+        var acts = el('div', 'dm-head-acts');
+        headEl.appendChild(acts);
         section.appendChild(headEl);
-        /* The encrypted-inbox assurance: a quiet badge, the honest explainer one
-           tap away, and the optional safety-number verify — no PIN, no friction. */
-        ensureDmStyles();
-        section.appendChild(dmE2eBadge(other, otherPub));
-        /* Disappearing-message notice (implied at the top of every conversation,
-           more prominent on a brand-new one) with the 24h/7d/30d chooser. */
-        var expiryNote = dmExpiryNode(other, d.ttl, !d.messages.length);
-        section.appendChild(expiryNote);
+        var presOn = false, typingOn = false, typingHideT: any = 0;
+        function paintSub() {
+          sub.textContent = '';
+          if (typingOn) { sub.appendChild(el('span', 'dm-sub-typing', 'typing…')); return; }
+          if (presOn) { sub.appendChild(el('span', 'dm-dot dm-dot-on')); sub.appendChild(document.createTextNode('Online')); return; }
+          sub.appendChild(document.createTextNode('🔒 End-to-end encrypted'));
+        }
+        paintSub();
+        /* ---- conversation info: the sheet behind the header, the ⓘ and the ⏳ chip ---- */
+        var infoExpiry: any = null;
+        function infoNode() {
+          var box = el('div', 'dm-info');
+          var card = el('div', 'dm-info-card');
+          var big = el('div', 'dm-info-avatar');
+          avatarInto(big, 72);
+          card.appendChild(big);
+          card.appendChild(el('div', 'dm-info-name', label));
+          var pl = el('a', 'dm-info-link', 'View profile');
+          pl.href = profileHref(other);
+          card.appendChild(pl);
+          box.appendChild(card);
+          var enc = el('div', 'dm-info-row');
+          enc.appendChild(el('div', 'dm-info-row-title', '🔒 End-to-end encrypted'));
+          var encP = el('p', 'dm-info-row-text');
+          encP.appendChild(document.createTextNode('Messages here are encrypted on your own device; we hold only ciphertext. '));
+          var how = el('a', null, 'How it works');
+          how.href = '#';
+          how.addEventListener('click', function (ev: any) { ev.preventDefault(); dmE2eExplainer(); });
+          encP.appendChild(how);
+          if (otherPub) {
+            encP.appendChild(document.createTextNode(' · '));
+            var v = el('a', null, dmVerified(other) ? '✓ verified' : 'Verify safety number');
+            v.href = '#';
+            v.addEventListener('click', function (ev: any) { ev.preventDefault(); dmVerifyPanel(other, otherPub, v); });
+            encP.appendChild(v);
+          }
+          enc.appendChild(encP);
+          box.appendChild(enc);
+          var dis = el('div', 'dm-info-row');
+          dis.appendChild(el('div', 'dm-info-row-title', '⏳ Disappearing messages'));
+          infoExpiry = dmExpiryNode(other, curTtl, isNew, function (t: number) { curTtl = t; isNew = false; paintNote(); });
+          dis.appendChild(infoExpiry);
+          box.appendChild(dis);
+          /* The quiet exit — the ONE block (unified 2026-08-03): messages held
+             out of sight AND their posts/profile hidden from your view. */
+          var dz = el('div', 'dm-info-row dm-info-danger');
+          dz.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
+            var blocking = !d.blocked;
+            var doBlock = function () { setBlock(other, blocking, function () { location.reload(); }); };
+            if (blocking) appConfirm('Block this member? Their future messages are held out of your sight (they are never told), and their posts and profile are hidden from you. Unblocking undoes all of it and delivers everything they wrote meanwhile.', { okLabel: 'Block', danger: true }, function (ok: any) { if (ok) doBlock(); });
+            else doBlock();
+          }));
+          dz.appendChild(identityAction('Delete conversation', function () {
+            appConfirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok: any) {
+              if (!ok) return;
+              fetch(API + '/dm/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: state.key, with: other }),
+              }).then(function (r) { return r.json(); }).then(function (d3) {
+                if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} go('messages.html'); }
+              }).catch(function () {});
+            });
+          }));
+          box.appendChild(dz);
+          return box;
+        }
+        function openInfo() {
+          var node = infoNode();
+          if (window.mcSheet) { window.mcSheet.open(shortName, node, function () { infoExpiry = null; }); return; }
+          /* No shell: the same panel folds out under the header. */
+          var old = section.querySelector('.dm-info-inline');
+          if (old) { old.remove(); infoExpiry = null; return; }
+          node.classList.add('dm-info-inline');
+          headEl.parentNode.insertBefore(node, headEl.nextSibling);
+        }
+        headText.addEventListener('click', openInfo);
+        var infoBtn = iconBtn('info', 'Conversation info', 'dm-head-btn dm-head-info');
+        infoBtn.addEventListener('click', openInfo);
+        acts.appendChild(infoBtn);
         /* Opening marked it read on the server; make the badge tell the
            same story on the next paint. */
         try { localStorage.removeItem(DM_CACHE); } catch (e) {}
         dmUnreadCheck();
+        /* ---- the messages ---- */
         var list = el('div', 'comments-list dm-list');
+        var note = el('button', 'dm-note');
+        note.type = 'button';
+        function paintNote() { note.textContent = '⏳ Messages disappear ' + dmTtlLabel(curTtl) + ' after they are opened'; }
+        paintNote();
+        note.addEventListener('click', openInfo);
+        list.appendChild(note);
+        var dmPages = Math.max(1, Math.ceil(d.total / d.per));
+        function dmHref(i: any) { return 'messages.html?dm=' + other + '&p=' + i; }
+        var topBar = pageBar(d.total, d.per, d.page, dmHref);
+        if (topBar) list.appendChild(topBar);   // earlier pages are above; the newest word is at the foot
         section.appendChild(list);
         if (!d.messages.length) {
           list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
@@ -8716,24 +8899,25 @@ trace('submit: feed post');
         trace('dm thread: ' + d.messages.length + ' msgs, '
           + d.messages.filter(function (m: any) { return m.media_key; }).length + ' attachments, '
           + mcDmBlobs.length + ' blobs held');
-        /* The "…is typing" line, shown only while the other side is composing. */
-        var typingLine = el('p', 'dm-typing', shortName + ' is typing…');
-        typingLine.style.display = 'none';
-        var typingHideT = 0;
+        /* The newest word sits at the foot, just above the composer. */
+        function scrollToEnd() {
+          var top = document.documentElement.scrollHeight;
+          try { window.scrollTo({ top: top, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollTo(0, top); }
+        }
+        function nearEnd() {
+          return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 240;
+        }
         /* Live drop-in + presence/typing/receipt updates for this open thread.
            A message pushed over the private user scope from THIS other party lands
-           at once (their own echo is ignored); presence toggles the header dot;
-           dm-read flips my bubbles to "Seen". */
+           at once (their own echo is ignored); presence and typing paint the
+           header's subtitle; dm-read flips my bubbles to ✓✓. */
         state.dmView = { other: other,
-          setTtl: function (t: any) { if (expiryNote && expiryNote.mcSetTtl) expiryNote.mcSetTtl(t); },
-          setPresence: function (on: any) {
-            presDot.className = 'dm-dot ' + (on ? 'dm-dot-on' : 'dm-dot-off');
-            presDot.title = on ? 'Online' : 'Offline';
-          },
+          setTtl: function (t: any) { curTtl = Number(t) || curTtl; isNew = false; paintNote(); if (infoExpiry && infoExpiry.mcSetTtl) infoExpiry.mcSetTtl(t); },
+          setPresence: function (on: any) { presOn = !!on; paintSub(); },
           setTyping: function (on: any) {
             clearTimeout(typingHideT);
-            if (on) { typingLine.style.display = ''; typingHideT = setTimeout(function () { typingLine.style.display = 'none'; }, 6000); }
-            else { typingLine.style.display = 'none'; }
+            typingOn = !!on; paintSub();
+            if (on) typingHideT = setTimeout(function () { typingOn = false; paintSub(); }, 6000);
           },
           markRead: function (at: any) {
             var t = Number(at) || 0;
@@ -8746,12 +8930,13 @@ trace('submit: feed post');
           },
           append: function (msg: any) {
             if (!msg || String(msg.sender_hash) === state.myHash) return;
-            clearTimeout(typingHideT); typingLine.style.display = 'none';   // a real message ends "typing"
+            clearTimeout(typingHideT); typingOn = false; paintSub();   // a real message ends "typing"
             var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
             d.total += 1;
             if (d.page === newMsgPage) {
-              var node = placeMsg(msg);
-              node.scrollIntoView();
+              var wasNear = nearEnd();
+              placeMsg(msg);
+              if (wasNear) scrollToEnd();
               /* Watched it arrive: settle read state + receipt server-side
                  (the send-side quiet bell already skipped the notification). */
               dmSeenPing(other);
@@ -8786,7 +8971,7 @@ trace('submit: feed post');
             var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
             if (bubble && (bubble as any).mcReactPaint) (bubble as any).mcReactPaint(msg.emoji);
           },
-          /* The other party saved (or unsaved) one of these bubbles: light it for me too. */
+          /* The other party saved (or unsaved) one of these bubbles: mark it for me too. */
           saveMsg: function (msg: any) {
             if (!msg || !msg.id) return;
             var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
@@ -8798,19 +8983,9 @@ trace('submit: feed post');
            replaced by the next view's sub() and the socket closes on a hidden
            tab, so the claim is only ever true while the reader truly looks. */
         if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + other, 'dmview:' + other]);
-        var dmPages = Math.max(1, Math.ceil(d.total / d.per));
-        function dmHref(i: any) { return 'messages.html?dm=' + other + '&p=' + i; }
-        var topBar = pageBar(d.total, d.per, d.page, dmHref);
-        if (topBar) section.insertBefore(topBar, list);
-        var botBar = pageBar(d.total, d.per, d.page, dmHref);
-        if (botBar) section.appendChild(botBar);
-        section.appendChild(typingLine);
-        var form = el('div', 'comment-form');
-        var ta = el('textarea', 'comment-text');
-        ta.maxLength = 4000;
-        ta.rows = 3;
-        ta.placeholder = 'Write your message.';
-        /* "Replying to …": the strip above the box while a reply is armed —
+        /* ---- the composer ---- */
+        var form = el('div', 'dm-composer');
+        /* "Replying to …": the strip above the field while a reply is armed —
            from the surface's Reply, or a swipe on a bubble — with the ✕ that
            disarms it. The quote rides inside the next send's E2E plaintext. */
         var replyTo: any = null;
@@ -8820,6 +8995,39 @@ trace('submit: feed post');
         var replyX = el('button', 'dm-reply-x', '✕');
         replyX.type = 'button'; replyX.title = 'Cancel reply'; replyX.setAttribute('aria-label', 'Cancel reply');
         replyBar.appendChild(replyBody); replyBar.appendChild(replyX);
+        form.appendChild(replyBar);
+        var mediaChip = el('span', 'dm-attach-chip');
+        mediaChip.hidden = true;
+        form.appendChild(mediaChip);
+        var ta = el('textarea', 'comment-text dm-c-ta');
+        ta.maxLength = 4000;
+        ta.rows = 1;
+        ta.placeholder = 'Message';
+        ta.setAttribute('aria-label', 'Message');
+        /* The focus net: the widget warms the instant they touch the field,
+           the earliest honest sign they mean to send (the mdEditor road, here
+           by hand because this composer is not the forum's). */
+        warmOnFocus(ta);
+        var emojiPanel = buildEmojiPanel(ta);
+        emojiPanel.classList.add('dm-c-emoji-panel');
+        form.appendChild(emojiPanel);
+        var row = el('div', 'dm-c-row');
+        var plus = iconBtn('plus', 'Attach a photo, video or audio', 'dm-c-btn dm-c-plus');
+        row.appendChild(plus);
+        var field = el('div', 'dm-c-field');
+        field.appendChild(ta);
+        var emojiBtn = iconBtn('smile', 'Emoji', 'dm-c-emoji');
+        emojiBtn.addEventListener('click', function () { emojiPanel.toggle(); });
+        field.appendChild(emojiBtn);
+        row.appendChild(field);
+        var mic: any = null;   // the voice button, when the Inbox takes voice notes
+        var send = iconBtn('send', 'Send', 'dm-c-send');
+        row.appendChild(send);
+        form.appendChild(row);
+        form.appendChild(el('div', 'ts-slot'));
+        var status = el('p', 'form-status dm-c-status');
+        form.appendChild(status);
+        section.appendChild(form);
         function setReply(ref: any) {
           replyTo = ref;
           replyBody.textContent = '';
@@ -8830,39 +9038,51 @@ trace('submit: feed post');
         }
         replyX.addEventListener('click', function () { setReply(null); ta.focus(); });
         ctx.reply = function (m: any) { setReply(dmReplyRef(m)); ta.focus(); };
-        form.appendChild(replyBar);
-        form.appendChild(mdEditor(ta));
+        /* The field grows with the words, to a few lines, then scrolls. */
+        function grow() { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 168) + 'px'; }
+        var pendingFile: any = null;
+        /* Mic while there is nothing to send, Send the moment there is —
+           WhatsApp's swap. Without voice, Send stands always, dimmed when idle. */
+        function refresh() {
+          var has = !!(ta.value.trim() || pendingFile);
+          if (mic) { mic.hidden = has; send.hidden = !has; }
+          else { send.hidden = false; send.classList.toggle('dm-c-idle', !has); }
+        }
         attachDraft(ta, 'dm:' + other);
+        attachEmoji(ta);
+        attachMentions(ta);
+        grow(); refresh();
         /* Sparing typing signal: a "start" at most once per 3s while composing,
            a "stop" 4s after the last keystroke. WebSocket only — no HTTP. */
         var typingLastSent = 0, typingStopT = 0;
         ta.addEventListener('input', function () {
+          grow(); refresh();
           if (!(window.mcLive && window.mcLive.member)) return;
           var now = Date.now();
           if (now - typingLastSent > 3000) { window.mcLive!.member.typing!(other, 'start'); typingLastSent = now; }
           clearTimeout(typingStopT);
           typingStopT = setTimeout(function () { window.mcLive!.member.typing!(other, 'stop'); typingLastSent = 0; }, 4000);
         });
-        form.appendChild(el('div', 'ts-slot'));
-        var btnRow = el('div', 'comment-buttons');
-        var send = el('button', 'btn btn-send', 'Send');
-        send.type = 'button';
-        btnRow.appendChild(send);
-        var pv = previewButton(ta);
-        if (pv) btnRow.appendChild(pv);
+        /* Enter sends where there is a keyboard with a pointer (WhatsApp Web's
+           convention; Shift+Enter breaks the line); on a phone Enter is a new
+           line and the button sends. A picker that already took the key
+           (the : emoji and @ mention lists) keeps it. */
+        var finePointer = false;
+        try { finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches; } catch (e) { finePointer = false; }
+        ta.addEventListener('keydown', function (e: any) {
+          if (e.key !== 'Enter' || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || e.isComposing || e.defaultPrevented || !finePointer) return;
+          e.preventDefault();
+          send.click();
+        });
         /* Attach a photo / audio / video from the device library. It is encrypted
            in the browser (AES-GCM) and sent as an E2E media message on Send; the
            text box becomes an optional caption. */
-        var pendingFile: any = null;
         var fileInput = el('input', 'dm-file-input');
         fileInput.type = 'file';
         fileInput.style.display = 'none';
-        var attach = utilBtnLabel(el('button', 'btn btn-attach'), '📎', 'Attach');
-        attach.type = 'button';
-        var mediaChip = el('span', 'dm-attach-chip');
-        mediaChip.style.display = 'none';
-        function clearAttach() { pendingFile = null; fileInput.value = ''; mediaChip.style.display = 'none'; mediaChip.textContent = ''; }
-        attach.addEventListener('click', function () { fileInput.click(); });
+        form.appendChild(fileInput);
+        function clearAttach() { pendingFile = null; fileInput.value = ''; mediaChip.hidden = true; mediaChip.textContent = ''; refresh(); }
+        plus.addEventListener('click', function () { fileInput.click(); });
         /* Gate + hold one picked (or recorded) file. The kind and size caps come
            from the served media settings (the old hardcoded 60 MB here let the
            server refuse at its own, smaller caps); images are downscaled in the
@@ -8879,7 +9099,8 @@ trace('submit: feed post');
               x.href = '#';
               x.addEventListener('click', function (ev: any) { ev.preventDefault(); clearAttach(); });
               mediaChip.appendChild(x);
-              mediaChip.style.display = '';
+              mediaChip.hidden = false;
+              refresh();
             });
           });
         }
@@ -8888,57 +9109,53 @@ trace('submit: feed post');
           if (!f) return;
           takeDmFile(f);
         });
-        btnRow.appendChild(attach);
-        /* One config tap: hide 📎 when the Inbox takes no media, accept from
-           the DM section's own kinds, 🎙 behind its voice flag. */
+        /* One config tap: hide + when the Inbox takes no media, accept from
+           the DM section's own kinds, the mic behind its voice flag. */
         mediaCfg().then(function (cfg: any) {
           var sec = cfg.sections.dm;
           if (cfg.enabled && sec.kinds.length) {
             fileInput.accept = window.mcCore ? (window.mcCore as any).mediaAcceptFor(sec.kinds) : 'image/*,video/*,audio/*';
-            if (sec.voice && sec.kinds.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, sec, status, takeDmFile));
-          } else attach.style.display = 'none';
-          /* 📞 lives HERE, beside 🎙 — reachable from the bottom of a long
-             thread where the composer already is (the header scrolled away
-             long ago). Gated on the platform switch + WebRTC support; the
-             bot has no ears. */
+            if (sec.voice && sec.kinds.indexOf('audio') !== -1) {
+              mic = voiceControl(form, cfg, sec, status, takeDmFile);
+              mic.className = 'dm-c-btn dm-c-mic';
+              mic.textContent = '';
+              mic.appendChild(mcIcon('mic'));
+              mic.title = 'Voice note'; mic.setAttribute('aria-label', 'Voice note');
+              row.insertBefore(mic, send);
+              refresh();
+            }
+          } else plus.hidden = true;
+          /* 📞 lives in the header, always in view (the WhatsApp place). Gated on
+             the platform switch + WebRTC support; the bot has no ears. */
           if (other !== MERECAT_BOT_HASH && (window as any).RTCPeerConnection
             && (navigator as any).mediaDevices && (navigator as any).mediaDevices.getUserMedia) {
             callsCfg().then(function (cc: any) {
-              if (cc.enabled) btnRow.appendChild(callButton(other, label));
+              if (!cc.enabled) return;
+              var cb = iconBtn('phone', 'Voice call (end-to-end encrypted)', 'dm-head-btn dm-head-call');
+              cb.addEventListener('click', function () { placeCall(other, label); });
+              acts.insertBefore(cb, acts.firstChild);
             });
           }
         });
-        form.appendChild(mediaChip);
-        form.appendChild(fileInput);
-        form.appendChild(btnRow);
-        var status = el('p', 'form-status');
-        form.appendChild(status);
-        section.appendChild(form);
-        /* No challenge merely for OPENING a conversation. This called
-           loadTurnstile() unconditionally, so the widget mounted — and in
-           render mode the mount IS the challenge — for a reader who had done
-           nothing but look. On the installed app that was the moment the
-           document died. The focusin net warms it the instant they touch the
-           composer, which is the earliest honest sign they mean to send. */
+        /* No challenge merely for OPENING a conversation: the focus net warms
+           the widget the instant they touch the field. */
         /* We can only encrypt to a member who has published a key. Until they have
            signed in once under the encrypted client, hold the send with a plain
            notice rather than silently falling back to plaintext. */
         if (!otherPub) {
           send.disabled = true;
           ta.disabled = true;
+          plus.disabled = true;
           ta.placeholder = 'Waiting for this member to sign in once to set up encryption.';
           status.textContent = 'You can message them privately once they have signed in to set up their encryption key.';
         }
         send.addEventListener('click', function () {
+          if (send.disabled) return;
           var body = ta.value.replace(/\s+$/, '');
-          if (!pendingFile && !body.trim()) {
-            if (ta.mcPreview) ta.mcPreview.off();
-            ta.focus();
-            return;
-          }
+          if (!pendingFile && !body.trim()) { ta.focus(); return; }
           send.disabled = true;
-      trace('submit: DM send');
-    status.textContent = 'Verifying...';
+          trace('submit: DM send');
+          status.textContent = 'Verifying...';
           var sending = pendingFile;   // captured: the echo path needs the local file
           var replyAt = replyTo;       // captured: the quote this send answers
           getToken().then(function (token) {
@@ -8976,69 +9193,45 @@ trace('submit: feed post');
             if (!d2.ok) throw new Error(d2.error || 'The message could not be sent.');
             ta.value = '';
             if (ta.mcDraftDone) ta.mcDraftDone();
-            if (ta.mcPreview) ta.mcPreview.off();
+            emojiPanel.closePanel();
             /* Seed the media cache from the local file so our own echo renders
                instantly without a round-trip. */
             if (sending && d2._media_key) { try { mcDmBlobPut(d2._media_key, URL.createObjectURL(sending), sending.size || 0); } catch (e) {} }
             clearAttach();
             setReply(null);
+            grow(); refresh();
             /* Newest message lands at the bottom of the last page. Show it
                inline when that page is on screen; else jump to it. */
             var msgPage = Math.ceil((d.total + 1) / d.per);
             if (msgPage === d.page) {
               d.total += 1;
-              var node;
               if (sending && d2._media_key) {
                 /* The media echo arrives with its envelope in hand (no decrypt). */
                 var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0, enc: 1,
                   _env: d2._env, reply: dmReplyClean(replyAt), react_me: '', react_other: '' };
-                node = placeMsg(mecho);
+                placeMsg(mecho);
               } else {
                 /* The text echo is already plaintext (enc 0) and carries its quote. */
                 var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0, enc: 0,
                   reply: dmReplyClean(replyAt), react_me: '', react_other: '' };
-                node = placeMsg(echo);
+                placeMsg(echo);
               }
-              status.textContent = 'Sent.';
-              node.scrollIntoView();
+              status.textContent = '';
+              scrollToEnd();
             } else {
               go('messages.html?dm=' + other + '&p=' + msgPage);
             }
           }).catch(function (err) {
             status.textContent = err.message || 'Network error. Try again in a moment.';
           }).finally(function () {
-            send.disabled = false;
+            send.disabled = !otherPub;
+            refresh();
             if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
           });
         });
-        /* The quiet exit — the ONE block (unified 2026-08-03): messages held
-           out of sight AND their posts/profile hidden from your view. */
-        var blockLine = el('p', 'board-audit-link');
-        blockLine.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
-          var blocking = !d.blocked;
-          var doBlock = function () { setBlock(other, blocking, function () { location.reload(); }); };
-          if (blocking) appConfirm('Block this member? Their future messages are held out of your sight (they are never told), and their posts and profile are hidden from you. Unblocking undoes all of it and delivers everything they wrote meanwhile.', { okLabel: 'Block', danger: true }, function (ok: any) { if (ok) doBlock(); });
-          else doBlock();
-        }));
-        blockLine.appendChild(document.createTextNode(' · '));
-        blockLine.appendChild(identityAction('Delete conversation', function () {
-          appConfirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok: any) {
-            if (!ok) return;
-            fetch(API + '/dm/delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, with: other }),
-            }).then(function (r) { return r.json(); }).then(function (d3) {
-              if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} go('messages.html'); }
-            }).catch(function () {});
-          });
-        }));
-        section.appendChild(blockLine);
-        /* Open a conversation at its newest word: on the last page, bring the
-           final message into view, above the composer. */
-        if (d.messages.length && d.page >= dmPages && list.lastChild) {
-          list.lastChild.scrollIntoView();
-        }
+        /* Open a conversation at its newest word: on the last page, the foot of
+           the thread, just above the composer. */
+        if (d.messages.length && d.page >= dmPages) scrollToEnd();
       })
       .catch(function () {
         section.textContent = '';        // drop the placeholder crumb + skeleton
