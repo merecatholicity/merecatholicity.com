@@ -119,6 +119,7 @@ import {
   dmLive,
   dmPair,
   dmUnreadExists,
+  dmUnreadCount,
   dumpDatabase,
   enc,
   discordSnippet,
@@ -1827,14 +1828,14 @@ async function handleDmThreads(request: any, env: any) {
     'pr.nick, pr.avatar, ' +
     '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ') AS msgs, ' +
     '(SELECT MAX(m.created_at) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ') AS last_at, ' +
-    'CASE WHEN ' + dmUnreadExists(now) + ' THEN 1 ELSE 0 END AS unread ' +
+    dmUnreadCount(now) + ' AS unread ' +   // the count (2026-09-11); truthy exactly when the old flag was
     'FROM dm_threads t LEFT JOIN profiles pr ON pr.hash = CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END ' +
     'WHERE t.a_hash = ?1 OR t.b_hash = ?1';
   const rows = await env.DB.prepare(
     'SELECT * FROM (' + inner + ') WHERE msgs > 0 ORDER BY last_at DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
   const totals = await env.DB.prepare(
-    'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'
+    'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN unread > 0 THEN 1 ELSE 0 END), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'   // unread_total counts THREADS, as before
   ).bind(me).first();
   const threads = (rows.results || []).map((r: any) => Object.assign({}, r,
     { assigned: r.other_hash ? displayName(r.other_hash) : null }));
@@ -1881,7 +1882,7 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
     return json({ ok: true, thread_id: null, ttl, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
-      messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
+      messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0, unread: 0, unread_from: null }, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
      sender and for nobody else, and a side that deleted the thread sees only
@@ -1912,6 +1913,15 @@ async function handleDmThread(request: any, env: any, ctx: any) {
     return out;
   });
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
+  /* What this reader has not read yet, told BEFORE this open marks it read
+     (2026-09-11): the count for the jump button's badge, and the first unread
+     word's id, above which the client stands its "N unread messages" line.
+     Held, cleared and expired words never count. */
+  const myReadAt = Number((me === a ? thread.a_read_at : thread.b_read_at) || 0);
+  const unreadRow = await env.DB.prepare(
+    'SELECT COUNT(*) AS n, MIN(m.id) AS first_id FROM dms m WHERE m.thread_id = ?2 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
+    'AND m.created_at > ?3 AND m.created_at > ?4 AND ' + dmLive(now)
+  ).bind(me, thread.id, myReadAt, myCleared).first();
   /* One conditional write: only when a visible word from the other side is
      newer than my stamp. Held and cleared words never trigger it. */
   await env.DB.prepare(
@@ -1942,7 +1952,8 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   }
   return json({ ok: true, thread_id: thread.id, ttl,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
-    messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
+    messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0,
+    unread: (unreadRow && unreadRow.n) || 0, unread_from: (unreadRow && unreadRow.first_id) || null }, 200);
 }
 
 /* The badge count: unread threads, one indexed COUNT. The client asks at most

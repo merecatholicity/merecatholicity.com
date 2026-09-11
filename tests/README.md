@@ -41,14 +41,18 @@ tests/
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
                        the build ↔ kernel parity of the commentable pages, the DM press-and-hold
                        surface's laws (the overlay's three layers, the reply envelope round trip),
-                       and the classic client's module wiring (client_modules: every binding
-                       filled and provided, no var initializer before bind, shared state on B only)
+                       the classic client's module wiring (client_modules: every binding
+                       filled and provided, no var initializer before bind, shared state on B only),
+                       and the conversation's chat-app basics (dm_chat_basics: the jump button, the
+                       unread line, seen only when reached, typing in the header, foot and inbox)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
                        the comments switches and the journal sweep's SQL on real migrations,
                        the DM reaction ledger — 0012's backfill and the handler's kernel gate —
-                       and the last-seen stamp — 0013, the hub as its one writer; plus the db
-                       builder, calls, media, webpush, the social switch, the Discord bridge)
+                       and the last-seen stamp — 0013, the hub as its one writer; the unread
+                       count and the thread's pre-open unread query RUN on the ledger, the hub's
+                       typing gate (dm_unread); plus the db builder, calls, media, webpush, the
+                       social switch, the Discord bridge)
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
                        slug parity, the docs/ source-vs-generated split and its orphans, the version
                        stamp, the boot splash, the baked partials, the librarian's sources and ingest

@@ -1052,6 +1052,18 @@ export function installDm(B: Boot) {
       '.dm-msg:hover .dm-more,.dm-more:focus-visible{opacity:1}' +
       '.dm-msg.dm-held{box-shadow:0 8px 28px rgba(0,0,0,.28)}' +
       '.dm-day{width:max-content;max-width:90%;margin:.9em auto .35em;font-size:.72em;color:var(--faint);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;padding:.15em .75em;text-align:center}' +
+      /* reading back (2026-09-11): the unread line, the jump button with its count, the typing bubble */
+      '.dm-unread-line{display:flex;align-items:center;gap:.6em;margin:.9em 0 .5em;font-size:.72em;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--maroon,#8b1a1a)}' +
+      '.dm-unread-line::before,.dm-unread-line::after{content:"";flex:1;border-top:1px solid color-mix(in srgb,var(--maroon,#8b1a1a) 45%,transparent)}' +
+      '.dm-jump{position:absolute;right:.7rem;bottom:calc(100% + .6rem);width:2.6rem;height:2.6rem;display:flex;align-items:center;justify-content:center;border-radius:999px;background:var(--surface,#fff);color:var(--ink);border:1px solid var(--rule);box-shadow:var(--shadow-2);font:inherit;font-size:1.5rem;line-height:1;cursor:pointer;padding:0 0 .3rem;z-index:1}' +
+      '.dm-jump[hidden]{display:none}' +
+      '.dm-jump-n{position:absolute;top:-.5rem;right:-.35rem;min-width:1.35rem;height:1.35rem;padding:0 .35rem;border-radius:999px;background:var(--maroon,#8b1a1a);color:#fff;font-size:.72rem;font-weight:700;line-height:1.35rem;text-align:center}' +
+      '.dm-jump-n[hidden]{display:none}' +
+      '.dm-typing-bubble{display:inline-flex;gap:.3em;align-items:center;padding:.75em .95em;width:max-content}' +
+      '.dm-typing-dot{width:.5em;height:.5em;border-radius:50%;background:var(--faint);animation:dm-typing 1.2s infinite ease-in-out}' +
+      '.dm-typing-dot:nth-child(2){animation-delay:.2s}.dm-typing-dot:nth-child(3){animation-delay:.4s}' +
+      '@keyframes dm-typing{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-.25em)}}' +
+      '.dm-sub-typing{animation:dm-typing-pulse 1.2s infinite ease-in-out}@keyframes dm-typing-pulse{50%{opacity:.55}}' +
       '@media (hover:none){.dm-more{display:none}.dm-screen{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.dm-screen textarea,.dm-screen input{-webkit-user-select:text;user-select:text}.dm-msg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y pinch-zoom}.dm-msg textarea{-webkit-user-select:text;user-select:text}}' +
       /* the action surface: a hole between four pieces of scrim (phone) or a
          popover at the pointer (desktop); scrim inert to touch, overscroll contained */
@@ -1284,6 +1296,7 @@ export function installDm(B: Boot) {
   function onLiveTyping(m: any) {
     var openDm = new URLSearchParams(location.search).get('dm');
     if (state.dmView && openDm && openDm === m.from && state.dmView.setTyping) state.dmView.setTyping(m.state !== 'stop');
+    if (state.inboxTyping) state.inboxTyping(m.from, m.state !== 'stop');
   }
   /* A member's online state changed: update the open thread's header dot and any
      inbox row dot. */
@@ -1457,7 +1470,7 @@ export function installDm(B: Boot) {
           var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmLabel(t.other_hash, t.nick));
           a.href = 'messages.html?dm=' + t.other_hash;
           left.appendChild(a);
-          if (t.unread) left.appendChild(el('span', 'dm-unread-badge', 'new'));
+          if (t.unread) left.appendChild(el('span', 'dm-unread-badge', String(t.unread)));   // the count (2026-09-11)
           var isub = el('div', 'board-row-sub', fmtTimeCompact(t.last_at));
           isub.title = fmtDateTime(t.last_at);
           left.appendChild(isub);
@@ -1523,6 +1536,19 @@ export function installDm(B: Boot) {
           line.appendChild(document.createTextNode(on ? 'Online' : (seen ? 'Last seen ' + dmSeenLabel(seen) : 'Offline')));
           line.hidden = false;
         }
+        /* "typing…" under the name while the other party writes to me (the
+           hub fans their signal to my own scope), the line back in 6 s. */
+        var typingT: Record<string, any> = {};
+        state.inboxTyping = function (h: any, on: any) {
+          var dot = presDots[h]; if (!dot) return;
+          clearTimeout(typingT[h]);
+          if (on) {
+            var line = dot.parentNode;
+            line.textContent = ''; line.appendChild(dot); dot.className = 'dm-row-dot on';
+            line.appendChild(el('span', 'dm-sub-typing', 'typing…')); line.hidden = false;
+            typingT[h] = setTimeout(function () { paintRow(h, !!presOnMap[h], presOnMap[h] ? 0 : (seenMap[h] || 0)); }, 6000);
+          } else paintRow(h, !!presOnMap[h], presOnMap[h] ? 0 : (seenMap[h] || 0));
+        };
         /* Only an online → offline transition is "just now" — the hub also seeds
            "offline" on subscribe, which must not overwrite the read's stamp. */
         state.inboxPresence = function (h: any, on: any) {
@@ -1817,12 +1843,58 @@ export function installDm(B: Boot) {
            2026-09-11). The spacer stands behind the bar; its top is where the
            bubbles end. (spacer and form are the composer's, built below.) */
         function endGap() { return spacer.getBoundingClientRect().top - (form.getBoundingClientRect().top - 8); }
-        function scrollToEnd() {
+        function scrollToEnd(smooth?: boolean) {
           var delta = endGap();
           if (delta <= 0) return;
-          try { window.scrollBy({ top: delta, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollBy(0, delta); }
+          try { window.scrollBy({ top: delta, left: 0, behavior: (smooth ? 'smooth' : 'instant') as any }); } catch (e) { window.scrollBy(0, delta); }
         }
         function nearEnd() { return endGap() < 240; }
+        /* Reading back is never interrupted, and never blind (2026-09-11): a
+           word that lands while the foot is out of view stays put under an
+           "N unread messages" line, the jump button above the composer carries
+           the count, and "seen" goes out only for words the reader actually
+           reached — at the foot when they arrived, or when the reader comes
+           down to them. pending: what the button counts; unseenLive: the live
+           words no seen ping has covered yet. */
+        var pending = 0, unseenLive = 0, unreadLine: any = null;
+        function unreadText(n: number) { return n === 1 ? '1 unread message' : n + ' unread messages'; }
+        function setUnreadLine(n: number, before: any) {
+          if (unreadLine) unreadLine.remove();
+          unreadLine = el('div', 'dm-unread-line', unreadText(n));
+          unreadLine.setAttribute('role', 'separator');
+          list.insertBefore(unreadLine, before);
+        }
+        function bumpUnreadLine(n: number) { if (unreadLine) unreadLine.textContent = unreadText(n); }
+        var jump: any = null, jumpN: any = null, jumpRaf = 0;
+        function updateJump() {
+          if (!jump) return;
+          var away = !nearEnd();
+          jump.hidden = !away;
+          if (!away) {
+            pending = 0;
+            if (unseenLive) { unseenLive = 0; dmSeenPing(other); }   // reached: now they are seen
+          }
+          jumpN.hidden = !pending;
+          jumpN.textContent = pending > 99 ? '99+' : String(pending);
+        }
+        window.addEventListener('scroll', function () {
+          if (jumpRaf) return;
+          jumpRaf = requestAnimationFrame(function () { jumpRaf = 0; updateJump(); });
+        }, { passive: true, signal: bootSig } as any);
+        /* The other party's keystrokes, in the thread itself: a bubble of three
+           dots at the foot while they type (kept in view when the foot is), and
+           the header's line for a reader who is scrolled back. */
+        var typingNode: any = null;
+        function typingBubble(on: boolean) {
+          if (on && !typingNode) {
+            typingNode = el('div', 'dm-msg dm-typing-bubble');
+            typingNode.setAttribute('aria-label', 'typing');
+            for (var i = 0; i < 3; i++) typingNode.appendChild(el('span', 'dm-typing-dot'));
+            var wasNear = nearEnd();
+            list.appendChild(typingNode);
+            if (wasNear) scrollToEnd();
+          } else if (!on && typingNode) { typingNode.remove(); typingNode = null; }
+        }
         /* Live drop-in + presence/typing/receipt updates for this open thread.
            A message pushed over the private user scope from THIS other party lands
            at once (their own echo is ignored); presence and typing paint the
@@ -1835,8 +1907,8 @@ export function installDm(B: Boot) {
           },
           setTyping: function (on: any) {
             clearTimeout(typingHideT);
-            typingOn = !!on; paintSub();
-            if (on) typingHideT = setTimeout(function () { typingOn = false; paintSub(); }, 6000);
+            typingOn = !!on; paintSub(); typingBubble(!!on);
+            if (on) typingHideT = setTimeout(function () { typingOn = false; paintSub(); typingBubble(false); }, 6000);
           },
           markRead: function (at: any) {
             var t = Number(at) || 0;
@@ -1849,16 +1921,24 @@ export function installDm(B: Boot) {
           },
           append: function (msg: any) {
             if (!msg || String(msg.sender_hash) === state.myHash) return;
-            clearTimeout(typingHideT); typingOn = false; paintSub();   // a real message ends "typing"
+            clearTimeout(typingHideT); typingOn = false; paintSub(); typingBubble(false);   // a real message ends "typing"
             var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
             d.total += 1;
             if (d.page === newMsgPage) {
               var wasNear = nearEnd();
-              placeMsg(msg);
-              if (wasNear) scrollToEnd();
-              /* Watched it arrive: settle read state + receipt server-side
-                 (the send-side quiet bell already skipped the notification). */
-              dmSeenPing(other);
+              var landed = placeMsg(msg);
+              if (wasNear) {
+                scrollToEnd();
+                /* Watched it arrive: settle read state + receipt server-side
+                   (the send-side quiet bell already skipped the notification). */
+                dmSeenPing(other);
+              } else {
+                /* Reading back: the word waits under the line, the button counts
+                   it, and it is "seen" when the reader comes down to it. */
+                if (!pending) setUnreadLine(1, landed); else bumpUnreadLine(pending + 1);
+                pending += 1; unseenLive += 1;
+              }
+              updateJump();
             } else {
               liveDmBadge();   // in the thread but paged back in history — still a bell
             }
@@ -1972,6 +2052,16 @@ export function installDm(B: Boot) {
         form.appendChild(el('div', 'ts-slot'));
         var status = el('p', 'form-status dm-c-status');
         form.appendChild(status);
+        /* The way back to the foot: a round button above the composer whenever
+           the foot is out of view, carrying the count of what waits there. */
+        jump = el('button', 'dm-jump');
+        jump.type = 'button'; jump.title = 'Jump to the latest message'; jump.setAttribute('aria-label', 'Jump to the latest message');
+        jump.appendChild(el('span', 'dm-jump-ico', '⌄'));
+        jumpN = el('span', 'dm-jump-n'); jumpN.hidden = true;
+        jump.appendChild(jumpN);
+        jump.hidden = true;
+        jump.addEventListener('click', function () { scrollToEnd(true); });
+        form.appendChild(jump);
         section.appendChild(form);
         /* The bar is FIXED above the tab bar (the merecat road), never sticky:
            a thread opens at the document's end, where a sticky bar sits in its
@@ -1997,7 +2087,7 @@ export function installDm(B: Boot) {
         var placeT: any = 0;
         function replace() {
           clearTimeout(placeT);
-          placeT = setTimeout(function () { var atEnd = nearEnd(); place(); if (atEnd) scrollToEnd(); }, 0);
+          placeT = setTimeout(function () { var atEnd = nearEnd(); place(); if (atEnd) scrollToEnd(); updateJump(); }, 0);
         }
         if (window.ResizeObserver) {
           var ro = new ResizeObserver(replace);
@@ -2227,12 +2317,28 @@ export function installDm(B: Boot) {
            the top on prod and at the foot on a local serve, where load had long
            fired. When load is still to come, re-land the foot for a beat after
            it (the reader has had no time to scroll away). */
-        if (d.messages.length && d.page >= dmPages) {
+        /* The unread line stands above the first word this reader had not read
+           when the thread opened — the server tells it BEFORE this open marks
+           them read — with the count; it stays until the reader leaves. The
+           landing is WhatsApp's: the foot when the unread words all fit under
+           the header, else the line just under the header with the jump button
+           carrying the count. */
+        var firstUnread = d.unread_from ? list.querySelector('[data-dmid="' + String(d.unread_from).replace(/"/g, '') + '"]') : null;
+        if (firstUnread && Number(d.unread) > 0) { setUnreadLine(Number(d.unread), firstUnread); pending = Number(d.unread); }
+        function landing() {
           scrollToEnd();
+          if (unreadLine) {
+            var top = unreadLine.getBoundingClientRect().top, under = headEl.getBoundingClientRect().bottom + 6;
+            if (top < under) { try { window.scrollBy({ top: top - under, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollBy(0, top - under); } }
+          }
+          updateJump();
+        }
+        if (d.messages.length && d.page >= dmPages) {
+          landing();
           if (document.readyState !== 'complete') {
             window.addEventListener('load', function () {
               var n = 0;
-              var settle = function () { if (!nearEnd()) scrollToEnd(); if (++n < 6) setTimeout(settle, 50); };
+              var settle = function () { landing(); if (++n < 6) setTimeout(settle, 50); };
               settle();
             }, { once: true, signal: bootSig });
           }

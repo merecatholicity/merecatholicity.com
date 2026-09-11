@@ -1247,6 +1247,10 @@ a.comment-dm:hover { text-decoration: underline; color: var(--maroon); }
 /* An inbox row with unread words draws the eye (2026-09-11): the accent edge,
    a step of cream, the name bold, and a small badge in place of a word. */
 .board-topic.dm-row-unread { border-left: 3px solid var(--maroon); background: var(--cream-2); }
+/* "typing…" under a name (the inbox rows, 2026-09-11) — the thread header's own word; the
+   DM client's injected block carries the same declarations for the thread. */
+.dm-sub-typing { color: #3ba55d; font-style: italic; animation: dm-typing-pulse 1.2s infinite ease-in-out; }
+@keyframes dm-typing-pulse { 50% { opacity: 0.55; } }
 .dm-unread-badge { display: inline-block; margin-left: 0.45em; padding: 0.08em 0.6em; border-radius: 999px; background: var(--maroon); color: #fff; font-size: 0.72rem; font-weight: 700; line-height: 1.5; vertical-align: middle; }
 /* The inbox row's presence line (2026-09-11): Online / Last seen … / Offline
    under the name, the thread header's own line — self-styled, since the

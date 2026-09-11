@@ -492,8 +492,8 @@ their original timestamps.
 | Route | Body | Returns | Gate |
 |---|---|---|---|
 | `POST /api/comments/dm/send` | `{key, to:<64-hex>, body:<≤4000>, token}` | `{ok, id, thread_id, created_at}` — **same shape even when shadow-held** (undetectable to the sender). | `POST_LIMIT` · **Turnstile** · gated. Refuses self (`"That would be a soliloquy."`) and the bot. |
-| `POST /api/comments/dm/threads` | `{key, p?}` | `{ok, threads:[{id,other_hash,nick,avatar,msgs,last_at,unread}], total, unread_total, page, per:20}`. Threads with 0 visible messages are absent. | `READ_LIMIT`, **not** gated. |
-| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey,last_seen}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. | `READ_LIMIT`, not gated. |
+| `POST /api/comments/dm/threads` | `{key, p?}` | `{ok, threads:[{id,other_hash,nick,avatar,msgs,last_at,unread}], total, unread_total, page, per:20}`. `unread` is the COUNT of the viewer's unread words in that thread (2026-09-11; truthy exactly when the old 0/1 flag was), `unread_total` the number of THREADS with something unread — the tab badge's number, unchanged. Threads with 0 visible messages are absent. | `READ_LIMIT`, **not** gated. |
+| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey,last_seen}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked, unread, unread_from}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock; `unread` / `unread_from` (2026-09-11) say what was unread BEFORE this open did — the count, and the id of the first unread word (`null` for none), so the client can stand its "N unread messages" line above it and count on its jump button. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. | `READ_LIMIT`, not gated. |
 | `POST /api/comments/dm/unread` | `{key}` | `{ok, unread}` — unread **thread** count. | `READ_LIMIT`, **gated** (this poll is the reliable logout trip). |
 | `POST /api/comments/dm/block` | `{key, hash, blocked:<bool>}` | `{ok, blocked}` | `POST_LIMIT`, not gated. Unblock releases held messages and rings the badge. |
 | `POST /api/comments/dm/delete` | `{key, with}` | `{ok, purged}` — per-side "fresh start"; both sides cleared with nothing newer → the thread is hard-deleted. | `POST_LIMIT`, gated. |
@@ -572,7 +572,8 @@ created_at,media_key}` — the ciphertext, decrypt client-side), `dm-edit`
 (`ttl`), `dm-read` (`reader, at` — flip your sent bubbles up to `at` to Seen),
 `dm-react` (`message:{id,emoji}`, `''` = withdrawn — 2026-09-10), `dm-save`
 (`message:{id,saved}` — a save lights the bubble for both), `typing`
-(`state:'start'|'stop'`) and `presence`.
+(`state:'start'|'stop'`; the hub fans it only while the sender's presence is visible — a member who
+appears offline is not seen typing, 2026-09-11) and `presence`.
 
 Only `status='live'` posts on public (`board:*`, not `adminsonly`) pages ever
 broadcast. Sockets **hibernate** when idle; there is no server heartbeat.

@@ -79,17 +79,21 @@ class McProfile extends LitElement {
 customElements.define('mc-profile', McProfile);
 
 class McInbox extends LitElement {
-  static properties = { d: { attribute: false }, err: { attribute: false }, pres: { attribute: false } };
+  static properties = { d: { attribute: false }, err: { attribute: false }, pres: { attribute: false }, typing: { attribute: false } };
   declare kit: any;
   declare d: any;
   declare err: string;
   declare pres: any;   // { online: {hash:true}, seen: {hash: epoch} } once the presence read answers
+  declare typing: Record<string, number>;   // hash → when their last typing signal landed (2026-09-11)
+  declare _typingT: Record<string, any>;
   declare _onLive: (ev: Event) => void;
   constructor() {
     super();
     this.kit = null;
     this.d = null;
     this.err = '';
+    this.typing = {};
+    this._typingT = {};
   }
   createRenderRoot() { return this; }
   connectedCallback() {
@@ -99,12 +103,26 @@ class McInbox extends LitElement {
     this.load();
     /* Live: a DM pushed over the private user scope bumps its thread to the top
        and rings the count, so the inbox stays current while it is open. */
-    this._onLive = (ev: Event) => { const det = (ev as CustomEvent).detail; if (det && det.t === 'dm') this.load(); };
+    this._onLive = (ev: Event) => {
+      const det = (ev as CustomEvent).detail;
+      if (!det) return;
+      if (det.t === 'dm') this.load();
+      else if (det.t === 'typing' && det.from) this._typing(String(det.from), det.state !== 'stop');
+    };
     document.addEventListener('mc-live', this._onLive);
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._onLive) document.removeEventListener('mc-live', this._onLive);
+    Object.keys(this._typingT).forEach((h) => clearTimeout(this._typingT[h]));
+  }
+  /* "typing…" under the name while that member writes to me — the hub fans
+     their signal to my own scope — and the presence line back after 6 s. */
+  _typing(h: string, on: boolean) {
+    clearTimeout(this._typingT[h]);
+    const t = Object.assign({}, this.typing);
+    if (on) { t[h] = Date.now(); this._typingT[h] = setTimeout(() => this._typing(h, false), 6000); } else delete t[h];
+    this.typing = t;
   }
   load() {
     const kit = this.kit;
@@ -153,6 +171,7 @@ class McInbox extends LitElement {
     if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(hashes.slice(0, 5).map((h: string) => 'presence:' + h));
   }
   _presTpl(h: string) {
+    if (this.typing && this.typing[h]) return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot on"></span><span class="dm-sub-typing">typing…</span></div>`;
     const p = this.pres;
     if (!p || !p.known[h]) return nothing;
     if (p.online[h]) return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot on"></span>Online</div>`;
@@ -212,7 +231,7 @@ class McInbox extends LitElement {
           ? html`<p class="comments-status mc-empty" data-ico="✉️">No messages yet. Find a member above, or press Direct Message on any post.</p>`
           : d.threads.map((t: any) => html`<div class=${'board-topic mc-cardnav' + (t.unread ? ' dm-row-unread' : '')} @click=${this._dmNav}>
               <div class="board-topic-left">
-                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread-badge">new</span>` : nothing}
+                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread-badge">${t.unread}</span>` : nothing}
                 <div class="board-row-sub" title=${kit.fmtDateTime(t.last_at)}>${kit.fmtTimeCompact(t.last_at)}</div>
                 ${this._presTpl(t.other_hash)}
               </div>

@@ -59,9 +59,15 @@ STUB = r"""
           { id: 104, sender_hash: me, body: 'And I answered', created_at: now - 60, enc: 0, saved: 0, react_me: '', react_other: '',
             reply: { id: 101, from: OTHER, kind: 'text', text: 'First word from them' } }
         ];
+        /* ?mcunread=1: nine unread words from them after my last, long enough to
+           stand taller than a phone screen — the unread line's and the jump
+           button's fixture. The server names them BEFORE the open marks them read. */
+        var unreadMode = /mcunread=1/.test(location.search);
+        if (unreadMode) for (var i = 0; i < 9; i++) msgs.push({ id: 105 + i, sender_hash: OTHER, created_at: now - 50 + i, enc: 0, saved: 0, react_me: '', react_other: '',
+          body: 'Unread word ' + (i + 1) + ' — a line long enough to wrap twice on a phone, so that nine of them stand taller than the screen and the line lands under the header.' });
         return reply({ ok: true, thread_id: 1, ttl: 604800,
           other: { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43), last_seen: now - 90000 },
-          messages: msgs, total: msgs.length, page: 1, per: 20, blocked: 0 });
+          messages: msgs, total: msgs.length, page: 1, per: 20, blocked: 0, unread: unreadMode ? 9 : 0, unread_from: unreadMode ? 105 : null });
       });
     }
     if (u.indexOf('/api/comments/dm/threads') !== -1) {
@@ -288,11 +294,24 @@ def main():
           var row = document.querySelector('mc-inbox .board-topic');
           return { text: l ? l.textContent : '', dotOff: !!d && !d.classList.contains('on'),
                    unreadRow: row.classList.contains('dm-row-unread') && getComputedStyle(row).borderLeftWidth === '3px',
-                   badge: (row.querySelector('.dm-unread-badge')||{}).textContent === 'new', noOldWord: !row.querySelector('span.dm-unread'),
+                   badge: (row.querySelector('.dm-unread-badge')||{}).textContent === '1', noOldWord: !row.querySelector('span.dm-unread'),
                    expect: 'Last seen yesterday at ' + new Date((Math.floor(Date.now()/1000) - 90000) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) };
         })());""")
         checks.append(('the inbox row carries the same line: Last seen yesterday at …, the dot off', row.get('text') == row.get('expect') and row.get('dotOff')))
-        checks.append(('an unread inbox row draws the eye: the accent edge and a badge, the old "● new" word gone', row.get('unreadRow') and row.get('badge') and row.get('noOldWord')))
+        checks.append(('an unread inbox row draws the eye: the accent edge and the COUNT as its badge, the old "● new" word gone', row.get('unreadRow') and row.get('badge') and row.get('noOldWord')))
+        # typing… under the name while they write to me (the Lit inbox hears the frame)
+        f.js("document.dispatchEvent(new CustomEvent('mc-live', { detail: { v: 1, t: 'typing', from: %s, state: 'start' } })); return 1;" % json.dumps(OTHER))
+        time.sleep(0.3)
+        typ = jsj(f, """return JSON.stringify((function(){
+          var l = document.querySelector('mc-inbox .board-topic .dm-row-pres');
+          var on = l ? l.textContent : '';
+          document.dispatchEvent(new CustomEvent('mc-live', { detail: { v: 1, t: 'typing', from: %s, state: 'stop' } }));
+          return { on: on, dotOn: !!(l && l.querySelector('.dm-row-dot.on')) };
+        })());""" % json.dumps(OTHER))
+        time.sleep(0.3)
+        after = f.js1("var l = document.querySelector('mc-inbox .board-topic .dm-row-pres'); return l ? l.textContent : '';")
+        checks.append(('the inbox row reads typing… while they write, the dot lit, and the presence line comes back on stop',
+                       typ.get('on') == 'typing…' and typ.get('dotOn') and after == row.get('expect')))
         checks.append(('desktop console clean', f.assert_console_clean('dm desktop')))
         fails = list(f.failures)
     # ---- phone: the hole between four pieces of scrim, and the lock ----
@@ -413,6 +432,64 @@ def main():
         checks.append(('the click after the hold is swallowed — the surface stays', released.get('stillOpen')))
         checks.append(('Escape closes it and releases the lock, body unpinned', released.get('gone') and released.get('unlocked') and released.get('bodyTop') == ''))
         checks.append(('phone console clean', f.assert_console_clean('dm phone')))
+        fails += f.failures
+    # ---- phone: reading back — the unread line, the jump button, seen only when reached, typing ----
+    with Flow(port=9613) as f:
+        f.login()
+        f._wd('POST', '/session/%s/window/rect' % f.sid, {'width': 390, 'height': 844})
+        install_stub(f)
+        f.goto('messages.html?dm=' + OTHER + '&mcunread=1')
+        f.wait("document.querySelectorAll('.dm-msg[data-dmid]').length === 13", timeout=25)
+        time.sleep(1.2)
+        op = jsj(f, """return JSON.stringify((function(){
+          var q = function(s){ return document.querySelector(s); };
+          var line = q('.dm-unread-line'), head = q('.dm-head'), jump = q('.dm-jump'), n = q('.dm-jump-n');
+          return { line: !!line, text: line ? line.textContent : '', before105: !!(line && line.nextElementSibling && line.nextElementSibling.getAttribute('data-dmid') === '105'),
+                   underHead: line ? Math.abs(line.getBoundingClientRect().top - (head.getBoundingClientRect().bottom + 6)) : 999,
+                   jumpShown: !!jump && !jump.hidden && getComputedStyle(jump).display !== 'none', badge: n ? n.textContent : '', badgeShown: !!n && !n.hidden,
+                   writes: (window.__mcDmWrites||[]).join(' ') };
+        })());""")
+        checks.append(('opening with nine unread words: the "9 unread messages" line stands above the first of them', op.get('line') and op.get('text') == '9 unread messages' and op.get('before105')))
+        checks.append(('the landing is the line just under the header (they do not fit), the jump button up with the count 9, nothing pinged seen', op.get('underHead', 999) <= 3 and op.get('jumpShown') and op.get('badge') == '9' and op.get('badgeShown') and '/dm/seen' not in op.get('writes', '')))
+        f.js("document.querySelector('.dm-jump').click(); return 1;")
+        time.sleep(1.5)
+        dn = jsj(f, """return JSON.stringify((function(){
+          var jump = document.querySelector('.dm-jump'), n = document.querySelector('.dm-jump-n');
+          return { jumpHidden: jump.hidden, badgeHidden: n.hidden, writes: (window.__mcDmWrites||[]).join(' ') };
+        })());""")
+        checks.append(('the jump button rides down to the foot and retires with its badge; words read at the open are not pinged again', dn.get('jumpHidden') and dn.get('badgeHidden') and '/dm/seen' not in dn.get('writes', '')))
+        lv = jsj(f, """return JSON.stringify((function(){
+          var q = function(s){ return document.querySelector(s); };
+          window.scrollTo(0, 0);
+          var now = Math.floor(Date.now() / 1000);
+          document.dispatchEvent(new CustomEvent('mc-live', { detail: { v: 1, t: 'dm', from: %s, message: { id: 120, sender_hash: %s, body: 'A live word while you read back', created_at: now, enc: 0, saved: 0, react_me: '', react_other: '' } } }));
+          var b = q('[data-dmid="120"]'), line = q('.dm-unread-line'), jump = q('.dm-jump'), n = q('.dm-jump-n');
+          return { landed: !!b, isLast: !!b && b === q('.dm-list').lastElementChild, lineBefore: !!(line && line.nextElementSibling === b), lines: document.querySelectorAll('.dm-unread-line').length,
+                   text: line ? line.textContent : '', scrollY: window.scrollY, badge: n.textContent, badgeShown: !n.hidden, jumpShown: !jump.hidden, writes: (window.__mcDmWrites||[]).join(' ') };
+        })());""" % (json.dumps(OTHER), json.dumps(OTHER)))
+        checks.append(('a word that lands while reading back stays put: appended at the foot, the reader not moved, under a fresh "1 unread message" line', lv.get('landed') and lv.get('isLast') and lv.get('lineBefore') and lv.get('lines') == 1 and lv.get('text') == '1 unread message' and lv.get('scrollY', 99) < 5))
+        checks.append(('the jump button counts it, and nothing is "seen" yet', lv.get('badge') == '1' and lv.get('badgeShown') and lv.get('jumpShown') and '/dm/seen' not in lv.get('writes', '')))
+        f.js("document.querySelector('.dm-jump').click(); return 1;")
+        time.sleep(2.6)   # the smooth ride, then the seen ping's 1.2 s debounce
+        rd = jsj(f, """return JSON.stringify((function(){
+          var jump = document.querySelector('.dm-jump'), n = document.querySelector('.dm-jump-n');
+          var w = (window.__mcDmWrites||[]);
+          return { jumpHidden: jump.hidden, badgeHidden: n.hidden, seen: w.filter(function(u){ return u.indexOf('/dm/seen') !== -1; }).length };
+        })());""")
+        checks.append(('coming down to it reads it: the badge retires and ONE seen ping goes out', rd.get('jumpHidden') and rd.get('badgeHidden') and rd.get('seen') == 1))
+        f.js("document.dispatchEvent(new CustomEvent('mc-live', { detail: { v: 1, t: 'typing', from: %s, state: 'start' } })); return 1;" % json.dumps(OTHER))
+        time.sleep(0.2)
+        ty = jsj(f, """return JSON.stringify((function(){
+          var q = function(s){ return document.querySelector(s); };
+          var head = q('.dm-head-sub .dm-sub-typing'), bub = q('.dm-typing-bubble');
+          var r = { head: head ? head.textContent : '', bubble: !!bub, dots: bub ? bub.querySelectorAll('.dm-typing-dot').length : 0, last: !!bub && bub === q('.dm-list').lastElementChild,
+                    inView: !!bub && bub.getBoundingClientRect().bottom <= q('.dm-composer').getBoundingClientRect().top + 1 };
+          document.dispatchEvent(new CustomEvent('mc-live', { detail: { v: 1, t: 'typing', from: %s, state: 'stop' } }));
+          r.headGone = !q('.dm-head-sub .dm-sub-typing'); r.bubbleGone = !q('.dm-typing-bubble');
+          return r;
+        })());""" % json.dumps(OTHER))
+        checks.append(('typing shows in the header AND as a three-dot bubble at the foot, kept in view; stop clears both', ty.get('head') == 'typing…' and ty.get('bubble') and ty.get('dots') == 3 and ty.get('last') and ty.get('inView') and ty.get('headGone') and ty.get('bubbleGone')))
+        checks.append(('phone (reading back) console clean', f.assert_console_clean('dm phone reading back')))
         fails += f.failures
     rc = 2 if fails or any(not p for _, p in checks) else 0
     for x in fails:

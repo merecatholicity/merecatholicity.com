@@ -84,6 +84,9 @@ export class BoardHub extends DurableObject<Env> {
       const me = (a && a.me) || '';
       const to = String(m.to || '');
       if (!me || !/^[0-9a-f]{64}$/.test(to)) return;
+      /* A member who chose to appear offline is not seen typing either: the
+         kernel rule that hides their socket hides their keystrokes (2026-09-11). */
+      if (!Presence.isVisible((a && a.presenceMode) || 'auto')(true)) return;
       this.#fan('user:' + to, JSON.stringify({ v: 1, t: 'typing', from: me, state: m.state === 'stop' ? 'stop' : 'start' }));
       return;
     }
