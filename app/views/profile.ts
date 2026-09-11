@@ -206,9 +206,9 @@ class McInbox extends LitElement {
       <div class="board-topics">
         ${!d.threads.length
           ? html`<p class="comments-status mc-empty" data-ico="✉️">No messages yet. Find a member above, or press Direct Message on any post.</p>`
-          : d.threads.map((t: any) => html`<div class="board-topic mc-cardnav" @click=${this._dmNav}>
+          : d.threads.map((t: any) => html`<div class=${'board-topic mc-cardnav' + (t.unread ? ' dm-row-unread' : '')} @click=${this._dmNav}>
               <div class="board-topic-left">
-                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}
+                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread-badge">new</span>` : nothing}
                 <div class="board-row-sub" title=${kit.fmtDateTime(t.last_at)}>${kit.fmtTimeCompact(t.last_at)}</div>
                 ${this._presTpl(t.other_hash)}
               </div>

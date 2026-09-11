@@ -288,13 +288,23 @@ class SentAndReceivedReadApart(unittest.TestCase):
 
     PALETTES = {
         # selector prefix as the minifier writes it → the pair that block defines
-        ':root{': ('#f5ebeb', '#af8673'),                                     # paper
-        ':root[data-theme=dark]{': ('#3b2a2c', '#624348'),                    # charcoal
-        ':root[data-theme=dark][data-dark=slate]{': ('#392a2e', '#5d4047'),
-        ':root[data-theme=dark][data-dark=ink]{': ('#3f2824', '#67413c'),
-        ':root[data-theme=light][data-light=mist]{': ('#f5ebeb', '#beacb2'),
-        ':root[data-theme=light][data-light=sepia]{': ('#f1e1d4', '#be9679'),
+        ':root{': ('#efdfdf', '#af8673'),                                     # paper
+        ':root[data-theme=dark]{': ('#442c2f', '#694549'),                    # charcoal
+        ':root[data-theme=dark][data-dark=slate]{': ('#412b31', '#654249'),
+        ':root[data-theme=dark][data-dark=ink]{': ('#482b27', '#6f443e'),
+        ':root[data-theme=light][data-light=mist]{': ('#efdfdf', '#beacb2'),
+        ':root[data-theme=light][data-light=sepia]{': ('#ebd6c9', '#be9679'),
     }
+
+    def test_the_light_phone_red_fill_is_retired(self):
+        # 2026-09-11: "a harsh red against the white" — light phones take the
+        # palette-tinted bubble like everywhere else, with the palette's inks
+        self.assertNotRegex(self.css, r"data-theme=light\] \.dm-msg\.dm-mine\{[^}]*background:var\(--accent-fill\)")
+        self.assertNotRegex(self.css, r"data-theme=light\] \.dm-msg\.dm-mine[^{]*\{[^}]*color:#fff")
+
+    def test_an_unread_inbox_row_draws_the_eye(self):
+        self.assertRegex(self.css, r"\.board-topic\.dm-row-unread\{[^}]*border-left:3px solid var\(--maroon\)")
+        self.assertRegex(self.css, r"\.dm-unread-badge\{[^}]*background:var\(--maroon\)")
 
     def test_every_palette_defines_its_sent_bubble_pair(self):
         for prefix, (bg, rule) in self.PALETTES.items():

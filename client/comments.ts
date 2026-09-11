@@ -8563,12 +8563,12 @@ trace('submit: feed post');
         }
         var presDots: Record<string, any> = {};
         d.threads.forEach(function (t: any) {
-          var row = el('div', 'board-topic');
+          var row = el('div', 'board-topic' + (t.unread ? ' dm-row-unread' : ''));
           var left = el('div', 'board-topic-left');
           var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmLabel(t.other_hash, t.nick));
           a.href = 'messages.html?dm=' + t.other_hash;
           left.appendChild(a);
-          if (t.unread) left.appendChild(el('span', 'dm-unread', ' ● new'));
+          if (t.unread) left.appendChild(el('span', 'dm-unread-badge', 'new'));
           var isub = el('div', 'board-row-sub', fmtTimeCompact(t.last_at));
           isub.title = fmtDateTime(t.last_at);
           left.appendChild(isub);

@@ -66,7 +66,7 @@ STUB = r"""
     }
     if (u.indexOf('/api/comments/dm/threads') !== -1) {
       var now2 = Math.floor(Date.now() / 1000);
-      return reply({ ok: true, threads: [{ id: 1, other_hash: OTHER, nick: 'Fixture', avatar: null, msgs: 4, last_at: now2 - 60, unread: 0 }], total: 1, unread_total: 0, page: 1, per: 20 });
+      return reply({ ok: true, threads: [{ id: 1, other_hash: OTHER, nick: 'Fixture', avatar: null, msgs: 4, last_at: now2 - 60, unread: 1 }], total: 1, unread_total: 1, page: 1, per: 20 });
     }
     if (u.indexOf('/api/comments/dm/presence') !== -1) {
       var now3 = Math.floor(Date.now() / 1000);
@@ -87,6 +87,25 @@ def jsj(f, js):
     """json.loads over js1, or {} when the page threw (the throw is already in f.failures)."""
     r = f.js1(js)
     return json.loads(r) if isinstance(r, str) else {}
+
+
+PALETTES_JS = """return JSON.stringify((function(){
+          var html = document.documentElement, mine = document.querySelector('.dm-msg.dm-mine'), theirs = document.querySelector('.dm-msg:not(.dm-mine)');
+          var keep = { theme: html.dataset.theme, dark: html.dataset.dark, light: html.dataset.light };
+          function rgb(s) { var m = /rgba?\\(([^)]+)\\)/.exec(s); return m ? m[1].split(',').slice(0, 3).map(Number) : [0, 0, 0]; }
+          function dist(a, b) { var x = rgb(a), y = rgb(b); return Math.abs(x[0]-y[0]) + Math.abs(x[1]-y[1]) + Math.abs(x[2]-y[2]); }
+          var out = {};
+          [['dark','charcoal'],['dark','slate'],['dark','ink'],['light','paper'],['light','mist'],['light','sepia']].forEach(function(p){
+            html.dataset.theme = p[0];
+            if (p[0] === 'dark') { html.dataset.dark = p[1] === 'charcoal' ? '' : p[1]; delete html.dataset.light; if (p[1] === 'charcoal') delete html.dataset.dark; }
+            else { html.dataset.light = p[1] === 'paper' ? '' : p[1]; delete html.dataset.dark; if (p[1] === 'paper') delete html.dataset.light; }
+            var a = getComputedStyle(mine).backgroundColor, b = getComputedStyle(theirs).backgroundColor;
+            var ink = getComputedStyle(mine).color;
+            out[p[1]] = { mine: a, theirs: b, apart: dist(a, b), inkApart: dist(a, ink) };
+          });
+          html.dataset.theme = keep.theme; if (keep.dark) html.dataset.dark = keep.dark; else delete html.dataset.dark; if (keep.light) html.dataset.light = keep.light; else delete html.dataset.light;
+          return out;
+        })());"""
 
 
 def install_stub(f):
@@ -166,23 +185,7 @@ def main():
         checks.append(('on open the bar is flush with the viewport bottom, aligned to the column, and the last bubble sits just above it', st.get('flushBottom') and st.get('alignedLeft') and st.get('lastAboveBar')))
         checks.append(('desktop keeps the footer, and it stays below the bar on open (the thread scrolls to its own foot)', st.get('footerShown') and st.get('footerBelowBar')))
         checks.append(('desktop shows the name in the header', st.get('nameShown')))
-        pal = jsj(f, """return JSON.stringify((function(){
-          var html = document.documentElement, mine = document.querySelector('.dm-msg.dm-mine'), theirs = document.querySelector('.dm-msg:not(.dm-mine)');
-          var keep = { theme: html.dataset.theme, dark: html.dataset.dark, light: html.dataset.light };
-          function rgb(s) { var m = /rgba?\\(([^)]+)\\)/.exec(s); return m ? m[1].split(',').slice(0, 3).map(Number) : [0, 0, 0]; }
-          function dist(a, b) { var x = rgb(a), y = rgb(b); return Math.abs(x[0]-y[0]) + Math.abs(x[1]-y[1]) + Math.abs(x[2]-y[2]); }
-          var out = {};
-          [['dark','charcoal'],['dark','slate'],['dark','ink'],['light','paper'],['light','mist'],['light','sepia']].forEach(function(p){
-            html.dataset.theme = p[0];
-            if (p[0] === 'dark') { html.dataset.dark = p[1] === 'charcoal' ? '' : p[1]; delete html.dataset.light; if (p[1] === 'charcoal') delete html.dataset.dark; }
-            else { html.dataset.light = p[1] === 'paper' ? '' : p[1]; delete html.dataset.dark; if (p[1] === 'paper') delete html.dataset.light; }
-            var a = getComputedStyle(mine).backgroundColor, b = getComputedStyle(theirs).backgroundColor;
-            var ink = getComputedStyle(mine).color;
-            out[p[1]] = { mine: a, theirs: b, apart: dist(a, b), inkApart: dist(a, ink) };
-          });
-          html.dataset.theme = keep.theme; if (keep.dark) html.dataset.dark = keep.dark; else delete html.dataset.dark; if (keep.light) html.dataset.light = keep.light; else delete html.dataset.light;
-          return out;
-        })());""")
+        pal = jsj(f, PALETTES_JS)
         apart = all((pal.get(k) or {}).get('apart', 0) >= 24 for k in ('charcoal', 'slate', 'ink', 'paper', 'mist', 'sepia'))
         legible = all((pal.get(k) or {}).get('inkApart', 0) >= 300 for k in ('charcoal', 'slate', 'ink', 'paper', 'mist', 'sepia'))
         checks.append(('sent and received read apart in all six palettes, and the ink stays legible on the tint', apart and legible))
@@ -282,10 +285,14 @@ def main():
         f.wait("!!document.querySelector('mc-inbox .board-topic .dm-row-pres')", timeout=25)
         row = jsj(f, """return JSON.stringify((function(){
           var l = document.querySelector('mc-inbox .board-topic .dm-row-pres'); var d = l ? l.querySelector('.dm-row-dot') : null;
+          var row = document.querySelector('mc-inbox .board-topic');
           return { text: l ? l.textContent : '', dotOff: !!d && !d.classList.contains('on'),
+                   unreadRow: row.classList.contains('dm-row-unread') && getComputedStyle(row).borderLeftWidth === '3px',
+                   badge: (row.querySelector('.dm-unread-badge')||{}).textContent === 'new', noOldWord: !row.querySelector('span.dm-unread'),
                    expect: 'Last seen yesterday at ' + new Date((Math.floor(Date.now()/1000) - 90000) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) };
         })());""")
         checks.append(('the inbox row carries the same line: Last seen yesterday at …, the dot off', row.get('text') == row.get('expect') and row.get('dotOff')))
+        checks.append(('an unread inbox row draws the eye: the accent edge and a badge, the old "● new" word gone', row.get('unreadRow') and row.get('badge') and row.get('noOldWord')))
         checks.append(('desktop console clean', f.assert_console_clean('dm desktop')))
         fails = list(f.failures)
     # ---- phone: the hole between four pieces of scrim, and the lock ----
@@ -310,6 +317,10 @@ def main():
         checks.append(('phone, on open: the bar sits flush on the tab bar, full width, before any scroll', bars.get('flushTab') and bars.get('fullWidth')))
         checks.append(('phone: the header sits flush under the app bar and the app bar carries the name', bars.get('headUnderBar') and bars.get('nameHidden')))
         checks.append(('phone: the thread opens at its foot, the last bubble just above the bar', bars.get('lastAboveBar')))
+        pal = jsj(f, PALETTES_JS)
+        apart = all((pal.get(k) or {}).get('apart', 0) >= 24 for k in ('charcoal', 'slate', 'ink', 'paper', 'mist', 'sepia'))
+        legible = all((pal.get(k) or {}).get('inkApart', 0) >= 300 for k in ('charcoal', 'slate', 'ink', 'paper', 'mist', 'sepia'))
+        checks.append(('phone: sent and received read apart in all six palettes against the phone cream, the ink legible, no red fill', apart and legible and (pal.get('paper') or {}).get('mine') != 'rgb(139, 26, 26)'))
         checks.append(('phone: no footer under the thread (the tab is stamped, the footer hidden)', bars.get('tab') == 'messages' and bars.get('footerHidden')))
         pk = jsj(f, """return JSON.stringify((function(){
           var q = function(s){ return document.querySelector(s); };

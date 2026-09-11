@@ -53,10 +53,11 @@
   --accent-fill: #8b1a1a;
   --accent-on: #ffffff;
   /* the sent bubble (DM + the librarian's log): the surface tinted with the
-     accent (9% here, 16% in the dark palettes), and its border (22% / 26% into
-     the rule) — one pair per palette, precomputed, so sent and received read
-     apart in every scheme and no color-mix fallback can paint a bubble solid */
-  --bubble-mine: #f5ebeb;
+     accent (14% here, 20% in the dark palettes), and its border (22% / 30%
+     into the rule) — one pair per palette, precomputed, so sent and received
+     read apart in every scheme, against cream on phones as against the surface
+     on desktop, and no color-mix fallback can paint a bubble solid */
+  --bubble-mine: #efdfdf;
   --bubble-mine-rule: #af8673;
   /* Type: a calm serif for reading (book, KJV, Fathers, papers), a modern system
      sans for the platform UI. Same on mobile and desktop. */
@@ -88,8 +89,8 @@
   --maroon-dark: #f2827c;
   --cream: #20242a;
   --cream-2: #262b32;
-  --bubble-mine: #3b2a2c;
-  --bubble-mine-rule: #624348;
+  --bubble-mine: #442c2f;
+  --bubble-mine-rule: #694549;
   --brown: #cba36a;
   --muted: #c6cace;
   --muted-b: #b3b8be;
@@ -158,8 +159,8 @@
   --faint: #8b949e;
   --cream: #1f2733;
   --cream-2: #232b36;
-  --bubble-mine: #392a2e;
-  --bubble-mine-rule: #5d4047;
+  --bubble-mine: #412b31;
+  --bubble-mine-rule: #654249;
   --brown: #c3a878;
   --muted: #c9d1d9;
   --muted-b: #b1bac4;
@@ -178,8 +179,8 @@
   --faint: #a99f8d;
   --cream: #262119;
   --cream-2: #2b2519;
-  --bubble-mine: #3f2824;
-  --bubble-mine-rule: #67413c;
+  --bubble-mine: #482b27;
+  --bubble-mine-rule: #6f443e;
   --brown: #cba06a;
   --muted: #cdc4b4;
   --muted-b: #bcb2a0;
@@ -204,7 +205,7 @@
   --rule: #cdd5dd;
   --cream: #e9eef3;
   --cream-2: #f1f5f8;
-  --bubble-mine: #f5ebeb;
+  --bubble-mine: #efdfdf;
   --bubble-mine-rule: #beacb2;
   --glass: rgba(243, 246, 248, 0.97);
   --creed-bg: #d5e6de;
@@ -215,7 +216,7 @@
   --rule: #ccb994;
   --cream: #efe4cb;
   --cream-2: #f5edd7;
-  --bubble-mine: #f1e1d4;
+  --bubble-mine: #ebd6c9;
   --bubble-mine-rule: #be9679;
   --brown: #7a5c28;
   --glass: rgba(244, 236, 216, 0.97);
@@ -1243,6 +1244,10 @@ h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted
 a.comment-dm { color: var(--brown); margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
 a.comment-dm:hover { text-decoration: underline; color: var(--maroon); }
 .dm-unread { color: var(--maroon); font-weight: bold; }
+/* An inbox row with unread words draws the eye (2026-09-11): the accent edge,
+   a step of cream, the name bold, and a small badge in place of a word. */
+.board-topic.dm-row-unread { border-left: 3px solid var(--maroon); background: var(--cream-2); }
+.dm-unread-badge { display: inline-block; margin-left: 0.45em; padding: 0.08em 0.6em; border-radius: 999px; background: var(--maroon); color: #fff; font-size: 0.72rem; font-weight: 700; line-height: 1.5; vertical-align: middle; }
 /* The inbox row's presence line (2026-09-11): Online / Last seen … / Offline
    under the name, the thread header's own line — self-styled, since the
    DM block's dots are injected only on a thread. */
@@ -1880,16 +1885,10 @@ body.mc-app main.prose > #title-block-header {
   /* mine: the palette's accent tint (the rule above the phone block); the
      librarian's log takes the same pair, being the other 1:1 chat */
   .merecat-log .merecat-msg.you { background: var(--bubble-mine, var(--cream)); border-color: var(--bubble-mine-rule, var(--rule)); }
-  html[data-theme="light"] .merecat-log .merecat-msg.you, html[data-theme="light"] .dm-msg.dm-mine { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); }
-  html[data-theme="light"] .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
-  /* Everything inside a LIGHT mine bubble must read on the red fill —
-     maroon/muted inks go low-contrast there. Load-bearing; covers head, meta,
-     controls. Dark bubbles keep the normal inks, exactly as on desktop. */
-  html[data-theme="light"] .dm-msg.dm-mine :is(.comment-date, .dm-meta, .dm-edited, .dm-quote-who, .dm-quote-text, .dm-sys-label, a) { color: rgba(255, 255, 255, 0.85); }
-  html[data-theme="light"] .dm-msg.dm-mine .dm-quote { background: rgba(255, 255, 255, 0.16); border-left-color: rgba(255, 255, 255, 0.85); }
-  /* The ticks on the red fill: delivered dim, seen full and bold (maroon would vanish here). */
-  html[data-theme="light"] .dm-msg.dm-mine .dm-receipt { color: rgba(255, 255, 255, 0.6); }
-  html[data-theme="light"] .dm-msg.dm-mine .dm-receipt-seen { color: #fff; font-weight: 700; }
+  /* The light-phone iMessage red fill (2026-08-03) is RETIRED (2026-09-11: "a
+     harsh red against the white… it feels intense"): light phones take the
+     same palette-tinted sent bubble as everywhere else, with the palette's own
+     inks — no white-on-fill overrides remain. */
   .merecat-log .merecat-msg.cat, .dm-msg:not(.dm-mine) { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
 
