@@ -118,8 +118,13 @@ SHAPE = """return JSON.stringify((function(){
     headSticky: q('.dm-head') && getComputedStyle(q('.dm-head')).position === 'sticky',
     subLock: (q('.dm-head-sub')||{}).textContent === '🔒 End-to-end encrypted',
     composer: !!q('.dm-composer .dm-c-ta') && !!q('.dm-composer .dm-c-send') && !!q('.dm-composer .dm-c-plus') && !!q('.dm-composer .dm-c-emoji'),
-    composerSticky: q('.dm-composer') && getComputedStyle(q('.dm-composer')).position === 'sticky',
-    composerLast: !!q('.dm-composer') && q('.dm-composer').parentNode.lastElementChild === q('.dm-composer'),
+    composerFixed: q('.dm-composer') && getComputedStyle(q('.dm-composer')).position === 'fixed',
+    spacerLast: !!q('.dm-c-space') && q('.dm-c-space').parentNode.lastElementChild === q('.dm-c-space') && q('.dm-c-space').previousElementSibling === q('.dm-composer')
+      && parseFloat(getComputedStyle(q('.dm-c-space')).height) >= q('.dm-composer').offsetHeight,
+    flushBottom: q('.dm-composer') && Math.abs(q('.dm-composer').getBoundingClientRect().bottom - window.innerHeight) < 2,
+    alignedLeft: q('.dm-composer') && Math.abs(q('.dm-composer').getBoundingClientRect().left - q('section[data-board], section[data-comments]').getBoundingClientRect().left) < 2,
+    nameShown: q('.dm-head-name') && getComputedStyle(q('.dm-head-name')).display !== 'none',
+    lastAboveBar: (function(){ var bs = document.querySelectorAll('.dm-msg[data-dmid]'); var last = bs[bs.length-1]; return last && last.getBoundingClientRect().bottom <= q('.dm-composer').getBoundingClientRect().top + 1; })(),
     note: (q('.dm-note')||{}).textContent || '',
     oldChrome: !!(q('.board-topic-head') || q('.dm-e2e') || q('.board-audit-link') || q('.dm-expiry:not(.dm-info .dm-expiry)')),
     writes: (window.__mcDmWrites||[]).length
@@ -146,7 +151,9 @@ def main():
         checks.append(('a reply carries the quote block naming them and their words', st.get('quote104')))
         checks.append(('the reply strip is mounted above the field and truly hidden until a reply is armed', st.get('replyBarHidden')))
         checks.append(('a sticky header: avatar, the lock subtitle, the ⓘ', st.get('head') and st.get('headSticky') and st.get('subLock')))
-        checks.append(('a sticky composer at the foot: +, the field, emoji, Send', st.get('composer') and st.get('composerSticky') and st.get('composerLast')))
+        checks.append(('a fixed composer at the foot: +, the field, emoji, Send; the spacer reserves its height', st.get('composer') and st.get('composerFixed') and st.get('spacerLast')))
+        checks.append(('on open the bar is flush with the viewport bottom, aligned to the column, and the last bubble sits above it', st.get('flushBottom') and st.get('alignedLeft') and st.get('lastAboveBar')))
+        checks.append(('desktop shows the name in the header', st.get('nameShown')))
         checks.append(('the ⏳ chip names the lifetime', str(st.get('note') or '').startswith('⏳ Messages disappear ') and 'after they are opened' in st.get('note')))
         checks.append(('the old thread chrome is gone (title line, badge, expiry note, block/delete links)', not st.get('oldChrome')))
         f.js1("document.querySelector('.dm-head-info').click(); return 1;")
@@ -244,8 +251,24 @@ def main():
     # ---- phone: the hole between four pieces of scrim, and the lock ----
     with Flow(port=9612) as f:
         f.login()
+        f._wd('POST', '/session/%s/window/rect' % f.sid, {'width': 390, 'height': 844})   # a phone: the app bar and tab bar are real
         install_stub(f)
         open_fixture(f)
+        bars = jsj(f, """return JSON.stringify((function(){
+          var q = function(s){ return document.querySelector(s); };
+          var c = q('.dm-composer'), tb = q('.mc-tabbar'), h = q('.dm-head'), ab = q('.mc-appbar');
+          if (!c || !tb || !h || !ab) return { missing: true };
+          var bs = document.querySelectorAll('.dm-msg[data-dmid]'); var last = bs[bs.length-1];
+          return { flushTab: Math.abs(c.getBoundingClientRect().bottom - tb.getBoundingClientRect().top) < 2,
+                   fullWidth: c.getBoundingClientRect().width >= document.documentElement.clientWidth - 1,   // clientWidth: headless Chrome's classic scrollbar is outside the layout viewport
+                   headUnderBar: Math.abs(h.getBoundingClientRect().top - ab.getBoundingClientRect().bottom) < 2,
+                   nameHidden: getComputedStyle(q('.dm-head-name')).display === 'none',
+                   lastAboveBar: last.getBoundingClientRect().bottom <= c.getBoundingClientRect().top + 1,
+                   scrolledToEnd: window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2 };
+        })());""")
+        checks.append(('phone, on open: the bar sits flush on the tab bar, full width, before any scroll', bars.get('flushTab') and bars.get('fullWidth')))
+        checks.append(('phone: the header sits flush under the app bar and the app bar carries the name', bars.get('headUnderBar') and bars.get('nameHidden')))
+        checks.append(('phone: the thread opens at its end with the last bubble above the bar', bars.get('scrolledToEnd') and bars.get('lastAboveBar')))
         ph = jsj(f, """return JSON.stringify((function(){
           var b = document.querySelector('[data-dmid="103"]');
           var r = b.getBoundingClientRect();

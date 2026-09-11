@@ -166,8 +166,9 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   quoted reply rides INSIDE the E2E plaintext behind `Domain.Dm.replySentinel` — the server
   never learns what answers what, and no `reply_to` column may appear. The surface keeps the
   overlay's three layers through `mcSheet.lock()` and releases only a lock it took. **The
-  thread is a chat screen**: a sticky header (avatar · presence · 📞 · ⓘ) and a sticky
-  composer (+ · field · 😊 · mic-or-Send) always in view; everything that is not a message
+  thread is a chat screen**: a sticky header (avatar · presence · 📞 · ⓘ) and a FIXED
+  composer (+ · field · 😊 · mic-or-Send) always in view — fixed, never sticky: a sticky bar
+  floats above the tab bar at the document's end, where a thread opens; everything that is not a message
   lives in the ⓘ sheet; the saved mark is a quiet ★. An element toggled by `hidden` needs
   a `[hidden]{display:none}` rule if it carries its own `display`.
 - **Nothing scrolls sideways on a phone**: `body{overflow-x:clip}` is the net, not the fix. A

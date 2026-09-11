@@ -1833,7 +1833,14 @@
       '.dm-head-btn .mc-ic,.dm-c-btn .mc-ic,.dm-c-send .mc-ic{width:1.45rem;height:1.45rem;vertical-align:0}' +
       '.dm-c-emoji .mc-ic{width:1.35rem;height:1.35rem;vertical-align:0}' +
       '.dm-note{display:block;width:max-content;max-width:92%;margin:.6em auto .4em;font:inherit;font-size:.74em;color:var(--faint);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;padding:.25em .8em;text-align:center;cursor:pointer}' +
-      '.dm-composer{position:sticky;bottom:0;z-index:37;margin:.6rem 0 0;padding:.45rem 0 .3rem;background:var(--bg,#fff);border-top:1px solid var(--rule)}' +
+      /* FIXED, never sticky: a thread opens at the document's end, where a
+         sticky bar sits in its natural place — above the body's tab-bar
+         reservation and the footer — and floated a gap over the tab bar until
+         a scroll re-stuck it (the owner's report, 2026-09-11). The spacer
+         reserves its height under the last bubble; on desktop the view aligns
+         it to the content column by measurement. */
+      '.dm-composer{position:fixed;left:0;right:0;bottom:0;z-index:37;margin:0;padding:.45rem 0 .3rem;background:var(--bg,#fff);border-top:1px solid var(--rule)}' +
+      '.dm-c-space{height:0}' +
       '.dm-c-row{display:flex;align-items:flex-end;gap:.3rem}' +
       '.dm-c-field{flex:1;min-width:0;display:flex;align-items:flex-end;background:var(--surface,#fff);border:1px solid var(--rule);border-radius:22px;padding:.15rem .15rem .15rem .9rem}' +
       '.dm-c-field:focus-within{border-color:var(--maroon,#8b1a1a)}' +
@@ -1852,7 +1859,8 @@
       '@media (max-width:600px){' +
         'body.mc-app .dm-head{top:calc(var(--mc-appbar-h,3rem) + env(safe-area-inset-top,0px));margin-left:calc(-1 * var(--page-pad,.8rem));margin-right:calc(-1 * var(--page-pad,.8rem));padding-left:var(--page-pad,.8rem);padding-right:var(--page-pad,.8rem)}' +
         'body.mc-app .dm-head-name{display:none}' +   /* the app bar carries the name on phones */
-        'body.mc-app .dm-composer{bottom:calc(var(--mc-tabbar-h,3.6rem) + env(safe-area-inset-bottom,0px));margin-left:calc(-1 * var(--page-pad,.8rem));margin-right:calc(-1 * var(--page-pad,.8rem));padding-left:var(--page-pad,.8rem);padding-right:var(--page-pad,.8rem)}' +
+        '.dm-composer{padding-left:var(--page-pad,.8rem);padding-right:var(--page-pad,.8rem)}' +
+        'body.mc-app .dm-composer{bottom:calc(var(--mc-tabbar-h,3.6rem) + env(safe-area-inset-bottom,0px))}' +
         'body.mc-app.mc-kb-open .dm-composer{bottom:var(--mc-kb,0px);transition:bottom .18s ease}' +
         '.dm-c-ta{font-size:16px}' +   /* zoom-proof, as every phone text control here */
       '}' +
@@ -9028,6 +9036,44 @@ trace('submit: feed post');
         var status = el('p', 'form-status dm-c-status');
         form.appendChild(status);
         section.appendChild(form);
+        /* The bar is FIXED above the tab bar (the merecat road), never sticky:
+           a thread opens at the document's end, where a sticky bar sits in its
+           natural place — above the body's tab-bar reservation and the footer
+           — and floated a gap over the tab bar until a scroll re-stuck it (the
+           owner's report, 2026-09-11). A spacer reserves the bar's height under
+           the last bubble, remeasured as the bar changes (the reply strip, the
+           attach chip, the recorder, the growing field); on desktop the bar is
+           aligned to the content column by measurement, since the sidebar
+           shifts the column. */
+        var spacer = el('div', 'dm-c-space');
+        section.appendChild(spacer);
+        function place() {
+          if (window.innerWidth > 600) {
+            var r = section.getBoundingClientRect();
+            form.style.left = Math.round(r.left) + 'px';
+            form.style.width = Math.round(r.width) + 'px';
+            form.style.right = 'auto';
+          } else { form.style.left = ''; form.style.width = ''; form.style.right = ''; }
+          spacer.style.height = (form.offsetHeight + 8) + 'px';
+        }
+        place();
+        var placeT: any = 0;
+        function replace() {
+          clearTimeout(placeT);
+          placeT = setTimeout(function () { var atEnd = nearEnd(); place(); if (atEnd) scrollToEnd(); }, 0);
+        }
+        if (window.ResizeObserver) {
+          var ro = new ResizeObserver(replace);
+          ro.observe(form); ro.observe(section);
+          bootSig.addEventListener('abort', function () { ro.disconnect(); }, { once: true });
+        }
+        window.addEventListener('resize', replace, { signal: bootSig });
+        if (window.MutationObserver) {
+          /* the desktop sidebar toggles a body class and eases the column over: re-place after the ease too */
+          var mo = new MutationObserver(function () { replace(); setTimeout(place, 320); });
+          mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+          bootSig.addEventListener('abort', function () { mo.disconnect(); }, { once: true });
+        }
         function setReply(ref: any) {
           replyTo = ref;
           replyBody.textContent = '';

@@ -91,11 +91,19 @@ test('an element toggled by its hidden attribute stays hidden', () => {
   assert.ok(/\.dm-reply-bar\[hidden\],\.dm-act-bar\[hidden\],\.dm-act-menu\[hidden\],\.dm-c-btn\[hidden\],\.dm-c-send\[hidden\],\.dm-attach-chip\[hidden\]\{display:none!important\}/.test(dmCss));
 });
 
-test('the conversation is a chat screen: header and composer stay in view, the composer rides the keyboard', () => {
+test('the conversation is a chat screen: the header sticks, the composer is fixed above the tab bar and rides the keyboard', () => {
   assert.ok(/\.dm-head\{position:sticky;top:0/.test(dmCss), 'the header is sticky');
   assert.ok(/body\.mc-app \.dm-head\{top:var\(--mc-deskbar-h/.test(dmCss), 'under the desktop bar');
   assert.ok(/body\.mc-app \.dm-head\{top:calc\(var\(--mc-appbar-h/.test(dmCss), 'under the phone app bar');
-  assert.ok(/\.dm-composer\{position:sticky;bottom:0/.test(dmCss), 'the composer is sticky');
+  /* Fixed, never sticky: a thread opens at the document's end, where a sticky
+     bar sits in its natural place above the tab-bar reservation and the footer
+     and floats a gap over the tab bar until a scroll re-sticks it. */
+  assert.ok(/\.dm-composer\{position:fixed;left:0;right:0;bottom:0/.test(dmCss), 'the composer is fixed');
+  assert.ok(!/\.dm-composer\{position:sticky/.test(dmCss), 'never sticky');
+  const view0 = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  assert.ok(/spacer\.style\.height = \(form\.offsetHeight \+ 8\) \+ 'px'/.test(view0), 'a spacer reserves the bar\'s height under the last bubble');
+  assert.ok(/ro\.observe\(form\); ro\.observe\(section\);/.test(view0), 'remeasured as the bar or the column changes');
+  assert.ok(/form\.style\.left = Math\.round\(r\.left\)/.test(view0), 'on desktop the bar is aligned to the content column');
   assert.ok(/body\.mc-app \.dm-composer\{bottom:calc\(var\(--mc-tabbar-h/.test(dmCss), 'above the phone tab bar');
   assert.ok(/body\.mc-app\.mc-kb-open \.dm-composer\{bottom:var\(--mc-kb,0px\)/.test(dmCss), 'and above the soft keyboard, as the merecat composer does');
   const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
