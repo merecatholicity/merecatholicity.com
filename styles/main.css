@@ -52,6 +52,12 @@
      so fills use their own deep red that always reads with white. */
   --accent-fill: #8b1a1a;
   --accent-on: #ffffff;
+  /* the sent bubble (DM + the librarian's log): the surface tinted with the
+     accent (9% here, 16% in the dark palettes), and its border (22% / 26% into
+     the rule) — one pair per palette, precomputed, so sent and received read
+     apart in every scheme and no color-mix fallback can paint a bubble solid */
+  --bubble-mine: #f5ebeb;
+  --bubble-mine-rule: #af8673;
   /* Type: a calm serif for reading (book, KJV, Fathers, papers), a modern system
      sans for the platform UI. Same on mobile and desktop. */
   --font-serif: Georgia, 'Palatino Linotype', Palatino, 'URW Palladio L', serif;
@@ -82,6 +88,8 @@
   --maroon-dark: #f2827c;
   --cream: #20242a;
   --cream-2: #262b32;
+  --bubble-mine: #3b2a2c;
+  --bubble-mine-rule: #624348;
   --brown: #cba36a;
   --muted: #c6cace;
   --muted-b: #b3b8be;
@@ -150,6 +158,8 @@
   --faint: #8b949e;
   --cream: #1f2733;
   --cream-2: #232b36;
+  --bubble-mine: #392a2e;
+  --bubble-mine-rule: #5d4047;
   --brown: #c3a878;
   --muted: #c9d1d9;
   --muted-b: #b1bac4;
@@ -168,6 +178,8 @@
   --faint: #a99f8d;
   --cream: #262119;
   --cream-2: #2b2519;
+  --bubble-mine: #3f2824;
+  --bubble-mine-rule: #67413c;
   --brown: #cba06a;
   --muted: #cdc4b4;
   --muted-b: #bcb2a0;
@@ -192,6 +204,8 @@
   --rule: #cdd5dd;
   --cream: #e9eef3;
   --cream-2: #f1f5f8;
+  --bubble-mine: #f5ebeb;
+  --bubble-mine-rule: #beacb2;
   --glass: rgba(243, 246, 248, 0.97);
   --creed-bg: #d5e6de;
 }
@@ -201,6 +215,8 @@
   --rule: #ccb994;
   --cream: #efe4cb;
   --cream-2: #f5edd7;
+  --bubble-mine: #f1e1d4;
+  --bubble-mine-rule: #be9679;
   --brown: #7a5c28;
   --glass: rgba(244, 236, 216, 0.97);
   --creed-bg: #dbe7d1;
@@ -1242,7 +1258,22 @@ a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
   border: 1px solid var(--rule); border-radius: 6px; background: var(--surface);
   padding: 0.55rem 0.8rem; margin: 0.55rem 0; max-width: 92%;
 }
-.dm-msg.dm-mine { margin-left: auto; background: var(--cream); }
+/* Sent and received must read apart at a glance in EVERY palette (the owner's
+   2026-09-11 ruling: on dark phones both sat on near-identical grays): theirs
+   on the neutral surface, mine on the surface TINTED with the palette's own
+   accent — the --bubble-mine pair each palette block defines (the accent
+   mixed 9% into the surface in the light palettes, 16% in the dark ones,
+   where the coral accent has further to travel on a dark ground). Tokens,
+   not color-mix at the point of use: the minifier writes a fallback for every
+   color-mix from its FIRST color, which would paint the bubble solid maroon in
+   a browser without it. Inks stay the palette's own — no white-on-fill here
+   (the light-phone iMessage fill below is the one exception, the owner's
+   standing choice). */
+.dm-msg.dm-mine {
+  margin-left: auto;
+  background: var(--bubble-mine, var(--cream));
+  border-color: var(--bubble-mine-rule, var(--rule));
+}
 /* No author line since 2026-09-10 (the side and the fill say who): the body
    opens the bubble, the meta row (time, ticks) closes it. */
 .dm-msg .comment-body { margin-top: 0; }
@@ -1839,7 +1870,10 @@ body.mc-app main.prose > #title-block-header {
      bubble palette instead: mine on --cream, theirs on --cream-2, every ink
      its normal self. The base rule here is the dark path — data-theme is
      stamped on <html> before any bubble renders, and the site defaults dark. */
-  .merecat-log .merecat-msg.you, .dm-msg.dm-mine { background: var(--cream); border-bottom-right-radius: 5px; }
+  .merecat-log .merecat-msg.you, .dm-msg.dm-mine { border-bottom-right-radius: 5px; }
+  /* mine: the palette's accent tint (the rule above the phone block); the
+     librarian's log takes the same pair, being the other 1:1 chat */
+  .merecat-log .merecat-msg.you { background: var(--bubble-mine, var(--cream)); border-color: var(--bubble-mine-rule, var(--rule)); }
   html[data-theme="light"] .merecat-log .merecat-msg.you, html[data-theme="light"] .dm-msg.dm-mine { background: var(--accent-fill); color: var(--accent-on); border-color: var(--accent-fill); }
   html[data-theme="light"] .merecat-log .merecat-msg.you .merecat-who { color: rgba(255, 255, 255, 0.8); }
   /* Everything inside a LIGHT mine bubble must read on the red fill —

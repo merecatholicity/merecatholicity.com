@@ -9648,7 +9648,9 @@ trace('submit: feed post');
       '.merecat-intro p{margin:.15rem 0;font-size:.92rem}' +
       '.merecat-log{margin:.8rem 0}' +
       '.merecat-msg{border:1px solid var(--rule);border-radius:6px;padding:.55rem .8rem;margin:.55rem 0;max-width:92%}' +
-      '.merecat-msg.you{margin-left:auto;background:var(--cream)}' +
+      /* mine on the palette's accent tint, the librarian on the neutral surface —
+         the same pair the DM bubbles keep (main.css), so the two chats agree */
+      '.merecat-msg.you{margin-left:auto;background:var(--bubble-mine,var(--cream));border-color:var(--bubble-mine-rule,var(--rule))}' +
       '.merecat-msg.cat{background:var(--surface)}' +
       '.merecat-who{font-size:.78rem;color:var(--faint);margin-bottom:.3rem}' +
       /* fillBody leaves raw newlines in place, the board renders them with

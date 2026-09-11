@@ -157,6 +157,26 @@ def main():
         checks.append(('on open the bar is flush with the viewport bottom, aligned to the column, and the last bubble sits just above it', st.get('flushBottom') and st.get('alignedLeft') and st.get('lastAboveBar')))
         checks.append(('desktop keeps the footer, and it stays below the bar on open (the thread scrolls to its own foot)', st.get('footerShown') and st.get('footerBelowBar')))
         checks.append(('desktop shows the name in the header', st.get('nameShown')))
+        pal = jsj(f, """return JSON.stringify((function(){
+          var html = document.documentElement, mine = document.querySelector('.dm-msg.dm-mine'), theirs = document.querySelector('.dm-msg:not(.dm-mine)');
+          var keep = { theme: html.dataset.theme, dark: html.dataset.dark, light: html.dataset.light };
+          function rgb(s) { var m = /rgba?\\(([^)]+)\\)/.exec(s); return m ? m[1].split(',').slice(0, 3).map(Number) : [0, 0, 0]; }
+          function dist(a, b) { var x = rgb(a), y = rgb(b); return Math.abs(x[0]-y[0]) + Math.abs(x[1]-y[1]) + Math.abs(x[2]-y[2]); }
+          var out = {};
+          [['dark','charcoal'],['dark','slate'],['dark','ink'],['light','paper'],['light','mist'],['light','sepia']].forEach(function(p){
+            html.dataset.theme = p[0];
+            if (p[0] === 'dark') { html.dataset.dark = p[1] === 'charcoal' ? '' : p[1]; delete html.dataset.light; if (p[1] === 'charcoal') delete html.dataset.dark; }
+            else { html.dataset.light = p[1] === 'paper' ? '' : p[1]; delete html.dataset.dark; if (p[1] === 'paper') delete html.dataset.light; }
+            var a = getComputedStyle(mine).backgroundColor, b = getComputedStyle(theirs).backgroundColor;
+            var ink = getComputedStyle(mine).color;
+            out[p[1]] = { mine: a, theirs: b, apart: dist(a, b), inkApart: dist(a, ink) };
+          });
+          html.dataset.theme = keep.theme; if (keep.dark) html.dataset.dark = keep.dark; else delete html.dataset.dark; if (keep.light) html.dataset.light = keep.light; else delete html.dataset.light;
+          return out;
+        })());""")
+        apart = all((pal.get(k) or {}).get('apart', 0) >= 24 for k in ('charcoal', 'slate', 'ink', 'paper', 'mist', 'sepia'))
+        legible = all((pal.get(k) or {}).get('inkApart', 0) >= 300 for k in ('charcoal', 'slate', 'ink', 'paper', 'mist', 'sepia'))
+        checks.append(('sent and received read apart in all six palettes, and the ink stays legible on the tint', apart and legible))
         checks.append(('the ⏳ chip names the lifetime', str(st.get('note') or '').startswith('⏳ Messages disappear ') and 'after they are opened' in st.get('note')))
         checks.append(('the old thread chrome is gone (title line, badge, expiry note, block/delete links)', not st.get('oldChrome')))
         f.js1("document.querySelector('.dm-head-info').click(); return 1;")

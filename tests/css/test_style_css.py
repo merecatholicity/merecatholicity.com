@@ -278,6 +278,46 @@ class DmBubbleIsTheMount(unittest.TestCase):
         self.assertRegex(self.css, r"\.dm-msg \.comment-body\{margin-top:0\}")
 
 
+class SentAndReceivedReadApart(unittest.TestCase):
+    """DM bubbles (2026-09-11): mine on the surface tinted with the palette's own
+    accent by color-mix, theirs on the neutral surface — so every palette gets a
+    distinct, sane pair. The tint rules must survive the build, light and dark."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    PALETTES = {
+        # selector prefix as the minifier writes it → the pair that block defines
+        ':root{': ('#f5ebeb', '#af8673'),                                     # paper
+        ':root[data-theme=dark]{': ('#3b2a2c', '#624348'),                    # charcoal
+        ':root[data-theme=dark][data-dark=slate]{': ('#392a2e', '#5d4047'),
+        ':root[data-theme=dark][data-dark=ink]{': ('#3f2824', '#67413c'),
+        ':root[data-theme=light][data-light=mist]{': ('#f5ebeb', '#beacb2'),
+        ':root[data-theme=light][data-light=sepia]{': ('#f1e1d4', '#be9679'),
+    }
+
+    def test_every_palette_defines_its_sent_bubble_pair(self):
+        for prefix, (bg, rule) in self.PALETTES.items():
+            i = self.css.find(prefix)
+            self.assertGreater(i, -1, "palette block missing: " + prefix)
+            block = self.css[i:self.css.find('}', i)]
+            self.assertIn('--bubble-mine:' + bg, block, prefix + ' lost its --bubble-mine')
+            self.assertIn('--bubble-mine-rule:' + rule, block, prefix + ' lost its --bubble-mine-rule')
+
+    def test_mine_reads_the_tokens_never_color_mix(self):
+        # the minifier writes a color-mix fallback from its FIRST color, which
+        # would paint a bubble solid maroon in a browser without color-mix
+        self.assertRegex(self.css, r"\.dm-msg\.dm-mine\{[^}]*background:var\(--bubble-mine,var\(--cream\)\)")
+        self.assertNotRegex(self.css, r"\.dm-msg\.dm-mine\{[^}]*color-mix")
+
+    def test_theirs_stays_neutral(self):
+        self.assertRegex(self.css, r"\.dm-msg\{[^}]*background:var\(--surface\)")
+        self.assertRegex(self.css, r"\.dm-msg:not\(\.dm-mine\)\{[^}]*background:var\(--cream-2\)")
+
+    def test_the_librarian_takes_the_same_pair(self):
+        self.assertRegex(self.css, r"\.merecat-log \.merecat-msg\.you\{[^}]*background:var\(--bubble-mine,var\(--cream\)\)")
+
+
 class PhonesShowNoFooterAndAboutIsADialog(unittest.TestCase):
     """Phones show no footer except on the home tab (2026-09-11): the footer's
     information lives in Settings → About, a themed dialog that keeps the
