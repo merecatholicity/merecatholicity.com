@@ -81,7 +81,19 @@ test('the bubble is the mount the pill and the ⌄ hang from', () => {
   /* The saved mark is quiet (the owner's second look, 2026-09-11): a small
      star in the meta's own ink — never a ring, never a second color. */
   assert.ok(!/\.dm-msg\.dm-saved\{[^}]*box-shadow/.test(dmCss), 'a saved bubble carries no ring');
-  assert.ok(/\.dm-savedmark\{color:inherit/.test(dmCss), 'the saved star takes the meta row\'s own ink');
+  assert.ok(/\.dm-savedmark\{color:var\(--dm-saved\)/.test(dmCss), 'the saved star is gold');
+  assert.ok(/\.dm-msg\.dm-saved\{border-color:color-mix\(in srgb,var\(--dm-saved\)/.test(dmCss), 'and the bubble\'s own border takes the tint');
+});
+
+test('the picker and the keyboard never share a phone screen', () => {
+  const panel = src.slice(src.indexOf('function buildEmojiPanel('), src.indexOf('function loadKjv('));
+  assert.ok(/if \(onPick\) return;\s*try \{ if \(window\.matchMedia && window\.matchMedia\('\(hover: none\)'\)\.matches\) search\.focus\(\);/.test(panel),
+    'the search takes focus on touch only for the toolbar\'s own picker — a caller with onPick owns the keyboard');
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  assert.ok(/function openPicker\(\) \{ if \(touchUi\) ta\.blur\(\); emojiPanel\.openPanel\(\); setEmojiFace\(true\); \}/.test(view), 'opening the picker dismisses the keyboard');
+  assert.ok(/insertEmojiItem\(ta, it\);\s*if \(touchUi\) closePicker\(\);\s*ta\.focus\(\);/.test(view), 'a pick inserts, closes the picker on touch, and hands the keyboard back');
+  assert.ok(/ta\.addEventListener\('focus', function \(\) \{ if \(touchUi && !emojiPanel\.hidden\) closePicker\(\); \}\)/.test(view), 'a tap into the field closes the picker');
+  assert.ok(/mcIcon\(open \? 'keyboard' : 'smile'\)/.test(view), 'the button shows its other face while the picker stands');
 });
 
 test('an element toggled by its hidden attribute stays hidden', () => {

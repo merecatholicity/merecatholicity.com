@@ -169,7 +169,9 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   thread is a chat screen**: a sticky header (avatar · presence · 📞 · ⓘ) and a FIXED
   composer (+ · field · 😊 · mic-or-Send) always in view — fixed, never sticky: a sticky bar
   floats above the tab bar at the document's end, where a thread opens; everything that is not a message
-  lives in the ⓘ sheet; the saved mark is a quiet ★. An element toggled by `hidden` needs
+  lives in the ⓘ sheet; the saved mark is a gold ★ and a gold-tinted border, never a ring;
+  on a phone the emoji picker and the keyboard never share the screen (opening the picker
+  blurs the field; a pick hands the keyboard back). An element toggled by `hidden` needs
   a `[hidden]{display:none}` rule if it carries its own `display`.
 - **Nothing scrolls sideways on a phone**: `body{overflow-x:clip}` is the net, not the fix. A
   new surface must fit 390px — a flex row wraps or its items may shrink, an edge-to-edge

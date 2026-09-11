@@ -60,7 +60,7 @@ STUB = r"""
             reply: { id: 101, from: OTHER, kind: 'text', text: 'First word from them' } }
         ];
         return reply({ ok: true, thread_id: 1, ttl: 604800,
-          other: { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: null },
+          other: { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43) },
           messages: msgs, total: msgs.length, page: 1, per: 20, blocked: 0 });
       });
     }
@@ -269,6 +269,27 @@ def main():
         checks.append(('phone, on open: the bar sits flush on the tab bar, full width, before any scroll', bars.get('flushTab') and bars.get('fullWidth')))
         checks.append(('phone: the header sits flush under the app bar and the app bar carries the name', bars.get('headUnderBar') and bars.get('nameHidden')))
         checks.append(('phone: the thread opens at its end with the last bubble above the bar', bars.get('scrolledToEnd') and bars.get('lastAboveBar')))
+        pk = jsj(f, """return JSON.stringify((function(){
+          var q = function(s){ return document.querySelector(s); };
+          var ta = q('.dm-c-ta'), btn = q('.dm-c-emoji'), panel = q('.dm-c-emoji-panel');
+          ta.focus();
+          var focusedBefore = document.activeElement === ta;
+          btn.click();
+          var opened = getComputedStyle(panel).display !== 'none';
+          var blurred = document.activeElement !== ta;
+          var searchIdle = document.activeElement !== panel.querySelector('.emoji-search');
+          var face = btn.getAttribute('aria-label');
+          var cell = panel.querySelector('.emoji-cell');
+          var glyph = cell ? cell.textContent : '';
+          if (cell) cell.click();
+          return { focusedBefore: focusedBefore, opened: opened, blurred: blurred, searchIdle: searchIdle, face: face,
+                   closedAfterPick: getComputedStyle(panel).display === 'none', inserted: !!glyph && ta.value.indexOf(glyph) !== -1,
+                   refocused: document.activeElement === ta, faceBack: btn.getAttribute('aria-label') };
+        })());""")
+        checks.append(('phone: opening the picker dismisses the keyboard (field blurred, search idle) and the button becomes Keyboard',
+                       pk.get('focusedBefore') and pk.get('opened') and pk.get('blurred') and pk.get('searchIdle') and pk.get('face') == 'Keyboard'))
+        checks.append(('phone: a pick inserts the emoji, closes the picker, and hands the keyboard back',
+                       pk.get('closedAfterPick') and pk.get('inserted') and pk.get('refocused') and pk.get('faceBack') == 'Emoji'))
         ph = jsj(f, """return JSON.stringify((function(){
           var b = document.querySelector('[data-dmid="103"]');
           var r = b.getBoundingClientRect();

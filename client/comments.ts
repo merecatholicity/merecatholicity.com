@@ -1764,9 +1764,11 @@
       '.dm-edited{font-style:italic;opacity:.85}' +
       '.dm-receipt{opacity:.85;letter-spacing:-.08em}' +
       '.dm-receipt-seen{color:var(--maroon,#8b1a1a);opacity:1}' +
-      /* The saved mark is QUIET (the owner's 2026-09-11 ruling: the ring and
-         the gold star shouted): a small star in the meta's own faint ink. */
-      '.dm-savedmark{color:inherit;opacity:.9;font-size:1em;line-height:1}' +
+      /* The saved mark, settled after two looks (2026-09-11): the ring shouted
+         and a faint-ink star whispered — a gold star in the meta row and the
+         bubble's own 1px border tinted the same gold; no ring, no shadow. */
+      '.dm-savedmark{color:var(--dm-saved);font-size:1.05em;line-height:1}' +
+      '.dm-msg.dm-saved{border-color:color-mix(in srgb,var(--dm-saved) 70%,var(--rule))}' +
       /* An element toggled by its hidden attribute must not be revived by its
          own display rule (author display beats the UA's [hidden]). */
       '.dm-reply-bar[hidden],.dm-act-bar[hidden],.dm-act-menu[hidden],.dm-c-btn[hidden],.dm-c-send[hidden],.dm-attach-chip[hidden]{display:none!important}' +
@@ -3131,6 +3133,11 @@
     search.addEventListener('input', draw);
     panel.openPanel = function () {
       panel.hidden = false; mark(); draw(); loadEmojiData();
+      /* On touch the search takes focus so a tap behaves like typing ":" — for
+         the forum toolbar's picker. A caller that hands over onPick (the DM
+         composer, the reaction surface) owns the keyboard: focusing here would
+         raise it under the picker, the crammed screen the owner reported. */
+      if (onPick) return;
       try { if (window.matchMedia && window.matchMedia('(hover: none)').matches) search.focus(); } catch (e) {}
     };
     panel.closePanel = function () { panel.hidden = true; };
@@ -7580,6 +7587,7 @@ trace('submit: board post');
       phone: 'M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3.1 19.5 19.5 0 01-6-6A19.8 19.8 0 012.1 4.2 2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.4 1.8.7 2.6a2 2 0 01-.5 2.1L8.1 9.7a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.8.3 1.7.6 2.6.7a2 2 0 011.7 2z',
       info: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 16v-4M12 8h.01',
       smile: 'M12 22a10 10 0 100-20 10 10 0 000 20zM8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01',
+      keyboard: 'M3 7h18v10H3zM7 10.5h.01M11 10.5h.01M15 10.5h.01M8 14h8',
       x: 'M18.9 2.5H22l-7.6 8.6L23 21.5h-6.9l-5.4-7-6.2 7H1.4l8.1-9.2L1 2.5h7l4.9 6.4L18.9 2.5z',
       facebook: 'M22 12a10 10 0 10-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.8 3.7-3.8 1.1 0 2.2.2 2.2.2v2.4h-1.2c-1.2 0-1.6.8-1.6 1.5V12h2.7l-.4 2.9h-2.3v7A10 10 0 0022 12z',
     };
@@ -9016,7 +9024,19 @@ trace('submit: feed post');
            the earliest honest sign they mean to send (the mdEditor road, here
            by hand because this composer is not the forum's). */
         warmOnFocus(ta);
-        var emojiPanel = buildEmojiPanel(ta);
+        /* The picker and the keyboard never share the screen on a phone (the
+           owner's report: both up at once was crammed). Opening the picker
+           dismisses the keyboard; the 😊 becomes a keyboard button while it
+           stands; a pick inserts the emoji, closes the picker and hands the
+           keyboard back; a tap into the field closes it too. On desktop the
+           picker simply stays open beside the field, as the forum's does. */
+        var touchUi = false;
+        try { touchUi = window.matchMedia('(hover: none)').matches; } catch (e) { touchUi = false; }
+        var emojiPanel = buildEmojiPanel(ta, function (it: any) {
+          insertEmojiItem(ta, it);
+          if (touchUi) closePicker();
+          ta.focus();
+        });
         emojiPanel.classList.add('dm-c-emoji-panel');
         form.appendChild(emojiPanel);
         var row = el('div', 'dm-c-row');
@@ -9025,7 +9045,21 @@ trace('submit: feed post');
         var field = el('div', 'dm-c-field');
         field.appendChild(ta);
         var emojiBtn = iconBtn('smile', 'Emoji', 'dm-c-emoji');
-        emojiBtn.addEventListener('click', function () { emojiPanel.toggle(); });
+        function setEmojiFace(open: boolean) {
+          emojiBtn.textContent = '';
+          emojiBtn.appendChild(mcIcon(open ? 'keyboard' : 'smile'));
+          emojiBtn.title = open ? 'Keyboard' : 'Emoji';
+          emojiBtn.setAttribute('aria-label', emojiBtn.title);
+          emojiBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        function openPicker() { if (touchUi) ta.blur(); emojiPanel.openPanel(); setEmojiFace(true); }
+        function closePicker() { emojiPanel.closePanel(); setEmojiFace(false); }
+        setEmojiFace(false);
+        emojiBtn.addEventListener('click', function () {
+          if (emojiPanel.hidden) openPicker();
+          else { closePicker(); if (touchUi) ta.focus(); }
+        });
+        ta.addEventListener('focus', function () { if (touchUi && !emojiPanel.hidden) closePicker(); });
         field.appendChild(emojiBtn);
         row.appendChild(field);
         var mic: any = null;   // the voice button, when the Inbox takes voice notes
@@ -9239,7 +9273,7 @@ trace('submit: feed post');
             if (!d2.ok) throw new Error(d2.error || 'The message could not be sent.');
             ta.value = '';
             if (ta.mcDraftDone) ta.mcDraftDone();
-            emojiPanel.closePanel();
+            closePicker();
             /* Seed the media cache from the local file so our own echo renders
                instantly without a round-trip. */
             if (sending && d2._media_key) { try { mcDmBlobPut(d2._media_key, URL.createObjectURL(sending), sending.size || 0); } catch (e) {} }
