@@ -24,3 +24,10 @@ test('isVisible: online iff a socket is held AND mode is not off', () => {
   assert.equal(Presence.isVisible('off')(true), false, 'appear-offline wins even with a socket');
   assert.equal(Presence.isVisible('off')(false), false);
 });
+
+test('recordsLastSeen: a last-seen stamp exists only under auto; appear-offline gets none', () => {
+  assert.equal(Presence.recordsLastSeen('auto'), true);
+  assert.equal(Presence.recordsLastSeen(''), true, 'blank is auto');
+  assert.equal(Presence.recordsLastSeen('off'), false, 'appear-offline: no stamp written, any held one cleared');
+  assert.equal(Presence.recordsLastSeen('OFF'), true, 'only the exact "off" hides (normalizeMode\'s rule)');
+});

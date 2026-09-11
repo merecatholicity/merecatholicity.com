@@ -1866,7 +1866,9 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const thread = await env.DB.prepare(
     'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at, a_cleared_at, b_cleared_at, ttl FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
   ).bind(a, b).first();
-  const prof = await env.DB.prepare('SELECT nick, avatar FROM profiles WHERE hash = ?1').bind(other).first();
+  /* last_seen_at is the hub's stamp, absent for a member who chose appear-offline
+     (the hub clears it): serving it as-is IS the privacy rule. */
+  const prof = await env.DB.prepare('SELECT nick, avatar, last_seen_at FROM profiles WHERE hash = ?1').bind(other).first();
   /* The correspondent's published X25519 public key, so the client can encrypt
      to them and decrypt this pair's messages. Null until they have signed in once
      under the encrypted-inbox client (the client then blocks the send with a
@@ -1878,7 +1880,7 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const ttl = (thread && thread.ttl) || dmDefaultTtl(settings);
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
-    return json({ ok: true, thread_id: null, ttl, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
+    return json({ ok: true, thread_id: null, ttl, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
@@ -1939,7 +1941,7 @@ async function handleDmThread(request: any, env: any, ctx: any) {
     }
   }
   return json({ ok: true, thread_id: thread.id, ttl,
-    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub },
+    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
     messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0 }, 200);
 }
 
@@ -1978,10 +1980,19 @@ async function handleDmPresence(request: any, env: any) {
   const { ip, data, key, me } = pre;
   const hashes = (Array.isArray(data.hashes) ? data.hashes : [])
     .filter((h: any) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 50);
-  if (!hashes.length || !env.HUB) return json({ ok: true, online: [] }, 200);
+  if (!hashes.length || !env.HUB) return json({ ok: true, online: [], seen: {} }, 200);
   let online = [];
   try { online = await env.HUB.get(env.HUB.idFromName('board')).presenceOf(hashes); } catch { online = []; }
-  return json({ ok: true, online: Array.isArray(online) ? online : [] }, 200);
+  const on = Array.isArray(online) ? online : [];
+  /* "Last seen" for those not online now: the hub's stamp, absent for a member
+     who chose appear-offline (the hub clears it), so serving it as-is IS the
+     privacy rule; an online member's stamp is not served (they are Online). */
+  const seen: Record<string, number> = {};
+  const rows = await env.DB.prepare(
+    'SELECT hash, last_seen_at FROM profiles WHERE last_seen_at IS NOT NULL AND hash IN (' + inList(hashes.length, 1) + ')'
+  ).bind(...hashes).all();
+  for (const r of (rows.results || []) as any[]) if (on.indexOf(r.hash) === -1) seen[r.hash] = Number(r.last_seen_at);
+  return json({ ok: true, online: on, seen }, 200);
 }
 
 /* Settings-gear preferences (keyed + private): read your own read-receipts mode

@@ -71,6 +71,11 @@ export class BoardHub extends DurableObject<Env> {
       const presenceMode = Presence.normalizeMode(String(m.presence || 'auto'));
       ws.serializeAttachment({ subs: (a && a.subs) || [], n: (a && a.n) || 0, me, presenceMode });
       if (me) this.#broadcastPresence(me, this.#isOnline(me));
+      /* Appear-offline hides the "last seen" moment too: a socket authenticating
+         under "off" clears any stamp the member holds, so nothing stale can be
+         served after the choice (Domain.Presence.recordsLastSeen — the same
+         rule that gates the write at disconnect). */
+      if (me && !Presence.recordsLastSeen(presenceMode)) await this.#clearLastSeen(me);
       return;
     }
     /* A transient typing signal (client → client, no storage): fan it to the
@@ -120,12 +125,31 @@ export class BoardHub extends DurableObject<Env> {
   /* A socket dropped: if it was the member's last online connection, tell anyone
      watching that they went offline. (webSocketError has no such last-socket
      meaning; it just logs.) */
-  webSocketClose(ws: any) {
+  async webSocketClose(ws: any) {
     let a;
     try { a = ws.deserializeAttachment(); } catch { a = null; }
     const me = a && a.me;
     if (!me) return;
-    if (!this.#isOnline(me, ws)) this.#broadcastPresence(me, false);
+    if (this.#isOnline(me, ws)) return;
+    this.#broadcastPresence(me, false);
+    /* The member's last live socket closed: stamp the moment for the "Last
+       seen …" line — only under "auto". The hub is the ONE writer of this
+       column, being the one party that knows the mode (it rides the auth
+       frame, never a column); a member who chose appear-offline gets no stamp. */
+    if (Presence.recordsLastSeen((a && a.presenceMode) || 'auto')) await this.#stampLastSeen(me);
+  }
+
+  async #stampLastSeen(hash: any) {
+    const now = Math.floor(Date.now() / 1000);
+    try {
+      await this.env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(hash, now).run();
+      await this.env.DB.prepare('UPDATE profiles SET last_seen_at = ?2 WHERE hash = ?1').bind(hash, now).run();
+    } catch (e) { console.log(JSON.stringify({ event: 'hub_last_seen_error', error: String(e) })); }
+  }
+  async #clearLastSeen(hash: any) {
+    try {
+      await this.env.DB.prepare('UPDATE profiles SET last_seen_at = NULL WHERE hash = ?1').bind(hash).run();
+    } catch (e) { console.log(JSON.stringify({ event: 'hub_last_seen_error', error: String(e) })); }
   }
 
   webSocketError(ws: any, err: any) {

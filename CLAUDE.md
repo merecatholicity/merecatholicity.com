@@ -139,7 +139,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `book-tail.html` (the detector refuses one without); a path is a storage key, never rename one.
   A closed section answers exactly as an unknown page; a deleted journal article retires its
   comments (`sweepJournalComments`); a switch deletes nothing.
-- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0013),
+- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0014),
   additive; `schema.sql` is a generated snapshot; the three librarian D1s are derived data.
   Renaming an applied migration file requires renaming its `d1_migrations` row too.
 - **Shared constants, tables and validators live in `purescript/src/Domain/*`** and are read
@@ -180,6 +180,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the document's.
   The merecat ask row is the same composer shape; a FIXED bar's `bottom` places its MARGIN edge,
   so a fixed composer carries `margin: 0` in main.css AND in any injected block (which wins).
+- **Presence is the hub's word alone**: online is a live socket under mode "auto"
+  (`Domain.Presence.isVisible`), and `profiles.last_seen_at` is written by the BoardHub only —
+  stamped at a member's last disconnect under "auto", cleared by an auth under "off"
+  (`recordsLastSeen`); the mode rides the auth frame, never a column, so no worker handler may
+  write the stamp or second-guess it — serving the column as-is IS the privacy rule.
 - **Nothing scrolls sideways on a phone**: `body{overflow-x:clip}` is the net, not the fix. A
   new surface must fit 390px — a flex row wraps or its items may shrink, an edge-to-edge
   pull uses `var(--page-pad)`, and a JS-injected style block must agree with the
@@ -259,4 +264,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · `contact-worker/`

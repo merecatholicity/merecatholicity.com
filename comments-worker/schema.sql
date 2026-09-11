@@ -588,3 +588,11 @@ ALTER TABLE dms ADD COLUMN react_a TEXT;
 ALTER TABLE dms ADD COLUMN react_b TEXT;
 UPDATE dms SET react_a = '❤️' WHERE COALESCE(liked_a, 0) = 1;
 UPDATE dms SET react_b = '❤️' WHERE COALESCE(liked_b, 0) = 1;
+-- Last seen (2026-09-11): the moment a member's last live socket closed, for
+-- the "Last seen …" line beside Offline in a conversation header and on a
+-- profile. Written by the BoardHub Durable Object alone — the one party that
+-- knows a member's presence mode, which rides the socket's auth frame, never a
+-- column: stamped at the last disconnect under "auto", and CLEARED whenever a
+-- socket authenticates under "off" (appear offline), so a member who hides
+-- their presence has no stamp to serve. NULL = never seen, or hidden.
+ALTER TABLE profiles ADD COLUMN last_seen_at INTEGER;

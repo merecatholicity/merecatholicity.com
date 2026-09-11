@@ -5,7 +5,7 @@
 -- | the BoardHub Durable Object can honour it without a DB read. This module is
 -- | the single typed source for the mode set + the visibility rule; the DO's
 -- | socket enumeration is the imperative half (an FFI-shaped effect).
-module Domain.Presence (modes, normalizeMode, isVisible) where
+module Domain.Presence (modes, normalizeMode, isVisible, recordsLastSeen) where
 
 import Prelude
 
@@ -26,3 +26,12 @@ normalizeMode m
 -- | open connection.
 isVisible :: String -> Boolean -> Boolean
 isVisible mode hasSocket = hasSocket && normalizeMode mode /= "off"
+
+-- | Whether a member's "last seen" moment may be recorded and shown (2026-09-11):
+-- | only under "auto". A member who chose appear-offline gets no stamp — the hub
+-- | clears any it holds the moment a socket authenticates under "off" — so the
+-- | Offline line stands alone for them, with no time beside it. The same rule
+-- | gates the write (the hub) and the read (the worker), so a mode change can
+-- | never leave a stale stamp behind.
+recordsLastSeen :: String -> Boolean
+recordsLastSeen mode = normalizeMode mode /= "off"

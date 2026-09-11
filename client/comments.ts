@@ -731,6 +731,25 @@
       { year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
+  /* "Last seen" beside Offline (2026-09-11): just now / N min ago / today at
+     3:09 PM / yesterday at 11:30 PM / Mon at 2:15 PM / Sep 8 — the WhatsApp
+     ladder, in the reader's own zone. The moment comes from the hub's stamp;
+     a member who chose appear-offline has none, and reads Offline alone. */
+  function dmSeenLabel(epoch: any) {
+    var t = Number(epoch) || 0;
+    if (!t) return '';
+    var now = Date.now() / 1000, age = now - t;
+    if (age < 60) return 'just now';
+    if (age < 3600) return Math.max(1, Math.floor(age / 60)) + ' min ago';
+    var d = new Date(t * 1000), today = new Date();
+    var time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    var yest = new Date(today); yest.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'today at ' + time;
+    if (d.toDateString() === yest.toDateString()) return 'yesterday at ' + time;
+    if (age < 6 * 86400) return d.toLocaleDateString('en-US', { weekday: 'short' }) + ' at ' + time;
+    if (d.getFullYear() === today.getFullYear()) return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
   /* Compact timestamps for post heads and list rows (the readability standard):
      today -> '2:49 PM', this year -> 'Jul 31', older -> 'Jul 2025'. Consumers
      put the full fmtDateTime on the title attribute; prose sentences keep the
@@ -6875,17 +6894,24 @@ trace('submit: board post');
     var line = el('div', 'profile-presence');
     line.hidden = true;
     names.appendChild(line);
+    var seenAt = 0, wasOn: boolean | null = null;
     function paint(on: boolean) {
+      if (wasOn === true && !on) seenAt = Math.floor(Date.now() / 1000);   // went offline before our eyes
+      wasOn = on;
       line.textContent = '';
       line.appendChild(el('span', 'dm-dot ' + (on ? 'dm-dot-on' : 'dm-dot-off')));
-      line.appendChild(document.createTextNode(on ? 'Online' : 'Offline'));
+      line.appendChild(document.createTextNode(on ? 'Online' : (seenAt ? 'Last seen ' + dmSeenLabel(seenAt) : 'Offline')));
       line.hidden = false;
     }
     state.profilePresence = function (h: any, on: any) { if (h === hash && line.isConnected) paint(!!on); };
     fetch(API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key, hashes: [hash] }) })
       .then(function (r) { return r.json(); })
-      .then(function (d) { if (d && d.ok && Array.isArray(d.online) && line.isConnected) paint(d.online.indexOf(hash) !== -1); })
+      .then(function (d) {
+        if (!(d && d.ok && Array.isArray(d.online)) || !line.isConnected) return;
+        seenAt = Number((d.seen && d.seen[hash]) || 0);   // absent for a member who hides their presence
+        paint(d.online.indexOf(hash) !== -1);
+      })
       .catch(function () { /* no line, no harm */ });
     if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + hash]);
   }
@@ -8824,14 +8850,24 @@ trace('submit: feed post');
            = Online, false = Offline — which is also what a member who chose
            "appear offline" reads as; the hub honours that before it answers. */
         var presOn: boolean | null = null, typingOn = false, typingHideT: any = 0;
+        /* The stamp the thread arrived with (null for a member who hides their
+           presence); a live offline is "just now". Repainted each minute so
+           "3 min ago" keeps time; the timer dies with the boot. */
+        var seenAt: number = Number((d.other && d.other.last_seen) || 0);
         function paintSub() {
           sub.textContent = '';
           if (typingOn) { sub.appendChild(el('span', 'dm-sub-typing', 'typing…')); return; }
           if (presOn === true) { sub.appendChild(el('span', 'dm-dot dm-dot-on')); sub.appendChild(document.createTextNode('Online')); return; }
-          if (presOn === false) { sub.appendChild(el('span', 'dm-dot dm-dot-off')); sub.appendChild(document.createTextNode('Offline')); return; }
+          if (presOn === false) {
+            sub.appendChild(el('span', 'dm-dot dm-dot-off'));
+            sub.appendChild(document.createTextNode(seenAt ? 'Last seen ' + dmSeenLabel(seenAt) : 'Offline'));
+            return;
+          }
           sub.appendChild(document.createTextNode('🔒 End-to-end encrypted'));
         }
         paintSub();
+        var seenTick = setInterval(function () { if (presOn === false && seenAt) paintSub(); }, 60000);
+        bootSig.addEventListener('abort', function () { clearInterval(seenTick); }, { once: true });
         /* ---- conversation info: the sheet behind the header, the ⓘ and the ⏳ chip ---- */
         var infoExpiry: any = null;
         function infoNode() {
@@ -8985,7 +9021,10 @@ trace('submit: feed post');
            header's subtitle; dm-read flips my bubbles to ✓✓. */
         state.dmView = { other: other,
           setTtl: function (t: any) { curTtl = Number(t) || curTtl; isNew = false; paintNote(); if (infoExpiry && infoExpiry.mcSetTtl) infoExpiry.mcSetTtl(t); },
-          setPresence: function (on: any) { presOn = !!on; paintSub(); },
+          setPresence: function (on: any) {
+            if (presOn === true && !on && seenAt !== -1) seenAt = Math.floor(Date.now() / 1000);   // went offline before our eyes
+            presOn = !!on; paintSub();
+          },
           setTyping: function (on: any) {
             clearTimeout(typingHideT);
             typingOn = !!on; paintSub();

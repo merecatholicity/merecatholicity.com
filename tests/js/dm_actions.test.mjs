@@ -96,11 +96,20 @@ test('a downward swipe over the page dismisses the keyboard; the thread names On
   const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
   assert.ok(/swipeDismissesKeyboard\(ta, form\);/.test(view), 'the DM composer takes it');
   assert.ok(/swipeDismissesKeyboard\(q, form\);/.test(src.slice(src.indexOf('function viewMerecat('))), 'so does the merecat ask box');
-  assert.ok(/if \(presOn === false\) \{ sub\.appendChild\(el\('span', 'dm-dot dm-dot-off'\)\); sub\.appendChild\(document\.createTextNode\('Offline'\)\)/.test(view),
-    'the thread header says Offline once the hub has answered, the lock only while unknown');
+  assert.ok(/if \(presOn === false\) \{[\s\S]*?seenAt \? 'Last seen ' \+ dmSeenLabel\(seenAt\) : 'Offline'/.test(view),
+    'the thread header says Last seen … (the hub\'s stamp) or Offline once the hub has answered, the lock only while unknown');
+  assert.ok(/var seenAt: number = Number\(\(d\.other && d\.other\.last_seen\) \|\| 0\);/.test(view), 'the stamp arrives with the thread');
+  assert.ok(/if \(presOn === true && !on && seenAt !== -1\) seenAt = Math\.floor\(Date\.now\(\) \/ 1000\);/.test(view), 'an offline seen live is "just now"');
+  assert.ok(/bootSig\.addEventListener\('abort', function \(\) \{ clearInterval\(seenTick\); \}, \{ once: true \}\);/.test(view), 'the minute repaint dies with the boot');
+  const label = src.slice(src.indexOf('function dmSeenLabel('), src.indexOf('/* Compact timestamps for post heads'));
+  for (const step of ["'just now'", "' min ago'", "'today at '", "'yesterday at '", "' at ' + time", "month: 'short', day: 'numeric', year: 'numeric'"]) {
+    assert.ok(label.includes(step), 'the last-seen ladder has ' + step);
+  }
   const prof = src.slice(src.indexOf('function profilePresenceInto('), src.indexOf('function renderProfile('));
   assert.ok(/hash === state\.myHash \|\| hash === MERECAT_BOT_HASH/.test(prof), 'not for yourself, not for the bot');
   assert.ok(/API \+ '\/dm\/presence'/.test(prof) && /board\.sub\(\['presence:' \+ hash\]\)/.test(prof), 'one keyed read, then the live frames');
+  assert.ok(/seenAt = Number\(\(d\.seen && d\.seen\[hash\]\) \|\| 0\);/.test(prof) && /'Last seen ' \+ dmSeenLabel\(seenAt\) : 'Offline'/.test(prof),
+    'the profile line reads Last seen … from the presence read, Offline without a stamp');
   assert.ok(/if \(state\.profilePresence\) state\.profilePresence\(m\.hash, !!m\.online\);/.test(src), 'the live frame reaches the open profile');
 });
 

@@ -60,7 +60,7 @@ STUB = r"""
             reply: { id: 101, from: OTHER, kind: 'text', text: 'First word from them' } }
         ];
         return reply({ ok: true, thread_id: 1, ttl: 604800,
-          other: { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43) },
+          other: { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43), last_seen: now - 90000 },
           messages: msgs, total: msgs.length, page: 1, per: 20, blocked: 0 });
       });
     }
@@ -116,7 +116,7 @@ SHAPE = """return JSON.stringify((function(){
     replyBarHidden: !!q('.dm-reply-bar') && getComputedStyle(q('.dm-reply-bar')).display === 'none',
     head: !!q('.dm-head .dm-head-avatar') && !!q('.dm-head .dm-head-sub') && !!q('.dm-head .dm-head-info'),
     headSticky: q('.dm-head') && getComputedStyle(q('.dm-head')).position === 'sticky',
-    subLock: ['🔒 End-to-end encrypted', 'Offline'].indexOf((q('.dm-head-sub')||{}).textContent) !== -1,   // the lock until the hub seeds presence; then Offline for a hash nobody holds
+    subLock: (function(){ var s = (q('.dm-head-sub')||{}).textContent || ''; return s === '🔒 End-to-end encrypted' || s === 'Last seen yesterday at ' + new Date((Math.floor(Date.now()/1000) - 90000) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); })(),   // the lock until the hub seeds presence; then the fixture's stamp, yesterday
     composer: !!q('.dm-composer .dm-c-ta') && !!q('.dm-composer .dm-c-send') && !!q('.dm-composer .dm-c-plus') && !!q('.dm-composer .dm-c-emoji'),
     composerFixed: q('.dm-composer') && getComputedStyle(q('.dm-composer')).position === 'fixed',
     spacerLast: !!q('.dm-c-space') && q('.dm-c-space').parentNode.lastElementChild === q('.dm-c-space') && q('.dm-c-space').previousElementSibling === q('.dm-composer')
@@ -152,7 +152,7 @@ def main():
         checks.append(('an edited message says so in its meta', st.get('edited103')))
         checks.append(('a reply carries the quote block naming them and their words', st.get('quote104')))
         checks.append(('the reply strip is mounted above the field and truly hidden until a reply is armed', st.get('replyBarHidden')))
-        checks.append(('a sticky header: avatar, the subtitle (the lock, or Offline once seeded), the ⓘ', st.get('head') and st.get('headSticky') and st.get('subLock')))
+        checks.append(('a sticky header: avatar, the subtitle (the lock, or Last seen yesterday once seeded), the ⓘ', st.get('head') and st.get('headSticky') and st.get('subLock')))
         checks.append(('a fixed composer at the foot: +, the field, emoji, Send; the spacer reserves its height', st.get('composer') and st.get('composerFixed') and st.get('spacerLast')))
         checks.append(('on open the bar is flush with the viewport bottom, aligned to the column, and the last bubble sits just above it', st.get('flushBottom') and st.get('alignedLeft') and st.get('lastAboveBar')))
         checks.append(('desktop keeps the footer, and it stays below the bar on open (the thread scrolls to its own foot)', st.get('footerShown') and st.get('footerBelowBar')))
