@@ -49,7 +49,7 @@ STUB = r"""
   window.__mcDmWrites = [];
   window.fetch = function (url, opts) {
     var u = String(url);
-    if (u.indexOf('/api/comments/dm/thread') !== -1) {
+    if (/\/api\/comments\/dm\/thread(?!s)/.test(u)) {   // the thread, not the inbox's /dm/threads
       return myHash().then(function (me) {
         var now = Math.floor(Date.now() / 1000);
         var msgs = [
@@ -63,6 +63,15 @@ STUB = r"""
           other: { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43), last_seen: now - 90000 },
           messages: msgs, total: msgs.length, page: 1, per: 20, blocked: 0 });
       });
+    }
+    if (u.indexOf('/api/comments/dm/threads') !== -1) {
+      var now2 = Math.floor(Date.now() / 1000);
+      return reply({ ok: true, threads: [{ id: 1, other_hash: OTHER, nick: 'Fixture', avatar: null, msgs: 4, last_at: now2 - 60, unread: 0 }], total: 1, unread_total: 0, page: 1, per: 20 });
+    }
+    if (u.indexOf('/api/comments/dm/presence') !== -1) {
+      var now3 = Math.floor(Date.now() / 1000);
+      var seen = {}; seen[OTHER] = now3 - 90000;
+      return reply({ ok: true, online: [], seen: seen });
     }
     if (/\/api\/comments\/dm\/(react|save|redact|edit|seen|ttl|send)/.test(u)) {
       window.__mcDmWrites.push(u);
@@ -269,6 +278,14 @@ def main():
         checks.append(('Escape closes the surface and leaves nothing behind', bool(closed)))
         writes = f.js1("return (window.__mcDmWrites||[]).join(' ');")
         checks.append(('the only write the whole run made was the stubbed reaction', writes.count('/dm/') == 1 and '/dm/react' in writes))
+        f.goto('messages.html')
+        f.wait("!!document.querySelector('mc-inbox .board-topic .dm-row-pres')", timeout=25)
+        row = jsj(f, """return JSON.stringify((function(){
+          var l = document.querySelector('mc-inbox .board-topic .dm-row-pres'); var d = l ? l.querySelector('.dm-row-dot') : null;
+          return { text: l ? l.textContent : '', dotOff: !!d && !d.classList.contains('on'),
+                   expect: 'Last seen yesterday at ' + new Date((Math.floor(Date.now()/1000) - 90000) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) };
+        })());""")
+        checks.append(('the inbox row carries the same line: Last seen yesterday at …, the dot off', row.get('text') == row.get('expect') and row.get('dotOff')))
         checks.append(('desktop console clean', f.assert_console_clean('dm desktop')))
         fails = list(f.failures)
     # ---- phone: the hole between four pieces of scrim, and the lock ----

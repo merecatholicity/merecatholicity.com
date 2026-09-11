@@ -1243,6 +1243,12 @@ h3.profile-label { margin: 1rem 0 0.2rem; font-size: 0.95rem; color: var(--muted
 a.comment-dm { color: var(--brown); margin-left: 0.9em; font-size: 0.85em; text-decoration: none; }
 a.comment-dm:hover { text-decoration: underline; color: var(--maroon); }
 .dm-unread { color: var(--maroon); font-weight: bold; }
+/* The inbox row's presence line (2026-09-11): Online / Last seen … / Offline
+   under the name, the thread header's own line — self-styled, since the
+   DM block's dots are injected only on a thread. */
+.dm-row-pres { display: flex; align-items: center; gap: 0.35em; }
+.dm-row-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #c0c0c0; flex: none; }
+.dm-row-dot.on { background: #3ba55d; box-shadow: 0 0 0 2px rgba(59, 165, 93, 0.22); }
 .dm-search { position: relative; }
 .dm-suggest { position: absolute; left: 0.9em; right: 0.9em; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); z-index: 5; }
 a.dm-suggest-row { display: flex; justify-content: space-between; align-items: baseline; gap: 1em; padding: 0.45em 0.7em; cursor: pointer; font-size: 0.95rem; color: var(--maroon); text-decoration: none; }

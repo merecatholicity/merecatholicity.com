@@ -111,6 +111,14 @@ test('a downward swipe over the page dismisses the keyboard; the thread names On
   assert.ok(/seenAt = Number\(\(d\.seen && d\.seen\[hash\]\) \|\| 0\);/.test(prof) && /'Last seen ' \+ dmSeenLabel\(seenAt\) : 'Offline'/.test(prof),
     'the profile line reads Last seen … from the presence read, Offline without a stamp');
   assert.ok(/if \(state\.profilePresence\) state\.profilePresence\(m\.hash, !!m\.online\);/.test(src), 'the live frame reaches the open profile');
+  /* The inbox rows carry the same line (the owner's ninth look). */
+  const inbox = readFileSync(join(root, 'app', 'views', 'profile.ts'), 'utf8');
+  const cls = inbox.slice(inbox.indexOf('class McInbox'), inbox.indexOf("customElements.define('mc-inbox'"));
+  assert.ok(/kit\.API \+ '\/dm\/presence'/.test(cls), 'the inbox reads presence for the page\'s members once the threads arrive');
+  assert.ok(/kit\.state\.inboxPresence = /.test(cls), 'and takes the live frames');
+  assert.ok(/\.slice\(0, 5\)\.map\(\(h: string\) => 'presence:' \+ h\)/.test(cls), 'watches the first five rows live (the socket\'s scope cap)');
+  assert.ok(/dm-row-pres/.test(cls) && /kit\.dmSeenLabel\(/.test(cls), 'renders Online / Last seen … / Offline under the name');
+  assert.ok(/dmSeenLabel: dmSeenLabel,/.test(src), 'the label rides the kit');
 });
 
 test('the picker and the keyboard never share a phone screen', () => {

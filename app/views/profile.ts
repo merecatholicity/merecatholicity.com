@@ -79,10 +79,11 @@ class McProfile extends LitElement {
 customElements.define('mc-profile', McProfile);
 
 class McInbox extends LitElement {
-  static properties = { d: { attribute: false }, err: { attribute: false } };
+  static properties = { d: { attribute: false }, err: { attribute: false }, pres: { attribute: false } };
   declare kit: any;
   declare d: any;
   declare err: string;
+  declare pres: any;   // { online: {hash:true}, seen: {hash: epoch} } once the presence read answers
   declare _onLive: (ev: Event) => void;
   constructor() {
     super();
@@ -115,7 +116,44 @@ class McInbox extends LitElement {
       if (!d.ok) throw new Error(d.error || 'failed');
       kit.dmCacheSet(d.unread_total);
       this.d = d;
+      this._presence(d.threads.map((t: any) => t.other_hash));
     }).catch(() => { this.err = 'load'; });
+  }
+  /* Online / Last seen … / Offline under each name (2026-09-11), the thread
+     header's own line: one batched keyed read of /dm/presence for the page's
+     members, then the live presence frames through state.inboxPresence — the
+     socket may watch five scopes, so the first five rows are live and the
+     snapshot covers the rest. A live offline reads "just now". */
+  _presence(hashes: string[]) {
+    const kit = this.kit;
+    if (!hashes.length) { this.pres = null; return; }
+    kit.state.inboxPresence = (h: string, on: boolean) => {
+      if (!this.pres || !(h in this.pres.known)) return;
+      const online = Object.assign({}, this.pres.online);
+      const seen = Object.assign({}, this.pres.seen);
+      if (on) online[h] = true; else { delete online[h]; seen[h] = Math.floor(Date.now() / 1000); }
+      this.pres = { online, seen, known: this.pres.known };
+    };
+    fetch(kit.API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: kit.state.key, hashes }) })
+      .then((r: Response) => r.json())
+      .then((pd: any) => {
+        if (!(pd && pd.ok && Array.isArray(pd.online))) return;
+        const online: Record<string, boolean> = {};
+        pd.online.forEach((h: string) => { online[h] = true; });
+        const known: Record<string, boolean> = {};
+        hashes.forEach((h) => { known[h] = true; });
+        this.pres = { online, seen: Object.assign({}, pd.seen || {}), known };
+      })
+      .catch(() => { /* no line, no harm */ });
+    if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(hashes.slice(0, 5).map((h: string) => 'presence:' + h));
+  }
+  _presTpl(h: string) {
+    const p = this.pres;
+    if (!p || !p.known[h]) return nothing;
+    if (p.online[h]) return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot on"></span>Online</div>`;
+    const s = Number(p.seen[h] || 0);
+    return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot"></span>${s ? 'Last seen ' + this.kit.dmSeenLabel(s) : 'Offline'}</div>`;
   }
   updated() {
     /* the DM search box (write machinery) mounts through the kit into its
@@ -172,6 +210,7 @@ class McInbox extends LitElement {
               <div class="board-topic-left">
                 <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread"> ● new</span>` : nothing}
                 <div class="board-row-sub" title=${kit.fmtDateTime(t.last_at)}>${kit.fmtTimeCompact(t.last_at)}</div>
+                ${this._presTpl(t.other_hash)}
               </div>
               <div class="board-stats" title=${kit.fmtDateTime(t.last_at)}>${t.msgs + (t.msgs === 1 ? ' message' : ' messages')}</div>
               <div class="board-admin-corner"><a class="trust-toggle" href="#" @click=${(e: Event) => this.del(e, t.other_hash, (e.target as HTMLElement).closest('.board-topic') as HTMLElement)}>Delete</a></div>

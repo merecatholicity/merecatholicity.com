@@ -8565,11 +8565,6 @@ trace('submit: feed post');
         d.threads.forEach(function (t: any) {
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
-          var dot = el('span', 'mc-inbox-dot');
-          dot.style.display = 'none';
-          dot.title = 'Online';
-          left.appendChild(dot);
-          presDots[t.other_hash] = dot;
           var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmLabel(t.other_hash, t.nick));
           a.href = 'messages.html?dm=' + t.other_hash;
           left.appendChild(a);
@@ -8577,6 +8572,13 @@ trace('submit: feed post');
           var isub = el('div', 'board-row-sub', fmtTimeCompact(t.last_at));
           isub.title = fmtDateTime(t.last_at);
           left.appendChild(isub);
+          /* the presence line, painted once the batched read answers */
+          var presLine = el('div', 'board-row-sub dm-row-pres');
+          presLine.hidden = true;
+          var dot = el('span', 'dm-row-dot');
+          presLine.appendChild(dot);
+          left.appendChild(presLine);
+          presDots[t.other_hash] = dot;
           row.appendChild(left);
           var istat = el('div', 'board-stats', t.msgs + (t.msgs === 1 ? ' message' : ' messages'));
           istat.title = fmtDateTime(t.last_at);
@@ -8610,10 +8612,24 @@ trace('submit: feed post');
           fetch(API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, hashes: presHashes }) })
             .then(function (r) { return r.json(); })
-            .then(function (pd) { if (pd && pd.ok && Array.isArray(pd.online)) pd.online.forEach(function (h: any) { if (presDots[h]) presDots[h].style.display = ''; }); })
+            .then(function (pd) {
+              if (!(pd && pd.ok && Array.isArray(pd.online))) return;
+              Object.keys(presDots).forEach(function (h) { paintRow(h, pd.online.indexOf(h) !== -1, Number((pd.seen && pd.seen[h]) || 0)); });
+            })
             .catch(function () {});
         }
-        state.inboxPresence = function (h: any, on: any) { if (presDots[h]) presDots[h].style.display = on ? '' : 'none'; };
+        /* Online / Last seen … / Offline under the name (2026-09-11), the
+           thread header's own line; a live offline reads "just now". */
+        function paintRow(h: any, on: boolean, seen: number) {
+          var dot = presDots[h]; if (!dot) return;
+          var line = dot.parentNode;
+          line.textContent = '';
+          line.appendChild(dot);
+          dot.className = 'dm-row-dot' + (on ? ' on' : '');
+          line.appendChild(document.createTextNode(on ? 'Online' : (seen ? 'Last seen ' + dmSeenLabel(seen) : 'Offline')));
+          line.hidden = false;
+        }
+        state.inboxPresence = function (h: any, on: any) { paintRow(h, !!on, on ? 0 : Math.floor(Date.now() / 1000)); };
         function inboxHref(i: any) { return 'messages.html&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, inboxHref);
         if (topBar) section.insertBefore(topBar, list);
@@ -12438,7 +12454,7 @@ trace('submit: feed post');
     el: el,
     renderProfile: renderProfile, adminProfileEditor: adminProfileEditor,
     peekJson: peekJson,
-    dmSearchBox: dmSearchBox, dmLabel: dmLabel,
+    dmSearchBox: dmSearchBox, dmLabel: dmLabel, dmSeenLabel: dmSeenLabel,
     dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck, markThreadRead: markThreadRead,
     mintIdentity: mintIdentity, loginWithKey: loginWithKey,
     /* admin read/observe cluster (Wave C-reads 3) */
