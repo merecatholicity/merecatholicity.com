@@ -8614,10 +8614,15 @@ trace('submit: feed post');
             .then(function (r) { return r.json(); })
             .then(function (pd) {
               if (!(pd && pd.ok && Array.isArray(pd.online))) return;
-              Object.keys(presDots).forEach(function (h) { paintRow(h, pd.online.indexOf(h) !== -1, Number((pd.seen && pd.seen[h]) || 0)); });
+              Object.keys(presDots).forEach(function (h) {
+                presOnMap[h] = pd.online.indexOf(h) !== -1;
+                seenMap[h] = Number((pd.seen && pd.seen[h]) || 0);
+                paintRow(h, presOnMap[h], seenMap[h]);
+              });
             })
             .catch(function () {});
         }
+        var presOnMap: Record<string, boolean> = {}, seenMap: Record<string, number> = {};
         /* Online / Last seen … / Offline under the name (2026-09-11), the
            thread header's own line; a live offline reads "just now". */
         function paintRow(h: any, on: boolean, seen: number) {
@@ -8629,7 +8634,14 @@ trace('submit: feed post');
           line.appendChild(document.createTextNode(on ? 'Online' : (seen ? 'Last seen ' + dmSeenLabel(seen) : 'Offline')));
           line.hidden = false;
         }
-        state.inboxPresence = function (h: any, on: any) { paintRow(h, !!on, on ? 0 : Math.floor(Date.now() / 1000)); };
+        /* Only an online → offline transition is "just now" — the hub also seeds
+           "offline" on subscribe, which must not overwrite the read's stamp. */
+        state.inboxPresence = function (h: any, on: any) {
+          var was = !!presOnMap[h];
+          presOnMap[h] = !!on;
+          if (!on && was) seenMap[h] = Math.floor(Date.now() / 1000);
+          paintRow(h, !!on, on ? 0 : (seenMap[h] || 0));
+        };
         function inboxHref(i: any) { return 'messages.html&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, inboxHref);
         if (topBar) section.insertBefore(topBar, list);

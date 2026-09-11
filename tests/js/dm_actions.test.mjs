@@ -116,6 +116,14 @@ test('a downward swipe over the page dismisses the keyboard; the thread names On
   const cls = inbox.slice(inbox.indexOf('class McInbox'), inbox.indexOf("customElements.define('mc-inbox'"));
   assert.ok(/kit\.API \+ '\/dm\/presence'/.test(cls), 'the inbox reads presence for the page\'s members once the threads arrive');
   assert.ok(/kit\.state\.inboxPresence = /.test(cls), 'and takes the live frames');
+  /* The hub seeds "offline" on subscribe for a member never online here; only
+     a transition may stamp "just now" over the read's real last-seen. */
+  assert.ok(/const wasOn = !!online\[h\];\s*if \(on\) online\[h\] = true; else \{ delete online\[h\]; if \(wasOn\) seen\[h\] = Math\.floor/.test(cls),
+    'the inbox stamps "just now" only on an online → offline transition');
+  const classic = src.slice(src.indexOf('var presDots: Record<string, any> = {};'), src.indexOf("function inboxHref(i: any)"));
+  assert.ok(/if \(!on && was\) seenMap\[h\] = Math\.floor\(Date\.now\(\) \/ 1000\);/.test(classic), 'so does the classic fallback');
+  const profile = src.slice(src.indexOf('function profilePresenceInto('), src.indexOf('function renderProfile('));
+  assert.ok(/if \(wasOn === true && !on\) seenAt = Math\.floor/.test(profile), 'and the profile line');
   assert.ok(/\.slice\(0, 5\)\.map\(\(h: string\) => 'presence:' \+ h\)/.test(cls), 'watches the first five rows live (the socket\'s scope cap)');
   assert.ok(/dm-row-pres/.test(cls) && /kit\.dmSeenLabel\(/.test(cls), 'renders Online / Last seen … / Offline under the name');
   assert.ok(/dmSeenLabel: dmSeenLabel,/.test(src), 'the label rides the kit');

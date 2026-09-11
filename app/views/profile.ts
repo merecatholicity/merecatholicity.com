@@ -131,7 +131,11 @@ class McInbox extends LitElement {
       if (!this.pres || !(h in this.pres.known)) return;
       const online = Object.assign({}, this.pres.online);
       const seen = Object.assign({}, this.pres.seen);
-      if (on) online[h] = true; else { delete online[h]; seen[h] = Math.floor(Date.now() / 1000); }
+      /* Only an online → offline TRANSITION is "just now": the hub also seeds
+         "offline" on subscribe for a member who was never online here, and
+         that must not overwrite the real stamp the read returned. */
+      const wasOn = !!online[h];
+      if (on) online[h] = true; else { delete online[h]; if (wasOn) seen[h] = Math.floor(Date.now() / 1000); }
       this.pres = { online, seen, known: this.pres.known };
     };
     fetch(kit.API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
