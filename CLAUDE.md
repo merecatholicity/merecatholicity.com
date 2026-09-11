@@ -89,7 +89,8 @@ committed), `webtest/`, `tests/`, `terraform/`, `.github/workflows/`.
   first); `make jscheck` (eslint + tsc + psbuild); `make check` (jscheck + linkcheck);
   `make check-pdfs` (bucket vs manifest vs local PDFs; CI runs it with the site token).
 - **Build**: `make css` (Tailwind → `docs/style.css`), `make bundle` (purs + esbuild → `app.js`,
-  `comments.js`, then the version stamp), `make content` (hand pages), `make html` (book +
+  `comments.js`, then the version stamp), `make content` (hand pages), `make writings` (detect the own writings → the generated
+  `Domain.Writings`; every psbuild runs it), `make html` (book +
   corpus + post-processing + stamp + manifest + check; incremental — one target per work),
   `make menu` (nav — `NAV_ENABLED = False`, the old menu is kept in code), `make -C resources pdf`,
   `make pdf` / `publish` / `chart-pdfs` (`CHROMIUM=…`) / `logos`, `make publish-pdfs` /
@@ -131,10 +132,13 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;
   the rules are `Domain.Comments`, whose polarity is the OPPOSITE of the social switch — only a
   literal `'1'` / a listed path opens anything). A section may stand only under the site's own
-  writings (`commentablePages`): a new own page joins by frontmatter `comments: true` AND the
-  kernel list in one change (the parity test refuses half of it); a library work never; a path is
-  a storage key, never rename one. A closed section answers exactly as an unknown page; a deleted
-  journal article retires its comments (`sweepJournalComments`); a switch deletes nothing.
+  writings, and that list is DETECTED, never kept: `scripts/writings.py` reads every `content/`
+  page (unless its frontmatter opts out with `comments: false`) and every book the root Makefile
+  builds, and writes the generated, git-ignored `Domain.Writings` on every `psbuild` — a new
+  article or book brings its own switch; a library work never; a book target must use
+  `book-tail.html` (the detector refuses one without); a path is a storage key, never rename one.
+  A closed section answers exactly as an unknown page; a deleted journal article retires its
+  comments (`sweepJournalComments`); a switch deletes nothing.
 - **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0012),
   additive; `schema.sql` is a generated snapshot; the three librarian D1s are derived data.
   Renaming an applied migration file requires renaming its `d1_migrations` row too.

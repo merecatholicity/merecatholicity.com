@@ -333,10 +333,12 @@ live as single source files under `content/` — `<slug>.md` (Markdown) or `<slu
 (a verbatim body for the dense doctrinal pages) with YAML frontmatter (`title`, optional
 `canon`, `description`, `comments`, `scripts`). All render through one shared skeleton in
 `scripts/content.py`, which injects the generated nav and footer, so page chrome is
-single-sourced. `comments: true` marks a page as one of the site's own writings that MAY
-carry a comments section — its path must also sit in `Domain.Comments.commentablePages`
-(a unit test holds the two together); whether the section is actually open is the admin's
-runtime switch (Platform settings → *Comments on our own writings*), closed by default.
+single-sourced. Every content page carries the comments widget's mount and is listed
+automatically — by `scripts/writings.py`, into the generated `Domain.Writings` the kernel
+reads — as one of the site's own writings the admin may open a section under (Platform
+settings → *Comments on our own writings*, closed by default); `comments: false` opts a
+utility page out (terms, privacy, the catalogs). The books the root Makefile builds are
+detected the same way, so a new article or book brings its own switch.
 
 ```sh
 make content        # content/*.{md,html} -> docs/<slug>.html

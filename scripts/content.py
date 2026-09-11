@@ -15,9 +15,10 @@ from nav.html (nav.py's output), so a nav change still flows to every content
 page on the next `make menu` (which runs nav.py then this).
 
 Frontmatter keys: title (required), canon (optional epigraph line),
-description (optional <meta>), comments (bool → the data-comments widget: the page
-MAY carry a section; its path must also be in Domain.Comments.commentablePages, and
-the admin's runtime switch `comments_pages` decides whether the section is open).
+description (optional <meta>), comments (`false` OPTS OUT of the comments widget —
+for a utility page: terms, privacy, a catalog; an ordinary page needs no key and
+carries the mount, which is closed until the admin opens it. scripts/writings.py
+detects the same pages by the same rule, `carries_comments`, for the kernel).
 A migrated page is REMOVED from nav.py's PAGES so the two never both write it.
 Deterministic (pandoc + fixed assembly) so committed output is byte-stable."""
 
@@ -33,7 +34,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT_DIR = os.path.join(ROOT, 'content')
 # Keep in step with the comments.js cache-bust bump (the wordlists-style
 # discipline): a content page with comments carries this exact include.
-COMMENTS_V = '2442905419'
+COMMENTS_V = '884897708'
 
 # Social-sharing defaults (Open Graph / Twitter cards). Every built page carries
 # a correct per-page card so a shared link shows what the page IS, not a generic
@@ -73,6 +74,15 @@ def social_head(slug, title, description, image, og_type):
         ('meta name="twitter:image"', img),
     ]
     return ''.join('<' + attr + ' content="' + _esc(val) + '">\n' for attr, val in tags)
+
+
+def carries_comments(fm):
+    """Does a content page carry the comments widget's mount (and so count as
+    one of the site's own writings the admin may open a section under)? Every
+    page does unless its frontmatter says `comments: false` — the opt-out for
+    the utility pages. The ONE rule, read here at build time and by
+    scripts/writings.py for the kernel's list, so the two cannot disagree."""
+    return fm.get('comments') is not False
 
 
 def split_frontmatter(text):
@@ -134,7 +144,7 @@ def build_page(slug, source_path, nav_block, footer_block):
         if fm.get('canon'):
             parts.append('<p class="canon">' + fm['canon'] + '</p>\n')
     parts.append('\n' + body_html + '\n')
-    if fm.get('comments'):
+    if carries_comments(fm):
         parts.append('\n<section class="comments" data-comments></section>\n'
                      '<script defer src="comments.js?v=' + str(COMMENTS_V) + '"></script>\n')
     # extra per-page scripts (a page's own light JS: flash.js, index.js,

@@ -119,8 +119,9 @@ test('wallEnabledFrom survives the boundary: nullish is the default, not "off"',
 });
 
 test('the comments-section rules cross with null-safe coercions (Domain.Comments)', () => {
-  assert.equal(Core.commentablePages.length, 7);
+  assert.ok(Core.commentablePages.length >= 7);
   assert.equal(Core.commentablePages[0].path, '/book.html');
+  assert.equal(Core.commentablePages[0].kind, 'book');
   assert.equal(typeof Core.commentablePages[0].title, 'string');
   assert.deepEqual(Core.commentsParseEnabledPages(null), [], 'an absent row -> nothing open');
   assert.deepEqual(Core.commentsParseEnabledPages(' /credo.html ,/anf01.html'), ['/credo.html']);

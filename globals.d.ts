@@ -45,7 +45,7 @@ interface McCore {
   toggleMute(hash: string, list: string[]): { list: string[]; added: boolean };
   blockedMessage(reason: string): string;
   mentionsIn(text: string, picks: Array<{ token: string; hash: string }>): string[];
-  commentablePages: ReadonlyArray<{ path: string; title: string }>;
+  commentablePages: ReadonlyArray<{ path: string; title: string; kind: string }>;
   commentablePaths: ReadonlyArray<string>;
   commentsParseEnabledPages(csv: unknown): string[];
   commentsSerializeEnabledPages(paths: string[]): string;

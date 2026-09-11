@@ -267,12 +267,14 @@ export const wallEnabledFrom = (v: any): boolean => Wall.enabledFrom(v == null ?
 export const turnstileSkipFrom = (v: any): boolean => Turnstile.skipFrom(v == null ? '' : String(v));
 
 /* Comments sections (Domain.Comments): the site's own writings that may carry
-   one, the CSV rule for which are open, the journal switch's polarity (only a
+   one (DETECTED from content/ and the Makefile by scripts/writings.py into the
+   generated Domain.Writings — a new article or book lists itself), the CSV
+   rule for which are open, the journal switch's polarity (only a
    literal '1' — the OPPOSITE of the social switch, on purpose: these ship
    closed), and the permalink path for a page key ('journal:<id>' → the
    article). The client reads the LIVE state from /config; these are the admin
    settings box's and the audit's rules over the raw stored values. */
-export const commentablePages: ReadonlyArray<{ path: string; title: string }> = Comments.commentablePages;
+export const commentablePages: ReadonlyArray<{ path: string; title: string; kind: string }> = Comments.commentablePages;
 export const commentablePaths: ReadonlyArray<string> = Comments.commentablePaths;
 export const commentsParseEnabledPages = (csv: any): string[] => Comments.parseEnabledPages(csv == null ? '' : String(csv));
 export const commentsSerializeEnabledPages = (paths: string[]): string => Comments.serializeEnabledPages(paths || []);

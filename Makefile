@@ -45,6 +45,14 @@ bundle: jscheck
 psbuild:
 	npm run build:ps
 
+# Detect the site's own writings (every content/ page unless it opts out, every
+# book the root Makefile builds) into the generated Domain.Writings module the
+# comments switches read. `npm run build:ps` runs it first, so every psbuild
+# and every CI gate is current; this is the hand road. See scripts/writings.py.
+.PHONY: writings
+writings:
+	python3 scripts/writings.py
+
 # The PureScript pure-unit tests (Layer 1), one file per Domain module under
 # tests/purescript/, run with Node's built-in runner over the compiled ESM.
 # A fast alias for the PureScript slice of `make tests`.
@@ -163,7 +171,7 @@ html:
 	cd book && sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' bishop-presbyter.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="The bishop and the presbyter, a question recorded" \
-	    --css=style.css -H ../partials/social-bishop.html -B ../partials/nav.html -A ../partials/footer.html \
+	    --css=style.css -H ../partials/social-bishop.html -B ../partials/nav.html -A ../partials/book-tail.html \
 	    -o ../docs/bishop-presbyter.html
 	$(MAKE) -C resources bible-json
 	$(MAKE) -C resources html

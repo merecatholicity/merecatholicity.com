@@ -10545,11 +10545,16 @@ trace('submit: feed post');
            pages, from the kernel's list (Domain.Comments); a library work is
            never offered. All ship OFF, and the polarity is the kernel's. */
         wrap.appendChild(el('h3', null, 'Comments on our own writings'));
-        desc(wrap, 'A comments section may stand under the site’s own writings only — the book and the pages written here — never under a work hosted in the library. Each is off until you open it. Turned off, the page shows no section and answers as though it never had one; nothing is deleted, and every comment returns when the section reopens. Allow about five minutes for a change to reach every reader.');
+        desc(wrap, 'A comments section may stand under the site’s own writings only — the books and the pages written here — never under a work hosted in the library. Every such page is listed here automatically: a new article or book appears with its own switch on its first build, off until you open it. Turned off, the page shows no section and answers as though it never had one; nothing is deleted, and every comment returns when the section reopens. Allow about five minutes for a change to reach every reader.');
         var cmBoxes: Array<{ path: string; cb: any }> = [];
-        window.mcCore!.commentablePages.forEach(function (pg) {
-          var cb = checkRow(wrap, pg.title + ' (' + pg.path + ')', window.mcCore!.commentsPageEnabled(s.comments_pages, pg.path));
-          cmBoxes.push({ path: pg.path, cb: cb });
+        [['book', 'Books'], ['article', 'Articles']].forEach(function (grp) {
+          var pages = window.mcCore!.commentablePages.filter(function (pg) { return pg.kind === grp[0]; });
+          if (!pages.length) return;
+          wrap.appendChild(el('h4', null, grp[1]));
+          pages.forEach(function (pg) {
+            var cb = checkRow(wrap, pg.title + ' (' + pg.path + ')', window.mcCore!.commentsPageEnabled(s.comments_pages, pg.path));
+            cmBoxes.push({ path: pg.path, cb: cb });
+          });
         });
 
         /* ---- Verification (Turnstile) ----

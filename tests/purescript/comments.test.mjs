@@ -14,17 +14,24 @@ import { orNull } from '../_support/ps.mjs';
 
 const journalKeyId = (k) => orNull(Comments.journalKeyId(k));
 
-const OWN = ['/book.html', '/charting-communions.html', '/free-churches.html',
-  '/objections.html', '/credo.html', '/lex-orandi.html', '/about.html'];
+/* The members come from the generated Domain.Writings (scripts/writings.py
+   over content/ and the Makefile); tests/js/commentable_pages.test.mjs holds
+   them to the sources. Here: the shape and the standing anchors. */
+const OWN = Comments.commentablePaths;
 
-test("commentablePaths: the site's own writings, the book first, in console order", () => {
-  assert.deepEqual(Comments.commentablePaths, OWN);
-  assert.equal(Comments.commentablePages.length, OWN.length);
+test("commentablePages: the site's own writings — books first, every entry titled and kinded", () => {
+  assert.ok(OWN.length >= 7, 'the book and the essays at least');
+  assert.deepEqual(OWN, Comments.commentablePages.map((p) => p.path));
+  assert.equal(OWN[0], '/book.html', 'the book leads');
+  assert.ok(OWN.includes('/credo.html'));
+  const kinds = Comments.commentablePages.map((p) => p.kind);
   for (const pg of Comments.commentablePages) {
-    assert.equal(typeof pg.title, 'string');
     assert.ok(pg.title.length > 0, `${pg.path} needs a title for the admin console`);
-    assert.ok(OWN.includes(pg.path));
+    assert.ok(pg.kind === 'book' || pg.kind === 'article', pg.path);
+    assert.ok(/^\/[a-z0-9-]+\.html$/.test(pg.path), `${pg.path} is a served path`);
   }
+  assert.deepEqual(kinds, [...kinds].sort((a, b) => (a === b ? 0 : a === 'book' ? -1 : 1)), 'books, then articles');
+  assert.equal(new Set(OWN).size, OWN.length, 'no path twice');
 });
 
 test('isCommentable: a library work, a board key, a reader page can never carry a section', () => {
@@ -46,7 +53,7 @@ test('parseEnabledPages: trims, dedupes, keeps canonical order, drops what is no
     ['/book.html', '/credo.html']);
   assert.deepEqual(Comments.parseEnabledPages(''), []);
   assert.deepEqual(Comments.parseEnabledPages('nonsense'), []);
-  assert.deepEqual(Comments.parseEnabledPages(OWN.slice().reverse().join(',')), OWN, 'order is the list\'s, not the input\'s');
+  assert.deepEqual(Comments.parseEnabledPages([...OWN].reverse().join(',')), OWN, 'order is the list\'s, not the input\'s');
 });
 
 test('serializeEnabledPages: the canonical stored form, and a round trip', () => {

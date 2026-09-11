@@ -75,7 +75,7 @@ they grew, what's duplicated, and the exact shape they're moving toward.
 | `contact-worker/src/index.ts` | 138 | The contact form worker. |
 | `comments-worker/src/db.ts` | 83 | The repository layer: typed row mappers, `inList`, the `Query` builder. |
 | `docs/{deeplink,sw,away,contact,flash,index}.js` | 8–161 ea. | Small served-raw scripts. |
-| `purescript/src/Domain/*.purs` | 29 files | The kernel (see the map). |
+| `purescript/src/Domain/*.purs` | 29 files | The kernel (see the map); plus the generated `Domain.Writings` (`scripts/writings.py`, git-ignored). |
 
 Re-measured 2026-09-08 over 35 hand-written files, **29,968 lines**: the median is
 **286 lines**, and the distribution is still bimodal — a long tail of small,

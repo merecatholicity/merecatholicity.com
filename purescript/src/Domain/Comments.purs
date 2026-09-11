@@ -2,11 +2,15 @@
 -- | worker and the client must agree on, so both read them here:
 -- |
 -- | 1. WHICH pages may carry a section at all: the site's own writings — the
--- |    book and the hand-written pages — and never a work merely hosted in the
--- |    library. `commentablePages` is that list; it was the worker's `PAGES`
--- |    whitelist, now single-sourced. The build stamps the widget onto exactly
--- |    these pages (content frontmatter `comments: true`, the book's tail
--- |    partial) and a parity test holds the two lists together.
+-- |    books and the hand-written pages — and never a work merely hosted in the
+-- |    library. `commentablePages` is that list, and it is DETECTED, not kept:
+-- |    `scripts/writings.py` reads every page built from content/ (unless its
+-- |    frontmatter opts out with `comments: false`) and every book the root
+-- |    Makefile builds, and writes them as the generated `Domain.Writings`
+-- |    module on every psbuild. It was the worker's hand-kept `PAGES`
+-- |    whitelist; now a new article or book brings its own switch. The build
+-- |    stamps the widget onto exactly these pages by the same rule, and a
+-- |    parity test derives the set a second way and holds the kernel to it.
 -- |
 -- | 2. WHETHER each section is open, which is the admin's call at runtime:
 -- |    `comments_pages` (a CSV of the enabled paths) and `comments_journal`
@@ -44,25 +48,19 @@ import Data.Int as Int
 import Data.Maybe (Maybe(..))
 import Data.String (Pattern(..), joinWith, split, stripPrefix, trim)
 import Data.String.CodeUnits (toCharArray)
+import Domain.Writings as Writings
 
--- | One of the site's own writings: its served path (the comments `page` key)
--- | and the title the admin console shows beside its switch.
-type Page = { path :: String, title :: String }
+-- | One of the site's own writings: its served path (the comments `page` key),
+-- | the title the admin console shows beside its switch, and its kind
+-- | ("book" | "article") — the console groups by it.
+type Page = { path :: String, title :: String, kind :: String }
 
--- | The site's own writings, in the order the console lists them. The path IS
--- | the storage key of every comment on that page, so a rename here orphans
--- | rows — add, never rename. Adding one also means giving the page its widget
--- | (content frontmatter `comments: true`); the parity test refuses a mismatch.
+-- | The site's own writings, in the order the console lists them (the books,
+-- | then the articles by slug) — the generated `Domain.Writings`, detected
+-- | from the sources by `scripts/writings.py`. The path IS the storage key of
+-- | every comment on that page, so renaming a page's file orphans its rows.
 commentablePages :: Array Page
-commentablePages =
-  [ { path: "/book.html", title: "Mere Catholicity (the book)" }
-  , { path: "/charting-communions.html", title: "Charting mere catholicity: the historic communions" }
-  , { path: "/free-churches.html", title: "Charting the free churches" }
-  , { path: "/objections.html", title: "Fifty objections, answered" }
-  , { path: "/credo.html", title: "Credo" }
-  , { path: "/lex-orandi.html", title: "Lex orandi, lex credendi" }
-  , { path: "/about.html", title: "About" }
-  ]
+commentablePages = Writings.writings
 
 -- | The paths alone (the worker's whitelist, the client's eligible list).
 commentablePaths :: Array String

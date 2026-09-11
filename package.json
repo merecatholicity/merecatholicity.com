@@ -10,7 +10,7 @@
   },
   "scripts": {
     "lint": "eslint comments-worker/src/pure.js comments-worker/src/webpush.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js ",
-    "build:ps": "rm -rf purescript/output && cd purescript && spago build",
+    "build:ps": "python3 scripts/writings.py && rm -rf purescript/output && cd purescript && spago build",
     "build:js": "npm run build:ps && esbuild app/shell.ts --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning && npm run build:client",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
     "tsc": "tsc -p tsconfig.json && tsc -p comments-worker/tsconfig.json && tsc -p contact-worker/tsconfig.json",

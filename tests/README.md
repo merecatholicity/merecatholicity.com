@@ -41,7 +41,8 @@ tests/
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
                        the comments switches and the journal sweep's SQL on real migrations)
-  py/                  the Python build tooling (nav, frontmatter, converters, slug parity, serve, llm)
+  py/                  the Python build tooling (nav, frontmatter, converters, slug parity, serve, llm,
+                       the writings detector behind the comments switches)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 

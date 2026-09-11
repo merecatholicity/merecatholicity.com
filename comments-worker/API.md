@@ -693,11 +693,14 @@ admin-warning check.
 
 ### 7.1 Commentable pages (`Domain.Comments.commentablePages` = the worker's `PAGES`, served in `/config` as `pages`)
 
-`/book.html`, `/charting-communions.html`, `/free-churches.html`,
-`/objections.html`, `/credo.html`, `/lex-orandi.html`, `/about.html` — the
-site's own writings, never a library work. A page comment on anything else →
-`400 "Unknown page."`, and so does one on a listed page whose section the
-admin has not opened (`config.comments.pages` is the OPEN subset). A journal
+The site's own writings, DETECTED from the sources (`scripts/writings.py` →
+the generated `Domain.Writings`): every `content/` page unless its frontmatter
+says `comments: false`, and every book the root Makefile builds — the two books
+`/book.html` and `/bishop-presbyter.html` plus the essays (`/credo.html`,
+`/objections.html`, `/about.html`, …); read `config.pages` for the current
+members rather than copying them. Never a library work. A page comment on
+anything else → `400 "Unknown page."`, and so does one on a listed page whose
+section the admin has not opened (`config.comments.pages` is the OPEN subset). A journal
 article's comments use the page key `journal:<article id>` (while
 `config.comments.journal` is true and the article is live) — §3.2.
 
