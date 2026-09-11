@@ -10556,6 +10556,13 @@ trace('submit: feed post');
             cmBoxes.push({ path: pg.path, cb: cb });
           });
         });
+        /* The journal's switch belongs here with the rest, not down in the
+           Journal panel (which governs the page itself): one switch for every
+           entry, made with the entry and retired with it. */
+        wrap.appendChild(el('h4', null, 'The Journal'));
+        var jCm = checkRow(wrap, 'Every journal article carries its own comments section',
+          window.mcCore!.commentsJournalFrom(s.comments_journal));
+        desc(wrap, 'On, each entry’s page gets a section of its own, made with the entry and retired with it: deleting an entry from the journal topic removes its comments too. Off, no entry shows one and every existing comment waits, undeleted. Whether the Journal page itself is live, and which topic it reads, is set in its own panel further down.');
 
         /* ---- Verification (Turnstile) ----
            Above the media panels because it governs whether members can post at
@@ -10668,9 +10675,7 @@ trace('submit: feed post');
         jEnRow.appendChild(jEn);
         jEnRow.appendChild(document.createTextNode(' Journal page is live'));
         wrap.appendChild(jEnRow);
-        var jCm = checkRow(wrap, 'Every journal article carries its own comments section',
-          window.mcCore!.commentsJournalFrom(s.comments_journal));
-        desc(wrap, 'On, each entry’s page gets a section of its own, made with the entry and retired with it: deleting an entry from the journal topic removes its comments too. Off, no entry shows one and every existing comment waits, undeleted.');
+        desc(wrap, 'Its comments switch sits with the other comments switches, near the top of this page.');
         var jRow = el('p', 'admin-set-row');
         jRow.appendChild(document.createTextNode('Journal source topic (its numeric id): '));
         var jInp = el('input'); jInp.type = 'number'; jInp.min = '1';
