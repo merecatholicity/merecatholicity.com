@@ -15,7 +15,9 @@ from nav.html (nav.py's output), so a nav change still flows to every content
 page on the next `make menu` (which runs nav.py then this).
 
 Frontmatter keys: title (required), canon (optional epigraph line),
-description (optional <meta>), comments (bool → the data-comments widget).
+description (optional <meta>), comments (bool → the data-comments widget: the page
+MAY carry a section; its path must also be in Domain.Comments.commentablePages, and
+the admin's runtime switch `comments_pages` decides whether the section is open).
 A migrated page is REMOVED from nav.py's PAGES so the two never both write it.
 Deterministic (pandoc + fixed assembly) so committed output is byte-stable."""
 
@@ -31,7 +33,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT_DIR = os.path.join(ROOT, 'content')
 # Keep in step with the comments.js cache-bust bump (the wordlists-style
 # discipline): a content page with comments carries this exact include.
-COMMENTS_V = '3886234797'
+COMMENTS_V = '2442905419'
 
 # Social-sharing defaults (Open Graph / Twitter cards). Every built page carries
 # a correct per-page card so a shared link shows what the page IS, not a generic

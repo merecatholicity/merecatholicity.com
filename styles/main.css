@@ -2607,6 +2607,9 @@ body[data-art]:not(.mc-no-art) main.prose:not(:has(section.board, mc-home, mc-li
 .journal-back:hover { text-decoration: underline; }
 .journal-back-foot { margin-top: 2.25rem; margin-bottom: 0; }
 .journal-single .journal-full { padding-top: 0; }
+/* The comments section under one journal article (client/comments.ts mounts
+   the page widget into this host when the admin has opened the journal's). */
+.journal-comments { margin-top: 2.25rem; padding-top: 0.75rem; border-top: 1px solid var(--rule); }
 
 /* ===================== Admin settings: danger boxes ===================== */
 /* A destructive one-time action framed with its explanation, sitting under the

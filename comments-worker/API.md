@@ -229,7 +229,7 @@ resource), `413` (avatar too large), `429` (rate limit), `500` (server), `503`
 
 | Route | Query | Returns |
 |---|---|---|
-| `GET /api/comments` | `page` (required, one of the 7 whitelisted paths — §7); `fresh` | `{ok, anon, comments:[…]}` — a page's `live` comments, `ORDER BY id LIMIT 500` (no pagination). |
+| `GET /api/comments` | `page` (required — a commentable path (§7.1) whose section the admin has OPENED, or `journal:<article id>` while the journal switch is on and the article is live; anything else, a closed section included, → `400 "Unknown page."`); `fresh` | `{ok, anon, comments:[…]}` — a page's `live` comments, `ORDER BY id LIMIT 500` (no pagination). |
 | `GET /api/comments/board` | `fresh` | `{ok, cats:{<catKey>:{topics, posts, last, latest:{topic_id,id,title,author_hash,nick,created_at}}}}`. **Categories with zero live posts are absent.** Back room excluded. |
 | `GET /api/comments/board/cat` | `cat` (required key), `p`, `q` (title filter), `fresh` | `{ok, topics:[…], total, page, per:20}`. `ORDER BY sticky DESC, last DESC`. |
 | `GET /api/comments/board/topic` | `id` (required), `p`, `find` (comment id — **only when no `p`**), `fresh` | `{ok, anon, cat, topic:{…}, replies:[…], total, page, per:20}`. Replies `ORDER BY id ASC`. |
@@ -238,7 +238,7 @@ resource), `413` (avatar too large), `429` (rate limit), `500` (server), `503`
 | `GET /api/comments/profile` | `hash` (required), `fresh` | `{ok, profile:{hash,nick,bio,signature,avatar,faith,posts,assigned,admin}}`. `assigned` is the **server-computed pseudonym**; `admin` is public. |
 | `GET /api/comments/dm/directory` | `fresh` | `{ok, users:[{hash, joined, nick}]}` — up to 2000, newest first. Bot and any `merecat…` nick excluded. All fuzzy matching is client-side. |
 | `GET /api/comments/feed` | `topic` \| `cat` \| `page` (precedence in that order) | RSS 2.0 XML. Renders `displayName` server-side. |
-| `GET /api/comments/config` | — | `{ok, apiVersion, media:{enabled, kinds:{dm,wall,board}, max_bytes:{image,video,audio}, audio_max_seconds, autocompress, sections:{dm,wall,board}}, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}, social:{enabled}}` — the shared constants a native client would otherwise triplicate. `social.enabled` is the Feed/member-wall kill switch (below): a client MUST hide the Feed and the profile wall when it is false, though the server refuses those surfaces regardless. `media.sections.<ctx>` is the per-SECTION policy (2026-08-02): `{kinds, voice, max_bytes:{image,video,audio}, audio_max_seconds}` plus `scan` on `wall`/`board` only — `dm` carries **no** `scan` field because DM media is E2E ciphertext and structurally unscannable; the absence is the statement. The flat legacy fields beside `sections` are kept for older clients. Gate client-side from the served policy, never a literal (everything is admin-tunable). Cacheable. |
+| `GET /api/comments/config` | — | `{ok, apiVersion, media:{enabled, kinds:{dm,wall,board}, max_bytes:{image,video,audio}, audio_max_seconds, autocompress, sections:{dm,wall,board}}, cats:[{key,label,blurb,order,link?}], faiths:[{code,label,order}], ranks:[{min,label}], pages:[…], bot_hash, bible:[{slug,spellings}], emoji:{custom,named,data_url}, social:{enabled}, comments:{pages:[…], journal}}` — the shared constants a native client would otherwise triplicate. `social.enabled` is the Feed/member-wall kill switch (below): a client MUST hide the Feed and the profile wall when it is false, though the server refuses those surfaces regardless. `comments.pages` is the list of commentable paths whose section is OPEN and `comments.journal` whether every journal article carries one (2026-09-10): a client renders no comments widget for a page not listed (and spends no read on it); the server refuses a closed page exactly as an unknown one. `media.sections.<ctx>` is the per-SECTION policy (2026-08-02): `{kinds, voice, max_bytes:{image,video,audio}, audio_max_seconds}` plus `scan` on `wall`/`board` only — `dm` carries **no** `scan` field because DM media is E2E ciphertext and structurally unscannable; the absence is the statement. The flat legacy fields beside `sections` are kept for older clients. Gate client-side from the served policy, never a literal (everything is admin-tunable). Cacheable. |
 | `GET /api/comments/avatar` | `hash` (required), `v` (cache-buster) | Raw JPEG bytes, `max-age=86400`, `nosniff`, `CSP default-src 'none'`. **No rate limit.** |
 
 **Row shapes.** A comment/reply row is `{id, author_hash, nick, assigned,
@@ -267,7 +267,7 @@ Target is exactly one of three shapes:
 - reply: `{topic:<int>}` — topic must be a live, unlocked root; a locked topic
   → `403 "This topic is locked."`
 - new topic: `{cat:<key>, title:<string>}` — title trimmed, 3–120 chars.
-- page comment: `{page:<whitelisted path>}`.
+- page comment: `{page:<a commentable path whose section is OPEN, or journal:<article id> while the journal switch is on and the article is live>}` — a closed section is refused exactly as an unknown page (`400 "Unknown page."`).
 
 Common fields: `body` (required unless a valid `media_key` rides along, ≤4000),
 `token` (Turnstile, required), `key`, and optional `media_key` (a board
@@ -365,10 +365,43 @@ shares that handler.
 Propagation is up to ~5 minutes: `getAppSettings` caches per isolate for 300 s
 (the saving isolate busts only its own) and `/config` is edge-cached 300 s.
 
+### Comments sections are admin-switched (2026-09-10)
+
+`app_settings.comments_pages` (a CSV of commentable paths whose section is
+open; absent/empty = none, **the default**) and `comments_journal` (`'1'` =
+every live journal article carries a section keyed `journal:<article id>`;
+anything else = none, **the default**). `Domain.Comments` holds the rules —
+NOTE the polarity is the opposite of the social switch's: only a literal `'1'`
+/ a listed path opens anything. A closed section is **indistinguishable from a
+page that never had one**: `GET /api/comments`, `POST /api/comments` and
+`GET /api/comments/feed` answer the genuine unknown-page **`400 "Unknown
+page."`** for a commentable page switched off and for a `journal:<id>` whose
+switch is off or whose article is not live in the standing journal (journal on;
+the topic a live board topic outside the back room by an unmuted author; the
+article its head or a live unmuted reply — the same predicate
+`GET /api/comments/journal` applies); `POST /api/comments/edit` answers the
+missing-row **`403 "Not yours, or already gone."`**.
+
+**Nothing is deleted by a switch**; every row returns when the section
+reopens. Still open when closed: `POST /api/comments/delete` (retraction),
+`/meta` (admin-keyed; it takes a journal key too), `/pending` + `/approve`, and
+every sweep.
+
+**A deleted journal article retires its comments**: the head or a reply of the
+journal topic deleted (`/delete`, `/moderate` delete, `/deleteuser`)
+soft-deletes every `journal:<its id>` row (the head deleted retires every
+article's), the monthly cron sweeps as the backstop, and the ordinary 30-day
+hard prune follows. Re-pointing `journal_topic` deletes nothing.
+`GET /api/comments/journal` carries `comments:<bool>` on both shapes, so a
+client mounts a section on the server's word alone. Propagation is the social
+switch's ~5 minutes.
+
 **`POST /api/comments/edit`** — `{id, key, body}`. `POST_LIMIT`, gated, **no
 Turnstile** (despite older docs; the web SDK sends a `token` the server
 ignores). An attachment survives a body edit untouched; a media-only post
-(empty body) cannot be edited at all. Author-only, even for admins. Re-screens; a flagged edit drops the
+(empty body) cannot be edited at all. Author-only, even for admins. A comment under a CLOSED section (its page
+switched off, or its journal article's) is refused with the same `403`.
+Re-screens; a flagged edit drops the
 post to `pending`. Returns `{ok, status, edited_at}`. `403 "Not yours, or
 already gone."` otherwise.
 
@@ -658,11 +691,15 @@ admin-warning check.
 
 ## 7. Reference data
 
-### 7.1 Commentable pages (`PAGES`, also served in `/config`)
+### 7.1 Commentable pages (`Domain.Comments.commentablePages` = the worker's `PAGES`, served in `/config` as `pages`)
 
 `/book.html`, `/charting-communions.html`, `/free-churches.html`,
-`/objections.html`, `/credo.html`, `/lex-orandi.html`, `/about.html`. A page
-comment on anything else → `400 "Unknown page."`
+`/objections.html`, `/credo.html`, `/lex-orandi.html`, `/about.html` — the
+site's own writings, never a library work. A page comment on anything else →
+`400 "Unknown page."`, and so does one on a listed page whose section the
+admin has not opened (`config.comments.pages` is the OPEN subset). A journal
+article's comments use the page key `journal:<article id>` (while
+`config.comments.journal` is true and the article is live) — §3.2.
 
 ### 7.2 Board categories (`BOARD_CATS`, keys only served)
 
@@ -717,7 +754,7 @@ All require the caller's hash in the `admins` table; all refuse non-admins with
 | `POST /api/comments/admins` · `/admin` | `{key}` · `{key,hash,admin}` | List the flat roster (with `assigned` names) · grant/revoke any admin (last-admin removal refused). |
 | `POST /api/comments/meta` · `/audit` · `/trust` | `{key,hash\|page}` · `{key}` · `{key,hash,trusted}` | Per-identity/per-page fingerprint + known-IP drawer · 14-day activity audit (reports/pages/topics) · grant/revoke AI-screen-skip. |
 | `POST /api/comments/backup` | `{key}` | Force a mid-month D1→R2 backup (check `backup.error`). |
-| `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB legacy globals, now the FALLBACK layer), the 9 per-section overrides `media_<dm\|wall\|board>_<image\|video\|audio>_max_bytes` (same clamp; **an empty string DELETES the override** — back to inheriting the global), `media_audio_max_seconds` + `media_audio_max_seconds_<ctx>` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_scan_wall`/`media_scan_board` (0/1, the per-section AI image screen; there is NO `media_scan_dm` — E2E ciphertext is unscannable), `media_voice_dm/wall/board` (0/1, the 🎙 feature flag, client-advisory), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` + `media_cap_board_bytes` (100 MB–9 GB per-section store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`/`board_media_bytes`), and media age retention `media_wall_retention_days`/`media_board_retention_days` (0–3650; 0 = keep forever) + `media_dm_retention_days` (1–90, the DM hard cap, default 30). `media_max_bytes` stays the absolute per-file ceiling over every per-kind cap. Platform switches: `social_enabled` (0/1, the Feed + member-wall kill switch — see above), `calls_enabled`/`calls_turn`/`calls_idle_hangup`/`calls_idle_seconds`, `journal_enabled`/`journal_topic`, `wall_prune_enabled`/`wall_prune_days`, `discord_forum_webhook`/`discord_feed_webhook`/`discord_feed_comments`. A key absent from the handler's `allowed` map is dropped SILENTLY. |
+| `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB legacy globals, now the FALLBACK layer), the 9 per-section overrides `media_<dm\|wall\|board>_<image\|video\|audio>_max_bytes` (same clamp; **an empty string DELETES the override** — back to inheriting the global), `media_audio_max_seconds` + `media_audio_max_seconds_<ctx>` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_scan_wall`/`media_scan_board` (0/1, the per-section AI image screen; there is NO `media_scan_dm` — E2E ciphertext is unscannable), `media_voice_dm/wall/board` (0/1, the 🎙 feature flag, client-advisory), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` + `media_cap_board_bytes` (100 MB–9 GB per-section store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`/`board_media_bytes`), and media age retention `media_wall_retention_days`/`media_board_retention_days` (0–3650; 0 = keep forever) + `media_dm_retention_days` (1–90, the DM hard cap, default 30). `media_max_bytes` stays the absolute per-file ceiling over every per-kind cap. Platform switches: `social_enabled` (0/1, the Feed + member-wall kill switch — see above), `calls_enabled`/`calls_turn`/`calls_idle_hangup`/`calls_idle_seconds`, `journal_enabled`/`journal_topic`, `comments_pages` (a CSV of commentable paths whose section is OPEN — re-parsed through `Domain.Comments`, so anything else is dropped; absent/empty = every section closed, the default) / `comments_journal` (0/1, default 0 — a section under every journal article), `wall_prune_enabled`/`wall_prune_days`, `discord_forum_webhook`/`discord_feed_webhook`/`discord_feed_comments`. A key absent from the handler's `allowed` map is dropped SILENTLY. |
 | `POST /api/comments/wall/media/purge` · `/board/media/purge` | `{key}` | Purge EVERY media object in that public section (feed+walls · forum) — R2 objects + rows deleted, every media-carrying parent stamped `media_expired` (text kept), that section's usage meter zeroed. `{ok, deleted}`. Safe to re-click; the DM sibling is `/dm/media/purge`. |
 | `POST /api/comments/admin/usage` | `{key}` | The Cloudflare free-tier usage monitor (`admin.html?usage=1`). Reads the account's GraphQL Analytics (Workers requests, AI neurons, D1 rows/storage, DO compute/storage, R2 ops/storage, Vectorize dims, TURN egress, Turnstile count) and answers `{ok, configured, at, rows, products, free_as_of, check_utc}` — each row `{id, product, label, used, limit, unit, period: day\|month\|total, pct, band: ok\|watch\|hot\|over\|na, detail?, note?}` or `{id, product, label, error}` when that one product's fetch failed. `configured:false` until the `CF_USAGE_TOKEN` secret (read-only, scope "Account Analytics: Read") stands beside the `CF_ACCOUNT_ID` var. A daily 23:30 UTC cron runs the same report and system-DMs every admin (as merecat) when any meter crosses 80% or its ceiling — escalations at once, standing warnings weekly (state in `app_settings.usage_alert_state`). |
 
@@ -756,6 +793,9 @@ passes.
   /api/comments/config` — a native client reads them there instead of copying.
   The worker and `comments.js` still keep inline copies that must stay identical
   until the web client is switched to read `/config`.
+- `journal:<id>` page keys (a journal article's comments) are not Discord
+  subscription scopes: `parseFeedScope` takes site paths only. The RSS feed
+  itself (`/feed?page=journal:<id>`) works while the section is open.
 - Full behavioral detail (the merecat retrieval legs, disconnect/resume
   contract, back-room doctrine, the cron chain, backups) lives in `CLAUDE.md`;
   this file is the wire contract clients build against. The free-tier budget

@@ -23,6 +23,7 @@ import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
+import * as Comments from '../../purescript/output/Domain.Comments/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
@@ -101,6 +102,9 @@ import {
   boardCatPayload,
   boardFloor,
   boardKey,
+  commentsJournalOn,
+  commentsPageOn,
+  commentsPagesOn,
   broadcastBoard,
   buildMatch,
   cacheHeader,
@@ -138,6 +142,8 @@ import {
   scopeLabel,
   isTrusted,
   journalArticle,
+  journalKey,
+  journalKeyId,
   json,
   keyed,
   keyedGated,
@@ -204,6 +210,7 @@ import {
   sweepDms,
   sweepExpiredDms,
   sweepMediaRetention,
+  sweepJournalComments,
   sweepWallOrphanMedia,
   topicViewPayload,
   verifyTurnstile,
@@ -268,6 +275,11 @@ async function handleConfig(request: any, env: any, url: any) {
        worker answers every /wall* surface the same way regardless — this field
        is the client's courtesy copy, not the enforcement. */
     social: { enabled: socialEnabled(s) },
+    /* Comments sections: which of the site's own writings have theirs open,
+       and whether every journal article carries one. A client mounts no
+       widget for a page not listed (and spends no read on it); the worker
+       refuses such a page regardless, exactly as it refuses an unknown one. */
+    comments: { pages: commentsPagesOn(s), journal: commentsJournalOn(s) },
     /* Advisory only: it tells the client whether a challenge is worth
        mounting. verifyTurnstile decides, every time, on the server. */
     turnstile: { skip_established: turnstileSkipEstablished(s) },
@@ -294,11 +306,27 @@ async function handleConfig(request: any, env: any, url: any) {
   }, 200, cacheHeader(url));
 }
 
+/* Resolve a comments read/write target to its page key, or null when the
+   caller may not have it: an unknown path, one of the site's own pages whose
+   section the admin has switched off, or a 'journal:<id>' whose switch is off
+   or whose article is not live in the standing journal. ONE rule for the read,
+   the write, the edit and the feed, so no two can disagree — and every caller
+   answers null exactly as it answers an unknown page, because a closed section
+   must be indistinguishable from a page that never had one. */
+async function commentsPageKey(env: any, raw: any): Promise<string | null> {
+  const s = await getAppSettings(env);
+  const page = normalizePage(raw);
+  if (page) return commentsPageOn(s, page) ? page : null;
+  const id = journalKeyId(raw);
+  if (id == null || !commentsJournalOn(s)) return null;
+  return (await journalArticleLive(env, s, id)) ? journalKey(raw) : null;
+}
+
 async function handleGet(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const page = normalizePage(url.searchParams.get('page'));
+  const page = await commentsPageKey(env, url.searchParams.get('page'));
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   const rows = await env.DB.prepare(
     'SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at ' +
@@ -483,7 +511,9 @@ async function handlePost(request: any, env: any, ctx: any) {
     if (title.length > MAX_TITLE) return json({ ok: false, error: 'The title is too long.' }, 400);
     if (CONTROL_RE.test(title)) return json({ ok: false, error: 'Bad request.' }, 400);
   } else {
-    page = normalizePage(data.page);
+    /* A site page or a journal article — only with its section open, by the
+       same rule the read applies (a closed one reads as unknown). */
+    page = await commentsPageKey(env, data.page);
     if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   }
 
@@ -772,6 +802,15 @@ async function handleSelfDelete(request: any, env: any, ctx: any) {
     } catch (e) { /* the sweep reclaims it */ }
   }
   if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
+  /* A deleted journal article takes its comments with it: the head or a reply
+     of the journal topic retires every 'journal:<id>' row whose article is
+     gone (idempotent; the monthly cron is the backstop). The head deleted is
+     the whole journal deleted, so its thread's articles retire too. */
+  if (boardKey(row.page)) {
+    const jt = Math.floor(Number((await getAppSettings(env)).journal_topic) || 0);
+    if (jt > 0 && id === jt) await sweepJournalComments(env, id);
+    else if (jt > 0 && Number(row.parent_id) === jt) await sweepJournalComments(env);
+  }
   /* Live push of the removal (Phase 1b): a reply vanishes from its thread; a
      whole topic drops from its category and the index. Back room stays silent. */
   if (env.HUB && boardKey(row.page) && row.page !== ADMIN_CAT) {
@@ -811,7 +850,9 @@ async function handleFeed(request: any, env: any, url: any) {
     ).bind(topicParam).all();
     results = rows.results;
   } else {
-    page = cat ? boardKey('board:' + cat) : normalizePage(url.searchParams.get('page'));
+    /* A page feed exists only while its section is open (the same rule as the
+       read); a journal article's comments feed rides its 'journal:<id>' key. */
+    page = cat ? boardKey('board:' + cat) : await commentsPageKey(env, url.searchParams.get('page'));
     if (!page || page === ADMIN_CAT) return new Response('Unknown page.', { status: 400 });
     const rows = await env.DB.prepare(
       "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
@@ -826,7 +867,7 @@ async function handleFeed(request: any, env: any, url: any) {
     const link = viewLink(env, page, c.id, c.parent_id);
     const itemTitle = c.title ? c.title
       : topicRow ? name + ' re: ' + topicRow.title
-      : name + ' on ' + page;
+      : name + ' on ' + pageHref;
     return '<item><title>' + xmlEscape(itemTitle) + '</title>' +
       '<link>' + xmlEscape(link) + '</link>' +
       '<guid isPermaLink="true">' + xmlEscape(link) + '</guid>' +
@@ -834,18 +875,19 @@ async function handleFeed(request: any, env: any, url: any) {
       '<description>' + xmlEscape(c.body) + '</description></item>';
   }).join('');
   const isBoard = page.indexOf('board:') === 0;
+  const pageHref = Comments.pageHref(page);   // 'journal:<id>' reads as the article's permalink
   const feedTitle = topicRow
     ? topicRow.title + ' - Catholicity Board - merecatholicity.com'
     : isBoard
     ? 'Catholicity Board - ' + page.slice(6) + ' - merecatholicity.com'
-    : 'Comments on ' + page + ' - merecatholicity.com';
+    : 'Comments on ' + pageHref + ' - merecatholicity.com';
   const feedLink = topicRow ? siteBase(env) + '/community.html?topic=' + topicRow.id
-    : isBoard ? siteBase(env) + '/community.html?cat=' + page.slice(6) : siteBase(env) + page;
+    : isBoard ? siteBase(env) + '/community.html?cat=' + page.slice(6) : siteBase(env) + pageHref;
   const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<rss version="2.0"><channel>' +
     '<title>' + xmlEscape(feedTitle) + '</title>' +
     '<link>' + xmlEscape(feedLink) + '</link>' +
-    '<description>' + xmlEscape(isBoard ? 'Topics and replies' : 'Reader comments on ' + page) + '</description>' +
+    '<description>' + xmlEscape(isBoard ? 'Topics and replies' : 'Reader comments on ' + pageHref) + '</description>' +
     items + '</channel></rss>';
   return new Response(xml, {
     status: 200,
@@ -860,24 +902,20 @@ async function handleFeed(request: any, env: any, url: any) {
      ?id=<n>  -> one article (for the shareable journal.html?a=<n> permalink)
      (else)   -> the articles newest-first, paginated (the journal index).
    The topic head and every reply are entries; each body is split into an
-   optional leading-heading title + the rest (journalArticle). */
+   optional leading-heading title + the rest (journalArticle). Both shapes
+   carry `comments`: whether the admin has opened a comments section under
+   every article — the client mounts one, keyed 'journal:<id>', on that word
+   alone, and the worker's commentsPageKey holds the same rule at the read. */
 const JOURNAL_PER_PAGE = 6;
 async function handleJournal(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const s = await getAppSettings(env);
-  const topicId = Math.floor(Number(s.journal_topic) || 0);
-  if (s.journal_enabled !== '1' || topicId < 1) {
-    return json({ ok: false, error: 'The journal is not available.' }, 404, cacheHeader(url));
-  }
-  const topic = await env.DB.prepare(
-    "SELECT c.id, c.title, c.body, c.created_at FROM comments c " +
-    "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
-  ).bind(topicId).first();
-  if (!topic || !boardKey(await journalTopicPage(env, topicId))) {
-    return json({ ok: false, error: 'The journal is not available.' }, 404, cacheHeader(url));
-  }
+  const topic = await journalTopic(env, s);
+  if (!topic) return json({ ok: false, error: 'The journal is not available.' }, 404, cacheHeader(url));
+  const topicId = topic.id;
+  const commentsOn = commentsJournalOn(s);
   const artId = Number(url.searchParams.get('id'));
   if (Number.isInteger(artId) && artId > 0) {
     const row = await env.DB.prepare(
@@ -888,7 +926,7 @@ async function handleJournal(request: any, env: any, url: any) {
     if (!row) return json({ ok: false, error: 'No such entry.' }, 404, cacheHeader(url));
     const a = journalArticle(row.body);
     return json({
-      ok: true, journal: topic.title,
+      ok: true, journal: topic.title, comments: commentsOn,
       article: { id: row.id, title: a.title, body: a.body, author: row.nick || displayName(row.author_hash),
         created_at: row.created_at, edited_at: row.edited_at },
     }, 200, cacheHeader(url));
@@ -908,17 +946,36 @@ async function handleJournal(request: any, env: any, url: any) {
     return { id: r.id, title: a.title, body: a.body, author: r.nick || displayName(r.author_hash),
       created_at: r.created_at, edited_at: r.edited_at };
   });
-  return json({ ok: true, journal: topic.title, articles, total: totalRow.n, page: p, per: JOURNAL_PER_PAGE },
+  return json({ ok: true, journal: topic.title, comments: commentsOn, articles, total: totalRow.n, page: p, per: JOURNAL_PER_PAGE },
     200, cacheHeader(url));
 }
 
-/* The journal topic must be a real board topic (never an article page or the
-   back room); returns its page so boardKey can vet it. */
-async function journalTopicPage(env: any, topicId: number) {
-  const r = await env.DB.prepare(
-    "SELECT page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
+/* The journal's topic, if the journal stands: journal_enabled on, and the
+   topic a live board topic outside the back room by an unmuted author. The
+   head row (id, page, title, body, created_at) or null. */
+async function journalTopic(env: any, s: any) {
+  const topicId = Math.floor(Number(s.journal_topic) || 0);
+  if (s.journal_enabled !== '1' || topicId < 1) return null;
+  const topic = await env.DB.prepare(
+    "SELECT c.id, c.page, c.title, c.body, c.created_at FROM comments c " +
+    "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
   ).bind(topicId).first();
-  return r && r.page !== ADMIN_CAT ? r.page : '';
+  if (!topic || !boardKey(topic.page) || topic.page === ADMIN_CAT) return null;
+  return topic;
+}
+
+/* Is this post a live article of the standing journal — its head, or one of
+   its live, unmuted replies? The ONE predicate the journal read and the
+   comments gate share, so a section can stand only under an article a reader
+   can open; anything else answers as an unknown page. */
+async function journalArticleLive(env: any, s: any, id: number) {
+  const topic = await journalTopic(env, s);
+  if (!topic) return false;
+  if (id === topic.id) return true;
+  const row = await env.DB.prepare(
+    "SELECT c.id FROM comments c WHERE c.id = ?1 AND c.parent_id = ?2 AND c.status = 'live' AND " + shadowExcl('c')
+  ).bind(id, topic.id).first();
+  return !!row;
 }
 
 /* Author-only editing. The key must hash to the comment's own author,
@@ -949,6 +1006,12 @@ async function handleEdit(request: any, env: any, ctx: any) {
     "SELECT page, parent_id, title, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
   ).bind(id, authorHash).first();
   if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+  /* A comment under a CLOSED section cannot be edited either — closed is closed
+     to its author too — and the refusal is the one a missing row gives, so
+     nothing about the switch is announced. Forum posts are not sections. */
+  if (!boardKey(row.page) && !(await commentsPageKey(env, row.page))) {
+    return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+  }
   const { status, verdict } = await screen(env, body, await isTrusted(env, authorHash));
   const editedAt = Math.floor(Date.now() / 1000);
   await env.DB.prepare(
@@ -990,7 +1053,7 @@ async function handleMeta(request: any, env: any) {
      way, so both return { meta: [...], identities: {...} }. */
   const hashParam = String(data.hash || '');
   if (/^[0-9a-f]{64}$/.test(hashParam)) return await metaForHash(env, hashParam);
-  const page = normalizePage(data.page) || boardKey(data.page);
+  const page = normalizePage(data.page) || boardKey(data.page) || journalKey(data.page);
   if (!page) return json({ ok: false, error: 'Bad request.' }, 400);
   const rows = await env.DB.prepare(
     'SELECT c.id, c.status, c.ai_verdict, c.ip, c.ua, c.os, c.tz, c.lang, c.author_hash, ' +
@@ -1262,6 +1325,11 @@ async function handleModerate(request: any, env: any, ctx: any) {
       }
     } catch (e) { /* the hourly sweep reclaims it */ }
     await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE id = ?1").bind(id).run();
+    /* Deleting the journal's own topic is deleting every article in it: the
+       comments under the head AND under each reply retire now (the reply rows
+       themselves stay, as orphans, exactly as before). */
+    const jt = Math.floor(Number((await getAppSettings(env)).journal_topic) || 0);
+    if (jt > 0 && id === jt) await sweepJournalComments(env, id);
     emit({ v: 1, t: 'moderation', act: 'delete', id, topic_id: id, cat: catKey,
       scopes: ['topic:' + id, 'cat:' + catKey, 'board:index'] });
     return json({ ok: true, deleted: true }, 200);
@@ -2397,7 +2465,7 @@ async function handleAdminSettings(request: any, env: any) {
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
     const me = await sha256hex(key);
-    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, discord_feed_comments: 1, journal_topic: 1, journal_enabled: 1,
+    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, discord_feed_comments: 1, journal_topic: 1, journal_enabled: 1, comments_pages: 1, comments_journal: 1,
       media_image_max_bytes: 1, media_video_max_bytes: 1, media_audio_max_bytes: 1, media_audio_max_seconds: 1,
       media_kinds_dm: 1, media_kinds_wall: 1, media_kinds_board: 1, media_image_autocompress: 1,
       media_cap_dm_bytes: 1, media_cap_wall_bytes: 1, media_cap_board_bytes: 1,
@@ -2429,7 +2497,7 @@ async function handleAdminSettings(request: any, env: any) {
         || k === 'media_scan_wall' || k === 'media_scan_board'
         || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board'
         || k === 'calls_enabled' || k === 'calls_turn' || k === 'calls_idle_hangup'
-        || k === 'social_enabled' || k === 'turnstile_skip_established') v = (v === '1' || v === 'true') ? '1' : '0';
+        || k === 'social_enabled' || k === 'turnstile_skip_established' || k === 'comments_journal') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'calls_idle_seconds') v = String(CallK.idleClampSecs(Math.floor(Number(v)) || CallK.idleDefaultSecs));
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
       /* Per-kind caps, the recorder stop, the store budgets, the retention
@@ -2455,6 +2523,10 @@ async function handleAdminSettings(request: any, env: any) {
       else if (k === 'wall_prune_days') v = String(Wall.clampPruneDays(Math.floor(Number(v)) || 365));
       else if (k === 'journal_enabled' || k === 'discord_feed_comments') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'journal_topic') v = String(Math.max(0, Math.floor(Number(v)) || 0));
+      /* The open-sections list is re-parsed through the kernel: only the site's
+         own writings survive, deduped, canonical order — a path that is not
+         commentable can never be stored as open. */
+      else if (k === 'comments_pages') v = Comments.serializeEnabledPages(Comments.parseEnabledPages(v));
       else if (k === 'discord_forum_webhook' || k === 'discord_feed_webhook') {
         /* Empty clears (turns the webhook off); anything else must be a genuine
            Discord webhook URL, so a typo or hostile value is never stored/POSTed. */
@@ -3835,6 +3907,8 @@ async function handleDeleteUser(request: any, env: any) {
   } catch (e) { /* the sweep reclaims it */ }
   await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE author_hash = ?1 AND status != 'deleted'")
     .bind(hash).run();
+  /* Any journal article of theirs is deleted now, so its comments retire too. */
+  await sweepJournalComments(env);
   await env.DB.prepare('DELETE FROM profiles WHERE hash = ?1').bind(hash).run();
   if (env.AVATARS) await env.AVATARS.delete('avatars/' + hash);
   await env.DB.prepare('INSERT OR IGNORE INTO locks (hash, created_at) VALUES (?1, ?2)')
@@ -5111,6 +5185,7 @@ export default {
       sweepExpiredDms(env)
         .then(() => pruneIdentityIps(env))
         .then(() => pruneComments(env))
+        .then(() => sweepJournalComments(env))
         .then(() => sweepDms(env))
         .then(() => pruneNotifications(env))
         .then(() => pruneMerecatChats(env))

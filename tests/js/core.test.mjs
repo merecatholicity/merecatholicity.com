@@ -117,3 +117,20 @@ test('wallEnabledFrom survives the boundary: nullish is the default, not "off"',
   assert.equal(Core.wallEnabledFrom(null), true, 'no stored row -> the default');
   assert.equal(Core.wallEnabledFrom(undefined), true);
 });
+
+test('the comments-section rules cross with null-safe coercions (Domain.Comments)', () => {
+  assert.equal(Core.commentablePages.length, 7);
+  assert.equal(Core.commentablePages[0].path, '/book.html');
+  assert.equal(typeof Core.commentablePages[0].title, 'string');
+  assert.deepEqual(Core.commentsParseEnabledPages(null), [], 'an absent row -> nothing open');
+  assert.deepEqual(Core.commentsParseEnabledPages(' /credo.html ,/anf01.html'), ['/credo.html']);
+  assert.equal(Core.commentsSerializeEnabledPages(['/about.html', '/book.html']), '/book.html,/about.html');
+  assert.equal(Core.commentsPageEnabled(undefined, '/credo.html'), false);
+  assert.equal(Core.commentsPageEnabled('/credo.html', '/credo.html'), true);
+  assert.equal(Core.commentsJournalFrom(undefined), false, 'absent -> off: the OPPOSITE polarity of the social switch');
+  assert.equal(Core.commentsJournalFrom('1'), true);
+  assert.equal(Core.commentsJournalFrom('true'), false);
+  assert.equal(Core.commentsPageHref('journal:3'), '/journal.html?a=3');
+  assert.equal(Core.commentsPageHref('/book.html'), '/book.html');
+  assert.equal(Core.commentsPageHref(null), '', 'null -> "" (String(null || \'\'))');
+});

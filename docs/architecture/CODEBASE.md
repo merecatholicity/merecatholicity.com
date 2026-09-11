@@ -26,7 +26,7 @@ idea holds the whole thing together and is the key to reading it:
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  PureScript kernel  purescript/src/Domain/*   │  28 modules
+            │  PureScript kernel  purescript/src/Domain/*   │  29 modules
             │  (validation, permissions, parsing, routing,  │  — the rulebook,
             │   ranks, FTS-safety, identity, …) ADTs +      │    pure, tested
             │   smart constructors, illegal states unrep.   │    1:1 in tests/
@@ -75,7 +75,7 @@ they grew, what's duplicated, and the exact shape they're moving toward.
 | `contact-worker/src/index.ts` | 138 | The contact form worker. |
 | `comments-worker/src/db.ts` | 83 | The repository layer: typed row mappers, `inList`, the `Query` builder. |
 | `docs/{deeplink,sw,away,contact,flash,index}.js` | 8–161 ea. | Small served-raw scripts. |
-| `purescript/src/Domain/*.purs` | 27 files | The kernel (see the map). |
+| `purescript/src/Domain/*.purs` | 29 files | The kernel (see the map). |
 
 Re-measured 2026-09-08 over 35 hand-written files, **29,968 lines**: the median is
 **286 lines**, and the distribution is still bimodal — a long tail of small,
@@ -144,7 +144,7 @@ middleware layer, a repository layer, and finishing the component migration
 More than the two big files suggest. The **modular seams already exist and are
 proven**:
 
-- The **PureScript `Domain/*` kernel — 28 modules**, each a single rule family
+- The **PureScript `Domain/*` kernel — 29 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
   each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 22 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
@@ -232,7 +232,7 @@ Yes. **Target tree [target]** — every file named for its feature, none over
 ~400 lines:
 
 ```
-purescript/src/Domain/*.purs        the rulebook (28 modules) — unchanged, it's the model
+purescript/src/Domain/*.purs        the rulebook (29 modules) — unchanged, it's the model
 app/
   core.ts        membrane (PS → JS)          api.ts     typed endpoints
   store.ts       request cache               shell.ts   SPA shell

@@ -333,7 +333,10 @@ live as single source files under `content/` — `<slug>.md` (Markdown) or `<slu
 (a verbatim body for the dense doctrinal pages) with YAML frontmatter (`title`, optional
 `canon`, `description`, `comments`, `scripts`). All render through one shared skeleton in
 `scripts/content.py`, which injects the generated nav and footer, so page chrome is
-single-sourced.
+single-sourced. `comments: true` marks a page as one of the site's own writings that MAY
+carry a comments section — its path must also sit in `Domain.Comments.commentablePages`
+(a unit test holds the two together); whether the section is actually open is the admin's
+runtime switch (Platform settings → *Comments on our own writings*), closed by default.
 
 ```sh
 make content        # content/*.{md,html} -> docs/<slug>.html

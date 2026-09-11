@@ -48,7 +48,11 @@ test('the setting is reachable, coerced, and served', () => {
   /* The standing gap this file also closes: nothing had ever guarded the
      /admin/settings allowlist, so a mistyped key was a silent no-op. */
   assert.ok(/turnstile_skip_established: 1/.test(index), 'not in the /admin/settings allowlist');
-  assert.ok(/k === 'turnstile_skip_established'\) v = \(v === '1'/.test(index),
+  /* Assert the RULE, not the line (the social test's lesson): the key sits in
+     the shared 1/0 coercion chain, whatever siblings join it later. */
+  const coercion = index.slice(index.indexOf("if (k === 'media_enabled'"));
+  const chain = coercion.slice(0, coercion.indexOf(';') + 1);
+  assert.ok(/k === 'turnstile_skip_established'/.test(chain) && /v = \(v === '1' \|\| v === 'true'\) \? '1' : '0';/.test(chain),
     'not coerced to 1/0 like its sibling switches');
   assert.ok(/turnstile: \{ skip_established: turnstileSkipEstablished\(s\) \}/.test(index),
     '/config must tell the client whether a challenge is worth mounting');

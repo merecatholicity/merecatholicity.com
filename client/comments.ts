@@ -189,6 +189,16 @@
     return p;
   }
 
+  /* The comments section this boot speaks for. Null = the page's own path (an
+     article page: the key and the permalink are one). The journal view sets
+     both before it mounts a section under an article, where they differ: the
+     API key is 'journal:<id>', the permalink '/journal.html?a=<id>'. Declared
+     inside the boot on purpose — a soft navigation rebuilds them with the page. */
+  var COMMENTS_KEY: string | null = null;
+  var COMMENTS_HREF: string | null = null;
+  function pageKey() { return COMMENTS_KEY || pagePath(); }
+  function pageHref() { return COMMENTS_HREF || pagePath(); }
+
   function el(tag: string, cls?: string | null, text?: string | number | null): any {
     var node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -2316,7 +2326,7 @@
     if (ctx && ctx.topicId) {
       return origin + '/community.html?topic=' + ctx.topicId + '#comment-' + c.id;
     }
-    return origin + ((ctx && ctx.page) || pagePath()) + '#comment-' + c.id;
+    return origin + ((ctx && ctx.page) || pageHref()) + '#comment-' + c.id;
   }
 
   /* Drop a quote of post c into the reply composer: an attribution line with
@@ -3478,7 +3488,7 @@
 
   function load() {
     var list = section.querySelector('.comments-list') as HTMLElement;
-    fetchRetry(API + '?page=' + encodeURIComponent(pagePath()) + freshParam('&'), freshOpts(), [1000, 3000],
+    fetchRetry(API + '?page=' + encodeURIComponent(pageKey()) + freshParam('&'), freshOpts(), [1000, 3000],
       function () { setStatus('Network hiccup, retrying...'); })
       .then(function (r) { return r.json(); })
       .then(function (d) {
@@ -3486,7 +3496,7 @@
         state.anonAllowed = !!d.anon;
         renderIdentity();
         list.textContent = '';
-        d.comments.forEach(function (c: any) { list.appendChild(commentNode(c, false, { page: pagePath() })); });
+        d.comments.forEach(function (c: any) { list.appendChild(commentNode(c, false, { page: pageHref() })); });
         section.querySelector('.comments-title-text')!.textContent =
           d.comments.length ? 'Comments (' + d.comments.length + ')' : 'Comments';
         setStatus(d.comments.length ? '' : 'No comments yet. Yours can be the first.');
@@ -3538,12 +3548,12 @@
     return details;
   }
 
-  function annotateMeta(pageKey?: any) {
+  function annotateMeta(forPage?: any) {
     if (!isAdmin()) return;
     fetch(API + '/meta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ page: pageKey || pagePath(), key: state.key }),
+      body: JSON.stringify({ page: forPage || pageKey(), key: state.key }),
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (!d.ok) return;
       d.meta.forEach(function (m: any) {
@@ -4026,6 +4036,19 @@
       .catch(function () { return socialRead(); });
   }
 
+  /* Which of the site's own writings have a comments section open, and whether
+     journal articles do — the worker's word, off the same cached /config read
+     as socialCfg() (no extra request). Null when unreachable, or when the
+     worker predates the switches: unknown reads as closed. */
+  function commentsCfg(): Promise<{ pages: string[]; journal: boolean } | null> {
+    return cachedJson(API + '/config', undefined, 300000)
+      .then(function (d: any) {
+        if (!d || !d.ok || !d.comments) return null;
+        return { pages: Array.isArray(d.comments.pages) ? d.comments.pages : [], journal: d.comments.journal === true };
+      })
+      .catch(function () { return null; });
+  }
+
   /* ================= 1v1 voice calls =================
      The ENGINE lives in the shell bundle now (app/call.ts, 2026-08-03) so a
      receiver rings on ANY page — not just the ones this client boots on, and
@@ -4362,7 +4385,7 @@ trace('submit: page comment');
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          page: pagePath(),
+          page: pageKey(),
           body: body,
           token: token,
           key: asKeyed ? state.key : '',
@@ -4378,7 +4401,7 @@ trace('submit: page comment');
       if (blockedOut(d)) return;
       if (!d.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
       var list = section.querySelector('.comments-list') as HTMLElement;
-      list.appendChild(commentNode(d.comment, d.status === 'pending', { page: pagePath() }));
+      list.appendChild(commentNode(d.comment, d.status === 'pending', { page: pageHref() }));
       try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
       textarea.value = '';
       if (textarea.mcDraftDone) textarea.mcDraftDone();
@@ -5312,7 +5335,7 @@ trace('submit: board post');
       ['IP ban list', 'admin.html?ipbans=1', 'Every banned address, added and removed by hand.'],
       ['Shadow bans', 'admin.html?shadowbans=1', 'Quiet mutes: a member keeps posting but no one else sees it. Add, review, and lift.'],
       ['Add / Remove Admins', 'admin.html?admins=1', 'Grant a member admin powers, or take them back.'],
-      ['Platform settings', 'admin.html?settings=1', 'Per-area media controls — what the feed, forum, and DMs each accept, sizes, voice notes, AI screening, storage budgets, retention, and one-time purges.'],
+      ['Platform settings', 'admin.html?settings=1', 'The switches — which of the site’s own writings carry a comments section, the journal’s, the social layer — then per-area media controls: what the feed, forum, and DMs each accept, sizes, voice notes, AI screening, storage budgets, retention, and one-time purges.'],
       ['Platform usage', 'admin.html?usage=1', 'Cloudflare free-tier health bars — every meter the platform rides and how close each is to its wall, checked daily with DM alerts past 80%.'],
       ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
       ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, the reasoning ladder, and the AI budget guard that rests it before the day’s Workers AI quota is spent.'],
@@ -5648,7 +5671,7 @@ trace('submit: board post');
             : r.page;
           var linkUrl = isForum
             ? 'community.html?topic=' + r.topic_id + '#comment-' + r.id
-            : r.page + '#comment-' + r.id;
+            : window.mcCore!.commentsPageHref(r.page) + '#comment-' + r.id;
           var row = actionRow(linkUrl, where, r, function (acts: any, line: any) {
             /* Dismiss clears this post's flags but leaves the post itself. */
             var dis = el('a', 'trust-toggle', '(dismiss)');
@@ -5675,7 +5698,9 @@ trace('submit: board post');
         var pagesBox = el('div', 'board-topics');
         if (!d.pages.length) pagesBox.appendChild(el('p', 'comments-status', 'No recent comments.'));
         d.pages.forEach(function (r: any) {
-          pagesBox.appendChild(actionRow(r.page + '#comment-' + r.id, r.page, r));
+          /* A journal comment jumps to its article (the kernel maps the
+             'journal:<id>' key to the permalink); a page comment to its page. */
+          pagesBox.appendChild(actionRow(window.mcCore!.commentsPageHref(r.page) + '#comment-' + r.id, r.page, r));
         });
         pagesScroll.appendChild(pagesBox);
         section.appendChild(pagesScroll);
@@ -6018,6 +6043,18 @@ trace('submit: board post');
         if (!d.ok || !d.article) { wrap.appendChild(el('p', 'comments-status', (d && d.error) || 'That entry could not be found.')); return; }
         document.title = (d.article.title || 'Journal entry') + ' — ' + (d.journal || 'Journal');
         wrap.appendChild(journalEntry(d.article, true));
+        /* The article's own comments section, when the admin has opened the
+           journal's (the worker said so in this same read): keyed to the
+           article, permalinked to it, mounted under it. The identity is already
+           resolved — startBoard() did that before routing here. */
+        if (d.comments === true) {
+          COMMENTS_KEY = 'journal:' + id;
+          COMMENTS_HREF = '/journal.html?a=' + id;
+          var host = el('div', 'journal-comments');
+          host.setAttribute('data-nosnippet', '');
+          wrap.appendChild(host);
+          mountComments(host);
+        }
         var more = el('a', 'journal-back journal-back-foot', 'Read more entries →');
         more.href = 'journal.html';
         wrap.appendChild(more);
@@ -10503,6 +10540,18 @@ trace('submit: feed post');
           (window.mcCore as any).wallEnabledFrom(s.social_enabled));
         desc(wrap, 'Turned off, the Feed tab disappears from the menu, feed.html and any shared link to a feed post read as a page that never existed, and the wall is removed from every profile — for everyone, admins included. Nothing is deleted: every post, comment, like and saved item stays in the database and comes back exactly as it was when you switch this on again. Profiles, direct messages, and the community forum are unaffected. Allow about five minutes for a change to reach every reader.');
 
+        /* ---- Comments sections (the site's own writings) ----
+           One switch per page that may carry a section — the book and the hand
+           pages, from the kernel's list (Domain.Comments); a library work is
+           never offered. All ship OFF, and the polarity is the kernel's. */
+        wrap.appendChild(el('h3', null, 'Comments on our own writings'));
+        desc(wrap, 'A comments section may stand under the site’s own writings only — the book and the pages written here — never under a work hosted in the library. Each is off until you open it. Turned off, the page shows no section and answers as though it never had one; nothing is deleted, and every comment returns when the section reopens. Allow about five minutes for a change to reach every reader.');
+        var cmBoxes: Array<{ path: string; cb: any }> = [];
+        window.mcCore!.commentablePages.forEach(function (pg) {
+          var cb = checkRow(wrap, pg.title + ' (' + pg.path + ')', window.mcCore!.commentsPageEnabled(s.comments_pages, pg.path));
+          cmBoxes.push({ path: pg.path, cb: cb });
+        });
+
         /* ---- Verification (Turnstile) ----
            Above the media panels because it governs whether members can post at
            all on some devices. Polarity from the kernel (Domain.Turnstile). */
@@ -10614,6 +10663,9 @@ trace('submit: feed post');
         jEnRow.appendChild(jEn);
         jEnRow.appendChild(document.createTextNode(' Journal page is live'));
         wrap.appendChild(jEnRow);
+        var jCm = checkRow(wrap, 'Every journal article carries its own comments section',
+          window.mcCore!.commentsJournalFrom(s.comments_journal));
+        desc(wrap, 'On, each entry’s page gets a section of its own, made with the entry and retired with it: deleting an entry from the journal topic removes its comments too. Off, no entry shows one and every existing comment waits, undeleted.');
         var jRow = el('p', 'admin-set-row');
         jRow.appendChild(document.createTextNode('Journal source topic (its numeric id): '));
         var jInp = el('input'); jInp.type = 'number'; jInp.min = '1';
@@ -10667,6 +10719,9 @@ trace('submit: feed post');
             calls_idle_seconds: vcIdleSecs.value,
             journal_enabled: jEn.checked ? '1' : '0',
             journal_topic: jInp.value,
+            comments_pages: window.mcCore!.commentsSerializeEnabledPages(
+              cmBoxes.filter(function (b) { return b.cb.checked; }).map(function (b) { return b.path; })),
+            comments_journal: jCm.checked ? '1' : '0',
           };
           Object.assign(set, panelKeys('wall', pWall), panelKeys('board', pBoard), panelKeys('dm', pDm));
           fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -11338,16 +11393,17 @@ trace('submit: feed post');
 
   /* ---- Assembly ---- */
 
-  function start() {
-    if (state.started) return;
-    state.started = true;
-    collectAltIps();
-
-    /* Tell search engines this block is visitor content: keep it out of
-       snippets, and never let it read as the site's own words. */
-    section.setAttribute('data-nosnippet', '');
-
-    var feedUrl = API + '/feed?page=' + encodeURIComponent(pagePath());
+  /* The comments widget itself — title + RSS, the list, the composer —
+     appended into `host`: the page's own section on an article page, or the
+     wrapper the journal view builds under an article. Keyed by pageKey(); every
+     helper it leans on finds its nodes by class under `section`, which the host
+     is inside. The caller has resolved the identity (state.myHash) already. */
+  function mountComments(host: HTMLElement) {
+    var feedUrl = API + '/feed?page=' + encodeURIComponent(pageKey());
+    /* One feed link per document: a soft hop between journal articles mounts
+       again, and the head is not swapped, so the last mount's link goes first. */
+    var prior = document.head.querySelector('link[rel="alternate"][title="Comments feed"]');
+    if (prior) prior.remove();
     var discover = document.createElement('link');
     discover.rel = 'alternate';
     discover.type = 'application/rss+xml';
@@ -11361,9 +11417,9 @@ trace('submit: feed post');
     rss.href = feedUrl;
     rss.title = 'Follow these comments with a feed reader';
     title.appendChild(rss);
-    section.appendChild(title);
-    section.appendChild(el('div', 'comments-list'));
-    section.appendChild(el('p', 'comments-status', 'Loading comments...'));
+    host.appendChild(title);
+    host.appendChild(el('div', 'comments-list'));
+    host.appendChild(el('p', 'comments-status', 'Loading comments...'));
 
     var form = el('div', 'comment-form');
     form.appendChild(el('div', 'comment-identity'));
@@ -11375,7 +11431,7 @@ trace('submit: feed post');
     textarea.rows = 5;
     textarea.placeholder = 'Say what you want to say.';
     form.appendChild(mdEditor(textarea));
-    attachDraft(textarea, 'page:' + pagePath());
+    attachDraft(textarea, 'page:' + pageKey());
     var hp = el('input', 'hp');
     hp.type = 'text';
     hp.name = 'website';
@@ -11386,19 +11442,11 @@ trace('submit: feed post');
     form.appendChild(el('div', 'ts-slot'));
     form.appendChild(el('div', 'comment-buttons'));
     form.appendChild(el('p', 'form-status'));
-    section.appendChild(form);
+    host.appendChild(form);
 
-    var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
-    ready.then(function (h) {
-      state.myHash = h;
-      enableMemberLive();
-      renderIdentity();
-      renderButtons();
-      load();
-      loadMyProfile();
-      dmUnreadCheck();
-      notifUnreadCheck();
-    });
+    renderIdentity();
+    renderButtons();
+    load();
 
     /* Re-render the buttons whenever identity changes. Cheapest hook: watch
        the identity box for the re-renders triggered above. */
@@ -11406,6 +11454,35 @@ trace('submit: feed post');
       .observe(form.querySelector('.comment-identity'), { childList: true });
     /* The page comment form carries a .ts-slot, so the focus net covers it;
        loading a page mounts nothing. */
+  }
+
+  /* An article page's boot: the section stands only if the admin has opened it
+     for THIS page. /config says which (one edge-cached read, shared with every
+     other *Cfg() through mcStore); a page not listed mounts nothing at all — no
+     widget, no comments read, a page that never had a section. The worker
+     refuses the page regardless; this only spares the read. Unknown (config
+     unreachable, or a worker without the field) reads as closed too. */
+  function start() {
+    if (state.started) return;
+    state.started = true;
+    collectAltIps();
+
+    /* Tell search engines this block is visitor content: keep it out of
+       snippets, and never let it read as the site's own words. */
+    section.setAttribute('data-nosnippet', '');
+
+    commentsCfg().then(function (cfg) {
+      if (!cfg || cfg.pages.indexOf(pageKey()) === -1) return;
+      var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
+      ready.then(function (h) {
+        state.myHash = h;
+        enableMemberLive();
+        mountComments(section);
+        loadMyProfile();
+        dmUnreadCheck();
+        notifUnreadCheck();
+      });
+    });
   }
 
   /* The kit: the per-boot bridge the Lit views (app/views/*) consume — every

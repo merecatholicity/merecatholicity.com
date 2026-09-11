@@ -21,6 +21,7 @@ import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
 import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
+import * as Comments from '../../purescript/output/Domain.Comments/index.js';
 import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
@@ -71,15 +72,12 @@ export async function keyedGated(request: any, env: any, bucket: string): Promis
    loosely (index signature) on purpose — this is a typing pass, not a
    binding-by-binding audit, and every access site already treats env as
    whatever-shape-it-needs-to-be at runtime. */
-export const PAGES = [
-  '/book.html',
-  '/charting-communions.html',
-  '/free-churches.html',
-  '/objections.html',
-  '/credo.html',
-  '/lex-orandi.html',
-  '/about.html',
-];
+/* The commentable pages: the site's OWN writings — the book and the hand
+   pages — single-sourced from Domain.Comments (the client's eligible list, the
+   admin console and the build-parity test read the same table). A work merely
+   hosted in the library is never here. Whether a listed page's section is OPEN
+   is the admin's runtime call (commentsPageOn below). */
+export const PAGES: string[] = Comments.commentablePaths;
 
 /* The Catholicity Board. A category is a virtual page key, a topic is a
    titled comment with no parent, a reply is a comment whose parent is the
@@ -456,7 +454,9 @@ export function viewLink(env: any, page: any, id: any, parentId: any) {
   if (page.indexOf('board:') === 0) {
     return siteBase(env) + '/community.html?topic=' + (parentId || id) + '#comment-' + id;
   }
-  return siteBase(env) + page + '#comment-' + id;
+  /* A page comment on its page; a journal comment on the article's permalink
+     (Domain.Comments.pageHref turns 'journal:<id>' into /journal.html?a=<id>). */
+  return siteBase(env) + Comments.pageHref(String(page)) + '#comment-' + id;
 }
 
 /* Comment email notifications were retired: the owner watches recent activity
@@ -925,6 +925,15 @@ export const APP_SETTING_DEFAULTS = {
   discord_feed_comments: '0',                   // also send comments on feed posts to the feed webhook (noisy at scale)
   journal_topic: '219',                         // the forum topic whose posts become Journal articles
   journal_enabled: '1',                         // whether the Mere Catholicity Journal page is live
+  /* Comments sections (Domain.Comments). Both default OFF — the OPPOSITE
+     polarity of social_enabled, on purpose: the owner switched the sections
+     off, and a fresh database opens none until an admin does. comments_pages
+     is the CSV of own-writing paths whose section is open (the kernel drops
+     anything else at parse and at save); comments_journal opens a section
+     under every journal article ('journal:<article id>' page keys). A closed
+     section answers exactly as an unknown page; nothing is deleted by either. */
+  comments_pages: Comments.pagesEnabledDefault,
+  comments_journal: Comments.journalEnabledDefault ? '1' : '0',
   /* Per-type / per-context media limits (Phase A, single-sourced in Domain.Media).
      media_max_bytes above stays as the absolute per-file ceiling: the effective
      cap for a kind is min(per-kind, ceiling). Kinds masks are CSV of
@@ -1049,6 +1058,22 @@ export function socialEnabled(s: any) { return Wall.enabledFrom(String(s.social_
    this exists at all: in the installed iOS app, mounting the widget took the
    document down, and a challenge that cannot run is not a gate but an outage. */
 export function turnstileSkipEstablished(s: any) { return Turnstile.skipFrom(String(s.turnstile_skip_established)); }
+/* Comments sections (Domain.Comments). A page's section is open only when its
+   path is in the stored CSV; the journal's only on a literal '1' (the kernel
+   holds the polarity — see its module note). The worker decides every read
+   and write; /config carries the client's courtesy copy. */
+export function commentsPagesOn(s: any): string[] { return Comments.parseEnabledPages(String(s.comments_pages == null ? '' : s.comments_pages)); }
+export function commentsPageOn(s: any, page: any) { return Comments.pageEnabled(String(s.comments_pages == null ? '' : s.comments_pages))(String(page || '')); }
+export function commentsJournalOn(s: any) { return Comments.journalEnabledFrom(String(s.comments_journal == null ? '' : s.comments_journal)); }
+/* A journal article's comments page key ('journal:<article id>'), vetted by
+   the kernel — the canonical key or null, the boardKey idiom. Whether that
+   article is LIVE in the current journal topic is a separate question
+   (journalArticleLive in index.ts), asked at every read and write. */
+export function journalKeyId(raw: any): number | null { return psOrNull(Comments.journalKeyId(String(raw || ''))); }
+export function journalKey(raw: any): string | null {
+  const n = journalKeyId(raw);
+  return n == null ? null : Comments.journalKey(n);
+}
 /* The voice-note length limit for a section: per-section override, else the
    legacy global, else the kernel default. Client-advisory, like the global. */
 export function mediaAudioSeconds(s: any, ctx?: string) {
@@ -1752,6 +1777,32 @@ export async function pruneComments(env: any) {
     console.log(JSON.stringify({ event: 'orphan_prune', deleted: r.meta && r.meta.changes || 0 }));
   } catch (e) {
     console.log(JSON.stringify({ event: 'orphan_prune_failed', error: String(e) }));
+  }
+}
+
+/* The comments under a journal article follow the article. When an article (a
+   post in the journal topic) is deleted or gone, every row keyed
+   'journal:<its id>' is soft-deleted here — one statement, idempotent — and
+   pruneComments hard-deletes them thirty days on like any other deleted row.
+   Called from every path that deletes a journal article (self-delete, the
+   topic-head delete, delete-user) and from the monthly cron as the backstop.
+   Only a DELETED or MISSING article retires its comments: a held (pending)
+   edit of the article keeps them, and re-pointing journal_topic touches
+   nothing — those rows merely become unreachable and return if the topic is
+   pointed back, the social switch's rule that a switch deletes nothing. */
+export const JOURNAL_SWEEP_SQL = "UPDATE comments SET status = 'deleted' WHERE page LIKE 'journal:%' AND status != 'deleted' AND (CAST(substr(page, 9) AS INTEGER) NOT IN (SELECT id FROM comments WHERE status != 'deleted')";
+/* Appended when the journal's own TOPIC was deleted: its replies stay live
+   rows (orphans, as a topic delete has always left them) but they are no
+   longer articles of anything, so their comments retire with the head's. */
+export const JOURNAL_SWEEP_THREAD_SQL = " OR CAST(substr(page, 9) AS INTEGER) IN (SELECT id FROM comments WHERE parent_id = ?1)";
+export async function sweepJournalComments(env: any, deletedTopicId?: number) {
+  try {
+    const stmt = env.DB.prepare(JOURNAL_SWEEP_SQL + (deletedTopicId ? JOURNAL_SWEEP_THREAD_SQL : '') + ')');
+    const r = await (deletedTopicId ? stmt.bind(deletedTopicId) : stmt).run();
+    const n = (r.meta && r.meta.changes) || 0;
+    if (n) console.log(JSON.stringify({ event: 'journal_comments_swept', deleted: n }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'journal_comments_sweep_failed', error: String(e) }));
   }
 }
 

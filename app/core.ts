@@ -34,6 +34,7 @@ import * as Media from '../purescript/output/Domain.Media/index.js';
 import * as Call from '../purescript/output/Domain.Call/index.js';
 import * as Wall from '../purescript/output/Domain.Wall/index.js';
 import * as Turnstile from '../purescript/output/Domain.Turnstile/index.js';
+import * as Comments from '../purescript/output/Domain.Comments/index.js';
 import * as Merecat from '../purescript/output/Domain.Merecat/index.js';
 import * as Cache from '../purescript/output/Domain.Cache/index.js';
 import * as Ptr from '../purescript/output/Domain.Ptr/index.js';
@@ -264,6 +265,20 @@ export const wallEnabledFrom = (v: any): boolean => Wall.enabledFrom(v == null ?
    same reason: getting it backwards puts every phone back in front of a
    challenge that takes the page down. */
 export const turnstileSkipFrom = (v: any): boolean => Turnstile.skipFrom(v == null ? '' : String(v));
+
+/* Comments sections (Domain.Comments): the site's own writings that may carry
+   one, the CSV rule for which are open, the journal switch's polarity (only a
+   literal '1' — the OPPOSITE of the social switch, on purpose: these ship
+   closed), and the permalink path for a page key ('journal:<id>' → the
+   article). The client reads the LIVE state from /config; these are the admin
+   settings box's and the audit's rules over the raw stored values. */
+export const commentablePages: ReadonlyArray<{ path: string; title: string }> = Comments.commentablePages;
+export const commentablePaths: ReadonlyArray<string> = Comments.commentablePaths;
+export const commentsParseEnabledPages = (csv: any): string[] => Comments.parseEnabledPages(csv == null ? '' : String(csv));
+export const commentsSerializeEnabledPages = (paths: string[]): string => Comments.serializeEnabledPages(paths || []);
+export const commentsPageEnabled = (csv: any, path: string): boolean => Comments.pageEnabled(csv == null ? '' : String(csv))(String(path || ''));
+export const commentsJournalFrom = (v: any): boolean => Comments.journalEnabledFrom(v == null ? '' : String(v));
+export const commentsPageHref = (page: any): string => Comments.pageHref(String(page || ''));
 
 /* The librarian's reasoning ladder (Domain.Merecat), read by the reader's
    selector and the admin dials. The server clamps every ask; these are the

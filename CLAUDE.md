@@ -79,7 +79,7 @@ line in `.gitignore` and an entry in `scripts/nav.py`'s `PAGES`. Elsewhere: `boo
 committed `*-body.tex`, `docs-src/` preserved sources), `partials/` (pandoc includes — a
 partial carrying a versioned asset is stamped too), `scripts/`, `styles/main.css` (the one
 Tailwind v4 entry), `app/` (Lit shell + views, TS), `client/comments.ts` → `docs/comments.js`,
-`purescript/src/Domain/*.purs` (the kernel, 28 modules), `comments-worker/`, `contact-worker/`,
+`purescript/src/Domain/*.purs` (the kernel, 29 modules), `comments-worker/`, `contact-worker/`,
 `librarian/` (`librarian/private/` is a separate PRIVATE clone — never a submodule, never
 committed), `webtest/`, `tests/`, `terraform/`, `.github/workflows/`.
 
@@ -128,6 +128,13 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   because the challenge completes on a hard-loaded document and killed soft-navigated ones.
 - **`READ_LIMIT` is one per-IP bucket shared by every read endpoint**; the client's read-budget
   coordinator paces every poller — never add a poller outside it.
+- **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;
+  the rules are `Domain.Comments`, whose polarity is the OPPOSITE of the social switch — only a
+  literal `'1'` / a listed path opens anything). A section may stand only under the site's own
+  writings (`commentablePages`): a new own page joins by frontmatter `comments: true` AND the
+  kernel list in one change (the parity test refuses half of it); a library work never; a path is
+  a storage key, never rename one. A closed section answers exactly as an unknown page; a deleted
+  journal article retires its comments (`sweepJournalComments`); a switch deletes nothing.
 - **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0012),
   additive; `schema.sql` is a generated snapshot; the three librarian D1s are derived data.
   Renaming an applied migration file requires renaming its `d1_migrations` row too.
@@ -227,4 +234,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · `contact-worker/`
