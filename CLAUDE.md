@@ -139,7 +139,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `book-tail.html` (the detector refuses one without); a path is a storage key, never rename one.
   A closed section answers exactly as an unknown page; a deleted journal article retires its
   comments (`sweepJournalComments`); a switch deletes nothing.
-- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0012),
+- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0013),
   additive; `schema.sql` is a generated snapshot; the three librarian D1s are derived data.
   Renaming an applied migration file requires renaming its `d1_migrations` row too.
 - **Shared constants, tables and validators live in `purescript/src/Domain/*`** and are read
@@ -159,6 +159,13 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   overscroll, its scrim is `touch-action:none`, and it locks the document while open
   (`html.mc-sheet-open`, body fixed at the saved offset). A new overlay reuses the sheet or
   the same three layers.
+- **A DM message's acts live on ONE surface**, the press-and-hold (right-click, the hover ⌄, or
+  the reaction pill on desktop): react · reply · copy · edit · save · delete — never a link row
+  or a ⋯ on the bubble. A reaction is ONE emoji per side per message, validated by
+  `Domain.Dm.normalizeReaction` on both ends (never re-inlined; a custom `:token:` is ours); a
+  quoted reply rides INSIDE the E2E plaintext behind `Domain.Dm.replySentinel` — the server
+  never learns what answers what, and no `reply_to` column may appear. The surface keeps the
+  overlay's three layers through `mcSheet.lock()` and releases only a lock it took.
 - **Nothing scrolls sideways on a phone**: `body{overflow-x:clip}` is the net, not the fix. A
   new surface must fit 390px — a flex row wraps or its items may shrink, an edge-to-edge
   pull uses `var(--page-pad)`, and a JS-injected style block must agree with the
@@ -238,4 +245,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · `contact-worker/`

@@ -46,6 +46,17 @@ test('dmTtlLabel coerces a missing/zero TTL to the 30-day default', () => {
   assert.equal(Core.dmTtlLabel('2592000'), '30 days', 'numeric string coerces');
 });
 
+test('the DM reaction membrane erases Maybe to string | null and coerces nullish input', () => {
+  assert.equal(Core.dmQuickReactions.length, 6, 'the press-and-hold bar\'s six pass through as a plain array');
+  assert.equal(Core.dmReaction('👍'), '👍');
+  assert.equal(Core.dmReaction(':PepeHeart:'), ':pepeheart:', 'a custom token comes back lower-cased');
+  assert.equal(Core.dmReaction('lol'), null, 'Nothing -> null (the picker refuses before the wire)');
+  assert.equal(Core.dmReaction(null), null, 'nullish -> "" -> null, never a throw');
+  assert.equal(Core.dmReplyExcerpt('  a \n b  '), 'a b');
+  assert.equal(Core.dmReplyExcerpt(undefined), '', 'nullish -> ""');
+  assert.equal(Core.dmReplySentinel, '\u0001', 'the envelope opener the client tests the first character against');
+});
+
 test('the Access predicates coerce nullish hashes to a keyless viewer', () => {
   assert.equal(Core.canInteract('x', 'me', 'bot'), true);
   assert.equal(Core.canInteract('x', null, 'bot'), false, 'null viewer = keyless -> false');

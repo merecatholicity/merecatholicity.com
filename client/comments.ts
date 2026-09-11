@@ -1019,20 +1019,96 @@
     paint();
     return p;
   }
-  function dmSaveControl(m: any, other: any) {
-    if (!m || !m.id) return null;
-    var a = el('a', 'dm-save', m.saved ? '★ saved' : '☆ save');
-    a.href = '#';
-    a.addEventListener('click', function (ev: any) {
-      ev.preventDefault();
-      var want = m.saved ? 0 : 1;
-      fetch(API + '/dm/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, with: other, id: m.id, saved: !!want }) })
-        .then(function (r) { return r.json(); })
-        .then(function (d) { if (d && d.ok) { m.saved = want; a.textContent = want ? '★ saved' : '☆ save'; } })
-        .catch(function () {});
-    });
-    return a;
+  /* ---- Per-message reactions and the saved mark (the WhatsApp press-and-hold
+     surface, 2026-09-10). One emoji per side per message — the quick six from
+     Domain.Dm, any single standard emoji, or one of our own custom-pack images
+     (:pepeheart: and friends, the reaction WhatsApp cannot offer). A reaction is
+     metadata beside opened_at (react_a/react_b on the canonical pair); the
+     plaintext stays sealed. It renders as a small pill hanging off the bubble's
+     bottom corner — the left corner of their bubble, the right of mine — both
+     glyphs side by side when we both reacted, "❤️ 2" when we agreed. ---- */
+  function dmQuickReactions(): string[] {
+    return window.mcCore && window.mcCore.dmQuickReactions
+      ? window.mcCore.dmQuickReactions.slice() : ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+  }
+  /* One reaction as a node: a custom token (:code:) as its pack image when the
+     pack knows it, else the glyph itself. Text nodes only, never innerHTML. */
+  function dmReactionNode(emoji: any) {
+    var str = String(emoji || '');
+    var tok = /^:([a-z0-9][a-z0-9_+-]{0,39}):$/i.exec(str);
+    if (tok && CUSTOM_EMOJI[tok[1].toLowerCase()]) return emojiImg(CUSTOM_EMOJI[tok[1].toLowerCase()], tok[1].toLowerCase());
+    return document.createTextNode(str);
+  }
+  /* Paint (or repaint) a bubble's reaction pill from m.react_me / m.react_other.
+     The pill opens the same surface a press-and-hold does, so a reaction is
+     changed or withdrawn where it is seen. */
+  function dmReactPaint(m: any, node: any, ctx: any) {
+    var old = node.querySelector(':scope > .dm-react-pill');
+    if (old) old.remove();
+    var mine = String(m.react_me || ''), theirs = String(m.react_other || '');
+    node.classList.toggle('dm-has-react', !!(mine || theirs));
+    if (!mine && !theirs) return;
+    var pill = el('button', 'dm-react-pill');
+    pill.type = 'button';
+    var who = (ctx && ctx.shortName) || 'They';
+    if (mine && theirs && mine === theirs) {
+      pill.appendChild(dmReactionNode(mine));
+      pill.appendChild(el('span', 'dm-react-n', '2'));
+      pill.title = 'You and ' + who + ' both reacted ' + mine;
+    } else {
+      if (theirs) pill.appendChild(dmReactionNode(theirs));
+      if (mine) pill.appendChild(dmReactionNode(mine));
+      pill.title = (theirs ? who + ' reacted ' + theirs : '') + (theirs && mine ? ' · ' : '') + (mine ? 'You reacted ' + mine : '');
+    }
+    pill.setAttribute('aria-label', pill.title);
+    pill.addEventListener('click', function (e: any) { e.stopPropagation(); dmOpenActions(m, node, ctx, null); });
+    node.appendChild(pill);
+  }
+  /* Send my reaction (empty = withdraw; my own again = withdraw): optimistic,
+     reverted on refusal. The value is the kernel's to accept or refuse
+     (mcCore.dmReaction), the same rule the worker's store runs. */
+  function dmReact(m: any, node: any, ctx: any, emoji: any) {
+    var was = String(m.react_me || '');
+    var want = String(emoji || '');
+    if (want === was) want = '';
+    if (want && window.mcCore && window.mcCore.dmReaction && window.mcCore.dmReaction(want) === null) return;
+    m.react_me = want; dmReactPaint(m, node, ctx);
+    fetch(API + '/dm/react', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, emoji: want }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (blockedOut(d)) return; if (!d || !d.ok) { m.react_me = was; dmReactPaint(m, node, ctx); } })
+      .catch(function () { m.react_me = was; dmReactPaint(m, node, ctx); });
+  }
+  /* The saved mark. A saved message is exempt from expiry for both, and it is
+     LIT for both — the bubble takes the saved ring and a ★ in its meta row
+     (the Snapchat convention: a kept message must look kept). Repainted live
+     when the other side saves or unsaves. */
+  function dmSavedPaint(m: any, node: any) {
+    var on = !!Number(m.saved || 0);
+    node.classList.toggle('dm-saved', on);
+    var meta = node.querySelector(':scope > .dm-meta');
+    if (!meta) return;
+    var mark = meta.querySelector('.dm-savedmark');
+    if (on && !mark) {
+      mark = el('span', 'dm-savedmark', '★');
+      mark.title = 'Saved — kept for both of you';
+      mark.setAttribute('aria-label', 'Saved');
+      var date = meta.querySelector('.comment-date');
+      meta.insertBefore(mark, date || null);
+    } else if (!on && mark) mark.remove();
+  }
+  function dmSave(m: any, node: any, ctx: any, want: any) {
+    var was = Number(m.saved || 0) ? 1 : 0;
+    m.saved = want ? 1 : 0; dmSavedPaint(m, node);
+    fetch(API + '/dm/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, saved: !!want }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (blockedOut(d)) return;
+        if (!d || !d.ok) { m.saved = was; dmSavedPaint(m, node); return; }
+        if (ctx.note) ctx.note(want ? 'Saved — it will not disappear.' : 'Unsaved.');
+      })
+      .catch(function () { m.saved = was; dmSavedPaint(m, node); });
   }
   /* ---- UI sounds: ONE engine, shell-owned in app/call.ts (window.mcSound —
      it must live in the bundle so an incoming call rings on any page). This
@@ -1041,45 +1117,351 @@
   function playSound(name: any, loop?: any) {
     try { if ((window as any).mcSound) (window as any).mcSound.play(name, loop); } catch (e) { /* silent */ }
   }
-  /* ❤ per message: on the OTHER party's bubbles a toggle, on your own a passive
-     heart that lights when they like it (live or on load). The flag rides
-     /dm/like — metadata only, the plaintext stays sealed. */
-  function dmLikeControl(m: any, node: any, other: any) {
-    if (!m || !m.id || m.redacted) return;
+  /* ---- The message action surface (the WhatsApp press-and-hold, 2026-09-10).
+     What a press-and-hold (touch), a right-click, the ⌄ that appears on hover,
+     or a tap on a bubble's reaction pill opens over ONE bubble: the reaction
+     bar above it — the quick six and a + for the whole picker, our own packs
+     included — the bubble itself untouched and lit in a hole between four
+     pieces of scrim, and the menu below it: Reply · Copy · Edit · Save/Unsave ·
+     Delete, only the acts that apply to that message. On a phone the page is
+     first scrolled just enough for the three to fit, then the document is
+     locked (the sheet's own lock, mcSheet.lock) for exactly as long as the
+     surface stands, and the scrim is inert to touch — the three layers every
+     overlay here keeps. On desktop it is a popover at the pointer that an
+     outside click, a scroll, or Escape dismisses. One at a time; a soft
+     navigation tears it down with the boot. ---- */
+  var dmActOpen: any = null;
+  function dmCloseActions() {
+    var a = dmActOpen;
+    if (!a) return;
+    dmActOpen = null;
+    a.close();
+  }
+  bootSig.addEventListener('abort', dmCloseActions, { once: true });
+  function dmIsPhone() {
+    try { return window.innerWidth <= 600 || window.matchMedia('(hover: none)').matches; } catch (e) { return window.innerWidth <= 600; }
+  }
+  function dmOpenActions(m: any, node: any, ctx: any, at: any) {
+    dmCloseActions();
+    if (!m || !m.id || m.redacted || node.mcDead || !node.isConnected) return;
+    var phone = dmIsPhone();
     var mine = m.sender_hash === state.myHash;
-    var wrap = el('div', 'dm-like-row');
-    var btn: any = null;
-    var chip = el('span', 'dm-like-chip');
-    function paint() {
-      var meL = Number(m.liked_me || 0) ? 1 : 0;
-      var themL = Number(m.liked_other || 0) ? 1 : 0;
-      chip.style.display = (meL || themL) ? '' : 'none';
-      chip.textContent = (meL + themL) > 1 ? '❤ 2' : '❤';
-      chip.title = themL ? (meL ? 'Liked by both of you' : 'Liked') : 'You liked this';
-      if (btn) {
-        btn.textContent = meL ? '❤' : '♡';
-        btn.title = meL ? 'Unlike' : 'Like';
-        btn.classList.toggle('on', !!meL);
+    var sys = Number(m.enc || 0) === 2;
+    var hasText = !m.media_key && !m.media_expired;
+    var root = el('div', 'dm-act ' + (phone ? 'dm-act-phone' : 'dm-act-desk') + (mine ? ' dm-act-mine' : ''));
+    root.setAttribute('data-mc-app', '');
+    var scrims: any[] = [];
+    function scrim() {
+      var sc = el('div', 'dm-act-scrim');
+      sc.addEventListener('click', function (e: any) { e.preventDefault(); dmCloseActions(); });
+      root.appendChild(sc); scrims.push(sc);
+      return sc;
+    }
+    /* The reaction bar: the quick six (plus my current reaction when it is not
+       one of them), mine lit; tapping mine again withdraws it. */
+    var bar = el('div', 'dm-act-bar');
+    bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'React');
+    var current = String(m.react_me || '');
+    var cells = dmQuickReactions();
+    if (current && cells.indexOf(current) === -1) cells.push(current);
+    cells.forEach(function (e) {
+      var b = el('button', 'dm-act-emoji' + (e === current ? ' on' : ''));
+      b.type = 'button';
+      b.appendChild(dmReactionNode(e));
+      b.title = e === current ? 'Remove your reaction' : 'React ' + e;
+      b.setAttribute('aria-label', b.title);
+      b.addEventListener('click', function () { dmCloseActions(); dmReact(m, node, ctx, e); });
+      bar.appendChild(b);
+    });
+    var more = el('button', 'dm-act-emoji dm-act-more', '+');
+    more.type = 'button'; more.title = 'More reactions'; more.setAttribute('aria-label', 'More reactions');
+    bar.appendChild(more);
+    /* The menu: only the acts that apply. */
+    var menu = el('div', 'dm-act-menu');
+    menu.setAttribute('role', 'menu');
+    function item(label: string, icon: string, cls: string, fn: () => void) {
+      var b = el('button', 'dm-act-item' + (cls ? ' ' + cls : ''));
+      b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.appendChild(el('span', 'dm-act-ico', icon));
+      b.appendChild(el('span', 'dm-act-label', label));
+      b.addEventListener('click', function () { dmCloseActions(); fn(); });
+      menu.appendChild(b);
+    }
+    item('Reply', '↩', '', function () { ctx.reply(m); });
+    var copyText = hasText ? String(m.body || '') : String((m._env && m._env.caption) || '');
+    if (copyText) item('Copy', '⧉', '', function () { dmCopy(copyText, ctx); });
+    if (mine && hasText && !sys) item('Edit', '✎', '', function () { dmStartEdit(m, node, ctx); });
+    var saved = !!Number(m.saved || 0);
+    item(saved ? 'Unsave' : 'Save', saved ? '★' : '☆', saved ? 'on' : '', function () { dmSave(m, node, ctx, saved ? 0 : 1); });
+    if (mine && !sys) item('Delete', '✕', 'dm-act-danger', function () { dmDeleteMsg(m, node, ctx); });
+    var pop: any = null;
+    if (phone) { scrim(); scrim(); scrim(); scrim(); root.appendChild(bar); root.appendChild(menu); }
+    else { scrim(); pop = el('div', 'dm-act-pop'); pop.appendChild(bar); pop.appendChild(menu); root.appendChild(pop); }
+    document.body.appendChild(root);
+    var lockedByUs = false;
+    var pad = 10, gap = 10;
+    var vv: any = (window as any).visualViewport;
+    function vTop() { return vv ? vv.offsetTop : 0; }
+    function vH() { return vv ? vv.height : window.innerHeight; }
+    var vW = window.innerWidth;
+    function clampPop() {
+      if (!pop) return;
+      var w = pop.offsetWidth, h = pop.offsetHeight;
+      var x = at ? at.x : node.getBoundingClientRect().right - w;
+      var y = at ? at.y : node.getBoundingClientRect().top;
+      pop.style.left = Math.max(pad, Math.min(vW - w - pad, x)) + 'px';
+      pop.style.top = Math.max(vTop() + pad, Math.min(vTop() + vH() - h - pad, y)) + 'px';
+    }
+    if (phone) {
+      var barH = bar.offsetHeight, menuH = menu.offsetHeight;
+      var r = node.getBoundingClientRect();
+      var fits = barH + gap + r.height + gap + menuH <= vH() - 2 * pad;
+      /* Scroll the page just enough — up, so the bar has room above, or down,
+         so the menu has room below; a bubble taller than the room gets its top
+         under the bar and its foot under the menu. Instant: this is placing,
+         not travelling. */
+      var delta = 0;
+      if (fits) {
+        var topWant = r.top - gap - barH, botWant = r.bottom + gap + menuH;
+        if (topWant < vTop() + pad) delta = topWant - (vTop() + pad);
+        else if (botWant > vTop() + vH() - pad) delta = botWant - (vTop() + vH() - pad);
+      } else delta = r.top - (vTop() + pad + barH + gap);
+      if (delta) {
+        try { window.scrollBy({ top: delta, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollBy(0, delta); }
+        r = node.getBoundingClientRect();
       }
-    }
-    if (!mine) {
-      btn = el('button', 'dm-like-btn');
-      btn.type = 'button';
-      btn.addEventListener('click', function () {
-        var want = Number(m.liked_me || 0) ? 0 : 1;
-        m.liked_me = want; paint();   // optimistic; revert on refusal
-        fetch(API + '/dm/like', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key, with: other, id: m.id, like: want }) })
-          .then(function (r) { return r.json(); })
-          .then(function (d) { if (blockedOut(d)) return; if (!d || !d.ok) { m.liked_me = want ? 0 : 1; paint(); } })
-          .catch(function () { m.liked_me = want ? 0 : 1; paint(); });
+      if (window.mcSheet && window.mcSheet.lock) lockedByUs = !!window.mcSheet.lock();
+      /* The four pieces: above, below, left of, and right of the bubble. */
+      var top = Math.max(0, r.top), bottom = Math.max(top, r.bottom);
+      scrims[0].style.cssText = 'left:0;right:0;top:0;height:' + top + 'px';
+      scrims[1].style.cssText = 'left:0;right:0;top:' + bottom + 'px;bottom:0';
+      scrims[2].style.cssText = 'left:0;top:' + top + 'px;height:' + (bottom - top) + 'px;width:' + Math.max(0, r.left) + 'px';
+      scrims[3].style.cssText = 'right:0;top:' + top + 'px;height:' + (bottom - top) + 'px;left:' + Math.min(vW, r.right) + 'px';
+      var barTop = fits ? r.top - gap - barH : vTop() + pad;
+      var menuTop = fits ? r.bottom + gap : vTop() + vH() - pad - menuH;
+      bar.style.top = Math.max(vTop() + pad, barTop) + 'px';
+      menu.style.top = Math.min(vTop() + vH() - pad - menuH, Math.max(vTop() + pad, menuTop)) + 'px';
+      var barW = bar.offsetWidth, menuW = menu.offsetWidth;
+      if (mine) {
+        bar.style.right = Math.max(pad, Math.min(vW - pad - barW, vW - r.right)) + 'px';
+        menu.style.right = Math.max(pad, Math.min(vW - pad - menuW, vW - r.right)) + 'px';
+      } else {
+        bar.style.left = Math.max(pad, Math.min(vW - pad - barW, r.left)) + 'px';
+        menu.style.left = Math.max(pad, Math.min(vW - pad - menuW, r.left)) + 'px';
+      }
+    } else clampPop();
+    /* The whole picker, in place of the bar and the menu, for a reaction
+       beyond the quick six — our own packs included. */
+    more.addEventListener('click', function () {
+      var panel = buildEmojiPanel(null, function (it: any) {
+        dmCloseActions();
+        dmReact(m, node, ctx, it.kind === 'img' ? ':' + it.code + ':' : it.char);
       });
-      wrap.appendChild(btn);
+      panel.classList.add('dm-act-picker');
+      bar.hidden = true; menu.hidden = true;
+      (pop || root).appendChild(panel);
+      panel.openPanel();
+      clampPop();
+    });
+    function onKey(e: any) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); dmCloseActions(); } }
+    function onScroll(e: any) { if (root.contains(e.target)) return; dmCloseActions(); }
+    function onTap(e: any) { e.preventDefault(); e.stopPropagation(); dmCloseActions(); }
+    document.addEventListener('keydown', onKey, true);
+    if (!phone) { window.addEventListener('scroll', onScroll, true); window.addEventListener('resize', dmCloseActions); }
+    else window.addEventListener('orientationchange', dmCloseActions);
+    node.addEventListener('click', onTap, true);
+    node.classList.add('dm-held');
+    var restore: any = document.activeElement;
+    dmActOpen = { node: node, close: function () {
+      if (root.parentNode) root.parentNode.removeChild(root);
+      if (lockedByUs && window.mcSheet && window.mcSheet.unlock) window.mcSheet.unlock();
+      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', dmCloseActions);
+      window.removeEventListener('orientationchange', dmCloseActions);
+      node.removeEventListener('click', onTap, true);
+      node.classList.remove('dm-held');
+      if (!phone && restore && restore.focus && document.contains(restore)) { try { restore.focus(); } catch (e) { /* gone */ } }
+    } };
+    if (!phone) { var first = menu.querySelector('button'); if (first) first.focus(); }
+  }
+  /* Arm a rendered bubble with the gestures: press-and-hold (touch) and
+     right-click open the surface; a swipe to the right replies; the ⌄ that
+     appears on hover is the pointer's road. A press that moves is a scroll, not
+     a hold; the click that follows a hold is swallowed so a link under the
+     finger does not also navigate. */
+  function dmArmGestures(m: any, node: any, ctx: any) {
+    var lpT: any = 0, sx = 0, sy = 0, held = false, swiping = false, dx = 0;
+    function cancelHold() { if (lpT) { clearTimeout(lpT); lpT = 0; } }
+    node.addEventListener('touchstart', function (e: any) {
+      if (node.mcDead || e.touches.length !== 1) { cancelHold(); return; }
+      var t = e.target;
+      if (t && t.closest && t.closest('video,audio,textarea,input,button,.dm-edit-box,.dm-react-pill')) return;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY; held = false; swiping = false; dx = 0;
+      cancelHold();
+      lpT = setTimeout(function () {
+        lpT = 0; held = true;
+        try { if (navigator.vibrate) navigator.vibrate(12); } catch (x) { /* fine */ }
+        dmOpenActions(m, node, ctx, null);
+      }, 430);
+    }, { passive: true });
+    node.addEventListener('touchmove', function (e: any) {
+      if (held || node.mcDead) return;
+      var t = e.touches[0];
+      var mx = t.clientX - sx, my = t.clientY - sy;
+      if (!swiping) {
+        if (Math.abs(mx) > 8 || Math.abs(my) > 8) cancelHold();
+        if (mx > 24 && Math.abs(my) < mx * 0.6) { swiping = true; node.classList.add('dm-swiping'); }
+        else return;
+      }
+      dx = Math.max(0, Math.min(72, mx - 24));
+      node.style.transform = 'translateX(' + dx + 'px)';
+      node.classList.toggle('dm-swipe-armed', dx >= 48);
+    }, { passive: true });
+    function endTouch() {
+      cancelHold();
+      /* A hold that no click follows (Android suppresses it) must not swallow
+         some later, unrelated click. */
+      if (held) setTimeout(function () { held = false; }, 500);
+      if (!swiping) return;
+      var fire = dx >= 48;
+      swiping = false;
+      node.classList.remove('dm-swiping'); node.classList.remove('dm-swipe-armed');
+      node.style.transform = '';
+      if (fire) { try { if (navigator.vibrate) navigator.vibrate(8); } catch (x) { /* fine */ } ctx.reply(m); }
     }
-    wrap.appendChild(chip);
-    node.appendChild(wrap);
-    (node as any).mcLikePaint = function (like: any) { m.liked_other = like ? 1 : 0; paint(); };
-    paint();
+    node.addEventListener('touchend', endTouch, { passive: true });
+    node.addEventListener('touchcancel', endTouch, { passive: true });
+    node.addEventListener('click', function (e: any) {
+      /* stopImmediatePropagation: the surface's own tap-to-close listener sits
+         on this same node, registered later, and must not see this click. */
+      if (held) { held = false; e.preventDefault(); e.stopImmediatePropagation(); }
+    }, true);
+    node.addEventListener('contextmenu', function (e: any) {
+      e.preventDefault();
+      if (node.mcDead) return;
+      try { if (window.matchMedia('(hover: none)').matches) return; } catch (x) { /* desktop */ }
+      dmOpenActions(m, node, ctx, { x: e.clientX, y: e.clientY });
+    });
+    var more = el('button', 'dm-more', '⌄');
+    more.type = 'button'; more.title = 'Message actions'; more.setAttribute('aria-label', 'Message actions');
+    more.addEventListener('click', function (e: any) {
+      e.stopPropagation();
+      var r = more.getBoundingClientRect();
+      dmOpenActions(m, node, ctx, { x: r.left, y: r.bottom + 2 });
+    });
+    node.appendChild(more);
+  }
+  /* The bubble frame every DM message shares (WhatsApp-shaped): the optional
+     system label, the quote of what it answers, the body the caller built, and
+     a meta row at the foot — the edited mark, the saved star, the time, and on
+     mine the ticks. No author line: the side and the fill say who. */
+  function dmBubble(m: any, bodyEl: any, opts: any) {
+    var mine = m.sender_hash === state.myHash;
+    var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
+    if (m.id) node.setAttribute('data-dmid', String(m.id));
+    if (opts && opts.sysLabel) node.appendChild(el('div', 'dm-sys-label', opts.sysLabel));
+    if (opts && opts.reply && opts.ctx) node.appendChild(dmQuoteNode(opts.reply, opts.ctx));
+    node.appendChild(bodyEl);
+    var meta = el('div', 'dm-meta');
+    if (m.edited_at) meta.appendChild(el('span', 'dm-edited', 'edited'));
+    var dt = el('span', 'comment-date', dmTimeLabel(m.created_at));
+    dt.title = fmtDateTime(m.created_at);
+    meta.appendChild(dt);
+    node.appendChild(meta);
+    return node;
+  }
+  /* Only the time: the day is said once, by the chip above the first bubble
+     of each day. */
+  function dmTimeLabel(epoch: any) {
+    return new Date((Number(epoch) || 0) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+  function dmDayLabel(epoch: any) {
+    var d = new Date((Number(epoch) || 0) * 1000), now = new Date();
+    var yest = new Date(now); yest.setDate(now.getDate() - 1);
+    if (d.toDateString() === now.toDateString()) return 'Today';
+    if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+    if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function dmDayNode(epoch: any) {
+    var n = el('div', 'dm-day', dmDayLabel(epoch));
+    n.setAttribute('data-day', new Date((Number(epoch) || 0) * 1000).toDateString());
+    return n;
+  }
+  /* What a quote of another message says: the media kind as a word, then the
+     caption or the excerpt. */
+  function dmQuoteText(reply: any) {
+    var kind = String(reply.kind || 'text');
+    var label = kind === 'image' ? '📷 Photo' : kind === 'video' ? '🎞️ Video' : kind === 'audio' ? '🎤 Voice note' : kind === 'file' ? '📎 File' : '';
+    var text = String(reply.text || '');
+    return label ? (text ? label + ' · ' + text : label) : (text || 'Message');
+  }
+  /* The quote block at the head of a reply: who and what, and a tap jumps to
+     the original when it is on this page (and lights it for a moment). */
+  function dmQuoteNode(reply: any, ctx: any) {
+    var q = el('div', 'dm-quote');
+    q.setAttribute('role', 'button'); q.tabIndex = 0;
+    q.title = 'Jump to the quoted message';
+    q.appendChild(el('span', 'dm-quote-who', String(reply.from || '') === state.myHash ? 'You' : (ctx.shortName || 'Them')));
+    q.appendChild(el('span', 'dm-quote-text', dmQuoteText(reply)));
+    function jump() {
+      var target = ctx.list && ctx.list.querySelector('[data-dmid="' + String(reply.id).replace(/"/g, '') + '"]');
+      if (!target) { if (ctx.note) ctx.note('That message is not on this page.'); return; }
+      try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { target.scrollIntoView(); }
+      target.classList.remove('dm-flash');
+      void target.offsetWidth;
+      target.classList.add('dm-flash');
+      setTimeout(function () { target.classList.remove('dm-flash'); }, 1300);
+    }
+    q.addEventListener('click', function (e: any) { e.stopPropagation(); jump(); });
+    q.addEventListener('keydown', function (e: any) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(); } });
+    return q;
+  }
+  /* ---- The reply envelope. A quoted reply rides INSIDE the E2E plaintext —
+     the server stays blind to what answers what — as the kernel's sentinel
+     (Domain.Dm.replySentinel, U+0001, untypeable) followed by JSON:
+     {v:1, text, reply:{id, from, kind, text}}. Plaintext without the sentinel
+     is the bare message it always was. A media message carries its reply in
+     the media envelope instead (env.reply). ---- */
+  function dmReplySentinel() {
+    return (window.mcCore && window.mcCore.dmReplySentinel) || '';
+  }
+  function dmWrapText(text: any, reply: any) {
+    var t = String(text == null ? '' : text);
+    if (!reply) return t;
+    return dmReplySentinel() + JSON.stringify({ v: 1, text: t, reply: reply });
+  }
+  /* A reply reference as received: only the shape we send, or nothing. */
+  function dmReplyClean(r: any) {
+    if (!r || typeof r !== 'object') return null;
+    var id = Math.floor(Number(r.id) || 0);
+    var from = String(r.from || '');
+    if (id < 1 || !/^[0-9a-f]{64}$/.test(from)) return null;
+    var kind = String(r.kind || 'text');
+    if (['text', 'image', 'video', 'audio', 'file'].indexOf(kind) === -1) kind = 'text';
+    return { id: id, from: from, kind: kind, text: String(r.text == null ? '' : r.text).slice(0, 400) };
+  }
+  function dmParseText(plain: any) {
+    var str = String(plain == null ? '' : plain);
+    if (str.charAt(0) !== dmReplySentinel()) return { text: str, reply: null };
+    try {
+      var o = JSON.parse(str.slice(1));
+      if (o && typeof o === 'object') return { text: String(o.text == null ? '' : o.text), reply: dmReplyClean(o.reply) };
+    } catch (e) { /* not an envelope after all */ }
+    return { text: str.slice(1), reply: null };
+  }
+  /* What a reply to m quotes. The excerpt rule is the kernel's (whitespace
+     folded, cut by code points with an ellipsis). */
+  function dmReplyRef(m: any) {
+    var kind = 'text', text = '';
+    if (m.media_key || m.media_expired) {
+      var mime = (m._env && m._env.mime) || '';
+      kind = /^image\//.test(mime) ? 'image' : /^video\//.test(mime) ? 'video' : /^audio\//.test(mime) ? 'audio' : 'file';
+      text = (m._env && m._env.caption) || '';
+    } else text = m.body || '';
+    var ex = window.mcCore && window.mcCore.dmReplyExcerpt ? window.mcCore.dmReplyExcerpt(text) : truncate(text, 160);
+    return { id: m.id, from: m.sender_hash, kind: kind, text: ex };
   }
   /* "I watched it arrive": debounced acknowledgment for a live-delivered message
      in the OPEN thread — stamps the read state, starts the disappearing clock,
@@ -1151,24 +1533,15 @@
        its element. The view is gone at teardown; the observer should be too. */
     bootSig.addEventListener('abort', function () { io.disconnect(); }, { once: true });
   }
-  /* One media bubble: the same chrome as dmMsgNode, but the body lazily loads the
+  /* One media bubble: the shared frame (dmBubble), its body lazily loading the
      decrypted media as an <img>/<video>/<audio> (or a download link). */
-  function dmMediaNode(m: any, otherLabel: any, other: any, envInfo: any) {
-    var mine = m.sender_hash === state.myHash;
-    var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
-    if (m.id) node.setAttribute('data-dmid', String(m.id));   // likes/receipts address bubbles by id
-    var head = el('div', 'comment-head');
-    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    var mdt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
-    mdt.title = fmtDateTime(m.created_at);
-    head.appendChild(mdt);
-    node.appendChild(head);
+  function dmMediaNode(m: any, ctx: any, envInfo: any) {
     var bodyEl = el('div', 'comment-body dm-media-body');
     var holder = el('div', 'dm-media');
     holder.appendChild(loadingLine('Loading ' + ((envInfo && envInfo.name) || 'media') + '…', 'dm-media-status'));
     bodyEl.appendChild(holder);
     if (envInfo && envInfo.caption) bodyEl.appendChild(fillBody(el('div', 'dm-media-caption'), envInfo.caption));
-    node.appendChild(bodyEl);
+    var node = dmBubble(m, bodyEl, { reply: m.reply, ctx: ctx });
     /* On approach, not on render: see whenNear. */
     var tries = 0;
     function paint() {
@@ -1212,105 +1585,69 @@
     whenNear(node, paint);
     return node;
   }
-  /* An elegant stand-in for a media attachment the 30-day hard cap has swept away
-     while the (saved) message itself survives — no fetch, just the placeholder over
+  /* The stand-in for a media attachment the 30-day hard cap has swept away
+     while the (saved) message itself survives — no fetch, the placeholder over
      any caption the message still carries. */
-  function dmMediaExpiredNode(m: any, otherLabel: any, caption: any) {
-    var mine = m.sender_hash === state.myHash;
-    var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
-    var head = el('div', 'comment-head');
-    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    var mdt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
-    mdt.title = fmtDateTime(m.created_at);
-    head.appendChild(mdt);
-    node.appendChild(head);
+  function dmMediaExpiredNode(m: any, ctx: any, caption: any) {
     var bodyEl = el('div', 'comment-body dm-media-body');
     var ph = el('div', 'dm-media-expired');
     ph.appendChild(el('span', 'dm-media-expired-icon', '🖼️'));
     ph.appendChild(el('span', 'dm-media-expired-text', 'Attachment expired'));
     bodyEl.appendChild(ph);
     if (caption) bodyEl.appendChild(fillBody(el('div', 'dm-media-caption'), caption));
-    node.appendChild(bodyEl);
-    return node;
+    return dmBubble(m, bodyEl, { reply: m.reply, ctx: ctx });
   }
-  /* Render one decrypted DM message: text via dmMsgNode, media via dmMediaNode,
-     with the per-message controls (save, and — on your own — edit + delete)
-     attached. Shared by history + live paths. A deleted message renders as the
-     "<redacted>" placeholder with no controls. */
-  function dmRenderMsg(m: any, otherPub: any, shortName: any, other: any) {
-    if (m.redacted) return dmRedactedNode(m, shortName);
-    var e = Number(m.enc || 0);
-    var lbl = shortName;
+  /* Render one DM message — decrypting upstream of the bubble builders, parsing
+     the reply envelope, keeping the media envelope on the message (a quote and
+     a Copy read it) — then arm it: the saved mark, the reaction pill, the
+     gestures. Shared by the history loop, the live drop-in, and my own echo
+     (which arrives with its envelope already in hand). A deleted message is the
+     "<redacted>" placeholder and takes no gesture. */
+  function dmRenderMsg(m: any, ctx: any) {
     var node;
-    if (m.media_key) {
-      var envInfo = null;
-      if (e === 1) { try { envInfo = JSON.parse(dmDecrypt(m.body, otherPub) || 'null'); } catch (x) { envInfo = null; } }
-      if (envInfo) node = dmMediaNode(m, lbl, other, envInfo);
-      else { m.body = '⚠️ could not open media'; node = dmMsgNode(m, lbl); }
-    } else if (m.media_expired) {
-      var cap = '';
-      if (e === 1) { try { var ev = JSON.parse(dmDecrypt(m.body, otherPub) || 'null'); cap = (ev && ev.caption) || ''; } catch (x2) { cap = ''; } }
-      node = dmMediaExpiredNode(m, lbl, cap);
-    } else {
-      if (e === 1) m.body = dmDecrypt(m.body, otherPub) || '⚠️ could not decrypt';
-      else if (e === 2) lbl = '⚙️ Automated notice';
-      node = dmMsgNode(m, lbl);
+    if (m.redacted) node = dmRedactedNode(m);
+    else {
+      var e = Number(m.enc || 0);
+      if (m.media_key) {
+        var envInfo = m._env || null;
+        if (!envInfo && e === 1) { try { envInfo = JSON.parse(dmDecrypt(m.body, ctx.otherPub) || 'null'); } catch (x) { envInfo = null; } }
+        if (envInfo) { m._env = envInfo; m.reply = dmReplyClean(envInfo.reply); node = dmMediaNode(m, ctx, envInfo); }
+        else { m.body = '⚠️ could not open media'; node = dmMsgNode(m, ctx, null); }
+      } else if (m.media_expired) {
+        var cap = '';
+        if (e === 1) {
+          try { var ev = JSON.parse(dmDecrypt(m.body, ctx.otherPub) || 'null'); if (ev) { m._env = ev; m.reply = dmReplyClean(ev.reply); cap = ev.caption || ''; } } catch (x2) { cap = ''; }
+        }
+        node = dmMediaExpiredNode(m, ctx, cap);
+      } else {
+        var sysLabel = null;
+        if (e === 1) { var pt = dmParseText(dmDecrypt(m.body, ctx.otherPub) || '⚠️ could not decrypt'); m.body = pt.text; m.reply = pt.reply; }
+        else if (e === 2) sysLabel = '⚙️ Automated notice';
+        node = dmMsgNode(m, ctx, sysLabel);
+      }
     }
-    dmAppendControls(m, node, otherPub, shortName, other);
+    dmArmMessage(m, node, ctx);
     return node;
   }
-  /* Append the per-message controls to a rendered bubble: the save toggle for
-     any message, and — only on your OWN, non-system, non-redacted messages — an
-     edit link (text messages) and a delete link. Editing re-encrypts a new body
-     to the same pair secret; deleting redacts it (a "<redacted>" note both sides
-     keep until it would have expired). */
-  function dmAppendControls(m: any, node: any, otherPub: any, shortName: any, other: any) {
-    /* The like ♡ stays a subtle inline affordance (the readability standard);
-       save/edit/delete fold into the bubble head's ⋯ menu. */
-    dmLikeControl(m, node, other);
-    var items: any[] = [];
-    var sv = dmSaveControl(m, other);
-    if (sv) items.push(sv);
-    var mine = m.sender_hash === state.myHash;
-    if (mine && !m.redacted && Number(m.enc || 0) !== 2 && m.id) {
-      if (!m.media_key) {   // a media caption is not separately editable
-        var ed = el('a', 'dm-edit', 'edit');
-        ed.href = '#';
-        ed.addEventListener('click', function (e: any) { e.preventDefault(); dmStartEdit(m, node, otherPub, shortName, other); });
-        items.push(ed);
-      }
-      var del = el('a', 'dm-del', 'delete');
-      del.href = '#';
-      del.addEventListener('click', function (e: any) {
-        e.preventDefault();
-        appConfirm('Delete this message? A “<redacted>” note stands in its place for both of you until it would have disappeared anyway.', { okLabel: 'Delete', danger: true }, function (ok: any) {
-          if (!ok) return;
-          fetch(API + '/dm/redact', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: state.key, with: other, id: m.id }) })
-            .then(function (r) { return r.json(); }).then(function (d) {
-              if (blockedOut(d)) return;
-              if (d && d.ok) { m.redacted = 1; dmMakeRedacted(node, true); }
-            }).catch(function () {});
-        });
-      });
-      items.push(del);
-    }
-    if (items.length) {
-      var head = node.querySelector('.comment-head');
-      if (head) head.appendChild(postMenu({ items: items }));
-      else node.appendChild(postMenu({ items: items }));
-    }
+  function dmArmMessage(m: any, node: any, ctx: any) {
+    dmSavedPaint(m, node);
+    if (m.redacted || !m.id) { node.mcDead = true; return; }
+    if (ctx.byId) ctx.byId[String(m.id)] = m;
+    dmReactPaint(m, node, ctx);
+    dmArmGestures(m, node, ctx);
+    node.mcReactPaint = function (emoji: any) { m.react_other = String(emoji || ''); dmReactPaint(m, node, ctx); };
+    node.mcSavedPaint = function (saved: any) { m.saved = saved ? 1 : 0; dmSavedPaint(m, node); };
   }
-  /* Turn a live text bubble into an in-place editor. Saving re-encrypts and
-     posts /dm/edit; on success the body re-renders and an "(edited)" marker is
-     added (the other side is told live). The current plaintext is m.body, which
-     dmRenderMsg has already decrypted into place. */
-  function dmStartEdit(m: any, node: any, otherPub: any, shortName: any, other: any) {
+  /* Turn a live text bubble into an in-place editor. Saving re-encrypts — the
+     reply envelope re-wrapped around the new text — and posts /dm/edit; on
+     success the body re-renders and the meta row gains "edited" (the other
+     side is told live). m.body is the plaintext dmRenderMsg decrypted. */
+  function dmStartEdit(m: any, node: any, ctx: any) {
     if (node.querySelector('.dm-edit-box')) return;
-    var bodyEl = node.querySelector('.comment-body');
-    var actions = node.querySelector('.dm-msg-actions');
+    var bodyEl = node.querySelector(':scope > .comment-body');
+    var meta = node.querySelector(':scope > .dm-meta');
     if (bodyEl) bodyEl.style.display = 'none';
-    if (actions) actions.style.display = 'none';
+    if (meta) meta.style.display = 'none';
     var box = el('div', 'dm-edit-box');
     var ta = el('textarea', 'comment-text');
     ta.rows = 3;
@@ -1326,7 +1663,7 @@
     box.appendChild(st);
     node.appendChild(box);
     ta.focus();
-    function done() { box.remove(); if (bodyEl) bodyEl.style.display = ''; if (actions) actions.style.display = ''; }
+    function done() { box.remove(); if (bodyEl) bodyEl.style.display = ''; if (meta) meta.style.display = ''; }
     cancel.addEventListener('click', done);
     save.addEventListener('click', function () {
       var nv = ta.value.replace(/\s+$/, '');
@@ -1334,31 +1671,67 @@
       if (nv === (m.body || '')) { done(); return; }
       save.disabled = true; st.textContent = 'Saving…';
       fetch(API + '/dm/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, with: other, id: m.id, body: dmEncrypt(nv, otherPub), enc: 1 }) })
+        body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, body: dmEncrypt(dmWrapText(nv, m.reply), ctx.otherPub), enc: 1 }) })
         .then(function (r) { return r.json(); }).then(function (d) {
           if (blockedOut(d)) return;
           if (!d || !d.ok) { st.textContent = (d && d.error) || 'Could not save.'; save.disabled = false; return; }
           m.body = nv; m.edited_at = d.edited_at || Math.floor(Date.now() / 1000);
           if (bodyEl) { bodyEl.textContent = ''; fillBody(bodyEl, nv); }
-          var head = node.querySelector('.comment-head');
-          if (head && !head.querySelector('.dm-edited')) head.appendChild(el('span', 'dm-edited', ' (edited)'));
+          dmMarkEdited(node);
           done();
         }).catch(function () { st.textContent = 'Network error. Try again.'; save.disabled = false; });
     });
   }
+  function dmMarkEdited(node: any) {
+    var meta = node.querySelector(':scope > .dm-meta');
+    if (meta && !meta.querySelector('.dm-edited')) meta.insertBefore(el('span', 'dm-edited', 'edited'), meta.firstChild);
+  }
   /* Mutate a bubble in place into the "<redacted>" placeholder, stripping its
-     body/media and every control. Used by my own delete and by the live redact
-     push from the other side. */
+     body/media, its quote, its pill, and every control; a surface open over it
+     closes. Used by my own delete and by the live redact from the other side. */
   function dmMakeRedacted(node: any, mine: any) {
+    node.mcDead = true;
     node.classList.add('dm-redacted-msg');
-    var body = node.querySelector('.comment-body');
+    node.classList.remove('dm-saved'); node.classList.remove('dm-has-react');
+    var body = node.querySelector(':scope > .comment-body');
     if (body) {
       body.textContent = '';
       body.className = 'comment-body';
       body.appendChild(el('span', 'dm-redacted', mine ? '<redacted> — you deleted this message' : '<redacted>'));
     }
-    ['.dm-msg-actions', '.dm-save', '.dm-edit-box', '.dm-receipt'].forEach(function (sel) {
+    ['.dm-quote', '.dm-react-pill', '.dm-more', '.dm-edit-box', '.dm-receipt', '.dm-savedmark', '.dm-sys-label'].forEach(function (sel) {
       var n = node.querySelector(sel); if (n) n.remove();
+    });
+    if (dmActOpen && dmActOpen.node === node) dmCloseActions();
+  }
+  /* Copy a message's text (or a media caption) to the clipboard, with a word
+     of feedback; the old execCommand road where the async clipboard is absent. */
+  function dmCopy(text: any, ctx: any) {
+    var str = String(text == null ? '' : text);
+    var done = function () { if (ctx.note) ctx.note('Copied.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(str).then(done, function () { if (ctx.note) ctx.note('Could not copy.'); });
+      return;
+    }
+    var ta = el('textarea');
+    ta.value = str; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { /* silent */ }
+    ta.remove();
+  }
+  /* Delete (redact) one of my own messages: a "<redacted>" note stands in its
+     place for both of us until it would have disappeared anyway. */
+  function dmDeleteMsg(m: any, node: any, ctx: any) {
+    appConfirm('Delete this message? A “<redacted>” note stands in its place for both of you until it would have disappeared anyway.', { okLabel: 'Delete', danger: true }, function (ok: any) {
+      if (!ok) return;
+      fetch(API + '/dm/redact', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id }) })
+        .then(function (r) { return r.json(); }).then(function (d) {
+          if (blockedOut(d)) return;
+          if (d && d.ok) { m.redacted = 1; dmMakeRedacted(node, true); }
+        }).catch(function () {});
     });
   }
   /* One injected style block for the disappearing/media/settings UI — kept out of
@@ -1368,12 +1741,68 @@
     var css = '' +
       '.dm-expiry{font-size:0.85em;opacity:0.72;margin:0.15em 0 0.5em}' +
       '.dm-expiry a{cursor:pointer}' +
-      '.dm-save{font-size:0.78em;opacity:0.55;margin-left:10px;cursor:pointer;white-space:nowrap}' +
-      '.dm-save:hover{opacity:0.9}' +
-      '.dm-like-row{display:flex;align-items:center;gap:0.45em;margin-top:0.25em;min-height:1.2em}' +
-      '.dm-like-btn{background:none;border:0;cursor:pointer;font:inherit;font-size:1.05em;line-height:1;color:var(--faint);padding:0.1em 0.35em;border-radius:8px}' +
-      '.dm-like-btn.on,.dm-like-btn:hover{color:var(--maroon)}' +
-      '.dm-like-chip{font-size:0.8em;color:var(--maroon);border:1px solid var(--rule);border-radius:999px;padding:0.05em 0.5em;background:var(--surface)}' +
+      /* The WhatsApp-shaped bubble (2026-09-10): a meta row at the foot, the
+         saved ring, the quote block, the reaction pill hanging off the corner,
+         the hover ⌄, the day chips, and the press-and-hold surface. The bubble's
+         base card (border, fill, radius, position:relative) is main.css's. */
+      '.dm-msg{--dm-saved:#d9a520;transition:transform .18s ease}' +
+      '.dm-msg.dm-swiping{transition:none}' +
+      '.dm-msg.dm-swipe-armed{box-shadow:-4px 0 0 0 var(--maroon,#8b1a1a)}' +
+      '.dm-sys-label{font-size:.78em;color:var(--faint);margin-bottom:.2em}' +
+      '.dm-meta{display:flex;justify-content:flex-end;align-items:center;gap:.45em;margin-top:.2em;font-size:.72em;line-height:1.2;color:var(--faint);white-space:nowrap}' +
+      '.dm-meta .comment-date{font-size:1em;color:inherit;margin:0}' +
+      '.dm-edited{font-style:italic;opacity:.85}' +
+      '.dm-receipt{opacity:.85;letter-spacing:-.08em}' +
+      '.dm-receipt-seen{color:var(--maroon,#8b1a1a);opacity:1}' +
+      '.dm-savedmark{color:var(--dm-saved);font-size:1.1em;line-height:1}' +
+      '.dm-msg.dm-saved{box-shadow:0 0 0 2px var(--dm-saved);border-color:var(--dm-saved)}' +
+      '.dm-quote{display:block;border-left:3px solid var(--maroon,#8b1a1a);background:color-mix(in srgb,var(--ink,#000) 7%,transparent);border-radius:6px;padding:.3em .6em;margin:0 0 .35em;cursor:pointer;font-size:.9em;max-width:100%;overflow:hidden}' +
+      '.dm-quote:focus-visible{outline:2px solid var(--maroon,#8b1a1a);outline-offset:1px}' +
+      '.dm-quote-who{display:block;font-weight:600;color:var(--maroon,#8b1a1a);font-size:.85em}' +
+      '.dm-quote-text{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--ink-soft,#333);opacity:.85;white-space:normal;overflow-wrap:anywhere}' +
+      '.dm-flash{animation:dm-flash 1.2s ease}' +
+      '@keyframes dm-flash{0%,55%{box-shadow:0 0 0 3px color-mix(in srgb,var(--maroon,#8b1a1a) 60%,transparent)}100%{box-shadow:none}}' +
+      '.dm-react-pill{position:absolute;bottom:-.9em;right:.6em;display:inline-flex;align-items:center;gap:.15em;font:inherit;font-size:.82em;line-height:1;padding:.2em .45em;border:1px solid var(--rule);border-radius:999px;background:var(--surface,#fff);color:var(--ink);box-shadow:var(--shadow-1);cursor:pointer;z-index:1}' +
+      '.dm-msg:not(.dm-mine) .dm-react-pill{right:auto;left:.6em}' +
+      '.dm-react-pill .mc-emoji{height:1.25em;vertical-align:-.2em;margin:0}' +
+      '.dm-react-n{font-size:.85em;color:var(--faint);margin-left:.1em}' +
+      '.dm-msg.dm-has-react{margin-bottom:1.3rem}' +
+      '.dm-more{position:absolute;top:.2em;right:.3em;font:inherit;line-height:1;background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;width:1.5em;height:1.5em;padding:0 0 .15em;cursor:pointer;color:var(--faint);opacity:0;transition:opacity .12s;z-index:1}' +
+      '.dm-msg:hover .dm-more,.dm-more:focus-visible{opacity:1}' +
+      '.dm-msg.dm-held{box-shadow:0 8px 28px rgba(0,0,0,.28)}' +
+      '.dm-day{width:max-content;max-width:90%;margin:.9em auto .35em;font-size:.72em;color:var(--faint);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;padding:.15em .75em;text-align:center}' +
+      '@media (hover:none){.dm-more{display:none}.dm-msg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y pinch-zoom}.dm-msg textarea{-webkit-user-select:text;user-select:text}}' +
+      /* the action surface: a hole between four pieces of scrim (phone) or a
+         popover at the pointer (desktop); scrim inert to touch, overscroll contained */
+      '.dm-act{position:fixed;inset:0;z-index:4100;pointer-events:none}' +
+      '.dm-act>*{pointer-events:auto}' +
+      '.dm-act-scrim{position:fixed;background:rgba(0,0,0,.45);touch-action:none;overscroll-behavior:contain}' +
+      '.dm-act-desk .dm-act-scrim{inset:0;background:transparent}' +
+      '.dm-act-bar{position:fixed;display:flex;gap:2px;align-items:center;padding:4px;border-radius:999px;background:var(--surface,#fff);border:1px solid var(--rule);box-shadow:var(--shadow-2);max-width:calc(100vw - 20px);overflow-x:auto;overscroll-behavior:contain;animation:dm-act-in .16s ease-out;transform-origin:bottom left}' +
+      '.dm-act-mine .dm-act-bar,.dm-act-mine .dm-act-menu{transform-origin:bottom right}' +
+      '.dm-act-emoji{width:2.4em;height:2.4em;display:inline-flex;align-items:center;justify-content:center;border:0;background:none;border-radius:999px;font:inherit;font-size:1.35rem;line-height:1;cursor:pointer;padding:0;flex:none;color:var(--ink)}' +
+      '.dm-act-emoji:hover{background:color-mix(in srgb,var(--maroon,#8b1a1a) 8%,transparent)}' +
+      '.dm-act-emoji.on{background:color-mix(in srgb,var(--maroon,#8b1a1a) 16%,transparent);box-shadow:0 0 0 2px var(--maroon,#8b1a1a) inset}' +
+      '.dm-act-emoji .mc-emoji{height:1.3em;margin:0;vertical-align:middle}' +
+      '.dm-act-more{font-size:1.45rem;color:var(--faint);border:1px solid var(--rule);width:2.1em;height:2.1em;margin-left:2px}' +
+      '.dm-act-menu{position:fixed;min-width:12.5rem;max-width:calc(100vw - 20px);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow-2);padding:.3rem;animation:dm-act-in .16s ease-out;transform-origin:top left}' +
+      '.dm-act-item{display:flex;align-items:center;gap:.7em;width:100%;text-align:left;font:inherit;font-size:1rem;color:var(--ink);background:none;border:0;border-radius:9px;padding:.6rem .7rem;cursor:pointer;margin:0}' +
+      '.dm-act-item:hover,.dm-act-item:focus-visible{background:color-mix(in srgb,var(--maroon,#8b1a1a) 8%,transparent);color:var(--maroon,#8b1a1a)}' +
+      '.dm-act-ico{width:1.4em;text-align:center;flex:none;color:var(--faint);font-size:1.05em}' +
+      '.dm-act-item.on .dm-act-ico{color:var(--dm-saved,#d9a520)}' +
+      '.dm-act-danger,.dm-act-danger .dm-act-ico{color:var(--maroon,#8b1a1a)}' +
+      '.dm-act-pop{position:fixed;display:flex;flex-direction:column;gap:6px;align-items:flex-start}' +
+      '.dm-act-pop .dm-act-bar,.dm-act-pop .dm-act-menu{position:static}' +
+      '.dm-act .dm-act-picker{position:fixed;left:10px;right:10px;bottom:10px;margin:0;z-index:1;max-height:70vh;display:flex;flex-direction:column;box-shadow:var(--shadow-2)}' +
+      '.dm-act .dm-act-picker .emoji-body{max-height:45vh}' +
+      '.dm-act-desk .dm-act-picker{position:static;width:22rem;max-width:calc(100vw - 20px)}' +
+      '@keyframes dm-act-in{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:none}}' +
+      /* the reply strip above the composer */
+      '.dm-reply-bar{display:flex;align-items:center;gap:.5em;margin:0 0 .4em;padding:.35em .5em .35em .7em;border-left:3px solid var(--maroon,#8b1a1a);background:color-mix(in srgb,var(--ink,#000) 6%,transparent);border-radius:8px}' +
+      '.dm-reply-body{flex:1;min-width:0;font-size:.9em}' +
+      '.dm-reply-body .dm-quote-text{-webkit-line-clamp:2}' +
+      '.dm-reply-x{flex:none;font:inherit;background:none;border:0;cursor:pointer;color:var(--faint);font-size:1.1em;padding:.2em .45em;border-radius:6px}' +
+      '.dm-reply-x:hover{color:var(--maroon,#8b1a1a)}' +
       '.dm-attach-chip{display:inline-block;font-size:0.85em;opacity:0.85;margin:0.3em 0}' +
       '.btn-attach{margin-left:6px}' +
       '.dm-media{margin:0.1em 0}' +
@@ -1388,8 +1817,6 @@
       '.dm-dot-on{background:#3ba55d;box-shadow:0 0 0 2px rgba(59,165,93,0.22)}' +
       '.dm-dot-off{background:#c0c0c0}.dm-dot-unknown{background:#dcdcdc}' +
       '.dm-typing{font-size:0.85em;opacity:0.7;font-style:italic;margin:0.25em 0.2em}' +
-      '.dm-receipt{display:block;font-size:0.72em;opacity:0.5;margin-top:2px}' +
-      '.dm-receipt-seen{opacity:0.8;color:var(--maroon,#8b1a1a)}' +
       '.mc-inbox-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;background:#3ba55d}' +
       '.wall-media{margin:0.45em 0}' +
       '.wall-media-el{max-width:100%;max-height:62vh;border-radius:8px;display:block}' +
@@ -1403,13 +1830,8 @@
       '.wall-newpill{display:inline-block;margin:0.4em 0;padding:0.3em 0.85em;border-radius:14px;background:var(--maroon,#8b1a1a);color:#fff;font-size:0.85em;cursor:pointer;text-decoration:none}' +
       '.wall-composer{margin:0.6em 0 1.1em}.wall-del{color:var(--maroon,#8b1a1a);opacity:0.7}' +
       '.wall-sentinel{height:1px}' +
-      '.dm-edited{font-size:0.72em;opacity:0.5;font-style:italic}' +
       '.dm-redacted{font-style:italic;opacity:0.6}' +
       '.dm-redacted-msg .comment-body{opacity:0.9}' +
-      '.dm-msg-actions{margin-top:2px}' +
-      '.dm-msg-actions a{font-size:0.78em;opacity:0.5;margin-right:10px;cursor:pointer;white-space:nowrap}' +
-      '.dm-msg-actions a:hover{opacity:0.9}' +
-      '.dm-del{color:var(--maroon,#8b1a1a)}' +
       '.dm-edit-box textarea{width:100%;box-sizing:border-box}' +
       '.dm-edit-box{margin-top:3px}' +
       '.admin-set-row{margin:0.6em 0}' +
@@ -2574,7 +2996,7 @@
      the standard set (grouped, scrolling) and each pack. On touch the search
      focuses on open, so a tap behaves like typing ":". Kept short with an inner
      scroll so it never swallows the screen. */
-  function buildEmojiPanel(textarea: any) {
+  function buildEmojiPanel(textarea: any, onPick?: (it: any) => void) {
     ensureEmojiStyles();
     var panel = el('div', 'emoji-panel');
     panel.hidden = true;
@@ -2591,7 +3013,9 @@
     });
     panel.appendChild(tabs); panel.appendChild(body);
     function mark() { TABS.forEach(function (t) { tabBtns[t[0]].className = 'emoji-tab' + (t[0] === active ? ' emoji-tab-on' : ''); }); }
-    function put(it: any) { insertEmojiItem(textarea, it); textarea.focus(); }
+    /* A pick goes to the caller when one is given (the DM reaction picker);
+       else into the textarea at the caret, as always. */
+    function put(it: any) { if (onPick) { onPick(it); return; } insertEmojiItem(textarea, it); textarea.focus(); }
     function cellChar(ch: any, label: any) {
       var b = el('button', 'emoji-cell'); b.type = 'button'; b.textContent = ch; b.title = ':' + label + ':';
       b.addEventListener('click', function () { put({ kind: 'char', char: ch }); });
@@ -3920,11 +4344,17 @@
     var openDm = new URLSearchParams(location.search).get('dm');
     if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.redactMsg) state.dmView.redactMsg(m.message.id);
   }
-  /* The other party liked (or unliked) a message in the open conversation:
-     light the heart on that bubble. Quiet by design — no badge, no sound. */
-  function onLiveDmLike(m: any) {
+  /* The other party reacted (or withdrew a reaction) on a message in the open
+     conversation: repaint that bubble's pill. Quiet by design — no badge, no sound. */
+  function onLiveDmReact(m: any) {
     var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.likeMsg) state.dmView.likeMsg(m.message);
+    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.reactMsg) state.dmView.reactMsg(m.message);
+  }
+  /* The other party saved (or unsaved) a message in the open conversation: a
+     save is for both, so the bubble lights (or dims) here too. */
+  function onLiveDmSave(m: any) {
+    var openDm = new URLSearchParams(location.search).get('dm');
+    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.saveMsg) state.dmView.saveMsg(m.message);
   }
   function onLiveNotif() {
     /* The notifications list (McNotifications) reloads itself and marks read;
@@ -4086,7 +4516,8 @@
     else if (m.t === 'dm-ttl') onLiveDmTtl(m);
     else if (m.t === 'dm-edit') onLiveDmEdit(m);
     else if (m.t === 'dm-redact') onLiveDmRedact(m);
-    else if (m.t === 'dm-like') onLiveDmLike(m);
+    else if (m.t === 'dm-react') onLiveDmReact(m);
+    else if (m.t === 'dm-save') onLiveDmSave(m);
     else if (m.t === 'dm-read') onLiveDmRead(m);
     else if (m.t === 'typing') onLiveTyping(m);
     else if (m.t === 'presence') onLivePresence(m);
@@ -8149,36 +8580,20 @@ trace('submit: feed post');
     return a;
   }
 
-  function dmMsgNode(m: any, otherLabel: any) {
-    var mine = m.sender_hash === state.myHash;
-    var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
-    if (m.id) node.setAttribute('data-dmid', String(m.id));
-    var head = el('div', 'comment-head');
-    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    var dt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
-    dt.title = fmtDateTime(m.created_at);
-    head.appendChild(dt);
-    if (m.edited_at) head.appendChild(el('span', 'dm-edited', ' (edited)'));
-    node.appendChild(head);
-    node.appendChild(fillBody(el('div', 'comment-body'), m.body));
-    return node;
+  /* A text bubble: the shared frame around the rendered body (m.body is the
+     plaintext dmRenderMsg decrypted; m.reply the envelope's quote, if any). */
+  function dmMsgNode(m: any, ctx: any, sysLabel: any) {
+    return dmBubble(m, fillBody(el('div', 'comment-body'), m.body), { sysLabel: sysLabel, reply: m.reply, ctx: ctx });
   }
   /* A deleted (redacted) message: the ciphertext is gone server-side, and both
      sides see a "<redacted>" placeholder standing in its place until the moment
      the message would have expired anyway. Built from text nodes only. */
-  function dmRedactedNode(m: any, otherLabel: any) {
+  function dmRedactedNode(m: any) {
     var mine = m.sender_hash === state.myHash;
-    var node = el('div', 'dm-msg dm-redacted-msg' + (mine ? ' dm-mine' : ''));
-    if (m.id) node.setAttribute('data-dmid', String(m.id));
-    var head = el('div', 'comment-head');
-    head.appendChild(el('span', 'comment-author', mine ? 'You' : otherLabel));
-    var mdt = el('span', 'comment-date', fmtTimeCompact(m.created_at));
-    mdt.title = fmtDateTime(m.created_at);
-    head.appendChild(mdt);
-    node.appendChild(head);
     var body = el('div', 'comment-body');
     body.appendChild(el('span', 'dm-redacted', mine ? '<redacted> — you deleted this message' : '<redacted>'));
-    node.appendChild(body);
+    var node = dmBubble(m, body, null);
+    node.classList.add('dm-redacted-msg');
     return node;
   }
 
@@ -8244,25 +8659,47 @@ trace('submit: feed post');
            same story on the next paint. */
         try { localStorage.removeItem(DM_CACHE); } catch (e) {}
         dmUnreadCheck();
-        var list = el('div', 'comments-list');
+        var list = el('div', 'comments-list dm-list');
         section.appendChild(list);
         if (!d.messages.length) {
           list.appendChild(el('p', 'comments-status', 'No messages yet. Say the first word.'));
         }
-        /* Read receipts: my own bubbles read "Delivered" until the other opens
-           them (opened_at is set at load, or a live dm-read event flips them to
-           "Seen"). Only my sent messages carry a receipt. */
+        /* Everything a rendered bubble needs to act: the correspondent, the
+           pair's key, the list it lives in (a quote jumps within it), the
+           messages by id (a live edit updates the object a menu reads), the
+           reply hook the composer owns below, and a word of feedback. */
+        var ctx: any = { other: other, otherPub: otherPub, shortName: shortName, list: list, byId: {},
+          reply: function () {},
+          note: function (t: string) { status.textContent = t; if (window.mcToast) window.mcToast(t); } };
+        /* Read receipts: my own bubbles carry ✓ until the other opens them
+           (opened_at is set at load, or a live dm-read event flips them to ✓✓).
+           Only my sent messages carry one; it rides the bubble's meta row. */
         var receipts: any[] = [];
         function addReceipt(node: any, m: any) {
           if (String(m.sender_hash) !== state.myHash) return;
           if (state.prefs && state.prefs.receipts === 'off') return;   // reciprocal: I send none AND see none
           var seen = !!m.opened_at;
-          var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : ''), seen ? '✓✓ Seen' : '✓ Delivered');
-          node.appendChild(r);
+          var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : ''), seen ? '✓✓' : '✓');
+          r.title = seen ? 'Seen' : 'Delivered';
+          r.setAttribute('aria-label', r.title);
+          var meta = node.querySelector(':scope > .dm-meta');
+          (meta || node).appendChild(r);
           receipts.push({ created: Number(m.created_at) || 0, span: r });
         }
-        function renderMsg(m: any) { var n = dmRenderMsg(m, otherPub, shortName, other); addReceipt(n, m); return n; }
-        d.messages.forEach(function (m: any) { list.appendChild(renderMsg(m)); });
+        function renderMsg(m: any) { var n = dmRenderMsg(m, ctx); addReceipt(n, m); return n; }
+        /* Bubbles land under a day chip — Today, Yesterday, a date — whenever
+           the day changes, so each bubble's meta carries only the time. */
+        var lastDay = '';
+        function placeMsg(m: any) {
+          var empty = list.querySelector(':scope > .comments-status');
+          if (empty) empty.remove();   // the first word retires "No messages yet"
+          var day = new Date((Number(m.created_at) || 0) * 1000).toDateString();
+          if (day !== lastDay) { list.appendChild(dmDayNode(m.created_at)); lastDay = day; }
+          var n = renderMsg(m);
+          list.appendChild(n);
+          return n;
+        }
+        d.messages.forEach(function (m: any) { placeMsg(m); });
         /* What this page actually weighs. A killed web view leaves no pagehide
            and no error, so the crumb ring can only say the app died — never
            how much it was carrying. Now it says. */
@@ -8291,7 +8728,10 @@ trace('submit: feed post');
           markRead: function (at: any) {
             var t = Number(at) || 0;
             receipts.forEach(function (rc) {
-              if (rc.created <= t) { rc.span.textContent = '✓✓ Seen'; rc.span.className = 'dm-receipt dm-receipt-seen'; }
+              if (rc.created <= t) {
+                rc.span.textContent = '✓✓'; rc.span.title = 'Seen'; rc.span.setAttribute('aria-label', 'Seen');
+                rc.span.className = 'dm-receipt dm-receipt-seen';
+              }
             });
           },
           append: function (msg: any) {
@@ -8300,8 +8740,7 @@ trace('submit: feed post');
             var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
             d.total += 1;
             if (d.page === newMsgPage) {
-              var node = renderMsg(msg);
-              list.appendChild(node);
+              var node = placeMsg(msg);
               node.scrollIntoView();
               /* Watched it arrive: settle read state + receipt server-side
                  (the send-side quiet bell already skipped the notification). */
@@ -8311,18 +8750,19 @@ trace('submit: feed post');
             }
           },
           /* The other party edited a message they sent me: re-render its body
-             (decrypting) and mark it "(edited)". Only its text body changes. */
+             (decrypting, the reply envelope parsed away) and mark it edited.
+             Only its text changes; the object the menu reads follows. */
           editMsg: function (msg: any) {
             if (!msg || !msg.id) return;
             var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
             if (!bubble || bubble.classList.contains('dm-redacted-msg') || bubble.querySelector('.dm-media')) return;
-            var body = bubble.querySelector('.comment-body');
-            if (body) {
-              var text = Number(msg.enc || 0) === 1 ? (dmDecrypt(msg.body, otherPub) || '⚠️ could not decrypt') : (msg.body || '');
-              body.textContent = ''; fillBody(body, text);
-            }
-            var head = bubble.querySelector('.comment-head');
-            if (head && !head.querySelector('.dm-edited')) head.appendChild(el('span', 'dm-edited', ' (edited)'));
+            var body = bubble.querySelector(':scope > .comment-body');
+            var text = Number(msg.enc || 0) === 1 ? (dmDecrypt(msg.body, otherPub) || '⚠️ could not decrypt') : (msg.body || '');
+            var pt = dmParseText(text);
+            if (body) { body.textContent = ''; fillBody(body, pt.text); }
+            var mm = ctx.byId[String(msg.id)];
+            if (mm) { mm.body = pt.text; mm.edited_at = msg.edited_at || Math.floor(Date.now() / 1000); }
+            dmMarkEdited(bubble);
           },
           /* The other party deleted a message they sent me: show "<redacted>". */
           redactMsg: function (id: any) {
@@ -8330,11 +8770,17 @@ trace('submit: feed post');
             var bubble = list.querySelector('[data-dmid="' + String(id).replace(/"/g, '') + '"]');
             if (bubble) dmMakeRedacted(bubble, false);
           },
-          /* The other party liked/unliked one of these bubbles: repaint it. */
-          likeMsg: function (msg: any) {
+          /* The other party reacted (or withdrew) on one of these bubbles: repaint its pill. */
+          reactMsg: function (msg: any) {
             if (!msg || !msg.id) return;
             var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
-            if (bubble && (bubble as any).mcLikePaint) (bubble as any).mcLikePaint(msg.like);
+            if (bubble && (bubble as any).mcReactPaint) (bubble as any).mcReactPaint(msg.emoji);
+          },
+          /* The other party saved (or unsaved) one of these bubbles: light it for me too. */
+          saveMsg: function (msg: any) {
+            if (!msg || !msg.id) return;
+            var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
+            if (bubble && (bubble as any).mcSavedPaint) (bubble as any).mcSavedPaint(msg.saved);
           } };
         /* Watch the other party's online state live (the DO seeds it now), and
            carry the on-screen claim (dmview:<other>) that keeps THIS thread's
@@ -8354,6 +8800,27 @@ trace('submit: feed post');
         ta.maxLength = 4000;
         ta.rows = 3;
         ta.placeholder = 'Write your message.';
+        /* "Replying to …": the strip above the box while a reply is armed —
+           from the surface's Reply, or a swipe on a bubble — with the ✕ that
+           disarms it. The quote rides inside the next send's E2E plaintext. */
+        var replyTo: any = null;
+        var replyBar = el('div', 'dm-reply-bar');
+        replyBar.hidden = true;
+        var replyBody = el('div', 'dm-reply-body');
+        var replyX = el('button', 'dm-reply-x', '✕');
+        replyX.type = 'button'; replyX.title = 'Cancel reply'; replyX.setAttribute('aria-label', 'Cancel reply');
+        replyBar.appendChild(replyBody); replyBar.appendChild(replyX);
+        function setReply(ref: any) {
+          replyTo = ref;
+          replyBody.textContent = '';
+          if (!ref) { replyBar.hidden = true; return; }
+          replyBody.appendChild(el('span', 'dm-quote-who', 'Replying to ' + (ref.from === state.myHash ? 'yourself' : shortName)));
+          replyBody.appendChild(el('span', 'dm-quote-text', dmQuoteText(ref)));
+          replyBar.hidden = false;
+        }
+        replyX.addEventListener('click', function () { setReply(null); ta.focus(); });
+        ctx.reply = function (m: any) { setReply(dmReplyRef(m)); ta.focus(); };
+        form.appendChild(replyBar);
         form.appendChild(mdEditor(ta));
         attachDraft(ta, 'dm:' + other);
         /* Sparing typing signal: a "start" at most once per 3s while composing,
@@ -8463,6 +8930,7 @@ trace('submit: feed post');
       trace('submit: DM send');
     status.textContent = 'Verifying...';
           var sending = pendingFile;   // captured: the echo path needs the local file
+          var replyAt = replyTo;       // captured: the quote this send answers
           getToken().then(function (token) {
             if (sending) {
               /* Media: encrypt the file in the browser, upload only ciphertext,
@@ -8477,6 +8945,7 @@ trace('submit: feed post');
                   if (!u.ok) throw new Error(u.error || 'The file could not be uploaded.');
                   status.textContent = 'Sending...';
                   if (body.trim()) mm.env.caption = body;
+                  if (replyAt) mm.env.reply = replyAt;
                   return fetchRetry(API + '/dm/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -8489,7 +8958,7 @@ trace('submit: feed post');
             return fetchRetry(API + '/dm/send', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, to: other, body: dmEncrypt(body, otherPub), enc: 1, token: token }),
+              body: JSON.stringify({ key: state.key, to: other, body: dmEncrypt(dmWrapText(body, replyAt), otherPub), enc: 1, token: token }),
             }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
               .then(function (r) { return r.json(); });
           }).then(function (d2) {
@@ -8502,6 +8971,7 @@ trace('submit: feed post');
                instantly without a round-trip. */
             if (sending && d2._media_key) { try { mcDmBlobPut(d2._media_key, URL.createObjectURL(sending), sending.size || 0); } catch (e) {} }
             clearAttach();
+            setReply(null);
             /* Newest message lands at the bottom of the last page. Show it
                inline when that page is on screen; else jump to it. */
             var msgPage = Math.ceil((d.total + 1) / d.per);
@@ -8509,16 +8979,16 @@ trace('submit: feed post');
               d.total += 1;
               var node;
               if (sending && d2._media_key) {
-                var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0, enc: 1 };
-                node = dmMediaNode(mecho, shortName, other, d2._env);
-                dmAppendControls(mecho, node, otherPub, shortName, other);   // save + delete (edit not offered for media)
+                /* The media echo arrives with its envelope in hand (no decrypt). */
+                var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0, enc: 1,
+                  _env: d2._env, reply: dmReplyClean(replyAt), react_me: '', react_other: '' };
+                node = placeMsg(mecho);
               } else {
-                /* Route the text echo through dmRenderMsg so my just-sent
-                   message carries edit/delete at once (body is already plaintext). */
-                var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0, enc: 0 };
-                node = dmRenderMsg(echo, otherPub, shortName, other);
+                /* The text echo is already plaintext (enc 0) and carries its quote. */
+                var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0, enc: 0,
+                  reply: dmReplyClean(replyAt), react_me: '', react_other: '' };
+                node = placeMsg(echo);
               }
-              list.appendChild(node);
               status.textContent = 'Sent.';
               node.scrollIntoView();
             } else {

@@ -106,6 +106,18 @@ export const displayName = Pseudonym.displayName;
 export const dmTtlLabel = (ttl: number | string): string => Dm.ttlLabel((Number(ttl) || Dm.defaultTtl) | 0);
 export const dmTtlOptions = Dm.ttlOptions;
 
+/* DM reactions (Domain.Dm, 2026-09-10): dmQuickReactions -> the press-and-hold
+   bar's six; dmReaction(raw) -> the validated reaction (exactly one emoji, or a
+   known custom-pack :token: lower-cased) or null — the Maybe erased HERE, the
+   same rule the worker's store runs. dmReplyExcerpt(s) -> the quote a reply
+   carries of the message it answers; dmReplySentinel -> the U+0001 that opens
+   a reply envelope inside the E2E plaintext. Nullish input coerces to ''. */
+export const dmQuickReactions = Dm.quickReactions;
+export const dmReaction = (raw: string): string | null =>
+  Maybe.maybe(null)((s: string) => s)(Dm.normalizeReaction(String(raw == null ? '' : raw)));
+export const dmReplyExcerpt = (s: string): string => Dm.replyExcerpt(String(s == null ? '' : s));
+export const dmReplySentinel = Dm.replySentinel;
+
 /* Post permission predicates (Domain.Access): pure UI authorization over the
    author hash, the viewer's hash, the bot hash, and admin-ness. canInteract =
    DM/mute; canReport = interact & !admin; canEdit = own; canDelete = own|admin.

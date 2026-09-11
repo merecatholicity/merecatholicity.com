@@ -1238,11 +1238,14 @@ a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
    (the 2026-08-03 readability standard; the old flat no-alternation policy is
    retired). */
 .dm-msg {
+  position: relative;   /* the reaction pill and the hover ⌄ hang off the bubble (2026-09-10) */
   border: 1px solid var(--rule); border-radius: 6px; background: var(--surface);
   padding: 0.55rem 0.8rem; margin: 0.55rem 0; max-width: 92%;
 }
 .dm-msg.dm-mine { margin-left: auto; background: var(--cream); }
-.dm-msg .comment-body { margin-top: 0.25em; }
+/* No author line since 2026-09-10 (the side and the fill say who): the body
+   opens the bubble, the meta row (time, ticks) closes it. */
+.dm-msg .comment-body { margin-top: 0; }
 
 /* Moderation: the non-fading ban/lock banner, the danger-red controls, and the
    pending-review rows. */
@@ -1835,7 +1838,11 @@ body.mc-app main.prose > #title-block-header {
   /* Everything inside a LIGHT mine bubble must read on the red fill —
      maroon/muted inks go low-contrast there. Load-bearing; covers head, meta,
      controls. Dark bubbles keep the normal inks, exactly as on desktop. */
-  html[data-theme="light"] .dm-msg.dm-mine :is(.comment-author, .comment-date, .dm-edited, .dm-receipt, .dm-save, .dm-like-chip, .comment-menu, a) { color: rgba(255, 255, 255, 0.85); }
+  html[data-theme="light"] .dm-msg.dm-mine :is(.comment-date, .dm-meta, .dm-edited, .dm-quote-who, .dm-quote-text, .dm-sys-label, a) { color: rgba(255, 255, 255, 0.85); }
+  html[data-theme="light"] .dm-msg.dm-mine .dm-quote { background: rgba(255, 255, 255, 0.16); border-left-color: rgba(255, 255, 255, 0.85); }
+  /* The ticks on the red fill: delivered dim, seen full and bold (maroon would vanish here). */
+  html[data-theme="light"] .dm-msg.dm-mine .dm-receipt { color: rgba(255, 255, 255, 0.6); }
+  html[data-theme="light"] .dm-msg.dm-mine .dm-receipt-seen { color: #fff; font-weight: 700; }
   .merecat-log .merecat-msg.cat, .dm-msg:not(.dm-mine) { background: var(--cream-2); border-bottom-left-radius: 5px; }
   .merecat-quota { font-size: 0.8rem; color: var(--faint); text-align: center; }
 

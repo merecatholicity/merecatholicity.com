@@ -493,10 +493,13 @@ their original timestamps.
 |---|---|---|---|
 | `POST /api/comments/dm/send` | `{key, to:<64-hex>, body:<≤4000>, token}` | `{ok, id, thread_id, created_at}` — **same shape even when shadow-held** (undetectable to the sender). | `POST_LIMIT` · **Turnstile** · gated. Refuses self (`"That would be a soliloquy."`) and the bot. |
 | `POST /api/comments/dm/threads` | `{key, p?}` | `{ok, threads:[{id,other_hash,nick,avatar,msgs,last_at,unread}], total, unread_total, page, per:20}`. Threads with 0 visible messages are absent. | `READ_LIMIT`, **not** gated. |
-| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, other:{hash,nick,avatar}, messages:[{id,sender_hash,body,created_at}], total, page, per:20, blocked}`. **`p` absent → the LAST page.** Opening marks the thread read. | `READ_LIMIT`, not gated. |
+| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. | `READ_LIMIT`, not gated. |
 | `POST /api/comments/dm/unread` | `{key}` | `{ok, unread}` — unread **thread** count. | `READ_LIMIT`, **gated** (this poll is the reliable logout trip). |
 | `POST /api/comments/dm/block` | `{key, hash, blocked:<bool>}` | `{ok, blocked}` | `POST_LIMIT`, not gated. Unblock releases held messages and rings the badge. |
 | `POST /api/comments/dm/delete` | `{key, with}` | `{ok, purged}` — per-side "fresh start"; both sides cleared with nothing newer → the thread is hard-deleted. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/react` | `{key, with, id, emoji}` | `{ok, id, emoji}` — ONE reaction per side per message: `emoji` is exactly one emoji (an RGI-shaped grapheme: a flag, a keycap, a base with selector / skin tone / tag sequence / ZWJ-joined bases) or one of our custom-pack `:tokens:` (lower-cased on the way in), validated by `Domain.Dm.normalizeReaction`; `''` withdraws. Anything else → `400`. Only a message the caller can SEE (their pair's thread, not held from them, not expired, not redacted, after their own clear stamp) → else `404`; a redacted one → `409`. The other party's open thread hears `dm-react` live. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/like` | `{key, with, id, like:<bool>}` | The 2026-08-03 heart on the same road: `like` true is the `❤️` reaction, false withdraws. **Deprecated alias** of `/dm/react`, kept one deploy for cached clients. | as `/dm/react`. |
+| `POST /api/comments/dm/save` | `{key, with, id, saved:<bool>}` | `{ok, saved, expires_at}` — a saved message is exempt from expiry for BOTH (`expires_at` null); unsaving restores the clock from `opened_at` + the thread ttl (or the unopened backstop). Lit for both: the other party's open thread hears `dm-save` live. | `POST_LIMIT`, gated. |
 
 ### 4.2 Notifications
 
@@ -559,6 +562,16 @@ only**. Origin-checked (absent Origin OK), `CONNECT_LIMIT`. Upgrade with
 | `moderation` | `{v:1,t,act:'delete'|'lock'|'unlock'|'sticky'|'unsticky',id,topic_id,cat[,locked|sticky],scopes}` |
 | `edited` | `{v:1,t,topic_id,id,body,edited_at,scopes:['topic:<id>']}` |
 | `moved` | `{v:1,t,id,from,scopes}` (followed by a `new-topic` into the destination cat, for public destinations) |
+
+The keyed member socket (`/api/comments/live` upgraded with a key, scope
+`user:<hash>`) additionally carries the private DM frames, each with `from`
+(the other party) and `thread_id`: `dm` (`message:{id,sender_hash,body,enc,
+created_at,media_key}` — the ciphertext, decrypt client-side), `dm-edit`
+(`message:{id,body,enc,edited_at}`), `dm-redact` (`message:{id}`), `dm-ttl`
+(`ttl`), `dm-read` (`reader, at` — flip your sent bubbles up to `at` to Seen),
+`dm-react` (`message:{id,emoji}`, `''` = withdrawn — 2026-09-10), `dm-save`
+(`message:{id,saved}` — a save lights the bubble for both), `typing`
+(`state:'start'|'stop'`) and `presence`.
 
 Only `status='live'` posts on public (`board:*`, not `adminsonly`) pages ever
 broadcast. Sockets **hibernate** when idle; there is no server heartbeat.
@@ -678,6 +691,8 @@ no longer derive names or ranks. The remaining must-replicate item is the
 | **Drafts / mute / preview** | Per-composer localStorage drafts; a local mute-hash list; a preview toggle. All per-device, never server-visible. | **No.** |
 | **Quote convention** | `> [Name wrote:](permalink)` + `> `-prefixed excerpt. Quoted `>` lines never trigger `@merecat`. | **No** — emit identically for quotes to render. |
 | **Blocked-logout UX** | On any `{blocked}` 403: clear key + caches, show the message, redirect. | Server gives only the `{blocked}` reason; the UX is yours. |
+| **DM reply envelope** (2026-09-10) | A quoted reply rides INSIDE the E2E plaintext, so the server never learns what answers what: plaintext beginning with `U+0001` (`Domain.Dm.replySentinel`) is `U+0001` + JSON `{v:1, text, reply:{id, from:<64-hex sender of the quoted message>, kind:'text'|'image'|'video'|'audio'|'file', text:<excerpt>}}`; plaintext without the sentinel is the bare message. The excerpt is `Domain.Dm.replyExcerpt` (whitespace folded, ≤160 code points + `…`). A media message carries its `reply` inside the media envelope (`{k, iv, name, mime, size, caption?, reply?}`) instead. Render the quote from the envelope (tap = jump to `id` when on the page); never trust `from` beyond the pair. An edit re-wraps the same `reply` around the new text. | **No** — the server holds ciphertext only. |
+| **DM reactions** | One reaction per side per message. Offer the quick six (`Domain.Dm.quickReactions`: 👍 ❤️ 😂 😮 😢 🙏) and the whole picker; send through `/dm/react`; render `react_me`/`react_other` as a pill on the bubble (both glyphs; `× 2` when equal); a `:code:` reaction is the pack image, as in bodies. Validate with the same grammar before the wire (`normalizeReaction`) — the server refuses with `400` otherwise. | Validation is server-enforced; rendering is yours. |
 
 The constants a client would otherwise triplicate — the ADJ/NOUN wordlists,
 cats (keys + labels + order), faith codes + labels, `RANKS`, the `BIBLE`
@@ -796,6 +811,10 @@ passes.
   /api/comments/config` — a native client reads them there instead of copying.
   The worker and `comments.js` still keep inline copies that must stay identical
   until the web client is switched to read `/config`.
+- `/dm/like` is a deprecated alias of `/dm/react` (2026-09-10) and the
+  `liked_me`/`liked_other` thread fields are derived from the reactions; both
+  stand one deploy for cached clients and then go. There is no `dm-like` live
+  frame any more — it is `dm-react` with the emoji.
 - `journal:<id>` page keys (a journal article's comments) are not Discord
   subscription scopes: `parseFeedScope` takes site paths only. The RSS feed
   itself (`/feed?page=journal:<id>`) works while the section is open.

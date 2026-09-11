@@ -261,6 +261,23 @@ class SheetOwnsTheScroll(unittest.TestCase):
                          "the scrim lost touch-action: none in the build")
 
 
+class DmBubbleIsTheMount(unittest.TestCase):
+    """The DM bubble (2026-09-10) is the box the reaction pill and the hover ⌄ hang
+    from — both absolutely positioned by the injected DM stylesheet, so the base
+    card in main.css must be position: relative or they land in the page."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    def test_dm_bubble_is_position_relative(self):
+        self.assertRegex(self.css, r"\.dm-msg\{[^}]*position:relative",
+                         "the .dm-msg card lost position:relative in the build")
+
+    def test_dm_body_has_no_top_margin(self):
+        # No author line since 2026-09-10: the body opens the bubble.
+        self.assertRegex(self.css, r"\.dm-msg \.comment-body\{margin-top:0\}")
+
+
 class NothingScrollsSideways(unittest.TestCase):
     """No page pans sideways on a phone (2026-09-09).
 

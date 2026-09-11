@@ -391,6 +391,10 @@ function lockDocument() {
   body.style.top = (-lockY) + 'px';
   if (gap > 0) body.style.paddingRight = gap + 'px';
   document.documentElement.classList.add('mc-sheet-open');
+  /* True when THIS call took the lock. A second overlay opening over a locked
+     document (the DM action surface, comments.ts) must not release a lock it
+     did not take, so it unlocks only when this said yes. */
+  return true;
 }
 function unlockDocument() {
   if (lockY === null) return;
@@ -1694,6 +1698,10 @@ export function installChrome() {
     open: function (heading, node, onClose) { sheet.show(heading, node, onClose); },
     settings: function () { sheet.show('Settings', document.createElement('mc-settings')); },
     close: function () { sheet.close(); },
+    /* The document lock, for an overlay that is not a sheet (the DM message
+       action surface): the same three layers every overlay here keeps. */
+    lock: lockDocument,
+    unlock: unlockDocument,
   };
   /* App controls for the whole client to reach (phones only; desktop no-ops to
      the native control). Phase 2 of the appification. */

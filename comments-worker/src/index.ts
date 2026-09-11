@@ -196,6 +196,7 @@ import {
   shadowExcl,
   isShadowBanned,
   runBackup,
+  dmReaction,
   runWallPrune,
   safeParseLinks,
   screen,
@@ -1891,17 +1892,21 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const msgs = await env.DB.prepare(
-    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at, COALESCE(m.liked_a, 0) AS liked_a, COALESCE(m.liked_b, 0) AS liked_b FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
+    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at, m.react_a, m.react_b FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
     ' AND m.created_at > ?5 AND ' + dmLive(now) + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
   ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
-  /* Per-message likes, told from the viewer's seat: liked_me is MY heart on the
-     message, liked_other is the other party's (the raw a/b columns stay ours). */
+  /* Per-message reactions, told from the viewer's seat: react_me is MY emoji on
+     the message ('' for none), react_other the other party's (the raw a/b
+     columns stay ours). liked_me/liked_other are the 2026-08-03 heart's fields,
+     derived, kept one deploy for clients cached before the picker. */
   const iAmA = me === a;
   const messages = (msgs.results || []).map((m: any) => {
     const out: any = Object.assign({}, m);
-    out.liked_me = iAmA ? m.liked_a : m.liked_b;
-    out.liked_other = iAmA ? m.liked_b : m.liked_a;
-    delete out.liked_a; delete out.liked_b;
+    out.react_me = String((iAmA ? m.react_a : m.react_b) || '');
+    out.react_other = String((iAmA ? m.react_b : m.react_a) || '');
+    out.liked_me = out.react_me ? 1 : 0;
+    out.liked_other = out.react_other ? 1 : 0;
+    delete out.react_a; delete out.react_b;
     return out;
   });
   const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
@@ -2076,7 +2081,7 @@ async function handleDmTtl(request: any, env: any, ctx: any) {
 /* Save or unsave one message (either participant). A saved message is exempt from
    auto-expiry for BOTH sides (expires_at NULL), so a save keeps it for everyone —
    which is how expiry stays identical for both. Unsaving resumes the clock. */
-async function handleDmSave(request: any, env: any) {
+async function handleDmSave(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2093,7 +2098,7 @@ async function handleDmSave(request: any, env: any) {
   const [a, b] = dmPair(me, other);
   /* The message must belong to this pair's thread; then either party may act. */
   const row = await env.DB.prepare(
-    'SELECT d.id, d.created_at, d.opened_at, t.ttl FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
+    'SELECT d.id, d.thread_id, d.created_at, d.opened_at, t.ttl FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
     'WHERE d.id = ?1 AND t.a_hash = ?2 AND t.b_hash = ?3'
   ).bind(id, a, b).first();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
@@ -2101,15 +2106,23 @@ async function handleDmSave(request: any, env: any) {
   const ttl = row.ttl || dmDefaultTtl(settings);
   const expires = saved ? null : (row.opened_at ? (row.opened_at + ttl) : (row.created_at + dmBackstopSeconds(settings)));
   await env.DB.prepare('UPDATE dms SET saved = ?1, expires_at = ?2 WHERE id = ?3').bind(saved, expires, id).run();
+  /* A save is for both: the other side's open thread lights the bubble live
+     (the Snapchat convention — a kept message looks kept to both parties). */
+  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-save', scopes: ['user:' + other], from: me, thread_id: row.thread_id, message: { id, saved } });
   return json({ ok: true, saved, expires_at: expires }, 200);
 }
 
-/* Like (or unlike) ONE message in a 1v1 thread. Either party may like any
-   message they can SEE — their pair's thread, not held from them, not expired,
-   not redacted, not behind their own delete-conversation stamp. The flag is
-   per-side metadata beside opened_at (liked_a/liked_b on the canonical pair);
-   the plaintext stays sealed. The other side's open thread hears it live. */
-async function handleDmLike(request: any, env: any, ctx: any) {
+/* React to ONE message in a 1v1 thread with a single emoji — the press-and-hold
+   picker's quick six, any one standard emoji, or one of our own custom-pack
+   :tokens: — or withdraw your reaction with an empty string. Either party may
+   react to any message they can SEE — their pair's thread, not held from them,
+   not expired, not redacted, not behind their own delete-conversation stamp.
+   One reaction per side per message, metadata beside opened_at (react_a/react_b
+   on the canonical pair), validated by the kernel through dmReaction (never an
+   inline regex here); the plaintext stays sealed. The other side's open thread
+   hears it live. The 2026-08-03 heart rides the same road: `/dm/like {like}` is
+   this handler with ❤️ or nothing, kept one deploy for cached clients. */
+async function handleDmReact(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2118,8 +2131,9 @@ async function handleDmLike(request: any, env: any, ctx: any) {
   const key = String(data.key || '');
   const other = String(data.with || '');
   const id = Math.floor(Number(data.id) || 0);
-  const like = data.like ? 1 : 0;
-  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const raw = data.emoji != null ? String(data.emoji) : (data.like ? '❤️' : '');
+  const emoji: string | null = raw.trim() ? dmReaction(raw) : '';
+  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1 || emoji === null) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
@@ -2135,10 +2149,10 @@ async function handleDmLike(request: any, env: any, ctx: any) {
   ).bind(me, a, b, id, now).first();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
-  const col = me === a ? 'liked_a' : 'liked_b';
-  await env.DB.prepare('UPDATE dms SET ' + col + ' = ?1 WHERE id = ?2').bind(like, id).run();
-  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-like', scopes: ['user:' + other], from: me, thread_id: row.thread_id, message: { id, like } });
-  return json({ ok: true, id, like }, 200);
+  const col = me === a ? 'react_a' : 'react_b';
+  await env.DB.prepare('UPDATE dms SET ' + col + ' = ?1 WHERE id = ?2').bind(emoji || null, id).run();
+  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-react', scopes: ['user:' + other], from: me, thread_id: row.thread_id, message: { id, emoji } });
+  return json({ ok: true, id, emoji }, 200);
 }
 
 /* "I watched it arrive": the open thread acknowledges a live-delivered message
@@ -5029,8 +5043,9 @@ const ROUTES: Route[] = [
   { m: 'GET', p: '/api/comments/dm/directory', fn: (request, env, ctx, url) => handleDmDirectory(request, env, url) },
   { m: 'POST', p: '/api/comments/dm/pubkey', fn: (request, env, ctx, url) => handleDmPubkey(request, env) },
   { m: 'POST', p: '/api/comments/dm/ttl', fn: (request, env, ctx, url) => handleDmTtl(request, env, ctx) },
-  { m: 'POST', p: '/api/comments/dm/save', fn: (request, env, ctx, url) => handleDmSave(request, env) },
-  { m: 'POST', p: '/api/comments/dm/like', fn: (request, env, ctx, url) => handleDmLike(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/save', fn: (request, env, ctx, url) => handleDmSave(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/react', fn: (request, env, ctx, url) => handleDmReact(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/like', fn: (request, env, ctx, url) => handleDmReact(request, env, ctx) },   // the 2026-08-03 heart, one deploy for cached clients
   { m: 'POST', p: '/api/comments/dm/seen', fn: (request, env, ctx, url) => handleDmSeen(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/edit', fn: (request, env, ctx, url) => handleDmEdit(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/redact', fn: (request, env, ctx, url) => handleDmRedact(request, env, ctx) },

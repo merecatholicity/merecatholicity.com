@@ -25,6 +25,10 @@ interface McCore {
   displayName(hash: string): string;
   dmTtlLabel(ttl: number | string): string;
   dmTtlOptions: ReadonlyArray<{ secs: number; label: string }>;
+  dmQuickReactions: ReadonlyArray<string>;
+  dmReaction(raw: string): string | null;
+  dmReplyExcerpt(s: string): string;
+  dmReplySentinel: string;
   canInteract(author: string, me: string, bot: string): boolean;
   canReport(author: string, me: string, bot: string, isAdmin: boolean): boolean;
   canEdit(author: string, me: string): boolean;
@@ -97,7 +101,7 @@ declare global {
     mcOnboard?: (onDone?: any, opts?: any) => void;
     mcConfirm?: (msg: string, opts?: any) => Promise<boolean>;
     mcToast?: (msg: string, opts?: any) => void;
-    mcSheet?: { open: (...a: any[]) => void; settings?: () => void; close: () => void };
+    mcSheet?: { open: (...a: any[]) => void; settings?: () => void; close: () => void; lock?: () => boolean | void; unlock?: () => void };
     mcGetDark?: () => string;
     mcSetDark?: (p: string) => void;
     mcGetLight?: () => string;

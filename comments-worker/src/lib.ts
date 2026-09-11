@@ -1003,6 +1003,15 @@ export function dmBackstopSeconds(s: any) { return (Number(s.dm_backstop_days) |
    This is the worker-side membrane over the kernel: Maybe is erased here and
    nowhere else, mirroring app/core.ts on the client side. ---- */
 const psOrNull = (m: any) => MaybeM.maybe(null)((x: any) => x)(m);
+
+/* One DM reaction, validated by the kernel (Domain.Dm.normalizeReaction):
+   exactly one emoji, or one of our own custom-pack :tokens: lower-cased; null
+   for anything else. The ONE place the worker erases that Maybe — the client's
+   picker runs the same rule through mcCore.dmReaction, so what the store
+   accepts the bubble renders, and neither side keeps an inline regex. */
+export function dmReaction(raw: any): string | null {
+  return psOrNull(Dm.normalizeReaction(String(raw == null ? '' : raw)));
+}
 /* The kind ('image'|'video'|'audio') encoded in a wall/<i|v|a>/<64hex> object
    key, or null for anything malformed. Strictness lives in the kernel. */
 export function mediaKindOfKey(key: any) { return psOrNull(Media.kindOfKey(String(key || ''))); }

@@ -37,10 +37,12 @@ tests/
   _support/ps.mjs      shared Maybe/Either erasure readers for the compiled PS output
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
-                       and the build ↔ kernel parity of the commentable pages
+                       the build ↔ kernel parity of the commentable pages, and the DM press-and-hold
+                       surface's laws (the overlay's three layers, the reply envelope round trip)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
-                       the comments switches and the journal sweep's SQL on real migrations)
+                       the comments switches and the journal sweep's SQL on real migrations,
+                       the DM reaction ledger — 0012's backfill and the handler's kernel gate)
   py/                  the Python build tooling (nav, frontmatter, converters, slug parity, serve, llm,
                        the writings detector behind the comments switches)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)

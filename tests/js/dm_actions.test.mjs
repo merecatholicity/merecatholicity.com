@@ -1,0 +1,118 @@
+/* The DM message action surface (client/comments.ts, 2026-09-10): the
+ * WhatsApp press-and-hold over one bubble — reactions above, the bubble lit
+ * in a hole between four pieces of scrim, the menu below — and the reply
+ * envelope a quoted reply rides in.
+ *
+ * What would break silently: an overlay that lets a touch reach the page
+ * behind it (the law every overlay here keeps — contained overscroll, an
+ * inert scrim, the document locked while it stands); a lock released by a
+ * surface that never took it; a surface that outlives the boot; a gesture
+ * that steals the page's own scroll; the mount-hole (bubble) styles that the
+ * hover ⌄ and the reaction pill hang from; and the envelope: a reply must
+ * survive a round trip and any older plaintext must still read as itself.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const src = readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
+const mainCss = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
+
+const fn = (name, next) => {
+  const i = src.indexOf(`function ${name}(`);
+  assert.ok(i > 0, `${name} not found`);
+  const j = next ? src.indexOf(`function ${next}(`, i + 10) : src.indexOf('\n  function ', i + 10);
+  return src.slice(i, j > i ? j : i + 8000);
+};
+
+/* The injected DM stylesheet, as the one string it is built from. */
+const dmCss = (() => {
+  const i = src.indexOf('function ensureDmStyles()');
+  const j = src.indexOf("st.id = 'mc-dm-css'", i);
+  assert.ok(i > 0 && j > i, 'ensureDmStyles not found');
+  return src.slice(i, j);
+})();
+
+test('the surface keeps the three overlay layers: contained overscroll, an inert scrim, the document lock', () => {
+  assert.ok(/\.dm-act-scrim\{[^}]*touch-action:none/.test(dmCss), 'a drag on the scrim must not scroll the document');
+  assert.ok(/\.dm-act-scrim\{[^}]*overscroll-behavior:contain/.test(dmCss), 'the scrim ends the scroll chain');
+  assert.ok(/\.dm-act-bar\{[^}]*overscroll-behavior:contain/.test(dmCss), 'the (scrollable) reaction bar ends the chain too');
+  const open = fn('dmOpenActions', 'dmArmGestures');
+  assert.ok(/lockedByUs = !!window\.mcSheet\.lock\(\)/.test(open), 'the phone surface takes the sheet\'s own document lock');
+  assert.ok(/if \(lockedByUs && window\.mcSheet && window\.mcSheet\.unlock\) window\.mcSheet\.unlock\(\)/.test(open),
+    'the lock is released only by the surface that took it — never one a sheet holds');
+});
+
+test('the lock says whether it was taken, and the sheet bridge hands it out', () => {
+  const chrome = readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8');
+  const lock = chrome.slice(chrome.indexOf('function lockDocument()'), chrome.indexOf('function unlockDocument()'));
+  assert.ok(/if \(lockY !== null\) return;/.test(lock) && /return true;\s*\}\s*$/.test(lock),
+    'lockDocument returns true only when this call took the lock');
+  assert.ok(/lock: lockDocument,\s*unlock: unlockDocument,/.test(chrome), 'window.mcSheet exposes lock/unlock');
+});
+
+test('one surface at a time, and it dies with the boot', () => {
+  assert.ok(/bootSig\.addEventListener\('abort', dmCloseActions, \{ once: true \}\)/.test(src),
+    'a soft navigation must tear the surface down — the boot re-runs, the overlay must not stay');
+  const open = fn('dmOpenActions', 'dmArmGestures');
+  assert.ok(/^\s*dmCloseActions\(\);/m.test(open), 'opening closes whatever was open');
+  assert.ok(/document\.removeEventListener\('keydown', onKey, true\)/.test(open) && /window\.removeEventListener\('scroll', onScroll, true\)/.test(open),
+    'every listener the surface installs is removed on close');
+});
+
+test('a hold is not a scroll, a scroll is not a hold, and the click after a hold is swallowed', () => {
+  const arm = fn('dmArmGestures', 'dmBubble');
+  assert.ok(/'touchstart'[\s\S]*\{ passive: true \}/.test(arm) && /'touchmove'[\s\S]*\{ passive: true \}/.test(arm),
+    'the touch listeners are passive — the page\'s own scroll is never delayed by them');
+  assert.ok(/Math\.abs\(mx\) > 8 \|\| Math\.abs\(my\) > 8\) cancelHold\(\)/.test(arm), 'a press that moves is a scroll, not a hold');
+  assert.ok(/if \(held\) \{ held = false; e\.preventDefault\(\); e\.stopImmediatePropagation\(\); \}/.test(arm),
+    'the click that follows a hold must not also follow a link under the finger — nor reach the surface\'s own tap-to-close');
+  assert.ok(/touch-action:pan-y pinch-zoom/.test(dmCss), 'bubbles keep vertical panning and pinch-zoom for the browser');
+  assert.ok(/@media \(hover:none\)\{[^}]*\.dm-more\{display:none\}/.test(dmCss), 'the hover ⌄ is the pointer\'s road only');
+});
+
+test('the bubble is the mount the pill and the ⌄ hang from', () => {
+  assert.ok(/\.dm-msg \{\s*position: relative;/.test(mainCss), 'main.css .dm-msg must be position: relative');
+  assert.ok(/\.dm-react-pill\{position:absolute/.test(dmCss) && /\.dm-more\{position:absolute/.test(dmCss));
+  assert.ok(/\.dm-msg\.dm-has-react\{margin-bottom/.test(dmCss), 'a bubble with a pill leaves room for it below');
+  assert.ok(/\.dm-msg\.dm-saved\{box-shadow:0 0 0 2px var\(--dm-saved\)/.test(dmCss), 'a saved bubble is lit for both sides');
+});
+
+test('the reply envelope: sentinel + JSON round-trips, and plain text is itself', () => {
+  /* Evaluate the four envelope functions out of the client with the kernel
+     stubbed, so the wire grammar is proven, not described. */
+  const names = ['dmReplySentinel', 'dmWrapText', 'dmReplyClean', 'dmParseText'];
+  /* The client is TypeScript; these four carry only `: any` annotations. */
+  const body = names.map((n) => fn(n)).join('\n').replace(/: any\b/g, '');
+  const factory = new Function('window', body + '\nreturn { dmWrapText, dmReplyClean, dmParseText };');
+  const env = factory({ mcCore: { dmReplySentinel: '\u0001' } });
+  const from = 'a'.repeat(64);
+  const wrapped = env.dmWrapText('hello\nworld', { id: 42, from, kind: 'text', text: 'what was said' });
+  assert.equal(wrapped.charAt(0), '\u0001', 'an envelope opens with the sentinel');
+  const back = env.dmParseText(wrapped);
+  assert.equal(back.text, 'hello\nworld');
+  assert.deepEqual(back.reply, { id: 42, from, kind: 'text', text: 'what was said' });
+  assert.deepEqual(env.dmParseText('just words'), { text: 'just words', reply: null }, 'older plaintext reads as itself');
+  assert.deepEqual(env.dmParseText('{"v":1,"text":"x"}'), { text: '{"v":1,"text":"x"}', reply: null },
+    'JSON a member typed is their message, not an envelope');
+  assert.equal(env.dmWrapText('plain', null), 'plain', 'no reply, no envelope');
+  /* A malformed reply reference is dropped, never trusted. */
+  assert.equal(env.dmReplyClean({ id: 0, from }), null);
+  assert.equal(env.dmReplyClean({ id: 1, from: 'nope' }), null);
+  assert.equal(env.dmReplyClean({ id: 1, from, kind: 'exe', text: 'x' }).kind, 'text', 'an unknown kind is text');
+  assert.equal(env.dmReplyClean({ id: 1, from, text: 'y'.repeat(1000) }).text.length, 400, 'the quote is capped on arrival too');
+  const torn = env.dmParseText('{not json');
+  assert.deepEqual(torn, { text: '{not json', reply: null }, 'a torn envelope shows its text, never throws');
+});
+
+test('a reply rides inside the ciphertext, and the media envelope carries its own', () => {
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('function searchSnippet('));
+  assert.ok(/dmEncrypt\(dmWrapText\(body, replyAt\), otherPub\)/.test(view), 'the text send wraps the quote INSIDE the E2E plaintext');
+  assert.ok(/if \(replyAt\) mm\.env\.reply = replyAt;/.test(view), 'a media reply rides in the (encrypted) media envelope');
+  assert.ok(!/reply_to/.test(src), 'the server never learns what answers what');
+  const edit = fn('dmStartEdit', 'dmMarkEdited');
+  assert.ok(/dmEncrypt\(dmWrapText\(nv, m\.reply\), ctx\.otherPub\)/.test(edit), 'an edit keeps the quote it answered');
+});
