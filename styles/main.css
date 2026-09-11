@@ -1806,21 +1806,28 @@ body.mc-app main.prose > #title-block-header {
      iMessage-like bubbles. The section reserves room so the fixed composer never
      covers the last message. */
   section:has(.merecat-form) { padding-bottom: 5rem; }
+  /* The same row as the DM composer (2026-09-11): one rounded, auto-growing
+     field and a round send button, flush on the tab bar. margin MUST be 0 here
+     and in the injected #mc-merecat-css alike — for a fixed element `bottom`
+     places the margin edge, and the injected block's old .2rem bottom margin
+     floated the bar a hair above the bar (the owner's report). */
   .merecat-form {
-    position: fixed; left: 0; right: 0;
+    position: fixed; left: 0; right: 0; flex-direction: row;
     bottom: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px)); z-index: 39;
-    margin: 0; padding: 0.5rem 0.7rem; gap: 0.5rem; align-items: flex-end;
-    background: var(--surface); border-top: 1px solid var(--rule);
-    box-shadow: 0 -1px 10px rgba(0, 0, 0, 0.06);
+    margin: 0; padding: 0.45rem var(--page-pad, 0.8rem) 0.3rem; gap: 0.4rem; align-items: flex-end;
+    background: var(--bg); border-top: 1px solid var(--rule);
   }
   .merecat-q {
-    flex: 1; min-height: 2.7rem; max-height: 38vh; resize: none;
-    border-radius: 20px; padding: 0.65rem 1rem; font-size: 16px;
+    flex: 1; min-height: 0; max-height: 168px; resize: none;
+    border-radius: 22px; padding: 0.55rem 0.9rem; font-size: 16px; line-height: 1.35;
   }
   .merecat-form .btn-send {
-    min-width: 0; border-radius: 20px; padding: 0.6rem 1.15rem; min-height: 2.7rem;
+    width: 2.6rem; height: 2.6rem; min-height: 0; min-width: 0; padding: 0; border-radius: 50%;
     font-size: 1rem; align-self: flex-end; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
   }
+  .merecat-form .btn-send .merecat-ask-word { display: none; }
+  .merecat-form .btn-send .mc-ic { width: 1.35rem; height: 1.35rem; vertical-align: 0; }
   .merecat-msg, .dm-msg { max-width: 85%; border-radius: 16px; padding: 0.65rem 0.9rem; }
   /* Scoped under .merecat-log so these beat the runtime-injected #mc-merecat-css
      `.merecat-msg.you{background:var(--cream)}` (appended to <head> after style.css,

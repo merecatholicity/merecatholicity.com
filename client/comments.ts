@@ -9124,7 +9124,14 @@ trace('submit: feed post');
         replyX.addEventListener('click', function () { setReply(null); ta.focus(); });
         ctx.reply = function (m: any) { setReply(dmReplyRef(m)); ta.focus(); };
         /* The field grows with the words, to a few lines, then scrolls. */
-        function grow() { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 168) + 'px'; }
+        /* An empty box is its natural one row (scrollHeight would count a
+           wrapped placeholder); a filled one grows to a few lines, then scrolls.
+           scrollHeight excludes a border-box field's borders: add them back. */
+        function grow() {
+          if (!ta.value) { ta.style.height = ''; return; }
+          ta.style.height = 'auto';
+          ta.style.height = Math.min(ta.scrollHeight + (ta.offsetHeight - ta.clientHeight), 168) + 'px';
+        }
         var pendingFile: any = null;
         /* Mic while there is nothing to send, Send the moment there is —
            WhatsApp's swap. Without voice, Send stands always, dimmed when idle. */
@@ -9610,9 +9617,16 @@ trace('submit: feed post');
       '.merecat-shelf{margin:.4em 0}' +
       '.merecat-shelf>summary{cursor:pointer;color:var(--maroon);font-size:.9rem}' +
       '.merecat-persona{white-space:pre-wrap;overflow-wrap:break-word;font-size:.85rem;color:var(--ink-soft);border-left:3px solid var(--rule);padding:.4em .8em;margin:.5em 0}' +
-      '.merecat-form{display:flex;gap:.5rem;align-items:flex-end;margin:.8rem 0 .2rem}' +
-      '.merecat-q{flex:1;min-height:3.1em;resize:vertical;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.5rem .65rem}' +
+      /* the ask row: the DM composer's shape — a rounded, auto-growing field and
+         the send button beside it (its word shows on desktop, the icon alone on
+         phones, where main.css fixes the row on the tab bar with margin 0 — a
+         fixed element's `bottom` places its MARGIN edge, so a margin here would
+         float it) */
+      '.merecat-form{display:flex;gap:.45rem;align-items:flex-end;margin:.8rem 0 .2rem}' +
+      '.merecat-q{flex:1;min-width:0;min-height:0;max-height:168px;resize:none;font:inherit;line-height:1.35;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:22px;padding:.55rem .9rem}' +
       '.merecat-q:focus{outline:1px solid var(--maroon);border-color:var(--maroon)}' +
+      '.merecat-form .btn-send{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:22px;flex:none}' +
+      '.merecat-form .btn-send .mc-ic{width:1.2rem;height:1.2rem;vertical-align:0}' +
       '.merecat-quota{color:var(--faint);font-size:.85rem;margin:.15rem 0 .9rem}' +
       '.merecat-persona-edit{width:100%;min-height:26em;font:inherit;font-size:.9rem;color:var(--ink);background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:.6rem .7rem;margin:.4rem 0;resize:vertical;white-space:pre-wrap}' +
       '.merecat-persona-edit:focus{outline:1px solid var(--maroon);border-color:var(--maroon)}' +
@@ -9643,7 +9657,11 @@ trace('submit: feed post');
       '.mc-fwd-sure{margin:.35rem 0 .5rem}' +
       '.mc-fwd-actions{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}' +
       '.mc-fwd-go{font:inherit;font-size:.9rem;padding:.4rem .9rem;cursor:pointer}' +
-      '@media (max-width:620px){.merecat-msg{max-width:100%}.merecat-form{flex-direction:column;align-items:stretch}.mc-fwd-list{max-height:50vh}}';
+      '@media (max-width:620px){.merecat-msg{max-width:100%}.mc-fwd-list{max-height:50vh}}' +
+      '@media (max-width:600px){.merecat-form{flex-direction:row;align-items:flex-end;margin:0}' +
+        '.merecat-form .btn-send{width:2.6rem;height:2.6rem;min-height:0;min-width:0;padding:0;border-radius:50%}' +
+        '.merecat-form .btn-send .merecat-ask-word{display:none}' +
+        '.merecat-form .btn-send .mc-ic{width:1.35rem;height:1.35rem}}';
     var st = el('style');
     st.id = 'mc-merecat-css';
     st.textContent = css;
@@ -9915,11 +9933,27 @@ trace('submit: feed post');
 
     var form = el('form', 'merecat-form');
     var q = el('textarea', 'merecat-q');
-    q.placeholder = 'Ask the librarian… say, what do the Fathers make of John 6:53?';
+    q.rows = 1;
+    /* One row on a phone: the long example placeholder wrapped there (and the
+       starter chips below already show examples). */
+    var narrow = false;
+    try { narrow = window.matchMedia('(max-width: 600px)').matches; } catch (e) { narrow = false; }
+    q.placeholder = narrow ? 'Ask the librarian…' : 'Ask the librarian… say, what do the Fathers make of John 6:53?';
     q.setAttribute('aria-label', 'Your question');
     form.appendChild(q);
-    var send = el('button', 'btn btn-send', 'Ask');
+    /* The field grows with the words, to a few lines, then scrolls — the DM
+       composer's road; a cleared box shrinks back (see the submit path). */
+    q.mcGrow = function () {
+      if (!q.value) { q.style.height = ''; return; }   // its natural one row: scrollHeight would count a wrapped placeholder
+      q.style.height = 'auto';
+      q.style.height = Math.min(q.scrollHeight + (q.offsetHeight - q.clientHeight), 168) + 'px';
+    };
+    q.addEventListener('input', q.mcGrow);
+    var send = el('button', 'btn btn-send');
     send.type = 'submit';
+    send.title = 'Ask'; send.setAttribute('aria-label', 'Ask');
+    send.appendChild(mcIcon('send'));
+    send.appendChild(el('span', 'merecat-ask-word', 'Ask'));
     form.appendChild(send);
     section.appendChild(form);
     /* The ask box keeps a draft like every other composer on the site; a
@@ -10900,6 +10934,7 @@ trace('submit: feed post');
       var text = q.value.trim();
       if (!text) return;
       q.value = '';
+      if (q.mcGrow) q.mcGrow();   // a cleared box shrinks back to one row
       if ((q as any).mcDraftDone) (q as any).mcDraftDone();
       enqueue(text);
     });
