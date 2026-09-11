@@ -179,10 +179,15 @@ else:
 # ---------------------------------------------------------------------------
 # GET /api/comments?page=<PAGES entry> — article-page comments (handleGet).
 # ---------------------------------------------------------------------------
+# Sections are admin-switched and ship CLOSED (Domain.Comments): an open section
+# answers with its rows; a closed one answers exactly as an unknown page. Both are
+# the contract — which one stands is the admin's switch, not the test's to assume.
 st, d, raw = get('/api/comments?page=/book.html')
-check(st == 200 and d is not None and d.get('ok') is True
-      and isinstance(d.get('comments'), list) and isinstance(d.get('anon'), bool),
-      'GET /api/comments?page=/book.html: shape', str(raw[:200]))
+open_shape = (st == 200 and d is not None and d.get('ok') is True
+              and isinstance(d.get('comments'), list) and isinstance(d.get('anon'), bool))
+closed_shape = d is not None and d.get('ok') is False and d.get('error') == 'Unknown page.'
+check(open_shape or closed_shape,
+      'GET /api/comments?page=/book.html: shape (open rows, or closed = Unknown page)', str(raw[:200]))
 
 # ---------------------------------------------------------------------------
 # GET /api/comments/board — the board index (windowed per-category CTE).

@@ -9,11 +9,14 @@ three per-section purge danger boxes, and the Save button. No save round-trip,
 no purge click — read-only against prod. NOTE it never TOGGLES the social
 switch: that is global state real readers are living in.
 
-GATED on the client that carries the Social panel being live.
+GATED on the test identity being an admin: the page is for the admins, so when
+`webtest/.testkeys` holds only a read-only probe the suite SKIPS (exit 0) and says
+so, rather than crashing on a panel that never renders. (It used to gate on a
+numeric comments.js?v= threshold — a `?v=` key is a content hash, not a counter,
+so that gate skipped or ran at random; 2026-09-11.)
 Run: python3 webtest/test_settings_page.py
 """
 import json
-import re
 import sys
 import urllib.request
 
@@ -28,14 +31,6 @@ PURGES = ['Purge all feed & wall media now', 'Purge all forum attachments now',
           'Purge all DM attachments now']
 
 
-def client_version():
-    req = urllib.request.Request(flows.BASE + '/community.html',
-                                 headers={'User-Agent': 'curl/8.14.1'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        m = re.search(r'comments\.js\?v=(\d+)', r.read().decode('utf-8', 'replace'))
-    return int(m.group(1)) if m else 0
-
-
 def config_social_enabled():
     """What the server says right now — the page must agree with it."""
     req = urllib.request.Request(flows.BASE + '/api/comments/config',
@@ -46,16 +41,14 @@ def config_social_enabled():
 
 
 def main():
-    v = client_version()
-    if v < 1353613342:
-        print('SKIP  test_settings_page — new client not deployed yet '
-              '(prod serves comments.js?v=%d, needs v=1353613342)' % v)
-        sys.exit(0)
     checks = []
     with Flow(port=9604) as f:
         f.login()
         f.goto('community.html')
-        f.wait("!!(window.mcKit && window.mcKit.isAdmin && window.mcKit.isAdmin())", timeout=20)
+        if not f.wait("!!(window.mcKit && window.mcKit.isAdmin && window.mcKit.isAdmin())", timeout=20):
+            print('SKIP  test_settings_page — the .testkeys identity is not an admin, and the page is '
+                  'for the admins; run it from a box whose owner key is one')
+            sys.exit(0)
         f.goto('community.html?settings=1')
         f.wait("document.querySelectorAll('.admin-settings h3').length >= 8", timeout=25)
         r = json.loads(f.js1("""
