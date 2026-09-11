@@ -1471,6 +1471,12 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
 
 @media (max-width: 600px) {
   :root { --mc-appbar-h: 3rem; --mc-tabbar-h: 3.6rem; }
+  /* On a phone the chrome is never text to select: a hold near the app bar or the
+     tab bar must not seed a selection that a bubble's hold then extends — iOS anchors
+     a long-press selection in the nearest selectable text (2026-09-11). */
+  @media (hover: none) {
+    .mc-appbar, mc-tabbar, .mc-tabbar { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  }
 
   /* gated off on mobile: the app chrome replaces the site menu + theme toggle */
   nav.site { display: none !important; }

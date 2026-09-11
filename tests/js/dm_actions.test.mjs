@@ -209,3 +209,21 @@ test('a reply rides inside the ciphertext, and the media envelope carries its ow
   const edit = fn('dmStartEdit', 'dmMarkEdited');
   assert.ok(/dmEncrypt\(dmWrapText\(nv, m\.reply\), ctx\.otherPub\)/.test(edit), 'an edit keeps the quote it answered');
 });
+
+test('on a phone a hold picks a message, never a word: the screen is not selectable text, the surface never is, and opening drops any selection', () => {
+  /* iOS starts its own selection under a long press and, when the bubble is
+     not selectable, anchors it in the nearest selectable text (the presence
+     line, a day chip, the spacer) — so the bubble rule alone was not enough. */
+  assert.ok(/@media \(hover:none\)\{[^@]*\.dm-screen\{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none\}/.test(dmCss),
+    'the whole chat screen is not selectable text under (hover:none)');
+  assert.ok(/\.dm-screen textarea,\.dm-screen input\{-webkit-user-select:text;user-select:text\}/.test(dmCss), 'the fields stay selectable');
+  assert.ok(/\.dm-act\{[^}]*-webkit-touch-callout:none;-webkit-user-select:none;user-select:none\}/.test(dmCss), 'the surface is never text, on any device');
+  assert.ok(/section\.classList\.add\('dm-screen'\)/.test(src) &&
+    /bootSig\.addEventListener\('abort', function \(\) \{ section\.classList\.remove\('dm-screen'\); \}, \{ once: true \}\)/.test(src),
+    'the thread stamps the screen class on its section and takes it away with the boot');
+  const open = fn('dmOpenActions', 'dmArmGestures');
+  assert.ok(/if \(phone\) dmClearSelection\(\);/.test(open), 'the phone surface drops the selection the hold may have started');
+  assert.ok(/function dmClearSelection\(\) \{\s*try \{ var s = window\.getSelection\(\); if \(s && s\.rangeCount\) s\.removeAllRanges\(\); \}/.test(src));
+  assert.ok(/@media \(hover: none\) \{\s*\.mc-appbar, mc-tabbar, \.mc-tabbar \{ -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; \}/.test(mainCss),
+    'the phone chrome (app bar, tab bar) is never text to select either — a stray selection cannot seed there');
+});

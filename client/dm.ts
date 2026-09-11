@@ -378,10 +378,21 @@ export function installDm(B: Boot) {
   function dmIsPhone() {
     try { return window.innerWidth <= 600 || window.matchMedia('(hover: none)').matches; } catch (e) { return window.innerWidth <= 600; }
   }
+  /* A hold on a phone picks a message, never a word. iOS starts its own text
+     selection under a long press and, when the bubble itself is not
+     selectable, anchors it in the NEAREST selectable text — the header's
+     presence line, a day chip, the composer's spacer — then extends it while
+     the finger stays down (the blue bands and handles of 2026-09-11). So the
+     whole screen is not selectable text under (hover:none) (ensureDmStyles),
+     and the surface drops whatever selection the hold managed to start. */
+  function dmClearSelection() {
+    try { var s = window.getSelection(); if (s && s.rangeCount) s.removeAllRanges(); } catch (e) { /* no selection API */ }
+  }
   function dmOpenActions(m: any, node: any, ctx: any, at: any) {
     dmCloseActions();
     if (!m || !m.id || m.redacted || node.mcDead || !node.isConnected) return;
     var phone = dmIsPhone();
+    if (phone) dmClearSelection();
     var mine = m.sender_hash === state.myHash;
     var sys = Number(m.enc || 0) === 2;
     var hasText = !m.media_key && !m.media_expired;
@@ -1041,10 +1052,10 @@ export function installDm(B: Boot) {
       '.dm-msg:hover .dm-more,.dm-more:focus-visible{opacity:1}' +
       '.dm-msg.dm-held{box-shadow:0 8px 28px rgba(0,0,0,.28)}' +
       '.dm-day{width:max-content;max-width:90%;margin:.9em auto .35em;font-size:.72em;color:var(--faint);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;padding:.15em .75em;text-align:center}' +
-      '@media (hover:none){.dm-more{display:none}.dm-msg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y pinch-zoom}.dm-msg textarea{-webkit-user-select:text;user-select:text}}' +
+      '@media (hover:none){.dm-more{display:none}.dm-screen{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.dm-screen textarea,.dm-screen input{-webkit-user-select:text;user-select:text}.dm-msg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y pinch-zoom}.dm-msg textarea{-webkit-user-select:text;user-select:text}}' +
       /* the action surface: a hole between four pieces of scrim (phone) or a
          popover at the pointer (desktop); scrim inert to touch, overscroll contained */
-      '.dm-act{position:fixed;inset:0;z-index:4100;pointer-events:none}' +
+      '.dm-act{position:fixed;inset:0;z-index:4100;pointer-events:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}' +
       '.dm-act>*{pointer-events:auto}' +
       '.dm-act-scrim{position:fixed;background:rgba(0,0,0,.45);touch-action:none;overscroll-behavior:contain}' +
       '.dm-act-desk .dm-act-scrim{inset:0;background:transparent}' +
@@ -1602,6 +1613,12 @@ export function installDm(B: Boot) {
         var d = res[1];
         if (!d.ok) throw new Error(d.error || 'failed');
         section.textContent = '';        // drop the placeholder crumb + skeleton
+        /* The thread is a chat screen, not a document: under (hover:none)
+           nothing on it is selectable text but the fields (ensureDmStyles) — a
+           hold picks a message. The class leaves with the boot, so the next
+           view on this section is a document again. */
+        section.classList.add('dm-screen');
+        bootSig.addEventListener('abort', function () { section.classList.remove('dm-screen'); }, { once: true });
         ensureDmStyles();
         /* The correspondent's public key drives both decrypt and encrypt for the
            whole thread (the shared secret is the same in both directions). */

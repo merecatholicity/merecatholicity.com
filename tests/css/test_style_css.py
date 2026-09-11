@@ -397,5 +397,20 @@ class NothingScrollsSideways(unittest.TestCase):
                          "docs/bible-reader.js injects a .bible-find rule that no longer lets it shrink")
 
 
+class AHoldPicksAMessageNeverAWord(unittest.TestCase):
+    """On a phone (2026-09-11) the app bar and the tab bar are never selectable
+    text: iOS anchors a long-press selection in the nearest selectable text, so
+    a hold on a DM bubble beside them would seed a selection there and extend
+    it. The chat screen's own rule rides the DM client's injected block
+    (tests/js/dm_actions.test.mjs); this is the stylesheet's half."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    def test_phone_chrome_is_not_selectable_under_hover_none(self):
+        self.assertRegex(self.css, r"\(hover:\s*none\)[^{]*\{[^}]*\.mc-appbar,\s*mc-tabbar,\s*\.mc-tabbar\{[^}]*user-select:none",
+                         "the app bar / tab bar lost their user-select:none under (hover: none)")
+
+
 if __name__ == "__main__":
     unittest.main()

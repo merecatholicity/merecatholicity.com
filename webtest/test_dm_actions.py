@@ -369,21 +369,35 @@ def main():
         ph = jsj(f, """return JSON.stringify((function(){
           var b = document.querySelector('[data-dmid="103"]');
           var r = b.getBoundingClientRect();
+          /* the selection iOS starts under a long press, stood in for by script: the hold must drop it */
+          var sel = window.getSelection(); sel.removeAllRanges(); sel.selectAllChildren(b);
+          var selBefore = sel.rangeCount;
+          var us = function(s){ var e = document.querySelector(s); return e ? getComputedStyle(e).userSelect : 'missing'; };
           var t = new Touch({identifier: 7, target: b, clientX: r.left + 20, clientY: r.top + 10});
           b.dispatchEvent(new TouchEvent('touchstart', {touches:[t], targetTouches:[t], changedTouches:[t], bubbles:true, cancelable:true}));
           return { moreHidden: getComputedStyle(b.querySelector('.dm-more')).display === 'none', before: !!document.querySelector('.dm-act'),
-                   ctxMenu: (function(){ b.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true})); return !!document.querySelector('.dm-act'); })() };
+                   ctxMenu: (function(){ b.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true})); return !!document.querySelector('.dm-act'); })(),
+                   selBefore: selBefore, screen: !!document.querySelector('section.dm-screen'),
+                   us: { body: us('[data-dmid="103"] .comment-body'), head: us('.dm-head-sub'), day: us('.dm-day'), space: us('.dm-c-space'),
+                         appbar: us('.mc-appbar'), tabbar: us('.mc-tabbar'), field: us('.dm-c-ta') } };
         })());""")
         checks.append(('the hover ⌄ is hidden under (hover: none)', bool(ph.get('moreHidden'))))
         checks.append(('nothing opens before the hold matures, and contextmenu is not a road on touch', not ph.get('before') and not ph.get('ctxMenu')))
+        us = ph.get('us') or {}
+        checks.append(('phone: the chat screen (bubble, presence line, day chip, spacer) and the chrome (app bar, tab bar) are not selectable text; the field is %s' % json.dumps(us),
+                       ph.get('screen') and all(us.get(k) == 'none' for k in ('body', 'head', 'day', 'space', 'appbar', 'tabbar')) and us.get('field') == 'text'))
         time.sleep(0.7)
         held = jsj(f, """return JSON.stringify((function(){
           var act = document.querySelector('.dm-act');
+          var item = document.querySelector('.dm-act-menu .dm-act-item');
           return { phone: !!(act && act.classList.contains('dm-act-phone')), scrims: document.querySelectorAll('.dm-act-scrim').length,
                    locked: document.documentElement.classList.contains('mc-sheet-open'),
-                   bar: !!document.querySelector('.dm-act-bar'), menu: !!document.querySelector('.dm-act-menu'), held: !!document.querySelector('.dm-held') };
+                   bar: !!document.querySelector('.dm-act-bar'), menu: !!document.querySelector('.dm-act-menu'), held: !!document.querySelector('.dm-held'),
+                   selAfter: window.getSelection().rangeCount, menuUs: item ? getComputedStyle(item).userSelect : 'missing' };
         })());""")
         checks.append(('a press-and-hold opens the phone surface: bar, hole, menu', held.get('phone') and held.get('bar') and held.get('menu') and held.get('held')))
+        checks.append(('the hold drops the selection it may have started (a message, never a word), and the surface is not selectable text',
+                       ph.get('selBefore') == 1 and held.get('selAfter') == 0 and held.get('menuUs') == 'none'))
         checks.append(('four pieces of scrim around the bubble', held.get('scrims') == 4))
         checks.append(('the document is locked while the surface stands', held.get('locked')))
         released = jsj(f, """return JSON.stringify((function(){
