@@ -1012,10 +1012,14 @@ async function handleEdit(request: any, env: any, ctx: any) {
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
+  /* Yours, or any post when you are an admin (2026-09-12: an admin keeps edit
+     AND delete over every member's post, as over every profile). The refusal
+     is one string for "not yours" and "gone" alike. */
   const row = await env.DB.prepare(
-    "SELECT page, parent_id, title, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
-  ).bind(id, authorHash).first();
-  if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+    "SELECT page, parent_id, title, author_hash, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND status != 'deleted'"
+  ).bind(id).first();
+  const asAdmin = !!row && row.author_hash !== authorHash;
+  if (!row || (asAdmin && !(await isAdminHash(env, authorHash)))) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
   /* A comment under a CLOSED section cannot be edited either — closed is closed
      to its author too — and the refusal is the one a missing row gives, so
      nothing about the switch is announced. Forum posts are not sections. */
@@ -1027,6 +1031,7 @@ async function handleEdit(request: any, env: any, ctx: any) {
   await env.DB.prepare(
     'UPDATE comments SET body = ?1, status = ?2, ai_verdict = ?3, edited_at = ?4 WHERE id = ?5'
   ).bind(body, status, verdict, editedAt, id).run();
+  if (asAdmin) console.log(JSON.stringify({ event: 'admin_post_edit', id, page: row.page, author: row.author_hash, by: authorHash }));
   if (boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
   /* Live: an edit to a live PUBLIC board post updates its text for everyone
      watching the thread at once. A re-screen that held the edit (pending) never
@@ -3056,10 +3061,13 @@ async function handleWallEdit(request: any, env: any) {
   if (body.length > MAX_BODY) return json({ ok: false, error: 'That is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const table = isComment ? 'wall_comments' : 'wall_posts';
+  /* Yours, or any when you are an admin (2026-09-12), as on the board. */
   const row = await env.DB.prepare(
-    'SELECT id FROM ' + table + " WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted'"
-  ).bind(id, me).first();
-  if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+    'SELECT id, author_hash FROM ' + table + " WHERE id = ?1 AND status != 'deleted'"
+  ).bind(id).first();
+  const asAdmin = !!row && row.author_hash !== me;
+  if (!row || (asAdmin && !(await isAdminHash(env, me)))) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
+  if (asAdmin) console.log(JSON.stringify({ event: 'admin_post_edit', id, page: table, author: row.author_hash, by: me }));
   const { status } = await screen(env, body, await isTrusted(env, me));
   const editedAt = Math.floor(Date.now() / 1000);
   await env.DB.prepare(

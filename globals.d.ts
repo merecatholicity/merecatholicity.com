@@ -39,7 +39,7 @@ interface McCore {
   dmReplySentinel: string;
   canInteract(author: string, me: string, bot: string): boolean;
   canReport(author: string, me: string, bot: string, isAdmin: boolean): boolean;
-  canEdit(author: string, me: string): boolean;
+  canEdit(author: string, me: string, isAdmin?: boolean): boolean;
   canDelete(author: string, me: string, isAdmin: boolean): boolean;
   topicCompare(a: { sticky?: number; last?: number }, b: { sticky?: number; last?: number }): number;
   replyPage(total: number, per: number): number;

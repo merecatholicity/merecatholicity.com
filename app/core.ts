@@ -150,11 +150,12 @@ export const notifHasSnippet = (kind: string): boolean => Notif.hasSnippet(Strin
 
 /* Post permission predicates (Domain.Access): pure UI authorization over the
    author hash, the viewer's hash, the bot hash, and admin-ness. canInteract =
-   DM/mute; canReport = interact & !admin; canEdit = own; canDelete = own|admin.
+   DM/mute; canReport = interact & !admin; canEdit = own|admin (2026-09-12);
+   canDelete = own|admin.
    Nullish hashes coerce to '' (a keyless viewer). Server authority unchanged. */
 export const canInteract = (author: string, me: string, bot: string): boolean => Access.canInteract(author || '')(me || '')(bot || '');
 export const canReport = (author: string, me: string, bot: string, isAdmin: boolean): boolean => Access.canReport(author || '')(me || '')(bot || '')(!!isAdmin);
-export const canEdit = (author: string, me: string): boolean => Access.canEdit(author || '')(me || '');
+export const canEdit = (author: string, me: string, isAdmin?: boolean): boolean => Access.canEdit(author || '')(me || '')(!!isAdmin);
 export const canDelete = (author: string, me: string, isAdmin: boolean): boolean => Access.canDelete(author || '')(me || '')(!!isAdmin);
 
 /* Live-forum pure decisions (Domain.Live). topicCompare(a,b) is the category

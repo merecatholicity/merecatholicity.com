@@ -63,6 +63,8 @@ test('the Access predicates coerce nullish hashes to a keyless viewer', () => {
   assert.equal(Core.canReport('x', 'me', 'bot', 1), false, 'truthy admin -> no report link');
   assert.equal(Core.canReport('x', 'me', 'bot', 0), true);
   assert.equal(Core.canEdit('me', 'me'), true);
+  assert.equal(Core.canEdit('x', 'me'), false, 'isAdmin omitted -> false');
+  assert.equal(Core.canEdit('x', 'me', 1), true, 'admin edits any (truthy coerces)');
   assert.equal(Core.canDelete('x', 'me', 1), true, 'admin deletes any');
 });
 

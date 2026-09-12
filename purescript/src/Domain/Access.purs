@@ -24,9 +24,13 @@ canInteract author me bot =
 canReport :: String -> String -> String -> Boolean -> Boolean
 canReport author me bot isAdmin = canInteract author me bot && not isAdmin
 
--- | May the viewer edit this post? Only its own author (keyed).
-canEdit :: String -> String -> Boolean
-canEdit author me = author /= "" && author == me
+-- | May the viewer edit this post? Its author, or any admin (keyed) — the
+-- | owner's ruling of 2026-09-12: an admin keeps edit AND delete over every
+-- | member's post, the way an admin may edit any profile in place (the
+-- | middle ground between doing nothing and deleting). The server enforces
+-- | the same rule (handleEdit / handleWallEdit).
+canEdit :: String -> String -> Boolean -> Boolean
+canEdit author me isAdmin = me /= "" && (author == me || isAdmin)
 
 -- | May the viewer delete this post? Its author, or any admin (keyed).
 canDelete :: String -> String -> Boolean -> Boolean

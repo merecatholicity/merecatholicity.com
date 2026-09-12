@@ -8,7 +8,7 @@ import * as Access from '../../purescript/output/Domain.Access/index.js';
 
 const ci = (a, m, b) => Access.canInteract(a)(m)(b);
 const cr = (a, m, b, ad) => Access.canReport(a)(m)(b)(ad);
-const ce = (a, m) => Access.canEdit(a)(m);
+const ce = (a, m, ad) => Access.canEdit(a)(m)(!!ad);
 const cd = (a, m, ad) => Access.canDelete(a)(m)(ad);
 
 test('canInteract: someone else, only if you hold a key and it is not the bot', () => {
@@ -23,9 +23,12 @@ test('canReport: interact-able AND you are not an admin (admins act directly)', 
   assert.equal(cr('x', 'me', 'bot', false), true);
 });
 
-test('canEdit: only your own post', () => {
+test('canEdit: your own post, or any post when you are an admin (2026-09-12) — never keyless', () => {
   assert.equal(ce('me', 'me'), true);
   assert.equal(ce('x', 'me'), false);
+  assert.equal(ce('x', 'me', true), true, 'an admin edits anyone\'s');
+  assert.equal(ce('x', '', true), false, 'no key, no edit — admin-ness rides a key');
+  assert.equal(ce('', 'me', true), true, 'an anonymous post is editable by an admin');
 });
 
 test('canDelete: your own post, or any post if you are an admin', () => {

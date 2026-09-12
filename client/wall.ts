@@ -18,6 +18,7 @@ export function installWall(B: Boot) {
   let blockedOut: (d: any) => any;
   let bookmarkToggle: (kind: any, ref: any, on: any) => any;
   let cachedJson: (url: any, init: any, ttl: any) => Promise<any>;
+  let canEditPost: (authorHash: any) => boolean;
   let clampBody: (bodyEl: any, lines: any) => any;
   let collectMentions: (text: any) => any;
   let crumb: (parts: any) => any;
@@ -468,7 +469,7 @@ export function installWall(B: Boot) {
     cdate.title = fmtDateTime(c.created_at);
     head.appendChild(cdate);
     var citems: any[] = [];
-    if (c.author_hash && state.myHash && c.author_hash === state.myHash) citems.push(wallEditLink(c, 'comment', node));
+    if (canEditPost(c.author_hash)) citems.push(wallEditLink(c, 'comment', node));   // yours, or any as an admin
     if (wallCanDelete(c.author_hash)) citems.push(wallDeleteLink(c.id, 'comment', node));
     /* the ⋯ and a hold open the comment's surface; the like control paints the pill */
     if (citems.length || state.myHash) head.appendChild(postMenu({ items: citems, hold: node, react: { target: 'wallc', id: c.id, seed: c, silent: true } }));
@@ -517,7 +518,7 @@ export function installWall(B: Boot) {
     if (p.author_hash && state.myHash && p.author_hash !== state.myHash && p.author_hash !== MERECAT_BOT_HASH) {
       var dm = el('a', 'comment-dm', 'Direct Message'); dm.href = 'messages.html?dm=' + p.author_hash; pitems.push(dm);
     }
-    if (p.author_hash && state.myHash && p.author_hash === state.myHash) pitems.push(wallEditLink(p, 'post', node));
+    if (canEditPost(p.author_hash)) pitems.push(wallEditLink(p, 'post', node));   // yours, or any as an admin
     if (wallCanDelete(p.author_hash)) pitems.push(wallDeleteLink(p.id, 'post', node));
     /* the ⋯ and a hold open the post's surface; the action bar paints the pill */
     if (pitems.length || state.myHash) head.appendChild(postMenu({ items: pitems, hold: node, react: { target: 'wall', id: p.id, seed: p, silent: true } }));
@@ -785,6 +786,7 @@ trace('submit: feed post');
     blockedOut = B.blockedOut;
     bookmarkToggle = B.bookmarkToggle;
     cachedJson = B.cachedJson;
+    canEditPost = B.canEditPost;
     clampBody = B.clampBody;
     collectMentions = B.collectMentions;
     crumb = B.crumb;

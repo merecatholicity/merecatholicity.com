@@ -420,7 +420,7 @@ switch's ~5 minutes.
 **`POST /api/comments/edit`** — `{id, key, body}`. `POST_LIMIT`, gated, **no
 Turnstile** (despite older docs; the web SDK sends a `token` the server
 ignores). An attachment survives a body edit untouched; a media-only post
-(empty body) cannot be edited at all. Author-only, even for admins. A comment under a CLOSED section (its page
+(empty body) cannot be edited at all. The author's, or — since 2026-09-12 — any admin's (an admin keeps edit AND delete over every member's post, as over every profile; an admin edit is logged `admin_post_edit`); the same rule holds for `/wall/edit`. A comment under a CLOSED section (its page
 switched off, or its journal article's) is refused with the same `403`.
 Re-screens; a flagged edit drops the
 post to `pending`. Returns `{ok, status, edited_at}`. `403 "Not yours, or

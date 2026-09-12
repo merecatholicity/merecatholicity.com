@@ -167,6 +167,12 @@ export function installBoard(B: Boot) {
     ta.scrollIntoView({ block: 'center' });
   }
 
+  /* May I edit this post? Its author, or any admin — the kernel's rule
+     (Domain.Access.canEdit through mcCore), the server's too. */
+  function canEditPost(authorHash: any) {
+    if (window.mcCore) return window.mcCore.canEdit(authorHash, state.myHash, isAdmin());
+    return !!state.myHash && (authorHash === state.myHash || isAdmin());
+  }
   function commentNode(c: any, pending: any, quoteCtx: any, reveal?: boolean): any {
     /* Ported (Wave B3b): the module builder renders when the bundle stands;
        this body is the no-bundle fallback (the deliberate no-bundle fallback). */
@@ -281,7 +287,8 @@ export function installBoard(B: Boot) {
       quoteInto(c, excerpt, permalinkFor(c, quoteCtx));
     });
     items.push(quote);
-    if (c.author_hash && c.author_hash === state.myHash) {
+    /* Yours, or any post when you are an admin (Domain.Access.canEdit, 2026-09-12). */
+    if (canEditPost(c.author_hash)) {
       var ed = el('a', 'comment-edit', 'edit');
       ed.href = '#';
       ed.addEventListener('click', function (e: any) {
@@ -1721,5 +1728,5 @@ trace('submit: board post');
      module is bound: listeners, deferred initializers. */
   function run() {
   }
-  return { bind, run, exports: { CATS, armBoardForm, attachAuthorPicker, boardButtons, boardPost, bookmarkToggle, buildBoardForm, catByKey, commentNode, indexSearchBox, permalinkFor, postMenu, quoteInto, renderButtons, renderTrustLine, searchSnippet, selectionInPost, setStatus, startEdit, truncate, viewCat, viewIndex, viewJoin, viewJournal, viewJournalArticle, viewNoSuchPage, viewPost, viewRecent, viewSaved, viewSearch, viewTopic, watchToggle } };
+  return { bind, run, exports: { CATS, armBoardForm, attachAuthorPicker, boardButtons, boardPost, bookmarkToggle, buildBoardForm, canEditPost, catByKey, commentNode, indexSearchBox, permalinkFor, postMenu, quoteInto, renderButtons, renderTrustLine, searchSnippet, selectionInPost, setStatus, startEdit, truncate, viewCat, viewIndex, viewJoin, viewJournal, viewJournalArticle, viewNoSuchPage, viewPost, viewRecent, viewSaved, viewSearch, viewTopic, watchToggle } };
 }

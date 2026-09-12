@@ -123,7 +123,7 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
       kit.quoteTake(c, quoteCtx);
     });
     items.push(quote);
-    if (Core.canEdit(c.author_hash, kit.state.myHash)) {
+    if (Core.canEdit(c.author_hash, kit.state.myHash, kit.isAdmin())) {   // yours, or any as an admin
       var ed = el('a', 'comment-edit', 'edit') as HTMLAnchorElement;
       ed.href = '#';
       ed.addEventListener('click', function (e: Event) {
