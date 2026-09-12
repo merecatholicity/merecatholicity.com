@@ -56,6 +56,9 @@ test('the region is the visual viewport minus the site\'s own chrome at both edg
     'by their rects: a tab bar slid away under the keyboard drops out by itself');
   assert.ok(/for \(var pass = 0; pass < 2; pass\+\+\)/.test(net), 'two passes: a bar standing on a bar');
   const need = net.slice(net.indexOf('function kbNeed('), net.indexOf('function kbAlign('));
+  assert.ok(/var KB_GROUPS = '\.dm-edit-box, \.comment-editor, \.wall-edit-box, \.comment-form, \.mc-confirm, \[data-mc-kb-group\]';/.test(net),
+    'the editor a field sits in — with its Save/Post row — is what is placed when it fits');
+  assert.ok(/var g = kbGroup\(el\);\s*if \(g !== el\) \{\s*var gr = g\.getBoundingClientRect\(\);\s*if \(gr\.height <= room\) r = gr;/.test(need), 'the editor when it fits the room, else the field');
   assert.ok(/if \(r\.height >= room\) \{/.test(need) && /atFoot = el\.selectionEnd >= el\.value\.length \/ 2;/.test(need),
     'taller than the room: the foot when the caret is past the middle, else the head — one rule, so successive placings agree');
   assert.ok(/if \(r\.bottom > vb - gap\) return Math\.round\(r\.bottom - \(vb - gap\)\);\s*if \(r\.top < vt \+ gap\) return Math\.round\(r\.top - \(vt \+ gap\)\);\s*return 0;/.test(need),

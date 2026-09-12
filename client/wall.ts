@@ -160,6 +160,7 @@ export function installWall(B: Boot) {
       copy: 'M15.5 8.5v-2a2 2 0 00-2-2h-7a2 2 0 00-2 2v7a2 2 0 002 2h2M10.5 8.5h7a2 2 0 012 2v7a2 2 0 01-2 2h-7a2 2 0 01-2-2v-7a2 2 0 012-2z',
       expand: 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5',
       close: 'M6 6l12 12M18 6L6 18',
+      check: 'M5 12.5l4.5 4.5L19 7',   // the composer's Send while editing a message (2026-09-12)
       /* the DM chat screen's line icons (Feather-shaped, hand-drawn) */
       plus: 'M12 5v14M5 12h14',
       send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',

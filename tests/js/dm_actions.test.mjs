@@ -211,7 +211,7 @@ test('a reply rides inside the ciphertext, and the media envelope carries its ow
   assert.ok(/dmEncrypt\(dmWrapText\(body, replyAt\), otherPub\)/.test(view), 'the text send wraps the quote INSIDE the E2E plaintext');
   assert.ok(/if \(replyAt\) mm\.env\.reply = replyAt;/.test(view), 'a media reply rides in the (encrypted) media envelope');
   assert.ok(!/reply_to/.test(src), 'the server never learns what answers what');
-  const edit = fn('dmStartEdit', 'dmMarkEdited');
+  const edit = fn('dmSaveEdit', 'dmStartEdit');
   assert.ok(/dmEncrypt\(dmWrapText\(nv, m\.reply\), ctx\.otherPub\)/.test(edit), 'an edit keeps the quote it answered');
 });
 
@@ -231,4 +231,17 @@ test('on a phone a hold picks a message, never a word: the screen is not selecta
   assert.ok(/function clearSelection\(\) \{\s*try \{ var s = window\.getSelection\(\); if \(s && s\.rangeCount\) s\.removeAllRanges\(\); \}/.test(src));
   assert.ok(/@media \(hover: none\) \{\s*\.mc-appbar, mc-tabbar, \.mc-tabbar \{ -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; \}/.test(mainCss),
     'the phone chrome (app bar, tab bar) is never text to select either — a stray selection cannot seed there');
+});
+
+test('editing a message happens IN the composer: the Editing strip, the text in the field, Send a ✓, the ✕ giving the draft back', () => {
+  const start = fn('dmStartEdit', 'dmMarkEdited');
+  assert.ok(/if \(ctx && ctx\.edit\) \{ ctx\.edit\(m, node\); return; \}/.test(start), 'the surface\'s Edit hands the message to the composer');
+  const view = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function ', src.indexOf('function viewDm(') + 10));
+  assert.ok(/var editBar = el\('div', 'dm-reply-bar dm-edit-bar'\);/.test(view), 'the strip is the reply strip\'s shape');
+  assert.ok(/ctx\.edit = function \(m: any, node: any\) \{ setEdit\(m, node\); ta\.focus\(\); \};/.test(view));
+  assert.ok(/ta\.value = String\(m\.body \|\| ''\);/.test(view) && /send\.appendChild\(mcIcon\(editing \? 'check' : 'send'\)\);/.test(view), 'the text in the field; Send a ✓');
+  assert.ok(/if \(editing\) \{\s*\/\* ✓: save the edit in place/.test(view) && /dmSaveEdit\(editing\.m, editing\.node, ctx, body\)/.test(view), 'Send saves through the one routine');
+  assert.ok(/editX\.addEventListener\('click', function \(\) \{ clearEdit\(true\); ta\.focus\(\); \}\);/.test(view) && /if \(e\.key === 'Escape' && editing\) \{ e\.preventDefault\(\); clearEdit\(true\); \}/.test(view), 'the ✕ and Escape give the earlier draft back');
+  assert.ok(/ctx\.reply = function \(m: any\) \{ if \(editing\) clearEdit\(true\); setReply/.test(view) && /setReply\(null\);\s*editBody\.textContent = '';/.test(view), 'one thing at a time: a reply ends an edit, an edit disarms a reply');
+  assert.ok(/var has = !!\(ta\.value\.trim\(\) \|\| pendingFile \|\| editing\);/.test(view) && /plus\.hidden = !!editing;/.test(view), 'Send stands while editing; an edit changes words, never media');
 });

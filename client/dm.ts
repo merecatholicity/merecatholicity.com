@@ -706,7 +706,31 @@ export function installDm(B: Boot) {
      reply envelope re-wrapped around the new text — and posts /dm/edit; on
      success the body re-renders and the meta row gains "edited" (the other
      side is told live). m.body is the plaintext dmRenderMsg decrypted. */
+  /* Save an edit: the new plaintext re-wrapped around the quote it answered,
+     sealed, posted; on success the bubble re-renders and gains "edited" (the
+     other side is told live). One routine for the composer's Editing strip
+     (the road since 2026-09-12) and the in-bubble box it replaced. */
+  function dmSaveEdit(m: any, node: any, ctx: any, nv: string) {
+    return fetch(API + '/dm/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, body: dmEncrypt(dmWrapText(nv, m.reply), ctx.otherPub), enc: 1 }) })
+      .then(function (r) { return r.json(); }).then(function (d) {
+        if (blockedOut(d)) return { ok: false, error: '' };
+        if (!d || !d.ok) return { ok: false, error: (d && d.error) || 'Could not save.' };
+        m.body = nv; m.edited_at = d.edited_at || Math.floor(Date.now() / 1000);
+        var bodyEl = node.querySelector(':scope > .comment-body');
+        if (bodyEl) { bodyEl.textContent = ''; fillBody(bodyEl, nv); }
+        dmMarkEdited(node);
+        return { ok: true, error: '' };
+      });
+  }
   function dmStartEdit(m: any, node: any, ctx: any) {
+    /* Editing happens IN the composer (2026-09-12, WhatsApp's way): the text
+       loaded into the field under an "Editing message" strip, Send become a
+       ✓ — the composer is fixed on the keyboard by construction, so an edit
+       can never hide behind it (the owner's screenshot: a box in the bubble,
+       its Save row under the composer). The in-bubble box below stands only
+       for a thread with no composer to edit in. */
+    if (ctx && ctx.edit) { ctx.edit(m, node); return; }
     if (node.querySelector('.dm-edit-box')) return;
     var bodyEl = node.querySelector(':scope > .comment-body');
     var meta = node.querySelector(':scope > .dm-meta');
@@ -734,16 +758,10 @@ export function installDm(B: Boot) {
       if (!nv.trim()) { ta.focus(); return; }
       if (nv === (m.body || '')) { done(); return; }
       save.disabled = true; st.textContent = 'Saving…';
-      fetch(API + '/dm/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, body: dmEncrypt(dmWrapText(nv, m.reply), ctx.otherPub), enc: 1 }) })
-        .then(function (r) { return r.json(); }).then(function (d) {
-          if (blockedOut(d)) return;
-          if (!d || !d.ok) { st.textContent = (d && d.error) || 'Could not save.'; save.disabled = false; return; }
-          m.body = nv; m.edited_at = d.edited_at || Math.floor(Date.now() / 1000);
-          if (bodyEl) { bodyEl.textContent = ''; fillBody(bodyEl, nv); }
-          dmMarkEdited(node);
-          done();
-        }).catch(function () { st.textContent = 'Network error. Try again.'; save.disabled = false; });
+      dmSaveEdit(m, node, ctx, nv).then(function (r) {
+        if (r.ok) { done(); return; }
+        st.textContent = r.error; save.disabled = false;
+      }).catch(function () { st.textContent = 'Network error. Try again.'; save.disabled = false; });
     });
   }
   function dmMarkEdited(node: any) {
@@ -857,6 +875,7 @@ export function installDm(B: Boot) {
       '.dm-reply-body .dm-quote-text{-webkit-line-clamp:2}' +
       '.dm-reply-x{flex:none;font:inherit;background:none;border:0;cursor:pointer;color:var(--faint);font-size:1.1em;padding:.2em .45em;border-radius:6px}' +
       '.dm-reply-x:hover{color:var(--maroon,#8b1a1a)}' +
+      '.dm-edit-bar{border-left-color:var(--dm-saved,#d9a520)}' +
       /* the chat screen: a sticky header over the words, a sticky composer under them */
       '.dm-head{position:sticky;top:0;z-index:38;display:flex;align-items:center;gap:.65rem;padding:.45rem 0;margin:0 0 .3rem;background:var(--surface,#fff);border-bottom:1px solid var(--rule)}' +
       'body.mc-app .dm-head{top:var(--mc-deskbar-h,0px)}' +
@@ -1760,6 +1779,19 @@ export function installDm(B: Boot) {
         replyX.type = 'button'; replyX.title = 'Cancel reply'; replyX.setAttribute('aria-label', 'Cancel reply');
         replyBar.appendChild(replyBody); replyBar.appendChild(replyX);
         form.appendChild(replyBar);
+        /* "Editing message": the strip above the field while one of my words
+           is being edited IN the composer (2026-09-12) — the text loaded into
+           the field, Send become a ✓, the ✕ (or Escape) giving the field its
+           earlier draft back. One thing at a time: arming a reply ends an
+           edit, and an edit disarms a reply. */
+        var editing: any = null;
+        var editBar = el('div', 'dm-reply-bar dm-edit-bar');
+        editBar.hidden = true;
+        var editBody = el('div', 'dm-reply-body');
+        var editX = el('button', 'dm-reply-x', '✕');
+        editX.type = 'button'; editX.title = 'Cancel edit'; editX.setAttribute('aria-label', 'Cancel edit');
+        editBar.appendChild(editBody); editBar.appendChild(editX);
+        form.appendChild(editBar);
         var mediaChip = el('span', 'dm-attach-chip');
         mediaChip.hidden = true;
         form.appendChild(mediaChip);
@@ -1875,7 +1907,37 @@ export function installDm(B: Boot) {
           replyBar.hidden = false;
         }
         replyX.addEventListener('click', function () { setReply(null); ta.focus(); });
-        ctx.reply = function (m: any) { setReply(dmReplyRef(m)); ta.focus(); };
+        ctx.reply = function (m: any) { if (editing) clearEdit(true); setReply(dmReplyRef(m)); ta.focus(); };
+        function paintSend() {
+          send.textContent = '';
+          send.appendChild(mcIcon(editing ? 'check' : 'send'));
+          send.title = editing ? 'Save' : 'Send'; send.setAttribute('aria-label', send.title);
+        }
+        function setEdit(m: any, node: any) {
+          if (editing && editing.node === node) { ta.focus(); return; }
+          if (!editing) editing = { m: m, node: node, prev: ta.value };
+          else { editing.m = m; editing.node = node; }
+          setReply(null);
+          editBody.textContent = '';
+          editBody.appendChild(el('span', 'dm-quote-who', '✎ Editing message'));
+          editBody.appendChild(el('span', 'dm-quote-text', dmQuoteText({ kind: 'text', text: String(m.body || '') })));
+          editBar.hidden = false;
+          ta.value = String(m.body || '');
+          try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { /* fine */ }
+          grow(); refresh(); paintSend();
+          status.textContent = '';
+        }
+        function clearEdit(restore: boolean) {
+          if (!editing) return;
+          var prev = editing.prev;
+          editing = null;
+          editBar.hidden = true;
+          ta.value = restore ? prev : '';
+          grow(); refresh(); paintSend();
+        }
+        editX.addEventListener('click', function () { clearEdit(true); ta.focus(); });
+        ta.addEventListener('keydown', function (e: any) { if (e.key === 'Escape' && editing) { e.preventDefault(); clearEdit(true); } });
+        ctx.edit = function (m: any, node: any) { setEdit(m, node); ta.focus(); };
         /* The field grows with the words, to a few lines, then scrolls. */
         /* An empty box is its natural one row (scrollHeight would count a
            wrapped placeholder); a filled one grows to a few lines, then scrolls.
@@ -1889,9 +1951,10 @@ export function installDm(B: Boot) {
         /* Mic while there is nothing to send, Send the moment there is —
            WhatsApp's swap. Without voice, Send stands always, dimmed when idle. */
         function refresh() {
-          var has = !!(ta.value.trim() || pendingFile);
+          var has = !!(ta.value.trim() || pendingFile || editing);
           if (mic) { mic.hidden = has; send.hidden = !has; }
           else { send.hidden = false; send.classList.toggle('dm-c-idle', !has); }
+          plus.hidden = !!editing;   // an edit changes words, never media
         }
         attachDraft(ta, 'dm:' + other);
         attachEmoji(ta);
@@ -1998,6 +2061,20 @@ export function installDm(B: Boot) {
         send.addEventListener('click', function () {
           if (send.disabled) return;
           var body = ta.value.replace(/\s+$/, '');
+          if (editing) {
+            /* ✓: save the edit in place (dmSaveEdit re-wraps the quote it answered) */
+            if (!body.trim()) { ta.focus(); return; }
+            if (body === String(editing.m.body || '')) { clearEdit(false); return; }
+            send.disabled = true; status.textContent = 'Saving…';
+            dmSaveEdit(editing.m, editing.node, ctx, body).then(function (r) {
+              send.disabled = false;
+              if (!r.ok) { status.textContent = r.error; return; }
+              status.textContent = '';
+              clearEdit(false);
+              if (ta.mcDraftDone) ta.mcDraftDone();
+            }).catch(function () { send.disabled = false; status.textContent = 'Network error. Try again.'; });
+            return;
+          }
           if (!pendingFile && !body.trim()) { ta.focus(); return; }
           send.disabled = true;
           trace('submit: DM send');

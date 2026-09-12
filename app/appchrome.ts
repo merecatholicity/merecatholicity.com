@@ -1877,11 +1877,25 @@ export function installChrome() {
     for (var n = el; n && n !== document.body; n = n.parentElement) if (getComputedStyle(n).position === 'fixed') return true;
     return false;
   }
-  /* How far to scroll so the field sits inside [vt, vb]: 0 when it already
-     does. A field taller than the room shows the half the caret is in (the
-     foot when the caret is past the middle, as it is while typing on). */
+  /* A field's EDITOR — the box that holds it with its Save/Post row (an edit
+     box in a post, a reply composer, the report prompt) — is what must be
+     seen, not the field alone: a field placed on the keyboard with its Save
+     row under it is the owner's second screenshot (2026-09-12). When the
+     editor fits the room it is the thing placed; else the field, by the
+     caret rule below. */
+  var KB_GROUPS = '.dm-edit-box, .comment-editor, .wall-edit-box, .comment-form, .mc-confirm, [data-mc-kb-group]';
+  function kbGroup(el: any) { var g = el.closest ? el.closest(KB_GROUPS) : null; return g || el; }
+  /* How far to scroll so the field (its editor, when that fits) sits inside
+     [vt, vb]: 0 when it already does. A field taller than the room shows the
+     half the caret is in (the foot when the caret is past the middle, as it
+     is while typing on). */
   function kbNeed(el: any, vt: number, vb: number) {
     var gap = 8, r = el.getBoundingClientRect(), room = vb - vt - 2 * gap;
+    var g = kbGroup(el);
+    if (g !== el) {
+      var gr = g.getBoundingClientRect();
+      if (gr.height <= room) r = gr;
+    }
     if (r.height >= room) {
       var atFoot = true;
       try { if (el.selectionEnd != null && typeof el.value === 'string') atFoot = el.selectionEnd >= el.value.length / 2; } catch (e) { /* not a text control */ }

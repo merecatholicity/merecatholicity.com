@@ -181,7 +181,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   floats above the tab bar at the document's end, where a thread opens; everything that is not a message
   lives in the ⓘ sheet; the saved mark is a gold ★ and a gold-tinted border, never a ring;
   on a phone the emoji picker and the keyboard never share the screen (opening the picker
-  blurs the field; a pick hands the keyboard back). An element toggled by `hidden` needs
+  blurs the field; a pick hands the keyboard back). **Editing a message happens IN the
+  composer** (an "Editing message" strip, the text in the field, Send a ✓, ✕/Escape giving
+  the draft back) — never a box in the bubble, which the composer riding the keyboard would
+  cover. An element toggled by `hidden` needs
   a `[hidden]{display:none}` rule if it carries its own `display`. **A hold picks a
   message, never a word**: under `(hover:none)` the whole chat screen (`section.dm-screen`)
   and the phone chrome are not selectable text, only the fields are; the surface never is;
@@ -231,8 +234,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   browser's own late focus-scroll), on every keyboard resize, on every input — into the visual
   viewport MINUS the site's own chrome (the top bar and the DM's sticky header; the tab bar,
   the DM composer, the merecat row, the dock — a field "on the keyboard" would otherwise sit
-  behind the composer riding it): scrollable ancestors first, then the document (never for a
-  field a fixed ancestor holds), a spacer for room when the page ends short.
+  behind the composer riding it): the field's EDITOR when it fits (`KB_GROUPS`: the box with
+  its Save/Post row — a new editor container joins that list or carries `data-mc-kb-group`),
+  else the field; scrollable ancestors first, then the document (never for a field a fixed
+  ancestor holds), a spacer for room when the page ends short.
   A new composer gets nothing of its own: an in-flow field is covered; a fixed one rides
   `--mc-kb` in its `bottom`. `window.mcKeyboard.align(el, region)` is the headless proof.
 - **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"]) mc-footer`;
