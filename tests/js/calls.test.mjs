@@ -72,7 +72,7 @@ test('the thread draws the missed call as a line by side, never a bubble', () =>
 
 test('one haptic engine, the shell\'s: installed first, used by the surface, the pull, the ring', () => {
   assert.ok(/export function haptic\(kind: string\): boolean/.test(haptic) && /tap: 6, pick: 6, arm: 8, hold: 12, ring: \[300, 150, 300\]/.test(haptic), 'the patterns, small');
-  assert.ok(/if \(!\('switch' in i\)\) return null;/.test(haptic) && /return kind === 'ring' \? false : iosTap\(\);/.test(haptic), 'iOS: the switch haptic, never for the ring');
+  assert.ok(!/switch/.test(haptic.replace(/\/\*[\s\S]*?\*\//g, '')) && /if \(!canVibrate\(\)\) return false;/.test(haptic), 'the Vibration API alone — iOS has none, and the switch hack never fired for a programmatic toggle');
   assert.ok(/if \(ua && !ua\.hasBeenActive\) return false;/.test(haptic), 'never before the first real tap');
   assert.ok(/if \(!buzzed\) return;\s*buzzed = false;\s*try \{ if \(canVibrate\(\)\) navigator\.vibrate\(0\); \}/.test(haptic), 'nor the ring\'s cancel — Chrome logs an intervention for a vibrate(0) too');
   const at = shell.indexOf('installHaptic();'), live = shell.indexOf('installLive();');

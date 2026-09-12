@@ -249,9 +249,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `/call/end` (`noanswer`/`canceled`) or the hourly sweep's backstop — never at the offer; a
   decline or a hangup stamps the row and is not a miss. The ring is 45 s.
 - **Haptics are the shell's one engine** (`app/haptic.ts`, `window.mcHaptic`): a hold, a pick,
-  an armed swipe or pull, the ring's pattern — the Vibration API where it exists (Android), the
-  `switch` haptic on iOS (which has no API), never before the first real tap, never elsewhere
-  by hand. Tastefully: small numbers, no buzz on a send or a release.
+  an armed swipe or pull, the ring's pattern — the Vibration API where it exists (Android);
+  iOS has none and no road around it (the `switch`-checkbox haptic fires only under a real
+  tap, never a programmatic toggle — tried, felt not working); never before the first real
+  tap, never elsewhere by hand. Tastefully: small numbers, no buzz on a send or a release.
 - **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"]) mc-footer`;
   the shell stamps `data-mc-tab` on every navigation); the footer's information lives in
   Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on the
