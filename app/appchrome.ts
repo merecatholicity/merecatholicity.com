@@ -9,6 +9,7 @@
 
 import { LitElement, html } from 'lit';
 import { mountLibrary } from './views/library.ts';
+import { notifLabel, notifHref } from './core.ts';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -1293,22 +1294,10 @@ class McNotifs extends LitElement {
     if (this.state === 'err') return wrap(html`<p class="mc-notifs-empty">Could not load notifications. Check your connection.</p>`);
     if (this.state === 'load') return wrap(html`<p class="mc-notifs-empty">Loading…</p>`);
     if (!this.items!.length) return wrap(html`<p class="mc-notifs-empty" data-ico="🔔">No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.</p>`);
-    const name = (it: any) => it.actor_nick || (it.actor_hash && window.mcCore ? window.mcCore.displayName(it.actor_hash) : 'Someone');
+    /* The sentence and the door are the kernel's (Domain.Notif). */
     return wrap(html`${this.items!.map((it: any) => {
-      const isDm = it.kind === 'dm';
-      const isWall = it.kind === 'wall';
-      const isLike = it.kind === 'wall-like';
-      const isCat = it.kind === 'merecat';
-      const who = name(it);
-      const label = isDm ? (who + ' sent you a message')
-        : isCat ? 'merecat finished answering your question'
-          : isLike ? (who + ' liked your post')
-            : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-              : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
-      const to = isDm ? ('messages.html?dm=' + it.actor_hash)
-        : isCat ? ('merecat-ai.html?chat=' + it.topic_id)
-          : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
-            : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+      const label = notifLabel(it);
+      const to = notifHref(it);
       return html`<a class=${'mc-notifs-row' + (it.read_at ? '' : ' mc-notifs-new')} href=${to}>${label}</a>`;
     })}`);
   }

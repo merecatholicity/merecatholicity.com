@@ -1287,29 +1287,17 @@ export function installProfile(B: Boot) {
         d.items.forEach(function (it: any) {
           var row = el('div', 'board-topic');
           var left = el('div', 'board-topic-left');
-          var who = it.actor_nick || (it.actor_hash ? displayName(it.actor_hash) : 'Someone');
-          /* A 'dm' notification opens the conversation; 'call' (a missed call)
-             does too; 'wall' jumps to the post; reply/mention jump to the
-             forum post. */
-          var isDm = it.kind === 'dm';
-          var isCall = it.kind === 'call';
-          var isWall = it.kind === 'wall';
-          var isLike = it.kind === 'wall-like';
-          var isCat = it.kind === 'merecat';
-          var label = isDm ? (who + ' sent you a message')
-            : isCall ? ('📞 ' + who + ' called you')
-              : isCat ? 'merecat finished answering your question'
-                : isLike ? (who + ' liked your post')
-                  : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-                    : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
+          /* The sentence and the door are the kernel's (Domain.Notif via
+             mcCore) — the one map the member-page list and the bell sheet
+             render from too; a fourth inline copy for the reaction kinds was
+             the moment to make it one rule. */
+          var core: any = window.mcCore;
+          var label = core && core.notifLabel ? core.notifLabel(it) : ((it.actor_nick || 'Someone') + ' · ' + it.kind);
           var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
-          a.href = (isDm || isCall) ? ('messages.html?dm=' + it.actor_hash)
-            : isCat ? ('merecat-ai.html?chat=' + it.topic_id)
-              : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
-                : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+          a.href = core && core.notifHref ? core.notifHref(it) : 'community.html?notifications=1';
           left.appendChild(a);
           if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
-          if (it.snippet && !isDm) left.appendChild(el('div', 'board-intro', it.snippet));
+          if (it.snippet && (!core || !core.notifHasSnippet || core.notifHasSnippet(it.kind))) left.appendChild(el('div', 'board-intro', it.snippet));
           row.appendChild(left);
           var nstat = el('div', 'board-stats', fmtTimeCompact(it.created_at));
           nstat.title = fmtDateTime(it.created_at);

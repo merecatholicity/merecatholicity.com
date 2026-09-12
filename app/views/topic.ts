@@ -177,6 +177,8 @@ class McTopic extends LitElement {
     const list = this.querySelector('.comments-list') as HTMLElement;
     if (d.page === 1) list.appendChild(kit.commentNode(d.topic, false, { topicId: id }));
     d.replies.forEach((c: any) => list.appendChild(kit.commentNode(c, false, { topicId: id })));
+    /* the viewer's own reactions ride a keyed read after the cached payload */
+    if (kit.reactLoadMine) kit.reactLoadMine('post', (d.page === 1 ? [d.topic.id] : []).concat(d.replies.map((c: any) => c.id)));
     /* the watch toggle (kit machinery) + the save-for-later toggle */
     const watchSlot = this.querySelector('.mc-watch-slot');
     if (watchSlot && kit.state.key) {

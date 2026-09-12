@@ -18,6 +18,8 @@ import * as Profile from '../purescript/output/Domain.Profile/index.js';
 import * as Faith from '../purescript/output/Domain.Faith/index.js';
 import * as Pseudonym from '../purescript/output/Domain.Pseudonym/index.js';
 import * as Dm from '../purescript/output/Domain.Dm/index.js';
+import * as Reaction from '../purescript/output/Domain.Reaction/index.js';
+import * as Notif from '../purescript/output/Domain.Notif/index.js';
 import * as Access from '../purescript/output/Domain.Access/index.js';
 import * as Live from '../purescript/output/Domain.Live/index.js';
 import * as Pager from '../purescript/output/Domain.Pager/index.js';
@@ -106,17 +108,45 @@ export const displayName = Pseudonym.displayName;
 export const dmTtlLabel = (ttl: number | string): string => Dm.ttlLabel((Number(ttl) || Dm.defaultTtl) | 0);
 export const dmTtlOptions = Dm.ttlOptions;
 
-/* DM reactions (Domain.Dm, 2026-09-10): dmQuickReactions -> the press-and-hold
-   bar's six; dmReaction(raw) -> the validated reaction (exactly one emoji, or a
-   known custom-pack :token: lower-cased) or null — the Maybe erased HERE, the
-   same rule the worker's store runs. dmReplyExcerpt(s) -> the quote a reply
-   carries of the message it answers; dmReplySentinel -> the U+0001 that opens
-   a reply envelope inside the E2E plaintext. Nullish input coerces to ''. */
-export const dmQuickReactions = Dm.quickReactions;
-export const dmReaction = (raw: string): string | null =>
-  Maybe.maybe(null)((s: string) => s)(Dm.normalizeReaction(String(raw == null ? '' : raw)));
+/* Reactions (Domain.Reaction, 2026-09-12; born in Domain.Dm 2026-09-10):
+   quickReactions -> the press-and-hold bar's six; reaction(raw) -> the
+   validated reaction (exactly one emoji, or a known custom-pack :token:
+   lower-cased) or null — the Maybe erased HERE, the same rule every worker
+   store runs (a DM's side, the public ledger); reactionTargets -> the public
+   ledger's three targets ('post' | 'wall' | 'wallc'), isReactionTarget the
+   membership test. The dm-prefixed names are the same values, kept for the
+   DM client's call sites. Nullish input coerces to ''. */
+export const quickReactions = Reaction.quickReactions;
+export const reaction = (raw: string): string | null =>
+  Maybe.maybe(null)((s: string) => s)(Reaction.normalizeReaction(String(raw == null ? '' : raw)));
+export const reactionTargets = Reaction.targets;
+export const isReactionTarget = (t: string): boolean => Reaction.isTarget(String(t == null ? '' : t));
+export const dmQuickReactions = quickReactions;
+export const dmReaction = reaction;
+/* dmReplyExcerpt(s) -> the quote a reply carries of the message it answers;
+   dmReplySentinel -> the U+0001 that opens a reply envelope inside the E2E
+   plaintext. */
 export const dmReplyExcerpt = (s: string): string => Dm.replyExcerpt(String(s == null ? '' : s));
 export const dmReplySentinel = Dm.replySentinel;
+
+/* Notifications (Domain.Notif, 2026-09-12): the sentence a row reads and the
+   door it opens, from the wire's own fields (kind, actor_nick, actor_hash,
+   topic_title, topic_id, comment_id) — the one map the classic list, the
+   member-page list and the bell sheet all render from. notifHasSnippet(kind)
+   says whether an excerpt may stand under the sentence (never for the E2E
+   kinds). Missing fields coerce to '' / 0. */
+const notifItem = (it: any) => ({
+  kind: String((it && it.kind) || ''),
+  who: Notif.who(String((it && it.actor_nick) || ''))(String((it && it.actor_hash) || '')),
+  topicTitle: String((it && it.topic_title) || ''),
+  topicId: Number(it && it.topic_id) | 0,
+  commentId: Number(it && it.comment_id) | 0,
+  actor: String((it && it.actor_hash) || ''),
+});
+export const notifKinds = Notif.kinds;
+export const notifLabel = (it: any): string => Notif.label(notifItem(it));
+export const notifHref = (it: any): string => Notif.href(notifItem(it));
+export const notifHasSnippet = (kind: string): boolean => Notif.hasSnippet(String(kind == null ? '' : kind));
 
 /* Post permission predicates (Domain.Access): pure UI authorization over the
    author hash, the viewer's hash, the bot hash, and admin-ness. canInteract =

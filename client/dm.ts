@@ -13,6 +13,7 @@ export function installDm(B: Boot) {
   let MERECAT_BOT_HASH: any;
   let NACL_SRC: any;
   let appConfirm: (msg: any, opts: any, cb: any) => any;
+  let armHold: (node: any, open: (at: any) => void, opts?: any) => any;
   let attachDraft: (ta: any, ctx: string, titleInput?: any, overwrite?: boolean) => any;
   let attachEmoji: (textarea: any) => any;
   let attachMentions: (textarea: any) => any;
@@ -21,6 +22,8 @@ export function installDm(B: Boot) {
   let bootSig: any;
   let buildEmojiPanel: (textarea: any, onPick?: (it: any) => void) => any;
   let cachedJson: (url: any, init: any, ttl: any) => Promise<any>;
+  let closeActs: () => any;
+  let closeActsFor: (node: any) => any;
   let crumb: (parts: any) => any;
   let displayName: (hash: any) => any;
   let el: (tag: string, cls?: string | null, text?: string | number | null) => any;
@@ -43,8 +46,10 @@ export function installDm(B: Boot) {
   let mediaDownloadLink: (url: any, filename: any, label: any, cls: any) => any;
   let mediaGateFile: (f: any, cfg: any, sec: any, statusEl: any) => any;
   let onLiveNotif: () => any;
+  let openActs: (spec: any) => any;
   let pageBar: (total: number, per: number, curPage: number, hrefFor: ((n: number) => string) | null, onGo?: (n: number) => void) => HTMLElement | null;
   let profileHref: (hash: any) => any;
+  let reactionNode: (emoji: any) => any;
   let readEase: any;
   let readMark: any;
   let readThrottled: any;
@@ -265,18 +270,6 @@ export function installDm(B: Boot) {
      plaintext stays sealed. It renders as a small pill hanging off the bubble's
      bottom corner — the left corner of their bubble, the right of mine — both
      glyphs side by side when we both reacted, "❤️ 2" when we agreed. ---- */
-  function dmQuickReactions(): string[] {
-    return window.mcCore && window.mcCore.dmQuickReactions
-      ? window.mcCore.dmQuickReactions.slice() : ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-  }
-  /* One reaction as a node: a custom token (:code:) as its pack image when the
-     pack knows it, else the glyph itself. Text nodes only, never innerHTML. */
-  function dmReactionNode(emoji: any) {
-    var str = String(emoji || '');
-    var tok = /^:([a-z0-9][a-z0-9_+-]{0,39}):$/i.exec(str);
-    if (tok && CUSTOM_EMOJI[tok[1].toLowerCase()]) return emojiImg(CUSTOM_EMOJI[tok[1].toLowerCase()], tok[1].toLowerCase());
-    return document.createTextNode(str);
-  }
   /* Paint (or repaint) a bubble's reaction pill from m.react_me / m.react_other.
      The pill opens the same surface a press-and-hold does, so a reaction is
      changed or withdrawn where it is seen. */
@@ -290,12 +283,12 @@ export function installDm(B: Boot) {
     pill.type = 'button';
     var who = (ctx && ctx.shortName) || 'They';
     if (mine && theirs && mine === theirs) {
-      pill.appendChild(dmReactionNode(mine));
+      pill.appendChild(reactionNode(mine));
       pill.appendChild(el('span', 'dm-react-n', '2'));
       pill.title = 'You and ' + who + ' both reacted ' + mine;
     } else {
-      if (theirs) pill.appendChild(dmReactionNode(theirs));
-      if (mine) pill.appendChild(dmReactionNode(mine));
+      if (theirs) pill.appendChild(reactionNode(theirs));
+      if (mine) pill.appendChild(reactionNode(mine));
       pill.title = (theirs ? who + ' reacted ' + theirs : '') + (theirs && mine ? ' · ' : '') + (mine ? 'You reacted ' + mine : '');
     }
     pill.setAttribute('aria-label', pill.title);
@@ -368,170 +361,32 @@ export function installDm(B: Boot) {
      overlay here keeps. On desktop it is a popover at the pointer that an
      outside click, a scroll, or Escape dismisses. One at a time; a soft
      navigation tears it down with the boot. ---- */
-  var dmActOpen: any = null;
-  function dmCloseActions() {
-    var a = dmActOpen;
-    if (!a) return;
-    dmActOpen = null;
-    a.close();
-  }
-  function dmIsPhone() {
-    try { return window.innerWidth <= 600 || window.matchMedia('(hover: none)').matches; } catch (e) { return window.innerWidth <= 600; }
-  }
-  /* A hold on a phone picks a message, never a word. iOS starts its own text
-     selection under a long press and, when the bubble itself is not
-     selectable, anchors it in the NEAREST selectable text — the header's
-     presence line, a day chip, the composer's spacer — then extends it while
-     the finger stays down (the blue bands and handles of 2026-09-11). So the
-     whole screen is not selectable text under (hover:none) (ensureDmStyles),
-     and the surface drops whatever selection the hold managed to start. */
-  function dmClearSelection() {
-    try { var s = window.getSelection(); if (s && s.rangeCount) s.removeAllRanges(); } catch (e) { /* no selection API */ }
-  }
+  /* ---- The message surface (2026-09-10; the shared surface since
+     2026-09-12, client/surface.ts openActs): a press-and-hold over one bubble
+     — the reaction bar above, the bubble lit in a hole between four pieces of
+     scrim, the acts below; a popover at the pointer on desktop. What is DM
+     here: my reaction on the message (react_me, one per side), and the acts
+     that apply — Reply · Copy (text, or a media caption) · Edit (mine, text,
+     not a system notice) · Save/Unsave (★ lit when saved) · Delete (mine).
+     No Forward, Star or More (the owner's ruling). A redacted bubble opens
+     nothing. ---- */
+  function dmCloseActions() { closeActs(); }
   function dmOpenActions(m: any, node: any, ctx: any, at: any) {
-    dmCloseActions();
-    if (!m || !m.id || m.redacted || node.mcDead || !node.isConnected) return;
-    var phone = dmIsPhone();
-    if (phone) dmClearSelection();
+    if (!m || !m.id || m.redacted || node.mcDead || !node.isConnected) { closeActs(); return; }
     var mine = m.sender_hash === state.myHash;
     var sys = Number(m.enc || 0) === 2;
     var hasText = !m.media_key && !m.media_expired;
-    var root = el('div', 'dm-act ' + (phone ? 'dm-act-phone' : 'dm-act-desk') + (mine ? ' dm-act-mine' : ''));
-    root.setAttribute('data-mc-app', '');
-    var scrims: any[] = [];
-    function scrim() {
-      var sc = el('div', 'dm-act-scrim');
-      sc.addEventListener('click', function (e: any) { e.preventDefault(); dmCloseActions(); });
-      root.appendChild(sc); scrims.push(sc);
-      return sc;
-    }
-    /* The reaction bar: the quick six (plus my current reaction when it is not
-       one of them), mine lit; tapping mine again withdraws it. */
-    var bar = el('div', 'dm-act-bar');
-    bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'React');
-    var current = String(m.react_me || '');
-    var cells = dmQuickReactions();
-    if (current && cells.indexOf(current) === -1) cells.push(current);
-    cells.forEach(function (e) {
-      var b = el('button', 'dm-act-emoji' + (e === current ? ' on' : ''));
-      b.type = 'button';
-      b.appendChild(dmReactionNode(e));
-      b.title = e === current ? 'Remove your reaction' : 'React ' + e;
-      b.setAttribute('aria-label', b.title);
-      b.addEventListener('click', function () { dmCloseActions(); dmReact(m, node, ctx, e); });
-      bar.appendChild(b);
-    });
-    var more = el('button', 'dm-act-emoji dm-act-more', '+');
-    more.type = 'button'; more.title = 'More reactions'; more.setAttribute('aria-label', 'More reactions');
-    bar.appendChild(more);
-    /* The menu: only the acts that apply. */
-    var menu = el('div', 'dm-act-menu');
-    menu.setAttribute('role', 'menu');
-    function item(label: string, icon: string, cls: string, fn: () => void) {
-      var b = el('button', 'dm-act-item' + (cls ? ' ' + cls : ''));
-      b.type = 'button'; b.setAttribute('role', 'menuitem');
-      b.appendChild(el('span', 'dm-act-ico', icon));
-      b.appendChild(el('span', 'dm-act-label', label));
-      b.addEventListener('click', function () { dmCloseActions(); fn(); });
-      menu.appendChild(b);
-    }
-    item('Reply', '↩', '', function () { ctx.reply(m); });
+    var items: any[] = [];
+    items.push({ label: 'Reply', icon: '↩', fn: function () { ctx.reply(m); } });
     var copyText = hasText ? String(m.body || '') : String((m._env && m._env.caption) || '');
-    if (copyText) item('Copy', '⧉', '', function () { dmCopy(copyText, ctx); });
-    if (mine && hasText && !sys) item('Edit', '✎', '', function () { dmStartEdit(m, node, ctx); });
+    if (copyText) items.push({ label: 'Copy', icon: '⧉', fn: function () { dmCopy(copyText, ctx); } });
+    if (mine && hasText && !sys) items.push({ label: 'Edit', icon: '✎', fn: function () { dmStartEdit(m, node, ctx); } });
     var saved = !!Number(m.saved || 0);
-    item(saved ? 'Unsave' : 'Save', saved ? '★' : '☆', saved ? 'on' : '', function () { dmSave(m, node, ctx, saved ? 0 : 1); });
-    if (mine && !sys) item('Delete', '✕', 'dm-act-danger', function () { dmDeleteMsg(m, node, ctx); });
-    var pop: any = null;
-    if (phone) { scrim(); scrim(); scrim(); scrim(); root.appendChild(bar); root.appendChild(menu); }
-    else { scrim(); pop = el('div', 'dm-act-pop'); pop.appendChild(bar); pop.appendChild(menu); root.appendChild(pop); }
-    document.body.appendChild(root);
-    var lockedByUs = false;
-    var pad = 10, gap = 10;
-    var vv: any = (window as any).visualViewport;
-    function vTop() { return vv ? vv.offsetTop : 0; }
-    function vH() { return vv ? vv.height : window.innerHeight; }
-    var vW = window.innerWidth;
-    function clampPop() {
-      if (!pop) return;
-      var w = pop.offsetWidth, h = pop.offsetHeight;
-      var x = at ? at.x : node.getBoundingClientRect().right - w;
-      var y = at ? at.y : node.getBoundingClientRect().top;
-      pop.style.left = Math.max(pad, Math.min(vW - w - pad, x)) + 'px';
-      pop.style.top = Math.max(vTop() + pad, Math.min(vTop() + vH() - h - pad, y)) + 'px';
-    }
-    if (phone) {
-      var barH = bar.offsetHeight, menuH = menu.offsetHeight;
-      var r = node.getBoundingClientRect();
-      var fits = barH + gap + r.height + gap + menuH <= vH() - 2 * pad;
-      /* Scroll the page just enough — up, so the bar has room above, or down,
-         so the menu has room below; a bubble taller than the room gets its top
-         under the bar and its foot under the menu. Instant: this is placing,
-         not travelling. */
-      var delta = 0;
-      if (fits) {
-        var topWant = r.top - gap - barH, botWant = r.bottom + gap + menuH;
-        if (topWant < vTop() + pad) delta = topWant - (vTop() + pad);
-        else if (botWant > vTop() + vH() - pad) delta = botWant - (vTop() + vH() - pad);
-      } else delta = r.top - (vTop() + pad + barH + gap);
-      if (delta) {
-        try { window.scrollBy({ top: delta, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollBy(0, delta); }
-        r = node.getBoundingClientRect();
-      }
-      if (window.mcSheet && window.mcSheet.lock) lockedByUs = !!window.mcSheet.lock();
-      /* The four pieces: above, below, left of, and right of the bubble. */
-      var top = Math.max(0, r.top), bottom = Math.max(top, r.bottom);
-      scrims[0].style.cssText = 'left:0;right:0;top:0;height:' + top + 'px';
-      scrims[1].style.cssText = 'left:0;right:0;top:' + bottom + 'px;bottom:0';
-      scrims[2].style.cssText = 'left:0;top:' + top + 'px;height:' + (bottom - top) + 'px;width:' + Math.max(0, r.left) + 'px';
-      scrims[3].style.cssText = 'right:0;top:' + top + 'px;height:' + (bottom - top) + 'px;left:' + Math.min(vW, r.right) + 'px';
-      var barTop = fits ? r.top - gap - barH : vTop() + pad;
-      var menuTop = fits ? r.bottom + gap : vTop() + vH() - pad - menuH;
-      bar.style.top = Math.max(vTop() + pad, barTop) + 'px';
-      menu.style.top = Math.min(vTop() + vH() - pad - menuH, Math.max(vTop() + pad, menuTop)) + 'px';
-      var barW = bar.offsetWidth, menuW = menu.offsetWidth;
-      if (mine) {
-        bar.style.right = Math.max(pad, Math.min(vW - pad - barW, vW - r.right)) + 'px';
-        menu.style.right = Math.max(pad, Math.min(vW - pad - menuW, vW - r.right)) + 'px';
-      } else {
-        bar.style.left = Math.max(pad, Math.min(vW - pad - barW, r.left)) + 'px';
-        menu.style.left = Math.max(pad, Math.min(vW - pad - menuW, r.left)) + 'px';
-      }
-    } else clampPop();
-    /* The whole picker, in place of the bar and the menu, for a reaction
-       beyond the quick six — our own packs included. */
-    more.addEventListener('click', function () {
-      var panel = buildEmojiPanel(null, function (it: any) {
-        dmCloseActions();
-        dmReact(m, node, ctx, it.kind === 'img' ? ':' + it.code + ':' : it.char);
-      });
-      panel.classList.add('dm-act-picker');
-      bar.hidden = true; menu.hidden = true;
-      (pop || root).appendChild(panel);
-      panel.openPanel();
-      clampPop();
-    });
-    function onKey(e: any) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); dmCloseActions(); } }
-    function onScroll(e: any) { if (root.contains(e.target)) return; dmCloseActions(); }
-    function onTap(e: any) { e.preventDefault(); e.stopPropagation(); dmCloseActions(); }
-    document.addEventListener('keydown', onKey, true);
-    if (!phone) { window.addEventListener('scroll', onScroll, true); window.addEventListener('resize', dmCloseActions); }
-    else window.addEventListener('orientationchange', dmCloseActions);
-    node.addEventListener('click', onTap, true);
-    node.classList.add('dm-held');
-    var restore: any = document.activeElement;
-    dmActOpen = { node: node, close: function () {
-      if (root.parentNode) root.parentNode.removeChild(root);
-      if (lockedByUs && window.mcSheet && window.mcSheet.unlock) window.mcSheet.unlock();
-      document.removeEventListener('keydown', onKey, true);
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', dmCloseActions);
-      window.removeEventListener('orientationchange', dmCloseActions);
-      node.removeEventListener('click', onTap, true);
-      node.classList.remove('dm-held');
-      if (!phone && restore && restore.focus && document.contains(restore)) { try { restore.focus(); } catch (e) { /* gone */ } }
-    } };
-    if (!phone) { var first = menu.querySelector('button'); if (first) first.focus(); }
+    items.push({ label: saved ? 'Unsave' : 'Save', icon: saved ? '★' : '☆', cls: saved ? 'on' : '', fn: function () { dmSave(m, node, ctx, saved ? 0 : 1); } });
+    if (mine && !sys) items.push({ label: 'Delete', icon: '✕', cls: 'dm-act-danger', fn: function () { dmDeleteMsg(m, node, ctx); } });
+    openActs({ node: node, at: at, mine: mine,
+      react: { current: String(m.react_me || ''), onPick: function (e: any) { dmReact(m, node, ctx, e); } },
+      items: items });
   }
   /* A downward swipe over the page while a composer has the keyboard up
      dismisses it (the owner's report: the page scrolled under a keyboard that
@@ -550,82 +405,12 @@ export function installDm(B: Boot) {
       if (e.touches[0].clientY - y0 > 48) { y0 = -1; try { ta.blur(); } catch (x) { /* fine */ } }
     }, { passive: true, signal: bootSig });
   }
-  /* Arm a rendered bubble with the gestures: press-and-hold (touch) and
-     right-click open the surface; a swipe to the right replies; the ⌄ that
-     appears on hover is the pointer's road. A press that moves is a scroll, not
-     a hold; the click that follows a hold is swallowed so a link under the
-     finger does not also navigate. */
-  /* A short haptic where the device has one. Chrome refuses (and logs an
-     intervention for) a vibrate before the frame's first real tap, so ask
-     userActivation first where it exists. */
-  function dmBuzz(ms: number) {
-    try {
-      var ua: any = (navigator as any).userActivation;
-      if (ua && !ua.hasBeenActive) return;
-      if (navigator.vibrate) navigator.vibrate(ms);
-    } catch (e) { /* fine */ }
-  }
+  /* Arm a rendered bubble: the shared gestures (client/surface.ts armHold —
+     a hold on touch, a right-click, the ⌄ on hover) open the message surface;
+     a swipe to the right replies (the DM's own). */
   function dmArmGestures(m: any, node: any, ctx: any) {
-    var lpT: any = 0, sx = 0, sy = 0, held = false, swiping = false, dx = 0;
-    function cancelHold() { if (lpT) { clearTimeout(lpT); lpT = 0; } }
-    node.addEventListener('touchstart', function (e: any) {
-      if (node.mcDead || e.touches.length !== 1) { cancelHold(); return; }
-      var t = e.target;
-      if (t && t.closest && t.closest('video,audio,textarea,input,button,.dm-edit-box,.dm-react-pill')) return;
-      sx = e.touches[0].clientX; sy = e.touches[0].clientY; held = false; swiping = false; dx = 0;
-      cancelHold();
-      lpT = setTimeout(function () {
-        lpT = 0; held = true;
-        dmBuzz(12);
-        dmOpenActions(m, node, ctx, null);
-      }, 430);
-    }, { passive: true });
-    node.addEventListener('touchmove', function (e: any) {
-      if (held || node.mcDead) return;
-      var t = e.touches[0];
-      var mx = t.clientX - sx, my = t.clientY - sy;
-      if (!swiping) {
-        if (Math.abs(mx) > 8 || Math.abs(my) > 8) cancelHold();
-        if (mx > 24 && Math.abs(my) < mx * 0.6) { swiping = true; node.classList.add('dm-swiping'); }
-        else return;
-      }
-      dx = Math.max(0, Math.min(72, mx - 24));
-      node.style.transform = 'translateX(' + dx + 'px)';
-      node.classList.toggle('dm-swipe-armed', dx >= 48);
-    }, { passive: true });
-    function endTouch() {
-      cancelHold();
-      /* A hold that no click follows (Android suppresses it) must not swallow
-         some later, unrelated click. */
-      if (held) setTimeout(function () { held = false; }, 500);
-      if (!swiping) return;
-      var fire = dx >= 48;
-      swiping = false;
-      node.classList.remove('dm-swiping'); node.classList.remove('dm-swipe-armed');
-      node.style.transform = '';
-      if (fire) { dmBuzz(8); ctx.reply(m); }
-    }
-    node.addEventListener('touchend', endTouch, { passive: true });
-    node.addEventListener('touchcancel', endTouch, { passive: true });
-    node.addEventListener('click', function (e: any) {
-      /* stopImmediatePropagation: the surface's own tap-to-close listener sits
-         on this same node, registered later, and must not see this click. */
-      if (held) { held = false; e.preventDefault(); e.stopImmediatePropagation(); }
-    }, true);
-    node.addEventListener('contextmenu', function (e: any) {
-      e.preventDefault();
-      if (node.mcDead) return;
-      try { if (window.matchMedia('(hover: none)').matches) return; } catch (x) { /* desktop */ }
-      dmOpenActions(m, node, ctx, { x: e.clientX, y: e.clientY });
-    });
-    var more = el('button', 'dm-more', '⌄');
-    more.type = 'button'; more.title = 'Message actions'; more.setAttribute('aria-label', 'Message actions');
-    more.addEventListener('click', function (e: any) {
-      e.stopPropagation();
-      var r = more.getBoundingClientRect();
-      dmOpenActions(m, node, ctx, { x: r.left, y: r.bottom + 2 });
-    });
-    node.appendChild(more);
+    armHold(node, function (at: any) { dmOpenActions(m, node, ctx, at); },
+      { skip: 'video,audio,textarea,input,button,.dm-edit-box,.dm-react-pill', swipe: function () { ctx.reply(m); }, contextmenu: true, more: true });
   }
   /* The bubble frame every DM message shares (WhatsApp-shaped): the optional
      system label, the quote of what it answers, the body the caller built, and
@@ -672,6 +457,13 @@ export function installDm(B: Boot) {
     var text = String(reply.text || '');
     return label ? (text ? label + ' · ' + text : label) : (text || 'Message');
   }
+  /* Light a bubble for a moment: the quote jump's and the bell's landing. */
+  function dmFlash(target: any) {
+    target.classList.remove('dm-flash');
+    void target.offsetWidth;
+    target.classList.add('dm-flash');
+    setTimeout(function () { target.classList.remove('dm-flash'); }, 1300);
+  }
   /* The quote block at the head of a reply: who and what, and a tap jumps to
      the original when it is on this page (and lights it for a moment). */
   function dmQuoteNode(reply: any, ctx: any) {
@@ -684,10 +476,7 @@ export function installDm(B: Boot) {
       var target = ctx.list && ctx.list.querySelector('[data-dmid="' + String(reply.id).replace(/"/g, '') + '"]');
       if (!target) { if (ctx.note) ctx.note('That message is not on this page.'); return; }
       try { target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { target.scrollIntoView(); }
-      target.classList.remove('dm-flash');
-      void target.offsetWidth;
-      target.classList.add('dm-flash');
-      setTimeout(function () { target.classList.remove('dm-flash'); }, 1300);
+      dmFlash(target);
     }
     q.addEventListener('click', function (e: any) { e.stopPropagation(); jump(); });
     q.addEventListener('keydown', function (e: any) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); jump(); } });
@@ -977,7 +766,7 @@ export function installDm(B: Boot) {
     ['.dm-quote', '.dm-react-pill', '.dm-more', '.dm-edit-box', '.dm-receipt', '.dm-savedmark', '.dm-sys-label'].forEach(function (sel) {
       var n = node.querySelector(sel); if (n) n.remove();
     });
-    if (dmActOpen && dmActOpen.node === node) dmCloseActions();
+    closeActsFor(node);
   }
   /* Copy a message's text (or a media caption) to the clipboard, with a word
      of feedback; the old execCommand road where the async clipboard is absent. */
@@ -1021,8 +810,6 @@ export function installDm(B: Boot) {
          the hover ⌄, the day chips, and the press-and-hold surface. The bubble's
          base card (border, fill, radius, position:relative) is main.css's. */
       '.dm-msg{--dm-saved:#d9a520;transition:transform .18s ease}' +
-      '.dm-msg.dm-swiping{transition:none}' +
-      '.dm-msg.dm-swipe-armed{box-shadow:-4px 0 0 0 var(--maroon,#8b1a1a)}' +
       '.dm-sys-label{font-size:.78em;color:var(--faint);margin-bottom:.2em}' +
       '.dm-meta{display:flex;justify-content:flex-end;align-items:center;gap:.45em;margin-top:.2em;font-size:.72em;line-height:1.2;color:var(--faint);white-space:nowrap}' +
       '.dm-meta .comment-date{font-size:1em;color:inherit;margin:0}' +
@@ -1050,7 +837,6 @@ export function installDm(B: Boot) {
       '.dm-msg.dm-has-react{margin-bottom:1.3rem}' +
       '.dm-more{position:absolute;top:.2em;right:.3em;font:inherit;line-height:1;background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;width:1.5em;height:1.5em;padding:0 0 .15em;cursor:pointer;color:var(--faint);opacity:0;transition:opacity .12s;z-index:1}' +
       '.dm-msg:hover .dm-more,.dm-more:focus-visible{opacity:1}' +
-      '.dm-msg.dm-held{box-shadow:0 8px 28px rgba(0,0,0,.28)}' +
       '.dm-day{width:max-content;max-width:90%;margin:.9em auto .35em;font-size:.72em;color:var(--faint);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:999px;padding:.15em .75em;text-align:center}' +
       /* reading back (2026-09-11): the unread line, the jump button with its count, the typing bubble */
       '.dm-unread-line{display:flex;align-items:center;gap:.6em;margin:.9em 0 .5em;font-size:.72em;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--maroon,#8b1a1a)}' +
@@ -1065,31 +851,6 @@ export function installDm(B: Boot) {
       '@keyframes dm-typing{0%,80%,100%{opacity:.35;transform:translateY(0)}40%{opacity:1;transform:translateY(-.25em)}}' +
       '.dm-sub-typing{animation:dm-typing-pulse 1.2s infinite ease-in-out}@keyframes dm-typing-pulse{50%{opacity:.55}}' +
       '@media (hover:none){.dm-more{display:none}.dm-screen{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.dm-screen textarea,.dm-screen input{-webkit-user-select:text;user-select:text}.dm-msg{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:pan-y pinch-zoom}.dm-msg textarea{-webkit-user-select:text;user-select:text}}' +
-      /* the action surface: a hole between four pieces of scrim (phone) or a
-         popover at the pointer (desktop); scrim inert to touch, overscroll contained */
-      '.dm-act{position:fixed;inset:0;z-index:4100;pointer-events:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}' +
-      '.dm-act>*{pointer-events:auto}' +
-      '.dm-act-scrim{position:fixed;background:rgba(0,0,0,.45);touch-action:none;overscroll-behavior:contain}' +
-      '.dm-act-desk .dm-act-scrim{inset:0;background:transparent}' +
-      '.dm-act-bar{position:fixed;display:flex;gap:2px;align-items:center;padding:4px;border-radius:999px;background:var(--surface,#fff);border:1px solid var(--rule);box-shadow:var(--shadow-2);max-width:calc(100vw - 20px);overflow-x:auto;overscroll-behavior:contain;animation:dm-act-in .16s ease-out;transform-origin:bottom left}' +
-      '.dm-act-mine .dm-act-bar,.dm-act-mine .dm-act-menu{transform-origin:bottom right}' +
-      '.dm-act-emoji{width:2.4em;height:2.4em;display:inline-flex;align-items:center;justify-content:center;border:0;background:none;border-radius:999px;font:inherit;font-size:1.35rem;line-height:1;cursor:pointer;padding:0;flex:none;color:var(--ink)}' +
-      '.dm-act-emoji:hover{background:color-mix(in srgb,var(--maroon,#8b1a1a) 8%,transparent)}' +
-      '.dm-act-emoji.on{background:color-mix(in srgb,var(--maroon,#8b1a1a) 16%,transparent);box-shadow:0 0 0 2px var(--maroon,#8b1a1a) inset}' +
-      '.dm-act-emoji .mc-emoji{height:1.3em;margin:0;vertical-align:middle}' +
-      '.dm-act-more{font-size:1.45rem;color:var(--faint);border:1px solid var(--rule);width:2.1em;height:2.1em;margin-left:2px}' +
-      '.dm-act-menu{position:fixed;min-width:12.5rem;max-width:calc(100vw - 20px);background:var(--surface,#fff);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow-2);padding:.3rem;animation:dm-act-in .16s ease-out;transform-origin:top left}' +
-      '.dm-act-item{display:flex;align-items:center;gap:.7em;width:100%;text-align:left;font:inherit;font-size:1rem;color:var(--ink);background:none;border:0;border-radius:9px;padding:.6rem .7rem;cursor:pointer;margin:0}' +
-      '.dm-act-item:hover,.dm-act-item:focus-visible{background:color-mix(in srgb,var(--maroon,#8b1a1a) 8%,transparent);color:var(--maroon,#8b1a1a)}' +
-      '.dm-act-ico{width:1.4em;text-align:center;flex:none;color:var(--faint);font-size:1.05em}' +
-      '.dm-act-item.on .dm-act-ico{color:var(--dm-saved,#d9a520)}' +
-      '.dm-act-danger,.dm-act-danger .dm-act-ico{color:var(--maroon,#8b1a1a)}' +
-      '.dm-act-pop{position:fixed;display:flex;flex-direction:column;gap:6px;align-items:flex-start}' +
-      '.dm-act-pop .dm-act-bar,.dm-act-pop .dm-act-menu{position:static}' +
-      '.dm-act .dm-act-picker{position:fixed;left:10px;right:10px;bottom:10px;margin:0;z-index:1;max-height:70vh;display:flex;flex-direction:column;box-shadow:var(--shadow-2)}' +
-      '.dm-act .dm-act-picker .emoji-body{max-height:45vh}' +
-      '.dm-act-desk .dm-act-picker{position:static;width:22rem;max-width:calc(100vw - 20px)}' +
-      '@keyframes dm-act-in{from{opacity:0;transform:scale(.88)}to{opacity:1;transform:none}}' +
       /* the reply strip above the composer */
       '.dm-reply-bar{display:flex;align-items:center;gap:.5em;margin:0 0 .4em;padding:.35em .5em .35em .7em;border-left:3px solid var(--maroon,#8b1a1a);background:color-mix(in srgb,var(--ink,#000) 6%,transparent);border-radius:8px}' +
       '.dm-reply-body{flex:1;min-width:0;font-size:.9em}' +
@@ -1621,8 +1382,12 @@ export function installDm(B: Boot) {
     }
     var qs = new URLSearchParams(location.search);
     var pNum = Math.floor(Number(qs.get('p')) || 0);
+    /* A reaction's bell lands on the very message (2026-09-12): ?m=<id> asks
+       the server for that message's page (find=) and is scrolled to on arrival. */
+    var mWant = Math.floor(Number(qs.get('m')) || 0);
     var payload: any = { key: state.key, with: other };
     if (pNum > 0) payload.p = pNum;
+    else if (mWant > 0) payload.find = mWant;
     /* Same as viewTopic: this rendered nothing at all until the thread AND the
        crypto library had both arrived — the longest blank wait in the app. */
     crumb([['Community', 'community.html'], ['Messages', 'messages.html'], ['Conversation']]);
@@ -2333,7 +2098,12 @@ export function installDm(B: Boot) {
           }
           updateJump();
         }
-        if (d.messages.length && d.page >= dmPages) {
+        var landOn = mWant > 0 ? list.querySelector('[data-dmid="' + mWant + '"]') : null;
+        if (landOn) {
+          try { landOn.scrollIntoView({ block: 'center' }); } catch (e) { landOn.scrollIntoView(); }
+          dmFlash(landOn);
+          updateJump();
+        } else if (d.messages.length && d.page >= dmPages) {
           landing();
           if (document.readyState !== 'complete') {
             window.addEventListener('load', function () {
@@ -2356,6 +2126,7 @@ export function installDm(B: Boot) {
     MERECAT_BOT_HASH = B.MERECAT_BOT_HASH;
     NACL_SRC = B.NACL_SRC;
     appConfirm = B.appConfirm;
+    armHold = B.armHold;
     attachDraft = B.attachDraft;
     attachEmoji = B.attachEmoji;
     attachMentions = B.attachMentions;
@@ -2364,6 +2135,8 @@ export function installDm(B: Boot) {
     bootSig = B.bootSig;
     buildEmojiPanel = B.buildEmojiPanel;
     cachedJson = B.cachedJson;
+    closeActs = B.closeActs;
+    closeActsFor = B.closeActsFor;
     crumb = B.crumb;
     displayName = B.displayName;
     el = B.el;
@@ -2386,8 +2159,10 @@ export function installDm(B: Boot) {
     mediaDownloadLink = B.mediaDownloadLink;
     mediaGateFile = B.mediaGateFile;
     onLiveNotif = B.onLiveNotif;
+    openActs = B.openActs;
     pageBar = B.pageBar;
     profileHref = B.profileHref;
+    reactionNode = B.reactionNode;
     readEase = B.readEase;
     readMark = B.readMark;
     readThrottled = B.readThrottled;
@@ -2406,8 +2181,6 @@ export function installDm(B: Boot) {
   /* What ran at boot time in the old file, in the old order, after every
      module is bound: listeners, deferred initializers. */
   function run() {
-    bootSig.addEventListener('abort', dmCloseActions, { once: true });
-
     document.addEventListener('mc-live', function (ev) {
       var m = (ev as CustomEvent).detail; if (!m) return;
       if (m.t === 'dm') onLiveDm(m);

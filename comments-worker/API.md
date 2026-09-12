@@ -335,18 +335,39 @@ storage. `GET /config` serves `calls:{enabled}`; app_settings `calls_enabled`
 (global kill switch, server-enforced) and `calls_turn` are admin-set in
 `/admin/settings`. Notification kind `'call'` (migration 0009).
 
+### Reactions (2026-09-12)
+
+ONE ledger for every public target — `post` (any row of `comments`: a topic
+head, a reply, an article-page comment), `wall` (a feed post), `wallc` (a feed
+comment); a DM reaction is not a target (it lives on the message row, §4.1).
+One reaction per member per target: exactly one emoji or one custom-pack
+`:token:`, validated by `Domain.Reaction.normalizeReaction` — the same grammar
+a DM reaction runs — a different emoji replaces, `''` withdraws. You may react
+to your own post (it rings no bell). Every served post row carries `reacts`
+(`[{e, n}]`, most given first) and `react_me` (`''` for none — on the CACHED
+public board reads it is always `''`; ask `/reacts`); `likes` (the total) and
+`liked` (`react_me ? 1 : 0`) ride along for one deploy of cached clients.
+
+| Route | Body | Returns | Gate |
+|---|---|---|---|
+| `POST /api/comments/react` | `{key, target, id, emoji}` | `{ok, target, id, emoji, reacts, liked, likes}`. Visibility is the target's own: a live row; a back-room post only to an admin (else the same `404 'That post is gone.'` a missing post gives); the wall's targets behind the social switch (same 404). Rings the author's bell (`react` / `wall-react`, coalesced: one row per reactor per post, reopened after read, never for your own post or the bot, withdrawn with the reaction). Fans `{t:'react', target, id, reacts}` live over the target's scope (`topic:<id>` / `feed:global`). | `POST_LIMIT`, gated, no Turnstile. |
+| `POST /api/comments/reacts` | `{key, target, ids:[…≤60]}` | `{ok, target, mine:{id: emoji}}` — the caller's own reactions over a batch (the board's payloads are cached, so "mine" rides this). A non-admin never learns a back-room id here. | `READ_LIMIT`, gated. |
+| `POST /api/comments/react/who` | `{target, id}` | `{ok, target, id, who:[{hash, nick, avatar, emoji}], more}` — who reacted and with what, capped at 60, muted reactors hidden; a back-room post (or a wall target with the switch off) answers the empty list a missing post gives. `likers` rides beside `who` one deploy. | `READ_LIMIT`, public. |
+| `POST /api/comments/wall/like` · `/wall/comment/like` · `/wall/likers` | `{key, post\|comment, like:<bool>}` / `{post\|comment}` | **Deprecated aliases** (2026-09-12) of `/react` and `/react/who`: `like` true is the `❤️` reaction, false withdraws. One deploy for cached clients. | as above. |
+
 ### The social layer's global kill switch
 
 `app_settings.social_enabled` ('1' default; `Domain.Wall.enabledFrom` is the
 rule, so only a literal `'0'` turns it off). Off, the Feed and every member wall
 are inaccessible **to everyone, admins included**, and each surface answers as
 though it never existed rather than announcing a switch: `/wall/feed`, `/wall`,
-`/wall/post`, `/wall/comment`, `/wall/edit`, `/wall/like`, `/wall/comment/like`
-and `POST /wall/media` return **404 `{ok:false,error:'No such page.'}`**;
-`/wall/post/get` returns the byte-identical **404 `'That post is gone.'`** a
-deleted post gives, so a shared `feed.html?post=<id>` link cannot tell the two
-apart; `/wall/likers` returns the empty `{ok:true,likers:[],more:false}` an
-unknown post already gives. Notifications of kind `'wall'`/`'wall-like'` drop
+`/wall/post`, `/wall/comment`, `/wall/edit` and `POST /wall/media` return
+**404 `{ok:false,error:'No such page.'}`**; `/wall/post/get` returns the
+byte-identical **404 `'That post is gone.'`** a deleted post gives, so a shared
+`feed.html?post=<id>` link cannot tell the two apart, and so does `/react` on a
+`wall`/`wallc` target; `/react/who` (and its `/wall/likers` alias) returns the
+empty list an unknown post already gives. Notifications of kind
+`'wall'`/`'wall-like'`/`'wall-react'` drop
 out of the list and BOTH unread counts, and `kind:'wall'` bookmarks drop out of
 `/bookmarks` while `POST /bookmark {kind:'wall'}` falls into the pre-existing
 `'Bad request.'` — so no badge or saved row points at something unreachable.
@@ -493,19 +514,27 @@ their original timestamps.
 |---|---|---|---|
 | `POST /api/comments/dm/send` | `{key, to:<64-hex>, body:<≤4000>, token}` | `{ok, id, thread_id, created_at}` — **same shape even when shadow-held** (undetectable to the sender). | `POST_LIMIT` · **Turnstile** · gated. Refuses self (`"That would be a soliloquy."`) and the bot. |
 | `POST /api/comments/dm/threads` | `{key, p?}` | `{ok, threads:[{id,other_hash,nick,avatar,msgs,last_at,unread}], total, unread_total, page, per:20}`. `unread` is the COUNT of the viewer's unread words in that thread (2026-09-11; truthy exactly when the old 0/1 flag was), `unread_total` the number of THREADS with something unread — the tab badge's number, unchanged. Threads with 0 visible messages are absent. | `READ_LIMIT`, **not** gated. |
-| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey,last_seen}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked, unread, unread_from}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock; `unread` / `unread_from` (2026-09-11) say what was unread BEFORE this open did — the count, and the id of the first unread word (`null` for none), so the client can stand its "N unread messages" line above it and count on its jump button. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. | `READ_LIMIT`, not gated. |
+| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey,last_seen}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked, unread, unread_from}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock; `unread` / `unread_from` (2026-09-11) say what was unread BEFORE this open did — the count, and the id of the first unread word (`null` for none), so the client can stand its "N unread messages" line above it and count on its jump button. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. A `find:<message id>` (2026-09-12, without `p`) places the answer on that message's page — the topic view's own idiom, for the bell that lands on a message. | `READ_LIMIT`, not gated. |
 | `POST /api/comments/dm/unread` | `{key}` | `{ok, unread}` — unread **thread** count. | `READ_LIMIT`, **gated** (this poll is the reliable logout trip). |
 | `POST /api/comments/dm/block` | `{key, hash, blocked:<bool>}` | `{ok, blocked}` | `POST_LIMIT`, not gated. Unblock releases held messages and rings the badge. |
 | `POST /api/comments/dm/delete` | `{key, with}` | `{ok, purged}` — per-side "fresh start"; both sides cleared with nothing newer → the thread is hard-deleted. | `POST_LIMIT`, gated. |
 | `POST /api/comments/dm/presence` | `{key, hashes:[<64-hex>…≤50]}` | `{ok, online:[hash…], seen:{hash: epoch}}` — who is online now (a live socket under presence mode "auto"), and for those who are not, when they were last seen (2026-09-11): the hub's `profiles.last_seen_at`, stamped at a member's last disconnect under "auto" and CLEARED by an auth under "off", so a member who chose appear-offline has no entry — its absence is the privacy rule; an online member has no entry either (they are Online). `other.last_seen` on `/dm/thread` is the same stamp. | `READ_LIMIT`, gated. |
-| `POST /api/comments/dm/react` | `{key, with, id, emoji}` | `{ok, id, emoji}` — ONE reaction per side per message: `emoji` is exactly one emoji (an RGI-shaped grapheme: a flag, a keycap, a base with selector / skin tone / tag sequence / ZWJ-joined bases) or one of our custom-pack `:tokens:` (lower-cased on the way in), validated by `Domain.Dm.normalizeReaction`; `''` withdraws. Anything else → `400`. Only a message the caller can SEE (their pair's thread, not held from them, not expired, not redacted, after their own clear stamp) → else `404`; a redacted one → `409`. The other party's open thread hears `dm-react` live. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/react` | `{key, with, id, emoji}` | `{ok, id, emoji}` — ONE reaction per side per message: `emoji` is exactly one emoji (an RGI-shaped grapheme: a flag, a keycap, a base with selector / skin tone / tag sequence / ZWJ-joined bases) or one of our custom-pack `:tokens:` (lower-cased on the way in), validated by `Domain.Dm.normalizeReaction`; `''` withdraws. Anything else → `400`. Only a message the caller can SEE (their pair's thread, not held from them, not expired, not redacted, after their own clear stamp) → else `404`; a redacted one → `409`. The other party's open thread hears `dm-react` live, and a reaction to THEIR message rings their `dm-react` bell (2026-09-12: "X reacted to your message", landing on it — coalesced, withdrawn with the reaction; your own message rings nothing). | `POST_LIMIT`, gated. |
 | `POST /api/comments/dm/like` | `{key, with, id, like:<bool>}` | The 2026-08-03 heart on the same road: `like` true is the `❤️` reaction, false withdraws. **Deprecated alias** of `/dm/react`, kept one deploy for cached clients. | as `/dm/react`. |
 | `POST /api/comments/dm/save` | `{key, with, id, saved:<bool>}` | `{ok, saved, expires_at}` — a saved message is exempt from expiry for BOTH (`expires_at` null); unsaving restores the clock from `opened_at` + the thread ttl (or the unopened backstop). Lit for both: the other party's open thread hears `dm-save` live. | `POST_LIMIT`, gated. |
 
 ### 4.2 Notifications
 
-`reply` and `mention` events (the codes are a server `CHECK` + a client-only
-label map). Jump target: `community.html?topic=<topic_id>#comment-<comment_id>`.
+The kinds are `Domain.Notif.kinds` — `reply`, `mention`, `dm`, `wall`,
+`wall-like`, `merecat`, `call`, `react`, `wall-react`, `dm-react` — a server
+`CHECK` and the kernel's own label/door map (`Domain.Notif.label` / `href`;
+`mcCore.notifLabel` / `notifHref` erase it): the board kinds (`reply`,
+`mention`, `react`) jump to `community.html?topic=<topic_id>#comment-<comment_id>`;
+the wall kinds to `feed.html?post=<comment_id>` (`wall-react` with
+`#wc-<topic_id>` when `topic_id` > 0 — a feed comment); `dm`/`call` to
+`messages.html?dm=<actor_hash>`, `dm-react` to that with `&m=<comment_id>`;
+`merecat` to `merecat-ai.html?chat=<topic_id>`. A reaction always reads
+"reacted" — never the emoji, never "liked".
 
 | Route | Body | Returns | Gate |
 |---|---|---|---|
@@ -694,7 +723,7 @@ no longer derive names or ranks. The remaining must-replicate item is the
 | **Quote convention** | `> [Name wrote:](permalink)` + `> `-prefixed excerpt. Quoted `>` lines never trigger `@merecat`. | **No** — emit identically for quotes to render. |
 | **Blocked-logout UX** | On any `{blocked}` 403: clear key + caches, show the message, redirect. | Server gives only the `{blocked}` reason; the UX is yours. |
 | **DM reply envelope** (2026-09-10) | A quoted reply rides INSIDE the E2E plaintext, so the server never learns what answers what: plaintext beginning with `U+0001` (`Domain.Dm.replySentinel`) is `U+0001` + JSON `{v:1, text, reply:{id, from:<64-hex sender of the quoted message>, kind:'text'|'image'|'video'|'audio'|'file', text:<excerpt>}}`; plaintext without the sentinel is the bare message. The excerpt is `Domain.Dm.replyExcerpt` (whitespace folded, ≤160 code points + `…`). A media message carries its `reply` inside the media envelope (`{k, iv, name, mime, size, caption?, reply?}`) instead. Render the quote from the envelope (tap = jump to `id` when on the page); never trust `from` beyond the pair. An edit re-wraps the same `reply` around the new text. | **No** — the server holds ciphertext only. |
-| **DM reactions** | One reaction per side per message. Offer the quick six (`Domain.Dm.quickReactions`: 👍 ❤️ 😂 😮 😢 🙏) and the whole picker; send through `/dm/react`; render `react_me`/`react_other` as a pill on the bubble (both glyphs; `× 2` when equal); a `:code:` reaction is the pack image, as in bodies. Validate with the same grammar before the wire (`normalizeReaction`) — the server refuses with `400` otherwise. | Validation is server-enforced; rendering is yours. |
+| **Reactions** (2026-09-12) | ONE grammar (`Domain.Reaction.normalizeReaction`; the quick six `quickReactions`: 👍 ❤️ 😂 😮 😢 🙏, and the whole picker) on every surface. A DM: one reaction per side per message through `/dm/react`; render `react_me`/`react_other` as a pill on the bubble (both glyphs; `× 2` when equal). A board post, a feed post, a feed comment: one per member per target through `/react`; render `reacts` as chips with counts, the viewer's own lit (from `react_me`, or `/reacts` after a cached board read), `/react/who` under a chip. A `:code:` reaction is the pack image, as in bodies. Validate with the grammar before the wire — the server refuses with `400` otherwise. | Validation is server-enforced; rendering is yours. |
 
 The constants a client would otherwise triplicate — the ADJ/NOUN wordlists,
 cats (keys + labels + order), faith codes + labels, `RANKS`, the `BIBLE`
@@ -739,7 +768,10 @@ client-only.
 locked, sticky, replies, last_at); `profiles` (hash PK, nick, bio, signature,
 avatar, faith, created_at, updated_at); `admins` (hash PK, added_by,
 created_at); `locks`, `ip_bans` (normalized key), `identity_ips`, `trusted`,
-`bans` (legacy); `dm_threads`/`dms`/`dm_blocks`; `notifications`/`watches`;
+`bans` (legacy); `dm_threads`/`dms`/`dm_blocks`; `reactions` (target `post|wall|wallc`,
+target_id, author_hash, emoji, created_at; PK on the three — one per member
+per target; `wall_likes`/`wall_comment_likes` are frozen since 0014);
+`notifications`/`watches`;
 `thread_reads` (topic_id 0 = read-all floor); `reports`; `comments_fts` (FTS5
 external-content over `comments`, `porter unicode61`, kept in lockstep by three
 triggers). Indexes on page/status/id, parent/status/id, author/page/status,
@@ -813,6 +845,10 @@ passes.
   /api/comments/config` — a native client reads them there instead of copying.
   The worker and `comments.js` still keep inline copies that must stay identical
   until the web client is switched to read `/config`.
+- `/wall/like`, `/wall/comment/like` and `/wall/likers` are deprecated
+  aliases (2026-09-12) of `/react` and `/react/who`: a like is the `❤️`
+  reaction. The `likes`/`liked` fields on wall rows and the `likers` key are
+  derived from the reactions; all stand one deploy for cached clients.
 - `/dm/like` is a deprecated alias of `/dm/react` (2026-09-10) and the
   `liked_me`/`liked_other` thread fields are derived from the reactions; both
   stand one deploy for cached clients and then go. There is no `dm-like` live

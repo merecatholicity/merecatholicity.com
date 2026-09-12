@@ -68,8 +68,11 @@ test('0012 carries every old like forward as the ❤️ reaction, and nothing el
 });
 
 test('the reaction is validated by the kernel, in the one worker membrane', () => {
-  assert.ok(/export function dmReaction\(raw: any\): string \| null \{\s*return psOrNull\(Dm\.normalizeReaction\(/.test(libSrc),
-    'lib.ts dmReaction must erase Domain.Dm.normalizeReaction — no inline grammar');
+  /* Since 2026-09-12 the grammar is Domain.Reaction (shared with the board and
+     the feed); dmReaction is that one validator under its DM-era name. */
+  assert.ok(/export function reactionOf\(raw: any\): string \| null \{\s*return psOrNull\(Reaction\.normalizeReaction\(/.test(libSrc),
+    'lib.ts reactionOf must erase Domain.Reaction.normalizeReaction — no inline grammar');
+  assert.ok(/export const dmReaction = reactionOf;/.test(libSrc), 'dmReaction is the same validator');
   const h = body('handleDmReact');
   assert.ok(/dmReaction\(raw\)/.test(h), 'handleDmReact must validate through dmReaction');
   assert.ok(!/Extended_Pictographic|\\p\{Emoji/.test(h), 'no emoji regex re-inlined in the handler');

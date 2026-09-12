@@ -146,3 +146,25 @@ test('the comments-section rules cross with null-safe coercions (Domain.Comments
   assert.equal(Core.commentsPageHref('/book.html'), '/book.html');
   assert.equal(Core.commentsPageHref(null), '', 'null -> "" (String(null || \'\'))');
 });
+
+test('reaction/quickReactions are the one grammar (Domain.Reaction); the dm-prefixed names are the same values', () => {
+  assert.equal(Core.reaction, Core.dmReaction, 'one validator under two names');
+  assert.equal(Core.quickReactions, Core.dmQuickReactions);
+  assert.equal(Core.reaction('😂'), '😂');
+  assert.equal(Core.reaction('two 😂😂'), null);
+  assert.deepEqual([...Core.reactionTargets], ['post', 'wall', 'wallc']);
+  assert.equal(Core.isReactionTarget('wallc'), true);
+  assert.equal(Core.isReactionTarget(undefined), false, 'nullish -> "" -> false, never a throw');
+});
+
+test('notifLabel/notifHref/notifHasSnippet coerce the wire row (missing fields -> "" / 0) and erase nothing', () => {
+  const it = { kind: 'wall-react', actor_nick: '', actor_hash: 'c'.repeat(64), topic_id: '7', comment_id: 3 };
+  assert.match(Core.notifLabel(it), /^[A-Z][a-z]+-[A-Z][a-z]+ [0-9a-f]{4} reacted to your comment$/, 'the pseudonym for a nickless actor; "7" coerces to 7 (a comment)');
+  assert.equal(Core.notifHref(it), 'feed.html?post=3#wc-7');
+  assert.equal(Core.notifLabel({ kind: 'react', actor_nick: 'Ann' }), 'Ann reacted to your post');
+  assert.equal(Core.notifHref({ kind: 'react', actor_nick: 'Ann' }), 'community.html?topic=0#comment-0', 'missing ids coerce to 0');
+  assert.equal(Core.notifLabel(null), 'Someone replied in a thread', 'a null row never throws');
+  assert.equal(Core.notifHasSnippet('dm-react'), false);
+  assert.equal(Core.notifHasSnippet(undefined), true, 'an unknown/missing kind may show its excerpt');
+  assert.ok(Core.notifKinds.includes('dm-react'));
+});

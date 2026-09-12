@@ -408,8 +408,25 @@ class AHoldPicksAMessageNeverAWord(unittest.TestCase):
         self.css = read(BUILT)
 
     def test_phone_chrome_is_not_selectable_under_hover_none(self):
-        self.assertRegex(self.css, r"\(hover:\s*none\)[^{]*\{[^}]*\.mc-appbar,\s*mc-tabbar,\s*\.mc-tabbar\{[^}]*user-select:none",
+        # the build merges the phone chrome's rule with .comment's (2026-09-12): one selector list
+        self.assertRegex(self.css, r"\(hover:\s*none\)[^{]*\{[^}]*\.mc-appbar,\s*mc-tabbar,\s*\.mc-tabbar(?:,\s*\.comment)?\{[^}]*user-select:none",
                          "the app bar / tab bar lost their user-select:none under (hover: none)")
+
+
+class AHoldPicksAPostNeverAWord(unittest.TestCase):
+    """On a phone (2026-09-12) a post — a board post, an article-page comment,
+    a feed post or comment — is not selectable text either: the shared
+    press-and-hold surface opens over it, and a hold that seeds a selection
+    under the finger is the DM's 2026-09-11 lesson. Its fields stay text."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    def test_posts_are_not_selectable_under_hover_none_but_their_fields_are(self):
+        self.assertRegex(self.css, r"\(hover:\s*none\)[^{]*\{[^}]*\.comment\{[^}]*user-select:none",
+                         ".comment lost its user-select:none under (hover: none)")
+        self.assertRegex(self.css, r"\.comment textarea,\s*\.comment input\{[^}]*user-select:text",
+                         "the fields inside a post must stay selectable text")
 
 
 class SixEqualTabsInTheBottomBar(unittest.TestCase):

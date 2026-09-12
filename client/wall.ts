@@ -11,6 +11,7 @@ export function installWall(B: Boot) {
   let API: any;
   let MERECAT_BOT_HASH: any;
   let appConfirm: (msg: any, opts: any, cb: any) => any;
+  let armHold: (node: any, open: (at: any) => void, opts?: any) => any;
   let attachDraft: (ta: any, ctx: string, titleInput?: any, overwrite?: boolean) => any;
   let attachMentions: (textarea: any) => any;
   let authorNode: (hash: any, nick: any, withSub: any, faith?: any, posts?: any) => any;
@@ -41,8 +42,13 @@ export function installWall(B: Boot) {
   let myAvatar: any;
   let myNick: any;
   let myPostCount: any;
+  let openActs: (spec: any) => any;
   let openMedia: (mediaKey: any, kind: any, post: any) => any;
   let postMenu: (opts: any) => any;
+  let reactMine: (target: any, id: any) => string;
+  let reactPillInto: (host: any, target: any, id: any, cells: any[], mine: string) => any;
+  let reactRegister: (target: any, id: any, host: any, seed: any, paint?: any) => any;
+  let reactSend: (target: any, id: any, emoji: any) => any;
   let previewButton: (ta: any) => any;
   let profileHref: (hash: any) => any;
   let section: any;
@@ -200,39 +206,6 @@ export function installWall(B: Boot) {
     pop.style.left = Math.max(8, Math.min(window.innerWidth - 244, r.left)) + 'px';
     pop.style.top = (window.scrollY + r.bottom + 6) + 'px';
   }
-  function showLikers(anchor: any, params: any) {
-    closePop();
-    var pop = el('div', 'wall-pop wall-likers-pop');
-    pop.appendChild(skeleton('short'));
-    document.body.appendChild(pop); mcPop = pop;
-    placePop(pop, anchor);
-    setTimeout(function () { document.addEventListener('click', popOutside, true); window.addEventListener('scroll', closePop, true); }, 0);
-    fetch(API + '/wall/likers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) })
-      .then(function (r) { return r.json(); }).then(function (d) {
-        if (mcPop !== pop) return;
-        pop.textContent = '';
-        if (!d || !d.ok || !(d.likers && d.likers.length)) { pop.appendChild(el('div', 'wall-pop-empty', 'No likes yet')); return; }
-        pop.appendChild(el('div', 'wall-pop-title', 'Liked by'));
-        d.likers.forEach(function (u: any) {
-          var row = el('a', 'wall-likers-row'); row.href = profileHref(u.hash);
-          wallAvatarInto(row, u.hash, u.avatar);
-          row.appendChild(el('span', 'wall-likers-name', u.nick));
-          pop.appendChild(row);
-        });
-        if (d.more) pop.appendChild(el('div', 'wall-pop-more', 'and more…'));
-        placePop(pop, anchor);
-      }).catch(function () { if (mcPop === pop) { pop.textContent = ''; pop.appendChild(el('div', 'wall-pop-empty', 'Could not load')); } });
-  }
-  function attachLikers(anchor: any, getParams: any) {
-    var lpT = 0, hoverT = 0;
-    anchor.addEventListener('mouseenter', function () { clearTimeout(hoverT); hoverT = setTimeout(function () { showLikers(anchor, getParams()); }, 320); });
-    anchor.addEventListener('mouseleave', function () { clearTimeout(hoverT); });
-    anchor.addEventListener('touchstart', function () { clearTimeout(lpT); lpT = setTimeout(function () { showLikers(anchor, getParams()); }, 450); }, { passive: true });
-    anchor.addEventListener('touchend', function () { clearTimeout(lpT); }, { passive: true });
-    anchor.addEventListener('touchmove', function () { clearTimeout(lpT); }, { passive: true });
-    anchor.addEventListener('click', function (e: any) { e.preventDefault(); e.stopPropagation(); showLikers(anchor, getParams()); });
-  }
-
   /* The share popover: Copy link, X, Facebook, an optional media Download, and the
      native OS share sheet where available. Proper icons, not text links. */
   function showShareMenu(anchor: any, shareUrl: any, mediaDl: any, saveRef?: any) {
@@ -276,18 +249,21 @@ export function installWall(B: Boot) {
     setTimeout(function () { document.addEventListener('click', popOutside, true); window.addEventListener('scroll', closePop, true); }, 0);
   }
 
-  /* The post action bar (summary counts + Like / Comment / Share buttons), reused
-     by the feed card AND the media theater rail. Owns the like state so the button
-     and the summary count stay in step. Returns the element + the button hooks. */
+  /* The post action bar (the reactions' pill + the comment count, then Like /
+     Comment / Share), reused by the feed card AND the media theater rail. The
+     tally and my reaction come from the ledger (client/surface.ts): the pill
+     of chips in the summary — a tap on a chip gives that reaction, a hover or
+     a long press says who — and the Like button lit when my reaction is the
+     ❤️. A tap on Like is the ❤️ (mine again withdraws it); a hold on it opens
+     the whole bar (Facebook's road to a reaction beyond the heart), as does a
+     hold on the card. Returns the element + the button hooks. */
   function wallActions(post: any) {
-    var likeN = Number(post.likes) || 0, liked = !!post.liked, gen = 0, cn = Number(post.comments) || 0;
+    var liked = false, haveReacts = false, cn = Number(post.comments) || 0;
     var box = el('div', 'wall-actions');
     var summary = el('div', 'wall-summary');
-    var likeSum = el('button', 'wall-sum-likes'); likeSum.type = 'button';
-    likeSum.appendChild(mcIcon('heart')); var likeSumN = el('span', 'wall-sum-n'); likeSum.appendChild(likeSumN);
+    var likeSum = el('div', 'wall-sum-likes');
     var cmtSum = el('button', 'wall-sum-comments'); cmtSum.type = 'button';
     summary.appendChild(likeSum); summary.appendChild(cmtSum);
-    attachLikers(likeSum, function () { return { post: post.id }; });
     var btns = el('div', 'wall-btnrow');
     var likeBtn = el('button', 'wall-act wall-like'); likeBtn.type = 'button';
     likeBtn.appendChild(mcIcon('heart')); likeBtn.appendChild(el('span', 'wall-act-lbl', 'Like'));
@@ -296,25 +272,23 @@ export function installWall(B: Boot) {
     btns.appendChild(likeBtn); btns.appendChild(cmtBtn); btns.appendChild(shareBtn);
     function render() {
       likeBtn.classList.toggle('on', liked); likeBtn.title = liked ? 'Unlike' : 'Like';
-      likeSum.classList.toggle('on', liked);
-      likeSumN.textContent = likeN > 0 ? String(likeN) : '';
-      likeSum.style.display = likeN > 0 ? '' : 'none';
       cmtSum.textContent = cn > 0 ? (cn === 1 ? '1 comment' : cn + ' comments') : '';
       cmtSum.style.display = cn > 0 ? '' : 'none';
-      summary.style.display = (likeN > 0 || cn > 0) ? '' : 'none';
+      summary.style.display = (haveReacts || cn > 0) ? '' : 'none';
     }
+    reactRegister('wall', post.id, box, post, function (cells: any[], mine: string) {
+      haveReacts = cells.length > 0; liked = mine === '❤️';
+      reactPillInto(likeSum, 'wall', post.id, cells, mine);
+      render();
+    });
     likeBtn.addEventListener('click', function (e: any) {
       e.preventDefault(); e.stopPropagation();
-      if (!state.myHash) { if (window.mcOnboard) window.mcOnboard(); return; }
-      var want = !liked, myGen = ++gen;
-      liked = want; likeN = Math.max(0, likeN + (want ? 1 : -1)); render();
-      fetch(API + '/wall/like', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key, post: post.id, like: want }) })
-        .then(function (r) { return r.json(); }).then(function (d) {
-          if (myGen !== gen) return;
-          if (d && d.ok) { liked = !!d.liked; likeN = Number(d.likes) || 0; } else { liked = !want; likeN = Math.max(0, likeN + (want ? -1 : 1)); }
-          render();
-        }).catch(function () { if (myGen !== gen) return; liked = !want; likeN = Math.max(0, likeN + (want ? -1 : 1)); render(); });
+      reactSend('wall', post.id, '❤️');
     });
+    armHold(likeBtn, function (at: any) {
+      openActs({ node: likeBtn.closest('.wall-post') || box, at: at, items: [],
+        react: { current: reactMine('wall', post.id), onPick: function (e: any) { reactSend('wall', post.id, e); } } });
+    }, { skip: '', contextmenu: true });
     box.appendChild(summary); box.appendChild(btns);
     render();
     return { el: box, likeBtn: likeBtn, cmtBtn: cmtBtn, shareBtn: shareBtn, cmtSum: cmtSum, bumpComment: function (d: any) { cn = Math.max(0, cn + d); render(); } };
@@ -335,6 +309,12 @@ export function installWall(B: Boot) {
           list.textContent = '';
           if (!d || !d.ok) { list.appendChild(el('p', 'comments-status', 'Could not load comments.')); return; }
           (d.comments || []).forEach(function (c: any) { list.appendChild(wallCommentNode(c, post)); });
+          /* a reaction's bell lands on the comment (#wc-<id>), lit for a moment */
+          var want = /^#wc-\d+$/.test(location.hash) ? list.querySelector(location.hash) : null;
+          if (want) {
+            try { want.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ }
+            want.classList.add('dm-flash'); setTimeout(function () { want.classList.remove('dm-flash'); }, 1300);
+          }
           if (state.myHash) wrap.appendChild(wallComposer('comment', { post: post.id }, function (added: any) {
             if (added) { list.appendChild(wallCommentNode(added, post)); if (onCount) onCount(1); }
           }));
@@ -445,27 +425,28 @@ export function installWall(B: Boot) {
     return a;
   }
   /* One comment on a public post. */
-  /* A compact like control for a COMMENT (Facebook style: a "Like" text button and
-     a small heart count that reveals who liked on hover / long-press). */
+  /* A compact like control for a COMMENT (Facebook style): a "Like" text
+     button — the ❤️, mine again withdraws — and the reactions' pill beside
+     it, both from the ledger; a hold on the button opens the whole bar. */
   function wallCommentLike(c: any) {
     var wrap = el('span', 'wall-clike-wrap');
-    var n = Number(c.likes) || 0, on = !!c.liked, gen = 0;
+    var liked = false;
     var btn = el('button', 'wall-clike'); btn.type = 'button';
-    var cnt = el('button', 'wall-clike-count'); cnt.type = 'button';
-    function render() { btn.textContent = on ? 'Liked' : 'Like'; btn.classList.toggle('on', on); if (n > 0) { cnt.textContent = '♥ ' + n; cnt.style.display = ''; } else { cnt.style.display = 'none'; } }
-    render();
-    attachLikers(cnt, function () { return { comment: c.id }; });
+    var cnt = el('span', 'wall-clike-count');
+    function render() { btn.textContent = liked ? 'Liked' : 'Like'; btn.classList.toggle('on', liked); }
+    reactRegister('wallc', c.id, wrap, c, function (cells: any[], mine: string) {
+      liked = mine === '❤️';
+      reactPillInto(cnt, 'wallc', c.id, cells, mine);
+      render();
+    });
     btn.addEventListener('click', function (e: any) {
       e.preventDefault(); e.stopPropagation();
-      if (!state.myHash) { if (window.mcOnboard) window.mcOnboard(); return; }
-      var want = !on, myGen = ++gen; on = want; n = Math.max(0, n + (want ? 1 : -1)); render();
-      fetch(API + '/wall/comment/like', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key, comment: c.id, like: want }) })
-        .then(function (r) { return r.json(); }).then(function (d) {
-          if (myGen !== gen) return;
-          if (d && d.ok) { on = !!d.liked; n = Number(d.likes) || 0; } else { on = !want; n = Math.max(0, n + (want ? -1 : 1)); }
-          render();
-        }).catch(function () { if (myGen !== gen) return; on = !want; n = Math.max(0, n + (want ? -1 : 1)); render(); });
+      reactSend('wallc', c.id, '❤️');
     });
+    armHold(btn, function (at: any) {
+      openActs({ node: btn.closest('.wall-comment') || wrap, at: at, items: [],
+        react: { current: reactMine('wallc', c.id), onPick: function (e: any) { reactSend('wallc', c.id, e); } } });
+    }, { skip: '', contextmenu: true });
     wrap.appendChild(btn); wrap.appendChild(cnt);
     return wrap;
   }
@@ -478,6 +459,7 @@ export function installWall(B: Boot) {
       return bph;
     }
     var node = el('article', 'comment wall-comment');
+    node.id = 'wc-' + c.id;   // a reaction's bell lands here (feed.html?post=P#wc-C)
     var head = el('div', 'comment-head');
     wallAvatarInto(head, c.author_hash, c.avatar);
     head.appendChild(authorNode(c.author_hash, c.nick, true, c.faith, c.posts));
@@ -488,7 +470,8 @@ export function installWall(B: Boot) {
     var citems: any[] = [];
     if (c.author_hash && state.myHash && c.author_hash === state.myHash) citems.push(wallEditLink(c, 'comment', node));
     if (wallCanDelete(c.author_hash)) citems.push(wallDeleteLink(c.id, 'comment', node));
-    if (citems.length) head.appendChild(postMenu({ items: citems }));
+    /* the ⋯ and a hold open the comment's surface; the like control paints the pill */
+    if (citems.length || state.myHash) head.appendChild(postMenu({ items: citems, hold: node, react: { target: 'wallc', id: c.id, seed: c, silent: true } }));
     node.appendChild(head);
     node.appendChild(fillBody(el('div', 'comment-body'), c.body));
     if (c.media_key) { var m = wallMediaNode(c.media_key, null); if (m) node.appendChild(m); }
@@ -536,7 +519,8 @@ export function installWall(B: Boot) {
     }
     if (p.author_hash && state.myHash && p.author_hash === state.myHash) pitems.push(wallEditLink(p, 'post', node));
     if (wallCanDelete(p.author_hash)) pitems.push(wallDeleteLink(p.id, 'post', node));
-    if (pitems.length) head.appendChild(postMenu({ items: pitems }));
+    /* the ⋯ and a hold open the post's surface; the action bar paints the pill */
+    if (pitems.length || state.myHash) head.appendChild(postMenu({ items: pitems, hold: node, react: { target: 'wall', id: p.id, seed: p, silent: true } }));
     node.appendChild(head);
     if (p.body) {
       var bodyEl = fillBody(el('div', 'comment-body'), p.body);
@@ -794,6 +778,7 @@ trace('submit: feed post');
     API = B.API;
     MERECAT_BOT_HASH = B.MERECAT_BOT_HASH;
     appConfirm = B.appConfirm;
+    armHold = B.armHold;
     attachDraft = B.attachDraft;
     attachMentions = B.attachMentions;
     authorNode = B.authorNode;
@@ -824,8 +809,13 @@ trace('submit: feed post');
     myAvatar = B.myAvatar;
     myNick = B.myNick;
     myPostCount = B.myPostCount;
+    openActs = B.openActs;
     openMedia = B.openMedia;
     postMenu = B.postMenu;
+    reactMine = B.reactMine;
+    reactPillInto = B.reactPillInto;
+    reactRegister = B.reactRegister;
+    reactSend = B.reactSend;
     previewButton = B.previewButton;
     profileHref = B.profileHref;
     section = B.section;

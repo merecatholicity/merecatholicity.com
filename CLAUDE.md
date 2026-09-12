@@ -79,9 +79,9 @@ line in `.gitignore` and an entry in `scripts/nav.py`'s `PAGES`. Elsewhere: `boo
 committed `*-body.tex`, `docs-src/` preserved sources), `partials/` (pandoc includes — a
 partial carrying a versioned asset is stamped too), `scripts/`, `styles/main.css` (the one
 Tailwind v4 entry), `app/` (Lit shell + views, TS), `client/` (the classic client: `comments.ts` is the boot — core helpers,
-the router, the kit — and `composer.ts` · `profile.ts` · `board.ts` · `wall.ts` · `dm.ts` · `merecat.ts` ·
-`admin.ts` are feature modules installed per boot; bundled to `docs/comments.js`),
-`purescript/src/Domain/*.purs` (the kernel, 29 modules), `comments-worker/`, `contact-worker/`,
+the router, the kit — and `composer.ts` · `profile.ts` · `board.ts` · `wall.ts` · `surface.ts` · `dm.ts` ·
+`merecat.ts` · `admin.ts` are feature modules installed per boot; bundled to `docs/comments.js`),
+`purescript/src/Domain/*.purs` (the kernel, 31 modules), `comments-worker/`, `contact-worker/`,
 `librarian/` (`librarian/private/` is a separate PRIVATE clone — never a submodule, never
 committed), `webtest/`, `tests/`, `terraform/`, `.github/workflows/`.
 
@@ -148,7 +148,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `book-tail.html` (the detector refuses one without); a path is a storage key, never rename one.
   A closed section answers exactly as an unknown page; a deleted journal article retires its
   comments (`sweepJournalComments`); a switch deletes nothing.
-- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0014),
+- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0015),
   additive; `schema.sql` is a generated snapshot; the three librarian D1s are derived data.
   Renaming an applied migration file requires renaming its `d1_migrations` row too.
 - **Shared constants, tables and validators live in `purescript/src/Domain/*`** and are read
@@ -171,7 +171,8 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **A DM message's acts live on ONE surface**, the press-and-hold (right-click, the hover ⌄, or
   the reaction pill on desktop): react · reply · copy · edit · save · delete — never a link row
   or a ⋯ on the bubble. A reaction is ONE emoji per side per message, validated by
-  `Domain.Dm.normalizeReaction` on both ends (never re-inlined; a custom `:token:` is ours); a
+  `Domain.Reaction.normalizeReaction` (re-exported by `Domain.Dm`) on both ends (never
+  re-inlined; a custom `:token:` is ours); a
   quoted reply rides INSIDE the E2E plaintext behind `Domain.Dm.replySentinel` — the server
   never learns what answers what, and no `reply_to` column may appear. The surface keeps the
   overlay's three layers through `mcSheet.lock()` and releases only a lock it took. **The
@@ -204,6 +205,20 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   the default `min-width: auto` lets its longest word refuse to shrink and eat its
   neighbours' width on a narrow phone. A tab carrying a badge says the count in its
   `aria-label` (`badgeLabel`) — a red disc reads as nothing.
+- **ONE press-and-hold surface, ONE reaction grammar, ONE bell** (2026-09-12). The surface
+  is `client/surface.ts` (`openActs` the overlay — bar · lit hole · acts — `armHold` the
+  gestures); the DM, every board post (topic head, reply, article-page comment) and every
+  feed post and comment open THAT one — a post through `postMenu` (the ⋯, and the hold it
+  arms on `opts.hold`), never a menu of its own. The public reactions are the `reactions`
+  ledger (one per member per `post`/`wall`/`wallc` target — a like is the ❤️ reaction, the
+  like tables are frozen); tallies ride every served post row (`reacts`), the viewer's own
+  ride the keyed `/reacts` after a cached board read; the client's ledger
+  (`reactRegister`/`reactSend`) is the one painter, and a reaction goes to the wire only
+  through `mcCore.reaction`. A reaction rings `react`/`wall-react`/`dm-react` — coalesced,
+  never for your own post, withdrawn with the reaction, and the word is always "reacted".
+  The notification list's sentences and doors are `Domain.Notif` (`mcCore.notifLabel` /
+  `notifHref`) — never an inline label map again (three had drifted). Under `(hover:none)`
+  `.comment` is not selectable text, its fields are: a hold picks a post, never a word.
 - **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"]) mc-footer`;
   the shell stamps `data-mc-tab` on every navigation); the footer's information lives in
   Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on the
@@ -295,4 +310,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · An unread inbox row draws the eye · Wave F: the classic client is feature modules · A hold picks a message, never a word · Reading back is never interrupted, and never blind · The tab badge counts words, and the bar has no hero · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · An unread inbox row draws the eye · Wave F: the classic client is feature modules · A hold picks a message, never a word · Reading back is never interrupted, and never blind · The tab badge counts words, and the bar has no hero · Every post opens the one surface · `contact-worker/`

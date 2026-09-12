@@ -1,7 +1,10 @@
-/* The DM message action surface (client/comments.ts, 2026-09-10): the
- * WhatsApp press-and-hold over one bubble — reactions above, the bubble lit
- * in a hole between four pieces of scrim, the menu below — and the reply
- * envelope a quoted reply rides in.
+/* The DM message action surface (2026-09-10): the WhatsApp press-and-hold
+ * over one bubble — reactions above, the bubble lit in a hole between four
+ * pieces of scrim, the menu below — and the reply envelope a quoted reply
+ * rides in. Since 2026-09-12 the overlay and the gestures are the SHARED
+ * surface (client/surface.ts openActs / armHold — the board and the feed
+ * open the same one); the DM keeps its bubble, its acts and its swipe. The
+ * laws below are the surface's, wherever it is opened from.
  *
  * What would break silently: an overlay that lets a touch reach the page
  * behind it (the law every overlay here keeps — contained overscroll, an
@@ -29,19 +32,21 @@ const fn = (name, next) => {
   return src.slice(i, j > i ? j : i + 8000);
 };
 
-/* The injected DM stylesheet, as the one string it is built from. */
-const dmCss = (() => {
-  const i = src.indexOf('function ensureDmStyles()');
-  const j = src.indexOf("st.id = 'mc-dm-css'", i);
-  assert.ok(i > 0 && j > i, 'ensureDmStyles not found');
+/* The injected stylesheets, as the strings they are built from: the DM's own
+   block and the surface's (the overlay's rules moved there with the code). */
+const block = (fnName, id) => {
+  const i = src.indexOf('function ' + fnName + '()');
+  const j = src.indexOf("st.id = '" + id + "'", i);
+  assert.ok(i > 0 && j > i, fnName + ' not found');
   return src.slice(i, j);
-})();
+};
+const dmCss = block('ensureDmStyles', 'mc-dm-css') + '\n' + block('ensureActStyles', 'mc-act-css');
 
 test('the surface keeps the three overlay layers: contained overscroll, an inert scrim, the document lock', () => {
   assert.ok(/\.dm-act-scrim\{[^}]*touch-action:none/.test(dmCss), 'a drag on the scrim must not scroll the document');
   assert.ok(/\.dm-act-scrim\{[^}]*overscroll-behavior:contain/.test(dmCss), 'the scrim ends the scroll chain');
   assert.ok(/\.dm-act-bar\{[^}]*overscroll-behavior:contain/.test(dmCss), 'the (scrollable) reaction bar ends the chain too');
-  const open = fn('dmOpenActions', 'dmArmGestures');
+  const open = fn('openActs', 'armHold');
   assert.ok(/lockedByUs = !!window\.mcSheet\.lock\(\)/.test(open), 'the phone surface takes the sheet\'s own document lock');
   assert.ok(/if \(lockedByUs && window\.mcSheet && window\.mcSheet\.unlock\) window\.mcSheet\.unlock\(\)/.test(open),
     'the lock is released only by the surface that took it — never one a sheet holds');
@@ -56,16 +61,16 @@ test('the lock says whether it was taken, and the sheet bridge hands it out', ()
 });
 
 test('one surface at a time, and it dies with the boot', () => {
-  assert.ok(/bootSig\.addEventListener\('abort', dmCloseActions, \{ once: true \}\)/.test(src),
+  assert.ok(/bootSig\.addEventListener\('abort', closeActs, \{ once: true \}\)/.test(src),
     'a soft navigation must tear the surface down — the boot re-runs, the overlay must not stay');
-  const open = fn('dmOpenActions', 'dmArmGestures');
-  assert.ok(/^\s*dmCloseActions\(\);/m.test(open), 'opening closes whatever was open');
+  const open = fn('openActs', 'armHold');
+  assert.ok(/^\s*closeActs\(\);/m.test(open), 'opening closes whatever was open');
   assert.ok(/document\.removeEventListener\('keydown', onKey, true\)/.test(open) && /window\.removeEventListener\('scroll', onScroll, true\)/.test(open),
     'every listener the surface installs is removed on close');
 });
 
 test('a hold is not a scroll, a scroll is not a hold, and the click after a hold is swallowed', () => {
-  const arm = fn('dmArmGestures', 'dmBubble');
+  const arm = fn('armHold', 'reactKey');
   assert.ok(/'touchstart'[\s\S]*\{ passive: true \}/.test(arm) && /'touchmove'[\s\S]*\{ passive: true \}/.test(arm),
     'the touch listeners are passive — the page\'s own scroll is never delayed by them');
   assert.ok(/Math\.abs\(mx\) > 8 \|\| Math\.abs\(my\) > 8\) cancelHold\(\)/.test(arm), 'a press that moves is a scroll, not a hold');
@@ -221,9 +226,9 @@ test('on a phone a hold picks a message, never a word: the screen is not selecta
   assert.ok(/section\.classList\.add\('dm-screen'\)/.test(src) &&
     /bootSig\.addEventListener\('abort', function \(\) \{ section\.classList\.remove\('dm-screen'\); \}, \{ once: true \}\)/.test(src),
     'the thread stamps the screen class on its section and takes it away with the boot');
-  const open = fn('dmOpenActions', 'dmArmGestures');
-  assert.ok(/if \(phone\) dmClearSelection\(\);/.test(open), 'the phone surface drops the selection the hold may have started');
-  assert.ok(/function dmClearSelection\(\) \{\s*try \{ var s = window\.getSelection\(\); if \(s && s\.rangeCount\) s\.removeAllRanges\(\); \}/.test(src));
+  const open = fn('openActs', 'armHold');
+  assert.ok(/if \(phone\) clearSelection\(\);/.test(open), 'the phone surface drops the selection the hold may have started');
+  assert.ok(/function clearSelection\(\) \{\s*try \{ var s = window\.getSelection\(\); if \(s && s\.rangeCount\) s\.removeAllRanges\(\); \}/.test(src));
   assert.ok(/@media \(hover: none\) \{\s*\.mc-appbar, mc-tabbar, \.mc-tabbar \{ -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; \}/.test(mainCss),
     'the phone chrome (app bar, tab bar) is never text to select either — a stray selection cannot seed there');
 });

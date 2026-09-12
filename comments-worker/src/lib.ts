@@ -8,6 +8,8 @@ import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
 import * as Faith from '../../purescript/output/Domain.Faith/index.js';
 import * as Profile from '../../purescript/output/Domain.Profile/index.js';
 import * as Dm from '../../purescript/output/Domain.Dm/index.js';
+import * as Reaction from '../../purescript/output/Domain.Reaction/index.js';
+import * as Notif from '../../purescript/output/Domain.Notif/index.js';
 import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
 import * as Fts from '../../purescript/output/Domain.Fts/index.js';
 import * as Board from '../../purescript/output/Domain.Board/index.js';
@@ -804,12 +806,17 @@ export async function topicViewPayload(env: any, topic: any, pRaw: any, findRaw:
   /* Each post carries its author's total forum-post count, for the rank the
      client shows under the name. One grouped query for every author on the page. */
   const counts = await postCountsFor(env, [topic.author_hash].concat((replies.results || []).map((r: any) => r.author_hash)));
+  /* The reactions' tallies ride the public payload (a reaction is public); the
+     viewer's OWN ride the keyed /reacts read, since this payload is cached. */
+  const head = withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0);
+  const posts = (replies.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0));
+  await stampReactions(env, 'post', [head].concat(posts), null);
   return {
     ok: true,
     anon: env.ALLOW_ANON === 'true',
     cat: topic.page.slice(6),
-    topic: withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0),
-    replies: (replies.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0)),
+    topic: head,
+    replies: posts,
     total: topic.replies || 0,
     page: p,
     per: TOPICS_PER_PAGE,
@@ -1012,8 +1019,79 @@ const psOrNull = (m: any) => MaybeM.maybe(null)((x: any) => x)(m);
    for anything else. The ONE place the worker erases that Maybe — the client's
    picker runs the same rule through mcCore.dmReaction, so what the store
    accepts the bubble renders, and neither side keeps an inline regex. */
-export function dmReaction(raw: any): string | null {
-  return psOrNull(Dm.normalizeReaction(String(raw == null ? '' : raw)));
+/* The ONE reaction validator (Domain.Reaction.normalizeReaction): exactly one
+   emoji or one known custom-pack token, or null. Every store runs it — a DM's
+   side (handleDmReact) and the public ledger (handleReact) — never an inline
+   regex. `dmReaction` is the same function under the name the DM handler and
+   its tests have carried since 2026-09-10. */
+export function reactionOf(raw: any): string | null {
+  return psOrNull(Reaction.normalizeReaction(String(raw == null ? '' : raw)));
+}
+export const dmReaction = reactionOf;
+export const REACT_TARGETS: string[] = Reaction.targets;
+export const isReactTarget = (t: any): boolean => Reaction.isTarget(String(t == null ? '' : t));
+/* The notification kinds by family, from Domain.Notif.kinds: the kinds whose
+   topic_id/comment_id name a board thread and post (joinable to `comments`),
+   and the wall's kinds (joinable to `wall_posts`, hidden with the social
+   switch). Everything else — dm, call, merecat, dm-react — joins nothing. */
+export const NOTIF_KINDS: string[] = Notif.kinds;
+export const NOTIF_POST_KINDS = ['reply', 'mention', 'react'];
+export const NOTIF_WALL_KINDS = ['wall', 'wall-like', 'wall-react'];
+const sqlList = (xs: string[]) => "('" + xs.join("','") + "')";
+
+/* The tallies of a batch of targets, one grouped query: { id: [{e, n}, …] }
+   with the most-given first (ties by first given). Public — a reaction is
+   public — so the rows are the caller's to serve; only rows for ids the
+   caller may show are ever asked for. */
+export async function reactionsFor(env: any, target: any, ids: any): Promise<Record<string, Array<{ e: string; n: number }>>> {
+  const out: Record<string, Array<{ e: string; n: number }>> = {};
+  const uniq = [...new Set((ids || []).map((x: any) => Math.floor(Number(x) || 0)).filter((x: any) => x > 0))] as number[];
+  if (!uniq.length || !isReactTarget(target)) return out;
+  for (let i = 0; i < uniq.length; i += 80) {
+    const chunk = uniq.slice(i, i + 80);
+    const rows = await env.DB.prepare(
+      'SELECT target_id, emoji, COUNT(*) AS n, MIN(created_at) AS first FROM reactions WHERE target = ?1 AND target_id IN (' + inList(chunk.length, 2) + ') ' +
+      'GROUP BY target_id, emoji ORDER BY target_id, n DESC, first'
+    ).bind(target, ...chunk).all();
+    for (const r of (rows.results || [])) {
+      (out[String(r.target_id)] = out[String(r.target_id)] || []).push({ e: String(r.emoji), n: Number(r.n) || 0 });
+    }
+  }
+  return out;
+}
+/* What the viewer put on each of a batch of targets: { id: emoji } for the
+   ones they reacted to. One indexed lookup (reactions_author_idx). */
+export async function myReactionsFor(env: any, me: any, target: any, ids: any): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const uniq = [...new Set((ids || []).map((x: any) => Math.floor(Number(x) || 0)).filter((x: any) => x > 0))] as number[];
+  if (!me || !uniq.length || !isReactTarget(target)) return out;
+  for (let i = 0; i < uniq.length; i += 80) {
+    const chunk = uniq.slice(i, i + 80);
+    const rows = await env.DB.prepare(
+      'SELECT target_id, emoji FROM reactions WHERE author_hash = ?1 AND target = ?2 AND target_id IN (' + inList(chunk.length, 3) + ')'
+    ).bind(me, target, ...chunk).all();
+    for (const r of (rows.results || [])) out[String(r.target_id)] = String(r.emoji);
+  }
+  return out;
+}
+/* Stamp a batch of served rows with their tallies and, for a keyed viewer,
+   their own reaction: `reacts` ([{e,n}]) and `react_me` ('' for none) on each
+   row whose `id` is a target of `target`. `likes` (the total) and `liked`
+   (react_me ? 1 : 0) ride along for one deploy of clients cached before the
+   picker. */
+export async function stampReactions(env: any, target: any, rows: any[], me: any) {
+  const ids = (rows || []).map((r: any) => r && r.id);
+  const tally = await reactionsFor(env, target, ids);
+  const mine: Record<string, string> = me ? await myReactionsFor(env, me, target, ids) : {};
+  for (const r of (rows || [])) {
+    if (!r) continue;
+    const cells = tally[String(r.id)] || [];
+    r.reacts = cells;
+    r.react_me = mine[String(r.id)] || '';
+    r.likes = cells.reduce((a: number, c: any) => a + c.n, 0);
+    r.liked = r.react_me ? 1 : 0;
+  }
+  return rows;
 }
 /* The kind ('image'|'video'|'audio') encoded in a wall/<i|v|a>/<64hex> object
    key, or null for anything malformed. Strictness lives in the kernel. */
@@ -1304,29 +1382,24 @@ export const WALL_PER_PAGE = 20;
 // Object-key shape: wall/<kind>/<64hex>, kind i=image v=video a=audio (the client
 // picks <img>/<video>/<audio> from the kind — no mime column or JOIN needed).
 export const WALL_MEDIA_RE = /^wall\/[iva]\/[0-9a-f]{64}$/;
-export const WALL_POST_COLS = 'p.id, p.author_hash, pr.nick, pr.avatar, pr.faith, p.body, p.created_at, p.edited_at, p.media_key, p.media_size, p.media_expired, p.comments, (SELECT COUNT(*) FROM wall_likes wl WHERE wl.post_id = p.id) AS likes';
-export const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.avatar, pr.faith, c.body, c.created_at, c.media_key, c.media_size, c.media_expired, (SELECT COUNT(*) FROM wall_comment_likes wcl WHERE wcl.comment_id = c.id) AS clikes';
+/* A post row is told from a comment row by `post_id`: a feed comment carries
+   the post it hangs under, a feed post does not — the one shape difference
+   stampReactions keys the target on. */
+export const WALL_POST_COLS = 'p.id, p.author_hash, pr.nick, pr.avatar, pr.faith, p.body, p.created_at, p.edited_at, p.media_key, p.media_size, p.media_expired, p.comments';
+export const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.avatar, pr.faith, c.body, c.created_at, c.media_key, c.media_size, c.media_expired';
 
 /* Add the author display fields (assigned pseudonym + rank) the client renders,
-   mirroring the forum's withNames. nick/avatar/faith are already joined in. */
+   mirroring the forum's withNames — nick/avatar/faith are already joined in —
+   and the reactions (2026-09-12): every post row is a 'wall' target and every
+   comment row a 'wallc' target, each stamped with its tally and the viewer's
+   own reaction in two batched reads, the same shape the board's posts carry. */
 export async function wallEnrich(env: any, rows: any, me: any) {
   const list = rows || [];
   const counts = await postCountsFor(env, list.map((r: any) => r.author_hash));
-  /* Which of these POST rows the viewer has liked. A post row carries the `likes`
-     COUNT (from WALL_POST_COLS); a comment row does not, so it never gets a like
-     flag. One batched point-lookup over the post ids. */
-  let liked = new Set();
-  const postIds = list.filter((r: any) => r.likes !== undefined && r.likes !== null).map((r: any) => r.id);
-  if (me && postIds.length) {
-    const ph = inList(postIds.length, 2);
-    const lr = await env.DB.prepare('SELECT post_id FROM wall_likes WHERE author_hash = ?1 AND post_id IN (' + ph + ')').bind(me, ...postIds).all();
-    liked = new Set((lr.results || []).map((x: any) => x.post_id));
-  }
-  return list.map((r: any) => {
-    const out = withNames(r, counts[r.author_hash] || 0);
-    if (r.likes !== undefined && r.likes !== null) { out.likes = Number(r.likes) || 0; out.liked = liked.has(r.id) ? 1 : 0; }
-    return out;
-  });
+  const out = list.map((r: any) => withNames(r, counts[r.author_hash] || 0));
+  await stampReactions(env, 'wall', out.filter((r: any) => r.post_id === undefined), me);
+  await stampReactions(env, 'wallc', out.filter((r: any) => r.post_id !== undefined), me);
+  return out;
 }
 
 /* The wall's own notifications (kind 'wall', comment_id = the post id, jumps to
@@ -1518,42 +1591,59 @@ export async function wallReader(request: any, env: any, data: any) {
   return { me };
 }
 
-/* GET-style read (POST body, keyed): the global feed, newest first, keyset cursor
-   (id < cursor) for infinite scroll. */
-export async function notifyWallLike(env: any, toHash: any, fromHash: any, postId: any) {
+/* The reaction bell (2026-09-12; the wall like's coalescing, generalised to
+   every target): one row per (recipient, kind, actor, thread, post), so a
+   reaction changed or given again never piles up rows. A previously READ row
+   from this actor on this post is reopened (a fresh reaction after the author
+   saw the last one); else a row is minted only when none exists at all (an
+   unread one is left as-is — no re-ring). For the public ledger both writes
+   require the reaction to STILL stand (EXISTS reactions), which closes the
+   react/withdraw race; a DM reaction has no ledger row to check — its column
+   was written by the caller a moment ago, and a withdraw retracts. The bell
+   rings only on a row actually reopened or added. Never for your own post,
+   never for the bot, and the caller has already dropped a muted reactor. A
+   reaction must never fail because its bell did, so this never throws out. */
+export async function notifyReact(env: any, o: { to: any; from: any; kind: string; topicId: number; commentId: number; target?: string; targetId?: number }) {
   try {
-    if (!toHash || !fromHash || toHash === fromHash) return;
+    if (!o.to || !o.from || o.to === o.from || o.to === MERECAT_BOT.hash || o.from === MERECAT_BOT.hash) return;
+    if (!NOTIF_KINDS.includes(o.kind)) return;
+    /* The board's bell prefs: a reaction on a board post rides notify_reply
+       (the thread's own bell), a feed one the same, a DM one notify_dm. */
+    const pref = (await notifyPrefsFor(env, [o.to]))[o.to];
+    if (!notifyEnabled(pref, o.kind === 'dm-react' ? 'dm' : 'reply')) return;
     const now = Math.floor(Date.now() / 1000);
-    /* First reopen a previously-READ like-notification from this liker on this post
-       (a fresh like after the author already saw the last one) rather than minting a
-       new row — so re-liking can never pile up rows: there is ever at most ONE
-       (recipient, actor, post) row. Both writes require the like to STILL exist
-       (EXISTS wall_likes), which closes the like/unlike race: if a concurrent unlike
-       already removed the like, neither fires and no orphan notification is left. */
+    const stands = o.target ? ' AND EXISTS (SELECT 1 FROM reactions WHERE target = ?6 AND target_id = ?7 AND author_hash = ?3)' : '';
+    const binds = o.target ? [o.to, o.commentId, o.from, now, o.topicId, o.target, o.targetId] : [o.to, o.commentId, o.from, now, o.topicId];
     const up = await env.DB.prepare(
       "UPDATE notifications SET read_at = NULL, created_at = ?4 " +
-      "WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?3 AND comment_id = ?2 AND read_at IS NOT NULL " +
-      "AND EXISTS (SELECT 1 FROM wall_likes WHERE post_id = ?2 AND author_hash = ?3)"
-    ).bind(toHash, postId, fromHash, now).run();
+      "WHERE recipient_hash = ?1 AND kind = '" + o.kind + "' AND actor_hash = ?3 AND comment_id = ?2 AND topic_id = ?5 AND read_at IS NOT NULL" + stands
+    ).bind(...binds).run();
     let rang = up.meta && up.meta.changes > 0;
     if (!rang) {
-      /* No read row to reopen: insert one, but only if the like stands AND there is
-         no existing row at all (an already-unread one is left as-is — no re-ring). */
       const ins = await env.DB.prepare(
         "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
-        "SELECT ?1, 'wall-like', 0, ?2, ?3, ?4 WHERE " +
-        "EXISTS (SELECT 1 FROM wall_likes WHERE post_id = ?2 AND author_hash = ?3) AND " +
-        "NOT EXISTS (SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?3 AND comment_id = ?2)"
-      ).bind(toHash, postId, fromHash, now).run();
+        "SELECT ?1, '" + o.kind + "', ?5, ?2, ?3, ?4 WHERE NOT EXISTS (" +
+        "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = '" + o.kind + "' AND actor_hash = ?3 AND comment_id = ?2 AND topic_id = ?5)" + stands
+      ).bind(...binds).run();
       rang = ins.meta && ins.meta.changes > 0;
     }
     if (rang) {
-      await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
-        kind: 'wall-like', topic_id: 0, comment_id: postId, actor_hash: fromHash, created_at: now }]);
+      await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + o.to],
+        kind: o.kind, topic_id: o.topicId, comment_id: o.commentId, actor_hash: o.from, created_at: now }]);
     }
   } catch (e) {
-    console.log(JSON.stringify({ event: 'notify_wall_like_failed', error: String(e) }));
+    console.log(JSON.stringify({ event: 'notify_react_failed', error: String(e) }));
   }
+}
+/* A withdrawn reaction takes back its bell if the author has not seen it yet
+   (a read one stays, Facebook style). Never throws out. */
+export async function retractReactNotif(env: any, o: { to: any; from: any; kind: string; topicId: number; commentId: number }) {
+  try {
+    if (!o.to || !o.from) return;
+    await env.DB.prepare(
+      "DELETE FROM notifications WHERE recipient_hash = ?1 AND kind = '" + o.kind + "' AND actor_hash = ?2 AND comment_id = ?3 AND topic_id = ?4 AND read_at IS NULL"
+    ).bind(o.to, o.from, o.commentId, o.topicId).run();
+  } catch (e) { /* never break the withdraw */ }
 }
 
 /* Validate an attached media_key: it must be an unlinked wall_media row, and —
@@ -1584,9 +1674,9 @@ export async function runWallPrune(env: any, days: any) {
     const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE media_key IS NOT NULL AND (created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)) LIMIT 5000').bind(cutoff).all();
     (cm.results || []).forEach((r: any) => keys.push(r.media_key));
     if (keys.length) await purgeWallMedia(env, keys);
-    await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id IN (SELECT id FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1))').bind(cutoff).run();
+    await env.DB.prepare("DELETE FROM reactions WHERE target = 'wallc' AND target_id IN (SELECT id FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1))").bind(cutoff).run();
     await env.DB.prepare('DELETE FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
-    await env.DB.prepare('DELETE FROM wall_likes WHERE post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
+    await env.DB.prepare("DELETE FROM reactions WHERE target = 'wall' AND target_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)").bind(cutoff).run();
     const del = await env.DB.prepare('DELETE FROM wall_posts WHERE created_at < ?1').bind(cutoff).run();
     deleted = (del.meta && del.meta.changes) || 0;
   } catch (e) { console.log(JSON.stringify({ event: 'prune_wall_failed', error: String(e) })); }
@@ -1856,20 +1946,21 @@ export async function pruneNotifications(env: any) {
     console.log(JSON.stringify({ event: 'notif_prune_failed', error: String(e) }));
   }
   try {
-    /* 'dm' notifications carry no comment (comment_id 0) and must be spared this
-       orphan sweep, which only clears reply/mention rows whose post is gone. */
+    /* The board kinds (reply, mention, react) name a post in comment_id; sweep
+       the rows whose post is gone. The DM kinds (dm, call, dm-react) name no
+       row of `comments` and are spared. */
     const r = await env.DB.prepare(
-      "DELETE FROM notifications WHERE kind IN ('reply','mention') AND comment_id NOT IN (SELECT id FROM comments)"
+      "DELETE FROM notifications WHERE kind IN " + sqlList(NOTIF_POST_KINDS) + " AND comment_id NOT IN (SELECT id FROM comments)"
     ).run();
     console.log(JSON.stringify({ event: 'notif_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
   } catch (e) {
     console.log(JSON.stringify({ event: 'notif_orphan_sweep_failed', error: String(e) }));
   }
   try {
-    /* Wall notifications ('wall' comment/mention, 'wall-like') carry comment_id =
-       the post id; sweep any whose post is gone. */
+    /* Wall notifications ('wall' comment/mention, 'wall-like', 'wall-react')
+       carry comment_id = the post id; sweep any whose post is gone. */
     const r = await env.DB.prepare(
-      "DELETE FROM notifications WHERE kind IN ('wall','wall-like') AND comment_id NOT IN (SELECT id FROM wall_posts)"
+      "DELETE FROM notifications WHERE kind IN " + sqlList(NOTIF_WALL_KINDS) + " AND comment_id NOT IN (SELECT id FROM wall_posts)"
     ).run();
     console.log(JSON.stringify({ event: 'notif_wall_orphan_sweep', deleted: r.meta && r.meta.changes || 0 }));
   } catch (e) {

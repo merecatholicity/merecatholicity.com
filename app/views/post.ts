@@ -159,8 +159,11 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
       });
       items.push(del);
     }
-    if (items.length) {
-      head.appendChild(kit.postMenu({ items: items, onOpen: function () { kit.quoteGrab(c); } }));
+    /* The ⋯ and a hold open the post's surface (2026-09-12): the reaction bar
+       for a keyed reader, the acts below — so a post with no acts still wears it. */
+    if (items.length || kit.state.myHash) {
+      head.appendChild(kit.postMenu({ items: items, onOpen: function () { kit.quoteGrab(c); },
+        hold: article, react: { target: 'post', id: c.id, seed: c } }));
     }
     article.appendChild(head);
     var body = window.mcRich!.fillBody(el('div', 'comment-body'), c.body,

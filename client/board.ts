@@ -65,6 +65,12 @@ export function installBoard(B: Boot) {
   let trace: (why: string) => any;
   let wallMediaNode: (mediaKey: any, post: any) => any;
   let wallPostNode: (p: any, expand?: boolean) => any;
+  let armHold: (node: any, open: (at: any) => void, opts?: any) => any;
+  let openActs: (spec: any) => any;
+  let reactLoadMine: (target: any, ids: any[]) => any;
+  let reactMine: (target: any, id: any) => string;
+  let reactRegister: (target: any, id: any, host: any, seed: any, paint?: any) => any;
+  let reactSend: (target: any, id: any, emoji: any) => any;
 
   /* The category display rows. Single-sourced from Domain.Board via window.mcCore
      (the same table the worker reads); the inline copy below is the no-app
@@ -309,8 +315,11 @@ export function installBoard(B: Boot) {
       });
       items.push(del);
     }
-    if (items.length) {
-      head.appendChild(postMenu({ items: items, onOpen: function () { B.quotedSelection = selectionInPost(c); } }));
+    /* The ⋯ and the hold open the post's surface — the reaction bar for a
+       keyed reader, the acts below — so a post with no acts still wears it. */
+    if (items.length || state.myHash) {
+      head.appendChild(postMenu({ items: items, onOpen: function () { B.quotedSelection = selectionInPost(c); },
+        hold: article, react: { target: 'post', id: c.id, seed: c } }));
     }
     article.appendChild(head);
     var body = fillBody(el('div', 'comment-body'), c.body,
@@ -958,6 +967,8 @@ trace('submit: board post');
         section.appendChild(list);
         if (d.page === 1) list.appendChild(commentNode(d.topic, false, { topicId: id }));
         d.replies.forEach(function (c: any) { list.appendChild(commentNode(c, false, { topicId: id })); });
+        /* the viewer's own reactions ride a keyed read after the cached payload */
+        reactLoadMine('post', (d.page === 1 ? [d.topic.id] : []).concat(d.replies.map(function (c: any) { return c.id; })));
         function topicHref(i: any) { return 'community.html?topic=' + id + '&p=' + i; }
         var topBar = pageBar(d.total, d.per, d.page, topicHref);
         if (topBar) section.insertBefore(topBar, list);
@@ -1140,16 +1151,21 @@ trace('submit: board post');
       .catch(function () { wrap.textContent = ''; wrap.appendChild(el('p', 'comments-status', 'That entry could not be loaded.')); });
   }
 
-  /* postMenu: the one ⋯ overflow menu every post/row uses — the readability
-     standard folds ALL action links here (the owner's ruling; the merecat-
-     clean head keeps only author + time + ⋯). The items are the CALLER'S
-     prebuilt elements — the same .comment-dm/.comment-quote-link/.comment-
-     edit/... nodes as always, appended EAGERLY into the (hidden) pop, so the
-     DOM contract the standing webtests assert is unchanged: only visibility
-     moved. opts.onOpen fires on the ⋯ MOUSEDOWN, before a click can collapse
-     a text selection (the quote grab lives there). On phones the items travel
-     into the app sheet and BACK on close, so the elements and their listeners
-     stay singular. */
+  /* postMenu: the one ⋯ every post/row wears — the readability standard folds
+     ALL action links here (the owner's ruling; the merecat-clean head keeps
+     only author + time + ⋯). The items are the CALLER'S prebuilt elements —
+     the same .comment-dm/.comment-quote-link/.comment-edit/... nodes as
+     always, appended EAGERLY into the (hidden) pop, so the DOM contract the
+     standing webtests assert is unchanged: only visibility moved. Since
+     2026-09-12 the ⋯ opens the SHARED press-and-hold surface
+     (client/surface.ts openActs) — the reaction bar above the post, the acts
+     below — the same one a hold on the post opens on a phone; the items
+     travel into the surface's menu and back on close. opts.onOpen fires on
+     the ⋯ MOUSEDOWN, before a click can collapse a text selection (the quote
+     grab lives there). opts.hold is the post's node to arm and to light;
+     opts.react {target, id, seed, silent} names the post in the reactions'
+     ledger — the bar appears for a keyed reader, and the pill is painted at
+     the node's end unless the caller paints its own (silent). */
   function postMenu(opts: any) {
     var wrap = el('span', 'comment-menu-wrap');
     var btn = el('button', 'comment-menu', '⋯');
@@ -1160,43 +1176,28 @@ trace('submit: board post');
     (opts.items || []).forEach(function (it: any) { if (it) pop.appendChild(it); });
     wrap.appendChild(btn);
     wrap.appendChild(pop);
-    function closeMenu() {
-      wrap.classList.remove('open');
-      document.removeEventListener('click', menuOutside, true);
-      document.removeEventListener('keydown', menuKey, true);
-      window.removeEventListener('scroll', closeMenu, true);
+    var react = opts.react || null;
+    var host = opts.hold || null;
+    if (react && host && !react.silent) reactRegister(react.target, react.id, host, react.seed);
+    function open(at: any) {
+      var items = [].slice.call(pop.childNodes);
+      openActs({
+        node: host || wrap,
+        at: at,
+        react: react && state.myHash
+          ? { current: reactMine(react.target, react.id), onPick: function (e: any) { reactSend(react.target, react.id, e); } }
+          : null,
+        items: items,
+        onClose: function () { items.forEach(function (k: any) { pop.appendChild(k); }); },
+      });
     }
-    function menuOutside(e: any) { if (!wrap.contains(e.target)) closeMenu(); }
-    function menuKey(e: any) { if (e.key === 'Escape') closeMenu(); }
     btn.addEventListener('mousedown', function () { if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* selection grab is best-effort */ } } });
     btn.addEventListener('click', function (e: any) {
       e.preventDefault(); e.stopPropagation();
-      var sheet: any = (window as any).mcSheet;
-      if (window.innerWidth <= 600 && sheet && sheet.open) {
-        var list = el('div', 'comment-menu-sheet');
-        var kids = [].slice.call(pop.childNodes);
-        kids.forEach(function (k: any) { list.appendChild(k); });
-        list.addEventListener('click', function (ev: any) {
-          var t = ev.target && ev.target.closest ? ev.target.closest('a,button') : null;
-          if (t) setTimeout(function () { try { sheet.close(); } catch (x) { /* fine */ } }, 0);
-        });
-        sheet.open('', list, function () {
-          [].slice.call(list.childNodes).forEach(function (k: any) { pop.appendChild(k); });
-        });
-        return;
-      }
-      if (wrap.classList.contains('open')) { closeMenu(); return; }
-      wrap.classList.add('open');
-      setTimeout(function () {
-        document.addEventListener('click', menuOutside, true);
-        document.addEventListener('keydown', menuKey, true);
-        window.addEventListener('scroll', closeMenu, true);
-      }, 0);
+      var r = btn.getBoundingClientRect();
+      open({ x: r.left, y: r.bottom + 2 });
     });
-    pop.addEventListener('click', function (ev: any) {
-      var t = ev.target && ev.target.closest ? ev.target.closest('a,button') : null;
-      if (t) closeMenu();
-    });
+    if (host) armHold(host, open);
     return wrap;
   }
 
@@ -1709,6 +1710,12 @@ trace('submit: board post');
     trace = B.trace;
     wallMediaNode = B.wallMediaNode;
     wallPostNode = B.wallPostNode;
+    armHold = B.armHold;
+    openActs = B.openActs;
+    reactLoadMine = B.reactLoadMine;
+    reactMine = B.reactMine;
+    reactRegister = B.reactRegister;
+    reactSend = B.reactSend;
   }
   /* What ran at boot time in the old file, in the old order, after every
      module is bound: listeners, deferred initializers. */

@@ -7,7 +7,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
-import { pagerItems } from '../core.ts';
+import { pagerItems, notifLabel, notifHref, notifHasSnippet } from '../core.ts';
 
 const PER_USERS = 20;
 
@@ -153,31 +153,13 @@ class McNotifications extends LitElement {
     return html`${head}
       ${pagerTpl(d.total, d.per, d.page, href)}
       <div class="board-topics">${d.items.map((it: any) => {
-        const who = it.actor_nick || (it.actor_hash ? kit.displayName(it.actor_hash) : 'Someone');
-        /* A 'dm' notification opens the conversation; reply/mention jump to the post. */
-        const isDm = it.kind === 'dm';
-        const isWall = it.kind === 'wall';
-        const isLike = it.kind === 'wall-like';
-        const isCat = it.kind === 'merecat';
-        /* A missed call is a notification like any other, and the wall rows
-           point at the feed's own page — this branch had drifted from the
-           classic renderer's, so a call read as "replied in a thread" and a
-           wall row took the retired community.html?post= road, which the
-           router then bounced with a second full document load. */
-        const isCall = it.kind === 'call';
-        const label = isDm ? (who + ' sent you a message')
-          : isCall ? ('\u{1F4DE} ' + who + ' called you')
-            : isCat ? 'merecat finished answering your question'
-              : isLike ? (who + ' liked your post')
-                : isWall ? (who + (it.topic_id === 1 ? ' commented on your post' : ' mentioned you in a post'))
-                  : who + (it.kind === 'mention' ? ' mentioned you in ' : ' replied in ') + (it.topic_title || 'a thread');
-        const to = (isDm || isCall) ? ('messages.html?dm=' + it.actor_hash)
-          : isCat ? ('merecat-ai.html?chat=' + it.topic_id)
-            : (isWall || isLike) ? ('feed.html?post=' + it.comment_id)
-              : ('community.html?topic=' + it.topic_id + '#comment-' + it.comment_id);
+        /* The sentence and the door are the kernel's (Domain.Notif) — the one
+           map the classic list and the bell sheet render from too. */
+        const label = notifLabel(it);
+        const to = notifHref(it);
         return html`<div class="board-topic"><div class="board-topic-left">
           <a class=${'board-topic-title' + (it.read_at ? '' : ' dm-unread')} href=${to}>${label}</a>${it.read_at ? nothing : html`<span class="dm-unread"> ● new</span>`}
-          ${it.snippet && !isDm ? html`<div class="board-intro">${it.snippet}</div>` : nothing}
+          ${it.snippet && notifHasSnippet(it.kind) ? html`<div class="board-intro">${it.snippet}</div>` : nothing}
           </div><div class="board-stats" title=${kit.fmtDateTime(it.created_at)}>${kit.fmtTimeCompact(it.created_at)}</div></div>`;
       })}</div>
       ${pagerTpl(d.total, d.per, d.page, href)}`;

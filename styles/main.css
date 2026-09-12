@@ -1481,6 +1481,16 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
   @media (hover: none) {
     .mc-appbar, mc-tabbar, .mc-tabbar { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   }
+  /* A hold picks a post, never a word (2026-09-12): the press-and-hold that
+     opens a post's surface — a board post, an article-page comment, a feed post
+     or comment — must not seed a text selection under the finger (iOS anchors
+     one in the nearest selectable text and extends it while the hold lasts;
+     the DM's lesson of 2026-09-11). Copy is on the surface. The fields inside a
+     post — an edit box, the reply composer — stay text. */
+  @media (hover: none) {
+    .comment { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    .comment textarea, .comment input { -webkit-user-select: text; user-select: text; }
+  }
 
   /* gated off on mobile: the app chrome replaces the site menu + theme toggle */
   nav.site { display: none !important; }

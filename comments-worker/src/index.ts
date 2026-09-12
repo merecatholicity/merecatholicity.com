@@ -172,7 +172,15 @@ import {
   notifyDm,
   notifyEnabled,
   notifyPrefsFor,
-  notifyWallLike,
+  notifyReact,
+  retractReactNotif,
+  reactionOf,
+  reactionsFor,
+  myReactionsFor,
+  stampReactions,
+  isReactTarget,
+  NOTIF_POST_KINDS,
+  NOTIF_WALL_KINDS,
   originOk,
   parseOS,
   pruneComments,
@@ -336,6 +344,7 @@ async function handleGet(request: any, env: any, url: any) {
   ).bind(page).all();
   const counts = await postCountsFor(env, (rows.results || []).map((r: any) => r.author_hash));
   const comments = (rows.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0));
+  await stampReactions(env, 'post', comments, null);   // the tallies; the viewer's own ride /reacts
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
 }
@@ -1892,7 +1901,17 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   ).bind(me, thread.id, myCleared).first();
   const total = totRow.n || 0;
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
-  const p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  /* A permalink into the conversation (a reaction's bell lands on the very
+     message, 2026-09-12) arrives as find=<message id> and one indexed count
+     places it on the right page — the topic view's own idiom. */
+  const find = Math.floor(Number(data.find) || 0);
+  let p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
+  if (find > 0 && data.p == null) {
+    const pos = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND m.created_at > ?3 AND ' + dmLive(now) + ' AND m.id < ?4'
+    ).bind(me, thread.id, myCleared, find).first();
+    p = Math.floor(((pos && pos.n) || 0) / DM_PER_PAGE) + 1;
+  }
   const msgs = await env.DB.prepare(
     'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at, m.react_a, m.react_b FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
     ' AND m.created_at > ?5 AND ' + dmLive(now) + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
@@ -2164,7 +2183,7 @@ async function handleDmReact(request: any, env: any, ctx: any) {
   const [a, b] = dmPair(me, other);
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
-    'SELECT d.id, d.thread_id, COALESCE(d.redacted, 0) AS redacted FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
+    'SELECT d.id, d.thread_id, d.sender_hash, COALESCE(d.redacted, 0) AS redacted FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
     'WHERE d.id = ?4 AND t.a_hash = ?2 AND t.b_hash = ?3 ' +
     'AND (COALESCE(d.held, 0) = 0 OR d.sender_hash = ?1) ' +
     'AND (d.expires_at IS NULL OR d.expires_at > ?5) ' +
@@ -2175,6 +2194,14 @@ async function handleDmReact(request: any, env: any, ctx: any) {
   const col = me === a ? 'react_a' : 'react_b';
   await env.DB.prepare('UPDATE dms SET ' + col + ' = ?1 WHERE id = ?2').bind(emoji || null, id).run();
   if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-react', scopes: ['user:' + other], from: me, thread_id: row.thread_id, message: { id, emoji } });
+  /* A reaction to THEIR word rings their bell (2026-09-12): "X reacted to your
+     message", landing on the message. Reacting to my own word rings nothing;
+     a withdraw takes an unheard bell back. Coalesced like every bell here. */
+  if (row.sender_hash === other) {
+    const bell = { to: other, from: me, kind: 'dm-react', topicId: 0, commentId: id };
+    if (emoji) { const ring = notifyReact(env, bell); if (ctx) ctx.waitUntil(ring); else await ring; }
+    else await retractReactNotif(env, bell);
+  }
   return json({ ok: true, id, emoji }, 200);
 }
 
@@ -2762,128 +2789,146 @@ async function handleWallPostGet(request: any, env: any) {
   const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id").bind(id).all();
   const enriched = await wallEnrich(env, [post].concat(crows.results || []), me);
   const comments = enriched.slice(1);
-  /* Comment likes: each comment carries its `clikes` count; add the viewer's own
-     like flag with one batched point-lookup, and normalise to {likes, liked} like
-     a post so the client renders the two the same way. */
-  let cliked: Set<any> = new Set();
-  if (me && comments.length) {
-    const cids = comments.map((c: any) => c.id);
-    const lr = await env.DB.prepare('SELECT comment_id FROM wall_comment_likes WHERE author_hash = ?1 AND comment_id IN (' + inList(cids.length, 2) + ')').bind(me, ...cids).all();
-    cliked = new Set((lr.results || []).map((x: any) => x.comment_id));
-  }
-  comments.forEach((c: any) => { c.likes = Number(c.clikes) || 0; c.liked = cliked.has(c.id) ? 1 : 0; delete c.clikes; });
   return json({ ok: true, post: enriched[0], comments, me }, 200);
 }
 
-/* Like or unlike a public post — a lightweight toggle: READ_LIMIT (not the post
-   budget), no Turnstile, gated like any write (key + blockedReason). Liking
-   notifies the post author (coalesced, Facebook style); unliking before it is
-   read retracts that notification. Returns the fresh {liked, likes}. */
-async function handleWallLike(request: any, env: any, ctx: any) {
+/* ---- Reactions on public posts (2026-09-12) ----
+   ONE handler for every target the ledger knows: 'post' (a row of `comments`
+   — a topic head, a reply, an article-page comment), 'wall' (a feed post),
+   'wallc' (a feed comment). {key, target, id, emoji}: `emoji` is exactly one
+   emoji or one custom-pack token (Domain.Reaction.normalizeReaction, the same
+   rule a DM reaction runs), '' withdraws; a different emoji replaces (one
+   reaction per member per target). Your own post may be reacted to (the
+   owner's ruling) — it just rings no bell. The old like roads are aliases
+   ({post|comment, like:<bool>} = the ❤️ reaction), kept one deploy for cached
+   clients, and the answer carries the old {liked, likes} beside the tally.
+   Visibility is the target's own: a live row; a back-room post only to an
+   admin (else the same 404 a missing post gives — indistinguishable); the
+   wall's targets behind the social switch. POST_LIMIT like a DM reaction, no
+   Turnstile, gated like any write. The tally goes out live over the target's
+   own scope, so every open page repaints the pill. */
+function reactAlias(data: any) {
+  if (data.target != null) return { target: String(data.target || ''), id: Math.floor(Number(data.id) || 0), raw: data.emoji != null ? String(data.emoji) : '' };
+  const like = !(data.like === false || data.like === 0 || data.like === 'false');
+  if (data.comment != null) return { target: 'wallc', id: Math.floor(Number(data.comment) || 0), raw: like ? '❤️' : '' };
+  return { target: 'wall', id: Math.floor(Number(data.post || data.id) || 0), raw: like ? '❤️' : '' };
+}
+/* The row a target names, as the viewer may see it: its author, the bell to
+   ring, the thread/post pair the bell carries, and the live scope the tally
+   goes out on. null = not visible to this viewer (= not there). */
+async function reactTarget(env: any, target: string, id: number, me: string) {
+  if (target === 'post') {
+    const row = await env.DB.prepare("SELECT id, author_hash, parent_id, page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+    if (!row) return null;
+    if (row.page === ADMIN_CAT && !(await isAdminHash(env, me))) return null;
+    const topicId = row.parent_id || row.id;
+    return { author: row.author_hash, kind: 'react', topicId, commentId: row.id, scopes: ['topic:' + topicId] };
+  }
+  if (await socialOff(env)) return null;
+  if (target === 'wall') {
+    const row = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(id).first();
+    if (!row) return null;
+    return { author: row.author_hash, kind: 'wall-react', topicId: 0, commentId: row.id, scopes: ['feed:global'] };
+  }
+  if (target === 'wallc') {
+    const row = await env.DB.prepare("SELECT id, post_id, author_hash FROM wall_comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+    if (!row) return null;
+    return { author: row.author_hash, kind: 'wall-react', topicId: row.id, commentId: row.post_id, scopes: ['feed:global'] };
+  }
+  return null;
+}
+async function handleReact(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Sign in to like.' }, 401);
+  if (!key) return json({ ok: false, error: 'Sign in to react.' }, 401);
+  const { target, id, raw } = reactAlias(data);
+  const emoji: string | null = raw.trim() ? reactionOf(raw) : '';
+  if (!isReactTarget(target) || id < 1 || emoji === null) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  if (await socialOff(env)) return noSuchPage();
-  const postId = Math.floor(Number(data.post || data.id) || 0);
-  const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first();
-  if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
-  const want = !(data.like === false || data.like === 0 || data.like === 'false');   // default: like
+  const t = await reactTarget(env, target, id, me);
+  if (!t) return json({ ok: false, error: 'That post is gone.' }, 404);
   const now = Math.floor(Date.now() / 1000);
-  if (want) {
-    const r = await env.DB.prepare('INSERT OR IGNORE INTO wall_likes (post_id, author_hash, created_at) VALUES (?1, ?2, ?3)').bind(postId, me, now).run();
-    /* Notify only on a genuinely NEW like (changes>0, not a repeat), never for
-       your own post, never the bot — and never from a muted (shadowbanned)
-       liker, whose engagement must reach no one. */
-    if (r.meta && r.meta.changes > 0 && post.author_hash && post.author_hash !== me && post.author_hash !== MERECAT_BOT.hash &&
-        !(await isShadowBanned(env, me))) {
-      if (ctx) ctx.waitUntil(notifyWallLike(env, post.author_hash, me, postId));
-      else await notifyWallLike(env, post.author_hash, me, postId);
+  const bell = { to: t.author, from: me, kind: t.kind, topicId: t.topicId, commentId: t.commentId };
+  if (emoji) {
+    await env.DB.prepare(
+      'INSERT INTO reactions (target, target_id, author_hash, emoji, created_at) VALUES (?1, ?2, ?3, ?4, ?5) ' +
+      'ON CONFLICT (target, target_id, author_hash) DO UPDATE SET emoji = excluded.emoji, created_at = excluded.created_at'
+    ).bind(target, id, me, emoji, now).run();
+    /* Never for your own post, never the bot, and never from a muted
+       (shadowbanned) reactor, whose engagement must reach no one. */
+    if (t.author && t.author !== me && t.author !== MERECAT_BOT.hash && !(await isShadowBanned(env, me))) {
+      const ring = notifyReact(env, Object.assign({ target, targetId: id }, bell));
+      if (ctx) ctx.waitUntil(ring); else await ring;
     }
   } else {
-    await env.DB.prepare('DELETE FROM wall_likes WHERE post_id = ?1 AND author_hash = ?2').bind(postId, me).run();
-    /* Retract the like-notification if the author has not seen it yet (a read one
-       stays, Facebook style). */
-    try {
-      await env.DB.prepare("DELETE FROM notifications WHERE recipient_hash = ?1 AND kind = 'wall-like' AND actor_hash = ?2 AND comment_id = ?3 AND read_at IS NULL")
-        .bind(post.author_hash, me, postId).run();
-    } catch (e) { /* never break the unlike */ }
+    await env.DB.prepare('DELETE FROM reactions WHERE target = ?1 AND target_id = ?2 AND author_hash = ?3').bind(target, id, me).run();
+    await retractReactNotif(env, bell);
   }
-  const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM wall_likes WHERE post_id = ?1').bind(postId).first();
-  return json({ ok: true, liked: want ? 1 : 0, likes: (c && c.n) || 0 }, 200);
+  const tally = await reactionsFor(env, target, [id]);
+  const reacts = tally[String(id)] || [];
+  if (ctx) publishLive(env, ctx, { v: 1, t: 'react', scopes: t.scopes, target, id, reacts });
+  return json({ ok: true, target, id, emoji, reacts, liked: emoji ? 1 : 0, likes: reacts.reduce((a: number, c: any) => a + c.n, 0) }, 200);
 }
 
-/* Like or unlike a public COMMENT — the twin of handleWallLike over
-   wall_comment_likes. No notification (kept lightweight; the count updates in
-   place). Returns the fresh {liked, likes}. */
-async function handleWallCommentLike(request: any, env: any) {
+/* The viewer's own reactions over a batch of targets — the board's public
+   payloads are cached, so "mine" rides this keyed read: {key, target, ids}
+   → {ok, mine: {id: emoji}}. Sixty ids a call (three pages of replies). A
+   member's own reactions are theirs to see; the back room's ids answer
+   nothing to a non-admin (they hold nothing of theirs). */
+async function handleReactMine(request: any, env: any) {
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const target = String(data.target || '');
+  const ids = (Array.isArray(data.ids) ? data.ids : []).slice(0, 60);
+  if (!isReactTarget(target)) return json({ ok: false, error: 'Bad request.' }, 400);
+  let mine = await myReactionsFor(env, me, target, ids);
+  if (target === 'post' && Object.keys(mine).length && !(await isAdminHash(env, me))) {
+    const keep = await env.DB.prepare("SELECT id FROM comments WHERE page != ?1 AND id IN (" + inList(Object.keys(mine).length, 2) + ')').bind(ADMIN_CAT, ...Object.keys(mine).map(Number)).all();
+    const ok = new Set((keep.results || []).map((r: any) => String(r.id)));
+    mine = Object.fromEntries(Object.entries(mine).filter(([k]) => ok.has(k)));
+  }
+  return json({ ok: true, target, mine }, 200);
+}
+
+/* Who reacted, and with what (the "who reacted" popover): {target, id} →
+   {ok, who:[{hash, nick, avatar, emoji}], more}. Public — anyone may see who
+   reacted to a public post — capped so a viral post never returns thousands.
+   Muted (shadowbanned) reactors are hidden from everyone but themselves, like
+   all their public activity. A back-room post answers the empty list a post
+   that never existed answers; so do the wall's targets with the social layer
+   off. The old {post|comment} body is an alias; `likers` rides beside `who`
+   for one deploy of cached clients. */
+async function handleReactWho(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Sign in to like.' }, 401);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
-  if (await socialOff(env)) return noSuchPage();
-  const commentId = Math.floor(Number(data.comment || data.id) || 0);
-  const cm = await env.DB.prepare("SELECT id FROM wall_comments WHERE id = ?1 AND status = 'live'").bind(commentId).first();
-  if (!cm) return json({ ok: false, error: 'That comment is gone.' }, 404);
-  const want = !(data.like === false || data.like === 0 || data.like === 'false');
-  const now = Math.floor(Date.now() / 1000);
-  if (want) {
-    await env.DB.prepare('INSERT OR IGNORE INTO wall_comment_likes (comment_id, author_hash, created_at) VALUES (?1, ?2, ?3)').bind(commentId, me, now).run();
-  } else {
-    await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id = ?1 AND author_hash = ?2').bind(commentId, me).run();
-  }
-  const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM wall_comment_likes WHERE comment_id = ?1').bind(commentId).first();
-  return json({ ok: true, liked: want ? 1 : 0, likes: (c && c.n) || 0 }, 200);
-}
-
-/* Who liked a public post or comment (the "who liked it" popover). Public read —
-   anyone can see the likers of a public post — capped so a viral post never
-   returns thousands. Muted (shadowbanned) likers are hidden from everyone but
-   themselves, like all their public activity. Returns display names + avatars. */
-async function handleWallLikers(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  /* An unknown post already answers with an empty list, so that is the
-     indistinguishable refusal when the social layer is off. */
-  if (await socialOff(env)) return json({ ok: true, likers: [], more: false }, 200);
-  const postId = Math.floor(Number(data.post) || 0);
-  const commentId = Math.floor(Number(data.comment) || 0);
+  const { target, id } = reactAlias(data);
+  if (!isReactTarget(target) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const LIMIT = 60;
-  let rows;
-  if (commentId > 0) {
-    rows = await env.DB.prepare(
-      'SELECT l.author_hash, pr.nick, pr.avatar FROM wall_comment_likes l LEFT JOIN profiles pr ON pr.hash = l.author_hash ' +
-      'WHERE l.comment_id = ?1 AND ' + shadowExcl('l') + ' ORDER BY l.created_at DESC LIMIT ?2'
-    ).bind(commentId, LIMIT + 1).all();
-  } else if (postId > 0) {
-    rows = await env.DB.prepare(
-      'SELECT l.author_hash, pr.nick, pr.avatar FROM wall_likes l LEFT JOIN profiles pr ON pr.hash = l.author_hash ' +
-      'WHERE l.post_id = ?1 AND ' + shadowExcl('l') + ' ORDER BY l.created_at DESC LIMIT ?2'
-    ).bind(postId, LIMIT + 1).all();
-  } else {
-    return json({ ok: false, error: 'Bad request.' }, 400);
-  }
+  const none = json({ ok: true, target, id, who: [], likers: [], more: false }, 200);
+  if (target === 'post') {
+    const row = await env.DB.prepare("SELECT page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+    if (!row || row.page === ADMIN_CAT) return none;
+  } else if (await socialOff(env)) return none;
+  const rows = await env.DB.prepare(
+    'SELECT r.author_hash, r.emoji, pr.nick, pr.avatar FROM reactions r LEFT JOIN profiles pr ON pr.hash = r.author_hash ' +
+    'WHERE r.target = ?1 AND r.target_id = ?2 AND ' + shadowExcl('r') + ' ORDER BY r.created_at DESC LIMIT ?3'
+  ).bind(target, id, LIMIT + 1).all();
   const all = rows.results || [];
   const more = all.length > LIMIT;
-  const likers = all.slice(0, LIMIT).map((r: any) => ({
-    hash: r.author_hash, nick: r.nick || displayName(r.author_hash), avatar: r.avatar || null,
+  const who = all.slice(0, LIMIT).map((r: any) => ({
+    hash: r.author_hash, nick: r.nick || displayName(r.author_hash), avatar: r.avatar || null, emoji: String(r.emoji || ''),
   }));
-  return json({ ok: true, likers, more }, 200);
+  return json({ ok: true, target, id, who, likers: who, more }, 200);
 }
 
 /* Coalesced like-notification (mirror of notifyDm): one unread row per
@@ -3112,7 +3157,7 @@ async function handleWallDelete(request: any, env: any) {
     if (!Wall.canDelete(row.author_hash)(me)(admin)) return json({ ok: false, error: 'No.' }, 403);
     if (row.media_key) await purgeWallMedia(env, [row.media_key]);
     await env.DB.prepare('DELETE FROM wall_comments WHERE id = ?1').bind(id).run();
-    await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id = ?1').bind(id).run();
+    await env.DB.prepare("DELETE FROM reactions WHERE target = 'wallc' AND target_id = ?1").bind(id).run();
     /* Decrement ONLY what was counted: the increment fires for a live,
        non-shadowbanned comment alone (handleWallComment / handleApprove), so
        discarding a held one — the pending_wall queue's routine action — must
@@ -3130,9 +3175,9 @@ async function handleWallDelete(request: any, env: any) {
   const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE post_id = ?1 AND media_key IS NOT NULL').bind(id).all();
   (cm.results || []).forEach((r: any) => keys.push(r.media_key));
   if (keys.length) await purgeWallMedia(env, keys);
-  await env.DB.prepare('DELETE FROM wall_comment_likes WHERE comment_id IN (SELECT id FROM wall_comments WHERE post_id = ?1)').bind(id).run();
+  await env.DB.prepare("DELETE FROM reactions WHERE target = 'wallc' AND target_id IN (SELECT id FROM wall_comments WHERE post_id = ?1)").bind(id).run();
   await env.DB.prepare('DELETE FROM wall_comments WHERE post_id = ?1').bind(id).run();
-  await env.DB.prepare('DELETE FROM wall_likes WHERE post_id = ?1').bind(id).run();
+  await env.DB.prepare("DELETE FROM reactions WHERE target = 'wall' AND target_id = ?1").bind(id).run();
   await env.DB.prepare('DELETE FROM wall_posts WHERE id = ?1').bind(id).run();
   return json({ ok: true }, 200);
 }
@@ -3332,7 +3377,7 @@ async function handleWallMediaPurge(request: any, env: any, section: string) {
    are unreachable, so counting or listing them would leave a bell the reader can
    never clear. Hide them from every count and from the list; the rows stay in D1
    and come back, read-state intact, the moment the switch goes on again. */
-const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('wall','wall-like') ";
+const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('" + NOTIF_WALL_KINDS.join("','") + "') ";
 async function notifHideWallSql(env: any, alias: string) {
   return (await socialOff(env)) ? notifHideWall(alias) : '';
 }
@@ -3368,14 +3413,22 @@ async function handleNotifList(request: any, env: any) {
   const me = await sha256hex(key);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const hideWall = await notifHideWallSql(env, '');
+  /* Each family joins only its own tables (the ids in topic_id/comment_id
+     mean different things per kind — a DM reaction's message id must never
+     land on a forum post that happens to share the number): the board kinds
+     join `comments` for the title and the excerpt, the wall kinds `wall_posts`
+     (and, for a reaction on a feed comment, that comment for the excerpt). */
+  const postKinds = "('" + NOTIF_POST_KINDS.join("','") + "')", wallKinds = "('" + NOTIF_WALL_KINDS.join("','") + "')";
   const rows = await env.DB.prepare(
     'SELECT n.id, n.kind, n.topic_id, n.comment_id, n.actor_hash, n.created_at, n.read_at, ' +
     't.title AS topic_title, pr.nick AS actor_nick, ' +
-    "CASE WHEN n.kind IN ('wall','wall-like') THEN substr(wp.body, 1, 140) ELSE substr(c.body, 1, 140) END AS snippet " +
+    "CASE WHEN n.kind = 'wall-react' AND n.topic_id > 0 THEN substr(wc.body, 1, 140) " +
+    'WHEN n.kind IN ' + wallKinds + ' THEN substr(wp.body, 1, 140) ELSE substr(c.body, 1, 140) END AS snippet ' +
     'FROM notifications n ' +
-    "LEFT JOIN comments t ON t.id = n.topic_id AND n.kind NOT IN ('wall','wall-like') " +
-    "LEFT JOIN comments c ON c.id = n.comment_id AND n.kind NOT IN ('wall','wall-like') " +
-    "LEFT JOIN wall_posts wp ON wp.id = n.comment_id AND n.kind IN ('wall','wall-like') " +
+    'LEFT JOIN comments t ON t.id = n.topic_id AND n.kind IN ' + postKinds + ' ' +
+    'LEFT JOIN comments c ON c.id = n.comment_id AND n.kind IN ' + postKinds + ' ' +
+    'LEFT JOIN wall_posts wp ON wp.id = n.comment_id AND n.kind IN ' + wallKinds + ' ' +
+    "LEFT JOIN wall_comments wc ON wc.id = n.topic_id AND n.kind = 'wall-react' " +
     'LEFT JOIN profiles pr ON pr.hash = n.actor_hash ' +
     'WHERE n.recipient_hash = ?1' + (hideWall ? notifHideWall('n.') : ' ') +
     'ORDER BY n.id DESC LIMIT ?2 OFFSET ?3'
@@ -5100,9 +5153,14 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/bookmark', fn: (request, env, ctx, url) => handleBookmark(request, env) },
   { m: 'POST', p: '/api/comments/bookmarks', fn: (request, env, ctx, url) => handleBookmarks(request, env) },
   { m: 'GET', p: '/api/comments/recent', fn: (request, env, ctx, url) => handleRecent(request, env, url) },
-  { m: 'POST', p: '/api/comments/wall/like', fn: (request, env, ctx, url) => handleWallLike(request, env, ctx) },
-  { m: 'POST', p: '/api/comments/wall/comment/like', fn: (request, env, ctx, url) => handleWallCommentLike(request, env) },
-  { m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleWallLikers(request, env) },
+  /* Reactions (2026-09-12): one road for every public target; the three like
+     roads are aliases of it (the ❤️ reaction), kept one deploy for cached clients. */
+  { m: 'POST', p: '/api/comments/react', fn: (request, env, ctx, url) => handleReact(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/reacts', fn: (request, env, ctx, url) => handleReactMine(request, env) },
+  { m: 'POST', p: '/api/comments/react/who', fn: (request, env, ctx, url) => handleReactWho(request, env) },
+  { m: 'POST', p: '/api/comments/wall/like', fn: (request, env, ctx, url) => handleReact(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/wall/comment/like', fn: (request, env, ctx, url) => handleReact(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleReactWho(request, env) },
   { m: 'POST', p: '/api/comments/wall/prune', fn: (request, env, ctx, url) => handleWallPrune(request, env) },
   { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url, ctx) },
   /* Gated at the ROUTE, not inside mediaUpload — the board route below shares

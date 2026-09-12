@@ -27,6 +27,14 @@ interface McCore {
   dmTtlOptions: ReadonlyArray<{ secs: number; label: string }>;
   dmQuickReactions: ReadonlyArray<string>;
   dmReaction(raw: string): string | null;
+  quickReactions: ReadonlyArray<string>;
+  reaction(raw: string): string | null;
+  reactionTargets: ReadonlyArray<string>;
+  isReactionTarget(t: string): boolean;
+  notifKinds: ReadonlyArray<string>;
+  notifLabel(it: unknown): string;
+  notifHref(it: unknown): string;
+  notifHasSnippet(kind: string): boolean;
   dmReplyExcerpt(s: string): string;
   dmReplySentinel: string;
   canInteract(author: string, me: string, bot: string): boolean;

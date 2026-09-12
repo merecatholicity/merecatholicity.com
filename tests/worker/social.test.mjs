@@ -61,10 +61,11 @@ test('the client is told, so it can hide what it cannot have', () => {
 test('one guard, spelled one way, on every feed/wall surface', () => {
   assert.ok(idxSrc.includes("const noSuchPage = () => json({ ok: false, error: 'No such page.' }, 404);"));
   assert.ok(idxSrc.includes('async function socialOff(env: any) { return !socialEnabled(await getAppSettings(env)); }'));
-  /* Nine gated surfaces: the two members-only reads, the two public reads, the
-     four writes, and the wall media upload. */
+  /* Eight gated surfaces: the two members-only reads, the public post read,
+     the reaction target and the who-reacted read (2026-09-12: the three like
+     roads folded into these two), the three writes, and the wall media upload. */
   const guards = (idxSrc.match(/if \(await socialOff\(env\)\)/g) || []).length;
-  assert.ok(guards >= 9, `expected every wall surface guarded, found ${guards}`);
+  assert.ok(guards >= 8, `expected every wall surface guarded, found ${guards}`);
 
   /* Each handler carries its own guard — checked by name, so moving code around
      cannot quietly leave one behind. */
@@ -73,8 +74,8 @@ test('one guard, spelled one way, on every feed/wall surface', () => {
     assert.ok(i > 0, `${name} not found`);
     return idxSrc.slice(i, i + 2400);
   };
-  for (const h of ['handleWallFeed', 'handleWall', 'handleWallPostGet', 'handleWallLike',
-    'handleWallCommentLike', 'handleWallLikers', 'handleWallPost', 'handleWallComment', 'handleWallEdit']) {
+  for (const h of ['handleWallFeed', 'handleWall', 'handleWallPostGet', 'reactTarget',
+    'handleReactWho', 'handleWallPost', 'handleWallComment', 'handleWallEdit']) {
     assert.ok(/socialOff\(env\)/.test(body(h)), `${h} has no social gate`);
   }
 });
@@ -87,9 +88,14 @@ test('a switched-off surface is indistinguishable from one that never existed', 
   assert.ok(post.includes("if (await socialOff(env)) return json({ ok: false, error: 'That post is gone.' }, 404);"));
   assert.ok(post.includes("if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);"),
     'the genuine missing-post refusal must stay byte-identical to the gated one');
-  /* Likers: an unknown post already answers with an empty list, so that is what
-     "off" answers too — not an error a prober could distinguish. */
-  assert.ok(idxSrc.includes("if (await socialOff(env)) return json({ ok: true, likers: [], more: false }, 200);"));
+  /* Who reacted: an unknown post already answers with an empty list, so that
+     is what "off" answers too — not an error a prober could distinguish; and
+     a reaction on a switched-off target reads as a reaction on a post that is
+     not there (reactTarget answers null → the missing-post 404). */
+  assert.ok(idxSrc.includes("const none = json({ ok: true, target, id, who: [], likers: [], more: false }, 200);"));
+  assert.ok(idxSrc.includes("} else if (await socialOff(env)) return none;"));
+  const rt = idxSrc.slice(idxSrc.indexOf('async function reactTarget('), idxSrc.indexOf('async function handleReact('));
+  assert.ok(rt.includes("if (await socialOff(env)) return null;"), 'a wall target behind the switch is no target');
 });
 
 test('the three surfaces that must STAY open when the switch is off', () => {
@@ -123,7 +129,9 @@ test('wall notifications leave no bell the reader can never clear', () => {
      the list hide them. The rows themselves stay: read state and all, they come
      back with the switch. */
   assert.ok(idxSrc.includes(
-    `const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('wall','wall-like') ";`));
+    `const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('" + NOTIF_WALL_KINDS.join("','") + "') ";`));
+  assert.ok(libSrc.includes("export const NOTIF_WALL_KINDS = ['wall', 'wall-like', 'wall-react'];"),
+    'a reaction on a feed post is a wall bell, hidden with the rest');
   const unread = idxSrc.slice(idxSrc.indexOf('async function notifUnreadCount('));
   assert.ok(unread.slice(0, 400).includes("notifHideWallSql(env, '')"),
     'the badge count must exclude wall kinds when off');

@@ -13,6 +13,7 @@ import { installComposer } from './composer';
 import { installProfile } from './profile';
 import { installBoard } from './board';
 import { installWall } from './wall';
+import { installSurface } from './surface';
 import { installDm } from './dm';
 import { installMerecat } from './merecat';
 import { installAdmin } from './admin';
@@ -167,6 +168,12 @@ import type { Boot } from './boot';
   let notifUnreadCheck: (force?: boolean) => any;
   let permalinkFor: (c: any, ctx: any) => any;
   let postMenu: (opts: any) => any;
+  let armHold: (node: any, open: (at: any) => void, opts?: any) => any;
+  let openActs: (spec: any) => any;
+  let reactLoadMine: (target: any, ids: any[]) => any;
+  let reactMine: (target: any, id: any) => string;
+  let reactRegister: (target: any, id: any, host: any, seed: any, paint?: any) => any;
+  let reactSend: (target: any, id: any, emoji: any) => any;
   let profileHref: (hash: any) => any;
   let quoteInto: (c: any, excerpt: any, url: any) => any;
   let renderButtons: () => any;
@@ -1218,6 +1225,7 @@ import type { Boot } from './boot';
         renderIdentity();
         list.textContent = '';
         d.comments.forEach(function (c: any) { list.appendChild(commentNode(c, false, { page: pageHref() })); });
+        reactLoadMine('post', d.comments.map(function (c: any) { return c.id; }));   // the viewer's own, after the cached read
         section.querySelector('.comments-title-text')!.textContent =
           d.comments.length ? 'Comments (' + d.comments.length + ')' : 'Comments';
         setStatus(d.comments.length ? '' : 'No comments yet. Yours can be the first.');
@@ -1786,7 +1794,7 @@ import type { Boot } from './boot';
   }
   /* ---- Wave F: the feature modules, installed per boot ---- */
   Object.assign(B, { API, BOARD, NACL_SRC, appConfirm, asset, authorNode, badgeChanged, bootSig, browserTz, busy, cachedJson, clampBody, clearKey, collectAltIps, crumb, displayName, el, enableMemberLive, fetchRetry, fillBody, fmtDateTime, fmtSecs, fmtTimeCompact, freshOpts, freshParam, getToken, go, isSharedV4Client, load, loadingLine, loginToInteract, makeKey, markThreadRead, mcDmBlobGet, mcDmBlobPut, mcDmBlobs, mountComments, myPostCount, pageBar, pageHref, pageKey, rankLine, readEase, readMark, readThrottled, route, section, setKey, sha256hex, skelInto, skeleton, stale, stampFresh, state, trace, warmToken });
-  const mods = [installComposer(B), installProfile(B), installBoard(B), installWall(B), installDm(B), installMerecat(B), installAdmin(B)];
+  const mods = [installComposer(B), installProfile(B), installBoard(B), installWall(B), installSurface(B), installDm(B), installMerecat(B), installAdmin(B)];
   for (const m of mods) Object.assign(B, m.exports);
   ADMIN_HASHES = B.ADMIN_HASHES;
   BLOCK_CONFIRM = B.BLOCK_CONFIRM;
@@ -1837,6 +1845,12 @@ import type { Boot } from './boot';
   notifUnreadCheck = B.notifUnreadCheck;
   permalinkFor = B.permalinkFor;
   postMenu = B.postMenu;
+  armHold = B.armHold;
+  openActs = B.openActs;
+  reactLoadMine = B.reactLoadMine;
+  reactMine = B.reactMine;
+  reactRegister = B.reactRegister;
+  reactSend = B.reactSend;
   profileHref = B.profileHref;
   quoteInto = B.quoteInto;
   renderButtons = B.renderButtons;
@@ -1900,6 +1914,8 @@ import type { Boot } from './boot';
     renderIdentity: renderIdentity, indexSearchBox: indexSearchBox,
     displayName: displayName, fmtDateTime: fmtDateTime, fmtTimeCompact: fmtTimeCompact,
     postMenu: postMenu, notifCacheSet: notifCacheSet,
+    /* the shared press-and-hold surface and the reactions' ledger (2026-09-12) */
+    armHold: armHold, openActs: openActs, reactRegister: reactRegister, reactLoadMine: reactLoadMine, reactSend: reactSend, reactMine: reactMine,
     topicAdminCorner: topicAdminCorner, buildBoardForm: buildBoardForm,
     boardButtons: boardButtons, armBoardForm: armBoardForm,
     attachMentions: attachMentions, attachDraft: attachDraft, boardPost: boardPost,

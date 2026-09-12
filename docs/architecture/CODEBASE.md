@@ -26,7 +26,7 @@ idea holds the whole thing together and is the key to reading it:
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  PureScript kernel  purescript/src/Domain/*   │  29 modules
+            │  PureScript kernel  purescript/src/Domain/*   │  31 modules
             │  (validation, permissions, parsing, routing,  │  — the rulebook,
             │   ranks, FTS-safety, identity, …) ADTs +      │    pure, tested
             │   smart constructors, illegal states unrep.   │    1:1 in tests/
@@ -58,7 +58,8 @@ duplicated, and the shape they moved toward.
 | File | Lines | Role |
 |---|---:|---|
 | `client/comments.ts` | 2,049 | The client's ROOT: pre-boot page state, the core helpers (fetch/read pacing, formatting, `el`, Turnstile, identity), the router, `start()`, the `mcKit` assembly; installs the modules below per boot. |
-| `client/dm.ts` | 2,304 | E2E crypto + media, the bubbles, the message surface, the chat screen, the inbox, presence, the live DM frames, calls. |
+| `client/dm.ts` | 2,210 | E2E crypto + media, the bubbles, the message's acts, the chat screen, the inbox, presence, the live DM frames, calls. |
+| `client/surface.ts` | 590 | The SHARED press-and-hold surface (2026-09-12): the overlay (`openActs`), the gestures (`armHold`), the public reactions' ledger and its pills, the wire to `/react`. The DM, every board post and every feed post/comment open this one. |
 | `client/merecat.ts` | 1,924 | The librarian's chat client. |
 | `client/board.ts` | 1,718 | The forum views, the comment renderer, quoting/editing, the board form, the journal, search, the post menu. |
 | `client/admin.ts` | 1,628 | The acting consoles. |
@@ -85,7 +86,7 @@ duplicated, and the shape they moved toward.
 | `contact-worker/src/index.ts` | 138 | The contact form worker. |
 | `comments-worker/src/db.ts` | 83 | The repository layer: typed row mappers, `inList`, the `Query` builder. |
 | `docs/{deeplink,sw,away,contact,flash,index}.js` | 8–161 ea. | Small served-raw scripts. |
-| `purescript/src/Domain/*.purs` | 29 files | The kernel (see the map); plus the generated `Domain.Writings` (`scripts/writings.py`, git-ignored). |
+| `purescript/src/Domain/*.purs` | 31 files | The kernel (see the map); plus the generated `Domain.Writings` (`scripts/writings.py`, git-ignored). |
 
 Re-measured 2026-09-08 over 35 hand-written files, **29,968 lines**: the median is
 **286 lines**, and the distribution is still bimodal — a long tail of small,
@@ -161,9 +162,9 @@ middleware layer, a repository layer, and finishing the component migration
 More than the two big files suggest. The **modular seams already exist and are
 proven**:
 
-- The **PureScript `Domain/*` kernel — 29 modules**, each a single rule family
+- The **PureScript `Domain/*` kernel — 31 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
-  each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 29 of them).
+  each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 31 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
   an auth state can't hold a hash without a key). This is the most modular part
   of the codebase and it is shared by both the client and the worker.
@@ -179,7 +180,7 @@ still inline in `index.ts`, the `db.ts` foundation notwithstanding), and the
 client's **42** classic fallbacks beside the Lit components — the client is
 feature files now (Wave F), but each feature file still carries its classic
 render path. Test layers are already modular and
-tiered: **Layer 1** unit (`tests/`, 29 PS + 15 js + 16 worker node specs, 12 py + 1 css unittest files — 2026-09-11), **Layer 2**
+tiered: **Layer 1** unit (`tests/`, 31 PS + 16 js + 17 worker node specs, 12 py + 1 css unittest files — 2026-09-11), **Layer 2**
 headless (`webtest/`).
 
 ### 3. Why do we have 6,000+-line files?
@@ -253,7 +254,7 @@ Yes. **Target tree [target]** — every file named for its feature, none over
 ~400 lines:
 
 ```
-purescript/src/Domain/*.purs        the rulebook (29 modules) — unchanged, it's the model
+purescript/src/Domain/*.purs        the rulebook (31 modules) — unchanged, it's the model
 app/
   core.ts        membrane (PS → JS)          api.ts     typed endpoints
   store.ts       request cache               shell.ts   SPA shell
