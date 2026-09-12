@@ -1788,18 +1788,134 @@ export function installChrome() {
      composer to sit right above the keyboard and slides the tab bar out of the
      way. Desktop never raises a soft keyboard, so kb stays ~0 and this no-ops. */
   var vv = window.visualViewport;
+  var kbInset = 0;
+  var kbRoom = document.createElement('div');
+  kbRoom.className = 'mc-kb-room';
+  kbRoom.setAttribute('aria-hidden', 'true');
+  function kbRoomClear() { kbRoom.style.height = ''; if (kbRoom.parentNode) kbRoom.parentNode.removeChild(kbRoom); }
   if (vv) {
     var applyKb = function () {
       var kb = Math.max(0, Math.round(window.innerHeight - vv!.height - vv!.offsetTop));
       /* A real keyboard is tall; a browser toolbar reveal is not. The threshold
          keeps chrome bars from being mistaken for a keyboard. */
       var open = kb > 120;
+      kbInset = kb;
       document.documentElement.style.setProperty('--mc-kb', kb + 'px');
       document.body.classList.toggle('mc-kb-open', open);
+      if (!open && !kbField(document.activeElement)) kbRoomClear();
     };
     vv.addEventListener('resize', applyKb);
     vv.addEventListener('scroll', applyKb);
   }
+
+  /* ---- The keyboard shackle (2026-09-12). The owner's law: a field the
+     reader types into is ALWAYS wholly visible, directly above the soft
+     keyboard — never a blind box under it. The fixed composers (DM, merecat)
+     ride --mc-kb by CSS; the sheet and the theater are lifted by it; and
+     every IN-FLOW field — a reply box, an edit box a tap just opened, a topic
+     composer, a profile field, a search input, the report prompt — is placed
+     by this net, which is the shell's (it must outlive every boot):
+       · focusin: a settle ladder (0 · 120 · 300 · 520 · 800 ms) — the keyboard
+         takes ~300 ms to stand, and the browser's own focus scroll runs before
+         it does, which is why a box lands under it;
+       · visualViewport resize: the keyboard rose, fell or changed (an emoji
+         keyboard is taller);
+       · input: the field grew (autosize) or the reader is typing under it.
+     Placing is idempotent and moves nothing that is already wholly visible:
+     the visible region is the visual viewport under the fixed top bar; the
+     field is brought inside it — its foot at the keyboard's top when it was
+     hidden below, its head under the bar when hidden above; a field taller
+     than the room shows the half the caret is in. Every scrollable ancestor
+     is scrolled first (the sheet, the theater's rail), then the document —
+     unless a fixed ancestor holds the field (a fixed composer), which the
+     document's scroll could never move. window.mcKeyboard exposes the region
+     and the placing for the headless proof, which cannot raise a keyboard. */
+  var KB_FIELDS = 'textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input[type="password"], [contenteditable=""], [contenteditable="true"]';
+  function kbField(el: any): boolean { return !!(el && el.matches && el.matches(KB_FIELDS)); }
+  function kbRegion() {
+    var top = vv ? vv.offsetTop : 0, bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    /* whichever top bar is drawn on this breakpoint (a fixed bar has no
+       offsetParent — its rect is the test) */
+    var bars = document.querySelectorAll('.mc-appbar, .mc-deskbar');
+    for (var i = 0; i < bars.length; i++) {
+      var br = bars[i].getBoundingClientRect();
+      if (br.height > 0 && br.bottom > top) { top = br.bottom; break; }
+    }
+    return { top: top, bottom: bottom };
+  }
+  function kbScrollers(el: any) {
+    var out: any[] = [];
+    for (var n = el.parentElement; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      var oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 1) out.push(n);
+    }
+    return out;
+  }
+  function kbFixed(el: any) {
+    for (var n = el; n && n !== document.body; n = n.parentElement) if (getComputedStyle(n).position === 'fixed') return true;
+    return false;
+  }
+  /* How far to scroll so the field sits inside [vt, vb]: 0 when it already
+     does. A field taller than the room shows the half the caret is in (the
+     foot when the caret is past the middle, as it is while typing on). */
+  function kbNeed(el: any, vt: number, vb: number) {
+    var gap = 8, r = el.getBoundingClientRect(), room = vb - vt - 2 * gap;
+    if (r.height >= room) {
+      var atFoot = true;
+      try { if (el.selectionEnd != null && typeof el.value === 'string') atFoot = el.selectionEnd >= el.value.length / 2; } catch (e) { /* not a text control */ }
+      return Math.round(atFoot ? r.bottom - (vb - gap) : r.top - (vt + gap));
+    }
+    if (r.bottom > vb - gap) return Math.round(r.bottom - (vb - gap));
+    if (r.top < vt + gap) return Math.round(r.top - (vt + gap));
+    return 0;
+  }
+  function kbAlign(el: any, regionOverride?: { top: number; bottom: number }) {
+    if (!kbField(el) || !el.isConnected) return false;
+    var region = regionOverride || kbRegion();
+    if (region.bottom - region.top < 80) return false;   // nothing to place into (mid-animation)
+    var moved = false;
+    kbScrollers(el).forEach(function (s) {
+      var sr = s.getBoundingClientRect();
+      var vt = Math.max(sr.top, region.top), vb = Math.min(sr.bottom, region.bottom);
+      if (vb - vt < 40) return;
+      var d = kbNeed(el, vt, vb);
+      if (d) { var before = s.scrollTop; s.scrollTop = before + d; if (s.scrollTop !== before) moved = true; }
+    });
+    if (!kbFixed(el)) {
+      var d2 = kbNeed(el, region.top, region.bottom);
+      if (d2) {
+        var y = window.scrollY;
+        try { window.scrollBy({ top: d2, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollBy(0, d2); }
+        if (window.scrollY !== y) moved = true;
+        /* A field at the page's foot may find no scroll left to bring it above
+           the keyboard (the document ends where it ends): give the document
+           the missing room — a shell-owned spacer after everything — and
+           place once more. The room goes when the keyboard does. */
+        var short = kbNeed(el, region.top, region.bottom);
+        if (short > 0) {
+          kbRoom.style.height = (parseFloat(kbRoom.style.height) || 0) + short + 'px';
+          if (!kbRoom.parentNode) document.body.appendChild(kbRoom);
+          var y2 = window.scrollY;
+          try { window.scrollBy({ top: short, left: 0, behavior: 'instant' as any }); } catch (e) { window.scrollBy(0, short); }
+          if (window.scrollY !== y2) moved = true;
+        }
+      }
+    }
+    return moved;
+  }
+
+  var kbLadder: any[] = [];
+  function kbSettle(el: any) {
+    kbLadder.forEach(clearTimeout);
+    kbLadder = [0, 120, 300, 520, 800].map(function (ms) {
+      return setTimeout(function () { if (document.activeElement === el) kbAlign(el); }, ms);
+    });
+  }
+  document.addEventListener('focusin', function (e: any) { if (kbField(e.target)) kbSettle(e.target); });
+  document.addEventListener('focusout', function (e: any) { if (kbField(e.target)) setTimeout(function () { if (!kbField(document.activeElement)) kbRoomClear(); }, 250); });
+  document.addEventListener('input', function (e: any) { if (kbField(e.target) && e.target === document.activeElement) kbAlign(e.target); }, true);
+  if (vv) vv.addEventListener('resize', function () { var a: any = document.activeElement; if (kbField(a)) kbSettle(a); });
+  window.mcKeyboard = { region: kbRegion, align: kbAlign, inset: function () { return kbInset; }, isField: kbField };
 
   /* On the Home route, drop the launcher into <main> and mark it so the mobile
      CSS hides the marketing siblings (phones only; desktop keeps the homepage). */

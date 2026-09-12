@@ -1926,6 +1926,11 @@ body.mc-app main.prose > #title-block-header {
   body.mc-kb-open .mc-tabbar { transform: translateY(100%); }
   body.mc-kb-open .merecat-form { bottom: var(--mc-kb, 0px); transition: bottom 0.18s ease; }
   body.mc-kb-open .mc-dock { display: none; }
+  /* The keyboard shackle (2026-09-12): the theater, like the composers, is
+     lifted onto the keyboard while it stands (the tab bar it sat on has slid
+     away), so the comment box in its rail is never under it; the in-flow
+     fields everywhere are placed by the shell's net (app/appchrome.ts). */
+  body.mc-app.mc-kb-open .wall-lightbox { bottom: var(--mc-kb, 0px); }
 
   /* a friendly starter shown in an empty merecat log (phones only): a few
      example questions that fill the ask box on tap. */
@@ -1991,6 +1996,18 @@ body.mc-app main.prose > #title-block-header {
   .comments-status.mc-empty::before {
     content: attr(data-ico); display: block; font-size: 2.9rem; margin-bottom: 0.55rem; opacity: 0.85;
   }
+}
+
+/* The keyboard shackle (2026-09-12): a sheet holding a field (the report prompt,
+   the onboarding key) is lifted onto the soft keyboard while it stands, its
+   height capped to the room above it — else its lower part, the field with it,
+   sits behind the keyboard where no scroll can reach (the body is locked while
+   a sheet is open). --mc-kb is the shell's; 0 on desktop, so this is inert there. */
+body.mc-kb-open .mc-sheet {
+  bottom: var(--mc-kb, 0px);
+  max-height: calc(100vh - var(--mc-kb, 0px) - 3rem);
+  max-height: calc(100dvh - var(--mc-kb, 0px) - 3rem);
+  transition: transform 0.26s cubic-bezier(0.2, 0.8, 0.2, 1), bottom 0.18s ease;
 }
 
 /* ---- Phase 4: polish — crisp icons + micro-animations (phones only) ---- */

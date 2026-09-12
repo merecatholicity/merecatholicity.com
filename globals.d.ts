@@ -111,6 +111,8 @@ declare global {
     mcDialog?: (opts: { title: string; body: Node; actions?: HTMLElement[] }) => { close: () => void; body: HTMLElement };
     mcToast?: (msg: string, opts?: any) => void;
     mcSheet?: { open: (...a: any[]) => void; settings?: () => void; close: () => void; lock?: () => boolean | void; unlock?: () => void };
+    /* the keyboard shackle (app/appchrome.ts, 2026-09-12): the visible region under the soft keyboard and the placing of a field into it */
+    mcKeyboard?: { region: () => { top: number; bottom: number }; align: (el: Element, region?: { top: number; bottom: number }) => boolean; inset: () => number; isField: (el: unknown) => boolean };
     mcGetDark?: () => string;
     mcSetDark?: (p: string) => void;
     mcGetLight?: () => string;
