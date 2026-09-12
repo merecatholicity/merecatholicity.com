@@ -1379,8 +1379,16 @@ export function installComposer(B: Boot) {
      right (desktop) or stacked below (mobile). Click the scrim / ✕ / Esc closes.
      For a comment's media (no post) it is a plain viewer with a download. */
   function openMedia(mediaKey: any, kind: any, post: any) {
+    openLightbox(API + '/wall/media?key=' + encodeURIComponent(mediaKey), kind, post, mediaFilename(mediaKey));
+  }
+  /* One image, full size, in the bare theater — as large as the viewport
+     allows, a download beside it: the profile picture (2026-09-12), or any
+     lone image a caller has a URL for. */
+  function openImage(src: any, filename: any) {
+    openLightbox(src, 'i', null, filename);
+  }
+  function openLightbox(src: any, kind: any, post: any, filename: any) {
     closePop();
-    var src = API + '/wall/media?key=' + encodeURIComponent(mediaKey);
     var ov = el('div', 'wall-lightbox' + (post ? '' : ' wall-lightbox-bare'));
     var inner = el('div', 'wall-lb-inner');
     var stage = el('div', 'wall-lb-stage');
@@ -1405,10 +1413,10 @@ export function installComposer(B: Boot) {
       var focusComposer = function () { var ta = cs.wrap.querySelector('.comment-form .comment-text') as HTMLElement; if (ta) ta.focus(); };
       acts.cmtBtn.addEventListener('click', focusComposer);
       acts.cmtSum.addEventListener('click', focusComposer);
-      acts.shareBtn.addEventListener('click', function (e: any) { e.stopPropagation(); showShareMenu(acts.shareBtn, location.origin + '/feed.html?post=' + post.id, { url: src, filename: mediaFilename(mediaKey) }, { kind: 'wall', ref: post.id }); });
+      acts.shareBtn.addEventListener('click', function (e: any) { e.stopPropagation(); showShareMenu(acts.shareBtn, location.origin + '/feed.html?post=' + post.id, { url: src, filename: filename }, { kind: 'wall', ref: post.id }); });
     } else {
       var mini = el('div', 'wall-lb-mini');
-      mini.appendChild(mediaDownloadLink(src, mediaFilename(mediaKey), 'Download', 'btn btn-anon'));
+      mini.appendChild(mediaDownloadLink(src, filename, 'Download', 'btn btn-anon'));
       rail.appendChild(mini);
     }
     inner.appendChild(rail);
@@ -1603,5 +1611,5 @@ export function installComposer(B: Boot) {
       }
     }, { capture: true, signal: bootSig });
   }
-  return { bind, run, exports: { CUSTOM_EMOJI, afterEdit, attachBoardMedia, attachDraft, attachEmoji, attachMentions, buildEmojiPanel, collectMentions, emojiImg, emojiToken, ensureEmojiStyles, ensureMentionDir, insertEmojiItem, mdEditor, mediaCfg, mediaDownloadLink, mediaGateFile, mediaStash, openMedia, previewButton, scriptureDecor, utilBtnLabel, voiceControl, warmOnFocus } };
+  return { bind, run, exports: { afterEdit, attachBoardMedia, attachDraft, attachEmoji, attachMentions, buildEmojiPanel, collectMentions, CUSTOM_EMOJI, emojiImg, emojiToken, ensureEmojiStyles, ensureMentionDir, insertEmojiItem, mdEditor, mediaCfg, mediaDownloadLink, mediaGateFile, mediaStash, openImage, openMedia, previewButton, scriptureDecor, utilBtnLabel, voiceControl, warmOnFocus } };
 }

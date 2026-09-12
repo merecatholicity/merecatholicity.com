@@ -28,6 +28,7 @@ export function installProfile(B: Boot) {
   let dmSeenLabel: (epoch: any) => any;
   let dmUnreadCheck: (force?: boolean) => any;
   let el: (tag: string, cls?: string | null, text?: string | number | null) => any;
+  let openImage: (src: any, filename: any) => any;
   let enableMemberLive: () => any;
   let ensureDmStyles: () => any;
   let ensureEmojiStyles: () => any;
@@ -830,6 +831,14 @@ export function installProfile(B: Boot) {
       img.width = 72;
       img.height = 72;
       avatar.appendChild(img);
+      /* The picture pops out full size in the bare theater (2026-09-12): as
+         large as the viewport allows, a download beside it; a tap, or Enter. */
+      avatar.classList.add('profile-avatar-zoom');
+      avatar.setAttribute('role', 'button'); avatar.tabIndex = 0;
+      avatar.title = 'View picture'; avatar.setAttribute('aria-label', 'View the profile picture full size');
+      var zoom = function () { openImage(img.src, 'avatar-' + String(p.hash || '').slice(0, 8) + '.jpg'); };
+      avatar.addEventListener('click', zoom);
+      avatar.addEventListener('keydown', function (e: any) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); zoom(); } });
     }
     headRow.appendChild(avatar);
     var names = el('div', 'profile-names');
@@ -1393,6 +1402,7 @@ export function installProfile(B: Boot) {
     dmSeenLabel = B.dmSeenLabel;
     dmUnreadCheck = B.dmUnreadCheck;
     el = B.el;
+    openImage = B.openImage;
     enableMemberLive = B.enableMemberLive;
     ensureDmStyles = B.ensureDmStyles;
     ensureEmojiStyles = B.ensureEmojiStyles;

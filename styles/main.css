@@ -1212,6 +1212,9 @@ a.comment-author-link:hover { text-decoration: underline; }
 .profile-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
 .profile-avatar { width: 72px; height: 72px; flex-shrink: 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--cream-2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .profile-avatar img { width: 100%; height: 100%; object-fit: cover; margin: 0; display: block; }
+/* a profile picture pops out full size in the bare theater on a tap (2026-09-12) */
+.profile-avatar-zoom { cursor: zoom-in; }
+.profile-avatar-zoom:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .profile-names { min-width: 0; }
 .profile-name { font-weight: bold; color: var(--maroon); font-size: 1.2rem; overflow-wrap: anywhere; }
 .profile-assigned { color: var(--faintest); font-size: 0.85rem; overflow-wrap: anywhere; }

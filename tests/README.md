@@ -49,7 +49,8 @@ tests/
                        raised hero, the Inbox badge spoken in the tab's label), and the shared
                        press-and-hold surface (surface: one overlay root, both post renderers arm
                        the hold with the reaction, the acts go home on close, the nearest armed
-                       node, the kernel before the wire, the phone selection rule)
+                       node, the kernel before the wire, the phone selection rule), and the profile
+                       picture's pop-out (profile_avatar: the theater takes a URL, the avatar is a button)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
                        the comments switches and the journal sweep's SQL on real migrations,
