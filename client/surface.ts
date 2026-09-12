@@ -100,10 +100,17 @@ export function installSurface(B: Boot) {
     var mine = !!spec.mine;
     var root = el('div', 'dm-act ' + (phone ? 'dm-act-phone' : 'dm-act-desk') + (mine ? ' dm-act-mine' : ''));
     root.setAttribute('data-mc-app', '');
+    /* The click that follows the opening hold is swallowed on the node — but
+       the node may have been scrolled to fit under the bar, and the click
+       then lands on a scrim instead (found by the CDP touch of the headless
+       proof, 2026-09-12; a release between the hold's 430 ms and the OS's
+       own long-press cut-off does the same on a phone). A scrim tap in the
+       first moments after opening is that click, never a dismissal. */
+    var openedAt = Date.now();
     var scrims: any[] = [];
     function scrim() {
       var sc = el('div', 'dm-act-scrim');
-      sc.addEventListener('click', function (e: any) { e.preventDefault(); closeActs(); });
+      sc.addEventListener('click', function (e: any) { e.preventDefault(); if (Date.now() - openedAt < 400) return; closeActs(); });
       root.appendChild(sc); scrims.push(sc);
       return sc;
     }

@@ -1832,14 +1832,36 @@ export function installChrome() {
      and the placing for the headless proof, which cannot raise a keyboard. */
   var KB_FIELDS = 'textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input[type="password"], [contenteditable=""], [contenteditable="true"]';
   function kbField(el: any): boolean { return !!(el && el.matches && el.matches(KB_FIELDS)); }
-  function kbRegion() {
-    var top = vv ? vv.offsetTop : 0, bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
-    /* whichever top bar is drawn on this breakpoint (a fixed bar has no
-       offsetParent — its rect is the test) */
-    var bars = document.querySelectorAll('.mc-appbar, .mc-deskbar');
-    for (var i = 0; i < bars.length; i++) {
-      var br = bars[i].getBoundingClientRect();
-      if (br.height > 0 && br.bottom > top) { top = br.bottom; break; }
+  /* The site's own chrome covers the edges of the visual viewport and is
+     taken off the region: at the top the fixed bar and a sticky header
+     standing under it (the DM's); at the foot every fixed bar that touches
+     the visual bottom — the tab bar, the DM composer, the merecat row, the
+     audio dock. A field placed "on the keyboard" would otherwise sit BEHIND
+     the composer that rides it (the DM edit box of 2026-09-12's screenshot).
+     Their rects say where they stand: a tab bar slid away under the keyboard
+     is below the visual bottom and drops out by itself; a composer mid-ride
+     is caught by the ladder's later ticks. Two passes, so a bar standing on
+     another bar (the composer on the tab bar) is taken off too. */
+  /* the proof's standing pretend viewport (window.mcKeyboard.pretend): a
+     keyboard a headless browser cannot raise, seen by every trigger */
+  var kbPretend: { top: number; bottom: number } | null = null;
+  var KB_TOP_BARS = '.mc-appbar, .mc-deskbar, .dm-head';
+  var KB_BOTTOM_BARS = '.mc-tabbar, .dm-composer, .merecat-form, .mc-dock';
+  function kbRegion(raw?: { top: number; bottom: number }) {
+    /* `raw` is the visual viewport as given (the headless proof's pretend
+       keyboard); the chrome comes off it exactly as off the real one. */
+    var base = raw || kbPretend;
+    var top = base ? base.top : (vv ? vv.offsetTop : 0), bottom = base ? base.bottom : (vv ? vv.offsetTop + vv.height : window.innerHeight);
+    var tops = document.querySelectorAll(KB_TOP_BARS), bots = document.querySelectorAll(KB_BOTTOM_BARS);
+    for (var pass = 0; pass < 2; pass++) {
+      for (var i = 0; i < tops.length; i++) {
+        var tr = tops[i].getBoundingClientRect();
+        if (tr.height > 0 && tr.top <= top + 2 && tr.bottom > top) top = tr.bottom;
+      }
+      for (var j = 0; j < bots.length; j++) {
+        var br = bots[j].getBoundingClientRect();
+        if (br.height > 0 && br.top < bottom && br.bottom >= bottom - 2) bottom = br.top;
+      }
     }
     return { top: top, bottom: bottom };
   }
@@ -1869,9 +1891,9 @@ export function installChrome() {
     if (r.top < vt + gap) return Math.round(r.top - (vt + gap));
     return 0;
   }
-  function kbAlign(el: any, regionOverride?: { top: number; bottom: number }) {
+  function kbAlign(el: any, raw?: { top: number; bottom: number }) {
     if (!kbField(el) || !el.isConnected) return false;
-    var region = regionOverride || kbRegion();
+    var region = kbRegion(raw);
     if (region.bottom - region.top < 80) return false;   // nothing to place into (mid-animation)
     var moved = false;
     kbScrollers(el).forEach(function (s) {
@@ -1904,18 +1926,35 @@ export function installChrome() {
     return moved;
   }
 
-  var kbLadder: any[] = [];
+  var kbLadder: any[] = [], kbSettleUntil = 0, kbScrollT: any = 0;
   function kbSettle(el: any) {
     kbLadder.forEach(clearTimeout);
-    kbLadder = [0, 120, 300, 520, 800].map(function (ms) {
+    kbSettleUntil = Date.now() + 1500;
+    kbLadder = [0, 120, 300, 520, 800, 1200].map(function (ms) {
       return setTimeout(function () { if (document.activeElement === el) kbAlign(el); }, ms);
     });
   }
+  /* The browser's OWN late focus-scroll — iOS scrolls the field into view
+     once the keyboard has risen, and (17+) lands it under its floating
+     accessory pill, after the ladder may have placed it — is answered: any
+     scroll inside the settle window re-places the field once it settles.
+     Our own placing scrolls too; it re-checks to nothing. Outside the window
+     the reader's scrolling is theirs. */
+  function kbOnScroll() {
+    if (Date.now() > kbSettleUntil) return;
+    var a: any = document.activeElement;
+    if (!kbField(a)) return;
+    clearTimeout(kbScrollT);
+    kbScrollT = setTimeout(function () { if (document.activeElement === a) kbAlign(a); }, 80);
+  }
+  window.addEventListener('scroll', kbOnScroll, { passive: true, capture: true });
+  if (vv) vv.addEventListener('scroll', kbOnScroll);
   document.addEventListener('focusin', function (e: any) { if (kbField(e.target)) kbSettle(e.target); });
   document.addEventListener('focusout', function (e: any) { if (kbField(e.target)) setTimeout(function () { if (!kbField(document.activeElement)) kbRoomClear(); }, 250); });
   document.addEventListener('input', function (e: any) { if (kbField(e.target) && e.target === document.activeElement) kbAlign(e.target); }, true);
   if (vv) vv.addEventListener('resize', function () { var a: any = document.activeElement; if (kbField(a)) kbSettle(a); });
-  window.mcKeyboard = { region: kbRegion, align: kbAlign, inset: function () { return kbInset; }, isField: kbField };
+  window.mcKeyboard = { region: kbRegion, align: kbAlign, inset: function () { return kbInset; }, isField: kbField,
+    pretend: function (raw: { top: number; bottom: number } | null) { kbPretend = raw; } };
 
   /* On the Home route, drop the launcher into <main> and mark it so the mobile
      CSS hides the marketing siblings (phones only; desktop keeps the homepage). */

@@ -227,9 +227,12 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   above the soft keyboard. The shell (`app/appchrome.ts`, never a boot) publishes `--mc-kb` /
   `body.mc-kb-open` from `visualViewport`; the fixed composers (DM, merecat), the sheet and the
   theater ride it by CSS; every IN-FLOW field is placed by the shell's net — on focus (a
-  settle ladder across the keyboard's rise), on every keyboard resize, on every input — into
-  the visual viewport under the top bar: scrollable ancestors first, then the document
-  (never for a field a fixed ancestor holds), a spacer for room when the page ends short.
+  settle ladder across the keyboard's rise, and any scroll inside the settle window — the
+  browser's own late focus-scroll), on every keyboard resize, on every input — into the visual
+  viewport MINUS the site's own chrome (the top bar and the DM's sticky header; the tab bar,
+  the DM composer, the merecat row, the dock — a field "on the keyboard" would otherwise sit
+  behind the composer riding it): scrollable ancestors first, then the document (never for a
+  field a fixed ancestor holds), a spacer for room when the page ends short.
   A new composer gets nothing of its own: an in-flow field is covered; a fixed one rides
   `--mc-kb` in its `bottom`. `window.mcKeyboard.align(el, region)` is the headless proof.
 - **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"]) mc-footer`;

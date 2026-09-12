@@ -29,7 +29,12 @@ test('the net is the shell\'s, installed once, and hears focus, the keyboard and
   assert.ok(chrome.includes("document.addEventListener('focusin', function (e: any) { if (kbField(e.target)) kbSettle(e.target); });"), 'focusin → the settle ladder');
   assert.ok(chrome.includes("document.addEventListener('input', function (e: any) { if (kbField(e.target) && e.target === document.activeElement) kbAlign(e.target); }, true);"), 'input → place again (autosize, typing under the keyboard)');
   assert.ok(chrome.includes("if (vv) vv.addEventListener('resize', function () { var a: any = document.activeElement; if (kbField(a)) kbSettle(a); });"), 'the keyboard rising or changing → the ladder again');
-  assert.ok(/kbLadder = \[0, 120, 300, 520, 800\]\.map/.test(net), 'the ladder spans the keyboard\'s ~300 ms rise');
+  assert.ok(/kbLadder = \[0, 120, 300, 520, 800, 1200\]\.map/.test(net), 'the ladder spans the keyboard\'s ~300 ms rise, and a slow first rise');
+  assert.ok(/kbSettleUntil = Date\.now\(\) \+ 1500;/.test(net) && /if \(Date\.now\(\) > kbSettleUntil\) return;/.test(net),
+    'a settle window, inside which a scroll re-places the field (the browser\'s own late focus-scroll lands it under iOS\'s floating accessory)');
+  assert.ok(chrome.includes("window.addEventListener('scroll', kbOnScroll, { passive: true, capture: true });") && chrome.includes("if (vv) vv.addEventListener('scroll', kbOnScroll);"),
+    'both the document\'s and the visual viewport\'s scroll');
+  assert.ok(/kbScrollT = setTimeout\(function \(\) \{ if \(document\.activeElement === a\) kbAlign\(a\); \}, 80\);/.test(net), 'once the scroll settles, never mid-gesture');
   assert.ok(!/mcKeyboard|kbAlign|kbSettle/.test(client), 'nothing in the boot re-implements it — the client only benefits');
 });
 
@@ -40,10 +45,16 @@ test('placing: every scrollable ancestor first, then the document — never for 
   assert.ok(/behavior: 'instant' as any/.test(net), 'placing, not travelling');
 });
 
-test('the region is the visual viewport under the fixed top bar; a field taller than the room shows the caret\'s half and never bounces', () => {
-  assert.ok(/var top = vv \? vv\.offsetTop : 0, bottom = vv \? vv\.offsetTop \+ vv\.height : window\.innerHeight;/.test(net));
-  assert.ok(/document\.querySelectorAll\('\.mc-appbar, \.mc-deskbar'\)/.test(net) && /if \(br\.height > 0 && br\.bottom > top\) \{ top = br\.bottom; break; \}/.test(net),
-    'the drawn bar\'s foot is the region\'s head — by its rect, since a fixed bar has no offsetParent');
+test('the region is the visual viewport minus the site\'s own chrome at both edges; a field taller than the room shows the caret\'s half and never bounces', () => {
+  assert.ok(/var base = raw \|\| kbPretend;\s*var top = base \? base\.top : \(vv \? vv\.offsetTop : 0\), bottom = base \? base\.bottom : \(vv \? vv\.offsetTop \+ vv\.height : window\.innerHeight\);/.test(net),
+    'the visual viewport, or the proof\'s pretend one (given, or standing) — the chrome comes off either');
+  assert.ok(/var region = kbRegion\(raw\);/.test(net), 'a placing never bypasses the chrome subtraction');
+  assert.ok(/var KB_TOP_BARS = '\.mc-appbar, \.mc-deskbar, \.dm-head';/.test(net), 'the fixed top bar and the DM\'s sticky header');
+  assert.ok(/var KB_BOTTOM_BARS = '\.mc-tabbar, \.dm-composer, \.merecat-form, \.mc-dock';/.test(net),
+    'every fixed bar that can stand on the keyboard — a field "on the keyboard" would otherwise sit BEHIND the composer (the DM edit box, 2026-09-12)');
+  assert.ok(/if \(tr\.height > 0 && tr\.top <= top \+ 2 && tr\.bottom > top\) top = tr\.bottom;/.test(net) && /if \(br\.height > 0 && br\.top < bottom && br\.bottom >= bottom - 2\) bottom = br\.top;/.test(net),
+    'by their rects: a tab bar slid away under the keyboard drops out by itself');
+  assert.ok(/for \(var pass = 0; pass < 2; pass\+\+\)/.test(net), 'two passes: a bar standing on a bar');
   const need = net.slice(net.indexOf('function kbNeed('), net.indexOf('function kbAlign('));
   assert.ok(/if \(r\.height >= room\) \{/.test(need) && /atFoot = el\.selectionEnd >= el\.value\.length \/ 2;/.test(need),
     'taller than the room: the foot when the caret is past the middle, else the head — one rule, so successive placings agree');

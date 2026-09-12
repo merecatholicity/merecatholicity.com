@@ -66,6 +66,12 @@ test('the feed: a post is a wall target, a comment a wallc target, each painting
   assert.ok(/node\.id = 'wc-' \+ c\.id;/.test(wall), 'a feed comment carries the anchor a reaction\'s bell lands on');
 });
 
+test('a scrim tap in the first moments after opening is the hold\'s own click, never a dismissal', () => {
+  const open = fn(surface, 'openActs', 'armHold');
+  assert.ok(/var openedAt = Date\.now\(\);/.test(open) && /if \(Date\.now\(\) - openedAt < 400\) return; closeActs\(\);/.test(open),
+    'the node may have been scrolled to fit, so the release\'s click lands on a scrim');
+});
+
 test('the caller\'s own acts travel into the menu and go HOME on close, in order', () => {
   const open = fn(surface, 'openActs', 'armHold');
   assert.ok(/travelled\.push\(\{ node: it, parent: it\.parentNode \}\);/.test(open), 'each element remembers where it came from');
