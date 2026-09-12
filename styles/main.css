@@ -1530,24 +1530,27 @@ mc-appbar, mc-tabbar, mc-sheet, mc-home { display: none; }
     background: var(--surface); border-top: 1px solid var(--rule);
     box-shadow: 0 -1px 12px rgba(0, 0, 0, 0.08);
   }
+  /* Six equal slots, whatever the words are: `flex: 1 1 0` + `min-width: 0`,
+     because the default `min-width: auto` lets the widest label (Community)
+     refuse to shrink and eat its neighbours' width on a narrow phone — the tabs
+     then measure 61px against 49px and the bar reads crooked. The label rides a
+     viewport-scaled size so it still fits the slot down to a 345px viewport, and
+     is clipped rather than wrapped below that (a second line would break the
+     bar's height). */
   .mc-tab {
-    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 2px; text-decoration: none; color: var(--faint); font-size: 0.66rem;
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; text-decoration: none; color: var(--faint); font-size: clamp(0.54rem, 2.6vw, 0.66rem);
     padding: 0.3rem 0; -webkit-tap-highlight-color: transparent;
   }
   .mc-tab-ico { font-size: 1.35rem; line-height: 1; position: relative; transition: transform 0.12s ease; }
-  .mc-tab-lbl { line-height: 1; }
+  .mc-tab-lbl { line-height: 1; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .mc-tab-on { color: var(--maroon); }
   .mc-tab-on .mc-tab-ico { transform: translateY(-1px) scale(1.06); }
 
-  /* the raised center hero: Ask Merecat, the standout */
-  .mc-tab-hero .mc-tab-ico {
-    width: 3.1rem; height: 3.1rem; margin-top: -1.6rem; border-radius: 50%;
-    background: var(--accent-fill); color: var(--accent-on); display: flex; align-items: center; justify-content: center;
-    font-size: 1.5rem; box-shadow: 0 4px 14px rgba(139, 26, 26, 0.45); border: 3px solid var(--surface);
-  }
-  .mc-tab-hero .mc-tab-lbl { color: var(--maroon); font-weight: 600; margin-top: -0.1rem; }
-  .mc-tab-hero.mc-tab-on .mc-tab-ico { transform: scale(1.04); }
+  /* No raised hero (2026-09-11): Community is an ordinary tab like the other
+     five — a six-item bar cannot optically centre a circle, so the lifted disc
+     read as an accent that had slipped sideways. Colour alone says which tab
+     is lit; every icon box is the same 25px, every label the same weight. */
 
   .mc-tab-badge {
     position: absolute; top: -0.35rem; right: -0.55rem; min-width: 1.05rem; height: 1.05rem;
@@ -1988,7 +1991,6 @@ body.mc-app main.prose > #title-block-header {
 
   /* tap feedback on the tabs */
   .mc-tab:active .mc-tab-ico { transform: scale(0.88); }
-  .mc-tab-hero:active .mc-tab-ico { transform: scale(0.94); }
 
   /* a gentle fade-in of freshly soft-navigated content */
   @keyframes mc-swapin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

@@ -27,18 +27,19 @@ const ICON = {
   feed: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7 8.5h6M7 12h10M7 15.5h10"/></svg>`,
 };
 
-/* The primary destinations. Community (the forum hub) is the raised center hero;
-   Merecat 🐈 keeps its mascot emoji (a deliberate brand mark), Feed uses a stroke
-   SVG like the other structural tabs. hrefs are ordinary same-origin links the
-   shell intercepts + soft-navs. (A 6-item bar can't optically centre the raised
-   hero; it sits at slot 4 by design.) */
+/* The primary destinations. SIX EQUAL TABS (2026-09-11): Community used to be a
+   raised circular hero, but a 6-item bar cannot optically centre one — it sat at
+   slot 4, reading as a misplaced accent rather than a centrepiece — so every tab
+   is now the same icon over the same label, and the active one is told by colour
+   alone. Merecat 🐈 keeps its mascot emoji (a deliberate brand mark), Feed uses a
+   stroke SVG like the other structural tabs. hrefs are ordinary same-origin links
+   the shell intercepts + soft-navs. */
 interface Tab {
   key: string;
   label: string;
   href: string;
   svg?: keyof typeof ICON;
   icon?: string;
-  hero?: boolean;
   badge?: string;
 }
 /* The social layer's mirror (written by client/comments.ts from /config, absence
@@ -59,7 +60,7 @@ const TABS: Tab[] = [
   { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
   { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
   { key: 'feed', label: 'Feed', svg: 'feed', href: 'feed.html' },
-  { key: 'community', label: 'Community', svg: 'community', href: 'community.html', hero: true },
+  { key: 'community', label: 'Community', svg: 'community', href: 'community.html' },
   { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'messages.html', badge: 'dm' },
   { key: 'profile', label: 'Profile', svg: 'profile', href: 'profile.html' },
 ];
@@ -214,6 +215,11 @@ function badgeCount(which: string) {
   } catch (e) { return 0; }
 }
 function badgeText(n: number) { return n > 99 ? '99+' : String(n); }
+/* The badge is a red disc a screen reader cannot read as anything — so the tab
+   that carries one says the count in its own label: "Inbox, 3 unread messages". */
+function badgeLabel(label: string, n: number) {
+  return n ? label + ', ' + n + (n === 1 ? ' unread message' : ' unread messages') : label;
+}
 
 function readKey() {
   try { return localStorage.getItem('mc-comment-key') || ''; } catch (e) { return ''; }
@@ -326,8 +332,9 @@ class McTabbar extends LitElement {
     const on = this.lit();
     return html`<nav class="mc-tabbar" aria-label="Primary">
       ${visibleTabs().map((t) => html`
-        <a class=${'mc-tab' + (t.hero ? ' mc-tab-hero' : '') + (on === t.key ? ' mc-tab-on' : '')}
-           href=${t.href} aria-label=${t.label} aria-current=${on === t.key ? 'page' : 'false'}>
+        <a class=${'mc-tab' + (on === t.key ? ' mc-tab-on' : '')}
+           href=${t.href} aria-label=${badgeLabel(t.label, t.badge === 'dm' ? this.dm : 0)}
+           aria-current=${on === t.key ? 'page' : 'false'}>
           <span class="mc-tab-ico">${t.icon ? t.icon : ICON[t.svg!]}${t.badge === 'dm' && this.dm
             ? html`<span class="mc-tab-badge">${badgeText(this.dm)}</span>` : ''}</span>
           <span class="mc-tab-lbl">${t.label}</span>
@@ -1439,7 +1446,7 @@ class McSidebar extends LitElement {
           return html`<span class="mc-sb-item mc-tab-on mc-sb-current" aria-current="page" title=${t.label}>${inner}</span>`;
         }
         const cls = 'mc-sb-item' + (lit === t.key ? ' mc-tab-on' : '');
-        return html`<a class=${cls} href=${t.href} aria-label=${t.label} title=${t.label}>${inner}</a>`;
+        return html`<a class=${cls} href=${t.href} aria-label=${badgeLabel(t.label, n)} title=${t.label}>${inner}</a>`;
       })}
     </nav>`;
   }

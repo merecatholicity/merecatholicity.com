@@ -118,7 +118,6 @@ import {
   dmDefaultTtl,
   dmLive,
   dmPair,
-  dmUnreadExists,
   dmUnreadCount,
   dumpDatabase,
   enc,
@@ -1835,7 +1834,7 @@ async function handleDmThreads(request: any, env: any) {
     'SELECT * FROM (' + inner + ') WHERE msgs > 0 ORDER BY last_at DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
   const totals = await env.DB.prepare(
-    'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN unread > 0 THEN 1 ELSE 0 END), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'   // unread_total counts THREADS, as before
+    'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'   // unread_total counts WORDS now (2026-09-11), the same number /dm/unread returns
   ).bind(me).first();
   const threads = (rows.results || []).map((r: any) => Object.assign({}, r,
     { assigned: r.other_hash ? displayName(r.other_hash) : null }));
@@ -1956,8 +1955,10 @@ async function handleDmThread(request: any, env: any, ctx: any) {
     unread: (unreadRow && unreadRow.n) || 0, unread_from: (unreadRow && unreadRow.first_id) || null }, 200);
 }
 
-/* The badge count: unread threads, one indexed COUNT. The client asks at most
-   once per ninety seconds, so this stays cheap on every side. */
+/* The badge count: unread WORDS across every thread (2026-09-11), one summed
+   pass of the same fragment the inbox rows carry — the tab's badge and the row
+   badges now add up, and "3" means three messages waiting, not three threads.
+   The client asks at most once per ninety seconds, so this stays cheap. */
 async function handleDmUnread(request: any, env: any) {
   let data;
   try {
@@ -1977,7 +1978,7 @@ async function handleDmUnread(request: any, env: any) {
   if (gate) return blockedJson(gate);
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1) AND ' + dmUnreadExists(now)
+    'SELECT COALESCE(SUM(' + dmUnreadCount(now) + '), 0) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1)'
   ).bind(me).first();
   return json({ ok: true, unread: row.n || 0 }, 200);
 }

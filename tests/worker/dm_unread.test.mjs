@@ -1,14 +1,15 @@
-/* Unread words, counted and named (2026-09-11): the inbox row's badge is a
- * count, `unread_total` still counts THREADS, the thread tells what was
- * unread BEFORE the open marked it read, and a member who appears offline is
- * not seen typing.
+/* Unread words, counted and named (2026-09-11): every unread number on the site
+ * is WORDS, from one fragment — the inbox row's badge, the inbox total, the tab
+ * bar's badge — the thread tells what was unread BEFORE the open marked it read,
+ * and a member who appears offline is not seen typing.
  *
- * What would break silently: a badge reading "1" for twelve words; the tab's
- * count quietly becoming a message count; the unread line drawn from the
- * post-open stamp (nothing is ever unread after the open); a held, expired or
- * cleared word counted; the typing frame leaking a hidden member's presence.
- * So: the counting fragment and the thread's query run against the real
- * ledger, and drift guards over the handlers and the hub. */
+ * What would break silently: a badge reading "1" for twelve words; the tab badge
+ * and the row badges disagreeing because one counts threads and the other counts
+ * words; the unread line drawn from the post-open stamp (nothing is ever unread
+ * after the open); a held, expired or cleared word counted; the typing frame
+ * leaking a hidden member's presence. So: the counting fragment, the thread's
+ * query and the tab badge's own query all run against the real ledger, and drift
+ * guards stand over the handlers and the hub. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -68,11 +69,35 @@ test('the counting fragment counts exactly the unheld, unexpired, uncleared word
   db.close();
 });
 
-test('the inbox rows carry the count, and unread_total still counts THREADS', () => {
+test('the inbox rows carry the count, and unread_total sums those same words', () => {
   const t = body('handleDmThreads');
   assert.ok(/dmUnreadCount\(now\) \+ ' AS unread '/.test(t), 'the row\'s unread is the count');
-  assert.ok(/SUM\(CASE WHEN unread > 0 THEN 1 ELSE 0 END\)/.test(t), 'the total counts threads with something unread, as the tab badge always did');
-  assert.ok(!/CASE WHEN ' \+ dmUnreadExists\(now\)/.test(t), 'the old flag is gone from the rows');
+  assert.ok(/COALESCE\(SUM\(unread\), 0\) AS unread/.test(t), 'the total adds the rows up — words, not threads');
+  assert.ok(!/SUM\(CASE WHEN unread > 0 THEN 1 ELSE 0 END\)/.test(t), 'the old thread tally is gone');
+});
+
+/* The tab bar's badge (2026-09-11): the same words, summed across every thread,
+   so "3" on the Inbox tab means three messages waiting — and equals what the
+   inbox rows add up to. A thread tally here would silently under-report. */
+test('the tab badge counts unread WORDS across all threads, by the inbox\'s own fragment', () => {
+  const t = body('handleDmUnread');
+  assert.ok(!/dmUnreadExists/.test(t) && !/dmUnreadExists/.test(libSrc), 'the thread-flag fragment is gone entirely');
+  const m = t.match(/'([^']*)' \+ dmUnreadCount\(now\) \+ '([^']*)'/);
+  assert.ok(m, 'the query is the counting fragment, summed');
+  const sql = m[1] + dmUnreadCount(dmLive, 2000) + m[2];
+  const db = seeded();
+  /* a second conversation, two unread words in it (and one held, which never counts) */
+  db.exec(`INSERT INTO dm_threads (id, a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (2, '${other}', '${me}', 100, 1700, '${other}', 3)`);
+  const ins = db.prepare('INSERT INTO dms (id, thread_id, sender_hash, body, created_at, held, expires_at) VALUES (?, 2, ?, ?, ?, ?, NULL)');
+  ins.run(7, other, 'unread', 1650, null);
+  ins.run(8, other, 'unread as well', 1700, null);
+  ins.run(9, other, 'held — never counts', 1700, 1);
+  assert.equal(db.prepare(sql).get(me).n, 4, 'two words in one thread plus two in the other — not "2 threads"');
+  db.exec('UPDATE dm_threads SET a_read_at = 1700 WHERE id = 1');
+  assert.equal(db.prepare(sql).get(me).n, 2, 'reading one conversation leaves the other\'s two');
+  db.exec(`UPDATE dm_threads SET b_read_at = 1700 WHERE id = 2`);
+  assert.equal(db.prepare(sql).get(me).n, 0, 'all read: no badge');
+  db.close();
 });
 
 test('the thread names what was unread BEFORE the open marks it read: the count and the first unread id', () => {

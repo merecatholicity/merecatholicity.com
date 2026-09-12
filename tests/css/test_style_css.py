@@ -412,5 +412,37 @@ class AHoldPicksAMessageNeverAWord(unittest.TestCase):
                          "the app bar / tab bar lost their user-select:none under (hover: none)")
 
 
+class SixEqualTabsInTheBottomBar(unittest.TestCase):
+    """The bottom bar is six equal tabs (2026-09-11, the owner's ask): Community
+    is no longer a raised hero, and no tab may steal its neighbours' width.
+
+    What breaks silently: `flex: 1` alone keeps the default `min-width: auto`, so
+    the longest label ("Community", 61px) refuses to shrink and the bar goes
+    crooked on a narrow phone — 61px against 49px at a 320px device width, with
+    nothing red anywhere. The label must also never wrap: a second line breaks
+    the bar's fixed height."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+
+    def test_every_tab_is_an_equal_slot_that_may_shrink(self):
+        tab = re.search(r"\.mc-tab\{([^}]*)}", self.css)
+        self.assertIsNotNone(tab, "no .mc-tab rule in the build")
+        self.assertIn("flex:1 1 0", tab.group(1), "the tabs must share the bar equally, from a zero basis")
+        self.assertIn("min-width:0", tab.group(1), "without this the widest label eats its neighbours' width")
+
+    def test_the_label_scales_and_never_wraps(self):
+        lbl = re.search(r"\.mc-tab-lbl\{([^}]*)}", self.css)
+        self.assertIsNotNone(lbl, "no .mc-tab-lbl rule in the build")
+        self.assertIn("white-space:nowrap", lbl.group(1))
+        self.assertIn("text-overflow:ellipsis", lbl.group(1), "clip the longest word, never wrap it")
+        self.assertRegex(self.css, r"\.mc-tab\{[^}]*font-size:clamp\(",
+                         "the label size must follow the viewport so it fits the slot on a narrow phone")
+
+    def test_the_raised_hero_is_gone(self):
+        self.assertNotIn("mc-tab-hero", self.css,
+                         "the raised centre hero came back — six equal tabs is the rule")
+
+
 if __name__ == "__main__":
     unittest.main()

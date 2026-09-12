@@ -876,19 +876,13 @@ export const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1)";
    appended to any DM query without shifting the numbered binds. */
 export function dmLive(now: any) { return '(m.expires_at IS NULL OR m.expires_at > ' + Math.floor(Number(now) || 0) + ')'; }
 
-/* Unread, per viewer: an unheld, unexpired message from someone else, newer than
-   my read stamp. Held and expired messages never trip the recipient's badge. */
-/* The same words, counted — the inbox row's badge and the thread's unread line
-   (2026-09-11). Held, cleared and expired words never count. */
+/* Unread, per viewer, COUNTED: unheld, unexpired, uncleared words from someone
+   else, newer than my read stamp. The one fragment behind every unread number —
+   the inbox row's badge, the inbox total, the thread's unread line, and the tab
+   bar's badge (2026-09-11) — so they can never disagree. Held, cleared and
+   expired words never count, and so never trip the recipient's badge. */
 export function dmUnreadCount(now: any) {
   return '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
-    'AND m.sender_hash != ?1 ' +
-    'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0) ' +
-    'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0) ' +
-    'AND ' + dmLive(now) + ')';
-}
-export function dmUnreadExists(now: any) {
-  return 'EXISTS(SELECT 1 FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
     'AND m.sender_hash != ?1 ' +
     'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0) ' +
     'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0) ' +
