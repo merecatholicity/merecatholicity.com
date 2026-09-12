@@ -99,7 +99,7 @@ function stopSound(name: string) {
    can assert it; ONE per page lifetime (the shell never reboots). */
 function freshCall() {
   return { state: 'Idle', reason: '', id: '', peer: '', peerLabel: '', dir: '',
-    pc: null as any, stream: null as any, pendingSdp: '', iceIn: [] as any[], iceOut: [] as any[],
+    pc: null as any, stream: null as any, pendingSdp: '', iceIn: [] as any[], iceOut: [] as any[], iceAll: [] as any[], late: false,
     iceT: 0 as any, ringT: 0 as any, setupT: 0 as any, tickT: 0 as any, graceT: 0 as any,
     idleT: 0 as any, lastVoice: 0, startedAt: 0, muted: false };
 }
@@ -211,6 +211,7 @@ export function installCall() {
   }
   function cleanup() {
     stopSound('ring');   // every teardown path silences the ring
+    if (window.mcHaptic) window.mcHaptic.ringStop();
     clearTimers();
     try { if (CALL.pc) CALL.pc.close(); } catch (e) { /* already */ }
     CALL.pc = null;
@@ -218,14 +219,26 @@ export function installCall() {
     CALL.stream = null; CALL.muted = false;
     const au: any = document.getElementById('mc-call-audio');
     if (au) { try { au.srcObject = null; } catch (e) { /* fine */ } }
-    CALL.iceIn = []; CALL.iceOut = []; CALL.pendingSdp = '';
+    CALL.iceIn = []; CALL.iceOut = []; CALL.iceAll = []; CALL.pendingSdp = ''; CALL.late = false;
+  }
+  /* The outcome, told to the server (2026-09-12): the caller's no-answer or
+     cancel records the MISS (the thread's line, the bell, the push); every
+     other end only stamps the stored offer so the hourly backstop never
+     counts a call that ended in front of both. Fire-and-forget. */
+  function report(reason: string) {
+    if (!myKey || !CALL.id || !CALL.peer) return;
+    post('/call/end', { key: myKey, call: CALL.id, to: CALL.peer, reason }).catch(() => { /* the sweep is the backstop */ });
   }
   function end(ev: string, sendEnd?: boolean) {
     /* A CONNECTED call ending is audible on BOTH sides (the local hang-up and
        the remote 'end' signal both come through here); declines, timeouts, and
        failed setups stay silent — the ring stopping is their signal. */
     const wasActive = CALL.state === 'Active';
+    const was = CALL.state;
     if (sendEnd && CALL.peer && CALL.id) sig(CALL.peer, { call: CALL.id, kind: 'end' });
+    if (CALL.dir === 'out' && was === 'Outgoing') report(ev === 'Timeout' ? 'noanswer' : ev === 'HangUp' ? 'canceled' : ev === 'RemoteDecline' ? 'declined' : ev === 'RemoteBusy' ? 'declined' : 'failed');
+    else if (ev === 'LocalDecline') report('declined');
+    else if (sendEnd && (was === 'Active' || was === 'Connecting')) report('hangup');
     step(ev);
     cleanup();
     if (wasActive) playSound('end');
@@ -241,7 +254,9 @@ export function installCall() {
     const pc: any = new (window as any).RTCPeerConnection({ iceServers: servers });
     CALL.pc = pc;
     pc.onicecandidate = (ev: any) => {
-      CALL.iceOut.push(ev.candidate ? JSON.parse(JSON.stringify(ev.candidate)) : { eoc: true });
+      const c = ev.candidate ? JSON.parse(JSON.stringify(ev.candidate)) : { eoc: true };
+      CALL.iceOut.push(c);
+      CALL.iceAll.push(c);   // kept: a late answer (the push woke the callee) re-sends them all
     };
     pc.ontrack = (ev: any) => {
       const au = audioEl();
@@ -369,7 +384,7 @@ export function installCall() {
             return pc.createAnswer();
           })
           .then((a: any) => pc.setLocalDescription(a))
-          .then(() => post('/call/answer', { key: myKey, to: CALL.peer, call: id, sdp: pc.localDescription.sdp }))
+          .then(() => post('/call/answer', { key: myKey, to: CALL.peer, call: id, sdp: pc.localDescription.sdp, late: CALL.late ? 1 : 0 }))
           .then((d: any) => {
             if (CALL.state !== 'Connecting' || CALL.id !== id) return;
             if (!d || !d.ok) { end('Failure', true); return; }
@@ -408,10 +423,11 @@ export function installCall() {
     }
     ensureStyles(); ensureUi();
     CALL.dir = 'in'; CALL.peer = m.from; CALL.id = m.call; CALL.pendingSdp = m.sdp;
-    CALL.iceIn = []; CALL.iceOut = []; CALL.reason = '';
+    CALL.iceIn = []; CALL.iceOut = []; CALL.iceAll = []; CALL.reason = ''; CALL.late = !!m.late;
     CALL.peerLabel = label(m.from);
     step('Ring');
     playSound('ring', true);   // looped while the Incoming panel stands; every exit stops it
+    if (window.mcHaptic) window.mcHaptic.ringStart();   // and the phone buzzes like one (where it can)
     fetchNick(m.from, m.call);
     CALL.ringT = setTimeout(() => {
       if (CALL.state === 'Incoming' && CALL.id === m.call) end('Timeout');
@@ -425,6 +441,10 @@ export function installCall() {
     const pc = CALL.pc;
     if (!pc) { end('Failure', true); return; }
     step('RemoteAnswer');
+    /* A late answer — the callee took the offer from the store, woken by the
+       push — never saw the candidates that went out to no socket: send them
+       all again (a duplicate is a no-op for the other side). */
+    if (m.late) { CALL.iceOut = CALL.iceAll.slice(); flushIce(); }
     pc.setRemoteDescription({ type: 'answer', sdp: m.sdp })
       .then(() => { CALL.iceIn.splice(0).forEach((c: any) => addRemoteIce(pc, c)); })
       .catch(() => end('Failure', true));
@@ -516,6 +536,30 @@ export function installCall() {
 
   ensureMember();
   if (CALL.state !== 'Idle') { ensureStyles(); render(); }
+  /* Woken by the ring's push (2026-09-12): the app opens on the thread with
+     the call's id; the stored offer is fetched and, while the call is still
+     fresh and unanswered, rings an answerable panel — the callee taps Answer
+     as they would have with the app open (the tap is also the gesture the
+     audio needs). Taken elsewhere meanwhile: a word says so; missed already:
+     the thread's own line says so. */
+  function wake() {
+    try {
+      const q = new URLSearchParams(location.search);
+      const call = String(q.get('call') || '');
+      if (!/^[0-9a-f]{16,64}$/.test(call) || !myKey) return;
+      if ((core as any).callInCall(CALL.state)) return;
+      post('/call/pending', { key: myKey, call }).then((d: any) => {
+        if (!d || !d.ok) return;
+        if (d.pending && d.from && d.sdp) { onOffer({ from: d.from, call, sdp: d.sdp, late: true }); return; }
+        if (d.answered && CALL.state === 'Idle') {
+          ensureStyles(); ensureUi();
+          CALL.state = 'Ended'; CALL.reason = 'taken'; CALL.id = call; render();
+          setTimeout(() => { if (CALL.state === 'Ended' && CALL.id === call) { CALL.state = 'Idle'; CALL.reason = ''; CALL.id = ''; render(); } }, 2600);
+        }
+      }).catch(() => { /* the thread's line is the record */ });
+    } catch (e) { /* no URL to read */ }
+  }
+  if (myKey) wake(); else setTimeout(() => { ensureMember(); wake(); }, 300);
   window.mcCall = { place, inCall: () => !!(core as any).callInCall(CALL.state) };
   window.mcSound = { play: playSound, stop: stopSound };   // comments.js rings its bell through this
 }

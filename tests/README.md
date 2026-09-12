@@ -51,7 +51,9 @@ tests/
                        the hold with the reaction, the acts go home on close, the nearest armed
                        node, the kernel before the wire, the phone selection rule), and the profile
                        picture's pop-out (profile_avatar: the theater takes a URL, the avatar is a button),
-                       and the keyboard shackle (keyboard: the shell's net over every field, the lifts)
+                       the keyboard shackle (keyboard: the shell's net over every field, the lifts), and the
+                       answerable ring, the recorded miss and the haptics (calls: the wake, the report, the
+                       service worker's ring, the thread's line, the one haptic engine)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
                        the comments switches and the journal sweep's SQL on real migrations,
@@ -61,7 +63,8 @@ tests/
                        typing gate, and the tab badge's summed count over the ledger (dm_unread);
                        the reactions ledger — 0014's backfill, the bell's SQL run on the ledger,
                        the handlers' visibility rules and the list's joins (reactions); no DM
-                       handler ever screens (dm_privacy);
+                       handler ever screens (dm_privacy); the pending-call store, the miss recorded once on
+                       the ledger, the pending read and the end's rules (call);
                        plus the db builder, calls, media, webpush, the
                        social switch, the Discord bridge)
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,

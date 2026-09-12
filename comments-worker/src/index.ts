@@ -168,7 +168,10 @@ import {
   metaForHash,
   normalizeLinks,
   normalizePage,
-  notifyCall,
+  ringCall,
+  notifyMissedCall,
+  recordMissedCall,
+  sweepCalls,
   notifyDm,
   notifyEnabled,
   notifyPrefsFor,
@@ -2424,9 +2427,11 @@ async function handleDmMediaGet(request: any, env: any) {
    only setup metadata; even a TURN relay carries opaque ciphertext). Setup
    rides these gated POSTs, where the DM privacy rules already live; the
    transient ICE/end/decline words ride the BoardHub 'call-sig' relay
-   (durable.ts). No storage, no call log — the only record is the coalesced
-   missed-call notification. calls_enabled (app_settings) is the global kill
-   switch, enforced here, server-authoritative. */
+   (durable.ts). The offer is KEPT for the ring (calls_pending, 2026-09-12) so
+   a callee reached by the ring's push can fetch it and answer; a miss is
+   recorded once — the thread's line, the coalesced bell, the push. No call
+   log beyond that. calls_enabled (app_settings) is the global kill switch,
+   enforced here, server-authoritative. */
 
 /* Place a call: validate, refuse the bot and self, and enforce dm_blocks with
    FAKE SUCCESS — a blocked caller gets {ok:true} and rings out to silence,
@@ -2456,8 +2461,62 @@ async function handleCallOffer(request: any, env: any, ctx: any) {
      success — "not taking calls" is indistinguishable from "did not pick up". */
   const prefRow = await env.DB.prepare('SELECT calls_ok FROM profiles WHERE hash = ?1').bind(to).first();
   if (prefRow && prefRow.calls_ok === 0) return json({ ok: true }, 200);
+  /* The offer, kept for the ring: a callee whose app is closed is rung by a
+     push and fetches it from here (/call/pending) when the app opens. */
+  await env.DB.prepare(
+    'INSERT OR REPLACE INTO calls_pending (call, from_hash, to_hash, sdp, created_at) VALUES (?1, ?2, ?3, ?4, ?5)'
+  ).bind(call, me, to, sdp, Math.floor(Date.now() / 1000)).run();
   await publishUser(env, [{ v: 1, t: 'call-offer', scopes: ['user:' + to], from: me, call, sdp }]);
-  if (ctx) ctx.waitUntil(notifyCall(env, to, me, call));
+  if (ctx) ctx.waitUntil(ringCall(env, to, me, call));
+  return json({ ok: true }, 200);
+}
+
+/* The stored offer, for the callee the ring's push woke: {key, call} →
+   {ok, pending, from, sdp} while the call is fresh (inside the ring plus the
+   push's own latency), unanswered and not yet missed; {ok, pending:false,
+   answered} once it was taken (on another device, say). Only the callee it
+   was placed to may read it; anyone else gets the empty answer a call that
+   never existed gives. */
+async function handleCallPending(request: any, env: any) {
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const call = String(data.call || '');
+  if (!/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const row = await env.DB.prepare(
+    'SELECT from_hash, sdp, created_at, answered_at, missed_at FROM calls_pending WHERE call = ?1 AND to_hash = ?2'
+  ).bind(call, me).first();
+  const now = Math.floor(Date.now() / 1000);
+  const fresh = !!row && (now - Number(row.created_at)) <= CallK.ringTimeoutSecs + 15;
+  if (!row || row.answered_at || row.missed_at || !fresh) {
+    return json({ ok: true, pending: false, answered: !!(row && row.answered_at) }, 200);
+  }
+  return json({ ok: true, pending: true, from: row.from_hash, sdp: row.sdp, age: now - Number(row.created_at) }, 200);
+}
+
+/* The call's outcome, from the party that saw it end: {key, call, to,
+   reason}. The caller's 'noanswer' (its ring timer) or 'canceled' (it hung up
+   while ringing) records the MISS — once, whatever else is reported after;
+   every other reason ('hangup', 'declined', 'failed', from either party)
+   only stamps the row so the sweep's backstop never counts a call that ended
+   in front of both. Idempotent; a row that is not there is nothing to say. */
+async function handleCallEnd(request: any, env: any, ctx: any) {
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const call = String(data.call || '');
+  const reason = String(data.reason || '');
+  if (!/^[0-9a-f]{16,64}$/.test(call) || ['noanswer', 'canceled', 'hangup', 'declined', 'failed'].indexOf(reason) === -1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const row = await env.DB.prepare('SELECT call, from_hash, to_hash, answered_at, missed_at FROM calls_pending WHERE call = ?1').bind(call).first();
+  if (!row || (row.from_hash !== me && row.to_hash !== me)) return json({ ok: true }, 200);
+  if (row.from_hash === me && (reason === 'noanswer' || reason === 'canceled')) {
+    const rec = recordMissedCall(env, row);
+    if (ctx) ctx.waitUntil(rec); else await rec;
+  } else if (!row.answered_at && !row.missed_at) {
+    /* ended in front of both (or declined, or failed): not a miss, and the
+       sweep must not make it one */
+    await env.DB.prepare('UPDATE calls_pending SET answered_at = ?2 WHERE call = ?1 AND answered_at IS NULL AND missed_at IS NULL').bind(call, Math.floor(Date.now() / 1000)).run();
+  }
   return json({ ok: true }, 200);
 }
 
@@ -2476,12 +2535,18 @@ async function handleCallAnswer(request: any, env: any, ctx: any) {
   const sdp = String(data.sdp || '');
   if (!/^[0-9a-f]{64}$/.test(to) || !/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!sdp || sdp.length > 32768 || sdp.slice(0, 2) !== 'v=') return json({ ok: false, error: 'Bad request.' }, 400);
-  await publishUser(env, [{ v: 1, t: 'call-answer', scopes: ['user:' + to], from: me, call, sdp }]);
+  /* `late`: the callee answered from the stored offer (the push woke them):
+     the caller re-sends every ICE candidate it gathered, which went out to no
+     socket the first time. */
+  await publishUser(env, [{ v: 1, t: 'call-answer', scopes: ['user:' + to], from: me, call, sdp, late: data.late ? 1 : 0 }]);
+  const now = Math.floor(Date.now() / 1000);
+  const stamp = env.DB.prepare('UPDATE calls_pending SET answered_at = ?2 WHERE call = ?1 AND to_hash = ?3 AND answered_at IS NULL').bind(call, now, me).run().catch(() => {});
   if (ctx) {
+    ctx.waitUntil(stamp);
     ctx.waitUntil(env.DB.prepare(
       "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind = 'call' AND actor_hash = ?2 AND read_at IS NULL"
-    ).bind(me, to, Math.floor(Date.now() / 1000)).run().catch(() => {}));
-  }
+    ).bind(me, to, now).run().catch(() => {}));
+  } else await stamp;
   return json({ ok: true }, 200);
 }
 
@@ -5121,6 +5186,8 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/prefs', fn: (request, env, ctx, url) => handlePrefs(request, env) },
   { m: 'POST', p: '/api/comments/call/offer', fn: (request, env, ctx, url) => handleCallOffer(request, env, ctx) },
   { m: 'POST', p: '/api/comments/call/answer', fn: (request, env, ctx, url) => handleCallAnswer(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/call/pending', fn: (request, env, ctx, url) => handleCallPending(request, env) },
+  { m: 'POST', p: '/api/comments/call/end', fn: (request, env, ctx, url) => handleCallEnd(request, env, ctx) },
   { m: 'POST', p: '/api/comments/call/turn', fn: (request, env, ctx, url) => handleCallTurn(request, env) },
   { m: 'POST', p: '/api/comments/dm/block', fn: (request, env, ctx, url) => handleDmBlock(request, env) },
   { m: 'POST', p: '/api/comments/dm/delete', fn: (request, env, ctx, url) => handleDmDelete(request, env) },
@@ -5291,6 +5358,7 @@ export default {
         .then(() => pruneComments(env))
         .then(() => sweepJournalComments(env))
         .then(() => sweepDms(env))
+        .then(() => sweepCalls(env))
         .then(() => pruneNotifications(env))
         .then(() => pruneMerecatChats(env))
         .then(() => sweepWallOrphanMedia(env))

@@ -128,6 +128,7 @@ export function installPtr() {
        be a tap, and swallowing its default can swallow the tap itself. */
     if (stage === 'idle') return;
     armed = true;
+    if ((window as any).mcHaptic) (window as any).mcHaptic.haptic('arm');   // the pull crossed the line: a small buzz (2026-09-12)
     /* Own the gesture: without this the page rubber-bands under the indicator
        (and on Android the browser's own pull-to-refresh fires as well). */
     if (e.cancelable) e.preventDefault();

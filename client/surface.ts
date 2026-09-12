@@ -65,14 +65,18 @@ export function installSurface(B: Boot) {
     if (tok && CUSTOM_EMOJI[tok[1].toLowerCase()]) return emojiImg(CUSTOM_EMOJI[tok[1].toLowerCase()], tok[1].toLowerCase());
     return document.createTextNode(str);
   }
-  /* A short haptic where the device has one. Chrome refuses (and logs an
+  /* A short haptic where the device has one — the shell's engine
+     (app/haptic.ts: the Vibration API on Android, the switch haptic on iOS)
+     when it stands, else the API alone. Chrome refuses (and logs an
      intervention for) a vibrate before the frame's first real tap, so ask
      userActivation first where it exists. */
-  function buzz(ms: number) {
+  function buzz(kind: string) {
     try {
+      var h: any = (window as any).mcHaptic;
+      if (h && h.haptic) { h.haptic(kind); return; }
       var ua: any = (navigator as any).userActivation;
       if (ua && !ua.hasBeenActive) return;
-      if (navigator.vibrate) navigator.vibrate(ms);
+      if (navigator.vibrate) navigator.vibrate(kind === 'hold' ? 12 : kind === 'arm' ? 8 : 6);
     } catch (e) { /* fine */ }
   }
   /* Open the surface over `node`. spec:
@@ -130,7 +134,7 @@ export function installSurface(B: Boot) {
         b.appendChild(reactionNode(e));
         b.title = e === current ? 'Remove your reaction' : 'React ' + e;
         b.setAttribute('aria-label', b.title);
-        b.addEventListener('click', function () { closeActs(); react.onPick(e); });
+        b.addEventListener('click', function () { buzz('pick'); closeActs(); react.onPick(e); });
         bar.appendChild(b);
       });
       more = el('button', 'dm-act-emoji dm-act-more', '+');
@@ -229,6 +233,7 @@ export function installSurface(B: Boot) {
     if (more) {
       more.addEventListener('click', function () {
         var panel = buildEmojiPanel(null, function (it: any) {
+          buzz('pick');
           closeActs();
           react.onPick(it.kind === 'img' ? ':' + it.code + ':' : it.char);
         });
@@ -296,7 +301,7 @@ export function installSurface(B: Boot) {
       cancelHold();
       lpT = setTimeout(function () {
         lpT = 0; held = true;
-        buzz(12);
+        buzz('hold');
         open(null);
       }, 430);
     }, { passive: true });
@@ -311,7 +316,9 @@ export function installSurface(B: Boot) {
       }
       dx = Math.max(0, Math.min(72, mx - 24));
       node.style.transform = 'translateX(' + dx + 'px)';
-      node.classList.toggle('dm-swipe-armed', dx >= 48);
+      var arm = dx >= 48;
+      if (arm && !node.classList.contains('dm-swipe-armed')) buzz('arm');   // the swipe crossed the line
+      node.classList.toggle('dm-swipe-armed', arm);
     }, { passive: true });
     function endTouch() {
       cancelHold();
@@ -323,7 +330,7 @@ export function installSurface(B: Boot) {
       swiping = false;
       node.classList.remove('dm-swiping'); node.classList.remove('dm-swipe-armed');
       node.style.transform = '';
-      if (fire) { buzz(8); o.swipe(); }
+      if (fire) o.swipe();
     }
     node.addEventListener('touchend', endTouch, { passive: true });
     node.addEventListener('touchcancel', endTouch, { passive: true });
@@ -405,7 +412,7 @@ export function installSurface(B: Boot) {
       chip.appendChild(el('span', 'mc-react-n', String(c.n)));
       chip.title = (c.e === mine ? 'You reacted ' + c.e + ' — tap to remove' : 'React ' + c.e);
       chip.setAttribute('aria-label', c.n + (c.n === 1 ? ' reaction ' : ' reactions ') + c.e + (c.e === mine ? ', yours' : ''));
-      chip.addEventListener('click', function (e: any) { e.preventDefault(); e.stopPropagation(); reactSend(target, id, c.e); });
+      chip.addEventListener('click', function (e: any) { e.preventDefault(); e.stopPropagation(); buzz('pick'); reactSend(target, id, c.e); });
       attachWho(chip, target, id);
       host.appendChild(chip);
     });

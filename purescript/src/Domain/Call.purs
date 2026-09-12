@@ -110,9 +110,13 @@ inCall st = case st of
   Active -> true
   _ -> false
 
--- | How long an unanswered call rings, both sides.
+-- | The ring: 45 s (2026-09-12; 30 before). A callee whose app is closed is
+-- | reached by a push and needs the seconds to unlock, open and answer — the
+-- | window WhatsApp gives (~60 s) less the caller's patience. Both sides run
+-- | it: the caller's ringback ends with "no answer", the callee's panel with
+-- | "missed", the same instant.
 ringTimeoutSecs :: Int
-ringTimeoutSecs = 30
+ringTimeoutSecs = 45
 
 -- | How long Connecting may take before the watchdog calls it failed.
 setupTimeoutSecs :: Int

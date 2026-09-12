@@ -322,9 +322,25 @@ success; the remedy is block, the Signal semantic):
 by the caller, sdp `v=`-prefixed ≤32 KB; refuses self/bot; **a dm_blocks row
 answers a fake `{ok:true}`** — the caller rings out to silence,
 indistinguishable; else fans `{t:'call-offer', from, call, sdp}` to
-`user:<to>` and fires the coalesced `'call'` notification + a Web-Push nudge
-when the callee has no live socket). `POST /call/answer {key, to, call, sdp}`
-(symmetric; also read-marks the caller's missed-call row, targeted).
+`user:<to>`, STORES the offer for the ring (`calls_pending`, 2026-09-12) and,
+when the callee has no live socket, rings their phone by Web Push — `{kind:
+'call', tag:'call:<from>'}`, URL `messages.html?dm=<from>&call=<id>` — so the
+app can fetch the offer and ring an answerable panel). `POST /call/answer
+{key, to, call, sdp, late?}` (symmetric; `late:1` says the callee answered
+from the stored offer, and the caller re-sends every ICE candidate; stamps
+the row answered; read-marks any missed-call row from that caller, targeted).
+`POST /call/pending {key, call}` (READ_LIMIT) → `{ok, pending:true, from,
+sdp, age}` for the callee while the call is fresh (the ring + 15 s), untaken
+and not yet missed, else `{ok, pending:false, answered}`; anyone else gets
+the empty answer. `POST /call/end {key, call, to, reason}` — `reason` one of
+`noanswer` · `canceled` · `hangup` · `declined` · `failed`: the CALLER's
+`noanswer`/`canceled` records the MISS once (the thread's line `call:missed`,
+a quiet system DM the client draws as "Missed voice call" / "Voice call · No
+answer"; the coalesced `'call'` bell; a `{kind:'call-missed'}` push replacing
+the ring's by its tag, when the callee is away); every other reason only
+stamps the row so the hourly `sweepCalls` backstop (two minutes on, no push)
+never counts a call that ended in front of both. The bell rings ONLY for a
+missed call now — never at the offer.
 `POST /call/turn {key}` (READ_LIMIT + established) → `{ok, iceServers, relay}`
 — short-TTL Cloudflare TURN credentials when the TURN key pair AND the
 `calls_turn` admin toggle stand, else the free STUN-only fallback
@@ -333,7 +349,9 @@ rides the live socket's `t:'call-sig'` frame `{to, call, kind, payload}` —
 relayed to `user:<to>` tagged with the authenticated sender, ≤4 KB, no
 storage. `GET /config` serves `calls:{enabled}`; app_settings `calls_enabled`
 (global kill switch, server-enforced) and `calls_turn` are admin-set in
-`/admin/settings`. Notification kind `'call'` (migration 0009).
+`/admin/settings`. Notification kind `'call'` (migration 0009); the pending-call
+store `calls_pending` (migration 0015: call PK, from_hash, to_hash, sdp,
+created_at, answered_at, missed_at — a day's rows, not a call log).
 
 ### Reactions (2026-09-12)
 

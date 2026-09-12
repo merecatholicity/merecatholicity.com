@@ -69,8 +69,8 @@ test('inCall: Outgoing/Incoming/Connecting/Active occupy the line; Idle/Ended do
   assert.equal(Call.inCall(Call.Ended.create('hangup')), false, 'Ended');
 });
 
-test('timeouts: 30 s ring, 20 s setup watchdog', () => {
-  assert.equal(Call.ringTimeoutSecs, 30);
+test('timeouts: 45 s ring (a pushed callee needs the seconds to open and answer), 20 s setup watchdog', () => {
+  assert.equal(Call.ringTimeoutSecs, 45);
   assert.equal(Call.setupTimeoutSecs, 20);
 });
 

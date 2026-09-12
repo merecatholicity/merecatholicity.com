@@ -683,6 +683,12 @@ export function installDm(B: Boot) {
           try { var ev = JSON.parse(dmDecrypt(m.body, ctx.otherPub) || 'null'); if (ev) { m._env = ev; m.reply = dmReplyClean(ev.reply); cap = ev.caption || ''; } } catch (x2) { cap = ''; }
         }
         node = dmMediaExpiredNode(m, ctx, cap);
+      } else if (e === 2 && String(m.body || '') === 'call:missed') {
+        /* A missed call's line (2026-09-12): the system word the worker writes
+           into the thread when a call went unanswered, drawn by side — the
+           caller's "no answer", the callee's "missed". A line, not a bubble:
+           no surface, no pill, nothing to reply to. */
+        return dmCallLine(m);
       } else {
         var sysLabel = null;
         if (e === 1) { var pt = dmParseText(dmDecrypt(m.body, ctx.otherPub) || '⚠️ could not decrypt'); m.body = pt.text; m.reply = pt.reply; }
@@ -692,6 +698,17 @@ export function installDm(B: Boot) {
     }
     dmArmMessage(m, node, ctx);
     return node;
+  }
+  function dmCallLine(m: any) {
+    var mine = m.sender_hash === state.myHash;   // I placed it
+    var line = el('div', 'dm-call-line');
+    if (m.id) line.setAttribute('data-dmid', String(m.id));
+    line.appendChild(el('span', 'dm-call-ico', '📞'));
+    line.appendChild(el('span', 'dm-call-text', mine ? 'Voice call · No answer' : 'Missed voice call'));
+    var t = el('span', 'dm-call-time', dmTimeLabel(m.created_at));
+    t.title = fmtDateTime(m.created_at);
+    line.appendChild(t);
+    return line;
   }
   function dmArmMessage(m: any, node: any, ctx: any) {
     dmSavedPaint(m, node);
@@ -876,6 +893,10 @@ export function installDm(B: Boot) {
       '.dm-reply-x{flex:none;font:inherit;background:none;border:0;cursor:pointer;color:var(--faint);font-size:1.1em;padding:.2em .45em;border-radius:6px}' +
       '.dm-reply-x:hover{color:var(--maroon,#8b1a1a)}' +
       '.dm-edit-bar{border-left-color:var(--dm-saved,#d9a520)}' +
+      /* a missed call's line: centred, quiet, a pill of its own */
+      '.dm-call-line{display:flex;width:fit-content;max-width:92%;align-items:center;gap:.4em;margin:.45em auto;padding:.3em .8em;border:1px solid var(--rule);border-radius:999px;background:color-mix(in srgb,var(--ink,#000) 5%,transparent);color:var(--faint);font-size:.85em;line-height:1.2}' +
+      '.dm-call-line .dm-call-text{color:var(--ink)}' +
+      '.dm-call-line .dm-call-time{opacity:.8}' +
       /* the chat screen: a sticky header over the words, a sticky composer under them */
       '.dm-head{position:sticky;top:0;z-index:38;display:flex;align-items:center;gap:.65rem;padding:.45rem 0;margin:0 0 .3rem;background:var(--surface,#fff);border-bottom:1px solid var(--rule)}' +
       'body.mc-app .dm-head{top:var(--mc-deskbar-h,0px)}' +
@@ -1591,6 +1612,7 @@ export function installDm(B: Boot) {
         var receipts: any[] = [];
         function addReceipt(node: any, m: any) {
           if (String(m.sender_hash) !== state.myHash) return;
+          if (node.classList && node.classList.contains('dm-call-line')) return;   // a call's line is not a sent word: no receipt
           if (state.prefs && state.prefs.receipts === 'off') return;   // reciprocal: I send none AND see none
           var seen = !!m.opened_at;
           var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : ''), seen ? '✓✓' : '✓');

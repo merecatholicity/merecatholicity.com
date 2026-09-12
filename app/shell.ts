@@ -34,6 +34,7 @@ import * as core from './core.ts';
 import { installLive } from './live.ts';
 import { installCall } from './call.ts';
 import { installPtr } from './ptr.ts';
+import { installHaptic } from './haptic.ts';
 import { installChrome } from './appchrome.ts';
 import './richtext.js';
 import './views/board.js';
@@ -328,6 +329,7 @@ customElements.define('mc-audio-dock', McAudioDock);
 
   /* Live updates: the shell-owned WebSocket to the board hub (window.mcLive).
      Forum views subscribe on mount; idle tabs close it and reopen on return. */
+  installHaptic();   // the page's one haptic engine, before anything that buzzes
   installLive();
 
   /* Voice calls: the shell-owned engine (banner/answer/decline on ANY page —

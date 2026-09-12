@@ -604,17 +604,42 @@ export async function notifyDm(env: any, toHash: any, fromHash: any) {
   }
 }
 
-/* The missed-call bell (notifyDm's sibling): one coalesced UNREAD 'call' row
-   per (recipient, caller) — a ring-burst never piles up rows — plus the live
-   badge ping, and a Web Push nudge ONLY when the callee has no live socket
-   (presenceOf; an open tab already rings over the wire, and the push is the
-   loudest bell). Rides the notify_dm pref in v1 — calls are the DM circle's
-   loudest form, and a dedicated notify_call pref is one profiles column away.
-   The push carries no names (the DM-push privacy idiom); its URL lands on the
-   conversation with the missed-call record — never an answerable ring (the
-   offer is transient). A ring must never fail because its bell did, so this
-   never throws out. */
-export async function notifyCall(env: any, toHash: any, fromHash: any, callId: any) {
+/* The ring's push (2026-09-12; the missed-call bell moved to the miss): when
+   the callee has no live socket (presenceOf — an open tab already rings over
+   the wire), their phone is rung by a Web Push whose URL opens the thread WITH
+   the call's id, so the app can fetch the stored offer (/call/pending) and
+   ring an answerable panel — "swipe open and answer", as far as a web app on
+   a phone can go (no CallKit exists for the web; the system notification IS
+   the swipe). The push carries no names (the DM-push privacy idiom) and a
+   tag per caller, so the miss's push replaces it rather than piling up. Rides
+   the notify_dm pref. A ring must never fail because its push did. */
+export async function ringCall(env: any, toHash: any, fromHash: any, callId: any) {
+  try {
+    if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
+    const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
+    if (!notifyEnabled(pref, 'dm')) return;
+    let online = false;
+    try {
+      /* presenceOf returns the ONLINE SUBSET as an array. */
+      const p = await env.HUB.get(env.HUB.idFromName('board')).presenceOf([toHash]);
+      online = Array.isArray(p) ? p.indexOf(toHash) !== -1 : false;
+    } catch (e) { /* hub unreachable => treat as away, send the push */ }
+    if (!online) {
+      await deliverPush(env, [toHash], { kind: 'call', title: 'Incoming call', body: 'Someone is calling you — tap to answer',
+        url: '/messages.html?dm=' + fromHash + '&call=' + String(callId || ''), tag: 'call:' + fromHash });
+    }
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'ring_call_failed', error: String(e) }));
+  }
+}
+
+/* The missed-call bell (notifyDm's sibling), rung ONLY for a call that was
+   missed (2026-09-12; it used to ring at the offer, so an answered call left
+   a read row behind): one coalesced UNREAD 'call' row per (recipient,
+   caller) — a ring-burst never piles up rows — plus the live badge ping, and
+   a Web Push ("Missed call", replacing the ring's push by its tag) only when
+   the callee has no live socket. Never throws out. */
+export async function notifyMissedCall(env: any, toHash: any, fromHash: any, opts?: { late?: boolean }) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
@@ -629,18 +654,52 @@ export async function notifyCall(env: any, toHash: any, fromHash: any, callId: a
       await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
         kind: 'call', topic_id: 0, comment_id: 0, actor_hash: fromHash, created_at: now }]);
     }
+    if (opts && opts.late) return;   // the sweep's backstop: the record, never an hour-late buzz
     let online = false;
     try {
-      /* presenceOf returns the ONLINE SUBSET as an array. */
       const p = await env.HUB.get(env.HUB.idFromName('board')).presenceOf([toHash]);
       online = Array.isArray(p) ? p.indexOf(toHash) !== -1 : false;
-    } catch (e) { /* hub unreachable => treat as away, send the nudge */ }
+    } catch (e) { /* away */ }
     if (!online) {
-      await deliverPush(env, [toHash], { kind: 'call', title: 'Incoming call',
-        body: 'Someone is calling you', url: '/messages.html?dm=' + fromHash + '&call=' + String(callId || '') });
+      await deliverPush(env, [toHash], { kind: 'call-missed', title: 'Missed call', body: 'You missed a call',
+        url: '/messages.html?dm=' + fromHash, tag: 'call:' + fromHash });
     }
   } catch (e) {
-    console.log(JSON.stringify({ event: 'notify_call_failed', error: String(e) }));
+    console.log(JSON.stringify({ event: 'notify_missed_call_failed', error: String(e) }));
+  }
+}
+
+/* Record a miss, ONCE per call (the stamp is the lock: a second caller
+   report, or the sweep after it, changes nothing): the thread's own line
+   (`call:missed`, a system word the client draws as "Missed voice call" /
+   "Voice call · No answer" by side — quiet, the bell below is its bell), the
+   coalesced 'call' bell, and the push. The pending row stays, stamped, for
+   the day's idempotency; the sweep clears it. */
+export async function recordMissedCall(env: any, row: { call: string; from_hash: string; to_hash: string }, opts?: { late?: boolean }) {
+  const now = Math.floor(Date.now() / 1000);
+  const r = await env.DB.prepare(
+    'UPDATE calls_pending SET missed_at = ?2 WHERE call = ?1 AND missed_at IS NULL AND answered_at IS NULL'
+  ).bind(row.call, now).run();
+  if (!(r.meta && r.meta.changes > 0)) return false;
+  try { await sendSystemDm(env, row.from_hash, row.to_hash, 'call:missed', { quiet: true }); } catch (e) { console.log(JSON.stringify({ event: 'missed_call_line_failed', error: String(e) })); }
+  await notifyMissedCall(env, row.to_hash, row.from_hash, opts);
+  return true;
+}
+
+/* The hourly backstop: a call neither answered nor reported missed two
+   minutes on (the caller's app died mid-ring) is recorded missed — the line
+   and the bell, no push (an hour late is no ring) — and the day's rows go. */
+export async function sweepCalls(env: any) {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const stale = await env.DB.prepare(
+      'SELECT call, from_hash, to_hash FROM calls_pending WHERE created_at < ?1 AND answered_at IS NULL AND missed_at IS NULL LIMIT 200'
+    ).bind(now - 120).all();
+    for (const row of (stale.results || [])) await recordMissedCall(env, row, { late: true });
+    const r = await env.DB.prepare('DELETE FROM calls_pending WHERE created_at < ?1').bind(now - 86400).run();
+    console.log(JSON.stringify({ event: 'calls_sweep', missed: (stale.results || []).length, deleted: (r.meta && r.meta.changes) || 0 }));
+  } catch (e) {
+    console.log(JSON.stringify({ event: 'calls_sweep_failed', error: String(e) }));
   }
 }
 
@@ -1230,7 +1289,7 @@ export async function sendDiscord(hookUrl: any, embed: any): Promise<void> {
    recipient does NOT refuse the send: the message is stored held, reads as
    delivered to its sender, and stays invisible to the recipient until an
    unblock releases it. The blocked party is never told. */
-export async function sendSystemDm(env: any, fromHash: any, toHash: any, body: any) {
+export async function sendSystemDm(env: any, fromHash: any, toHash: any, body: any, opts?: { quiet?: boolean }) {
   if (!fromHash || !toHash || fromHash === toHash || !body) return false;
   const [a, b] = dmPair(fromHash, toHash);
   const now = Math.floor(Date.now() / 1000);
@@ -1249,8 +1308,10 @@ export async function sendSystemDm(env: any, fromHash: any, toHash: any, body: a
   /* Nudge the recipient's own connections (badge + open thread) like any DM. */
   await publishUser(env, [{ v: 1, t: 'dm', scopes: ['user:' + toHash], from: fromHash, thread_id: thread.id,
     message: { id: (msg && msg.id) || 0, sender_hash: fromHash, body: body, created_at: now, enc: 2 } }]);
-  /* A system DM (e.g. a topic-move notice) is notification-worthy too. */
-  await notifyDm(env, toHash, fromHash);
+  /* A system DM (e.g. a topic-move notice) is notification-worthy too —
+     unless the caller rings its own bell (the missed-call line rides the
+     'call' bell, never a second 'dm' one). */
+  if (!(opts && opts.quiet)) await notifyDm(env, toHash, fromHash);
   return true;
 }
 

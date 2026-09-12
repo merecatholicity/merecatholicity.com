@@ -255,16 +255,30 @@ self.addEventListener('push', function (event) {
     icon: 'icon-192.png',
     badge: 'icon-192.png',
     tag: d.tag || undefined,
-    data: { url: d.url || '/community.html' },
+    renotify: !!d.tag,   // a replacement (the miss over the ring) is heard again
+    data: { url: d.url || '/community.html', kind: d.kind || '' },
   };
+  /* A ring (2026-09-12): stands until touched, buzzes like a phone, and offers
+     Answer where the platform draws actions (Android; iOS shows the body and
+     opens on a tap — the tap IS the swipe, and the app rings an answerable
+     panel from the stored offer). A miss buzzes once. */
+  if (d.kind === 'call') {
+    opts.requireInteraction = true;
+    opts.vibrate = [300, 150, 300, 150, 300];
+    opts.actions = [{ action: 'answer', title: 'Answer' }];
+  } else if (d.kind === 'call-missed') {
+    opts.vibrate = [200];
+  }
   event.waitUntil(self.registration.showNotification(title, opts));
 });
 
 /* Tapping a notification focuses an existing tab (navigating it to the deep link)
-   or opens a new one. */
+   or opens a new one. The ring's Answer action opens the same deep link,
+   marked, so the app lands straight on the answer. */
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
   var url = (event.notification.data && event.notification.data.url) || '/community.html';
+  if (event.action === 'answer') url += (url.indexOf('?') === -1 ? '?' : '&') + 'answer=1';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (cs) {
       for (var i = 0; i < cs.length; i++) {
