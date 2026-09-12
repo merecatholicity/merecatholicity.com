@@ -58,7 +58,8 @@ tests/
                        count and the thread's pre-open unread query RUN on the ledger, the hub's
                        typing gate, and the tab badge's summed count over the ledger (dm_unread);
                        the reactions ledger — 0014's backfill, the bell's SQL run on the ledger,
-                       the handlers' visibility rules and the list's joins (reactions);
+                       the handlers' visibility rules and the list's joins (reactions); no DM
+                       handler ever screens (dm_privacy);
                        plus the db builder, calls, media, webpush, the
                        social switch, the Discord bridge)
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
