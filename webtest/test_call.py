@@ -69,9 +69,9 @@ STUN_PATCH = (
 
 
 def click_call_button(f, checks, label):
-    ok = f.wait("!!document.querySelector('.mc-call-btn')", timeout=20)
-    checks.append((label + ': 📞 button renders in the DM header', ok))
-    f.click('.mc-call-btn')
+    ok = f.wait("!!document.querySelector('.dm-head-call, .mc-call-btn')", timeout=20)
+    checks.append((label + ': 📞 button renders in the DM header (.dm-head-call since 2026-09-11; .mc-call-btn in the composer before)', ok))
+    f.click('.dm-head-call, .mc-call-btn')
 
 
 def click_panel_btn(f, text):

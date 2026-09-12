@@ -13,6 +13,7 @@ const PATTERNS: Record<string, number | number[]> = {
 };
 let sw: HTMLInputElement | null = null;
 let ringT: any = 0;
+let buzzed = false;   // a ring pattern actually went to the device (the cancel is only for that)
 
 function canVibrate(): boolean {
   try {
@@ -57,13 +58,18 @@ export function haptic(kind: string): boolean {
 export function ringStart() {
   ringStop();
   if (typeof navigator.vibrate !== 'function') return;
-  const tick = () => { if (canVibrate()) { try { navigator.vibrate(PATTERNS.ring); } catch (e) { /* fine */ } } };
+  const tick = () => { if (canVibrate()) { try { navigator.vibrate(PATTERNS.ring); buzzed = true; } catch (e) { /* fine */ } } };
   tick();
   ringT = setInterval(tick, 2200);
 }
+/* Chrome logs an intervention for ANY vibrate before the frame's first tap —
+   a cancel included (the live call webtest's callee console, 2026-09-12) —
+   so the cancel goes only after a pattern actually went out. */
 export function ringStop() {
   if (ringT) { clearInterval(ringT); ringT = 0; }
-  try { if (typeof navigator.vibrate === 'function') navigator.vibrate(0); } catch (e) { /* fine */ }
+  if (!buzzed) return;
+  buzzed = false;
+  try { if (canVibrate()) navigator.vibrate(0); } catch (e) { /* fine */ }
 }
 export function installHaptic() {
   if ((window as any).mcHaptic) return;
