@@ -941,6 +941,11 @@ export function installDm(B: Boot) {
       '.dm-composer .dm-attach-chip{margin:.1rem 0 .35rem}' +
       '.dm-composer .mc-rec-row{margin:.4rem 0 .1rem}' +
       '@media (max-width:600px){' +
+        /* The chat screen begins where the app bar ends (2026-09-12): the
+           board section's 1rem top margin was a hole between the bar and the
+           header at the TRUE top — invisible while the thread is scrolled
+           (the sticky header hides it), bared by a fling that reaches 0. */
+        'body.mc-app section.comments.board.dm-screen{margin-top:0}' +
         'body.mc-app .dm-head{top:calc(var(--mc-appbar-h,3rem) + env(safe-area-inset-top,0px));margin-left:calc(-1 * var(--page-pad,.8rem));margin-right:calc(-1 * var(--page-pad,.8rem));padding-left:var(--page-pad,.8rem);padding-right:var(--page-pad,.8rem)}' +
         'body.mc-app .dm-head-name{display:none}' +   /* the app bar carries the name on phones */
         '.dm-composer{padding-left:var(--page-pad,.8rem);padding-right:var(--page-pad,.8rem)}' +

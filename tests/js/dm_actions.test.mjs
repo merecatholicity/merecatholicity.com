@@ -157,6 +157,8 @@ test('the conversation is a chat screen: the header sticks, the composer is fixe
   assert.ok(/\.dm-head\{position:sticky;top:0/.test(dmCss), 'the header is sticky');
   assert.ok(/body\.mc-app \.dm-head\{top:var\(--mc-deskbar-h/.test(dmCss), 'under the desktop bar');
   assert.ok(/body\.mc-app \.dm-head\{top:calc\(var\(--mc-appbar-h/.test(dmCss), 'under the phone app bar');
+  assert.ok(/body\.mc-app section\.comments\.board\.dm-screen\{margin-top:0\}/.test(dmCss),
+    'and nothing between them at the true top: the board section\'s 1rem margin is a hole a fling to 0 bares (2026-09-12)');
   /* Fixed, never sticky: a thread opens at the document's end, where a sticky
      bar sits in its natural place above the tab-bar reservation and the footer
      and floats a gap over the tab bar until a scroll re-sticks it. */
