@@ -66,7 +66,8 @@ tests/
                        the handlers' visibility rules and the list's joins (reactions); no DM
                        handler ever screens (dm_privacy); the pending-call store, the miss recorded once on
                        the ledger, the pending read and the end's rules (call); the read-marks every door
-                       makes, on the ledger (notif_read);
+                       makes, on the ledger (notif_read); every delete and expiry road purging its media, and
+                       delete-user's feed sweep on the ledger (media_hygiene);
                        plus the db builder, calls, media, webpush, the
                        social switch, the Discord bridge)
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,

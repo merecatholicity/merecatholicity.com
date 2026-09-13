@@ -4095,6 +4095,41 @@ async function handleDeleteUser(request: any, env: any) {
   } catch (e) { /* the sweep reclaims it */ }
   await env.DB.prepare("UPDATE comments SET status = 'deleted' WHERE author_hash = ?1 AND status != 'deleted'")
     .bind(hash).run();
+  /* Their FEED goes with them too (2026-09-12; the feed came after this
+     handler and had been left out): every post of theirs — with the comments
+     under it, everyone's — and every comment of theirs under others' posts,
+     hard-deleted the way /wall/delete deletes, every attachment's bytes purged
+     with the rows, the reactions on them gone, and the surviving posts'
+     comment counts recomputed. The hourly orphan sweep is the backstop. */
+  try {
+    const keys: string[] = [];
+    const mine = await env.DB.prepare('SELECT id, media_key FROM wall_posts WHERE author_hash = ?1').bind(hash).all();
+    const postIds = (mine.results || []).map((r: any) => r.id);
+    (mine.results || []).forEach((r: any) => { if (r.media_key) keys.push(r.media_key); });
+    if (postIds.length) {
+      const ph = inList(postIds.length);
+      const under = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE post_id IN (' + ph + ') AND media_key IS NOT NULL').bind(...postIds).all();
+      (under.results || []).forEach((r: any) => { if (r.media_key) keys.push(r.media_key); });
+      await env.DB.prepare("DELETE FROM reactions WHERE target = 'wallc' AND target_id IN (SELECT id FROM wall_comments WHERE post_id IN (" + ph + '))').bind(...postIds).run();
+      await env.DB.prepare('DELETE FROM wall_comments WHERE post_id IN (' + ph + ')').bind(...postIds).run();
+      await env.DB.prepare("DELETE FROM reactions WHERE target = 'wall' AND target_id IN (" + ph + ')').bind(...postIds).run();
+      await env.DB.prepare('DELETE FROM wall_posts WHERE id IN (' + ph + ')').bind(...postIds).run();
+    }
+    const theirs = await env.DB.prepare('SELECT id, post_id, media_key FROM wall_comments WHERE author_hash = ?1').bind(hash).all();
+    const cIds = (theirs.results || []).map((r: any) => r.id);
+    const touched = [...new Set((theirs.results || []).map((r: any) => r.post_id))];
+    (theirs.results || []).forEach((r: any) => { if (r.media_key) keys.push(r.media_key); });
+    if (cIds.length) {
+      const ph2 = inList(cIds.length);
+      await env.DB.prepare("DELETE FROM reactions WHERE target = 'wallc' AND target_id IN (" + ph2 + ')').bind(...cIds).run();
+      await env.DB.prepare('DELETE FROM wall_comments WHERE id IN (' + ph2 + ')').bind(...cIds).run();
+    }
+    for (let i = 0; i < touched.length; i += 50) {
+      const chunk = touched.slice(i, i + 50);
+      await env.DB.prepare("UPDATE wall_posts SET comments = (SELECT COUNT(*) FROM wall_comments WHERE post_id = wall_posts.id AND status = 'live') WHERE id IN (" + inList(chunk.length) + ')').bind(...chunk).run();
+    }
+    if (keys.length) await purgeWallMedia(env, keys);
+  } catch (e) { console.log(JSON.stringify({ event: 'delete_user_feed_failed', hash, error: String(e) })); }
   /* Any journal article of theirs is deleted now, so its comments retire too. */
   await sweepJournalComments(env);
   await env.DB.prepare('DELETE FROM profiles WHERE hash = ?1').bind(hash).run();
