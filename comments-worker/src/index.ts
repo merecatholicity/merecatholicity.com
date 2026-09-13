@@ -1898,7 +1898,8 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
     return json({ ok: true, thread_id: null, ttl, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
-      messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0, unread: 0, unread_from: null }, 200);
+      messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0, unread: 0, unread_from: null,
+      notif_unread: await notifUnreadCount(env, me) }, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
      sender and for nobody else, and a side that deleted the thread sees only
