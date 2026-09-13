@@ -18,6 +18,7 @@ export function installProfile(B: Boot) {
   let appConfirm: (msg: any, opts: any, cb: any) => any;
   let asset: any;
   let badgeChanged: () => any;
+  let bootSig: any;
   let buildFingerprint: (m: any, identities: any) => any;
   let cachedJson: (url: any, init: any, ttl: any) => Promise<any>;
   let catByKey: (key: any) => any;
@@ -322,7 +323,10 @@ export function installProfile(B: Boot) {
       if (d.ok) notifCacheSet(d.unread);
     }).catch(function () {});
   }
-  function liveNotifBadge() { playSound('bell'); clearTimeout(B.notifBadgeT); B.notifBadgeT = setTimeout(function () { notifUnreadCheck(true); }, 300); }
+  function liveNotifBadge() {
+    if ((window as any).mcBadges) return;   // the shell's badges (app/badges.ts) hear the frame on every page — no second read, no second bell
+    playSound('bell'); clearTimeout(B.notifBadgeT); B.notifBadgeT = setTimeout(function () { notifUnreadCheck(true); }, 300);
+  }
   function onLiveNotif() {
     /* The notifications list (McNotifications) reloads itself and marks read;
        elsewhere, just ring the badge. */
@@ -1392,6 +1396,7 @@ export function installProfile(B: Boot) {
     appConfirm = B.appConfirm;
     asset = B.asset;
     badgeChanged = B.badgeChanged;
+    bootSig = B.bootSig;
     buildFingerprint = B.buildFingerprint;
     cachedJson = B.cachedJson;
     catByKey = B.catByKey;
@@ -1442,6 +1447,9 @@ export function installProfile(B: Boot) {
   /* What ran at boot time in the old file, in the old order, after every
      module is bound: listeners, deferred initializers. */
   function run() {
+    /* A badge the SHELL wrote (a frame heard on this page) repaints the
+       identity line too; the classic's own writes already do. */
+    document.addEventListener('mc-badge', function (ev: any) { if (ev && ev.detail && ev.detail.from === 'shell') renderIdentity(); }, { signal: bootSig });
   }
   return { bind, run, exports: { BLOCK_CONFIRM, MUTED_STORE, NOTIF_CACHE, annotateProfileMeta, authSig, blockedOut, faithLabel, getFaith, getMuted, identityAction, isBlocked, isMember, isMuted, keyFromFragment, keyNudge, loadMyProfile, loginWithKey, mintIdentity, myAvatar, myNick, notifCacheSet, notifUnreadCheck, onLiveNotif, profileHref, profileLimits, renderIdentity, renderProfile, setBlock, syncMutedUp, toggleMute, viewNotifications, viewProfile, viewProfileByHandle } };
 }

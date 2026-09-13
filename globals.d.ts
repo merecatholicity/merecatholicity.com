@@ -113,6 +113,8 @@ declare global {
     mcSheet?: { open: (...a: any[]) => void; settings?: () => void; close: () => void; lock?: () => boolean | void; unlock?: () => void };
     /* the keyboard shackle (app/appchrome.ts, 2026-09-12): the visible region under the soft keyboard and the placing of a field into it */
     /* haptics (app/haptic.ts, 2026-09-12): a buzz where the device has one, the ring's pattern */
+    /* badges everywhere (app/badges.ts, 2026-09-12): the shell's refresh of the two counts */
+    mcBadges?: { refresh: (which: 'dm' | 'notif') => void; set: (which: 'dm' | 'notif', n: number) => void };
     mcHaptic?: { haptic: (kind: string) => boolean; ringStart: () => void; ringStop: () => void };
     mcKeyboard?: { region: () => { top: number; bottom: number }; align: (el: Element, region?: { top: number; bottom: number }) => boolean; inset: () => number; isField: (el: unknown) => boolean; pretend: (raw: { top: number; bottom: number } | null) => void };
     mcGetDark?: () => string;

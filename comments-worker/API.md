@@ -532,7 +532,7 @@ their original timestamps.
 |---|---|---|---|
 | `POST /api/comments/dm/send` | `{key, to:<64-hex>, body:<≤4000>, token}` | `{ok, id, thread_id, created_at}` — **same shape even when shadow-held** (undetectable to the sender). | `POST_LIMIT` · **Turnstile** · gated. Refuses self (`"That would be a soliloquy."`) and the bot. |
 | `POST /api/comments/dm/threads` | `{key, p?}` | `{ok, threads:[{id,other_hash,nick,avatar,msgs,last_at,unread}], total, unread_total, page, per:20}`. `unread` is the COUNT of the viewer's unread words in that thread (2026-09-11; truthy exactly when the old 0/1 flag was), `unread_total` the number of THREADS with something unread — the tab badge's number, unchanged. Threads with 0 visible messages are absent. | `READ_LIMIT`, **not** gated. |
-| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey,last_seen}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked, unread, unread_from}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock; `unread` / `unread_from` (2026-09-11) say what was unread BEFORE this open did — the count, and the id of the first unread word (`null` for none), so the client can stand its "N unread messages" line above it and count on its jump button. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. A `find:<message id>` (2026-09-12, without `p`) places the answer on that message's page — the topic view's own idiom, for the bell that lands on a message. | `READ_LIMIT`, not gated. |
+| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey,last_seen}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked, unread, unread_from}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock; `unread` / `unread_from` (2026-09-11) say what was unread BEFORE this open did — the count, and the id of the first unread word (`null` for none), so the client can stand its "N unread messages" line above it and count on its jump button. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. A `find:<message id>` (2026-09-12, without `p`) places the answer on that message's page — the topic view's own idiom, for the bell that lands on a message. Opening READS every bell this sender rang you (`dm`, `dm-react`, `call`) and the answer carries `notif_unread` (2026-09-12). | `READ_LIMIT`, not gated. |
 | `POST /api/comments/dm/unread` | `{key}` | `{ok, unread}` — unread **thread** count. | `READ_LIMIT`, **gated** (this poll is the reliable logout trip). |
 | `POST /api/comments/dm/block` | `{key, hash, blocked:<bool>}` | `{ok, blocked}` | `POST_LIMIT`, not gated. Unblock releases held messages and rings the badge. |
 | `POST /api/comments/dm/delete` | `{key, with}` | `{ok, purged}` — per-side "fresh start"; both sides cleared with nothing newer → the thread is hard-deleted. | `POST_LIMIT`, gated. |
@@ -542,6 +542,15 @@ their original timestamps.
 | `POST /api/comments/dm/save` | `{key, with, id, saved:<bool>}` | `{ok, saved, expires_at}` — a saved message is exempt from expiry for BOTH (`expires_at` null); unsaving restores the clock from `opened_at` + the thread ttl (or the unopened backstop). Lit for both: the other party's open thread hears `dm-save` live. | `POST_LIMIT`, gated. |
 
 ### 4.2 Notifications
+
+Reading marks read (2026-09-12), whichever door the reader came through:
+opening a conversation (`/dm/thread`, `/dm/seen`) reads every bell its sender
+rang (`dm`, `dm-react`, `call`); opening a topic (`/board/read`) reads the
+topic's; opening a feed post (`/wall/post/get`, keyed) reads the post's
+(`wall`, `wall-like`, `wall-react`). Each of those answers carries
+`notif_unread`, the fresh count, so a client never needs a second read. A
+message or a reaction to a word the recipient has ON SCREEN (the live
+socket's `dmview:<sender>` sub) rings no bell at all.
 
 The kinds are `Domain.Notif.kinds` — `reply`, `mention`, `dm`, `wall`,
 `wall-like`, `merecat`, `call`, `react`, `wall-react`, `dm-react` — a server

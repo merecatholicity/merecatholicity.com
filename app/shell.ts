@@ -35,6 +35,7 @@ import { installLive } from './live.ts';
 import { installCall } from './call.ts';
 import { installPtr } from './ptr.ts';
 import { installHaptic } from './haptic.ts';
+import { installBadges } from './badges.ts';
 import { installChrome } from './appchrome.ts';
 import './richtext.js';
 import './views/board.js';
@@ -331,6 +332,7 @@ customElements.define('mc-audio-dock', McAudioDock);
      Forum views subscribe on mount; idle tabs close it and reopen on return. */
   installHaptic();   // the page's one haptic engine, before anything that buzzes
   installLive();
+  installBadges();   // the Inbox count and the bell, refreshed on every page a live frame reaches
 
   /* Voice calls: the shell-owned engine (banner/answer/decline on ANY page —
      it self-enables the member's live socket wherever a key exists). The DM

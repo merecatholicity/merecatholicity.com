@@ -1955,6 +1955,13 @@ async function handleDmThread(request: any, env: any, ctx: any) {
     'SELECT 1 FROM dms m WHERE m.thread_id = ?3 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
     'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
   ).bind(me, now, thread.id, myCleared).run();
+  /* Opening the conversation READS its bells (2026-09-12): every unread
+     notification this sender rang me — a message, a reaction to my word, a
+     missed call — however I got here, from the bell or on my own. The fresh
+     count rides the payload so the client's badge tells the truth at once. */
+  await env.DB.prepare(
+    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND actor_hash = ?2 AND read_at IS NULL"
+  ).bind(me, other, now).run();
   /* Start the disappearing-message clock. The messages this viewer is the
      recipient of, and is opening for the first time, get opened_at = now and a
      fresh expires_at = now + the conversation ttl, overriding the unopened
@@ -1979,7 +1986,8 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   return json({ ok: true, thread_id: thread.id, ttl,
     other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
     messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0,
-    unread: (unreadRow && unreadRow.n) || 0, unread_from: (unreadRow && unreadRow.first_id) || null }, 200);
+    unread: (unreadRow && unreadRow.n) || 0, unread_from: (unreadRow && unreadRow.first_id) || null,
+    notif_unread: await notifUnreadCount(env, me) }, 200);
 }
 
 /* The badge count: unread WORDS across every thread (2026-09-11), one summed
@@ -2207,8 +2215,13 @@ async function handleDmReact(request: any, env: any, ctx: any) {
      a withdraw takes an unheard bell back. Coalesced like every bell here. */
   if (row.sender_hash === other) {
     const bell = { to: other, from: me, kind: 'dm-react', topicId: 0, commentId: id };
-    if (emoji) { const ring = notifyReact(env, bell); if (ctx) ctx.waitUntil(ring); else await ring; }
-    else await retractReactNotif(env, bell);
+    if (emoji) {
+      /* The quiet bell (the send's rule): a reaction to a word the other has
+         on screen lands on the pill in front of their eyes — no bell. */
+      let onScreen = false;
+      if (env.HUB) { try { onScreen = !!(await env.HUB.get(env.HUB.idFromName('board')).dmViewing(other, me)); } catch { onScreen = false; } }
+      if (!onScreen) { const ring = notifyReact(env, bell); if (ctx) ctx.waitUntil(ring); else await ring; }
+    } else await retractReactNotif(env, bell);
   }
   return json({ ok: true, id, emoji }, 200);
 }
@@ -2251,11 +2264,13 @@ async function handleDmSeen(request: any, env: any, ctx: any) {
     }
   }
   /* Belt for the race where the bell rang in the instant before the on-screen
-     sub registered: reading the words on screen reads the notification too. */
+     sub registered: reading the words on screen reads the notification too —
+     every bell this sender rang (a message, a reaction, a missed call), and
+     the fresh count goes back so the badge follows at once. */
   await env.DB.prepare(
-    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind = 'dm' AND actor_hash = ?2 AND read_at IS NULL"
+    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND actor_hash = ?2 AND read_at IS NULL"
   ).bind(me, other, now).run();
-  return json({ ok: true }, 200);
+  return json({ ok: true, notif_unread: await notifUnreadCount(env, me) }, 200);
 }
 
 /* Edit one of your OWN messages. DMs are end-to-end encrypted, so the server is
@@ -2859,7 +2874,16 @@ async function handleWallPostGet(request: any, env: any) {
   const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id").bind(id).all();
   const enriched = await wallEnrich(env, [post].concat(crows.results || []), me);
   const comments = enriched.slice(1);
-  return json({ ok: true, post: enriched[0], comments, me }, 200);
+  /* Opening the post READS its bells (2026-09-12): a comment on it, a mention
+     in it, a like, a reaction — and the fresh count rides back. */
+  let notifUnread: number | undefined;
+  if (me) {
+    await env.DB.prepare(
+      "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('wall','wall-like','wall-react') AND comment_id = ?2 AND read_at IS NULL"
+    ).bind(me, id, Math.floor(Date.now() / 1000)).run();
+    notifUnread = await notifUnreadCount(env, me);
+  }
+  return json({ ok: true, post: enriched[0], comments, me, notif_unread: notifUnread }, 200);
 }
 
 /* ---- Reactions on public posts (2026-09-12) ----

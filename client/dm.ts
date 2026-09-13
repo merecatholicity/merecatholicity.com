@@ -42,6 +42,7 @@ export function installDm(B: Boot) {
   let mcDmBlobPut: any;
   let mcDmBlobs: any;
   let mcIcon: (name: any) => any;
+  let notifCacheSet: (n: any) => any;
   let mediaCfg: () => Promise<any>;
   let mediaDownloadLink: (url: any, filename: any, label: any, cls: any) => any;
   let mediaGateFile: (f: any, cfg: any, sec: any, statusEl: any) => any;
@@ -537,7 +538,10 @@ export function installDm(B: Boot) {
     dmSeenT = setTimeout(function () {
       try { localStorage.removeItem(DM_CACHE); } catch (e) { /* fine */ }
       fetch(API + '/dm/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, with: other }) }).catch(function () { /* next open settles it */ });
+        body: JSON.stringify({ key: state.key, with: other }) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && typeof d.notif_unread === 'number') notifCacheSet(d.notif_unread); })   // the bells it read
+        .catch(function () { /* next open settles it */ });
     }, 1200);
   }
   /* ---- E2E media: encrypt a file with AES-256-GCM (a fresh key per file), carry
@@ -1048,7 +1052,10 @@ export function installDm(B: Boot) {
      shared read budget) coalesce into one fresh read. */
   /* Both are reached ONLY from live socket events (never the 90s polls or page
      boot), so the bell sound obeys the "already on the site" rule for free. */
-  function liveDmBadge() { playSound('bell'); clearTimeout(dmBadgeT); dmBadgeT = setTimeout(function () { dmUnreadCheck(true); }, 300); }
+  function liveDmBadge() {
+    if ((window as any).mcBadges) return;   // the shell's badges (app/badges.ts) hear the frame on every page — no second read, no second bell
+    playSound('bell'); clearTimeout(dmBadgeT); dmBadgeT = setTimeout(function () { dmUnreadCheck(true); }, 300);
+  }
 
   function onLiveDm(m: any) {
     var openDm = new URLSearchParams(location.search).get('dm');
@@ -2187,6 +2194,9 @@ export function installDm(B: Boot) {
            landing is WhatsApp's: the foot when the unread words all fit under
            the header, else the line just under the header with the jump button
            carrying the count. */
+        /* Opening read this sender's bells on the server; the bell's badge
+           follows at once from the count the payload carries (2026-09-12). */
+        if (typeof d.notif_unread === 'number') notifCacheSet(d.notif_unread);
         var firstUnread = d.unread_from ? list.querySelector('[data-dmid="' + String(d.unread_from).replace(/"/g, '') + '"]') : null;
         if (firstUnread && Number(d.unread) > 0) { setUnreadLine(Number(d.unread), firstUnread); pending = Number(d.unread); }
         function landing() {
@@ -2254,6 +2264,7 @@ export function installDm(B: Boot) {
     mcDmBlobPut = B.mcDmBlobPut;
     mcDmBlobs = B.mcDmBlobs;
     mcIcon = B.mcIcon;
+    notifCacheSet = B.notifCacheSet;
     mediaCfg = B.mediaCfg;
     mediaDownloadLink = B.mediaDownloadLink;
     mediaGateFile = B.mediaGateFile;

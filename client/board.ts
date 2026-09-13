@@ -1248,6 +1248,7 @@ trace('submit: board post');
         holder.textContent = '';
         if (blockedOut(d)) return;
         if (!d || !d.ok) { holder.appendChild(el('p', 'comments-status', d && d.error ? d.error : 'That post is gone.')); return; }
+        if (typeof d.notif_unread === 'number') notifCacheSet(d.notif_unread);   // opening read the post's bells
         holder.appendChild(wallPostNode(d.post, true));
       }).catch(function () { holder.textContent = ''; holder.appendChild(el('p', 'comments-status', 'Could not load the post.')); });
   }
