@@ -107,7 +107,8 @@ test('the thread names what was unread BEFORE the open marks it read: the count 
   assert.ok(q > 0 && upd > q, 'the unread query runs before the read stamp is advanced');
   assert.ok(/const myReadAt = Number\(\(me === a \? thread\.a_read_at : thread\.b_read_at\) \|\| 0\);/.test(t), 'from the stamp the thread row arrived with');
   assert.ok(/\.bind\(me, thread\.id, myReadAt, myCleared\)\.first\(\);/.test(t));
-  assert.ok(/unread: \(unreadRow && unreadRow\.n\) \|\| 0, unread_from: \(unreadRow && unreadRow\.first_id\) \|\| null \}, 200\);/.test(t), 'both ride the payload');
+  assert.ok(/unread: \(unreadRow && unreadRow\.n\) \|\| 0, unread_from: \(unreadRow && unreadRow\.first_id\) \|\| null,\s*notif_unread: await notifUnreadCount\(env, me\) \}, 200\);/.test(t),
+    'both ride the payload — with the fresh bell count beside them (2026-09-12: opening reads the sender\'s bells)');
   assert.ok(/blocked: iBlocked \? 1 : 0, unread: 0, unread_from: null \}, 200\);/.test(t), 'the empty room says so too');
   /* the query itself, on the real ledger */
   const m = t.match(/'(SELECT COUNT\(\*\) AS n, MIN\(m\.id\) AS first_id[^']*)' \+\s*'([^']*)' \+ dmLive\(now\)/);
