@@ -26,7 +26,7 @@ idea holds the whole thing together and is the key to reading it:
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  PureScript kernel  purescript/src/Domain/*   │  31 modules
+            │  PureScript kernel  purescript/src/Domain/*   │  32 modules
             │  (validation, permissions, parsing, routing,  │  — the rulebook,
             │   ranks, FTS-safety, identity, …) ADTs +      │    pure, tested
             │   smart constructors, illegal states unrep.   │    1:1 in tests/
@@ -162,9 +162,9 @@ middleware layer, a repository layer, and finishing the component migration
 More than the two big files suggest. The **modular seams already exist and are
 proven**:
 
-- The **PureScript `Domain/*` kernel — 31 modules**, each a single rule family
+- The **PureScript `Domain/*` kernel — 32 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
-  each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 31 of them).
+  each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 32 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
   an auth state can't hold a hash without a key). This is the most modular part
   of the codebase and it is shared by both the client and the worker.
@@ -254,7 +254,7 @@ Yes. **Target tree [target]** — every file named for its feature, none over
 ~400 lines:
 
 ```
-purescript/src/Domain/*.purs        the rulebook (31 modules) — unchanged, it's the model
+purescript/src/Domain/*.purs        the rulebook (32 modules) — unchanged, it's the model
 app/
   core.ts        membrane (PS → JS)          api.ts     typed endpoints
   store.ts       request cache               shell.ts   SPA shell

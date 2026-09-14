@@ -40,6 +40,7 @@ import * as Comments from '../purescript/output/Domain.Comments/index.js';
 import * as Merecat from '../purescript/output/Domain.Merecat/index.js';
 import * as Cache from '../purescript/output/Domain.Cache/index.js';
 import * as Ptr from '../purescript/output/Domain.Ptr/index.js';
+import * as Tap from '../purescript/output/Domain.Tap/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -416,3 +417,9 @@ export const ptrStage = (t: number): string => Ptr.stageTag(Ptr.stage(Number(t) 
 export const ptrThreshold: number = Ptr.threshold;
 export const ptrEscalates = (n: number, sinceFirst: number): boolean =>
   Ptr.escalates(Math.floor(Number(n) || 0))(Number(sinceFirst) || 0);
+
+/* A press on the fixed chrome (Domain.Tap): was the finger's lift a tap, a
+   drag or a hold? The Verdict ADT is erased to its tag, as every ADT is here. */
+export const tapExcursion = (dx: number, dy: number): number => Tap.excursion(Number(dx) || 0)(Number(dy) || 0);
+export const tapVerdict = (far: number, ms: number): string => Tap.verdictTag(Tap.verdict(Number(far) || 0)(Number(ms) || 0));
+export const tapEchoMs: number = Tap.echoMs;

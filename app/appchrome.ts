@@ -9,7 +9,7 @@
 
 import { LitElement, html } from 'lit';
 import { mountLibrary } from './views/library.ts';
-import { notifLabel, notifHref } from './core.ts';
+import { notifLabel, notifHref, tapExcursion, tapVerdict, tapEchoMs } from './core.ts';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -311,6 +311,72 @@ function qrSvg(text: string): SVGSVGElement | null {
   } catch (e) { return null; }
 }
 
+/* ---- The finger's own road onto the fixed chrome (2026-09-13) ----
+   The shell navigates on `click`, and on a phone the click is SYNTHESIZED by
+   the platform after the finger lifts — and withheld whenever the platform
+   decides the tap meant something else. Live (the owner, iPhone, 2026-09-13):
+   Inbox pressed, the tab drawn in the hover tint, the page never moving; a
+   second press worked. The shell's own state had not moved at all — the lit
+   tab was still Home in its `--maroon`, and the Inbox tint was `--maroon-dark`,
+   the global `a:hover`: iOS's sticky hover, which rides the synthetic mouse
+   events a click comes with, when it comes. iOS withholds the click for a tap
+   that lands while the page is still decelerating (the tap stops the scroll
+   instead — a fling to the top and straight to a tab is exactly the rare case)
+   and for a tap whose hover it judges to have changed content. The finger's
+   own events are delivered every time, so the fixed chrome answers them
+   directly: a touch that begins on a control and lifts on the same one, in
+   place and quickly (Domain.Tap's verdict), IS the press — the control's own
+   click is dispatched by us inside the touchend, and the platform's synthetic
+   click is cancelled (touchend's preventDefault) so nothing runs twice and no
+   hover tint is left behind. Should an engine send its click anyway, it is an
+   echo: swallowed in the capture phase, before the shell can navigate again.
+   Everything else — a drag, a hold, a lift somewhere else — is left to the
+   platform exactly as before, as is every other road in (a mouse, a keyboard,
+   a screen reader's double-tap, all of which arrive as clicks). Only the
+   chrome: a link in the content keeps the platform's judgement, where "a tap
+   during deceleration stops the scroll" is the right answer. */
+function armTap(host: HTMLElement, selector: string) {
+  if ((host as any).__mcTap) return;
+  (host as any).__mcTap = true;
+  let press: { el: HTMLElement; x: number; y: number; t: number; far: number } | null = null;
+  let firedAt = 0;
+  const stamp = (e: Event) => e.timeStamp || Date.now();
+  host.addEventListener('touchstart', (e: TouchEvent) => {
+    press = null;
+    if (e.touches.length !== 1) return;
+    const t = e.target as Element | null;
+    const el = t && t.closest ? (t.closest(selector) as HTMLElement | null) : null;
+    if (!el) return;
+    const p = e.touches[0];
+    press = { el, x: p.clientX, y: p.clientY, t: stamp(e), far: 0 };
+  }, { passive: true });
+  host.addEventListener('touchmove', (e: TouchEvent) => {
+    if (!press) return;
+    if (e.touches.length !== 1) { press = null; return; }
+    const p = e.touches[0];
+    press.far = Math.max(press.far, tapExcursion(p.clientX - press.x, p.clientY - press.y));
+  }, { passive: true });
+  host.addEventListener('touchcancel', () => { press = null; }, { passive: true });
+  host.addEventListener('touchend', (e: TouchEvent) => {
+    const s = press; press = null;
+    if (!s || e.touches.length !== 0 || e.changedTouches.length !== 1) return;
+    const p = e.changedTouches[0];
+    const far = Math.max(s.far, tapExcursion(p.clientX - s.x, p.clientY - s.y));
+    if (tapVerdict(far, stamp(e) - s.t) !== 'tap') return;
+    /* The lift must land on the pressed control: sliding off a native button
+       cancels it, and so does this. */
+    let under: Element | null = null;
+    try { under = document.elementFromPoint(p.clientX, p.clientY); } catch (x) { under = null; }
+    if (!under || !s.el.contains(under)) return;
+    if (e.cancelable) e.preventDefault();
+    firedAt = Date.now();
+    s.el.click();
+  }, { passive: false });
+  host.addEventListener('click', (e: MouseEvent) => {
+    if (e.isTrusted && firedAt && Date.now() - firedAt < tapEchoMs) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
+
 /* ---- the bottom tab bar ---- */
 class McTabbar extends LitElement {
   static properties = { active: { attribute: false }, dm: { attribute: false }, pending: { attribute: false } };
@@ -325,7 +391,7 @@ class McTabbar extends LitElement {
   constructor() { super(); this.active = 'home'; this.dm = 0; this.pending = ''; }
   createRenderRoot() { return this; }
   /* The Feed tab appears or vanishes with the social switch, without a reload. */
-  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-social-change', this._onSocial); }
+  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-social-change', this._onSocial); armTap(this, 'a.mc-tab'); }
   disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-social-change', this._onSocial); }
   sync() { this.active = activeTab(); this.pending = ''; this.dm = badgeCount('dm'); }
   lit() { return this.pending || this.active; }
@@ -357,6 +423,7 @@ class McAppbar extends LitElement {
   declare notif: number;
   constructor() { super(); this.canBack = false; this.notif = 0; this.title = ''; }
   createRenderRoot() { return this; }
+  connectedCallback() { super.connectedCallback(); armTap(this, '.mc-ab-btn'); }
   sync() {
     this.canBack = history.length > 1;   // dim < at the very start of history
     this.notif = badgeCount('notif');
