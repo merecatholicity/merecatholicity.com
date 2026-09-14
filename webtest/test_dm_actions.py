@@ -53,17 +53,17 @@ STUB = r"""
       return myHash().then(function (me) {
         var now = Math.floor(Date.now() / 1000);
         var msgs = [
-          { id: 101, sender_hash: OTHER, body: 'First word from them', created_at: now - 2 * 86400, enc: 0, saved: 0, react_me: '', react_other: '' },
-          { id: 102, sender_hash: me, body: 'My reply from yesterday', created_at: now - 86400, enc: 0, saved: 1, opened_at: now - 80000, react_me: '', react_other: '❤️' },
-          { id: 103, sender_hash: OTHER, body: 'Today they wrote', created_at: now - 600, enc: 0, saved: 0, edited_at: now - 500, react_me: '👍', react_other: '👍' },
-          { id: 104, sender_hash: me, body: 'And I answered', created_at: now - 60, enc: 0, saved: 0, react_me: '', react_other: '',
+          { id: 101, sender_hash: OTHER, body: 'First word from them', created_at: now - 2 * 86400, enc: 0, saved: 0, reactions: [], react_me: '', react_other: '' },
+          { id: 102, sender_hash: me, body: 'My reply from yesterday', created_at: now - 86400, enc: 0, saved: 1, opened_at: now - 80000, reactions: [{ hash: OTHER, emoji: '❤️' }], react_me: '', react_other: '❤️' },
+          { id: 103, sender_hash: OTHER, body: 'Today they wrote', created_at: now - 600, enc: 0, saved: 0, edited_at: now - 500, reactions: [{ hash: me, emoji: '👍' }, { hash: OTHER, emoji: '👍' }], react_me: '👍', react_other: '👍' },
+          { id: 104, sender_hash: me, body: 'And I answered', created_at: now - 60, enc: 0, saved: 0, reactions: [], react_me: '', react_other: '',
             reply: { id: 101, from: OTHER, kind: 'text', text: 'First word from them' } }
         ];
         /* ?mcunread=1: nine unread words from them after my last, long enough to
            stand taller than a phone screen — the unread line's and the jump
            button's fixture. The server names them BEFORE the open marks them read. */
         var unreadMode = /mcunread=1/.test(location.search);
-        if (unreadMode) for (var i = 0; i < 9; i++) msgs.push({ id: 105 + i, sender_hash: OTHER, created_at: now - 50 + i, enc: 0, saved: 0, react_me: '', react_other: '',
+        if (unreadMode) for (var i = 0; i < 9; i++) msgs.push({ id: 105 + i, sender_hash: OTHER, created_at: now - 50 + i, enc: 0, saved: 0, reactions: [], react_me: '', react_other: '',
           body: 'Unread word ' + (i + 1) + ' — a line long enough to wrap twice on a phone, so that nine of them stand taller than the screen and the line lands under the header.' });
         var other = { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43), last_seen: now - 90000, joined_at: now - 3 * 86400, left_at: null, read_at: now - 80000 };
         var mine = { hash: me, nick: null, avatar: null, assigned: 'Me', pubkey: 'B'.repeat(43), last_seen: null, joined_at: now - 3 * 86400, left_at: null, read_at: now - 30 };
@@ -207,15 +207,16 @@ def main():
           var titles = box ? Array.prototype.map.call(box.querySelectorAll('.dm-info-row-title'), function(x){return x.textContent;}) : [];
           var acts = box ? Array.prototype.map.call(box.querySelectorAll('.dm-info-danger .identity-action'), function(x){return x.textContent;}) : [];
           var chooser = !!(box && box.querySelector('.dm-expiry'));
+          var members = box ? Array.prototype.map.call(box.querySelectorAll('.dm-info-row:not(.dm-info-danger) .identity-action'), function(x){return x.textContent;}) : [];
           window.mcSheet.close();
-          return { box: !!box, titles: titles, acts: acts, chooser: chooser };
+          return { box: !!box, titles: titles, acts: acts, chooser: chooser, members: members };
         })());""")
         time.sleep(0.4)
         # the sheet keeps its last node mounted (hidden) after closing; open state is the class and the lock
         info['closed'] = bool(f.js1("return !document.querySelector('mc-sheet .mc-sheet.on') && !document.documentElement.classList.contains('mc-sheet-open');"))
-        checks.append(('ⓘ opens the conversation sheet: encryption, disappearing messages (with the chooser), block, delete',
-                       info.get('box') and info.get('titles') == ['🔒 End-to-end encrypted', '⏳ Disappearing messages'] and info.get('chooser')
-                       and info.get('acts') == ['Block this member', 'Delete conversation'] and info.get('closed')))
+        checks.append(('ⓘ opens the conversation sheet: encryption, members (Add members — a pair forks), disappearing messages (with the chooser), block, delete',
+                       info.get('box') and info.get('titles') == ['🔒 End-to-end encrypted', '👥 Members', '⏳ Disappearing messages'] and info.get('chooser')
+                       and info.get('members') == ['Add members'] and info.get('acts') == ['Block this member', 'Delete conversation'] and info.get('closed')))
         jumped = f.js1("""var q = document.querySelector('[data-dmid="104"] .dm-quote'); q.click();
           return document.querySelector('[data-dmid="101"]').classList.contains('dm-flash');""")
         checks.append(('tapping the quote flashes the original', bool(jumped)))

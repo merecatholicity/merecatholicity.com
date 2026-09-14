@@ -364,8 +364,15 @@ export function installDm(B: Boot) {
      and the pair fields beside them. */
   function dmSetReaction(m: any, hash: any, emoji: any) {
     var h = String(hash || ''), e = String(emoji || '');
-    if (!Array.isArray(m.reactions)) m.reactions = [];
-    m.reactions = m.reactions.filter(function (r: any) { return r && r.hash !== h; });
+    if (!Array.isArray(m.reactions)) {
+      /* A word that arrived in the pair shape alone (a bundle's cached payload
+         from before 0016): its two sides seed the rows, the other's under a
+         stand-in hash, so a first reaction here never loses theirs. */
+      m.reactions = [];
+      if (m.react_me) m.reactions.push({ hash: state.myHash, emoji: String(m.react_me) });
+      if (m.react_other) m.reactions.push({ hash: '*', emoji: String(m.react_other) });
+    }
+    m.reactions = m.reactions.filter(function (r: any) { return r && r.hash !== h && !(h !== state.myHash && r.hash === '*'); });
     if (e) m.reactions.push({ hash: h, emoji: e });
     if (h === state.myHash) m.react_me = e; else m.react_other = e;
   }
