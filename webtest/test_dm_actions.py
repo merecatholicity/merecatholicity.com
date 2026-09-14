@@ -233,7 +233,7 @@ def main():
         })());""")
         checks.append(('right-click opens the desktop popover over the held bubble, no lock', opened.get('desk') and opened.get('held') and not opened.get('locked')))
         checks.append(('the bar: the quick six and the +, none lit (no reaction of mine)', opened.get('cells') == 7 and opened.get('hasMore') and opened.get('lit') == 0))
-        checks.append(('my bubble: Reply · Copy · Edit · Save · Delete', opened.get('labels') == ['Reply', 'Copy', 'Edit', 'Save', 'Delete']))
+        checks.append(('my bubble: Reply · Forward · Copy · Edit · Save · Delete', opened.get('labels') == ['Reply', 'Forward', 'Copy', 'Edit', 'Save', 'Delete']))
         replied = jsj(f, """return JSON.stringify((function(){
           var items = document.querySelectorAll('.dm-act-menu .dm-act-item');
           items[0].click();   // Reply
@@ -252,7 +252,7 @@ def main():
           var lit = document.querySelector('.dm-act-bar .dm-act-emoji.on');
           return { labels: labels, lit: lit ? lit.textContent : '', litTitle: lit ? lit.title : '' };
         })());""")
-        checks.append(('their bubble: Reply · Copy · Save — no Edit, no Delete', theirs.get('labels') == ['Reply', 'Copy', 'Save']))
+        checks.append(('their bubble: Reply · Forward · Copy · Save — no Edit, no Delete', theirs.get('labels') == ['Reply', 'Forward', 'Copy', 'Save']))
         checks.append(('my current reaction is lit, and tapping it would withdraw', theirs.get('lit') == '\U0001F44D' and theirs.get('litTitle') == 'Remove your reaction'))
         picker = jsj(f, """return JSON.stringify((function(){
           document.querySelector('.dm-act-bar .dm-act-more').click();

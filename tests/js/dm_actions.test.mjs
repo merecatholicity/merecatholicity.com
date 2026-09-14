@@ -185,8 +185,8 @@ test('the reply envelope: sentinel + JSON round-trips, and plain text is itself'
   /* Evaluate the four envelope functions out of the client with the kernel
      stubbed, so the wire grammar is proven, not described. */
   const names = ['dmReplySentinel', 'dmWrapText', 'dmReplyClean', 'dmParseText'];
-  /* The client is TypeScript; these four carry only `: any` annotations. */
-  const body = names.map((n) => fn(n)).join('\n').replace(/: any\b/g, '');
+  /* The client is TypeScript; these four carry only `: any` annotations (one optional). */
+  const body = names.map((n) => fn(n)).join('\n').replace(/\?: any\b/g, '').replace(/: any\b/g, '');
   const factory = new Function('window', body + '\nreturn { dmWrapText, dmReplyClean, dmParseText };');
   const env = factory({ mcCore: { dmReplySentinel: '\u0001' } });
   const from = 'a'.repeat(64);

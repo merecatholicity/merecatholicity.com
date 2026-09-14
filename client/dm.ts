@@ -34,6 +34,7 @@ export function installDm(B: Boot) {
   let fmtTimeCompact: (epoch: any) => any;
   let freshParam: (sep: any) => any;
   let getToken: () => Promise<any>;
+  let warmToken: () => void;
   let go: (href: string, replace?: boolean) => any;
   let identityAction: (label: any, onClick: any) => any;
   let insertEmojiItem: (ta: any, it: any) => any;
@@ -464,10 +465,10 @@ export function installDm(B: Boot) {
      — the reaction bar above, the bubble lit in a hole between four pieces of
      scrim, the acts below; a popover at the pointer on desktop. What is DM
      here: my reaction on the message (react_me, one per side), and the acts
-     that apply — Reply · Copy (text, or a media caption) · Edit (mine, text,
-     not a system notice) · Save/Unsave (★ lit when saved) · Delete (mine).
-     No Forward, Star or More (the owner's ruling). A redacted bubble opens
-     nothing. ---- */
+     that apply — Reply · Forward (any word but a system line or an expired
+     attachment; 2026-09-13) · Copy (text, or a media caption) · Edit (mine,
+     text, not a system notice) · Save/Unsave (★ lit when saved) · Delete
+     (mine). No Star or More. A redacted bubble opens nothing. ---- */
   function dmCloseActions() { closeActs(); }
   function dmOpenActions(m: any, node: any, ctx: any, at: any) {
     if (!m || !m.id || m.redacted || node.mcDead || !node.isConnected) { closeActs(); return; }
@@ -476,6 +477,7 @@ export function installDm(B: Boot) {
     var hasText = !m.media_key && !m.media_expired;
     var items: any[] = [];
     items.push({ label: 'Reply', icon: '↩', fn: function () { ctx.reply(m); } });
+    if (!sys && !m.media_expired) items.push({ label: 'Forward', icon: '↪', fn: function () { dmForwardPicker(m, ctx); } });
     var copyText = hasText ? String(m.body || '') : String((m._env && m._env.caption) || '');
     if (copyText) items.push({ label: 'Copy', icon: '⧉', fn: function () { dmCopy(copyText, ctx); } });
     if (mine && hasText && !sys) items.push({ label: 'Edit', icon: '✎', fn: function () { dmStartEdit(m, node, ctx); } });
@@ -485,6 +487,140 @@ export function installDm(B: Boot) {
     openActs({ node: node, at: at, mine: mine,
       react: { current: String(m.react_me || ''), onPick: function (e: any) { dmReact(m, node, ctx, e); } },
       items: items });
+  }
+  /* ---- Forward (2026-09-13): the press-and-hold's "Forward" — pick one or
+     more conversations (mine, and any member by name), and the word goes to
+     each as a new word of MINE, sealed afresh for that conversation's members
+     (envelope v2): the text, or the media envelope with the SAME object —
+     nothing is uploaded again; the object lives until its last reference
+     goes — the quote it answered dropped, the small "Forwarded" mark inside
+     the envelope (the server never learns a word was forwarded, nor from
+     where). One gate for the batch: /dm/forward. ---- */
+  /* What the copy carries: the words, or the media envelope with the same
+     object; never the quote it answered; the mark. */
+  function dmForwardPlain(m: any) {
+    if (m.media_key && m._env) {
+      var env: any = Object.assign({}, m._env);
+      delete env.reply;
+      env.fwd = 1;
+      return { plain: JSON.stringify(env), media_key: m.media_key };
+    }
+    return { plain: dmWrapText(String(m.body || ''), null, true), media_key: null };
+  }
+  /* Seal the copy for each target's current members (their roster read
+     without a mark) and post the batch. Resolves to how many were sent. */
+  function dmForwardTo(m: any, targets: any[], status: any) {
+    var src = dmForwardPlain(m);
+    status.textContent = 'Sealing…';
+    return getToken().then(function (token) {
+      return Promise.all(targets.map(function (t: any) {
+        return fetch(API + '/dm/roster', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.assign({ key: state.key }, t)) })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d || !d.ok || !Array.isArray(d.members) || !d.members.length) return null;
+            if (d.members.some(function (mm: any) { return !mm.pubkey; })) return null;   // a member without a key: nothing can be sealed to them
+            var sealed = dmSealFor(src.plain, d.members);
+            var item: any = { body: sealed.body, enc: 3, keys: sealed.keys };
+            if (d.thread_id) item.thread_id = d.thread_id; else item.to = t.with;
+            if (src.media_key) item.media_key = src.media_key;
+            return item;
+          })
+          .catch(function () { return null; });
+      })).then(function (items) {
+        var live = items.filter(Boolean);
+        if (!live.length) throw new Error('Nobody to forward to — a member may not have set up encryption yet.');
+        status.textContent = 'Sending…';
+        return fetch(API + '/dm/forward', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: state.key, token: token, items: live }) }).then(function (r) { return r.json(); });
+      });
+    }).then(function (d) {
+      if (blockedOut(d)) return 0;
+      if (!d || !d.ok) throw new Error((d && d.error) || 'Could not forward.');
+      return (d.results || []).filter(function (r: any) { return r && r.ok; }).length;
+    }).finally(function () {
+      if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+    });
+  }
+  /* The picker: my conversations (the inbox's first page), a search over the
+     directory for anyone else, checkboxes, one Send. A sheet in the shell. */
+  function dmForwardPicker(m: any, ctx: any) {
+    /* The Send is Turnstile-gated and a press on a bubble focuses no field:
+       warm the challenge now, so the token is waiting when they press. */
+    warmToken();
+    var box = el('div', 'dm-fwd-pick');
+    var chosen: Record<string, any> = {};
+    var search = el('input', 'key-input dm-fwd-search');
+    search.type = 'text'; search.placeholder = 'Find a member…'; search.setAttribute('aria-label', 'Find a member');
+    var list = el('div', 'dm-fwd-list');
+    var status = el('p', 'form-status');
+    var sendBtn = el('button', 'btn btn-send dm-fwd-send', 'Send');
+    sendBtn.type = 'button'; sendBtn.disabled = true;
+    function paintSend() { var n = Object.keys(chosen).length; sendBtn.disabled = !n; sendBtn.textContent = n ? 'Send to ' + n : 'Send'; }
+    function rowFor(key: string, label: string, sub: string, target: any, first?: boolean) {
+      if (list.querySelector('[data-key="' + key + '"]')) return;
+      var row = el('label', 'dm-fwd-row');
+      row.setAttribute('data-key', key);
+      var cb = el('input'); cb.type = 'checkbox';
+      cb.addEventListener('change', function () { if (cb.checked) chosen[key] = target; else delete chosen[key]; paintSend(); });
+      row.appendChild(cb);
+      var text = el('span', 'dm-fwd-text');
+      text.appendChild(el('span', 'dm-fwd-name', label));
+      if (sub) text.appendChild(el('span', 'dm-fwd-sub', sub));
+      row.appendChild(text);
+      if (first && list.firstChild) list.insertBefore(row, list.firstChild); else list.appendChild(row);
+    }
+    var dir: any = null, dirT: any = 0;
+    function suggest() {
+      var q = search.value.trim().toLowerCase();
+      if (q.length < 2) return;
+      var run = function () {
+        dir.filter(function (u: any) { return u.hash !== state.myHash && u.hash !== MERECAT_BOT_HASH; })
+          .map(function (u: any) { return { u: u, s: Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash))) }; })
+          .filter(function (x: any) { return x.s > 0; })
+          .sort(function (x: any, y: any) { return y.s - x.s; })
+          .slice(0, 5)
+          .forEach(function (x: any) { rowFor('h:' + x.u.hash, dmLabel(x.u.hash, x.u.nick), 'member', { with: x.u.hash }, true); });
+      };
+      if (dir) return run();
+      fetch(API + '/dm/directory' + freshParam('?')).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) { dir = d.users || []; run(); } }).catch(function () { /* the list alone */ });
+    }
+    search.addEventListener('input', function () { clearTimeout(dirT); dirT = setTimeout(suggest, 200); });
+    box.appendChild(search);
+    box.appendChild(list);
+    box.appendChild(sendBtn);
+    box.appendChild(status);
+    skelInto(list);
+    fetchRetry(API + '/dm/threads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key, p: 1 }) }, [1000])
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        list.textContent = '';
+        (d && d.threads || []).forEach(function (t: any) {
+          if (ctx && ctx.threadId && Number(t.thread_id || t.id) === ctx.threadId) return;   // not back into this one
+          rowFor('t:' + (t.thread_id || t.id), dmRowLabel(t), Number(t.kind) === 1 ? dmMembersLabel(t) : '', dmRowTarget(t));
+        });
+        if (!list.childNodes.length) list.appendChild(el('p', 'comments-status', 'No other conversations yet — find a member above.'));
+      })
+      .catch(function () { list.textContent = ''; list.appendChild(el('p', 'comments-status', 'The conversations could not be loaded. Find a member above.')); });
+    var close: any = null;
+    sendBtn.addEventListener('click', function () {
+      if (sendBtn.disabled) return;
+      sendBtn.disabled = true;
+      var targets = Object.keys(chosen).map(function (k) { return chosen[k]; });
+      dmForwardTo(m, targets, status).then(function (n) {
+        status.textContent = '';
+        if (ctx && ctx.note) ctx.note(n ? 'Forwarded to ' + n + (n === 1 ? ' conversation.' : ' conversations.') : 'Nothing was forwarded.');
+        if (close) close();
+      }).catch(function (err: any) { status.textContent = (err && err.message) || 'Could not forward.'; sendBtn.disabled = false; });
+    });
+    if (window.mcSheet) { window.mcSheet.open('Forward to…', box); close = function () { try { window.mcSheet!.close(); } catch (e) { /* closed already */ } }; }
+    else {
+      /* No shell: the picker folds out under the word, with a way back. */
+      var x = el('button', 'btn', 'Cancel'); x.type = 'button';
+      x.addEventListener('click', function () { box.remove(); });
+      box.appendChild(x);
+      close = function () { box.remove(); };
+      (ctx && ctx.list ? ctx.list : document.body).appendChild(box);
+    }
   }
   /* A downward swipe over the page while a composer has the keyboard up
      dismisses it (the owner's report: the page scrolled under a keyboard that
@@ -519,6 +655,7 @@ export function installDm(B: Boot) {
     var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
     if (m.id) node.setAttribute('data-dmid', String(m.id));
     if (opts && opts.sysLabel) node.appendChild(el('div', 'dm-sys-label', opts.sysLabel));
+    if (m.fwd) node.appendChild(el('div', 'dm-fwd', '↪ ' + ((window.mcCore && window.mcCore.dmForwardedLabel) || 'Forwarded')));
     if (opts && opts.reply && opts.ctx) node.appendChild(dmQuoteNode(opts.reply, opts.ctx));
     node.appendChild(bodyEl);
     var meta = el('div', 'dm-meta');
@@ -583,16 +720,21 @@ export function installDm(B: Boot) {
   /* ---- The reply envelope. A quoted reply rides INSIDE the E2E plaintext —
      the server stays blind to what answers what — as the kernel's sentinel
      (Domain.Dm.replySentinel, U+0001, untypeable) followed by JSON:
-     {v:1, text, reply:{id, from, kind, text}}. Plaintext without the sentinel
-     is the bare message it always was. A media message carries its reply in
-     the media envelope instead (env.reply). ---- */
+     {v:1, text, reply:{id, from, kind, text}, fwd:1}. Plaintext without the
+     sentinel is the bare message it always was. A media message carries its
+     reply in the media envelope instead (env.reply), and its mark (env.fwd).
+     The mark (2026-09-13) says a word was forwarded — the small "Forwarded"
+     line the owner chose — and rides here so the server never learns it. ---- */
   function dmReplySentinel() {
     return (window.mcCore && window.mcCore.dmReplySentinel) || '';
   }
-  function dmWrapText(text: any, reply: any) {
+  function dmWrapText(text: any, reply: any, fwd?: any) {
     var t = String(text == null ? '' : text);
-    if (!reply) return t;
-    return dmReplySentinel() + JSON.stringify({ v: 1, text: t, reply: reply });
+    if (!reply && !fwd) return t;
+    var o: any = { v: 1, text: t };
+    if (reply) o.reply = reply;
+    if (fwd) o.fwd = 1;
+    return dmReplySentinel() + JSON.stringify(o);
   }
   /* A reply reference as received: only the shape we send, or nothing. */
   function dmReplyClean(r: any) {
@@ -609,7 +751,11 @@ export function installDm(B: Boot) {
     if (str.charAt(0) !== dmReplySentinel()) return { text: str, reply: null };
     try {
       var o = JSON.parse(str.slice(1));
-      if (o && typeof o === 'object') return { text: String(o.text == null ? '' : o.text), reply: dmReplyClean(o.reply) };
+      if (o && typeof o === 'object') {
+        var out: any = { text: String(o.text == null ? '' : o.text), reply: dmReplyClean(o.reply) };
+        if (o.fwd) out.fwd = true;   // the mark, only when it was set
+        return out;
+      }
     } catch (e) { /* not an envelope after all */ }
     return { text: str.slice(1), reply: null };
   }
@@ -776,7 +922,7 @@ export function installDm(B: Boot) {
       if (m.media_key) {
         var envInfo = m._env || null;
         if (!envInfo && (e === 1 || e === 3)) { try { envInfo = JSON.parse(dmPlain(m, ctx) || 'null'); } catch (x) { envInfo = null; } }
-        if (envInfo) { m._env = envInfo; m.reply = dmReplyClean(envInfo.reply); node = dmMediaNode(m, ctx, envInfo); }
+        if (envInfo) { m._env = envInfo; m.reply = dmReplyClean(envInfo.reply); m.fwd = !!envInfo.fwd; node = dmMediaNode(m, ctx, envInfo); }
         else { m.body = '⚠️ could not open media'; node = dmMsgNode(m, ctx, null); }
       } else if (m.media_expired) {
         var cap = '';
@@ -794,7 +940,7 @@ export function installDm(B: Boot) {
         return dmCallLine(m);
       } else {
         var sysLabel = null;
-        if (e === 1 || e === 3) { var pt = dmParseText(dmPlain(m, ctx) || '⚠️ could not decrypt'); m.body = pt.text; m.reply = pt.reply; }
+        if (e === 1 || e === 3) { var pt = dmParseText(dmPlain(m, ctx) || '⚠️ could not decrypt'); m.body = pt.text; m.reply = pt.reply; m.fwd = !!pt.fwd; }
         else if (e === 2) sysLabel = '⚙️ Automated notice';
         node = dmMsgNode(m, ctx, sysLabel);
       }
@@ -905,7 +1051,7 @@ export function installDm(B: Boot) {
       body.className = 'comment-body';
       body.appendChild(el('span', 'dm-redacted', mine ? '<redacted> — you deleted this message' : '<redacted>'));
     }
-    ['.dm-quote', '.dm-react-pill', '.dm-more', '.dm-edit-box', '.dm-receipt', '.dm-savedmark', '.dm-sys-label'].forEach(function (sel) {
+    ['.dm-quote', '.dm-react-pill', '.dm-more', '.dm-edit-box', '.dm-receipt', '.dm-savedmark', '.dm-sys-label', '.dm-fwd'].forEach(function (sel) {
       var n = node.querySelector(sel); if (n) n.remove();
     });
     closeActsFor(node);
@@ -953,6 +1099,16 @@ export function installDm(B: Boot) {
          base card (border, fill, radius, position:relative) is main.css's. */
       '.dm-msg{--dm-saved:#d9a520;transition:transform .18s ease}' +
       '.dm-sys-label{font-size:.78em;color:var(--faint);margin-bottom:.2em}' +
+      /* the small "Forwarded" line (2026-09-13), and the picker behind the act */
+      '.dm-fwd{font-size:.72em;font-style:italic;color:var(--faint);margin-bottom:.15em}' +
+      '.dm-fwd-pick{display:flex;flex-direction:column;gap:.5em}' +
+      '.dm-fwd-list{max-height:50vh;overflow:auto;overscroll-behavior:contain}' +
+      '.dm-fwd-row{display:flex;align-items:center;gap:.6em;padding:.45em .2em;border-bottom:1px solid var(--rule);cursor:pointer}' +
+      '.dm-fwd-row input{flex:none;margin:0}' +
+      '.dm-fwd-text{display:flex;flex-direction:column;min-width:0;flex:1 1 0}' +
+      '.dm-fwd-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.dm-fwd-sub{font-size:.8em;color:var(--faint)}' +
+      '.dm-fwd-send{align-self:flex-end}' +
       '.dm-meta{display:flex;justify-content:flex-end;align-items:center;gap:.45em;margin-top:.2em;font-size:.72em;line-height:1.2;color:var(--faint);white-space:nowrap}' +
       '.dm-meta .comment-date{font-size:1em;color:inherit;margin:0}' +
       '.dm-edited{font-style:italic;opacity:.85}' +
@@ -2542,6 +2698,7 @@ export function installDm(B: Boot) {
     fmtTimeCompact = B.fmtTimeCompact;
     freshParam = B.freshParam;
     getToken = B.getToken;
+    warmToken = B.warmToken;
     go = B.go;
     identityAction = B.identityAction;
     insertEmojiItem = B.insertEmojiItem;
