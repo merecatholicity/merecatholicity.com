@@ -175,11 +175,14 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   the same three layers.
 - **A DM message's acts live on ONE surface**, the press-and-hold (right-click, the hover ⌄, or
   the reaction pill on desktop): react · reply · copy · edit · save · delete — never a link row
-  or a ⋯ on the bubble. A reaction is ONE emoji per side per message, validated by
+  or a ⋯ on the bubble. A reaction is ONE emoji per MEMBER per message (`dm_reactions`, one
+  row each; a pair's pill shows the two sides, a group's the tally through the surface's
+  painter with the DM's own pick — never the public ledger's wires), validated by
   `Domain.Reaction.normalizeReaction` (re-exported by `Domain.Dm`) on both ends (never
   re-inlined; a custom `:token:` is ours); a
   quoted reply rides INSIDE the E2E plaintext behind `Domain.Dm.replySentinel` — the server
-  never learns what answers what, and no `reply_to` column may appear. The surface keeps the
+  never learns what answers what, and no `reply_to` column may appear; so does the small
+  "Forwarded" mark (`fwd` in the same header, `env.fwd` for media) — no `forward_of` either. The surface keeps the
   overlay's three layers through `mcSheet.lock()` and releases only a lock it took. **The
   thread is a chat screen**: a sticky header (avatar · presence · 📞 · ⓘ) that begins where the
   app bar ends — no margin above it, which a fling to the true top would bare — and a FIXED
@@ -208,7 +211,36 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `lib.ts`): the inbox row's badge, `/dm/threads`'s `unread_total`, the thread's unread line
   and the tab bar's own `/dm/unread` all sum it — the tab and the rows it opens onto must
   add up, and both roads feed the one `mc-dm-unread` cache. Never re-inline the fragment,
-  never let one road count threads.
+  never let one road count threads. It counts from the viewer's OWN member row (`mb`, the
+  `DM_MINE` join) — never a pair column.
+- **One member model** (migration 0016, 2026-09-13): a conversation is a thread with member
+  rows (`dm_members`) — a pair is two of them, keyed once by `pair_key`; a group (`kind` 1)
+  up to `Domain.Dm.maxMembers`, nobody owns it. Every read runs from the viewer's seat: what
+  they may see is unheld or their own, after their clear stamp, no older than their joining
+  (a newcomer gets no history), and in a group never from a sender they blocked (a PAIR keeps
+  its stored shadow-hold — a blocked sender is never told). Adding to a pair FORKS a new
+  group (Snapchat's and WhatsApp's way; the pair and its history stay); leaving stamps the
+  seat, the last member out purges the thread, and a thread with no surviving word dies
+  (`sweepDms`) — nobody remains. The six pair columns of `dm_threads` are legacy: no new
+  code may read `a_hash`/`b_hash`/`a_read_at`/… ; every conversation is addressed by
+  `thread_id` (`messages.html?t=<id>`, the resolved form of a pair's `?dm=<hash>` door and
+  the only door a group has), every live frame carries it and the client keys on it, and a
+  DM bell names its thread in `topic_id`. Membership changes are system lines (`sys:add:`,
+  `sys:leave`, `sys:name:` — `Domain.Dm.parseSysLine`), never message content; the group
+  name is server-visible metadata by design.
+- **Envelope v2** (`enc` 3, `E3.`): a random content key per message under `nacl.secretbox`,
+  boxed once per current member (the sender included) to their published X25519 key and
+  stored in `dm_keys` — the server serves each reader ONLY their own `sealed`; the key set
+  must equal the roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and
+  sealed once more; an edit re-seals under the SAME key; a pair's `E1` words stay readable
+  for ever (and are accepted on the wire one deploy longer). The client's sealing functions
+  are proven by running them with tweetnacl (`tests/js/dm_envelope.test.mjs`).
+- **An object dies with its LAST reference** (`dm_media_refs`): a forwarded attachment is
+  never uploaded twice — the copy names the same object, allowed only to a member who can
+  read it (the media GET's own rule, `dmMediaReadable`) — so every message road calls
+  `releaseMediaRefs`, never `purgeMediaKeys` directly; the 30-day cap and the LRU valve take
+  an object from under EVERY message naming it; the orphan sweep takes what nothing names;
+  `dm_media.msg_id` is retired.
 - **The bottom bar is SIX EQUAL TABS** — no raised hero (a six-item bar cannot centre one).
   Each is `flex: 1 1 0; min-width: 0` with a nowrap, viewport-scaled label: a tab left at
   the default `min-width: auto` lets its longest word refuse to shrink and eat its
@@ -374,4 +406,4 @@ Each entry is the bold lead-in of a passage, by section; grep it verbatim to lan
 
 - **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
 
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · An unread inbox row draws the eye · Wave F: the classic client is feature modules · A hold picks a message, never a word · Reading back is never interrupted, and never blind · The tab badge counts words, and the bar has no hero · Every post opens the one surface · Admins edit any post · DMs are never AI-screened · A profile picture pops out full size · The keyboard shackle · The ring that reaches a closed app, and the miss recorded once · The call log: every call leaves one event line · Haptics · Badges everywhere, and reading marks read · Media hygiene: every delete takes its media · The fixed chrome answers the finger, not the platform's click · `contact-worker/`
+- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · An unread inbox row draws the eye · Wave F: the classic client is feature modules · A hold picks a message, never a word · Reading back is never interrupted, and never blind · The tab badge counts words, and the bar has no hero · Every post opens the one surface · Admins edit any post · DMs are never AI-screened · A profile picture pops out full size · The keyboard shackle · The ring that reaches a closed app, and the miss recorded once · The call log: every call leaves one event line · Haptics · Badges everywhere, and reading marks read · Media hygiene: every delete takes its media · The fixed chrome answers the finger, not the platform's click · One member model, envelope v2, and the object that outlives its message · Multi-member conversations and forwarding · `contact-worker/`

@@ -58,8 +58,8 @@ duplicated, and the shape they moved toward.
 | File | Lines | Role |
 |---|---:|---|
 | `client/comments.ts` | 2,049 | The client's ROOT: pre-boot page state, the core helpers (fetch/read pacing, formatting, `el`, Turnstile, identity), the router, `start()`, the `mcKit` assembly; installs the modules below per boot. |
-| `client/dm.ts` | 2,210 | E2E crypto + media, the bubbles, the message's acts, the chat screen, the inbox, presence, the live DM frames, calls. |
-| `client/surface.ts` | 590 | The SHARED press-and-hold surface (2026-09-12): the overlay (`openActs`), the gestures (`armHold`), the public reactions' ledger and its pills, the wire to `/react`. The DM, every board post and every feed post/comment open this one. |
+| `client/dm.ts` | 3,044 | E2E crypto (the pair's box, and envelope v2's per-member sealed keys) + media, the bubbles (authors named in a group), the message's acts (Forward among them, with its picker), the chat screen by thread id, the ⓘ sheet (members, add, leave, name), the inbox (New group), presence, the live DM frames keyed on the thread, calls. |
+| `client/surface.ts` | 621 | The SHARED press-and-hold surface (2026-09-12): the overlay (`openActs`), the gestures (`armHold`), the public reactions' ledger and its pills (`reactPillInto`, which a DM group paints with its own pick), the wire to `/react`. The DM, every board post and every feed post/comment open this one. |
 | `client/merecat.ts` | 1,924 | The librarian's chat client. |
 | `client/board.ts` | 1,718 | The forum views, the comment renderer, quoting/editing, the board form, the journal, search, the post menu. |
 | `client/admin.ts` | 1,628 | The acting consoles. |
@@ -264,7 +264,7 @@ app/
 client/                              the classic client (Wave F, shipped 2026-09-11)
   comments.ts    the boot: page state · core helpers · router · start() · the kit
   boot.ts        the Boot bag type
-  composer.ts · profile.ts · board.ts · wall.ts · dm.ts · merecat.ts · admin.ts
+  composer.ts · profile.ts · board.ts · wall.ts · surface.ts · dm.ts · merecat.ts · admin.ts
                  install<Feature>(B) factories: bind() · run() · exports
 comments-worker/src/
   index.ts       thin composition root  (~150 lines)
