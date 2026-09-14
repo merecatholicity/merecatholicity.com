@@ -1063,19 +1063,20 @@ export function installDm(B: Boot) {
           try { var ev = JSON.parse(dmPlain(m, ctx) || 'null'); if (ev) { m._env = ev; m.reply = dmReplyClean(ev.reply); cap = ev.caption || ''; } } catch (x2) { cap = ''; }
         }
         node = dmMediaExpiredNode(m, ctx, cap);
-      } else if (e === 2 && window.mcCore && window.mcCore.dmSysLine && window.mcCore.dmSysLine(String(m.body || ''))) {
-        /* A membership line (0016): "Ann added Bob and you", "Bob left", "Ann
-           named the conversation “Choir”" — a muted line like a call's, no
-           bubble, no surface, nothing to reply to. */
-        return dmSysLineNode(m, ctx);
       } else if (e === 2 && window.mcCore && window.mcCore.callLine && window.mcCore.callLine(String(m.body || ''))) {
         /* A call's line (2026-09-12; the log 2026-09-13): the system word the
            worker writes into the thread once per call — missed, declined, or
            answered with its length — drawn by side (Domain.Call.callLineText):
            the caller's "no answer", the callee's "missed", "Outgoing voice
            call · 12 min". A muted line, not a bubble: no surface, no pill,
-           nothing to reply to. */
+           nothing to reply to. Asked FIRST among the system words: the
+           sys-line grammar must never read a call's word (2026-09-14). */
         return dmCallLine(m);
+      } else if (e === 2 && window.mcCore && window.mcCore.dmSysLine && window.mcCore.dmSysLine(String(m.body || ''))) {
+        /* A membership line (0016): "Ann added Bob and you", "Bob left", "Ann
+           named the conversation “Choir”" — a muted line like a call's, no
+           bubble, no surface, nothing to reply to. */
+        return dmSysLineNode(m, ctx);
       } else {
         var sysLabel = null;
         if (e === 1 || e === 3) { var pt = dmParseText(dmPlain(m, ctx) || '⚠️ could not decrypt'); m.body = pt.text; m.reply = pt.reply; m.fwd = !!pt.fwd; }

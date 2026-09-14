@@ -163,10 +163,9 @@ test('the system-line grammar round-trips, and anything else is not a system lin
   assert.deepEqual(tag(Dm.sysAddLine([b, c])), { tag: 'add', hashes: [b, c], name: '' });
   assert.deepEqual(tag(Dm.sysLeaveLine), { tag: 'leave', hashes: [], name: '' });
   assert.deepEqual(tag(Dm.sysNameLine('Choir')), { tag: 'name', hashes: [], name: 'Choir' });
-  assert.deepEqual(tag(Dm.missedCallLine), { tag: 'missed-call', hashes: [], name: '' });
   assert.equal(Dm.missedCallLine, 'call:missed', 'the 2026-09-12 line, unchanged');
   assert.deepEqual(tag('sys:add:'), { tag: 'add', hashes: [], name: '' });
-  for (const s of ['hello', 'sys:', 'sys:bogus:x', 'call:missed2', '', 'E3.abc.def']) assert.equal(orNull(Dm.parseSysLine(s)), null, JSON.stringify(s) + ' is a message, not a system line');
+  for (const s of ['hello', 'sys:', 'sys:bogus:x', 'call:missed', 'call:missed2', 'call:declined', 'call:answered:5', '', 'E3.abc.def']) assert.equal(orNull(Dm.parseSysLine(s)), null, JSON.stringify(s) + ' is a message, not a system line');
 });
 
 test('sysLineText reads the sentence: names listed with commas and an "and", the leaver alone, the name quoted', () => {
@@ -178,7 +177,6 @@ test('sysLineText reads the sentence: names listed with commas and an "and", the
   assert.equal(say('sys:add:'), 'Ann added nobody');
   assert.equal(say(Dm.sysLeaveLine), 'Ann left');
   assert.equal(say(Dm.sysNameLine('Choir')), 'Ann named the conversation “Choir”');
-  assert.equal(say(Dm.missedCallLine), 'Missed voice call');
   assert.equal(Dm.forwardedLabel, 'Forwarded');
 });
 

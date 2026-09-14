@@ -186,7 +186,6 @@ data SysLine
   = SysAdd (Array String)
   | SysLeave
   | SysName String
-  | SysMissedCall
 
 -- | "sys:add:<hash>,<hash>" — the actor added these members.
 sysAddLine :: Array String -> String
@@ -205,13 +204,13 @@ sysNameLine n = "sys:name:" <> n
 missedCallLine :: String
 missedCallLine = Call.missedCallLine
 
--- | The grammar, read back. Anything else is not a system line — a call's
--- | other lines ("call:declined", "call:answered:N") are
--- | Domain.Call.parseCallLine's, drawn by side.
+-- | The grammar, read back. Anything else is not a system line — EVERY call
+-- | line ("call:missed", "call:declined", "call:answered:N") is
+-- | Domain.Call.parseCallLine's, drawn by side (2026-09-14: this grammar once
+-- | read "call:missed" too and said "Missed voice call" to the caller).
 parseSysLine :: String -> Maybe SysLine
 parseSysLine s
   | s == sysLeaveLine = Just SysLeave
-  | s == missedCallLine = Just SysMissedCall
   | otherwise = case stripPrefix (Pattern "sys:add:") s of
       Just rest -> Just (SysAdd (filter (_ /= "") (split (Pattern ",") rest)))
       Nothing -> case stripPrefix (Pattern "sys:name:") s of
@@ -225,17 +224,15 @@ sysLineTag l = case l of
   SysAdd hs -> { tag: "add", hashes: hs, name: "" }
   SysLeave -> { tag: "leave", hashes: [], name: "" }
   SysName n -> { tag: "name", hashes: [], name: n }
-  SysMissedCall -> { tag: "missed-call", hashes: [], name: "" }
 
 -- | The sentence a system line reads, given the actor's shown name and a way
 -- | to name any member. "Ann added Bob and Cy" / "Ann left" / "Ann named the
--- | conversation “Choir”"; the missed call keeps its own renderer (by side).
+-- | conversation “Choir”"; a call's line is never one of these (Domain.Call).
 sysLineText :: String -> (String -> String) -> SysLine -> String
 sysLineText actor nameOf l = case l of
   SysAdd hs -> actor <> " added " <> listNames (map nameOf hs)
   SysLeave -> actor <> " left"
   SysName n -> actor <> " named the conversation “" <> n <> "”"
-  SysMissedCall -> "Missed voice call"
 
 -- | "Bob" / "Bob and Cy" / "Bob, Cy and Di" / "nobody".
 listNames :: Array String -> String

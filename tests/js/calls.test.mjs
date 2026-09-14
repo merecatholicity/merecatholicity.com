@@ -66,6 +66,8 @@ test('the service worker rings: the call notification stands, buzzes, offers Ans
 
 test('the thread draws every call line by side through the membrane, muted, never a bubble', () => {
   assert.ok(/else if \(e === 2 && window\.mcCore && window\.mcCore\.callLine && window\.mcCore\.callLine\(String\(m\.body \|\| ''\)\)\) \{[\s\S]*?return dmCallLine\(m\);/.test(dm), 'the grammar is Domain.Call\'s, before the bubble road — no surface, no pill');
+  const render = fn(dm, 'dmRenderMsg', 'dmCallLine');
+  assert.ok(render.indexOf('window.mcCore.callLine(') < render.indexOf('window.mcCore.dmSysLine('), 'the call grammar is asked before the sys-line grammar (which once said "Missed voice call" to the caller, 2026-09-14)');
   const line = fn(dm, 'dmCallLine');
   assert.ok(/core\.callLineText\(body, mine\)/.test(line) && /core\.callLineMissed\(body, mine\) \? ' dm-call-missed' : ''/.test(line), 'the sentence and the tint are the kernel\'s, by side');
   assert.ok(!/'Missed voice call'|'No answer'/.test(line), 'no sentence inlined in the client');
