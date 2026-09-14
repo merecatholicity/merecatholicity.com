@@ -669,31 +669,53 @@ export async function notifyMissedCall(env: any, toHash: any, fromHash: any, opt
   }
 }
 
-/* Record a miss, ONCE per call (the stamp is the lock: a second caller
-   report, or the sweep after it, changes nothing): the thread's own line
-   (`call:missed`, a system word the client draws as "Missed voice call" /
-   "Voice call · No answer" by side — quiet, the bell below is its bell), the
-   coalesced 'call' bell, and the push. The pending row stays, stamped, for
-   the day's idempotency; the sweep clears it. */
-export async function recordMissedCall(env: any, row: { call: string; from_hash: string; to_hash: string }, opts?: { late?: boolean }) {
+/* The call log (2026-09-13): a call's outcome, recorded ONCE per call into
+   the conversation as a muted event line — the way every chat app writes
+   "Missed voice call" / "Voice call · 12 min" into the thread. `ended_at` is
+   the lock (the first report from either party, or the sweep's backstop,
+   stamps it; every later report changes nothing — a miss also stamps
+   missed_at, the pre-0017 rows' own lock, so an old miss is never re-recorded).
+   The line is a quiet system DM from the CALLER to the callee (the client
+   draws it by side; `Domain.Call.callLineText`): a miss ('missed' — no answer,
+   canceled, busy) rings the coalesced 'call' bell and the push below; a
+   decline ('declined') is the callee's own act and rings nothing; an answered
+   call ('answered') carries its length, ended_at − answered_at, measured here
+   so both sides agree; a failed setup ('failed') is stamped and nothing is
+   written — no app logs "couldn't connect". Returns whether this call was
+   the one that recorded it. */
+export async function recordCallEnd(env: any, row: { call: string; from_hash: string; to_hash: string; answered_at?: any }, outcome: string, opts?: { late?: boolean }) {
   const now = Math.floor(Date.now() / 1000);
   const r = await env.DB.prepare(
-    'UPDATE calls_pending SET missed_at = ?2 WHERE call = ?1 AND missed_at IS NULL AND answered_at IS NULL'
-  ).bind(row.call, now).run();
+    'UPDATE calls_pending SET ended_at = ?2, outcome = ?3, missed_at = CASE WHEN ?3 = \'missed\' THEN ?2 ELSE missed_at END ' +
+    'WHERE call = ?1 AND ended_at IS NULL AND missed_at IS NULL' + (outcome === 'answered' ? ' AND answered_at IS NOT NULL' : '')
+  ).bind(row.call, now, outcome).run();
   if (!(r.meta && r.meta.changes > 0)) return false;
-  try { await sendSystemDm(env, row.from_hash, row.to_hash, 'call:missed', { quiet: true }); } catch (e) { console.log(JSON.stringify({ event: 'missed_call_line_failed', error: String(e) })); }
-  await notifyMissedCall(env, row.to_hash, row.from_hash, opts);
+  let line = '';
+  if (outcome === 'missed') line = CallK.missedCallLine;
+  else if (outcome === 'declined') line = CallK.declinedCallLine;
+  else if (outcome === 'answered') line = CallK.answeredCallLine(Math.max(0, now - (Number(row.answered_at) || now)));
+  if (line) {
+    try { await sendSystemDm(env, row.from_hash, row.to_hash, line, { quiet: true }); } catch (e) { console.log(JSON.stringify({ event: 'call_line_failed', outcome, error: String(e) })); }
+  }
+  if (outcome === 'missed') await notifyMissedCall(env, row.to_hash, row.from_hash, opts);
   return true;
 }
 
-/* The hourly backstop: a call neither answered nor reported missed two
-   minutes on (the caller's app died mid-ring) is recorded missed — the line
-   and the bell, no push (an hour late is no ring) — and the day's rows go. */
+/* A miss, by name: the caller's no-answer / cancel / busy, and the sweep. */
+export async function recordMissedCall(env: any, row: { call: string; from_hash: string; to_hash: string }, opts?: { late?: boolean }) {
+  return recordCallEnd(env, row, 'missed', opts);
+}
+
+/* The hourly backstop: a call neither answered nor ended two minutes on (the
+   caller's app died mid-ring) is recorded missed — the line and the bell, no
+   push (an hour late is no ring) — and the day's rows go. An answered call
+   whose end nobody reported (both apps died) is left alone: its length is
+   unknown, and a guessed line is worse than none. */
 export async function sweepCalls(env: any) {
   const now = Math.floor(Date.now() / 1000);
   try {
     const stale = await env.DB.prepare(
-      'SELECT call, from_hash, to_hash FROM calls_pending WHERE created_at < ?1 AND answered_at IS NULL AND missed_at IS NULL LIMIT 200'
+      'SELECT call, from_hash, to_hash FROM calls_pending WHERE created_at < ?1 AND answered_at IS NULL AND missed_at IS NULL AND ended_at IS NULL LIMIT 200'
     ).bind(now - 120).all();
     for (const row of (stale.results || [])) await recordMissedCall(env, row, { late: true });
     const r = await env.DB.prepare('DELETE FROM calls_pending WHERE created_at < ?1').bind(now - 86400).run();

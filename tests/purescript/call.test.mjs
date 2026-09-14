@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Call from '../../purescript/output/Domain.Call/index.js';
+import * as Maybe from '../../purescript/output/Data.Maybe/index.js';
 
 const STATES = {
   Idle: Call.Idle.value,
@@ -100,4 +101,75 @@ test('stateTag/endReason totality', () => {
   }
   assert.equal(Call.stateTag(Call.Ended.create('busy')), 'Ended');
   assert.equal(Call.endReason(Call.Ended.create('busy')), 'busy');
+});
+
+/* The call log (2026-09-13): the event line a call leaves in the
+   conversation, as every chat app writes one — the grammar round-trips, each
+   side reads its own sentence, a decline reads as "no answer" to the caller
+   (the callee's private act), and the server's one outcome rule. */
+const orNull = (m) => (m instanceof Maybe.Just ? m.value0 : null);
+
+test('call lines: the grammar round-trips, and anything else is a message', () => {
+  assert.equal(Call.missedCallLine, 'call:missed', 'the 2026-09-12 line, unchanged');
+  assert.equal(Call.declinedCallLine, 'call:declined');
+  assert.equal(Call.answeredCallLine(754), 'call:answered:754');
+  assert.equal(Call.answeredCallLine(-5), 'call:answered:0', 'never negative');
+  assert.equal(Call.answeredCallLine(10 ** 9), 'call:answered:86400', 'clamped to a day');
+  for (const [s, tag, secs] of [['call:missed', 'missed', 0], ['call:declined', 'declined', 0], ['call:answered:754', 'answered', 754], ['call:answered:0', 'answered', 0]]) {
+    const l = orNull(Call.parseCallLine(s));
+    assert.ok(l, s + ' parses');
+    assert.equal(Call.callLineTag(l), tag);
+    assert.equal(Call.callLineSecs(l), secs);
+  }
+  for (const s of ['', 'hello', 'call:', 'call:missed2', 'call:answered:', 'call:answered:-3', 'call:answered:12x', 'sys:leave', 'E1.abc']) {
+    assert.equal(orNull(Call.parseCallLine(s)), null, JSON.stringify(s) + ' is not a call line');
+  }
+});
+
+test('call lines: each side reads its own sentence; a decline is "no answer" to the caller; a miss is tinted for the callee only', () => {
+  const text = (mine, s) => Call.callLineText(mine)(orNull(Call.parseCallLine(s)));
+  const missed = (mine, s) => Call.callLineMissedFor(mine)(orNull(Call.parseCallLine(s)));
+  assert.equal(text(true, 'call:missed'), 'Voice call · No answer');
+  assert.equal(text(false, 'call:missed'), 'Missed voice call');
+  assert.equal(text(true, 'call:declined'), 'Voice call · No answer', 'the callee\'s decline is private');
+  assert.equal(text(false, 'call:declined'), 'Declined voice call');
+  assert.equal(text(true, 'call:answered:754'), 'Outgoing voice call · 12 min');
+  assert.equal(text(false, 'call:answered:754'), 'Incoming voice call · 12 min');
+  assert.equal(text(true, 'call:answered:0'), 'Outgoing voice call', 'no length when none was measured');
+  assert.equal(missed(false, 'call:missed'), true);
+  assert.equal(missed(false, 'call:declined'), true);
+  assert.equal(missed(true, 'call:missed'), false, 'the caller\'s "no answer" is quiet');
+  assert.equal(missed(true, 'call:answered:5'), false);
+  assert.equal(missed(false, 'call:answered:5'), false);
+});
+
+test('durationLabel: seconds under a minute, minutes under an hour, then hours and minutes', () => {
+  assert.equal(Call.durationLabel(0), '0 sec');
+  assert.equal(Call.durationLabel(45), '45 sec');
+  assert.equal(Call.durationLabel(60), '1 min');
+  assert.equal(Call.durationLabel(754), '12 min');
+  assert.equal(Call.durationLabel(3599), '59 min');
+  assert.equal(Call.durationLabel(3600), '1 hr');
+  assert.equal(Call.durationLabel(3900), '1 hr 5 min');
+  assert.equal(Call.durationLabel(7200), '2 hr');
+});
+
+test('callOutcome: the server\'s one rule for what a report records', () => {
+  assert.deepEqual(Call.endReasons, ['noanswer', 'canceled', 'busy', 'hangup', 'declined', 'failed']);
+  const out = (caller, answered, reason) => orNull(Call.callOutcome({ caller, answered, reason }));
+  // unanswered: only the CALLER's ring ending is a miss
+  for (const r of ['noanswer', 'canceled', 'busy']) {
+    assert.equal(out(true, false, r), 'missed', 'caller ' + r);
+    assert.equal(out(false, false, r), null, 'a callee cannot ' + r);
+  }
+  assert.equal(out(true, false, 'declined'), 'declined', 'echoed by the caller');
+  assert.equal(out(false, false, 'declined'), 'declined', 'the callee\'s press');
+  assert.equal(out(true, false, 'failed'), 'failed', 'stamped, no line');
+  assert.equal(out(false, false, 'hangup'), 'failed', 'a callee whose answer never landed: stamped, never a miss');
+  // answered: any end is the answered line; a stale ring word records nothing
+  assert.equal(out(true, true, 'hangup'), 'answered');
+  assert.equal(out(false, true, 'hangup'), 'answered');
+  assert.equal(out(false, true, 'failed'), 'answered', 'a connection that broke mid-call still happened');
+  for (const r of ['noanswer', 'canceled', 'busy', 'declined']) assert.equal(out(true, true, r), null, 'after the answer, ' + r + ' is stale');
+  assert.equal(out(true, false, 'bogus'), null);
 });

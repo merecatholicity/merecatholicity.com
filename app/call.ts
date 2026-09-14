@@ -221,10 +221,12 @@ export function installCall() {
     if (au) { try { au.srcObject = null; } catch (e) { /* fine */ } }
     CALL.iceIn = []; CALL.iceOut = []; CALL.iceAll = []; CALL.pendingSdp = ''; CALL.late = false;
   }
-  /* The outcome, told to the server (2026-09-12): the caller's no-answer or
-     cancel records the MISS (the thread's line, the bell, the push); every
-     other end only stamps the stored offer so the hourly backstop never
-     counts a call that ended in front of both. Fire-and-forget. */
+  /* The outcome, told to the server (2026-09-12; the call log 2026-09-13):
+     the caller's no-answer, cancel or busy records the MISS (the thread's
+     line, the bell, the push), a decline the callee's line, a hangup after
+     the answer the answered line with its length; an unanswered break-up
+     only stamps the stored offer so the hourly backstop never counts a call
+     that ended in front of both. Fire-and-forget. */
   function report(reason: string) {
     if (!myKey || !CALL.id || !CALL.peer) return;
     post('/call/end', { key: myKey, call: CALL.id, to: CALL.peer, reason }).catch(() => { /* the sweep is the backstop */ });
@@ -236,9 +238,10 @@ export function installCall() {
     const wasActive = CALL.state === 'Active';
     const was = CALL.state;
     if (sendEnd && CALL.peer && CALL.id) sig(CALL.peer, { call: CALL.id, kind: 'end' });
-    if (CALL.dir === 'out' && was === 'Outgoing') report(ev === 'Timeout' ? 'noanswer' : ev === 'HangUp' ? 'canceled' : ev === 'RemoteDecline' ? 'declined' : ev === 'RemoteBusy' ? 'declined' : 'failed');
+    if (CALL.dir === 'out' && was === 'Outgoing') report(ev === 'Timeout' ? 'noanswer' : ev === 'HangUp' ? 'canceled' : ev === 'RemoteDecline' ? 'declined' : ev === 'RemoteBusy' ? 'busy' : 'failed');
     else if (ev === 'LocalDecline') report('declined');
-    else if (sendEnd && (was === 'Active' || was === 'Connecting')) report('hangup');
+    else if (sendEnd && was === 'Active') report('hangup');
+    else if (sendEnd && was === 'Connecting') report(ev === 'HangUp' ? 'hangup' : 'failed');   // the setup watchdog or a broken pc: not a call that happened
     step(ev);
     cleanup();
     if (wasActive) playSound('end');

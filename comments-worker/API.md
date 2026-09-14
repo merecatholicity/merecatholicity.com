@@ -333,14 +333,19 @@ the row answered; read-marks any missed-call row from that caller, targeted).
 sdp, age}` for the callee while the call is fresh (the ring + 15 s), untaken
 and not yet missed, else `{ok, pending:false, answered}`; anyone else gets
 the empty answer. `POST /call/end {key, call, to, reason}` — `reason` one of
-`noanswer` · `canceled` · `hangup` · `declined` · `failed`: the CALLER's
-`noanswer`/`canceled` records the MISS once (the thread's line `call:missed`,
-a quiet system DM the client draws as "Missed voice call" / "Voice call · No
-answer"; the coalesced `'call'` bell; a `{kind:'call-missed'}` push replacing
-the ring's by its tag, when the callee is away); every other reason only
-stamps the row so the hourly `sweepCalls` backstop (two minutes on, no push)
-never counts a call that ended in front of both. The bell rings ONLY for a
-missed call now — never at the offer.
+`Domain.Call.endReasons` (`noanswer` · `canceled` · `busy` · `hangup` ·
+`declined` · `failed`). What it records is `Domain.Call.callOutcome`'s rule,
+once per call (`ended_at` is the lock, whichever party reports first): the
+CALLER's `noanswer`/`canceled`/`busy` is the MISS — the thread's line
+`call:missed`, the coalesced `'call'` bell, a `{kind:'call-missed'}` push
+replacing the ring's by its tag when the callee is away; either side's
+`declined` writes `call:declined` (no bell); any end after the answer writes
+`call:answered:<secs>` with the server-measured length; an unanswered
+`hangup`/`failed` only stamps the row so the hourly `sweepCalls` backstop
+(two minutes on, no push) never counts a call that ended in front of both.
+The lines are quiet system DMs (`enc` 2) from the caller; the client draws
+them by side through `mcCore.callLineText`. The bell rings ONLY for a missed
+call — never at the offer.
 `POST /call/turn {key}` (READ_LIMIT + established) → `{ok, iceServers, relay}`
 — short-TTL Cloudflare TURN credentials when the TURN key pair AND the
 `calls_turn` admin toggle stand, else the free STUN-only fallback

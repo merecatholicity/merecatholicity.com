@@ -126,7 +126,7 @@ const libBodyOf = (name) => {
 test('0015 builds: the pending-call store, one row per call, stamped answered or missed', () => {
   const { db, files } = freshDb();
   assert.ok(files.some((f) => f.startsWith('0015_calls_pending')), 'migration 0015 present');
-  assert.deepEqual(db.prepare('PRAGMA table_info(calls_pending)').all().map((c) => c.name), ['call', 'from_hash', 'to_hash', 'sdp', 'created_at', 'answered_at', 'missed_at']);
+  assert.deepEqual(db.prepare('PRAGMA table_info(calls_pending)').all().map((c) => c.name).slice(0, 7), ['call', 'from_hash', 'to_hash', 'sdp', 'created_at', 'answered_at', 'missed_at'], '0015\'s columns (0017 adds the log\'s after them)');
   const ins = db.prepare('INSERT INTO calls_pending (call, from_hash, to_hash, sdp, created_at) VALUES (?, ?, ?, ?, ?)');
   ins.run('c1', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100);
   assert.throws(() => ins.run('c1', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 101), /UNIQUE|PRIMARY/, 'the caller mints the id once');
@@ -147,34 +147,62 @@ test('the offer is kept for the ring, and the bell moved from the offer to the m
   assert.ok(/if \(opts && opts\.late\) return;/.test(miss), 'the sweep\'s backstop rings no hour-late push');
 });
 
-test('the miss is recorded ONCE on the real ledger — the stamp is the lock; the line rides the thread quietly', () => {
-  const rec = libBodyOf('recordMissedCall');
-  const m = rec.match(/'(UPDATE calls_pending SET missed_at = \?2 WHERE call = \?1 AND missed_at IS NULL AND answered_at IS NULL)'/);
-  assert.ok(m, 'the one UPDATE');
-  assert.ok(/sendSystemDm\(env, row\.from_hash, row\.to_hash, 'call:missed', \{ quiet: true \}\)/.test(rec), 'the thread\'s line, from the caller, quiet');
-  assert.ok(/await notifyMissedCall\(env, row\.to_hash, row\.from_hash, opts\);/.test(rec), 'then the bell');
+test('0017 builds: the call log — ended_at the lock, outcome the word; every earlier column stands', () => {
+  const { db, files } = freshDb();
+  assert.ok(files.some((f) => f.startsWith('0017_calls_log')), 'migration 0017 present');
+  assert.deepEqual(db.prepare('PRAGMA table_info(calls_pending)').all().map((c) => c.name), ['call', 'from_hash', 'to_hash', 'sdp', 'created_at', 'answered_at', 'missed_at', 'ended_at', 'outcome']);
+  db.close();
+});
+
+/* The lock's SQL is concatenated in lib.ts; the guard rebuilds it as the
+   worker does and runs it on the real ledger. */
+const LOCK_SQL = "'UPDATE calls_pending SET ended_at = ?2, outcome = ?3, missed_at = CASE WHEN ?3 = \\'missed\\' THEN ?2 ELSE missed_at END ' +\n    'WHERE call = ?1 AND ended_at IS NULL AND missed_at IS NULL' + (outcome === 'answered' ? ' AND answered_at IS NOT NULL' : '')";
+
+test('the outcome is recorded ONCE on the real ledger — ended_at is the lock; the line rides the thread quietly; only a miss rings', () => {
+  const rec = libBodyOf('recordCallEnd');
+  assert.ok(rec.includes(LOCK_SQL), 'the one UPDATE, verbatim');
+  assert.ok(/if \(outcome === 'missed'\) line = CallK\.missedCallLine;\s*else if \(outcome === 'declined'\) line = CallK\.declinedCallLine;\s*else if \(outcome === 'answered'\) line = CallK\.answeredCallLine\(Math\.max\(0, now - \(Number\(row\.answered_at\) \|\| now\)\)\);/.test(rec),
+    'the line by outcome, Domain.Call\'s grammar; an answered call\'s length is the server\'s measure');
+  assert.ok(/sendSystemDm\(env, row\.from_hash, row\.to_hash, line, \{ quiet: true \}\)/.test(rec), 'the thread\'s line, from the caller, quiet');
+  assert.ok(/if \(outcome === 'missed'\) await notifyMissedCall\(env, row\.to_hash, row\.from_hash, opts\);/.test(rec), 'the bell rings for a miss alone');
+  assert.ok(/export async function recordMissedCall\([^)]*\) \{\s*return recordCallEnd\(env, row, 'missed', opts\);/.test(libSrc), 'the miss is the general record by name');
   const { db } = freshDb();
-  db.prepare('INSERT INTO calls_pending (call, from_hash, to_hash, sdp, created_at) VALUES (?, ?, ?, ?, ?)').run('c1', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100);
-  const upd = db.prepare(m[1].replace('?1', ':call').replace('?2', ':now'));
-  assert.equal(upd.run({ call: 'c1', now: 150 }).changes, 1, 'the first report records');
-  assert.equal(upd.run({ call: 'c1', now: 160 }).changes, 0, 'a second report (or the sweep after it) changes nothing');
-  db.prepare('INSERT INTO calls_pending (call, from_hash, to_hash, sdp, created_at, answered_at) VALUES (?, ?, ?, ?, ?, ?)').run('c2', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100, 120);
-  assert.equal(upd.run({ call: 'c2', now: 150 }).changes, 0, 'an answered call is never a miss');
+  const run = (call, now, outcome) => db.prepare(
+    'UPDATE calls_pending SET ended_at = :now, outcome = :outcome, missed_at = CASE WHEN :outcome = \'missed\' THEN :now ELSE missed_at END ' +
+    'WHERE call = :call AND ended_at IS NULL AND missed_at IS NULL' + (outcome === 'answered' ? ' AND answered_at IS NOT NULL' : '')
+  ).run({ call, now, outcome }).changes;
+  const ins = db.prepare('INSERT INTO calls_pending (call, from_hash, to_hash, sdp, created_at, answered_at, missed_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  ins.run('c1', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100, null, null);
+  assert.equal(run('c1', 150, 'missed'), 1, 'the first report records');
+  assert.equal(run('c1', 160, 'missed'), 0, 'a second report (or the sweep after it) changes nothing');
+  assert.equal(run('c1', 160, 'declined'), 0, 'nor a different word after it');
+  assert.deepEqual({ ...db.prepare('SELECT missed_at, ended_at, outcome FROM calls_pending WHERE call = ?').get('c1') }, { missed_at: 150, ended_at: 150, outcome: 'missed' }, 'a miss stamps both');
+  ins.run('c2', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100, 120, null);
+  assert.equal(run('c2', 150, 'missed'), 1, 'the SQL does not know the rule (callOutcome does); it only locks');
+  ins.run('c3', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100, null, null);
+  assert.equal(run('c3', 150, 'answered'), 0, 'an unanswered call is never an answered line');
+  ins.run('c4', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100, 120, null);
+  assert.equal(run('c4', 150, 'declined'), 1, 'the first end wins');
+  assert.equal(run('c4', 151, 'answered'), 0, 'the other side\'s hangup a moment later changes nothing');
+  assert.deepEqual({ ...db.prepare('SELECT missed_at, ended_at, outcome FROM calls_pending WHERE call = ?').get('c4') }, { missed_at: null, ended_at: 150, outcome: 'declined' }, 'only a miss stamps missed_at');
+  ins.run('c5', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100, null, 130);
+  assert.equal(run('c5', 150, 'missed'), 0, 'a pre-0017 miss (missed_at, no ended_at) is never re-recorded');
   db.close();
   const sys = libBodyOf('sendSystemDm');
   assert.ok(/if \(!\(opts && opts\.quiet\)\) await notifyDm\(env, toHash, fromHash\);/.test(sys), 'a quiet system DM rings no dm bell');
 });
 
-test('/call/pending serves the offer to its callee alone, fresh and untaken; /call/end records a miss from the caller alone', () => {
+test('/call/pending serves the offer to its callee alone, fresh and untaken; /call/end records by the one rule, through the one lock', () => {
   const pend = bodyOf('handleCallPending');
   assert.ok(/FROM calls_pending WHERE call = \?1 AND to_hash = \?2/.test(pend), 'the callee\'s own');
   assert.ok(/\(now - Number\(row\.created_at\)\) <= CallK\.ringTimeoutSecs \+ 15;/.test(pend), 'fresh: the ring plus the push\'s latency');
-  assert.ok(/if \(!row \|\| row\.answered_at \|\| row\.missed_at \|\| !fresh\) \{\s*return json\(\{ ok: true, pending: false, answered: !!\(row && row\.answered_at\) \}, 200\);/.test(pend), 'taken or gone: pending false, with the word');
+  assert.ok(/if \(!row \|\| row\.answered_at \|\| row\.missed_at \|\| row\.ended_at \|\| !fresh\) \{\s*return json\(\{ ok: true, pending: false, answered: !!\(row && row\.answered_at\) \}, 200\);/.test(pend), 'taken or gone: pending false, with the word');
   const end = bodyOf('handleCallEnd');
-  assert.ok(/\['noanswer', 'canceled', 'hangup', 'declined', 'failed'\]\.indexOf\(reason\) === -1/.test(end), 'the reasons');
+  assert.ok(/CallK\.endReasons\.indexOf\(reason\) === -1/.test(end), 'the reasons are Domain.Call\'s');
   assert.ok(/if \(!row \|\| \(row\.from_hash !== me && row\.to_hash !== me\)\) return json\(\{ ok: true \}, 200\);/.test(end), 'a stranger says nothing');
-  assert.ok(/if \(row\.from_hash === me && \(reason === 'noanswer' \|\| reason === 'canceled'\)\) \{\s*const rec = recordMissedCall\(env, row\);/.test(end), 'only the caller\'s no-answer or cancel is a miss');
-  assert.ok(/UPDATE calls_pending SET answered_at = \?2 WHERE call = \?1 AND answered_at IS NULL AND missed_at IS NULL/.test(end), 'every other end stamps the row so the sweep never counts it');
+  assert.ok(/CallK\.callOutcome\(\{ caller: row\.from_hash === me, answered: !!row\.answered_at, reason \}\)/.test(end), 'what a report records is Domain.Call\'s one rule');
+  assert.ok(/if \(!outcome\) return json\(\{ ok: true \}, 200\);\s*const rec = recordCallEnd\(env, row, outcome\);/.test(end), 'a word that records nothing is dropped; the rest goes through the one lock');
+  assert.ok(!/SET answered_at/.test(end), 'the end never forges an answer');
   const ans = bodyOf('handleCallAnswer');
   assert.ok(/late: data\.late \? 1 : 0/.test(ans), 'the answer says whether it came from the store');
   assert.ok(/UPDATE calls_pending SET answered_at = \?2 WHERE call = \?1 AND to_hash = \?3 AND answered_at IS NULL/.test(ans));
@@ -182,5 +210,5 @@ test('/call/pending serves the offer to its callee alone, fresh and untaken; /ca
     idxSrc.includes("{ m: 'POST', p: '/api/comments/call/end', fn: (request, env, ctx, url) => handleCallEnd(request, env, ctx) },"), 'both routes');
   assert.ok(/\.then\(\(\) => sweepCalls\(env\)\)/.test(idxSrc), 'the sweep is in the hourly chain');
   const sweep = libBodyOf('sweepCalls');
-  assert.ok(/created_at < \?1 AND answered_at IS NULL AND missed_at IS NULL LIMIT 200/.test(sweep) && /recordMissedCall\(env, row, \{ late: true \}\)/.test(sweep), 'the backstop, late');
+  assert.ok(/created_at < \?1 AND answered_at IS NULL AND missed_at IS NULL AND ended_at IS NULL LIMIT 200/.test(sweep) && /recordMissedCall\(env, row, \{ late: true \}\)/.test(sweep), 'the backstop, late — never a call already ended');
 });

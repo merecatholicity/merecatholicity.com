@@ -49,10 +49,11 @@ test('a late answer re-sends every candidate the caller gathered; the ring buzze
   assert.ok(/if \(window\.mcHaptic\) window\.mcHaptic\.ringStop\(\);/.test(fn(call, 'cleanup', 'report')), 'stopped by the one teardown every exit takes');
 });
 
-test('the outcome is reported: the caller\'s no-answer or cancel is the miss, a decline is a decline, a hangup a hangup', () => {
+test('the outcome is reported: the caller\'s no-answer, cancel or busy is the miss, a decline a decline, a hangup after the answer a hangup, a broken setup a failure', () => {
   const end = fn(call, 'end', 'makePc');
-  assert.ok(/if \(CALL\.dir === 'out' && was === 'Outgoing'\) report\(ev === 'Timeout' \? 'noanswer' : ev === 'HangUp' \? 'canceled' : ev === 'RemoteDecline' \? 'declined' : ev === 'RemoteBusy' \? 'declined' : 'failed'\);/.test(end));
-  assert.ok(/else if \(ev === 'LocalDecline'\) report\('declined'\);/.test(end) && /else if \(sendEnd && \(was === 'Active' \|\| was === 'Connecting'\)\) report\('hangup'\);/.test(end));
+  assert.ok(/if \(CALL\.dir === 'out' && was === 'Outgoing'\) report\(ev === 'Timeout' \? 'noanswer' : ev === 'HangUp' \? 'canceled' : ev === 'RemoteDecline' \? 'declined' : ev === 'RemoteBusy' \? 'busy' : 'failed'\);/.test(end));
+  assert.ok(/else if \(ev === 'LocalDecline'\) report\('declined'\);/.test(end) && /else if \(sendEnd && was === 'Active'\) report\('hangup'\);/.test(end));
+  assert.ok(/else if \(sendEnd && was === 'Connecting'\) report\(ev === 'HangUp' \? 'hangup' : 'failed'\);/.test(end), 'the setup watchdog is not a call that happened');
   assert.ok(/post\('\/call\/end', \{ key: myKey, call: CALL\.id, to: CALL\.peer, reason \}\)/.test(fn(call, 'report', 'end')));
 });
 
@@ -63,11 +64,13 @@ test('the service worker rings: the call notification stands, buzzes, offers Ans
   assert.ok(/if \(event\.action === 'answer'\) url \+= \(url\.indexOf\('\?'\) === -1 \? '\?' : '&'\) \+ 'answer=1';/.test(sw), 'Answer opens the same deep link, marked');
 });
 
-test('the thread draws the missed call as a line by side, never a bubble', () => {
-  assert.ok(/else if \(e === 2 && String\(m\.body \|\| ''\) === 'call:missed'\) \{[\s\S]*?return dmCallLine\(m\);/.test(dm), 'the system word, before the bubble road — no surface, no pill');
+test('the thread draws every call line by side through the membrane, muted, never a bubble', () => {
+  assert.ok(/else if \(e === 2 && window\.mcCore && window\.mcCore\.callLine && window\.mcCore\.callLine\(String\(m\.body \|\| ''\)\)\) \{[\s\S]*?return dmCallLine\(m\);/.test(dm), 'the grammar is Domain.Call\'s, before the bubble road — no surface, no pill');
   const line = fn(dm, 'dmCallLine');
-  assert.ok(/mine \? 'Voice call · No answer' : 'Missed voice call'/.test(line), 'the caller\'s "no answer", the callee\'s "missed"');
+  assert.ok(/core\.callLineText\(body, mine\)/.test(line) && /core\.callLineMissed\(body, mine\) \? ' dm-call-missed' : ''/.test(line), 'the sentence and the tint are the kernel\'s, by side');
+  assert.ok(!/'Missed voice call'|'No answer'/.test(line), 'no sentence inlined in the client');
   assert.ok(/'\.dm-call-line\{display:flex;width:fit-content/.test(dm), 'centred by its own width');
+  assert.ok(/'\.dm-call-line \.dm-call-text\{color:var\(--faint\)\}'/.test(dm) && /'\.dm-call-line\.dm-call-missed \.dm-call-text\{color:var\(--maroon,#8b1a1a\)\}'/.test(dm), 'muted; a miss for this reader tinted');
 });
 
 test('one haptic engine, the shell\'s: installed first, used by the surface, the pull, the ring', () => {

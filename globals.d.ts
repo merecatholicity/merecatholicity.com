@@ -37,6 +37,9 @@ interface McCore {
   notifHasSnippet(kind: string): boolean;
   dmReplyExcerpt(s: string): string;
   dmReplySentinel: string;
+  callLine(body: string): { tag: string; secs: number } | null;
+  callLineText(body: string, mine: boolean): string;
+  callLineMissed(body: string, mine: boolean): boolean;
   canInteract(author: string, me: string, bot: string): boolean;
   canReport(author: string, me: string, bot: string, isAdmin: boolean): boolean;
   canEdit(author: string, me: string, isAdmin?: boolean): boolean;

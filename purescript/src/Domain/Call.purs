@@ -25,9 +25,25 @@ module Domain.Call
   , glareWins
   , stateTag
   , endReason
+  , endReasons
+  , callOutcome
+  , CallLine(..)
+  , missedCallLine
+  , declinedCallLine
+  , answeredCallLine
+  , parseCallLine
+  , callLineTag
+  , callLineSecs
+  , callLineText
+  , callLineMissedFor
+  , durationLabel
   ) where
 
 import Prelude
+
+import Data.Int (fromString)
+import Data.Maybe (Maybe(..))
+import Data.String (Pattern(..), stripPrefix)
 
 -- | The call lifecycle. Ended carries the reason tag the UI speaks from:
 -- | "hangup" | "declined" | "busy" | "canceled" | "noanswer" | "missed"
@@ -161,3 +177,125 @@ endReason :: CallState -> String
 endReason st = case st of
   Ended r -> r
   _ -> ""
+
+-- | The call log (2026-09-13). Every major chat app writes a call's outcome
+-- | into the conversation as a muted event line — WhatsApp's "Voice call ·
+-- | 12 min", Signal's "Missed voice call", FaceTime's "Canceled" — and this
+-- | is that grammar: what the worker records once per call, and what both
+-- | readers draw by side. The line is a plaintext system word (`enc` 2) in
+-- | the thread, written from the CALLER to the callee, so "mine" below means
+-- | "I placed the call". It expires with the conversation like any word.
+-- |
+-- |   * "call:missed"           — nobody answered: the caller's timer ran out,
+-- |                               the caller hung up while ringing, or the
+-- |                               callee was on another call (busy).
+-- |   * "call:declined"         — the callee pressed Decline. The CALLER reads
+-- |                               it as "No answer": a decline is the callee's
+-- |                               private act (the same indistinguishability
+-- |                               a block or the calls-off switch enjoys).
+-- |   * "call:answered:<secs>"  — the call connected and lasted this long,
+-- |                               measured by the server between the answer
+-- |                               and the first hang-up it heard.
+-- |
+-- | A failed setup records nothing: no app writes "couldn't connect" into
+-- | the chat, and the caller's panel already said so.
+data CallLine
+  = CallMissed
+  | CallDeclined
+  | CallAnswered Int
+
+derive instance eqCallLine :: Eq CallLine
+
+missedCallLine :: String
+missedCallLine = "call:missed"
+
+declinedCallLine :: String
+declinedCallLine = "call:declined"
+
+answeredPrefix :: String
+answeredPrefix = "call:answered:"
+
+-- | "call:answered:<secs>", the seconds clamped to a day and never negative.
+answeredCallLine :: Int -> String
+answeredCallLine secs = answeredPrefix <> show (clampSecs secs)
+
+clampSecs :: Int -> Int
+clampSecs n = max 0 (min 86400 n)
+
+-- | The grammar read back; anything else is not a call's line.
+parseCallLine :: String -> Maybe CallLine
+parseCallLine s
+  | s == missedCallLine = Just CallMissed
+  | s == declinedCallLine = Just CallDeclined
+  | otherwise = case stripPrefix (Pattern answeredPrefix) s of
+      Just rest -> case fromString rest of
+        Just n | n >= 0 -> Just (CallAnswered (clampSecs n))
+        _ -> Nothing
+      Nothing -> Nothing
+
+-- | The tag the membrane speaks: "missed" | "declined" | "answered".
+callLineTag :: CallLine -> String
+callLineTag l = case l of
+  CallMissed -> "missed"
+  CallDeclined -> "declined"
+  CallAnswered _ -> "answered"
+
+-- | The duration an answered line carries, 0 otherwise.
+callLineSecs :: CallLine -> Int
+callLineSecs l = case l of
+  CallAnswered n -> n
+  _ -> 0
+
+-- | The sentence each side reads, `mine` = I placed the call. The caller's
+-- | side is WhatsApp's ("Voice call · No answer"), the callee's Signal's
+-- | ("Missed voice call"), and an answered call names its direction and
+-- | length on both ("Outgoing voice call · 12 min").
+callLineText :: Boolean -> CallLine -> String
+callLineText mine l = case l of
+  CallMissed -> if mine then "Voice call · No answer" else "Missed voice call"
+  CallDeclined -> if mine then "Voice call · No answer" else "Declined voice call"
+  CallAnswered n ->
+    let dir = if mine then "Outgoing voice call" else "Incoming voice call"
+    in if n <= 0 then dir else dir <> " · " <> durationLabel n
+
+-- | Whether the line is a miss FOR THIS READER — the callee's missed or
+-- | declined call, drawn in the missed tint every app uses; the caller's
+-- | "no answer" and every answered call are quiet.
+callLineMissedFor :: Boolean -> CallLine -> Boolean
+callLineMissedFor mine l = case l of
+  CallAnswered _ -> false
+  _ -> not mine
+
+-- | A call's length as the apps say it: "45 sec" under a minute, "12 min"
+-- | under an hour, then "1 hr 5 min" ("2 hr" on the hour).
+durationLabel :: Int -> String
+durationLabel secs
+  | secs < 60 = show (max 0 secs) <> " sec"
+  | secs < 3600 = show (secs / 60) <> " min"
+  | otherwise =
+      let h = secs / 3600
+          m = (secs `mod` 3600) / 60
+      in show h <> " hr" <> (if m > 0 then " " <> show m <> " min" else "")
+
+-- | What a client may report to /call/end. `noanswer` and `canceled` are the
+-- | caller's ring ending; `busy` the callee's auto-reply from another call;
+-- | `declined` the callee's press (echoed by the caller); `hangup` any end
+-- | after the answer; `failed` a setup that never connected.
+endReasons :: Array String
+endReasons = [ "noanswer", "canceled", "busy", "hangup", "declined", "failed" ]
+
+-- | The server's one rule for what a report records, given who reports
+-- | (`caller`), whether the call had been answered, and the reason:
+-- |   Just "answered" — any end after the answer: the line carries the length
+-- |   Just "missed"   — the CALLER's noanswer / canceled / busy, unanswered
+-- |   Just "declined" — either side's declined, unanswered
+-- |   Just "failed"   — an unanswered setup that broke: stamped, no line
+-- |   Nothing         — a word that records nothing (a callee cannot cancel)
+-- | Recording once is the ledger's lock, not this rule's business.
+callOutcome :: { caller :: Boolean, answered :: Boolean, reason :: String } -> Maybe String
+callOutcome r
+  | r.answered = if r.reason == "hangup" || r.reason == "failed" then Just "answered" else Nothing
+  | r.reason == "declined" = Just "declined"
+  | r.caller && (r.reason == "noanswer" || r.reason == "canceled" || r.reason == "busy") = Just "missed"
+  | r.reason == "hangup" || r.reason == "failed" = Just "failed"
+  | otherwise = Nothing

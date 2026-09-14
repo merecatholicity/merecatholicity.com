@@ -23,6 +23,7 @@ import * as Wall from '../../purescript/output/Domain.Wall/index.js';
 import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
+import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 import * as Comments from '../../purescript/output/Domain.Comments/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
@@ -171,6 +172,7 @@ import {
   ringCall,
   notifyMissedCall,
   recordMissedCall,
+  recordCallEnd,
   sweepCalls,
   notifyDm,
   notifyEnabled,
@@ -2444,9 +2446,10 @@ async function handleDmMediaGet(request: any, env: any) {
    rides these gated POSTs, where the DM privacy rules already live; the
    transient ICE/end/decline words ride the BoardHub 'call-sig' relay
    (durable.ts). The offer is KEPT for the ring (calls_pending, 2026-09-12) so
-   a callee reached by the ring's push can fetch it and answer; a miss is
-   recorded once — the thread's line, the coalesced bell, the push. No call
-   log beyond that. calls_enabled (app_settings) is the global kill switch,
+   a callee reached by the ring's push can fetch it and answer; the outcome is
+   recorded once (0017) as the thread's own event line — missed, declined, or
+   answered with its length — the coalesced bell and the push riding a miss.
+   calls_enabled (app_settings) is the global kill switch,
    enforced here, server-authoritative. */
 
 /* Place a call: validate, refuse the bot and self, and enforce dm_blocks with
@@ -2500,39 +2503,39 @@ async function handleCallPending(request: any, env: any) {
   const call = String(data.call || '');
   if (!/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);
   const row = await env.DB.prepare(
-    'SELECT from_hash, sdp, created_at, answered_at, missed_at FROM calls_pending WHERE call = ?1 AND to_hash = ?2'
+    'SELECT from_hash, sdp, created_at, answered_at, missed_at, ended_at FROM calls_pending WHERE call = ?1 AND to_hash = ?2'
   ).bind(call, me).first();
   const now = Math.floor(Date.now() / 1000);
   const fresh = !!row && (now - Number(row.created_at)) <= CallK.ringTimeoutSecs + 15;
-  if (!row || row.answered_at || row.missed_at || !fresh) {
+  if (!row || row.answered_at || row.missed_at || row.ended_at || !fresh) {
     return json({ ok: true, pending: false, answered: !!(row && row.answered_at) }, 200);
   }
   return json({ ok: true, pending: true, from: row.from_hash, sdp: row.sdp, age: now - Number(row.created_at) }, 200);
 }
 
 /* The call's outcome, from the party that saw it end: {key, call, to,
-   reason}. The caller's 'noanswer' (its ring timer) or 'canceled' (it hung up
-   while ringing) records the MISS — once, whatever else is reported after;
-   every other reason ('hangup', 'declined', 'failed', from either party)
-   only stamps the row so the sweep's backstop never counts a call that ended
-   in front of both. Idempotent; a row that is not there is nothing to say. */
+   reason} — reason one of Domain.Call.endReasons. What it records is
+   `Domain.Call.callOutcome`'s one rule (who reports, whether the call had
+   been answered, the word): the caller's noanswer / canceled / busy is the
+   MISS, either side's declined the decline, any end after the answer the
+   answered line with its length, an unanswered break-up a stamp and no line;
+   a word that records nothing (a callee cannot cancel) is dropped. Recording
+   is once per call — `recordCallEnd`'s stamp is the lock, whatever is
+   reported after. Idempotent; a row that is not there is nothing to say. */
 async function handleCallEnd(request: any, env: any, ctx: any) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
   const call = String(data.call || '');
   const reason = String(data.reason || '');
-  if (!/^[0-9a-f]{16,64}$/.test(call) || ['noanswer', 'canceled', 'hangup', 'declined', 'failed'].indexOf(reason) === -1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT call, from_hash, to_hash, answered_at, missed_at FROM calls_pending WHERE call = ?1').bind(call).first();
+  if (!/^[0-9a-f]{16,64}$/.test(call) || CallK.endReasons.indexOf(reason) === -1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const row = await env.DB.prepare('SELECT call, from_hash, to_hash, answered_at, missed_at, ended_at FROM calls_pending WHERE call = ?1').bind(call).first();
   if (!row || (row.from_hash !== me && row.to_hash !== me)) return json({ ok: true }, 200);
-  if (row.from_hash === me && (reason === 'noanswer' || reason === 'canceled')) {
-    const rec = recordMissedCall(env, row);
-    if (ctx) ctx.waitUntil(rec); else await rec;
-  } else if (!row.answered_at && !row.missed_at) {
-    /* ended in front of both (or declined, or failed): not a miss, and the
-       sweep must not make it one */
-    await env.DB.prepare('UPDATE calls_pending SET answered_at = ?2 WHERE call = ?1 AND answered_at IS NULL AND missed_at IS NULL').bind(call, Math.floor(Date.now() / 1000)).run();
-  }
+  if (row.ended_at || row.missed_at) return json({ ok: true }, 200);   // recorded already: the lock would refuse anyway
+  const outcome = MaybeM.maybe(null)((o: string) => o)(CallK.callOutcome({ caller: row.from_hash === me, answered: !!row.answered_at, reason }));
+  if (!outcome) return json({ ok: true }, 200);
+  const rec = recordCallEnd(env, row, outcome);
+  if (ctx) ctx.waitUntil(rec); else await rec;
   return json({ ok: true }, 200);
 }
 

@@ -687,11 +687,13 @@ export function installDm(B: Boot) {
           try { var ev = JSON.parse(dmDecrypt(m.body, ctx.otherPub) || 'null'); if (ev) { m._env = ev; m.reply = dmReplyClean(ev.reply); cap = ev.caption || ''; } } catch (x2) { cap = ''; }
         }
         node = dmMediaExpiredNode(m, ctx, cap);
-      } else if (e === 2 && String(m.body || '') === 'call:missed') {
-        /* A missed call's line (2026-09-12): the system word the worker writes
-           into the thread when a call went unanswered, drawn by side — the
-           caller's "no answer", the callee's "missed". A line, not a bubble:
-           no surface, no pill, nothing to reply to. */
+      } else if (e === 2 && window.mcCore && window.mcCore.callLine && window.mcCore.callLine(String(m.body || ''))) {
+        /* A call's line (2026-09-12; the log 2026-09-13): the system word the
+           worker writes into the thread once per call — missed, declined, or
+           answered with its length — drawn by side (Domain.Call.callLineText):
+           the caller's "no answer", the callee's "missed", "Outgoing voice
+           call · 12 min". A muted line, not a bubble: no surface, no pill,
+           nothing to reply to. */
         return dmCallLine(m);
       } else {
         var sysLabel = null;
@@ -705,10 +707,12 @@ export function installDm(B: Boot) {
   }
   function dmCallLine(m: any) {
     var mine = m.sender_hash === state.myHash;   // I placed it
-    var line = el('div', 'dm-call-line');
+    var body = String(m.body || '');
+    var core = window.mcCore as NonNullable<typeof window.mcCore>;   // dmRenderMsg took this road only because the membrane read the line
+    var line = el('div', 'dm-call-line' + (core.callLineMissed(body, mine) ? ' dm-call-missed' : ''));
     if (m.id) line.setAttribute('data-dmid', String(m.id));
-    line.appendChild(el('span', 'dm-call-ico', '📞'));
-    line.appendChild(el('span', 'dm-call-text', mine ? 'Voice call · No answer' : 'Missed voice call'));
+    line.appendChild(el('span', 'dm-call-ico', mine ? '📞↗' : '📞↙'));
+    line.appendChild(el('span', 'dm-call-text', core.callLineText(body, mine)));
     var t = el('span', 'dm-call-time', dmTimeLabel(m.created_at));
     t.title = fmtDateTime(m.created_at);
     line.appendChild(t);
@@ -897,10 +901,12 @@ export function installDm(B: Boot) {
       '.dm-reply-x{flex:none;font:inherit;background:none;border:0;cursor:pointer;color:var(--faint);font-size:1.1em;padding:.2em .45em;border-radius:6px}' +
       '.dm-reply-x:hover{color:var(--maroon,#8b1a1a)}' +
       '.dm-edit-bar{border-left-color:var(--dm-saved,#d9a520)}' +
-      /* a missed call's line: centred, quiet, a pill of its own */
+      /* a call's event line (the log): centred, muted, a pill of its own; a miss for this reader is tinted */
       '.dm-call-line{display:flex;width:fit-content;max-width:92%;align-items:center;gap:.4em;margin:.45em auto;padding:.3em .8em;border:1px solid var(--rule);border-radius:999px;background:color-mix(in srgb,var(--ink,#000) 5%,transparent);color:var(--faint);font-size:.85em;line-height:1.2}' +
-      '.dm-call-line .dm-call-text{color:var(--ink)}' +
+      '.dm-call-line .dm-call-ico{font-size:.9em;letter-spacing:-.15em;margin-right:.15em}' +
+      '.dm-call-line .dm-call-text{color:var(--faint)}' +
       '.dm-call-line .dm-call-time{opacity:.8}' +
+      '.dm-call-line.dm-call-missed .dm-call-text{color:var(--maroon,#8b1a1a)}' +
       /* the chat screen: a sticky header over the words, a sticky composer under them */
       '.dm-head{position:sticky;top:0;z-index:38;display:flex;align-items:center;gap:.65rem;padding:.45rem 0;margin:0 0 .3rem;background:var(--surface,#fff);border-bottom:1px solid var(--rule)}' +
       'body.mc-app .dm-head{top:var(--mc-deskbar-h,0px)}' +
