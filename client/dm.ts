@@ -2448,7 +2448,22 @@ export function installDm(B: Boot) {
             document.title = shortName + ' | Inbox';
           },
           append: function (msg: any) {
-            if (!msg || String(msg.sender_hash) === state.myHash) return;
+            if (!msg) return;
+            if (String(msg.sender_hash) === state.myHash) {
+              /* My own words are echoed locally — except a system line written
+                 in my name (enc 2: my call's outcome, 2026-09-14), which has no
+                 echo and lands here from the server: placed, no receipt, no
+                 unread count, never "seen". */
+              if (Number(msg.enc || 0) !== 2) return;
+              var pg = Math.max(1, Math.ceil((d.total + 1) / d.per));
+              d.total += 1;
+              if (d.page !== pg) return;
+              var near = nearEnd();
+              placeMsg(msg);
+              if (near) scrollToEnd();
+              updateJump();
+              return;
+            }
             setTypist(msg.sender_hash, false); typingOn = Object.keys(typists).length > 0; paintSub(); typingBubble(typingOn);   // a real message ends "typing"
             var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
             d.total += 1;

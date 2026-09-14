@@ -191,6 +191,8 @@ test('the outcome is recorded ONCE on the real ledger — ended_at is the lock; 
   assert.equal(run('c5', 150, 'missed'), 0, 'a pre-0017 miss (missed_at, no ended_at) is never re-recorded');
   db.close();
   const sys = libBodyOf('sendSystemDmLine');
+  assert.ok(/const live = to\.concat\(\[String\(actorHash\)\]\);\s*await publishUser\(env, \[\{ v: 1, t: 'dm', scopes: live\.map\(\(h\) => 'user:' \+ h\)/.test(sys),
+    'the line is published to the actor\'s own sockets too — the caller sees their outcome land without a reload (2026-09-14)');
   assert.ok(/if \(!\(opts && opts\.quiet\)\) for \(const h of to\) await notifyDm\(env, h, actorHash, threadId\);/.test(sys), 'a quiet system line rings no dm bell; a loud one rings every other member\'s, by the conversation (0016)');
 });
 

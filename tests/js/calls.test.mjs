@@ -70,6 +70,10 @@ test('the thread draws every call line by side through the membrane, muted, neve
   assert.ok(/core\.callLineText\(body, mine\)/.test(line) && /core\.callLineMissed\(body, mine\) \? ' dm-call-missed' : ''/.test(line), 'the sentence and the tint are the kernel\'s, by side');
   assert.ok(!/'Missed voice call'|'No answer'/.test(line), 'no sentence inlined in the client');
   assert.ok(/'\.dm-call-line\{display:flex;width:fit-content/.test(dm), 'centred by its own width');
+  const app = dm.slice(dm.indexOf('append: function (msg: any) {'), dm.indexOf('editMsg: function (msg: any) {'));
+  assert.ok(/if \(String\(msg\.sender_hash\) === state\.myHash\) \{[\s\S]*?if \(Number\(msg\.enc \|\| 0\) !== 2\) return;[\s\S]*?placeMsg\(msg\);[\s\S]*?return;\s*\}/.test(app),
+    'my own system line (my call\'s outcome) lands live where my echoed words are dropped; no seen ping, no unread count');
+  assert.ok(!/dmSeenPing/.test(app.slice(0, app.indexOf('setTypist'))), 'never "seen" for my own line');
   assert.ok(/'\.dm-call-line \.dm-call-text\{color:var\(--faint\)\}'/.test(dm) && /'\.dm-call-line\.dm-call-missed \.dm-call-text\{color:var\(--maroon,#8b1a1a\)\}'/.test(dm), 'muted; a miss for this reader tinted');
 });
 

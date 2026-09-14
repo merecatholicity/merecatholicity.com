@@ -1498,11 +1498,15 @@ export async function sendSystemDmLine(env: any, threadId: any, actorHash: any, 
   ).bind(threadId, now, actorHash).run();
   await env.DB.prepare('UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?1 AND hash = ?3').bind(threadId, now, actorHash).run();
   const to = await dmRecipients(env, threadId, actorHash);
-  /* Nudge every other member's own connections (badge + open thread) like any DM. */
-  if (to.length) {
-    await publishUser(env, [{ v: 1, t: 'dm', scopes: to.map((h) => 'user:' + h), from: actorHash, thread_id: threadId,
-      message: { id: (msg && msg.id) || 0, sender_hash: actorHash, body: body, created_at: now, enc: 2 } }]);
-  }
+  /* Nudge every other member's own connections (badge + open thread) like any
+     DM — AND the actor's own (2026-09-14): a system line has no local echo
+     (the caller's "Voice call · No answer" is written here, seconds after
+     they cancelled, into the conversation on their screen), so the actor's
+     live sockets must hear it too. The client lets its own enc-2 word through
+     where it drops its own echoed messages. */
+  const live = to.concat([String(actorHash)]);
+  await publishUser(env, [{ v: 1, t: 'dm', scopes: live.map((h) => 'user:' + h), from: actorHash, thread_id: threadId,
+    message: { id: (msg && msg.id) || 0, sender_hash: actorHash, body: body, created_at: now, enc: 2 } }]);
   if (!(opts && opts.quiet)) for (const h of to) await notifyDm(env, h, actorHash, threadId);
   return (msg && msg.id) || 0;
 }
