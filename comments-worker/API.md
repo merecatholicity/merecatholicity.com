@@ -528,34 +528,87 @@ hostname, or a second mobile sitekey the owner adds to the allowlist. Failure
 
 ### 4.1 Direct messages
 
-Strictly 1-v-1 threads, canonical-pair keyed. Private by design (no admin read
-path). Shadow-block: a blocked sender's messages read as delivered to *them*
-but are stored `held` and invisible to the recipient; unblock releases them at
-their original timestamps.
+Conversations of two to twenty-five members (`Domain.Dm.maxMembers`), ONE
+model for both since migration 0016: a thread with member rows (`dm_members`)
+— a pair is two of them, keyed once by `pair_key`; a group (`kind` 1) any
+number more, with an optional name. Private by design (no admin read path).
+Every read runs from the viewer's own seat: what they may see is unheld or
+their own, newer than their clear stamp, no older than their joining (a
+member added later gets no history — the crypto's rule too), and in a group
+never from a sender they blocked. Shadow-block is a PAIR's: a blocked sender's
+messages read as delivered to *them* but are stored `held` and invisible to
+the recipient; unblock releases them at their original timestamps. In a group
+a block is the blocker's alone: the blocked member's words are hidden from
+them and never fanned to them, and they cannot be added by that member.
+
+**The envelope (`enc`)**: `1` = the pair's static X25519 box (`E1.<nonce>.<ct>`,
+one ciphertext both sides open; accepted on a pair one deploy longer, readable
+for ever); `2` = a system line in the clear (`call:missed`, `call:declined`,
+`call:answered:N`, `sys:add:<h>,<h>`, `sys:leave`, `sys:name:<name>` —
+`Domain.Dm.parseSysLine` / `Domain.Call.parseCallLine`); `3` = the sealed
+envelope (2026-09-13): `E3.<nonce>.<secretbox>` under a random per-message
+content key, that key boxed once per CURRENT member (the sender included) and
+sent as `keys:{<hash>: <b64url nonce||box>}` — `dm_keys` serves each reader
+ONLY their own `sealed`. The key set must equal the current roster
+(`Domain.Dm.membersEqual`) or the send answers `409 {error:'roster',
+members:[{hash,pubkey}]}` and the client seals once more. Media is AES-256-GCM
+per file, its key inside the envelope; an attachment is a `dm_media` object
+named by `dm_media_refs` rows — a forward names the same object again (never
+re-uploaded) and the object dies with its LAST reference. The server never
+sees a plaintext, a file key, a reply quote or the "Forwarded" mark.
+
+Every conversation is addressed by `thread_id`; a pair may still be addressed
+by `with:<64-hex>` (the profile button's door; a room that does not exist yet
+is an empty one). `messages.html?t=<id>` opens a thread, `?dm=<hash>` a pair.
 
 | Route | Body | Returns | Gate |
 |---|---|---|---|
-| `POST /api/comments/dm/send` | `{key, to:<64-hex>, body:<≤4000>, token}` | `{ok, id, thread_id, created_at}` — **same shape even when shadow-held** (undetectable to the sender). | `POST_LIMIT` · **Turnstile** · gated. Refuses self (`"That would be a soliloquy."`) and the bot. |
-| `POST /api/comments/dm/threads` | `{key, p?}` | `{ok, threads:[{id,other_hash,nick,avatar,msgs,last_at,unread}], total, unread_total, page, per:20}`. `unread` is the COUNT of the viewer's unread words in that thread (2026-09-11; truthy exactly when the old 0/1 flag was), `unread_total` the number of THREADS with something unread — the tab badge's number, unchanged. Threads with 0 visible messages are absent. | `READ_LIMIT`, **not** gated. |
-| `POST /api/comments/dm/thread` | `{key, with:<64-hex>, p?}` | `{ok, thread_id, ttl, other:{hash,nick,avatar,assigned,pubkey,last_seen}, messages:[{id,sender_hash,body,enc,created_at,edited_at,opened_at,expires_at,saved,redacted,media_key,media_size,media_expired,react_me,react_other}], total, page, per:20, blocked, unread, unread_from}`. **`p` absent → the LAST page.** Opening marks the thread read and starts the disappearing clock; `unread` / `unread_from` (2026-09-11) say what was unread BEFORE this open did — the count, and the id of the first unread word (`null` for none), so the client can stand its "N unread messages" line above it and count on its jump button. `react_me` / `react_other` (2026-09-10) are each side's one reaction, `''` for none, told from the viewer's seat; `liked_me`/`liked_other` ride beside them derived (`1` iff a reaction stands) for one deploy of cached clients. A `find:<message id>` (2026-09-12, without `p`) places the answer on that message's page — the topic view's own idiom, for the bell that lands on a message. Opening READS every bell this sender rang you (`dm`, `dm-react`, `call`) and the answer carries `notif_unread` (2026-09-12). | `READ_LIMIT`, not gated. |
-| `POST /api/comments/dm/unread` | `{key}` | `{ok, unread}` — unread **thread** count. | `READ_LIMIT`, **gated** (this poll is the reliable logout trip). |
-| `POST /api/comments/dm/block` | `{key, hash, blocked:<bool>}` | `{ok, blocked}` | `POST_LIMIT`, not gated. Unblock releases held messages and rings the badge. |
-| `POST /api/comments/dm/delete` | `{key, with}` | `{ok, purged}` — per-side "fresh start"; both sides cleared with nothing newer → the thread is hard-deleted. | `POST_LIMIT`, gated. |
-| `POST /api/comments/dm/presence` | `{key, hashes:[<64-hex>…≤50]}` | `{ok, online:[hash…], seen:{hash: epoch}}` — who is online now (a live socket under presence mode "auto"), and for those who are not, when they were last seen (2026-09-11): the hub's `profiles.last_seen_at`, stamped at a member's last disconnect under "auto" and CLEARED by an auth under "off", so a member who chose appear-offline has no entry — its absence is the privacy rule; an online member has no entry either (they are Online). `other.last_seen` on `/dm/thread` is the same stamp. | `READ_LIMIT`, gated. |
-| `POST /api/comments/dm/react` | `{key, with, id, emoji}` | `{ok, id, emoji}` — ONE reaction per side per message: `emoji` is exactly one emoji (an RGI-shaped grapheme: a flag, a keycap, a base with selector / skin tone / tag sequence / ZWJ-joined bases) or one of our custom-pack `:tokens:` (lower-cased on the way in), validated by `Domain.Dm.normalizeReaction`; `''` withdraws. Anything else → `400`. Only a message the caller can SEE (their pair's thread, not held from them, not expired, not redacted, after their own clear stamp) → else `404`; a redacted one → `409`. The other party's open thread hears `dm-react` live, and a reaction to THEIR message rings their `dm-react` bell (2026-09-12: "X reacted to your message", landing on it — coalesced, withdrawn with the reaction; your own message rings nothing). | `POST_LIMIT`, gated. |
-| `POST /api/comments/dm/like` | `{key, with, id, like:<bool>}` | The 2026-08-03 heart on the same road: `like` true is the `❤️` reaction, false withdraws. **Deprecated alias** of `/dm/react`, kept one deploy for cached clients. | as `/dm/react`. |
-| `POST /api/comments/dm/save` | `{key, with, id, saved:<bool>}` | `{ok, saved, expires_at}` — a saved message is exempt from expiry for BOTH (`expires_at` null); unsaving restores the clock from `opened_at` + the thread ttl (or the unopened backstop). Lit for both: the other party's open thread hears `dm-save` live. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/send` | `{key, token, thread_id? \| to?:<64-hex>, body, enc:0\|1\|3, keys?:{hash: sealed}, media_key?}` | `{ok, id, thread_id, created_at}` — **same shape even when shadow-held** (undetectable to the sender). `404` for a thread you are not in; `409 roster` for a stale key set; a `media_key` already named by a message is accepted only from a member who can read it (a forward). | `POST_LIMIT` · **Turnstile** · gated. Refuses self and the bot on a pair. |
+| `POST /api/comments/dm/forward` | `{key, token, items:[<a send body> …≤10]}` | `{ok, results:[{status, ok, id?, thread_id?, error?}]}` — one gate, then the send's delivery core per item. | `POST_LIMIT` · **Turnstile** · gated. |
+| `POST /api/comments/dm/threads` | `{key, p?}` | `{ok, threads:[{thread_id, id, kind, name, other_hash (a pair), nick, avatar, assigned, members:[{hash,nick,avatar,assigned} ≤4 of the others], member_count, msgs, last_at, unread}], total, unread_total, page, per:20}`. `unread` is the COUNT of the viewer's unread words in that thread, `unread_total` their sum across threads — the tab badge's number. Threads with 0 visible messages, and threads left, are absent. | `READ_LIMIT`, **not** gated. |
+| `POST /api/comments/dm/thread` | `{key, thread_id? \| with?, p?, find?}` | `{ok, thread:{id, kind, name, ttl, members:[{hash, nick, avatar, assigned, pubkey, joined_at, left_at, read_at, last_seen}]}, messages:[{id, sender_hash, body, enc, sealed, created_at, edited_at, opened_at, expires_at, saved, saved_by, redacted, media_key, media_size, media_expired, reactions:[{hash,emoji}]}], total, page, per:20, blocked, unread, unread_from, notif_unread}` — plus, one deploy, the top-level `thread_id`, `ttl`, `other` and a pair message's `react_me`/`react_other`/`liked_*`. `members` lists the departed too (`left_at` set) so their words still open; `read_at` is withheld under that member's receipts "off"; `last_seen` is the hub's stamp as-is. **`p` absent → the LAST page.** Opening marks the thread read, starts the disappearing clock (the FIRST open by any recipient starts everyone's), READS every bell the conversation rang you (`dm`, `dm-react`, `call`) and says what was unread BEFORE it did (`unread`, `unread_from`). `find:<message id>` places the answer on that message's page. `404 No such conversation.` for one you are not (or no longer) in. | `READ_LIMIT`, not gated. |
+| `POST /api/comments/dm/roster` | `{key, thread_id? \| with?}` | `{ok, thread_id, kind, name, members:[{hash, pubkey}]}` — the current members' keys, read WITHOUT marking anything (a picker's road, and the re-seal after `409 roster`). | `READ_LIMIT`, gated. |
+| `POST /api/comments/dm/groups` | `{key, token, members:[<64-hex>…], name?}` | `{ok, thread_id, name}` — a new group of you and them; its first word is the line "you added …", which is how they learn of it (their bell, their inbox). Every member needs a published key and none may block you: a shortfall → `400 {error:'Some members cannot be added yet.', missing:[…]}` (ONE word for both, by design). Cap 25. | `POST_LIMIT` · **Turnstile** · gated. |
+| `POST /api/comments/dm/members` | `{key, token, thread_id, add:[<64-hex>…]}` | On a group: `{ok, thread_id, forked:0, added}` — in place; a member who had left comes back afresh (no history). On a PAIR: `{ok, thread_id:<new>, forked:1, added}` — a new group of the two of you and them; the pair and its history stay as they were. Same eligibility and cap as `/dm/groups`. | `POST_LIMIT` · **Turnstile** · gated. |
+| `POST /api/comments/dm/leave` | `{key, thread_id}` | `{ok, thread_id, purged}` — groups only (a pair is deleted, not left); "you left" is your last line; the last member out purges the thread. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/name` | `{key, thread_id, name:<≤60>}` | `{ok, thread_id, name}` — any member; a line says who named it. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/seen` | `{key, thread_id? \| with?}` | `{ok, notif_unread}` — "I watched it arrive": the open's own three writes (the read stamp, the clock, the receipts), and the bells read. | `READ_LIMIT`, gated. |
+| `POST /api/comments/dm/unread` | `{key}` | `{ok, unread}` — unread **words** across every conversation you are in. | `READ_LIMIT`, **gated** (this poll is the reliable logout trip). |
+| `POST /api/comments/dm/ttl` | `{key, thread_id? \| with?, ttl:86400\|604800\|2592000}` | `{ok, ttl}` — any member, the last write wins for all; opened unsaved words are rebased; `dm-ttl` to the others. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/block` | `{key, hash, blocked:<bool>}` | `{ok, blocked}` | `POST_LIMIT`, not gated. Unblock releases a pair's held messages and rings the badge. |
+| `POST /api/comments/dm/blocked` | `{key}` | `{ok, blocked:[{hash,nick,avatar,assigned}]}` — the members you block. | `READ_LIMIT`, gated. |
+| `POST /api/comments/dm/delete` | `{key, thread_id? \| with?}` | `{ok, purged}` — a per-member "fresh start"; every current member cleared (or none left) with nothing newer than the earliest clear → the thread, its keys, reactions and references are hard-deleted, and every object nothing names any more. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/presence` | `{key, hashes:[<64-hex>…≤50]}` | `{ok, online:[hash…], seen:{hash: epoch}}` — who is online now (a live socket under presence mode "auto"), and for those who are not, when they were last seen (2026-09-11): the hub's `profiles.last_seen_at`, stamped at a member's last disconnect under "auto" and CLEARED by an auth under "off" — its absence is the privacy rule; an online member has no entry either. A group's ⓘ sheet asks this once on open (a socket holds no presence subs for a group). | `READ_LIMIT`, gated. |
+| `POST /api/comments/dm/react` | `{key, id, emoji}` | `{ok, id, emoji}` — ONE reaction per MEMBER per message (`dm_reactions`): `emoji` is exactly one emoji (an RGI-shaped grapheme) or one of our custom-pack `:tokens:`, validated by `Domain.Reaction.normalizeReaction`; `''` withdraws. Only a message the caller can SEE → else `404`; a redacted one → `409`. Every other member's open thread hears `dm-react {message:{id, emoji, by}}`, and a reaction to ANOTHER's message rings their `dm-react` bell (coalesced, keyed on the thread, withdrawn with the reaction; quiet when the word is on their screen). | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/like` | `{key, id, like:<bool>}` | The 2026-08-03 heart on the same road. **Deprecated alias** of `/dm/react`. | as `/dm/react`. |
+| `POST /api/comments/dm/save` | `{key, id, saved:<bool>}` | `{ok, saved, saved_by, expires_at}` — a saved message is exempt from expiry for EVERYONE (`expires_at` null) and names its saver; unsaving restores the clock from `opened_at` + the thread ttl (or the unopened backstop). Every other member's open thread hears `dm-save {message:{id, saved, by}}`. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/edit` | `{key, id, body, enc:1\|3}` | `{ok, id, edited_at}` — your own live, unredacted, non-system word; a sealed one re-sealed under the SAME content key (every member's key stands). `dm-edit` to the others. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/redact` | `{key, id}` | `{ok, id, redacted}` — your own word blanked in place (the row stands until it would have expired), its sealed keys dropped, its reference to the object let go (the object dies only if nothing else names it). `dm-redact` to the others. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/media` | multipart `key`, `file` (ciphertext) | `{ok, media_key, size}` — an opaque `dm/<64-hex>` object, unclaimed until a send names it (15 minutes, else swept). Established identities only; the per-section cap and the store budget apply. Never screened: ciphertext. | `POST_LIMIT`, gated. |
+| `POST /api/comments/dm/media/get` | `{key, media_key}` | the ciphertext bytes (`application/octet-stream`, private cache) — for a member who can see a live, unredacted message naming it (a forward counts); otherwise an indistinguishable `404`. | `READ_LIMIT`. |
+| `POST /api/comments/dm/pubkey` | `{key, pubkey:<43 b64url>}` | `{ok}` — publish your X25519 public key (idempotent; only its owner can change it). Without one you cannot be added to a group, nor written to. | `POST_LIMIT`. |
+| `POST /api/comments/dm/media/purge` | `{key}` (admin) | `{ok, deleted}` — every DM object, row and reference gone; each message stamped. | admin. |
+
+Live frames on a member's `user:<hash>` scope, every one carrying `thread_id`
+and `from`: `dm` (`message` — with `keys` when sealed), `dm-edit`, `dm-redact`,
+`dm-react {message:{id, emoji, by}}`, `dm-save {message:{id, saved, by}}`,
+`dm-read {reader, at}`, `dm-ttl {ttl}`, `dm-members {by, added:[{hash, nick,
+avatar, assigned, pubkey, joined_at}], left:[hash]}`, `dm-name {name, by}`, and
+`typing {from, thread, state}` (sent as `{t:'typing', thread, to:[hash…]|hash,
+state}`, at most 24 recipients). The quiet-bell claim is the sub
+`dmview:t<thread_id>` (`dmview:<hash>` one deploy longer).
 
 ### 4.2 Notifications
 
 Reading marks read (2026-09-12), whichever door the reader came through:
-opening a conversation (`/dm/thread`, `/dm/seen`) reads every bell its sender
-rang (`dm`, `dm-react`, `call`); opening a topic (`/board/read`) reads the
+opening a conversation (`/dm/thread`, `/dm/seen`) reads every bell it rang
+(`dm`, `dm-react`, `call` — a DM bell names its thread in `topic_id` since
+0016; a row from before, with 0, still by its sender); opening a topic (`/board/read`) reads the
 topic's; opening a feed post (`/wall/post/get`, keyed) reads the post's
 (`wall`, `wall-like`, `wall-react`). Each of those answers carries
 `notif_unread`, the fresh count, so a client never needs a second read. A
 message or a reaction to a word the recipient has ON SCREEN (the live
-socket's `dmview:<sender>` sub) rings no bell at all.
+socket's `dmview:t<thread_id>` sub) rings no bell at all.
 
 The kinds are `Domain.Notif.kinds` — `reply`, `mention`, `dm`, `wall`,
 `wall-like`, `merecat`, `call`, `react`, `wall-react`, `dm-react` — a server
@@ -564,7 +617,10 @@ The kinds are `Domain.Notif.kinds` — `reply`, `mention`, `dm`, `wall`,
 `mention`, `react`) jump to `community.html?topic=<topic_id>#comment-<comment_id>`;
 the wall kinds to `feed.html?post=<comment_id>` (`wall-react` with
 `#wc-<topic_id>` when `topic_id` > 0 — a feed comment); `dm`/`call` to
-`messages.html?dm=<actor_hash>`, `dm-react` to that with `&m=<comment_id>`;
+`messages.html?t=<topic_id>` (a row without a thread, from before 0016:
+`?dm=<actor_hash>`), `dm-react` to that with `&m=<comment_id>`; a `dm` row
+from a group carries the group's name as `topic_title` ("X sent a message in
+Choir");
 `merecat` to `merecat-ai.html?chat=<topic_id>`. A reaction always reads
 "reacted" — never the emoji, never "liked".
 

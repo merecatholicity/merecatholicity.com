@@ -1259,6 +1259,27 @@ export function reactionOf(raw: any): string | null {
   return psOrNull(Reaction.normalizeReaction(String(raw == null ? '' : raw)));
 }
 export const dmReaction = reactionOf;
+
+/* A group's name as stored (Domain.Dm.normalizeGroupName): trimmed, folded,
+   cut to the cap, control characters dropped; null when nothing is left. */
+export function dmGroupName(raw: any): string | null {
+  return psOrNull(Dm.normalizeGroupName(String(raw == null ? '' : raw)));
+}
+
+/* Who may be added by `me` (2026-09-13): a member with a published key (the
+   envelope needs it) who does not block me — the two refusals wear ONE
+   generic word at the handler, so a block is indistinguishable from "no key
+   yet" (the standing rule). The bot is never a member. */
+export async function dmEligible(env: any, me: any, hashes: any): Promise<{ ok: string[]; missing: string[] }> {
+  const want = Array.from(new Set((Array.isArray(hashes) ? hashes : []).map((h: any) => String(h || '')).filter((h: string) => /^[0-9a-f]{64}$/.test(h) && h !== me && h !== MERECAT_BOT.hash)));
+  if (!want.length) return { ok: [], missing: [] };
+  const r = await env.DB.prepare(
+    'SELECT pk.hash FROM dm_pubkeys pk WHERE pk.hash IN (' + inList(want.length, 2) + ') ' +
+    'AND NOT EXISTS (SELECT 1 FROM dm_blocks b WHERE b.owner_hash = pk.hash AND b.blocked_hash = ?1)'
+  ).bind(me, ...want).all();
+  const ok = new Set(((r.results || []) as any[]).map((x: any) => String(x.hash)));
+  return { ok: want.filter((h) => ok.has(h)), missing: want.filter((h) => !ok.has(h)) };
+}
 export const REACT_TARGETS: string[] = Reaction.targets;
 export const isReactTarget = (t: any): boolean => Reaction.isTarget(String(t == null ? '' : t));
 /* The notification kinds by family, from Domain.Notif.kinds: the kinds whose

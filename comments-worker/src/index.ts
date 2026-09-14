@@ -60,6 +60,7 @@ import {
   DM_TTLS,
   DM_VIS,
   dmThreadFor, ensurePairThread, dmCurrentMembers, dmRecipients, dmMembersPayload, dmPairRoomRows, dmPubkeysOf, dmMediaReadable, releaseMediaRefs, dmPairKey,
+  dmGroupName, dmEligible, sendSystemDmLine,
   EMOJI_PACKS,
   FAITHS,
   FAITH_LABELS,
@@ -1714,9 +1715,25 @@ async function handleDmSend(request: any, env: any, ctx: any) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many messages at once. Wait a minute and try again.' }, 429);
   const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  return deliverDmWord(env, ctx, me, data, Math.floor(Date.now() / 1000));
+}
+
+/* The delivery core of a word (2026-09-13: shared by /dm/send and the batched
+   /dm/forward, which passes the gate once for up to ten words): the
+   conversation, the shadow hold, the envelope's roster, the attachment's
+   claim, the row and what hangs off it, the fan-out, the bells. Everything
+   before it — the throttle, the ban, Turnstile — is the caller's. */
+async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: number) {
   const to = String(data.to || '');
   const threadId = Math.floor(Number(data.thread_id) || 0);
-  if (!key || (!threadId && !/^[0-9a-f]{64}$/.test(to))) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!threadId && !/^[0-9a-f]{64}$/.test(to)) return json({ ok: false, error: 'Bad request.' }, 400);
   /* enc = 3: the sealed envelope (2026-09-13) — a content key per message,
      boxed once per member, `keys` naming every current member (the sender
      included); enc = 1: the pair's box, accepted one deploy for a bundle
@@ -1727,14 +1744,10 @@ async function handleDmSend(request: any, env: any, ctx: any) {
   if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
   if (body.length > (enc ? DM_ENC_MAX : MAX_BODY)) return json({ ok: false, error: 'The message is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
   if (!threadId && me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
   if (!threadId && to === MERECAT_BOT.hash) {
     return json({ ok: false, error: 'merecat is a librarian, not a correspondent. Mention @merecat in a post or comment, or visit the merecat page.' }, 400);
   }
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
-  const now = Math.floor(Date.now() / 1000);
   /* The conversation: an existing one by id (mine, current — a stranger's id
      is "no such conversation"), or a pair's room by its other, made on this
      first word. */
@@ -1753,9 +1766,6 @@ async function handleDmSend(request: any, env: any, ctx: any) {
   if (kind === 0 && other) {
     const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(other, me).first();
     held = blockRow ? 1 : 0;
-  }
-  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
-    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
   /* Envelope v2's roster check: the sealed keys must name EXACTLY the current
      members (Domain.Dm.membersEqual) — a key for a stranger would hand them
@@ -1870,6 +1880,209 @@ async function handleDmSend(request: any, env: any, ctx: any) {
     }
   }
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
+}
+
+/* Forward up to ten words at once (2026-09-13): the press-and-hold's
+   "Forward" picks several conversations, and the client seals the SAME
+   plaintext afresh for each target's members (a fresh content key per copy;
+   the reply quote dropped; the small "Forwarded" mark inside the envelope —
+   the server never learns a word was forwarded, nor from where). An
+   attachment is NOT re-uploaded: each copy names the same object, allowed
+   because the forwarder can read it, and the object lives until its last
+   reference goes. One gate for the batch — throttle, ban, Turnstile — then
+   the delivery core per word, each answered on its own. */
+async function handleDmForward(request: any, env: any, ctx: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many messages at once. Wait a minute and try again.' }, 429);
+  const key = String(data.key || '');
+  const items = Array.isArray(data.items) ? data.items : [];
+  if (!key || !items.length || items.length > 10) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const results: any[] = [];
+  for (const item of items) {
+    const r = await deliverDmWord(env, ctx, me, item && typeof item === 'object' ? item : {}, now);
+    let j: any = null;
+    try { j = await r.json(); } catch { j = null; }
+    results.push(Object.assign({ status: r.status }, j || { ok: false, error: 'Bad request.' }));
+  }
+  return json({ ok: true, results }, 200);
+}
+
+/* The roster: a conversation's current members and their published keys —
+   what a sender seals to — read without a mark (opening a thread marks it
+   read and starts clocks; a picker and a re-seal must not). An unmade pair's
+   room answers with its two. A stranger's ask is "no such conversation". */
+async function handleDmRoster(request: any, env: any) {
+  const pre = await keyedGated(request, env, 'READ_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const found = await dmThreadFor(env, me, data);
+  if (!found) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const members = found.thread ? await dmCurrentMembers(env, found.thread.id) : await dmPubkeysOf(env, [me, found.other]);
+  return json({ ok: true, thread_id: found.thread ? found.thread.id : null, kind: found.thread ? (Number(found.thread.kind) || 0) : 0,
+    name: (found.thread && found.thread.name) || null, members }, 200);
+}
+
+/* A group is born (2026-09-13): the creator and the members they named, each
+   with a published key and none who block the creator (dmEligible — one
+   generic refusal for both), at most Domain.Dm.maxMembers in all; the first
+   word is the system line "X added Y and Z", which is what tells each new
+   member of it (their bell, their inbox). Shared by /dm/groups and the fork
+   /dm/members makes from a pair. */
+async function createDmGroup(env: any, ctx: any, me: string, wanted: string[], name: string | null, now: number) {
+  const thread = await env.DB.prepare(
+    'INSERT INTO dm_threads (kind, pair_key, name, created_at, created_by, last_at, last_sender, msgs) VALUES (1, NULL, ?1, ?2, ?3, ?2, ?3, 0) RETURNING id'
+  ).bind(name, now, me).first();
+  const stmts: any[] = [env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(thread.id, me, now)];
+  for (const h of wanted) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at, added_by) VALUES (?1, ?2, ?3, ?4)').bind(thread.id, h, now, me));
+  await env.DB.batch(stmts);
+  await sendSystemDmLine(env, thread.id, me, Dm.sysAddLine(wanted));
+  await announceDmMembers(env, ctx, thread.id, me, wanted, []);
+  return thread.id;
+}
+
+/* The roster changed: every current member's open thread (the newcomers'
+   included) learns who came or went, with the newcomers' names and keys so
+   the composer seals to them at once. */
+async function announceDmMembers(env: any, ctx: any, threadId: number, by: string, added: string[], left: string[]) {
+  const rows = added.length ? (await dmMembersPayload(env, threadId)).filter((r: any) => added.indexOf(r.hash) !== -1) : [];
+  const ev = { v: 1, t: 'dm-members', scopes: (await dmRecipients(env, threadId, by)).map((h) => 'user:' + h), from: by, thread_id: threadId, by,
+    added: rows.map((r: any) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at })),
+    left };
+  if (!ev.scopes.length) return;
+  if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+}
+
+/* Start a group: `members` the hashes to bring in, an optional name. */
+async function handleDmGroups(request: any, env: any, ctx: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const { ok: wanted, missing } = await dmEligible(env, me, data.members);
+  if (!wanted.length && !missing.length) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (wanted.length + missing.length > Dm.maxMembers - 1) return json({ ok: false, error: 'A conversation holds at most ' + Dm.maxMembers + ' members.' }, 400);
+  if (missing.length) return json({ ok: false, error: 'Some members cannot be added yet.', missing }, 400);
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const name = dmGroupName(data.name);
+  const id = await createDmGroup(env, ctx, me, wanted, name, Math.floor(Date.now() / 1000));
+  return json({ ok: true, thread_id: id, name }, 200);
+}
+
+/* Add members: to a group, in place (a member who left and is brought back
+   starts afresh — no history, as the crypto has it); to a PAIR, by making a
+   new group of the three or more (Snapchat's and WhatsApp's way — the pair
+   and its private history stay as they were). Any current member may add;
+   nobody owns the thread. */
+async function handleDmMembers(request: any, env: any, ctx: any) {
+  let data;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.POST_LIMIT.limit({ key: ip });
+  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  const key = String(data.key || '');
+  const threadId = Math.floor(Number(data.thread_id) || 0);
+  if (!key || threadId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  const gate = await blockedReason(env, me, ip);
+  if (gate) return blockedJson(gate);
+  const found = await dmThreadFor(env, me, { thread_id: threadId });
+  if (!found || !found.thread) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const thread = found.thread;
+  const kind = Number(thread.kind) || 0;
+  const current = (await dmCurrentMembers(env, thread.id)).map((m) => m.hash);
+  const asked = (Array.isArray(data.add) ? data.add : []).map((h: any) => String(h || '')).filter((h: string) => current.indexOf(h) === -1);
+  const { ok: wanted, missing } = await dmEligible(env, me, asked);
+  if (!wanted.length && !missing.length) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (current.length + wanted.length + missing.length > Dm.maxMembers) return json({ ok: false, error: 'A conversation holds at most ' + Dm.maxMembers + ' members.' }, 400);
+  if (missing.length) return json({ ok: false, error: 'Some members cannot be added yet.', missing }, 400);
+  if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (kind === 0) {
+    /* A pair forks: the other and the newcomers, in a group of their own. */
+    const id = await createDmGroup(env, ctx, me, [found.other].concat(wanted), null, now);
+    return json({ ok: true, thread_id: id, forked: 1, added: wanted }, 200);
+  }
+  const stmts = wanted.map((h) => env.DB.prepare(
+    'INSERT INTO dm_members (thread_id, hash, joined_at, added_by) VALUES (?1, ?2, ?3, ?4) ' +
+    'ON CONFLICT(thread_id, hash) DO UPDATE SET joined_at = excluded.joined_at, left_at = NULL, read_at = NULL, cleared_at = NULL, added_by = excluded.added_by'
+  ).bind(thread.id, h, now, me));
+  await env.DB.batch(stmts);
+  await sendSystemDmLine(env, thread.id, me, Dm.sysAddLine(wanted));
+  await announceDmMembers(env, ctx, thread.id, me, wanted, []);
+  return json({ ok: true, thread_id: thread.id, forked: 0, added: wanted }, 200);
+}
+
+/* Leave a group: my seat is stamped and I see nothing further; the line "X
+   left" is my last word in it. When nobody remains, the thread and all its
+   words go — nobody owns it, nobody is left to. A pair cannot be left (delete
+   it instead). */
+async function handleDmLeave(request: any, env: any, ctx: any) {
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const found = await dmThreadFor(env, me, { thread_id: data.thread_id });
+  if (!found || !found.thread) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const thread = found.thread;
+  if (Number(thread.kind) !== 1) return json({ ok: false, error: 'A conversation with one person is deleted, not left.' }, 400);
+  const now = Math.floor(Date.now() / 1000);
+  await sendSystemDmLine(env, thread.id, me, Dm.sysLeaveLine, { quiet: true });
+  await env.DB.prepare('UPDATE dm_members SET left_at = ?1 WHERE thread_id = ?2 AND hash = ?3').bind(now, thread.id, me).run();
+  await announceDmMembers(env, ctx, thread.id, me, [], [me]);
+  const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM dm_members WHERE thread_id = ?1 AND left_at IS NULL').bind(thread.id).first();
+  let purged = false;
+  if (!(left && left.n > 0)) {
+    const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
+    await releaseMediaRefs(env, (media.results || []) as any[]);
+    for (const tbl of ['dm_keys', 'dm_reactions', 'dm_media_refs']) {
+      await env.DB.prepare('DELETE FROM ' + tbl + ' WHERE msg_id IN (SELECT id FROM dms WHERE thread_id = ?1)').bind(thread.id).run();
+    }
+    await env.DB.prepare('DELETE FROM dms WHERE thread_id = ?1').bind(thread.id).run();
+    await env.DB.prepare('DELETE FROM dm_members WHERE thread_id = ?1').bind(thread.id).run();
+    await env.DB.prepare('DELETE FROM dm_threads WHERE id = ?1').bind(thread.id).run();
+    purged = true;
+  }
+  return json({ ok: true, thread_id: thread.id, purged }, 200);
+}
+
+/* Name a group (any member; ≤ Domain.Dm.groupNameMax code points, the
+   kernel's normalisation). Server-visible metadata by design: the inbox row,
+   the bell's sentence and the ⓘ sheet all need it, and there is no per-thread
+   key to seal it under. */
+async function handleDmName(request: any, env: any, ctx: any) {
+  const pre = await keyedGated(request, env, 'POST_LIMIT');
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
+  const found = await dmThreadFor(env, me, { thread_id: data.thread_id });
+  if (!found || !found.thread) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const thread = found.thread;
+  if (Number(thread.kind) !== 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const name = dmGroupName(data.name);
+  if (!name) return json({ ok: false, error: 'Bad request.' }, 400);
+  await env.DB.prepare('UPDATE dm_threads SET name = ?1 WHERE id = ?2').bind(name, thread.id).run();
+  await sendSystemDmLine(env, thread.id, me, Dm.sysNameLine(name), { quiet: true });
+  const to = await dmRecipients(env, thread.id, me);
+  if (ctx && to.length) publishLive(env, ctx, { v: 1, t: 'dm-name', scopes: to.map((h) => 'user:' + h), from: me, thread_id: thread.id, name, by: me });
+  return json({ ok: true, thread_id: thread.id, name }, 200);
 }
 
 /* Inbox: my conversations by newest activity — a pair's other resolved with
@@ -5377,6 +5590,12 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/dm/media', fn: (request, env, ctx, url) => handleDmMediaUpload(request, env) },
   { m: 'POST', p: '/api/comments/dm/media/get', fn: (request, env, ctx, url) => handleDmMediaGet(request, env) },
   { m: 'POST', p: '/api/comments/dm/media/purge', fn: (request, env, ctx, url) => handleDmMediaPurge(request, env) },
+  { m: 'POST', p: '/api/comments/dm/roster', fn: (request, env, ctx, url) => handleDmRoster(request, env) },
+  { m: 'POST', p: '/api/comments/dm/groups', fn: (request, env, ctx, url) => handleDmGroups(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/members', fn: (request, env, ctx, url) => handleDmMembers(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/leave', fn: (request, env, ctx, url) => handleDmLeave(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/name', fn: (request, env, ctx, url) => handleDmName(request, env, ctx) },
+  { m: 'POST', p: '/api/comments/dm/forward', fn: (request, env, ctx, url) => handleDmForward(request, env, ctx) },
   { m: 'POST', p: '/api/comments/admin/settings', fn: (request, env, ctx, url) => handleAdminSettings(request, env) },
   { m: 'POST', p: '/api/comments/admin/discord/list', fn: (request, env, ctx, url) => handleAdminDiscordList(request, env) },
   { m: 'POST', p: '/api/comments/admin/discord/add', fn: (request, env, ctx, url) => handleAdminDiscordAdd(request, env) },
