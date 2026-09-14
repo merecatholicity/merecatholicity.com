@@ -1532,6 +1532,7 @@ import type { Boot } from './boot';
     if (params.get('inbox')) return { tag: 'Inbox' };
     if (params.get('users')) return { tag: 'Users' };
     if (params.get('q') !== null) return { tag: 'Search' };
+    if (Number(params.get('t')) > 0) return { tag: 'Thread', n: Math.floor(Number(params.get('t'))) };
     if (params.get('dm')) return { tag: 'Dm', s: params.get('dm') };
     if (params.get('me')) return { tag: 'Me' };
     if (params.get('profile')) return { tag: 'Profile', s: params.get('profile') };
@@ -1561,8 +1562,11 @@ import type { Boot } from './boot';
        live on their own page now. They all boot this same client — route by page. */
     if (page === 'messages.html') {
       if (!isMember()) return viewJoin('read and send messages');
+      /* a conversation by its id (?t=, the resolved form and a group's only
+         door), else a pair by its other (?dm=, the door the buttons use) */
+      var tId = Math.floor(Number(params.get('t')) || 0);
       var dmh = params.get('dm');
-      return dmh ? viewDm(dmh) : viewInbox();
+      return tId > 0 ? viewDm({ thread: tId }) : dmh ? viewDm({ with: dmh }) : viewInbox();
     }
     if (page === 'profile.html') {
       var u = params.get('u') || params.get('profile');
@@ -1631,6 +1635,7 @@ import type { Boot } from './boot';
        community.html?admin=1 links still resolve to the hub too.) */
     if (page === 'admin.html' && r.tag === 'Index') r = { tag: 'AdminHome' };
     switch (r.tag) {
+      case 'Thread': go('messages.html?t=' + r.n + location.hash, true); return;
       case 'Dm': go('messages.html?dm=' + encodeURIComponent(r.s) + location.hash, true); return;
       case 'Inbox': go('messages.html', true); return;
       case 'Me': go('profile.html', true); return;

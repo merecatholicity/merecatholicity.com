@@ -196,11 +196,15 @@ const memberApi = {
     else board._sendSub();
   },
   /* Transient "I am typing to <to>" signal, sent over the live socket only (no
-     HTTP, no rate-limit bucket); the caller debounces it. state 'start'|'stop'. */
-  typing: function (to: string, state?: string) {
+     HTTP, no rate-limit bucket); the caller debounces it. state 'start'|'stop'.
+     `to` is one hash (a pair) or every other member of a group (the hub keeps
+     no roster: the sender names who it reaches, exactly as a send does), and
+     `thread` the conversation the keystrokes belong to (2026-09-13). */
+  typing: function (to: string | string[], state?: string, thread?: number) {
     if (!board.ws || board.ws.readyState !== 1) return;
-    if (!/^[0-9a-f]{64}$/.test(String(to))) return;
-    try { board.ws.send(JSON.stringify({ t: 'typing', to: to, state: state === 'stop' ? 'stop' : 'start' })); } catch (e) { /* dropped */ }
+    const list = (Array.isArray(to) ? to : [to]).map((h) => String(h || '')).filter((h) => /^[0-9a-f]{64}$/.test(h));
+    if (!list.length) return;
+    try { board.ws.send(JSON.stringify({ t: 'typing', to: list.length === 1 ? list[0] : list, thread: Math.floor(Number(thread) || 0), state: state === 'stop' ? 'stop' : 'start' })); } catch (e) { /* dropped */ }
   },
   /* Transient 1v1 call-signaling frame (ICE batches + end/decline/busy/taken),
      typing's sibling — no HTTP, no bucket, relayed by the hub to the

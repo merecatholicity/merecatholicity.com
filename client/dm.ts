@@ -139,6 +139,79 @@ export function installDm(B: Boot) {
       return pt ? new TextDecoder().decode(pt) : null;
     } catch (e) { return null; }
   }
+  /* ---- Envelope v2 (2026-09-13; Domain.Dm.encSealed = 3): a random content key
+     K per message. The body is K's secretbox ("E3.<nonce>.<ct>"); K itself is
+     boxed once per member — to each member's published X25519 key, from my own
+     — and rides beside the body as `keys` (the server hands each reader only
+     their own `sealed`). A member added later has no key for earlier words; a
+     member who left has none for later ones. The same primitives and the same
+     library as E1 (X25519 / XSalsa20-Poly1305), so a pair is sealed the same
+     way a group is — one road. K is kept on the message (m._k) so an edit
+     re-seals under it and every member's key still opens the new words. ---- */
+  function dmSealKeyTo(K: any, pubB64: any) {
+    var n = nacl.randomBytes(24);
+    var box = nacl.box(K, n, dmB64uDec(pubB64), myDmKeypair().secretKey);
+    var out = new Uint8Array(24 + box.length);
+    out.set(n, 0); out.set(box, 24);
+    return dmB64uEnc(out);
+  }
+  function dmOpenKey(sealedB64: any, senderPubB64: any) {
+    if (!sealedB64 || !senderPubB64) return null;
+    try {
+      var raw = dmB64uDec(sealedB64);
+      if (raw.length <= 24) return null;
+      var K = nacl.box.open(raw.subarray(24), raw.subarray(0, 24), dmB64uDec(senderPubB64), myDmKeypair().secretKey);
+      return K && K.length === 32 ? K : null;
+    } catch (e) { return null; }
+  }
+  function dmSealBody(plaintext: any, K: any) {
+    var n = nacl.randomBytes(24);
+    var ct = nacl.secretbox(new TextEncoder().encode(String(plaintext)), n, K);
+    return 'E3.' + dmB64uEnc(n) + '.' + dmB64uEnc(ct);
+  }
+  function dmOpenBody(blob: any, K: any) {
+    if (!K || typeof blob !== 'string' || blob.slice(0, 3) !== 'E3.') return null;
+    var parts = blob.split('.');
+    if (parts.length !== 3) return null;
+    try {
+      var pt = nacl.secretbox.open(dmB64uDec(parts[2]), dmB64uDec(parts[1]), K);
+      return pt ? new TextDecoder().decode(pt) : null;
+    } catch (e) { return null; }
+  }
+  /* Seal a plaintext for these members — me among them, so I can read my own
+     word back — under a fresh K. What /dm/send takes: the body, the keys by
+     hash; K rides back on the echo. A member without a published key gets no
+     key (the caller refuses the send before this). */
+  function dmSealFor(plaintext: any, members: any) {
+    var K = nacl.randomBytes(32);
+    var keys: any = {};
+    (members || []).forEach(function (mm: any) { if (mm && mm.hash && mm.pubkey) keys[mm.hash] = dmSealKeyTo(K, mm.pubkey); });
+    return { body: dmSealBody(plaintext, K), keys: keys, K: K };
+  }
+  /* Open a sealed word from my seat: my K (served beside the word as `sealed`,
+     or in a live frame's `keys` map) under the SENDER's key, then the body. */
+  function dmOpen(m: any, ctx: any) {
+    if (!m._k) {
+      var sealed = m.sealed || (m.keys && m.keys[state.myHash]) || null;
+      m._k = dmOpenKey(sealed, ctx.pubOf ? ctx.pubOf(m.sender_hash) : null);
+    }
+    return dmOpenBody(m.body, m._k);
+  }
+  /* The plaintext of a word, whichever envelope it wears: E1 with the pair's
+     key, E3 with mine. Null when it cannot be opened. */
+  function dmPlain(m: any, ctx: any) {
+    var e = Number(m.enc || 0);
+    if (e === 1) return dmDecrypt(m.body, ctx.otherPub);
+    if (e === 3) return dmOpen(m, ctx);
+    return null;
+  }
+  /* Re-seal an edit: a sealed word under the SAME K (the keys stand), a pair's
+     E1 word to the pair's key. What /dm/edit takes. */
+  function dmReseal(plaintext: any, m: any, ctx: any) {
+    if (m._k) return { body: dmSealBody(plaintext, m._k), enc: 3 };
+    if (ctx.otherPub) return { body: dmEncrypt(plaintext, ctx.otherPub), enc: 1 };
+    return null;
+  }
   /* A per-conversation safety number: a short fingerprint of the two public keys,
      ordered the same way on both sides so both compute the identical code. Two
      people compare it out of band to be sure no key was substituted. */
@@ -226,7 +299,7 @@ export function installDm(B: Boot) {
       ? window.mcCore.dmTtlOptions.map(function (o) { return [o.secs, o.label]; })
       : [[86400, '24 hours'], [604800, '7 days'], [2592000, '30 days']];
   }
-  function dmExpiryNode(other: any, ttl: any, isNew: any, onChange?: (t: number) => void) {
+  function dmExpiryNode(target: any, ttl: any, isNew: any, onChange?: (t: number) => void) {
     var p = el('p', 'dm-expiry');
     var cur = Number(ttl) || 2592000;   // Domain.Dm.defaultTtl (30 days)
     function paint() {
@@ -246,7 +319,7 @@ export function installDm(B: Boot) {
         a.addEventListener('click', function (ev: any) {
           ev.preventDefault();
           fetch(API + '/dm/ttl', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: state.key, with: other, ttl: opt[0] }) })
+            body: JSON.stringify(Object.assign({ key: state.key, ttl: opt[0] }, target)) })
             .then(function (r) { return r.json(); })
             .then(function (d) { if (d && d.ok) { cur = opt[0] as number; isNew = false; paint(); if (onChange) onChange(cur); } })
             .catch(function () {});
@@ -271,13 +344,37 @@ export function installDm(B: Boot) {
      plaintext stays sealed. It renders as a small pill hanging off the bubble's
      bottom corner — the left corner of their bubble, the right of mine — both
      glyphs side by side when we both reacted, "❤️ 2" when we agreed. ---- */
-  /* Paint (or repaint) a bubble's reaction pill from m.react_me / m.react_other.
+  /* A pair's two sides from the ledger's rows (0016: one row per member,
+     m.reactions) — or the react_me / react_other a pair's payload still carries
+     one deploy. */
+  function dmReactSides(m: any) {
+    if (Array.isArray(m.reactions)) {
+      var mine = '', theirs = '';
+      m.reactions.forEach(function (r: any) {
+        if (!r || !r.emoji) return;
+        if (r.hash === state.myHash) mine = String(r.emoji); else if (!theirs) theirs = String(r.emoji);
+      });
+      return { mine: mine, theirs: theirs };
+    }
+    return { mine: String(m.react_me || ''), theirs: String(m.react_other || '') };
+  }
+  /* One member's reaction set (or withdrawn) on a message object: the rows,
+     and the pair fields beside them. */
+  function dmSetReaction(m: any, hash: any, emoji: any) {
+    var h = String(hash || ''), e = String(emoji || '');
+    if (!Array.isArray(m.reactions)) m.reactions = [];
+    m.reactions = m.reactions.filter(function (r: any) { return r && r.hash !== h; });
+    if (e) m.reactions.push({ hash: h, emoji: e });
+    if (h === state.myHash) m.react_me = e; else m.react_other = e;
+  }
+  /* Paint (or repaint) a bubble's reaction pill from the message's reactions.
      The pill opens the same surface a press-and-hold does, so a reaction is
      changed or withdrawn where it is seen. */
   function dmReactPaint(m: any, node: any, ctx: any) {
     var old = node.querySelector(':scope > .dm-react-pill');
     if (old) old.remove();
-    var mine = String(m.react_me || ''), theirs = String(m.react_other || '');
+    var rx = dmReactSides(m);
+    var mine = rx.mine, theirs = rx.theirs;
     node.classList.toggle('dm-has-react', !!(mine || theirs));
     if (!mine && !theirs) return;
     var pill = el('button', 'dm-react-pill');
@@ -300,16 +397,16 @@ export function installDm(B: Boot) {
      reverted on refusal. The value is the kernel's to accept or refuse
      (mcCore.dmReaction), the same rule the worker's store runs. */
   function dmReact(m: any, node: any, ctx: any, emoji: any) {
-    var was = String(m.react_me || '');
+    var was = dmReactSides(m).mine;
     var want = String(emoji || '');
     if (want === was) want = '';
     if (want && window.mcCore && window.mcCore.dmReaction && window.mcCore.dmReaction(want) === null) return;
-    m.react_me = want; dmReactPaint(m, node, ctx);
+    dmSetReaction(m, state.myHash, want); dmReactPaint(m, node, ctx);
     fetch(API + '/dm/react', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, emoji: want }) })
+      body: JSON.stringify(Object.assign({ key: state.key, id: m.id, emoji: want }, ctx.target())) })
       .then(function (r) { return r.json(); })
-      .then(function (d) { if (blockedOut(d)) return; if (!d || !d.ok) { m.react_me = was; dmReactPaint(m, node, ctx); } })
-      .catch(function () { m.react_me = was; dmReactPaint(m, node, ctx); });
+      .then(function (d) { if (blockedOut(d)) return; if (!d || !d.ok) { dmSetReaction(m, state.myHash, was); dmReactPaint(m, node, ctx); } })
+      .catch(function () { dmSetReaction(m, state.myHash, was); dmReactPaint(m, node, ctx); });
   }
   /* The saved mark. A saved message is exempt from expiry for both, and it is
      LIT for both — the bubble takes the saved ring and a ★ in its meta row
@@ -333,7 +430,7 @@ export function installDm(B: Boot) {
     var was = Number(m.saved || 0) ? 1 : 0;
     m.saved = want ? 1 : 0; dmSavedPaint(m, node);
     fetch(API + '/dm/save', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, saved: !!want }) })
+      body: JSON.stringify(Object.assign({ key: state.key, id: m.id, saved: !!want }, ctx.target())) })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (blockedOut(d)) return;
@@ -471,7 +568,7 @@ export function installDm(B: Boot) {
     var q = el('div', 'dm-quote');
     q.setAttribute('role', 'button'); q.tabIndex = 0;
     q.title = 'Jump to the quoted message';
-    q.appendChild(el('span', 'dm-quote-who', String(reply.from || '') === state.myHash ? 'You' : (ctx.shortName || 'Them')));
+    q.appendChild(el('span', 'dm-quote-who', String(reply.from || '') === state.myHash ? 'You' : (ctx.nameOf ? ctx.nameOf(reply.from) : (ctx.shortName || 'Them'))));
     q.appendChild(el('span', 'dm-quote-text', dmQuoteText(reply)));
     function jump() {
       var target = ctx.list && ctx.list.querySelector('[data-dmid="' + String(reply.id).replace(/"/g, '') + '"]');
@@ -533,12 +630,12 @@ export function installDm(B: Boot) {
      sends the Seen receipt, and clears any raced dm notification, exactly as a
      thread reload would, without refetching it. */
   var dmSeenT: any = 0;
-  function dmSeenPing(other: any) {
+  function dmSeenPing(target: any) {
     clearTimeout(dmSeenT);
     dmSeenT = setTimeout(function () {
       try { localStorage.removeItem(DM_CACHE); } catch (e) { /* fine */ }
       fetch(API + '/dm/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, with: other }) })
+        body: JSON.stringify(Object.assign({ key: state.key }, target)) })
         .then(function (r) { return r.json(); })
         .then(function (d) { if (d && typeof d.notif_unread === 'number') notifCacheSet(d.notif_unread); })   // the bells it read
         .catch(function () { /* next open settles it */ });
@@ -678,13 +775,13 @@ export function installDm(B: Boot) {
       var e = Number(m.enc || 0);
       if (m.media_key) {
         var envInfo = m._env || null;
-        if (!envInfo && e === 1) { try { envInfo = JSON.parse(dmDecrypt(m.body, ctx.otherPub) || 'null'); } catch (x) { envInfo = null; } }
+        if (!envInfo && (e === 1 || e === 3)) { try { envInfo = JSON.parse(dmPlain(m, ctx) || 'null'); } catch (x) { envInfo = null; } }
         if (envInfo) { m._env = envInfo; m.reply = dmReplyClean(envInfo.reply); node = dmMediaNode(m, ctx, envInfo); }
         else { m.body = '⚠️ could not open media'; node = dmMsgNode(m, ctx, null); }
       } else if (m.media_expired) {
         var cap = '';
-        if (e === 1) {
-          try { var ev = JSON.parse(dmDecrypt(m.body, ctx.otherPub) || 'null'); if (ev) { m._env = ev; m.reply = dmReplyClean(ev.reply); cap = ev.caption || ''; } } catch (x2) { cap = ''; }
+        if (e === 1 || e === 3) {
+          try { var ev = JSON.parse(dmPlain(m, ctx) || 'null'); if (ev) { m._env = ev; m.reply = dmReplyClean(ev.reply); cap = ev.caption || ''; } } catch (x2) { cap = ''; }
         }
         node = dmMediaExpiredNode(m, ctx, cap);
       } else if (e === 2 && window.mcCore && window.mcCore.callLine && window.mcCore.callLine(String(m.body || ''))) {
@@ -697,7 +794,7 @@ export function installDm(B: Boot) {
         return dmCallLine(m);
       } else {
         var sysLabel = null;
-        if (e === 1) { var pt = dmParseText(dmDecrypt(m.body, ctx.otherPub) || '⚠️ could not decrypt'); m.body = pt.text; m.reply = pt.reply; }
+        if (e === 1 || e === 3) { var pt = dmParseText(dmPlain(m, ctx) || '⚠️ could not decrypt'); m.body = pt.text; m.reply = pt.reply; }
         else if (e === 2) sysLabel = '⚙️ Automated notice';
         node = dmMsgNode(m, ctx, sysLabel);
       }
@@ -724,7 +821,7 @@ export function installDm(B: Boot) {
     if (ctx.byId) ctx.byId[String(m.id)] = m;
     dmReactPaint(m, node, ctx);
     dmArmGestures(m, node, ctx);
-    node.mcReactPaint = function (emoji: any) { m.react_other = String(emoji || ''); dmReactPaint(m, node, ctx); };
+    node.mcReactPaint = function (emoji: any, by: any) { dmSetReaction(m, String(by || ctx.other || ''), String(emoji || '')); dmReactPaint(m, node, ctx); };
     node.mcSavedPaint = function (saved: any) { m.saved = saved ? 1 : 0; dmSavedPaint(m, node); };
   }
   /* Turn a live text bubble into an in-place editor. Saving re-encrypts — the
@@ -736,8 +833,10 @@ export function installDm(B: Boot) {
      other side is told live). One routine for the composer's Editing strip
      (the road since 2026-09-12) and the in-bubble box it replaced. */
   function dmSaveEdit(m: any, node: any, ctx: any, nv: string) {
+    var sealed = dmReseal(dmWrapText(nv, m.reply), m, ctx);
+    if (!sealed) return Promise.resolve({ ok: false, error: 'Could not seal the edit.' });
     return fetch(API + '/dm/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id, body: dmEncrypt(dmWrapText(nv, m.reply), ctx.otherPub), enc: 1 }) })
+      body: JSON.stringify(Object.assign({ key: state.key, id: m.id, body: sealed.body, enc: sealed.enc }, ctx.target())) })
       .then(function (r) { return r.json(); }).then(function (d) {
         if (blockedOut(d)) return { ok: false, error: '' };
         if (!d || !d.ok) return { ok: false, error: (d && d.error) || 'Could not save.' };
@@ -834,7 +933,7 @@ export function installDm(B: Boot) {
     appConfirm('Delete this message? A “<redacted>” note stands in its place for both of you until it would have disappeared anyway.', { okLabel: 'Delete', danger: true }, function (ok: any) {
       if (!ok) return;
       fetch(API + '/dm/redact', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: state.key, with: ctx.other, id: m.id }) })
+        body: JSON.stringify(Object.assign({ key: state.key, id: m.id }, ctx.target())) })
         .then(function (r) { return r.json(); }).then(function (d) {
           if (blockedOut(d)) return;
           if (d && d.ok) { m.redacted = 1; dmMakeRedacted(node, true); }
@@ -1067,55 +1166,73 @@ export function installDm(B: Boot) {
     if ((window as any).mcBadges) return;   // the shell's badges (app/badges.ts) hear the frame on every page — no second read, no second bell
     playSound('bell'); clearTimeout(dmBadgeT); dmBadgeT = setTimeout(function () { dmUnreadCheck(true); }, 300);
   }
-
+  /* The open conversation a live frame belongs to, if any: by the thread's id
+     (every frame carries one since 0016); a pair's room still unmade — no id
+     yet — by its other, and the frame's id is adopted. Null: not this one. */
+  function forOpen(m: any) {
+    var v = state.dmView;
+    if (!v || !m) return null;
+    var tid = Math.floor(Number(m.thread_id) || 0);
+    if (v.threadId) return tid === v.threadId || (!tid && v.other && m.from === v.other) ? v : null;
+    if (v.other && m.from === v.other) { if (tid && v.adopt) v.adopt(tid); return v; }
+    return null;
+  }
   function onLiveDm(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && m.message) {
-      state.dmView.append(m.message);   // instant in the open conversation
-    } else {
-      liveDmBadge();   // a background thread — ring the badge (McInbox self-refreshes if open)
-    }
+    var v = forOpen(m);
+    if (v && m.message) v.append(m.message);   // instant in the open conversation
+    else liveDmBadge();   // a background thread — ring the badge (McInbox self-refreshes if open)
   }
-  /* The other party changed the disappearing-message lifetime: update the open
-     conversation's expiry note live so both sides always show the same setting. */
+  /* A member changed the disappearing-message lifetime: update the open
+     conversation's expiry note live so everyone always shows the same setting. */
   function onLiveDmTtl(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && state.dmView.setTtl) state.dmView.setTtl(m.ttl);
+    var v = forOpen(m);
+    if (v && v.setTtl) v.setTtl(m.ttl);
   }
-  /* The other party edited a message they sent me: re-render that bubble live. */
+  /* A member edited a message: re-render that bubble live. */
   function onLiveDmEdit(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.editMsg) state.dmView.editMsg(m.message);
+    var v = forOpen(m);
+    if (v && m.message && v.editMsg) v.editMsg(m.message);
   }
-  /* The other party deleted a message they sent me: replace it with "<redacted>". */
+  /* A member deleted a message they sent: replace it with "<redacted>". */
   function onLiveDmRedact(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.redactMsg) state.dmView.redactMsg(m.message.id);
+    var v = forOpen(m);
+    if (v && m.message && v.redactMsg) v.redactMsg(m.message.id);
   }
-  /* The other party reacted (or withdrew a reaction) on a message in the open
+  /* A member reacted (or withdrew a reaction) on a message in the open
      conversation: repaint that bubble's pill. Quiet by design — no badge, no sound. */
   function onLiveDmReact(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.reactMsg) state.dmView.reactMsg(m.message);
+    var v = forOpen(m);
+    if (v && m.message && v.reactMsg) v.reactMsg(m.message, m.from);
   }
-  /* The other party saved (or unsaved) a message in the open conversation: a
-     save is for both, so the bubble lights (or dims) here too. */
+  /* A member saved (or unsaved) a message in the open conversation: a save is
+     for all, so the bubble lights (or dims) here too. */
   function onLiveDmSave(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && m.message && state.dmView.saveMsg) state.dmView.saveMsg(m.message);
+    var v = forOpen(m);
+    if (v && m.message && v.saveMsg) v.saveMsg(m.message);
   }
-  /* The recipient opened my messages: flip the open conversation's sent bubbles
-     to "Seen" up to their read timestamp. m.reader is the other party. */
+  /* A member opened my messages: flip the open conversation's sent bubbles to
+     ✓✓ once every other member has read them. m.reader is who. */
   function onLiveDmRead(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.reader && state.dmView.markRead) state.dmView.markRead(m.at);
+    var v = forOpen(m);
+    if (v && v.markRead) v.markRead(m.reader, m.at);
   }
-  /* The other party is (or stopped) typing — show/hide the "…typing" line in the
-     open conversation only. */
+  /* A member is (or stopped) typing — the line in the open conversation, and
+     the inbox row's. */
   function onLiveTyping(m: any) {
-    var openDm = new URLSearchParams(location.search).get('dm');
-    if (state.dmView && openDm && openDm === m.from && state.dmView.setTyping) state.dmView.setTyping(m.state !== 'stop');
-    if (state.inboxTyping) state.inboxTyping(m.from, m.state !== 'stop');
+    var v = forOpen(m);
+    if (v && v.setTyping) v.setTyping(m.from, m.state !== 'stop');
+    if (state.inboxTyping) state.inboxTyping(Math.floor(Number(m.thread) || 0), m.from, m.state !== 'stop');
+  }
+  /* The roster changed (someone was added, someone left) or the group was
+     named: the open conversation follows, so the next word seals to the
+     members as they are now. */
+  function onLiveDmMembers(m: any) {
+    var v = forOpen(m);
+    if (v && v.roster) v.roster(m);
+  }
+  function onLiveDmName(m: any) {
+    var v = forOpen(m);
+    if (v && v.setName) v.setName(m.name);
   }
   /* A member's online state changed: update the open thread's header dot and any
      inbox row dot. */
@@ -1249,6 +1366,24 @@ export function installDm(B: Boot) {
     return box;
   }
 
+  /* An inbox row's name, door, key and target (2026-09-13): a pair by its
+     other, a group by its name or its members' names, opened by its id. */
+  function dmRowLabel(t: any) {
+    if (Number(t.kind) === 1) {
+      if (t.name) return String(t.name);
+      var names = (t.members || []).map(function (m: any) { return m.nick || m.assigned || displayName(m.hash); });
+      return names.length ? names.join(', ') : 'Group';
+    }
+    return dmLabel(t.other_hash, t.nick);
+  }
+  function dmRowHref(t: any) { return t.thread_id ? 'messages.html?t=' + t.thread_id : 'messages.html?dm=' + t.other_hash; }
+  function dmRowKey(t: any) { return Number(t.kind) === 1 || !t.other_hash ? 't' + (t.thread_id || t.id) : String(t.other_hash); }
+  function dmRowTarget(t: any) { return t.thread_id ? { thread_id: t.thread_id } : { with: t.other_hash }; }
+  function dmMembersLabel(t: any) { var n = Number(t.member_count) || ((t.members || []).length + 1); return n + ' members'; }
+  function dmTypistName(t: any, h: any) {
+    var row = (t.members || []).filter(function (m: any) { return m.hash === h; })[0];
+    return row ? (row.nick || row.assigned || displayName(h)) : displayName(String(h || ''));
+  }
   function viewInbox() {
     if (window.mcViews && window.mcViews.inbox) {
       /* The Lit <mc-inbox> renders into its own subtree without clearing section,
@@ -1283,11 +1418,13 @@ export function installDm(B: Boot) {
           return;
         }
         var presDots: Record<string, any> = {};
+        var rowDots: Record<string, any> = {}, rowsByKey: Record<string, any> = {};   // by the conversation's key (0016)
         d.threads.forEach(function (t: any) {
+          rowsByKey[dmRowKey(t)] = t;
           var row = el('div', 'board-topic' + (t.unread ? ' dm-row-unread' : ''));
           var left = el('div', 'board-topic-left');
-          var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmLabel(t.other_hash, t.nick));
-          a.href = 'messages.html?dm=' + t.other_hash;
+          var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmRowLabel(t));
+          a.href = dmRowHref(t);
           left.appendChild(a);
           if (t.unread) left.appendChild(el('span', 'dm-unread-badge', String(t.unread)));   // the count (2026-09-11)
           var isub = el('div', 'board-row-sub', fmtTimeCompact(t.last_at));
@@ -1299,7 +1436,9 @@ export function installDm(B: Boot) {
           var dot = el('span', 'dm-row-dot');
           presLine.appendChild(dot);
           left.appendChild(presLine);
-          presDots[t.other_hash] = dot;
+          if (t.other_hash) presDots[t.other_hash] = dot;
+          rowDots[dmRowKey(t)] = dot;
+          if (Number(t.kind) === 1) { presLine.appendChild(document.createTextNode(dmMembersLabel(t))); presLine.hidden = false; }
           row.appendChild(left);
           var istat = el('div', 'board-stats', t.msgs + (t.msgs === 1 ? ' message' : ' messages'));
           istat.title = fmtDateTime(t.last_at);
@@ -1308,27 +1447,27 @@ export function installDm(B: Boot) {
           var delWrap = el('div', 'board-admin-corner');
           var del = el('a', 'trust-toggle', 'Delete');
           del.href = '#';
-          del.addEventListener('click', (function (other, rowEl) {
+          del.addEventListener('click', (function (target, rowEl) {
             return function (e: any) {
               e.preventDefault();
-              appConfirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok: any) {
+              appConfirm('Delete this conversation? It is cleared from your inbox; the other members keep their copies until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok: any) {
                 if (!ok) return;
                 fetch(API + '/dm/delete', {
                   method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ key: state.key, with: other }),
+                  body: JSON.stringify(Object.assign({ key: state.key }, target)),
                 }).then(function (r) { return r.json(); }).then(function (d2) {
                   if (d2.ok) { rowEl.remove(); try { localStorage.removeItem(DM_CACHE); } catch (e2) {} dmUnreadCheck(); }
                 }).catch(function () {});
               });
             };
-          })(t.other_hash, row));
+          })(dmRowTarget(t), row));
           delWrap.appendChild(del);
           row.appendChild(delWrap);
           list.appendChild(row);
         });
         /* One batched presence snapshot for the whole page: which correspondents
            are online now (honouring appear-offline). No per-row polling. */
-        var presHashes = d.threads.map(function (t: any) { return t.other_hash; });
+        var presHashes = d.threads.map(function (t: any) { return t.other_hash; }).filter(Boolean);
         if (presHashes.length) {
           fetch(API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, hashes: presHashes }) })
@@ -1358,15 +1497,24 @@ export function installDm(B: Boot) {
         /* "typing…" under the name while the other party writes to me (the
            hub fans their signal to my own scope), the line back in 6 s. */
         var typingT: Record<string, any> = {};
-        state.inboxTyping = function (h: any, on: any) {
-          var dot = presDots[h]; if (!dot) return;
-          clearTimeout(typingT[h]);
+        /* keyed by the conversation (a group's row is 't<id>', a pair's its
+           other); a group's line names the typist and returns to its count. */
+        state.inboxTyping = function (thread: any, h: any, on: any) {
+          var k = thread ? 't' + thread : h;
+          var dot = rowDots[k] || presDots[h]; if (!dot) return;
+          var t = rowsByKey[k];
+          var group = t && Number(t.kind) === 1;
+          function back() {
+            if (group) { var ln = dot.parentNode; ln.textContent = ''; ln.appendChild(dot); dot.className = 'dm-row-dot'; ln.appendChild(document.createTextNode(dmMembersLabel(t))); ln.hidden = false; }
+            else paintRow(h, !!presOnMap[h], presOnMap[h] ? 0 : (seenMap[h] || 0));
+          }
+          clearTimeout(typingT[k]);
           if (on) {
             var line = dot.parentNode;
             line.textContent = ''; line.appendChild(dot); dot.className = 'dm-row-dot on';
-            line.appendChild(el('span', 'dm-sub-typing', 'typing…')); line.hidden = false;
-            typingT[h] = setTimeout(function () { paintRow(h, !!presOnMap[h], presOnMap[h] ? 0 : (seenMap[h] || 0)); }, 6000);
-          } else paintRow(h, !!presOnMap[h], presOnMap[h] ? 0 : (seenMap[h] || 0));
+            line.appendChild(el('span', 'dm-sub-typing', group ? dmTypistName(t, h) + ' is typing…' : 'typing…')); line.hidden = false;
+            typingT[k] = setTimeout(back, 6000);
+          } else back();
         };
         /* Only an online → offline transition is "just now" — the hub also seeds
            "offline" on subscribe, which must not overwrite the read's stamp. */
@@ -1422,8 +1570,15 @@ export function installDm(B: Boot) {
     b.appendChild(mcIcon(name));
     return b;
   }
-  function viewDm(other: any) {
-    if (!/^[0-9a-f]{64}$/.test(String(other))) {
+  function viewDm(target: any) {
+    /* A conversation by its id (messages.html?t=<id>, the only door a group
+       has and the resolved form of a pair's) or a pair by its other (?dm=<hash>,
+       the door every "Message" button and older bell still uses; a room not
+       yet made is an empty one). */
+    var other = '', threadWant = 0;
+    if (typeof target === 'string') other = String(target);
+    else if (target && typeof target === 'object') { other = String(target.with || ''); threadWant = Math.floor(Number(target.thread) || 0); }
+    if (!threadWant && !/^[0-9a-f]{64}$/.test(other)) {
       crumb([['Community', 'community.html'], ['Messages']]);
       section.appendChild(el('p', 'comments-status', 'No such member.'));
       return;
@@ -1433,7 +1588,7 @@ export function installDm(B: Boot) {
       section.appendChild(el('p', 'comments-status', 'Messages need an identity. Create one on the board front page.'));
       return;
     }
-    if (other === state.myHash) {
+    if (other && other === state.myHash) {
       crumb([['Community', 'community.html'], ['Messages']]);
       section.appendChild(el('p', 'comments-status', 'That would be a soliloquy. Pick another member.'));
       return;
@@ -1443,7 +1598,8 @@ export function installDm(B: Boot) {
     /* A reaction's bell lands on the very message (2026-09-12): ?m=<id> asks
        the server for that message's page (find=) and is scrolled to on arrival. */
     var mWant = Math.floor(Number(qs.get('m')) || 0);
-    var payload: any = { key: state.key, with: other };
+    var payload: any = { key: state.key };
+    if (threadWant) payload.thread_id = threadWant; else payload.with = other;
     if (pNum > 0) payload.p = pNum;
     else if (mWant > 0) payload.find = mWant;
     /* Same as viewTopic: this rendered nothing at all until the thread AND the
@@ -1460,7 +1616,7 @@ export function installDm(B: Boot) {
     ])
       .then(function (res) {
         var d = res[1];
-        if (!d.ok) throw new Error(d.error || 'failed');
+        if (!d.ok) throw new Error(d.error || (d.status === 404 ? 'gone' : 'failed'));
         section.textContent = '';        // drop the placeholder crumb + skeleton
         /* The thread is a chat screen, not a document: under (hover:none)
            nothing on it is selectable text but the fields (ensureDmStyles) — a
@@ -1469,24 +1625,51 @@ export function installDm(B: Boot) {
         section.classList.add('dm-screen');
         bootSig.addEventListener('abort', function () { section.classList.remove('dm-screen'); }, { once: true });
         ensureDmStyles();
-        /* The correspondent's public key drives both decrypt and encrypt for the
-           whole thread (the shared secret is the same in both directions). */
-        var otherPub = (d.other && d.other.pubkey) || null;
-        var label = dmLabel(other, d.other.nick);
-        var shortName = d.other.nick || displayName(other);
+        /* The conversation and its members (0016): each member's published key
+           — what a word is sealed to, what a word from them is opened with —
+           their names, their read stamps. A room not yet made lists its two.
+           A thread reached by its id learns its pair's other from the roster. */
+        var thr = d.thread || null;
+        var threadId = Math.floor(Number(d.thread_id || (thr && thr.id) || 0)) || 0;
+        var kind = thr ? (Number(thr.kind) || 0) : 0;
+        var members: any[] = (thr && Array.isArray(thr.members)) ? thr.members.slice() : [];
+        if (!members.length && d.other) {
+          members = [{ hash: state.myHash, nick: null, avatar: null, assigned: displayName(state.myHash), pubkey: dmB64uEnc(myDmKeypair().publicKey) }, d.other];
+        }
+        var byHash: Record<string, any> = {};
+        members.forEach(function (mm: any) { if (mm && mm.hash) byHash[mm.hash] = mm; });
+        if (kind === 0 && !other) members.forEach(function (mm: any) { if (mm.hash !== state.myHash && !mm.left_at) other = mm.hash; });
+        var otherRow = other ? (byHash[other] || d.other || null) : null;
+        /* The correspondent's public key drives both decrypt and encrypt of a
+           pair's E1 words (the shared secret is the same in both directions). */
+        var otherPub = (otherRow && otherRow.pubkey) || null;
+        function nameOf(h: any) { var r = byHash[String(h)]; return r ? (r.nick || r.assigned || displayName(String(h))) : displayName(String(h || '')); }
+        function othersNames() { return members.filter(function (mm: any) { return mm.hash !== state.myHash && !mm.left_at; }).map(function (mm: any) { return nameOf(mm.hash); }); }
+        var label = kind === 1 ? ((thr && thr.name) || othersNames().join(', ') || 'Group') : dmLabel(other, otherRow && otherRow.nick);
+        var shortName = kind === 1 ? label : ((otherRow && otherRow.nick) || displayName(other));
         document.title = shortName + ' | Inbox';
         crumb([['Community', 'community.html'], ['Inbox', 'messages.html'], [shortName]]);
+        /* The resolved door: a pair opened by its other takes its id in the
+           address (never a navigation — that re-boots), so a reload, a share
+           and the badge all speak of the same conversation. */
+        function dmPageHref(i: any) { return (threadId ? 'messages.html?t=' + threadId : 'messages.html?dm=' + other) + '&p=' + i; }
+        function adoptUrl() {
+          if (!threadId || !qs.get('dm')) return;
+          var u = 'messages.html?t=' + threadId + (pNum > 0 ? '&p=' + pNum : '') + (mWant > 0 ? '&m=' + mWant : '') + location.hash;
+          try { history.replaceState(history.state, '', u); } catch (e) { /* the door still works */ }
+        }
+        adoptUrl();
         var curTtl = Number(d.ttl) || 2592000;   // Domain.Dm.defaultTtl
         var isNew = !d.messages.length;
         /* ---- the header ---- */
         var headEl = el('div', 'dm-head');
         var avatarLink = el('a', 'dm-head-avatar');
-        avatarLink.href = profileHref(other);
+        if (other) avatarLink.href = profileHref(other);
         avatarLink.setAttribute('aria-label', 'Profile');
         function avatarInto(host: any, size: number) {
-          if (d.other.avatar) {
+          if (otherRow && otherRow.avatar) {
             var im = el('img', 'dm-head-img');
-            im.src = API + '/avatar?hash=' + other + '&v=' + encodeURIComponent(d.other.avatar);
+            im.src = API + '/avatar?hash=' + other + '&v=' + encodeURIComponent(otherRow.avatar);
             im.alt = ''; im.width = size; im.height = size;
             host.appendChild(im);
           } else host.appendChild(el('span', 'dm-head-initial', (shortName.charAt(0) || '?').toUpperCase()));
@@ -1507,13 +1690,21 @@ export function installDm(B: Boot) {
            = Online, false = Offline — which is also what a member who chose
            "appear offline" reads as; the hub honours that before it answers. */
         var presOn: boolean | null = null, typingOn = false, typingHideT: any = 0;
+        /* who is typing, by hash (a group names them; a pair's line is just "typing…") */
+        var typists: Record<string, any> = {};
+        function typistLine() {
+          var names = Object.keys(typists).map(nameOf);
+          if (kind === 0 || !names.length) return 'typing…';
+          return (names.length > 2 ? names.slice(0, 2).join(', ') + ' and ' + (names.length - 2) + ' others' : names.join(' and ')) + (names.length > 1 ? ' are typing…' : ' is typing…');
+        }
         /* The stamp the thread arrived with (null for a member who hides their
            presence); a live offline is "just now". Repainted each minute so
            "3 min ago" keeps time; the timer dies with the boot. */
         var seenAt: number = Number((d.other && d.other.last_seen) || 0);
         function paintSub() {
           sub.textContent = '';
-          if (typingOn) { sub.appendChild(el('span', 'dm-sub-typing', 'typing…')); return; }
+          if (typingOn) { sub.appendChild(el('span', 'dm-sub-typing', typistLine())); return; }
+          if (kind === 1) { sub.appendChild(document.createTextNode(members.filter(function (mm: any) { return !mm.left_at; }).length + ' members · 🔒')); return; }
           if (presOn === true) { sub.appendChild(el('span', 'dm-dot dm-dot-on')); sub.appendChild(document.createTextNode('Online')); return; }
           if (presOn === false) {
             sub.appendChild(el('span', 'dm-dot dm-dot-off'));
@@ -1534,9 +1725,11 @@ export function installDm(B: Boot) {
           avatarInto(big, 72);
           card.appendChild(big);
           card.appendChild(el('div', 'dm-info-name', label));
-          var pl = el('a', 'dm-info-link', 'View profile');
-          pl.href = profileHref(other);
-          card.appendChild(pl);
+          if (other) {
+            var pl = el('a', 'dm-info-link', 'View profile');
+            pl.href = profileHref(other);
+            card.appendChild(pl);
+          }
           box.appendChild(card);
           var enc = el('div', 'dm-info-row');
           enc.appendChild(el('div', 'dm-info-row-title', '🔒 End-to-end encrypted'));
@@ -1546,7 +1739,7 @@ export function installDm(B: Boot) {
           how.href = '#';
           how.addEventListener('click', function (ev: any) { ev.preventDefault(); dmE2eExplainer(); });
           encP.appendChild(how);
-          if (otherPub) {
+          if (kind === 0 && otherPub) {
             encP.appendChild(document.createTextNode(' · '));
             var v = el('a', null, dmVerified(other) ? '✓ verified' : 'Verify safety number');
             v.href = '#';
@@ -1557,25 +1750,27 @@ export function installDm(B: Boot) {
           box.appendChild(enc);
           var dis = el('div', 'dm-info-row');
           dis.appendChild(el('div', 'dm-info-row-title', '⏳ Disappearing messages'));
-          infoExpiry = dmExpiryNode(other, curTtl, isNew, function (t: number) { curTtl = t; isNew = false; paintNote(); });
+          infoExpiry = dmExpiryNode(ctx.target(), curTtl, isNew, function (t: number) { curTtl = t; isNew = false; paintNote(); });
           dis.appendChild(infoExpiry);
           box.appendChild(dis);
           /* The quiet exit — the ONE block (unified 2026-08-03): messages held
              out of sight AND their posts/profile hidden from your view. */
           var dz = el('div', 'dm-info-row dm-info-danger');
-          dz.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
-            var blocking = !d.blocked;
-            var doBlock = function () { setBlock(other, blocking, function () { location.reload(); }); };
-            if (blocking) appConfirm('Block this member? Their future messages are held out of your sight (they are never told), and their posts and profile are hidden from you. Unblocking undoes all of it and delivers everything they wrote meanwhile.', { okLabel: 'Block', danger: true }, function (ok: any) { if (ok) doBlock(); });
-            else doBlock();
-          }));
+          if (kind === 0) {
+            dz.appendChild(identityAction(d.blocked ? 'Unblock this member' : 'Block this member', function () {
+              var blocking = !d.blocked;
+              var doBlock = function () { setBlock(other, blocking, function () { location.reload(); }); };
+              if (blocking) appConfirm('Block this member? Their future messages are held out of your sight (they are never told), and their posts and profile are hidden from you. Unblocking undoes all of it and delivers everything they wrote meanwhile.', { okLabel: 'Block', danger: true }, function (ok: any) { if (ok) doBlock(); });
+              else doBlock();
+            }));
+          }
           dz.appendChild(identityAction('Delete conversation', function () {
-            appConfirm('Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok: any) {
+            appConfirm('Delete this conversation? It is cleared from your inbox; the other members keep their copies until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok: any) {
               if (!ok) return;
               fetch(API + '/dm/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key: state.key, with: other }),
+                body: JSON.stringify(Object.assign({ key: state.key }, ctx.target())),
               }).then(function (r) { return r.json(); }).then(function (d3) {
                 if (d3.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) {} go('messages.html'); }
               }).catch(function () {});
@@ -1610,7 +1805,7 @@ export function installDm(B: Boot) {
         note.addEventListener('click', openInfo);
         list.appendChild(note);
         var dmPages = Math.max(1, Math.ceil(d.total / d.per));
-        function dmHref(i: any) { return 'messages.html?dm=' + other + '&p=' + i; }
+        function dmHref(i: any) { return dmPageHref(i); }
         var topBar = pageBar(d.total, d.per, d.page, dmHref);
         if (topBar) list.appendChild(topBar);   // earlier pages are above; the newest word is at the foot
         section.appendChild(list);
@@ -1621,24 +1816,38 @@ export function installDm(B: Boot) {
            pair's key, the list it lives in (a quote jumps within it), the
            messages by id (a live edit updates the object a menu reads), the
            reply hook the composer owns below, and a word of feedback. */
-        var ctx: any = { other: other, otherPub: otherPub, shortName: shortName, list: list, byId: {},
+        var ctx: any = { threadId: threadId, kind: kind, members: members, byHash: byHash,
+          other: other, otherHash: other, otherPub: otherPub, shortName: shortName, list: list, byId: {},
+          pubOf: function (h: any) { var r = byHash[String(h)]; return (r && r.pubkey) || null; },
+          nameOf: nameOf,
+          current: function () { return members.filter(function (mm: any) { return !mm.left_at; }); },
+          target: function () { return threadId ? { thread_id: threadId } : { with: other }; },
           reply: function () {},
           note: function (t: string) { status.textContent = t; if (window.mcToast) window.mcToast(t); } };
+        /* Who a word of mine seals to, and who my keystrokes reach: every current member but me. */
+        function recipients() { return ctx.current().map(function (mm: any) { return mm.hash; }).filter(function (h: string) { return h !== state.myHash; }); }
         /* Read receipts: my own bubbles carry ✓ until the other opens them
            (opened_at is set at load, or a live dm-read event flips them to ✓✓).
            Only my sent messages carry one; it rides the bubble's meta row. */
         var receipts: any[] = [];
+        /* ✓✓ once every other current member's read stamp reaches the word
+           (Domain.Dm.readByAll — the members' read_at ride the thread and the
+           live dm-read frames); a pair's opened_at, one deploy, says the same. */
+        function seenByAll(m: any) {
+          if (window.mcCore && window.mcCore.dmReadByAll && window.mcCore.dmReadByAll(m.created_at, state.myHash, ctx.current())) return true;
+          return kind === 0 && !!m.opened_at;
+        }
         function addReceipt(node: any, m: any) {
           if (String(m.sender_hash) !== state.myHash) return;
           if (node.classList && node.classList.contains('dm-call-line')) return;   // a call's line is not a sent word: no receipt
           if (state.prefs && state.prefs.receipts === 'off') return;   // reciprocal: I send none AND see none
-          var seen = !!m.opened_at;
+          var seen = seenByAll(m);
           var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : ''), seen ? '✓✓' : '✓');
           r.title = seen ? 'Seen' : 'Delivered';
           r.setAttribute('aria-label', r.title);
           var meta = node.querySelector(':scope > .dm-meta');
           (meta || node).appendChild(r);
-          receipts.push({ created: Number(m.created_at) || 0, span: r });
+          receipts.push({ created: Number(m.created_at) || 0, span: r, m: m });
         }
         function renderMsg(m: any) { var n = dmRenderMsg(m, ctx); addReceipt(n, m); return n; }
         /* Bubbles land under a day chip — Today, Yesterday, a date — whenever
@@ -1696,7 +1905,7 @@ export function installDm(B: Boot) {
           jump.hidden = !away;
           if (!away) {
             pending = 0;
-            if (unseenLive) { unseenLive = 0; dmSeenPing(other); }   // reached: now they are seen
+            if (unseenLive) { unseenLive = 0; dmSeenPing(ctx.target()); }   // reached: now they are seen
           }
           jumpN.hidden = !pending;
           jumpN.textContent = pending > 99 ? '99+' : String(pending);
@@ -1723,29 +1932,73 @@ export function installDm(B: Boot) {
            A message pushed over the private user scope from THIS other party lands
            at once (their own echo is ignored); presence and typing paint the
            header's subtitle; dm-read flips my bubbles to ✓✓. */
-        state.dmView = { other: other,
+        /* The room gained its id (the first word of a pair): the door, the
+           on-screen claim and every later write follow it. */
+        function adopt(id: any) {
+          var n = Math.floor(Number(id) || 0);
+          if (!n || threadId) return;
+          threadId = n; ctx.threadId = n; state.dmView.threadId = n;
+          adoptUrl(); resub();
+        }
+        function resub() {
+          if (!(window.mcLive && window.mcLive.board)) return;
+          var subs: string[] = threadId ? ['dmview:t' + threadId] : [];
+          if (kind === 0 && other) { subs.push('presence:' + other); if (!threadId) subs.push('dmview:' + other); }
+          window.mcLive.board.sub(subs);
+        }
+        function setTypist(h: any, on: boolean) {
+          var k = String(h || '');
+          if (!k || k === state.myHash) return;
+          clearTimeout(typists[k]);
+          if (on) typists[k] = setTimeout(function () { delete typists[k]; state.dmView.setTyping(k, false); }, 6000);
+          else delete typists[k];
+        }
+        state.dmView = { other: other, threadId: threadId, kind: kind, adopt: adopt,
           setTtl: function (t: any) { curTtl = Number(t) || curTtl; isNew = false; paintNote(); if (infoExpiry && infoExpiry.mcSetTtl) infoExpiry.mcSetTtl(t); },
           setPresence: function (on: any) {
             if (presOn === true && !on && seenAt !== -1) seenAt = Math.floor(Date.now() / 1000);   // went offline before our eyes
             presOn = !!on; paintSub();
           },
-          setTyping: function (on: any) {
+          setTyping: function (from: any, on: any) {
+            setTypist(from, !!on);
             clearTimeout(typingHideT);
-            typingOn = !!on; paintSub(); typingBubble(!!on);
-            if (on) typingHideT = setTimeout(function () { typingOn = false; paintSub(); typingBubble(false); }, 6000);
+            typingOn = Object.keys(typists).length > 0; paintSub(); typingBubble(typingOn);
           },
-          markRead: function (at: any) {
-            var t = Number(at) || 0;
+          /* A member read up to `at`: their stamp moves, and every sent bubble
+             every other member has now reached flips to ✓✓. */
+          markRead: function (reader: any, at: any) {
+            var t = Number(at) || 0, r = byHash[String(reader)];
+            if (r) r.read_at = Math.max(Number(r.read_at || 0), t);
             receipts.forEach(function (rc) {
-              if (rc.created <= t) {
+              if (seenByAll(rc.m) || (kind === 0 && rc.created <= t)) {
                 rc.span.textContent = '✓✓'; rc.span.title = 'Seen'; rc.span.setAttribute('aria-label', 'Seen');
                 rc.span.className = 'dm-receipt dm-receipt-seen';
               }
             });
           },
+          /* Someone was added or left: the roster the next word seals to,
+             the header's count, the names. The line itself lands as a word. */
+          roster: function (m: any) {
+            (m.added || []).forEach(function (r: any) {
+              if (!r || !r.hash) return;
+              var cur = byHash[r.hash];
+              if (cur) { cur.left_at = null; cur.pubkey = r.pubkey || cur.pubkey; cur.joined_at = r.joined_at || cur.joined_at; cur.nick = r.nick || cur.nick; cur.avatar = r.avatar || cur.avatar; }
+              else { var row = { hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: r.assigned || displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at || null, left_at: null, read_at: null }; members.push(row); byHash[r.hash] = row; }
+            });
+            (m.left || []).forEach(function (h: any) { var cur = byHash[String(h)]; if (cur) cur.left_at = Math.floor(Date.now() / 1000); setTypist(h, false); });
+            if (kind === 1 && !(thr && thr.name)) { label = othersNames().join(', ') || 'Group'; shortName = label; headText.querySelector('.dm-head-name').textContent = label; }
+            paintSub();
+          },
+          setName: function (name: any) {
+            if (kind !== 1) return;
+            if (thr) thr.name = name || null;
+            label = name || othersNames().join(', ') || 'Group'; shortName = label;
+            headText.querySelector('.dm-head-name').textContent = label;
+            document.title = shortName + ' | Inbox';
+          },
           append: function (msg: any) {
             if (!msg || String(msg.sender_hash) === state.myHash) return;
-            clearTimeout(typingHideT); typingOn = false; paintSub(); typingBubble(false);   // a real message ends "typing"
+            setTypist(msg.sender_hash, false); typingOn = Object.keys(typists).length > 0; paintSub(); typingBubble(typingOn);   // a real message ends "typing"
             var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
             d.total += 1;
             if (d.page === newMsgPage) {
@@ -1755,7 +2008,7 @@ export function installDm(B: Boot) {
                 scrollToEnd();
                 /* Watched it arrive: settle read state + receipt server-side
                    (the send-side quiet bell already skipped the notification). */
-                dmSeenPing(other);
+                dmSeenPing(ctx.target());
               } else {
                 /* Reading back: the word waits under the line, the button counts
                    it, and it is "seen" when the reader comes down to it. */
@@ -1775,10 +2028,12 @@ export function installDm(B: Boot) {
             var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
             if (!bubble || bubble.classList.contains('dm-redacted-msg') || bubble.querySelector('.dm-media')) return;
             var body = bubble.querySelector(':scope > .comment-body');
-            var text = Number(msg.enc || 0) === 1 ? (dmDecrypt(msg.body, otherPub) || '⚠️ could not decrypt') : (msg.body || '');
+            var mm = ctx.byId[String(msg.id)];
+            if (mm && mm._k && !msg._k) msg._k = mm._k;   // the same K: the edit frame carries no keys
+            if (mm && !msg.sender_hash) msg.sender_hash = mm.sender_hash;
+            var text = Number(msg.enc || 0) ? (dmPlain(msg, ctx) || '⚠️ could not decrypt') : (msg.body || '');
             var pt = dmParseText(text);
             if (body) { body.textContent = ''; fillBody(body, pt.text); }
-            var mm = ctx.byId[String(msg.id)];
             if (mm) { mm.body = pt.text; mm.edited_at = msg.edited_at || Math.floor(Date.now() / 1000); }
             dmMarkEdited(bubble);
           },
@@ -1788,11 +2043,11 @@ export function installDm(B: Boot) {
             var bubble = list.querySelector('[data-dmid="' + String(id).replace(/"/g, '') + '"]');
             if (bubble) dmMakeRedacted(bubble, false);
           },
-          /* The other party reacted (or withdrew) on one of these bubbles: repaint its pill. */
-          reactMsg: function (msg: any) {
+          /* A member reacted (or withdrew) on one of these bubbles: repaint its pill. */
+          reactMsg: function (msg: any, from: any) {
             if (!msg || !msg.id) return;
             var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
-            if (bubble && (bubble as any).mcReactPaint) (bubble as any).mcReactPaint(msg.emoji);
+            if (bubble && (bubble as any).mcReactPaint) (bubble as any).mcReactPaint(msg.emoji, msg.by || from);
           },
           /* The other party saved (or unsaved) one of these bubbles: mark it for me too. */
           saveMsg: function (msg: any) {
@@ -1800,12 +2055,14 @@ export function installDm(B: Boot) {
             var bubble = list.querySelector('[data-dmid="' + String(msg.id).replace(/"/g, '') + '"]');
             if (bubble && (bubble as any).mcSavedPaint) (bubble as any).mcSavedPaint(msg.saved);
           } };
-        /* Watch the other party's online state live (the DO seeds it now), and
-           carry the on-screen claim (dmview:<other>) that keeps THIS thread's
-           incoming messages off the bell while it is mounted — the sub is
-           replaced by the next view's sub() and the socket closes on a hidden
-           tab, so the claim is only ever true while the reader truly looks. */
-        if (window.mcLive && window.mcLive.board) window.mcLive.board.sub(['presence:' + other, 'dmview:' + other]);
+        /* Watch a pair's other online live (the DO seeds it now; a group shows
+           no live presence — its ⓘ asks once), and carry the on-screen claim
+           (dmview:t<id>; dmview:<other> for a room not yet made) that keeps THIS
+           conversation's incoming messages off the bell while it is mounted —
+           the sub is replaced by the next view's sub() and the socket closes on
+           a hidden tab, so the claim is only ever true while the reader truly
+           looks. */
+        resub();
         /* ---- the composer ---- */
         var form = el('div', 'dm-composer');
         /* "Replying to …": the strip above the field while a reply is armed —
@@ -1942,7 +2199,7 @@ export function installDm(B: Boot) {
           replyTo = ref;
           replyBody.textContent = '';
           if (!ref) { replyBar.hidden = true; return; }
-          replyBody.appendChild(el('span', 'dm-quote-who', 'Replying to ' + (ref.from === state.myHash ? 'yourself' : shortName)));
+          replyBody.appendChild(el('span', 'dm-quote-who', 'Replying to ' + (ref.from === state.myHash ? 'yourself' : nameOf(ref.from))));
           replyBody.appendChild(el('span', 'dm-quote-text', dmQuoteText(ref)));
           replyBar.hidden = false;
         }
@@ -1996,7 +2253,7 @@ export function installDm(B: Boot) {
           else { send.hidden = false; send.classList.toggle('dm-c-idle', !has); }
           plus.hidden = !!editing;   // an edit changes words, never media
         }
-        attachDraft(ta, 'dm:' + other);
+        attachDraft(ta, 'dm:' + (kind === 1 ? 't' + threadId : other));
         attachEmoji(ta);
         attachMentions(ta);
         swipeDismissesKeyboard(ta, form);
@@ -2008,9 +2265,9 @@ export function installDm(B: Boot) {
           grow(); refresh();
           if (!(window.mcLive && window.mcLive.member)) return;
           var now = Date.now();
-          if (now - typingLastSent > 3000) { window.mcLive!.member.typing!(other, 'start'); typingLastSent = now; }
+          if (now - typingLastSent > 3000) { window.mcLive!.member.typing!(recipients(), 'start', threadId); typingLastSent = now; }
           clearTimeout(typingStopT);
-          typingStopT = setTimeout(function () { window.mcLive!.member.typing!(other, 'stop'); typingLastSent = 0; }, 4000);
+          typingStopT = setTimeout(function () { window.mcLive!.member.typing!(recipients(), 'stop', threadId); typingLastSent = 0; }, 4000);
         });
         /* Enter sends where there is a keyboard with a pointer (WhatsApp Web's
            convention; Shift+Enter breaks the line); on a phone Enter is a new
@@ -2076,7 +2333,7 @@ export function installDm(B: Boot) {
           } else plus.hidden = true;
           /* 📞 lives in the header, always in view (the WhatsApp place). Gated on
              the platform switch + WebRTC support; the bot has no ears. */
-          if (other !== MERECAT_BOT_HASH && (window as any).RTCPeerConnection
+          if (kind === 0 && other && other !== MERECAT_BOT_HASH && (window as any).RTCPeerConnection
             && (navigator as any).mediaDevices && (navigator as any).mediaDevices.getUserMedia) {
             callsCfg().then(function (cc: any) {
               if (!cc.enabled) return;
@@ -2091,12 +2348,35 @@ export function installDm(B: Boot) {
         /* We can only encrypt to a member who has published a key. Until they have
            signed in once under the encrypted client, hold the send with a plain
            notice rather than silently falling back to plaintext. */
-        if (!otherPub) {
+        if (kind === 0 && !otherPub) {
           send.disabled = true;
           ta.disabled = true;
           plus.disabled = true;
           ta.placeholder = 'Waiting for this member to sign in once to set up encryption.';
           status.textContent = 'You can message them privately once they have signed in to set up their encryption key.';
+        }
+        /* Seal a word for the members as they are now and post it; a stale
+           roster (someone came or went as this was sealed) is answered by the
+           server with the fresh one, and the word is sealed once more. */
+        function post(plain: string, mediaKey: any, token: any, retried?: boolean): Promise<any> {
+          var cur = ctx.current();
+          if (cur.some(function (mm: any) { return !mm.pubkey; })) return Promise.reject(new Error('A member has not set up encryption yet.'));
+          var sealed = dmSealFor(plain, cur);
+          var payload: any = Object.assign({ key: state.key, body: sealed.body, enc: 3, keys: sealed.keys, token: token }, ctx.target());
+          if (mediaKey) payload.media_key = mediaKey;
+          return fetchRetry(API + '/dm/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) },
+            [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
+            .then(function (r) { return r.json(); })
+            .then(function (d2) {
+              if (d2 && d2.error === 'roster' && Array.isArray(d2.members) && !retried) {
+                state.dmView.roster({ added: d2.members.filter(function (mm: any) { return !byHash[mm.hash] || byHash[mm.hash].left_at; }),
+                  left: members.filter(function (mm: any) { return !mm.left_at && !d2.members.some(function (x: any) { return x.hash === mm.hash; }); }).map(function (mm: any) { return mm.hash; }) });
+                d2.members.forEach(function (mm: any) { if (byHash[mm.hash] && mm.pubkey) byHash[mm.hash].pubkey = mm.pubkey; });
+                return post(plain, mediaKey, token, true);
+              }
+              if (d2 && d2.ok) d2._k = sealed.K;
+              return d2;
+            });
         }
         send.addEventListener('click', function () {
           if (send.disabled) return;
@@ -2136,24 +2416,16 @@ export function installDm(B: Boot) {
                   status.textContent = 'Sending...';
                   if (body.trim()) mm.env.caption = body;
                   if (replyAt) mm.env.reply = replyAt;
-                  return fetchRetry(API + '/dm/send', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: state.key, to: other, body: dmEncrypt(JSON.stringify(mm.env), otherPub), enc: 1, media_key: u.media_key, token: token }),
-                  }, [1500]).then(function (r) { return r.json(); }).then(function (d2) { d2._env = mm.env; d2._media_key = u.media_key; return d2; });
+                  return post(JSON.stringify(mm.env), u.media_key, token).then(function (d2) { d2._env = mm.env; d2._media_key = u.media_key; return d2; });
                 });
               });
             }
             status.textContent = 'Sending...';
-            return fetchRetry(API + '/dm/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key: state.key, to: other, body: dmEncrypt(dmWrapText(body, replyAt), otherPub), enc: 1, token: token }),
-            }, [1500], function () { status.textContent = 'Network hiccup, retrying...'; })
-              .then(function (r) { return r.json(); });
+            return post(dmWrapText(body, replyAt), null, token);
           }).then(function (d2) {
             if (blockedOut(d2)) return;
             if (!d2.ok) throw new Error(d2.error || 'The message could not be sent.');
+            if (d2.thread_id) adopt(d2.thread_id);
             ta.value = '';
             if (ta.mcDraftDone) ta.mcDraftDone();
             closePicker();
@@ -2171,23 +2443,23 @@ export function installDm(B: Boot) {
               if (sending && d2._media_key) {
                 /* The media echo arrives with its envelope in hand (no decrypt). */
                 var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0, enc: 1,
-                  _env: d2._env, reply: dmReplyClean(replyAt), react_me: '', react_other: '' };
+                  _env: d2._env, _k: d2._k, reply: dmReplyClean(replyAt), reactions: [], react_me: '', react_other: '' };
                 placeMsg(mecho);
               } else {
-                /* The text echo is already plaintext (enc 0) and carries its quote. */
+                /* The text echo is already plaintext (enc 0) and carries its quote — and its K, so an edit re-seals under it. */
                 var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0, enc: 0,
-                  reply: dmReplyClean(replyAt), react_me: '', react_other: '' };
+                  _k: d2._k, reply: dmReplyClean(replyAt), reactions: [], react_me: '', react_other: '' };
                 placeMsg(echo);
               }
               status.textContent = '';
               scrollToEnd();
             } else {
-              go('messages.html?dm=' + other + '&p=' + msgPage);
+              go(dmPageHref(msgPage));
             }
           }).catch(function (err) {
             status.textContent = err.message || 'Network error. Try again in a moment.';
           }).finally(function () {
-            send.disabled = !otherPub;
+            send.disabled = (kind === 0 && !otherPub);
             refresh();
             if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
           });
@@ -2234,10 +2506,13 @@ export function installDm(B: Boot) {
           }
         }
       })
-      .catch(function () {
+      .catch(function (err: any) {
         section.textContent = '';        // drop the placeholder crumb + skeleton
-        crumb([['Community', 'community.html'], ['Messages']]);
-        section.appendChild(el('p', 'comments-status', 'The conversation could not be loaded. Check your connection and reload the page.'));
+        crumb([['Community', 'community.html'], ['Inbox', 'messages.html'], ['Conversation']]);
+        /* "No such conversation": it ended (nothing saved, everything expired,
+           nobody remains), or I left it. */
+        var gone = err && /No such conversation|gone/.test(String(err.message || ''));
+        section.appendChild(el('p', 'comments-status', gone ? 'This conversation has ended.' : 'The conversation could not be loaded. Check your connection and reload the page.'));
       });
   }
   function bind() {
@@ -2311,6 +2586,8 @@ export function installDm(B: Boot) {
       else if (m.t === 'dm-react') onLiveDmReact(m);
       else if (m.t === 'dm-save') onLiveDmSave(m);
       else if (m.t === 'dm-read') onLiveDmRead(m);
+      else if (m.t === 'dm-members') onLiveDmMembers(m);
+      else if (m.t === 'dm-name') onLiveDmName(m);
       else if (m.t === 'typing') onLiveTyping(m);
       else if (m.t === 'presence') onLivePresence(m);
       else if (m.t === 'notification') onLiveNotif();

@@ -210,11 +210,13 @@ test('the reply envelope: sentinel + JSON round-trips, and plain text is itself'
 
 test('a reply rides inside the ciphertext, and the media envelope carries its own', () => {
   const view = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function ', src.indexOf('function viewDm(') + 10));
-  assert.ok(/dmEncrypt\(dmWrapText\(body, replyAt\), otherPub\)/.test(view), 'the text send wraps the quote INSIDE the E2E plaintext');
+  assert.ok(/return post\(dmWrapText\(body, replyAt\), null, token\);/.test(view), 'the text send wraps the quote INSIDE the E2E plaintext');
+  assert.ok(/var sealed = dmSealFor\(plain, cur\);/.test(view) && /body: sealed\.body, enc: 3, keys: sealed\.keys/.test(view), 'sealed for the members as they are now (envelope v2, 2026-09-13)');
+  assert.ok(/if \(d2 && d2\.error === 'roster' && Array\.isArray\(d2\.members\) && !retried\)/.test(view), 'a stale roster is sealed once more');
   assert.ok(/if \(replyAt\) mm\.env\.reply = replyAt;/.test(view), 'a media reply rides in the (encrypted) media envelope');
   assert.ok(!/reply_to/.test(src), 'the server never learns what answers what');
   const edit = fn('dmSaveEdit', 'dmStartEdit');
-  assert.ok(/dmEncrypt\(dmWrapText\(nv, m\.reply\), ctx\.otherPub\)/.test(edit), 'an edit keeps the quote it answered');
+  assert.ok(/dmReseal\(dmWrapText\(nv, m\.reply\), m, ctx\)/.test(edit), 'an edit keeps the quote it answered, re-sealed under the same K');
 });
 
 test('on a phone a hold picks a message, never a word: the screen is not selectable text, the surface never is, and opening drops any selection', () => {

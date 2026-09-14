@@ -84,7 +84,7 @@ class McInbox extends LitElement {
   declare d: any;
   declare err: string;
   declare pres: any;   // { online: {hash:true}, seen: {hash: epoch} } once the presence read answers
-  declare typing: Record<string, number>;   // hash → when their last typing signal landed (2026-09-11)
+  declare typing: Record<string, string>;   // conversation key ('t<id>' for a group, the other's hash for a pair) → the typist's hash (2026-09-11; keyed by the conversation since 2026-09-13)
   declare _typingT: Record<string, any>;
   declare _onLive: (ev: Event) => void;
   constructor() {
@@ -107,7 +107,7 @@ class McInbox extends LitElement {
       const det = (ev as CustomEvent).detail;
       if (!det) return;
       if (det.t === 'dm') this.load();
-      else if (det.t === 'typing' && det.from) this._typing(String(det.from), det.state !== 'stop');
+      else if (det.t === 'typing' && det.from) this._typing(String(det.from), det.state !== 'stop', Number(det.thread) || 0);
     };
     document.addEventListener('mc-live', this._onLive);
   }
@@ -117,12 +117,36 @@ class McInbox extends LitElement {
     Object.keys(this._typingT).forEach((h) => clearTimeout(this._typingT[h]));
   }
   /* "typing…" under the name while that member writes to me — the hub fans
-     their signal to my own scope — and the presence line back after 6 s. */
-  _typing(h: string, on: boolean) {
-    clearTimeout(this._typingT[h]);
+     their signal to my own scope — and the presence line back after 6 s.
+     Keyed by the conversation: a group's row by its id ('t<id>'), a pair's by
+     its other (2026-09-13). */
+  _typing(h: string, on: boolean, thread?: number) {
+    const k = thread ? 't' + thread : h;
+    clearTimeout(this._typingT[k]);
     const t = Object.assign({}, this.typing);
-    if (on) { t[h] = Date.now(); this._typingT[h] = setTimeout(() => this._typing(h, false), 6000); } else delete t[h];
+    if (on) { t[k] = h; this._typingT[k] = setTimeout(() => this._typing(h, false, thread), 6000); } else delete t[k];
     this.typing = t;
+  }
+  /* A row's name and door (2026-09-13): a pair by its other, a group by its
+     name or its members' names, opened by its id. */
+  _rowLabel(t: any): string {
+    if (Number(t.kind) === 1) {
+      if (t.name) return String(t.name);
+      const names = (t.members || []).map((m: any) => m.nick || m.assigned || this.kit.displayName(m.hash));
+      return names.length ? names.join(', ') : 'Group';
+    }
+    return this.kit.dmLabel(t.other_hash, t.nick);
+  }
+  _rowHref(t: any): string { return t.thread_id ? 'messages.html?t=' + t.thread_id : 'messages.html?dm=' + t.other_hash; }
+  _groupTpl(t: any) {
+    const typist = this.typing && this.typing['t' + (t.thread_id || t.id)];
+    if (typist) {
+      const row = (t.members || []).find((m: any) => m.hash === typist);
+      const who = row ? (row.nick || row.assigned || this.kit.displayName(typist)) : this.kit.displayName(typist);
+      return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot on"></span><span class="dm-sub-typing">${who} is typing…</span></div>`;
+    }
+    const n = Number(t.member_count) || ((t.members || []).length + 1);
+    return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot"></span>${n} members</div>`;
   }
   load() {
     const kit = this.kit;
@@ -134,7 +158,7 @@ class McInbox extends LitElement {
       if (!d.ok) throw new Error(d.error || 'failed');
       kit.dmCacheSet(d.unread_total);
       this.d = d;
-      this._presence(d.threads.map((t: any) => t.other_hash));
+      this._presence(d.threads.map((t: any) => t.other_hash).filter(Boolean));
     }).catch(() => { this.err = 'load'; });
   }
   /* Online / Last seen … / Offline under each name (2026-09-11), the thread
@@ -189,19 +213,20 @@ class McInbox extends LitElement {
     const host = this.querySelector('.mc-dmsearch');
     if (host && !host.firstChild) host.appendChild(kit.dmSearchBox());
   }
-  del(e: Event, other: string, row: HTMLElement) {
+  del(e: Event, t: any, row: HTMLElement) {
     e.preventDefault();
     const kit = this.kit;
+    const target = t && t.thread_id ? { thread_id: t.thread_id } : { with: t && t.other_hash };
     const go = (ok: boolean) => {
       if (!ok) return;
       fetch(kit.API + '/dm/delete', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: kit.state.key, with: other }),
+        body: JSON.stringify(Object.assign({ key: kit.state.key }, target)),
       }).then((r) => r.json()).then((d2) => {
         if (d2.ok) { row.remove(); try { localStorage.removeItem('mc-dm-unread'); } catch (e2) {} kit.dmUnreadCheck(); }
       }).catch(() => {});
     };
-    const msg = 'Delete this conversation? It is cleared from your inbox; the other member keeps their copy until they delete it too.';
+    const msg = 'Delete this conversation? It is cleared from your inbox; the other members keep their copies until they delete it too.';
     if (window.mcConfirm) window.mcConfirm(msg, { okLabel: 'Delete', danger: true }).then(go);
     else go(confirm(msg));
   }
@@ -231,12 +256,12 @@ class McInbox extends LitElement {
           ? html`<p class="comments-status mc-empty" data-ico="✉️">No messages yet. Find a member above, or press Direct Message on any post.</p>`
           : d.threads.map((t: any) => html`<div class=${'board-topic mc-cardnav' + (t.unread ? ' dm-row-unread' : '')} @click=${this._dmNav}>
               <div class="board-topic-left">
-                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${'messages.html?dm=' + t.other_hash}>${kit.dmLabel(t.other_hash, t.nick)}</a>${t.unread ? html`<span class="dm-unread-badge">${t.unread}</span>` : nothing}
+                <a class=${'board-topic-title' + (t.unread ? ' dm-unread' : '')} href=${this._rowHref(t)}>${this._rowLabel(t)}</a>${t.unread ? html`<span class="dm-unread-badge">${t.unread}</span>` : nothing}
                 <div class="board-row-sub" title=${kit.fmtDateTime(t.last_at)}>${kit.fmtTimeCompact(t.last_at)}</div>
-                ${this._presTpl(t.other_hash)}
+                ${Number(t.kind) === 1 ? this._groupTpl(t) : this._presTpl(t.other_hash)}
               </div>
               <div class="board-stats" title=${kit.fmtDateTime(t.last_at)}>${t.msgs + (t.msgs === 1 ? ' message' : ' messages')}</div>
-              <div class="board-admin-corner"><a class="trust-toggle" href="#" @click=${(e: Event) => this.del(e, t.other_hash, (e.target as HTMLElement).closest('.board-topic') as HTMLElement)}>Delete</a></div>
+              <div class="board-admin-corner"><a class="trust-toggle" href="#" @click=${(e: Event) => this.del(e, t, (e.target as HTMLElement).closest('.board-topic') as HTMLElement)}>Delete</a></div>
             </div>`)}
       </div>
       ${d.threads.length ? pagerTpl(d.total, d.per, d.page, href) : nothing}`;

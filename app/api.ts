@@ -79,11 +79,22 @@ export const markRead = (topicId: string | number) => write(API, '/board/read', 
 export const markAllRead = () => write(API, '/board/read-all', { key: keyFn() }, [API + '/board']);
 
 /* ---- DMs & notifications ---- */
+/* A conversation is addressed by its id ({thread_id}) — the only door a group
+   has — or, a pair, by its other (a 64-hex string, or {with}); 2026-09-13. */
+type DmTarget = string | { thread_id?: number; with?: string };
+const dmTarget = (t: DmTarget) => (typeof t === 'string' ? { with: t } : { ...(t.thread_id ? { thread_id: t.thread_id } : {}), ...(t.with ? { with: t.with } : {}) });
 export const dmThreads = (p?: number) => postRead('/dm/threads', { key: keyFn(), p: p || 1 }, 20000);
-export const dmThread = (other: string, p?: number) => postRead('/dm/thread', { key: keyFn(), with: other, ...(p ? { p } : {}) }, 15000);
-export const dmSend = (to: string, body: string, token: string) => write(API, '/dm/send', { to, body, token, key: keyFn() }, [API + '/dm']);
+export const dmThread = (target: DmTarget, p?: number) => postRead('/dm/thread', { key: keyFn(), ...dmTarget(target), ...(p ? { p } : {}) }, 15000);
+/* The sealed envelope: {thread_id | to, body:'E3.…', enc:3, keys:{hash: sealed}, media_key?, token}; a pair's E1 body ({to, body, enc:1}) one deploy longer. */
+export const dmSend = (payload: Record<string, unknown>) => write(API, '/dm/send', { ...payload, key: keyFn() }, [API + '/dm']);
+export const dmForward = (items: Record<string, unknown>[], token: string) => write(API, '/dm/forward', { items, token, key: keyFn() }, [API + '/dm']);
+export const dmRoster = (target: DmTarget) => postRead('/dm/roster', { key: keyFn(), ...dmTarget(target) }, 5000);
+export const dmGroups = (members: string[], name: string | null, token: string) => write(API, '/dm/groups', { members, name, token, key: keyFn() }, [API + '/dm']);
+export const dmMembers = (threadId: number, add: string[], token: string) => write(API, '/dm/members', { thread_id: threadId, add, token, key: keyFn() }, [API + '/dm']);
+export const dmLeave = (threadId: number) => write(API, '/dm/leave', { thread_id: threadId, key: keyFn() }, [API + '/dm']);
+export const dmName = (threadId: number, name: string) => write(API, '/dm/name', { thread_id: threadId, name, key: keyFn() }, [API + '/dm']);
 export const dmBlock = (hash: string, blocked: boolean) => write(API, '/dm/block', { hash, blocked, key: keyFn() }, [API + '/dm']);
-export const dmDelete = (other: string) => write(API, '/dm/delete', { with: other, key: keyFn() }, [API + '/dm']);
+export const dmDelete = (target: DmTarget) => write(API, '/dm/delete', { ...dmTarget(target), key: keyFn() }, [API + '/dm']);
 export const notifications = (p?: number) => postRead('/notifications', { key: keyFn(), p: p || 1 }, 15000);
 export const notificationsRead = () => write(API, '/notifications/read', { key: keyFn() }, [API + '/notifications']);
 

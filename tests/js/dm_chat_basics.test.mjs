@@ -31,9 +31,9 @@ test('a live word never scrolls a reader who is reading back: it waits under the
 });
 
 test('"seen" goes out only for words the reader reached: at the foot as they arrived, or when the reader comes down to them', () => {
-  assert.equal((append.match(/dmSeenPing\(other\)/g) || []).length, 1, 'one ping in append — in the at-the-foot branch');
-  assert.ok(/if \(wasNear\) \{\s*scrollToEnd\(\);[\s\S]*?dmSeenPing\(other\);\s*\} else \{/.test(append));
-  assert.ok(/function updateJump\(\) \{[\s\S]*?if \(!away\) \{\s*pending = 0;\s*if \(unseenLive\) \{ unseenLive = 0; dmSeenPing\(other\); \}/.test(view),
+  assert.equal((append.match(/dmSeenPing\(ctx\.target\(\)\)/g) || []).length, 1, 'one ping in append — in the at-the-foot branch');
+  assert.ok(/if \(wasNear\) \{\s*scrollToEnd\(\);[\s\S]*?dmSeenPing\(ctx\.target\(\)\);\s*\} else \{/.test(append));
+  assert.ok(/function updateJump\(\) \{[\s\S]*?if \(!away\) \{\s*pending = 0;\s*if \(unseenLive\) \{ unseenLive = 0; dmSeenPing\(ctx\.target\(\)\); \}/.test(view),
     'reaching the foot pings once for the live words that waited there');
 });
 
@@ -58,12 +58,13 @@ test('the unread line on open: above the first unread word the SERVER named, the
 });
 
 test('typing shows wherever the reader is: the header line, a three-dot bubble at the foot, and the inbox row', () => {
-  assert.ok(/setTyping: function \(on: any\) \{\s*clearTimeout\(typingHideT\);\s*typingOn = !!on; paintSub\(\); typingBubble\(!!on\);/.test(view));
+  assert.ok(/setTyping: function \(from: any, on: any\) \{\s*setTypist\(from, !!on\);\s*clearTimeout\(typingHideT\);\s*typingOn = Object\.keys\(typists\)\.length > 0; paintSub\(\); typingBubble\(typingOn\);/.test(view),
+    'the header line and the bubble follow WHO is typing (a group names them; 2026-09-13)');
   assert.ok(/function typingBubble\(on: boolean\) \{[\s\S]*?typingNode = el\('div', 'dm-msg dm-typing-bubble'\);[\s\S]*?for \(var i = 0; i < 3; i\+\+\) typingNode\.appendChild\(el\('span', 'dm-typing-dot'\)\);[\s\S]*?if \(wasNear\) scrollToEnd\(\);/.test(view),
     'the bubble keeps the foot in view when the reader is there');
-  assert.ok(/paintSub\(\); typingBubble\(false\);   \/\/ a real message ends "typing"/.test(view));
-  assert.ok(/if \(state\.inboxTyping\) state\.inboxTyping\(m\.from, m\.state !== 'stop'\);/.test(dm), 'the classic inbox hears it');
-  assert.ok(/else if \(det\.t === 'typing' && det\.from\) this\._typing\(String\(det\.from\), det\.state !== 'stop'\);/.test(inbox), 'the Lit inbox hears it');
+  assert.ok(/setTypist\(msg\.sender_hash, false\); typingOn = Object\.keys\(typists\)\.length > 0; paintSub\(\); typingBubble\(typingOn\);   \/\/ a real message ends "typing"/.test(view));
+  assert.ok(/if \(state\.inboxTyping\) state\.inboxTyping\(Math\.floor\(Number\(m\.thread\) \|\| 0\), m\.from, m\.state !== 'stop'\);/.test(dm), 'the classic inbox hears it, by the conversation (0016)');
+  assert.ok(/else if \(det\.t === 'typing' && det\.from\) this\._typing\(String\(det\.from\), det\.state !== 'stop', Number\(det\.thread\) \|\| 0\);/.test(inbox), 'the Lit inbox hears it');
   assert.ok(/if \(this\.typing && this\.typing\[h\]\) return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot on"><\/span><span class="dm-sub-typing">typing…<\/span><\/div>`;/.test(inbox),
     'the Lit inbox row reads typing…');
   assert.ok(/@keyframes dm-typing\{/.test(dmCss) && /\.dm-typing-dot:nth-child\(2\)\{animation-delay:\.2s\}/.test(dmCss));

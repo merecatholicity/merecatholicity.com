@@ -65,21 +65,24 @@ STUB = r"""
         var unreadMode = /mcunread=1/.test(location.search);
         if (unreadMode) for (var i = 0; i < 9; i++) msgs.push({ id: 105 + i, sender_hash: OTHER, created_at: now - 50 + i, enc: 0, saved: 0, react_me: '', react_other: '',
           body: 'Unread word ' + (i + 1) + ' — a line long enough to wrap twice on a phone, so that nine of them stand taller than the screen and the line lands under the header.' });
+        var other = { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43), last_seen: now - 90000, joined_at: now - 3 * 86400, left_at: null, read_at: now - 80000 };
+        var mine = { hash: me, nick: null, avatar: null, assigned: 'Me', pubkey: 'B'.repeat(43), last_seen: null, joined_at: now - 3 * 86400, left_at: null, read_at: now - 30 };
         return reply({ ok: true, thread_id: 1, ttl: 604800,
-          other: { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43), last_seen: now - 90000 },
+          thread: { id: 1, kind: 0, name: null, ttl: 604800, members: [mine, other] },   // the member model (0016)
+          other: other,
           messages: msgs, total: msgs.length, page: 1, per: 20, blocked: 0, unread: unreadMode ? 9 : 0, unread_from: unreadMode ? 105 : null });
       });
     }
     if (u.indexOf('/api/comments/dm/threads') !== -1) {
       var now2 = Math.floor(Date.now() / 1000);
-      return reply({ ok: true, threads: [{ id: 1, other_hash: OTHER, nick: 'Fixture', avatar: null, msgs: 4, last_at: now2 - 60, unread: 1 }], total: 1, unread_total: 1, page: 1, per: 20 });
+      return reply({ ok: true, threads: [{ id: 1, thread_id: 1, kind: 0, name: null, other_hash: OTHER, nick: 'Fixture', avatar: null, members: [{ hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture' }], member_count: 2, msgs: 4, last_at: now2 - 60, unread: 1 }], total: 1, unread_total: 1, page: 1, per: 20 });
     }
     if (u.indexOf('/api/comments/dm/presence') !== -1) {
       var now3 = Math.floor(Date.now() / 1000);
       var seen = {}; seen[OTHER] = now3 - 90000;
       return reply({ ok: true, online: [], seen: seen });
     }
-    if (/\/api\/comments\/dm\/(react|save|redact|edit|seen|ttl|send)/.test(u)) {
+    if (/\/api\/comments\/dm\/(react|save|redact|edit|seen|ttl|send|forward|roster|members|leave|name)/.test(u)) {
       window.__mcDmWrites.push(u);
       return reply({ ok: true, id: 0, emoji: '', saved: 1, edited_at: 0 });
     }

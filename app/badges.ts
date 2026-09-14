@@ -36,6 +36,15 @@ function openThreadWith(): string {
     return String(new URLSearchParams(location.search).get('dm') || '');
   } catch (e) { return ''; }
 }
+/* The conversation on screen by its id (messages.html?t=<id>, 2026-09-13):
+   the door every frame names since 0016; ?dm=<hash> stands for a pair's room
+   not yet made. */
+function openThreadId(): number {
+  try {
+    if ((location.pathname.split('/').pop() || '') !== 'messages.html') return 0;
+    return Math.floor(Number(new URLSearchParams(location.search).get('t')) || 0);
+  } catch (e) { return 0; }
+}
 function notifListOpen(): boolean {
   try { return new URLSearchParams(location.search).get('notifications') === '1'; } catch (e) { return false; }
 }
@@ -69,7 +78,8 @@ export function installBadges() {
     const m = ev.detail;
     if (!m || !readKey()) return;
     if (m.t === 'dm') {
-      if (m.from && openThreadWith() === m.from) return;   // the thread on screen takes it
+      if (m.thread_id && openThreadId() === Number(m.thread_id)) return;   // the conversation on screen takes it
+      if (m.from && openThreadWith() === m.from) return;   // a pair's room not yet made, by its other
       bell(); refresh('dm');
     } else if (m.t === 'notification') {
       if (notifListOpen()) return;   // the list reloads itself and marks read

@@ -37,6 +37,25 @@ interface McCore {
   notifHasSnippet(kind: string): boolean;
   dmReplyExcerpt(s: string): string;
   dmReplySentinel: string;
+  /* the member model (Domain.Dm, 2026-09-13) */
+  dmMaxMembers: number;
+  dmTypingFanCap: number;
+  dmInboxAvatars: number;
+  dmGroupNameMax: number;
+  dmGroupName(raw: string): string | null;
+  dmEnc: { plain: number; pair: number; system: number; sealed: number };
+  dmEnvTags: { pair: string; sealed: string };
+  dmMembersEqual(a: unknown, b: unknown): boolean;
+  dmSysLine(body: string): { tag: string; hashes: string[]; name: string } | null;
+  dmSysLineText(body: string, actor: string, nameOf: (h: string) => string): string;
+  dmSysAddLine(hashes: unknown): string;
+  dmSysLeaveLine: string;
+  dmSysNameLine(name: string): string;
+  dmMissedCallLine: string;
+  dmForwardedLabel: string;
+  dmTally(rows: unknown): { e: string; n: number }[];
+  dmReadByAll(createdAt: number, me: string, members: unknown): boolean;
+  dmMemberHue(hash: string): number;
   callLine(body: string): { tag: string; secs: number } | null;
   callLineText(body: string, mine: boolean): string;
   callLineMissed(body: string, mine: boolean): boolean;
@@ -96,7 +115,7 @@ declare global {
     mcLive?: {
       board: { sub: (scopes: string[]) => void; leave: () => void };
       member: { enable: (key: string, hash: string) => void; disable: () => void;
-                typing?: (to: string, state?: string) => void; setPresence?: (mode: string) => void;
+                typing?: (to: string | string[], state?: string, thread?: number) => void; setPresence?: (mode: string) => void;
                 callSig?: (to: string, f: { call?: string; kind?: string; payload?: unknown }) => boolean;
                 presenceMode?: () => string };
       chat: (chatId: string | number, key: string, onFrame: (m: any) => void) =>

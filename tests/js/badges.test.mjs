@@ -29,7 +29,7 @@ test('the shell owns the refresh: installed right after the live layer, hearing 
   const live = shell.indexOf('installLive();'), at = shell.indexOf('installBadges();');
   assert.ok(live > 0 && at > live && at - live < 200, 'installed right after installLive');
   const code = badges.replace(/\/\/[^\n]*/g, '');   // the comments off the lines
-  assert.ok(/if \(m\.t === 'dm'\) \{\s*if \(m\.from && openThreadWith\(\) === m\.from\) return;\s*bell\(\); refresh\('dm'\);/.test(code), 'a dm frame not for the thread on screen: the Inbox count and one bell');
+  assert.ok(/if \(m\.t === 'dm'\) \{\s*if \(m\.thread_id && openThreadId\(\) === Number\(m\.thread_id\)\) return;\s*if \(m\.from && openThreadWith\(\) === m\.from\) return;\s*bell\(\); refresh\('dm'\);/.test(code), 'a dm frame not for the conversation on screen: the Inbox count and one bell');
   assert.ok(/else if \(m\.t === 'notification'\) \{\s*if \(notifListOpen\(\)\) return;\s*bell\(\); refresh\('notif'\);/.test(code), 'a notification frame, unless the list is open');
   assert.ok(/document\.addEventListener\('mc-live-resync', \(\) => \{[\s\S]*?if \(stale\(DM_CACHE\)\) refresh\('dm'\);\s*if \(stale\(NOTIF_CACHE\)\) refresh\('notif'\);/.test(badges), 'a reconnect refreshes what is stale');
   assert.ok(/if \(now - lastBell < 1500\) return;/.test(badges), 'one sound per burst');
