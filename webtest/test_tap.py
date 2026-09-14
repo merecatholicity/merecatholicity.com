@@ -5,10 +5,15 @@ The verdict is unit-tested in tests/purescript/tap.test.mjs and the road's
 shape in tests/js/tabbar.test.mjs; this is the half that only exists in a
 browser — that a press on a tab navigates softly on the finger's lift, exactly
 ONCE (the engine's own click cancelled, or swallowed as an echo), that the
-destination is painted at once, and that a drag or a hold on the bar navigates
-nowhere. The touches are the engine's own (CDP Input.dispatchTouchEvent), so
-Chromium synthesizes its click after the lift exactly as a phone does — which
-is what the road has to beat.
+destination is painted at once, and that a drag or a hold on the bar gets
+NOTHING from the road: its touchend is left uncancelled and it dispatches no
+click of its own. The touches are the engine's own (CDP Input.dispatchTouchEvent),
+so Chromium synthesizes its click after the lift exactly as a phone does —
+which is what the road has to beat. Every click is logged with its
+`isTrusted`: the road's is untrusted (`el.click()`), the engine's trusted —
+so a hold that still navigates is the engine's own long-press click (Chromium
+sends one; measured 2026-09-13), the platform's judgement unchanged, and the
+proof accepts it while holding the road to silence.
 
 Run: python3 webtest/test_tap.py
 """
@@ -38,6 +43,26 @@ return {x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2)
 """
 
 HERE = "return {path: location.pathname.split('/').pop(), n: history.length, mark: window.__mark || ''};"
+
+# Every touchend and click on the tab bar, with what the road did to it.
+LOG = """
+window.__log = [];
+['touchend', 'click'].forEach(function (t) {
+  document.addEventListener(t, function (e) {
+    var tab = e.target && e.target.closest && e.target.closest('a.mc-tab');
+    if (!tab) return;
+    setTimeout(function () {   // read defaultPrevented AFTER the bar's own listeners ran
+      window.__log.push({t: t, trusted: e.isTrusted, prevented: e.defaultPrevented});
+    }, 0);
+  }, true);
+});
+return 1;
+"""
+
+
+def log(f):
+    out = f.js("var l = window.__log || []; window.__log = []; return l;") or []
+    return out
 
 
 def touch(f, kind, points):
@@ -70,6 +95,7 @@ def main():
         f.wait("document.querySelector('mc-tabbar a.mc-tab[href=\"messages.html\"]')")
         time.sleep(1.5)
         f.js("window.__mark = 'alive'; return 1;")
+        f.js(LOG)
         before = f.js(HERE)
         checks.append(('starts on Home: %s' % before, before and before['path'] in ('index.html', '')))
 
@@ -85,27 +111,41 @@ def main():
                        after and before and after['n'] == before['n'] + 1))
         checks.append(('the Inbox tab is the lit one',
                        f.js("var a=document.querySelector('mc-tabbar a.mc-tab[href=\"messages.html\"]'); return !!(a && a.classList.contains('mc-tab-on'));")))
+        ev = log(f)
+        checks.append(('the road answered the lift: touchend cancelled, one untrusted click of its own: %s' % ev,
+                       any(e['t'] == 'touchend' and e['prevented'] for e in ev)
+                       and sum(1 for e in ev if e['t'] == 'click' and not e['trusted']) == 1))
+        checks.append(('and no trusted click of the engine\'s reached the page unswallowed',
+                       all(e['prevented'] for e in ev if e['t'] == 'click' and e['trusted'])))
 
         # Back to Home by the same road.
         press(f, 'index.html')
         home = f.wait("location.pathname.split('/').pop() === 'index.html'", timeout=8, every=0.25)
         checks.append(('a press on Home brings Home', home))
         time.sleep(1.5)
+        log(f)
         base = f.js(HERE)
 
         # A drag that begins on the tab is a scroll, never a tap.
         press(f, 'messages.html', drag=40)
         time.sleep(1.5)
         dragged = f.js(HERE)
-        checks.append(('a drag on the bar navigates nowhere: %s' % dragged,
-                       dragged and dragged['path'] == 'index.html' and dragged['n'] == base['n']))
+        ev = log(f)
+        checks.append(('a drag on the bar gets nothing from the road, and navigates nowhere: %s %s' % (dragged, ev),
+                       dragged and dragged['path'] == 'index.html' and dragged['n'] == base['n']
+                       and not any(e['t'] == 'click' and not e['trusted'] for e in ev)
+                       and not any(e['t'] == 'touchend' and e['prevented'] for e in ev)))
 
-        # A hold is the platform's gesture, never a tap.
+        # A hold is the platform's gesture: the road leaves its touchend alone and
+        # dispatches nothing. What the engine then does with a long press is its
+        # own (Chromium sends a trusted click; a phone may show a preview).
         press(f, 'messages.html', hold=0.8)
         time.sleep(1.5)
         held = f.js(HERE)
-        checks.append(('a hold on the bar navigates nowhere: %s' % held,
-                       held and held['path'] == 'index.html' and held['n'] == base['n']))
+        ev = log(f)
+        checks.append(('a hold on the bar gets nothing from the road (engine\'s own outcome: %s): %s' % (held, ev),
+                       not any(e['t'] == 'click' and not e['trusted'] for e in ev)
+                       and any(e['t'] == 'touchend' and not e['prevented'] for e in ev)))
         harness = list(f.failures)
 
     ok = True
