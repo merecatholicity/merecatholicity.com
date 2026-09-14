@@ -401,7 +401,11 @@ export function installSurface(B: Boot) {
   /* The pill: one chip per emoji with its count, mine lit. A tap on a chip
      gives that reaction (mine again withdraws it); a hover or a long press
      says who. */
-  function reactPillInto(host: any, target: any, id: any, cells: any[], mine: string) {
+  /* The pill's cells painted into a host. Without `opts` the chips wire to
+     the public ledger (/react, /react/who); a DM group (2026-09-13) paints
+     the same chips with its own pick and its own title (its rows are E2E
+     metadata the ledger does not hold): opts.onPick(emoji), opts.title(emoji). */
+  function reactPillInto(host: any, target: any, id: any, cells: any[], mine: string, opts?: any) {
     host.textContent = '';
     host.classList.add('mc-react-pill');
     host.hidden = !cells.length;
@@ -410,10 +414,10 @@ export function installSurface(B: Boot) {
       chip.type = 'button';
       chip.appendChild(reactionNode(c.e));
       chip.appendChild(el('span', 'mc-react-n', String(c.n)));
-      chip.title = (c.e === mine ? 'You reacted ' + c.e + ' — tap to remove' : 'React ' + c.e);
+      chip.title = opts && opts.title ? String(opts.title(c.e) || '') : (c.e === mine ? 'You reacted ' + c.e + ' — tap to remove' : 'React ' + c.e);
       chip.setAttribute('aria-label', c.n + (c.n === 1 ? ' reaction ' : ' reactions ') + c.e + (c.e === mine ? ', yours' : ''));
-      chip.addEventListener('click', function (e: any) { e.preventDefault(); e.stopPropagation(); buzz('pick'); reactSend(target, id, c.e); });
-      attachWho(chip, target, id);
+      chip.addEventListener('click', function (e: any) { e.preventDefault(); e.stopPropagation(); buzz('pick'); if (opts && opts.onPick) opts.onPick(c.e); else reactSend(target, id, c.e); });
+      if (!(opts && opts.onPick)) attachWho(chip, target, id);
       host.appendChild(chip);
     });
   }

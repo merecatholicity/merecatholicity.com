@@ -1,4 +1,4 @@
-/* Turnstile guards SEVEN actions, and the warm must reach all of them.
+/* Turnstile guards EIGHT actions, and the warm must reach all of them.
  *
  * The live evidence (2026-09-08): the first submit called turnstile.execute()
  * and the page was replaced without ever returning a token — the challenge
@@ -33,12 +33,15 @@ function enclosing(idx) {
   return m.length ? m[m.length - 1][1] : '(top level)';
 }
 
-test('every Turnstile-gated action is one of the seven we know about', () => {
+test('every Turnstile-gated action is one of the eight we know about', () => {
   const callers = [...src.matchAll(/getToken\(\)\.then/g)].map((m) => enclosing(m.index));
   /* dmForwardTo (2026-09-13): the Forward picker warms as it opens (an
      explicit warmToken() — the act is a press on a bubble, no field focused),
      and its Send spends the token seconds later. */
-  const known = new Set(['post', 'boardPost', 'wallComposer', 'viewDm', 'editProfile', 'dmForwardTo']);
+  /* dmSearchBox (2026-09-13): its New group door opens the member picker,
+     which warms as it opens; Create spends the token. viewDm's Add members
+     runs the same picker on a view that already carries a .ts-slot. */
+  const known = new Set(['post', 'boardPost', 'wallComposer', 'viewDm', 'editProfile', 'dmForwardTo', 'dmSearchBox']);
   for (const c of callers) {
     assert.ok(known.has(c),
       `${c}() asks Turnstile for a token and is not in the covered set — give it a ` +
@@ -344,4 +347,10 @@ test('the Forward picker warms the challenge as it opens (its Send is gated; no 
   const i = src.indexOf('  function dmForwardPicker(');
   assert.ok(i > 0, 'dmForwardPicker is gone');
   assert.ok(/warmToken\(\)/.test(src.slice(i, i + 900)), 'the picker must warm as it opens');
+});
+
+test('the member picker warms the challenge as it opens (New group and Add members are gated; a press opens it)', () => {
+  const i = src.indexOf('  function dmMemberPicker(');
+  assert.ok(i > 0, 'dmMemberPicker is gone');
+  assert.ok(/^\s*warmToken\(\);/m.test(src.slice(i, i + 400)), 'the picker must warm as it opens');
 });

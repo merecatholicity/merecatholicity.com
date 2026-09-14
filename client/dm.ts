@@ -35,6 +35,7 @@ export function installDm(B: Boot) {
   let freshParam: (sep: any) => any;
   let getToken: () => Promise<any>;
   let warmToken: () => void;
+  let reactPillInto: any;
   let go: (href: string, replace?: boolean) => any;
   let identityAction: (label: any, onClick: any) => any;
   let insertEmojiItem: (ta: any, it: any) => any;
@@ -374,6 +375,23 @@ export function installDm(B: Boot) {
   function dmReactPaint(m: any, node: any, ctx: any) {
     var old = node.querySelector(':scope > .dm-react-pill');
     if (old) old.remove();
+    if (ctx && ctx.kind === 1) {
+      /* A group's pill is the public painter's (client/surface.ts): the set
+         with counts, mine lit, who under each chip; a chip reacts the same or
+         withdraws mine — the surface's own act, never the public ledger. */
+      var cells = (window.mcCore && window.mcCore.dmTally) ? window.mcCore.dmTally(m.reactions || []) : [];
+      node.classList.toggle('dm-has-react', !!cells.length);
+      if (!cells.length) return;
+      var host = el('div', 'dm-react-pill dm-react-many');
+      reactPillInto(host, 'dm', m.id, cells, dmReactSides(m).mine, {
+        onPick: function (e: any) { dmReact(m, node, ctx, e); },
+        title: function (e: any) {
+          return (m.reactions || []).filter(function (r: any) { return r && r.emoji === e; })
+            .map(function (r: any) { return r.hash === state.myHash ? 'You' : ctx.nameOf(r.hash); }).join(', ') + ' reacted ' + e;
+        } });
+      node.appendChild(host);
+      return;
+    }
     var rx = dmReactSides(m);
     var mine = rx.mine, theirs = rx.theirs;
     node.classList.toggle('dm-has-react', !!(mine || theirs));
@@ -622,6 +640,107 @@ export function installDm(B: Boot) {
       (ctx && ctx.list ? ctx.list : document.body).appendChild(box);
     }
   }
+  /* ---- Members (2026-09-13): the picker behind "New group" and "Add members"
+     — a search over the directory, checkboxes, an optional name, one button.
+     The create and the add are Turnstile-gated, so the picker warms as it
+     opens; the cap is the kernel's (Domain.Dm.maxMembers). ---- */
+  function dmMemberPicker(opts: any) {
+    warmToken();
+    var cap = (window.mcCore && window.mcCore.dmMaxMembers) || 25;
+    var exclude: string[] = (opts.exclude || []).map(String);
+    var have = Number(opts.count) || 0;   // members already in (the cap counts them)
+    var box = el('div', 'dm-fwd-pick');
+    var chosen: Record<string, boolean> = {};
+    var search = el('input', 'key-input dm-fwd-search');
+    search.type = 'text'; search.placeholder = 'Find a member…'; search.setAttribute('aria-label', 'Find a member');
+    var list = el('div', 'dm-fwd-list');
+    var nameIn: any = null;
+    if (opts.nameField) {
+      nameIn = el('input', 'key-input dm-group-name');
+      nameIn.type = 'text'; nameIn.placeholder = 'Group name (optional)'; nameIn.setAttribute('aria-label', 'Group name');
+      nameIn.maxLength = (window.mcCore && window.mcCore.dmGroupNameMax) || 60;
+    }
+    var status = el('p', 'form-status');
+    var okBtn = el('button', 'btn btn-send dm-fwd-send', opts.submitLabel || 'Add');
+    okBtn.type = 'button'; okBtn.disabled = true;
+    function paint() { var n = Object.keys(chosen).length; okBtn.disabled = !n; okBtn.textContent = (opts.submitLabel || 'Add') + (n ? ' (' + n + ')' : ''); }
+    function rowFor(u: any) {
+      var key = 'h:' + u.hash;
+      if (list.querySelector('[data-key="' + key + '"]')) return;
+      var row = el('label', 'dm-fwd-row');
+      row.setAttribute('data-key', key);
+      var cb = el('input'); cb.type = 'checkbox';
+      cb.addEventListener('change', function () {
+        if (cb.checked && have + Object.keys(chosen).length + 1 > cap) { cb.checked = false; status.textContent = 'A conversation holds at most ' + cap + ' members.'; return; }
+        if (cb.checked) chosen[u.hash] = true; else delete chosen[u.hash];
+        status.textContent = ''; paint();
+      });
+      row.appendChild(cb);
+      var text = el('span', 'dm-fwd-text');
+      text.appendChild(el('span', 'dm-fwd-name', dmLabel(u.hash, u.nick)));
+      row.appendChild(text);
+      if (list.firstChild) list.insertBefore(row, list.firstChild); else list.appendChild(row);
+    }
+    var dir: any = null, dirT: any = 0;
+    function suggest() {
+      var q = search.value.trim().toLowerCase();
+      if (q.length < 2) return;
+      var run = function () {
+        dir.filter(function (u: any) { return u.hash !== state.myHash && u.hash !== MERECAT_BOT_HASH && exclude.indexOf(u.hash) === -1; })
+          .map(function (u: any) { return { u: u, s: Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash))) }; })
+          .filter(function (x: any) { return x.s > 0; })
+          .sort(function (x: any, y: any) { return y.s - x.s; })
+          .slice(0, 6)
+          .forEach(function (x: any) { rowFor(x.u); });
+      };
+      if (dir) return run();
+      fetch(API + '/dm/directory' + freshParam('?')).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) { dir = d.users || []; run(); } }).catch(function () { status.textContent = 'The member list could not be loaded.'; });
+    }
+    search.addEventListener('input', function () { clearTimeout(dirT); dirT = setTimeout(suggest, 200); });
+    if (nameIn) box.appendChild(nameIn);
+    box.appendChild(search);
+    box.appendChild(el('p', 'key-note', 'Type a nickname or an assigned name, then tick the members.'));
+    box.appendChild(list);
+    box.appendChild(okBtn);
+    box.appendChild(status);
+    var close: any = null;
+    okBtn.addEventListener('click', function () {
+      if (okBtn.disabled) return;
+      okBtn.disabled = true; status.textContent = 'Working…';
+      Promise.resolve(opts.onDone(Object.keys(chosen), nameIn ? nameIn.value.trim() : '')).then(function () {
+        status.textContent = '';
+        if (close) close();
+      }).catch(function (err: any) { status.textContent = (err && err.message) || 'Could not do that.'; okBtn.disabled = false; });
+    });
+    if (window.mcSheet) { window.mcSheet.open(opts.title || 'Members', box); close = function () { try { window.mcSheet!.close(); } catch (e) { /* closed already */ } }; }
+    else {
+      var x = el('button', 'btn', 'Cancel'); x.type = 'button';
+      x.addEventListener('click', function () { box.remove(); });
+      box.appendChild(x);
+      close = function () { box.remove(); };
+      (opts.host || document.body).appendChild(box);
+    }
+    setTimeout(function () { try { search.focus(); } catch (e) { /* fine */ } }, 50);
+  }
+  /* A member's avatar, small — the sheet's rows, the group's collage. */
+  function dmAvatarCell(mm: any, cls: string) {
+    var cell = el('span', cls);
+    if (mm && mm.avatar) {
+      var im = el('img', 'dm-head-img');
+      im.src = API + '/avatar?hash=' + mm.hash + '&v=' + encodeURIComponent(mm.avatar);
+      im.alt = '';
+      cell.appendChild(im);
+    } else cell.appendChild(el('span', 'dm-collage-initial', String((mm && (mm.nick || mm.assigned)) || '?').charAt(0).toUpperCase()));
+    return cell;
+  }
+  /* A group's face: up to four of the others, in a 2×2 (the inbox row's and
+     the header's collage). */
+  function dmCollageInto(host: any, rows: any[]) {
+    var pick = rows.slice(0, (window.mcCore && window.mcCore.dmInboxAvatars) || 4);
+    host.classList.add('dm-collage', 'dm-collage-' + Math.max(1, pick.length));
+    if (!pick.length) { host.appendChild(el('span', 'dm-head-initial', '👥')); return; }
+    pick.forEach(function (mm: any) { host.appendChild(dmAvatarCell(mm, 'dm-collage-cell')); });
+  }
   /* A downward swipe over the page while a composer has the keyboard up
      dismisses it (the owner's report: the page scrolled under a keyboard that
      stayed, with no easy way out). Touch only, passive, live only while the
@@ -654,6 +773,13 @@ export function installDm(B: Boot) {
     var mine = m.sender_hash === state.myHash;
     var node = el('div', 'dm-msg' + (mine ? ' dm-mine' : ''));
     if (m.id) node.setAttribute('data-dmid', String(m.id));
+    /* In a group another's bubble names its author — once per run of the same
+       sender (placeMsg decides), in that member's colour (Domain.Dm.memberHue);
+       a pair's bubbles never do: the side and the fill say who. */
+    if (!mine && m._author && opts && opts.ctx && opts.ctx.kind === 1) {
+      var hue = (window.mcCore && window.mcCore.dmMemberHue) ? window.mcCore.dmMemberHue(String(m.sender_hash || '')) : 0;
+      node.appendChild(el('div', 'dm-author dm-hue-' + hue, opts.ctx.nameOf(m.sender_hash)));
+    }
     if (opts && opts.sysLabel) node.appendChild(el('div', 'dm-sys-label', opts.sysLabel));
     if (m.fwd) node.appendChild(el('div', 'dm-fwd', '↪ ' + ((window.mcCore && window.mcCore.dmForwardedLabel) || 'Forwarded')));
     if (opts && opts.reply && opts.ctx) node.appendChild(dmQuoteNode(opts.reply, opts.ctx));
@@ -930,6 +1056,11 @@ export function installDm(B: Boot) {
           try { var ev = JSON.parse(dmPlain(m, ctx) || 'null'); if (ev) { m._env = ev; m.reply = dmReplyClean(ev.reply); cap = ev.caption || ''; } } catch (x2) { cap = ''; }
         }
         node = dmMediaExpiredNode(m, ctx, cap);
+      } else if (e === 2 && window.mcCore && window.mcCore.dmSysLine && window.mcCore.dmSysLine(String(m.body || ''))) {
+        /* A membership line (0016): "Ann added Bob and you", "Bob left", "Ann
+           named the conversation “Choir”" — a muted line like a call's, no
+           bubble, no surface, nothing to reply to. */
+        return dmSysLineNode(m, ctx);
       } else if (e === 2 && window.mcCore && window.mcCore.callLine && window.mcCore.callLine(String(m.body || ''))) {
         /* A call's line (2026-09-12; the log 2026-09-13): the system word the
            worker writes into the thread once per call — missed, declined, or
@@ -947,6 +1078,19 @@ export function installDm(B: Boot) {
     }
     dmArmMessage(m, node, ctx);
     return node;
+  }
+  function dmSysLineNode(m: any, ctx: any) {
+    var core = window.mcCore as NonNullable<typeof window.mcCore>;   // dmRenderMsg took this road only because the membrane read the line
+    var mine = m.sender_hash === state.myHash;
+    var who = function (h: any) { return String(h) === state.myHash ? 'you' : (ctx && ctx.nameOf ? ctx.nameOf(h) : displayName(String(h || ''))); };
+    var actor = mine ? 'You' : who(m.sender_hash);
+    var line = el('div', 'dm-call-line dm-sys-line');
+    if (m.id) line.setAttribute('data-dmid', String(m.id));
+    line.appendChild(el('span', 'dm-call-text', core.dmSysLineText(String(m.body || ''), actor, who)));
+    var t = el('span', 'dm-call-time', dmTimeLabel(m.created_at));
+    t.title = fmtDateTime(m.created_at);
+    line.appendChild(t);
+    return line;
   }
   function dmCallLine(m: any) {
     var mine = m.sender_hash === state.myHash;   // I placed it
@@ -1109,6 +1253,28 @@ export function installDm(B: Boot) {
       '.dm-fwd-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.dm-fwd-sub{font-size:.8em;color:var(--faint)}' +
       '.dm-fwd-send{align-self:flex-end}' +
+      /* a group (2026-09-13): the author line in the member's colour, the membership lines, the collage, the members in the sheet, the tally pill */
+      '.dm-author{font-size:.78em;font-weight:600;margin-bottom:.15em;line-height:1.2}' +
+      '.dm-hue-0{color:#8b1a1a}.dm-hue-1{color:#1a5e8b}.dm-hue-2{color:#2e7d32}.dm-hue-3{color:#8b5a1a}.dm-hue-4{color:#6a1b9a}.dm-hue-5{color:#00695c}.dm-hue-6{color:#ad1457}.dm-hue-7{color:#4e342e}' +
+      '.dm-sys-line .dm-call-text{font-style:italic}' +
+      '.dm-collage{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule)}' +
+      '.dm-collage-1{grid-template-columns:1fr}' +
+      '.dm-collage-cell{overflow:hidden;background:var(--cream-2,#faf6ee);display:flex;align-items:center;justify-content:center;font-size:.6em;font-weight:600;color:var(--maroon,#8b1a1a);min-width:0;min-height:0}' +
+      '.dm-collage-cell .dm-head-img{width:100%;height:100%;object-fit:cover}' +
+      '.dm-collage-initial{line-height:1}' +
+      '.dm-members{display:flex;flex-direction:column;gap:.4rem;margin:.3rem 0 .6rem}' +
+      '.dm-member-row{display:flex;align-items:center;gap:.6rem;min-width:0}' +
+      '.dm-member-av{flex:none;width:1.75rem;height:1.75rem;border-radius:50%;overflow:hidden;background:var(--cream-2,#faf6ee);display:inline-flex;align-items:center;justify-content:center;font-size:.8em;font-weight:600;color:var(--maroon,#8b1a1a)}' +
+      '.dm-member-av .dm-head-img{width:100%;height:100%;object-fit:cover;display:block;margin:0}' +
+      '.dm-member-name{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+      '.dm-member-acts{flex:none;display:inline-flex;gap:.6rem;font-size:.85em}' +
+      '.dm-member-row .dm-row-dot[hidden]{display:none}' +
+      '.dm-new-group{flex:none;white-space:nowrap}' +
+      '.dm-group-name{margin-bottom:.4em}' +
+      '.dm-msg > .dm-react-many{padding:.1em .25em;gap:.15em;margin:0}' +
+      '.dm-msg > .dm-react-many .mc-react-chip{font:inherit;font-size:.9em;line-height:1;padding:.1em .3em;border:0;background:none;cursor:pointer;display:inline-flex;align-items:center;gap:.15em;border-radius:999px}' +
+      '.dm-msg > .dm-react-many .mc-react-chip.on{background:color-mix(in srgb,var(--maroon,#8b1a1a) 12%,transparent)}' +
+      '.dm-msg > .dm-react-many .mc-react-n{font-size:.85em;color:var(--faint)}' +
       '.dm-meta{display:flex;justify-content:flex-end;align-items:center;gap:.45em;margin-top:.2em;font-size:.72em;line-height:1.2;color:var(--faint);white-space:nowrap}' +
       '.dm-meta .comment-date{font-size:1em;color:inherit;margin:0}' +
       '.dm-edited{font-style:italic;opacity:.85}' +
@@ -1447,6 +1613,24 @@ export function installDm(B: Boot) {
     input.type = 'text';
     input.placeholder = 'e.g. Constant-Almond, or a nickname';
     row.appendChild(input);
+    /* New group (2026-09-13): pick the members and a name; the group opens
+       with its first line, "You added …". */
+    var newGroup = el('button', 'btn dm-new-group', '👥 New group');
+    newGroup.type = 'button';
+    newGroup.addEventListener('click', function () {
+      dmMemberPicker({ title: 'New group', nameField: true, submitLabel: 'Create', exclude: [state.myHash], count: 1, host: box,
+        onDone: function (hashes: string[], name: string) {
+          return getToken().then(function (token) {
+            return fetch(API + '/dm/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key, token: token, members: hashes, name: name || null }) }).then(function (r) { return r.json(); });
+          }).then(function (d) {
+            if (blockedOut(d)) return;
+            if (!d || !d.ok) throw new Error((d && d.error) || 'The group could not be started.');
+            go('messages.html?t=' + d.thread_id);
+          }).finally(function () { if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId); });
+        } });
+    });
+    row.appendChild(newGroup);
     box.appendChild(row);
     var sug = el('div', 'dm-suggest');
     sug.hidden = true;
@@ -1823,6 +2007,7 @@ export function installDm(B: Boot) {
         if (other) avatarLink.href = profileHref(other);
         avatarLink.setAttribute('aria-label', 'Profile');
         function avatarInto(host: any, size: number) {
+          if (kind === 1) { dmCollageInto(host, members.filter(function (mm: any) { return !mm.left_at && mm.hash !== state.myHash; })); return; }
           if (otherRow && otherRow.avatar) {
             var im = el('img', 'dm-head-img');
             im.src = API + '/avatar?hash=' + other + '&v=' + encodeURIComponent(otherRow.avatar);
@@ -1904,6 +2089,106 @@ export function installDm(B: Boot) {
           }
           enc.appendChild(encP);
           box.appendChild(enc);
+          /* The members (2026-09-13): who is here, online or not, each with
+             the safety number to verify; Add members (a pair forks into a new
+             group — Snapchat's and WhatsApp's way, its private history stays);
+             Leave, for a group. */
+          if (threadId) {
+            var mem = el('div', 'dm-info-row');
+            var cur = ctx.current();
+            mem.appendChild(el('div', 'dm-info-row-title', '👥 ' + (kind === 1 ? cur.length + ' members' : 'Members')));
+            if (kind === 1) {
+              var mlist = el('div', 'dm-members');
+              var dots: Record<string, any> = {};
+              cur.forEach(function (mm: any) {
+                var mrow = el('div', 'dm-member-row');
+                mrow.appendChild(dmAvatarCell(mm, 'dm-member-av'));
+                var nm = el('a', 'dm-member-name', mm.hash === state.myHash ? 'You' : nameOf(mm.hash));
+                nm.href = profileHref(mm.hash);
+                mrow.appendChild(nm);
+                var dot = el('span', 'dm-row-dot'); dot.hidden = true; dots[mm.hash] = dot;
+                mrow.appendChild(dot);
+                var macts = el('span', 'dm-member-acts');
+                if (mm.hash !== state.myHash && mm.pubkey) {
+                  var v2 = el('a', null, dmVerified(mm.hash) ? '✓ verified' : 'verify');
+                  v2.href = '#';
+                  v2.addEventListener('click', function (ev: any) { ev.preventDefault(); dmVerifyPanel(mm.hash, mm.pubkey, v2); });
+                  macts.appendChild(v2);
+                }
+                if (mm.hash !== state.myHash) {
+                  var bl = el('a', null, 'block');
+                  bl.href = '#'; bl.title = 'Block this member: their words here are hidden from you, and their posts and profile too';
+                  bl.addEventListener('click', function (ev: any) {
+                    ev.preventDefault();
+                    appConfirm('Block ' + nameOf(mm.hash) + '? Their words in this conversation are hidden from you (they are never told), and their posts and profile are hidden from you.', { okLabel: 'Block', danger: true }, function (ok: any) {
+                      if (ok) setBlock(mm.hash, true, function () { location.reload(); });
+                    });
+                  });
+                  macts.appendChild(bl);
+                }
+                mrow.appendChild(macts);
+                mlist.appendChild(mrow);
+              });
+              mem.appendChild(mlist);
+              /* one batched presence read for the sheet (a group holds no live presence subs) */
+              var hashesFor = cur.map(function (mm: any) { return mm.hash; }).filter(function (h: string) { return h !== state.myHash; });
+              if (hashesFor.length) {
+                fetch(API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key, hashes: hashesFor }) })
+                  .then(function (r) { return r.json(); })
+                  .then(function (pd) {
+                    if (!(pd && pd.ok && Array.isArray(pd.online))) return;
+                    hashesFor.forEach(function (h: string) { var dt = dots[h]; if (!dt) return; dt.className = 'dm-row-dot' + (pd.online.indexOf(h) !== -1 ? ' on' : ''); dt.title = pd.online.indexOf(h) !== -1 ? 'Online' : 'Offline'; dt.hidden = false; });
+                  }).catch(function () { /* no dots, no harm */ });
+              }
+            }
+            mem.appendChild(identityAction('Add members', function () {
+              dmMemberPicker({ title: 'Add members', submitLabel: 'Add', exclude: members.filter(function (mm: any) { return !mm.left_at; }).map(function (mm: any) { return mm.hash; }), count: cur.length, host: section,
+                onDone: function (hashes: string[]) {
+                  return getToken().then(function (token) {
+                    return fetch(API + '/dm/members', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ key: state.key, token: token, thread_id: threadId, add: hashes }) }).then(function (r) { return r.json(); });
+                  }).then(function (d) {
+                    if (blockedOut(d)) return;
+                    if (!d || !d.ok) throw new Error((d && d.error) || 'They could not be added.');
+                    /* the actor is not fanned to: reopen the conversation as it now stands (a pair's fork opens the new group) */
+                    go('messages.html?t=' + (d.thread_id || threadId));
+                  }).finally(function () { if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId); });
+                } });
+            }));
+            if (kind === 1) {
+              mem.appendChild(identityAction('Leave conversation', function () {
+                appConfirm('Leave this conversation? You will see nothing further from it; the others keep it.', { okLabel: 'Leave', danger: true }, function (ok: any) {
+                  if (!ok) return;
+                  fetch(API + '/dm/leave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key, thread_id: threadId }) })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) { if (d && d.ok) { try { localStorage.removeItem(DM_CACHE); } catch (e) { /* fine */ } go('messages.html'); } else ctx.note((d && d.error) || 'Could not leave.'); })
+                    .catch(function () { ctx.note('Network error. Try again.'); });
+                });
+              }));
+            }
+            box.appendChild(mem);
+            if (kind === 1) {
+              var nmRow = el('div', 'dm-info-row');
+              nmRow.appendChild(el('div', 'dm-info-row-title', '✎ Name'));
+              var nrow = el('div', 'key-row');
+              var nin = el('input', 'key-input');
+              nin.type = 'text'; nin.value = (thr && thr.name) || ''; nin.placeholder = 'Name this conversation'; nin.setAttribute('aria-label', 'Conversation name');
+              nin.maxLength = (window.mcCore && window.mcCore.dmGroupNameMax) || 60;
+              var nbtn = el('button', 'btn', 'Save'); nbtn.type = 'button';
+              nbtn.addEventListener('click', function () {
+                var v = nin.value.trim();
+                if (!v) return;
+                nbtn.disabled = true;
+                fetch(API + '/dm/name', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key, thread_id: threadId, name: v }) })
+                  .then(function (r) { return r.json(); })
+                  .then(function (d) { nbtn.disabled = false; if (d && d.ok) { state.dmView.setName(d.name); ctx.note('Named.'); } else ctx.note((d && d.error) || 'Could not name it.'); })
+                  .catch(function () { nbtn.disabled = false; ctx.note('Network error. Try again.'); });
+              });
+              nrow.appendChild(nin); nrow.appendChild(nbtn);
+              nmRow.appendChild(nrow);
+              box.appendChild(nmRow);
+            }
+          }
           var dis = el('div', 'dm-info-row');
           dis.appendChild(el('div', 'dm-info-row-title', '⏳ Disappearing messages'));
           infoExpiry = dmExpiryNode(ctx.target(), curTtl, isNew, function (t: number) { curTtl = t; isNew = false; paintNote(); });
@@ -2008,12 +2293,15 @@ export function installDm(B: Boot) {
         function renderMsg(m: any) { var n = dmRenderMsg(m, ctx); addReceipt(n, m); return n; }
         /* Bubbles land under a day chip — Today, Yesterday, a date — whenever
            the day changes, so each bubble's meta carries only the time. */
-        var lastDay = '';
+        var lastDay = '', lastSender = '';
         function placeMsg(m: any) {
           var empty = list.querySelector(':scope > .comments-status');
           if (empty) empty.remove();   // the first word retires "No messages yet"
           var day = new Date((Number(m.created_at) || 0) * 1000).toDateString();
-          if (day !== lastDay) { list.appendChild(dmDayNode(m.created_at)); lastDay = day; }
+          if (day !== lastDay) { list.appendChild(dmDayNode(m.created_at)); lastDay = day; lastSender = ''; }
+          /* a group names another's bubble once per run of the same sender */
+          m._author = kind === 1 && String(m.sender_hash) !== state.myHash && lastSender !== String(m.sender_hash);
+          lastSender = String(m.sender_hash || '');
           var n = renderMsg(m);
           list.appendChild(n);
           return n;
@@ -2699,6 +2987,7 @@ export function installDm(B: Boot) {
     freshParam = B.freshParam;
     getToken = B.getToken;
     warmToken = B.warmToken;
+    reactPillInto = B.reactPillInto;
     go = B.go;
     identityAction = B.identityAction;
     insertEmojiItem = B.insertEmojiItem;
