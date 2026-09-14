@@ -129,6 +129,44 @@ export const dmReaction = reaction;
 export const dmReplyExcerpt = (s: string): string => Dm.replyExcerpt(String(s == null ? '' : s));
 export const dmReplySentinel = Dm.replySentinel;
 
+/* Conversations with members (Domain.Dm, 2026-09-13): dmMaxMembers the cap,
+   dmTypingFanCap how many a typing signal may reach, dmInboxAvatars the
+   collage's size, dmGroupName(raw) -> the stored name or null (the Maybe
+   erased HERE), dmEnc the `enc` marks and dmEnvTags the body prefixes,
+   dmMembersEqual(a, b) the roster equality a sealed message is checked
+   against, dmSysLine(body) -> {tag, hashes, name} | null (a system line read
+   back; null = not one), dmSysLineText(body, actor, nameOf) -> its sentence
+   ('' when not one), dmSysAddLine/dmSysLeaveLine/dmSysNameLine the grammar
+   written, dmForwardedLabel the forward's small line, dmTally(rows) the
+   pill's cells, dmReadByAll(createdAt, me, members) the ✓✓ rule (members as
+   the wire gives them: hash, read_at, left_at), dmMemberHue(hash) -> 0..7.
+   Every string input coerces nullish to ''; every array input to []. */
+const strList = (a: any): string[] => (Array.isArray(a) ? a : []).map((x: any) => String(x == null ? '' : x));
+export const dmMaxMembers: number = Dm.maxMembers;
+export const dmTypingFanCap: number = Dm.typingFanCap;
+export const dmInboxAvatars: number = Dm.inboxAvatars;
+export const dmGroupNameMax: number = Dm.groupNameMax;
+export const dmGroupName = (raw: string): string | null =>
+  Maybe.maybe(null)((s: string) => s)(Dm.normalizeGroupName(String(raw == null ? '' : raw)));
+export const dmEnc = { plain: Dm.encPlain as number, pair: Dm.encPair as number, system: Dm.encSystem as number, sealed: Dm.encSealed as number };
+export const dmEnvTags = { pair: Dm.envPairTag as string, sealed: Dm.envSealedTag as string };
+export const dmMembersEqual = (a: any, b: any): boolean => Dm.membersEqual(strList(a))(strList(b));
+export const dmSysLine = (body: string): { tag: string; hashes: string[]; name: string } | null =>
+  Maybe.maybe(null)(Dm.sysLineTag)(Dm.parseSysLine(String(body == null ? '' : body)));
+export const dmSysLineText = (body: string, actor: string, nameOf: (h: string) => string): string =>
+  Maybe.maybe('')(Dm.sysLineText(String(actor == null ? '' : actor))((h: string) => String(nameOf(h) == null ? '' : nameOf(h))))(Dm.parseSysLine(String(body == null ? '' : body)));
+export const dmSysAddLine = (hashes: any): string => Dm.sysAddLine(strList(hashes));
+export const dmSysLeaveLine: string = Dm.sysLeaveLine;
+export const dmSysNameLine = (name: string): string => Dm.sysNameLine(String(name == null ? '' : name));
+export const dmMissedCallLine: string = Dm.missedCallLine;
+export const dmForwardedLabel: string = Dm.forwardedLabel;
+export const dmTally = (rows: any): { e: string; n: number }[] =>
+  Dm.tallyReactions((Array.isArray(rows) ? rows : []).map((r: any) => ({ hash: String((r && r.hash) || ''), emoji: String((r && r.emoji) || '') })).filter((r: any) => r.emoji));
+export const dmReadByAll = (createdAt: number, me: string, members: any): boolean =>
+  Dm.readByAll((Number(createdAt) || 0) | 0)(String(me == null ? '' : me))((Array.isArray(members) ? members : []).map((m: any) => ({
+    hash: String((m && m.hash) || ''), readAt: (Number(m && m.read_at) || 0) | 0, leftAt: (Number(m && m.left_at) || 0) | 0 })));
+export const dmMemberHue = (hash: string): number => Dm.memberHue(String(hash == null ? '' : hash));
+
 /* Notifications (Domain.Notif, 2026-09-12): the sentence a row reads and the
    door it opens, from the wire's own fields (kind, actor_nick, actor_hash,
    topic_title, topic_id, comment_id) — the one map the classic list, the
@@ -191,19 +229,22 @@ export const emojiNamedTokens = Emoji.namedTokens;
 
 /* parseRoute(get) -> {tag, s, n}: the forum's URL→view decision (Domain.Route),
    the priority ladder comments.js route() ran. `get` is URLSearchParams.get
-   (name -> string|null). The `topic` param's Number()+isInteger coercion runs
-   HERE at the JS boundary (those quirks belong in JS); the id or null is passed
-   in, and PS decides the route. The ADT is erased to {tag, s, n} inside PS. */
+   (name -> string|null). The `topic` and `t` params' Number()+isInteger
+   coercion runs HERE at the JS boundary (those quirks belong in JS); the id or
+   null is passed in, and PS decides the route. The ADT is erased to {tag, s, n} inside PS. */
 export const parseRoute = (get: (k: string) => string | null): { tag: string; s: string; n: number } => {
   const topicRaw = get('topic');
   const topicNum = Number(topicRaw);
   const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
+  const tRaw = get('t');
+  const tNum = Number(tRaw);
+  const t = (tRaw != null && Number.isInteger(tNum) && tNum > 0) ? tNum : null;   // a conversation by id: the same gate as topic
   return Route.routeTag(Route.parseRoute({
     ipbans: get('ipbans'), settings: get('settings'), admins: get('admins'),
     admin: get('admin'), discord: get('discord'), shadowbans: get('shadowbans'), usage: get('usage'), merecatadmin: get('merecatadmin'), merecatthread: get('merecatthread'),
     merecatthreads: get('merecatthreads'), merecat: get('merecat'), feed: get('feed'),
     notifications: get('notifications'), inbox: get('inbox'), users: get('users'), q: get('q'),
-    dm: get('dm'), me: get('me'), profile: get('profile'), post: get('post'),
+    t, dm: get('dm'), me: get('me'), profile: get('profile'), post: get('post'),
     audit: get('audit'), topic, cat: get('cat'),
   }));
 };
@@ -296,6 +337,20 @@ export const callIdleDefaultSecs: number = Call.idleDefaultSecs;
 export const callIdleClampSecs = (n: number): number => Call.idleClampSecs(Math.floor(Number(n) || Call.idleDefaultSecs));
 export const callVoiceFloor: number = Call.voiceFloor;
 export const callGlareWins = (me: string, other: string): boolean => Call.glareWins(String(me || ''))(String(other || ''));
+/* The call log (Domain.Call, 2026-09-13): the event line a call leaves in the
+   conversation. callLine(body) -> {tag, secs} | null reads a system word back
+   (null = not a call's line); callLineText(body, mine) -> the sentence this
+   side reads ('' when not one; mine = I placed the call); callLineMissed(body,
+   mine) -> whether it is a miss for this reader (the missed tint);
+   callDuration(secs) -> "12 min". callEndReasons is what /call/end accepts. */
+export const callLine = (body: string): { tag: string; secs: number } | null =>
+  Maybe.maybe(null)((l: any) => ({ tag: Call.callLineTag(l), secs: Call.callLineSecs(l) }))(Call.parseCallLine(String(body == null ? '' : body)));
+export const callLineText = (body: string, mine: boolean): string =>
+  Maybe.maybe('')(Call.callLineText(!!mine))(Call.parseCallLine(String(body == null ? '' : body)));
+export const callLineMissed = (body: string, mine: boolean): boolean =>
+  Maybe.maybe(false)(Call.callLineMissedFor(!!mine))(Call.parseCallLine(String(body == null ? '' : body)));
+export const callDuration = (secs: number): string => Call.durationLabel(Math.max(0, Math.floor(Number(secs) || 0)));
+export const callEndReasons: string[] = Call.endReasons;
 
 /* The social layer's global switch (Domain.Wall). The client reads the LIVE
    state from /config; this is the rule for the raw stored app_settings string,

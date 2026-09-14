@@ -28,11 +28,13 @@ kinds =
   , "react", "wall-react", "dm-react" ]
 
 -- | A row as the client sees it: the kind, the actor's shown name (already
--- | resolved by `who`), the thread's title when there is one, and the two
+-- | resolved by `who`), the thread's title when there is one (for a DM kind:
+-- | the group's name, so the sentence says where), and the two
 -- | integers whose meaning depends on the kind — for reply/mention/react the
 -- | thread and the post; for wall the sub-kind (1 = a comment on your post,
 -- | 0 = an @mention) and the feed post; for wall-react the feed comment (0 for
--- | the post itself) and the feed post; for dm-react 0 and the message; for
+-- | the post itself) and the feed post; for the DM kinds the conversation
+-- | (0 for a row from before 0016) and, for dm-react, the message; for
 -- | merecat the chat and 0.
 type Item =
   { kind :: String
@@ -56,7 +58,7 @@ who nick actor
 -- | a reactor, one word covers every reaction honestly.
 label :: Item -> String
 label r = case r.kind of
-  "dm" -> r.who <> " sent you a message"
+  "dm" -> r.who <> (if r.topicTitle == "" then " sent you a message" else " sent a message in " <> r.topicTitle)
   "call" -> "📞 " <> r.who <> " called you"
   "merecat" -> "merecat finished answering your question"
   "wall-like" -> r.who <> " liked your post"
@@ -71,17 +73,22 @@ label r = case r.kind of
 
 -- | The door a tap opens: the exact post for the board kinds, the feed post
 -- | (and the feed comment's own anchor) for the wall kinds, the conversation —
--- | landing on the very message for a reaction — for the DM kinds.
+-- | by its id when the row carries one (2026-09-13: a group has no "other"),
+-- | else by the actor — landing on the very message for a reaction.
 href :: Item -> String
 href r = case r.kind of
-  "dm" -> "messages.html?dm=" <> r.actor
-  "call" -> "messages.html?dm=" <> r.actor
-  "dm-react" -> "messages.html?dm=" <> r.actor <> "&m=" <> show r.commentId
+  "dm" -> thread
+  "call" -> thread
+  "dm-react" -> thread <> "&m=" <> show r.commentId
   "merecat" -> "merecat-ai.html?chat=" <> show r.topicId
   "wall" -> "feed.html?post=" <> show r.commentId
   "wall-like" -> "feed.html?post=" <> show r.commentId
   "wall-react" -> "feed.html?post=" <> show r.commentId <> (if r.topicId > 0 then "#wc-" <> show r.topicId else "")
   _ -> "community.html?topic=" <> show r.topicId <> "#comment-" <> show r.commentId
+  where
+  -- A DM bell names its conversation in topic_id (migration 0016); a row from
+  -- before that, or from a pair since vanished, still opens by its actor.
+  thread = if r.topicId > 0 then "messages.html?t=" <> show r.topicId else "messages.html?dm=" <> r.actor
 
 -- | Whether the row may show an excerpt of the post under the sentence. A
 -- | message is end-to-end encrypted — the server has no words to excerpt for

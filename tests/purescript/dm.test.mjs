@@ -118,3 +118,89 @@ test('replyExcerpt folds whitespace, trims, and cuts by code points with an elli
   assert.equal(over, '😀'.repeat(160) + '…', 'never split an emoji in half');
   assert.equal(Dm.replyExcerpt('   '), '', 'nothing quotable stays empty');
 });
+
+/* ---- The member model (2026-09-13): the cap, the group name, the envelope
+   marks, the roster equality, the system-line grammar, the pill's tally, the
+   ✓✓ rule and the author colours. What would break silently: a sealed message
+   accepted with a key for a stranger (or missing one member's), a system line
+   rendered as a message, a name with a control character stored, ✓✓ shown
+   while a member still has not read. ---- */
+test('the cap is 25, and the fan-out and collage sizes hang off it', () => {
+  assert.equal(Dm.maxMembers, 25);
+  assert.equal(Dm.typingFanCap, 24, 'everyone but the typist');
+  assert.equal(Dm.inboxAvatars, 4);
+  assert.equal(Dm.groupNameMax, 60);
+});
+
+test('normalizeGroupName folds, trims, cuts to 60 code points, drops control characters, and refuses nothing', () => {
+  assert.equal(orNull(Dm.normalizeGroupName('  The   Choir\n ')), 'The Choir');
+  assert.equal(orNull(Dm.normalizeGroupName('a\u0001b\u007fc')), 'abc', 'control characters dropped');
+  assert.equal(orNull(Dm.normalizeGroupName('x'.repeat(80))), 'x'.repeat(60), 'cut to the cap');
+  assert.equal(orNull(Dm.normalizeGroupName('😀'.repeat(61))), '😀'.repeat(60), 'counted in code points, never a split emoji');
+  assert.equal(orNull(Dm.normalizeGroupName('   ')), null, 'nothing left is Nothing');
+  assert.equal(orNull(Dm.normalizeGroupName('')), null);
+});
+
+test('the envelope marks: enc 0/1/2/3 and the E1./E3. body tags', () => {
+  assert.deepEqual([Dm.encPlain, Dm.encPair, Dm.encSystem, Dm.encSealed], [0, 1, 2, 3]);
+  assert.equal(Dm.envPairTag, 'E1.');
+  assert.equal(Dm.envSealedTag, 'E3.');
+});
+
+test('membersEqual is set equality: order and repeats aside, one member more or less breaks it', () => {
+  const a = 'a'.repeat(64), b = 'b'.repeat(64), c = 'c'.repeat(64);
+  assert.equal(Dm.membersEqual([a, b, c])([c, a, b]), true);
+  assert.equal(Dm.membersEqual([a, b, c, a])([c, b, a]), true, 'a repeat is not a member');
+  assert.equal(Dm.membersEqual([a, b])([a, b, c]), false, 'a key for a stranger');
+  assert.equal(Dm.membersEqual([a, b, c])([a, b]), false, 'one member without a key');
+  assert.equal(Dm.membersEqual([])([]), true);
+});
+
+test('the system-line grammar round-trips, and anything else is not a system line', () => {
+  const b = 'b'.repeat(64), c = 'c'.repeat(64);
+  const tag = (s) => orNull(Dm.parseSysLine(s)) && Dm.sysLineTag(orNull(Dm.parseSysLine(s)));
+  assert.equal(Dm.sysAddLine([b, c]), 'sys:add:' + b + ',' + c);
+  assert.deepEqual(tag(Dm.sysAddLine([b, c])), { tag: 'add', hashes: [b, c], name: '' });
+  assert.deepEqual(tag(Dm.sysLeaveLine), { tag: 'leave', hashes: [], name: '' });
+  assert.deepEqual(tag(Dm.sysNameLine('Choir')), { tag: 'name', hashes: [], name: 'Choir' });
+  assert.deepEqual(tag(Dm.missedCallLine), { tag: 'missed-call', hashes: [], name: '' });
+  assert.equal(Dm.missedCallLine, 'call:missed', 'the 2026-09-12 line, unchanged');
+  assert.deepEqual(tag('sys:add:'), { tag: 'add', hashes: [], name: '' });
+  for (const s of ['hello', 'sys:', 'sys:bogus:x', 'call:missed2', '', 'E3.abc.def']) assert.equal(orNull(Dm.parseSysLine(s)), null, JSON.stringify(s) + ' is a message, not a system line');
+});
+
+test('sysLineText reads the sentence: names listed with commas and an "and", the leaver alone, the name quoted', () => {
+  const nameOf = (h) => ({ b: 'Bob', c: 'Cy', d: 'Di' })[h[0]];
+  const say = (s) => Dm.sysLineText('Ann')(nameOf)(orNull(Dm.parseSysLine(s)));
+  assert.equal(say(Dm.sysAddLine(['b'.repeat(64)])), 'Ann added Bob');
+  assert.equal(say(Dm.sysAddLine(['b'.repeat(64), 'c'.repeat(64)])), 'Ann added Bob and Cy');
+  assert.equal(say(Dm.sysAddLine(['b'.repeat(64), 'c'.repeat(64), 'd'.repeat(64)])), 'Ann added Bob, Cy and Di');
+  assert.equal(say('sys:add:'), 'Ann added nobody');
+  assert.equal(say(Dm.sysLeaveLine), 'Ann left');
+  assert.equal(say(Dm.sysNameLine('Choir')), 'Ann named the conversation “Choir”');
+  assert.equal(say(Dm.missedCallLine), 'Missed voice call');
+  assert.equal(Dm.forwardedLabel, 'Forwarded');
+});
+
+test('tallyReactions: one cell per emoji with its count, most-given first, ties by emoji', () => {
+  const rows = [{ hash: 'a', emoji: '👍' }, { hash: 'b', emoji: '❤️' }, { hash: 'c', emoji: '👍' }, { hash: 'd', emoji: '🙏' }];
+  assert.deepEqual(Dm.tallyReactions(rows), [{ e: '👍', n: 2 }, { e: '❤️', n: 1 }, { e: '🙏', n: 1 }]);
+  assert.deepEqual(Dm.tallyReactions([]), []);
+});
+
+test('readByAll: every OTHER current member has read; a leaver does not count; nobody else -> false', () => {
+  const me = 'a'.repeat(64), b = 'b'.repeat(64), c = 'c'.repeat(64);
+  const m = (hash, readAt, leftAt = 0) => ({ hash, readAt, leftAt });
+  assert.equal(Dm.readByAll(100)(me)([m(me, 0), m(b, 100), m(c, 150)]), true, 'read at the moment counts');
+  assert.equal(Dm.readByAll(100)(me)([m(me, 200), m(b, 100), m(c, 99)]), false, 'one still reading');
+  assert.equal(Dm.readByAll(100)(me)([m(me, 200), m(b, 100), m(c, 0, 90)]), true, 'a leaver is not waited for');
+  assert.equal(Dm.readByAll(100)(me)([m(me, 200)]), false, 'nobody else remains');
+  assert.equal(Dm.readByAll(100)(me)([m(me, 200), m(b, 0)]), false, 'never read');
+});
+
+test('memberHue: eight slots, stable per hash, spread across members', () => {
+  const hues = new Set();
+  for (const ch of 'abcdef0123456789') { const h = Dm.memberHue(ch.repeat(64)); assert.ok(h >= 0 && h < 8); hues.add(h); }
+  assert.ok(hues.size >= 4, 'not everyone the same colour: ' + [...hues].join(','));
+  assert.equal(Dm.memberHue('a'.repeat(64)), Dm.memberHue('a'.repeat(64)));
+});

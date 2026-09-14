@@ -13,12 +13,15 @@ function psRoute(qs) {
   const topicRaw = params.get('topic');
   const topicNum = Number(topicRaw);
   const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
+  const tRaw = params.get('t');
+  const tNum = Number(tRaw);
+  const t = (tRaw != null && Number.isInteger(tNum) && tNum > 0) ? tNum : null;
   const g = (k) => params.get(k);
   return Route.routeTag(Route.parseRoute({
     ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'), discord: g('discord'), shadowbans: g('shadowbans'),
     usage: g('usage'), merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),
     merecat: g('merecat'), feed: g('feed'), notifications: g('notifications'), inbox: g('inbox'), users: g('users'),
-    q: g('q'), dm: g('dm'), me: g('me'), profile: g('profile'), post: g('post'), audit: g('audit'), topic, cat: g('cat'),
+    q: g('q'), t, dm: g('dm'), me: g('me'), profile: g('profile'), post: g('post'), audit: g('audit'), topic, cat: g('cat'),
   }));
 }
 
@@ -66,4 +69,14 @@ test('the public posting routes: feed and single post', () => {
   assert.equal(psRoute('post=42').s, '42', 'post id rides as a string (JS Number()s it)');
   assert.equal(psRoute('feed=1&topic=9').tag, 'Feed', 'feed beats topic in the ladder');
   assert.equal(psRoute('').tag, 'Index', 'no feed/post param -> not a wall route (absent = null, not truthy)');
+});
+
+test('a conversation by id (2026-09-13): ?t=<id> is the thread, gated like topic, and beats the ?dm=<hash> door it resolves', () => {
+  assert.equal(psRoute('t=12').tag, 'Thread');
+  assert.equal(psRoute('t=12').n, 12);
+  assert.equal(psRoute('t=0').tag, 'Index', 't=0 -> not a thread');
+  assert.equal(psRoute('t=5.5').tag, 'Index', 'non-integer -> not a thread');
+  assert.equal(psRoute('t=12&dm=abc').tag, 'Thread', 'the resolved form wins over the door');
+  assert.equal(psRoute('dm=abc&t=').tag, 'Dm', 'a bare ?t= is not a thread');
+  assert.equal(psRoute('q=x&t=12').tag, 'Search', 'the ladder above it still wins');
 });

@@ -170,3 +170,37 @@ test('notifLabel/notifHref/notifHasSnippet coerce the wire row (missing fields -
   assert.equal(Core.notifHasSnippet(undefined), true, 'an unknown/missing kind may show its excerpt');
   assert.ok(Core.notifKinds.includes('dm-react'));
 });
+
+test('the member model\'s membrane (2026-09-13): the Maybe erased, the ADT erased, every input coerced', () => {
+  const a = 'a'.repeat(64), b = 'b'.repeat(64), c = 'c'.repeat(64);
+  assert.equal(Core.dmMaxMembers, 25);
+  assert.equal(Core.dmTypingFanCap, 24);
+  assert.equal(Core.dmGroupName('  The  Choir '), 'The Choir');
+  assert.equal(Core.dmGroupName(null), null, 'nullish -> "" -> null, never a throw');
+  assert.deepEqual(Core.dmEnc, { plain: 0, pair: 1, system: 2, sealed: 3 });
+  assert.deepEqual(Core.dmEnvTags, { pair: 'E1.', sealed: 'E3.' });
+  assert.equal(Core.dmMembersEqual([a, b], [b, a]), true);
+  assert.equal(Core.dmMembersEqual(null, []), true, 'a missing list is the empty list');
+  assert.deepEqual(Core.dmSysLine('sys:add:' + b + ',' + c), { tag: 'add', hashes: [b, c], name: '' });
+  assert.equal(Core.dmSysLine('hello'), null, 'a message is not a system line');
+  assert.equal(Core.dmSysLine(undefined), null);
+  assert.equal(Core.dmSysLineText('sys:leave', 'Ann', () => ''), 'Ann left');
+  assert.equal(Core.dmSysLineText(Core.dmSysAddLine([b]), 'Ann', (h) => (h === b ? 'Bob' : null)), 'Ann added Bob');
+  assert.equal(Core.dmSysLineText('just words', 'Ann', () => ''), '', 'not a system line -> ""');
+  assert.equal(Core.dmSysLeaveLine, 'sys:leave');
+  assert.equal(Core.dmSysNameLine('Choir'), 'sys:name:Choir');
+  assert.equal(Core.dmMissedCallLine, 'call:missed');
+  assert.equal(Core.dmForwardedLabel, 'Forwarded');
+  assert.deepEqual(Core.dmTally([{ hash: a, emoji: '👍' }, { hash: b, emoji: '👍' }, { hash: c, emoji: '' }, null]), [{ e: '👍', n: 2 }], 'empty and null rows are dropped');
+  assert.equal(Core.dmReadByAll(100, a, [{ hash: a }, { hash: b, read_at: '150' }, { hash: c, read_at: 90, left_at: 95 }]), true, 'wire fields: read_at/left_at as strings or numbers, missing -> 0');
+  assert.equal(Core.dmReadByAll(100, a, [{ hash: a }, { hash: b, read_at: null }]), false);
+  assert.ok(Core.dmMemberHue(b) >= 0 && Core.dmMemberHue(b) < 8);
+  assert.equal(Core.dmMemberHue(undefined), Core.dmMemberHue(''), 'nullish -> ""');
+});
+
+test('parseRoute gates ?t= like ?topic= (a positive integer or nothing)', () => {
+  const get = (qs) => (k) => new URLSearchParams(qs).get(k);
+  assert.deepEqual(Core.parseRoute(get('t=7')), { tag: 'Thread', s: '', n: 7 });
+  assert.equal(Core.parseRoute(get('t=x')).tag, 'Index');
+  assert.equal(Core.parseRoute(get('t=7&dm=' + 'a'.repeat(64))).tag, 'Thread');
+});

@@ -43,6 +43,7 @@ test('the reaction kinds say "reacted" — never the emoji, never "liked" — an
 
 test('the older kinds read as they always did', () => {
   assert.equal(Notif.label(row({ kind: 'dm' })), 'Ann sent you a message');
+  assert.equal(Notif.label(row({ kind: 'dm', topicTitle: 'Choir' })), 'Ann sent a message in Choir', 'a group bell says where (2026-09-13)');
   assert.equal(Notif.label(row({ kind: 'call' })), '📞 Ann called you');
   assert.equal(Notif.label(row({ kind: 'merecat' })), 'merecat finished answering your question');
   assert.equal(Notif.label(row({ kind: 'wall', topicId: 1 })), 'Ann commented on your post');
@@ -60,6 +61,13 @@ test('the door: the exact post, the feed post (and its comment\'s anchor), the c
   assert.equal(Notif.href(row({ kind: 'wall', topicId: 1, commentId: 3 })), 'feed.html?post=3');
   assert.equal(Notif.href(row({ kind: 'wall-like', commentId: 3 })), 'feed.html?post=3');
   assert.equal(Notif.href(row({ kind: 'dm-react', commentId: 44 })), 'messages.html?dm=' + a + '&m=44');
+  /* A DM bell names its conversation in topic_id since 0016: the door is the
+     thread itself — the only door a group has — and the actor's only for a row
+     from before, or from a pair since vanished. */
+  assert.equal(Notif.href(row({ kind: 'dm', topicId: 12 })), 'messages.html?t=12');
+  assert.equal(Notif.href(row({ kind: 'call', topicId: 12 })), 'messages.html?t=12');
+  assert.equal(Notif.href(row({ kind: 'dm-react', topicId: 12, commentId: 44 })), 'messages.html?t=12&m=44');
+  assert.equal(Notif.href(row({ kind: 'dm', topicId: 0 })), 'messages.html?dm=' + a, 'no thread on the row: by the actor');
   assert.equal(Notif.href(row({ kind: 'dm' })), 'messages.html?dm=' + a);
   assert.equal(Notif.href(row({ kind: 'call' })), 'messages.html?dm=' + a);
   assert.equal(Notif.href(row({ kind: 'merecat', topicId: 12 })), 'merecat-ai.html?chat=12');

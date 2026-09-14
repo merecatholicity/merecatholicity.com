@@ -9,7 +9,8 @@
 -- | `merecatthreads`/`q` match on mere PRESENCE (the classic used `!== null`).
 -- | `topic` arrives pre-validated as `Nullable Int`: the JS boundary runs
 -- | `Number()` + `Number.isInteger` + `> 0` (those coercion quirks belong in JS),
--- | and passes the id or null. `merecatthread` keeps its raw string; the dispatch
+-- | and passes the id or null; `t` — a conversation by its id (2026-09-13),
+-- | the resolved form of `dm=<hash>` and the only door to a group — the same. `merecatthread` keeps its raw string; the dispatch
 -- | re-runs `Number()` on it exactly as the classic did.
 module Domain.Route (Route(..), parseRoute, routeTag) where
 
@@ -34,6 +35,7 @@ type Params =
   , inbox :: Nullable String
   , users :: Nullable String
   , q :: Nullable String
+  , t :: Nullable Int
   , dm :: Nullable String
   , me :: Nullable String
   , profile :: Nullable String
@@ -60,6 +62,7 @@ data Route
   | RInbox
   | RUsers
   | RSearch
+  | RThread Int
   | RDm String
   | RMe
   | RProfile String
@@ -101,6 +104,7 @@ parseRoute p =
   else if truthy p.inbox then RInbox
   else if truthy p.users then RUsers
   else if present p.q then RSearch
+  else if isJust (toMaybe p.t) then RThread (fromMaybe 0 (toMaybe p.t))
   else if truthy p.dm then RDm (str p.dm)
   else if truthy p.me then RMe
   else if truthy p.profile then RProfile (str p.profile)
@@ -130,6 +134,7 @@ routeTag r = case r of
   RInbox -> t "Inbox"
   RUsers -> t "Users"
   RSearch -> t "Search"
+  RThread n -> tn "Thread" n
   RDm s -> ts "Dm" s
   RMe -> t "Me"
   RProfile s -> ts "Profile" s
