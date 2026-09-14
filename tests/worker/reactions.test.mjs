@@ -147,9 +147,9 @@ test('the handler: the kernel validates, a back-room post is invisible to an out
 
 test('the DM reaction rings the other side, only for THEIR message; the row is read with its sender', () => {
   const h = body(idxSrc, 'handleDmReact');
-  assert.ok(/SELECT d\.id, d\.thread_id, d\.sender_hash, COALESCE\(d\.redacted, 0\) AS redacted/.test(h));
-  assert.ok(/if \(row\.sender_hash === other\) \{/.test(h), 'my own message rings nothing');
-  assert.ok(/kind: 'dm-react', topicId: 0, commentId: id/.test(h) && /if \(!onScreen\) \{ const ring = notifyReact\(env, bell\);/.test(h) && /else await retractReactNotif\(env, bell\);/.test(h),
+  assert.ok(/SELECT m\.id, m\.thread_id, m\.sender_hash, COALESCE\(m\.redacted, 0\) AS redacted, t\.kind FROM dms m/.test(h));
+  assert.ok(/if \(row\.sender_hash !== me\) \{/.test(h), 'my own message rings nothing; any other member\'s rings theirs (0016)');
+  assert.ok(/kind: 'dm-react', topicId: Number\(row\.thread_id\), commentId: id/.test(h) && /if \(!onScreen\) \{ const ring = notifyReact\(env, bell\);/.test(h) && /else await retractReactNotif\(env, bell\);/.test(h),
     'rung unless the word is on their screen (the send\'s quiet bell, mirrored 2026-09-12); a withdraw retracts');
 });
 

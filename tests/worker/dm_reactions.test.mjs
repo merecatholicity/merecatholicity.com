@@ -89,25 +89,26 @@ test('the old heart rides the new road: /dm/like is the react handler with ❤�
   assert.ok(/data\.like \? '❤️' : ''/.test(h), '{like:1} is the ❤️ reaction, {like:0} withdraws');
 });
 
-test('a reaction lands only on a message the reactor can see, never a redacted one', () => {
+test('a reaction lands only on a message the reactor can see, never a redacted one — one row per member (0016)', () => {
   const h = body('handleDmReact');
-  assert.ok(/COALESCE\(d\.held, 0\) = 0 OR d\.sender_hash = \?1/.test(h), 'held-from-me words are invisible');
-  assert.ok(/d\.expires_at IS NULL OR d\.expires_at > \?5/.test(h), 'an expired word is gone');
-  assert.ok(/t\.a_cleared_at ELSE t\.b_cleared_at/.test(h), 'my own delete-conversation stamp hides what came before it');
+  assert.ok(/JOIN dm_members mb ON mb\.thread_id = t\.id AND mb\.hash = \?1 AND mb\.left_at IS NULL/.test(h), 'from my own seat: a thread I am still in');
+  assert.ok(/' \+ DM_VIS \+ ' AND ' \+ DM_CLEARED \+ ' AND ' \+ dmLive\(now\)/.test(h), 'held-from-me, cleared, pre-joining and expired words are invisible — the shared fragments, never re-inlined');
   assert.ok(/if \(row\.redacted\) return json\(\{ ok: false, error: 'That message was deleted\.' \}, 409\)/.test(h));
-  assert.ok(/const col = me === a \? 'react_a' : 'react_b'/.test(h), 'one column per side of the canonical pair');
-  assert.ok(/bind\(emoji \|\| null, id\)/.test(h), 'a withdrawn reaction is NULL, never an empty string');
+  assert.ok(/INSERT INTO dm_reactions \(msg_id, hash, emoji, created_at\) VALUES \(\?1, \?2, \?3, \?4\) ON CONFLICT\(msg_id, hash\) DO UPDATE SET emoji = \?3, created_at = \?4/.test(h), 'one row per member per message, replaced in place');
+  assert.ok(/DELETE FROM dm_reactions WHERE msg_id = \?1 AND hash = \?2/.test(h), 'a withdrawn reaction is no row at all');
+  assert.ok(!/react_a|react_b/.test(h), 'the pair columns are never written again');
 });
 
-test('the thread tells each viewer react_me / react_other, and the other side hears reactions and saves live', () => {
+test('the thread tells every viewer the reactions as the ledger holds them (react_me / react_other derived for a pair, one deploy), and every other member hears reactions and saves live', () => {
   const t = body('handleDmThread');
-  assert.ok(/m\.react_a, m\.react_b FROM dms m/.test(t), 'the thread reads the reaction columns');
-  assert.ok(/out\.react_me = String\(\(iAmA \? m\.react_a : m\.react_b\) \|\| ''\)/.test(t));
-  assert.ok(/out\.react_other = String\(\(iAmA \? m\.react_b : m\.react_a\) \|\| ''\)/.test(t));
+  assert.ok(/json_group_array\(json_object\('hash', r\.hash, 'emoji', r\.emoji\)\) FROM dm_reactions r WHERE r\.msg_id = m\.id\) AS reactions_json/.test(t), 'the thread reads the reaction ledger beside each word');
+  assert.ok(/out\.reactions = reactions\.filter\(\(r: any\) => r && r\.emoji\);/.test(t));
+  assert.ok(/out\.react_me = String\(\(\(out\.reactions\.find\(\(r: any\) => r\.hash === me\)\) \|\| \{\}\)\.emoji \|\| ''\)/.test(t), 'a pair still reads react_me');
   assert.ok(/out\.liked_me = out\.react_me \? 1 : 0/.test(t), 'the heart fields are derived for one deploy of cached clients');
   const r = body('handleDmReact');
-  assert.ok(/t: 'dm-react', scopes: \['user:' \+ other\][^}]*message: \{ id, emoji \}/.test(r), 'dm-react to the other party only');
+  assert.ok(/t: 'dm-react', scopes: to\.map\(\(h\) => 'user:' \+ h\)[^}]*message: \{ id, emoji, by: me \}/.test(r), 'dm-react to every other member, naming who');
   const s = body('handleDmSave');
-  assert.ok(/t: 'dm-save', scopes: \['user:' \+ other\][^}]*message: \{ id, saved \}/.test(s), 'dm-save to the other party only');
+  assert.ok(/t: 'dm-save', scopes: to\.map\(\(h\) => 'user:' \+ h\)[^}]*message: \{ id, saved, by: me \}/.test(s), 'dm-save to every other member, naming the saver');
+  assert.ok(/saved_by = \?4/.test(s), 'the saver is written (Snapchat names them)');
   assert.ok(/handleDmSave\(request, env, ctx\)/.test(idxSrc), 'the save route passes ctx so the event can publish');
 });

@@ -48,15 +48,22 @@ test('the feed: a deleted post takes its comments\' media, a deleted comment its
   assert.ok(before(prune, 'if (keys.length) await purgeWallMedia(env, keys);', 'DELETE FROM wall_comments WHERE created_at < ?1'), 'the prune purges before it deletes');
 });
 
-test('the DMs: a redacted message, a purged conversation, an expired message, an aged attachment, an orphan — each takes its object', () => {
+test('the DMs: a redacted message, a purged conversation, an expired message, an aged attachment, an orphan — each lets go of its object, which dies with its LAST reference (0016)', () => {
   const red = body(idx, 'handleDmRedact');
-  assert.ok(before(red, 'if (row.media_key) await purgeMediaKeys(env, [row.media_key]);', "UPDATE dms SET redacted = 1"), 'a redact purges before it blanks');
+  assert.ok(before(red, 'if (row.media_key) await releaseMediaRefs(env, [{ id: row.id, media_key: row.media_key }]);', "UPDATE dms SET redacted = 1"), 'a redact lets go before it blanks');
   const conv = body(idx, 'handleDmDelete');
-  assert.ok(/SELECT media_key FROM dms WHERE thread_id = \?1 AND media_key IS NOT NULL/.test(conv) && before(conv, 'await purgeMediaKeys(env, (media.results || []).map((r: any) => r.media_key).filter(Boolean));', 'DELETE FROM dms WHERE thread_id = ?1'), 'a purged conversation: keys first');
+  assert.ok(/SELECT id, media_key FROM dms WHERE thread_id = \?1 AND media_key IS NOT NULL/.test(conv) && before(conv, 'await releaseMediaRefs(env, (media.results || []) as any[]);', 'DELETE FROM dms WHERE thread_id = ?1'), 'a purged conversation: the references first');
   const sweep = lib.slice(lib.indexOf('export async function sweepExpiredDms('), lib.indexOf('\nexport async function ', lib.indexOf('export async function sweepExpiredDms(') + 10));
-  assert.ok(before(sweep, 'if (keys.length) await purgeMediaKeys(env, keys);', 'DELETE FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1'), 'expiry: the objects before the rows');
-  assert.ok(/msg_id IS NULL AND created_at < \?1\) OR \(msg_id IS NOT NULL AND msg_id NOT IN \(SELECT id FROM dms\)\)/.test(sweep), 'orphans: unlinked past the window, or whose message is gone');
-  assert.ok(/mediaRetentionDays\(settings, 'dm'\)/.test(sweep) && /UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1/.test(sweep), 'the retention cap purges and stamps, even inside a saved message');
+  assert.ok(before(sweep, 'if (rows.length) await releaseMediaRefs(env, rows);', 'DELETE FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1'), 'expiry: the references before the rows');
+  assert.ok(/NOT EXISTS \(SELECT 1 FROM dm_media_refs r WHERE r\.key = md\.key\) LIMIT 2000/.test(sweep), 'orphans: nothing names it, past the window');
+  assert.ok(/mediaRetentionDays\(settings, 'dm'\)/.test(sweep) && /await dmExpireObjects\(env, keys\)/.test(sweep), 'the retention cap takes the object from under EVERY message naming it');
+  const expire = lib.slice(lib.indexOf('async function dmExpireObjects('), lib.indexOf('\n}\n', lib.indexOf('async function dmExpireObjects(')));
+  assert.ok(/UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1/.test(expire) && before(expire, 'await purgeMediaKeys(env, keys);', 'DELETE FROM dm_media_refs WHERE key IN'), 'purge, stamp every message, drop the references');
+  const rel = lib.slice(lib.indexOf('export async function releaseMediaRefs('), lib.indexOf('\n}\n', lib.indexOf('export async function releaseMediaRefs(')));
+  assert.ok(/DELETE FROM dm_media_refs WHERE msg_id IN/.test(rel) && /NOT EXISTS \(SELECT 1 FROM dm_media_refs r WHERE r\.key = md\.key\)/.test(rel) && /if \(dead\.length\) await purgeMediaKeys\(env, dead\);/.test(rel), 'the references go, then only the objects nothing names');
+  const roads = idx + lib;
+  const bare = (roads.match(/await purgeMediaKeys\(env, /g) || []).length;
+  assert.equal(bare, 3, 'purgeMediaKeys is called from releaseMediaRefs, dmExpireObjects and the orphan sweep alone — never straight from a message road (found ' + bare + ')');
   const pm = lib.slice(lib.indexOf('export async function purgeMediaKeys('), lib.indexOf('\nexport async function ', lib.indexOf('export async function purgeMediaKeys(') + 10));
   const pw = lib.slice(lib.indexOf('export async function purgeWallMedia('), lib.indexOf('\nexport async function ', lib.indexOf('export async function purgeWallMedia(') + 10));
   assert.ok(/env\.MEDIA\.delete\(/.test(pm) && /DELETE FROM dm_media WHERE key IN/.test(pm) && /env\.WALLMEDIA\.delete\(/.test(pw) && /DELETE FROM wall_media WHERE key IN/.test(pw), 'both purges take the object AND the accounting row');

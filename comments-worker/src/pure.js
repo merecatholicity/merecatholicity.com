@@ -116,8 +116,9 @@ export function boardEventPublic(event) {
    subscribing to someone else's private events. Allowed: 'board:index'; a real
    'cat:<key>' (never the admins-only back room); 'topic:<positive int>';
    'presence:<64hex>' (anyone may watch anyone's online state); 'feed:global' (the
-   public feed channel); and the PRIVATE 'user:<hash>' ONLY when the socket
-   authenticated as that exact hash (`me`). Anything else is dropped, at most 5
+   public feed channel); the PRIVATE 'user:<hash>' ONLY when the socket
+   authenticated as that exact hash (`me`); and 'dmview:t<id>' / 'dmview:<hash>'
+   (an authed member's on-screen claim). Anything else is dropped, at most 5
    kept. `boardCats` is the worker's BOARD_CATS (passed in so this stays pure). */
 export function sanitizeScopes(raw, me, boardCats) {
   if (!Array.isArray(raw)) return [];
@@ -144,12 +145,14 @@ export function sanitizeScopes(raw, me, boardCats) {
       continue;
     }
     if (s.startsWith('dmview:')) {
-      /* "I have the DM thread with <hash> on screen right now" — an authed
-         member's claim about their OWN viewport, used only to keep their own
-         bell quiet while they watch a message arrive (handleDmSend asks the
-         hub before notifying). Refused on an unauthenticated socket. */
+      /* "I have this conversation on screen right now" — an authed member's
+         claim about their OWN viewport, used only to keep their own bell quiet
+         while they watch a message arrive (handleDmSend asks the hub before
+         notifying). By the thread's id (dmview:t<id>, 2026-09-13) or, one
+         deploy longer, by the counterpart's hash. Refused on an
+         unauthenticated socket. */
       const h = s.slice(7);
-      if (me && /^[0-9a-f]{64}$/.test(h)) out.push(s);
+      if (me && /^(t[1-9][0-9]*|[0-9a-f]{64})$/.test(h)) out.push(s);
     }
   }
   return out;

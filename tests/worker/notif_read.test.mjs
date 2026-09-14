@@ -1,7 +1,8 @@
 /* Reading marks read (2026-09-12), on the real ledger: opening a conversation
- * clears every bell its sender rang the reader — a message, a reaction, a
- * missed call — and no other sender's; opening a feed post clears the post's
- * bells and no other post's. The statements are lifted from the handlers.
+ * clears every bell it rang the reader — a message, a reaction, a missed
+ * call — and no other conversation's (since 0016 a DM bell names its thread;
+ * a row from before still names its sender); opening a feed post clears the
+ * post's bells and no other post's. The statements are lifted from the handlers.
  *
  * What would break silently: a kind left out (a reaction's bell staying lit
  * after the thread was read); a WHERE without the sender (one open clearing
@@ -31,23 +32,32 @@ const me = 'a'.repeat(64), ann = 'b'.repeat(64), bob = 'c'.repeat(64);
 function seeded() {
   const db = freshDb();
   const ins = db.prepare('INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?, ?, ?, ?, ?, 1)');
-  ins.run(me, 'dm', 0, 0, ann); ins.run(me, 'dm-react', 0, 44, ann); ins.run(me, 'call', 0, 0, ann);
+  /* Since 0016 a DM bell names its conversation in topic_id: thread 7 is the
+     pair with ann, thread 8 a group ann is also in; a row from before (0)
+     still names ann alone. */
+  ins.run(me, 'dm', 7, 0, ann); ins.run(me, 'dm-react', 7, 44, ann); ins.run(me, 'call', 7, 0, ann);
+  ins.run(me, 'dm', 0, 0, ann);                       // a bell from before 0016: no thread on it, matched by its sender
+  ins.run(me, 'dm', 8, 0, ann);                       // the group's bell: another conversation, stays
   ins.run(me, 'dm', 0, 0, bob);                       // another sender: stays
   ins.run(me, 'reply', 5, 9, ann);                    // a board bell from ann: not the thread's
   ins.run(me, 'wall', 1, 3, ann); ins.run(me, 'wall-react', 0, 3, bob); ins.run(me, 'wall-like', 0, 4, ann);   // the feed: post 3 twice, post 4 once
   return db;
 }
-const named = (sql) => sql.replace('?1', ':me').replace('?2', ':who').replace('?3', ':now');
+const named = (sql) => sql.replace(/\?1/g, ':me').replace(/\?2/g, ':who').replace(/\?3/g, ':now').replace(/\?4/g, ':other');
+const DM_CLEAR = /"(UPDATE notifications SET read_at = \?3 WHERE recipient_hash = \?1 AND kind IN \('dm','dm-react','call'\) AND \(topic_id = \?2 OR \(topic_id = 0 AND actor_hash = \?4\)\) AND read_at IS NULL)"/;
 
-test('opening a conversation reads the three kinds its sender rang me, and nothing else', () => {
-  const m = body('handleDmThread').match(/"(UPDATE notifications SET read_at = \?3 WHERE recipient_hash = \?1 AND kind IN \('dm','dm-react','call'\) AND actor_hash = \?2 AND read_at IS NULL)"/);
+test('opening a conversation reads the three kinds it rang me — by the thread, or by the sender for a bell from before 0016 — and nothing else', () => {
+  const m = body('handleDmThread').match(DM_CLEAR);
   assert.ok(m, 'the statement');
   const db = seeded();
-  assert.equal(db.prepare(named(m[1])).run({ me, who: ann, now: 50 }).changes, 3, 'the message, the reaction, the missed call');
-  const left = db.prepare('SELECT kind, actor_hash FROM notifications WHERE read_at IS NULL ORDER BY id').all().map((r) => [r.kind, r.actor_hash === ann ? 'ann' : 'bob']);
-  assert.deepEqual(left, [['dm', 'bob'], ['reply', 'ann'], ['wall', 'ann'], ['wall-react', 'bob'], ['wall-like', 'ann']], 'the other sender, the board, the feed: untouched');
-  const seen = body('handleDmSeen').match(/"(UPDATE notifications SET read_at = \?3 WHERE recipient_hash = \?1 AND kind IN \('dm','dm-react','call'\) AND actor_hash = \?2 AND read_at IS NULL)"/);
+  assert.equal(db.prepare(named(m[1])).run({ me, who: 7, now: 50, other: ann }).changes, 4, 'the message, the reaction, the missed call, and the old row by its sender');
+  const left = db.prepare('SELECT kind, topic_id, actor_hash FROM notifications WHERE read_at IS NULL ORDER BY id').all().map((r) => [r.kind, r.topic_id, r.actor_hash === ann ? 'ann' : 'bob']);
+  assert.deepEqual(left, [['dm', 8, 'ann'], ['dm', 0, 'bob'], ['reply', 5, 'ann'], ['wall', 1, 'ann'], ['wall-react', 0, 'bob'], ['wall-like', 0, 'ann']], 'the group, the other sender, the board, the feed: untouched');
+  /* A group has no "other": its open passes '' and clears by the thread alone. */
+  assert.equal(db.prepare(named(m[1])).run({ me, who: 8, now: 60, other: '' }).changes, 1, 'the group\'s bell, by its id');
+  const seen = body('handleDmSeen').match(DM_CLEAR);
   assert.ok(seen, 'the seen ping runs the same statement');
+  assert.ok(/\.bind\(me, thread\.id, now, other \|\| ''\)\.run\(\);/.test(body('handleDmThread')) && /\.bind\(me, thread\.id, now, other \|\| ''\)\.run\(\);/.test(body('handleDmSeen')), 'bound to the thread and, for a pair, its other');
   db.close();
 });
 

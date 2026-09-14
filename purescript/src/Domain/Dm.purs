@@ -62,6 +62,7 @@ import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String (Pattern(..), joinWith, split, stripPrefix, trim)
 import Data.String.CodePoints as CP
 import Data.String.CodeUnits as CU
+import Domain.Call as Call
 import Data.String.Regex (Regex, replace)
 import Data.String.Regex.Flags (global)
 import Data.String.Regex.Unsafe (unsafeRegex)
@@ -199,11 +200,14 @@ sysLeaveLine = "sys:leave"
 sysNameLine :: String -> String
 sysNameLine n = "sys:name:" <> n
 
--- | "call:missed" — the caller's line for a call nobody answered (2026-09-12).
+-- | "call:missed" — Domain.Call's own word (2026-09-12), aliased here so every
+-- | DM reader finds it where the other lines are; the literal lives there alone.
 missedCallLine :: String
-missedCallLine = "call:missed"
+missedCallLine = Call.missedCallLine
 
--- | The grammar, read back. Anything else is not a system line.
+-- | The grammar, read back. Anything else is not a system line — a call's
+-- | other lines ("call:declined", "call:answered:N") are
+-- | Domain.Call.parseCallLine's, drawn by side.
 parseSysLine :: String -> Maybe SysLine
 parseSysLine s
   | s == sysLeaveLine = Just SysLeave

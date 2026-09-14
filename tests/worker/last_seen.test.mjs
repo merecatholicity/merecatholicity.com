@@ -49,10 +49,13 @@ test('the hub is the one writer: a stamp at the last disconnect under auto, clea
   assert.ok(!/last_seen_at = /.test(idxSrc.replace(/SELECT[^;]*last_seen_at[^;]*/g, '')), 'no worker handler writes the column');
 });
 
-test('the thread carries other.last_seen, and the presence read carries seen for those not online', () => {
+test('the thread carries every member\'s last_seen, and the presence read carries seen for those not online', () => {
   const t = body('handleDmThread');
-  assert.ok(/SELECT nick, avatar, last_seen_at FROM profiles WHERE hash = \?1/.test(t), 'the thread reads the stamp');
-  assert.equal((t.match(/last_seen: \(prof && prof\.last_seen_at\) \|\| null/g) || []).length, 2, 'both thread shapes carry it (the empty room too)');
+  const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
+  assert.ok(/pr\.last_seen_at, pr\.receipts_mode, pk\.pubkey/.test(lib.slice(lib.indexOf('export async function dmMembersPayload('))), 'the members payload reads the stamp');
+  assert.ok(/SELECT nick, avatar, last_seen_at, receipts_mode FROM profiles WHERE hash = \?1/.test(lib.slice(lib.indexOf('export async function dmPairRoomRows('))), 'the empty room reads it too');
+  assert.ok(/last_seen: r\.last_seen_at \|\| null,/.test(t), 'served on each member as-is (the privacy rule)');
+  assert.ok(/const memberRows = thread \? await dmMembersPayload\(env, thread\.id\) : await dmPairRoomRows\(env, me, other\);/.test(t), 'both thread shapes carry it (the empty room too)');
   const p = body('handleDmPresence');
   assert.ok(/last_seen_at IS NOT NULL AND hash IN \(/.test(p), 'only stamped members');
   assert.ok(/if \(on\.indexOf\(r\.hash\) === -1\) seen\[r\.hash\] = Number\(r\.last_seen_at\)/.test(p), 'an online member\'s stamp is not served');

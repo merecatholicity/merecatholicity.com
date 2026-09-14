@@ -120,6 +120,10 @@ test('sanitizeScopes: the WebSocket allowlist — the private-scope guard holds'
   assert.deepEqual(san(['dmview:' + OTHER], ME), ['dmview:' + OTHER], 'an authed member may claim a thread on screen');
   assert.deepEqual(san(['dmview:' + OTHER], ''), [], 'an unauthenticated socket may not');
   assert.deepEqual(san(['dmview:xyz'], ME), [], 'a malformed dmview hash is dropped');
+  // dmview:t<id> — the same claim by the conversation's id (0016: a group has no counterpart)
+  assert.deepEqual(san(['dmview:t12'], ME), ['dmview:t12'], 'an authed member may claim a conversation on screen by its id');
+  assert.deepEqual(san(['dmview:t12'], ''), [], 'not an unauthenticated socket');
+  assert.deepEqual(san(['dmview:t0', 'dmview:t', 'dmview:tx', 'dmview:t01'], ME), [], 'a thread id is a positive integer, nothing else');
   // capped at 5, junk ignored
   assert.equal(san(['board:index', 'cat:pub', 'cat:rc', 'topic:1', 'topic:2', 'topic:3'], ME).length, 5, 'at most 5 scopes');
   assert.deepEqual(san('not-an-array', ME), []);

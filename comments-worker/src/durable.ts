@@ -4,6 +4,7 @@
    classes so wrangler finds them on the main module. */
 import { DurableObject } from 'cloudflare:workers';
 import * as Presence from '../../purescript/output/Domain.Presence/index.js';
+import * as Dm from '../../purescript/output/Domain.Dm/index.js';
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
 } from './pure.js';
@@ -79,15 +80,21 @@ export class BoardHub extends DurableObject<Env> {
       return;
     }
     /* A transient typing signal (client → client, no storage): fan it to the
-       recipient's own sockets only, tagged with the authenticated sender. */
+       recipients' own sockets only, tagged with the authenticated sender and
+       the conversation. `to` is one hash (a pair) or the members of a group
+       (at most Domain.Dm.typingFanCap — the hub keeps no roster, the client
+       names who it is typing to, exactly as a send does); the typist is never
+       told of their own keystrokes. */
     if (m.t === 'typing') {
       const me = (a && a.me) || '';
-      const to = String(m.to || '');
-      if (!me || !/^[0-9a-f]{64}$/.test(to)) return;
+      const list = (Array.isArray(m.to) ? m.to : [m.to]).map((h: any) => String(h || '')).filter((h: string) => /^[0-9a-f]{64}$/.test(h) && h !== me);
+      if (!me || !list.length || list.length > Dm.typingFanCap) return;
       /* A member who chose to appear offline is not seen typing either: the
          kernel rule that hides their socket hides their keystrokes (2026-09-11). */
       if (!Presence.isVisible((a && a.presenceMode) || 'auto')(true)) return;
-      this.#fan('user:' + to, JSON.stringify({ v: 1, t: 'typing', from: me, state: m.state === 'stop' ? 'stop' : 'start' }));
+      const thread = Math.floor(Number(m.thread) || 0);
+      const frame = JSON.stringify({ v: 1, t: 'typing', from: me, thread, state: m.state === 'stop' ? 'stop' : 'start' });
+      for (const to of Array.from(new Set(list))) this.#fan('user:' + to, frame);
       return;
     }
     /* Transient 1v1 call signaling (client → client, no storage): the ICE
@@ -202,7 +209,9 @@ export class BoardHub extends DurableObject<Env> {
      `sender` ON SCREEN right now? True only when one of the recipient's own
      authenticated sockets carries the dmview:<sender> sub — the client sets it
      while that thread is mounted, and the socket closes on a hidden tab, so a
-     backgrounded or navigated-away reader still gets the bell. */
+     backgrounded or navigated-away reader still gets the bell. Since
+     2026-09-13 the claim is dmview:t<thread id> (viewersOf below); this form,
+     by the counterpart's hash, is honoured one deploy for the older bundle. */
   async dmViewing(recipient: any, sender: any) {
     const want = 'dmview:' + sender;
     for (const s of this.ctx.getWebSockets()) {
@@ -211,6 +220,22 @@ export class BoardHub extends DurableObject<Env> {
       if (a && a.me === recipient && Array.isArray(a.subs) && a.subs.includes(want)) return true;
     }
     return false;
+  }
+
+  /* RPC for the quiet bell of a conversation with members (2026-09-13): of
+     these members, which have the thread tagged `tag` ('t' + id) ON SCREEN
+     right now — an authenticated socket of theirs carrying dmview:<tag>. One
+     call per send, however many members. */
+  async viewersOf(tag: any, hashes: any) {
+    const want = 'dmview:' + String(tag || '');
+    const asked = new Set((Array.isArray(hashes) ? hashes : []).map((h: any) => String(h)));
+    const seen = new Set<string>();
+    for (const s of this.ctx.getWebSockets()) {
+      let a;
+      try { a = s.deserializeAttachment(); } catch { a = null; }
+      if (a && a.me && asked.has(a.me) && Array.isArray(a.subs) && a.subs.includes(want)) seen.add(a.me);
+    }
+    return Array.from(seen);
   }
 
   /* RPC, called by the worker on every live public board mutation. */

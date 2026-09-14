@@ -579,7 +579,7 @@ export async function deliverNotifications(env: any, o: any) {
    "X sent you a message" until it is read, rather than burying the list. A 'dm'
    notification carries no topic/comment (both 0) and jumps to the conversation.
    A DM must never fail because its notification did, so this never throws out. */
-export async function notifyDm(env: any, toHash: any, fromHash: any) {
+export async function notifyDm(env: any, toHash: any, fromHash: any, threadId?: any) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     /* "Direct messages" notifications off silences the BELL only — the message
@@ -588,16 +588,20 @@ export async function notifyDm(env: any, toHash: any, fromHash: any) {
     const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
     if (!notifyEnabled(pref, 'dm')) return;
     const now = Math.floor(Date.now() / 1000);
+    /* Coalesced per CONVERSATION since 0016 (topic_id names the thread): a
+       burst in one group surfaces once until read; a row with no thread on
+       it still coalesces by its sender. */
+    const tid = Math.floor(Number(threadId) || 0);
     const r = await env.DB.prepare(
       "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
-      "SELECT ?1, 'dm', 0, 0, ?2, ?3 WHERE NOT EXISTS (" +
-      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'dm' AND actor_hash = ?2 AND read_at IS NULL)"
-    ).bind(toHash, fromHash, now).run();
+      "SELECT ?1, 'dm', ?4, 0, ?2, ?3 WHERE NOT EXISTS (" +
+      "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'dm' AND topic_id = ?4 AND (?4 > 0 OR actor_hash = ?2) AND read_at IS NULL)"
+    ).bind(toHash, fromHash, now, tid).run();
     /* Ring the notification badge only when a row was actually added (an existing
-       unread 'dm' from this sender already counts). */
+       unread 'dm' from this conversation already counts). */
     if (r.meta && r.meta.changes > 0) {
       await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
-        kind: 'dm', topic_id: 0, comment_id: 0, actor_hash: fromHash, created_at: now }]);
+        kind: 'dm', topic_id: tid, comment_id: 0, actor_hash: fromHash, created_at: now }]);
     }
   } catch (e) {
     console.log(JSON.stringify({ event: 'notify_dm_failed', error: String(e) }));
@@ -639,20 +643,22 @@ export async function ringCall(env: any, toHash: any, fromHash: any, callId: any
    caller) — a ring-burst never piles up rows — plus the live badge ping, and
    a Web Push ("Missed call", replacing the ring's push by its tag) only when
    the callee has no live socket. Never throws out. */
-export async function notifyMissedCall(env: any, toHash: any, fromHash: any, opts?: { late?: boolean }) {
+export async function notifyMissedCall(env: any, toHash: any, fromHash: any, opts?: { late?: boolean }, threadId?: any) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
     if (!notifyEnabled(pref, 'dm')) return;
     const now = Math.floor(Date.now() / 1000);
+    /* topic_id names the pair's thread since 0016, so the bell opens it by id. */
+    const tid = Math.floor(Number(threadId) || 0);
     const r = await env.DB.prepare(
       "INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) " +
-      "SELECT ?1, 'call', 0, 0, ?2, ?3 WHERE NOT EXISTS (" +
+      "SELECT ?1, 'call', ?4, 0, ?2, ?3 WHERE NOT EXISTS (" +
       "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'call' AND actor_hash = ?2 AND read_at IS NULL)"
-    ).bind(toHash, fromHash, now).run();
+    ).bind(toHash, fromHash, now, tid).run();
     if (r.meta && r.meta.changes > 0) {
       await publishUser(env, [{ v: 1, t: 'notification', scopes: ['user:' + toHash],
-        kind: 'call', topic_id: 0, comment_id: 0, actor_hash: fromHash, created_at: now }]);
+        kind: 'call', topic_id: tid, comment_id: 0, actor_hash: fromHash, created_at: now }]);
     }
     if (opts && opts.late) return;   // the sweep's backstop: the record, never an hour-late buzz
     let online = false;
@@ -662,7 +668,7 @@ export async function notifyMissedCall(env: any, toHash: any, fromHash: any, opt
     } catch (e) { /* away */ }
     if (!online) {
       await deliverPush(env, [toHash], { kind: 'call-missed', title: 'Missed call', body: 'You missed a call',
-        url: '/messages.html?dm=' + fromHash, tag: 'call:' + fromHash });
+        url: tid > 0 ? '/messages.html?t=' + tid : '/messages.html?dm=' + fromHash, tag: 'call:' + fromHash });
     }
   } catch (e) {
     console.log(JSON.stringify({ event: 'notify_missed_call_failed', error: String(e) }));
@@ -694,10 +700,14 @@ export async function recordCallEnd(env: any, row: { call: string; from_hash: st
   if (outcome === 'missed') line = CallK.missedCallLine;
   else if (outcome === 'declined') line = CallK.declinedCallLine;
   else if (outcome === 'answered') line = CallK.answeredCallLine(Math.max(0, now - (Number(row.answered_at) || now)));
-  if (line) {
-    try { await sendSystemDm(env, row.from_hash, row.to_hash, line, { quiet: true }); } catch (e) { console.log(JSON.stringify({ event: 'call_line_failed', outcome, error: String(e) })); }
+  /* The pair's room (made if this call was its first word), so the line and
+     the bell both name the conversation (0016). */
+  let thread: any = null;
+  try { thread = await ensurePairThread(env, row.from_hash, row.to_hash, now, { bump: false, sender: row.from_hash }); } catch (e) { thread = null; }
+  if (line && thread) {
+    try { await sendSystemDmLine(env, thread.id, row.from_hash, line, { quiet: true }); } catch (e) { console.log(JSON.stringify({ event: 'call_line_failed', outcome, error: String(e) })); }
   }
-  if (outcome === 'missed') await notifyMissedCall(env, row.to_hash, row.from_hash, opts);
+  if (outcome === 'missed') await notifyMissedCall(env, row.to_hash, row.from_hash, opts, thread ? thread.id : 0);
   return true;
 }
 
@@ -953,10 +963,29 @@ export function dmPair(h1: any, h2: any) {
   return h1 < h2 ? [h1, h2] : [h2, h1];
 }
 
-/* Visibility is per viewer: everyone sees the unheld, and a sender always
-   sees their own words, held or not. ?1 must be bound to the viewer's hash
-   wherever this fragment appears. */
-export const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1)";
+/* The one-thread-per-pair key (migration 0016): the canonical pair joined by
+   a bar, unique across dm_threads. A group thread has none. */
+export function dmPairKey(h1: any, h2: any) {
+  const [a, b] = dmPair(h1, h2);
+  return a + '|' + b;
+}
+
+/* The other side of a pair key, from my seat ('' when I am not in it, or it
+   is a group's). */
+export function dmPairOther(pairKey: any, me: any) {
+  const k = String(pairKey || '');
+  if (!k) return '';
+  const [a, b] = k.split('|');
+  return a === me ? b : (b === me ? a : '');
+}
+
+/* Visibility is per viewer: everyone sees the unheld, a sender always sees
+   their own words, held or not — and in a GROUP (t.kind = 1) a member who
+   blocked the sender does not see the sender's words at all (Snapchat's
+   rule: you stay, they go quiet for you; a pair keeps its stored
+   shadow-hold). ?1 must be bound to the viewer's hash, and `t` (the thread)
+   and `m` (the message) must be in scope wherever this fragment appears. */
+export const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1) AND (t.kind = 0 OR NOT EXISTS (SELECT 1 FROM dm_blocks bk WHERE bk.owner_hash = ?1 AND bk.blocked_hash = m.sender_hash))";
 
 /* A message still lives: not past its disappearing-message expiry. A saved
    message carries expires_at NULL and so is always live. `now` is a server
@@ -965,21 +994,142 @@ export const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1)";
 export function dmLive(now: any) { return '(m.expires_at IS NULL OR m.expires_at > ' + Math.floor(Number(now) || 0) + ')'; }
 
 /* Unread, per viewer, COUNTED: unheld, unexpired, uncleared words from someone
-   else, newer than my read stamp. The one fragment behind every unread number —
-   the inbox row's badge, the inbox total, the thread's unread line, and the tab
-   bar's badge (2026-09-11) — so they can never disagree. Held, cleared and
-   expired words never count, and so never trip the recipient's badge. */
+   else, newer than my read stamp and no older than my joining. The one
+   fragment behind every unread number — the inbox row's badge, the inbox
+   total, the thread's unread line, and the tab bar's badge (2026-09-11) — so
+   they can never disagree. Held, cleared, pre-joining and expired words never
+   count, nor (in a group) a sender I blocked, and so never trip my badge. `t`
+   must be the thread and `mb` MY member row (DM_MINE) in scope; ?1 the viewer. */
 export function dmUnreadCount(now: any) {
   return '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
     'AND m.sender_hash != ?1 ' +
-    'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_read_at ELSE t.b_read_at END, 0) ' +
-    'AND m.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0) ' +
+    'AND (t.kind = 0 OR NOT EXISTS (SELECT 1 FROM dm_blocks bk WHERE bk.owner_hash = ?1 AND bk.blocked_hash = m.sender_hash)) ' +
+    'AND m.created_at > COALESCE(mb.read_at, 0) AND m.created_at > COALESCE(mb.cleared_at, 0) AND m.created_at >= mb.joined_at ' +
     'AND ' + dmLive(now) + ')';
 }
 
-/* A side that deleted the conversation sees only words newer than its clear
-   stamp. ?1 is the viewer; t must be the thread row in scope. */
-export const DM_CLEARED = 'm.created_at > COALESCE(CASE WHEN t.a_hash = ?1 THEN t.a_cleared_at ELSE t.b_cleared_at END, 0)';
+/* A member sees only words newer than their clear stamp (a fresh start) and
+   no older than their joining — a member added to a group gets no history,
+   the crypto's rule kept here as well. `mb` must be the viewer's member row. */
+export const DM_CLEARED = 'm.created_at > COALESCE(mb.cleared_at, 0) AND m.created_at >= mb.joined_at';
+
+/* The viewer's own seat, for every query that filters through DM_CLEARED or
+   counts through dmUnreadCount: `t` the thread, ?1 the viewer. A member who
+   left has no seat, so the thread is nowhere for them. */
+export const DM_MINE = 'JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 AND mb.left_at IS NULL';
+
+/* ================= The member model (migration 0016, 2026-09-13) =================
+   A conversation is a thread with member rows: a pair is two of them (kind 0,
+   keyed by pair_key), a group up to Domain.Dm.maxMembers (kind 1). Every
+   per-member stamp lives on the member row; nothing below reads a_hash/b_hash. */
+
+const DM_THREAD_COLS = 't.id, t.kind, t.pair_key, t.name, t.created_at, t.created_by, t.last_at, t.last_sender, t.msgs, t.ttl, ' +
+  'mb.joined_at, mb.left_at, mb.read_at, mb.cleared_at';
+
+/* The conversation a request names, from this member's seat: by `thread_id`
+   (a current member's thread, else null — a stranger's ask is
+   indistinguishable from nonexistence) or by the pair behind `with` (a room
+   that may not exist yet: `thread` null with `other` set, so the caller may
+   make it). The row carries the viewer's own member stamps. */
+export async function dmThreadFor(env: any, me: any, data: any): Promise<{ thread: any; other: string } | null> {
+  const id = Math.floor(Number(data && data.thread_id) || 0);
+  if (id > 0) {
+    const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.id = ?2').bind(me, id).first();
+    if (!t) return null;
+    return { thread: t, other: Number(t.kind) === 0 ? dmPairOther(t.pair_key, me) : '' };
+  }
+  const other = String((data && data.with) || '');
+  if (!/^[0-9a-f]{64}$/.test(other) || other === me) return null;
+  const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.pair_key = ?2').bind(me, dmPairKey(me, other)).first();
+  return { thread: t || null, other };
+}
+
+/* A pair's room, made on its first word (or its first setting) with both
+   member rows; an existing one is returned as it stands. `bump` moves the
+   last-word fields (never for a held send: the recipient's world stays
+   untouched). The legacy a_hash/b_hash are still WRITTEN for a pair — never
+   read by this code — so a rolled-back worker would still find the room;
+   the target-less ON CONFLICT covers the pair index and the legacy one alike,
+   and heals a room the old worker made without its pair_key. */
+export async function ensurePairThread(env: any, h1: any, h2: any, now: any, opts?: { bump?: boolean; sender?: any }) {
+  const [a, b] = dmPair(h1, h2);
+  const sender = (opts && opts.sender) || h1;
+  const row = await env.DB.prepare(
+    'INSERT INTO dm_threads (kind, pair_key, created_at, last_at, last_sender, msgs, a_hash, b_hash) VALUES (0, ?1, ?2, ?2, ?3, 0, ?4, ?5) ' +
+    (opts && opts.bump
+      ? 'ON CONFLICT DO UPDATE SET pair_key = COALESCE(pair_key, excluded.pair_key), last_at = ?2, last_sender = ?3 RETURNING id'
+      : 'ON CONFLICT DO UPDATE SET pair_key = COALESCE(pair_key, excluded.pair_key) RETURNING id')
+  ).bind(dmPairKey(a, b), now, sender, a, b).first();
+  await env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(row.id, a, now).run();
+  await env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(row.id, b, now).run();
+  return row;
+}
+
+/* The current members of a thread with their published keys, joined-first. */
+export async function dmCurrentMembers(env: any, threadId: any): Promise<{ hash: string; pubkey: string | null }[]> {
+  const r = await env.DB.prepare(
+    'SELECT mb.hash, pk.pubkey FROM dm_members mb LEFT JOIN dm_pubkeys pk ON pk.hash = mb.hash ' +
+    'WHERE mb.thread_id = ?1 AND mb.left_at IS NULL ORDER BY mb.joined_at, mb.hash'
+  ).bind(threadId).all();
+  return (r.results || []).map((m: any) => ({ hash: String(m.hash), pubkey: m.pubkey || null }));
+}
+
+/* These members' published keys (an unmade pair's room: the two of them). */
+export async function dmPubkeysOf(env: any, hashes: any): Promise<{ hash: string; pubkey: string | null }[]> {
+  const list = (Array.isArray(hashes) ? hashes : []).filter((h: any) => /^[0-9a-f]{64}$/.test(String(h)));
+  if (!list.length) return [];
+  const r = await env.DB.prepare('SELECT hash, pubkey FROM dm_pubkeys WHERE hash IN (' + inList(list.length) + ')').bind(...list).all();
+  const by: Record<string, string> = {};
+  for (const row of (r.results || []) as any[]) by[row.hash] = row.pubkey;
+  return list.map((h: string) => ({ hash: h, pubkey: by[h] || null }));
+}
+
+/* Who a word from `me` reaches: every current member but me, minus any who
+   block me — their world stays untouched (in a group the block is theirs
+   alone; a pair's held send never reaches here). */
+export async function dmRecipients(env: any, threadId: any, me: any): Promise<string[]> {
+  const r = await env.DB.prepare(
+    'SELECT mb.hash FROM dm_members mb WHERE mb.thread_id = ?1 AND mb.left_at IS NULL AND mb.hash != ?2 ' +
+    'AND NOT EXISTS (SELECT 1 FROM dm_blocks b WHERE b.owner_hash = mb.hash AND b.blocked_hash = ?2)'
+  ).bind(threadId, me).all();
+  return (r.results || []).map((m: any) => String(m.hash));
+}
+
+/* Every member row of a thread, the departed included (their names and keys
+   still open the words they sent), with the profile fields the thread shows:
+   nick, avatar, the hub's last_seen_at, the receipts mode (a stamp is served
+   only under it), and the published key. */
+export async function dmMembersPayload(env: any, threadId: any) {
+  const r = await env.DB.prepare(
+    'SELECT mb.hash, mb.joined_at, mb.left_at, mb.read_at, mb.added_by, pr.nick, pr.avatar, pr.last_seen_at, pr.receipts_mode, pk.pubkey ' +
+    'FROM dm_members mb LEFT JOIN profiles pr ON pr.hash = mb.hash LEFT JOIN dm_pubkeys pk ON pk.hash = mb.hash ' +
+    'WHERE mb.thread_id = ?1 ORDER BY mb.joined_at, mb.hash'
+  ).bind(threadId).all();
+  return (r.results || []) as any[];
+}
+
+/* An unmade pair's room: its two would-be members in the same shape, no stamps. */
+export async function dmPairRoomRows(env: any, me: any, other: any) {
+  const out: any[] = [];
+  for (const h of [me, other]) {
+    const pr = await env.DB.prepare('SELECT nick, avatar, last_seen_at, receipts_mode FROM profiles WHERE hash = ?1').bind(h).first();
+    const pk = await env.DB.prepare('SELECT pubkey FROM dm_pubkeys WHERE hash = ?1').bind(h).first();
+    out.push({ hash: h, joined_at: null, left_at: null, read_at: null, added_by: null, nick: pr && pr.nick || null, avatar: pr && pr.avatar || null,
+      last_seen_at: (pr && pr.last_seen_at) || null, receipts_mode: (pr && pr.receipts_mode) || null, pubkey: pk ? pk.pubkey : null });
+  }
+  return out;
+}
+
+/* May `me` read this object? Iff a live, visible, unredacted message naming
+   it stands in a thread where I am a current member — the media GET's rule,
+   and the rule a forward must pass to name the object again. */
+export async function dmMediaReadable(env: any, me: any, key: any, now: any) {
+  const row = await env.DB.prepare(
+    'SELECT 1 AS ok FROM dm_media_refs r JOIN dms m ON m.id = r.msg_id JOIN dm_threads t ON t.id = m.thread_id ' + DM_MINE + ' ' +
+    'WHERE r.key = ?2 AND COALESCE(m.redacted, 0) = 0 AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ' LIMIT 1'
+  ).bind(me, key).first();
+  return !!row;
+}
 
 /* Disappearing-message + media tunables, and the growing admin key/value store
    behind them (app_settings). A missing key falls back to these defaults; the
@@ -1307,34 +1457,45 @@ export async function sendDiscord(hookUrl: any, embed: any): Promise<void> {
   finally { clearTimeout(timer); }
 }
 
-/* Send. The same wall as posting: throttle, ban, Turnstile. A block by the
-   recipient does NOT refuse the send: the message is stored held, reads as
-   delivered to its sender, and stays invisible to the recipient until an
-   unblock releases it. The blocked party is never told. */
-export async function sendSystemDm(env: any, fromHash: any, toHash: any, body: any, opts?: { quiet?: boolean }) {
-  if (!fromHash || !toHash || fromHash === toHash || !body) return false;
-  const [a, b] = dmPair(fromHash, toHash);
+/* A system line into ONE conversation (2026-09-13): a plaintext (enc 2) word
+   the server writes about the thread — a topic-move notice, a call's line,
+   "X added Y", "X left", "X named the conversation" — from the actor's seat.
+   Always unheld (a moderation notice reaches its target regardless of
+   blocks), post-dating any clear stamp so a fresh-started thread resurfaces
+   to carry it; counts as unread for everyone else, like any word. Fanned to
+   every other current member's own connections; a bell for each unless the
+   caller rings its own (a call's line rides the 'call' bell, never a second
+   'dm' one). Returns the message id. */
+export async function sendSystemDmLine(env: any, threadId: any, actorHash: any, body: any, opts?: { quiet?: boolean }) {
+  if (!threadId || !actorHash || !body) return 0;
   const now = Math.floor(Date.now() / 1000);
-  const senderReadCol = fromHash === a ? 'a_read_at' : 'b_read_at';
-  const thread = await env.DB.prepare(
-    'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
-    'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
-  ).bind(a, b, now, fromHash).first();
   const msg = await env.DB.prepare(
     'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc, expires_at) VALUES (?1, ?2, ?3, ?4, 0, 2, ?5) RETURNING id'
-  ).bind(thread.id, fromHash, body, now, now + dmBackstopSeconds(await getAppSettings(env))).first();
+  ).bind(threadId, actorHash, body, now, now + dmBackstopSeconds(await getAppSettings(env))).first();
   await env.DB.prepare(
-    'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
-    senderReadCol + ' = ?2 WHERE id = ?1'
-  ).bind(thread.id, now).run();
-  /* Nudge the recipient's own connections (badge + open thread) like any DM. */
-  await publishUser(env, [{ v: 1, t: 'dm', scopes: ['user:' + toHash], from: fromHash, thread_id: thread.id,
-    message: { id: (msg && msg.id) || 0, sender_hash: fromHash, body: body, created_at: now, enc: 2 } }]);
-  /* A system DM (e.g. a topic-move notice) is notification-worthy too —
-     unless the caller rings its own bell (the missed-call line rides the
-     'call' bell, never a second 'dm' one). */
-  if (!(opts && opts.quiet)) await notifyDm(env, toHash, fromHash);
-  return true;
+    'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), last_at = ?2, last_sender = ?3 WHERE id = ?1'
+  ).bind(threadId, now, actorHash).run();
+  await env.DB.prepare('UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?1 AND hash = ?3').bind(threadId, now, actorHash).run();
+  const to = await dmRecipients(env, threadId, actorHash);
+  /* Nudge every other member's own connections (badge + open thread) like any DM. */
+  if (to.length) {
+    await publishUser(env, [{ v: 1, t: 'dm', scopes: to.map((h) => 'user:' + h), from: actorHash, thread_id: threadId,
+      message: { id: (msg && msg.id) || 0, sender_hash: actorHash, body: body, created_at: now, enc: 2 } }]);
+  }
+  if (!(opts && opts.quiet)) for (const h of to) await notifyDm(env, h, actorHash, threadId);
+  return (msg && msg.id) || 0;
+}
+
+/* Send a system word from one identity to another, with no gate: the pair's
+   room is made on it if need be, then the line rides sendSystemDmLine. The
+   callers from before the member model (a topic-move notice, the usage
+   alerts) keep this signature. Returns whether it delivered. */
+export async function sendSystemDm(env: any, fromHash: any, toHash: any, body: any, opts?: { quiet?: boolean }) {
+  if (!fromHash || !toHash || fromHash === toHash || !body) return false;
+  const now = Math.floor(Date.now() / 1000);
+  const thread = await ensurePairThread(env, fromHash, toHash, now, { bump: false, sender: fromHash });
+  const id = await sendSystemDmLine(env, thread.id, fromHash, body, opts);
+  return id > 0;
 }
 
 /* Inbox: my threads by newest activity, the other party resolved with their
@@ -1354,6 +1515,66 @@ export async function purgeMediaKeys(env: any, keys: any) {
   }
 }
 
+/* An object dies with its LAST reference (2026-09-13): a forwarded attachment
+   is not re-uploaded, so one object may be named by several messages in
+   several threads (dm_media_refs). Every road that removes a message calls
+   this with the rows it is removing — the references go, then only the
+   objects nothing names any more are purged (R2 and the accounting row).
+   Never purgeMediaKeys straight from a message road. */
+export async function releaseMediaRefs(env: any, rows: any) {
+  const ids = (rows || []).map((r: any) => Number(r && r.id) || 0).filter((n: number) => n > 0);
+  const keys: string[] = Array.from(new Set((rows || []).map((r: any) => r && r.media_key).filter(Boolean).map(String)));
+  if (!ids.length && !keys.length) return;
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    try { await env.DB.prepare('DELETE FROM dm_media_refs WHERE msg_id IN (' + inList(chunk.length) + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
+  }
+  const dead: string[] = [];
+  for (let i = 0; i < keys.length; i += 50) {
+    const chunk = keys.slice(i, i + 50);
+    try {
+      const r = await env.DB.prepare(
+        'SELECT md.key FROM dm_media md WHERE md.key IN (' + inList(chunk.length) + ') AND NOT EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key)'
+      ).bind(...chunk).all();
+      for (const row of (r.results || []) as any[]) dead.push(String(row.key));
+    } catch (e) { /* keep going */ }
+  }
+  if (dead.length) await purgeMediaKeys(env, dead);
+}
+
+/* The messages naming these objects (through the references). */
+export async function dmRefMessageIds(env: any, keys: any): Promise<number[]> {
+  const ids: number[] = [];
+  const list = (keys || []).filter(Boolean);
+  for (let i = 0; i < list.length; i += 50) {
+    const chunk = list.slice(i, i + 50);
+    try {
+      const r = await env.DB.prepare('SELECT msg_id FROM dm_media_refs WHERE key IN (' + inList(chunk.length) + ')').bind(...chunk).all();
+      for (const row of (r.results || []) as any[]) ids.push(Number(row.msg_id));
+    } catch (e) { /* keep going */ }
+  }
+  return ids;
+}
+
+/* An object taken from under its messages (the retention cap, the LRU
+   valve): every message naming it shows the "media expired" placeholder, and
+   the references go with the object. */
+export async function dmExpireObjects(env: any, keys: string[]) {
+  if (!keys.length) return;
+  const ids = await dmRefMessageIds(env, keys);
+  await purgeMediaKeys(env, keys);
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    try {
+      await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + inList(chunk.length) + ')').bind(...chunk).run();
+    } catch (e) { /* keep going */ }
+  }
+  for (let i = 0; i < keys.length; i += 50) {
+    const chunk = keys.slice(i, i + 50);
+    try { await env.DB.prepare('DELETE FROM dm_media_refs WHERE key IN (' + inList(chunk.length) + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
+  }
+}
+
 /* Recompute the total DM-media storage, cache it for the upload gate + admin
    display, and — only if near the 10 GB free-tier wall — emergency-prune the
    oldest media (LRU) until back under 90%, nulling the message's media pointer so
@@ -1369,20 +1590,15 @@ export async function enforceMediaCap(env: any) {
   const EMERGENCY = Math.floor(capBytes * 0.95);
   const TARGET = Math.floor(capBytes * 0.90);
   if (total > EMERGENCY) {
+    /* Oldest objects first, among those a message still names (an unnamed
+       one is the orphan sweep's); each is taken from under EVERY message
+       naming it, forwards included (dm_media_refs). */
     const old = await env.DB.prepare(
-      'SELECT key, size, msg_id FROM dm_media WHERE msg_id IS NOT NULL ORDER BY created_at ASC LIMIT 1000'
+      'SELECT md.key, md.size FROM dm_media md WHERE EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key) ORDER BY md.created_at ASC LIMIT 1000'
     ).all();
-    const kill = [];
-    for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
-    if (kill.length) {
-      await purgeMediaKeys(env, kill.map((r) => r.key));
-      const ids = kill.map((r) => r.msg_id).filter(Boolean);
-      for (let i = 0; i < ids.length; i += 50) {
-        const chunk = ids.slice(i, i + 50);
-        const ph = inList(chunk.length);
-        try { await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL WHERE id IN (' + ph + ')').bind(...chunk).run(); } catch (e) { /* keep going */ }
-      }
-    }
+    const kill: any[] = [];
+    for (const r of (old.results || []) as any[]) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
+    if (kill.length) await dmExpireObjects(env, kill.map((r) => String(r.key)));
   }
   try {
     await env.DB.prepare(
@@ -1402,44 +1618,44 @@ export async function sweepExpiredDms(env: any) {
   const settings = await getAppSettings(env);
   try {
     const gone = await env.DB.prepare(
-      'SELECT media_key FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0 AND media_key IS NOT NULL LIMIT 5000'
+      'SELECT id, media_key FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0 AND media_key IS NOT NULL LIMIT 5000'
     ).bind(now).all();
-    const keys = (gone.results || []).map((r: any) => r.media_key).filter(Boolean);
-    if (keys.length) await purgeMediaKeys(env, keys);
+    const rows = (gone.results || []) as any[];
+    /* The references go first, then only the objects nothing names any more
+       (a forward elsewhere keeps its object): an object dies with its last
+       reference, never with its first message. */
+    if (rows.length) await releaseMediaRefs(env, rows);
     await env.DB.prepare(
       'DELETE FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0'
     ).bind(now).run();
+    /* What hangs off a message goes with it (D1 has no cascade): each
+       member's sealed key, the reactions, any reference still standing. */
+    for (const tbl of ['dm_keys', 'dm_reactions', 'dm_media_refs']) {
+      try { await env.DB.prepare('DELETE FROM ' + tbl + ' WHERE msg_id NOT IN (SELECT id FROM dms)').run(); } catch (e) { /* keep going */ }
+    }
   } catch (e) { console.log(JSON.stringify({ event: 'sweep_expired_failed', error: String(e) })); }
   try {
     // Hard media cap (media_dm_retention_days, clamped 1..90, default = the old
     // Dm.mediaMaxSeconds 30 days): NO media attachment persists beyond it, even
-    // inside a SAVED message. On a surviving message whose media has aged out,
-    // purge the R2 object + row and mark the message media_expired so the
-    // client shows a placeholder over any saved text/caption.
+    // inside a SAVED message, and it is counted from the UPLOAD — a forward of
+    // an old photo dies with the original. On every surviving message naming
+    // an aged object, purge the R2 object + row and mark the message
+    // media_expired so the client shows a placeholder over any saved
+    // text/caption.
     const cap = now - mediaRetentionDays(settings, 'dm') * 86400;
     const capped = await env.DB.prepare(
-      'SELECT md.key AS key, md.msg_id AS msg_id FROM dm_media md JOIN dms d ON d.id = md.msg_id ' +
-      'WHERE md.created_at < ?1 AND d.media_key IS NOT NULL LIMIT 5000'
+      'SELECT md.key AS key FROM dm_media md WHERE md.created_at < ?1 AND EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key) LIMIT 5000'
     ).bind(cap).all();
-    const rows = capped.results || [];
-    if (rows.length) {
-      await purgeMediaKeys(env, rows.map((r: any) => r.key).filter(Boolean));
-      const ids = rows.map((r: any) => r.msg_id).filter(Boolean);
-      for (let i = 0; i < ids.length; i += 50) {
-        const chunk = ids.slice(i, i + 50);
-        const ph = inList(chunk.length);
-        try {
-          await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (' + ph + ')').bind(...chunk).run();
-        } catch (e) { /* keep going */ }
-      }
-    }
+    const keys = ((capped.results || []) as any[]).map((r: any) => String(r.key)).filter(Boolean);
+    if (keys.length) await dmExpireObjects(env, keys);
   } catch (e) { console.log(JSON.stringify({ event: 'sweep_media_cap_failed', error: String(e) })); }
   try {
     /* 15 minutes, not an hour: a real send links its upload within seconds, so
-       anything unlinked that long is an abandoned draft or a flood — and the
-       shorter window is what makes an upload flood self-cleaning. */
+       anything no message names that long is an abandoned draft or a flood —
+       and the shorter window is what makes an upload flood self-cleaning. An
+       object whose last message went the way of a purge is caught here too. */
     const orphan = await env.DB.prepare(
-      'SELECT key FROM dm_media WHERE (msg_id IS NULL AND created_at < ?1) OR (msg_id IS NOT NULL AND msg_id NOT IN (SELECT id FROM dms)) LIMIT 2000'
+      'SELECT key FROM dm_media md WHERE md.created_at < ?1 AND NOT EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key) LIMIT 2000'
     ).bind(now - 900).all();
     await purgeMediaKeys(env, (orphan.results || []).map((r: any) => r.key));
   } catch (e) { /* keep going */ }
@@ -2011,6 +2227,12 @@ export async function sweepDms(env: any) {
     console.log(JSON.stringify({ event: 'dm_empty_sweep', deleted: r.meta && r.meta.changes || 0 }));
   } catch (e) {
     console.log(JSON.stringify({ event: 'dm_empty_sweep_failed', error: String(e) }));
+  }
+  /* A thread with no surviving word is gone, and its members with it: when
+     nothing was saved and everything expired, nobody remains (the owner's
+     rule, 2026-09-13). The ledgers that hang off a message go the same way. */
+  for (const [tbl, col, parent] of [['dm_members', 'thread_id', 'dm_threads'], ['dm_keys', 'msg_id', 'dms'], ['dm_reactions', 'msg_id', 'dms'], ['dm_media_refs', 'msg_id', 'dms']]) {
+    try { await env.DB.prepare('DELETE FROM ' + tbl + ' WHERE ' + col + ' NOT IN (SELECT id FROM ' + parent + ')').run(); } catch (e) { /* keep going */ }
   }
 }
 

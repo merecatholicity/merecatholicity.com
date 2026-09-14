@@ -45,7 +45,7 @@ test('0009 builds: kind CHECK carries the full list + call, index recreated', ()
 /* The insert is built from concatenated literals in lib.ts, so the guard
    checks each fragment verbatim (the SWEEP_FRAGMENTS idiom). */
 const COALESCE_FRAGMENTS = [
-  "SELECT ?1, 'call', 0, 0, ?2, ?3 WHERE NOT EXISTS (",
+  "SELECT ?1, 'call', ?4, 0, ?2, ?3 WHERE NOT EXISTS (",
   "SELECT 1 FROM notifications WHERE recipient_hash = ?1 AND kind = 'call' AND actor_hash = ?2 AND read_at IS NULL)",
 ];
 
@@ -55,15 +55,16 @@ test('the missed-call bell (notifyMissedCall) coalescing SQL matches lib.ts verb
   const a = 'a'.repeat(64), b = 'b'.repeat(64);
   // Same statement with named binds (node:sqlite has no ?N positional support).
   const stmt = db.prepare('INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) ' +
-    "SELECT :to, 'call', 0, 0, :from, :now WHERE NOT EXISTS (" +
+    "SELECT :to, 'call', :tid, 0, :from, :now WHERE NOT EXISTS (" +
     "SELECT 1 FROM notifications WHERE recipient_hash = :to AND kind = 'call' AND actor_hash = :from AND read_at IS NULL)");
-  stmt.run({ to: a, from: b, now: 1 });
-  stmt.run({ to: a, from: b, now: 2 });
+  stmt.run({ to: a, from: b, now: 1, tid: 7 });
+  stmt.run({ to: a, from: b, now: 2, tid: 7 });
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'call'").get().n, 1,
     'a ring-burst never piles up rows');
   // read the row, ring again: a NEW unread row may now be minted
   db.prepare('UPDATE notifications SET read_at = 5').run();
-  stmt.run({ to: a, from: b, now: 6 });
+  stmt.run({ to: a, from: b, now: 6, tid: 7 });
+  assert.equal(db.prepare("SELECT topic_id FROM notifications WHERE kind = 'call' ORDER BY id DESC LIMIT 1").get().topic_id, 7, 'the bell names the pair\'s conversation (0016)');
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'call'").get().n, 2,
     'a later call after reading rings anew');
   db.close();
@@ -163,8 +164,9 @@ test('the outcome is recorded ONCE on the real ledger — ended_at is the lock; 
   assert.ok(rec.includes(LOCK_SQL), 'the one UPDATE, verbatim');
   assert.ok(/if \(outcome === 'missed'\) line = CallK\.missedCallLine;\s*else if \(outcome === 'declined'\) line = CallK\.declinedCallLine;\s*else if \(outcome === 'answered'\) line = CallK\.answeredCallLine\(Math\.max\(0, now - \(Number\(row\.answered_at\) \|\| now\)\)\);/.test(rec),
     'the line by outcome, Domain.Call\'s grammar; an answered call\'s length is the server\'s measure');
-  assert.ok(/sendSystemDm\(env, row\.from_hash, row\.to_hash, line, \{ quiet: true \}\)/.test(rec), 'the thread\'s line, from the caller, quiet');
-  assert.ok(/if \(outcome === 'missed'\) await notifyMissedCall\(env, row\.to_hash, row\.from_hash, opts\);/.test(rec), 'the bell rings for a miss alone');
+  assert.ok(/ensurePairThread\(env, row\.from_hash, row\.to_hash, now, \{ bump: false, sender: row\.from_hash \}\)/.test(rec), 'the pair\'s room, made if this call was its first word (0016)');
+  assert.ok(/sendSystemDmLine\(env, thread\.id, row\.from_hash, line, \{ quiet: true \}\)/.test(rec), 'the thread\'s line, from the caller, quiet');
+  assert.ok(/if \(outcome === 'missed'\) await notifyMissedCall\(env, row\.to_hash, row\.from_hash, opts, thread \? thread\.id : 0\);/.test(rec), 'the bell rings for a miss alone, naming the conversation');
   assert.ok(/export async function recordMissedCall\([^)]*\) \{\s*return recordCallEnd\(env, row, 'missed', opts\);/.test(libSrc), 'the miss is the general record by name');
   const { db } = freshDb();
   const run = (call, now, outcome) => db.prepare(
@@ -188,8 +190,8 @@ test('the outcome is recorded ONCE on the real ledger — ended_at is the lock; 
   ins.run('c5', 'a'.repeat(64), 'b'.repeat(64), 'v=0', 100, null, 130);
   assert.equal(run('c5', 150, 'missed'), 0, 'a pre-0017 miss (missed_at, no ended_at) is never re-recorded');
   db.close();
-  const sys = libBodyOf('sendSystemDm');
-  assert.ok(/if \(!\(opts && opts\.quiet\)\) await notifyDm\(env, toHash, fromHash\);/.test(sys), 'a quiet system DM rings no dm bell');
+  const sys = libBodyOf('sendSystemDmLine');
+  assert.ok(/if \(!\(opts && opts\.quiet\)\) for \(const h of to\) await notifyDm\(env, h, actorHash, threadId\);/.test(sys), 'a quiet system line rings no dm bell; a loud one rings every other member\'s, by the conversation (0016)');
 });
 
 test('/call/pending serves the offer to its callee alone, fresh and untaken; /call/end records by the one rule, through the one lock', () => {

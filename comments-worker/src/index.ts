@@ -59,6 +59,7 @@ import {
   DM_PER_PAGE,
   DM_TTLS,
   DM_VIS,
+  dmThreadFor, ensurePairThread, dmCurrentMembers, dmRecipients, dmMembersPayload, dmPairRoomRows, dmPubkeysOf, dmMediaReadable, releaseMediaRefs, dmPairKey,
   EMOJI_PACKS,
   FAITHS,
   FAITH_LABELS,
@@ -118,7 +119,6 @@ import {
   dmBackstopSeconds,
   dmDefaultTtl,
   dmLive,
-  dmPair,
   dmUnreadCount,
   dumpDatabase,
   enc,
@@ -1715,101 +1715,156 @@ async function handleDmSend(request: any, env: any, ctx: any) {
   if (!success) return json({ ok: false, error: 'Too many messages at once. Wait a minute and try again.' }, 429);
   const key = String(data.key || '');
   const to = String(data.to || '');
-  if (!key || !/^[0-9a-f]{64}$/.test(to)) return json({ ok: false, error: 'Bad request.' }, 400);
-  /* enc = 1: the body is an opaque end-to-end-encrypted blob the server must not
-     touch beyond bounding its size; enc = 0: a legacy/plain body. Either way the
-     store is verbatim — the server never reads the message content. */
-  const enc = (data.enc === 1 || data.enc === true) ? 1 : 0;
+  const threadId = Math.floor(Number(data.thread_id) || 0);
+  if (!key || (!threadId && !/^[0-9a-f]{64}$/.test(to))) return json({ ok: false, error: 'Bad request.' }, 400);
+  /* enc = 3: the sealed envelope (2026-09-13) — a content key per message,
+     boxed once per member, `keys` naming every current member (the sender
+     included); enc = 1: the pair's box, accepted one deploy for a bundle
+     from before; enc = 0: a legacy/plain body. Either way the store is
+     verbatim — the server never reads the message content. */
+  const enc = (data.enc === 3 || data.enc === '3') ? 3 : ((data.enc === 1 || data.enc === true) ? 1 : 0);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
   if (body.length > (enc ? DM_ENC_MAX : MAX_BODY)) return json({ ok: false, error: 'The message is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  if (me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
-  if (to === MERECAT_BOT.hash) {
+  if (!threadId && me === to) return json({ ok: false, error: 'That would be a soliloquy.' }, 400);
+  if (!threadId && to === MERECAT_BOT.hash) {
     return json({ ok: false, error: 'merecat is a librarian, not a correspondent. Mention @merecat in a post or comment, or visit the merecat page.' }, 400);
   }
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
-    .bind(to, me).first();
-  const held = blockRow ? 1 : 0;
+  const now = Math.floor(Date.now() / 1000);
+  /* The conversation: an existing one by id (mine, current — a stranger's id
+     is "no such conversation"), or a pair's room by its other, made on this
+     first word. */
+  let thread: any = null, other = '';
+  if (threadId) {
+    const found = await dmThreadFor(env, me, { thread_id: threadId });
+    if (!found || !found.thread) return json({ ok: false, error: 'No such conversation.' }, 404);
+    thread = found.thread; other = found.other;
+  } else other = to;
+  const kind = thread ? (Number(thread.kind) || 0) : 0;
+  /* The shadow hold is a PAIR's: a word sent to someone who blocked me is
+     stored held — delivered to my eyes, invisible to theirs, never told. In
+     a group the block is the blocker's alone (their read path hides my
+     words; dmRecipients leaves them out) and the group goes on. */
+  let held = 0;
+  if (kind === 0 && other) {
+    const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(other, me).first();
+    held = blockRow ? 1 : 0;
+  }
   if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
-  /* An optional media attachment: the client uploaded the ciphertext to R2 first
-     and passes its opaque key here. Validate it exists and is unused; it is linked
-     to this message below so the sweep can reclaim the R2 object on expiry. */
+  /* Envelope v2's roster check: the sealed keys must name EXACTLY the current
+     members (Domain.Dm.membersEqual) — a key for a stranger would hand them
+     the word, a missing one would blind a member. A stale roster (someone
+     was added or left as this was sealed) is answered with the fresh one
+     (409 'roster'), and the client seals once more. A group takes nothing
+     but the envelope. */
+  let keys: Record<string, string> | null = null;
+  if (enc === 3) {
+    const raw = data.keys && typeof data.keys === 'object' && !Array.isArray(data.keys) ? data.keys : null;
+    if (!raw) return json({ ok: false, error: 'Bad request.' }, 400);
+    keys = {};
+    for (const h of Object.keys(raw)) {
+      const v = raw[h];
+      if (!/^[0-9a-f]{64}$/.test(h) || typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(v)) return json({ ok: false, error: 'Bad request.' }, 400);
+      keys[h] = v;
+    }
+    const roster = thread ? await dmCurrentMembers(env, thread.id) : await dmPubkeysOf(env, [me, other]);
+    if (!Dm.membersEqual(Object.keys(keys))(roster.map((m: any) => m.hash))) {
+      return json({ ok: false, error: 'roster', members: roster }, 409);
+    }
+  } else if (kind === 1) {
+    return json({ ok: false, error: 'This conversation needs the newer app. Reload and try again.' }, 400);
+  }
+  /* An optional media attachment: the client uploaded the ciphertext to R2
+     first and passes its opaque key. A fresh object is claimed by its first
+     message; an object already named by a message (a forward, 2026-09-13)
+     may be named again ONLY by a member who can read it — the media GET's
+     own rule — and gains one more reference. */
   let mediaKey = null, mediaSize = null;
   const rawMediaKey = String(data.media_key || '');
   if (rawMediaKey) {
     if (!/^dm\/[0-9a-f]{64}$/.test(rawMediaKey)) return json({ ok: false, error: 'Bad request.' }, 400);
-    const mrow = await env.DB.prepare('SELECT size, msg_id FROM dm_media WHERE key = ?1').bind(rawMediaKey).first();
-    if (!mrow || mrow.msg_id) return json({ ok: false, error: 'That attachment is not available.' }, 400);
+    const mrow = await env.DB.prepare('SELECT size FROM dm_media WHERE key = ?1').bind(rawMediaKey).first();
+    if (!mrow) return json({ ok: false, error: 'That attachment is not available.' }, 400);
+    const refRow = await env.DB.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?1').bind(rawMediaKey).first();
+    if (refRow && refRow.n > 0 && !(await dmMediaReadable(env, me, rawMediaKey, now))) {
+      return json({ ok: false, error: 'That attachment is not available.' }, 400);
+    }
     mediaKey = rawMediaKey;
     mediaSize = mrow.size;
   }
-  const [a, b] = dmPair(me, to);
-  const now = Math.floor(Date.now() / 1000);
-  /* A fresh message counts down from the unopened backstop; when the recipient
-     opens it, handleDmThread rebases the clock to opened_at + the conversation
-     ttl (so "expires N days after opening"). */
+  /* A pair's room is made on its first word. A held send must leave the
+     recipient's world untouched: the thread's last-word fields stay as they
+     were, so nothing bumps, nothing rings. */
+  if (!thread) thread = await ensurePairThread(env, me, other, now, { bump: !held, sender: me });
+  /* A fresh message counts down from the unopened backstop; when a recipient
+     opens it, handleDmThread rebases the clock to opened_at + the
+     conversation ttl (so "expires N days after opening"). */
   const msgExpires = now + dmBackstopSeconds(await getAppSettings(env));
-  const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
-  /* A held send must leave the recipient's world untouched: the thread's
-     last-word fields stay as they were, so nothing bumps, nothing rings. */
-  const thread = held
-    ? await env.DB.prepare(
-        'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
-        'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = last_at RETURNING id'
-      ).bind(a, b, now, me).first()
-    : await env.DB.prepare(
-        'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES (?1, ?2, ?3, ?3, ?4, 0) ' +
-        'ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = ?3, last_sender = ?4 RETURNING id'
-      ).bind(a, b, now, me).first();
   const msg = await env.DB.prepare(
     'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc, expires_at, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING id'
   ).bind(thread.id, me, body, now, held, enc, msgExpires, mediaKey, mediaSize).first();
-  if (mediaKey) await env.DB.prepare('UPDATE dm_media SET msg_id = ?1 WHERE key = ?2').bind(msg.id, mediaKey).run();
+  /* What hangs off the word, in one batch: each member's sealed key, the
+     object's reference, the thread's last-word fields (never for a held
+     send), and the sender's own read stamp — what you just said is read by
+     you. msgs is recomputed, never incremented, over the visible words alone. */
+  const stmts: any[] = [];
+  if (keys) for (const h of Object.keys(keys)) stmts.push(env.DB.prepare('INSERT OR REPLACE INTO dm_keys (msg_id, hash, sealed) VALUES (?1, ?2, ?3)').bind(msg.id, h, keys[h]));
+  if (mediaKey) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO dm_media_refs (key, msg_id) VALUES (?1, ?2)').bind(mediaKey, msg.id));
   if (!held) {
-    /* Recomputed, never incremented, over the visible words alone, and the
-       sender's own stamp rides along: what you just said is read by you. */
-    await env.DB.prepare(
-      'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), ' +
-      myReadCol + ' = ?2 WHERE id = ?1'
-    ).bind(thread.id, now).run();
-    /* Instant delivery to the recipient's own connections over the private
-       user:<to> scope — their open thread drops it in, their badge rings — plus
-       the native Web Push nudge. A HELD message does neither: the recipient must
-       never learn of a shadow-blocked send. */
-    if (ctx) {
-      publishLive(env, ctx, { v: 1, t: 'dm', scopes: ['user:' + to], from: me, thread_id: thread.id,
-        message: { id: msg.id, sender_hash: me, body: body, created_at: now, enc: enc, media_key: mediaKey } });
+    stmts.push(env.DB.prepare(
+      'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), last_at = ?2, last_sender = ?3 WHERE id = ?1'
+    ).bind(thread.id, now, me));
+  }
+  stmts.push(env.DB.prepare('UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?1 AND hash = ?3').bind(thread.id, now, me));
+  await env.DB.batch(stmts);
+  if (!held) {
+    /* Instant delivery to every other member's own connections over their
+       private user:<hash> scopes — an open thread drops it in, a badge rings
+       — plus the native Web Push nudge. The sealed keys ride the frame (a
+       member sees the others' blobs: ciphertext to keys they do not hold).
+       A HELD message does none of this: the recipient must never learn of a
+       shadow-blocked send. */
+    const recipients = await dmRecipients(env, thread.id, me);
+    if (ctx && recipients.length) {
+      publishLive(env, ctx, { v: 1, t: 'dm', scopes: recipients.map((h) => 'user:' + h), from: me, thread_id: thread.id,
+        message: { id: msg.id, sender_hash: me, body: body, created_at: now, enc: enc, media_key: mediaKey, keys: keys || undefined } });
     }
-    /* The quiet bell: when the recipient has THIS conversation on screen right
-       now (their live socket carries dmview:<me> — a sub the client holds only
-       while that thread is mounted, on a socket that closes the moment the tab
-       hides), the message lands in front of their eyes via the live push above,
-       so neither the notification row nor the OS push fires. Any doubt — hub
-       error, no socket — rings the bell as before. */
-    let onScreen = false;
-    if (ctx && env.HUB) {
-      try { onScreen = !!(await env.HUB.get(env.HUB.idFromName('board')).dmViewing(to, me)); } catch { onScreen = false; }
+    /* The quiet bell: a member who has THIS conversation on screen right now
+       (their live socket carries dmview:t<id> — a sub the client holds only
+       while the thread is mounted, on a socket that closes the moment the
+       tab hides) sees the word land in front of their eyes via the live push
+       above, so neither the notification row nor the OS push fires for
+       them. A bundle from before 2026-09-13 still claims dmview:<me> on a
+       pair, honoured one deploy. Any doubt — hub error, no socket — rings
+       the bell as before. */
+    let viewing: string[] = [];
+    if (ctx && env.HUB && recipients.length) {
+      const hub = env.HUB.get(env.HUB.idFromName('board'));
+      try { viewing = await hub.viewersOf('t' + thread.id, recipients); } catch { viewing = []; }
+      if (kind === 0 && other && viewing.indexOf(other) === -1) { try { if (await hub.dmViewing(other, me)) viewing.push(other); } catch { /* rings */ } }
     }
-    if (!onScreen) {
-      /* A DM also lands in the recipient's notifications list (the inbox badge
-         is not the only place it should show). */
-      await notifyDm(env, to, me);
-      /* Native push nudge, DEFERRED (like the reply/mention/wall paths) so a slow
-         push service never delays the sender's response — but only if the recipient
-         hasn't turned DM notifications off ("the bell only — messages still
-         arrive"); a push is the loudest bell, so it honors that opt-out too. Carries
-         NO message content (DMs are E2E; the server never sees the plaintext). */
+    const away = recipients.filter((h) => viewing.indexOf(h) === -1);
+    /* A DM also lands in each absent member's notifications list (the inbox
+       badge is not the only place it should show) — one coalesced bell per
+       conversation. */
+    for (const h of away) await notifyDm(env, h, me, thread.id);
+    /* Native push nudge, DEFERRED (like the reply/mention/wall paths) so a
+       slow push service never delays the sender's response — only to those
+       who have not turned DM notifications off ("the bell only — messages
+       still arrive"); a push is the loudest bell, so it honors that opt-out
+       too. Carries NO message content (DMs are E2E; the server never sees the
+       plaintext), and opens the conversation by its id. */
+    if (away.length) {
       const pushDm = async () => {
-        const dmPref = (await notifyPrefsFor(env, [to]))[to];
-        if (notifyEnabled(dmPref, 'dm')) {
-          await deliverPush(env, [to], { kind: 'dm', title: 'New message', body: 'You have a new message', url: '/community.html?dm=' + me });
-        }
+        const prefs = await notifyPrefsFor(env, away);
+        const want = away.filter((h) => notifyEnabled(prefs[h], 'dm'));
+        if (want.length) await deliverPush(env, want, { kind: 'dm', title: 'New message', body: 'You have a new message', url: '/messages.html?t=' + thread.id });
       };
       if (ctx) ctx.waitUntil(pushDm()); else await pushDm();
     }
@@ -1817,11 +1872,10 @@ async function handleDmSend(request: any, env: any, ctx: any) {
   return json({ ok: true, id: msg.id, thread_id: thread.id, created_at: now }, 200);
 }
 
-/* Deliver a message from one identity to another with no gate — for automated,
-   system-authored notices (e.g. a topic-move notification). Always unheld, so a
-   moderation notice reaches its target regardless of blocks, and it post-dates
-   any clear stamp so a fresh-started thread resurfaces to carry it. Returns
-   whether it delivered. */
+/* Inbox: my conversations by newest activity — a pair's other resolved with
+   their nick and avatar, a group's name and up to four members for its
+   collage (2026-09-13) — and the total unread count riding along so one call
+   feeds both the list and the badge. */
 async function handleDmThreads(request: any, env: any) {
   let data;
   try {
@@ -1837,33 +1891,50 @@ async function handleDmThreads(request: any, env: any) {
   const me = await sha256hex(key);
   const now = Math.floor(Date.now() / 1000);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
-  /* Everything per viewer: counts and last-activity over the words this reader
-     may see (unheld or their own, uncleared, UNEXPIRED); a thread whose every
-     visible word has expired or is held reads as absent. */
+  /* Everything per viewer, from my own seat (a member who left has none):
+     counts and last-activity over the words this reader may see (unheld or
+     their own, uncleared, since they joined, UNEXPIRED, and in a group not
+     from a sender they blocked); a thread whose every visible word has
+     expired or is held reads as absent. */
+  const otherOf = "replace(replace(t.pair_key, ?1 || '|', ''), '|' || ?1, '')";
   const inner =
-    'SELECT t.id, ' +
-    'CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END AS other_hash, ' +
+    'SELECT t.id, t.id AS thread_id, t.kind, t.name, ' +
+    'CASE WHEN t.kind = 0 THEN ' + otherOf + ' END AS other_hash, ' +
     'pr.nick, pr.avatar, ' +
+    "(SELECT json_group_array(json_object('hash', x.hash, 'nick', x.nick, 'avatar', x.avatar)) FROM (" +
+    'SELECT m2.hash, p2.nick, p2.avatar FROM dm_members m2 LEFT JOIN profiles p2 ON p2.hash = m2.hash ' +
+    'WHERE m2.thread_id = t.id AND m2.left_at IS NULL AND m2.hash != ?1 ORDER BY m2.joined_at, m2.hash LIMIT ' + Dm.inboxAvatars + ') x) AS members_json, ' +
+    '(SELECT COUNT(*) FROM dm_members m3 WHERE m3.thread_id = t.id AND m3.left_at IS NULL) AS member_count, ' +
     '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ') AS msgs, ' +
     '(SELECT MAX(m.created_at) FROM dms m WHERE m.thread_id = t.id AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ') AS last_at, ' +
     dmUnreadCount(now) + ' AS unread ' +   // the count (2026-09-11); truthy exactly when the old flag was
-    'FROM dm_threads t LEFT JOIN profiles pr ON pr.hash = CASE WHEN t.a_hash = ?1 THEN t.b_hash ELSE t.a_hash END ' +
-    'WHERE t.a_hash = ?1 OR t.b_hash = ?1';
+    'FROM dm_threads t JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 AND mb.left_at IS NULL ' +
+    'LEFT JOIN profiles pr ON t.kind = 0 AND pr.hash = ' + otherOf;
   const rows = await env.DB.prepare(
     'SELECT * FROM (' + inner + ') WHERE msgs > 0 ORDER BY last_at DESC LIMIT ?2 OFFSET ?3'
   ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
   const totals = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'   // unread_total counts WORDS now (2026-09-11), the same number /dm/unread returns
   ).bind(me).first();
-  const threads = (rows.results || []).map((r: any) => Object.assign({}, r,
-    { assigned: r.other_hash ? displayName(r.other_hash) : null }));
+  const threads = (rows.results || []).map((r: any) => {
+    let members: any[] = [];
+    try { members = JSON.parse(r.members_json || '[]'); } catch { members = []; }
+    const out = Object.assign({}, r, {
+      members: members.map((m: any) => ({ hash: m.hash, nick: m.nick || null, avatar: m.avatar || null, assigned: m.hash ? displayName(m.hash) : null })),
+      assigned: r.other_hash ? displayName(r.other_hash) : null,
+    });
+    delete out.members_json;
+    return out;
+  });
   return json({ ok: true, threads, total: totals.n || 0,
     unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE }, 200);
 }
 
-/* One conversation, paged by twenty like everything else, defaulting to the
-   LAST page so it opens at its newest words. Opening marks it read with at
-   most one write, none when nothing was unread. */
+/* One conversation — by its id, or a pair's by its other (the door every
+   "Message" button and older bell still uses; an unmade pair is an empty
+   room) — paged by twenty like everything else, defaulting to the LAST page
+   so it opens at its newest words. The members ride along with their keys.
+   Opening marks it read with at most one write, none when nothing was unread. */
 async function handleDmThread(request: any, env: any, ctx: any) {
   let data;
   try {
@@ -1875,41 +1946,55 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
-  const other = String(data.with || '');
-  if (!key || !/^[0-9a-f]{64}$/.test(other)) return json({ ok: false, error: 'Bad request.' }, 400);
+  const threadId = Math.floor(Number(data.thread_id) || 0);
+  const withHash = String(data.with || '');
+  if (!key || (!threadId && !/^[0-9a-f]{64}$/.test(withHash))) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
-  const [a, b] = dmPair(me, other);
+  if (!threadId && me === withHash) return json({ ok: false, error: 'Bad request.' }, 400);
+  const found = await dmThreadFor(env, me, { thread_id: threadId, with: withHash });
+  if (!found) return json({ ok: false, error: 'No such conversation.' }, 404);
+  const thread = found.thread, other = found.other;
   const now = Math.floor(Date.now() / 1000);
   const settings = await getAppSettings(env);
-  const thread = await env.DB.prepare(
-    'SELECT id, msgs, last_at, last_sender, a_read_at, b_read_at, a_cleared_at, b_cleared_at, ttl FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
-  ).bind(a, b).first();
-  /* last_seen_at is the hub's stamp, absent for a member who chose appear-offline
-     (the hub clears it): serving it as-is IS the privacy rule. */
-  const prof = await env.DB.prepare('SELECT nick, avatar, last_seen_at FROM profiles WHERE hash = ?1').bind(other).first();
-  /* The correspondent's published X25519 public key, so the client can encrypt
-     to them and decrypt this pair's messages. Null until they have signed in once
-     under the encrypted-inbox client (the client then blocks the send with a
-     notice rather than falling back to plaintext). */
-  const otherPubRow = await env.DB.prepare('SELECT pubkey FROM dm_pubkeys WHERE hash = ?1').bind(other).first();
-  const otherPub = otherPubRow ? otherPubRow.pubkey : null;
-  const iBlocked = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2')
-    .bind(me, other).first();
   const ttl = (thread && thread.ttl) || dmDefaultTtl(settings);
+  const kind = thread ? (Number(thread.kind) || 0) : 0;
+  const iBlocked = other ? await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(me, other).first() : null;
+  /* The members, the departed included (their names and keys still open the
+     words they sent), each with their published X25519 key so the client can
+     seal to them and open what they sent (null until they have signed in once
+     under the encrypted-inbox client; the client then blocks the send with a
+     notice rather than falling back to plaintext). A read stamp is served
+     only under the member's own receipts mode (reciprocal, as the dm-read
+     frame); last_seen_at is the hub's stamp, absent for a member who chose
+     appear-offline (the hub clears it) — serving it as-is IS the privacy
+     rule. An unmade pair's room lists its two. */
+  const memberRows = thread ? await dmMembersPayload(env, thread.id) : await dmPairRoomRows(env, me, other);
+  const members = memberRows.map((r: any) => ({
+    hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null,
+    joined_at: r.joined_at == null ? null : Number(r.joined_at), left_at: r.left_at == null ? null : Number(r.left_at),
+    read_at: (r.hash === me || Prefs.receiptsOn(r.receipts_mode || 'auto')) && r.read_at != null ? Number(r.read_at) : null,
+    last_seen: r.last_seen_at || null,
+  }));
+  /* A pair's `other`, kept one deploy for bundles from before the member model. */
+  const otherRow = kind === 0 && other
+    ? (members.find((m: any) => m.hash === other) || { hash: other, nick: null, avatar: null, assigned: displayName(other), pubkey: null, last_seen: null })
+    : null;
+  const threadOut = { id: thread ? thread.id : null, kind, name: (thread && thread.name) || null, ttl, members };
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
-    return json({ ok: true, thread_id: null, ttl, other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
+    return json({ ok: true, thread_id: null, ttl, thread: threadOut, other: otherRow,
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0, unread: 0, unread_from: null,
       notif_unread: await notifUnreadCount(env, me) }, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
-     sender and for nobody else, and a side that deleted the thread sees only
-     what arrived after its own clear stamp (a fresh start). */
-  const myCleared = (me === a ? thread.a_cleared_at : thread.b_cleared_at) || 0;
-  const totRow = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND m.created_at > ?3 AND ' + dmLive(now)
-  ).bind(me, thread.id, myCleared).first();
+     sender and for nobody else, a member sees only what arrived after their
+     own clear stamp (a fresh start) and since they joined, and in a group a
+     sender they blocked is silent to them. */
+  const myCleared = Number(thread.cleared_at || 0);
+  const floor = Math.max(myCleared, Number(thread.joined_at || 0) - 1);   // "> cleared AND >= joined" as one bound
+  const from = ' FROM dms m JOIN dm_threads t ON t.id = m.thread_id JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 ' +
+    'WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now);
+  const totRow = await env.DB.prepare('SELECT COUNT(*) AS n' + from).bind(me, thread.id).first();
   const total = totRow.n || 0;
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   /* A permalink into the conversation (a reaction's bell lands on the very
@@ -1918,76 +2003,89 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const find = Math.floor(Number(data.find) || 0);
   let p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   if (find > 0 && data.p == null) {
-    const pos = await env.DB.prepare(
-      'SELECT COUNT(*) AS n FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND m.created_at > ?3 AND ' + dmLive(now) + ' AND m.id < ?4'
-    ).bind(me, thread.id, myCleared, find).first();
+    const pos = await env.DB.prepare('SELECT COUNT(*) AS n' + from + ' AND m.id < ?3').bind(me, thread.id, find).first();
     p = Math.floor(((pos && pos.n) || 0) / DM_PER_PAGE) + 1;
   }
+  /* One query per page: the words, MY sealed key beside each (k.sealed —
+     served to its member alone; the others' stay in the ledger), who saved
+     it, and every reaction on it. */
   const msgs = await env.DB.prepare(
-    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.media_key, m.media_size, COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at, m.react_a, m.react_b FROM dms m WHERE m.thread_id = ?2 AND ' + DM_VIS +
-    ' AND m.created_at > ?5 AND ' + dmLive(now) + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
-  ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE, myCleared).all();
-  /* Per-message reactions, told from the viewer's seat: react_me is MY emoji on
-     the message ('' for none), react_other the other party's (the raw a/b
-     columns stay ours). liked_me/liked_other are the 2026-08-03 heart's fields,
-     derived, kept one deploy for clients cached before the picker. */
-  const iAmA = me === a;
+    'SELECT m.id, m.sender_hash, m.body, m.created_at, COALESCE(m.enc, 0) AS enc, COALESCE(m.saved, 0) AS saved, m.saved_by, m.media_key, m.media_size, ' +
+    'COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at, k.sealed, ' +
+    "(SELECT json_group_array(json_object('hash', r.hash, 'emoji', r.emoji)) FROM dm_reactions r WHERE r.msg_id = m.id) AS reactions_json" +
+    from.replace(' FROM dms m ', ' FROM dms m LEFT JOIN dm_keys k ON k.msg_id = m.id AND k.hash = ?1 ') + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
+  ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
+  /* Per-message reactions, one per member (dm_reactions since 0016), told as
+     the ledger holds them; for a pair, react_me / react_other and the
+     2026-08-03 heart's liked_* fields are derived — kept one deploy for
+     clients cached before the member model. */
   const messages = (msgs.results || []).map((m: any) => {
     const out: any = Object.assign({}, m);
-    out.react_me = String((iAmA ? m.react_a : m.react_b) || '');
-    out.react_other = String((iAmA ? m.react_b : m.react_a) || '');
-    out.liked_me = out.react_me ? 1 : 0;
-    out.liked_other = out.react_other ? 1 : 0;
-    delete out.react_a; delete out.react_b;
+    let reactions: any[] = [];
+    try { reactions = JSON.parse(m.reactions_json || '[]'); } catch { reactions = []; }
+    out.reactions = reactions.filter((r: any) => r && r.emoji);
+    delete out.reactions_json;
+    if (kind === 0) {
+      out.react_me = String(((out.reactions.find((r: any) => r.hash === me)) || {}).emoji || '');
+      out.react_other = String(((out.reactions.find((r: any) => r.hash !== me)) || {}).emoji || '');
+      out.liked_me = out.react_me ? 1 : 0;
+      out.liked_other = out.react_other ? 1 : 0;
+    }
     return out;
   });
-  const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
   /* What this reader has not read yet, told BEFORE this open marks it read
      (2026-09-11): the count for the jump button's badge, and the first unread
      word's id, above which the client stands its "N unread messages" line.
-     Held, cleared and expired words never count. */
-  const myReadAt = Number((me === a ? thread.a_read_at : thread.b_read_at) || 0);
+     Held, cleared, pre-joining and expired words never count, nor — in a
+     group — a blocked sender's. */
+  const myReadAt = Number(thread.read_at || 0);
   const unreadRow = await env.DB.prepare(
     'SELECT COUNT(*) AS n, MIN(m.id) AS first_id FROM dms m WHERE m.thread_id = ?2 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
-    'AND m.created_at > ?3 AND m.created_at > ?4 AND ' + dmLive(now)
-  ).bind(me, thread.id, myReadAt, myCleared).first();
-  /* One conditional write: only when a visible word from the other side is
-     newer than my stamp. Held and cleared words never trigger it. */
+    'AND m.created_at > ?3 AND m.created_at > ?4 AND (?5 = 0 OR NOT EXISTS (SELECT 1 FROM dm_blocks bk WHERE bk.owner_hash = ?1 AND bk.blocked_hash = m.sender_hash)) AND ' + dmLive(now)
+  ).bind(me, thread.id, myReadAt, floor, kind).first();
+  /* One conditional write: only when a visible word from someone else is
+     newer than my stamp. Held, cleared and pre-joining words never trigger it. */
   await env.DB.prepare(
-    'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?3 AND EXISTS(' +
+    'UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?3 AND hash = ?1 AND EXISTS(' +
     'SELECT 1 FROM dms m WHERE m.thread_id = ?3 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
-    'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
-  ).bind(me, now, thread.id, myCleared).run();
+    'AND m.created_at > COALESCE(dm_members.read_at, 0) AND m.created_at > ?4)'
+  ).bind(me, now, thread.id, floor).run();
   /* Opening the conversation READS its bells (2026-09-12): every unread
-     notification this sender rang me — a message, a reaction to my word, a
-     missed call — however I got here, from the bell or on my own. The fresh
-     count rides the payload so the client's badge tells the truth at once. */
+     notification this conversation rang me — a message, a reaction to my
+     word, a missed call — however I got here, from the bell or on my own; a
+     row from before 0016 (no thread on it) is matched by the pair's other.
+     The fresh count rides the payload so the client's badge tells the truth
+     at once. */
   await env.DB.prepare(
-    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND actor_hash = ?2 AND read_at IS NULL"
-  ).bind(me, other, now).run();
-  /* Start the disappearing-message clock. The messages this viewer is the
+    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND (topic_id = ?2 OR (topic_id = 0 AND actor_hash = ?4)) AND read_at IS NULL"
+  ).bind(me, thread.id, now, other || '').run();
+  /* Start the disappearing-message clock. The messages this viewer is a
      recipient of, and is opening for the first time, get opened_at = now and a
      fresh expires_at = now + the conversation ttl, overriding the unopened
-     backstop. Idempotent (opened_at IS NULL); saved messages are left alone so a
-     save survives an open. This is why a message "expires N days after opening". */
+     backstop — the FIRST open by any recipient starts everyone's clock.
+     Idempotent (opened_at IS NULL); saved messages are left alone so a save
+     survives an open. This is why a message "expires N days after opening". */
   const openRes = await env.DB.prepare(
     'UPDATE dms SET opened_at = ?2, expires_at = ?2 + ?5 WHERE thread_id = ?3 AND sender_hash != ?1 ' +
     'AND COALESCE(held, 0) = 0 AND opened_at IS NULL AND COALESCE(saved, 0) = 0 AND created_at > ?4'
-  ).bind(me, now, thread.id, myCleared, ttl).run();
-  /* Read receipt: if I just opened messages the OTHER side sent, tell the SENDER
+  ).bind(me, now, thread.id, floor, ttl).run();
+  /* Read receipt: if I just opened words others sent, tell every other member
      (their user:<hash> sockets) that everything up to `now` has been seen, so
-     their open thread flips those bubbles to "Seen" live. One event per open. */
+     the senders' open threads flip those bubbles — ✓✓ once every other member
+     has — live. One event per open. */
   if (openRes && openRes.meta && openRes.meta.changes > 0) {
     /* Reciprocal read receipts: a reader who set receipts to "off" sends none
        (and, client-side, sees none), so we only emit when their mode allows it. */
     const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first();
     if (Prefs.receiptsOn((myPref && myPref.receipts_mode) || 'auto')) {
-      const ev = { v: 1, t: 'dm-read', scopes: ['user:' + other], thread_id: thread.id, reader: me, at: now };
-      if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+      const to = await dmRecipients(env, thread.id, me);
+      if (to.length) {
+        const ev = { v: 1, t: 'dm-read', scopes: to.map((h) => 'user:' + h), thread_id: thread.id, reader: me, at: now };
+        if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+      }
     }
   }
-  return json({ ok: true, thread_id: thread.id, ttl,
-    other: { hash: other, nick: prof && prof.nick || null, avatar: prof && prof.avatar || null, assigned: displayName(other), pubkey: otherPub, last_seen: (prof && prof.last_seen_at) || null },
+  return json({ ok: true, thread_id: thread.id, ttl, thread: threadOut, other: otherRow,
     messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0,
     unread: (unreadRow && unreadRow.n) || 0, unread_from: (unreadRow && unreadRow.first_id) || null,
     notif_unread: await notifUnreadCount(env, me) }, 200);
@@ -2016,7 +2114,7 @@ async function handleDmUnread(request: any, env: any) {
   if (gate) return blockedJson(gate);
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
-    'SELECT COALESCE(SUM(' + dmUnreadCount(now) + '), 0) AS n FROM dm_threads t WHERE (t.a_hash = ?1 OR t.b_hash = ?1)'
+    'SELECT COALESCE(SUM(' + dmUnreadCount(now) + '), 0) AS n FROM dm_threads t JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 AND mb.left_at IS NULL'
   ).bind(me).first();
   return json({ ok: true, unread: row.n || 0 }, 200);
 }
@@ -2106,12 +2204,12 @@ async function handleDmBlocked(request: any, env: any) {
   return json({ ok: true, blocked }, 200);
 }
 
-/* Set the per-conversation disappearing-message lifetime. Either participant may
-   change it and the LAST write wins for both — it is a single column. Changing it
-   rebases every opened, unsaved message to the new lifetime, and the other party
-   is told live so their header updates. Upserts the thread if it does not exist
-   yet (a still-empty room, invisible in the inbox), so the choice sticks before
-   the first message is even sent. */
+/* Set the per-conversation disappearing-message lifetime. Any member may
+   change it and the LAST write wins for everyone — it is a single column.
+   Changing it rebases every opened, unsaved message to the new lifetime, and
+   the other members are told live so their headers update. A pair's room is
+   made if it does not exist yet (a still-empty room, invisible in the inbox),
+   so the choice sticks before the first message is even sent. */
 async function handleDmTtl(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -2119,29 +2217,32 @@ async function handleDmTtl(request: any, env: any, ctx: any) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
+  const threadId = Math.floor(Number(data.thread_id) || 0);
   const other = String(data.with || '');
   const ttl = Math.floor(Number(data.ttl) || 0);
-  if (!key || !/^[0-9a-f]{64}$/.test(other) || DM_TTLS.indexOf(ttl) === -1) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!key || DM_TTLS.indexOf(ttl) === -1 || (!threadId && !/^[0-9a-f]{64}$/.test(other))) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!threadId && me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const [a, b] = dmPair(me, other);
+  const found = await dmThreadFor(env, me, { thread_id: threadId, with: other });
+  if (!found) return json({ ok: false, error: 'No such conversation.' }, 404);
   const now = Math.floor(Date.now() / 1000);
-  const thread = await env.DB.prepare(
-    'INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs, ttl) VALUES (?1, ?2, ?3, ?3, ?4, 0, ?5) ' +
-    'ON CONFLICT(a_hash, b_hash) DO UPDATE SET ttl = ?5 RETURNING id'
-  ).bind(a, b, now, me, ttl).first();
+  const thread = found.thread || await ensurePairThread(env, me, found.other, now, { bump: false, sender: me });
+  await env.DB.prepare('UPDATE dm_threads SET ttl = ?1 WHERE id = ?2').bind(ttl, thread.id).run();
   await env.DB.prepare(
     'UPDATE dms SET expires_at = opened_at + ?1 WHERE thread_id = ?2 AND opened_at IS NOT NULL AND COALESCE(saved, 0) = 0'
   ).bind(ttl, thread.id).run();
-  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-ttl', scopes: ['user:' + other], from: me, thread_id: thread.id, ttl });
+  const to = await dmRecipients(env, thread.id, me);
+  if (ctx && to.length) publishLive(env, ctx, { v: 1, t: 'dm-ttl', scopes: to.map((h) => 'user:' + h), from: me, thread_id: thread.id, ttl });
   return json({ ok: true, ttl }, 200);
 }
 
-/* Save or unsave one message (either participant). A saved message is exempt from
-   auto-expiry for BOTH sides (expires_at NULL), so a save keeps it for everyone —
-   which is how expiry stays identical for both. Unsaving resumes the clock. */
+/* Save or unsave one message (any member). A saved message is exempt from
+   auto-expiry for EVERYONE (expires_at NULL), so a save keeps it for all —
+   which is how expiry stays identical for all — and the saver is named
+   (saved_by, Snapchat's "saved by"). Unsaving resumes the clock. The message
+   id alone names it: membership is checked through its thread. */
 async function handleDmSave(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -2149,40 +2250,40 @@ async function handleDmSave(request: any, env: any, ctx: any) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
-  const other = String(data.with || '');
   const id = Math.floor(Number(data.id) || 0);
   const saved = data.saved ? 1 : 0;
-  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const [a, b] = dmPair(me, other);
-  /* The message must belong to this pair's thread; then either party may act. */
+  /* The message must stand in a thread I am a current member of; then any member may act. */
   const row = await env.DB.prepare(
-    'SELECT d.id, d.thread_id, d.created_at, d.opened_at, t.ttl FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
-    'WHERE d.id = ?1 AND t.a_hash = ?2 AND t.b_hash = ?3'
-  ).bind(id, a, b).first();
+    'SELECT m.id, m.thread_id, m.created_at, m.opened_at, t.ttl FROM dms m JOIN dm_threads t ON t.id = m.thread_id ' +
+    'JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?2 AND mb.left_at IS NULL WHERE m.id = ?1'
+  ).bind(id, me).first();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   const settings = await getAppSettings(env);
   const ttl = row.ttl || dmDefaultTtl(settings);
   const expires = saved ? null : (row.opened_at ? (row.opened_at + ttl) : (row.created_at + dmBackstopSeconds(settings)));
-  await env.DB.prepare('UPDATE dms SET saved = ?1, expires_at = ?2 WHERE id = ?3').bind(saved, expires, id).run();
-  /* A save is for both: the other side's open thread lights the bubble live
-     (the Snapchat convention — a kept message looks kept to both parties). */
-  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-save', scopes: ['user:' + other], from: me, thread_id: row.thread_id, message: { id, saved } });
-  return json({ ok: true, saved, expires_at: expires }, 200);
+  await env.DB.prepare('UPDATE dms SET saved = ?1, saved_by = ?4, expires_at = ?2 WHERE id = ?3').bind(saved, expires, id, saved ? me : null).run();
+  /* A save is for all: every other member's open thread lights the bubble
+     live (the Snapchat convention — a kept message looks kept to everyone). */
+  const to = await dmRecipients(env, row.thread_id, me);
+  if (ctx && to.length) publishLive(env, ctx, { v: 1, t: 'dm-save', scopes: to.map((h) => 'user:' + h), from: me, thread_id: row.thread_id, message: { id, saved, by: me } });
+  return json({ ok: true, saved, saved_by: saved ? me : null, expires_at: expires }, 200);
 }
 
-/* React to ONE message in a 1v1 thread with a single emoji — the press-and-hold
-   picker's quick six, any one standard emoji, or one of our own custom-pack
-   :tokens: — or withdraw your reaction with an empty string. Either party may
-   react to any message they can SEE — their pair's thread, not held from them,
-   not expired, not redacted, not behind their own delete-conversation stamp.
-   One reaction per side per message, metadata beside opened_at (react_a/react_b
-   on the canonical pair), validated by the kernel through dmReaction (never an
-   inline regex here); the plaintext stays sealed. The other side's open thread
-   hears it live. The 2026-08-03 heart rides the same road: `/dm/like {like}` is
-   this handler with ❤️ or nothing, kept one deploy for cached clients. */
+/* React to ONE message with a single emoji — the press-and-hold picker's
+   quick six, any one standard emoji, or one of our own custom-pack :tokens:
+   — or withdraw your reaction with an empty string. Any member may react to
+   any message they can SEE — a thread they are in, not held from them, not
+   expired, not redacted, not behind their own delete-conversation stamp,
+   since they joined. One reaction per MEMBER per message (dm_reactions since
+   0016), metadata beside opened_at, validated by the kernel through
+   dmReaction (never an inline regex here); the plaintext stays sealed. Every
+   other member's open thread hears it live. The 2026-08-03 heart rides the
+   same road: `/dm/like {like}` is this handler with ❤️ or nothing, kept one
+   deploy for cached clients. */
 async function handleDmReact(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -2190,39 +2291,45 @@ async function handleDmReact(request: any, env: any, ctx: any) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
-  const other = String(data.with || '');
   const id = Math.floor(Number(data.id) || 0);
   const raw = data.emoji != null ? String(data.emoji) : (data.like ? '❤️' : '');
   const emoji: string | null = raw.trim() ? dmReaction(raw) : '';
-  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1 || emoji === null) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!key || id < 1 || emoji === null) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const [a, b] = dmPair(me, other);
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
-    'SELECT d.id, d.thread_id, d.sender_hash, COALESCE(d.redacted, 0) AS redacted FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
-    'WHERE d.id = ?4 AND t.a_hash = ?2 AND t.b_hash = ?3 ' +
-    'AND (COALESCE(d.held, 0) = 0 OR d.sender_hash = ?1) ' +
-    'AND (d.expires_at IS NULL OR d.expires_at > ?5) ' +
-    'AND d.created_at > COALESCE(CASE WHEN ?1 = t.a_hash THEN t.a_cleared_at ELSE t.b_cleared_at END, 0)'
-  ).bind(me, a, b, id, now).first();
+    'SELECT m.id, m.thread_id, m.sender_hash, COALESCE(m.redacted, 0) AS redacted, t.kind FROM dms m JOIN dm_threads t ON t.id = m.thread_id ' +
+    'JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 AND mb.left_at IS NULL ' +
+    'WHERE m.id = ?2 AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now)
+  ).bind(me, id).first();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
-  const col = me === a ? 'react_a' : 'react_b';
-  await env.DB.prepare('UPDATE dms SET ' + col + ' = ?1 WHERE id = ?2').bind(emoji || null, id).run();
-  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-react', scopes: ['user:' + other], from: me, thread_id: row.thread_id, message: { id, emoji } });
-  /* A reaction to THEIR word rings their bell (2026-09-12): "X reacted to your
-     message", landing on the message. Reacting to my own word rings nothing;
-     a withdraw takes an unheard bell back. Coalesced like every bell here. */
-  if (row.sender_hash === other) {
-    const bell = { to: other, from: me, kind: 'dm-react', topicId: 0, commentId: id };
+  if (emoji) {
+    await env.DB.prepare(
+      'INSERT INTO dm_reactions (msg_id, hash, emoji, created_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(msg_id, hash) DO UPDATE SET emoji = ?3, created_at = ?4'
+    ).bind(id, me, emoji, now).run();
+  } else {
+    await env.DB.prepare('DELETE FROM dm_reactions WHERE msg_id = ?1 AND hash = ?2').bind(id, me).run();
+  }
+  const to = await dmRecipients(env, row.thread_id, me);
+  if (ctx && to.length) publishLive(env, ctx, { v: 1, t: 'dm-react', scopes: to.map((h) => 'user:' + h), from: me, thread_id: row.thread_id, message: { id, emoji, by: me } });
+  /* A reaction to ANOTHER's word rings their bell (2026-09-12): "X reacted to
+     your message", landing on the message. Reacting to my own word rings
+     nothing; a withdraw takes an unheard bell back. Coalesced like every bell
+     here, keyed on the conversation. */
+  if (row.sender_hash !== me) {
+    const bell = { to: row.sender_hash, from: me, kind: 'dm-react', topicId: Number(row.thread_id), commentId: id };
     if (emoji) {
-      /* The quiet bell (the send's rule): a reaction to a word the other has
+      /* The quiet bell (the send's rule): a reaction to a word its author has
          on screen lands on the pill in front of their eyes — no bell. */
       let onScreen = false;
-      if (env.HUB) { try { onScreen = !!(await env.HUB.get(env.HUB.idFromName('board')).dmViewing(other, me)); } catch { onScreen = false; } }
+      if (env.HUB) {
+        const hub = env.HUB.get(env.HUB.idFromName('board'));
+        try { onScreen = ((await hub.viewersOf('t' + row.thread_id, [row.sender_hash])) || []).length > 0; } catch { onScreen = false; }
+        if (!onScreen && Number(row.kind) === 0) { try { onScreen = !!(await hub.dmViewing(row.sender_hash, me)); } catch { onScreen = false; } }
+      }
       if (!onScreen) { const ring = notifyReact(env, bell); if (ctx) ctx.waitUntil(ring); else await ring; }
     } else await retractReactNotif(env, bell);
   }
@@ -2238,50 +2345,50 @@ async function handleDmSeen(request: any, env: any, ctx: any) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
-  const other = String(data.with || '');
-  if (!/^[0-9a-f]{64}$/.test(other) || me === other) return json({ ok: false, error: 'Bad request.' }, 400);
-  const [a, b] = dmPair(me, other);
-  const thread = await env.DB.prepare(
-    'SELECT id, ttl, a_cleared_at, b_cleared_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
-  ).bind(a, b).first();
-  if (!thread) return json({ ok: true }, 200);
+  const found = await dmThreadFor(env, me, data);
+  if (!found || !found.thread) return json({ ok: true }, 200);
+  const thread = found.thread, other = found.other;
   const now = Math.floor(Date.now() / 1000);
   const settings = await getAppSettings(env);
   const ttl = thread.ttl || dmDefaultTtl(settings);
-  const myCleared = (me === a ? thread.a_cleared_at : thread.b_cleared_at) || 0;
-  const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
+  const floor = Math.max(Number(thread.cleared_at || 0), Number(thread.joined_at || 0) - 1);
   await env.DB.prepare(
-    'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?3 AND EXISTS(' +
+    'UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?3 AND hash = ?1 AND EXISTS(' +
     'SELECT 1 FROM dms m WHERE m.thread_id = ?3 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
-    'AND m.created_at > COALESCE(' + myReadCol + ', 0) AND m.created_at > ?4)'
-  ).bind(me, now, thread.id, myCleared).run();
+    'AND m.created_at > COALESCE(dm_members.read_at, 0) AND m.created_at > ?4)'
+  ).bind(me, now, thread.id, floor).run();
   const openRes = await env.DB.prepare(
     'UPDATE dms SET opened_at = ?2, expires_at = ?2 + ?5 WHERE thread_id = ?3 AND sender_hash != ?1 ' +
     'AND COALESCE(held, 0) = 0 AND opened_at IS NULL AND COALESCE(saved, 0) = 0 AND created_at > ?4'
-  ).bind(me, now, thread.id, myCleared, ttl).run();
+  ).bind(me, now, thread.id, floor, ttl).run();
   if (openRes && openRes.meta && openRes.meta.changes > 0) {
     const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first();
     if (Prefs.receiptsOn((myPref && myPref.receipts_mode) || 'auto')) {
-      const ev = { v: 1, t: 'dm-read', scopes: ['user:' + other], thread_id: thread.id, reader: me, at: now };
-      if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+      const to = await dmRecipients(env, thread.id, me);
+      if (to.length) {
+        const ev = { v: 1, t: 'dm-read', scopes: to.map((h) => 'user:' + h), thread_id: thread.id, reader: me, at: now };
+        if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
+      }
     }
   }
   /* Belt for the race where the bell rang in the instant before the on-screen
      sub registered: reading the words on screen reads the notification too —
-     every bell this sender rang (a message, a reaction, a missed call), and
-     the fresh count goes back so the badge follows at once. */
+     every bell this conversation rang (a message, a reaction, a missed call),
+     and the fresh count goes back so the badge follows at once. */
   await env.DB.prepare(
-    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND actor_hash = ?2 AND read_at IS NULL"
-  ).bind(me, other, now).run();
+    "UPDATE notifications SET read_at = ?3 WHERE recipient_hash = ?1 AND kind IN ('dm','dm-react','call') AND (topic_id = ?2 OR (topic_id = 0 AND actor_hash = ?4)) AND read_at IS NULL"
+  ).bind(me, thread.id, now, other || '').run();
   return json({ ok: true, notif_unread: await notifUnreadCount(env, me) }, 200);
 }
 
 /* Edit one of your OWN messages. DMs are end-to-end encrypted, so the server is
-   blind: the client re-encrypts the new plaintext to the same pair secret and
-   sends the fresh ciphertext, which simply replaces the stored body; edited_at
-   is stamped so both sides show an "(edited)" marker. Everything else — the
-   expiry clock, opened_at, saved, any media pointer — is untouched. Only the
-   sender may edit, only a live (unexpired), un-redacted, non-system message. */
+   blind: the client re-seals the new plaintext — under the SAME content key
+   for a sealed envelope, so every member's key still opens it; to the pair
+   secret for an E1 word — and sends the fresh ciphertext, which simply
+   replaces the stored body; edited_at is stamped so everyone shows an
+   "(edited)" marker. Everything else — the expiry clock, opened_at, saved, the
+   sealed keys, any media pointer — is untouched. Only the sender may edit,
+   only a live (unexpired), un-redacted, non-system message. */
 async function handleDmEdit(request: any, env: any, ctx: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -2289,34 +2396,32 @@ async function handleDmEdit(request: any, env: any, ctx: any) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
   const key = String(data.key || '');
-  const other = String(data.with || '');
   const id = Math.floor(Number(data.id) || 0);
-  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const enc = (data.enc === 1 || data.enc === true) ? 1 : 0;
+  if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  const enc = (data.enc === 3 || data.enc === '3') ? 3 : ((data.enc === 1 || data.enc === true) ? 1 : 0);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
   if (body.length > (enc ? DM_ENC_MAX : MAX_BODY)) return json({ ok: false, error: 'The message is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const [a, b] = dmPair(me, other);
   const now = Math.floor(Date.now() / 1000);
-  /* Mine, in this pair's thread, still live, not redacted, not a system notice. */
+  /* Mine, in a thread I am still in, still live, not redacted, not a system notice. */
   const row = await env.DB.prepare(
-    'SELECT d.id, d.thread_id, COALESCE(d.enc, 0) AS enc, COALESCE(d.redacted, 0) AS redacted, d.expires_at ' +
-    'FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
-    'WHERE d.id = ?1 AND d.sender_hash = ?2 AND t.a_hash = ?3 AND t.b_hash = ?4'
-  ).bind(id, me, a, b).first();
+    'SELECT m.id, m.thread_id, COALESCE(m.enc, 0) AS enc, COALESCE(m.redacted, 0) AS redacted, m.expires_at ' +
+    'FROM dms m JOIN dm_threads t ON t.id = m.thread_id JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?2 AND mb.left_at IS NULL ' +
+    'WHERE m.id = ?1 AND m.sender_hash = ?2'
+  ).bind(id, me).first();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
   if (Number(row.enc) === 2) return json({ ok: false, error: 'That message cannot be edited.' }, 403);
   if (row.expires_at != null && row.expires_at <= now) return json({ ok: false, error: 'That message has expired.' }, 410);
   await env.DB.prepare('UPDATE dms SET body = ?1, enc = ?2, edited_at = ?3 WHERE id = ?4').bind(body, enc, now, id).run();
-  /* Push the new ciphertext to the recipient's open thread so their bubble
-     re-renders (decrypts) live and shows "(edited)". */
-  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-edit', scopes: ['user:' + other], from: me, thread_id: row.thread_id,
+  /* Push the new ciphertext to every other member's open thread so their
+     bubble re-renders (decrypts) live and shows "(edited)". */
+  const to = await dmRecipients(env, row.thread_id, me);
+  if (ctx && to.length) publishLive(env, ctx, { v: 1, t: 'dm-edit', scopes: to.map((h) => 'user:' + h), from: me, thread_id: row.thread_id,
     message: { id, body, enc, edited_at: now } });
   return json({ ok: true, id, edited_at: now }, 200);
 }
@@ -2333,28 +2438,30 @@ async function handleDmRedact(request: any, env: any, ctx: any) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Wait a minute and try again.' }, 429);
   const key = String(data.key || '');
-  const other = String(data.with || '');
   const id = Math.floor(Number(data.id) || 0);
-  if (!key || !/^[0-9a-f]{64}$/.test(other) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const [a, b] = dmPair(me, other);
   const row = await env.DB.prepare(
-    'SELECT d.id, d.thread_id, d.media_key, COALESCE(d.redacted, 0) AS redacted ' +
-    'FROM dms d JOIN dm_threads t ON t.id = d.thread_id ' +
-    'WHERE d.id = ?1 AND d.sender_hash = ?2 AND t.a_hash = ?3 AND t.b_hash = ?4'
-  ).bind(id, me, a, b).first();
+    'SELECT m.id, m.thread_id, m.media_key, COALESCE(m.redacted, 0) AS redacted ' +
+    'FROM dms m JOIN dm_threads t ON t.id = m.thread_id JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?2 AND mb.left_at IS NULL ' +
+    'WHERE m.id = ?1 AND m.sender_hash = ?2'
+  ).bind(id, me).first();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: true, id, redacted: true }, 200);   // already gone; idempotent
-  /* Reclaim any R2 media at once (D1 can't cascade to R2); the byte counter
-     self-heals on the next hourly sweep, exactly as conversation-delete does. */
-  if (row.media_key) await purgeMediaKeys(env, [row.media_key]);
+  /* Let go of the object at once (D1 can't cascade to R2): this word's
+     reference goes, and the object with it unless a forward elsewhere still
+     names it; the byte counter self-heals on the next hourly sweep, exactly
+     as conversation-delete does. The sealed keys go too — nothing is left
+     to open. */
+  if (row.media_key) await releaseMediaRefs(env, [{ id: row.id, media_key: row.media_key }]);
   await env.DB.prepare(
     "UPDATE dms SET redacted = 1, body = '', enc = 0, media_key = NULL, media_size = NULL WHERE id = ?1"
   ).bind(id).run();
-  if (ctx) publishLive(env, ctx, { v: 1, t: 'dm-redact', scopes: ['user:' + other], from: me, thread_id: row.thread_id,
+  await env.DB.prepare('DELETE FROM dm_keys WHERE msg_id = ?1').bind(id).run();
+  const to = await dmRecipients(env, row.thread_id, me);
+  if (ctx && to.length) publishLive(env, ctx, { v: 1, t: 'dm-redact', scopes: to.map((h) => 'user:' + h), from: me, thread_id: row.thread_id,
     message: { id } });
   return json({ ok: true, id, redacted: true }, 200);
 }
@@ -2407,10 +2514,12 @@ async function handleDmMediaUpload(request: any, env: any) {
   return json({ ok: true, media_key: mediaKey, size: bytes.length }, 200);
 }
 
-/* Stream one media object's ciphertext to a thread participant. Membership is
-   verified against the live, unexpired message that references it; a stranger or an
-   expired reference gets an indistinguishable 404. The bytes are opaque ciphertext,
-   useless without the key the recipient holds from the E2E message body. */
+/* Stream one media object's ciphertext to a member who may read it: a live,
+   unexpired, unredacted message naming it (a forward counts, 2026-09-13)
+   stands in a thread they are a current member of, in their view. A stranger,
+   a leaver, or an expired reference gets an indistinguishable 404. The bytes
+   are opaque ciphertext, useless without the key the reader holds from the
+   E2E message body. */
 async function handleDmMediaGet(request: any, env: any) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
@@ -2423,11 +2532,7 @@ async function handleDmMediaGet(request: any, env: any) {
   if (!key || !/^dm\/[0-9a-f]{64}$/.test(mediaKey)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
   const now = Math.floor(Date.now() / 1000);
-  const row = await env.DB.prepare(
-    'SELECT t.a_hash, t.b_hash FROM dm_media md JOIN dms d ON d.id = md.msg_id JOIN dm_threads t ON t.id = d.thread_id ' +
-    'WHERE md.key = ?1 AND (d.expires_at IS NULL OR d.expires_at > ?2)'
-  ).bind(mediaKey, now).first();
-  if (!row || (row.a_hash !== me && row.b_hash !== me)) return json({ ok: false, error: 'Not found.' }, 404);
+  if (!(await dmMediaReadable(env, me, mediaKey, now))) return json({ ok: false, error: 'Not found.' }, 404);
   const obj = await env.MEDIA.get(mediaKey);
   if (!obj) return json({ ok: false, error: 'Not found.' }, 404);
   return new Response(obj.body, {
@@ -2781,6 +2886,7 @@ async function handleDmMediaPurge(request: any, env: any) {
     } while (cursor);
   }
   await env.DB.prepare('DELETE FROM dm_media').run();
+  await env.DB.prepare('DELETE FROM dm_media_refs').run();
   await env.DB.prepare('UPDATE dms SET media_key = NULL, media_size = NULL WHERE media_key IS NOT NULL').run();
   await env.DB.prepare(
     "INSERT INTO app_settings (k, v, updated_at) VALUES ('dm_media_bytes', '0', ?1) ON CONFLICT(k) DO UPDATE SET v = '0', updated_at = ?1"
@@ -3522,12 +3628,13 @@ async function handleNotifList(request: any, env: any) {
   const postKinds = "('" + NOTIF_POST_KINDS.join("','") + "')", wallKinds = "('" + NOTIF_WALL_KINDS.join("','") + "')";
   const rows = await env.DB.prepare(
     'SELECT n.id, n.kind, n.topic_id, n.comment_id, n.actor_hash, n.created_at, n.read_at, ' +
-    't.title AS topic_title, pr.nick AS actor_nick, ' +
+    "COALESCE(t.title, CASE WHEN dt.kind = 1 THEN COALESCE(dt.name, 'a group') END) AS topic_title, pr.nick AS actor_nick, " +
     "CASE WHEN n.kind = 'wall-react' AND n.topic_id > 0 THEN substr(wc.body, 1, 140) " +
     'WHEN n.kind IN ' + wallKinds + ' THEN substr(wp.body, 1, 140) ELSE substr(c.body, 1, 140) END AS snippet ' +
     'FROM notifications n ' +
     'LEFT JOIN comments t ON t.id = n.topic_id AND n.kind IN ' + postKinds + ' ' +
     'LEFT JOIN comments c ON c.id = n.comment_id AND n.kind IN ' + postKinds + ' ' +
+    "LEFT JOIN dm_threads dt ON dt.id = n.topic_id AND n.kind IN ('dm','dm-react','call') " +   // a DM bell names its conversation (0016): a group's name for the sentence
     'LEFT JOIN wall_posts wp ON wp.id = n.comment_id AND n.kind IN ' + wallKinds + ' ' +
     "LEFT JOIN wall_comments wc ON wc.id = n.topic_id AND n.kind = 'wall-react' " +
     'LEFT JOIN profiles pr ON pr.hash = n.actor_hash ' +
@@ -3701,8 +3808,7 @@ async function handleDmBlock(request: any, env: any) {
     /* Unblocking delivers the flood: every word held during the block is
        released with its original timestamp, and the thread's last-word
        fields catch up so the inbox and the badge finally ring. */
-    const [a, b] = dmPair(me, hash);
-    const t = await env.DB.prepare('SELECT id FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2').bind(a, b).first();
+    const t = await env.DB.prepare('SELECT id FROM dm_threads WHERE pair_key = ?1').bind(dmPairKey(me, hash)).first();
     if (t) {
       const mn = await env.DB.prepare(
         'SELECT MIN(created_at) AS mn FROM dms WHERE thread_id = ?1 AND sender_hash = ?2 AND COALESCE(held, 0) = 1'
@@ -3713,10 +3819,9 @@ async function handleDmBlock(request: any, env: any) {
       /* The released words keep their original times, which may sit behind
          my read stamp; wind the stamp back so the delivery still rings. */
       if (mn && mn.mn != null) {
-        const myReadCol = me === a ? 'a_read_at' : 'b_read_at';
         await env.DB.prepare(
-          'UPDATE dm_threads SET ' + myReadCol + ' = ?2 WHERE id = ?1 AND ' + myReadCol + ' IS NOT NULL AND ' + myReadCol + ' >= ?2'
-        ).bind(t.id, mn.mn - 1).run();
+          'UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?1 AND hash = ?3 AND read_at IS NOT NULL AND read_at >= ?2'
+        ).bind(t.id, mn.mn - 1, me).run();
       }
       await env.DB.prepare(
         'UPDATE dm_threads SET ' +
@@ -3732,9 +3837,11 @@ async function handleDmBlock(request: any, env: any) {
 }
 
 /* Delete a conversation from my side: a fresh start. My clear stamp hides every
-   earlier word from me while the other keeps their copy; when both sides have
-   cleared and no word outlives the earlier clear, the thread and all its words
-   are purged so nothing persists. Keyed, not admin — you delete your own. */
+   earlier word from me while the others keep their copies; when every current
+   member has cleared (or nobody remains) and no word outlives the earliest
+   clear, the thread and all its words — the keys, the reactions, the
+   references — are purged so nothing persists. Keyed, not admin — you delete
+   your own. */
 async function handleDmDelete(request: any, env: any) {
   let data;
   try {
@@ -3746,34 +3853,38 @@ async function handleDmDelete(request: any, env: any) {
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const other = String(data.with || '');
-  if (!key || !/^[0-9a-f]{64}$/.test(other)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  if (me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
-  const [a, b] = dmPair(me, other);
-  const thread = await env.DB.prepare(
-    'SELECT id, a_cleared_at, b_cleared_at FROM dm_threads WHERE a_hash = ?1 AND b_hash = ?2'
-  ).bind(a, b).first();
+  const found = await dmThreadFor(env, me, data);
+  if (!found) return json({ ok: false, error: 'Bad request.' }, 400);
+  const thread = found.thread;
   if (!thread) return json({ ok: true, purged: false }, 200);
   const now = Math.floor(Date.now() / 1000);
-  const myCol = me === a ? 'a_cleared_at' : 'b_cleared_at';
-  await env.DB.prepare('UPDATE dm_threads SET ' + myCol + ' = ?1 WHERE id = ?2').bind(now, thread.id).run();
-  /* Purge when both sides have cleared and no word outlives the earlier clear,
-     so neither side can still see anything. Held words count too, erring toward
-     never destroying a word its sender might still see. */
-  const aC = me === a ? now : (thread.a_cleared_at || 0);
-  const bC = me === b ? now : (thread.b_cleared_at || 0);
+  await env.DB.prepare('UPDATE dm_members SET cleared_at = ?1 WHERE thread_id = ?2 AND hash = ?3').bind(now, thread.id, me).run();
+  /* Purge when every current member has cleared (or none remains) and no
+     word outlives the earliest clear, so nobody can still see anything. Held
+     words count too, erring toward never destroying a word its sender might
+     still see. */
+  const cur = await env.DB.prepare(
+    'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN cleared_at IS NULL THEN 1 ELSE 0 END), 0) AS open, COALESCE(MIN(cleared_at), 0) AS floor ' +
+    'FROM dm_members WHERE thread_id = ?1 AND left_at IS NULL'
+  ).bind(thread.id).first();
   let purged = false;
-  if (aC && bC) {
+  if (cur && Number(cur.open) === 0) {
     const surv = await env.DB.prepare('SELECT COUNT(*) AS n FROM dms WHERE thread_id = ?1 AND created_at > ?2')
-      .bind(thread.id, Math.min(aC, bC)).first();
+      .bind(thread.id, Number(cur.n) > 0 ? Number(cur.floor) : now).first();
     if (!surv.n) {
-      /* Reclaim any R2 media the purged messages carried (D1 can't cascade to R2). */
-      const media = await env.DB.prepare('SELECT media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
-      await purgeMediaKeys(env, (media.results || []).map((r: any) => r.media_key).filter(Boolean));
+      /* The objects go by their references (a forward elsewhere keeps its copy);
+         D1 can't cascade to R2. */
+      const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
+      await releaseMediaRefs(env, (media.results || []) as any[]);
+      for (const tbl of ['dm_keys', 'dm_reactions', 'dm_media_refs']) {
+        await env.DB.prepare('DELETE FROM ' + tbl + ' WHERE msg_id IN (SELECT id FROM dms WHERE thread_id = ?1)').bind(thread.id).run();
+      }
       await env.DB.prepare('DELETE FROM dms WHERE thread_id = ?1').bind(thread.id).run();
+      await env.DB.prepare('DELETE FROM dm_members WHERE thread_id = ?1').bind(thread.id).run();
       await env.DB.prepare('DELETE FROM dm_threads WHERE id = ?1').bind(thread.id).run();
       purged = true;
     }
