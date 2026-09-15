@@ -1277,7 +1277,6 @@ export function installDm(B: Boot) {
       '.dm-member-name{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.dm-member-acts{flex:none;display:inline-flex;gap:.6rem;font-size:.85em}' +
       '.dm-member-row .dm-row-dot[hidden]{display:none}' +
-      '.dm-new-group{flex:none;white-space:nowrap}' +
       '.dm-group-name{margin-bottom:.4em}' +
       '.dm-msg > .dm-react-many{padding:.1em .25em;gap:.15em;margin:0}' +
       '.dm-msg > .dm-react-many .mc-react-chip{font:inherit;font-size:.9em;line-height:1;padding:.1em .3em;border:0;background:none;cursor:pointer;display:inline-flex;align-items:center;gap:.15em;border-radius:999px}' +
@@ -1615,17 +1614,29 @@ export function installDm(B: Boot) {
   function dmSearchBox() {
     var box = el('div', 'key-box dm-search');
     box.hidden = false;
-    box.appendChild(el('p', 'key-note', 'Send a direct message. Type a nickname or an assigned name, then click the member below to open the conversation.'));
+    box.appendChild(el('p', 'key-note', 'New message: type a name to write to one member, or start a group with several.'));
     var row = el('div', 'key-row');
     var input = el('input', 'key-input');
     input.type = 'text';
-    input.placeholder = 'e.g. Constant-Almond, or a nickname';
+    input.placeholder = 'To: a nickname or an assigned name';
+    input.setAttribute('aria-label', 'To');
     row.appendChild(input);
-    /* New group (2026-09-13): pick the members and a name; the group opens
-       with its first line, "You added …". */
-    var newGroup = el('button', 'btn dm-new-group', '👥 New group');
-    newGroup.type = 'button';
-    newGroup.addEventListener('click', function () {
+    box.appendChild(row);
+    var sug = el('div', 'dm-suggest');
+    sug.hidden = true;
+    box.appendChild(sug);
+    var note = el('p', 'form-status');
+    box.appendChild(note);
+    var dir: any = null;
+    var loading = false;
+    var current: any[] = [];
+    /* the list's index: 0 is the New group row, 1… the matching members */
+    var sel = 0;
+    var timer: any = null;
+    /* New group (2026-09-13; the one list, the owner's ruling on the second
+       look): pick the members and a name; the group opens with its first
+       line, "You added …". */
+    function openNewGroup() {
       dmMemberPicker({ title: 'New group', nameField: true, submitLabel: 'Create', exclude: [state.myHash], count: 1, host: box,
         onDone: function (hashes: string[], name: string) {
           return getToken().then(function (token) {
@@ -1637,19 +1648,7 @@ export function installDm(B: Boot) {
             go('messages.html?t=' + d.thread_id);
           }).finally(function () { if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId); });
         } });
-    });
-    row.appendChild(newGroup);
-    box.appendChild(row);
-    var sug = el('div', 'dm-suggest');
-    sug.hidden = true;
-    box.appendChild(sug);
-    var note = el('p', 'form-status');
-    box.appendChild(note);
-    var dir: any = null;
-    var loading = false;
-    var current: any[] = [];
-    var sel = 0;
-    var timer: any = null;
+    }
     function ensureDir(cb: any) {
       if (dir) return cb();
       if (loading) return;
@@ -1659,11 +1658,23 @@ export function installDm(B: Boot) {
         .then(function (d) { loading = false; if (d.ok) { dir = d.users; cb(); } })
         .catch(function () { loading = false; note.textContent = 'The member list could not be loaded.'; });
     }
+    /* ONE list a message starts from (WhatsApp's "New chat"): "New group" is
+       its first row — there before a letter is typed and while the matches
+       come in — and a member's row opens the pair. Two roads, one door. */
+    function groupRow(selected: boolean) {
+      var r = el('a', 'dm-suggest-row dm-suggest-group' + (selected ? ' dm-suggest-sel' : ''));
+      r.href = '#';
+      r.title = 'Start a group: pick several members';
+      r.appendChild(el('span', null, '👥 New group'));
+      r.appendChild(el('span', 'dm-suggest-go', 'pick members →'));
+      r.addEventListener('mousedown', function (e: any) { e.preventDefault(); openNewGroup(); });
+      return r;
+    }
     function renderSug() {
       sug.textContent = '';
-      if (!current.length) { sug.hidden = true; return; }
+      sug.appendChild(groupRow(sel === 0));
       current.forEach(function (u, i) {
-        var r = el('a', 'dm-suggest-row' + (i === sel ? ' dm-suggest-sel' : ''));
+        var r = el('a', 'dm-suggest-row' + (i + 1 === sel ? ' dm-suggest-sel' : ''));
         r.href = 'messages.html?dm=' + u.hash;
         r.title = 'Open the conversation';
         r.appendChild(el('span', null, dmLabel(u.hash, u.nick)));
@@ -1690,7 +1701,7 @@ export function installDm(B: Boot) {
           .sort(function (x: any, y: any) { return y.s - x.s || (x.label < y.label ? -1 : 1); })
           .slice(0, 8)
           .map(function (x: any) { return x.u; });
-        sel = 0;
+        sel = current.length ? 1 : 0;   // Enter opens the best match; with none, the group
         note.textContent = current.length ? '' : 'No member matches that. Pick from the suggestions.';
         renderSug();
       });
@@ -1699,17 +1710,19 @@ export function installDm(B: Boot) {
       clearTimeout(timer);
       timer = setTimeout(suggest, 150);
     });
+    input.addEventListener('focus', function () { renderSug(); });   // the list opens with the New group row before a letter is typed
     input.addEventListener('keydown', function (e: any) {
       if (sug.hidden) return;
-      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, current.length - 1); renderSug(); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, current.length); renderSug(); }
       else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); renderSug(); }
       else if (e.key === 'Enter') {
         e.preventDefault();
-        if (current[sel]) go('messages.html?dm=' + current[sel].hash);
-      } else if (e.key === 'Escape') { current = []; renderSug(); }
+        if (sel === 0) openNewGroup();
+        else if (current[sel - 1]) go('messages.html?dm=' + current[sel - 1].hash);
+      } else if (e.key === 'Escape') { sug.hidden = true; }
     });
     input.addEventListener('blur', function () {
-      setTimeout(function () { current = []; renderSug(); }, 200);
+      setTimeout(function () { sug.hidden = true; }, 200);   // a row's mousedown has run by then
     });
     return box;
   }

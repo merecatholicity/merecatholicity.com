@@ -69,6 +69,13 @@ test('the member picker: the cap is the kernel\'s, the directory searched, the c
   const box = fn('dmSearchBox');
   assert.ok(/dmMemberPicker\(\{ title: 'New group', nameField: true, submitLabel: 'Create', exclude: \[state\.myHash\], count: 1/.test(box), 'New group: me and the chosen');
   assert.ok(/API \+ '\/dm\/groups'/.test(box) && /go\('messages\.html\?t=' \+ d\.thread_id\);/.test(box), 'the group opens by its id');
+  /* ONE list, two roads (the owner's second look, 2026-09-14): New group is the
+     list's first row, shown on focus before a letter is typed; no button beside
+     the field, no second pathway. */
+  assert.ok(/sug\.appendChild\(groupRow\(sel === 0\)\);\s*current\.forEach/.test(box), 'the New group row leads the list');
+  assert.ok(/input\.addEventListener\('focus', function \(\) \{ renderSug\(\); \}\);/.test(box), 'the list opens on focus');
+  assert.ok(/if \(sel === 0\) openNewGroup\(\);/.test(box) && /sel = current\.length \? 1 : 0;/.test(box), 'Enter opens the best match, or the group when there is none');
+  assert.ok(!/dm-new-group/.test(src), 'no button beside the field');
 });
 
 test('the header wears a group\'s collage and its count; presence and the call stay a pair\'s', () => {

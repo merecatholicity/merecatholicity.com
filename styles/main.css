@@ -1267,6 +1267,8 @@ a.dm-suggest-row { display: flex; justify-content: space-between; align-items: b
 a.dm-suggest-row:hover, .dm-suggest-sel { background: var(--cream); }
 a.dm-suggest-row:hover span:first-child { text-decoration: underline; }
 .dm-suggest-go { color: var(--brown); font-size: 0.85em; white-space: nowrap; }
+/* the list's first row is the New group door (2026-09-13): one list, two roads */
+a.dm-suggest-row.dm-suggest-group { font-weight: 600; border-bottom: 1px solid var(--rule); }
 /* DM: the merecat 1:1 alternation, via the long-standing .dm-mine hook —
    mine right on --cream, theirs left on --surface, each message its own card
    (the 2026-08-03 readability standard; the old flat no-alternation policy is
