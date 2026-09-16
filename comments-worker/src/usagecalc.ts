@@ -44,9 +44,10 @@ export const FREE = {
      with no cap (why calls_turn is a kill switch). Only the relayed leg —
      P2P/STUN calls cost nothing. */
   turnEgressBytesMonth: 1000 * GB,
-  /* Cron triggers: 5 per account on free; this worker holds three (monthly
-     backup, hourly sweeps, the daily usage check itself). */
-  cronsUsed: 3,
+  /* Cron triggers: 5 per account on free; this worker holds four (the hourly
+     sweeps, the 03:15 daily backup + self-check, the 23:30 usage check +
+     self-check, the monthly housekeeping) — 2026-09-16. */
+  cronsUsed: 4,
   cronsLimit: 5,
 };
 

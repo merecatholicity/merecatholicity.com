@@ -105,11 +105,12 @@
   // ALERT_FROM (default alerts@merecatholicity.com). Same binding shape as the
   // contact worker; sending to a verified destination is free on every plan.
   "send_email": [{ "name": "EMAIL" }],
-  // Monthly: the full backup/prune chain. Hourly: sweep expired DMs + their
-  // media. Daily 23:30 UTC: the Cloudflare free-tier usage check (usage.ts) —
-  // health data for admin.html?usage=1 and DM alerts past 80%. Three of the
-  // five crons the free account allows.
-  "triggers": { "crons": ["0 0 1 * *", "0 * * * *", "30 23 * * *"] },
+  // Four of the five crons the free account allows (src/ops.ts runs each as a
+  // chain: every step in its own try/catch, a heartbeat, alerts). Monthly: the
+  // housekeeping + avatar mirror. Hourly: sweep expired DMs + their media.
+  // Daily 03:15 UTC: the D1→R2 backup, then the self-check. Daily 23:30 UTC:
+  // the Cloudflare free-tier usage check (usage.ts), then the self-check.
+  "triggers": { "crons": ["0 0 1 * *", "0 * * * *", "15 3 * * *", "30 23 * * *"] },
   "ratelimits": [
     // Writes. These pass Turnstile + AI moderation before they land, so the
     // limiter is only an abuse backstop, not the primary gate. 30/min/IP lets an

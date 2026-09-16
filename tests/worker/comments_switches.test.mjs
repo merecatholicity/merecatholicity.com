@@ -111,8 +111,8 @@ test('a deleted journal article takes its comments with it — from every deleti
   /* The head deleted is the whole journal deleted: the thread form. */
   assert.ok(/id === jt\) await sweepJournalComments\(env, id\)/.test(body('handleSelfDelete')));
   assert.ok(/id === jt\) await sweepJournalComments\(env, id\)/.test(body('handleModerate')));
-  const cron = idxSrc.slice(idxSrc.indexOf('async scheduled('));
-  assert.ok(/pruneComments\(env\)\)\s*\.then\(\(\) => sweepJournalComments\(env\)\)/.test(cron),
+  const cron = idxSrc.slice(idxSrc.indexOf('const MONTHLY_STEPS'), idxSrc.indexOf('export default {'));
+  assert.ok(/\['pruneComments', pruneComments\],\s*\['sweepJournalComments', sweepJournalComments\]/.test(cron),
     'the monthly cron must sweep right after the comment prune (which may just have hard-deleted the articles)');
 });
 

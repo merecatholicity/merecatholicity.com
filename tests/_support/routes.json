@@ -306,6 +306,16 @@
  },
  {
   "m": "POST",
+  "p": "/api/comments/admin/health",
+  "fn": "(request, env, ctx, url) => handleOpsHealth(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/ops/report",
+  "fn": "(request, env, ctx, url) => handleOpsReport(request, env)"
+ },
+ {
+  "m": "POST",
   "p": "/api/comments/notifications/unread",
   "fn": "(request, env, ctx, url) => handleNotifUnread(request, env)"
  },

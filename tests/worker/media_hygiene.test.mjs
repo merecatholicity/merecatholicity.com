@@ -163,8 +163,9 @@ test('the DMs: a redacted message, an expired one, an aged attachment, an orphan
 });
 
 test('the backstops stand in the cron chain, and the board orphan rule spares only a live or pending owner', async () => {
-  const sched = idx.slice(idx.indexOf('async scheduled('));
-  for (const fn of ['sweepExpiredDms(env)', 'sweepWallOrphanMedia(env)', 'sweepMediaRetention(env)']) assert.ok(sched.includes(fn), fn + ' is scheduled');
+  /* since 2026-09-16 the chains are step lists ops.ts runs (each step in its own try/catch) */
+  const sched = idx.slice(idx.indexOf('const HOURLY_STEPS'), idx.indexOf('export default {'));
+  for (const fn of ['sweepExpiredDms', 'sweepWallOrphanMedia', 'sweepMediaRetention']) assert.ok(sched.includes("['" + fn + "', " + fn + "]"), fn + ' is scheduled');
   const { db, env } = setup();
   const now = Math.floor(Date.now() / 1000);
   const post = db.prepare("INSERT INTO comments (id, page, author_hash, body, status, created_at, media_key) VALUES (?, 'board:pub', ?, 'x', ?, 1, ?)");

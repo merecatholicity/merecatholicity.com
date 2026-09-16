@@ -353,6 +353,15 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
 - **Renaming an applied migration file** makes wrangler see it as pending: rename the row in
   `d1_migrations` too (prod AND local miniflare), or the next apply fails on a duplicate
   column.
+- **Alerts (2026-09-16):** the worker speaks through Admin → Platform settings → Alerts — an
+  email address (the `send_email` binding `EMAIL`, from `alerts@merecatholicity.com`; the
+  `ALERT_FROM` var overrides) and a Discord webhook, each with a switch. The address must be a
+  **verified destination**: Cloudflare dashboard → Email Routing → Destination addresses → add
+  it → click the link Cloudflare mails (a dashboard act — Email Routing is §10 exception 5).
+  Until then *Send a test alert* reports the refusal verbatim; Discord works at once. The
+  daily backup (03:15 UTC) and the self-check ride the same road; the Health card there is
+  the truth, and `POST /api/comments/ops/report {probe:true}` (ingest key) is the outside
+  probe `ops-watch.yml` runs.
 - **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `TURN_KEY_SECRET`,
   `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
   Never in git, never in CI. `CF_USAGE_TOKEN` (read-only, *Account Analytics: Read*)

@@ -205,7 +205,7 @@ test('/call/pending serves the offer to its callee alone, fresh and untaken; /ca
   assert.ok(/UPDATE calls_pending SET answered_at = \?2 WHERE call = \?1 AND to_hash = \?3 AND answered_at IS NULL/.test(ans));
   assert.ok(idxSrc.includes("{ m: 'POST', p: '/api/comments/call/pending', fn: (request, env, ctx, url) => handleCallPending(request, env) },") &&
     idxSrc.includes("{ m: 'POST', p: '/api/comments/call/end', fn: (request, env, ctx, url) => handleCallEnd(request, env, ctx) },"), 'both routes');
-  assert.ok(/\.then\(\(\) => sweepCalls\(env\)\)/.test(idxSrc), 'the sweep is in the hourly chain');
+  assert.ok(/\['sweepCalls', sweepCalls\]/.test(idxSrc), 'the sweep is a step of a cron chain (the monthly; since 2026-09-16 the chains are step lists ops.ts runs)');
   const sweep = libBodyOf('sweepCalls');
   assert.ok(/created_at < \?1 AND answered_at IS NULL AND missed_at IS NULL AND ended_at IS NULL LIMIT 200/.test(sweep) && /recordMissedCall\(env, row, \{ late: true \}\)/.test(sweep), 'the backstop, late — never a call already ended');
 });

@@ -40,6 +40,9 @@ module Domain.Ops
   , recoveredSubject
   , recoveredText
   , foldOpsAlerts
+  , alertScope
+  , digest
+  , recoveredDigest
   ) where
 
 import Prelude
@@ -196,3 +199,36 @@ foldOpsAlerts r =
     clear = A.filter (\k -> not (A.elem k keys)) r.open
   in
     { open: keys, fire, clear }
+
+-- | Which open conditions a chain's run may judge: its own step failures, and
+-- | — when it ran the self-check — every backup and staleness condition. A
+-- | chain never clears a condition it cannot observe: the hourly chain finding
+-- | no failures of its own must not "recover" the daily's missing backup.
+alertScope :: { chain :: String, selfCheck :: Boolean } -> String -> Boolean
+alertScope r key =
+  startsWith ("step_failed:" <> r.chain <> "/")
+    || (r.selfCheck && (startsWith "backup_" || startsWith "cron_stale:"))
+  where
+  startsWith p = S.indexOf (S.Pattern p) key == Just 0
+
+-- | One message for everything a run raised: the first condition's subject
+-- | (and how many more), every condition's subject and sentence in the body.
+digest :: Array Condition -> { subject :: String, text :: String }
+digest cs = case A.uncons cs of
+  Nothing -> { subject: "", text: "" }
+  Just { head, tail } ->
+    { subject: conditionSubject head <> more tail
+    , text: S.joinWith "\n\n" (map (\c -> conditionSubject c <> "\n" <> conditionText c) cs)
+    }
+
+-- | And one for what a run cleared.
+recoveredDigest :: Array String -> { subject :: String, text :: String }
+recoveredDigest keys = case A.uncons keys of
+  Nothing -> { subject: "", text: "" }
+  Just { head, tail } ->
+    { subject: recoveredSubject head <> more tail
+    , text: S.joinWith "\n" (map recoveredText keys)
+    }
+
+more :: forall a. Array a -> String
+more tail = if A.null tail then "" else " (+" <> show (A.length tail) <> " more)"

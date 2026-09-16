@@ -86,6 +86,10 @@ tests/
                        the route table held to its snapshot and every entry dispatched through the loaded worker (routes);
                        the worker's voice — the settings door's address/webhook validators, the test door sending
                        through exactly the channels the settings open and reporting each refusal (alerts);
+                       the backup — the dump replayed twice into a fresh SQLite and the same ledger both times,
+                       runBackup's object, prune and record, the avatar mirror (backup); the cron chains, the
+                       self-check and the health read RUN — a throwing step that stops nothing, once/quiet/recovered,
+                       the scope rule, the report door (ops);
                        plus the db builder, calls, media, webpush, the
                        social switch, the Discord bridge)
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,

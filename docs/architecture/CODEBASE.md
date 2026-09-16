@@ -284,7 +284,9 @@ comments-worker/src/
   env.ts         the bindings as wrangler.jsonc declares them, typed (2026-09-16) — a route file that takes `env: Env` gets D1's first<Row>() for free
   alerts.ts      the worker's voice (2026-09-16): sendAlert — email through the send_email binding EMAIL, Discord through
                  sendDiscord, the channels Domain.Ops.channelsFrom opens from the four alert_* Platform settings
-  routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin
+  ops.ts         the cron chains (runChain: every step in its own try/catch, a heartbeat per chain, failures and the
+                 self-check's findings folded into alerts), runSelfCheck, readOps (the health object) — 2026-09-16
+  routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin · ops (the report door)
   lib.ts         the shared core — constants · crypto/auth · settings · notifications/push · DM primitives ·
                  media purges · Discord · merecat · publish — references no handler
   db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList

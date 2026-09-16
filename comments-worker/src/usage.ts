@@ -16,6 +16,7 @@
    reads the neurons dataset through the very same select. */
 
 import { json, requireAdmin, sendSystemDm, siteBase, MERECAT_BOT } from './lib.ts';
+import { sendAlert } from './alerts.ts';
 import { gqlSelect } from './analytics.ts';
 import { aiNeuronsSelect } from './quota.ts';
 import {
@@ -99,7 +100,14 @@ export async function runUsageCheck(env: any) {
       if (!a.hash || a.hash === MERECAT_BOT.hash) continue;
       try { await sendSystemDm(env, MERECAT_BOT.hash, a.hash, body); sent++; } catch (e) { /* next admin */ }
     }
-    console.log(JSON.stringify({ event: 'usage_alerts_sent', meters: alerts.length, admins: sent }));
+    /* and the owner's channels (alerts.ts — email, Discord or both, from
+       Platform settings); the DM above stays for every admin */
+    const said = await sendAlert(env, {
+      kind: 'usage',
+      subject: 'Usage: ' + alerts.length + ' meter' + (alerts.length === 1 ? '' : 's') + ' past a band',
+      text: body,
+    });
+    console.log(JSON.stringify({ event: 'usage_alerts_sent', meters: alerts.length, admins: sent, channels: said.channels }));
   } catch (e) {
     console.log(JSON.stringify({ event: 'usage_check_failed', error: String(e).slice(0, 300) }));
   }

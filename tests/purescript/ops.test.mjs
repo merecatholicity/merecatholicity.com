@@ -111,3 +111,33 @@ test('the fold fires a condition once when it opens, clears it once when it clos
   r = Ops.foldOpsAlerts({ open: [], conditions: [] });
   assert.deepEqual([r.fire, r.clear, r.open], [[], [], []]);
 });
+
+test('a chain judges only what it can observe: its own step failures, and the backup and staleness conditions when it ran the self-check', () => {
+  const daily = Ops.alertScope({ chain: 'daily', selfCheck: true });
+  const hourly = Ops.alertScope({ chain: 'hourly', selfCheck: false });
+  assert.equal(daily('step_failed:daily/runBackup'), true);
+  assert.equal(daily('step_failed:hourly/sweepExpiredDms'), false, 'another chain\'s failure is not the daily\'s to clear');
+  assert.equal(daily('backup_missing:backups/comments-2026-09-16.sql.gz'), true);
+  assert.equal(daily('backup_failed:backups/comments-2026-09-16.sql.gz'), true);
+  assert.equal(daily('cron_stale:hourly'), true);
+  assert.equal(hourly('step_failed:hourly/sweepExpiredDms'), true);
+  assert.equal(hourly('backup_missing:backups/comments-2026-09-16.sql.gz'), false, 'the hourly ran no self-check: the missing backup is not its to recover');
+  assert.equal(hourly('cron_stale:daily'), false);
+  assert.equal(hourly('step_failed:hourlyx/other'), false, 'the prefix is the chain and the slash, not a substring');
+});
+
+test('a run\'s digest names the first condition and how many more; every sentence is in the body', () => {
+  const miss = Ops.backupMissing('backups/comments-2026-09-16.sql.gz');
+  const stale = Ops.cronStale('hourly')(4 * 3600);
+  let d = Ops.digest([miss]);
+  assert.equal(d.subject, 'Backup missing: backups/comments-2026-09-16.sql.gz');
+  assert.match(d.text, /^Backup missing: backups\/comments-2026-09-16\.sql\.gz\nThe backup object/);
+  d = Ops.digest([miss, stale]);
+  assert.equal(d.subject, 'Backup missing: backups/comments-2026-09-16.sql.gz (+1 more)');
+  assert.match(d.text, /\n\nCron stale: hourly\nThe hourly cron last beat 4 hours ago/);
+  assert.deepEqual(Ops.digest([]), { subject: '', text: '' });
+  const r = Ops.recoveredDigest(['cron_stale:hourly', 'backup_missing:x']);
+  assert.equal(r.subject, 'Recovered: cron_stale:hourly (+1 more)');
+  assert.equal(r.text, 'The condition cron_stale:hourly is no longer present.\nThe condition backup_missing:x is no longer present.');
+});
+

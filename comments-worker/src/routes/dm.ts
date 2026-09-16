@@ -998,8 +998,9 @@ async function handleDmRedact(request: any, env: any, ctx: any) {
 }
 
 /* Delete a set of media objects from R2 and their dm_media rows. R2 delete takes
-   up to 1000 keys per call; the D1 delete is chunked to stay under the 50-subrequest
-   budget. Keys are opaque server-minted ids. */
+   up to 1000 keys per call; the D1 delete is chunked to stay well inside the
+   invocation's 1,000 binding calls (the 50 cap is for external fetches). Keys
+   are opaque server-minted ids. */
 async function handleDmMediaUpload(request: any, env: any) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';

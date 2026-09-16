@@ -257,16 +257,18 @@ export function publishKey(db, hash, now = 1_700_000_000) {
 
 /* ---- requests ------------------------------------------------------------- */
 
-/* one request through default.fetch → { status, json, text, res, ctx } */
-export async function call(worker, env, method, path, body, { ip = '203.0.113.7', origin = ORIGIN, headers = {}, ctx: c } = {}) {
+/* one request through default.fetch → { status, json, text, res, ctx }.
+   `origin: null` sends no Origin header (a curl from CI, the pipeline's shape);
+   `host` reaches the worker on another hostname (its workers.dev front door). */
+export async function call(worker, env, method, path, body, { ip = '203.0.113.7', origin = ORIGIN, headers = {}, ctx: c, host = ORIGIN } = {}) {
   const h = { 'CF-Connecting-IP': ip, ...headers };
   const init = { method, headers: h };
   if (method !== 'GET' && method !== 'HEAD') {
-    h.Origin = origin;
+    if (origin !== null) h.Origin = origin;
     if (body !== undefined) { h['Content-Type'] = h['Content-Type'] || 'application/json'; init.body = typeof body === 'string' ? body : JSON.stringify(body); }
   }
   const cx = c || ctx();
-  const res = await worker.fetch(new Request(ORIGIN + path, init), env, cx);
+  const res = await worker.fetch(new Request(host + path, init), env, cx);
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* not JSON */ }

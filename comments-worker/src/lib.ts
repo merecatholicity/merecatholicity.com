@@ -23,7 +23,9 @@ import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
 import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import * as Comments from '../../purescript/output/Domain.Comments/index.js';
+import * as Ops from '../../purescript/output/Domain.Ops/index.js';
 import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
+import type { Env } from './env.ts';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
 // extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
@@ -2038,8 +2040,9 @@ export async function enforceWallMediaCap(env: any) {
    spared here (unlike the orphan sweep's evidence-sparing branch): retention is
    a time policy the owner sets, the held TEXT survives for the queue, and the
    parent gets the honest placeholder. LIMIT 200/section keeps a first-enable
-   backlog hour inside the shared ~50-subrequest cron budget (the hourly chain
-   also runs the DM and orphan sweeps); the backlog self-drains hourly. Stamp
+   backlog hour inside the cron invocation's budget — 1,000 binding calls
+   (D1/R2) on the free plan; the 50 cap is for external fetches — which the
+   hourly chain's DM and orphan sweeps share; the backlog self-drains hourly. Stamp
    BEFORE purge: a stamped parent whose object still exists is re-selected and
    finished next hour, while a purged object with no stamp would be a
    permanent broken tile. */
@@ -2270,13 +2273,25 @@ export async function screenImage(env: any, bytes: any) {
 export function sqlLit(v: any) {
   if (v === null || v === undefined) return 'NULL';
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
+  /* A BLOB column (none today) would otherwise be dumped as "[object
+     ArrayBuffer]" and restore as garbage — a silent corruption; X'…' is SQL. */
+  if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
+    const bytes = v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array((v as ArrayBufferView).buffer, (v as ArrayBufferView).byteOffset, (v as ArrayBufferView).byteLength);
+    let hex = '';
+    for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
+    return "X'" + hex + "'";
+  }
   return "'" + String(v).replace(/'/g, "''") + "'";
 }
 
 /* A restorable dump: every user table's CREATE (as IF NOT EXISTS) and rows,
    then the indexes. Explicit ids in the INSERTs carry the AUTOINCREMENT
-   sequence along on their own. */
-export async function dumpDatabase(env: any) {
+   sequence along on their own. Replaying it is idempotent (2026-09-16):
+   INSERT OR REPLACE, and every index — UNIQUE ones too — as IF NOT EXISTS
+   (sqlite_master strips the clause, so it is put back here); a second replay
+   into the same database changes nothing, which is what a restore drill
+   needs. `stats`, if given, is filled with the table and row counts. */
+export async function dumpDatabase(env: any, stats?: { tables: number; rows: number }) {
   const master = await env.DB.prepare(
     "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL " +
     "AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'comments_fts%' " +
@@ -2286,18 +2301,20 @@ export async function dumpDatabase(env: any) {
   for (const m of master.results) {
     if (m.type === 'table') {
       parts.push(m.sql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ') + ';');
+      if (stats) stats.tables++;
       const rows = await env.DB.prepare('SELECT * FROM "' + m.name + '"').all();
       const rs = rows.results;
+      if (stats) stats.rows += rs.length;
       if (!rs.length) continue;
       const cols = Object.keys(rs[0]);
       const colList = cols.map((c) => '"' + c + '"').join(', ');
       for (let i = 0; i < rs.length; i += 50) {
         const values = rs.slice(i, i + 50)
           .map((r: any) => '(' + cols.map((c) => sqlLit(r[c])).join(', ') + ')').join(',\n');
-        parts.push('INSERT INTO "' + m.name + '" (' + colList + ') VALUES\n' + values + ';');
+        parts.push('INSERT OR REPLACE INTO "' + m.name + '" (' + colList + ') VALUES\n' + values + ';');
       }
     } else if (m.type === 'index') {
-      parts.push(m.sql.replace(/^CREATE INDEX\s+/i, 'CREATE INDEX IF NOT EXISTS ') + ';');
+      parts.push(m.sql.replace(/^CREATE\s+(UNIQUE\s+)?INDEX\s+/i, 'CREATE $1INDEX IF NOT EXISTS ') + ';');
     }
   }
   /* The search index is derived data — its shadow tables are excluded above.
@@ -2319,7 +2336,25 @@ export async function gzipBytes(text: any) {
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
-export const BACKUP_KEEP_DAYS = 90;
+/* The retention is the kernel's (Domain.Ops.keepBackup: 90 days, a
+   first-of-month object 400); this name stays for the readers of the old one. */
+export const BACKUP_KEEP_DAYS = Ops.keepDays;
+
+/* The ops state: small JSON values in app_settings (ops_heartbeat, ops_backup,
+   ops_alert_state, ops_webtest, csp_report_tally), read and written directly —
+   the five-minute settings cache has no business in a cron path. */
+export async function getOpsState<T>(env: Env, k: string, fallback: T): Promise<T> {
+  try {
+    const row = await env.DB.prepare('SELECT v FROM app_settings WHERE k = ?1').bind(k).first<{ v: string | null }>();
+    if (row && row.v) return JSON.parse(String(row.v)) as T;
+  } catch (e) { /* fresh state */ }
+  return fallback;
+}
+export async function setOpsState(env: Env, k: string, value: unknown) {
+  await env.DB.prepare(
+    "INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?1, ?2, ?3, 'ops') ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3, updated_by = 'ops'"
+  ).bind(k, JSON.stringify(value), Math.floor(Date.now() / 1000)).run();
+}
 
 /* The Known-IPs history is not a ledger: rows idle past IP_KEEP_DAYS go, and
    banned keys stay whatever their age so a standing ban keeps its handle in
@@ -2482,42 +2517,67 @@ export async function pruneNotifications(env: any) {
   }
 }
 
+/* The daily backup (2026-09-16; monthly before that): the whole ledger as one
+   restorable gzip in R2 under Domain.Ops.backupKey(today), then the prune by
+   Domain.Ops.keepBackup (90 days; a first-of-month object 400), walking the
+   listing to its end. Records what it did — or what failed — in app_settings
+   `ops_backup` for the self-check and the health panel, and rethrows so the
+   chain runner logs the step. Budget: the dump is ~40 D1 reads and one R2 put
+   against the free plan's 1,000 binding calls per invocation (the 50 cap is
+   for EXTERNAL fetches). The avatar mirror is its own monthly step. */
 export async function runBackup(env: any) {
-  if (!env.BACKUPS) return { error: 'BACKUPS bucket not bound; enable R2 and redeploy.' };
-  const sql = await dumpDatabase(env);
-  const gz = await gzipBytes(sql);
-  const key = 'backups/comments-' + new Date().toISOString().slice(0, 10) + '.sql.gz';
-  await env.BACKUPS.put(key, gz, { httpMetadata: { contentType: 'application/gzip' } });
-  const list = await env.BACKUPS.list({ prefix: 'backups/' });
-  const cutoff = Date.now() - BACKUP_KEEP_DAYS * 86400 * 1000;
-  let pruned = 0;
-  for (const obj of list.objects) {
-    if (obj.key !== key && obj.uploaded.getTime() < cutoff) {
-      await env.BACKUPS.delete(obj.key);
-      pruned++;
-    }
+  const t0 = Date.now();
+  const at = Math.floor(t0 / 1000);
+  const key = Ops.backupKey(new Date(t0).toISOString().slice(0, 10));
+  try {
+    if (!env.BACKUPS) throw new Error('BACKUPS bucket not bound; enable R2 and redeploy.');
+    const stats = { tables: 0, rows: 0 };
+    const sql = await dumpDatabase(env, stats);
+    const gz = await gzipBytes(sql);
+    await env.BACKUPS.put(key, gz, { httpMetadata: { contentType: 'application/gzip' } });
+    let pruned = 0, kept = 0;
+    let cursor: string | undefined;
+    do {
+      const list = await env.BACKUPS.list({ prefix: 'backups/', cursor });
+      for (const obj of list.objects) {
+        const ageDays = Math.floor((t0 - new Date(obj.uploaded).getTime()) / 86400000);
+        if (obj.key !== key && !Ops.keepBackup({ key: obj.key, ageDays })) {
+          await env.BACKUPS.delete(obj.key);
+          pruned++;
+        } else kept++;
+      }
+      cursor = list.truncated ? list.cursor : undefined;
+    } while (cursor);
+    const result = { at, key, bytes: gz.length, sqlBytes: sql.length, tables: stats.tables, rows: stats.rows, kept, pruned, ms: Date.now() - t0 };
+    await setOpsState(env, 'ops_backup', result);
+    console.log(JSON.stringify({ event: 'backup', ...result }));
+    return result;
+  } catch (e) {
+    const error = String(e).slice(0, 300);
+    try { await setOpsState(env, 'ops_backup', { at, key, error, ms: Date.now() - t0 }); } catch (e2) { /* the log below still tells */ }
+    console.log(JSON.stringify({ event: 'backup_failed', key, error }));
+    throw e;
   }
-  /* Mirror the avatar objects too, so all state rides in one bucket. Capped
-     well under the free plan's per-invocation subrequest budget; the cap is
-     logged when hit, never silent. Old mirror entries are left in place,
-     which for a backup is a feature. */
-  let avatarsMirrored = 0, avatarsSkipped = 0;
-  if (env.AVATARS) {
-    const avs = await env.AVATARS.list({ prefix: 'avatars/' });
-    const MIRROR_CAP = 15;
-    for (const o of avs.objects.slice(0, MIRROR_CAP)) {
-      const obj = await env.AVATARS.get(o.key);
-      if (!obj) continue;
-      await env.BACKUPS.put('avatars-mirror/' + o.key.slice(8),
-        await obj.arrayBuffer(), { httpMetadata: obj.httpMetadata });
-      avatarsMirrored++;
-    }
-    avatarsSkipped = Math.max(0, avs.objects.length - MIRROR_CAP);
-    if (avatarsSkipped) console.log(JSON.stringify({ event: 'backup_avatar_cap', skipped: avatarsSkipped }));
+}
+
+/* Mirror the avatar objects into the backup bucket (the monthly chain), so
+   all state rides in one bucket. Cap 300 = 600 binding calls, inside the
+   1,000 per invocation; the cap is logged when hit, never silent. Old mirror
+   entries are left in place, which for a backup is a feature. */
+export async function mirrorAvatars(env: Env, cap = 300) {
+  if (!env.AVATARS || !env.BACKUPS) return { mirrored: 0, skipped: 0 };
+  const avs = await env.AVATARS.list({ prefix: 'avatars/' });
+  let mirrored = 0;
+  for (const o of avs.objects.slice(0, cap)) {
+    const obj = await env.AVATARS.get(o.key);
+    if (!obj) continue;
+    await env.BACKUPS.put('avatars-mirror/' + o.key.slice(8), await obj.arrayBuffer(), { httpMetadata: obj.httpMetadata });
+    mirrored++;
   }
-  const result = { key, sqlBytes: sql.length, gzBytes: gz.length, kept: list.objects.length - pruned, pruned, avatarsMirrored, avatarsSkipped };
-  console.log(JSON.stringify({ event: 'backup', ...result }));
-  return result;
+  const skipped = Math.max(0, avs.objects.length - cap);
+  if (skipped) console.log(JSON.stringify({ event: 'backup_avatar_cap', skipped }));
+  console.log(JSON.stringify({ event: 'avatars_mirrored', mirrored, skipped }));
+  return { mirrored, skipped };
 }
 
 /* Admin-only manual run of the same backup the cron performs, so the path

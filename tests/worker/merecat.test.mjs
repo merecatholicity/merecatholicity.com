@@ -109,20 +109,21 @@ test('the client is told, so the selector can show only what is allowed', () => 
   assert.ok(/a\.effort = mode;/.test(client) && !/a\.instant = true/.test(client), 'the ask frame sends the level, and the retired instant flag is gone');
 });
 
-test('the pipeline\'s door: the ingest key opens the three librarian endpoints and nothing else', () => {
+test('the pipeline\'s door: the ingest key opens the three librarian endpoints and the ops report door, and nothing else', () => {
   const ri = lib.slice(lib.indexOf('export async function requireIngest'), lib.indexOf('export async function requireIngest') + 900);
   assert.ok(/env\.MERECAT_INGEST_KEY/.test(ri) && /return requireAdmin\(env, k\)/.test(ri), 'the ingest key or an admin key');
   assert.ok(/diff \|= a\[i\] \^ b\[i\]/.test(ri), 'compared in constant time');
-  for (const fn of ['handleMerecatWorks', 'handleMerecatConfigSet', 'handleMerecatIngest']) {
+  for (const fn of ['handleMerecatWorks', 'handleMerecatConfigSet', 'handleMerecatIngest', 'handleOpsReport']) {
     const h = index.slice(index.indexOf('async function ' + fn + '('), index.indexOf('async function ' + fn + '(') + 500);
     assert.ok(/requireIngest\(env/.test(h), fn + ' must accept the ingest key');
   }
   const admins = [...index.matchAll(/requireIngest\(env/g)].length;
-  assert.equal(admins, 3, 'exactly the three librarian endpoints accept the ingest key');
+  assert.equal(admins, 4, 'exactly the three librarian endpoints and the ops report door (2026-09-16) accept the ingest key');
   const f = index.slice(index.indexOf('async fetch(request: Request'), index.indexOf('for (const r of ROUTES)'));
   assert.ok(/url\.hostname\.endsWith\('\.workers\.dev'\)/.test(f) && /INGEST_DOORS\.indexOf\(path\) !== -1/.test(f),
     'workers.dev must serve only the ingest doors');
-  assert.ok(/INGEST_DOORS = \['\/api\/merecat\/works', '\/api\/merecat\/config', '\/api\/merecat\/ingest'\]/.test(index));
+  assert.ok(/INGEST_DOORS = \['\/api\/merecat\/works', '\/api\/merecat\/config', '\/api\/merecat\/ingest', '\/api\/comments\/ops\/report'\]/.test(index),
+    'the three librarian doors and the ops report door (2026-09-16) are the ingest doors');
   const wr = readFileSync(join(root, 'comments-worker', 'wrangler.jsonc'), 'utf8');
   assert.ok(/"workers_dev": true/.test(wr) && /"preview_urls": false/.test(wr), 'the workers.dev route is declared, previews are not');
 });

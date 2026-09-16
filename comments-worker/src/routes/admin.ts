@@ -9,6 +9,7 @@ import * as Comments from '../../../purescript/output/Domain.Comments/index.js';
 import * as OpsK from '../../../purescript/output/Domain.Ops/index.js';
 import { toBanKey, looksLikeIp } from '../pure.js';
 import { sendAlert } from '../alerts.ts';
+import { readOps } from '../ops.ts';
 import type { Env } from '../env.ts';
 import { inList } from '../db.ts';
 import {
@@ -236,8 +237,23 @@ async function handleBackup(request: any, env: any) {
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
-  const result = await runBackup(env);
-  return json({ ok: true, backup: result }, 200);
+  /* the documented shape: a failure is `backup.error`, never a 5xx (runBackup
+     records it in ops_backup and rethrows for the cron runner's sake) */
+  try {
+    const result = await runBackup(env);
+    return json({ ok: true, backup: result }, 200);
+  } catch (e) {
+    return json({ ok: true, backup: { error: String(e).slice(0, 300) } }, 200);
+  }
+}
+
+/* The health card (2026-09-16): heartbeats, the last backup and its object,
+   open conditions, the nightly webtest's last report — ops.ts readOps. */
+async function handleOpsHealth(request: Request, env: Env) {
+  let data: { key?: unknown };
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  return json({ ok: true, health: await readOps(env) }, 200);
 }
 
 async function handleLock(request: any, env: any) {
@@ -514,6 +530,7 @@ export {
   handleIpBan,
   handleIpBans,
   handleLock,
+  handleOpsHealth,
   handleRdns,
   handleShadowban,
   handleShadowbanList,

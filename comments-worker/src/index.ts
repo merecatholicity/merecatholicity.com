@@ -55,6 +55,7 @@ import {
   pruneMerecatChats,
   pruneNotifications,
   pruneWallPosts,
+  mirrorAvatars,
   runBackup,
   screen,
   sendToHub,
@@ -80,10 +81,14 @@ import {
   handleIpBan,
   handleIpBans,
   handleLock,
+  handleOpsHealth,
   handleRdns,
   handleShadowban,
   handleShadowbanList,
 } from './routes/admin.ts';
+import { handleOpsReport } from './routes/ops.ts';
+import { runChain, runSelfCheck } from './ops.ts';
+import type { Step } from './ops.ts';
 import {
   handleApprove,
   handleAudit,
@@ -426,7 +431,7 @@ async function handleLive(request: any, env: any) {
    POST origin guard, the two websocket upgrades) stay explicit in fetch. */
 type Route = { m: string; p: string;
   fn: (request: Request, env: Env, ctx: ExecutionContext, url: URL) => Promise<Response> | Response };
-const INGEST_DOORS = ['/api/merecat/works', '/api/merecat/config', '/api/merecat/ingest'];
+const INGEST_DOORS = ['/api/merecat/works', '/api/merecat/config', '/api/merecat/ingest', '/api/comments/ops/report'];
 
 const ROUTES: Route[] = [
   { m: 'GET', p: '/api/comments', fn: (request, env, ctx, url) => handleGet(request, env, url) },
@@ -490,6 +495,8 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/admin/discord/delete', fn: (request, env, ctx, url) => handleAdminDiscordDelete(request, env) },
   { m: 'POST', p: '/api/comments/admin/usage', fn: (request, env, ctx, url) => handleAdminUsage(request, env) },
   { m: 'POST', p: '/api/comments/admin/alert-test', fn: (request, env, ctx, url) => handleAlertTest(request, env) },
+  { m: 'POST', p: '/api/comments/admin/health', fn: (request, env, ctx, url) => handleOpsHealth(request, env) },
+  { m: 'POST', p: '/api/comments/ops/report', fn: (request, env, ctx, url) => handleOpsReport(request, env) },
   { m: 'POST', p: '/api/comments/notifications/unread', fn: (request, env, ctx, url) => handleNotifUnread(request, env) },
   { m: 'POST', p: '/api/comments/notifications/read', fn: (request, env, ctx, url) => handleNotifRead(request, env) },
   { m: 'POST', p: '/api/comments/notifications', fn: (request, env, ctx, url) => handleNotifList(request, env) },
@@ -561,6 +568,40 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/merecat/stats', fn: (request, env, ctx, url) => handleMerecatStats(request, env) },
 ];
 
+/* The cron chains' step lists — ops.ts runs them (each step in its own
+   try/catch), the locks in tests/worker read them here. Order matters in the
+   monthly: the journal sweep right after the comment prune that may have
+   hard-deleted its articles; the avatar mirror last. */
+const HOURLY_STEPS: Step[] = [
+  ['sweepExpiredDms', sweepExpiredDms],
+  ['sweepWallOrphanMedia', sweepWallOrphanMedia],
+  ['sweepMediaRetention', sweepMediaRetention],
+  ['enforceWallMediaCap', enforceWallMediaCap],
+];
+const DAILY_STEPS: Step[] = [
+  ['runBackup', runBackup],
+  ['runSelfCheck', runSelfCheck],
+];
+const USAGE_STEPS: Step[] = [
+  ['runUsageCheck', runUsageCheck],
+  ['runSelfCheck', runSelfCheck],
+];
+const MONTHLY_STEPS: Step[] = [
+  ['sweepExpiredDms', sweepExpiredDms],
+  ['pruneIdentityIps', pruneIdentityIps],
+  ['pruneComments', pruneComments],
+  ['sweepJournalComments', sweepJournalComments],
+  ['sweepDms', sweepDms],
+  ['sweepCalls', sweepCalls],
+  ['pruneNotifications', pruneNotifications],
+  ['pruneMerecatChats', pruneMerecatChats],
+  ['sweepWallOrphanMedia', sweepWallOrphanMedia],
+  ['sweepMediaRetention', sweepMediaRetention],
+  ['enforceWallMediaCap', enforceWallMediaCap],
+  ['pruneWallPosts', pruneWallPosts],
+  ['mirrorAvatars', mirrorAvatars],
+];
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     try {
@@ -571,8 +612,9 @@ export default {
          which the zone's Bot Fight Mode would turn away at merecatholicity.com
          (it cannot be skipped by any rule on the Free plan, and a GitHub runner
          is exactly what it fights). That second front door opens onto nothing
-         but the three librarian endpoints, each of which demands the ingest
-         key; every other path answers 404 there as though the worker did not
+         but the three librarian endpoints and the ops report door (2026-09-16,
+         the watchdog's outside leg), each of which demands the ingest key;
+         every other path answers 404 there as though the worker did not
          exist. The site's own origin is untouched. */
       if (url.hostname.endsWith('.workers.dev') &&
           !(request.method === 'POST' && INGEST_DOORS.indexOf(path) !== -1)) {
@@ -610,45 +652,21 @@ export default {
       return json({ ok: false, error: 'Server hiccup. Please try again shortly.' }, 500);
     }
   },
-  /* Monthly cron (1st, 00:00 UTC): prune the idle Known-IPs rows, clear
-     soft-deleted comments past their window and the replies they orphaned,
-     sweep stray DM rows, clear read notifications and their dead weight, then
-     back the database up to R2 so the dump reflects the cleaned state (the prior
-     month's backup, kept ninety days, still holds what was just removed). */
+  /* The four crons (2026-09-16), each a chain through ops.ts's runChain: every
+     step in its own try/catch (a failed prune no longer skips the step behind
+     it), the chain's heartbeat stamped at the end, its failures and the
+     self-check's findings folded into alerts (email/Discord — Platform
+     settings). Hourly: the reclamation sweeps. Daily 03:15 UTC: the backup,
+     then the self-check. Daily 23:30 UTC (late, so the day meters read
+     near-complete): the usage check, then the self-check. Monthly (1st,
+     00:00 UTC): the housekeeping and the avatar mirror — the backup itself is
+     daily now, and the 1st's object is kept 400 days (Domain.Ops.keepBackup). */
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    /* Hourly: only sweep expired disappearing DMs + their media (cheap, frequent,
-       the reclamation pass behind the instant read-time hiding). Monthly (any
-       other schedule): the sweep plus the full housekeeping + backup chain. */
-    if (event && event.cron === '0 * * * *') {
-      ctx.waitUntil(sweepExpiredDms(env)
-        .then(() => sweepWallOrphanMedia(env))
-        .then(() => sweepMediaRetention(env))
-        .then(() => enforceWallMediaCap(env)));
-      return;
-    }
-    /* Daily (23:30 UTC — late in the UTC day, so the day-quota meters read
-       near-complete): the Cloudflare free-tier usage check. DMs every admin
-       (as merecat, an Automated notice) when a meter crosses 80% or its
-       ceiling; no-ops until the CF_USAGE_TOKEN secret is set. */
-    if (event && event.cron === '30 23 * * *') {
-      ctx.waitUntil(runUsageCheck(env));
-      return;
-    }
-    ctx.waitUntil(
-      sweepExpiredDms(env)
-        .then(() => pruneIdentityIps(env))
-        .then(() => pruneComments(env))
-        .then(() => sweepJournalComments(env))
-        .then(() => sweepDms(env))
-        .then(() => sweepCalls(env))
-        .then(() => pruneNotifications(env))
-        .then(() => pruneMerecatChats(env))
-        .then(() => sweepWallOrphanMedia(env))
-        .then(() => sweepMediaRetention(env))
-        .then(() => enforceWallMediaCap(env))
-        .then(() => pruneWallPosts(env))
-        .then(() => runBackup(env))
-    );
+    const cron = event && event.cron;
+    if (cron === '0 * * * *') { ctx.waitUntil(runChain(env, 'hourly', HOURLY_STEPS)); return; }
+    if (cron === '15 3 * * *') { ctx.waitUntil(runChain(env, 'daily', DAILY_STEPS)); return; }
+    if (cron === '30 23 * * *') { ctx.waitUntil(runChain(env, 'usage', USAGE_STEPS)); return; }
+    ctx.waitUntil(runChain(env, 'monthly', MONTHLY_STEPS));
   },
 };
 
