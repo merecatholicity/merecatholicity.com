@@ -694,6 +694,10 @@ make bundle                                          # the stamp gives app.js it
 $EDITOR styles/main.css                              # the one Tailwind entry
 make css                                             # tailwindcss -> docs/style.css
 
+# The restore drill: fetch the latest daily D1 backup from R2 and replay it locally
+make comments-backup                                 # or DAY=2026-09-01 for a month's object
+make comments-backup-check FILE=~/.config/merecatholicity/backups/comments-2026-09-01.sql.gz
+
 # Add a book to the library: write its converter + WORKS entry in resources/, then
 make -C resources body pdf html
 make check

@@ -96,7 +96,9 @@ tests/
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
                        slug parity, the docs/ source-vs-generated split and its orphans, the version
                        stamp, the boot splash, the baked partials, the librarian's sources and ingest
-                       ledger, the writings detector behind the comments switches
+                       ledger, the writings detector behind the comments switches, the restore drill's
+                       checker (backup_check: twice to the same counts, the FTS tail skipped where the
+                       box's sqlite lacks FTS5, a non-idempotent dump named)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 

@@ -276,12 +276,19 @@ chart-pdfs:
 serve:
 	python -m http.server 8000 --bind 127.0.0.1 --directory docs
 
-# Export the live comments database to a local .sql file. The file stays out
-# of git: commenters' text belongs on the site, not in the repo history.
-.PHONY: comments-backup
+# The restore drill (2026-09-16): fetch the worker's latest daily D1 backup from
+# R2 (today's, else yesterday's; DAY=YYYY-MM-DD for another — the 1st of a month
+# is kept 400 days) to ~/.config/merecatholicity/backups/, OUTSIDE the repo —
+# commenters' text belongs on the site, not in the repo history — and replay it
+# twice into a local SQLite, printing every table's count. Needs the site token
+# in ci.env (it is the one that reads R2). `wrangler d1 export` is gone: it
+# refuses a database with FTS5 tables; the worker's own dump is the backup.
+.PHONY: comments-backup comments-backup-check
 comments-backup:
-	cd comments-worker && npx wrangler d1 export merecatholicity-comments --remote --output ../comments-backup.sql
-	@echo "exported comments-backup.sql (kept out of git)"
+	@f=$$(scripts/backup_fetch.sh $(DAY)) && echo "fetched $$f" && python3 scripts/backup_check.py "$$f"
+comments-backup-check:
+	@test -n "$(FILE)" || { echo "usage: make comments-backup-check FILE=path/to/comments-YYYY-MM-DD.sql.gz"; exit 2; }
+	python3 scripts/backup_check.py "$(FILE)"
 
 # Rebuild and push everything merecat (the librarian bot) knows: the corpus
 # chunks, the persona, and the config, all from librarian/. Incremental, so

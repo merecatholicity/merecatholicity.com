@@ -361,7 +361,9 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   Until then *Send a test alert* reports the refusal verbatim; Discord works at once. The
   daily backup (03:15 UTC) and the self-check ride the same road; the Health card there is
   the truth, and `POST /api/comments/ops/report {probe:true}` (ingest key) is the outside
-  probe `ops-watch.yml` runs.
+  probe `ops-watch.yml` runs. **The restore drill** is `make comments-backup`: the site token
+  fetches the latest daily object from R2 (outside the repo) and `scripts/backup_check.py`
+  replays it twice into a local SQLite — `wrangler d1 export` is gone (it refuses FTS5).
 - **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `TURN_KEY_SECRET`,
   `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
   Never in git, never in CI. `CF_USAGE_TOKEN` (read-only, *Account Analytics: Read*)
