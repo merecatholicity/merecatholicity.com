@@ -267,7 +267,8 @@ Yes. **The tree** — every file named for its feature:
 ```
 purescript/src/Domain/*.purs        the rulebook (32 modules) — unchanged, it's the model
 app/
-  core.ts        membrane (PS → JS)          api.ts     typed endpoints
+  core.ts        membrane (PS → JS)          api.ts     typed endpoints (the DM reads return their wire shapes)
+  wire.ts        the DM wire shapes, types only — the worker's routes/dm.ts builds them, the views read them (2026-09-16)
   store.ts       request cache               shell.ts   SPA shell
   richtext.ts    THE body renderer           live.ts    WebSocket lifecycle
   appchrome/     sidebar · deskbar · home · settings · footer (split from appchrome.ts)

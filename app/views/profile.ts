@@ -10,6 +10,7 @@
    dominated by the Turnstile-gated composer, stays kit machinery. */
 
 import { LitElement, html, nothing } from 'lit';
+import type { DmThreadsPayload, DmThreadsRow } from '../wire.ts';
 import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
 
 class McProfile extends LitElement {
@@ -81,7 +82,7 @@ customElements.define('mc-profile', McProfile);
 class McInbox extends LitElement {
   static properties = { d: { attribute: false }, err: { attribute: false }, pres: { attribute: false }, typing: { attribute: false } };
   declare kit: any;
-  declare d: any;
+  declare d: DmThreadsPayload | null;
   declare err: string;
   declare pres: any;   // { online: {hash:true}, seen: {hash: epoch} } once the presence read answers
   declare typing: Record<string, string>;   // conversation key ('t<id>' for a group, the other's hash for a pair) → the typist's hash (2026-09-11; keyed by the conversation since 2026-09-13)
@@ -129,7 +130,7 @@ class McInbox extends LitElement {
   }
   /* A row's name and door (2026-09-13): a pair by its other, a group by its
      name or its members' names, opened by its id. */
-  _rowLabel(t: any): string {
+  _rowLabel(t: DmThreadsRow): string {
     if (Number(t.kind) === 1) {
       if (t.name) return String(t.name);
       const names = (t.members || []).map((m: any) => m.nick || m.assigned || this.kit.displayName(m.hash));
@@ -137,8 +138,8 @@ class McInbox extends LitElement {
     }
     return this.kit.dmLabel(t.other_hash, t.nick);
   }
-  _rowHref(t: any): string { return t.thread_id ? 'messages.html?t=' + t.thread_id : 'messages.html?dm=' + t.other_hash; }
-  _groupTpl(t: any) {
+  _rowHref(t: DmThreadsRow): string { return t.thread_id ? 'messages.html?t=' + t.thread_id : 'messages.html?dm=' + t.other_hash; }
+  _groupTpl(t: DmThreadsRow) {
     const typist = this.typing && this.typing['t' + (t.thread_id || t.id)];
     if (typist) {
       const row = (t.members || []).find((m: any) => m.hash === typist);
@@ -158,7 +159,7 @@ class McInbox extends LitElement {
       if (!d.ok) throw new Error(d.error || 'failed');
       kit.dmCacheSet(d.unread_total);
       this.d = d;
-      this._presence(d.threads.map((t: any) => t.other_hash).filter(Boolean));
+      this._presence(d.threads.map((t: DmThreadsRow) => t.other_hash).filter(Boolean));
     }).catch(() => { this.err = 'load'; });
   }
   /* Online / Last seen … / Offline under each name (2026-09-11), the thread

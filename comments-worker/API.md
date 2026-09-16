@@ -532,6 +532,12 @@ Conversations of two to twenty-five members (`Domain.Dm.maxMembers`), ONE
 model for both since migration 0016: a thread with member rows (`dm_members`)
 — a pair is two of them, keyed once by `pair_key`; a group (`kind` 1) any
 number more, with an optional name. Private by design (no admin read path).
+
+The payload shapes below are TYPED once in `app/wire.ts` (`DmThreadPayload`,
+`DmThreadsPayload`, `DmRosterPayload`, `DmMessage`, `DmMember`, `DmSendBody`):
+the worker builds them as those types and `app/api.ts` returns them — this
+section is their prose, and a field added on one side without the other is a
+compile error.
 Every read runs from the viewer's own seat: what they may see is unheld or
 their own, newer than their clear stamp, no older than their joining (a
 member added later gets no history — the crypto's rule too), and in a group

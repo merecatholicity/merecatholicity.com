@@ -58,6 +58,7 @@ import {
   verifyTurnstile,
   notifUnreadCount,
 } from '../lib.ts';
+import type { DmRosterPayload, DmThreadPayload, DmThreadsPayload } from '../../../app/wire.ts';
 
 async function handleDmSend(request: any, env: any, ctx: any) {
   let data;
@@ -283,8 +284,9 @@ async function handleDmRoster(request: any, env: any) {
   const found = await dmThreadFor(env, me, data);
   if (!found) return json({ ok: false, error: 'No such conversation.' }, 404);
   const members = found.thread ? await dmCurrentMembers(env, found.thread.id) : await dmPubkeysOf(env, [me, found.other]);
-  return json({ ok: true, thread_id: found.thread ? found.thread.id : null, kind: found.thread ? (Number(found.thread.kind) || 0) : 0,
-    name: (found.thread && found.thread.name) || null, members }, 200);
+  const roster: DmRosterPayload = { ok: true, thread_id: found.thread ? found.thread.id : null, kind: found.thread ? (Number(found.thread.kind) || 0) : 0,
+    name: (found.thread && found.thread.name) || null, members };
+  return json(roster, 200);
 }
 
 /* A group is born (2026-09-13): the creator and the members they named, each
@@ -495,8 +497,9 @@ async function handleDmThreads(request: any, env: any) {
     delete out.members_json;
     return out;
   });
-  return json({ ok: true, threads, total: totals.n || 0,
-    unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE }, 200);
+  const inbox: DmThreadsPayload = { ok: true, threads, total: totals.n || 0,
+    unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE };
+  return json(inbox, 200);
 }
 
 /* One conversation — by its id, or a pair's by its other (the door every
@@ -552,9 +555,10 @@ async function handleDmThread(request: any, env: any, ctx: any) {
   const threadOut = { id: thread ? thread.id : null, kind, name: (thread && thread.name) || null, ttl, members };
   if (!thread) {
     /* No words yet: an empty room, ready for the first message. */
-    return json({ ok: true, thread_id: null, ttl, thread: threadOut, other: otherRow,
+    const room: DmThreadPayload = { ok: true, thread_id: null, ttl, thread: threadOut, other: otherRow,
       messages: [], total: 0, page: 1, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0, unread: 0, unread_from: null,
-      notif_unread: await notifUnreadCount(env, me) }, 200);
+      notif_unread: await notifUnreadCount(env, me) };
+    return json(room, 200);
   }
   /* The total and the pages are the viewer's own: held words count for their
      sender and for nobody else, a member sees only what arrived after their
@@ -655,10 +659,11 @@ async function handleDmThread(request: any, env: any, ctx: any) {
       }
     }
   }
-  return json({ ok: true, thread_id: thread.id, ttl, thread: threadOut, other: otherRow,
+  const payload: DmThreadPayload = { ok: true, thread_id: thread.id, ttl, thread: threadOut, other: otherRow,
     messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0,
     unread: (unreadRow && unreadRow.n) || 0, unread_from: (unreadRow && unreadRow.first_id) || null,
-    notif_unread: await notifUnreadCount(env, me) }, 200);
+    notif_unread: await notifUnreadCount(env, me) };
+  return json(payload, 200);
 }
 
 /* The badge count: unread WORDS across every thread (2026-09-11), one summed

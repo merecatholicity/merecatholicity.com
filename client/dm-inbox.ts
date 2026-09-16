@@ -2,6 +2,7 @@
    Split out of client/dm.ts on 2026-09-16 (the six DM factories); every declaration
    moved verbatim. Names from the boot and the other modules are bound in bind(). */
 import type { Boot } from './boot';
+import type { DmThreadsRow } from '../app/wire.ts';
 
 export function installDmInbox(B: Boot) {
   /* Names this module takes from the boot — the root's helpers and the other
@@ -320,7 +321,7 @@ export function installDmInbox(B: Boot) {
 
   /* An inbox row's name, door, key and target (2026-09-13): a pair by its
      other, a group by its name or its members' names, opened by its id. */
-  function dmRowLabel(t: any) {
+  function dmRowLabel(t: DmThreadsRow) {
     if (Number(t.kind) === 1) {
       if (t.name) return String(t.name);
       var names = (t.members || []).map(function (m: any) { return m.nick || m.assigned || displayName(m.hash); });
@@ -329,9 +330,9 @@ export function installDmInbox(B: Boot) {
     return dmLabel(t.other_hash, t.nick);
   }
 
-  function dmRowTarget(t: any) { return t.thread_id ? { thread_id: t.thread_id } : { with: t.other_hash }; }
+  function dmRowTarget(t: DmThreadsRow) { return t.thread_id ? { thread_id: t.thread_id } : { with: t.other_hash }; }
 
-  function dmMembersLabel(t: any) { var n = Number(t.member_count) || ((t.members || []).length + 1); return n + ' members'; }
+  function dmMembersLabel(t: DmThreadsRow) { var n = Number(t.member_count) || ((t.members || []).length + 1); return n + ' members'; }
 
   function viewInbox() {
     /* The Lit <mc-inbox> renders into its own subtree without clearing section,
