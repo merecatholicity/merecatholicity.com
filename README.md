@@ -551,6 +551,14 @@ spend reaches the line, telling the asker how many hours until midnight UTC — 
 is never the reason the account crosses its quota. Without the token the guard has no
 meter and stands open, which the admin page says in words.
 
+**Alerts (2026-09-16).** The platform speaks when something is wrong — a cron step that
+failed, a missing daily backup, a usage meter past its band — through **Admin → Platform
+settings → Alerts**: an email address (mail from `alerts@merecatholicity.com` through the
+worker's `send_email` binding; the address must be a verified destination in Cloudflare →
+Email Routing → Destination addresses, a dashboard act) and a Discord channel webhook, each
+with its own switch — email, Discord or both; empty or unticked is silent. *Send a test
+alert* saves the four fields and reports what each channel answered, refusals verbatim.
+
 ### merecat, the librarian
 
 merecat is a members-open RAG chat (`community.html?merecat=1`) living in the comments

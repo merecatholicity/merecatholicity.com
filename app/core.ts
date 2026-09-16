@@ -41,6 +41,7 @@ import * as Merecat from '../purescript/output/Domain.Merecat/index.js';
 import * as Cache from '../purescript/output/Domain.Cache/index.js';
 import * as Ptr from '../purescript/output/Domain.Ptr/index.js';
 import * as Tap from '../purescript/output/Domain.Tap/index.js';
+import * as Ops from '../purescript/output/Domain.Ops/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -370,6 +371,12 @@ export const wallEnabledFrom = (v: any): boolean => Wall.enabledFrom(v == null ?
    same reason: getting it backwards puts every phone back in front of a
    challenge that takes the page down. */
 export const turnstileSkipFrom = (v: any): boolean => Turnstile.skipFrom(v == null ? '' : String(v));
+
+/* opsIsEmailAddress(v): the alerts' address rule (Domain.Ops.isEmailAddress —
+   the contact form's shape, no empty label). The Platform settings panel
+   refuses a typo before the round trip; the worker's settings door is the
+   authority and applies the same rule. */
+export const opsIsEmailAddress = (v: unknown): boolean => Ops.isEmailAddress(v == null ? '' : String(v).trim());
 
 /* Comments sections (Domain.Comments): the site's own writings that may carry
    one (DETECTED from content/ and the Makefile by scripts/writings.py into the

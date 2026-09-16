@@ -1267,6 +1267,71 @@ export function installAdmin(B: Boot) {
         jLinkP.appendChild(jLink); jLinkP.appendChild(document.createTextNode('.'));
         wrap.appendChild(jLinkP);
 
+        /* ---- Alerts (2026-09-16): where the worker speaks. Email, Discord or
+           both — a channel speaks when its box is ticked AND its field holds a
+           valid value (Domain.Ops.channelsFrom); empty or unticked is silent. ---- */
+        wrap.appendChild(el('h3', null, 'Alerts'));
+        desc(wrap, 'Where the platform reports trouble — a cron step that failed, a missing daily backup, a usage meter past its band. Email, Discord, or both: a channel speaks when its box is ticked and its field is filled; empty or unticked is silent.');
+        var alEmRow = el('p', 'admin-set-row mc-set-key');
+        alEmRow.appendChild(el('label', null, 'Alert email address:'));
+        var alEm = el('input') as HTMLInputElement;
+        alEm.type = 'email'; alEm.placeholder = 'you@example.org'; alEm.autocomplete = 'off';
+        alEm.value = String(s.alert_email || '');
+        alEmRow.appendChild(alEm);
+        wrap.appendChild(alEmRow);
+        var alEmOn = checkRow(wrap, 'Send alerts by email', s.alert_email_on !== '0');
+        desc(wrap, 'Mail comes from alerts@merecatholicity.com. The address must be a verified destination in Cloudflare → Email Routing → Destination addresses (Cloudflare mails a confirmation link to it); until it is, a test alert reports the refusal right here.');
+        var alDcRow = el('p', 'admin-set-row mc-set-key');
+        alDcRow.appendChild(el('label', null, 'Alert Discord webhook:'));
+        var alDc = el('input') as HTMLInputElement;
+        alDc.type = 'url'; alDc.placeholder = 'https://discord.com/api/webhooks/…';
+        alDc.value = String(s.alert_discord_webhook || '');
+        alDcRow.appendChild(alDc);
+        wrap.appendChild(alDcRow);
+        var alDcOn = checkRow(wrap, 'Send alerts to Discord', s.alert_discord_on !== '0');
+        desc(wrap, 'A channel webhook of its own (Discord: Server Settings → Integrations → Webhooks), separate from the forum and feed announcement hooks on the Discord webhooks page.');
+        function alertKeys() {
+          return {
+            alert_email: alEm.value.trim(),
+            alert_email_on: alEmOn.checked ? '1' : '0',
+            alert_discord_webhook: alDc.value.trim(),
+            alert_discord_on: alDcOn.checked ? '1' : '0',
+          };
+        }
+        /* The same rule the worker's door applies, so a typo is named before
+           the round trip; the server remains the authority. */
+        function alertAddressProblem() {
+          var v = alEm.value.trim();
+          return v && window.mcCore && !window.mcCore.opsIsEmailAddress(v) ? 'That is not a valid email address.' : '';
+        }
+        var alTest = el('button', 'btn btn-send', 'Send a test alert') as HTMLButtonElement;
+        alTest.type = 'button';
+        var alTestNote = el('p', 'form-status');
+        alTest.addEventListener('click', function () {
+          var problem = alertAddressProblem();
+          if (problem) { alTestNote.textContent = problem; return; }
+          alTest.disabled = true; alTestNote.textContent = 'Saving the alert settings, then sending…';
+          /* save these four keys first, so the test speaks through what is on screen */
+          fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key, set: alertKeys() }) }).then(function (r) { return r.json(); }).then(function (d3) {
+            if (!d3 || !d3.ok) throw new Error((d3 && d3.error) || 'Save failed.');
+            return fetch(API + '/admin/alert-test', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); });
+          }).then(function (d4) {
+            alTest.disabled = false;
+            if (!d4 || !d4.ok) { alTestNote.textContent = (d4 && d4.error) || 'The test could not be sent.'; return; }
+            var parts: string[] = [];
+            var ch = d4.channels || [];
+            if (!ch.length) parts.push('No channel is open — fill a field and tick its box.');
+            if (ch.indexOf('email') !== -1) parts.push(d4.email ? 'Email: sent to ' + alEm.value.trim() + '.' : 'Email: refused.');
+            if (ch.indexOf('discord') !== -1) parts.push(d4.discord ? 'Discord: posted.' : 'Discord: refused.');
+            (d4.errors || []).forEach(function (e: string) { parts.push(e); });
+            alTestNote.textContent = parts.join(' ');
+          }).catch(function (e) { alTest.disabled = false; alTestNote.textContent = (e && e.message) || 'The test could not be sent.'; });
+        });
+        wrap.appendChild(alTest);
+        wrap.appendChild(alTestNote);
+
         /* ---- Save (all tunables above; each panel contributes its own keys —
            the legacy global per-kind size keys are no longer written and stand
            only as server-side fallbacks for areas never saved here). ---- */
@@ -1290,6 +1355,8 @@ export function installAdmin(B: Boot) {
         saveBtn.type = 'button';
         var saveStatus = el('p', 'form-status');
         saveBtn.addEventListener('click', function () {
+          var problem = alertAddressProblem();
+          if (problem) { saveStatus.textContent = problem; return; }
           saveBtn.disabled = true;
           saveStatus.textContent = 'Saving…';
           var set: any = {
@@ -1312,7 +1379,7 @@ export function installAdmin(B: Boot) {
               cmBoxes.filter(function (b) { return b.cb.checked; }).map(function (b) { return b.path; })),
             comments_journal: jCm.checked ? '1' : '0',
           };
-          Object.assign(set, panelKeys('wall', pWall), panelKeys('board', pBoard), panelKeys('dm', pDm));
+          Object.assign(set, panelKeys('wall', pWall), panelKeys('board', pBoard), panelKeys('dm', pDm), alertKeys());
           fetch(API + '/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: state.key, set: set }) }).then(function (r) { return r.json(); }).then(function (d2) {
             saveBtn.disabled = false;
