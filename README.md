@@ -600,6 +600,15 @@ cd contact-worker && npx wrangler deploy  # contact worker
 Never `wrangler deploy` the comments worker without the gates — `make worker-deploy` runs
 `jscheck` first, because an undefined identifier ships silently otherwise.
 
+**Rollback, staged rollout, the outside watchdog (2026-09-16).** `make worker-rollback` re-points
+traffic at the previous Worker Version in seconds (`VERSION=<id>` for another) and probes — then
+`git revert` + push, or the next push re-deploys what was rolled away from. A change no webtest
+covers can go out staged: `gh workflow run workers.yml -f mode=stage -f percent=10` uploads a
+Version and sends a tenth of traffic to it; `-f mode=promote` sends everything. `ops-watch.yml`
+asks the worker how it is every morning and fails its run — GitHub mails the owner — when a
+heartbeat is stale, a condition is open or the day's backup is missing; the dev box's nightly
+headless run (`make nightly-install`, `scripts/webtest_nightly.py`) reports to the same door.
+
 ### Infrastructure as code (Terraform)
 
 `terraform/` holds the infrastructure that outlives a deploy. It was adopted by import

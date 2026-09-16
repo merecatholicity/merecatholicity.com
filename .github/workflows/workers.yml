@@ -43,6 +43,16 @@ on:
       - 'eslint.config.js'
       - '.github/workflows/workers.yml'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'deploy = the normal push road; stage = upload a Version and send `percent` of traffic to it; promote = 100% to the newest Version (CICD.md §12)'
+        type: choice
+        options: [deploy, stage, promote]
+        default: deploy
+      percent:
+        description: 'For stage: the share of traffic the new Version gets (1-99)'
+        required: false
+        default: '10'
 
 permissions:
   contents: read
@@ -173,6 +183,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '6093bc0889c95a08f0a92a8df6750c66' }}
           CONTACT: ${{ needs.check.outputs.contact_changed }}
+          # staged rollout (workflow_dispatch only; a push is always `deploy`)
+          MODE: ${{ github.event.inputs.mode || 'deploy' }}
+          PERCENT: ${{ github.event.inputs.percent || '10' }}
+          MC_STAGE_MESSAGE: 'staged from workers.yml by ${{ github.actor }} (${{ github.sha }})'
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::notice::CLOUDFLARE_WORKERS_TOKEN not set — gates passed, nothing deployed. Add the secret to enable CI deploys; until then \`make worker-deploy\` is the road."
@@ -180,8 +194,12 @@ jobs:
           fi
           cd comments-worker
           npx wrangler d1 migrations apply merecatholicity-comments --remote
-          npx wrangler deploy
           cd ..
+          case "$MODE" in
+            stage)   scripts/worker_stage.sh stage "$PERCENT" ;;
+            promote) scripts/worker_stage.sh promote ;;
+            *)       (cd comments-worker && npx wrangler deploy) ;;
+          esac
           if [ "$CONTACT" = "yes" ]; then
             (cd contact-worker && npx wrangler deploy)
           else

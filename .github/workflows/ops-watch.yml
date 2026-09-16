@@ -1,0 +1,81 @@
+# ops-watch — the watchdog's outside leg (2026-09-16).
+#
+# The comments worker checks itself twice a day (comments-worker/src/ops.ts:
+# the 03:15 backup chain and the 23:30 usage chain run runSelfCheck, and a
+# missing backup, a failed step or a stale heartbeat alerts by email/Discord
+# from Platform settings). A watchdog inside a dead worker says nothing, so
+# this workflow asks from outside: every day at 03:45 UTC — half an hour after
+# the backup — it POSTs {probe:true} to the ops report door and FAILS THE RUN
+# when the health object's `ok` is false (a stale heartbeat, an open
+# condition, no plausible backup object). GitHub's own failed-run email is
+# the alert that needs no worker at all.
+#
+# The door is keyed like the librarian's pipeline (MC_INGEST_KEY, the same
+# secret merecat.yml uses — no new credential) and is reached on the worker's
+# workers.dev hostname: the zone's Bot Fight Mode turns a GitHub runner away
+# and cannot be skipped on the Free plan; that hostname serves nothing but the
+# ingest doors, each of which demands the key. Never on a pull_request: no
+# secret is present there (CICD.md Principle 3). `host` exists for the drill:
+# point it at nowhere and the run must go red.
+name: ops-watch
+
+on:
+  schedule:
+    - cron: '45 3 * * *'
+  workflow_dispatch:
+    inputs:
+      host:
+        description: 'The worker host to probe (the drill points it at nowhere to prove the run goes red)'
+        required: false
+        default: 'https://merecatholicity-comments.support-609.workers.dev'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-watch
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask the worker how it is
+        env:
+          MC_INGEST_KEY: ${{ secrets.MC_INGEST_KEY }}
+          HOST: ${{ github.event.inputs.host || 'https://merecatholicity-comments.support-609.workers.dev' }}
+        run: |
+          if [ -z "$MC_INGEST_KEY" ]; then
+            echo "::error::MC_INGEST_KEY is not set — the probe cannot open the door"; exit 1
+          fi
+          code=$(curl -s -m 30 -o /tmp/health.json -w '%{http_code}' -X POST "$HOST/api/comments/ops/report" \
+            -H 'Content-Type: application/json' --data-binary "{\"key\":\"$MC_INGEST_KEY\",\"probe\":true}" || true)
+          echo "POST $HOST/api/comments/ops/report -> $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::the door did not answer 200 (got $code) — the worker is unreachable or the key is refused"; exit 1
+          fi
+          python3 - <<'PY'
+          import json, sys, time
+          d = json.load(open('/tmp/health.json'))
+          h = d.get('health') or {}
+          now = h.get('now') or int(time.time())
+          def ago(s): return 'never' if not s else '%dh%02dm ago' % divmod((now - s) // 60, 60)
+          print('ok:', h.get('ok'))
+          for b in h.get('heartbeat', []):
+              print('  %-8s %s%s' % (b['name'], ago(b.get('last')), '  STALE' if b.get('stale') else ''))
+          print('  backup object:', (h.get('object') or {}).get('key'), '| backup_ok:', h.get('backup_ok'))
+          print('  open conditions:', h.get('open'))
+          w = h.get('webtest') or {}
+          if w: print('  nightly webtest: %s pass %s fail, regressions %s' % (w.get('pass'), w.get('fail'), w.get('regressions')))
+          with open('/tmp/summary.md', 'w') as f:
+              f.write('### Worker health: %s\n\n' % ('ok' if h.get('ok') else 'NOT OK'))
+              f.write('| chain | last beat |\n|---|---|\n')
+              for b in h.get('heartbeat', []):
+                  f.write('| %s | %s%s |\n' % (b['name'], ago(b.get('last')), ' **STALE**' if b.get('stale') else ''))
+              f.write('\nbackup object: `%s`, backup_ok: %s, open: %s\n' % ((h.get('object') or {}).get('key'), h.get('backup_ok'), h.get('open')))
+          if not h.get('ok'):
+              print('::error::the worker says it is not ok — read the table above; the Health card in Platform settings has the detail')
+              sys.exit(1)
+          PY
+          cat /tmp/summary.md >> "$GITHUB_STEP_SUMMARY"

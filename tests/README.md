@@ -98,7 +98,9 @@ tests/
                        stamp, the boot splash, the baked partials, the librarian's sources and ingest
                        ledger, the writings detector behind the comments switches, the restore drill's
                        checker (backup_check: twice to the same counts, the FTS tail skipped where the
-                       box's sqlite lacks FTS5, a non-idempotent dump named)
+                       box's sqlite lacks FTS5, a non-idempotent dump named), the nightly run's summary
+                       parser and its baseline comparison (webtest_nightly: a rise above the baseline or
+                       a crash is a regression, the known admin-key shape is not)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 

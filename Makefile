@@ -76,6 +76,41 @@ tests: psbuild
 worker-deploy: jscheck psbuild
 	npm run worker:deploy
 
+# Rollback and staged rollout (2026-09-16, CICD.md §12). The workers token from
+# ci.env. `worker-rollback` re-points traffic at the previous Version (or
+# VERSION=<id>) in seconds and probes — then `git revert` + push, or the next
+# push re-deploys what you rolled away from. `worker-stage` uploads THIS
+# checkout as a Version and gives it PERCENT of traffic (the CI road is
+# `gh workflow run workers.yml -f mode=stage -f percent=10`, the build of
+# record; this is the emergency hand road); `worker-promote` sends 100% to the
+# newest Version; `worker-status` shows the split.
+.PHONY: worker-rollback worker-stage worker-promote worker-status
+worker-rollback:
+	scripts/worker_rollback.sh $(VERSION)
+worker-stage: jscheck psbuild
+	scripts/worker_stage.sh stage $(or $(PERCENT),10)
+worker-promote:
+	scripts/worker_stage.sh promote
+worker-status:
+	scripts/worker_stage.sh status
+
+# The nightly headless run against production (2026-09-16): the read-only
+# webtest suites, compared with webtest/nightly_baseline.json, reported to the
+# worker's ops door (the Health card; a regression alerts). `nightly-install`
+# links the user systemd units (04:30 local, catches up a missed night).
+.PHONY: nightly-run nightly-baseline nightly-install
+nightly-run:
+	python3 scripts/webtest_nightly.py run
+nightly-baseline:
+	python3 scripts/webtest_nightly.py baseline
+nightly-install:
+	mkdir -p $(HOME)/.config/systemd/user
+	cp scripts/systemd/webtest-nightly.service scripts/systemd/webtest-nightly.timer $(HOME)/.config/systemd/user/
+	systemctl --user daemon-reload
+	systemctl --user enable --now webtest-nightly.timer
+	@loginctl enable-linger $(USER) 2>/dev/null || echo "note: 'loginctl enable-linger $(USER)' needs privileges — without it the timer runs only while you are logged in"
+	systemctl --user list-timers webtest-nightly.timer --no-pager
+
 # D1 migrations for the persistent comments DB (comments-worker/migrations/).
 # A schema change = a NEW migrations/NNNN_name.sql (wrangler d1 migrations create),
 # then `make migrate`. `schema.sql` is a GENERATED snapshot (make schema-snapshot);

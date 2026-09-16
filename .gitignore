@@ -128,3 +128,7 @@ docs/dr.json
 # list of the site's own writings, detected from content/ and the Makefile —
 # never hand-kept, never committed). See CLAUDE.md.
 purescript/src/Domain/Writings.purs
+
+# local/ is the dev box's own: a second agent's worktrees (scripts/agent_worktree.sh),
+# scratch, the retired GPU backend's leftovers. Never tracked.
+local/

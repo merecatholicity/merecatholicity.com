@@ -1,0 +1,14 @@
+# The dev box's nightly headless run against production (2026-09-16):
+# scripts/webtest_nightly.py runs the read-only webtest suites, compares
+# each with webtest/nightly_baseline.json and reports to the worker's ops
+# door (the Health card shows it; a regression alerts). A user unit —
+# `make nightly-install` links and enables it with its timer.
+[Unit]
+Description=merecatholicity.com nightly headless webtest against production
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/repos/merecatholicity.com
+ExecStart=/usr/bin/env bash -lc 'make nightly-run'
+Nice=10
