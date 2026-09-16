@@ -1,6 +1,8 @@
 /* comments-worker/src/routes/dm.ts — the direct messages: the send core (deliverDmWord) and the forward, the roster, the groups and their announcements, the inbox and the thread, unread, presence, blocked, ttl, save, react, seen, edit, redact, the media upload and GET, block, delete, the directory and the public key.
    Every handler here moved verbatim from index.ts (2026-09-16, the route split);
-   index.ts keeps the ROUTES table and imports what it mounts. */
+   index.ts keeps the ROUTES table and imports what it mounts. The three read
+   payloads (/dm/thread, /dm/threads, /dm/roster) are built as their app/wire.ts
+   types — the one home of the DM wire shapes, shared with app/api.ts (2026-09-16). */
 import * as Dm from '../../../purescript/output/Domain.Dm/index.js';
 import * as Prefs from '../../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../../purescript/output/Domain.Media/index.js';
