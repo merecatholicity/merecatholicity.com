@@ -330,5 +330,13 @@ origin; `tsc` strict-green over client + workers; the kernel still the single
 source of every rule. The measurements here are the before; this table is how the
 after gets checked.
 
+**Toolchain note — TypeScript 7 (2026-09-16).** The pinned `typescript` 7.0.2 is the native
+(Go) compiler: exact-pinned in `package.json`, leading-edge, and without a JavaScript compiler
+API (its package exports only `version`/`versionMajorMinor`), which is why typescript-eslint
+cannot run here and the `: any` ratchet is a stdlib test instead. Expect churn between
+minors; the gate is `npm run tsc` (`make jscheck`) staying green. The re-check that a JS API
+is back — `node -e "console.log(Object.keys(require('typescript')).length)"` reading more than
+2 — sits in `tests/js/any_ratchet.test.mjs`'s header.
+
 *Metrics captured by `scratchpad/clonescan.py` (window=6) and direct `grep`/`wc`
 over the tree; re-run them after each phase to refresh the before/after.*

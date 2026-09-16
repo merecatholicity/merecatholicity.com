@@ -87,6 +87,8 @@ tests/
                        the route table held to its snapshot and every entry dispatched through the loaded worker (routes);
                        the worker's voice — the settings door's address/webhook validators, the test door sending
                        through exactly the channels the settings open and reporting each refusal (alerts);
+                       the member directory hiding the test and probe identities (hidden_hashes: the secret's
+                       and the var's lists joined, whole hashes only, run through the door);
                        the backup — the dump replayed twice into a fresh SQLite and the same ledger both times,
                        runBackup's object, prune and record, the avatar mirror (backup); the cron chains, the
                        self-check and the health read RUN — a throwing step that stops nothing, once/quiet/recovered,
@@ -100,7 +102,9 @@ tests/
                        checker (backup_check: twice to the same counts, the FTS tail skipped where the
                        box's sqlite lacks FTS5, a non-idempotent dump named), the nightly run's summary
                        parser and its baseline comparison (webtest_nightly: a rise above the baseline or
-                       a crash is a regression, the known admin-key shape is not)
+                       a crash is a regression, the known admin-key shape is not), API.md's parity with the
+                       route table (api_parity: every mounted route named — abbreviations resolved — and every
+                       named path mounted or documented as retired)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 

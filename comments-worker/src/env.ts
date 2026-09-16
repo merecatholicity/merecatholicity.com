@@ -44,6 +44,7 @@ export interface Env {
   TURN_KEY_ID?: string;
   CF_ACCOUNT_ID?: string;
   ALERT_FROM?: string;
+  HIDDEN_HASHES?: string;
   /* secrets (`wrangler secret put`, never in a file) */
   TURNSTILE_SECRET?: string;
   VAPID_PRIVATE_KEY?: string;

@@ -59,6 +59,7 @@ import {
   sha256hex,
   verifyTurnstile,
   notifUnreadCount,
+  hiddenHashes,
 } from '../lib.ts';
 import type { DmRosterPayload, DmThreadPayload, DmThreadsPayload } from '../../../app/wire.ts';
 
@@ -1194,6 +1195,7 @@ async function handleDmDirectory(request: any, env: any, url: any) {
   /* Each member with the moment they first appeared (earliest live comment or
      profile creation), newest first, so the member list leads with the latest
      to join. The DM autocomplete ignores the order and the extra column. */
+  const hidden = hiddenHashes(env);
   const rows = await env.DB.prepare(
     'SELECT u.hash, u.joined, pr.nick FROM (' +
     '  SELECT hash, MIN(joined) AS joined FROM (' +
@@ -1202,10 +1204,12 @@ async function handleDmDirectory(request: any, env: any, url: any) {
     '  ) GROUP BY hash' +
     ') u LEFT JOIN profiles pr ON pr.hash = u.hash ' +
     /* The librarian and its machinery identities (merecat-named, which the
-       nick guard denies to members) belong in no roster or picker. */
+       nick guard denies to members) belong in no roster or picker — nor do the
+       test and probe identities (hiddenHashes: TEST_HASHES + HIDDEN_HASHES). */
     "WHERE u.hash != ?1 AND (pr.nick IS NULL OR pr.nick NOT LIKE 'merecat%') " +
+    (hidden.length ? 'AND u.hash NOT IN (' + hidden.map((_h: string, i: number) => '?' + (i + 2)).join(', ') + ') ' : '') +
     'ORDER BY u.joined DESC LIMIT 2000'
-  ).bind(MERECAT_BOT.hash).all();
+  ).bind(MERECAT_BOT.hash, ...hidden).all();
   const users = (rows.results || []).map((r: any) => Object.assign({}, r,
     { assigned: r.hash ? displayName(r.hash) : null }));
   return json({ ok: true, users }, 200, cacheHeader(url));

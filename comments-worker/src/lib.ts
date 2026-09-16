@@ -261,6 +261,16 @@ export function normalizePage(raw: any) {
   return PAGES.includes(p) ? p : null;
 }
 
+/* The identities that are machinery, not members (P3-3, 2026-09-16): the
+   TEST_HASHES secret (the write-bypass identities of the interactive kit) and
+   the HIDDEN_HASHES var (the read-only probes — the nightly webtest's, a
+   second agent's). Never listed in the member directory, never counted as a
+   member; their hashes are public by design, like the admins'. */
+export function hiddenHashes(env: { TEST_HASHES?: string; HIDDEN_HASHES?: string }): string[] {
+  const list = String(env.TEST_HASHES || '') + ',' + String(env.HIDDEN_HASHES || '');
+  return list.split(',').map((h) => h.trim()).filter((h) => /^[0-9a-f]{64}$/.test(h));
+}
+
 /* Fails closed. A blip reaching siteverify refuses the post rather than
    crashing the worker or waving the post through unverified. */
 export async function verifyTurnstile(env: any, token: any, ip: any, key: any) {

@@ -500,6 +500,22 @@ buster on `GET /avatar`. Resize + re-encode is **your** job.
 **`POST /api/comments/avatar/delete`** — `{key}`. `POST_LIMIT`, no gate, no
 Turnstile (a key holder may always remove their own avatar, even if locked).
 
+**`POST /api/comments/prefs`** (keyed, `READ_LIMIT`; never on the public profile read) — the
+settings gear. `{key}` reads, `{key, set:{…}}` writes then reads: `receipts` (`'auto'` | `'off'`,
+the read-receipts mode — a member with receipts off sends no stamp and is not waited for),
+`notify_reply` · `notify_mention` · `notify_dm` (1/0), `calls` (1/0 — off makes every offer to
+this member fake-succeed like a block), `muted` (an array of hashes, ≤ 300, the mute list that
+follows the member across devices). Answers `{ok:true, prefs:{receipts, notify_reply,
+notify_mention, notify_dm, calls, muted}}`.
+
+**`POST /api/comments/bookmark`** (keyed, `POST_LIMIT`) — `{key, kind:'topic'|'wall', ref, on}`
+toggles a saved item (`'wall'` is not a kind while the social layer is off — the same
+`400 "Bad request."` an unknown kind gets); answers `{ok:true, on}`. `/bookmarks` lists them.
+
+**`GET /api/comments/recent?p=`** (keyless, `READ_LIMIT`, cacheable) — the member-safe
+recent-activity window: the last live forum posts across the public categories, twenty a page;
+`{ok, items, page, more}`.
+
 ### 3.4 Turnstile (the four gated writes)
 
 `verifyTurnstile` POSTs `secret`/`response`/`remoteip` to Cloudflare
@@ -649,6 +665,25 @@ notifications and DMs.
 | `POST /api/comments/push/unregister` | `{key, token}` | `{ok}` — drop that token. | `POST_LIMIT`. |
 
 ---
+
+**`GET /api/comments/push/vapid-key`** (keyless, cacheable) — `{ok:true, key}`, the VAPID public
+key the client passes to `pushManager.subscribe`; the shell compares it against its
+subscription's key and re-subscribes when it changed.
+
+### 4.4 Voice calls (keyed; `Domain.Call`)
+
+All `POST`, all keyed, `calls_enabled` off → `403 "Calls are turned off."`; the offer and the
+TURN mint need an **established** identity (`403 "Calls unlock after your first post or profile
+save."`). The indistinguishability law: a blocked caller, or a callee whose Privacy switch is
+off, gets `{ok:true}` and rings out to silence.
+
+| Route | Body | Purpose |
+|---|---|---|
+| `POST /api/comments/call/offer` | `{key, to, call, sdp}` (`to` a hash, `call` 16–64 hex, `sdp` ≤ 32 KB starting `v=`) | Place a call: the offer is STORED (`calls_pending`) for the ring, fanned to the callee's live sockets, and the missed-call bell/push ride `waitUntil`. `POST_LIMIT`. |
+| `POST /api/comments/call/pending` | `{key, call}` | The stored offer for the callee the push woke: `{ok, pending:true, from, sdp, age}` while fresh (ring + 15 s), unanswered and not missed; `{ok, pending:false, answered}` otherwise. Only the callee may read it. `READ_LIMIT`. |
+| `POST /api/comments/call/answer` | `{key, to, call, sdp, late?}` | The SDP answer back to the caller; `late` makes the caller re-send its ICE. Stamps `answered_at`; reads THIS call's missed-call bell. `POST_LIMIT`. |
+| `POST /api/comments/call/end` | `{key, call, reason}` (`Domain.Call.endReasons`) | Record the outcome once (`recordCallEnd`'s stamp is the lock): the caller's noanswer/canceled/busy is the miss, either side's declined the decline, an end after the answer the answered line with its length. Idempotent. `POST_LIMIT`. |
+| `POST /api/comments/call/turn` | `{key}` | Short-lived ICE servers: TURN through Cloudflare when `calls_turn` is on and the key pair is set, else the free STUN-only list (`relay:false`). `READ_LIMIT`. |
 
 ## 5. merecat, the librarian (RAG chat, `/api/merecat/*`)
 
@@ -899,6 +934,9 @@ All require the caller's hash in the `admins` table; all refuse non-admins with
 | `POST /api/comments/profile/admin` · `/profile/clear` | `{key,hash,nick?,bio?,signature?,clear_avatar?}` · `{key,hash}` | Edit any profile in place (whole-record replace) · clear a profile + avatar (keeps faith). |
 | `POST /api/comments/admins` · `/admin` | `{key}` · `{key,hash,admin}` | List the flat roster (with `assigned` names) · grant/revoke any admin (last-admin removal refused). |
 | `POST /api/comments/meta` · `/audit` · `/trust` | `{key,hash\|page}` · `{key}` · `{key,hash,trusted}` | Per-identity/per-page fingerprint + known-IP drawer · 14-day activity audit (reports/pages/topics) · grant/revoke AI-screen-skip. |
+| `POST /api/comments/shadowban` · `/shadowban/list` | `{key,hash,on}` · `{key}` | Shadow-ban an identity (their posts stay visible to them alone; never the librarian, never an admin — `400 "That identity cannot be shadow banned."`) · the whole roster with who set each. |
+| `POST /api/comments/admin/discord/list` · `/admin/discord/add` · `/admin/discord/delete` | `{key}` · `{key, feed_url, hook_url, label?}` · `{key, id}` | The per-feed Discord subscriptions: list them (webhooks MASKED — a bearer secret is never echoed) · add one (the feed URL must be one of ours with a `?topic=`/`?cat=`/`?page=` selector, the webhook must pass `isDiscordWebhook`; an exact duplicate is `409`) · delete by id. |
+| `POST /api/comments/wall/prune` | `{key, days?}` | Delete public feed/wall posts — and their media — older than `days` (default the `wall_prune_days` setting), now; `{ok, deleted}`. The cron runs the same `runWallPrune` when auto-prune is on. |
 | `POST /api/comments/backup` | `{key}` | Run the D1→R2 backup now (the cron runs it daily at 03:15 UTC since 2026-09-16); answers `backup` = the run's record (`key, bytes, tables, rows, kept, pruned, ms`) or `backup.error` — never a 5xx. Recorded in `app_settings.ops_backup` for the self-check. |
 | `POST /api/comments/admin/settings` | `{key, set?:{…}}` | Read/write `app_settings` with clamps. Media keys (Domain.Media clamps): `media_image/video/audio_max_bytes` (64 KB–100 MB legacy globals, now the FALLBACK layer), the 9 per-section overrides `media_<dm\|wall\|board>_<image\|video\|audio>_max_bytes` (same clamp; **an empty string DELETES the override** — back to inheriting the global), `media_audio_max_seconds` + `media_audio_max_seconds_<ctx>` (30–600, client-advisory — the server cannot decode audio; bytes are its wall), `media_kinds_dm/wall/board` (CSV of image,video,audio; empty = off), `media_scan_wall`/`media_scan_board` (0/1, the per-section AI image screen; there is NO `media_scan_dm` — E2E ciphertext is unscannable), `media_voice_dm/wall/board` (0/1, the 🎙 feature flag, client-advisory), `media_image_autocompress` (0/1), `media_cap_dm_bytes` + `media_cap_wall_bytes` + `media_cap_board_bytes` (100 MB–9 GB per-section store budgets; usage meters ride back as `dm_media_bytes`/`wall_media_bytes`/`board_media_bytes`), and media age retention `media_wall_retention_days`/`media_board_retention_days` (0–3650; 0 = keep forever) + `media_dm_retention_days` (1–90, the DM hard cap, default 30). `media_max_bytes` stays the absolute per-file ceiling over every per-kind cap. Platform switches: `social_enabled` (0/1, the Feed + member-wall kill switch — see above), `calls_enabled`/`calls_turn`/`calls_idle_hangup`/`calls_idle_seconds`, `journal_enabled`/`journal_topic`, `comments_pages` (a CSV of commentable paths whose section is OPEN — re-parsed through `Domain.Comments`, so anything else is dropped; absent/empty = every section closed, the default) / `comments_journal` (0/1, default 0 — a section under every journal article), `wall_prune_enabled`/`wall_prune_days`, `discord_forum_webhook`/`discord_feed_webhook`/`discord_feed_comments`. A key absent from the handler's `allowed` map is dropped SILENTLY. **Alerts (2026-09-16)**: `alert_email` (must read as an address — `Domain.Ops.isEmailAddress`; empty clears; `400 "That is not a valid email address."`), `alert_email_on`, `alert_discord_webhook` (`isDiscordWebhook`, empty clears), `alert_discord_on` — a channel speaks when its switch is `'1'` AND its field is valid (`Domain.Ops.channelsFrom`). |
 | `POST /api/comments/wall/media/purge` · `/board/media/purge` | `{key}` | Purge EVERY media object in that public section (feed+walls · forum) — R2 objects + rows deleted, every media-carrying parent stamped `media_expired` (text kept), that section's usage meter zeroed. `{ok, deleted}`. Safe to re-click; the DM sibling is `/dm/media/purge`. |
