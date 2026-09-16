@@ -184,5 +184,6 @@ on page one.)
 - **The handler preambles are one function with the variance as options (2026-09-16)** — `log/2026-09.md`
 - **One road registers a member, and the directory lists members (2026-09-16)** — `log/2026-09.md`
 - **Additive is not forever: the retirement cadence and its tripwire (2026-09-16)** — `log/2026-09.md`
+- **The CSP has somewhere to report (2026-09-16)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

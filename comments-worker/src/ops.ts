@@ -123,6 +123,7 @@ export async function readOps(env: Env) {
   const backup = await getOpsState<Record<string, unknown> | null>(env, 'ops_backup', null);
   const alerts = await getOpsState<{ open?: string[]; at?: number }>(env, 'ops_alert_state', {});
   const webtest = await getOpsState<Record<string, unknown> | null>(env, 'ops_webtest', null);
+  const csp = await getOpsState<Record<string, unknown> | null>(env, 'csp_report_tally', null);
   const heartbeat = CHAINS.map((name) => {
     const last = Number(hb[name] || 0);
     return { name, last, age: last ? now - last : null, stale: OpsK.isStale({ name, last, now }), stale_after: OpsK.staleAfter(name) };
@@ -139,5 +140,5 @@ export async function readOps(env: Env) {
   const open = Array.isArray(alerts.open) ? alerts.open.map(String) : [];
   const backupOk = !hb.daily || (!!object && object.size >= OpsK.minBackupBytes);
   const ok = stale.length === 0 && open.length === 0 && backupOk;
-  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest };
+  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest, csp };
 }

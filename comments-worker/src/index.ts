@@ -86,7 +86,7 @@ import {
   handleShadowban,
   handleShadowbanList,
 } from './routes/admin.ts';
-import { handleOpsReport } from './routes/ops.ts';
+import { handleOpsReport, handleCspReport } from './routes/ops.ts';
 import { runChain, runSelfCheck } from './ops.ts';
 import type { Step } from './ops.ts';
 import {
@@ -497,6 +497,7 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/admin/alert-test', fn: (request, env, ctx, url) => handleAlertTest(request, env) },
   { m: 'POST', p: '/api/comments/admin/health', fn: (request, env, ctx, url) => handleOpsHealth(request, env) },
   { m: 'POST', p: '/api/comments/ops/report', fn: (request, env, ctx, url) => handleOpsReport(request, env) },
+  { m: 'POST', p: '/api/comments/csp-report', fn: (request, env, ctx, url) => handleCspReport(request, env) },
   { m: 'POST', p: '/api/comments/notifications/unread', fn: (request, env, ctx, url) => handleNotifUnread(request, env) },
   { m: 'POST', p: '/api/comments/notifications/read', fn: (request, env, ctx, url) => handleNotifRead(request, env) },
   { m: 'POST', p: '/api/comments/notifications', fn: (request, env, ctx, url) => handleNotifList(request, env) },

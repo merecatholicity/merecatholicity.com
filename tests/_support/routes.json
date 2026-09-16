@@ -316,6 +316,11 @@
  },
  {
   "m": "POST",
+  "p": "/api/comments/csp-report",
+  "fn": "(request, env, ctx, url) => handleCspReport(request, env)"
+ },
+ {
+  "m": "POST",
   "p": "/api/comments/notifications/unread",
   "fn": "(request, env, ctx, url) => handleNotifUnread(request, env)"
  },

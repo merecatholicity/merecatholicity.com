@@ -97,6 +97,8 @@ tests/
                        lists it, a bare row or a deleted post does not);
                        the retirement ledger's tripwire (retire: _support/retirements.json names every shim and
                        dead column with its due date — present until then, gone from then, or the suite is red);
+                       the CSP report collector (csp_report: both browser shapes tallied by directive, blocked
+                       origin and document path, a collector that never argues, the top hundred);
                        the backup — the dump replayed twice into a fresh SQLite and the same ledger both times,
                        runBackup's object, prune and record, the avatar mirror (backup); the cron chains, the
                        self-check and the health read RUN — a throwing step that stops nothing, once/quiet/recovered,
@@ -115,7 +117,9 @@ tests/
                        named path mounted or documented as retired), the infrastructure log's index and rules
                        (infra_index: the committed index equals the generated one, lead-ins unique, every passage
                        under a section heading, prose wrapped at 100 columns), and CLAUDE.md's ceilings (claude_md: 280 lines, no
-                       bullet over six, the next migration number derived, the pointer to the log)
+                       bullet over six, the next migration number derived, the pointer to the log); the js/ layer
+                       also sweeps for HTML and code sinks (no_html_sinks: no innerHTML, outerHTML,
+                       insertAdjacentHTML, document.write, eval or new Function in app/ or client/)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 
