@@ -36,7 +36,8 @@ Layer 2, `webtest/`.
 tests/
   _support/ps.mjs      shared Maybe/Either erasure readers for the compiled PS output
   _support/client.mjs  the browser client's sources for the source-rule tests (the root and the
-                       eight feature modules of client/, as one text or one at a time)
+                       thirteen feature modules of client/ — the DM family is six since 2026-09-16 —
+                       as one text, one at a time, or the DM family alone (clientDm))
   _support/any_baseline.json  the two `: any` counts the ratchet holds (see js/any_ratchet)
   _support/worker.mjs  the worker, RUN: loadWorker() (index.ts in plain Node behind one resolve hook), freshDb()
                        (every migration on node:sqlite), d1() (the D1-shaped shim), makeEnv() (limiters that allow,

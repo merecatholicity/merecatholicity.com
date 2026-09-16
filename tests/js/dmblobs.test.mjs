@@ -20,7 +20,7 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 import { clientRoot, clientModule, CLIENT_MODULES } from '../_support/client.mjs';
 const src = clientRoot();
-const dmSrc = clientModule('dm');
+const dmSrc = clientModule('dm-message');
 const bootAt = src.indexOf('function mcBoot()');
 
 test('the blob store outlives the boot that fills it', () => {

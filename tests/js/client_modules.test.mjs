@@ -20,7 +20,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CLIENT_MODULES, clientModule, clientRoot } from '../_support/client.mjs';
 
-const cap = (s) => s[0].toUpperCase() + s.slice(1);
+const cap = (s) => s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');   // dm-crypto → DmCrypto
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
 const ident = /[A-Za-z_$][\w$]*/;
 

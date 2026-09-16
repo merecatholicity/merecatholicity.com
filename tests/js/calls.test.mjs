@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { clientModule } from '../_support/client.mjs';
+import { clientModule, clientDm } from '../_support/client.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const call = readFileSync(join(root, 'app', 'call.ts'), 'utf8');
@@ -23,7 +23,7 @@ const sw = readFileSync(join(root, 'docs', 'sw.js'), 'utf8');
 const haptic = readFileSync(join(root, 'app', 'haptic.ts'), 'utf8');
 const shell = readFileSync(join(root, 'app', 'shell.ts'), 'utf8');
 const ptr = readFileSync(join(root, 'app', 'ptr.ts'), 'utf8');
-const dm = clientModule('dm');
+const dm = clientDm();
 const surface = clientModule('surface');
 const fn = (src, name, next) => {
   const i = src.indexOf(`function ${name}(`);

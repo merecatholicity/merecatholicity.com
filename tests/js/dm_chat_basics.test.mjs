@@ -17,11 +17,11 @@ import { dirname, join } from 'node:path';
 import { clientModule } from '../_support/client.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const dm = clientModule('dm');
+const thread = clientModule('dm-thread'), styles = clientModule('dm-styles');
 const inbox = readFileSync(join(root, 'app', 'views', 'profile.ts'), 'utf8');
-const view = dm.slice(dm.indexOf('function viewDm('), dm.indexOf('\n  function bind() {'));
+const view = thread.slice(thread.indexOf('function viewDm('), thread.indexOf('\n  function bind() {'));
 const append = view.slice(view.indexOf('append: function (msg: any) {'), view.indexOf('editMsg: function'));
-const dmCss = (() => { const i = dm.indexOf('function ensureDmStyles()'); return dm.slice(i, dm.indexOf("st.id = 'mc-dm-css'", i)); })();
+const dmCss = (() => { const i = styles.indexOf('function ensureDmStyles()'); return styles.slice(i, styles.indexOf("st.id = 'mc-dm-css'", i)); })();
 
 test('a live word never scrolls a reader who is reading back: it waits under the unread line and the jump button counts it', () => {
   assert.ok(/var wasNear = nearEnd\(\);\s*var landed = placeMsg\(msg\);\s*if \(wasNear\) \{\s*scrollToEnd\(\);/.test(append), 'at the foot: the word scrolls into view');

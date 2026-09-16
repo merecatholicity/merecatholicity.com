@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-import { clientAll } from '../_support/client.mjs';
+import { clientAll, clientModule } from '../_support/client.mjs';
 const src = clientAll();
 
 /* Code only: a comment that tells the history of a bug may name it. */
@@ -285,7 +285,7 @@ test('the host never exists without its stylesheet', () => {
   assert.ok(/\.mc-ts-frame\{[^}]*height:0/.test(sheet), 'the frame must be collapsed to 0 height by default');
   assert.ok(/\.mc-ts-host\.on \.mc-ts-frame\{height:\d+px\}/.test(sheet), 'and given height only for a human check');
   assert.ok(/mc-ts-css/.test(sheet), 'the sheet needs its own id so it is injected once');
-  const dm = src.slice(src.indexOf('function ensureDmStyles()'), src.indexOf('function ensureTsStyles()'));
+  const dm = clientModule('dm-styles');   // the whole DM stylesheet module (the old slice spanned files and was empty)
   assert.ok(!/mc-ts-/.test(dm), 'the host rules are back in the DM stylesheet, where the profile view cannot see them');
 });
 

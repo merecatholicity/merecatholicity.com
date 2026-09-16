@@ -13,16 +13,17 @@
  * roster as it was; a group opened by anything but its id. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clientModule } from '../_support/client.mjs';
+import { clientModule, clientDm } from '../_support/client.mjs';
 
-const src = clientModule('dm');
+const src = clientDm();
 const fn = (name, next) => {
   const i = src.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);
   const j = next ? src.indexOf(`function ${next}(`, i + 10) : src.indexOf('\n  function ', i + 10);
   return src.slice(i, j > i ? j : i + 8000);
 };
-const view = src.slice(src.indexOf('function viewDm('), src.indexOf('\n  function bind() {'));
+const viewAt = src.indexOf('function viewDm(');
+const view = src.slice(viewAt, src.indexOf('\n  function bind() {', viewAt));   // dm-thread's own bind(), not an earlier module's
 
 test('a group names its authors, once per run, in the member\'s colour; a pair never does', () => {
   const bubble = fn('dmBubble');

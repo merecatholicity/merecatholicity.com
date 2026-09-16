@@ -11,9 +11,9 @@
  * send's sealing; the act offered on a system line or an expired attachment. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clientModule, clientAll } from '../_support/client.mjs';
+import { clientModule, clientAll, clientDm } from '../_support/client.mjs';
 
-const src = clientModule('dm');
+const src = clientDm();
 const fn = (name, next) => {
   const i = src.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);

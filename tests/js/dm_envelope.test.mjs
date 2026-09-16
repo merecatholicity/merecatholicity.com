@@ -23,7 +23,7 @@ if (typeof globalThis.self === 'undefined') globalThis.self = globalThis;
 let nacl = createRequire(import.meta.url)(join(root, 'docs', 'tweetnacl.min.js'));
 if (!nacl || !nacl.box) nacl = globalThis.self.nacl;
 assert.ok(nacl && nacl.box && nacl.secretbox, 'tweetnacl loaded with box and secretbox');
-const src = clientModule('dm');
+const src = clientModule('dm-crypto');
 const fn = (name) => {
   const i = src.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);

@@ -15,12 +15,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { clientModule } from '../_support/client.mjs';
+import { clientModule, clientDm } from '../_support/client.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const badges = readFileSync(join(root, 'app', 'badges.ts'), 'utf8');
 const shell = readFileSync(join(root, 'app', 'shell.ts'), 'utf8');
-const dm = clientModule('dm');
+const dm = clientDm();
 const profile = clientModule('profile');
 const board = clientModule('board');
 

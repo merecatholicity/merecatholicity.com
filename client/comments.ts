@@ -14,7 +14,12 @@ import { installProfile } from './profile';
 import { installBoard } from './board';
 import { installWall } from './wall';
 import { installSurface } from './surface';
-import { installDm } from './dm';
+import { installDmCrypto } from './dm-crypto';
+import { installDmMessage } from './dm-message';
+import { installDmPickers } from './dm-pickers';
+import { installDmInbox } from './dm-inbox';
+import { installDmThread } from './dm-thread';
+import { installDmStyles } from './dm-styles';
 import { installMerecat } from './merecat';
 import { installAdmin } from './admin';
 import type { Boot } from './boot';
@@ -1799,7 +1804,7 @@ import type { Boot } from './boot';
   }
   /* ---- Wave F: the feature modules, installed per boot ---- */
   Object.assign(B, { API, BOARD, NACL_SRC, appConfirm, asset, authorNode, badgeChanged, bootSig, browserTz, busy, cachedJson, clampBody, clearKey, collectAltIps, crumb, displayName, el, enableMemberLive, fetchRetry, fillBody, fmtDateTime, fmtSecs, fmtTimeCompact, freshOpts, freshParam, getToken, go, isSharedV4Client, load, loadingLine, loginToInteract, makeKey, markThreadRead, mcDmBlobGet, mcDmBlobPut, mcDmBlobs, mountComments, myPostCount, pageBar, pageHref, pageKey, rankLine, readEase, readMark, readThrottled, route, section, setKey, sha256hex, skelInto, skeleton, stale, stampFresh, state, trace, warmToken });
-  const mods = [installComposer(B), installProfile(B), installBoard(B), installWall(B), installSurface(B), installDm(B), installMerecat(B), installAdmin(B)];
+  const mods = [installComposer(B), installProfile(B), installBoard(B), installWall(B), installSurface(B), installDmCrypto(B), installDmMessage(B), installDmPickers(B), installDmInbox(B), installDmThread(B), installDmStyles(B), installMerecat(B), installAdmin(B)];
   for (const m of mods) Object.assign(B, m.exports);
   ADMIN_HASHES = B.ADMIN_HASHES;
   BLOCK_CONFIRM = B.BLOCK_CONFIRM;

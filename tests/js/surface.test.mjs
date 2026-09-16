@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { clientAll, clientModule } from '../_support/client.mjs';
+import { clientAll, clientModule, clientDm } from '../_support/client.mjs';
 import { routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -26,7 +26,7 @@ const src = clientAll();
 const surface = clientModule('surface');
 const board = clientModule('board');
 const wall = clientModule('wall');
-const dm = clientModule('dm');
+const dm = clientDm();
 const postView = readFileSync(join(root, 'app', 'views', 'post.ts'), 'utf8');
 const mainCss = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
 const fn = (text, name, next) => {
