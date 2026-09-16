@@ -89,6 +89,9 @@ tests/
                        through exactly the channels the settings open and reporting each refusal (alerts);
                        the member directory hiding the test and probe identities (hidden_hashes: the secret's
                        and the var's lists joined, whole hashes only, run through the door);
+                       the one preamble and its options (gates: gated/adminGated/readLimited/ingestGated —
+                       each refusal with the text the option names, an optional key hashing to the empty
+                       identity as before, the block gate only when asked);
                        the backup — the dump replayed twice into a fresh SQLite and the same ledger both times,
                        runBackup's object, prune and record, the avatar mirror (backup); the cron chains, the
                        self-check and the health read RUN — a throwing step that stops nothing, once/quiet/recovered,

@@ -181,5 +181,6 @@ on page one.)
 - **Backups are daily and verified, and every cron is a chain that cannot lose a step (2026-09-16)** — `log/2026-09.md`
 - **Rollback is a drilled road, a staged rollout is a switch, and the watchdog has an outside leg (2026-09-16)** — `log/2026-09.md`
 - **The four nits (2026-09-16)** — `log/2026-09.md`
+- **The handler preambles are one function with the variance as options (2026-09-16)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

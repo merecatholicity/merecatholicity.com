@@ -287,8 +287,9 @@ comments-worker/src/
   ops.ts         the cron chains (runChain: every step in its own try/catch, a heartbeat per chain, failures and the
                  self-check's findings folded into alerts), runSelfCheck, readOps (the health object) — 2026-09-16
   routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin · ops (the report door)
-  lib.ts         the shared core — constants · crypto/auth · settings · notifications/push · DM primitives ·
-                 media purges · Discord · merecat · publish — references no handler
+  lib.ts         the shared core — constants · crypto/auth · the preambles (keyed/keyedGated, and since
+                 2026-09-16 gated/adminGated/readLimited/ingestGated with the variance as options) · settings ·
+                 notifications/push · DM primitives · media purges · Discord · merecat · publish — references no handler
   db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList
   durable.ts     BoardHub · ChatRoom (the only importer of cloudflare:workers)
   quota.ts · usage.ts · usagecalc.ts · analytics.ts   the AI budget guard and the usage monitor

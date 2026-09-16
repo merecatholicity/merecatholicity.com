@@ -70,6 +70,76 @@ export async function keyedGated(request: any, env: any, bucket: string): Promis
   return pre;
 }
 
+/* The one preamble, with its variance made explicit (P2-1, 2026-09-16). Eighty
+   handlers opened with the same eight lines — parse the body, rate-limit by IP,
+   read the key, hash it, maybe the block gate — differing only in the 429
+   sentence, whether a missing key is refused (and with what), and whether the
+   block gate runs. `gated` takes those as options so a call site reads as what it
+   does, and the texts stay exactly what the wire always said; a handler that
+   validates BEFORE it rate-limits (a bad id must not cost a limiter token) keeps
+   its own order and is not converted. `keyed`/`keyedGated` above are the two
+   commonest shapes and stay as they are. */
+export type GateOpts = {
+  bucket?: 'POST_LIMIT' | 'READ_LIMIT' | null;   // null: no rate limit
+  limited?: string;                              // the 429 sentence (default 'Too many requests.')
+  key?: 'required' | 'optional';                 // optional: an empty key hashes to the empty identity, as before
+  missing?: string;                              // the 400 sentence for a missing key (default 'Bad request.')
+  block?: boolean;                               // the lock/ban gate (blockedReason → blockedJson)
+};
+export type Gated = { ip: string; data: any; key: string; me: string };
+export async function gated(request: Request, env: any, o: GateOpts = {}): Promise<Response | Gated> {
+  let data: any;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  if (o.bucket) {
+    const { success } = await env[o.bucket].limit({ key: ip });
+    if (!success) return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
+  }
+  const key = String((data && data.key) || '');
+  if (o.key !== 'optional' && !key) return json({ ok: false, error: o.missing || 'Bad request.' }, 400);
+  const me = await sha256hex(key);
+  if (o.block) {
+    const g = await blockedReason(env, me, ip);
+    if (g) return blockedJson(g);
+  }
+  return { ip, data, key, me };
+}
+
+/* The admin preamble: parse, an optional limit, `requireAdmin` (403 "No."),
+   the admin's own hash for `updated_by`. */
+export async function adminGated(request: Request, env: any, o: { bucket?: 'POST_LIMIT' | 'READ_LIMIT' | null; limited?: string } = {}): Promise<Response | Gated> {
+  let data: any;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  if (o.bucket) {
+    const { success } = await env[o.bucket].limit({ key: ip });
+    if (!success) return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
+  }
+  const key = String((data && data.key) || '');
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  return { ip, data, key, me: await sha256hex(key) };
+}
+
+/* The keyless read preamble (a GET with URL params): the READ limit alone; the
+   refusal is JSON, or plain text where the endpoint has always answered so. */
+export async function readLimited(request: Request, env: any, o: { limited?: string; plain?: boolean } = {}): Promise<Response | string> {
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const { success } = await env.READ_LIMIT.limit({ key: ip });
+  if (!success) {
+    const text = o.limited || 'Too many requests.';
+    return o.plain ? new Response(text, { status: 429 }) : json({ ok: false, error: text }, 429);
+  }
+  return ip;
+}
+
+/* The pipeline's preamble: parse, then the ingest key (or an admin's). */
+export async function ingestGated(request: Request, env: any): Promise<Response | { data: any }> {
+  let data: any;
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await requireIngest(env, String((data && data.key) || '')))) return json({ ok: false, error: 'No.' }, 403);
+  return { data };
+}
+
 /* Worker environment bindings (D1 databases, R2 buckets, Vectorize, Workers AI,
    Durable Object namespaces, rate limiters) plus string vars/secrets. Typed
    loosely (index signature) on purpose — this is a typing pass, not a

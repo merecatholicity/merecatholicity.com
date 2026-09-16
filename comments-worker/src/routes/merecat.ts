@@ -25,8 +25,10 @@ import {
   originOk,
   quotaPublic,
   requireAdmin,
-  requireIngest,
   sha256hex,
+  gated,
+  adminGated,
+  ingestGated,
 } from '../lib.ts';
 
 /* ---- Admin observation of merecat Q&A (2026-07-29). The terms disclose that
@@ -35,13 +37,10 @@ import {
    librarian (to guide what to teach it next) WITHOUT participating. They only
    ever SELECT — no prune, no write, nothing touched. This deliberately adds
    the admin-read path the design once withheld, now that the terms allow it. */
-async function handleMerecatAdminThreads(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleMerecatAdminThreads(request: Request, env: any) {
+  const pre = await adminGated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const per = 30;
   const pg = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   /* A rolling thirty-day window, matching the thread expiry: this is a bird's
@@ -68,13 +67,10 @@ async function handleMerecatAdminThreads(request: any, env: any) {
   return json({ ok: true, threads, total: (total && total.n) || 0, page: pg, per }, 200);
 }
 
-async function handleMerecatAdminThread(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleMerecatAdminThread(request: Request, env: any) {
+  const pre = await adminGated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const id = Number(data.id);
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
@@ -113,17 +109,10 @@ async function handleMerecatBackends(request: any, env: any) {
    the verbatim window, condense them into the thread's running summary with
    one cheap model call, made after the answer is already on its way so it
    never adds latency. A failed fold just waits for the next turn. */
-async function handleMerecatChats(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+async function handleMerecatChats(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.', block: true });
+  if (pre instanceof Response) return pre;
+  const { me } = pre;
   const cut = Math.floor(Date.now() / 1000) - MERECAT_CHAT_DAYS * 86400;
   // saved threads are kept permanently: the expiry sweeps pass them by
   await env.LIBDB.batch([
@@ -138,16 +127,12 @@ async function handleMerecatChats(request: any, env: any) {
   return json({ ok: true, chats: rows.results || [] }, 200);
 }
 
-async function handleMerecatChat(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
+async function handleMerecatChat(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const id = Number(data.id);
-  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const chat = await env.LIBDB.prepare(
@@ -160,16 +145,12 @@ async function handleMerecatChat(request: any, env: any) {
   return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
 }
 
-async function handleMerecatChatDelete(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
+async function handleMerecatChatDelete(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const id = Number(data.id);
-  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
@@ -213,10 +194,10 @@ async function handleMerecatChatSave(request: any, env: any) {
 /* Monthly sweep of expired threads (the opportunistic per-owner prune in
    handleMerecatChats covers everyone who returns; this catches the rest).
    Self-contained like every prune, so a failure never stops the backup. */
-async function handleMerecatIngest(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireIngest(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleMerecatIngest(request: Request, env: any) {
+  const pre = await ingestGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const mode = String(data.mode || '');
   const work = data.work || {};
   const id = String(work.id || '');
@@ -374,10 +355,10 @@ async function merecatMentionKick(env: any, id: any) {
    R2 under its hash like anyone's): Nicene by confession, bio and signature
    fixed, upserted on every reply so this code stays the source of truth. The
    avatar column is left alone — it carries the upload stamp. */
-async function handleMerecatMention(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleMerecatMention(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const id = Number(data.id);
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const queued = await merecatMentionKick(env, id);
@@ -454,15 +435,10 @@ async function handleMerecatForward(request: any, env: any) {
    "you have used N of M today" the moment it opens (the ask preamble keeps
    it fresh afterward). Admins read their true count against the same cap
    they are allowed to exceed. */
-async function handleMerecatUsage(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+async function handleMerecatUsage(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { data, key, me } = pre;
   const cfg = await merecatConfig(env);
   const day = merecatDay();
   const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
@@ -539,10 +515,10 @@ async function handleMerecatAbout(request: any, env: any) {
 }
 
 /* Works roster + content hashes, so ingest.py can skip unchanged works. */
-async function handleMerecatWorks(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireIngest(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleMerecatWorks(request: Request, env: any) {
+  const pre = await ingestGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const works = [];
   let tb1 = 0, tb2 = 0;
   const rows = await env.LIBDB.prepare(
@@ -598,10 +574,10 @@ const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
 
 /* Persona / dials push: from librarian/config.yml + persona.md through the
    pipeline, and from the merecat admin page. */
-async function handleMerecatConfigSet(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireIngest(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleMerecatConfigSet(request: Request, env: any) {
+  const pre = await ingestGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const stmts: any[] = [];
   const put = (k: any, v: any) => stmts.push(env.LIBDB.prepare(
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
@@ -618,10 +594,9 @@ async function handleMerecatConfigSet(request: any, env: any) {
 
 /* Usage counters for the admin: the last fourteen days, questions and rough
    token spend, distinct askers per day. Counters only — no question text. */
-async function handleMerecatStats(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleMerecatStats(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
   const use = await env.LIBDB.prepare(
     'SELECT day, q, in_tok, out_tok FROM usage ORDER BY day DESC LIMIT 14').all();
   const users = await env.LIBDB.prepare(
@@ -645,17 +620,10 @@ async function handleMerecatStats(request: any, env: any) {
    the back-room privacy gate is one predicate in one place and a future
    subscriber (webhook / Discord / Matrix) is a single addition here — no forum
    handler ever changes. Returns a promise; env-guarded (no-op without the DO). */
-async function handleMerecatAskInit(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many questions at once. Wait a minute.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+async function handleMerecatAskInit(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many questions at once. Wait a minute.', block: true });
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
   await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
     .bind(me, Math.floor(Date.now() / 1000)).run();
   const cfg = await merecatConfig(env);

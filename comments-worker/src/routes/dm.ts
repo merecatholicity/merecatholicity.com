@@ -60,24 +60,15 @@ import {
   verifyTurnstile,
   notifUnreadCount,
   hiddenHashes,
+  gated,
+  readLimited,
 } from '../lib.ts';
 import type { DmRosterPayload, DmThreadPayload, DmThreadsPayload } from '../../../app/wire.ts';
 
-async function handleDmSend(request: any, env: any, ctx: any) {
-  let data;
-  try {
-    data = await request.json();
-  } catch {
-    return json({ ok: false, error: 'Bad request.' }, 400);
-  }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many messages at once. Wait a minute and try again.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+async function handleDmSend(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many messages at once. Wait a minute and try again.', block: true });
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
@@ -250,16 +241,12 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
    because the forwarder can read it, and the object lives until its last
    reference goes. One gate for the batch — throttle, ban, Turnstile — then
    the delivery core per word, each answered on its own. */
-async function handleDmForward(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many messages at once. Wait a minute and try again.' }, 429);
-  const key = String(data.key || '');
+async function handleDmForward(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many messages at once. Wait a minute and try again.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const items = Array.isArray(data.items) ? data.items : [];
-  if (!key || !items.length || items.length > 10) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!items.length || items.length > 10) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
@@ -324,17 +311,10 @@ async function announceDmMembers(env: any, ctx: any, threadId: number, by: strin
 }
 
 /* Start a group: `members` the hashes to bring in, an optional name. */
-async function handleDmGroups(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+async function handleDmGroups(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.', block: true });
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const { ok: wanted, missing } = await dmEligible(env, me, data.members);
   if (!wanted.length && !missing.length) return json({ ok: false, error: 'Bad request.' }, 400);
   if (wanted.length + missing.length > Dm.maxMembers - 1) return json({ ok: false, error: 'A conversation holds at most ' + Dm.maxMembers + ' members.' }, 400);
@@ -352,16 +332,12 @@ async function handleDmGroups(request: any, env: any, ctx: any) {
    new group of the three or more (Snapchat's and WhatsApp's way — the pair
    and its private history stay as they were). Any current member may add;
    nobody owns the thread. */
-async function handleDmMembers(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
+async function handleDmMembers(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, key, me } = pre;
   const threadId = Math.floor(Number(data.thread_id) || 0);
-  if (!key || threadId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (threadId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const found = await dmThreadFor(env, me, { thread_id: threadId });
@@ -450,19 +426,10 @@ async function handleDmName(request: any, env: any, ctx: any) {
    their nick and avatar, a group's name and up to four members for its
    collage (2026-09-13) — and the total unread count riding along so one call
    feeds both the list and the badge. */
-async function handleDmThreads(request: any, env: any) {
-  let data;
-  try {
-    data = await request.json();
-  } catch {
-    return json({ ok: false, error: 'Bad request.' }, 400);
-  }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+async function handleDmThreads(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
   const now = Math.floor(Date.now() / 1000);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   /* Everything per viewer, from my own seat (a member who left has none):
@@ -510,21 +477,13 @@ async function handleDmThreads(request: any, env: any) {
    room) — paged by twenty like everything else, defaulting to the LAST page
    so it opens at its newest words. The members ride along with their keys.
    Opening marks it read with at most one write, none when nothing was unread. */
-async function handleDmThread(request: any, env: any, ctx: any) {
-  let data;
-  try {
-    data = await request.json();
-  } catch {
-    return json({ ok: false, error: 'Bad request.' }, 400);
-  }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
+async function handleDmThread(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { data, key, me } = pre;
   const threadId = Math.floor(Number(data.thread_id) || 0);
   const withHash = String(data.with || '');
-  if (!key || (!threadId && !/^[0-9a-f]{64}$/.test(withHash))) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if ((!threadId && !/^[0-9a-f]{64}$/.test(withHash))) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!threadId && me === withHash) return json({ ok: false, error: 'Bad request.' }, 400);
   const found = await dmThreadFor(env, me, { thread_id: threadId, with: withHash });
   if (!found) return json({ ok: false, error: 'No such conversation.' }, 404);
@@ -673,19 +632,10 @@ async function handleDmThread(request: any, env: any, ctx: any) {
    pass of the same fragment the inbox rows carry — the tab's badge and the row
    badges now add up, and "3" means three messages waiting, not three threads.
    The client asks at most once per ninety seconds, so this stays cheap. */
-async function handleDmUnread(request: any, env: any) {
-  let data;
-  try {
-    data = await request.json();
-  } catch {
-    return json({ ok: false, error: 'Bad request.' }, 400);
-  }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+async function handleDmUnread(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT' });
+  if (pre instanceof Response) return pre;
+  const { ip, me } = pre;
   /* The reliable catch for a logged-in reader: this poll fires on every keyed
      page load, so a lock or IP ban logs them out on their next page turn. */
   const gate = await blockedReason(env, me, ip);
@@ -742,18 +692,14 @@ async function handleDmBlocked(request: any, env: any) {
    the other members are told live so their headers update. A pair's room is
    made if it does not exist yet (a still-empty room, invisible in the inbox),
    so the choice sticks before the first message is even sent. */
-async function handleDmTtl(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
+async function handleDmTtl(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const threadId = Math.floor(Number(data.thread_id) || 0);
   const other = String(data.with || '');
   const ttl = Math.floor(Number(data.ttl) || 0);
-  if (!key || DM_TTLS.indexOf(ttl) === -1 || (!threadId && !/^[0-9a-f]{64}$/.test(other))) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (DM_TTLS.indexOf(ttl) === -1 || (!threadId && !/^[0-9a-f]{64}$/.test(other))) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!threadId && me === other) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
@@ -775,17 +721,13 @@ async function handleDmTtl(request: any, env: any, ctx: any) {
    which is how expiry stays identical for all — and the saver is named
    (saved_by, Snapchat's "saved by"). Unsaving resumes the clock. The message
    id alone names it: membership is checked through its thread. */
-async function handleDmSave(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
+async function handleDmSave(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const id = Math.floor(Number(data.id) || 0);
   const saved = data.saved ? 1 : 0;
-  if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   /* The message must stand in a thread I am a current member of; then any member may act. */
@@ -963,16 +905,12 @@ async function handleDmEdit(request: any, env: any, ctx: any) {
    with its ORIGINAL expires_at, so a "<redacted>" placeholder stands where the
    message was until the moment it would have disappeared anyway — then the
    ordinary sweep removes it. Only the sender may redact, and only once. */
-async function handleDmRedact(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Wait a minute and try again.' }, 429);
-  const key = String(data.key || '');
+async function handleDmRedact(request: Request, env: any, ctx: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Wait a minute and try again.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const id = Math.floor(Number(data.id) || 0);
-  if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const row = await env.DB.prepare(
@@ -1079,20 +1017,12 @@ async function handleDmMediaGet(request: any, env: any) {
 }
 
 /* Block and unblock, owner-side only. */
-async function handleDmBlock(request: any, env: any) {
-  let data;
-  try {
-    data = await request.json();
-  } catch {
-    return json({ ok: false, error: 'Bad request.' }, 400);
-  }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
+async function handleDmBlock(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
   const hash = String(data.hash || '');
-  if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (data.blocked) {
     await env.DB.prepare('INSERT OR IGNORE INTO dm_blocks (owner_hash, blocked_hash, created_at) VALUES (?1, ?2, ?3)')
       .bind(me, hash, Math.floor(Date.now() / 1000)).run();
@@ -1134,21 +1064,10 @@ async function handleDmBlock(request: any, env: any) {
    clear, the thread and all its words — the keys, the reactions, the
    references — are purged so nothing persists. Keyed, not admin — you delete
    your own. */
-async function handleDmDelete(request: any, env: any) {
-  let data;
-  try {
-    data = await request.json();
-  } catch {
-    return json({ ok: false, error: 'Bad request.' }, 400);
-  }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
-  const gate = await blockedReason(env, me, ip);
-  if (gate) return blockedJson(gate);
+async function handleDmDelete(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', block: true });
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
   const found = await dmThreadFor(env, me, data);
   if (!found) return json({ ok: false, error: 'Bad request.' }, 400);
   const thread = found.thread;
@@ -1188,10 +1107,9 @@ async function handleDmDelete(request: any, env: any) {
    its nick when one is set and its server-resolved `assigned` pseudonym (the web
    client derives the same value from the hash; native clients read it here).
    Public-by-construction data, cacheable. */
-async function handleDmDirectory(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleDmDirectory(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   /* Each member with the moment they first appeared (earliest live comment or
      profile creation), newest first, so the member list leads with the latest
      to join. The DM autocomplete ignores the order and the extra column. */
