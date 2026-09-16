@@ -5,7 +5,6 @@
    (flagged or unscreenable comments are held pending, never dropped).
    The only secret is TURNSTILE_SECRET, the Turnstile server key. */
 
-import { DurableObject } from 'cloudflare:workers';
 import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import * as Rank from '../../purescript/output/Domain.Rank/index.js';
 import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
@@ -35,7 +34,7 @@ import {
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 import { createPusher } from './webpush.js';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
-import { inList, rankFor, withNames, postCountsFor } from './db.js';
+import { inList, rankFor, withNames, postCountsFor } from './db.ts';
 
 /* Keyed-request preamble, single-sourced. Parse the JSON body, rate-limit by IP
    on `bucket`, then require + hash the identity key. Returns the resolved
@@ -234,8 +233,8 @@ import {
   wallEnrich,
   wallReader,
   xmlEscape,
-} from './lib.js';
-import { handleAdminUsage, runUsageCheck } from './usage.js';
+} from './lib.ts';
+import { handleAdminUsage, runUsageCheck } from './usage.ts';
 
 interface Env {
   [key: string]: any;
@@ -5408,7 +5407,7 @@ async function handleMerecatStats(request: any, env: any) {
 
 /* The two Durable Objects live in ./durable.ts; re-exported so wrangler
    finds BoardHub/ChatRoom on the main module. */
-export { BoardHub, ChatRoom } from './durable.js';
+export { BoardHub, ChatRoom } from './durable.ts';
 async function handleLive(request: any, env: any) {
   if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.HUB) return new Response('unavailable', { status: 503 });

@@ -15,13 +15,13 @@
    analytics.ts, shared with the librarian's AI budget guard (quota.ts), which
    reads the neurons dataset through the very same select. */
 
-import { json, requireAdmin, sendSystemDm, siteBase, MERECAT_BOT } from './lib.js';
-import { gqlSelect } from './analytics.js';
-import { aiNeuronsSelect } from './quota.js';
+import { json, requireAdmin, sendSystemDm, siteBase, MERECAT_BOT } from './lib.ts';
+import { gqlSelect } from './analytics.ts';
+import { aiNeuronsSelect } from './quota.ts';
 import {
   buildReport, foldUsageAlerts, alertBody, worstPct,
   iso, utcDayStart, utcMonthStart, FREE, PRODUCT_LABELS,
-} from './usagecalc.js';
+} from './usagecalc.ts';
 
 export async function fetchUsageReport(env: any) {
   const now = Date.now();

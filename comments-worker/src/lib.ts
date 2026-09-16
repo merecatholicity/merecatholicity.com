@@ -2,7 +2,6 @@
    validation, and the DB / notification / broadcast helpers. Everything that is
    NOT a request handler, a Durable Object, or the route dispatch. index.ts and
    the route modules import from here — a one-way DAG (core references no handler). */
-import { DurableObject } from 'cloudflare:workers';
 import * as Rank from '../../purescript/output/Domain.Rank/index.js';
 import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
 import * as Faith from '../../purescript/output/Domain.Faith/index.js';
@@ -37,11 +36,11 @@ export { isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabe
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 import { createPusher } from './webpush.js';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
-import { inList, rankFor, withNames, postCountsFor } from './db.js';
+import { inList, rankFor, withNames, postCountsFor } from './db.ts';
 /* The librarian's AI budget guard: its own module (no lib import, Node-
    tested), re-exported below so the ChatRoom and the handlers keep one
    import site for the librarian helpers. */
-import { merecatQuota, quotaPublic } from './quota.js';
+import { merecatQuota, quotaPublic } from './quota.ts';
 export { merecatQuota, quotaPublic };
 
 /* Keyed-request preamble, single-sourced. Parse the JSON body, rate-limit by IP

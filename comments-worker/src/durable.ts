@@ -29,7 +29,7 @@ import {
   publishUser,
   quotaPublic,
   sha256hex,
-} from './lib.js';
+} from './lib.ts';
 
 interface Env { [key: string]: any; }
 
