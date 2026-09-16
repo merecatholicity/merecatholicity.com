@@ -26,7 +26,7 @@ idea holds the whole thing together and is the key to reading it:
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  PureScript kernel  purescript/src/Domain/*   │  32 modules
+            │  PureScript kernel  purescript/src/Domain/*   │  33 modules
             │  (validation, permissions, parsing, routing,  │  — the rulebook,
             │   ranks, FTS-safety, identity, …) ADTs +      │    pure, tested
             │   smart constructors, illegal states unrep.   │    1:1 in tests/
@@ -168,7 +168,7 @@ middleware layer, a repository layer, and finishing the component migration
 More than the two big files suggest. The **modular seams already exist and are
 proven**:
 
-- The **PureScript `Domain/*` kernel — 32 modules**, each a single rule family
+- The **PureScript `Domain/*` kernel — 33 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
   each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 32 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
@@ -265,7 +265,7 @@ Yes — the natural division is **by feature**, and it maps cleanly:
 Yes. **The tree** — every file named for its feature:
 
 ```
-purescript/src/Domain/*.purs        the rulebook (32 modules) — unchanged, it's the model
+purescript/src/Domain/*.purs        the rulebook (33 modules) — unchanged, it's the model
 app/
   core.ts        membrane (PS → JS)          api.ts     typed endpoints (the DM reads return their wire shapes)
   wire.ts        the DM wire shapes, types only — the worker's routes/dm.ts builds them, the views read them (2026-09-16)
@@ -282,6 +282,8 @@ client/                              the classic client (Wave F, shipped 2026-09
 comments-worker/src/
   index.ts       the composition root: imports · handleConfig/handleLive · the ROUTES table · fetch/scheduled
   env.ts         the bindings as wrangler.jsonc declares them, typed (2026-09-16) — a route file that takes `env: Env` gets D1's first<Row>() for free
+  alerts.ts      the worker's voice (2026-09-16): sendAlert — email through the send_email binding EMAIL, Discord through
+                 sendDiscord, the channels Domain.Ops.channelsFrom opens from the four alert_* Platform settings
   routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin
   lib.ts         the shared core — constants · crypto/auth · settings · notifications/push · DM primitives ·
                  media purges · Discord · merecat · publish — references no handler

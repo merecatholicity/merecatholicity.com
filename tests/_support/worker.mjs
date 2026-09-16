@@ -171,8 +171,21 @@ export function hubSpy({ viewersOf = () => [], viewing = () => false, online = (
 
 /* Every binding wrangler.jsonc declares, as a request sees it. `vars` overrides
    or adds plain variables/secrets (ADMIN_HASHES, ALLOW_ANON, …). */
-export function makeEnv({ db, libdb, hub, vars = {}, snapshot } = {}) {
+/* the send_email binding: records every message; `fail` makes send() throw
+   with a code, the way a refused destination does */
+export function emailSpy(sent, fail) {
+  return {
+    send: async (msg) => {
+      sent.push(msg);
+      if (fail) { const e = new Error(fail); e.code = 'test_refused'; throw e; }
+      return { messageId: 'test-' + sent.length };
+    },
+  };
+}
+
+export function makeEnv({ db, libdb, hub, vars = {}, snapshot, emailFail, email = true } = {}) {
   const r2 = [];
+  const emails = [];
   const lib = libdb || freshLibDb();
   return {
     DB: d1(db || freshDb()),
@@ -182,10 +195,12 @@ export function makeEnv({ db, libdb, hub, vars = {}, snapshot } = {}) {
     WALLMEDIA: r2Bucket('WALLMEDIA', r2, snapshot), BACKUPS: r2Bucket('BACKUPS', r2, snapshot),
     AI: untouchable('AI', ['run']), MERECAT_INDEX: untouchable('MERECAT_INDEX', ['query', 'upsert', 'deleteByIds', 'getByIds']),
     MODERATION_MODE: 'off',
+    ...(email ? { EMAIL: emailSpy(emails, emailFail) } : {}),
     ...(hub ? { HUB: hub.namespace } : {}),
     ...vars,
-    /* the R2 call log, for the hygiene rules */
+    /* the R2 call log, for the hygiene rules; the mails the alerts sent */
     r2,
+    emails,
   };
 }
 

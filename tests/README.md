@@ -41,7 +41,8 @@ tests/
   _support/any_baseline.json  the two `: any` counts the ratchet holds (see js/any_ratchet)
   _support/worker.mjs  the worker, RUN: loadWorker() (index.ts in plain Node behind one resolve hook), freshDb()
                        (every migration on node:sqlite), d1() (the D1-shaped shim), makeEnv() (limiters that allow,
-                       R2 buckets that record, an optional hub spy, Workers AI that throws), netSpy() (a fetch that
+                       R2 buckets that record, an EMAIL spy that records into env.emails or refuses on demand,
+                       an optional hub spy, Workers AI that throws), netSpy() (a fetch that
                        throws and records), identity()/establish()/publishKey(), call()/client() through
                        default.fetch, resetCaches()
   _support/worker_src.mjs  the worker's sources for the source-rule locks: routesSource() (routes/*.ts + index.ts),
@@ -81,6 +82,8 @@ tests/
                        makes, on the ledger (notif_read); every delete and expiry road purging its media, and
                        delete-user's feed sweep on the ledger (media_hygiene);
                        the route table held to its snapshot and every entry dispatched through the loaded worker (routes);
+                       the worker's voice — the settings door's address/webhook validators, the test door sending
+                       through exactly the channels the settings open and reporting each refusal (alerts);
                        plus the db builder, calls, media, webpush, the
                        social switch, the Discord bridge)
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,

@@ -6,7 +6,10 @@ import * as Wall from '../../../purescript/output/Domain.Wall/index.js';
 import * as Media from '../../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../../purescript/output/Domain.Call/index.js';
 import * as Comments from '../../../purescript/output/Domain.Comments/index.js';
+import * as OpsK from '../../../purescript/output/Domain.Ops/index.js';
 import { toBanKey, looksLikeIp } from '../pure.js';
+import { sendAlert } from '../alerts.ts';
+import type { Env } from '../env.ts';
 import { inList } from '../db.ts';
 import {
   APP_SETTING_DEFAULTS,
@@ -53,7 +56,8 @@ async function handleAdminSettings(request: any, env: any) {
       media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
       media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1,
       calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1,
-      social_enabled: 1, turnstile_skip_established: 1 };
+      social_enabled: 1, turnstile_skip_established: 1,
+      alert_email: 1, alert_email_on: 1, alert_discord_webhook: 1, alert_discord_on: 1 };
     /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
        back to "inherit the legacy global" — because absence is what the
        fallback chain reads. Without this the chain would be one-way. */
@@ -74,7 +78,8 @@ async function handleAdminSettings(request: any, env: any) {
         || k === 'media_scan_wall' || k === 'media_scan_board'
         || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board'
         || k === 'calls_enabled' || k === 'calls_turn' || k === 'calls_idle_hangup'
-        || k === 'social_enabled' || k === 'turnstile_skip_established' || k === 'comments_journal') v = (v === '1' || v === 'true') ? '1' : '0';
+        || k === 'social_enabled' || k === 'turnstile_skip_established' || k === 'comments_journal'
+        || k === 'alert_email_on' || k === 'alert_discord_on') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'calls_idle_seconds') v = String(CallK.idleClampSecs(Math.floor(Number(v)) || CallK.idleDefaultSecs));
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
       /* Per-kind caps, the recorder stop, the store budgets, the retention
@@ -104,11 +109,19 @@ async function handleAdminSettings(request: any, env: any) {
          own writings survive, deduped, canonical order — a path that is not
          commentable can never be stored as open. */
       else if (k === 'comments_pages') v = Comments.serializeEnabledPages(Comments.parseEnabledPages(v));
-      else if (k === 'discord_forum_webhook' || k === 'discord_feed_webhook') {
+      else if (k === 'discord_forum_webhook' || k === 'discord_feed_webhook' || k === 'alert_discord_webhook') {
         /* Empty clears (turns the webhook off); anything else must be a genuine
            Discord webhook URL, so a typo or hostile value is never stored/POSTed. */
         v = v.trim();
         if (v && !isDiscordWebhook(v)) return json({ ok: false, error: 'That is not a valid Discord webhook URL.' }, 400);
+      }
+      else if (k === 'alert_email') {
+        /* The alerts' address: empty clears; anything else must read as an
+           address (Domain.Ops.isEmailAddress) so a typo is refused here and
+           not discovered at the first alert. Whether the address is a VERIFIED
+           Email Routing destination only the send can tell — the test door. */
+        v = v.trim();
+        if (v && !OpsK.isEmailAddress(v)) return json({ ok: false, error: 'That is not a valid email address.' }, 400);
       }
       stmts.push(env.DB.prepare(
         'INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(k) DO UPDATE SET v = ?2, updated_at = ?3, updated_by = ?4'
@@ -184,6 +197,30 @@ function maskWebhook(u: any) {
   if (!m) return 'webhook';
   const tail = m[3].slice(-6);
   return 'discord.com/…/…' + tail;
+}
+
+/* The alerts' test door (2026-09-16): sends one alert through whatever the
+   Alerts settings open — email, Discord or both — and answers with what each
+   channel said ({email, discord, channels, errors}), so an unverified
+   destination or a dead webhook is read on the admin's screen, not guessed. */
+async function handleAlertTest(request: Request, env: Env) {
+  let data: { key?: unknown };
+  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const key = String(data.key || '');
+  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+  const me = await sha256hex(key);
+  let who = me.slice(0, 8);
+  try {
+    const row = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(me).first<{ nick: string | null }>();
+    if (row && row.nick) who = String(row.nick);
+  } catch (e) { /* the hash prefix will do */ }
+  const at = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  const result = await sendAlert(env, {
+    kind: 'test',
+    subject: 'Test alert',
+    text: 'A test alert from merecatholicity.com, sent by ' + who + ' at ' + at + ' from Admin → Platform settings → Alerts. If you are reading this, the channel works.',
+  });
+  return json({ ok: true, ...result }, 200);
 }
 
 async function handleBackup(request: any, env: any) {
@@ -471,6 +508,7 @@ export {
   handleAdminDiscordList,
   handleAdminSettings,
   handleAdmins,
+  handleAlertTest,
   handleBackup,
   handleDeleteUser,
   handleIpBan,

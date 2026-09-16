@@ -100,6 +100,11 @@
     // same-origin like avatars; random opaque keys). Admin-prunable, not backed up.
     { "binding": "WALLMEDIA", "bucket_name": "merecatholicity-wall-media" }
   ],
+  // The ops alerts' mail (2026-09-16, src/alerts.ts): sends to the VERIFIED Email
+  // Routing destination address stored as the alert_email Platform setting, from
+  // ALERT_FROM (default alerts@merecatholicity.com). Same binding shape as the
+  // contact worker; sending to a verified destination is free on every plan.
+  "send_email": [{ "name": "EMAIL" }],
   // Monthly: the full backup/prune chain. Hourly: sweep expired DMs + their
   // media. Daily 23:30 UTC: the Cloudflare free-tier usage check (usage.ts) —
   // health data for admin.html?usage=1 and DM alerts past 80%. Three of the
@@ -138,8 +143,8 @@
     // on any comment. The hash is safe to publish, the power is in the key.
     "ADMIN_HASHES": "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6,c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03",
     // Comment email notifications were retired in favor of RSS + the Activity
-    // Audit page, so there is no notification recipient and no send_email
-    // binding here anymore.
+    // Audit page, so there is no per-comment notification recipient. The
+    // send_email binding EMAIL (top level) is for the ops alerts alone.
     // Turnstile tokens are accepted only when solved on one of these hosts
     // (comma-separated), a check layered on top of the sitekey's own domain
     // lock. Leave unset in local dev so the always-pass test key still works.

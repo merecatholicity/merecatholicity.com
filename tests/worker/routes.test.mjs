@@ -3,7 +3,7 @@
  * The ROUTES table in comments-worker/src/index.ts is the worker's
  * composition root: (method, path) → handler. As the handlers move out into
  * comments-worker/src/routes/*.ts, two things must hold on every commit:
- *  - the table itself is unchanged — the same 125 (method, path, thunk)
+ *  - the table itself is unchanged — the same 126 (method, path, thunk)
  *    triples, in the same order, as tests/_support/routes.json records (a
  *    route added or renamed on purpose updates the snapshot in that commit);
  *  - every entry still dispatches — the worker, loaded in Node with the
@@ -33,7 +33,7 @@ function tableTriples(src) {
   return [...src.slice(i, j).matchAll(re)].map((m) => ({ m: m[1], p: m[2], fn: m[3] }));
 }
 
-test('the ROUTES table is the committed snapshot: 125 (method, path, thunk) triples, in order, every pair unique', () => {
+test('the ROUTES table is the committed snapshot: 126 (method, path, thunk) triples, in order, every pair unique', () => {
   const triples = tableTriples(indexSrc);
   assert.deepEqual(triples, snapshot, 'tests/_support/routes.json records the table; a deliberate change updates it in the same commit');
   assert.equal(new Set(triples.map((r) => r.m + ' ' + r.p)).size, triples.length, 'every (method, path) pair is unique');

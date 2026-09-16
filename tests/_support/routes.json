@@ -301,6 +301,11 @@
  },
  {
   "m": "POST",
+  "p": "/api/comments/admin/alert-test",
+  "fn": "(request, env, ctx, url) => handleAlertTest(request, env)"
+ },
+ {
+  "m": "POST",
   "p": "/api/comments/notifications/unread",
   "fn": "(request, env, ctx, url) => handleNotifUnread(request, env)"
  },

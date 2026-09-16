@@ -18,6 +18,10 @@ export interface Env {
   /* the two Durable Objects */
   HUB: DurableObjectNamespace;
   CHAT: DurableObjectNamespace;
+  /* the ops alerts' mail (send_email binding, 2026-09-16) — it may write to
+     every VERIFIED Email Routing destination address; the address is the
+     alert_email Platform setting, the sender ALERT_FROM (alerts.ts) */
+  EMAIL?: { send(msg: EmailSend): Promise<unknown> };
   /* R2 */
   BACKUPS: R2Bucket;
   AVATARS: R2Bucket;
@@ -39,6 +43,7 @@ export interface Env {
   VAPID_SUBJECT?: string;
   TURN_KEY_ID?: string;
   CF_ACCOUNT_ID?: string;
+  ALERT_FROM?: string;
   /* secrets (`wrangler secret put`, never in a file) */
   TURNSTILE_SECRET?: string;
   VAPID_PRIVATE_KEY?: string;
@@ -48,3 +53,15 @@ export interface Env {
   MC_TEST_BYPASS?: string;
   TEST_HASHES?: string;
 }
+
+/* the send_email binding's message (the shape contact-worker sends) */
+export type EmailAddress = string | { email: string; name?: string };
+export type EmailSend = {
+  to: EmailAddress;
+  from: EmailAddress;
+  subject: string;
+  text?: string;
+  html?: string;
+  replyTo?: EmailAddress;
+  headers?: Record<string, string>;
+};

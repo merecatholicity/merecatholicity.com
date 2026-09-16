@@ -1223,6 +1223,15 @@ export const APP_SETTING_DEFAULTS = {
      /config; the default and clamp are Domain.Call's). */
   calls_idle_hangup: '1',
   calls_idle_seconds: String(CallK.idleDefaultSecs),
+  /* The worker's voice (2026-09-16, alerts.ts): where a failed cron step, a
+     missing backup or a usage alert is reported. A channel speaks when its
+     switch is on AND its field holds a valid value (Domain.Ops.channelsFrom) —
+     the owner picks email, Discord or both; empty or off is silent. The
+     address must be a VERIFIED Email Routing destination (the dashboard). */
+  alert_email: '',
+  alert_email_on: '1',
+  alert_discord_webhook: '',
+  alert_discord_on: '1',
 };
 export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
 export async function getAppSettings(env: any) {
@@ -1478,13 +1487,15 @@ export async function isEstablished(env: any, hash: any) {
    content to an arbitrary host. Member text rides ONLY in an embed (embeds never
    ping) and allowed_mentions is emptied, so no post body can @everyone or @here
    the channel. Fire-and-forget with a hard timeout: a dead or slow webhook never
-   delays or breaks a post. Callers exclude the back room. */
-export async function sendDiscord(hookUrl: any, embed: any): Promise<void> {
-  if (!isDiscordWebhook(hookUrl)) return;
+   delays or breaks a post. Callers exclude the back room. Answers whether
+   Discord accepted the post (the alerts road reports it; the feed hooks
+   ignore it, as before). */
+export async function sendDiscord(hookUrl: any, embed: any): Promise<boolean> {
+  if (!isDiscordWebhook(hookUrl)) return false;
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 5000);
   try {
-    await fetch(hookUrl.trim(), {
+    const r = await fetch(hookUrl.trim(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1494,7 +1505,8 @@ export async function sendDiscord(hookUrl: any, embed: any): Promise<void> {
       }),
       signal: ctl.signal,
     });
-  } catch (e) { /* a dead webhook must never break a post */ }
+    return r.ok;
+  } catch (e) { return false; /* a dead webhook must never break a post */ }
   finally { clearTimeout(timer); }
 }
 
