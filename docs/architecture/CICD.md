@@ -395,6 +395,16 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
 
 ## 7. The site and the PDFs
 
+**The corpus sources (2026-09-16).** 364 MB of `resources/` — the 237 generated `*-body.tex`,
+50 preserved `*-src.html`, 30 ThML/XML files, 8 source PDFs — are not in git. They ride the
+GitHub Release `sources` of this public repository as four `.tar.xz` shards, each pinned by
+sha256 in `resources/SOURCES.json` (tracked). `make fetch-sources` (`scripts/sources.py fetch`)
+takes what is missing or differs — anonymously, so a `pull_request` build works with no secret
+(Principle 3) and Bot Fight Mode is never in the way (github.com, not the zone); `build.yml`
+caches the tarballs by the manifest's hash. The release is a shelf, not a software release:
+assets are replaced in place (`--clobber`) when a source is regenerated. The history rewrite
+that would shrink existing clones is a separate, owner-authorised act (§10 ex. 9).
+
 - **`docs/` is a mixture.** Hand-maintained source (nav.js, sw.js, the page scripts, the
   vendored libraries, turnstile.html, images, the 17 hand pages, CNAME, .nojekyll) is
   tracked; everything the build writes (corpus pages, bundles, style.css, version.json,
@@ -513,6 +523,10 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 - **a migration** → next number, additive, `make schema-snapshot`.
 - **a generated file under `docs/`** → `.gitignore` + `tests/py/test_docs_sources.py`'s
   `buildable()`; a **hand** file → the `!docs/…` exception.
+- **a corpus source or a regenerated `*-body.tex`** → `scripts/sources.py manifest`, `pack`,
+  `publish` (the dev box's `gh`, repo scope — before the manifest is committed), then commit
+  `resources/SOURCES.json`; never `git add` the file itself (`.gitignore` refuses;
+  `tests/py/test_sources_manifest.py` too). The build fetches (`make fetch-sources`).
 - **a published PDF** → it must come from a make target (or `resources/docs-src/` +
   `mirrored-pdfs`); never upload something no target can rebuild.
 - **a gated environment** → create it via the API with its reviewers *before* any workflow

@@ -1,0 +1,1989 @@
+{
+ "_note": "the corpus sources, pinned (scripts/sources.py); the files live on the GitHub Release \"sources\", not in git",
+ "files": {
+  "addresses-body.tex": {
+   "bytes": 463846,
+   "sha256": "3a2fbee682a22a8f1929b5b431872c225814665c6ab12a259bdce741159a0c38",
+   "shard": "body-tex"
+  },
+  "aeneid-body.tex": {
+   "bytes": 642308,
+   "sha256": "0eb9fccb135d335d4da2e68295fdf12514c0feb57b2728a88b8ad5cf21df200f",
+   "shard": "body-tex"
+  },
+  "aeneid-src.html": {
+   "bytes": 827611,
+   "sha256": "243c22655d5ab699bf0c2a41fec787af42226bf86298497e5791212c07ba3317",
+   "shard": "src-html"
+  },
+  "agricola-body.tex": {
+   "bytes": 124968,
+   "sha256": "1c0370506fd4102ac04286136c0c74a48d8687add7187f81b969ae9084c95543",
+   "shard": "body-tex"
+  },
+  "ammianus-body.tex": {
+   "bytes": 1430567,
+   "sha256": "a69abed24762468caa6d5f931b6f66ade8b7cabdda70052d8b10f89a38b13589",
+   "shard": "body-tex"
+  },
+  "ammianus-src.html": {
+   "bytes": 1736992,
+   "sha256": "06b457e5010431168d206c527af4a0769441998f10a75252c10ed358effb8f7a",
+   "shard": "src-html"
+  },
+  "andrewes-devotions-body.tex": {
+   "bytes": 115370,
+   "sha256": "cc360ff42666297c967df0fe8d3db7863394cc4cb11f1a2ce1c32bb90fcae070",
+   "shard": "body-tex"
+  },
+  "andrewes-devotions-thml.xml": {
+   "bytes": 223073,
+   "sha256": "a831dcf98a7815d527a83296a62b3e1f0ecccd1f32683cae55f307939a2b000b",
+   "shard": "xml"
+  },
+  "anf01-body.tex": {
+   "bytes": 2894628,
+   "sha256": "5906f8cf73ea2a5c44d8c5f50ee88cbe0cbad8670dde0251f3242e7855274212",
+   "shard": "body-tex"
+  },
+  "anf02-body.tex": {
+   "bytes": 2969088,
+   "sha256": "53b37b9ee9af30f47f70ace4d5098958786e4f4c5fc766fe365f41acf68b0964",
+   "shard": "body-tex"
+  },
+  "anf03-body.tex": {
+   "bytes": 3697324,
+   "sha256": "d2e562644142cbda90d7c790ff818a99edbf28694193812c0bad5ca1b9037830",
+   "shard": "body-tex"
+  },
+  "anf04-body.tex": {
+   "bytes": 3499376,
+   "sha256": "ad2132ddafd953c02d98816c408f0801ed0491180e78b64469f4d7056c84a5a6",
+   "shard": "body-tex"
+  },
+  "anf05-body.tex": {
+   "bytes": 3576860,
+   "sha256": "cf2d6eb43e71baf8aa50e4d32651abd99838977ad8f39cc860d376cdb4e00bdb",
+   "shard": "body-tex"
+  },
+  "anf06-body.tex": {
+   "bytes": 2946790,
+   "sha256": "9f2a74febd5a961d29ff61e374e1bb19c0d2d84fce497a3813a500fec87deb42",
+   "shard": "body-tex"
+  },
+  "anf07-body.tex": {
+   "bytes": 2792890,
+   "sha256": "c519a835cfa52875a916084c897171243094cfd90b7d4e21742d74d082af8453",
+   "shard": "body-tex"
+  },
+  "anf08-body.tex": {
+   "bytes": 3841211,
+   "sha256": "1b2269917a51ea650dd1c63595db65fa3f1bfce3910b056b1bc2ce46ba030f87",
+   "shard": "body-tex"
+  },
+  "anf09-body.tex": {
+   "bytes": 2211616,
+   "sha256": "de07f996e08b7de15a79c89d3ce71cb8254ff40af14f439f2b0d679ba328690a",
+   "shard": "body-tex"
+  },
+  "anglicans1-body.tex": {
+   "bytes": 588110,
+   "sha256": "706acde63728a789a3325c8258019338e013717fb2efd5946b7a016353fceb6e",
+   "shard": "body-tex"
+  },
+  "annals-body.tex": {
+   "bytes": 935616,
+   "sha256": "7695f8769d075344605a1a13e7b1b3df86580e918f12df5670b06cc3b4ca8711",
+   "shard": "body-tex"
+  },
+  "antiquities-body.tex": {
+   "bytes": 2949638,
+   "sha256": "79873d50be9f61d287cde4a5a982ceacbd0c0af7a7b06e9af17ca4e060764b43",
+   "shard": "body-tex"
+  },
+  "antiquities-src.html": {
+   "bytes": 3537487,
+   "sha256": "813081d6d824f3554243858e4e98056a130c491c951dab9d7885c66d5ddae3d0",
+   "shard": "src-html"
+  },
+  "apion-src.html": {
+   "bytes": 293938,
+   "sha256": "2c7b38ad0463d4e83631a0947468d03538cfaa0143ce19b1be0e8e0159ecf236",
+   "shard": "src-html"
+  },
+  "apologia-body.tex": {
+   "bytes": 780304,
+   "sha256": "b34f2a17139f94c02cedb5ac0086455303087acdff92687074a8cea82913ba12",
+   "shard": "body-tex"
+  },
+  "apostolicae-body.tex": {
+   "bytes": 30785,
+   "sha256": "aee79d3f48938c49492358032bed1839e5d9cd835ee93d468ad68a5b25d18254",
+   "shard": "body-tex"
+  },
+  "apuleius-body.tex": {
+   "bytes": 438981,
+   "sha256": "ef05d92cc33205a03caab71d417f4b6a37459c5b2de4aead92de680a1c826786",
+   "shard": "body-tex"
+  },
+  "apuleius-src.html": {
+   "bytes": 484702,
+   "sha256": "bf0036bd54b25dd498312a461c7930a808ab548204cc01ab43a8feeee3f3a481",
+   "shard": "src-html"
+  },
+  "arguments-body.tex": {
+   "bytes": 692963,
+   "sha256": "eb38b0b9f9f9c09c3c76c4c38041348a53c52ad79c8549bcabaa5a96f7ec5bcd",
+   "shard": "body-tex"
+  },
+  "arians-body.tex": {
+   "bytes": 803435,
+   "sha256": "2035fddcdadae1c0d251030d2d362bb131b7b8d9c01a0ce5f4b862600cf1bc6f",
+   "shard": "body-tex"
+  },
+  "articles1571-body.tex": {
+   "bytes": 78810,
+   "sha256": "dfa99c2315329a5eaa95a2c16713b203c596494f32ca7afbb92793bf3143b6f9",
+   "shard": "body-tex"
+  },
+  "athanasius-tracts-body.tex": {
+   "bytes": 793272,
+   "sha256": "2b41d93ebb77196547fc0e4b2b20b96b20d9dcbb3584ea400a83ebb23fa5c9a2",
+   "shard": "body-tex"
+  },
+  "athanasius1-body.tex": {
+   "bytes": 842824,
+   "sha256": "9e267f27763ac61139b2776b6da7912324a275b5b5b5c012b628d528aef40cb9",
+   "shard": "body-tex"
+  },
+  "athanasius2-body.tex": {
+   "bytes": 653225,
+   "sha256": "165ae878ad73ae1689eb59cc4570889cc749779348a0bca707c657b12a93fb09",
+   "shard": "body-tex"
+  },
+  "baptism-body.tex": {
+   "bytes": 61415,
+   "sha256": "fcd83b850fe1318518c40b75375e6b775b321f6522b7b3dd4c0cef606925b02a",
+   "shard": "body-tex"
+  },
+  "baptism-thml.xml": {
+   "bytes": 111106,
+   "sha256": "c57d30e64170c45a009ef75a53e08e5933fe4792f0656cf5da22dec9b53c1388",
+   "shard": "xml"
+  },
+  "bcp1559-body.tex": {
+   "bytes": 264734,
+   "sha256": "8c2548e82feda21fdcec64d5198ff73fec6ca70644cf5be013500fb075392fbe",
+   "shard": "body-tex"
+  },
+  "bcp1662-body.tex": {
+   "bytes": 850861,
+   "sha256": "ab7cf4452c2b4f6e04edf2d39651128449e0bc52cf8b6b1dc7291fb554712ac2",
+   "shard": "body-tex"
+  },
+  "bcp1928-body.tex": {
+   "bytes": 664460,
+   "sha256": "2d9e94919e957199878803189e18cbedc4737e1f4c6717db9cdeefaf10388988",
+   "shard": "body-tex"
+  },
+  "benedict-rule-body.tex": {
+   "bytes": 115359,
+   "sha256": "7f79a359a18d15c047975611e6862778702e191e1b556a627acc51836b0d3772",
+   "shard": "body-tex"
+  },
+  "benedict-rule.xml": {
+   "bytes": 185602,
+   "sha256": "8d7b099401667ef7bfe40b4fa0ce308bd02db5016b966870495bfff7f1e8168f",
+   "shard": "xml"
+  },
+  "beowulf-body.tex": {
+   "bytes": 228500,
+   "sha256": "b99de7b4116be5a5a8ca6372a18d217e955f5eff1f820767a9538491fddf7889",
+   "shard": "body-tex"
+  },
+  "beowulf-src.html": {
+   "bytes": 508624,
+   "sha256": "29c2fc4ae0bfe4eb3412090456c46479329ebe9a8ba6d0b2cf4cc4cbdf4a00cd",
+   "shard": "src-html"
+  },
+  "boethius-body.tex": {
+   "bytes": 243203,
+   "sha256": "cab220027344cda99e356e946163b6cdbdd56027174ef9a4eeb85559c30b2f93",
+   "shard": "body-tex"
+  },
+  "boethius-src.html": {
+   "bytes": 324698,
+   "sha256": "da4695060cc596709cbbca02e60eb934ddf1e036c5b1f58aed9562633ed52caf",
+   "shard": "src-html"
+  },
+  "bondage-body.tex": {
+   "bytes": 690271,
+   "sha256": "f7e77d935e5e9e4300f9796cb2ceae03f452e010f72919bda7c7106d5a91bd36",
+   "shard": "body-tex"
+  },
+  "bondage-thml.xml": {
+   "bytes": 839475,
+   "sha256": "ce7060a6def31b017789bc57ee4cc3c802c666b2d40321d1810653fd19f38384",
+   "shard": "xml"
+  },
+  "british-critic-body.tex": {
+   "bytes": 975625,
+   "sha256": "99b12deb67178dc91f3417e06b184fc30674c8f0612d293c2f8015f59e7327b6",
+   "shard": "body-tex"
+  },
+  "burlat-body.tex": {
+   "bytes": 2466435,
+   "sha256": "834bec4efee8c8d8e6828889de0729a3716fa81b917cfe0c21d8c0b18721a6bc",
+   "shard": "body-tex"
+  },
+  "caesar-body.tex": {
+   "bytes": 833588,
+   "sha256": "22bba6b95eccb3c8304ef4b697fec0f5517081aa462cc09c6afd9d8f983fc7d9",
+   "shard": "body-tex"
+  },
+  "caesar-src.html": {
+   "bytes": 1007220,
+   "sha256": "c0c7a810b475c5e0ba31a83af3ca6233c543e1824387fec2163f5c166f3445c0",
+   "shard": "src-html"
+  },
+  "callista-body.tex": {
+   "bytes": 536657,
+   "sha256": "0c31b093c60d6a68725bbf2e7aa926a2003283c9637e089aace0cdd805978744",
+   "shard": "body-tex"
+  },
+  "cassian-prayer-body.tex": {
+   "bytes": 115902,
+   "sha256": "aff41fdc8864505669d4b526df39b53d1ec63acadd09c3fb2a4ef6f31c2f9a47",
+   "shard": "body-tex"
+  },
+  "cassian-prayer-thml.xml": {
+   "bytes": 150279,
+   "sha256": "7b0320b4bee750cdce5b6181cfca20849fe39c92fa54e16b5b2e271c57a12db5",
+   "shard": "xml"
+  },
+  "catena-john-body.tex": {
+   "bytes": 1417751,
+   "sha256": "378e242452ef101822f9e2018ae8ba2e9f1631051d4b7d714793eeb2ba0e8263",
+   "shard": "body-tex"
+  },
+  "catena-luke-body.tex": {
+   "bytes": 1758413,
+   "sha256": "4cf845a7ff6d4c320a04ca492fa1c530b4cc68b10e305365bb2b6bfe8d552c52",
+   "shard": "body-tex"
+  },
+  "catena-mark-body.tex": {
+   "bytes": 760264,
+   "sha256": "a9154b4bb4a3244c754359c7b95d6b7c297b088ff573e648aeb361d27858a3b3",
+   "shard": "body-tex"
+  },
+  "catena-matthew-body.tex": {
+   "bytes": 2235621,
+   "sha256": "4e03cf3d2661bc692714b6de6dbd0801106dad42b11312c7d445a42ed14a3f2d",
+   "shard": "body-tex"
+  },
+  "catena-src/xaquinas-john.pdf": {
+   "bytes": 2925162,
+   "sha256": "4380c1b7f31fe2c8e0e1e4c9687f210bd26a0df3c2f60ca5739369160ee96794",
+   "shard": "pdf"
+  },
+  "catena-src/xaquinas-luke.pdf": {
+   "bytes": 4421602,
+   "sha256": "dfe510d1d7a24be2b7b9ce9d835ee934dd8b2f19743165af2b438209c54b781e",
+   "shard": "pdf"
+  },
+  "catena-src/xaquinas-mark.pdf": {
+   "bytes": 2177712,
+   "sha256": "1feda6f0d592311fb62eccc5d01f849d62b1bf6f06b89eb3f1dbce5ddba49102",
+   "shard": "pdf"
+  },
+  "catena-src/xaquinas-matthew.pdf": {
+   "bytes": 5197031,
+   "sha256": "e89c1819202adaa2be649cc046c54dd25c161dfe59eef1dbe51bdeff71066a58",
+   "shard": "pdf"
+  },
+  "cathedra-body.tex": {
+   "bytes": 5614,
+   "sha256": "28d84487b80391783ba154a5ea40ab945365cbf4c505dfef88b5e85e4d0e2aca",
+   "shard": "body-tex"
+  },
+  "chieti-body.tex": {
+   "bytes": 19091,
+   "sha256": "f49927012c5520dfd2679200a0857add7c4a43675638520bc6af678c42bbf36a",
+   "shard": "body-tex"
+  },
+  "church-empires-body.tex": {
+   "bytes": 24860,
+   "sha256": "1b8ed8a17459ced0088a47820f21cefe49311612ef7139c1594195e73c342cf5",
+   "shard": "body-tex"
+  },
+  "cicero-body.tex": {
+   "bytes": 1029710,
+   "sha256": "a7c96ca20c532468a63ddc17c08a94a28ebc1f6124b5922df8d649e310d4ddae",
+   "shard": "body-tex"
+  },
+  "cicero-div-body.tex": {
+   "bytes": 281381,
+   "sha256": "8d7db3e1d16585c2e546ab56b583f1bff41f71e4e157ee81d559e71ad04e767b",
+   "shard": "body-tex"
+  },
+  "cicero-vol-src.html": {
+   "bytes": 1187766,
+   "sha256": "ebfd861ea55c4bc4357659a8f61c4637694e51846cd2e89092dc1def6c3a0067",
+   "shard": "src-html"
+  },
+  "cityofgod-body.tex": {
+   "bytes": 2641849,
+   "sha256": "58454e50e921a348f6c8551e31da1de3a0137c72ff279c1c571cd0f4a950184d",
+   "shard": "body-tex"
+  },
+  "clement-body.tex": {
+   "bytes": 90037,
+   "sha256": "f409fb1ce7d9cb65ed3a44767c45133f71dbcb0ceb5d8957776ccbad00747e81",
+   "shard": "body-tex"
+  },
+  "clement-thml.xml": {
+   "bytes": 177777,
+   "sha256": "ed9b2dd4e154af9b34dd3f20811e1189a940d1b2f6dbe94275fef7939406a832",
+   "shard": "xml"
+  },
+  "commonitory-body.tex": {
+   "bytes": 144164,
+   "sha256": "57c47a7f79748e3eb571ed6d451b18d55eaf7da25514aa2616efbbda1446124c",
+   "shard": "body-tex"
+  },
+  "commonitory-thml.xml": {
+   "bytes": 201568,
+   "sha256": "7d8778fb639fc5f69b21737ba5f936ca6fa86ab45412a540aacc8c04d3eb8410",
+   "shard": "xml"
+  },
+  "concord-body.tex": {
+   "bytes": 3372771,
+   "sha256": "eaf51f155c5df19ac4f302958af1498861ae411c434f4c364714a14d63f80c97",
+   "shard": "body-tex"
+  },
+  "confessions-body.tex": {
+   "bytes": 1015363,
+   "sha256": "222e2650f7663b1525398c512424fd79832386d20cb1e67a20e82d888ef7ba14",
+   "shard": "body-tex"
+  },
+  "consulting-body.tex": {
+   "bytes": 92582,
+   "sha256": "5efa816f050cd45de341b5e2c2ac4689ff767074449ca9bd88044263891edcb2",
+   "shard": "body-tex"
+  },
+  "councils-body.tex": {
+   "bytes": 2301630,
+   "sha256": "8a9575561583d1bb23803dd7612268dfb988774e9caa6db089bc45bc9991007a",
+   "shard": "body-tex"
+  },
+  "councils-thml.xml": {
+   "bytes": 3045057,
+   "sha256": "5834977af0a367858133bbfb0f37cc2823dc46bb635a678407c4fcc396c8d021",
+   "shard": "xml"
+  },
+  "creeds1-body.tex": {
+   "bytes": 2864929,
+   "sha256": "4561fc118bf70a0e1cc31d2d9b1cc73557bd963ab7cd9a32e5f5affcb3128ff3",
+   "shard": "body-tex"
+  },
+  "creeds2-body.tex": {
+   "bytes": 1658708,
+   "sha256": "62d9f213b21d3e3508f426e792651afad75c0a239ba5b0e5ea3d84d52d99ebf6",
+   "shard": "body-tex"
+  },
+  "creeds3-body.tex": {
+   "bytes": 2318277,
+   "sha256": "3ba807f923b9de58df02519d55451b8f325ca62a030bad4015a43c8043bda2e8",
+   "shard": "body-tex"
+  },
+  "cyril-body.tex": {
+   "bytes": 918623,
+   "sha256": "381829871257a71da4d83eebe1fa6b50a86905bdbc4fd99d2205dc6a322b461f",
+   "shard": "body-tex"
+  },
+  "cyril-thml.xml": {
+   "bytes": 1700316,
+   "sha256": "ea5203c180fc03a14f90b78973217997cf0240b7ca4dc5bc117cec85ab4643f0",
+   "shard": "xml"
+  },
+  "damascus-body.tex": {
+   "bytes": 557646,
+   "sha256": "a3083776421c920b859917d13b5c3962887771e4f2d3d0174b0170584adc4f4d",
+   "shard": "body-tex"
+  },
+  "development-body.tex": {
+   "bytes": 803278,
+   "sha256": "7dec166c7fbf40675eb39ce1aa0892053bd9a5ea432f87d8a1f9a407a4e05409",
+   "shard": "body-tex"
+  },
+  "didache-body.tex": {
+   "bytes": 40365,
+   "sha256": "7315a234c9e7894f7ce90dcc1c4abe24a271bfcdbaedac5ad1ec35177431c52d",
+   "shard": "body-tex"
+  },
+  "didache-thml.xml": {
+   "bytes": 96811,
+   "sha256": "595a9f85e25b1d689da6b1f547c3464c8455b1cb4fce263f729455e45ba9bd97",
+   "shard": "xml"
+  },
+  "dio1-body.tex": {
+   "bytes": 340836,
+   "sha256": "4c6da62c4babcdae08fbb9cb5522fa25a1278fdbeab26176f03d4c23ada51bef",
+   "shard": "body-tex"
+  },
+  "dio2-body.tex": {
+   "bytes": 2025929,
+   "sha256": "f84094266da3a6d7b1dd6ee511e5516f697b2d7dca6899a3e146cd441a453a41",
+   "shard": "body-tex"
+  },
+  "dio3-body.tex": {
+   "bytes": 736205,
+   "sha256": "6746f664e5067005cb36b51a08e96e7a2ad15338f18491f0cfc6b90c25bece4f",
+   "shard": "body-tex"
+  },
+  "discourses-body.tex": {
+   "bytes": 588095,
+   "sha256": "2399c59651bab951bf12243781eed6cc35a25aa7a05f1d0cc2e7da99b0f3f200",
+   "shard": "body-tex"
+  },
+  "docs-src/The_Bishop_of_Rome.pdf": {
+   "bytes": 1365864,
+   "sha256": "b371d16ccf9ed56f87c67066bc2d963e613ae87913231db9a2c39697597d4646",
+   "shard": "pdf"
+  },
+  "docs-src/guettee_thepapacy.pdf": {
+   "bytes": 1455032,
+   "sha256": "1d8f6456d1343a92b4dbe0db72a29ba543782e0a04c34b792e3c5ddc367a0960",
+   "shard": "pdf"
+  },
+  "docs-src/saepius.pdf": {
+   "bytes": 114542,
+   "sha256": "6c5540888705f66708d89f43496b82edb4e41c6ee462cb35f710cffab741dd5e",
+   "shard": "pdf"
+  },
+  "docs-src/scranton.pdf": {
+   "bytes": 169282,
+   "sha256": "bd1886277c2505e6f4d3232f62d8c184c10821b67e883b3283d5ccd1804344c0",
+   "shard": "pdf"
+  },
+  "douay-rheims-body.tex": {
+   "bytes": 5863731,
+   "sha256": "2969b0c015fd31c5bd0b7161eb9363eca31a81a5a73516b9df3015f8dc633af9",
+   "shard": "body-tex"
+  },
+  "douay-rheims-src.html": {
+   "bytes": 6228528,
+   "sha256": "de79c27e2a7c0eb2fdd55d8d79b567dcc5a542650802f19e1532f6a707c933b9",
+   "shard": "src-html"
+  },
+  "eddas-body.tex": {
+   "bytes": 507252,
+   "sha256": "ee2c5cd209893615cf0fa3182e7d7ba037f757c3ed66b2a5b0d665e990dfd82e",
+   "shard": "body-tex"
+  },
+  "eddas-src.html": {
+   "bytes": 629789,
+   "sha256": "d11929e7770a6b5c4bd02ccd3eaa22069ab1dffebac3edf6b99ba5c20ba340d3",
+   "shard": "src-html"
+  },
+  "enchiridion-body.tex": {
+   "bytes": 188375,
+   "sha256": "a53253475ec76a6b754f353311309d4ffc650d02a4a6cd01e6d950c984c47192",
+   "shard": "body-tex"
+  },
+  "enchiridion.xml": {
+   "bytes": 275720,
+   "sha256": "d0a0289ba72dabc64308146353242e74d285dfe1418a3b9ba687fb2b48dde3bb",
+   "shard": "xml"
+  },
+  "encyclical1848-body.tex": {
+   "bytes": 61685,
+   "sha256": "0e568bf756d95e22a7d988f916dda146d09744bec56561779919894c1463b8b5",
+   "shard": "body-tex"
+  },
+  "encyclical1895-body.tex": {
+   "bytes": 44747,
+   "sha256": "ca88ef1ed7374b55ed7bf8362b792cd386af80e3d2005d0119e826224b3f9a5b",
+   "shard": "body-tex"
+  },
+  "english-saints-body.tex": {
+   "bytes": 50022,
+   "sha256": "b3da032132e428dd8949e393112ced7407979e062b29d74e43e3b788f36a34d4",
+   "shard": "body-tex"
+  },
+  "enoch-body.tex": {
+   "bytes": 256467,
+   "sha256": "fb067082f9a89e1a52928cae3bca5c122089f8c04385927a3fa95ca5751a2b23",
+   "shard": "body-tex"
+  },
+  "enoch-src.html": {
+   "bytes": 377172,
+   "sha256": "35713d5003f3df1da8f0d357dbd297d3ba4814de6cb9bfde04781b9f1e5dcac6",
+   "shard": "src-html"
+  },
+  "epictetus-body.tex": {
+   "bytes": 740361,
+   "sha256": "f8f246a95d0a1db8c97414dbe44eee83b3ead0dc66f2356c96bc6b4b239a3261",
+   "shard": "body-tex"
+  },
+  "essays1-body.tex": {
+   "bytes": 746568,
+   "sha256": "98fe20cba6bdcef824e4606aa5500a66d1073ae345403fcdeff790ade66bd2c5",
+   "shard": "body-tex"
+  },
+  "essays2-body.tex": {
+   "bytes": 850441,
+   "sha256": "56997cabff5ba2dc43d68689fadddbd85f3d4544b5876e2cbd0ced51070c17c1",
+   "shard": "body-tex"
+  },
+  "ethics-body.tex": {
+   "bytes": 639824,
+   "sha256": "f1411b7f7f4fbe77a1f9d46c25d799c26a6aa6139cbd1b0e5abad197282112ee",
+   "shard": "body-tex"
+  },
+  "ethics-src.html": {
+   "bytes": 732590,
+   "sha256": "592f5af0f68c1a7761a447ea128c0c588ee557d9775bcaebfbd2be66016151ad",
+   "shard": "src-html"
+  },
+  "everlasting-body.tex": {
+   "bytes": 589721,
+   "sha256": "c6cd9658661f5822db40b31c5e45f7fb5e8d639dfc71ab9b771691b99acd15be",
+   "shard": "body-tex"
+  },
+  "everlasting-thml.xml": {
+   "bytes": 603115,
+   "sha256": "9b0bdba94c79ea94256263108719191702e530890e66eddfb4572c618e6ef440",
+   "shard": "xml"
+  },
+  "faith-prejudice-body.tex": {
+   "bytes": 162476,
+   "sha256": "305f548270103217ff7204c6a575422f96ae220459dca7c8b8e6c6e479142f21",
+   "shard": "body-tex"
+  },
+  "festal39-body.tex": {
+   "bytes": 6936,
+   "sha256": "4e64f747910fd24a3f77dbf11f9b0e901c3cd3290bb8bc27fc9ce115d87c412b",
+   "shard": "body-tex"
+  },
+  "festal39-thml.xml": {
+   "bytes": 9178,
+   "sha256": "cba8d5d05ff235ca31b5e061800edebd2537823ee4ec79562f9387396a922985",
+   "shard": "xml"
+  },
+  "five-letters-body.tex": {
+   "bytes": 38339,
+   "sha256": "a10fd9adb28804e7e8ec3fc39275c8d92af090508d40f17b1d3928ddc3b6430d",
+   "shard": "body-tex"
+  },
+  "frazer-body.tex": {
+   "bytes": 2278253,
+   "sha256": "d976d17510e01370e7fbc1172b8f4e446e29b054569c573f4c32d45e64a3f0f7",
+   "shard": "body-tex"
+  },
+  "frazer-src.html": {
+   "bytes": 2381694,
+   "sha256": "bf3c2a5d4584788e20585c41eef5971fbef2bcb2e10895cdb352d3487bd55b71",
+   "shard": "src-html"
+  },
+  "froude-remains-body.tex": {
+   "bytes": 24247,
+   "sha256": "00ef41d08fb346fcc0f30e689fed9bf7ac0b24fdb865942f6a5febdc84e818ba",
+   "shard": "body-tex"
+  },
+  "gerontius-body.tex": {
+   "bytes": 35561,
+   "sha256": "d82699d482be8402c62f8cfd02b2aac2e2fdc858ef35255928082b340081cf42",
+   "shard": "body-tex"
+  },
+  "gibbon1-body.tex": {
+   "bytes": 847912,
+   "sha256": "49241442910a2df5c5d1d30771bdf581451ffe20feee3f88ff941796eefdb514",
+   "shard": "body-tex"
+  },
+  "gibbon10-body.tex": {
+   "bytes": 987883,
+   "sha256": "ec3bdb4cc3c9d514f35681f823ec0a0a524ca761e5fd007b15294a54c656261a",
+   "shard": "body-tex"
+  },
+  "gibbon11-body.tex": {
+   "bytes": 808734,
+   "sha256": "6f21b24caeda0052d2ca83623247d79d693bb42682ac6c4cc1b8792b50335ceb",
+   "shard": "body-tex"
+  },
+  "gibbon12-body.tex": {
+   "bytes": 519780,
+   "sha256": "46a4f8d305fcda7281fc3f72c79c5b4c75d653e46cc36f6892cff6af6d7d9ac2",
+   "shard": "body-tex"
+  },
+  "gibbon2-body.tex": {
+   "bytes": 863422,
+   "sha256": "41fd1ca88561263fd3910058233e064c5fdfc0665694d0425692dbc6f4854184",
+   "shard": "body-tex"
+  },
+  "gibbon3-body.tex": {
+   "bytes": 1070348,
+   "sha256": "a5c9e1e142bb7fbe492270f06b50917bfc2709518072e40bab0eabaf23fade14",
+   "shard": "body-tex"
+  },
+  "gibbon4-body.tex": {
+   "bytes": 847779,
+   "sha256": "358ca011c80504260ab93ca335e98d39ff886421846cefc78ae53a6497f06d63",
+   "shard": "body-tex"
+  },
+  "gibbon5-body.tex": {
+   "bytes": 885038,
+   "sha256": "c7fad1f0dc1db4f51c90f33ec69424097758b6d264e2f880fbf25f6dcb8d716e",
+   "shard": "body-tex"
+  },
+  "gibbon6-body.tex": {
+   "bytes": 883647,
+   "sha256": "924216d7b8dfdbd1000a67187fc28b170532ffc48ea8eab57987c3ce58d95728",
+   "shard": "body-tex"
+  },
+  "gibbon7-body.tex": {
+   "bytes": 977719,
+   "sha256": "345f06d27216fa46cb082e6139ab2a7c56f0fa174307ce2605e19548dba5041c",
+   "shard": "body-tex"
+  },
+  "gibbon8-body.tex": {
+   "bytes": 1115697,
+   "sha256": "9aa80f9bac1b845838ee509a40e1e1ca13ad2dc323f0b23ad7b7055b14c12673",
+   "shard": "body-tex"
+  },
+  "gibbon9-body.tex": {
+   "bytes": 1044337,
+   "sha256": "6d5d0ed636a913614d30b5dfe26be12b54d55eb04c9398bd42b8a12ba726f0a4",
+   "shard": "body-tex"
+  },
+  "gibbons-body.tex": {
+   "bytes": 698641,
+   "sha256": "33e1ac37b5bed34e5e0c2f6a950725c0422b29984a1c5f8f1ae09ce0231ddf25",
+   "shard": "body-tex"
+  },
+  "gibbons-src.html": {
+   "bytes": 1283033,
+   "sha256": "c101de7ba12aef874f584ee3a96e9801c97e507cec44cb72ee2688ea11ab0068",
+   "shard": "src-html"
+  },
+  "grammar-body.tex": {
+   "bytes": 800987,
+   "sha256": "22d2b39217c050d7f4f11f9c8b2ee641a21b5428178dd92c15b02e871b3fba44",
+   "shard": "body-tex"
+  },
+  "gregory-body.tex": {
+   "bytes": 231449,
+   "sha256": "fb6d1d3472bf3be431cbcd55627dec4f4b7a77fe4419581dcbfee99caa6e8f0d",
+   "shard": "body-tex"
+  },
+  "gregory-letters-body.tex": {
+   "bytes": 55328,
+   "sha256": "29f8275e9e2e3a01b01f5d5c34d3ce61e409c9a6fd28eeea14fa114cd1cb5cf5",
+   "shard": "body-tex"
+  },
+  "gregory-letters-thml.xml": {
+   "bytes": 69008,
+   "sha256": "c650f2560514454f73a1a211dca2cd21c61da6c47b1c423826417593addcde07",
+   "shard": "xml"
+  },
+  "gregory-thml.xml": {
+   "bytes": 278917,
+   "sha256": "4f436286c5598a71c3b6a2f3eb1c6ad9aae7b64b36c97c4ddf723e22693d2a77",
+   "shard": "xml"
+  },
+  "guettee-body.tex": {
+   "bytes": 711147,
+   "sha256": "19f26bc731c360f51443109a39f2e3f9ecfff02a33dd64b732ddce08e9e1dc93",
+   "shard": "body-tex"
+  },
+  "hades-src.html": {
+   "bytes": 39156,
+   "sha256": "aa29c2e21f2b22f649be3396a127d9fd4492ffb171780c87b5bf605a24148add",
+   "shard": "src-html"
+  },
+  "hcc1-body.tex": {
+   "bytes": 2128687,
+   "sha256": "8b2cd437f9e9d4dcda9e245d53539c2d608df73481c20be6e1decc7bc859586d",
+   "shard": "body-tex"
+  },
+  "hcc2-body.tex": {
+   "bytes": 2072556,
+   "sha256": "d4297b50ac18cefa06d13ed32c9be9965554799b4baa393268b41a3e117d3b30",
+   "shard": "body-tex"
+  },
+  "hcc3-body.tex": {
+   "bytes": 2583531,
+   "sha256": "20c4dd5f4be7eee2a3a65e8d7c263163ddfa7c99c321f09c0d9c25b1ef289f5e",
+   "shard": "body-tex"
+  },
+  "hcc4-body.tex": {
+   "bytes": 1745910,
+   "sha256": "8aea044de4d501ea144a45472b69bd65560a5e45ba4f27e2f18236091d7c533b",
+   "shard": "body-tex"
+  },
+  "hcc5-body.tex": {
+   "bytes": 1815762,
+   "sha256": "2eea82d79befa2e6780aea992a6cebd67a0a2e412bdd31fbf27957360c5bf8c5",
+   "shard": "body-tex"
+  },
+  "hcc6-body.tex": {
+   "bytes": 1831553,
+   "sha256": "a4799dda18ea23e42245be9d5ce21dd6cc1312757f4df19b3c7efe991c8cddf6",
+   "shard": "body-tex"
+  },
+  "hcc7-body.tex": {
+   "bytes": 1644997,
+   "sha256": "7a2e9c663383b56d1c0cde7051e056c0c78fdf5154c9a5a91440a776c3a1d022",
+   "shard": "body-tex"
+  },
+  "hcc8-body.tex": {
+   "bytes": 1971008,
+   "sha256": "b1254c6c21e40d3c51c3902c2f06a26c52b98ca0fb2d2280ef7ff24e205982b9",
+   "shard": "body-tex"
+  },
+  "heretics-body.tex": {
+   "bytes": 362310,
+   "sha256": "c54faa77e54b6a798e276e148eb2201c496e726b4a72827d1fc4fe8a2309df89",
+   "shard": "body-tex"
+  },
+  "heretics-thml.xml": {
+   "bytes": 401628,
+   "sha256": "4ded32f2de5ebc70f42e86d5665e980e9fc9193c647bc090f459cd43de64005c",
+   "shard": "xml"
+  },
+  "herodotus-body.tex": {
+   "bytes": 1606971,
+   "sha256": "a165a44d5cd4d5226cea741873482cc14b866ea5594ce43fb401d388c6b2b7f0",
+   "shard": "body-tex"
+  },
+  "herodotus1-src.html": {
+   "bytes": 1193230,
+   "sha256": "e446a87bdae19e1cc4463225a3870401387513e9eda4ed774c702d00cec724ec",
+   "shard": "src-html"
+  },
+  "herodotus2-src.html": {
+   "bytes": 1125336,
+   "sha256": "e1a1d923ee2adb97d25667ba88e8bb873ce032ffb63df6bbd5df61422165822f",
+   "shard": "src-html"
+  },
+  "hesiod-body.tex": {
+   "bytes": 514602,
+   "sha256": "cdbf8c88e50dea68d3e688f05c777532f4599629a21bcba1f13f8f5c1f15b7d0",
+   "shard": "body-tex"
+  },
+  "hesiod-src.html": {
+   "bytes": 637725,
+   "sha256": "bfb7d7383b7b3edfa245e3f814fbad788b1bca620984306ca2eec4d3c0b02e3f",
+   "shard": "src-html"
+  },
+  "historical1-body.tex": {
+   "bytes": 767971,
+   "sha256": "af48d35e4014ff7cafa33de86f212002694f635376ffbfdd15639a34cad9f8ff",
+   "shard": "body-tex"
+  },
+  "historical2-body.tex": {
+   "bytes": 873417,
+   "sha256": "0b7fa0b2bb39fbb813d78c03847f37e03c143f22d0e87d3622fad94d96111938",
+   "shard": "body-tex"
+  },
+  "historical3-body.tex": {
+   "bytes": 719182,
+   "sha256": "c19d72be6ebf533e3e4a38bb5161ea5a2cf1666022253965a3a051d8616b489b",
+   "shard": "body-tex"
+  },
+  "histories-body.tex": {
+   "bytes": 586258,
+   "sha256": "c211afa09e218f98efe5d0c11507270829f113fb3673953e75351a9d3cf95d9c",
+   "shard": "body-tex"
+  },
+  "hooker-body.tex": {
+   "bytes": 3830150,
+   "sha256": "b1bd9b99076b11849208fab2c3eb51011685970693e758e19c38a4ab54bc5707",
+   "shard": "body-tex"
+  },
+  "hooker-reform1.xml": {
+   "bytes": 86195,
+   "sha256": "983d0ae1a17afc171ca708f9fdd8ef73c58f3ec9f13ca16f7700b60a851237c2",
+   "shard": "xml"
+  },
+  "hooker-reform2.xml": {
+   "bytes": 165384,
+   "sha256": "c5ef5288e9e57d619efa0189e780603da7d2a909afbe52a716f8e84485c1e0ef",
+   "shard": "xml"
+  },
+  "hooker-reform3.xml": {
+   "bytes": 109345,
+   "sha256": "4c3afc4ab40238291d672835046c319536a4caf9e0cdda5e2330ec832514faa2",
+   "shard": "xml"
+  },
+  "hymni-body.tex": {
+   "bytes": 12876,
+   "sha256": "977e4c94ae884d0cb80412005e24f6f05517ad6a98629bcdb0246cee0f37227f",
+   "shard": "body-tex"
+  },
+  "idea-body.tex": {
+   "bytes": 918607,
+   "sha256": "750b359291d0764f29cb3e40b328d4c8d900bc76512402b88a16f3c988919a7c",
+   "shard": "body-tex"
+  },
+  "ignatius-body.tex": {
+   "bytes": 207039,
+   "sha256": "643d2c34f62dd1514664d5917b17023b81e0c80ac4ed27404bd1ad7a27889f6a",
+   "shard": "body-tex"
+  },
+  "ignatius-thml.xml": {
+   "bytes": 394994,
+   "sha256": "336db63d4c51692f7e4fb503348fde34631a2eb8d4ce4ff4a971d4f13336dd81",
+   "shard": "xml"
+  },
+  "iliad-body.tex": {
+   "bytes": 814928,
+   "sha256": "952925562c84ecfef10ce801d2e2b978f2465c85d69c5516b64a296aed16ce8d",
+   "shard": "body-tex"
+  },
+  "iliad-src.html": {
+   "bytes": 944359,
+   "sha256": "0bdda2ca9289ea177613e65f71bb5fe8ee58d6864d07d8d322c0d27b3de8c74f",
+   "shard": "src-html"
+  },
+  "incarnation-body.tex": {
+   "bytes": 198148,
+   "sha256": "011335db6dca54e868afb616be01fdcbf8391772c08d3fbd2cc9d2632f36df3c",
+   "shard": "body-tex"
+  },
+  "inspiration-body.tex": {
+   "bytes": 42645,
+   "sha256": "1bbeb7ccbaa09bd481bec1f5857f8ae25d754d7a0e08d98f8abc4daa5d46ca07",
+   "shard": "body-tex"
+  },
+  "institutes-body.tex": {
+   "bytes": 3909682,
+   "sha256": "defa4c712384829424c738da8b2f478cc60e85a726109f50a325a38485c1c6bb",
+   "shard": "body-tex"
+  },
+  "institutes-thml.xml": {
+   "bytes": 4979278,
+   "sha256": "d7995178c1fe1723d1124126010e430f12d0444239ad7f9a7c8c818aa9766717",
+   "shard": "xml"
+  },
+  "irenaeus3-body.tex": {
+   "bytes": 262118,
+   "sha256": "3e37ca0ec6e32d78cf28c2ea0830778b39cea2a615359c6c448c8d0e7993419c",
+   "shard": "body-tex"
+  },
+  "irenaeus3-thml.xml": {
+   "bytes": 397150,
+   "sha256": "c7e9b9aa91384f3507d4fd11d77ce1ce12069b556fa7837b867f4e41391853de",
+   "shard": "xml"
+  },
+  "jddj-body.tex": {
+   "bytes": 56961,
+   "sha256": "4f36dfa9f9aa40d5cdabe2bf48fb441a19cb72724498aa47b61b135bb126e7a7",
+   "shard": "body-tex"
+  },
+  "jewel-body.tex": {
+   "bytes": 237580,
+   "sha256": "6eec05846c1edfe042289bf125290a316493c69fdf736f22084edafbc8f44910",
+   "shard": "body-tex"
+  },
+  "jewel-src.html": {
+   "bytes": 282972,
+   "sha256": "57ec546e995c5f413edf7e5756ef4c476ff7d08d56dce32e0de33df886037581",
+   "shard": "src-html"
+  },
+  "josephus-life-src.html": {
+   "bytes": 194196,
+   "sha256": "0a8b447b29750988b1b5119e05d31d56c8b807b8dbbf26ea19fdeed38b789d44",
+   "shard": "src-html"
+  },
+  "josephus-minor-body.tex": {
+   "bytes": 385854,
+   "sha256": "0211320061a9d319fe1874d12ed45d086db7dd5b6e5b945c4cd9837911b14ef1",
+   "shard": "body-tex"
+  },
+  "jubilees-body.tex": {
+   "bytes": 415518,
+   "sha256": "bf1db0367a022f2be30e29d037e5b9b85633865504bf2fee6eae530bac0a4448",
+   "shard": "body-tex"
+  },
+  "julian-body.tex": {
+   "bytes": 108124,
+   "sha256": "023e65786eb1bf1c2ab9d358a5a38bdd3b5759d4a06569fecc6c2db663b9cbed",
+   "shard": "body-tex"
+  },
+  "justification-body.tex": {
+   "bytes": 718372,
+   "sha256": "aa3ebe7ec183c2ba66aa35729de2f03e09a6f771236dfcb8f3d507539f4c21e7",
+   "shard": "body-tex"
+  },
+  "justin-body.tex": {
+   "bytes": 141645,
+   "sha256": "a4e7a2d284db36b2c38d73cebf4890b0623f07839dea42cb477b8d8c9f328ad7",
+   "shard": "body-tex"
+  },
+  "justin-thml.xml": {
+   "bytes": 216654,
+   "sha256": "5a7931cec078dfaade22339ed23d15d59305fae2a10d175eaa61e42121037362",
+   "shard": "xml"
+  },
+  "keble-year-body.tex": {
+   "bytes": 305659,
+   "sha256": "50680f348454c4473eb7e7f08c4c4de89e01f7de7c601d7f71c8c7fbb2b2dc6d",
+   "shard": "body-tex"
+  },
+  "keble-year-thml.xml": {
+   "bytes": 636423,
+   "sha256": "eb9b03713755f71a005a1b0c653962c683226e6498c40897a84dd0ce00c68739",
+   "shard": "xml"
+  },
+  "kjv-body.tex": {
+   "bytes": 4651094,
+   "sha256": "1edad319e8d4fb85dcb68d9eb5e39f06380f3e575243c6bd385869aa5935f882",
+   "shard": "body-tex"
+  },
+  "kjv-src.html": {
+   "bytes": 4687527,
+   "sha256": "4667619f83d4a8191e1390c696962de9d6cc950227f7b59db03205377424f7d9",
+   "shard": "src-html"
+  },
+  "law-body.tex": {
+   "bytes": 652502,
+   "sha256": "f1b707227fc3589fc28144ef18d63bd7e7fbbd24eb86df8e1df354aa89638c37",
+   "shard": "body-tex"
+  },
+  "liberty-src.html": {
+   "bytes": 138646,
+   "sha256": "288d646ca980dd6a4be4ab5ed826faa7992d76fbb908341e5b8f3b5bf07592e4",
+   "shard": "src-html"
+  },
+  "library-fathers-body.tex": {
+   "bytes": 106492,
+   "sha256": "dca0d50ae0a62fb4c2aab8728532be95931885aba8a42c92ab444266b1473efa",
+   "shard": "body-tex"
+  },
+  "liturgies-body.tex": {
+   "bytes": 179526,
+   "sha256": "e1ff522bc6756ac289cf47be704c3547cca5fcfae94afa87c313530e0bd00bba",
+   "shard": "body-tex"
+  },
+  "livy1-body.tex": {
+   "bytes": 1356841,
+   "sha256": "4ae0009a697ccdfff22a1e463a2f7d220ca76142e030388222dae22a951a9a48",
+   "shard": "body-tex"
+  },
+  "livy1-src.html": {
+   "bytes": 1530034,
+   "sha256": "b424baba04cb87e0f36205ed7cb1751b80d22e947e416796227bdd9bcb1ee8a6",
+   "shard": "src-html"
+  },
+  "livy2-body.tex": {
+   "bytes": 1286436,
+   "sha256": "85f74767481dc3275eb11f606dd70b3bf4820d2e02608dbaae3608ed370210bd",
+   "shard": "body-tex"
+  },
+  "livy2-src.html": {
+   "bytes": 1451843,
+   "sha256": "09cbf7480c3bd05e20bfb496d86c214de960302ab96843f26fefc5ff50005edd",
+   "shard": "src-html"
+  },
+  "livy3-body.tex": {
+   "bytes": 1362339,
+   "sha256": "b128cf9d4dc9e72b8a651e0e630df5775fd664e46f6bad328a4349c34ffe9445",
+   "shard": "body-tex"
+  },
+  "livy3-src.html": {
+   "bytes": 1498119,
+   "sha256": "8672995ab2ae8a066294b7b878ccb60ade4482ac8fe5049350d5d04954d8d50b",
+   "shard": "src-html"
+  },
+  "livy4-body.tex": {
+   "bytes": 1398559,
+   "sha256": "254da6eeba39c452f2b8ef402d77e7996d396b760a0be4f95103f9b552fe954c",
+   "shard": "body-tex"
+  },
+  "livy4-src.html": {
+   "bytes": 1946058,
+   "sha256": "0a8a21d54bc6a9194be39a738380d604cb573fa5436046b0b56f149d4442cf13",
+   "shard": "src-html"
+  },
+  "loss-and-gain-body.tex": {
+   "bytes": 611530,
+   "sha256": "f9d193068797b26e6153726ff52c4c6ef5b3c03d2f43b2a0208b035b13e85b55",
+   "shard": "body-tex"
+  },
+  "lucian-body.tex": {
+   "bytes": 1986803,
+   "sha256": "21d5c2adda79e512173e11b4609e7a37c7fd0bb6ee9d4146a2870dad301174d2",
+   "shard": "body-tex"
+  },
+  "lucian1-src.html": {
+   "bytes": 563198,
+   "sha256": "a822e647479548c00fbb77156f0350edaf64c606a1e0be6cd547f0714c935459",
+   "shard": "src-html"
+  },
+  "lucian2-src.html": {
+   "bytes": 581274,
+   "sha256": "0912403550596b0491ef3b85b28e91623362bb4708807046a268bbf6068a009d",
+   "shard": "src-html"
+  },
+  "lucian3-src.html": {
+   "bytes": 595569,
+   "sha256": "108ff8f68aec07d498724f9b7b76e874a70cb1898cfdfff913eaffa24b8e3fa2",
+   "shard": "src-html"
+  },
+  "lucian4-src.html": {
+   "bytes": 557439,
+   "sha256": "fcd2abb2f94a180151a34eae18447135750ec784c8caf8c41510daf21a21d14d",
+   "shard": "src-html"
+  },
+  "lucretius-body.tex": {
+   "bytes": 435691,
+   "sha256": "0302e4b3b51b3eccff21c74e69dcd0194f49282db668f9c6c27af06b3ee2537f",
+   "shard": "body-tex"
+  },
+  "lucretius-src.html": {
+   "bytes": 514231,
+   "sha256": "0735c38eba2b7770d8cb680d9322e49e4a0e2f7ee0bac40a2c60f9012cd4b7af",
+   "shard": "src-html"
+  },
+  "luther-galatians-body.tex": {
+   "bytes": 478739,
+   "sha256": "e46800e659c44cbcddbe70954051f4fd1c9b0b52c5764db0af8cf3ecf0f5493b",
+   "shard": "body-tex"
+  },
+  "luther-galatians-thml.xml": {
+   "bytes": 571146,
+   "sha256": "fda607a4571f61881bcbaa529d37515d47f386c9b1953442a7078c2b77533d29",
+   "shard": "xml"
+  },
+  "luther-primary-body.tex": {
+   "bytes": 128861,
+   "sha256": "d1ac2e59c5a8038071e5ec6db41b17facb090e8b68a9600dd2632861be54f2ca",
+   "shard": "body-tex"
+  },
+  "marcus-body.tex": {
+   "bytes": 428787,
+   "sha256": "1ea434f4ad1c3981fb653dde023198d5e2f7950bdb7a22c5faae855f1eb32f07",
+   "shard": "body-tex"
+  },
+  "marcus-src.html": {
+   "bytes": 569092,
+   "sha256": "5082e242772d0c288ca71139b160c7d9a1d4e6a5905aa2718af5397e8d56f3ae",
+   "shard": "src-html"
+  },
+  "meditations-body.tex": {
+   "bytes": 444682,
+   "sha256": "de8933f2340bcf0374c9b1d3200010e05fec11a5101d0ef70242ee72aefd3c47",
+   "shard": "body-tex"
+  },
+  "metam-body.tex": {
+   "bytes": 1508150,
+   "sha256": "841fdcd7ce02f410f341bce7e12e8f64ea19001092e50d4ff68727ad55767b13",
+   "shard": "body-tex"
+  },
+  "metam1-src.html": {
+   "bytes": 943289,
+   "sha256": "3bd4f6986e7cecbbe10d407b6e77de0141308af4573d0d0cd587eb24b0ecd455",
+   "shard": "src-html"
+  },
+  "metam2-src.html": {
+   "bytes": 979267,
+   "sha256": "a84d1a9f0a38f8182cf488b9ae5e78ce95239c085a021b938e6a2c0b3ac84b5d",
+   "shard": "src-html"
+  },
+  "metaphysics-body.tex": {
+   "bytes": 321231,
+   "sha256": "71e5443e7c8f7f536cf5cdf301319aeffbf2402e251bcae97794cfe7e17a4970",
+   "shard": "body-tex"
+  },
+  "miracles-body.tex": {
+   "bytes": 568593,
+   "sha256": "36ac15d92ebbcba718290daea91ba50987c610883e8cc4e377124ca9b5228c7a",
+   "shard": "body-tex"
+  },
+  "norfolk-body.tex": {
+   "bytes": 323495,
+   "sha256": "2c8e077473af50eb5b01a79d19761c60003cf49fb502ef8803d004ba94be92c7",
+   "shard": "body-tex"
+  },
+  "npnf101-body.tex": {
+   "bytes": 3208269,
+   "sha256": "12e3541b0c42d38cbc607f79403ba11ec55fdae3419ebf5671eb1034fa4dd60b",
+   "shard": "body-tex"
+  },
+  "npnf102-body.tex": {
+   "bytes": 3059256,
+   "sha256": "c456d723c03f13b0ebb70297dfa69461f8cc13d79c8579a2b94ee4005abda16e",
+   "shard": "body-tex"
+  },
+  "npnf103-body.tex": {
+   "bytes": 2537184,
+   "sha256": "08ef82bd1df8dc274dcde34ebdb9e6c690eba560ccf6914565ca51643ef377c3",
+   "shard": "body-tex"
+  },
+  "npnf104-body.tex": {
+   "bytes": 3018049,
+   "sha256": "24d106a9d56dc8babe4279c6dbc83ff51cda0c268e0b3f0be5ca6431724c2434",
+   "shard": "body-tex"
+  },
+  "npnf105-body.tex": {
+   "bytes": 2995067,
+   "sha256": "1727705376367f8019d51ced647e238b45312b6d897b28aee85cd1d934726e12",
+   "shard": "body-tex"
+  },
+  "npnf106-body.tex": {
+   "bytes": 3040225,
+   "sha256": "2c5ec071838850413ac30fdd83bc278e5a633af12bfce58774f16d23514fd63d",
+   "shard": "body-tex"
+  },
+  "npnf107-body.tex": {
+   "bytes": 2756033,
+   "sha256": "253c6c601f4bf03fffce6bd8a035579c9e174c3750505c53102cb50b5a730453",
+   "shard": "body-tex"
+  },
+  "npnf108-body.tex": {
+   "bytes": 3867632,
+   "sha256": "b447fa639abbb1530076e74d844973582b18e6e92a1655e25be4a29a3143c336",
+   "shard": "body-tex"
+  },
+  "npnf109-body.tex": {
+   "bytes": 2160622,
+   "sha256": "05989dce4467f3e255325d2fa705945942f6875a0fd9769c22569a8c576e1a35",
+   "shard": "body-tex"
+  },
+  "npnf110-body.tex": {
+   "bytes": 2607011,
+   "sha256": "f817db7066e0e3a2982d6620a1d6a595230df417bc96b77a4eb043d33b8328dc",
+   "shard": "body-tex"
+  },
+  "npnf111-body.tex": {
+   "bytes": 3368516,
+   "sha256": "4f3c382954895377505c58a76b5f27c0b55618d353ef5b719ff91be70c6374ff",
+   "shard": "body-tex"
+  },
+  "npnf112-body.tex": {
+   "bytes": 2249593,
+   "sha256": "c4e65c0277f8209e3ac3b06a39882a8ce52802bc9d2688a564db595f639066a6",
+   "shard": "body-tex"
+  },
+  "npnf113-body.tex": {
+   "bytes": 2920651,
+   "sha256": "24eda97bea731af6700f453fae1aba2f3829f2c5a9d8cfc95638bec220f37a25",
+   "shard": "body-tex"
+  },
+  "npnf114-body.tex": {
+   "bytes": 2788308,
+   "sha256": "553478c953922a6ce967b70c7ab62e55dfa6d637b90b10449c17829c7ed3e8f9",
+   "shard": "body-tex"
+  },
+  "npnf201-body.tex": {
+   "bytes": 3960074,
+   "sha256": "4c87c68782d36c2a9b4380f44fc2179c784ba136c92f8925366939c65f0fc0c9",
+   "shard": "body-tex"
+  },
+  "npnf202-body.tex": {
+   "bytes": 2309636,
+   "sha256": "99ceb73557e4e879dfbc2abb38200cb4960805ea200cfab27ee934cee1d0f5bf",
+   "shard": "body-tex"
+  },
+  "npnf203-body.tex": {
+   "bytes": 2974162,
+   "sha256": "1cc09b5e07125aa9aeac3d9f840970bd943d205552907da2f44db7105ab21189",
+   "shard": "body-tex"
+  },
+  "npnf204-body.tex": {
+   "bytes": 3890789,
+   "sha256": "7b924b2840e2ecc6b065116d4c5c2ccc413e2bfc8a870c005368d61b5c67e23a",
+   "shard": "body-tex"
+  },
+  "npnf205-body.tex": {
+   "bytes": 3043768,
+   "sha256": "c73bdd2828a7a4007e5ed8980371dca75780e42557ece7dc7bee88ee0ca9f8e6",
+   "shard": "body-tex"
+  },
+  "npnf206-body.tex": {
+   "bytes": 2842983,
+   "sha256": "5a2bb212d0194c51acc7fb786aec0e29bc589f8562f665f589d818ee7e4610fa",
+   "shard": "body-tex"
+  },
+  "npnf207-body.tex": {
+   "bytes": 2699053,
+   "sha256": "e31b1b3b4b17bd54698f048fc32d2d1c7e6a6fd7130db0a1b3f6570558a421b2",
+   "shard": "body-tex"
+  },
+  "npnf208-body.tex": {
+   "bytes": 2208258,
+   "sha256": "820ecbdb0723d599481d1c43a7eb952d6e06d582fc11bcb78c1446cdb6d42a97",
+   "shard": "body-tex"
+  },
+  "npnf209-body.tex": {
+   "bytes": 2247305,
+   "sha256": "763f3281ac7b209148ec0efe4f59c387fbf37750c3135e8dab3ea13cd2343edf",
+   "shard": "body-tex"
+  },
+  "npnf210-body.tex": {
+   "bytes": 2442720,
+   "sha256": "61c7f1fe38e3877a31567a7fef5928af92583349dcfd247302c7649864e09351",
+   "shard": "body-tex"
+  },
+  "npnf211-body.tex": {
+   "bytes": 2983936,
+   "sha256": "6977f54faa4c5b729d1e99485bbc7da91aedabc8bd8b2a635bca5f1a492e68e8",
+   "shard": "body-tex"
+  },
+  "npnf212-body.tex": {
+   "bytes": 2539385,
+   "sha256": "de33bbb639bb17592486a862fb52970a2e87f06ac7f98dedb7798945f9602170",
+   "shard": "body-tex"
+  },
+  "npnf213-body.tex": {
+   "bytes": 1662928,
+   "sha256": "db942c8ff7b1b3b8e73120d415ef899ad2d6e6cdf0e2d04d9f3bbb72499be6ff",
+   "shard": "body-tex"
+  },
+  "occasions-body.tex": {
+   "bytes": 515807,
+   "sha256": "cefba67949529a25ce40f8bf9473fa8c4e0c7472c85dcf99e1f4d0688ed36497",
+   "shard": "body-tex"
+  },
+  "odyssey-body.tex": {
+   "bytes": 677946,
+   "sha256": "9ad84812648d112e88bdac7c1b12700732def77acb9ad14f99cb26b04be3a329",
+   "shard": "body-tex"
+  },
+  "odyssey-src.html": {
+   "bytes": 776165,
+   "sha256": "c09346c17dd04efa9178756f3c9cd156bbb99def6d14bfd6ec0ab270dd332d48",
+   "shard": "src-html"
+  },
+  "onbaptism-body.tex": {
+   "bytes": 531398,
+   "sha256": "20de32a71cd74d6480f229b451e3e4bc6223dcd396507b286fd817ded012863b",
+   "shard": "body-tex"
+  },
+  "onbaptism-thml.xml": {
+   "bytes": 724420,
+   "sha256": "8d9a0d24916e8c53158c73dd1f3779f72bd10c2552b5b81b596560e101b04c3c",
+   "shard": "xml"
+  },
+  "ondoctrine-body.tex": {
+   "bytes": 398029,
+   "sha256": "9dcbca993df5f914e1117b57f9e778357a8c09f39a1a730a4907a7f2c48714eb",
+   "shard": "body-tex"
+  },
+  "orthodoxy-body.tex": {
+   "bytes": 353894,
+   "sha256": "6cde00c1c25f8dc359e825056bba02d44abc255e3a420dd0b1f6ab3f75344ee1",
+   "shard": "body-tex"
+  },
+  "orthodoxy-thml.xml": {
+   "bytes": 370815,
+   "sha256": "c99bdca8881f1b749c1515e3feac8376ff35fb160222670557d9c0bfe6d233f4",
+   "shard": "xml"
+  },
+  "oxford-sermons-body.tex": {
+   "bytes": 571764,
+   "sha256": "96106252cbef11fc8998bd1891881cbc1b2efa68bb1cecbff62d081f1a394e66",
+   "shard": "body-tex"
+  },
+  "parochial1-body.tex": {
+   "bytes": 544248,
+   "sha256": "d81d774225733c73ab084eb8c368bb866c8a18a11409c6fb4b5367132ceddb61",
+   "shard": "body-tex"
+  },
+  "parochial2-body.tex": {
+   "bytes": 619794,
+   "sha256": "7d37cda2bc57f206f9025994883bbd4129731135441503e4c1be58cebfd87ddb",
+   "shard": "body-tex"
+  },
+  "parochial3-body.tex": {
+   "bytes": 599638,
+   "sha256": "9b8b0d854d1bbc204c72a7d0758fd993a6323f8e5a4159326059273a6e5b0d11",
+   "shard": "body-tex"
+  },
+  "parochial4-body.tex": {
+   "bytes": 545607,
+   "sha256": "01ca0c2bc0236107ba6e55abab00fd74973c541720a19d0048bcea9359629a15",
+   "shard": "body-tex"
+  },
+  "parochial5-body.tex": {
+   "bytes": 553679,
+   "sha256": "40ccd525f191392e773e4a10ba50ac587e72f2939d14208a57b26cb2b9e6aab4",
+   "shard": "body-tex"
+  },
+  "parochial6-body.tex": {
+   "bytes": 573548,
+   "sha256": "5eb736e8885eb65fd243bd9b78a433a317544f3d0172cfc22b787b6053eabc24",
+   "shard": "body-tex"
+  },
+  "parochial7-body.tex": {
+   "bytes": 357542,
+   "sha256": "464f17dc4ce1d67609056bb409d0318091a3ae0c63f028ae5d3535e0fe734f52",
+   "shard": "body-tex"
+  },
+  "parochial8-body.tex": {
+   "bytes": 375690,
+   "sha256": "2f06ba916e87d03f140f6e9a1f8c8d4f4317f874231d92398b54fa5b1a16fc3f",
+   "shard": "body-tex"
+  },
+  "phaedo-body.tex": {
+   "bytes": 232963,
+   "sha256": "dc951e70bc8c682a3c3e8f6d80c96867294a7f07a56d6defa0a29087cde359a1",
+   "shard": "body-tex"
+  },
+  "phaedo-src.html": {
+   "bytes": 294874,
+   "sha256": "1b030d6c1b2cf9a3dbcf0b8f61fa2d604b257a23c8c67b09be1130a32a12f773",
+   "shard": "src-html"
+  },
+  "philo1-body.tex": {
+   "bytes": 2200986,
+   "sha256": "34ecfbbd09609df73dd1b059f0e2d771ae1717e6bc775bc9dc78737ce5213e43",
+   "shard": "body-tex"
+  },
+  "philo2-body.tex": {
+   "bytes": 1487198,
+   "sha256": "b42bba2ce671e7661b0de045d75684525c54c1c1ac6ffd41bc55e44a4b201e0a",
+   "shard": "body-tex"
+  },
+  "philo3-body.tex": {
+   "bytes": 586965,
+   "sha256": "45bb25ad95fbf28f139e10f3e21812be596c5c54e6b306c5c77cd3c7d305616e",
+   "shard": "body-tex"
+  },
+  "philo4-body.tex": {
+   "bytes": 539375,
+   "sha256": "466487ce261f137a1f40ce51812d146f52b93ce7654e0aeabd66dd09b83ca55c",
+   "shard": "body-tex"
+  },
+  "pliny-body.tex": {
+   "bytes": 510299,
+   "sha256": "37a8d3b71ae62b6a0024f735c6a81e4e25ea4166fcb332d933798f5a1c209695",
+   "shard": "body-tex"
+  },
+  "pliny-src.html": {
+   "bytes": 704486,
+   "sha256": "862dd0e13d075bcbb3a76fd4d73b7b2e522f61431ee40a11163a3749e55ee43c",
+   "shard": "src-html"
+  },
+  "plutarch-body.tex": {
+   "bytes": 4233153,
+   "sha256": "977267aaa623b4e688b395c0eb523f3fbe6215ef0b8c8ab21fddf05385cb5bfa",
+   "shard": "body-tex"
+  },
+  "plutarch-src.html": {
+   "bytes": 4364158,
+   "sha256": "69accaeb7897858c3f4dc15c520220e2322c0fd4b84f5077c3a8a2c3f05eefd5",
+   "shard": "src-html"
+  },
+  "politics-body.tex": {
+   "bytes": 548336,
+   "sha256": "cf0d562a0da62154e5b1988df57667e7446833f319d2c7c01e38fb6d086ea731",
+   "shard": "body-tex"
+  },
+  "politics-src.html": {
+   "bytes": 685786,
+   "sha256": "2d47fcbee6474d98f8e0c1d8d855ebc2e90e8c05969c1bc5450e78f8c1d4ad64",
+   "shard": "src-html"
+  },
+  "polybius-body.tex": {
+   "bytes": 2736647,
+   "sha256": "b6a110ed0b2422e0e388aefd551de22c1f52ef7f0b2644d4425f689940e119d7",
+   "shard": "body-tex"
+  },
+  "polybius1-src.html": {
+   "bytes": 1738011,
+   "sha256": "ceb7152efba1bd9f8ebd7e6e2c9c36a059c9ae7b0842d8d420edf32f2b229c9d",
+   "shard": "src-html"
+  },
+  "polybius2-src.html": {
+   "bytes": 2386426,
+   "sha256": "342572ec79cd05a4c7c328cf1984a30edf8fd41d506c7a87ff6e016d733b69c0",
+   "shard": "src-html"
+  },
+  "present-position-body.tex": {
+   "bytes": 722337,
+   "sha256": "7e94a0fb68f3f457d27fd2c0bac93c4f5d7fab8171aaf19474a6f8edf273363f",
+   "shard": "body-tex"
+  },
+  "pusey-body.tex": {
+   "bytes": 266971,
+   "sha256": "4b999ad5e87acf59f21a80f61192cf7769ca36c9b187819dde6df11fec6ae569",
+   "shard": "body-tex"
+  },
+  "ravenna-body.tex": {
+   "bytes": 36422,
+   "sha256": "b5447ef2ef540ba0ef3c770d08af3659d64deac6addf44f797d543eb02489deb",
+   "shard": "body-tex"
+  },
+  "religious-error-body.tex": {
+   "bytes": 59862,
+   "sha256": "f8b15358b9444c72b23a6d8a3d69ff087c87902bcc5217824070c7f38241556f",
+   "shard": "body-tex"
+  },
+  "republic-body.tex": {
+   "bytes": 1199589,
+   "sha256": "c356901aafa06386e8ecfb30d49d2e6f450c279abc480ae5e2801f4fef722c64",
+   "shard": "body-tex"
+  },
+  "republic-src.html": {
+   "bytes": 1302890,
+   "sha256": "2ffbef4002ee6b6629121c453a38dcf3f2e8fd2c43cdf3279943888b2c04fd5d",
+   "shard": "src-html"
+  },
+  "rigveda-body.tex": {
+   "bytes": 1758352,
+   "sha256": "13473b2e40942afcb32a7c907799d618c41a46d7cda3bfb348213243eb740e39",
+   "shard": "body-tex"
+  },
+  "russian-church-body.tex": {
+   "bytes": 12812,
+   "sha256": "70774f0a324dca9881ca74923a0e5fe5d1a20bf0677f763bc49dfcd25db69e8c",
+   "shard": "body-tex"
+  },
+  "saepius-body.tex": {
+   "bytes": 103679,
+   "sha256": "e9229f3f7b55ed8bea52a3cd9419b65110c4bd0fd28b92c4aa058b2e8769415a",
+   "shard": "body-tex"
+  },
+  "sallust-body.tex": {
+   "bytes": 557974,
+   "sha256": "ff449192e1f886b05156c69b89953e1c053725aa043b15a70e07c815ba15dbca",
+   "shard": "body-tex"
+  },
+  "sallust-src.html": {
+   "bytes": 626968,
+   "sha256": "d55f21f93592bc53cd14957f656a4f8661481305076a3bf59153e889953262da",
+   "shard": "src-html"
+  },
+  "sayings-body.tex": {
+   "bytes": 187657,
+   "sha256": "61c79cd7dfd55ec33d92792eaa510e8e2cddbbc68921e9e29cfc58168c58876b",
+   "shard": "body-tex"
+  },
+  "scranton-body.tex": {
+   "bytes": 4655,
+   "sha256": "9eed90ce339c2969e9521abf14567ac13b320f918c32cddd6ed1e0f0faa80317",
+   "shard": "body-tex"
+  },
+  "seneca-body.tex": {
+   "bytes": 1182936,
+   "sha256": "bc6bdb9db6005dab498ff480d69dabf6159b58a0f778c8cfdcd11d1013efdf49",
+   "shard": "body-tex"
+  },
+  "sermon-notes-body.tex": {
+   "bytes": 488365,
+   "sha256": "23a7c5ec75c49635f1e218b3f954509f83149764e6b1f1bd46a9b41e5374e48c",
+   "shard": "body-tex"
+  },
+  "soulres-body.tex": {
+   "bytes": 263185,
+   "sha256": "2952c5569337658d04c172a482f92ecedb1c1a1d6119f4681295300e7c3ca7ae",
+   "shard": "body-tex"
+  },
+  "soulres-thml.xml": {
+   "bytes": 317357,
+   "sha256": "c885453a3b95292682d202ef0ae74181c9a2f32b0addbade21beb369ccfbf10d",
+   "shard": "xml"
+  },
+  "subjects-body.tex": {
+   "bytes": 643082,
+   "sha256": "3fb878d7417b46754aa1215ffc9c63b19d0af3a6ffc87cf47e98fa3ec2368be6",
+   "shard": "body-tex"
+  },
+  "suetonius-body.tex": {
+   "bytes": 1369848,
+   "sha256": "2216cf806a910e4bafbb8ba33fad7507cbf7ba5221f94702bf532ed1d61ebc90",
+   "shard": "body-tex"
+  },
+  "suetonius-src.html": {
+   "bytes": 1624207,
+   "sha256": "b52fd3e6fed9bc3aa548c07f88a84e14cb8985e44271a79611f125b2c1a410dd",
+   "shard": "src-html"
+  },
+  "summa-fp-body.tex": {
+   "bytes": 2898493,
+   "sha256": "48b27dca7b26ddfc40754dfe50d578fec77ccc026865033ab158d588db6622f6",
+   "shard": "body-tex"
+  },
+  "summa-fs-body.tex": {
+   "bytes": 2858369,
+   "sha256": "f1eb794e91496c57befbedb888271c0b9ede2bed50d04c0219c0f345c2c39446",
+   "shard": "body-tex"
+  },
+  "summa-ss-body.tex": {
+   "bytes": 4213904,
+   "sha256": "0241de9f14edbca7c088d9afe89a08b524f113b893cdd0ebe75c9d5f80419dd9",
+   "shard": "body-tex"
+  },
+  "summa-tp-body.tex": {
+   "bytes": 2744107,
+   "sha256": "99b936e2ada197d73478a4e4718a379f4b24e6a02199d2d8dd7f6cb66bac103d",
+   "shard": "body-tex"
+  },
+  "summa-xp-body.tex": {
+   "bytes": 2197817,
+   "sha256": "1ab88160fa62a11dbd2a866d47da89819a9c11b7d733a07ce83490237eba028c",
+   "shard": "body-tex"
+  },
+  "testaments-body.tex": {
+   "bytes": 186300,
+   "sha256": "a95dcab0fd7eb7c72672e24968d1aa7d427ef7b4d1c8efaa1c08ad9ac927e553",
+   "shard": "body-tex"
+  },
+  "theses-src.html": {
+   "bytes": 62812,
+   "sha256": "a8b8c169fb9d377f3cca0e0e78e769a5b8554cc088780df2a706cd8bc9c24dde",
+   "shard": "src-html"
+  },
+  "thucydides-body.tex": {
+   "bytes": 1178154,
+   "sha256": "329137ecae5b888cca2ccdfb91ebc81392ec33ee37f604acf3bc16f6263e339b",
+   "shard": "body-tex"
+  },
+  "thucydides-src.html": {
+   "bytes": 1239344,
+   "sha256": "cca3da2fe4649b810446e6d506b7932e4dd1c187b0a795e81ead780d7336a29a",
+   "shard": "src-html"
+  },
+  "timaeus-body.tex": {
+   "bytes": 409208,
+   "sha256": "26f70826c666926b1317b7d2f1cec3b0cdfaf65c5cf8d711d32384c36c969c10",
+   "shard": "body-tex"
+  },
+  "timaeus-src.html": {
+   "bytes": 481647,
+   "sha256": "8adadb4c3850aa550751226f0e16237a34559f2723575cae315287cc88acf20c",
+   "shard": "src-html"
+  },
+  "tome-body.tex": {
+   "bytes": 32683,
+   "sha256": "e2ff84501702d727faa5078ac2e8ac50448e480f32ecbc9db4fd4301fcffea7e",
+   "shard": "body-tex"
+  },
+  "tome-thml.xml": {
+   "bytes": 47106,
+   "sha256": "3672766dcd044d0906f4c6275dc0f091a060e8287112fe3477ee6317bb0be273",
+   "shard": "xml"
+  },
+  "tracts-theological-body.tex": {
+   "bytes": 693344,
+   "sha256": "9fd2ec2843fcd389714e19eefd5d22267a2acc851de26a76af4c6dc30d5223aa",
+   "shard": "body-tex"
+  },
+  "tracts-times-body.tex": {
+   "bytes": 1103875,
+   "sha256": "b03796da63701132fff5a59ae916118924a866dd8130f6d557b2fa27dafb2262",
+   "shard": "body-tex"
+  },
+  "trent-body.tex": {
+   "bytes": 296740,
+   "sha256": "91c23d7102dde4300e86cbf0ab1282ee7c71a2a485b7781c58630530d2db7c14",
+   "shard": "body-tex"
+  },
+  "unity-body.tex": {
+   "bytes": 49470,
+   "sha256": "6d8d10875b751e4785f8245e437c27e96618dd0a8b51bb6246be57b94482f266",
+   "shard": "body-tex"
+  },
+  "unity-thml.xml": {
+   "bytes": 66832,
+   "sha256": "7a1be760794c2642d1176da63298a7f66df7d79303dbcf7fd46c9c1d77297c8d",
+   "shard": "xml"
+  },
+  "verses-body.tex": {
+   "bytes": 202470,
+   "sha256": "f781165813e876d1e4c419f4454a690fd77c20b06e116f77fd044b75121b1475",
+   "shard": "body-tex"
+  },
+  "viamedia1-body.tex": {
+   "bytes": 795524,
+   "sha256": "ad812aaf794543f2fc7dabbf6a8f754f321006001f15384352d2a045cf82131e",
+   "shard": "body-tex"
+  },
+  "viamedia2-body.tex": {
+   "bytes": 748015,
+   "sha256": "c3872f8e5d83b1b036f9f81b3da1a9459ede5cf626e88ee5306f5f83ba68d02b",
+   "shard": "body-tex"
+  },
+  "wars-body.tex": {
+   "bytes": 1392933,
+   "sha256": "936a63566889162fe290e33d9669f95daab14003f675b0c5c782200ea0d38cf5",
+   "shard": "body-tex"
+  },
+  "wars-src.html": {
+   "bytes": 1530087,
+   "sha256": "8484ec89a3e8787eedd4402ab2af4bac5a2e8080f8c10288e3f31105b7d48117",
+   "shard": "src-html"
+  },
+  "westminster-body.tex": {
+   "bytes": 278045,
+   "sha256": "a51c59669ba17498372f484e7611dd77797cff103adbd9bf4531adc29a2172b0",
+   "shard": "body-tex"
+  },
+  "zosimus-body.tex": {
+   "bytes": 467181,
+   "sha256": "f8b59e34eb3f251f0a861558d7b593ab7357bfb0cdaf5d62c34f0788858adbfc",
+   "shard": "body-tex"
+  }
+ },
+ "shards": {
+  "body-tex": {
+   "asset": "body-tex-9c641448cff4.tar.xz",
+   "bytes": 86155596,
+   "content": "9c641448cff47fc1d2795344795d7ae942d8e16eed2483410a8a9649e9f74800",
+   "files": [
+    "addresses-body.tex",
+    "aeneid-body.tex",
+    "agricola-body.tex",
+    "ammianus-body.tex",
+    "andrewes-devotions-body.tex",
+    "anf01-body.tex",
+    "anf02-body.tex",
+    "anf03-body.tex",
+    "anf04-body.tex",
+    "anf05-body.tex",
+    "anf06-body.tex",
+    "anf07-body.tex",
+    "anf08-body.tex",
+    "anf09-body.tex",
+    "anglicans1-body.tex",
+    "annals-body.tex",
+    "antiquities-body.tex",
+    "apologia-body.tex",
+    "apostolicae-body.tex",
+    "apuleius-body.tex",
+    "arguments-body.tex",
+    "arians-body.tex",
+    "articles1571-body.tex",
+    "athanasius-tracts-body.tex",
+    "athanasius1-body.tex",
+    "athanasius2-body.tex",
+    "baptism-body.tex",
+    "bcp1559-body.tex",
+    "bcp1662-body.tex",
+    "bcp1928-body.tex",
+    "benedict-rule-body.tex",
+    "beowulf-body.tex",
+    "boethius-body.tex",
+    "bondage-body.tex",
+    "british-critic-body.tex",
+    "burlat-body.tex",
+    "caesar-body.tex",
+    "callista-body.tex",
+    "cassian-prayer-body.tex",
+    "catena-john-body.tex",
+    "catena-luke-body.tex",
+    "catena-mark-body.tex",
+    "catena-matthew-body.tex",
+    "cathedra-body.tex",
+    "chieti-body.tex",
+    "church-empires-body.tex",
+    "cicero-body.tex",
+    "cicero-div-body.tex",
+    "cityofgod-body.tex",
+    "clement-body.tex",
+    "commonitory-body.tex",
+    "concord-body.tex",
+    "confessions-body.tex",
+    "consulting-body.tex",
+    "councils-body.tex",
+    "creeds1-body.tex",
+    "creeds2-body.tex",
+    "creeds3-body.tex",
+    "cyril-body.tex",
+    "damascus-body.tex",
+    "development-body.tex",
+    "didache-body.tex",
+    "dio1-body.tex",
+    "dio2-body.tex",
+    "dio3-body.tex",
+    "discourses-body.tex",
+    "douay-rheims-body.tex",
+    "eddas-body.tex",
+    "enchiridion-body.tex",
+    "encyclical1848-body.tex",
+    "encyclical1895-body.tex",
+    "english-saints-body.tex",
+    "enoch-body.tex",
+    "epictetus-body.tex",
+    "essays1-body.tex",
+    "essays2-body.tex",
+    "ethics-body.tex",
+    "everlasting-body.tex",
+    "faith-prejudice-body.tex",
+    "festal39-body.tex",
+    "five-letters-body.tex",
+    "frazer-body.tex",
+    "froude-remains-body.tex",
+    "gerontius-body.tex",
+    "gibbon1-body.tex",
+    "gibbon10-body.tex",
+    "gibbon11-body.tex",
+    "gibbon12-body.tex",
+    "gibbon2-body.tex",
+    "gibbon3-body.tex",
+    "gibbon4-body.tex",
+    "gibbon5-body.tex",
+    "gibbon6-body.tex",
+    "gibbon7-body.tex",
+    "gibbon8-body.tex",
+    "gibbon9-body.tex",
+    "gibbons-body.tex",
+    "grammar-body.tex",
+    "gregory-body.tex",
+    "gregory-letters-body.tex",
+    "guettee-body.tex",
+    "hcc1-body.tex",
+    "hcc2-body.tex",
+    "hcc3-body.tex",
+    "hcc4-body.tex",
+    "hcc5-body.tex",
+    "hcc6-body.tex",
+    "hcc7-body.tex",
+    "hcc8-body.tex",
+    "heretics-body.tex",
+    "herodotus-body.tex",
+    "hesiod-body.tex",
+    "historical1-body.tex",
+    "historical2-body.tex",
+    "historical3-body.tex",
+    "histories-body.tex",
+    "hooker-body.tex",
+    "hymni-body.tex",
+    "idea-body.tex",
+    "ignatius-body.tex",
+    "iliad-body.tex",
+    "incarnation-body.tex",
+    "inspiration-body.tex",
+    "institutes-body.tex",
+    "irenaeus3-body.tex",
+    "jddj-body.tex",
+    "jewel-body.tex",
+    "josephus-minor-body.tex",
+    "jubilees-body.tex",
+    "julian-body.tex",
+    "justification-body.tex",
+    "justin-body.tex",
+    "keble-year-body.tex",
+    "kjv-body.tex",
+    "law-body.tex",
+    "library-fathers-body.tex",
+    "liturgies-body.tex",
+    "livy1-body.tex",
+    "livy2-body.tex",
+    "livy3-body.tex",
+    "livy4-body.tex",
+    "loss-and-gain-body.tex",
+    "lucian-body.tex",
+    "lucretius-body.tex",
+    "luther-galatians-body.tex",
+    "luther-primary-body.tex",
+    "marcus-body.tex",
+    "meditations-body.tex",
+    "metam-body.tex",
+    "metaphysics-body.tex",
+    "miracles-body.tex",
+    "norfolk-body.tex",
+    "npnf101-body.tex",
+    "npnf102-body.tex",
+    "npnf103-body.tex",
+    "npnf104-body.tex",
+    "npnf105-body.tex",
+    "npnf106-body.tex",
+    "npnf107-body.tex",
+    "npnf108-body.tex",
+    "npnf109-body.tex",
+    "npnf110-body.tex",
+    "npnf111-body.tex",
+    "npnf112-body.tex",
+    "npnf113-body.tex",
+    "npnf114-body.tex",
+    "npnf201-body.tex",
+    "npnf202-body.tex",
+    "npnf203-body.tex",
+    "npnf204-body.tex",
+    "npnf205-body.tex",
+    "npnf206-body.tex",
+    "npnf207-body.tex",
+    "npnf208-body.tex",
+    "npnf209-body.tex",
+    "npnf210-body.tex",
+    "npnf211-body.tex",
+    "npnf212-body.tex",
+    "npnf213-body.tex",
+    "occasions-body.tex",
+    "odyssey-body.tex",
+    "onbaptism-body.tex",
+    "ondoctrine-body.tex",
+    "orthodoxy-body.tex",
+    "oxford-sermons-body.tex",
+    "parochial1-body.tex",
+    "parochial2-body.tex",
+    "parochial3-body.tex",
+    "parochial4-body.tex",
+    "parochial5-body.tex",
+    "parochial6-body.tex",
+    "parochial7-body.tex",
+    "parochial8-body.tex",
+    "phaedo-body.tex",
+    "philo1-body.tex",
+    "philo2-body.tex",
+    "philo3-body.tex",
+    "philo4-body.tex",
+    "pliny-body.tex",
+    "plutarch-body.tex",
+    "politics-body.tex",
+    "polybius-body.tex",
+    "present-position-body.tex",
+    "pusey-body.tex",
+    "ravenna-body.tex",
+    "religious-error-body.tex",
+    "republic-body.tex",
+    "rigveda-body.tex",
+    "russian-church-body.tex",
+    "saepius-body.tex",
+    "sallust-body.tex",
+    "sayings-body.tex",
+    "scranton-body.tex",
+    "seneca-body.tex",
+    "sermon-notes-body.tex",
+    "soulres-body.tex",
+    "subjects-body.tex",
+    "suetonius-body.tex",
+    "summa-fp-body.tex",
+    "summa-fs-body.tex",
+    "summa-ss-body.tex",
+    "summa-tp-body.tex",
+    "summa-xp-body.tex",
+    "testaments-body.tex",
+    "thucydides-body.tex",
+    "timaeus-body.tex",
+    "tome-body.tex",
+    "tracts-theological-body.tex",
+    "tracts-times-body.tex",
+    "trent-body.tex",
+    "unity-body.tex",
+    "verses-body.tex",
+    "viamedia1-body.tex",
+    "viamedia2-body.tex",
+    "wars-body.tex",
+    "westminster-body.tex",
+    "zosimus-body.tex"
+   ],
+   "sha256": "f1dbab72d62d9f0a6e00d233b230a1b98da46e54caadedc0b6829c25fac7db50"
+  },
+  "pdf": {
+   "asset": "pdf-b523c7f26e9c.tar.xz",
+   "bytes": 12634200,
+   "content": "b523c7f26e9cf045b6edf81a5823de0ee16fac5e1a7183d0088632a2bd96cc8f",
+   "files": [
+    "catena-src/xaquinas-john.pdf",
+    "catena-src/xaquinas-luke.pdf",
+    "catena-src/xaquinas-mark.pdf",
+    "catena-src/xaquinas-matthew.pdf",
+    "docs-src/The_Bishop_of_Rome.pdf",
+    "docs-src/guettee_thepapacy.pdf",
+    "docs-src/saepius.pdf",
+    "docs-src/scranton.pdf"
+   ],
+   "sha256": "b21ca07e9943d8c539bef575b6dad018d6f84d8965a441f6d269b675b9b0605d"
+  },
+  "src-html": {
+   "asset": "src-html-0bc51f4921ef.tar.xz",
+   "bytes": 17144028,
+   "content": "0bc51f4921efb5c7b8cbdee6e26ec22f592cb3f746d0392576ef9a8f2b1dd043",
+   "files": [
+    "aeneid-src.html",
+    "ammianus-src.html",
+    "antiquities-src.html",
+    "apion-src.html",
+    "apuleius-src.html",
+    "beowulf-src.html",
+    "boethius-src.html",
+    "caesar-src.html",
+    "cicero-vol-src.html",
+    "douay-rheims-src.html",
+    "eddas-src.html",
+    "enoch-src.html",
+    "ethics-src.html",
+    "frazer-src.html",
+    "gibbons-src.html",
+    "hades-src.html",
+    "herodotus1-src.html",
+    "herodotus2-src.html",
+    "hesiod-src.html",
+    "iliad-src.html",
+    "jewel-src.html",
+    "josephus-life-src.html",
+    "kjv-src.html",
+    "liberty-src.html",
+    "livy1-src.html",
+    "livy2-src.html",
+    "livy3-src.html",
+    "livy4-src.html",
+    "lucian1-src.html",
+    "lucian2-src.html",
+    "lucian3-src.html",
+    "lucian4-src.html",
+    "lucretius-src.html",
+    "marcus-src.html",
+    "metam1-src.html",
+    "metam2-src.html",
+    "odyssey-src.html",
+    "phaedo-src.html",
+    "pliny-src.html",
+    "plutarch-src.html",
+    "politics-src.html",
+    "polybius1-src.html",
+    "polybius2-src.html",
+    "republic-src.html",
+    "sallust-src.html",
+    "suetonius-src.html",
+    "theses-src.html",
+    "thucydides-src.html",
+    "timaeus-src.html",
+    "wars-src.html"
+   ],
+   "sha256": "a9f709d49ee4324a028ac42dad8e65c38eedd990845c279ca84dc4da1b3e69ef"
+  },
+  "xml": {
+   "asset": "xml-a5e0f5929874.tar.xz",
+   "bytes": 4613760,
+   "content": "a5e0f5929874e6f3e3f25c29e24b6272ecb12ce21b350dbb522f68cc909b67c5",
+   "files": [
+    "andrewes-devotions-thml.xml",
+    "baptism-thml.xml",
+    "benedict-rule.xml",
+    "bondage-thml.xml",
+    "cassian-prayer-thml.xml",
+    "clement-thml.xml",
+    "commonitory-thml.xml",
+    "councils-thml.xml",
+    "cyril-thml.xml",
+    "didache-thml.xml",
+    "enchiridion.xml",
+    "everlasting-thml.xml",
+    "festal39-thml.xml",
+    "gregory-letters-thml.xml",
+    "gregory-thml.xml",
+    "heretics-thml.xml",
+    "hooker-reform1.xml",
+    "hooker-reform2.xml",
+    "hooker-reform3.xml",
+    "ignatius-thml.xml",
+    "institutes-thml.xml",
+    "irenaeus3-thml.xml",
+    "justin-thml.xml",
+    "keble-year-thml.xml",
+    "luther-galatians-thml.xml",
+    "onbaptism-thml.xml",
+    "orthodoxy-thml.xml",
+    "soulres-thml.xml",
+    "tome-thml.xml",
+    "unity-thml.xml"
+   ],
+   "sha256": "67c2bd6671861a50a22e3577f43686b85a06539a51a3f87461697ccb76cb29c3"
+  }
+ }
+}

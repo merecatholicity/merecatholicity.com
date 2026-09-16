@@ -193,10 +193,22 @@ memorandum:
 	cp book/bishop-presbyter.pdf docs/The_Bishop_and_the_Presbyter.pdf
 	@echo "built The_Bishop_and_the_Presbyter.pdf ($$(pdfinfo book/bishop-presbyter.pdf | awk '/^Pages/{print $$2}') pages)"
 
+# The corpus sources (2026-09-16, P2-6): the 237 generated *-body.tex, the preserved
+# *-src.html, the ThML/XML and the source PDFs are NOT in git — they ride the GitHub
+# Release "sources", pinned by sha256 in resources/SOURCES.json. `fetch-sources` takes
+# what is missing or differs (anonymously; the repository is public) — every build
+# runs it first. Regenerated a body? `scripts/sources.py manifest && … pack && … publish`,
+# then commit the manifest.
+.PHONY: fetch-sources check-sources
+fetch-sources:
+	python3 scripts/sources.py fetch
+check-sources:
+	python3 scripts/sources.py check
+
 # HTML edition from the same .tex, with pandoc-friendly preprocessing:
 #  - \unit{...} heads become \paragraph{...} so pandoc keeps them
 #  - \color{...} stripped out of starred section headings
-html:
+html: fetch-sources
 	cd book && sed -e 's/\\unit{/\\paragraph{/g' memorandum-body.tex > memorandum-body-html.tex
 	cd book && sed -e 's/\\unit{/\\paragraph{/g' \
 	    -e 's/\\hrule height [0-9.]*pt//g' \

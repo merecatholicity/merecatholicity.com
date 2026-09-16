@@ -202,6 +202,23 @@ jobs:
           make css
           make bundle
 
+      # The corpus sources are not in git (2026-09-16, P2-6): the generated
+      # *-body.tex, the preserved *-src.html, the ThML/XML and the source PDFs
+      # ride the GitHub Release "sources", pinned by sha256 in
+      # resources/SOURCES.json. The tarballs are cached by the manifest's hash;
+      # a miss downloads them anonymously from the release (this repository is
+      # public — no secret, so a pull_request build fetches too). Every make
+      # target that reads them runs `fetch-sources` first; this step is the
+      # cache in front of it.
+      - name: Restore the corpus source tarballs
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: local/sources
+          key: sources-${{ hashFiles('resources/SOURCES.json') }}
+
+      - name: Fetch the corpus sources
+        run: make fetch-sources
+
       - name: Build the PDFs
         if: steps.changed.outputs.latex == 'yes'
         run: make -C resources pdf

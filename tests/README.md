@@ -111,7 +111,9 @@ tests/
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
                        slug parity, the docs/ source-vs-generated split and its orphans, the version
                        stamp, the boot splash, the baked partials, the librarian's sources and ingest
-                       ledger, the writings detector behind the comments switches, the CSP's hashes (csp: the
+                       ledger, the writings detector behind the comments switches, the corpus sources' manifest (sources_manifest: every body and
+                       source under resources/ listed and untracked, every shard a published asset, a present
+                       file matching its sha), the CSP's hashes (csp: the
                        ruleset carries exactly the two inline scripts' hashes from scripts/csp_hashes.py, names
                        the collector, admits wss: and blob:), the restore drill's
                        checker (backup_check: twice to the same counts, the FTS tail skipped where the

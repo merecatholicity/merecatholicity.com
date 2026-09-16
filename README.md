@@ -77,7 +77,9 @@ content/         Source for the rarely-changing prose pages (credo, about, the p
 
 resources/       The library engine. *2tex.py converters turn preserved public-domain
                  sources (*-src.html, *-thml.xml, docs-src/, catena-src/, …) into
-                 *-body.tex, and its own Makefile renders ~200 works to docs/*.html and
+                 *-body.tex — sources and bodies FETCHED, not tracked, since 2026-09-16
+                 (`make fetch-sources`; resources/SOURCES.json pins them; the GitHub
+                 Release "sources" holds them) — and its own Makefile renders ~200 works to docs/*.html and
                  docs/*.pdf. Has its own .gitignore (the fetched/generated churn).
 
 scripts/         Site build tooling + its data: nav.py (menus) with nav.yml (the
@@ -384,6 +386,9 @@ trees are git-ignored (`make -C resources <name>-fetch` re-downloads them).
 
 ```sh
 make -C resources body        # regenerate every *-body.tex from sources
+python3 scripts/sources.py manifest && python3 scripts/sources.py pack && python3 scripts/sources.py publish
+                              # …then commit resources/SOURCES.json: the bodies and sources
+                              # are fetched (make fetch-sources), never committed (2026-09-16)
 make -C resources pdf         # build every root PDF into docs/
 make -C resources html        # render every <id>.html into docs/  (also run by `make html`)
 make -C resources schaff-fetch  # (example) re-download the CCEL Schaff XML
@@ -637,6 +642,7 @@ domain and the TURN key cannot be managed at all (no resource, or no import supp
 ```sh
 . path/to/your/credentials            # CLOUDFLARE_API_TOKEN, GITHUB_TOKEN, AWS_* for R2
 terraform -chdir=terraform plan       # expect: No changes
+make fetch-sources                    # the corpus sources (364 MB) from the GitHub Release "sources"; no credential
 ```
 
 **Adopted 2026-09-09:** the three things the PDF move had made by hand — the

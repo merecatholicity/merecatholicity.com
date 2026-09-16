@@ -135,3 +135,13 @@ purescript/src/Domain/Writings.purs
 # local/ is the dev box's own: a second agent's worktrees (scripts/agent_worktree.sh),
 # scratch, the retired GPU backend's leftovers. Never tracked.
 local/
+
+# The corpus sources are fetched, not tracked (2026-09-16, P2-6): the generated bodies, the
+# preserved HTML/XML sources and the source PDFs live on the GitHub Release "sources",
+# pinned in resources/SOURCES.json (tracked). `make fetch-sources`; scripts/sources.py.
+resources/*-body.tex
+resources/*-src.html
+resources/*.xml
+resources/docs-src/*.pdf
+resources/catena-src/*.pdf
+
