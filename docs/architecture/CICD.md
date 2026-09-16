@@ -525,6 +525,9 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
   CLAUDE.md's count. Five per account on the free plan; four are in use.
 - **a webtest suite** → `SUITES` in `scripts/webtest_nightly.py` if it is read-only, then
   `make nightly-baseline` and commit `webtest/nightly_baseline.json`.
+- **an inline `<script>`** (there are two: the anti-flash script every page carries and
+  turnstile.html's bridge) → its hash in the CSP: `python3 scripts/csp_hashes.py`, the value in
+  `terraform/rulesets.tf`; `tests/py/test_csp.py` refuses a policy that does not match.
 - **a passage of the long-form reference** → append it to `docs/architecture/log/<this
   month>.md` under its `## section` heading (a bullet, a **bold lead-in**, a date, 100
   columns — `scripts/infra_index.py --wrap`), then `scripts/infra_index.py --write`; the

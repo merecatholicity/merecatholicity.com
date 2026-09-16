@@ -321,15 +321,27 @@ resource "cloudflare_ruleset" "response_headers" {
         from_list                  = null
         from_value                 = null
         headers = {
+          # Report-Only until the collector (POST /api/comments/csp-report, the worker) has
+          # read as noise for a week (2026-09-16, P2-7). The two 'sha256-…' tokens are the
+          # site's ONLY inline scripts — the mc-fout anti-flash script every page carries and
+          # turnstile.html's bridge — computed by scripts/csp_hashes.py from the same sources
+          # the pages are built from; tests/py/test_csp.py holds this value to them. blob: is
+          # the decrypted DM attachment shown from an object URL; wss: is the live socket.
           Content-Security-Policy-Report-Only = {
             expression = null
             operation  = "set"
-            value      = "default-src 'self'; script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' https://audio.merecatholicity.com; connect-src 'self' https://contact-api.merecatholicity.com https://challenges.cloudflare.com https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; form-action 'self' https://contact-api.merecatholicity.com; base-uri 'none'; object-src 'none'; frame-ancestors 'self'"
+            value      = "default-src 'self'; script-src 'self' 'sha256-Lpm874M4p0anPZRmtN32NM/YUS0kIxHkXilC6EICobU=' 'sha256-v9Kaa5FyIXGSjLesVHggG/AhtbqmN29QWK7luYdVMnw=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://audio.merecatholicity.com; connect-src 'self' wss://merecatholicity.com https://contact-api.merecatholicity.com https://challenges.cloudflare.com https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; form-action 'self' https://contact-api.merecatholicity.com; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; report-uri /api/comments/csp-report; report-to csp"
           }
           Permissions-Policy = {
             expression = null
             operation  = "set"
             value      = "geolocation=(), microphone=(self), camera=()"
+          }
+          # the Reporting API endpoint `report-to csp` names (report-uri covers the browsers without it)
+          Reporting-Endpoints = {
+            expression = null
+            operation  = "set"
+            value      = "csp=\"https://merecatholicity.com/api/comments/csp-report\""
           }
           Referrer-Policy = {
             expression = null
