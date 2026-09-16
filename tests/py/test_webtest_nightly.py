@@ -12,9 +12,12 @@ import webtest_nightly as wn  # noqa: E402
 
 
 class NightlyParse(unittest.TestCase):
-    def test_the_summary_line(self):
-        self.assertEqual(wn.parse_summary('PASS x\nPASS y\n\n==== 30 PASS  0 FAIL ====\n'), (30, 0))
+    def test_the_summary_line_or_the_check_lines(self):
+        self.assertEqual(wn.parse_summary('PASS x\nPASS y\n\n==== 30 PASS  0 FAIL ====\n'), (30, 0), 'the banner wins where a suite prints one')
         self.assertEqual(wn.parse_summary('==== 5 PASS 4 FAIL ===='), (5, 4))
+        self.assertEqual(wn.parse_summary('PASS  the jump button counts it\nPASS  typing shows\nFAIL  phone console clean\n'), (2, 1), 'the other suites: one line per check')
+        self.assertEqual(wn.parse_summary('  ok anchored\n  ok zoomed\nFAIL pinch\n2/3 passed\n'), (2, 1), 'the "  ok" shape too')
+        self.assertEqual(wn.parse_summary('PASSPORT is not a pass\nFAILURE is not a fail\n'), None, 'whole words only')
         self.assertIsNone(wn.parse_summary('Traceback (most recent call last):\n  boom'))
         self.assertIsNone(wn.parse_summary(''))
 

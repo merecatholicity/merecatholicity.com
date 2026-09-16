@@ -1,0 +1,98 @@
+{
+ "test_about_dialog": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 15,
+  "summary": true
+ },
+ "test_core_rank": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 28,
+  "summary": true
+ },
+ "test_dm_actions": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 62,
+  "summary": true
+ },
+ "test_hscroll": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 113,
+  "summary": true
+ },
+ "test_member_views": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 6,
+  "summary": true
+ },
+ "test_ptr": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 8,
+  "summary": true
+ },
+ "test_richtext": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 9,
+  "summary": true
+ },
+ "test_settings_page": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 0,
+  "summary": false
+ },
+ "test_sheet_lock": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 29,
+  "summary": true
+ },
+ "test_store": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 4,
+  "summary": true
+ },
+ "test_tap": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 10,
+  "summary": true
+ },
+ "test_theme_toggle": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 5,
+  "summary": true
+ },
+ "test_topic_search": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 10,
+  "summary": true
+ },
+ "test_turnstile_mount": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 17,
+  "summary": true
+ },
+ "test_worker_reads": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 30,
+  "summary": true
+ },
+ "test_zoomproof": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 9,
+  "summary": true
+ }
+}

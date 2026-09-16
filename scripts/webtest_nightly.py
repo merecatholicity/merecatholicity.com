@@ -30,6 +30,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASELINE = os.path.join(ROOT, 'webtest', 'nightly_baseline.json')
 DOOR = os.environ.get('MC_OPS_DOOR', 'https://merecatholicity-comments.support-609.workers.dev/api/comments/ops/report')
 SUMMARY = re.compile(r'====\s*(\d+)\s+PASS\s+(\d+)\s+FAIL\s*====')
+PASS_LINE = re.compile(r'^(PASS\b|  ok )')
+FAIL_LINE = re.compile(r'^FAIL\b')
 
 # read-only suites (webtest/test_*.py): render and read, never write
 SUITES = [
@@ -41,10 +43,19 @@ SUITES = [
 
 
 def parse_summary(text):
-    """The suites print '==== N PASS  M FAIL ===='; None when a suite crashed
-    before its summary."""
-    m = SUMMARY.search(text or '')
-    return (int(m.group(1)), int(m.group(2))) if m else None
+    """A suite's verdict from its output: the '==== N PASS  M FAIL ====' banner
+    where a suite prints one (test_worker_reads), else the count of its
+    'PASS <check>' / '  ok <check>' and 'FAIL <check>' lines (every other
+    suite's shape). None when the output has neither — the suite crashed
+    before it checked anything."""
+    text = text or ''
+    m = SUMMARY.search(text)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    lines = text.splitlines()
+    passed = sum(1 for ln in lines if PASS_LINE.match(ln))
+    failed = sum(1 for ln in lines if FAIL_LINE.match(ln))
+    return (passed, failed) if (passed or failed) else None
 
 
 def run_suite(name, timeout=900):
