@@ -272,7 +272,7 @@ client/                              the classic client (Wave F, shipped 2026-09
 comments-worker/src/
   index.ts       the composition root: imports · Env · handleConfig/handleLive · the ROUTES table · fetch/scheduled
   routes/        one file per feature, landing in this order (✅ = shipped):
-                 ✅ calls · ✅ notify · ✅ media · ✅ wall · profile · dm · merecat · board · admin
+                 ✅ calls · ✅ notify · ✅ media · ✅ wall · profile · ✅ dm · merecat · board · admin
   lib.ts         the shared core — constants · crypto/auth · settings · notifications/push · DM primitives ·
                  media purges · Discord · merecat · publish — references no handler
   db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList
