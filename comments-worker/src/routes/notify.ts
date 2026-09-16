@@ -11,10 +11,10 @@ import {
   keyedGated,
   NOTIF_POST_KINDS,
   NOTIF_WALL_KINDS,
-  sha256hex,
   notifHideWall,
   notifHideWallSql,
   notifUnreadCount,
+  gated,
 } from '../lib.ts';
 
 /* Fan notifications out from a fresh board post. The author always comes to
@@ -24,17 +24,13 @@ import {
    anyone already mentioned so no one is told twice for one post. One batch write. */
 /* Batch-load the per-type notification prefs for a set of recipients. A member
    with no profile row (or a NULL column) keeps the default (on). */
-async function handlePushRegister(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
+async function handlePushRegister(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const platform = String(data.platform || '');
   const token = String(data.token || '').slice(0, 4096);
-  if (!key || !token || !/^[a-z0-9_-]{1,20}$/i.test(platform)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!token || !/^[a-z0-9_-]{1,20}$/i.test(platform)) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   await env.DB.prepare('INSERT OR REPLACE INTO push_tokens (hash, platform, token, created_at) VALUES (?1, ?2, ?3, ?4)')
@@ -43,16 +39,12 @@ async function handlePushRegister(request: any, env: any) {
 }
 
 /* Drop one device token (logout / uninstall). */
-async function handlePushUnregister(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
+async function handlePushUnregister(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
+  if (pre instanceof Response) return pre;
+  const { data, key, me } = pre;
   const token = String(data.token || '');
-  if (!key || !token) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!token) return json({ ok: false, error: 'Bad request.' }, 400);
   await env.DB.prepare('DELETE FROM push_tokens WHERE hash = ?1 AND token = ?2').bind(me, token).run();
   return json({ ok: true }, 200);
 }
@@ -80,15 +72,10 @@ async function handleNotifUnread(request: any, env: any) {
 /* The notification list, newest first, paged by twenty. Each row carries the
    thread title, a snippet of the post, and the actor's nick so the client can
    render "X replied/mentioned you in <title>" and jump to the exact comment. */
-async function handleNotifList(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const key = String(data.key || '');
-  if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+async function handleNotifList(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { data, me } = pre;
   const p = Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   const hideWall = await notifHideWallSql(env, '');
   /* Each family joins only its own tables (the ids in topic_id/comment_id

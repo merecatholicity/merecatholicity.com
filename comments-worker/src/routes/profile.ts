@@ -22,7 +22,6 @@ import {
   isAdminHash,
   isTrusted,
   json,
-  keyed,
   keyedGated,
   normalizeLinks,
   safeParseLinks,
@@ -31,12 +30,12 @@ import {
   sha256hex,
   sniffImage,
   verifyTurnstile,
+  readLimited,
 } from '../lib.ts';
 
-async function handleProfileGet(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleProfileGet(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   /* Address a profile by its 64-hex hash OR by a custom ?handle=<name> (the URL
      name a member claimed). A handle resolves to its owner's hash; an unclaimed
      handle is an ordinary "not found" (an empty profile, like a hashless hash). */

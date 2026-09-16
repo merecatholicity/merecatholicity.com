@@ -13,7 +13,6 @@ import {
   boardKey,
   isAdminHash,
   json,
-  keyed,
   merecatConfig,
   merecatConfigCache,
   merecatDay,

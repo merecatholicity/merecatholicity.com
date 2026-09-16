@@ -17,7 +17,6 @@ import {
   DM_TTLS,
   MERECAT_BOT,
   appSettingsCache,
-  blockedReason,
   displayName,
   ensureAdminsSeeded,
   getAppSettings,
@@ -33,20 +32,18 @@ import {
   runBackup,
   sha256hex,
   sweepJournalComments,
-  deliverDiscordFeedHooks,
+  adminGated,
 } from '../lib.ts';
 
 /* Admin platform settings: read them (with the current media usage), and set the
    tunable ones with sanity clamps. The growing home for site-wide toggles. */
-async function handleAdminSettings(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const key = String(data.key || '');
-  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+async function handleAdminSettings(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data, key, me } = pre;
   if (data.set && typeof data.set === 'object') {
     const now = Math.floor(Date.now() / 1000);
-    const me = await sha256hex(key);
-    const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, discord_feed_comments: 1, journal_topic: 1, journal_enabled: 1, comments_pages: 1, comments_journal: 1,
+      const allowed: any = { media_enabled: 1, media_max_bytes: 1, dm_default_ttl: 1, dm_backstop_days: 1, wall_prune_enabled: 1, wall_prune_days: 1, discord_forum_webhook: 1, discord_feed_webhook: 1, discord_feed_comments: 1, journal_topic: 1, journal_enabled: 1, comments_pages: 1, comments_journal: 1,
       media_image_max_bytes: 1, media_video_max_bytes: 1, media_audio_max_bytes: 1, media_audio_max_seconds: 1,
       media_kinds_dm: 1, media_kinds_wall: 1, media_kinds_board: 1, media_image_autocompress: 1,
       media_cap_dm_bytes: 1, media_cap_wall_bytes: 1, media_cap_board_bytes: 1,
@@ -140,11 +137,9 @@ async function handleAdminSettings(request: any, env: any) {
    post. Both the feed URL and the webhook URL are validated before storage — the
    webhook by isDiscordWebhook (the SSRF gate), the feed by parseFeedScope (only
    our own /api/comments/feed, only a real selector). */
-async function handleAdminDiscordList(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const key = String(data.key || '');
-  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+async function handleAdminDiscordList(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
   const rows = await env.DB.prepare(
     'SELECT id, scope, feed_url, hook_url, label, created_at FROM discord_hooks ORDER BY id DESC'
   ).all();
@@ -157,11 +152,10 @@ async function handleAdminDiscordList(request: any, env: any) {
   return json({ ok: true, hooks }, 200);
 }
 
-async function handleAdminDiscordAdd(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const key = String(data.key || '');
-  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+async function handleAdminDiscordAdd(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data, key, me } = pre;
   const feedUrl = String(data.feed_url || '').trim();
   const hookUrl = String(data.hook_url || '').trim();
   const label = String(data.label || '').trim().slice(0, 120);
@@ -169,7 +163,6 @@ async function handleAdminDiscordAdd(request: any, env: any) {
   if (!scope) return json({ ok: false, error: 'That is not one of our feed URLs. Paste a /api/comments/feed link with a ?topic=, ?cat=, or ?page= selector.' }, 400);
   if (!isDiscordWebhook(hookUrl)) return json({ ok: false, error: 'That is not a valid Discord webhook URL.' }, 400);
   const now = Math.floor(Date.now() / 1000);
-  const me = await sha256hex(key);
   /* An exact (scope + webhook) pair twice is pointless; refuse the duplicate. */
   const dup = await env.DB.prepare('SELECT id FROM discord_hooks WHERE scope = ?1 AND hook_url = ?2').bind(scope, hookUrl).first();
   if (dup) return json({ ok: false, error: 'That feed already posts to that Discord channel.' }, 409);
@@ -179,11 +172,10 @@ async function handleAdminDiscordAdd(request: any, env: any) {
   return json({ ok: true, scope, scope_label: scopeLabel(scope) }, 200);
 }
 
-async function handleAdminDiscordDelete(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const key = String(data.key || '');
-  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+async function handleAdminDiscordDelete(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const id = Math.floor(Number(data.id) || 0);
   if (id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   await env.DB.prepare('DELETE FROM discord_hooks WHERE id = ?1').bind(id).run();
@@ -311,10 +303,10 @@ async function handleShadowban(request: any, env: any) {
    of the IP ban list). Admin-only. Each row carries the muted identity's
    assigned/chosen name and when it was muted, so an admin can lift a mute
    without hunting for the post that set it. */
-async function handleShadowbanList(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleShadowbanList(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { key } = pre;
   const rows = await env.DB.prepare(
     'SELECT s.hash, s.created_at, pr.nick FROM shadowbans s LEFT JOIN profiles pr ON pr.hash = s.hash ORDER BY s.created_at DESC'
   ).all();
@@ -430,13 +422,10 @@ async function handleIpBan(request: any, env: any) {
 /* Lazy, admin-only reverse-DNS for the IPs of one fingerprint, fetched when a
    drawer opens. Kept off the bulk meta path and the poster's write path; a
    handful of DoH lookups per call, well under the free-tier subrequest cap. */
-async function handleRdns(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleRdns(request: Request, env: any) {
+  const pre = await adminGated(request, env, { bucket: 'READ_LIMIT' });
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const ips = Array.isArray(data.ips) ? data.ips.slice(0, 8) : [];
   const rdns: any = {};
   await Promise.all(ips.map(async (raw: any) => {
@@ -447,13 +436,10 @@ async function handleRdns(request: any, env: any) {
 }
 
 /* The banned-IP list for the admin page. */
-async function handleIpBans(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleIpBans(request: Request, env: any) {
+  const pre = await adminGated(request, env, { bucket: 'READ_LIMIT' });
+  if (pre instanceof Response) return pre;
+  const { ip } = pre;
   const rows = await env.DB.prepare('SELECT ip, created_at FROM ip_bans ORDER BY created_at DESC LIMIT 1000').all();
   return json({ ok: true, ips: rows.results }, 200);
 }
@@ -461,13 +447,9 @@ async function handleIpBans(request: any, env: any) {
 /* The admin roster for the console: every admin, equal, each removable, carried
    with the name they post under so the list reads in people, not hashes. Seeded
    from the env owners on first view so they appear as ordinary rows. */
-async function handleAdmins(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleAdmins(request: Request, env: any) {
+  const pre = await adminGated(request, env, { bucket: 'READ_LIMIT' });
+  if (pre instanceof Response) return pre;
   await ensureAdminsSeeded(env);
   const dyn = await env.DB.prepare('SELECT hash, created_at FROM admins ORDER BY created_at, hash').all();
   const list = (dyn.results || []).map((r: any) => ({ hash: r.hash, created_at: r.created_at }));

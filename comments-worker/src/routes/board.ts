@@ -33,7 +33,6 @@ import {
   journalKey,
   journalKeyId,
   json,
-  keyed,
   keyedGated,
   merecatMentioned,
   metaForHash,
@@ -60,6 +59,9 @@ import {
   deliverDiscordFeedHooks,
   notifUnreadCount,
   notifyDiscordForum,
+  gated,
+  adminGated,
+  readLimited,
 } from '../lib.ts';
 import { merecatMentionKick } from './merecat.ts';
 
@@ -79,10 +81,9 @@ async function commentsPageKey(env: any, raw: any): Promise<string | null> {
   return (await journalArticleLive(env, s, id)) ? journalKey(raw) : null;
 }
 
-async function handleGet(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleGet(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   const page = await commentsPageKey(env, url.searchParams.get('page'));
   if (!page) return json({ ok: false, error: 'Unknown page.' }, 400);
   const rows = await env.DB.prepare(
@@ -406,10 +407,9 @@ async function handleSelfDelete(request: any, env: any, ctx: any) {
   return json({ ok: true }, 200);
 }
 
-async function handleFeed(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return new Response('Too many requests.', { status: 429 });
+async function handleFeed(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { plain: true });
+  if (limited instanceof Response) return limited;
   const cat = url.searchParams.get('cat');
   const topicParam = Number(url.searchParams.get('topic'));
   let page, results, topicRow = null;
@@ -488,10 +488,9 @@ async function handleFeed(request: any, env: any, url: any) {
    alone, and the worker's commentsPageKey holds the same rule at the read. */
 const JOURNAL_PER_PAGE = 6;
 
-async function handleJournal(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleJournal(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   const s = await getAppSettings(env);
   const topic = await journalTopic(env, s);
   if (!topic) return json({ ok: false, error: 'The journal is not available.' }, 404, cacheHeader(url));
@@ -690,10 +689,9 @@ async function handleMeta(request: any, env: any) {
 }
 
 /* The board index: per-category topic and post counts with last activity. */
-async function handleBoardIndex(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleBoardIndex(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   /* One pass: per room, window counts plus the newest post whose thread
      is still live, its title borrowed from the thread. */
   const rows = await env.DB.prepare(
@@ -727,10 +725,9 @@ async function handleBoardIndex(request: any, env: any, url: any) {
 
 /* One category page: twenty topics by newest activity, read from the
    denormalized topic rows alone, the replies never scanned. */
-async function handleBoardCat(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleBoardCat(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   const page = boardKey('board:' + url.searchParams.get('cat'));
   if (!page) return json({ ok: false, error: 'Unknown category.' }, 400);
   /* answer exactly as if the category did not exist: a prober learns nothing */
@@ -739,10 +736,9 @@ async function handleBoardCat(request: any, env: any, url: any) {
   return json(await boardCatPayload(env, page, p, url.searchParams.get('q')), 200, cacheHeader(url));
 }
 
-async function handleAuthorPosts(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleAuthorPosts(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   const hash = String(url.searchParams.get('hash') || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
@@ -768,10 +764,9 @@ async function handleAuthorPosts(request: any, env: any, url: any) {
   return json({ ok: true, items, total: (total && total.n) || 0, page: p, per }, 200, cacheHeader(url));
 }
 
-async function handleSearch(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleSearch(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   const qRaw = String(url.searchParams.get('q') || '');
   const match = buildMatch(qRaw);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
@@ -822,10 +817,9 @@ async function handleSearch(request: any, env: any, url: any) {
 }
 
 /* One topic with its live replies in order. */
-async function handleTopicView(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleTopicView(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   const id = Number(url.searchParams.get('id'));
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const topic = await env.DB.prepare(
@@ -840,15 +834,10 @@ async function handleTopicView(request: any, env: any, url: any) {
   return json(await topicViewPayload(env, topic, url.searchParams.get('p'), url.searchParams.get('find')), 200, cacheHeader(url));
 }
 
-async function handleBoardAdmin(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  if (!(await isAdminHash(env, await sha256hex(String(data.key || ''))))) {
-    return json({ ok: false, error: 'No.' }, 403);
-  }
+async function handleBoardAdmin(request: Request, env: any) {
+  const pre = await adminGated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   if (data.id != null) {
     const id = Number(data.id);
     if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -1171,16 +1160,12 @@ async function handleBoardReads(request: any, env: any) {
 }
 
 /* Mark one thread read — fired on opening a topic. */
-async function handleBoardRead(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  const key = String(data.key || '');
+async function handleBoardRead(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const topicId = Number(data.topic);
-  if (!key || !Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const now = Math.floor(Date.now() / 1000);
@@ -1218,16 +1203,12 @@ async function handleBoardReadAll(request: any, env: any) {
    only surfaces it in the Activity audit's Reported queue. One report per member
    per post (INSERT OR IGNORE against the UNIQUE), so no brigade can inflate a
    count or hide anything. An optional short reason rides along. */
-async function handleReport(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many reports at once. Wait a minute.' }, 429);
-  const key = String(data.key || '');
+async function handleReport(request: Request, env: any) {
+  const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many reports at once. Wait a minute.' });
+  if (pre instanceof Response) return pre;
+  const { ip, data, me } = pre;
   const id = Number(data.id);
-  if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const me = await sha256hex(key);
+  if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
   const target = await env.DB.prepare("SELECT page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
@@ -1339,13 +1320,9 @@ async function handleApprove(request: any, env: any, ctx: any) {
 }
 
 /* The pending-review queue: every held comment, newest first. */
-async function handlePending(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handlePending(request: Request, env: any) {
+  const pre = await adminGated(request, env, { bucket: 'READ_LIMIT' });
+  if (pre instanceof Response) return pre;
   const rows = await env.DB.prepare(
     "SELECT c.id, c.page, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at, c.ai_verdict, c.media_key " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +

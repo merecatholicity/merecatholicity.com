@@ -21,9 +21,7 @@ import {
   isAdminHash,
   isTrusted,
   json,
-  keyed,
   keyedGated,
-  notifyDm,
   notifyReact,
   retractReactNotif,
   reactionOf,
@@ -45,6 +43,7 @@ import {
   notifyDiscordFeed,
   notifyDiscordFeedComment,
   socialOff,
+  readLimited,
 } from '../lib.ts';
 
 async function handleWallFeed(request: any, env: any) {
@@ -456,10 +455,9 @@ async function handleBookmarks(request: any, env: any) {
 /* A member-safe recent-activity window: the last live forum posts across the
    PUBLIC rooms (never the back room), each under its topic's title. Cacheable,
    keyless, one query — "what happened since I left" for everyone. */
-async function handleRecent(request: any, env: any, url: any) {
-  const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+async function handleRecent(request: Request, env: any, url: any) {
+  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
+  if (limited instanceof Response) return limited;
   const p = Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1));
   const PER = 20;
   const rows = await env.DB.prepare(

@@ -9,7 +9,6 @@ import {
   appSettingsCache,
   blockedJson,
   blockedReason,
-  enforceWallMediaCap,
   getAppSettings,
   isEstablished,
   mediaKindMax,
@@ -18,22 +17,20 @@ import {
   mediaScanEnabled,
   json,
   randomHex,
-  requireAdmin,
   runWallPrune,
-  screen,
   screenImage,
   sha256hex,
   sniffImage,
+  adminGated,
 } from '../lib.ts';
 
 /* Purge ALL DM media from the bucket (admin, destructive). Cursor-paginated list +
    batched delete, then clear the pointers and the usage counter. Message text is
    untouched; only the shared attachments are removed. */
-async function handleDmMediaPurge(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  const key = String(data.key || '');
-  if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
+async function handleDmMediaPurge(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { ip, key, me } = pre;
   let deleted = 0;
   if (env.MEDIA) {
     let cursor: any;
@@ -175,10 +172,10 @@ async function handleWallMediaGet(request: any, env: any, url: any, ctx?: any) {
 
 /* Delete public posts/comments older than `days` and purge their media. Shared by
    the cron (only when auto-prune is enabled) and the admin "prune now" button. */
-async function handleWallPrune(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleWallPrune(request: Request, env: any) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { data } = pre;
   const s = await getAppSettings(env);
   const deleted = await runWallPrune(env, Number(data.days) || Number(s.wall_prune_days) || 365);
   return json({ ok: true, deleted }, 200);
@@ -200,10 +197,10 @@ async function handleWallPrune(request: any, env: any) {
    (a partial run must not orphan the surviving rows' pointers). Edge/browser
    caches may serve purged bytes up to a day, the standing property of every
    delete path. */
-async function handleWallMediaPurge(request: any, env: any, section: string) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+async function handleWallMediaPurge(request: Request, env: any, section: string) {
+  const pre = await adminGated(request, env);
+  if (pre instanceof Response) return pre;
+  const { key } = pre;
   let deleted = 0;
   /* ~12 subrequests per 500-key batch (1 SELECT + 1 R2 delete + 10 row
      DELETEs); two batches per click keeps the whole request — including the
