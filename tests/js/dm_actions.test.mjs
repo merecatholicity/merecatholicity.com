@@ -126,8 +126,6 @@ test('a downward swipe over the page dismisses the keyboard; the thread names On
      a transition may stamp "just now" over the read's real last-seen. */
   assert.ok(/const wasOn = !!online\[h\];\s*if \(on\) online\[h\] = true; else \{ delete online\[h\]; if \(wasOn\) seen\[h\] = Math\.floor/.test(cls),
     'the inbox stamps "just now" only on an online → offline transition');
-  const classic = src.slice(src.indexOf('var presDots: Record<string, any> = {};'), src.indexOf("function inboxHref(i: any)"));
-  assert.ok(/if \(!on && was\) seenMap\[h\] = Math\.floor\(Date\.now\(\) \/ 1000\);/.test(classic), 'so does the classic fallback');
   const profile = src.slice(src.indexOf('function profilePresenceInto('), src.indexOf('function renderProfile('));
   assert.ok(/if \(wasOn === true && !on\) seenAt = Math\.floor/.test(profile), 'and the profile line');
   assert.ok(/\.slice\(0, 5\)\.map\(\(h: string\) => 'presence:' \+ h\)/.test(cls), 'watches the first five rows live (the socket\'s scope cap)');

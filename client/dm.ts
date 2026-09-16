@@ -1585,7 +1585,6 @@ export function installDm(B: Boot) {
   function onLiveTyping(m: any) {
     var v = forOpen(m);
     if (v && v.setTyping) v.setTyping(m.from, m.state !== 'stop');
-    if (state.inboxTyping) state.inboxTyping(Math.floor(Number(m.thread) || 0), m.from, m.state !== 'stop');
   }
   /* The roster changed (someone was added, someone left) or the group was
      named: the open conversation follows, so the next word seals to the
@@ -1772,164 +1771,15 @@ export function installDm(B: Boot) {
     }
     return dmLabel(t.other_hash, t.nick);
   }
-  function dmRowHref(t: any) { return t.thread_id ? 'messages.html?t=' + t.thread_id : 'messages.html?dm=' + t.other_hash; }
-  function dmRowKey(t: any) { return Number(t.kind) === 1 || !t.other_hash ? 't' + (t.thread_id || t.id) : String(t.other_hash); }
   function dmRowTarget(t: any) { return t.thread_id ? { thread_id: t.thread_id } : { with: t.other_hash }; }
   function dmMembersLabel(t: any) { var n = Number(t.member_count) || ((t.members || []).length + 1); return n + ' members'; }
-  function dmTypistName(t: any, h: any) {
-    var row = (t.members || []).filter(function (m: any) { return m.hash === h; })[0];
-    return row ? (row.nick || row.assigned || displayName(h)) : displayName(String(h || ''));
-  }
   function viewInbox() {
-    if (window.mcViews && window.mcViews.inbox) {
-      /* The Lit <mc-inbox> renders into its own subtree without clearing section,
-         so a badge prepended here survives above the list — no bundle change. */
-      section.appendChild(dmE2eBadge());
-      return window.mcViews.inbox(section, window.mcKit);
-    }
-    document.title = 'Inbox | Community';
-    crumb([['Community', 'community.html'], ['Inbox']]);
-    if (!state.key) {
-      section.appendChild(el('p', 'comments-status', 'Messages need an identity. Create one on the board front page.'));
-      return;
-    }
-    section.appendChild(dmSearchBox());
+    /* The Lit <mc-inbox> renders into its own subtree without clearing section,
+       so a badge prepended here survives above the list. The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
     section.appendChild(dmE2eBadge());
-    var list = el('div', 'board-topics');
-    skelInto(list);
-    section.appendChild(list);
-    var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-    fetchRetry(API + '/dm/threads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, p: pageNum }),
-    }, [1000, 3000])
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.ok) throw new Error(d.error || 'failed');
-        dmCacheSet(d.unread_total);
-        list.textContent = '';
-        if (!d.threads.length) {
-          list.appendChild(el('p', 'comments-status', 'No messages yet. Find a member above, or press Direct Message on any post.'));
-          return;
-        }
-        var presDots: Record<string, any> = {};
-        var rowDots: Record<string, any> = {}, rowsByKey: Record<string, any> = {};   // by the conversation's key (0016)
-        d.threads.forEach(function (t: any) {
-          rowsByKey[dmRowKey(t)] = t;
-          var row = el('div', 'board-topic' + (t.unread ? ' dm-row-unread' : ''));
-          var left = el('div', 'board-topic-left');
-          var a = el('a', 'board-topic-title' + (t.unread ? ' dm-unread' : ''), dmRowLabel(t));
-          a.href = dmRowHref(t);
-          left.appendChild(a);
-          if (t.unread) left.appendChild(el('span', 'dm-unread-badge', String(t.unread)));   // the count (2026-09-11)
-          var isub = el('div', 'board-row-sub', fmtTimeCompact(t.last_at));
-          isub.title = fmtDateTime(t.last_at);
-          left.appendChild(isub);
-          /* the presence line, painted once the batched read answers */
-          var presLine = el('div', 'board-row-sub dm-row-pres');
-          presLine.hidden = true;
-          var dot = el('span', 'dm-row-dot');
-          presLine.appendChild(dot);
-          left.appendChild(presLine);
-          if (t.other_hash) presDots[t.other_hash] = dot;
-          rowDots[dmRowKey(t)] = dot;
-          if (Number(t.kind) === 1) { presLine.appendChild(document.createTextNode(dmMembersLabel(t))); presLine.hidden = false; }
-          row.appendChild(left);
-          var istat = el('div', 'board-stats', t.msgs + (t.msgs === 1 ? ' message' : ' messages'));
-          istat.title = fmtDateTime(t.last_at);
-          row.appendChild(istat);
-          /* A quiet Delete in the corner: clears my side, keeps the other's. */
-          var delWrap = el('div', 'board-admin-corner');
-          var del = el('a', 'trust-toggle', 'Delete');
-          del.href = '#';
-          del.addEventListener('click', (function (target, rowEl) {
-            return function (e: any) {
-              e.preventDefault();
-              appConfirm('Delete this conversation? It is cleared from your inbox; the other members keep their copies until they delete it too.', { okLabel: 'Delete', danger: true }, function (ok: any) {
-                if (!ok) return;
-                fetch(API + '/dm/delete', {
-                  method: 'POST', headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(Object.assign({ key: state.key }, target)),
-                }).then(function (r) { return r.json(); }).then(function (d2) {
-                  if (d2.ok) { rowEl.remove(); try { localStorage.removeItem(DM_CACHE); } catch (e2) {} dmUnreadCheck(); }
-                }).catch(function () {});
-              });
-            };
-          })(dmRowTarget(t), row));
-          delWrap.appendChild(del);
-          row.appendChild(delWrap);
-          list.appendChild(row);
-        });
-        /* One batched presence snapshot for the whole page: which correspondents
-           are online now (honouring appear-offline). No per-row polling. */
-        var presHashes = d.threads.map(function (t: any) { return t.other_hash; }).filter(Boolean);
-        if (presHashes.length) {
-          fetch(API + '/dm/presence', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: state.key, hashes: presHashes }) })
-            .then(function (r) { return r.json(); })
-            .then(function (pd) {
-              if (!(pd && pd.ok && Array.isArray(pd.online))) return;
-              Object.keys(presDots).forEach(function (h) {
-                presOnMap[h] = pd.online.indexOf(h) !== -1;
-                seenMap[h] = Number((pd.seen && pd.seen[h]) || 0);
-                paintRow(h, presOnMap[h], seenMap[h]);
-              });
-            })
-            .catch(function () {});
-        }
-        var presOnMap: Record<string, boolean> = {}, seenMap: Record<string, number> = {};
-        /* Online / Last seen … / Offline under the name (2026-09-11), the
-           thread header's own line; a live offline reads "just now". */
-        function paintRow(h: any, on: boolean, seen: number) {
-          var dot = presDots[h]; if (!dot) return;
-          var line = dot.parentNode;
-          line.textContent = '';
-          line.appendChild(dot);
-          dot.className = 'dm-row-dot' + (on ? ' on' : '');
-          line.appendChild(document.createTextNode(on ? 'Online' : (seen ? 'Last seen ' + dmSeenLabel(seen) : 'Offline')));
-          line.hidden = false;
-        }
-        /* "typing…" under the name while the other party writes to me (the
-           hub fans their signal to my own scope), the line back in 6 s. */
-        var typingT: Record<string, any> = {};
-        /* keyed by the conversation (a group's row is 't<id>', a pair's its
-           other); a group's line names the typist and returns to its count. */
-        state.inboxTyping = function (thread: any, h: any, on: any) {
-          var k = thread ? 't' + thread : h;
-          var dot = rowDots[k] || presDots[h]; if (!dot) return;
-          var t = rowsByKey[k];
-          var group = t && Number(t.kind) === 1;
-          function back() {
-            if (group) { var ln = dot.parentNode; ln.textContent = ''; ln.appendChild(dot); dot.className = 'dm-row-dot'; ln.appendChild(document.createTextNode(dmMembersLabel(t))); ln.hidden = false; }
-            else paintRow(h, !!presOnMap[h], presOnMap[h] ? 0 : (seenMap[h] || 0));
-          }
-          clearTimeout(typingT[k]);
-          if (on) {
-            var line = dot.parentNode;
-            line.textContent = ''; line.appendChild(dot); dot.className = 'dm-row-dot on';
-            line.appendChild(el('span', 'dm-sub-typing', group ? dmTypistName(t, h) + ' is typing…' : 'typing…')); line.hidden = false;
-            typingT[k] = setTimeout(back, 6000);
-          } else back();
-        };
-        /* Only an online → offline transition is "just now" — the hub also seeds
-           "offline" on subscribe, which must not overwrite the read's stamp. */
-        state.inboxPresence = function (h: any, on: any) {
-          var was = !!presOnMap[h];
-          presOnMap[h] = !!on;
-          if (!on && was) seenMap[h] = Math.floor(Date.now() / 1000);
-          paintRow(h, !!on, on ? 0 : (seenMap[h] || 0));
-        };
-        function inboxHref(i: any) { return 'messages.html&p=' + i; }
-        var topBar = pageBar(d.total, d.per, d.page, inboxHref);
-        if (topBar) section.insertBefore(topBar, list);
-        var botBar = pageBar(d.total, d.per, d.page, inboxHref);
-        if (botBar) section.appendChild(botBar);
-      })
-      .catch(function () {
-        list.textContent = '';
-        list.appendChild(el('p', 'comments-status', 'The inbox could not be loaded. Check your connection and reload the page.'));
-      });
+    return window.mcViews!.inbox(section, window.mcKit);
   }
 
   /* A text bubble: the shared frame around the rendered body (m.body is the

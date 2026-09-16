@@ -58,13 +58,13 @@ duplicated, and the shape they moved toward.
 | File | Lines | Role |
 |---|---:|---|
 | `client/comments.ts` | 2,049 | The client's ROOT: pre-boot page state, the core helpers (fetch/read pacing, formatting, `el`, Turnstile, identity), the router, `start()`, the `mcKit` assembly; installs the modules below per boot. |
-| `client/dm.ts` | 3,044 | E2E crypto (the pair's box, and envelope v2's per-member sealed keys) + media, the bubbles (authors named in a group), the message's acts (Forward among them, with its picker), the chat screen by thread id, the ⓘ sheet (members, add, leave, name), the inbox (New group), presence, the live DM frames keyed on the thread, calls. |
+| `client/dm.ts` | 3,015 | E2E crypto (the pair's box, and envelope v2's per-member sealed keys) + media, the bubbles (authors named in a group), the message's acts (Forward among them, with its picker), the chat screen by thread id, the ⓘ sheet (members, add, leave, name), the inbox (New group), presence, the live DM frames keyed on the thread, calls. |
 | `client/surface.ts` | 621 | The SHARED press-and-hold surface (2026-09-12): the overlay (`openActs`), the gestures (`armHold`), the public reactions' ledger and its pills (`reactPillInto`, which a DM group paints with its own pick), the wire to `/react`. The DM, every board post and every feed post/comment open this one. |
-| `client/merecat.ts` | 1,924 | The librarian's chat client. |
-| `client/board.ts` | 1,718 | The forum views, the comment renderer, quoting/editing, the board form, the journal, search, the post menu. |
-| `client/admin.ts` | 1,628 | The acting consoles. |
+| `client/merecat.ts` | 1,826 | The librarian's chat client. |
+| `client/board.ts` | 1,052 | The forum views, the comment renderer, quoting/editing, the board form, the journal, search, the post menu. |
+| `client/admin.ts` | 1,526 | The acting consoles. |
 | `client/composer.ts` | 1,607 | The markdown editor, emoji, Scripture, drafts, the media gate + compression + voice, mentions, the stash. |
-| `client/profile.ts` | 1,449 | Identity, faith, mute/block, prefs, the profile card and editor, avatars, notifications. |
+| `client/profile.ts` | 1,368 | Identity, faith, mute/block, prefs, the profile card and editor, avatars, notifications. |
 | `client/wall.ts` | 844 | Feed + walls. |
 | `client/boot.ts` | 6 | The `Boot` bag type the factories take. (All of `client/` bundles to `docs/comments.js`, 349 KB.) |
 | `comments-worker/src/index.ts` | 654 | The composition root: imports · `Env` · `handleConfig`/`handleLive` · the `ROUTES` table · `fetch`/`scheduled`. |
@@ -176,11 +176,12 @@ proven**:
 - **`comments-worker/src/pure.js`** — the pure worker helpers, extracted so they
   can be unit-tested in plain Node (the stepping-stone toward the ORM).
 
-What is **not** yet modular: the worker's SQL and request-handling (**~90%**
-still inline in `index.ts`, the `db.ts` foundation notwithstanding), and the
-client's **42** classic fallbacks beside the Lit components — the client is
-feature files now (Wave F), but each feature file still carries its classic
-render path. Test layers are already modular and
+What is **not** yet modular: the worker's SQL (inline in the route files, the
+`db.ts` foundation notwithstanding — testable where it sits since the handlers
+run in the unit suite). The client's classic twins of the 13 Lit screens are
+gone (2026-09-16): a `viewX` with a Lit view is a one-line door to it, and the
+classic modules keep only what has no Lit view — the write paths, the DM
+thread, merecat, the acting consoles. Test layers are already modular and
 tiered: **Layer 1** unit (`tests/`, 32 PS + 26 js + 28 worker node specs, 12 py + 1 css unittest files — 2026-09-16; the worker specs run handlers through `tests/_support/worker.mjs`), **Layer 2**
 headless (`webtest/`).
 
@@ -194,10 +195,11 @@ Honest history, not excuse:
   consoles, the merecat chat client) was added into that one IIFE. Then the Lit
   migration ("the interior campaign") re-implemented each *read* view as a
   component **but deliberately kept the classic body in `comments.js` as the
-  no-bundle fallback** — so for the migrated views the logic exists twice, behind
-  a `if (window.mcViews…) … else classic…` switch. That fallback is a real
-  feature (the site works with storage/JS-bundle disabled), but it doubled the
-  file. The remaining *write* paths (composer, DM send, profile/avatar editors,
+  no-bundle fallback** — so for the migrated views the logic existed twice, behind
+  a `if (window.mcViews…) … else classic…` switch. That fallback was retired on
+  2026-09-16: the bundle always stands (`docs/nav.js` injects it on every page and
+  the boot waits for it), so the twin bodies rendered for nobody; the 13 are gone
+  and each door delegates unconditionally. The remaining *write* paths (composer, DM send, profile/avatar editors,
   the acting admin consoles) were never componentized — they're Turnstile-gated
   round-trips that are awkward to test headless, so they stayed inline.
 - **`index.js` (6,381)** is a single Worker module because that is the unit
@@ -309,7 +311,7 @@ comments-worker/src/
 | F | **Wave F: the classic client is feature modules** — `client/comments.ts` (12,584 lines, one boot function) → the root + seven `install<Feature>(B)` factories, every statement moved verbatim, names bound from the boot object after install, top-level effects in `run()`; `build:client` bundles; source-rule tests read `tests/_support/client.mjs` | — (lines moved, not deduplicated; the classic-vs-Lit clone is the remaining target) | ✅ |
 | 3 | **`db.ts` repository** — foundation shipped (`inList` retires the 13 hand-rolled `?N` loops, the `Query` builder, the `rankFor`/`withNames`/`postCountsFor` mappers moved in, unit-tested). The fuller repository layer `PLAN-TODO.md` proposed (no inline `prepare()` in handlers, typed rows, a builder everywhere) is **not pursued** (2026-09-16): with the handlers running in the unit suite against a real SQLite, inline SQL is testable where it sits — and the plan file is retired. | −13 `?N` loops; mappers single-sourced | ✅ |
 | 4 | **Middleware + declarative routes + file-split** — the 91-branch chain is a declarative `ROUTES` table (route-parity diff = identical); `keyed`/`keyedGated` middleware on the byte-exact handlers; the monolith split into `lib.ts` / `durable.ts` / `db.ts` (2026-08-01); and — **2026-09-16 — the handlers into `routes/{calls,notify,media,wall,profile,dm,merecat,board,admin}.ts`**, every one moved verbatim (its declaration line and comment intact) behind the table `index.ts` keeps, which is now the composition root (654 lines). The 2026-08-01 attempt was reverted because an esbuild tree-shake around the Durable Object re-export dropped live code with no coverage to catch it; this pass first made the handlers runnable in the unit suite (`tests/_support/worker.mjs`, `tests/worker/routes.test.mjs` holding the table to its snapshot and dispatching every entry) and proved each commit with `scripts/worker_bundle_set.sh` — function-name set and code-line set identical before and after. | monolith → composition root + 9 route files, core/DO seams | ✅ |
-| 5 | **Finish single-sourcing** — the owner ruled the bundle required, so `client/comments.ts` drops its no-bundle-fallback constant copies (FAITH/RANKS/NAMED_EMOJI/EMOJI_PACKS/CATS/pseudonym wordlists) and reads them UNCONDITIONALLY from the kernel via `window.mcCore` — drift now impossible. (The larger read-view component-vs-classic fallback deletion is the remaining Wave-F surgery.) | client↔kernel constant duplication removed | ◑ |
+| 5 | **Finish single-sourcing** — the owner ruled the bundle required, so `client/comments.ts` drops its no-bundle-fallback constant copies (FAITH/RANKS/NAMED_EMOJI/EMOJI_PACKS/CATS/pseudonym wordlists) and reads them UNCONDITIONALLY from the kernel via `window.mcCore` — drift now impossible. **2026-09-16: the read-view twins are gone** — the 13 classic bodies behind `window.mcViews` delegations (board index and category, topic, search, the post renderer, profile, inbox, users, notifications, admin home, the two merecat views, usage) deleted, ~1,150 lines, each door now `return window.mcViews!.X(…)`; the Lit views are the read UI and the webtests cover them. | client↔kernel constant duplication removed; the Lit/classic clone of the read screens removed | ✅ |
 
 **Target:** every hand-written file ≤ ~400 lines; duplication < 2%; one schema
 origin; `tsc` strict-green over client + workers; the kernel still the single

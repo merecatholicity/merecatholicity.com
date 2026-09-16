@@ -302,8 +302,10 @@ PureScript types at the JS boundary) and `esbuild` inlines into `docs/app.js` (s
 command changed); `comments-worker/src/index.ts` imports the same output. `app/shell.ts`
 exposes the barrel as `window.mcCore`; the Lit views import `app/core.ts` directly, and the
 classic client `docs/comments.js` (built from `client/`, reaching the kernel only through
-`window.mcCore`) delegates via `if (window.mcCore) … else …classic…`, where each
-classic branch is the no-bundle fallback (app disabled / storage blocked). What stays JS by
+`window.mcCore`) reads it unconditionally — the bundle always stands, so since 2026-09-16 a
+classic `viewX` with a Lit twin is a one-line door to that view and no classic fallback body
+remains; the classic client is the write paths, the DM thread, merecat and the screens without
+a Lit view. What stays JS by
 design: DOM/Lit rendering, the Turnstile/nacl/WebCrypto/fetch/WebSocket effects, the DM E2E
 crypto, and the raw identity key/hash storage.
 

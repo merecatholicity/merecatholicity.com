@@ -44,118 +44,20 @@ export function installMerecat(B: Boot) {
      short (what to teach it next). The terms disclose this review. The admin
      observes; there is no composer, no way to ask or reply, nothing to change. */
   function viewMerecatThreads() {
-    if (window.mcViews && window.mcViews.merecatThreads) return window.mcViews.merecatThreads(section, window.mcKit);
-    document.title = 'merecat Q&A at a glance | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'], ['merecat Q&A']]);
-    if (adminGate(viewMerecatThreads)) return;
-    section.appendChild(el('p', 'board-intro',
-      'Every question put to the librarian in the last thirty days, newest first, read-only. Open one to observe the whole exchange. A thread a member deletes leaves here too, and one saved past thirty days still ages off this view. This is for improving the service, not participating. You cannot ask or reply here.'));
-    var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-    var list = el('div', 'board-topics');
-    list.textContent = 'Loading…';
-    section.appendChild(list);
-    var pagerHost = el('div');
-    section.appendChild(pagerHost);
-    fetchRetry(MERECAT_API + '/admin/threads', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, p: pageNum }),
-    }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
-      if (blockedOut(d)) return;
-      if (!d.ok) { list.textContent = d.error === 'No.' ? 'This is for admins alone.' : 'Could not load.'; return; }
-      list.textContent = '';
-      if (!d.threads.length) { list.appendChild(el('p', 'comments-status', 'No conversations yet.')); return; }
-      d.threads.forEach(function (t: any) {
-        var row = el('div', 'board-topic');
-        var left = el('div', 'board-topic-left');
-        var title = el('a', 'board-topic-title', t.title || ('Conversation ' + t.id));
-        title.href = 'community.html?merecatthread=' + t.id;
-        left.appendChild(title);
-        if (t.saved) left.appendChild(el('span', 'board-sticky', ' (saved)'));
-        var who = el('div', 'board-cat-desc');
-        who.appendChild(document.createTextNode('asked by '));
-        var wl = el('a', 'body-link', t.nick || displayName(t.hash));
-        wl.href = profileHref(t.hash);
-        who.appendChild(wl);
-        left.appendChild(who);
-        row.appendChild(left);
-        var stat = el('div', 'board-stats');
-        var q = Math.max(0, Math.ceil((t.msgs || 0) / 2));
-        stat.textContent = q + (q === 1 ? ' question · ' : ' questions · ') + fmtDateTime(t.last_at);
-        row.appendChild(stat);
-        list.appendChild(row);
-      });
-      var pager = pageBar(d.total, d.per, d.page, function (i) {
-        return 'community.html?merecatthreads=1&p=' + i;
-      });
-      if (pager) pagerHost.appendChild(pager);
-    }).catch(function () { list.textContent = 'Could not load the list. Reload to retry.'; });
+    /* The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
+    return window.mcViews!.merecatThreads(section, window.mcKit);
   }
 
   /* One conversation, observed. Read-only: the questions as the member wrote
      them, the answers as the librarian gave them (its markdown neutralised the
      same as everywhere), sources shown. No composer, no forward, no controls. */
   function viewMerecatThread(id: any) {
-    if (window.mcViews && window.mcViews.merecatThread) return window.mcViews.merecatThread(section, window.mcKit, id);
-    document.title = 'Observing a conversation | Community';
-    crumb([['Community', 'community.html'], ['Administrative options', 'admin.html'],
-      ['merecat Q&A', 'community.html?merecatthreads=1'], ['Conversation ' + id]]);
-    if (adminGate(function () { viewMerecatThread(id); })) return;
-    if (!Number.isInteger(id) || id < 1) { section.appendChild(el('p', 'comments-status', 'No such conversation.')); return; }
-    var note = el('p', 'board-intro', 'Observing only. You cannot ask or reply in this conversation.');
-    section.appendChild(note);
-    var log = el('div', 'merecat-log');
-    section.appendChild(log);
-    var status = el('p', 'comments-status', 'Loading…');
-    section.appendChild(status);
-    fetchRetry(MERECAT_API + '/admin/thread', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, id: id }),
-    }, [1000, 3000]).then(function (r) { return r.json(); }).then(function (d) {
-      if (blockedOut(d)) return;
-      status.remove();
-      if (!d.ok) { section.appendChild(el('p', 'comments-status', d.error === 'No.' ? 'This is for admins alone.' : 'That conversation is gone.')); return; }
-      var who = d.chat.nick || displayName(d.chat.hash);
-      var head = el('p', 'board-intro');
-      head.appendChild(document.createTextNode('Conversation with '));
-      var wl = el('a', 'body-link', who);
-      wl.href = profileHref(d.chat.hash);
-      head.appendChild(wl);
-      head.appendChild(document.createTextNode('. Started ' + fmtDateTime(d.chat.created_at) + '.'));
-      log.appendChild(head);
-      (d.msgs || []).forEach(function (m: any) {
-        var msg = el('div', 'merecat-msg ' + (m.role === 'user' ? 'you' : 'cat'));
-        msg.appendChild(el('div', 'merecat-who', m.role === 'user' ? who : '🐈 merecat'));
-        var body = el('div', 'merecat-body');
-        msg.appendChild(body);
-        if (m.role === 'user') {
-          fillBody(body, m.body);
-        } else {
-          /* The stored answer verbatim (markdown neutralised, as the reader saw
-             it), then a plain sources list. Self-contained, so this admin view
-             leans on no helper scoped inside the live chat. */
-          fillBody(body, m.body, true);
-          var srcs = [];
-          try { srcs = JSON.parse(m.sources || '[]'); } catch (e) {}
-          if (srcs.length) {
-            var ft = el('p', 'merecat-note');
-            ft.appendChild(el('strong', null, 'Sources: '));
-            srcs.forEach(function (sc: any, i: any) {
-              if (i) ft.appendChild(document.createTextNode(' · '));
-              var label = '[' + (sc.n || (i + 1)) + '] ' + (sc.title || '');
-              if (sc.url) {
-                var a = el('a', 'body-link', label);
-                a.href = sc.url;
-                ft.appendChild(a);
-              } else {
-                ft.appendChild(el('span', null, label));
-              }
-            });
-            body.appendChild(ft);
-          }
-        }
-        log.appendChild(msg);
-      });
-    }).catch(function () { status.textContent = 'Could not load the conversation. Reload to retry.'; });
+    /* The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
+    return window.mcViews!.merecatThread(section, window.mcKit, id);
   }
 
   /* ---- merecat, the librarian ----------------------------------------

@@ -664,41 +664,10 @@ export function installProfile(B: Boot) {
   }
 
   function viewProfile(hash: any) {
-    if (window.mcViews && window.mcViews.profile) return window.mcViews.profile(section, window.mcKit, hash);
-    document.title = 'Profile | Community';
-    crumb([['Community', 'community.html'], ['Profile']]);
-    if (!/^[0-9a-f]{64}$/.test(String(hash))) {
-      section.appendChild(el('p', 'comments-status', 'No such profile.'));
-      return;
-    }
-    var editable = !!state.key && hash === state.myHash;
-    var card = el('div', 'profile');
-    section.appendChild(card);
-    var status = skeleton('card');
-    section.appendChild(status);
-    /* Editing is a write, so it gets the same Turnstile gate as posting. The
-       slot lives outside the card so it survives the read/edit toggle — and it
-       is only the net's marker: nothing mounts until the editor opens
-       (editProfile warms) or a field is focused. */
-    if (editable) section.appendChild(el('div', 'ts-slot'));
-    fetchRetry(API + '/profile?hash=' + hash + freshParam('&'), freshOpts(), [1000, 3000])
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.ok) throw new Error(d.error || 'failed');
-        status.remove();
-        renderProfile(card, d.profile, editable);
-        /* Admin defense: edit or clean another member's profile in place —
-           the middle ground between doing nothing and lock/ban/delete. Only
-           on profiles that are not your own; the server refuses non-admins
-           regardless, so hiding this is courtesy, not the lock. */
-        if (!editable && isAdmin()) adminProfileEditor(card, hash, d.profile || {});
-      })
-      .catch(function () {
-        /* Replace the skeleton outright — writing text INTO it would leave the
-           shimmer wrapper around a sentence. */
-        status.replaceWith(el('p', 'comments-status',
-          'The profile could not be loaded. Check your connection and reload the page.'));
-      });
+    /* The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
+    return window.mcViews!.profile(section, window.mcKit, hash);
   }
 
   /* The profile field caps, single-sourced from the PureScript Domain.Profile
@@ -1267,66 +1236,10 @@ export function installProfile(B: Boot) {
      links to the exact post, riding the same find-pagination jump as any
      permalink. Newest first, twenty to a page. */
   function viewNotifications() {
-    if (window.mcViews && window.mcViews.notifications) return window.mcViews.notifications(section, window.mcKit);
-    document.title = 'Notifications | Community';
-    crumb([['Community', 'community.html'], ['Notifications']]);
-    if (!state.key) {
-      section.appendChild(el('p', 'comments-status', 'Notifications need an identity. Create one on the board front page.'));
-      return;
-    }
-    var list = el('div', 'board-topics');
-    skelInto(list);
-    section.appendChild(list);
-    var pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-    fetchRetry(API + '/notifications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: state.key, p: pageNum }),
-    }, [1000, 3000])
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (blockedOut(d)) return;
-        if (!d.ok) throw new Error(d.error || 'failed');
-        /* Reading the list clears it on the server; make the badge tell the truth. */
-        fetch(API + '/notifications/read', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: state.key }),
-        }).then(function () { try { localStorage.removeItem(NOTIF_CACHE); } catch (e) {} notifUnreadCheck(); }).catch(function () {});
-        list.textContent = '';
-        if (!d.items.length) {
-          list.appendChild(el('p', 'comments-status', 'No notifications yet. Post in a thread to follow it; you will hear when someone replies or names you.'));
-          return;
-        }
-        d.items.forEach(function (it: any) {
-          var row = el('div', 'board-topic');
-          var left = el('div', 'board-topic-left');
-          /* The sentence and the door are the kernel's (Domain.Notif via
-             mcCore) — the one map the member-page list and the bell sheet
-             render from too; a fourth inline copy for the reaction kinds was
-             the moment to make it one rule. */
-          var core: any = window.mcCore;
-          var label = core && core.notifLabel ? core.notifLabel(it) : ((it.actor_nick || 'Someone') + ' · ' + it.kind);
-          var a = el('a', 'board-topic-title' + (it.read_at ? '' : ' dm-unread'), label);
-          a.href = core && core.notifHref ? core.notifHref(it) : 'community.html?notifications=1';
-          left.appendChild(a);
-          if (!it.read_at) left.appendChild(el('span', 'dm-unread', ' ● new'));
-          if (it.snippet && (!core || !core.notifHasSnippet || core.notifHasSnippet(it.kind))) left.appendChild(el('div', 'board-intro', it.snippet));
-          row.appendChild(left);
-          var nstat = el('div', 'board-stats', fmtTimeCompact(it.created_at));
-          nstat.title = fmtDateTime(it.created_at);
-          row.appendChild(nstat);
-          list.appendChild(row);
-        });
-        function notifHref(i: any) { return 'community.html?notifications=1&p=' + i; }
-        var topBar = pageBar(d.total, d.per, d.page, notifHref);
-        if (topBar) section.insertBefore(topBar, list);
-        var botBar = pageBar(d.total, d.per, d.page, notifHref);
-        if (botBar) section.appendChild(botBar);
-      })
-      .catch(function () {
-        list.textContent = '';
-        list.appendChild(el('p', 'comments-status', 'Notifications could not be loaded. Check your connection and reload the page.'));
-      });
+    /* The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
+    return window.mcViews!.notifications(section, window.mcKit);
   }
 
   /* Device linking: the Settings QR encodes profile.html#key=… — the fragment

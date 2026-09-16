@@ -394,41 +394,19 @@ export function installAdmin(B: Boot) {
      bundle-only Lit view (mc-usage in app/views/admin.ts) — admin pages
      require the app anyway, so there is no classic body to fall back to. */
   function viewUsage() {
-    if (window.mcViews && window.mcViews.usage) return window.mcViews.usage(section, window.mcKit);
-    section.appendChild(el('p', 'comments-status', 'This page needs the app to finish loading. Refresh to try again.'));
+    /* The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
+    return window.mcViews!.usage(section, window.mcKit);
   }
 
   /* The admin hub: one door from the board that gathers the three admin pages,
      so a member of staff picks a task rather than hunting scattered links. */
   function viewAdminHome() {
-    if (window.mcViews && window.mcViews.adminHome) return window.mcViews.adminHome(section, window.mcKit);
-    document.title = 'Administrative options | Community';
-    crumb([['Community', 'community.html'], ['Administrative options']]);
-    if (adminGate(viewAdminHome)) return;
-    section.appendChild(el('p', 'board-intro',
-      'Everything that governs the board sits behind these doors. Each is admin-only, here and at the server.'));
-    var wrap = el('div', 'board-cats');
-    [
-      ['Activity audit', 'admin.html?audit=1', 'Reported posts, the review queue, and the last two weeks of activity, every row actionable.'],
-      ['IP ban list', 'admin.html?ipbans=1', 'Every banned address, added and removed by hand.'],
-      ['Shadow bans', 'admin.html?shadowbans=1', 'Quiet mutes: a member keeps posting but no one else sees it. Add, review, and lift.'],
-      ['Add / Remove Admins', 'admin.html?admins=1', 'Grant a member admin powers, or take them back.'],
-      ['Platform settings', 'admin.html?settings=1', 'The switches — which of the site’s own writings carry a comments section, the journal’s, the social layer — then per-area media controls: what the feed, forum, and DMs each accept, sizes, voice notes, AI screening, storage budgets, retention, and one-time purges.'],
-      ['Platform usage', 'admin.html?usage=1', 'Cloudflare free-tier health bars — every meter the platform rides and how close each is to its wall, checked daily with DM alerts past 80%.'],
-      ['Discord webhooks', 'admin.html?discord=1', 'Announce new posts to Discord: the two global webhooks, plus per-feed subscriptions that post one thread or category to a channel.'],
-      ['merecat administration', 'admin.html?merecatadmin=1', 'The librarian’s dials: the per-member daily cap, the reasoning ladder, and the AI budget guard that rests it before the day’s Workers AI quota is spent.'],
-      ['merecat Q&A at a glance', 'admin.html?merecatthreads=1', 'Observe how members use the librarian, every question and answer, read-only, to guide what to teach it next.']
-    ].forEach(function (opt) {
-      var row = el('div', 'board-cat');
-      var left = el('div', 'board-cat-left');
-      var name = el('a', 'board-cat-name', opt[0]);
-      name.href = opt[1];
-      left.appendChild(name);
-      left.appendChild(el('div', 'board-cat-desc', opt[2]));
-      row.appendChild(left);
-      wrap.appendChild(row);
-    });
-    section.appendChild(wrap);
+    /* The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
+    return window.mcViews!.adminHome(section, window.mcKit);
   }
 
   /* Add or remove admins. Owners (set in the worker config) show as permanent;
@@ -977,90 +955,10 @@ export function installAdmin(B: Boot) {
      in on one cached fetch, so a search narrows every page and the pager turns
      in place). Twenty to a page, click a name to open the profile. */
   function viewUsers() {
-    if (window.mcViews && window.mcViews.users) return window.mcViews.users(section, window.mcKit);
-    document.title = 'Members | Community';
-    crumb([['Community', 'community.html'], ['Members']]);
-    section.appendChild(el('p', 'board-intro',
-      'Everyone on the board, newest first. Search by nickname or assigned name to find who is who, then open a profile.'));
-    var searchRow = el('div', 'key-row');
-    var search = el('input', 'key-input');
-    search.type = 'text';
-    search.placeholder = 'Search members by name...';
-    searchRow.appendChild(search);
-    section.appendChild(searchRow);
-    var count = el('p', 'comments-status', '');
-    section.appendChild(count);
-    var list = el('div', 'user-list');
-    list.appendChild(skeleton());
-    section.appendChild(list);
-    var pagerHost = el('div');
-    section.appendChild(pagerHost);
-
-    var roster: any = null;
-    var st = { q: '', page: 1 };
-    var PER = 20;
-
-    /* Empty query keeps the server's newest-first order; a query filters the
-       whole roster and ranks by match, both on nickname and assigned name. */
-    function visible() {
-      if (!st.q) return roster;
-      var q = st.q.toLowerCase();
-      return roster
-        .map(function (u: any) { return { u: u, s: Math.max(dmScore(q, u.nick), dmScore(q, displayName(u.hash))) }; })
-        .filter(function (x: any) { return x.s > 0; })
-        .sort(function (x: any, y: any) { return y.s - x.s; })
-        .map(function (x: any) { return x.u; });
-    }
-
-    function draw() {
-      var items = visible();
-      var total = items.length;
-      var pages = Math.max(1, Math.ceil(total / PER));
-      if (st.page > pages) st.page = pages;
-      list.textContent = '';
-      if (!total) {
-        count.textContent = st.q ? 'No member matches that.' : 'No members yet.';
-      } else {
-        count.textContent = st.q
-          ? total + (total === 1 ? ' match' : ' matches')
-          : total + (total === 1 ? ' member' : ' members');
-        items.slice((st.page - 1) * PER, st.page * PER).forEach(function (u: any) {
-          var row = el('a', 'user-row');
-          row.href = profileHref(u.hash);
-          var names = el('span', 'user-names');
-          if (u.nick) {
-            names.appendChild(el('span', 'user-nick', u.nick));
-            names.appendChild(el('span', 'user-assigned', displayName(u.hash)));
-          } else {
-            names.appendChild(el('span', 'user-nick', displayName(u.hash)));
-          }
-          row.appendChild(names);
-          row.appendChild(el('span', 'user-go', 'profile →'));
-          list.appendChild(row);
-        });
-      }
-      pagerHost.textContent = '';
-      var bar = pageBar(total, PER, st.page, null, function (n) { st.page = n; draw(); window.scrollTo(0, 0); });
-      if (bar) pagerHost.appendChild(bar);
-    }
-
-    var timer: any = null;
-    search.addEventListener('input', function () {
-      clearTimeout(timer);
-      timer = setTimeout(function () { st.q = search.value.trim(); st.page = 1; draw(); }, 120);
-    });
-
-    fetchRetry(API + '/dm/directory' + freshParam('?'), freshOpts(), [1000, 3000])
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.ok) throw new Error(d.error || 'failed');
-        roster = d.users || [];
-        st.page = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-        draw();
-      })
-      .catch(function () {
-        count.textContent = 'The member list could not be loaded. Check your connection and reload the page.';
-      });
+    /* The Lit view is THE screen (2026-09-16): the bundle always stands — docs/nav.js
+       injects it on every page and this boot waits for it — so the classic body that
+       once stood in for it is gone; only the door remains. */
+    return window.mcViews!.users(section, window.mcKit);
   }
 
   /* The platform-settings page, per-SECTION since 2026-08-02: a global panel

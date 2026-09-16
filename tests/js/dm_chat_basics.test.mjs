@@ -63,7 +63,6 @@ test('typing shows wherever the reader is: the header line, a three-dot bubble a
   assert.ok(/function typingBubble\(on: boolean\) \{[\s\S]*?typingNode = el\('div', 'dm-msg dm-typing-bubble'\);[\s\S]*?for \(var i = 0; i < 3; i\+\+\) typingNode\.appendChild\(el\('span', 'dm-typing-dot'\)\);[\s\S]*?if \(wasNear\) scrollToEnd\(\);/.test(view),
     'the bubble keeps the foot in view when the reader is there');
   assert.ok(/setTypist\(msg\.sender_hash, false\); typingOn = Object\.keys\(typists\)\.length > 0; paintSub\(\); typingBubble\(typingOn\);   \/\/ a real message ends "typing"/.test(view));
-  assert.ok(/if \(state\.inboxTyping\) state\.inboxTyping\(Math\.floor\(Number\(m\.thread\) \|\| 0\), m\.from, m\.state !== 'stop'\);/.test(dm), 'the classic inbox hears it, by the conversation (0016)');
   assert.ok(/else if \(det\.t === 'typing' && det\.from\) this\._typing\(String\(det\.from\), det\.state !== 'stop', Number\(det\.thread\) \|\| 0\);/.test(inbox), 'the Lit inbox hears it');
   assert.ok(/if \(this\.typing && this\.typing\[h\]\) return html`<div class="board-row-sub dm-row-pres"><span class="dm-row-dot on"><\/span><span class="dm-sub-typing">typing…<\/span><\/div>`;/.test(inbox),
     'the Lit inbox row reads typing…');
@@ -73,6 +72,5 @@ test('typing shows wherever the reader is: the header line, a three-dot bubble a
 });
 
 test('the inbox badge is the count', () => {
-  assert.ok(/el\('span', 'dm-unread-badge', String\(t\.unread\)\)/.test(dm), 'classic');
   assert.ok(/<span class="dm-unread-badge">\$\{t\.unread\}<\/span>/.test(inbox), 'Lit');
 });

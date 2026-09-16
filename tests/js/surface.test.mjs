@@ -44,11 +44,12 @@ test('one surface: the DM, the board and the feed all open openActs; nothing els
   assert.ok(!/wrap\.classList\.add\('open'\)/.test(board), 'nor opens its own desktop pop');
 });
 
-test('a post is armed for the hold with the reaction it is armed for, in both renderers', () => {
+test('a post is armed for the hold with the reaction it is armed for — one renderer, the Lit one; the classic commentNode is its door', () => {
   const classic = fn(board, 'commentNode', 'postMenu');
-  assert.ok(/hold: article, react: \{ target: 'post', id: c\.id, seed: c \}/.test(classic), 'the classic renderer');
+  assert.ok(/return window\.mcViews!\.commentNode\(window\.mcKit, c, pending, quoteCtx, reveal\);/.test(classic), 'the classic renderer delegates, unconditionally (2026-09-16)');
+  assert.ok(!/hold: article/.test(classic), 'and carries no renderer of its own');
   assert.ok(/hold: article, react: \{ target: 'post', id: c\.id, seed: c \}/.test(postView), 'the Lit renderer');
-  assert.ok(/if \(items\.length \|\| state\.myHash\)/.test(classic) && /if \(items\.length \|\| kit\.state\.myHash\)/.test(postView),
+  assert.ok(/if \(items\.length \|\| kit\.state\.myHash\)/.test(postView),
     'a keyed reader gets the ⋯ even on a post with no acts — it is the road to the reaction bar on desktop');
   const menu = fn(board, 'postMenu');
   assert.ok(/if \(host\) armHold\(host, open\);/.test(menu), 'postMenu arms the node it is given');
@@ -104,8 +105,8 @@ test('the ledger: a reaction goes out only through the kernel; mine again withdr
   const live = fn(surface, 'onLiveReact', 'closeWho');
   assert.ok(/ledger\[k\]\.cells = /.test(live) && !/\.mine = /.test(live), 'a live tally never touches the viewer\'s own reaction');
   assert.ok(/if \(m\.t === 'react'\) onLiveReact\(m\);/.test(surface), 'the frame lands in run()');
-  assert.ok(/reactLoadMine\('post', /.test(board) && /kit\.reactLoadMine\('post', /.test(readFileSync(join(root, 'app', 'views', 'topic.ts'), 'utf8')) && /reactLoadMine\('post', d\.comments/.test(clientModule('comments')),
-    'the viewer\'s own reactions ride a keyed read after every cached board payload — topic (both renderers) and article page');
+  assert.ok(/kit\.reactLoadMine\('post', /.test(readFileSync(join(root, 'app', 'views', 'topic.ts'), 'utf8')) && /reactLoadMine\('post', d\.comments/.test(clientModule('comments')),
+    'the viewer\'s own reactions ride a keyed read after every cached board payload — the topic view (Lit, the one renderer since 2026-09-16) and the article page');
 });
 
 test('on a phone a hold picks a post, never a word: posts are not selectable text, their fields are', () => {
