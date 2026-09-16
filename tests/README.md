@@ -37,6 +37,7 @@ tests/
   _support/ps.mjs      shared Maybe/Either erasure readers for the compiled PS output
   _support/client.mjs  the browser client's sources for the source-rule tests (the root and the
                        eight feature modules of client/, as one text or one at a time)
+  _support/any_baseline.json  the two `: any` counts the ratchet holds (see js/any_ratchet)
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
                        the build ↔ kernel parity of the commentable pages, the DM press-and-hold
@@ -54,7 +55,9 @@ tests/
                        the keyboard shackle (keyboard: the shell's net over every field, the lifts), and the
                        answerable ring, the recorded miss and the haptics (calls: the wake, the report, the
                        service worker's ring, the thread's line, the one haptic engine), and the badges
-                       (badges: the shell owns the refresh, the classic defers, reading marks read)
+                       (badges: the shell owns the refresh, the classic defers, reading marks read),
+                       and the `: any` ratchet (any_ratchet: each tsc project's count equals
+                       _support/any_baseline.json, a number that only ever falls)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
                        the comments switches and the journal sweep's SQL on real migrations,
