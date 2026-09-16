@@ -74,6 +74,8 @@ class DocsIsSourceOrOutput(unittest.TestCase):
                     continue
                 if name.endswith('.pdf'):
                     continue        # published to R2; docs/pdfs.txt is the record
+                if rel.replace(os.sep, '/').startswith('chunks/') and name.endswith('.js'):
+                    continue        # the lazy modules' content-hashed chunks: make bundle (P2-5)
                 orphans.append(rel)
         self.assertEqual(sorted(orphans), [],
                          'served files that are neither tracked nor rebuildable — '

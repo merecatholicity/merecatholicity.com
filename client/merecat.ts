@@ -6,6 +6,8 @@ export function installMerecat(B: Boot) {
   /* Names this module takes from the boot — the root's helpers and the other
      modules' exports — bound in bind() once every module is installed, so
      order of installation never matters and every body reads as it did. */
+  let MERECAT_API: string;
+  let MERECAT_BOT_HASH: string;
   let API: any;
   let CATS: any;
   let adminGate: (rerender: any) => any;
@@ -67,11 +69,9 @@ export function installMerecat(B: Boot) {
      blocked) come back as ordinary JSON. The reply body renders through
      fillBody, so citations like John 6:53 autolink into the KJV reader,
      and the sources footer is built here as plain same-site links. */
-  var MERECAT_API = '/api/merecat';
-  /* The librarian's fixed pseudo-identity: mentionable in posts and comments
-     (type @merecat), never DMable, summoned server-side. Its hash has no
-     possible key, so nobody can post as it. */
-  var MERECAT_BOT_HASH = 'efb94d8de69dc537e2bba1facbd9db3f849f3927593488d19c07629ce35f54cc';
+  /* MERECAT_API and MERECAT_BOT_HASH are the root's since 2026-09-16 (P2-5): every
+     eager module binds the bot's hash, and this module is lazy — nothing eager may
+     bind a name from here. */
 
   /* The daily counters renew at midnight UTC; say it in the reader's own
      clock. Computed locally, shown locally, sent nowhere. */
@@ -1785,6 +1785,8 @@ export function installMerecat(B: Boot) {
     });
   }
   function bind() {
+    MERECAT_API = B.MERECAT_API;
+    MERECAT_BOT_HASH = B.MERECAT_BOT_HASH;
     API = B.API;
     CATS = B.CATS;
     adminGate = B.adminGate;
@@ -1822,5 +1824,5 @@ export function installMerecat(B: Boot) {
      module is bound: listeners, deferred initializers. */
   function run() {
   }
-  return { bind, run, exports: { MERECAT_API, MERECAT_BOT_HASH, viewMerecat, viewMerecatAdmin, viewMerecatThread, viewMerecatThreads } };
+  return { bind, run, exports: { viewMerecat, viewMerecatAdmin, viewMerecatThread, viewMerecatThreads } };
 }

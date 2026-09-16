@@ -26,3 +26,21 @@ for (const name of Object.keys(budget).filter((k) => !k.startsWith('_'))) {
     assert.ok(size >= floor, `${name}: ${size} B is more than 5% under the ceiling — good: write ${Math.ceil(size * 1.02)} into tests/_support/bundle_budget.json in this commit so the ratchet clicks`);
   });
 }
+
+/* The shell loads a page's comments.js on a soft navigation as a CLASSIC script
+ * (app/shell.ts loadScript) while the page's own tag is type="module": both
+ * roads work only while the ESM entry has no static import or export — its
+ * chunks are reached by import(), which a classic script may use. esbuild would
+ * add a static import the day a lazy module shared runtime code with the
+ * entry; this says so before the soft-navigation road breaks. */
+test('docs/comments.js is an ES module a classic script tag can still load: no static import or export, chunks by import() only', () => {
+  const path = join(root, 'docs', 'comments.js');
+  assert.ok(existsSync(path), 'comments.js is not built — make bundle first');
+  const src = readFileSync(path, 'utf8');
+  assert.equal((src.match(/(?:^|[;}\n])import\s*[{"'*a-zA-Z_$]/g) || []).length, 0, 'a static import — the shell\'s classic loadScript would throw');
+  assert.equal((src.match(/(?:^|[;}\n])export\s*[{*]/g) || []).length, 0, 'an export statement — not classic-loadable');
+  assert.ok(/import\("\.\/chunks\/admin-[A-Z0-9]+\.js"\)/.test(src), 'the admin views ride a chunk reached by import()');
+  assert.ok(/import\("\.\/chunks\/merecat-[A-Z0-9]+\.js"\)/.test(src), 'so does merecat');
+  assert.ok(/import\("\.\/chunks\/dm-thread-[A-Z0-9]+\.js"\)/.test(src), 'and the DM thread');
+});
+

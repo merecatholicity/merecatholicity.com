@@ -146,7 +146,7 @@ def build_page(slug, source_path, nav_block, footer_block):
     parts.append('\n' + body_html + '\n')
     if carries_comments(fm):
         parts.append('\n<section class="comments" data-comments></section>\n'
-                     '<script defer src="comments.js?v=' + str(COMMENTS_V) + '"></script>\n')
+                     '<script type="module" src="comments.js?v=' + str(COMMENTS_V) + '"></script>\n')
     # extra per-page scripts (a page's own light JS: flash.js, index.js,
     # bible-reader.js, contact.js…). A string or a list of srcs; each becomes
     # a deferred include just before </main>, exactly as the hand pages carried.

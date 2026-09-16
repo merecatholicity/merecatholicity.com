@@ -18,7 +18,7 @@
  * Every check reads the sources; nothing runs. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLIENT_MODULES, clientModule, clientRoot } from '../_support/client.mjs';
+import { CLIENT_MODULES, LAZY_MODULES, ALL_MODULES, clientModule, clientRoot } from '../_support/client.mjs';
 
 const cap = (s) => s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');   // dm-crypto → DmCrypto
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -62,17 +62,20 @@ function declared(src) {
 }
 
 const root = clientRoot();
-const modules = Object.fromEntries(CLIENT_MODULES.map((n) => [n, clientModule(n)]));
+const modules = Object.fromEntries(ALL_MODULES.map((n) => [n, clientModule(n)]));
 const rootProviders = (() => {
   const m = root.match(/Object\.assign\(B, \{([^}]*)\}\);/);
   assert.ok(m, 'the root lands its helpers on B in one Object.assign');
   return m[1].split(',').map((s) => s.trim()).filter(Boolean);
 })();
-const exportsOf = Object.fromEntries(CLIENT_MODULES.map((n) => [n, exportList(modules[n])]));
-const providers = new Set([...rootProviders, ...Object.values(exportsOf).flat()]);
+const exportsOf = Object.fromEntries(ALL_MODULES.map((n) => [n, exportList(modules[n])]));
+/* what an EAGER module (and the root) may bind: the root's helpers and the eager exports — a
+   lazy module's export is not on B until its chunk has been fetched (P2-5) */
+const providers = new Set([...rootProviders, ...CLIENT_MODULES.flatMap((n) => exportsOf[n])]);
+const lazyExports = new Map(LAZY_MODULES.flatMap((n) => exportsOf[n].map((e) => [e, n])));
 
 test('the root installs every module, in the documented order, and each module is a factory', () => {
-  const order = root.match(/const mods = \[([^\]]*)\];/);
+  const order = root.match(/const mods(?:: Installed\[\])? = \[([^\]]*)\];/);
   assert.ok(order, 'the install list');
   assert.deepEqual(order[1].split(',').map((s) => s.trim()), CLIENT_MODULES.map((n) => `install${cap(n)}(B)`),
     'the install list is CLIENT_MODULES in order');
@@ -81,6 +84,14 @@ test('the root installs every module, in the documented order, and each module i
     assert.ok(modules[n].includes(`export function install${cap(n)}(B: Boot) {`), `${n}.ts exports its factory`);
     assert.ok(/\n  function run\(\) \{/.test(modules[n]), `${n}.ts has a run()`);
   }
+  for (const n of LAZY_MODULES) {
+    assert.ok(root.includes(`import('./${n}')`), `the root fetches ${n} by import()`);
+    assert.ok(new RegExp('ns\\.install' + cap(n) + '\\b[^;]*\\(boot\\)').test(root), `the root installs ${n}'s factory once fetched`);
+    assert.ok(!root.includes(`from './${n}'`), `the root never imports ${n} statically — it would ride the main chunk`);
+    assert.ok(modules[n].includes(`export function install${cap(n)}(B: Boot) {`), `${n}.ts exports its factory`);
+    assert.ok(/\n  function run\(\) \{/.test(modules[n]), `${n}.ts has a run()`);
+  }
+  assert.ok(root.includes('for (const name of Object.keys(lazyLoaded)) mods.push(LAZY_MODULES[name].install(lazyLoaded[name], B));'), 'a lazy module already fetched installs with the rest on every boot');
   assert.ok(root.includes('for (const m of mods) Object.assign(B, m.exports);'), 'every export lands on B before any bind');
   const bindAt = root.indexOf('for (const m of mods) m.bind();');
   const runAt = root.indexOf('for (const m of mods) m.run();');
@@ -88,7 +99,7 @@ test('the root installs every module, in the documented order, and each module i
 });
 
 test('every binding a module declares is filled by bind() from B under its own name — and nothing else is', () => {
-  for (const n of CLIENT_MODULES) {
+  for (const n of ALL_MODULES) {
     const lets = headerLets(modules[n], /^export function install/);
     const binds = bindAssigns(modules[n]);
     assert.ok(lets.length > 0, `${n}: header bindings found`);
@@ -103,14 +114,19 @@ test('every binding a module declares is filled by bind() from B under its own n
 });
 
 test('every bound name has one provider: a root helper or a module export; no export is declared twice or shadows a helper', () => {
-  for (const n of CLIENT_MODULES) {
-    const unprovided = bindAssigns(modules[n]).map((b) => b[1]).filter((name) => !providers.has(name));
+  for (const n of ALL_MODULES) {
+    const binds = bindAssigns(modules[n]).map((b) => b[1]);
+    const fromLazy = binds.filter((name) => lazyExports.has(name)).map((name) => `${name} (exported by lazy ${lazyExports.get(name)})`);
+    assert.deepEqual(fromLazy, [], `${n} binds a lazy module's export — the chunk may not be fetched yet; reach it through the router's lazyView`);
+    const unprovided = binds.filter((name) => !providers.has(name));
     assert.deepEqual(unprovided, [], `${n}: every bound name is provided`);
   }
+  const rootLazyCopies = [...root.matchAll(/^  [A-Za-z_$][\w$]* = B\.([A-Za-z_$][\w$]*);/gm)].map((m) => m[1]).filter((name) => lazyExports.has(name));
+  assert.deepEqual(rootLazyCopies, [], 'the root copies no lazy export — it calls lazyView(module, name, …)');
   const rootUnprovided = [...root.matchAll(/^  [A-Za-z_$][\w$]* = B\.([A-Za-z_$][\w$]*);/gm)].map((m) => m[1]).filter((name) => !providers.has(name));
   assert.deepEqual(rootUnprovided, [], 'root: every bound name is provided');
   const seen = new Map();
-  for (const n of CLIENT_MODULES) {
+  for (const n of ALL_MODULES) {
     const decl = declared(modules[n]);
     for (const e of exportsOf[n]) {
       assert.ok(decl.has(e), `${n} exports ${e}, which it declares`);
@@ -122,7 +138,7 @@ test('every bound name has one provider: a root helper or a module export; no ex
 });
 
 test('a module-level var never touches a binding in its initializer (it is not bound at install)', () => {
-  for (const n of CLIENT_MODULES) {
+  for (const n of ALL_MODULES) {
     const lets = headerLets(modules[n], /^export function install/);
     const lines = strip(modules[n]).split('\n');
     const balance = (t) => (t.match(/[([{]/g) || []).length - (t.match(/[)\]}]/g) || []).length;

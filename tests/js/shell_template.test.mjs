@@ -59,8 +59,9 @@ test('every templated page is still the same empty thin shell', () => {
     assert.ok(html.includes('<section class="comments board" data-board></section>'),
       `${page}: the board section is no longer the empty '<section class="comments board" data-board>' the template builds`);
     assert.ok(/<main class="prose">/.test(html), `${page}: <main class="prose"> changed`);
-    /* One script, and it is the client the shell boots by name. */
-    assert.ok(/<script defer src="comments\.js\?v=\d+"><\/script>/.test(html),
+    /* One script, and it is the client the shell boots by name (a module since the
+       lazy chunks of 2026-09-16 — deferred like the classic `defer` tag it replaced). */
+    assert.ok(/<script (?:defer|type="module") src="comments\.js\?v=\d+"><\/script>/.test(html),
       `${page}: no comments.js script tag — bootLoaded() would have nothing to boot`);
   }
 });

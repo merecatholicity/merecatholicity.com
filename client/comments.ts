@@ -18,10 +18,8 @@ import { installDmCrypto } from './dm-crypto';
 import { installDmMessage } from './dm-message';
 import { installDmPickers } from './dm-pickers';
 import { installDmInbox } from './dm-inbox';
-import { installDmThread } from './dm-thread';
 import { installDmStyles } from './dm-styles';
-import { installMerecat } from './merecat';
-import { installAdmin } from './admin';
+import { installAdminCore } from './admin-core';
 import type { Boot } from './boot';
 
 (function () {
@@ -66,6 +64,22 @@ import type { Boot } from './boot';
   var mcTsFrame: HTMLIFrameElement | null = null;
   var mcTsFrameReady = false;
   var mcTsFell = false;
+  /* The lazy feature modules (P2-5, 2026-09-16): the admin views, merecat and the
+     DM thread ride their own chunks, fetched by import() the first time a route
+     needs them — a reader of a KJV chapter no longer downloads the admin console.
+     PAGE-SCOPED like the DM blob cache: a chunk once loaded is kept here, above
+     the boot, and every later mcBoot() installs it eagerly with the rest, so its
+     bind() and run() behave exactly as a bundled module's. The seam's law
+     (tests/js/client_modules): nothing eager binds a name a lazy module exports;
+     the router reaches a lazy view through B.ensure(name), never a copied binding. */
+  type Installed = { bind: () => void; run: () => void; exports: Record<string, unknown> };
+  type LazyNs = Record<string, unknown>;
+  var LAZY_MODULES: Record<string, { load: () => Promise<LazyNs>; install: (ns: LazyNs, boot: Boot) => Installed }> = {
+    admin: { load: function () { return import('./admin'); }, install: function (ns, boot) { return (ns.installAdmin as (b: Boot) => Installed)(boot); } },
+    merecat: { load: function () { return import('./merecat'); }, install: function (ns, boot) { return (ns.installMerecat as (b: Boot) => Installed)(boot); } },
+    'dm-thread': { load: function () { return import('./dm-thread'); }, install: function (ns, boot) { return (ns.installDmThread as (b: Boot) => Installed)(boot); } },
+  };
+  var lazyLoaded: Record<string, LazyNs> = {};
   /* Decrypted DM attachments, as blob: URLs — PAGE-SCOPED, above mcBoot.
 
      A blob URL pins its bytes in memory until something revokes it, and
@@ -127,8 +141,6 @@ import type { Boot } from './boot';
   let ADMIN_HASHES: any;
   let BLOCK_CONFIRM: any;
   let CATS: any;
-  let MERECAT_API: any;
-  let MERECAT_BOT_HASH: any;
   let MUTED_STORE: any;
   let NOTIF_CACHE: any;
   let adminProfileEditor: (card: any, hash: any, prof: any) => any;
@@ -196,36 +208,22 @@ import type { Boot } from './boot';
   let toggleMute: (hash: any) => any;
   let topicAdminCorner: (topic: any, curCat: any) => any;
   let truncate: (s: any, n: any) => any;
-  let viewAdminHome: () => any;
-  let viewAdmins: () => any;
-  let viewAudit: () => any;
   let viewCat: (key: any) => any;
-  let viewDiscordHooks: () => any;
-  let viewDm: (other: any) => any;
   let viewFeed: () => any;
   let viewInbox: () => any;
   let viewIndex: () => any;
-  let viewIpBans: () => any;
   let viewJoin: (what: any) => any;
   let viewJournal: () => any;
   let viewJournalArticle: (id: any) => any;
-  let viewMerecat: () => any;
-  let viewMerecatAdmin: () => any;
-  let viewMerecatThread: (id: any) => any;
-  let viewMerecatThreads: () => any;
   let viewNoSuchPage: () => any;
   let viewNotifications: () => any;
-  let viewPlatformSettings: () => any;
   let viewPost: (id: any) => any;
   let viewProfile: (hash: any) => any;
   let viewProfileByHandle: (handle: any) => any;
   let viewRecent: (p: any) => any;
   let viewSaved: (p: any) => any;
   let viewSearch: () => any;
-  let viewShadowbans: () => any;
   let viewTopic: (id: any) => any;
-  let viewUsage: () => any;
-  let viewUsers: () => any;
   let wallMediaNode: (mediaKey: any, post: any) => any;
   let watchToggle: (topicId: any) => any;
   if (mcDown) { try { mcDown(); } catch (e) { /* half-torn is still torn */ } mcDown = null; }
@@ -242,6 +240,12 @@ import type { Boot } from './boot';
   };
 
   var API = '/api/comments';
+  /* The librarian's door and its fixed pseudo-identity (moved here from merecat.ts on
+     2026-09-16, P2-5: merecat is a lazy module and every eager module binds the bot's
+     hash). Mentionable in posts and comments (type @merecat), never DMable, summoned
+     server-side; the hash has no possible key, so nobody can post as it. */
+  var MERECAT_API = '/api/merecat';
+  var MERECAT_BOT_HASH = 'efb94d8de69dc537e2bba1facbd9db3f849f3927593488d19c07629ce35f54cc';
   var SITEKEY = '0x4AAAAAAD8IYH9_xQ0HE0yB';
   var STORAGE = 'mc-comment-key';
 
@@ -1571,7 +1575,7 @@ import type { Boot } from './boot';
          door), else a pair by its other (?dm=, the door the buttons use) */
       var tId = Math.floor(Number(params.get('t')) || 0);
       var dmh = params.get('dm');
-      return tId > 0 ? viewDm({ thread: tId }) : dmh ? viewDm({ with: dmh }) : viewInbox();
+      return tId > 0 ? lazyView('dm-thread', 'viewDm', { thread: tId }) : dmh ? lazyView('dm-thread', 'viewDm', { with: dmh }) : viewInbox();
     }
     if (page === 'profile.html') {
       var u = params.get('u') || params.get('profile');
@@ -1587,7 +1591,7 @@ import type { Boot } from './boot';
       /* Logged-out merecat gets the SAME clean join prompt + registration modal as
          Profile/Inbox — not the old inline identity drawer embedded in the page. */
       if (!isMember()) return viewJoin('ask the librarian');
-      return viewMerecat();
+      return lazyView('merecat', 'viewMerecat');
     }
     if (page === 'feed.html') {
       /* A single post (?post=<id>) is PUBLIC — anyone may read it and its likes and
@@ -1646,20 +1650,20 @@ import type { Boot } from './boot';
       case 'Me': go('profile.html', true); return;
       case 'Profile': go('profile.html?u=' + encodeURIComponent(r.s), true); return;
       case 'Merecat': go('merecat-ai.html' + (params.get('chat') ? '?chat=' + encodeURIComponent(params.get('chat') as string) : ''), true); return;
-      case 'IpBans': return viewIpBans();
-      case 'Settings': return viewPlatformSettings();
-      case 'Admins': return viewAdmins();
-      case 'AdminHome': return viewAdminHome();
-      case 'Discord': return viewDiscordHooks();
-      case 'Shadowbans': return viewShadowbans();
-      case 'Usage': return viewUsage();
-      case 'MerecatAdmin': return viewMerecatAdmin();
-      case 'MerecatThread': return viewMerecatThread(Number(r.s));
-      case 'MerecatThreads': return viewMerecatThreads();
+      case 'IpBans': return lazyView('admin', 'viewIpBans');
+      case 'Settings': return lazyView('admin', 'viewPlatformSettings');
+      case 'Admins': return lazyView('admin', 'viewAdmins');
+      case 'AdminHome': return lazyView('admin', 'viewAdminHome');
+      case 'Discord': return lazyView('admin', 'viewDiscordHooks');
+      case 'Shadowbans': return lazyView('admin', 'viewShadowbans');
+      case 'Usage': return lazyView('admin', 'viewUsage');
+      case 'MerecatAdmin': return lazyView('merecat', 'viewMerecatAdmin');
+      case 'MerecatThread': return lazyView('merecat', 'viewMerecatThread', Number(r.s));
+      case 'MerecatThreads': return lazyView('merecat', 'viewMerecatThreads');
       case 'Notifications': return viewNotifications();
-      case 'Users': return viewUsers();
+      case 'Users': return lazyView('admin', 'viewUsers');
       case 'Search': return viewSearch();
-      case 'Audit': return viewAudit();
+      case 'Audit': return lazyView('admin', 'viewAudit');
       case 'Feed': go('feed.html' + location.hash, true); return;
       case 'Post': go('feed.html?post=' + encodeURIComponent(r.s) + location.hash, true); return;
       case 'Topic': return viewTopic(r.n);
@@ -1803,14 +1807,35 @@ import type { Boot } from './boot';
     });
   }
   /* ---- Wave F: the feature modules, installed per boot ---- */
-  Object.assign(B, { API, BOARD, NACL_SRC, appConfirm, asset, authorNode, badgeChanged, bootSig, browserTz, busy, cachedJson, clampBody, clearKey, collectAltIps, crumb, displayName, el, enableMemberLive, fetchRetry, fillBody, fmtDateTime, fmtSecs, fmtTimeCompact, freshOpts, freshParam, getToken, go, isSharedV4Client, load, loadingLine, loginToInteract, makeKey, markThreadRead, mcDmBlobGet, mcDmBlobPut, mcDmBlobs, mountComments, myPostCount, pageBar, pageHref, pageKey, rankLine, readEase, readMark, readThrottled, route, section, setKey, sha256hex, skelInto, skeleton, stale, stampFresh, state, trace, warmToken });
-  const mods = [installComposer(B), installProfile(B), installBoard(B), installWall(B), installSurface(B), installDmCrypto(B), installDmMessage(B), installDmPickers(B), installDmInbox(B), installDmThread(B), installDmStyles(B), installMerecat(B), installAdmin(B)];
+  Object.assign(B, { API, BOARD, MERECAT_API, MERECAT_BOT_HASH, NACL_SRC, appConfirm, asset, authorNode, badgeChanged, bootSig, browserTz, busy, cachedJson, clampBody, clearKey, collectAltIps, crumb, displayName, el, enableMemberLive, fetchRetry, fillBody, fmtDateTime, fmtSecs, fmtTimeCompact, freshOpts, freshParam, getToken, go, isSharedV4Client, load, loadingLine, loginToInteract, makeKey, markThreadRead, mcDmBlobGet, mcDmBlobPut, mcDmBlobs, mountComments, myPostCount, pageBar, pageHref, pageKey, rankLine, readEase, readMark, readThrottled, route, section, setKey, sha256hex, skelInto, skeleton, stale, stampFresh, state, trace, warmToken });
+  /* Fetch a lazy module's chunk (once per document), install it into THIS boot,
+     bind and run it, and put its exports on B. A later boot installs it eagerly. */
+  B.ensure = function (name: string): Promise<void> {
+    if (lazyLoaded[name]) return Promise.resolve();
+    return LAZY_MODULES[name].load().then(function (ns: LazyNs) {
+      if (lazyLoaded[name]) return;                 // two routes raced; the first installed it
+      lazyLoaded[name] = ns;
+      if (bootSig.aborted) return;                  // the page moved on while the chunk was in flight
+      const inst = LAZY_MODULES[name].install(ns, B);
+      Object.assign(B, inst.exports);
+      inst.bind();
+      inst.run();
+    });
+  };
+  /* a view from a lazy module: load, then open — unless this boot is no longer the one on screen */
+  function lazyView(mod: string, name: string, ...args: unknown[]) {
+    return B.ensure(mod).then(function () {
+      if (bootSig.aborted || typeof B[name] !== 'function') return;
+      return B[name].apply(null, args);
+    });
+  }
+  const mods: Installed[] = [installComposer(B), installProfile(B), installBoard(B), installWall(B), installSurface(B), installDmCrypto(B), installDmMessage(B), installDmPickers(B), installDmInbox(B), installDmStyles(B), installAdminCore(B)];
+  /* a lazy module already fetched on this page installs like the rest (see LAZY_MODULES) */
+  for (const name of Object.keys(lazyLoaded)) mods.push(LAZY_MODULES[name].install(lazyLoaded[name], B));
   for (const m of mods) Object.assign(B, m.exports);
   ADMIN_HASHES = B.ADMIN_HASHES;
   BLOCK_CONFIRM = B.BLOCK_CONFIRM;
   CATS = B.CATS;
-  MERECAT_API = B.MERECAT_API;
-  MERECAT_BOT_HASH = B.MERECAT_BOT_HASH;
   MUTED_STORE = B.MUTED_STORE;
   NOTIF_CACHE = B.NOTIF_CACHE;
   adminProfileEditor = B.adminProfileEditor;
@@ -1878,36 +1903,22 @@ import type { Boot } from './boot';
   toggleMute = B.toggleMute;
   topicAdminCorner = B.topicAdminCorner;
   truncate = B.truncate;
-  viewAdminHome = B.viewAdminHome;
-  viewAdmins = B.viewAdmins;
-  viewAudit = B.viewAudit;
   viewCat = B.viewCat;
-  viewDiscordHooks = B.viewDiscordHooks;
-  viewDm = B.viewDm;
   viewFeed = B.viewFeed;
   viewInbox = B.viewInbox;
   viewIndex = B.viewIndex;
-  viewIpBans = B.viewIpBans;
   viewJoin = B.viewJoin;
   viewJournal = B.viewJournal;
   viewJournalArticle = B.viewJournalArticle;
-  viewMerecat = B.viewMerecat;
-  viewMerecatAdmin = B.viewMerecatAdmin;
-  viewMerecatThread = B.viewMerecatThread;
-  viewMerecatThreads = B.viewMerecatThreads;
   viewNoSuchPage = B.viewNoSuchPage;
   viewNotifications = B.viewNotifications;
-  viewPlatformSettings = B.viewPlatformSettings;
   viewPost = B.viewPost;
   viewProfile = B.viewProfile;
   viewProfileByHandle = B.viewProfileByHandle;
   viewRecent = B.viewRecent;
   viewSaved = B.viewSaved;
   viewSearch = B.viewSearch;
-  viewShadowbans = B.viewShadowbans;
   viewTopic = B.viewTopic;
-  viewUsage = B.viewUsage;
-  viewUsers = B.viewUsers;
   wallMediaNode = B.wallMediaNode;
   watchToggle = B.watchToggle;
   for (const m of mods) m.bind();

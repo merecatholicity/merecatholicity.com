@@ -109,6 +109,9 @@ docs/*.html
 !docs/douay-rheims.html
 docs/app.js
 docs/comments.js
+# the lazy feature modules' chunks (P2-5, 2026-09-16): content-hashed names, rebuilt by every
+# `make bundle` (rm -rf first, so a stale chunk never lingers)
+docs/chunks/
 # `make logos` (pandoc, no TeX) builds this from the book; CI rebuilds it when
 # the book changes and whenever it is missing from the cached tree.
 docs/Mere_Catholicity_Logos.docx

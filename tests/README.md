@@ -53,7 +53,8 @@ tests/
                        the build ↔ kernel parity of the commentable pages, the DM press-and-hold
                        surface's laws (the overlay's three layers, the reply envelope round trip),
                        the classic client's module wiring (client_modules: every binding
-                       filled and provided, no var initializer before bind, shared state on B only),
+                       filled and provided, no var initializer before bind, shared state on B only,
+                       and — since the lazy chunks — nothing eager binds a lazy module's export),
                        the conversation's chat-app basics (dm_chat_basics: the jump button, the
                        unread line, seen only when reached, typing in the header, foot and inbox),
                        the bottom bar's own laws (tabbar: six equal slots that may shrink, no

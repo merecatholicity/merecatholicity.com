@@ -79,7 +79,7 @@ ignored. **`docs/` is the served site and a MIXTURE**: hand-maintained source is
 the build writes is git-ignored and rebuilt, `tests/py/test_docs_sources.py` enforces the split; a
 new hand page needs an `!docs/<name>.html` line in `.gitignore` and an entry in `scripts/nav.py`'s
 `PAGES`. The directory tour (book, content, resources, partials, scripts, styles, app, client — the
-boot and its feature-module factories — the 33-module kernel, the two workers, librarian, webtest,
+boot, its feature-module factories, three of them lazy chunks — the kernel, the two workers, librarian, webtest,
 tests, terraform, workflows) is CODEBASE.md's; `librarian/private/` is a separate PRIVATE clone,
 never a submodule, never committed.
 

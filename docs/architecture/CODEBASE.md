@@ -278,6 +278,11 @@ client/                              the classic client (Wave F, shipped 2026-09
   boot.ts        the Boot bag type
   composer.ts · profile.ts · board.ts · wall.ts · surface.ts · merecat.ts · admin.ts
   dm-crypto.ts · dm-message.ts · dm-pickers.ts · dm-inbox.ts · dm-thread.ts · dm-styles.ts   (the DM family, 2026-09-16)
+  admin-core.ts  the admin core every page needs (ADMIN_HASHES, isAdmin, adminGate, the moderation lines, the
+                 profile fingerprint and editor) — eager; the board, wall and profile bind it (P2-5, 2026-09-16)
+  LAZY (own chunks under docs/chunks/, fetched by import() the first time a route needs them, installed by
+  B.ensure(name); nothing eager binds their exports — tests/js/client_modules holds the seam):
+  admin.ts (the admin views) · merecat.ts (the librarian's screens) · dm-thread.ts (the chat screen)
                  install<Feature>(B) factories: bind() · run() · exports
 comments-worker/src/
   index.ts       the composition root: imports · handleConfig/handleLive · the ROUTES table · fetch/scheduled
