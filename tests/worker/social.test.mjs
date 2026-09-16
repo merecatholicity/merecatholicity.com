@@ -17,11 +17,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { handlerBody, routesSource } from '../_support/worker_src.mjs';
+import { handlerBody, routesSource, workerSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
 const idxSrc = routesSource();
+const allSrc = workerSource();   // routes + index + lib: the helpers the gates share live in lib.ts since 2026-09-16
 
 test("the flag is seeded ON and read through the kernel's rule, not a bare compare", () => {
   assert.ok(libSrc.includes("social_enabled: '1',"),
@@ -60,8 +61,8 @@ test('the client is told, so it can hide what it cannot have', () => {
 });
 
 test('one guard, spelled one way, on every feed/wall surface', () => {
-  assert.ok(idxSrc.includes("const noSuchPage = () => json({ ok: false, error: 'No such page.' }, 404);"));
-  assert.ok(idxSrc.includes('async function socialOff(env: any) { return !socialEnabled(await getAppSettings(env)); }'));
+  assert.ok(allSrc.includes("export const noSuchPage = () => json({ ok: false, error: 'No such page.' }, 404);"));
+  assert.ok(allSrc.includes('export async function socialOff(env: any) { return !socialEnabled(await getAppSettings(env)); }'));
   /* Eight gated surfaces: the two members-only reads, the public post read,
      the reaction target and the who-reacted read (2026-09-12: the three like
      roads folded into these two), the three writes, and the wall media upload. */
@@ -120,16 +121,16 @@ test('wall notifications leave no bell the reader can never clear', () => {
      counting one would leave a badge with nothing behind it — so the counts and
      the list hide them. The rows themselves stay: read state and all, they come
      back with the switch. */
-  assert.ok(idxSrc.includes(
-    `const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('" + NOTIF_WALL_KINDS.join("','") + "') ";`));
+  assert.ok(allSrc.includes(
+    `export const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('" + NOTIF_WALL_KINDS.join("','") + "') ";`));
   assert.ok(libSrc.includes("export const NOTIF_WALL_KINDS = ['wall', 'wall-like', 'wall-react'];"),
     'a reaction on a feed post is a wall bell, hidden with the rest');
-  const unread = idxSrc.slice(idxSrc.indexOf('async function notifUnreadCount('));
+  const unread = allSrc.slice(allSrc.indexOf('async function notifUnreadCount('));
   assert.ok(unread.slice(0, 400).includes("notifHideWallSql(env, '')"),
     'the badge count must exclude wall kinds when off');
   /* BOTH unread counts go through the one helper — there were two copies of
      this query, and a fix applied to one only is exactly how a badge sticks. */
-  const rawCounts = (idxSrc.match(/SELECT COUNT\(\*\) AS n FROM notifications WHERE recipient_hash = \?1 AND read_at IS NULL/g) || []).length;
+  const rawCounts = (allSrc.match(/SELECT COUNT\(\*\) AS n FROM notifications WHERE recipient_hash = \?1 AND read_at IS NULL/g) || []).length;
   assert.equal(rawCounts, 1, 'the unread-count query must exist in exactly one place');
   assert.ok((idxSrc.match(/notifUnreadCount\(env, me\)/g) || []).length >= 2,
     'every unread-count caller must use the helper');

@@ -233,6 +233,15 @@ import {
   wallEnrich,
   wallReader,
   xmlEscape,
+  deliverDiscordFeedHooks,
+  noSuchPage,
+  notifHideWall,
+  notifHideWallSql,
+  notifUnreadCount,
+  notifyDiscordFeed,
+  notifyDiscordFeedComment,
+  notifyDiscordForum,
+  socialOff,
 } from './lib.ts';
 import { handleAdminUsage, runUsageCheck } from './usage.ts';
 
@@ -352,134 +361,6 @@ async function handleGet(request: any, env: any, url: any) {
   await stampReactions(env, 'post', comments, null);   // the tallies; the viewer's own ride /reacts
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
-}
-
-/* Announce a fresh LIVE forum post to Discord, if a forum webhook is configured.
-   Topics and replies both go (the message distinguishes them); the back room is
-   NEVER announced (the caller excludes it). Reads the topic title for a reply so
-   the embed can say what thread it landed in. Fire-and-forget: any failure is
-   swallowed, so Discord being down or misconfigured never touches the post. */
-async function notifyDiscordForum(env: any, p: {
-  page: string; commentId: number; topicId: number; isReply: boolean;
-  title: any; authorHash: any; nick: any; body: any; hasMedia?: boolean; createdAt: number;
-}) {
-  const s = await getAppSettings(env);
-  const hook = s.discord_forum_webhook;
-  if (!isDiscordWebhook(hook)) return;
-  let topicTitle = p.title;
-  if (p.isReply || !topicTitle) {
-    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(p.topicId).first();
-    topicTitle = (t && t.title) || 'a thread';
-  }
-  const name = p.nick || displayName(p.authorHash);
-  const link = siteBase(env) + '/community.html?topic=' + p.topicId + '#comment-' + p.commentId;
-  const heading = p.isReply ? (name + ' replied in “' + topicTitle + '”')
-    : (name + ' started a new topic');
-  await sendDiscord(hook, {
-    title: (topicTitle || 'New forum post').slice(0, 240),
-    url: link,
-    description: discordSnippet(p.body) || (p.hasMedia ? '(shared an attachment)' : (p.isReply ? '(reply)' : '(new topic)')),
-    author: { name: heading.slice(0, 240) },
-    color: 0x7a1f2b,
-    footer: { text: 'Mere Catholicity · Community' },
-    timestamp: new Date(p.createdAt * 1000).toISOString(),
-  });
-}
-
-/* Announce a fresh LIVE feed (wall) post to Discord, if a feed webhook is set. */
-async function notifyDiscordFeed(env: any, p: {
-  postId: number; authorHash: string; body: string;
-  hasMedia: boolean; createdAt: number;
-}) {
-  const s = await getAppSettings(env);
-  const hook = s.discord_feed_webhook;
-  if (!isDiscordWebhook(hook)) return;
-  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first();
-  const name = (prof && prof.nick) || displayName(p.authorHash);
-  const link = siteBase(env) + '/feed.html?post=' + p.postId;
-  await sendDiscord(hook, {
-    title: 'New post in the feed',
-    url: link,
-    description: discordSnippet(p.body) || (p.hasMedia ? '(shared an attachment)' : ''),
-    author: { name: (name + ' posted').slice(0, 240) },
-    color: 0x7a1f2b,
-    footer: { text: 'Mere Catholicity · Feed' },
-    timestamp: new Date(p.createdAt * 1000).toISOString(),
-  });
-}
-
-/* Announce a fresh LIVE comment on a feed post to Discord — only when the feed
-   webhook is set AND the admin opted in (discord_feed_comments). Handy early on,
-   deliberately off by default because it gets noisy as the platform grows. */
-async function notifyDiscordFeedComment(env: any, p: {
-  postId: number; authorHash: string; body: string; createdAt: number;
-}) {
-  const s = await getAppSettings(env);
-  const hook = s.discord_feed_webhook;
-  if (s.discord_feed_comments !== '1' || !isDiscordWebhook(hook)) return;
-  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first();
-  const name = (prof && prof.nick) || displayName(p.authorHash);
-  const link = siteBase(env) + '/feed.html?post=' + p.postId;
-  await sendDiscord(hook, {
-    title: 'New comment in the feed',
-    url: link,
-    description: discordSnippet(p.body) || '(a comment)',
-    author: { name: (name + ' commented').slice(0, 240) },
-    color: 0x7a1f2b,
-    footer: { text: 'Mere Catholicity · Feed' },
-    timestamp: new Date(p.createdAt * 1000).toISOString(),
-  });
-}
-
-/* Fan a fresh LIVE post out to every PER-FEED Discord subscription that matches
-   it (the discord_hooks table). A board reply matches its thread's `topic:<id>`
-   AND its `cat:<key>`; a new topic matches its `cat:<key>`; an article-page
-   comment matches `page:<page>`. Independent of the two coarse global webhooks
-   above — a post can announce to both. The back room is excluded by the caller.
-   Fire-and-forget per subscription so one bad webhook never blocks the others or
-   the poster's response. */
-async function deliverDiscordFeedHooks(env: any, p: {
-  commentId: number; parentId: any; page: string; isReply: boolean;
-  title: any; authorHash: any; nick: any; body: any; hasMedia: boolean; createdAt: number;
-}) {
-  const scopes: string[] = [];
-  const topicId = p.isReply ? Number(p.parentId) : p.commentId;
-  if (topicId) scopes.push('topic:' + topicId);
-  if (boardKey(p.page)) scopes.push('cat:' + p.page.slice(6));
-  else scopes.push('page:' + p.page);
-  if (!scopes.length) return;
-  const rows = await env.DB.prepare(
-    'SELECT id, scope, hook_url FROM discord_hooks WHERE scope IN (' +
-    scopes.map((_, i) => '?' + (i + 1)).join(',') + ')'
-  ).bind(...scopes).all();
-  const hooks = (rows && rows.results) || [];
-  if (!hooks.length) return;
-  const name = p.nick || (p.authorHash ? displayName(p.authorHash) : 'Anonymous');
-  const isBoard = boardKey(p.page);
-  let topicTitle = p.title;
-  if (isBoard && (p.isReply || !topicTitle)) {
-    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(topicId).first();
-    topicTitle = (t && t.title) || 'a thread';
-  }
-  const link = viewLink(env, p.page, p.commentId, p.isReply ? p.parentId : null);
-  const heading = isBoard
-    ? (p.isReply ? (name + ' replied in “' + topicTitle + '”') : (name + ' started a new topic'))
-    : (name + ' commented');
-  /* Dedupe by hook URL so two overlapping subscriptions (e.g. topic AND its
-     category) pointing at the SAME channel post only once. */
-  const seen = new Set<string>();
-  const jobs = hooks
-    .filter((h: any) => { if (seen.has(h.hook_url)) return false; seen.add(h.hook_url); return true; })
-    .map((h: any) => sendDiscord(h.hook_url, {
-      title: (isBoard ? (topicTitle || 'New forum post') : 'New comment').slice(0, 240),
-      url: link,
-      description: discordSnippet(p.body) || (p.hasMedia ? '(shared an attachment)' : (p.isReply ? '(reply)' : '')),
-      author: { name: heading.slice(0, 240) },
-      color: 0x7a1f2b,
-      footer: { text: 'Mere Catholicity · ' + scopeLabel(h.scope) },
-      timestamp: new Date(p.createdAt * 1000).toISOString(),
-    }).catch((e: any) => console.log(JSON.stringify({ event: 'discord_hook_failed', id: h.id, error: String(e) }))));
-  await Promise.all(jobs);
 }
 
 async function handlePost(request: any, env: any, ctx: any) {
@@ -3125,11 +3006,6 @@ async function handleDmMediaPurge(request: any, env: any) {
    attachments too), the admin pending/approve queue (so held content is never
    stranded), and every storage sweep. */
 
-/* The refusal a disabled feed/wall surface gives: indistinguishable from a path
-   the platform never had. */
-const noSuchPage = () => json({ ok: false, error: 'No such page.' }, 404);
-async function socialOff(env: any) { return !socialEnabled(await getAppSettings(env)); }
-
 async function handleWallFeed(request: any, env: any) {
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -3792,22 +3668,6 @@ async function handleWallMediaPurge(request: any, env: any, section: string) {
     appSettingsCache.at = 0; appSettingsCache.s = null;
   }
   return json({ ok: true, deleted, remaining }, 200);
-}
-
-/* Wall notifications point at feed posts. With the social layer off those posts
-   are unreachable, so counting or listing them would leave a bell the reader can
-   never clear. Hide them from every count and from the list; the rows stay in D1
-   and come back, read-state intact, the moment the switch goes on again. */
-const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN ('" + NOTIF_WALL_KINDS.join("','") + "') ";
-async function notifHideWallSql(env: any, alias: string) {
-  return (await socialOff(env)) ? notifHideWall(alias) : '';
-}
-async function notifUnreadCount(env: any, me: any) {
-  const row = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
-    + await notifHideWallSql(env, '')
-  ).bind(me).first();
-  return (row && row.n) || 0;
 }
 
 /* The notification badge count: unread rows for this reader, one indexed COUNT.
