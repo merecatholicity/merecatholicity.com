@@ -56,8 +56,13 @@ resource "github_repository_deploy_key" "private_shelf_ci" {
   count      = var.private_shelf_deploy_key == "" ? 0 : 1
   repository = github_repository.private_shelf.name
   title      = "merecatholicity.com CI: the librarian ingest (read-only)"
-  key        = var.private_shelf_deploy_key
-  read_only  = true
+  # GitHub stores a deploy key as its two fields — type and base64 — and drops the
+  # trailing comment the variable carries (`… merecatholicity.com CI: …`); handing
+  # the comment in made every plan since 2026-09-10 want to REPLACE the key, which
+  # the destroy law refused (found 2026-09-16, the day a ruleset change first
+  # re-planned). Compare what GitHub compares.
+  key       = join(" ", slice(split(" ", trimspace(var.private_shelf_deploy_key)), 0, 2))
+  read_only = true
 }
 
 resource "github_repository" "site" {
