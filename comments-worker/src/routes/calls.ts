@@ -13,6 +13,11 @@ import {
   recordCallEnd,
   publishUser,
 } from '../lib.ts';
+import type { Env } from '../env.ts';
+
+/* the rows this file reads (calls_pending, and the two gates) */
+type PendingRow = { from_hash: string; sdp: string; created_at: number; answered_at: number | null; missed_at: number | null; ended_at: number | null };
+type CallRow = { call: string; from_hash: string; to_hash: string; answered_at: number | null; missed_at: number | null; ended_at: number | null };
 
 /* Place a call: validate, refuse the bot and self, and enforce dm_blocks with
    FAKE SUCCESS — a blocked caller gets {ok:true} and rings out to silence,
@@ -20,7 +25,7 @@ import {
    indistinguishability law). Else the offer fans to the callee's live sockets
    and the missed-call bell/push rides waitUntil (a slow bell must never delay
    the ring). */
-async function handleCallOffer(request: any, env: any, ctx: any) {
+async function handleCallOffer(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -36,11 +41,11 @@ async function handleCallOffer(request: any, env: any, ctx: any) {
   /* The media-upload fence, same reason: a drive-by throwaway key must not be
      able to ring members (or, via /call/turn, mint relay credentials). */
   if (!(await isEstablished(env, me))) return json({ ok: false, error: 'Calls unlock after your first post or profile save.' }, 403);
-  const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(to, me).first();
+  const blockRow = await env.DB.prepare('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2').bind(to, me).first<{ b: number }>();
   if (blockRow) return json({ ok: true }, 200);
   /* The callee's own Privacy switch (profiles.calls_ok = 0): the SAME fake
      success — "not taking calls" is indistinguishable from "did not pick up". */
-  const prefRow = await env.DB.prepare('SELECT calls_ok FROM profiles WHERE hash = ?1').bind(to).first();
+  const prefRow = await env.DB.prepare('SELECT calls_ok FROM profiles WHERE hash = ?1').bind(to).first<{ calls_ok: number | null }>();
   if (prefRow && prefRow.calls_ok === 0) return json({ ok: true }, 200);
   /* The offer, kept for the ring: a callee whose app is closed is rung by a
      push and fetches it from here (/call/pending) when the app opens. */
@@ -58,7 +63,7 @@ async function handleCallOffer(request: any, env: any, ctx: any) {
    answered} once it was taken (on another device, say). Only the callee it
    was placed to may read it; anyone else gets the empty answer a call that
    never existed gives. */
-async function handleCallPending(request: any, env: any) {
+async function handleCallPending(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -66,7 +71,7 @@ async function handleCallPending(request: any, env: any) {
   if (!/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);
   const row = await env.DB.prepare(
     'SELECT from_hash, sdp, created_at, answered_at, missed_at, ended_at FROM calls_pending WHERE call = ?1 AND to_hash = ?2'
-  ).bind(call, me).first();
+  ).bind(call, me).first<PendingRow>();
   const now = Math.floor(Date.now() / 1000);
   const fresh = !!row && (now - Number(row.created_at)) <= CallK.ringTimeoutSecs + 15;
   if (!row || row.answered_at || row.missed_at || row.ended_at || !fresh) {
@@ -84,14 +89,14 @@ async function handleCallPending(request: any, env: any) {
    a word that records nothing (a callee cannot cancel) is dropped. Recording
    is once per call — `recordCallEnd`'s stamp is the lock, whatever is
    reported after. Idempotent; a row that is not there is nothing to say. */
-async function handleCallEnd(request: any, env: any, ctx: any) {
+async function handleCallEnd(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
   const call = String(data.call || '');
   const reason = String(data.reason || '');
   if (!/^[0-9a-f]{16,64}$/.test(call) || CallK.endReasons.indexOf(reason) === -1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT call, from_hash, to_hash, answered_at, missed_at, ended_at FROM calls_pending WHERE call = ?1').bind(call).first();
+  const row = await env.DB.prepare('SELECT call, from_hash, to_hash, answered_at, missed_at, ended_at FROM calls_pending WHERE call = ?1').bind(call).first<CallRow>();
   if (!row || (row.from_hash !== me && row.to_hash !== me)) return json({ ok: true }, 200);
   if (row.ended_at || row.missed_at) return json({ ok: true }, 200);   // recorded already: the lock would refuse anyway
   const outcome = MaybeM.maybe(null)((o: string) => o)(CallK.callOutcome({ caller: row.from_hash === me, answered: !!row.answered_at, reason }));
@@ -105,7 +110,7 @@ async function handleCallEnd(request: any, env: any, ctx: any) {
    block/bot gate — the offer was the invitation. The waitUntil marks THIS
    call's missed-call row read, TARGETED (kind+actor), never the nuke-all
    /notifications/read. */
-async function handleCallAnswer(request: any, env: any, ctx: any) {
+async function handleCallAnswer(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -135,7 +140,7 @@ async function handleCallAnswer(request: any, env: any, ctx: any) {
    relay leg) needs the TURN key pair AND the calls_turn admin toggle; any
    absence or failure degrades to the free STUN-only list — calls still mostly
    connect, and the degradation IS the no-billing-exposure kill switch. */
-async function handleCallTurn(request: any, env: any) {
+async function handleCallTurn(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const settings = await getAppSettings(env);

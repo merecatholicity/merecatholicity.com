@@ -206,9 +206,7 @@ import {
 } from './routes/calls.ts';
 import { handleAdminUsage, runUsageCheck } from './usage.ts';
 
-interface Env {
-  [key: string]: any;
-}
+import type { Env } from './env.ts';
 
 async function handleConfig(request: any, env: any, url: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';

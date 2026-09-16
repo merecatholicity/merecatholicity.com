@@ -31,7 +31,7 @@ import {
   sha256hex,
 } from './lib.ts';
 
-interface Env { [key: string]: any; }
+import type { Env } from './env.ts';
 
 export class BoardHub extends DurableObject<Env> {
   constructor(ctx: any, env: any) {
@@ -392,12 +392,12 @@ export class ChatRoom extends DurableObject<Env> {
     const day = merecatDay();
     let youQ = 0; let todayQ = 0;
     try {
-      const g = await this.env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+      const g = await this.env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first<{ q: number }>();
       todayQ = (g && g.q) || 0;
       if (!admin && todayQ >= cfg.global_daily) {
         ws.send(JSON.stringify({ t: 'state', phase: 'error', resting: true, error: merecatRestingNote() })); return;
       }
-      const u = await this.env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first();
+      const u = await this.env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first<{ q: number }>();
       youQ = (u && u.q) || 0;
       if (!admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
         ws.send(JSON.stringify({ t: 'state', phase: 'error', capped: true,
@@ -419,21 +419,21 @@ export class ChatRoom extends DurableObject<Env> {
        fragile stream). A fresh conversation gets its id here and rides the first
        frame back so the client adopts ?chat=<id> at once. */
     const now = Math.floor(Date.now() / 1000);
-    let history = []; let summary = '';
+    let history: { role: string; content: string }[] = []; let summary = '';
     if (!this.chatId) {
       const ins = await this.env.LIBDB.prepare(
         'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
-      ).bind(me, q.slice(0, 90), now).first();
-      this.chatId = ins.id;
+      ).bind(me, q.slice(0, 90), now).first<{ id: number }>();
+      this.chatId = ins!.id;
     } else {
-      const own = await this.env.LIBDB.prepare('SELECT summary FROM chats WHERE id = ?1').bind(this.chatId).first();
+      const own = await this.env.LIBDB.prepare('SELECT summary FROM chats WHERE id = ?1').bind(this.chatId).first<{ summary: string | null }>();
       summary = String((own && own.summary) || '');
       const rows = await this.env.LIBDB.prepare(
         'SELECT role, body FROM chat_msgs WHERE chat_id = ?1 AND COALESCE(done, 1) = 1 ORDER BY id DESC LIMIT ' + MERECAT_WINDOW
       ).bind(this.chatId).all();
       history = (rows.results || []).reverse().map((r: any) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
     }
-    const urs = await this.env.LIBDB.batch([
+    const urs = await this.env.LIBDB.batch<{ id: number }>([
       this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3) RETURNING id").bind(this.chatId, q, now),
       this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, now),
     ]);
