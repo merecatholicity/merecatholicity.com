@@ -66,6 +66,8 @@ tests/
                        answerable ring, the recorded miss and the haptics (calls: the wake, the report, the
                        service worker's ring, the thread's line, the one haptic engine), and the badges
                        (badges: the shell owns the refresh, the classic defers, reading marks read),
+                       the bundles' budget (bundle_budget: comments.js, app.js and style.css under their ceilings,
+                       a ceiling that only comes down),
                        the Alerts section and the Health card of Platform settings (alerts_panel: the four
                        keys the panel saves are the door's, the address rule shared through the membrane,
                        the card reads the one health object and Back up now presses the documented door),
@@ -108,7 +110,9 @@ tests/
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
                        slug parity, the docs/ source-vs-generated split and its orphans, the version
                        stamp, the boot splash, the baked partials, the librarian's sources and ingest
-                       ledger, the writings detector behind the comments switches, the restore drill's
+                       ledger, the writings detector behind the comments switches, the CSP's hashes (csp: the
+                       ruleset carries exactly the two inline scripts' hashes from scripts/csp_hashes.py, names
+                       the collector, admits wss: and blob:), the restore drill's
                        checker (backup_check: twice to the same counts, the FTS tail skipped where the
                        box's sqlite lacks FTS5, a non-idempotent dump named), the nightly run's summary
                        parser and its baseline comparison (webtest_nightly: a rise above the baseline or

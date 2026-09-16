@@ -1271,6 +1271,8 @@ class McSettings extends LitElement {
           <div class="mc-set-qrbox" style="max-width:220px"></div>
           <p style="margin:0;font-size:0.85em;opacity:0.75">Scan with your phone camera to sign in there.
             Anyone who scans this owns the identity, so show it to no one else.</p>
+          <p style="margin:0;font-size:0.85em;opacity:0.75">There is no recovery: the site never has this key.
+            <a class="body-link" href="privacy.html#your-key">What the key is, what loses it, what leaks it.</a></p>
         </div>` : ''}
         <button class="mc-set-row mc-set-btn mc-set-danger" @click=${() => this.logout()}>
           <span>Log out</span><span class="mc-set-go">›</span></button>
@@ -1774,8 +1776,13 @@ function mcOnboard(onDone?: any, opts?: any) {
     if (!kit || !kit.loginWithKey) { location.href = 'profile.html'; return; }
     pasteBtn.disabled = true; note.textContent = 'Logging in…';
     kit.loginWithKey(key).then(function (ok: any) {
-      if (ok) done();
-      else { note.textContent = 'That key was not recognized.'; pasteBtn.disabled = false; }
+      if (ok) {
+        /* a key anyone could guess is an account anyone could be — said once, never refused (Domain.Auth.keyStrength) */
+        if (window.mcCore && window.mcCore.authKeyStrength(key) === 'weak' && window.mcToast) {
+          window.mcToast('Signed in. This key is short enough to guess — anyone who guesses it is you. Consider a new identity, and save its key.');
+        }
+        done();
+      } else { note.textContent = 'That key was not recognized.'; pasteBtn.disabled = false; }
     }).catch(function () { note.textContent = 'Could not log in. Try again.'; pasteBtn.disabled = false; });
   });
 

@@ -266,6 +266,9 @@ const authSignals = (s: Record<string, unknown>) => ({
 export const authIsAdmin = (s: Record<string, unknown>): boolean => Auth.isAdmin(authSignals(s));
 export const authIsMember = (s: Record<string, unknown>): boolean => Auth.isMember(authSignals(s));
 export const authGate = (s: Record<string, unknown>): string => Auth.gate(authSignals(s));
+/* authKeyStrength(key) -> 'generated' | 'strong' | 'weak' (Domain.Auth.keyStrength):
+   the identity key's shape; the sign-in warns on 'weak', never refuses. */
+export const authKeyStrength = (key: unknown): string => Auth.keyStrengthTag(Auth.keyStrength(key == null ? '' : String(key)));
 
 /* Mute (Domain.Mute): a client-only list of hashes whose posts collapse for this
    reader. isMuted(bot, hash, list) is bot-exempt non-empty membership;

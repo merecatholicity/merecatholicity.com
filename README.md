@@ -562,6 +562,12 @@ Below it the **Health** card: the last backup (daily, 03:15 UTC) and whether its
 really in the bucket, each cron chain's last heartbeat, the conditions currently alerted, the
 nightly headless run's last report, and *Back up now*.
 
+**The key is the account (2026-09-16).** An identity is a key the browser mints; the site keeps
+only its hash, so there is no recovery — the backup is the key (Settings → Account → Show my key:
+copy, key file, QR for a second device). `privacy.html#your-key` says what loses it, what leaks it
+and what it protects; a pasted key short enough to guess is signed in and warned about
+(`Domain.Auth.keyStrength`), never refused.
+
 ### merecat, the librarian
 
 merecat is a members-open RAG chat (`community.html?merecat=1`) living in the comments

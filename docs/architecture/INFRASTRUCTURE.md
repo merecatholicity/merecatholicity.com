@@ -185,5 +185,6 @@ on page one.)
 - **One road registers a member, and the directory lists members (2026-09-16)** — `log/2026-09.md`
 - **Additive is not forever: the retirement cadence and its tripwire (2026-09-16)** — `log/2026-09.md`
 - **The CSP has somewhere to report (2026-09-16)** — `log/2026-09.md`
+- **The key is the account, said plainly; and the bundles have a budget (2026-09-16)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

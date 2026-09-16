@@ -16,9 +16,16 @@ module Domain.Auth
   , isMember
   , gate
   , stateTag
+  , KeyStrength(..)
+  , keyStrength
+  , keyStrengthTag
   ) where
 
 import Prelude
+
+import Data.Array as A
+import Data.String as S
+import Data.String.CodeUnits (toCharArray)
 
 -- | The raw signals the classic code read off `state` (+ the built-in-admin hint
 -- | = `ADMIN_HASHES.indexOf(myHash) !== -1`, which stays a client-only pre-load
@@ -74,3 +81,35 @@ stateTag st = case st of
   Pending -> "Pending"
   Member -> "Member"
   Admin -> "Admin"
+
+-- | The identity key's shape (P2-9, 2026-09-16). The key IS the account: a
+-- | guessable one is an account anyone can be. `makeKey` mints 32 random bytes
+-- | as 43 base64url characters — `Generated`; a pasted key of twenty or more
+-- | characters drawing on three character classes is `Strong`; anything else
+-- | that the sign-in still accepts (sixteen characters or more) is `Weak`, and
+-- | the client says so — a warning, never a refusal: custom keys exist and a
+-- | refusal would lock their holders out.
+data KeyStrength = Generated | Strong | Weak
+
+derive instance eqKeyStrength :: Eq KeyStrength
+
+keyStrength :: String -> KeyStrength
+keyStrength k =
+  let
+    chars = toCharArray k
+    n = A.length chars
+    lower = A.any (\c -> c >= 'a' && c <= 'z') chars
+    upper = A.any (\c -> c >= 'A' && c <= 'Z') chars
+    digit = A.any (\c -> c >= '0' && c <= '9') chars
+    other = A.any (\c -> not ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) chars
+    classes = A.length (A.filter identity [ lower, upper, digit, other ])
+    b64url = A.all (\c -> (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_') chars
+  in
+    if n == 43 && b64url && classes >= 3 then Generated
+    else if n >= 20 && classes >= 3 then Strong
+    else Weak
+
+keyStrengthTag :: KeyStrength -> String
+keyStrengthTag Generated = "generated"
+keyStrengthTag Strong = "strong"
+keyStrengthTag Weak = "weak"

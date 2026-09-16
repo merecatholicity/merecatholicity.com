@@ -27,6 +27,31 @@ their very design. They are also set to expire, the way a message fades on a
 platform like Snapchat, so a conversation does not linger forever unless you
 choose to save it.</p>
 
+<h2 id="your-key">Your key</h2>
+
+<p>Your identity here is a key: a string of characters your browser made and keeps. The key
+<em>is</em> the account. There is no username, no password to reset, no email on file — and
+so no recovery. The site holds only a one-way hash of the key; it cannot give the key back,
+and nobody here can sign in as you without it.</p>
+
+<p><strong>What loses it:</strong> clearing the browser's site data, a browser profile that is
+wiped or replaced, a phone reset. <strong>The backup is the key itself:</strong> Settings →
+Account → <em>Show my key</em> offers a copy, a small key file to put somewhere safe, and a QR
+code a second device can scan to sign in as you — the same key on two devices is one identity.
+Save it once; the site reminds you once.</p>
+
+<p><strong>What leaks it:</strong> a synced clipboard, a photograph of the QR code, a shared or
+borrowed browser left signed in, a key pasted into anything but this site. Anyone who holds the
+key is you: they can post as you and read your private messages, which are encrypted for your
+key. If you believe the key has leaked, create a new identity and tell your correspondents;
+the old identity cannot be locked from the outside, because nothing on the server can prove
+which holder is you.</p>
+
+<p><strong>What the key protects:</strong> your private messages are end-to-end encrypted with
+keys derived from it — the server stores ciphertext it cannot read. A pasted key shorter than
+the one the browser mints is accepted but warned about: a key anyone could guess is an
+account anyone could be.</p>
+
 <h2>What we collect</h2>
 
 <p>Your identity is a key made in your own browser. We store only a one-way

@@ -44,3 +44,14 @@ test('classify names the identity state (Anonymous -> Authenticating -> Pending 
   assert.equal(tag({ ...base, hasKey: true, hasHash: true, profileLoaded: true, myAdmin: true }), 'Admin');
   assert.equal(tag({ ...base, hasKey: true, hasHash: true, hint: true }), 'Admin', 'hint before load = Admin');
 });
+
+test('the identity key\'s shape (P2-9): the minted 43-char base64url key is generated, a long mixed pasted key strong, a short one weak — and the client only ever warns', () => {
+  const tag = (k) => Auth.keyStrengthTag(Auth.keyStrength(k));
+  assert.equal(tag('mQ3v-Zt8_kL0pR2sT4uV6wX8yZ1aB3cD5eF7gH9iJ0k'), 'generated', '32 random bytes as 43 base64url chars');
+  assert.equal(tag('mQ3v-Zt8_kL0pR2sT4uV6wX8yZ1aB3cD5eF7gH9iJ0'), 'strong', '42 chars: not the minted shape, but long and mixed');
+  assert.equal(tag('correct horse battery staple 2026!'), 'strong', 'twenty or more, three classes');
+  assert.equal(tag('correcthorsebatterystaple'), 'weak', 'one class, however long');
+  assert.equal(tag('Password1'), 'weak', 'too short');
+  assert.equal(tag(''), 'weak');
+  assert.equal(tag('a'.repeat(43)), 'weak', 'the minted length alone is nothing');
+});
