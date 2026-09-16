@@ -242,7 +242,7 @@ Yes — the natural division is **by feature**, and it maps cleanly:
   (the composition root: imports · `Env` · the table · `fetch`/`scheduled`);
   `lib.ts` the shared core every route file imports and that references no
   handler; `db.ts` the row mappers; `durable.ts` the two Durable Objects.
-  The split is landing commit by commit (2026-09-16), each proven
+  The split landed on 2026-09-16 in nine commits, each proven
   behaviour-neutral by `scripts/worker_bundle_set.sh` (the dry-run bundle's
   function-name set and code-line set identical before and after) and by
   the unit suite running the handlers (`tests/_support/worker.mjs`).
@@ -264,7 +264,7 @@ app/
   store.ts       request cache               shell.ts   SPA shell
   richtext.ts    THE body renderer           live.ts    WebSocket lifecycle
   appchrome/     sidebar · deskbar · home · settings · footer (split from appchrome.ts)
-  views/         board · topic · post · member · ✅ profile · ✅ admin · library
+  views/         board · topic · post · member · profile · admin · library
 client/                              the classic client (Wave F, shipped 2026-09-11)
   comments.ts    the boot: page state · core helpers · router · start() · the kit
   boot.ts        the Boot bag type
@@ -272,8 +272,7 @@ client/                              the classic client (Wave F, shipped 2026-09
                  install<Feature>(B) factories: bind() · run() · exports
 comments-worker/src/
   index.ts       the composition root: imports · Env · handleConfig/handleLive · the ROUTES table · fetch/scheduled
-  routes/        one file per feature, landing in this order (✅ = shipped):
-                 ✅ calls · ✅ notify · ✅ media · ✅ wall · profile · ✅ dm · ✅ merecat · ✅ board · admin
+  routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin
   lib.ts         the shared core — constants · crypto/auth · settings · notifications/push · DM primitives ·
                  media purges · Discord · merecat · publish — references no handler
   db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList
@@ -282,8 +281,7 @@ comments-worker/src/
   pure.js · webpush.js   pure helpers (no imports)
 ```
 
-**Newcomer reading order** (the worker's `routes/` split is landing; a handler not yet
-moved still sits in `index.ts`):
+**Newcomer reading order** (a handler's home is `routes/<feature>.ts`; `index.ts` is the table):
 
 1. **This file**, then `README.md` (build), `CLAUDE.md` (rules) and `docs/architecture/INFRASTRUCTURE.md` (infra, long form).
 2. `purescript/src/Domain/Route.purs` + `Auth.purs` + `Access.purs` — the rules
@@ -309,8 +307,8 @@ moved still sits in `index.ts`):
 | 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ✅ |
 | 2D | Both workers → TypeScript (`Env`, typed rows) | — | ✅ |
 | F | **Wave F: the classic client is feature modules** — `client/comments.ts` (12,584 lines, one boot function) → the root + seven `install<Feature>(B)` factories, every statement moved verbatim, names bound from the boot object after install, top-level effects in `run()`; `build:client` bundles; source-rule tests read `tests/_support/client.mjs` | — (lines moved, not deduplicated; the classic-vs-Lit clone is the remaining target) | ✅ |
-| 3 | **`db.ts` repository** — foundation shipped (`inList` retires the 13 hand-rolled `?N` loops, the `Query` builder, the `rankFor`/`withNames`/`postCountsFor` mappers moved in, unit-tested); routing the remaining trivial one-off `.prepare()` sites + the profile-join/DM-fragment consolidation is a further slice | −13 `?N` loops; mappers single-sourced | ◑ |
-| 4 | **Middleware + declarative routes + file-split** — the 91-branch chain is a declarative `ROUTES` table (route-parity diff = identical); `keyed`/`keyedGated` middleware on the byte-exact handlers; and the 6,359-line worker monolith is **split into 4 modules**: `index.ts` (handlers + dispatch, 3,708), `lib.ts` (shared core — constants/crypto/auth/DB/notification/broadcast, 2,388), `durable.ts` (the two Durable Objects, 486), + the existing `db.ts`/`pure.js`/`webpush.js`. Each split behavior-proven: tsc-clean, the wrangler bundle's function set + code line-set unchanged bar cosmetic esbuild renames, live suites green. **Handler-group route files** (`routes/merecat` etc.) were attempted and reverted: extracting a group whose helpers are reached only through a Durable-Object re-export triggers an esbuild cross-module tree-shake that drops live code, and merecat generation isn't covered by the regression suite — so it isn't safely verifiable and is left for a pass that first extends coverage. | monolith → 4 modules; declarative dispatch; core/handler/DO seams | ◑ |
+| 3 | **`db.ts` repository** — foundation shipped (`inList` retires the 13 hand-rolled `?N` loops, the `Query` builder, the `rankFor`/`withNames`/`postCountsFor` mappers moved in, unit-tested). The fuller repository layer `PLAN-TODO.md` proposed (no inline `prepare()` in handlers, typed rows, a builder everywhere) is **not pursued** (2026-09-16): with the handlers running in the unit suite against a real SQLite, inline SQL is testable where it sits — and the plan file is retired. | −13 `?N` loops; mappers single-sourced | ✅ |
+| 4 | **Middleware + declarative routes + file-split** — the 91-branch chain is a declarative `ROUTES` table (route-parity diff = identical); `keyed`/`keyedGated` middleware on the byte-exact handlers; the monolith split into `lib.ts` / `durable.ts` / `db.ts` (2026-08-01); and — **2026-09-16 — the handlers into `routes/{calls,notify,media,wall,profile,dm,merecat,board,admin}.ts`**, every one moved verbatim (its declaration line and comment intact) behind the table `index.ts` keeps, which is now the composition root (654 lines). The 2026-08-01 attempt was reverted because an esbuild tree-shake around the Durable Object re-export dropped live code with no coverage to catch it; this pass first made the handlers runnable in the unit suite (`tests/_support/worker.mjs`, `tests/worker/routes.test.mjs` holding the table to its snapshot and dispatching every entry) and proved each commit with `scripts/worker_bundle_set.sh` — function-name set and code-line set identical before and after. | monolith → composition root + 9 route files, core/DO seams | ✅ |
 | 5 | **Finish single-sourcing** — the owner ruled the bundle required, so `client/comments.ts` drops its no-bundle-fallback constant copies (FAITH/RANKS/NAMED_EMOJI/EMOJI_PACKS/CATS/pseudonym wordlists) and reads them UNCONDITIONALLY from the kernel via `window.mcCore` — drift now impossible. (The larger read-view component-vs-classic fallback deletion is the remaining Wave-F surgery.) | client↔kernel constant duplication removed | ◑ |
 
 **Target:** every hand-written file ≤ ~400 lines; duplication < 2%; one schema
