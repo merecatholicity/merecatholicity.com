@@ -263,7 +263,7 @@ app/
   store.ts       request cache               shell.ts   SPA shell
   richtext.ts    THE body renderer           live.ts    WebSocket lifecycle
   appchrome/     sidebar · deskbar · home · settings · footer (split from appchrome.ts)
-  views/         board · topic · post · member · ✅ profile · admin · library
+  views/         board · topic · post · member · ✅ profile · ✅ admin · library
 client/                              the classic client (Wave F, shipped 2026-09-11)
   comments.ts    the boot: page state · core helpers · router · start() · the kit
   boot.ts        the Boot bag type
