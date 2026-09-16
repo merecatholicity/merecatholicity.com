@@ -66,8 +66,9 @@ tests/
                        answerable ring, the recorded miss and the haptics (calls: the wake, the report, the
                        service worker's ring, the thread's line, the one haptic engine), and the badges
                        (badges: the shell owns the refresh, the classic defers, reading marks read),
-                       the Alerts section of Platform settings (alerts_panel: the four keys the panel
-                       saves are the door's, the address rule shared through the membrane),
+                       the Alerts section and the Health card of Platform settings (alerts_panel: the four
+                       keys the panel saves are the door's, the address rule shared through the membrane,
+                       the card reads the one health object and Back up now presses the documented door),
                        and the `: any` ratchet (any_ratchet: each tsc project's count equals
                        _support/any_baseline.json, a number that only ever falls)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,

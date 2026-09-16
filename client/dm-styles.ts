@@ -215,6 +215,8 @@ export function installDmStyles(B: Boot) {
       '.dm-edit-box{margin-top:3px}' +
       '.admin-set-row{margin:0.6em 0}' +
       '.admin-set-row input[type=number]{width:6em}' +
+      '.admin-health-beats{margin:0.4em 0 0.6em 1.2em;padding:0;font-size:0.92rem;color:var(--muted-b)}' +
+      '.admin-health-stale{color:#b23b3b;font-weight:600}' +
       '.mc-media-row{margin:0.5em 0}' +
       '.mc-media-note{font-size:0.85em;opacity:0.75;margin-left:8px}' +
       '.mc-rec-row{display:flex;align-items:center;gap:10px;margin:0.5em 0;flex-wrap:wrap}' +

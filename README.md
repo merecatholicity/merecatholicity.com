@@ -558,6 +558,9 @@ worker's `send_email` binding; the address must be a verified destination in Clo
 Email Routing → Destination addresses, a dashboard act) and a Discord channel webhook, each
 with its own switch — email, Discord or both; empty or unticked is silent. *Send a test
 alert* saves the four fields and reports what each channel answered, refusals verbatim.
+Below it the **Health** card: the last backup (daily, 03:15 UTC) and whether its object is
+really in the bucket, each cron chain's last heartbeat, the conditions currently alerted, the
+nightly headless run's last report, and *Back up now*.
 
 ### merecat, the librarian
 

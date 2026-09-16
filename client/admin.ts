@@ -1332,6 +1332,89 @@ export function installAdmin(B: Boot) {
         wrap.appendChild(alTest);
         wrap.appendChild(alTestNote);
 
+        /* ---- Health (2026-09-16): what the worker knows about itself —
+           POST /admin/health (ops.ts readOps). The card is the truth the
+           self-check alerts from; "Back up now" runs the same road the 03:15
+           cron takes and prints its record. ---- */
+        wrap.appendChild(el('h3', null, 'Health'));
+        desc(wrap, 'What the worker knows about itself: the last backup and whether its object is really in the bucket, each cron chain\u2019s last heartbeat, the conditions currently alerted, and the nightly headless run\u2019s last report.');
+        var hlBox = el('div', 'admin-health');
+        hlBox.textContent = 'Loading\u2026';
+        wrap.appendChild(hlBox);
+        /* the health object, as ops.ts readOps serves it */
+        type HealthBeat = { name: string; last: number; age: number | null; stale: boolean; stale_after: number };
+        type HealthBackup = { at?: number; key?: string; bytes?: number; tables?: number; rows?: number; ms?: number; error?: string };
+        type Health = {
+          now: number; ok: boolean; heartbeat: HealthBeat[]; never: string[]; open: string[];
+          backup: HealthBackup | null; object: { key: string; size: number } | null;
+          webtest: { at: number; pass: number; fail: number; regressions: string[] } | null;
+        };
+        function ago(secs: unknown) {
+          var n = Number(secs);
+          if (!isFinite(n) || n < 0) return '';
+          if (n < 90) return n + ' s ago';
+          if (n < 5400) return Math.round(n / 60) + ' min ago';
+          if (n < 172800) return Math.round(n / 3600) + ' h ago';
+          return Math.round(n / 86400) + ' days ago';
+        }
+        function kb(n: unknown) { var v = Number(n) || 0; return v >= 1048576 ? (v / 1048576).toFixed(1) + ' MB' : Math.round(v / 1024) + ' KB'; }
+        function renderHealth(h: Health) {
+          hlBox.textContent = '';
+          var verdict = el('p', 'admin-set-row', h.ok ? '\u2713 All well.' : '\u26a0 Something needs a look.');
+          hlBox.appendChild(verdict);
+          var b: HealthBackup = h.backup || {};
+          var bLine = el('p', 'board-cat-desc');
+          if (!b.key) bLine.textContent = 'Last backup: none recorded yet (the first daily run is at 03:15 UTC).';
+          else if (b.error) bLine.textContent = 'Last backup FAILED ' + ago(h.now - Number(b.at)) + ' (' + b.key + '): ' + b.error;
+          else bLine.textContent = 'Last backup ' + ago(h.now - Number(b.at)) + ': ' + b.key + ', ' + kb(b.bytes) + ' gzipped, ' + b.tables + ' tables, ' + b.rows + ' rows, ' + b.ms + ' ms.';
+          hlBox.appendChild(bLine);
+          hlBox.appendChild(el('p', 'board-cat-desc', h.object
+            ? 'In the bucket: ' + h.object.key + ' (' + kb(h.object.size) + ').'
+            : 'In the bucket: no object for today or yesterday' + (h.never && h.never.indexOf('daily') !== -1 ? ' \u2014 the daily chain has not run yet.' : '.')));
+          var hb = el('ul', 'admin-health-beats');
+          (h.heartbeat || []).forEach(function (x: HealthBeat) {
+            var li = el('li', x.stale ? 'admin-health-stale' : null);
+            li.textContent = x.name + ': ' + (x.last ? ago(x.age) : 'never') + (x.stale ? ' \u2014 STALE (presumed dead after ' + Math.round(x.stale_after / 3600) + ' h)' : '');
+            hb.appendChild(li);
+          });
+          hlBox.appendChild(hb);
+          hlBox.appendChild(el('p', 'board-cat-desc', (h.open && h.open.length) ? 'Alerted and still standing: ' + h.open.join(', ') : 'No condition is currently alerted.'));
+          var w = h.webtest;
+          hlBox.appendChild(el('p', 'board-cat-desc', w
+            ? 'Nightly headless run ' + ago(h.now - Number(w.at)) + ': ' + w.pass + ' passed, ' + w.fail + ' failed' + (w.regressions && w.regressions.length ? ' \u2014 ' + w.regressions.length + ' regression(s): ' + w.regressions.join('; ') : '.')
+            : 'Nightly headless run: no report yet.'));
+        }
+        function loadHealth() {
+          return fetch(API + '/admin/health', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d5) {
+            if (!d5 || !d5.ok) throw new Error((d5 && d5.error) || 'failed');
+            renderHealth(d5.health);
+          }).catch(function () { hlBox.textContent = 'The health could not be read.'; });
+        }
+        loadHealth();
+        var hlRow = el('p', 'admin-set-row');
+        var bkBtn = el('button', 'btn btn-send', 'Back up now') as HTMLButtonElement;
+        bkBtn.type = 'button';
+        var rfBtn = el('button', 'btn btn-plain', 'Refresh') as HTMLButtonElement;
+        rfBtn.type = 'button';
+        var bkNote = el('span', 'form-status');
+        bkBtn.addEventListener('click', function () {
+          bkBtn.disabled = true; bkNote.textContent = ' Backing up\u2026';
+          fetch(API + '/backup', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d6) {
+            bkBtn.disabled = false;
+            var bk = (d6 && d6.backup) || {};
+            bkNote.textContent = bk.error ? ' Backup failed: ' + bk.error : (bk.key ? ' Wrote ' + bk.key + ' (' + kb(bk.bytes) + ', ' + bk.rows + ' rows).' : ' Backup did not answer.');
+            loadHealth();
+          }).catch(function () { bkBtn.disabled = false; bkNote.textContent = ' Backup failed.'; });
+        });
+        rfBtn.addEventListener('click', function () { hlBox.textContent = 'Loading\u2026'; loadHealth(); });
+        hlRow.appendChild(bkBtn);
+        hlRow.appendChild(document.createTextNode(' '));
+        hlRow.appendChild(rfBtn);
+        hlRow.appendChild(bkNote);
+        wrap.appendChild(hlRow);
+
         /* ---- Save (all tunables above; each panel contributes its own keys —
            the legacy global per-kind size keys are no longer written and stand
            only as server-side fallbacks for areas never saved here). ---- */

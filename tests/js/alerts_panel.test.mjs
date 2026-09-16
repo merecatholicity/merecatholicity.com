@@ -36,3 +36,13 @@ test('the address is validated by the one kernel rule on both ends, and the test
   assert.match(admin, /fetch\(API \+ '\/admin\/alert-test'/, 'the button presses the test door');
   assert.match(door, /async function handleAlertTest\(request: Request, env: Env\)/);
 });
+
+test('the Health card reads the one health object and its Back up now runs the documented door', () => {
+  assert.match(admin, /fetch\(API \+ '\/admin\/health'/, 'the card reads POST /admin/health');
+  assert.match(door, /async function handleOpsHealth\(request: Request, env: Env\)/);
+  assert.match(door, /return json\(\{ ok: true, health: await readOps\(env\) \}, 200\)/, 'the door serves ops.ts readOps, nothing of its own');
+  assert.match(admin, /fetch\(API \+ '\/backup'/, 'Back up now presses POST /backup');
+  for (const field of ['heartbeat', 'object', 'open', 'webtest', 'backup']) assert.match(admin, new RegExp('h\\.' + field + '\\b'), 'the card shows ' + field);
+  assert.match(admin, /bk\.error \? ' Backup failed: ' \+ bk\.error/, 'a failed backup is read on screen, never swallowed');
+});
+
