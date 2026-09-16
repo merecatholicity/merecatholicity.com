@@ -31,6 +31,7 @@ import {
   sniffImage,
   verifyTurnstile,
   readLimited,
+  registerMember,
 } from '../lib.ts';
 
 async function handleProfileGet(request: Request, env: any, url: any) {
@@ -208,7 +209,7 @@ async function handlePrefs(request: any, env: any) {
   const { ip, data, key, me } = pre;
   const now = Math.floor(Date.now() / 1000);
   if (data.set && typeof data.set === 'object') {
-    await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(me, now).run();
+    await registerMember(env, me, now);
     const set = data.set;
     const parts = [];
     const vals = [];

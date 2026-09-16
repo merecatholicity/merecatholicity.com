@@ -28,6 +28,7 @@ import {
   gated,
   adminGated,
   ingestGated,
+  registerMember,
 } from '../lib.ts';
 
 /* ---- Admin observation of merecat Q&A (2026-07-29). The terms disclose that
@@ -623,8 +624,7 @@ async function handleMerecatAskInit(request: Request, env: any) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many questions at once. Wait a minute.', block: true });
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
-  await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
-    .bind(me, Math.floor(Date.now() / 1000)).run();
+  await registerMember(env, me);
   const cfg = await merecatConfig(env);
   /* The account's own wall (quota.ts), before anything is minted and admins
      included: a resting librarian answers 503 with the hours until the day

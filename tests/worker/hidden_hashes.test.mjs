@@ -26,7 +26,10 @@ test('the directory lists the members and never the probes, whichever list names
   resetCaches();
   const db = freshDb();
   for (const who of [ann, bob, probe, kit]) establish(db, who.hash);
+  /* since P2-2 a bare row is not listed: each of the four is a member by a post or a nick */
   db.prepare("INSERT INTO comments (id, page, author_hash, body, status, created_at) VALUES (1, 'board:pub', ?, 'hello', 'live', 5), (2, 'board:pub', ?, 'probe post', 'live', 6)").run(ann.hash, probe.hash);
+  db.prepare("UPDATE profiles SET nick = 'Bob' WHERE hash = ?").run(bob.hash);
+  db.prepare("UPDATE profiles SET nick = 'Kit' WHERE hash = ?").run(kit.hash);
   let r = await call(worker, makeEnv({ db }), 'GET', '/api/comments/dm/directory');
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.users.map((u) => u.hash).sort(), [ann.hash, bob.hash, probe.hash, kit.hash].sort(), 'without a hidden list everyone shows');

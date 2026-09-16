@@ -1562,6 +1562,18 @@ export async function isEstablished(env: any, hash: any) {
   return !!w;
 }
 
+/* The one road a member row appears by (P2-2, 2026-09-16). A keyed act on a
+   fresh identity — the board's unread count, the settings gear, a merecat ask,
+   the hub's last-seen stamp — makes the `profiles` row that `isEstablished`
+   (the Turnstile spare) reads; four handlers used to write it each on their
+   own. The profile save, the avatar upload and the first post write their
+   richer rows themselves. Idempotent. A row alone does NOT list an identity in
+   the member directory: that takes a nick, a post or a published DM key
+   (handleDmDirectory) — the difference between "has acted" and "is someone". */
+export async function registerMember(env: Env, hash: string, now = Math.floor(Date.now() / 1000)) {
+  await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(hash, now).run();
+}
+
 /* ================= Discord webhook fan-out =================
    Two OPTIONAL webhooks (forum posts, feed posts) live in app_settings as full
    Discord webhook URLs; empty = off. The URL is validated by isDiscordWebhook

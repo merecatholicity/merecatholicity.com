@@ -62,6 +62,7 @@ import {
   gated,
   adminGated,
   readLimited,
+  registerMember,
 } from '../lib.ts';
 import { merecatMentionKick } from './merecat.ts';
 
@@ -1115,8 +1116,7 @@ async function handleBoardUnread(request: any, env: any) {
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
   /* A keyed board visit registers the member too (see the ask-side note). */
-  await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)')
-    .bind(me, Math.floor(Date.now() / 1000)).run();
+  await registerMember(env, me);
   let floor = await boardFloor(env, me);
   if (floor === null) {
     floor = Math.floor(Date.now() / 1000);

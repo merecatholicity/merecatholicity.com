@@ -92,6 +92,9 @@ tests/
                        the one preamble and its options (gates: gated/adminGated/readLimited/ingestGated —
                        each refusal with the text the option names, an optional key hashing to the empty
                        identity as before, the block gate only when asked);
+                       one road registering a member and the directory listing members only (directory:
+                       a keyed read leaves the row and is spared, a nick, a live post or a published key
+                       lists it, a bare row or a deleted post does not);
                        the backup — the dump replayed twice into a fresh SQLite and the same ledger both times,
                        runBackup's object, prune and record, the avatar mirror (backup); the cron chains, the
                        self-check and the health read RUN — a throwing step that stops nothing, once/quiet/recovered,

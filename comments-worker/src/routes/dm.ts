@@ -1124,6 +1124,15 @@ async function handleDmDirectory(request: Request, env: any, url: any) {
        test and probe identities (hiddenHashes: TEST_HASHES + HIDDEN_HASHES). */
     "WHERE u.hash != ?1 AND (pr.nick IS NULL OR pr.nick NOT LIKE 'merecat%') " +
     (hidden.length ? 'AND u.hash NOT IN (' + hidden.map((_h: string, i: number) => '?' + (i + 2)).join(', ') + ') ' : '') +
+    /* A member is someone who has said or shown something: a nick, a live post
+       (forum or feed), or a published DM key. A profiles row alone — what any
+       keyed read leaves behind (registerMember) — is an identity that has
+       acted, not a member to list; it once made the directory read 53 for six
+       humans (P2-2, 2026-09-16). */
+    "AND (COALESCE(pr.nick, '') != '' " +
+    "  OR EXISTS (SELECT 1 FROM comments c2 WHERE c2.author_hash = u.hash AND c2.status != 'deleted') " +
+    "  OR EXISTS (SELECT 1 FROM wall_posts w WHERE w.author_hash = u.hash AND w.status = 'live') " +
+    '  OR EXISTS (SELECT 1 FROM dm_pubkeys k WHERE k.hash = u.hash)) ' +
     'ORDER BY u.joined DESC LIMIT 2000'
   ).bind(MERECAT_BOT.hash, ...hidden).all();
   const users = (rows.results || []).map((r: any) => Object.assign({}, r,

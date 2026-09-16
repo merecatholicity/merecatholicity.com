@@ -29,6 +29,7 @@ import {
   publishUser,
   quotaPublic,
   sha256hex,
+  registerMember,
 } from './lib.ts';
 
 import type { Env } from './env.ts';
@@ -152,7 +153,7 @@ export class BoardHub extends DurableObject<Env> {
   async #stampLastSeen(hash: any) {
     const now = Math.floor(Date.now() / 1000);
     try {
-      await this.env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(hash, now).run();
+      await registerMember(this.env, hash, now);
       await this.env.DB.prepare('UPDATE profiles SET last_seen_at = ?2 WHERE hash = ?1').bind(hash, now).run();
     } catch (e) { console.log(JSON.stringify({ event: 'hub_last_seen_error', error: String(e) })); }
   }
