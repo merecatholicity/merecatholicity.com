@@ -236,11 +236,15 @@ Yes, and they are named and quantified. Concrete extractions:
 
 Yes — the natural division is **by feature**, and it maps cleanly:
 
-- **Worker →** `routes/{comments,dm,wall,notifications,merecat,admin}.ts`
-  (each a small sub-route table), `services/*` (the business ops above), `db.ts`
-  (all SQL), `middleware/*`, and the two Durable Objects (`BoardHub`, `ChatRoom`)
-  in their own files. `index.ts` becomes a thin composition root: build the env,
-  compose middleware, mount the route tables.
+- **Worker →** `routes/{calls,notify,media,wall,profile,dm,merecat,board,admin}.ts`,
+  each handler moved verbatim behind the one `ROUTES` table `index.ts` keeps
+  (the composition root: imports · `Env` · the table · `fetch`/`scheduled`);
+  `lib.ts` the shared core every route file imports and that references no
+  handler; `db.ts` the row mappers; `durable.ts` the two Durable Objects.
+  The split is landing commit by commit (2026-09-16), each proven
+  behaviour-neutral by `scripts/worker_bundle_set.sh` (the dry-run bundle's
+  function-name set and code-line set identical before and after) and by
+  the unit suite running the handlers (`tests/_support/worker.mjs`).
 - **Client →** one Lit component per view under `app/views/*` (already true for
   reads), `app/api.ts` (all endpoints), `app/core.ts` (the membrane); the write
   paths live in `client/<feature>.ts` now (Wave F), each a per-boot factory over
@@ -250,8 +254,7 @@ Yes — the natural division is **by feature**, and it maps cleanly:
 
 ### 6. Is there a natural division for human approachability?
 
-Yes. **Target tree [target]** — every file named for its feature, none over
-~400 lines:
+Yes. **The tree** — every file named for its feature:
 
 ```
 purescript/src/Domain/*.purs        the rulebook (32 modules) — unchanged, it's the model
@@ -267,17 +270,19 @@ client/                              the classic client (Wave F, shipped 2026-09
   composer.ts · profile.ts · board.ts · wall.ts · surface.ts · dm.ts · merecat.ts · admin.ts
                  install<Feature>(B) factories: bind() · run() · exports
 comments-worker/src/
-  index.ts       thin composition root  (~150 lines)
-  middleware/    withJson · withRateLimit · withKey · withBlockGate · originOk
-  db.ts          every SQL statement + typed rows + the query builder
-  routes/        comments · dm · wall · notifications · merecat · admin
-  services/      screen · notify · push · broadcast · backup · merecat(retrieval/gen)
-  durable/       board-hub.ts · chat-room.ts
-  pure.ts        pure helpers (already extracted)
+  index.ts       the composition root: imports · Env · handleConfig/handleLive · the ROUTES table · fetch/scheduled
+  routes/        one file per feature, landing in this order (✅ = shipped):
+                 ✅ calls · notify · media · wall · profile · dm · merecat · board · admin
+  lib.ts         the shared core — constants · crypto/auth · settings · notifications/push · DM primitives ·
+                 media purges · Discord · merecat · publish — references no handler
+  db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList
+  durable.ts     BoardHub · ChatRoom (the only importer of cloudflare:workers)
+  quota.ts · usage.ts · usagecalc.ts · analytics.ts   the AI budget guard and the usage monitor
+  pure.js · webpush.js   pure helpers (no imports)
 ```
 
-**Newcomer reading order** (the worker's `routes/` · `services/` · `durable/`
-split above is the target shape; today its write path is `index.ts` → `lib.ts` → `db.ts`):
+**Newcomer reading order** (the worker's `routes/` split is landing; a handler not yet
+moved still sits in `index.ts`):
 
 1. **This file**, then `README.md` (build), `CLAUDE.md` (rules) and `docs/architecture/INFRASTRUCTURE.md` (infra, long form).
 2. `purescript/src/Domain/Route.purs` + `Auth.purs` + `Access.purs` — the rules
@@ -287,8 +292,8 @@ split above is the target shape; today its write path is `index.ts` → `lib.ts`
 5. `client/comments.ts` (`mcBoot`: the boot object `B`, the install list, `start()`)
    → `client/board.ts` (the board form → `/api/comments`) — one classic write path,
    and how a feature module binds its names.
-6. Worker `index.ts` (the `ROUTES` table + the handlers) → `lib.ts` → `db.ts` — one
-   full write path, from HTTP to SQL.
+6. Worker `index.ts` (the `ROUTES` table) → `routes/<feature>.ts` (the handler) → `lib.ts` → `db.ts` —
+   one full write path, from HTTP to SQL.
 7. `durable.ts` (`BoardHub`) — how live updates fan out.
 
 ---
