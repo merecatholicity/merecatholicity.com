@@ -15,17 +15,13 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
-const idx = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idx = routesSource();
 const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const body = (src, name) => {
-  const i = src.indexOf(`async function ${name}(`);
-  assert.ok(i > 0, `${name} not found`);
-  const j = src.indexOf('\nasync function ', i + 10);
-  return src.slice(i, j > i ? j : i + 9000);
-};
+const body = (src, name) => handlerBody(name, src);
 const before = (text, a, b) => { const i = text.indexOf(a), j = text.indexOf(b); assert.ok(i > 0 && j > 0, a + ' / ' + b); return i < j; };
 
 test('the board: a soft-deleted post, a deleted topic, a move into the back room, a deleted member — every attachment purged, never left named by a row', () => {

@@ -16,11 +16,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idxSrc = routesSource();
 const hubSrc = readFileSync(join(root, 'comments-worker', 'src', 'durable.ts'), 'utf8');
 
 function freshDb() {
@@ -28,12 +29,7 @@ function freshDb() {
   for (const f of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
   return db;
 }
-const body = (name) => {
-  const i = idxSrc.indexOf(`async function ${name}(`);
-  assert.ok(i > 0, `${name} not found`);
-  const j = idxSrc.indexOf('\nasync function ', i + 10);
-  return idxSrc.slice(i, j > i ? j : i + 6000);
-};
+const body = (name) => handlerBody(name, idxSrc);
 /* the SQL fragments exactly as the worker builds them, lifted from lib.ts by name */
 function fragment(name) {
   const m = libSrc.match(new RegExp('export function ' + name + '\\(now: any\\) \\{([\\s\\S]*?)\\}(?:\\n|$)'));

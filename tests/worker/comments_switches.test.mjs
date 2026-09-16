@@ -19,19 +19,15 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idxSrc = routesSource();
 
 /* The body of one top-level handler, by name, so moving code around cannot
    quietly leave a guard behind (the social file's idiom). */
-const body = (name) => {
-  const i = idxSrc.indexOf(`async function ${name}(`);
-  assert.ok(i > 0, `${name} not found`);
-  const j = idxSrc.indexOf('\nasync function ', i + 10);
-  return idxSrc.slice(i, j > i ? j : i + 6000);
-};
+const body = (name) => handlerBody(name, idxSrc);
 
 test('the page list is the kernel\'s, never an inline copy', () => {
   assert.ok(libSrc.includes('export const PAGES: string[] = Comments.commentablePaths;'),

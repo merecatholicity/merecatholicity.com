@@ -21,6 +21,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
@@ -131,7 +132,7 @@ test('the orphan sweep spares live/pending board media and never cross-wires wal
 });
 
 test('all three link SQLs carry the double-claim guard AND the ctx re-stamp (drift guard)', () => {
-  const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+  const idxSrc = routesSource();
   /* ctx follows ref_type at link time — the invariant the per-section purge
      endpoints' wholesale parent-stamping relies on. The ref_id IS NULL guard
      (once board-only; the wall paths gained it 2026-08-02) closes the

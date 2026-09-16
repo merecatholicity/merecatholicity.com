@@ -13,21 +13,17 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idxSrc = routesSource();
 function freshDb() {
   const db = new DatabaseSync(':memory:');
   for (const f of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
   return db;
 }
-const body = (name) => {
-  const i = idxSrc.indexOf(`async function ${name}(`);
-  assert.ok(i > 0, `${name} not found`);
-  const j = idxSrc.indexOf('\nasync function ', i + 10);
-  return idxSrc.slice(i, j > i ? j : i + 8000);
-};
+const body = (name) => handlerBody(name, idxSrc);
 const me = 'a'.repeat(64), ann = 'b'.repeat(64), bob = 'c'.repeat(64);
 function seeded() {
   const db = freshDb();

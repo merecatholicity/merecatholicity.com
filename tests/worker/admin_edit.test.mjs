@@ -9,15 +9,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
-const body = (name) => {
-  const i = idxSrc.indexOf(`async function ${name}(`);
-  assert.ok(i > 0, `${name} not found`);
-  const j = idxSrc.indexOf('\nasync function ', i + 10);
-  return idxSrc.slice(i, j > i ? j : i + 6000);
-};
+const idxSrc = routesSource();
+const body = (name) => handlerBody(name, idxSrc);
 
 test('the board edit: the row by id, the author or an admin, the same refusal for everyone else, the admin logged', () => {
   const h = body('handleEdit');

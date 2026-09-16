@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { clientAll, clientModule } from '../_support/client.mjs';
+import { routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = clientAll();
@@ -115,6 +116,6 @@ test('on a phone a hold picks a post, never a word: posts are not selectable tex
 test('the DM bell lands on the message: ?m= rides find= to the server and is scrolled to', () => {
   assert.ok(/else if \(mWant > 0\) payload\.find = mWant;/.test(dm), 'the thread asks for the message\'s page');
   assert.ok(/var landOn = mWant > 0 \? list\.querySelector\('\[data-dmid="' \+ mWant \+ '"\]'\) : null;/.test(dm) && /dmFlash\(landOn\);/.test(dm));
-  const idx = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+  const idx = routesSource();
   assert.ok(/const find = Math\.floor\(Number\(data\.find\) \|\| 0\);/.test(idx) && /p = Math\.floor\(\(\(pos && pos\.n\) \|\| 0\) \/ DM_PER_PAGE\) \+ 1;/.test(idx), 'the worker places it');
 });

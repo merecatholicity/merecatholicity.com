@@ -18,11 +18,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idxSrc = routesSource();
 
 function freshDb() {
   const db = new DatabaseSync(':memory:');
@@ -148,7 +149,7 @@ test('the pair\'s room is made once (ensurePairThread): the upsert survives the 
 
 test('the inbox query runs on the ledger: a pair\'s other, a group\'s members and count, the words from my seat alone', () => {
   const db = seeded();
-  const t = idxSrc.slice(idxSrc.indexOf('async function handleDmThreads('), idxSrc.indexOf('\nasync function ', idxSrc.indexOf('async function handleDmThreads(') + 10));
+  const t = handlerBody('handleDmThreads', idxSrc);
   const build = t.slice(t.indexOf('const otherOf = '), t.indexOf('const rows = await'));
   const fragment = (name) => libSrc.match(new RegExp('export function ' + name + '\\(now: any\\) \\{([\\s\\S]*?)\\}(?:\\n|$)'))[1];
   const dmUnreadCount = new Function('dmLive', 'now', fragment('dmUnreadCount'));
@@ -165,7 +166,7 @@ test('the inbox query runs on the ledger: a pair\'s other, a group\'s members an
 });
 
 test('the thread tells whether each member reports reads (2026-09-15): a group\'s ✓✓ waits only for those who do, and Message info says "Receipts off"', () => {
-  const t = idxSrc.slice(idxSrc.indexOf('async function handleDmThread('), idxSrc.indexOf('\nasync function ', idxSrc.indexOf('async function handleDmThread(') + 10));
+  const t = handlerBody('handleDmThread', idxSrc);
   assert.ok(/receipts: Prefs\.receiptsOn\(r\.receipts_mode \|\| 'auto'\) \? 1 : 0,/.test(t), 'each member row carries receipts');
   assert.ok(/read_at: \(r\.hash === me \|\| Prefs\.receiptsOn\(r\.receipts_mode \|\| 'auto'\)\) && r\.read_at != null \? Number\(r\.read_at\) : null,/.test(t), 'and a hidden stamp stays withheld');
   const ann = idxSrc.slice(idxSrc.indexOf('async function announceDmMembers('), idxSrc.indexOf('\n}\n', idxSrc.indexOf('async function announceDmMembers(')));

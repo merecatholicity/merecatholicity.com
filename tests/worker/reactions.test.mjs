@@ -17,10 +17,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idxSrc = routesSource();
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
 
 function freshDb(upTo) {
@@ -30,12 +31,7 @@ function freshDb(upTo) {
   for (const f of files) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
   return { db, files };
 }
-const body = (text, name) => {
-  const i = text.indexOf(`async function ${name}(`);
-  assert.ok(i > 0, `${name} not found`);
-  const j = text.indexOf('\nasync function ', i + 10);
-  return text.slice(i, j > i ? j : i + 7000);
-};
+const body = (text, name) => handlerBody(name, text);
 const me = 'a'.repeat(64), other = 'b'.repeat(64), third = 'c'.repeat(64);
 
 test('the ledger builds through 0014: one reaction per member per target, the notification CHECK widened', () => {

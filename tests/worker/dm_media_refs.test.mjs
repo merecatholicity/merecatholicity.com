@@ -16,6 +16,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
@@ -80,7 +81,7 @@ test('a redacted forward lets go of its reference alone (the original keeps the 
   const db = seeded();
   assert.deepEqual(release(db, [{ id: 2, media_key: K }]), []);
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?').get(K).n, 1, 'the original\'s reference stands');
-  assert.ok(/if \(row\.media_key\) await releaseMediaRefs\(env, \[\{ id: row\.id, media_key: row\.media_key \}\]\);/.test(readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8')), 'a redact releases its own reference');
+  assert.ok(/if \(row\.media_key\) await releaseMediaRefs\(env, \[\{ id: row\.id, media_key: row\.media_key \}\]\);/.test(routesSource()), 'a redact releases its own reference');
   db.close();
 });
 

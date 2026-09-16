@@ -38,6 +38,14 @@ tests/
   _support/client.mjs  the browser client's sources for the source-rule tests (the root and the
                        eight feature modules of client/, as one text or one at a time)
   _support/any_baseline.json  the two `: any` counts the ratchet holds (see js/any_ratchet)
+  _support/worker.mjs  the worker, RUN: loadWorker() (index.ts in plain Node behind one resolve hook), freshDb()
+                       (every migration on node:sqlite), d1() (the D1-shaped shim), makeEnv() (limiters that allow,
+                       R2 buckets that record, an optional hub spy, Workers AI that throws), netSpy() (a fetch that
+                       throws and records), identity()/establish()/publishKey(), call()/client() through
+                       default.fetch, resetCaches()
+  _support/worker_src.mjs  the worker's sources for the source-rule locks: routesSource() (routes/*.ts + index.ts),
+                       libSource(), workerSource(), handlerBody(name) — bounded by the next top-level declaration
+  _support/routes.json the ROUTES table's committed snapshot (worker/routes)
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
                        the build ↔ kernel parity of the commentable pages, the DM press-and-hold
@@ -71,6 +79,7 @@ tests/
                        the ledger, the pending read and the end's rules (call); the read-marks every door
                        makes, on the ledger (notif_read); every delete and expiry road purging its media, and
                        delete-user's feed sweep on the ledger (media_hygiene);
+                       the route table held to its snapshot and every entry dispatched through the loaded worker (routes);
                        plus the db builder, calls, media, webpush, the
                        social switch, the Discord bridge)
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
@@ -87,6 +96,18 @@ tests/
   `make psbuild` must have run first (`make tests` / `make pstest` do it for you).
 - **Python + CSS**: stdlib `unittest` (pytest is not installed). Each file is
   standalone-runnable and puts the source dir it targets on `sys.path`.
+- **The worker, run (2026-09-16)**: `tests/_support/worker.mjs` loads
+  `comments-worker/src/index.ts` in plain Node and drives its handlers through
+  `default.fetch` against a real SQLite behind a D1-shaped shim, every binding a
+  request can touch stubbed or spying and the network a fetch that throws — a
+  request that passes has provably touched nothing outside the ledger. Rules:
+  import index.ts only through `loadWorker()` (dynamically — its Durable Object
+  re-export needs the one resolve hook, and ESM links a static graph before any
+  hook runs); `resetCaches()` in `beforeEach` (lib.ts caches app_settings for
+  five minutes); an identity passes Turnstile once `establish()` gives it a
+  `profiles` row. Lock source text (`worker_src.mjs`) only for a law that IS
+  textual — the privacy sweep, the Turnstile sweep, the one-fragment rule; prove
+  a road by running it.
 
 ## Running
 

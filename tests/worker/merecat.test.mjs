@@ -16,9 +16,10 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const index = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const index = routesSource();
 const durable = readFileSync(join(root, 'comments-worker', 'src', 'durable.ts'), 'utf8');
 import { clientAll } from '../_support/client.mjs';
+import { routesSource } from '../_support/worker_src.mjs';
 const client = clientAll();
 const uncommented = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
 

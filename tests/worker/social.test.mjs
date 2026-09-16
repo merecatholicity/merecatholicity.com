@@ -17,10 +17,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idxSrc = routesSource();
 
 test("the flag is seeded ON and read through the kernel's rule, not a bare compare", () => {
   assert.ok(libSrc.includes("social_enabled: '1',"),
@@ -69,11 +70,7 @@ test('one guard, spelled one way, on every feed/wall surface', () => {
 
   /* Each handler carries its own guard — checked by name, so moving code around
      cannot quietly leave one behind. */
-  const body = (name) => {
-    const i = idxSrc.indexOf(`async function ${name}(`);
-    assert.ok(i > 0, `${name} not found`);
-    return idxSrc.slice(i, i + 2400);
-  };
+  const body = (name) => handlerBody(name, idxSrc);
   for (const h of ['handleWallFeed', 'handleWall', 'handleWallPostGet', 'reactTarget',
     'handleReactWho', 'handleWallPost', 'handleWallComment', 'handleWallEdit']) {
     assert.ok(/socialOff\(env\)/.test(body(h)), `${h} has no social gate`);
@@ -99,18 +96,13 @@ test('a switched-off surface is indistinguishable from one that never existed', 
 });
 
 test('the three surfaces that must STAY open when the switch is off', () => {
-  const between = (from, to) => {
-    const i = idxSrc.indexOf(from);
-    const j = idxSrc.indexOf(to, i);
-    return idxSrc.slice(i, j > i ? j : i + 3000);
-  };
   /* An author (or an admin) must always be able to retract their own content,
      and the admin queue discards held wall rows through this same route. */
-  assert.ok(!/socialOff\(env\)/.test(between('async function handleWallDelete(', '\nasync function ')),
+  assert.ok(!/socialOff\(env\)/.test(handlerBody('handleWallDelete', idxSrc)),
     '/wall/delete must never be gated — content would be un-retractable');
   /* GET /wall/media serves FORUM attachments too (ref_type 'board'): gating it
      would break board media for a feature that has nothing to do with the feed. */
-  assert.ok(!/socialOff\(env\)/.test(between('async function handleWallMediaGet(', '\nasync function ')),
+  assert.ok(!/socialOff\(env\)/.test(handlerBody('handleWallMediaGet', idxSrc)),
     'the shared media GET must never be gated — board attachments ride it');
   /* The gate rides the wall UPLOAD route, not mediaUpload itself, for the same
      reason: the board route shares that handler. */
@@ -119,7 +111,7 @@ test('the three surfaces that must STAY open when the switch is off', () => {
   assert.ok(idxSrc.includes(
     "{ m: 'POST', p: '/api/comments/board/media', fn: (request, env, ctx, url) => mediaUpload(request, env, 'board') },"),
     'the board upload route must stay ungated');
-  const mu = between('async function mediaUpload(', '\nasync function ');
+  const mu = handlerBody('mediaUpload', idxSrc);
   assert.ok(!/socialOff\(env\)/.test(mu), 'the gate belongs on the route, not inside the shared handler');
 });
 

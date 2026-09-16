@@ -1,0 +1,627 @@
+[
+ {
+  "m": "GET",
+  "p": "/api/comments",
+  "fn": "(request, env, ctx, url) => handleGet(request, env, url)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/config",
+  "fn": "(request, env, ctx, url) => handleConfig(request, env, url)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments",
+  "fn": "(request, env, ctx, url) => handlePost(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/delete",
+  "fn": "(request, env, ctx, url) => handleSelfDelete(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/edit",
+  "fn": "(request, env, ctx, url) => handleEdit(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/meta",
+  "fn": "(request, env, ctx, url) => handleMeta(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/audit",
+  "fn": "(request, env, ctx, url) => handleAudit(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/trust",
+  "fn": "(request, env, ctx, url) => handleTrust(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/moderate",
+  "fn": "(request, env, ctx, url) => handleModerate(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/move",
+  "fn": "(request, env, ctx, url) => handleMove(request, env, ctx)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/feed",
+  "fn": "(request, env, ctx, url) => handleFeed(request, env, url)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/journal",
+  "fn": "(request, env, ctx, url) => handleJournal(request, env, url)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/board",
+  "fn": "(request, env, ctx, url) => handleBoardIndex(request, env, url)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/board/cat",
+  "fn": "(request, env, ctx, url) => handleBoardCat(request, env, url)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/board/author",
+  "fn": "(request, env, ctx, url) => handleAuthorPosts(request, env, url)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/board/topic",
+  "fn": "(request, env, ctx, url) => handleTopicView(request, env, url)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/board/admin",
+  "fn": "(request, env, ctx, url) => handleBoardAdmin(request, env)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/search",
+  "fn": "(request, env, ctx, url) => handleSearch(request, env, url)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/profile",
+  "fn": "(request, env, ctx, url) => handleProfileGet(request, env, url)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/profile",
+  "fn": "(request, env, ctx, url) => handleProfileSave(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/profile/admin",
+  "fn": "(request, env, ctx, url) => handleProfileAdminEdit(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/profile/clear",
+  "fn": "(request, env, ctx, url) => handleProfileClear(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/backup",
+  "fn": "(request, env, ctx, url) => handleBackup(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/send",
+  "fn": "(request, env, ctx, url) => handleDmSend(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/threads",
+  "fn": "(request, env, ctx, url) => handleDmThreads(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/thread",
+  "fn": "(request, env, ctx, url) => handleDmThread(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/unread",
+  "fn": "(request, env, ctx, url) => handleDmUnread(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/presence",
+  "fn": "(request, env, ctx, url) => handleDmPresence(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/blocked",
+  "fn": "(request, env, ctx, url) => handleDmBlocked(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/prefs",
+  "fn": "(request, env, ctx, url) => handlePrefs(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/call/offer",
+  "fn": "(request, env, ctx, url) => handleCallOffer(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/call/answer",
+  "fn": "(request, env, ctx, url) => handleCallAnswer(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/call/pending",
+  "fn": "(request, env, ctx, url) => handleCallPending(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/call/end",
+  "fn": "(request, env, ctx, url) => handleCallEnd(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/call/turn",
+  "fn": "(request, env, ctx, url) => handleCallTurn(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/block",
+  "fn": "(request, env, ctx, url) => handleDmBlock(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/delete",
+  "fn": "(request, env, ctx, url) => handleDmDelete(request, env)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/dm/directory",
+  "fn": "(request, env, ctx, url) => handleDmDirectory(request, env, url)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/pubkey",
+  "fn": "(request, env, ctx, url) => handleDmPubkey(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/ttl",
+  "fn": "(request, env, ctx, url) => handleDmTtl(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/save",
+  "fn": "(request, env, ctx, url) => handleDmSave(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/react",
+  "fn": "(request, env, ctx, url) => handleDmReact(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/like",
+  "fn": "(request, env, ctx, url) => handleDmReact(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/seen",
+  "fn": "(request, env, ctx, url) => handleDmSeen(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/edit",
+  "fn": "(request, env, ctx, url) => handleDmEdit(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/redact",
+  "fn": "(request, env, ctx, url) => handleDmRedact(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/media",
+  "fn": "(request, env, ctx, url) => handleDmMediaUpload(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/media/get",
+  "fn": "(request, env, ctx, url) => handleDmMediaGet(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/media/purge",
+  "fn": "(request, env, ctx, url) => handleDmMediaPurge(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/roster",
+  "fn": "(request, env, ctx, url) => handleDmRoster(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/groups",
+  "fn": "(request, env, ctx, url) => handleDmGroups(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/members",
+  "fn": "(request, env, ctx, url) => handleDmMembers(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/leave",
+  "fn": "(request, env, ctx, url) => handleDmLeave(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/name",
+  "fn": "(request, env, ctx, url) => handleDmName(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/forward",
+  "fn": "(request, env, ctx, url) => handleDmForward(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/admin/settings",
+  "fn": "(request, env, ctx, url) => handleAdminSettings(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/admin/discord/list",
+  "fn": "(request, env, ctx, url) => handleAdminDiscordList(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/admin/discord/add",
+  "fn": "(request, env, ctx, url) => handleAdminDiscordAdd(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/admin/discord/delete",
+  "fn": "(request, env, ctx, url) => handleAdminDiscordDelete(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/admin/usage",
+  "fn": "(request, env, ctx, url) => handleAdminUsage(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/notifications/unread",
+  "fn": "(request, env, ctx, url) => handleNotifUnread(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/notifications/read",
+  "fn": "(request, env, ctx, url) => handleNotifRead(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/notifications",
+  "fn": "(request, env, ctx, url) => handleNotifList(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/watch",
+  "fn": "(request, env, ctx, url) => handleWatch(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/board/unread",
+  "fn": "(request, env, ctx, url) => handleBoardUnread(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/board/reads",
+  "fn": "(request, env, ctx, url) => handleBoardReads(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/board/read",
+  "fn": "(request, env, ctx, url) => handleBoardRead(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/board/read-all",
+  "fn": "(request, env, ctx, url) => handleBoardReadAll(request, env)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/avatar",
+  "fn": "(request, env, ctx, url) => handleAvatarGet(request, env, url)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/avatar",
+  "fn": "(request, env, ctx, url) => handleAvatarUpload(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/avatar/delete",
+  "fn": "(request, env, ctx, url) => handleAvatarDelete(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/feed",
+  "fn": "(request, env, ctx, url) => handleWallFeed(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/post",
+  "fn": "(request, env, ctx, url) => handleWallPost(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/post/get",
+  "fn": "(request, env, ctx, url) => handleWallPostGet(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/comment",
+  "fn": "(request, env, ctx, url) => handleWallComment(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/delete",
+  "fn": "(request, env, ctx, url) => handleWallDelete(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/edit",
+  "fn": "(request, env, ctx, url) => handleWallEdit(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/bookmark",
+  "fn": "(request, env, ctx, url) => handleBookmark(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/bookmarks",
+  "fn": "(request, env, ctx, url) => handleBookmarks(request, env)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/recent",
+  "fn": "(request, env, ctx, url) => handleRecent(request, env, url)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/react",
+  "fn": "(request, env, ctx, url) => handleReact(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/reacts",
+  "fn": "(request, env, ctx, url) => handleReactMine(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/react/who",
+  "fn": "(request, env, ctx, url) => handleReactWho(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/like",
+  "fn": "(request, env, ctx, url) => handleReact(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/comment/like",
+  "fn": "(request, env, ctx, url) => handleReact(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/likers",
+  "fn": "(request, env, ctx, url) => handleReactWho(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/prune",
+  "fn": "(request, env, ctx, url) => handleWallPrune(request, env)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/wall/media",
+  "fn": "(request, env, ctx, url) => handleWallMediaGet(request, env, url, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/media",
+  "fn": "async (request, env, ctx, url) => (await socialOff(env)) ? noSuchPage() : mediaUpload(request, env, 'wall')"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/board/media",
+  "fn": "(request, env, ctx, url) => mediaUpload(request, env, 'board')"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall/media/purge",
+  "fn": "(request, env, ctx, url) => handleWallMediaPurge(request, env, 'wall')"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/board/media/purge",
+  "fn": "(request, env, ctx, url) => handleWallMediaPurge(request, env, 'board')"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/wall",
+  "fn": "(request, env, ctx, url) => handleWall(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/lock",
+  "fn": "(request, env, ctx, url) => handleLock(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/shadowban",
+  "fn": "(request, env, ctx, url) => handleShadowban(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/shadowban/list",
+  "fn": "(request, env, ctx, url) => handleShadowbanList(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/deleteuser",
+  "fn": "(request, env, ctx, url) => handleDeleteUser(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/ipban",
+  "fn": "(request, env, ctx, url) => handleIpBan(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/ipbans",
+  "fn": "(request, env, ctx, url) => handleIpBans(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/rdns",
+  "fn": "(request, env, ctx, url) => handleRdns(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/approve",
+  "fn": "(request, env, ctx, url) => handleApprove(request, env, ctx)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/pending",
+  "fn": "(request, env, ctx, url) => handlePending(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/report",
+  "fn": "(request, env, ctx, url) => handleReport(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/report/dismiss",
+  "fn": "(request, env, ctx, url) => handleReportDismiss(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/admins",
+  "fn": "(request, env, ctx, url) => handleAdmins(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/admin",
+  "fn": "(request, env, ctx, url) => handleAdmin(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/push/register",
+  "fn": "(request, env, ctx, url) => handlePushRegister(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/push/unregister",
+  "fn": "(request, env, ctx, url) => handlePushUnregister(request, env)"
+ },
+ {
+  "m": "GET",
+  "p": "/api/comments/push/vapid-key",
+  "fn": "(request, env, ctx, url) => handleVapidKey(request, env, url)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/ask-init",
+  "fn": "(request, env, ctx, url) => handleMerecatAskInit(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/about",
+  "fn": "(request, env, ctx, url) => handleMerecatAbout(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/backends",
+  "fn": "(request, env, ctx, url) => handleMerecatBackends(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/usage",
+  "fn": "(request, env, ctx, url) => handleMerecatUsage(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/forward",
+  "fn": "(request, env, ctx, url) => handleMerecatForward(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/mention",
+  "fn": "(request, env, ctx, url) => handleMerecatMention(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/chats",
+  "fn": "(request, env, ctx, url) => handleMerecatChats(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/chat",
+  "fn": "(request, env, ctx, url) => handleMerecatChat(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/chat/delete",
+  "fn": "(request, env, ctx, url) => handleMerecatChatDelete(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/admin/threads",
+  "fn": "(request, env, ctx, url) => handleMerecatAdminThreads(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/admin/thread",
+  "fn": "(request, env, ctx, url) => handleMerecatAdminThread(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/chat/save",
+  "fn": "(request, env, ctx, url) => handleMerecatChatSave(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/ingest",
+  "fn": "(request, env, ctx, url) => handleMerecatIngest(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/works",
+  "fn": "(request, env, ctx, url) => handleMerecatWorks(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/config",
+  "fn": "(request, env, ctx, url) => handleMerecatConfigSet(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/merecat/stats",
+  "fn": "(request, env, ctx, url) => handleMerecatStats(request, env)"
+ }
+]

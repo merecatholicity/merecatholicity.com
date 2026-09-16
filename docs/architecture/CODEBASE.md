@@ -180,7 +180,7 @@ still inline in `index.ts`, the `db.ts` foundation notwithstanding), and the
 client's **42** classic fallbacks beside the Lit components — the client is
 feature files now (Wave F), but each feature file still carries its classic
 render path. Test layers are already modular and
-tiered: **Layer 1** unit (`tests/`, 31 PS + 16 js + 17 worker node specs, 12 py + 1 css unittest files — 2026-09-11), **Layer 2**
+tiered: **Layer 1** unit (`tests/`, 32 PS + 26 js + 28 worker node specs, 12 py + 1 css unittest files — 2026-09-16; the worker specs run handlers through `tests/_support/worker.mjs`), **Layer 2**
 headless (`webtest/`).
 
 ### 3. Why do we have 6,000+-line files?

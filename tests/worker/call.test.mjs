@@ -13,11 +13,12 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const idxSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idxSrc = routesSource();
 const doSrc = readFileSync(join(root, 'comments-worker', 'src', 'durable.ts'), 'utf8');
 
 const KINDS = ['reply', 'mention', 'dm', 'wall', 'wall-like', 'merecat', 'call'];
@@ -76,9 +77,7 @@ test('the answer read-mark is TARGETED, never the nuke-all (drift guard)', () =>
 });
 
 test('blocked offer keeps the fake-success shape; relay branch keeps its guards (drift guards)', () => {
-  const at = idxSrc.indexOf('handleCallOffer');
-  assert.ok(at !== -1);
-  const body = idxSrc.slice(at, idxSrc.indexOf('handleCallAnswer'));
+  const body = handlerBody('handleCallOffer', idxSrc);
   assert.ok(body.includes('SELECT 1 AS b FROM dm_blocks WHERE owner_hash = ?1 AND blocked_hash = ?2'), 'block check');
   assert.ok(body.includes('if (blockRow) return json({ ok: true }, 200);'), 'fake success — indistinguishable');
   assert.ok(doSrc.includes("['ice', 'end', 'decline', 'busy', 'taken'].indexOf(kind) === -1"), 'relay kind whitelist');
@@ -93,8 +92,7 @@ test("the member's calls-off pref gets the SAME fake success as a block (drift g
   const cols = db.prepare('PRAGMA table_info(profiles)').all().map((c) => c.name);
   assert.ok(cols.includes('calls_ok'), 'profiles.calls_ok');
   db.close();
-  const at = idxSrc.indexOf('handleCallOffer');
-  const body = idxSrc.slice(at, idxSrc.indexOf('handleCallAnswer'));
+  const body = handlerBody('handleCallOffer', idxSrc);
   assert.ok(body.includes('SELECT calls_ok FROM profiles WHERE hash = ?1'), 'pref read');
   assert.ok(body.includes('if (prefRow && prefRow.calls_ok === 0) return json({ ok: true }, 200);'),
     'fake success — "not taking calls" indistinguishable from "did not pick up"');
@@ -111,12 +109,7 @@ test("the member's calls-off pref gets the SAME fake success as a block (drift g
  * a callee's own /call/end recording a miss; the stored offer served to
  * anyone but its callee, or past the ring; the missed-call line ringing a
  * second 'dm' bell; the sweep left out of the cron chain. */
-const bodyOf = (name) => {
-  const i = idxSrc.indexOf(`async function ${name}(`);
-  assert.ok(i > 0, `${name} not found`);
-  const j = idxSrc.indexOf('\nasync function ', i + 10);
-  return idxSrc.slice(i, j > i ? j : i + 6000);
-};
+const bodyOf = (name) => handlerBody(name, idxSrc);
 const libBodyOf = (name) => {
   const i = libSrc.indexOf(`export async function ${name}(`);
   assert.ok(i > 0, `${name} not found in lib`);

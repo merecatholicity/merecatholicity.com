@@ -12,6 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
@@ -57,7 +58,7 @@ test('the missed-call bell names the pair\'s conversation and opens it by id', (
   const miss = libSrc.slice(libSrc.indexOf('export async function notifyMissedCall('), libSrc.indexOf('\n}\n', libSrc.indexOf('export async function notifyMissedCall(')));
   assert.ok(/url: tid > 0 \? '\/messages\.html\?t=' \+ tid : '\/messages\.html\?dm=' \+ fromHash, tag: 'call:' \+ fromHash/.test(miss), 'the push opens the thread by id when it has one');
   assert.ok(/kind: 'call', topic_id: tid, comment_id: 0, actor_hash: fromHash, created_at: now/.test(miss));
-  const send = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+  const send = routesSource();
   assert.ok(/url: '\/messages\.html\?t=' \+ thread\.id \}\);/.test(send), 'a message\'s push opens the conversation by id (the community.html?dm= drift is gone)');
   assert.ok(!/community\.html\?dm=/.test(send), 'no push points at the community page');
 });

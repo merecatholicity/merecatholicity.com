@@ -16,11 +16,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { clientModule } from '../_support/client.mjs';
+import { handlerBody, routesSource } from '../_support/worker_src.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const badges = readFileSync(join(root, 'app', 'badges.ts'), 'utf8');
 const shell = readFileSync(join(root, 'app', 'shell.ts'), 'utf8');
-const idx = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
+const idx = routesSource();
 const dm = clientModule('dm');
 const profile = clientModule('profile');
 const board = clientModule('board');
@@ -44,14 +45,14 @@ test('the classic handlers defer to the shell, and the identity line follows a s
 });
 
 test('reading marks read on every door, and the fresh count rides back', () => {
-  const thread = idx.slice(idx.indexOf('async function handleDmThread('), idx.indexOf('\nasync function ', idx.indexOf('async function handleDmThread(') + 10));
+  const thread = handlerBody('handleDmThread', idx);
   assert.ok(/UPDATE notifications SET read_at = \?3 WHERE recipient_hash = \?1 AND kind IN \('dm','dm-react','call'\) AND \(topic_id = \?2 OR \(topic_id = 0 AND actor_hash = \?4\)\) AND read_at IS NULL/.test(thread), 'opening a conversation reads every bell it rang (by the thread since 0016; by the sender for a row from before)');
   assert.ok(/notif_unread: await notifUnreadCount\(env, me\) \}, 200\);/.test(thread), 'and says the fresh count');
-  const seen = idx.slice(idx.indexOf('async function handleDmSeen('), idx.indexOf('\nasync function ', idx.indexOf('async function handleDmSeen(') + 10));
+  const seen = handlerBody('handleDmSeen', idx);
   assert.ok(/kind IN \('dm','dm-react','call'\) AND \(topic_id = \?2 OR \(topic_id = 0 AND actor_hash = \?4\)\) AND read_at IS NULL/.test(seen) && /return json\(\{ ok: true, notif_unread: await notifUnreadCount\(env, me\) \}, 200\);/.test(seen), 'the seen ping too');
-  const post = idx.slice(idx.indexOf('async function handleWallPostGet('), idx.indexOf('\nasync function ', idx.indexOf('async function handleWallPostGet(') + 10));
+  const post = handlerBody('handleWallPostGet', idx);
   assert.ok(/kind IN \('wall','wall-like','wall-react'\) AND comment_id = \?2 AND read_at IS NULL/.test(post) && /notif_unread: notifUnread/.test(post), 'opening a feed post reads its bells');
-  const react = idx.slice(idx.indexOf('async function handleDmReact('), idx.indexOf('\nasync function ', idx.indexOf('async function handleDmReact(') + 10));
+  const react = handlerBody('handleDmReact', idx);
   assert.ok(/hub\.viewersOf\('t' \+ row\.thread_id, \[row\.sender_hash\]\)/.test(react) && /if \(!onScreen\) \{ const ring = notifyReact\(env, bell\);/.test(react), 'a reaction to a word on screen rings no bell (the claim is by the thread since 0016)');
   assert.ok(/if \(typeof d\.notif_unread === 'number'\) notifCacheSet\(d\.notif_unread\);/.test(dm), 'the thread sets the bell from its payload');
   assert.ok(/\.then\(function \(d\) \{ if \(d && typeof d\.notif_unread === 'number'\) notifCacheSet\(d\.notif_unread\); \}\)/.test(dm), 'so does the seen ping');
