@@ -106,7 +106,8 @@ tests/
                        route table (api_parity: every mounted route named — abbreviations resolved — and every
                        named path mounted or documented as retired), the infrastructure log's index and rules
                        (infra_index: the committed index equals the generated one, lead-ins unique, every passage
-                       under a section heading, prose wrapped at 100 columns)
+                       under a section heading, prose wrapped at 100 columns), and CLAUDE.md's ceilings (claude_md: 280 lines, no
+                       bullet over six, the next migration number derived, the pointer to the log)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 

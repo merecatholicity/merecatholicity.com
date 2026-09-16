@@ -363,8 +363,9 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   A manual deploy is not drift (the next CI deploy ships the same git source), but it skips
   the ledger step, so run `make migrate` first if a migration is pending.
 - **Schema change:** `cd comments-worker && npx wrangler d1 migrations create merecatholicity-comments <name>`
-  → a NEW `migrations/NNNN_name.sql` with the **next** number (0012 is next; there were two
-  0010s once, one is 0011 now), additive only (`IF NOT EXISTS` / `ALTER` / table-swap);
+  → a NEW `migrations/NNNN_name.sql` with the **next** number — the last file's + 1, which
+  `make migration NAME=<name>` derives (a kept number drifted three times; there were two
+  0010s once, one is 0011 now) — additive only (`IF NOT EXISTS` / `ALTER` / table-swap);
   `make schema-snapshot` regenerates the read-only `schema.sql`; commit; the push applies it
   before deploying. Check: `make migrate-status` → *No migrations to apply*.
 - **Renaming an applied migration file** makes wrangler see it as pending: rename the row in

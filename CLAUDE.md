@@ -1,23 +1,19 @@
 # CLAUDE.md
 
 Guidance for agents working in this repository: the website **merecatholicity.com**, its
-Cloudflare backend, and the build/deploy system. This file is the **rulebook and the map**,
-kept short on purpose. The long-form reference — every design decision and postmortem since
-July 2026 — is the dated log under **`docs/architecture/log/`**, indexed by
-`docs/architecture/INFRASTRUCTURE.md`: before changing a subsystem, read its passage (find the
-bold lead-in in the index, grep it in the month's file).
+Cloudflare backend, and the build/deploy system. This file is the **rulebook and the map**, kept
+short on purpose (`tests/py/test_claude_md.py` holds it to 280 lines and every bullet to six). The
+long-form reference — every design decision and postmortem since July 2026 — is the dated log
+under **`docs/architecture/log/`**, indexed by `docs/architecture/INFRASTRUCTURE.md`: before
+changing a subsystem, read its passage. The other documents: `docs/architecture/CICD.md` (**how
+work ships** — read before deploying, changing infra or touching a secret),
+`docs/architecture/CODEBASE.md` (the code map and reading order), `README.md` (the human
+how-it-works), `comments-worker/API.md` (the wire contract), `librarian/README.md`,
+`tests/README.md`, `terraform/README.md`. If `CONTEXT_DUMP.txt` is present in the root and you
+work on text content, ingest it first.
 
-- `docs/architecture/CICD.md` — **how work ships**: the workflows, the approval gate, every
-  credential, the exceptions, the traps. Read before deploying, changing infra, or touching a secret.
-- `docs/architecture/CODEBASE.md` — code architecture: PureScript kernel → `core.ts` membrane →
-  Lit views; the worker's module split; a newcomer reading order.
-- `README.md` — the human how-it-works: layout, hosting, build pipeline, cookbook.
-- `comments-worker/API.md` (wire contract), `librarian/README.md` (the bot's mind),
-  `tests/README.md`, `terraform/README.md`.
-- If `CONTEXT_DUMP.txt` is present in the root and you work on text content, ingest it first.
-
-**Keep the documents current in the same change**: this file for rules; the log for the why
-(a dated passage with a bold lead-in appended to `docs/architecture/log/<this month>.md`, then
+**Keep the documents current in the same change**: this file for rules; the log for the why (a
+dated passage with a bold lead-in appended to `docs/architecture/log/<this month>.md`, then
 `scripts/infra_index.py --write`); CICD.md when a workflow, secret or make target it names
 changes; CODEBASE.md when module structure changes; README when the human story changes.
 
@@ -53,14 +49,11 @@ worker that reads it; otherwise it goes on a branch.
    change, or a written exception.
 6. **Never a destroy or replace from CI** — the plan fails on any delete; only a
    `workflow_dispatch` with `allow_destroy=true` gets past, deliberately.
-7. **Workers ship on push** (`workers.yml`: gates → D1 ledger → `wrangler deploy`). **So does the
-   librarian's shelf** (`merecat.yml`: waits for the Build, ingests against its `docs/` and the
-   private shelf, incrementally, daily resume; `make librarian` is the hand road).
-   `make worker-deploy` is the emergency road; `wrangler secret put` is the only home for
-   worker secrets. **Rollback is a drilled road** (`make worker-rollback`, seconds; then
-   `git revert` + push — CICD §12); **a staged rollout is a switch** (`gh workflow run
-   workers.yml -f mode=stage -f percent=10`, then `mode=promote`) for a change no webtest
-   covers; `ops-watch.yml` asks the worker daily how it is and goes red when it is not.
+7. **Workers ship on push** (`workers.yml`: gates → D1 ledger → `wrangler deploy`); so does the
+   librarian's shelf (`merecat.yml`; `make librarian` is the hand road). `make worker-deploy` is
+   the emergency road; `wrangler secret put` the only home for worker secrets. **Rollback** (`make
+   worker-rollback`, then `git revert` + push) and **staged rollout** (`workflow_dispatch`
+   `mode=stage|promote`) are CICD §12; `ops-watch.yml` asks the worker daily how it is.
 8. **Never hand-edit or commit the generated half of `docs/`**; never bump a `?v=` by hand
    (the build stamps them, preserving mtimes so a stamp never hides a source change from
    make); never fetch a freshly stamped `?v=N` URL mid-deploy — probe a throwaway query
@@ -79,45 +72,31 @@ the repo are public by design.
 
 ## Repository layout
 
-The root holds only tool-convention files (`Makefile`, `eslint.config.js`, `package.json` +
-lock, `tsconfig.json`, `globals.d.ts`, `.gitignore`, `README.md`, `CLAUDE.md`, `LICENSE*`);
-a review or a hand-over note is a dated file under `docs/architecture/reviews/`, never a
-root artefact; `local/` is the box's own and ignored.
-**`docs/` is the served site and a MIXTURE**: hand-maintained source (nav.js, sw.js, the page
-scripts, the vendored libraries, turnstile.html, every image, the 17 hand pages, CNAME,
-.nojekyll) is tracked; everything the build writes is git-ignored and rebuilt;
-`tests/py/test_docs_sources.py` enforces the split. A new hand page needs an `!docs/<name>.html`
-line in `.gitignore` and an entry in `scripts/nav.py`'s `PAGES`. Elsewhere: `book/` (LaTeX +
-`build-confession.sh`), `content/` (hand-page sources), `resources/` (corpus converters, the
-committed `*-body.tex`, `docs-src/` preserved sources), `partials/` (pandoc includes — a
-partial carrying a versioned asset is stamped too), `scripts/`, `styles/main.css` (the one
-Tailwind v4 entry), `app/` (Lit shell + views, TS), `client/` (the classic client: `comments.ts` is the boot — core helpers,
-the router, the kit — and `composer.ts` · `profile.ts` · `board.ts` · `wall.ts` · `surface.ts` · the six DM
-factories `dm-{crypto,message,pickers,inbox,thread,styles}.ts` · `merecat.ts` · `admin.ts` are feature
-modules installed per boot; bundled to `docs/comments.js`),
-`purescript/src/Domain/*.purs` (the kernel, 33 modules), `comments-worker/`, `contact-worker/`,
-`librarian/` (`librarian/private/` is a separate PRIVATE clone — never a submodule, never
-committed), `webtest/`, `tests/`, `terraform/`, `.github/workflows/`.
+The root holds only tool-convention files (`Makefile`, `eslint.config.js`, `package.json` + lock,
+`tsconfig.json`, `globals.d.ts`, `.gitignore`, `README.md`, `CLAUDE.md`, `LICENSE*`); a review or
+a hand-over note is a dated file under `docs/architecture/reviews/`; `local/` is the box's own and
+ignored. **`docs/` is the served site and a MIXTURE**: hand-maintained source is tracked, everything
+the build writes is git-ignored and rebuilt, `tests/py/test_docs_sources.py` enforces the split; a
+new hand page needs an `!docs/<name>.html` line in `.gitignore` and an entry in `scripts/nav.py`'s
+`PAGES`. The directory tour (book, content, resources, partials, scripts, styles, app, client — the
+boot and its feature-module factories — the 33-module kernel, the two workers, librarian, webtest,
+tests, terraform, workflows) is CODEBASE.md's; `librarian/private/` is a separate PRIVATE clone,
+never a submodule, never committed.
 
 ## Build and verify
 
-- **Gates**: `make tests` (unit suite: PureScript, JS, worker, Python, CSS; runs `psbuild`
+- **Gates**: `make tests` (the unit suite: PureScript, JS, worker, Python, CSS; runs `psbuild`
   first); `make jscheck` (eslint + tsc + psbuild); `make check` (jscheck + linkcheck);
   `make check-pdfs` (bucket vs manifest vs local PDFs; CI runs it with the site token).
-- **Build**: `make css` (Tailwind → `docs/style.css`), `make bundle` (purs + esbuild → `app.js`,
-  `comments.js`, then the version stamp), `make content` (hand pages), `make writings` (detect the own writings → the generated
-  `Domain.Writings`; every psbuild runs it), `make html` (book +
-  corpus + post-processing + stamp + manifest + check; incremental — one target per work),
-  `make menu` (nav — `NAV_ENABLED = False`, the old menu is kept in code), `make -C resources pdf`,
-  `make pdf` / `publish` / `chart-pdfs` (`CHROMIUM=…`) / `logos`, `make publish-pdfs` /
-  `mirrored-pdfs` / `pdf-manifest`, `make migrate` / `migrate-status` / `schema-snapshot`,
-  `make serve` (binds 127.0.0.1 only — load-bearing), `make comments-backup`, `make librarian`.
+- **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `content` · `writings` ·
+  `html` (incremental, one target per work) · `menu` · `pdf`/`publish`/`chart-pdfs`/`logos` ·
+  `publish-pdfs`/`mirrored-pdfs`/`pdf-manifest` · `migrate`/`migrate-status`/`schema-snapshot`/
+  `migration` · `serve` (binds 127.0.0.1 only — load-bearing) · `comments-backup` · `librarian`;
+  README's target reference describes each.
 - Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` and byte-deterministic: a double
-  `make bundle` must leave `docs/app.js` unchanged.
-- Toolchain is npm: `npm ci` only, never `sudo npm` or `-g`; esbuild and purs exact-pinned.
-  This dev box is Ubuntu/WSL2, not the Arch machine older notes assume: official Node 24 in
-  `~/.local`, a `python` shim (see the toolchain memory).
-- Every pandoc call in a resources loop ends `|| exit 1`; a new loop must too.
+  `make bundle` must leave `docs/app.js` unchanged. Toolchain is npm (`npm ci` only, never `sudo`
+  or `-g`; esbuild and purs exact-pinned); this dev box is Ubuntu/WSL2 (Node 24 in `~/.local`, a
+  `python` shim — the toolchain memory). Every pandoc call in a resources loop ends `|| exit 1`.
 
 ## Laws that break silently
 
@@ -130,50 +109,30 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   edge-cached.
 - **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client)
   re-runs on every soft navigation, so anything inside it that owns a resource leaks per hop —
-  keep page-scoped state above it, and every document/window listener it installs carries
-  the boot signal. Since 2026-09-11 the boot installs the feature modules (`client/*.ts`, each
-  an `install<Feature>(B)` factory) per boot: a module's body is boot-scoped exactly as before,
-  its cross-module names are bound from the boot object `B` after every module is installed
-  (`bind()`), and what ran at the boot's top level runs in its `run()` — so a module-level
-  `var` may not call another module's or a page-scoped helper in its initializer (it is not
-  bound yet; the generator deferred such initializers to `run()`), and state more than one
-  module writes lives on `B` (`B.quotedSelection` and friends), never in a copied binding. A
-  new feature is a new `client/<feature>.ts` factory wired in the root's install list. Page-scoped state stamped on `<html>`/`<body>` must be cleared by the shell
-  on navigation (only `<main>` is swapped).
+  keep page-scoped state above it, and every document/window listener it installs carries the boot
+  signal.
 - **Turnstile**: an established identity is not challenged (`Domain.Turnstile`, app_settings
-  `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing
-  context; its `?v=` is stamped into nav.js's `MC_ASSETS`, never by hand). **Only
-  `loadTurnstile()` mounts, only from the focus net or a press, never because a view
-  opened, never for a spared identity** — the test sweeps every call site. The host is the
-  document's own (`tsHost()`, `body > .mc-ts-host[data-mc-app]`), never inside `<main>`,
-  never off-screen, never without its stylesheet. The contact form (`docs/contact.js`, its
-  own sitekey, nobody to spare) mounts on the first focus only, and `contact.html` is a
-  **document page** in the shell (`DOCUMENT_PAGES`): every door reaches it by a full load,
-  because the challenge completes on a hard-loaded document and killed soft-navigated ones.
+  `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing context;
+  its `?v=` is stamped into nav.js's `MC_ASSETS`, never by hand). **Only `loadTurnstile()` mounts,
+  only from the focus net or a press, never because a view opened, never for a spared identity** —
+  the test sweeps every call site.
 - **`READ_LIMIT` is one per-IP bucket shared by every read endpoint**; the client's read-budget
   coordinator paces every poller — never add a poller outside it.
 - **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;
   the rules are `Domain.Comments`, whose polarity is the OPPOSITE of the social switch — only a
-  literal `'1'` / a listed path opens anything). A section may stand only under the site's own
-  writings, and that list is DETECTED, never kept: `scripts/writings.py` reads every `content/`
-  page (unless its frontmatter opts out with `comments: false`) and every book the root Makefile
-  builds, and writes the generated, git-ignored `Domain.Writings` on every `psbuild` — a new
-  article or book brings its own switch; a library work never; a book target must use
-  `book-tail.html` (the detector refuses one without); a path is a storage key, never rename one.
-  A closed section answers exactly as an unknown page; a deleted journal article retires its
-  comments (`sweepJournalComments`); a switch deletes nothing.
-- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (next: 0018),
+  literal `'1'` / a listed path opens anything).
+- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (the next number is the last
+  file's + 1 — `make migration NAME=<name>` creates it; never a kept number),
   additive; `schema.sql` is a generated snapshot; the three librarian D1s are derived data.
   Renaming an applied migration file requires renaming its `d1_migrations` row too.
 - **Shared constants, tables and validators live in `purescript/src/Domain/*`** and are read
   by both the client (`window.mcCore` / `app/core.ts`) and the worker. Never re-inline a copy.
 - **A NEW state store must be added to `runBackup()`'s mirror** or it is not backed up
-  (`MEDIA`/`WALLMEDIA` are outside it on purpose; LIBDB is derived). **The backup is daily
-  (03:15 UTC) and self-checked** (2026-09-16): every cron is a chain through `ops.ts`
-  (`runChain` — a failed step never skips the one behind it; a heartbeat per chain), and a
-  missing backup, a failed step or a stale heartbeat alerts through `sendAlert` — email and
-  Discord from Platform settings → Alerts, whose Health card is the truth; the outside leg is
-  `ops-watch.yml`. Ops state is `app_settings` rows (`ops_*`), never a table.
+  (`MEDIA`/`WALLMEDIA` are outside it on purpose; LIBDB is derived). **The backup is daily (03:15
+  UTC) and self-checked** (2026-09-16): every cron is a chain through `ops.ts` (`runChain` — a
+  failed step never skips the one behind it; a heartbeat per chain), and a missing backup, a
+  failed step or a stale heartbeat alerts through `sendAlert` — email and Discord from Platform
+  settings → Alerts, whose Health card is the truth; the outside leg is `ops-watch.yml`.
 - **Every road that removes a message takes its media with it** — the object AND its accounting
   row (`purgeMediaKeys` for DMs, `purgeWallMedia` for the feed and board attachments), keys read
   BEFORE the row is dropped or its status flips, never a `media_key = NULL` without the purge;
@@ -193,72 +152,26 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   (`html.mc-sheet-open`, body fixed at the saved offset). A new overlay reuses the sheet or
   the same three layers.
 - **A DM message's acts live on ONE surface**, the press-and-hold (right-click, the hover ⌄, or
-  the reaction pill on desktop): react · reply · copy · edit · save · delete — never a link row
-  or a ⋯ on the bubble. A reaction is ONE emoji per MEMBER per message (`dm_reactions`, one
-  row each; a pair's pill shows the two sides, a group's the tally through the surface's
-  painter with the DM's own pick — never the public ledger's wires), validated by
-  `Domain.Reaction.normalizeReaction` (re-exported by `Domain.Dm`) on both ends (never
-  re-inlined; a custom `:token:` is ours); a
-  quoted reply rides INSIDE the E2E plaintext behind `Domain.Dm.replySentinel` — the server
-  never learns what answers what, and no `reply_to` column may appear; so does the small
-  "Forwarded" mark (`fwd` in the same header, `env.fwd` for media) — no `forward_of` either. The surface keeps the
-  overlay's three layers through `mcSheet.lock()` and releases only a lock it took. **The
-  thread is a chat screen**: a sticky header (avatar · presence · 📞 · ⓘ) that begins where the
-  app bar ends — no margin above it, which a fling to the true top would bare — and a FIXED
-  composer (+ · field · 😊 · mic-or-Send) always in view — fixed, never sticky: a sticky bar
-  floats above the tab bar at the document's end, where a thread opens; everything that is not a message
-  lives in the ⓘ sheet; the saved mark is a gold ★ and a gold-tinted border, never a ring;
-  on a phone the emoji picker and the keyboard never share the screen (opening the picker
-  blurs the field; a pick hands the keyboard back). **Editing a message happens IN the
-  composer** (an "Editing message" strip, the text in the field, Send a ✓, ✕/Escape giving
-  the draft back) — never a box in the bubble, which the composer riding the keyboard would
-  cover. An element toggled by `hidden` needs
-  a `[hidden]{display:none}` rule if it carries its own `display`. **A hold picks a
-  message, never a word**: under `(hover:none)` the whole chat screen (`section.dm-screen`)
-  and the phone chrome are not selectable text, only the fields are; the surface never is;
-  opening it drops any selection — iOS anchors a long-press selection in the NEAREST
-  selectable text, so a rule on the bubble alone is not enough. **Reading back is never
-  interrupted and never blind**: a word that lands while the foot is out of view stays put
-  under an "N unread messages" line, the jump button above the composer carries the count,
-  and "seen" goes out only for words the reader reached (at the foot as they arrived, or
-  when they come down); on open the server names what was unread BEFORE the open
-  (`unread`, `unread_from`) and the landing is WhatsApp's (the line under the header when
-  the unread words do not fit); typing shows in the header, as a three-dot bubble at the
-  foot, and on the inbox row — never for a member who appears offline (the hub's gate,
-  `Domain.Presence.isVisible`); the inbox badge is the count.
+  the reaction pill on desktop): react · reply · copy · edit · save · delete — never a link row or
+  a ⋯ on the bubble.
 - **Every unread number is WORDS, from one fragment** (`dmUnreadCount` in the worker's
   `lib.ts`): the inbox row's badge, `/dm/threads`'s `unread_total`, the thread's unread line
   and the tab bar's own `/dm/unread` all sum it — the tab and the rows it opens onto must
   add up, and both roads feed the one `mc-dm-unread` cache. Never re-inline the fragment,
   never let one road count threads. It counts from the viewer's OWN member row (`mb`, the
   `DM_MINE` join) — never a pair column.
-- **One member model** (migration 0016, 2026-09-13): a conversation is a thread with member
-  rows (`dm_members`) — a pair is two of them, keyed once by `pair_key`; a group (`kind` 1)
-  up to `Domain.Dm.maxMembers`, nobody owns it. Every read runs from the viewer's seat: what
-  they may see is unheld or their own, after their clear stamp, no older than their joining
-  (a newcomer gets no history), and in a group never from a sender they blocked (a PAIR keeps
-  its stored shadow-hold — a blocked sender is never told). Adding to a pair FORKS a new
-  group (Snapchat's and WhatsApp's way; the pair and its history stay); leaving stamps the
-  seat, the last member out purges the thread, and a thread with no surviving word dies
-  (`sweepDms`) — nobody remains. The six pair columns of `dm_threads` are legacy: no new
-  code may read `a_hash`/`b_hash`/`a_read_at`/… ; every conversation is addressed by
-  `thread_id` (`messages.html?t=<id>`, the resolved form of a pair's `?dm=<hash>` door and
-  the only door a group has), every live frame carries it and the client keys on it, and a
-  DM bell names its thread in `topic_id`. **Who has read, in a group**: ✓✓ once every other
-  member who REPORTS reads has (`Domain.Dm.readByAll` over the members whose `receipts` is on;
-  a member with receipts off sends no stamp and is not waited for), each member's small face
-  sits under the last word they read (the seen-by row, Messenger's way — never under their
-  own word, never in a pair), and Info on my word — the surface's act, or the tick itself —
-  lists Read / Delivered / Receipts off. Membership changes are system lines (`sys:add:`,
-  `sys:leave`, `sys:name:` — `Domain.Dm.parseSysLine`), never message content; the group
-  name is server-visible metadata by design.
-- **Envelope v2** (`enc` 3, `E3.`): a random content key per message under `nacl.secretbox`,
-  boxed once per current member (the sender included) to their published X25519 key and
-  stored in `dm_keys` — the server serves each reader ONLY their own `sealed`; the key set
-  must equal the roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and
-  sealed once more; an edit re-seals under the SAME key; a pair's `E1` words stay readable
-  for ever (and are accepted on the wire one deploy longer). The client's sealing functions
-  are proven by running them with tweetnacl (`tests/js/dm_envelope.test.mjs`).
+- **One member model** (migration 0016, 2026-09-13): a conversation is a thread with member rows
+  (`dm_members`) — a pair is two of them, keyed once by `pair_key`; a group (`kind` 1) up to
+  `Domain.Dm.maxMembers`, nobody owns it. Every read runs from the viewer's seat: what they may
+  see is unheld or their own, after their clear stamp, no older than their joining (a newcomer
+  gets no history), and in a group never from a sender they blocked (a PAIR keeps its stored
+  shadow-hold — a blocked sender is never told).
+- **Envelope v2** (`enc` 3, `E3.`): a random content key per message under `nacl.secretbox`, boxed
+  once per current member (the sender included) to their published X25519 key and stored in
+  `dm_keys` — the server serves each reader ONLY their own `sealed`; the key set must equal the
+  roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and sealed once more; an
+  edit re-seals under the SAME key; a pair's `E1` words stay readable for ever (and are accepted
+  on the wire one deploy longer).
 - **An object dies with its LAST reference** (`dm_media_refs`): a forwarded attachment is
   never uploaded twice — the copy names the same object, allowed only to a member who can
   read it (the media GET's own rule, `dmMediaReadable`) — so every message road calls
@@ -270,53 +183,22 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   the default `min-width: auto` lets its longest word refuse to shrink and eat its
   neighbours' width on a narrow phone. A tab carrying a badge says the count in its
   `aria-label` (`badgeLabel`) — a red disc reads as nothing.
-- **ONE press-and-hold surface, ONE reaction grammar, ONE bell** (2026-09-12). The surface
-  is `client/surface.ts` (`openActs` the overlay — bar · lit hole · acts — `armHold` the
-  gestures); the DM, every board post (topic head, reply, article-page comment) and every
-  feed post and comment open THAT one — a post through `postMenu` (the ⋯, and the hold it
-  arms on `opts.hold`), never a menu of its own. The public reactions are the `reactions`
-  ledger (one per member per `post`/`wall`/`wallc` target — a like is the ❤️ reaction, the
-  like tables are frozen); tallies ride every served post row (`reacts`), the viewer's own
-  ride the keyed `/reacts` after a cached board read; the client's ledger
-  (`reactRegister`/`reactSend`) is the one painter, and a reaction goes to the wire only
-  through `mcCore.reaction`. A reaction rings `react`/`wall-react`/`dm-react` — coalesced,
-  never for your own post, withdrawn with the reaction, and the word is always "reacted".
-  The notification list's sentences and doors are `Domain.Notif` (`mcCore.notifLabel` /
-  `notifHref`) — never an inline label map again (three had drifted). Under `(hover:none)`
-  `.comment` is not selectable text, its fields are: a hold picks a post, never a word.
+- **ONE press-and-hold surface, ONE reaction grammar, ONE bell** (2026-09-12). The surface is
+  `client/surface.ts` (`openActs` the overlay — bar · lit hole · acts — `armHold` the gestures);
+  the DM, every board post (topic head, reply, article-page comment) and every feed post and
+  comment open THAT one — a post through `postMenu` (the ⋯, and the hold it arms on `opts.hold`),
+  never a menu of its own.
 - **DMs are never AI-screened** — text, edits, media, system notices: none. A message is E2E
   ciphertext (the server could not read it) and privacy is the point; Turnstile on the send
   stays (a bot gate, not a reader). `tests/worker/dm_privacy.test.mjs` sweeps every DM
   handler for a screen call — a new DM road must pass it.
-- **The keyboard shackle**: a field the reader types into is ALWAYS wholly visible, directly
-  above the soft keyboard. The shell (`app/appchrome.ts`, never a boot) publishes `--mc-kb` /
-  `body.mc-kb-open` from `visualViewport`; the fixed composers (DM, merecat), the sheet and the
-  theater ride it by CSS; every IN-FLOW field is placed by the shell's net — on focus (a
-  settle ladder across the keyboard's rise, and any scroll inside the settle window — the
-  browser's own late focus-scroll), on every keyboard resize, on every input — into the visual
-  viewport MINUS the site's own chrome (the top bar and the DM's sticky header; the tab bar,
-  the DM composer, the merecat row, the dock — a field "on the keyboard" would otherwise sit
-  behind the composer riding it): the field's EDITOR when it fits (`KB_GROUPS`: the box with
-  its Save/Post row — a new editor container joins that list or carries `data-mc-kb-group`),
-  else the field; scrollable ancestors first, then the document (never for a field a fixed
-  ancestor holds), a spacer for room when the page ends short.
-  A new composer gets nothing of its own: an in-flow field is covered; a fixed one rides
-  `--mc-kb` in its `bottom`. `window.mcKeyboard.align(el, region)` is the headless proof.
-- **A call rings the phone, and only a missed call is a notification** (2026-09-12). The offer
-  is STORED for the ring (`calls_pending`, 0015); a callee without a live socket is rung by a
-  push whose URL carries the call's id, and the engine (`app/call.ts` `wake`) fetches the offer
-  and rings an answerable panel — as far as a web app on a phone can go (no CallKit for the
-  web; the notification is the swipe). A late answer re-sends the caller's ICE. The ring is 45 s.
-  **Every call leaves ONE event line in the conversation** (2026-09-13, the call log every chat
-  app keeps): `call:missed` · `call:declined` · `call:answered:<secs>` — the grammar, the
-  sentence each side reads and the server's outcome rule are `Domain.Call` (`parseCallLine`,
-  `callLineText`, `callOutcome`; the membrane's `callLine`/`callLineText`), never inlined. The
-  line is a quiet system DM from the caller, muted, by side (the callee's miss tinted; a decline
-  reads "No answer" to the caller — the callee's private act), expiring with the thread like any
-  word. `recordCallEnd`'s stamp (`ended_at`, 0017) is the lock: whichever party's `/call/end`
-  or the hourly sweep arrives first writes it, once; only a miss rings the 'call' bell and the
-  "Missed call" push, never at the offer; an answered call's length is the server's measure;
-  a failed setup is stamped and writes nothing.
+- **The keyboard shackle**: a field the reader types into is ALWAYS wholly visible, directly above
+  the soft keyboard.
+- **A call rings the phone, and only a missed call is a notification** (2026-09-12). The offer is
+  STORED for the ring (`calls_pending`, 0015); a callee without a live socket is rung by a push
+  whose URL carries the call's id, and the engine (`app/call.ts` `wake`) fetches the offer and
+  rings an answerable panel — as far as a web app on a phone can go (no CallKit for the web; the
+  notification is the swipe). A late answer re-sends the caller's ICE. The ring is 45 s.
 - **Haptics are the shell's one engine** (`app/haptic.ts`, `window.mcHaptic`): a hold, a pick,
   an armed swipe or pull, the ring's pattern — the Vibration API where it exists (Android);
   iOS has none and no road around it (the `switch`-checkbox haptic fires only under a real
@@ -325,19 +207,14 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Badges are the shell's, and reading marks read** (2026-09-12). The Inbox count and the bell
   (`mc-dm-unread` / `mc-notif-unread`) are refreshed by `app/badges.ts` on EVERY page the live
   socket reaches — a `dm` frame not for the thread on screen, a `notification` frame unless the
-  list is open, a reconnect when a cache is stale — never inside a page boot (Home and the
-  readers have no boot), never a poller; the classic handlers defer to it. Opening a
-  conversation reads every bell its sender rang (`dm`, `dm-react`, `call`) and `/dm/thread`,
-  `/dm/seen` and `/wall/post/get` hand back `notif_unread`, which the client sets at once —
-  a bell never stays lit for a thing the reader is looking at, however they reached it; a
-  message or a reaction to a word on screen rings no bell at all (`dmViewing`).
-- **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"]) mc-footer`;
-  the shell stamps `data-mc-tab` on every navigation); the footer's information lives in
-  Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on the
-  window so the sheet under it stays). `FOOTER_LINKS` is the one list — a new footer door goes there.
-  Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the document's.
-  The merecat ask row is the same composer shape; a FIXED bar's `bottom` places its MARGIN edge,
-  so a fixed composer carries `margin: 0` in main.css AND in any injected block (which wins).
+  list is open, a reconnect when a cache is stale — never inside a page boot (Home and the readers
+  have no boot), never a poller; the classic handlers defer to it.
+- **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"])
+  mc-footer`; the shell stamps `data-mc-tab` on every navigation); the footer's information lives
+  in Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on
+  the window so the sheet under it stays). `FOOTER_LINKS` is the one list — a new footer door goes
+  there. Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the
+  document's.
 - **Presence is the hub's word alone**: online is a live socket under mode "auto"
   (`Domain.Presence.isVisible`), and `profiles.last_seen_at` is written by the BoardHub only —
   stamped at a member's last disconnect under "auto", cleared by an auth under "off"
@@ -346,11 +223,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **The fixed chrome answers the finger, not the platform's click** (2026-09-13): a phone
   synthesizes the click after the finger lifts and withholds it at will (iOS: a tap that stops a
   decelerating page; a tap whose hover it judges to have changed content — live: Inbox pressed,
-  the tab tinted, the page never moved, a second press worked). The tab bar and the app bar
-  (`armTap`, `app/appchrome.ts`) act on `touchend` when `Domain.Tap` says the lift was a tap (in
-  place, quick, on the same control), dispatch the control's own click, cancel the platform's, and
-  swallow any echo; a drag or a hold stays the platform's. Only the two bars — a content link
-  keeps the platform's judgement — and every other road in still arrives as a click.
+  the tab tinted, the page never moved, a second press worked).
 - **Nothing scrolls sideways on a phone**: `body{overflow-x:clip}` is the net, not the fix. A
   new surface must fit 390px — a flex row wraps or its items may shrink, an edge-to-edge
   pull uses `var(--page-pad)`, and a JS-injected style block must agree with the
@@ -358,71 +231,49 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 
 ## Architecture in brief
 
-The PureScript kernel (`Domain.*`: ADTs, smart constructors, `Maybe`/`Either`, illegal states
-unrepresentable, pure) → **`app/core.ts`, the one audited membrane where types are erased** →
-Lit views (`app/views/*`, light-DOM, presentational — THE read screens) and the classic client
-(`client/comments.ts` + its modules: the write paths, the DM thread, merecat and every screen
-without a Lit view; a `viewX` with a Lit twin is a one-line door to it — since 2026-09-16 there
-is no no-bundle fallback, because the bundle always stands; the classic reaches the kernel
-through `window.mcCore` / `mcKit` / `mcRich`). The worker (`comments-worker/src/index.ts` the `ROUTES` table, `routes/*.ts` the handlers
-one file per feature, `{lib,durable,db}.ts` + `pure.js`,
-`webpush.js`) imports the same compiled kernel. **New application logic goes in PureScript**;
-JS is interop only (DOM, fetch, crypto, storage, Turnstile, WebSocket). A slice ships through
-four gates: byte-deterministic rebuild; parity (`make pstest` + headless delegate-vs-classic);
-`npm run lint` green; headless render parity against a **local** serve (`make serve`,
-`MC_BASE=http://127.0.0.1:8000`). Realtime: the `BoardHub` DO (forum fan-out over WebSockets)
-and the `ChatRoom` DO (merecat generation and @mentions). Full map: CODEBASE.md.
+The PureScript kernel (`Domain.*`: ADTs, smart constructors, illegal states unrepresentable, pure) →
+**`app/core.ts`, the one audited membrane where types are erased** → the Lit views (`app/views/*`,
+presentational) and the classic client (`client/*.ts`: the write paths, the DM thread, merecat).
+The worker imports the same compiled kernel. **New application logic goes in PureScript**; JS is
+interop only (DOM, fetch, crypto, storage, Turnstile, WebSocket). Realtime: the `BoardHub` and
+`ChatRoom` Durable Objects. The full map, the four gates a slice ships through (byte-deterministic
+rebuild · parity · lint · headless render parity against `make serve`), the reading order: CODEBASE.md.
 
 ## Testing policy
 
-Tests exist to clarify what the code does and to guard the rules that break silently — no
-coverage target, no tests for trivial getters. Layer 1 `tests/` is hermetic (`make tests`,
-the standing gate; one file per concern; `tests/README.md`); a worker road is RUN against a real
-SQLite through `tests/_support/worker.mjs` — lock source text only for a law that is textual. Layer 2 `webtest/` is headless
-Chromium against prod (`webtest/audit.py --pages …`, `--app --journey …`, the per-slice
-`test_*.py`; a matched chrome + chromedriver pair lives in `~/.cloakbrowser/chromium-<ver>/`).
-When you add or change a rule, add or adjust
-its test in the same change; never delete a test to go green.
+Tests clarify what the code does and guard the rules that break silently — no coverage target, no
+tests for trivial getters. Layer 1 `tests/` is hermetic (`make tests`, the standing gate; one file
+per concern; a worker road is RUN against a real SQLite through `tests/_support/worker.mjs` — lock
+source text only for a law that is textual). Layer 2 `webtest/` is headless Chromium against prod
+(`audit.py`, the per-slice `test_*.py`; the nightly runs the read-only ones). A new or changed rule
+brings its test in the same change; never delete a test to go green.
 
 ## Infrastructure at a glance
 
-- **Hosting**: GitHub Pages serves the artifact `build.yml` deploys (`build_type: workflow`;
-  `docs/` is the packaged folder; CNAME + .nojekyll are asserted before packaging). Cloudflare
-  fronts it: `ssl = full` (NOT strict — the origin is Pages), `browser_cache_ttl = 0` (what
-  makes `?v=` work), the response-header/CSP ruleset, bot management — all in Terraform.
-- **PDFs**: the 244 published PDFs live in R2 `merecatholicity-files` at
-  `files.merecatholicity.com`, reached by a dynamic redirect from `/<name>.pdf`; `docs/pdfs.txt`
-  is the manifest; `scripts/publish_pdfs.py` publishes and verifies; one PDF has no build
-  (`resources/docs-src/The_Bishop_of_Rome.pdf`, a mirrored source).
-- **Workers**: `comments-worker` (routes `/api/comments*`, `/api/merecat*`, `/@*`; D1
-  `merecatholicity-comments` + three librarian rooms; R2 avatars/backups/dm-media/wall-media;
-  Vectorize; Workers AI; two Durable Objects; four crons) and `contact-worker`
-  (`contact-api.merecatholicity.com`). Both TypeScript; `wrangler.jsonc` is the config truth.
-- **merecat**, the librarian bot: a WebSocket state machine in the `ChatRoom` DO, five-legged
-  retrieval over three D1 rooms + Vectorize, `librarian/` is its mind; Cloudflare Workers AI is
-  its only backend (the GPU twin retired 2026-09-10). Its dials are `Domain.Merecat` (the
-  reasoning ladder, temperature, the nine band weights) stored in the librarian D1 `config`
-  table: the file-owned ones ride `librarian/config.yml`, the reasoning ones the merecat admin
-  page. The band weighting and persona are the owner's standing law — read the merecat passage
-  in INFRASTRUCTURE.md before touching anything there. The **AI budget guard**
-  (`quota_guard_on`/`_pct`, default on at 95% of the Workers AI day, `comments-worker/src/quota.ts`)
-  reads the account's meter through `CF_USAGE_TOKEN` before every ask and mention, admins
-  included, rests merecat with the hours until midnight UTC, and stands OPEN when the meter
-  cannot be read — a margin, never the wall.
-- **Terraform** owns the zone settings, DNS, the four rulesets, bot management, the R2 buckets,
-  the D1 databases (as records), the Turnstile widgets, both GitHub repos, Pages, the two
-  environments, the Actions policy and variables; state is in R2 (`merecatholicity-tfstate`,
-  unmanaged, SECRET). wrangler owns everything a deploy rewrites. It cannot hold Vectorize,
-  the R2 custom-domain bindings, the TURN key, or Email Routing settings.
-- **Credentials**: three Cloudflare account tokens (terraform / site / workers), their R2 pair,
-  and one fine-grained GitHub PAT — inventory and rotation in CICD.md §4.
-- **History** was rewritten 2026-09-09 (554 → 153 MB); every earlier sha is gone — re-clone.
+- **Hosting**: GitHub Pages serves the artifact `build.yml` deploys (`docs/` packaged; CNAME +
+  .nojekyll asserted); Cloudflare fronts it — `ssl = full` (not strict: the origin is Pages),
+  `browser_cache_ttl = 0` (what makes `?v=` work), the CSP ruleset, bot management — all Terraform.
+- **PDFs**: the 244 published PDFs live in R2 `merecatholicity-files` at `files.merecatholicity.com`;
+  `docs/pdfs.txt` is the manifest; `scripts/publish_pdfs.py` publishes and verifies.
+- **Workers**: `comments-worker` (`/api/comments*`, `/api/merecat*`, `/@*`; D1 + three librarian
+  rooms; R2 avatars/backups/dm-media/wall-media; Vectorize; Workers AI; two Durable Objects; four
+  crons) and `contact-worker` (`contact-api.merecatholicity.com`). `wrangler.jsonc` is the truth.
+- **merecat**, the librarian: a WebSocket state machine in the `ChatRoom` DO, five-legged retrieval
+  over three D1 rooms + Vectorize, `librarian/` its mind, Workers AI its only backend; its dials are
+  `Domain.Merecat`. **The band weighting and persona are the owner's standing law — read the merecat
+  passage first.** The AI budget guard (`quota.ts`) stands OPEN when the meter cannot be read.
+- **Terraform** owns the zone settings, DNS, the four rulesets, bot management, the R2 buckets, the
+  D1 records, the Turnstile widgets, both GitHub repos, Pages, the environments, the Actions policy
+  and variables; state is in R2 (`merecatholicity-tfstate`, unmanaged, SECRET). It cannot hold
+  Vectorize, the R2 custom domains, the TURN key, or Email Routing. wrangler owns what a deploy rewrites.
+- **Credentials**: three Cloudflare account tokens (terraform / site / workers), their R2 pair, one
+  fine-grained GitHub PAT — inventory and rotation in CICD §4. **History** was rewritten 2026-09-09
+  (554 → 153 MB); every earlier sha is gone — re-clone.
 
 ## The long-form reference
 
-`docs/architecture/INFRASTRUCTURE.md` holds the standing rules and, generated at its end, the
-**index of every passage by section** (`scripts/infra_index.py --write`; the test keeps it
-current). The passages themselves live in `docs/architecture/log/YYYY-MM.md`, one file per
-month, each a bullet opening with a **bold lead-in** and a date — grep the lead-in there. A
-new passage is appended to the current month's file under its `## section` heading, wrapped
-at 100 columns (`scripts/infra_index.py --wrap <file>`), then the index is regenerated.
+`docs/architecture/INFRASTRUCTURE.md`: the standing rules and, generated at its end, the index of
+every passage by section (`scripts/infra_index.py --write`; the test keeps it current). The
+passages live in `docs/architecture/log/YYYY-MM.md`, a bullet each with a **bold lead-in** and a
+date — append yours to the current month under its `## section`, wrapped at 100 columns
+(`scripts/infra_index.py --wrap <file>`), then regenerate the index.

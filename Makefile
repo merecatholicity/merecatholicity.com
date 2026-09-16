@@ -111,6 +111,13 @@ nightly-install:
 	@loginctl enable-linger $(USER) 2>/dev/null || echo "note: 'loginctl enable-linger $(USER)' needs privileges — without it the timer runs only while you are logged in"
 	systemctl --user list-timers webtest-nightly.timer --no-pager
 
+# A new migration file with the NEXT number (the last file's + 1 — never a kept
+# number; CLAUDE.md's law): make migration NAME=retire_pair_columns
+.PHONY: migration
+migration:
+	@test -n "$(NAME)" || { echo "usage: make migration NAME=<snake_case_name>"; exit 2; }
+	@last=$$(ls comments-worker/migrations | sed -n 's/^\([0-9]\{4\}\)_.*/\1/p' | sort | tail -1); next=$$(printf '%04d' $$((10#$$last + 1))); f=comments-worker/migrations/$${next}_$(NAME).sql; printf -- '-- %s (%s)\n' "$(NAME)" "$$(date -u +%Y-%m-%d)" > "$$f" && echo "created $$f — additive only; then make schema-snapshot"
+
 # D1 migrations for the persistent comments DB (comments-worker/migrations/).
 # A schema change = a NEW migrations/NNNN_name.sql (wrangler d1 migrations create),
 # then `make migrate`. `schema.sql` is a GENERATED snapshot (make schema-snapshot);

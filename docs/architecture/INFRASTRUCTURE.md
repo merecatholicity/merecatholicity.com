@@ -116,6 +116,7 @@ on page one.)
 - **The Library page** — `log/2026-09.md`
 - **Deep-linking (`deeplink.js`).** — `log/2026-09.md`
 - **The long-form reference is a monthly log with a generated index (2026-09-16)** — `log/2026-09.md`
+- **CLAUDE.md compacted: the laws in full (2026-09-16)** — `log/2026-09.md`
 
 ### The PureScript application layer
 
