@@ -1,131 +1,153 @@
-/* Unread words, counted and named (2026-09-11): every unread number on the site
- * is WORDS, from one fragment — the inbox row's badge, the inbox total, the tab
- * bar's badge — the thread tells what was unread BEFORE the open marked it read,
- * and a member who appears offline is not seen typing.
+/* Unread words, counted and named (2026-09-11; run through the handlers since
+ * 2026-09-16): every unread number on the site is WORDS, from one fragment —
+ * the inbox row's badge, the inbox total, the tab bar's badge — the thread
+ * tells what was unread BEFORE the open marked it read, and a member who
+ * appears offline is not seen typing.
  *
- * What would break silently: a badge reading "1" for twelve words; the tab badge
- * and the row badges disagreeing because one counts threads and the other counts
- * words; the unread line drawn from the post-open stamp (nothing is ever unread
- * after the open); a held, expired or cleared word counted; the typing frame
- * leaking a hidden member's presence. So: the counting fragment, the thread's
- * query and the tab badge's own query all run against the real ledger, and drift
- * guards stand over the handlers and the hub. */
-import { test } from 'node:test';
+ * What would break silently: a badge reading "1" for twelve words; the tab
+ * badge and the row badges disagreeing because one counts threads and the
+ * other counts words; the unread line drawn from the post-open stamp (nothing
+ * is ever unread after the open); a held, expired, cleared or pre-joining word
+ * counted; the typing frame leaking a hidden member's presence. So: the
+ * counting fragment runs on the ledger as lib.ts exports it, and /dm/threads,
+ * /dm/unread and /dm/thread answer real requests over a seeded ledger through
+ * tests/_support/worker.mjs — the road, not its text. The hub's typing gate
+ * stays a source rule (it needs live sockets). */
+import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { handlerBody, routesSource } from '../_support/worker_src.mjs';
+import { dmUnreadCount, DM_MINE } from '../../comments-worker/src/lib.ts';
+import { loadWorker, makeEnv, client, freshDb, identity, resetCaches, netSpy } from '../_support/worker.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const migrationsDir = join(root, 'comments-worker', 'migrations');
-const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
-const idxSrc = routesSource();
 const hubSrc = readFileSync(join(root, 'comments-worker', 'src', 'durable.ts'), 'utf8');
 
-function freshDb() {
-  const db = new DatabaseSync(':memory:');
-  for (const f of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
-  return db;
-}
-const body = (name) => handlerBody(name, idxSrc);
-/* the SQL fragments exactly as the worker builds them, lifted from lib.ts by name */
-function fragment(name) {
-  const m = libSrc.match(new RegExp('export function ' + name + '\\(now: any\\) \\{([\\s\\S]*?)\\}(?:\\n|$)'));
-  assert.ok(m, `lib.ts exports ${name}(now)`);
-  return m[1];
-}
-const dmLive = new Function('now', fragment('dmLive'));
-const dmUnreadCount = new Function('dmLive', 'now', fragment('dmUnreadCount'));
+let worker, A, B, C, D, net;
+before(async () => {
+  ({ worker } = await loadWorker());
+  [A, B, C, D] = await Promise.all(['a', 'b', 'c', 'd'].map(identity));
+  net = netSpy();   // every request below passes without a byte of network
+});
+after(() => { assert.deepEqual(net.calls, [], 'no request reached the network'); net.restore(); });
+beforeEach(resetCaches);
 
-const me = 'a'.repeat(64), other = 'b'.repeat(64);
-/* The viewer's seat: every counting query joins their own member row (DM_MINE). */
-const MINE = 'JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 AND mb.left_at IS NULL';
+/* A pair (A and B) with six words: one A read, two unread, one held, one expired, one A's own. */
 function seeded() {
   const db = freshDb();
-  db.exec(`INSERT INTO dm_threads (id, kind, pair_key, created_at, last_at, last_sender, msgs) VALUES (1, 0, '${me}|${other}', 100, 1600, '${other}', 6)`);
-  db.exec(`INSERT INTO dm_members (thread_id, hash, joined_at, read_at) VALUES (1, '${me}', 100, 1000), (1, '${other}', 100, NULL)`);
-  const ins = db.prepare('INSERT INTO dms (id, thread_id, sender_hash, body, created_at, held, expires_at) VALUES (?, 1, ?, ?, ?, ?, ?)');
-  ins.run(1, other, 'read already', 900, null, null);
-  ins.run(2, other, 'unread', 1100, null, null);
-  ins.run(3, other, 'held — never counts', 1200, 1, null);
-  ins.run(4, other, 'expired by now', 1300, null, 1500);
-  ins.run(5, me, 'mine', 1400, null, null);
-  ins.run(6, other, 'unread too', 1600, null, null);
+  db.prepare("INSERT INTO dm_threads (id, kind, pair_key, created_at, last_at, last_sender, msgs) VALUES (1, 0, ?, 100, 1600, ?, 6)").run(A.hash + '|' + B.hash, B.hash);
+  db.prepare('INSERT INTO dm_members (thread_id, hash, joined_at, read_at) VALUES (1, ?, 100, 1000), (1, ?, 100, NULL)').run(A.hash, B.hash);
+  /* an expired word was OPENED once (that is what started its clock) — an open
+     today must not restart it, so the fixture says so */
+  const ins = db.prepare('INSERT INTO dms (id, thread_id, sender_hash, body, created_at, held, expires_at, opened_at) VALUES (?, 1, ?, ?, ?, ?, ?, ?)');
+  ins.run(1, B.hash, 'read already', 900, null, null, null);
+  ins.run(2, B.hash, 'unread', 1100, null, null, null);
+  ins.run(3, B.hash, 'held — never counts', 1200, 1, null, null);
+  ins.run(4, B.hash, 'expired by now', 1300, null, 1500, 1300);
+  ins.run(5, A.hash, 'mine', 1400, null, null, null);
+  ins.run(6, B.hash, 'unread too', 1600, null, null, null);
   return db;
 }
+/* a second conversation — a group of three — two unread words in it (and one held, which never counts) */
+function addGroup(db) {
+  db.prepare("INSERT INTO dm_threads (id, kind, pair_key, created_at, last_at, last_sender, msgs) VALUES (2, 1, NULL, 100, 1700, ?, 3)").run(B.hash);
+  db.prepare('INSERT INTO dm_members (thread_id, hash, joined_at) VALUES (2, ?, 100), (2, ?, 100), (2, ?, 100)').run(A.hash, B.hash, C.hash);
+  const ins = db.prepare('INSERT INTO dms (id, thread_id, sender_hash, body, created_at, held, expires_at) VALUES (?, 2, ?, ?, ?, ?, NULL)');
+  ins.run(7, B.hash, 'unread', 1650, null);
+  ins.run(8, B.hash, 'unread as well', 1700, null);
+  ins.run(9, B.hash, 'held — never counts', 1700, 1);
+}
+const readAt = (db, thread, who, at) => db.prepare('UPDATE dm_members SET read_at = ? WHERE thread_id = ? AND hash = ?').run(at, thread, who);
 
 test('the counting fragment counts exactly the unheld, unexpired, uncleared words from the other side newer than my stamp', () => {
   const db = seeded();
-  const count = (who, now) => db.prepare('SELECT ' + dmUnreadCount(dmLive, now) + ' AS unread FROM dm_threads t ' + MINE + ' WHERE t.id = 1').get(who).unread;
-  assert.equal(count(me, 2000), 2, 'ids 2 and 6: not the read one, not the held, not the expired, not my own');
-  assert.equal(count(other, 2000), 1, 'from their seat (no stamp yet): my one word');
-  db.exec(`UPDATE dm_members SET cleared_at = 1150 WHERE thread_id = 1 AND hash = '${me}'`);
-  assert.equal(count(me, 2000), 1, 'a cleared member sees only what came after their clear stamp');
-  db.exec(`UPDATE dm_members SET read_at = 1700 WHERE thread_id = 1 AND hash = '${me}'`);
-  assert.equal(count(me, 2000), 0, 'read up to date: nothing');
-  db.exec(`UPDATE dm_members SET left_at = 1800 WHERE thread_id = 1 AND hash = '${me}'`);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads t ' + MINE + ' WHERE t.id = 1').get(me).n, 0, 'a member who left has no seat: the thread is nowhere for them');
+  const count = (who, now) => db.prepare('SELECT ' + dmUnreadCount(now) + ' AS unread FROM dm_threads t ' + DM_MINE + ' WHERE t.id = 1').get(who).unread;
+  assert.equal(count(A.hash, 2000), 2, 'ids 2 and 6: not the read one, not the held, not the expired, not my own');
+  assert.equal(count(B.hash, 2000), 1, 'from their seat (no stamp yet): my one word');
+  db.prepare('UPDATE dm_members SET cleared_at = 1150 WHERE thread_id = 1 AND hash = ?').run(A.hash);
+  assert.equal(count(A.hash, 2000), 1, 'a cleared member sees only what came after their clear stamp');
+  readAt(db, 1, A.hash, 1700);
+  assert.equal(count(A.hash, 2000), 0, 'read up to date: nothing');
+  db.prepare('UPDATE dm_members SET left_at = 1800 WHERE thread_id = 1 AND hash = ?').run(A.hash);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads t ' + DM_MINE + ' WHERE t.id = 1').get(A.hash).n, 0, 'a member who left has no seat: the thread is nowhere for them');
   db.close();
 });
 
-test('the inbox rows carry the count, and unread_total sums those same words', () => {
-  const t = body('handleDmThreads');
-  assert.ok(/dmUnreadCount\(now\) \+ ' AS unread '/.test(t), 'the row\'s unread is the count');
-  assert.ok(/COALESCE\(SUM\(unread\), 0\) AS unread/.test(t), 'the total adds the rows up — words, not threads');
-  assert.ok(!/SUM\(CASE WHEN unread > 0 THEN 1 ELSE 0 END\)/.test(t), 'the old thread tally is gone');
+test('the inbox rows carry the count, and unread_total sums those same words — not threads', async () => {
+  const db = seeded();
+  const api = client(worker, makeEnv({ db }));
+  let r = await api.post('/api/comments/dm/threads', { key: A.key });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.threads.map((t) => [t.thread_id, t.kind, t.unread]), [[1, 0, 2]], 'the pair\'s row: two unread words');
+  assert.equal(r.json.unread_total, 2);
+  addGroup(db);
+  r = await api.post('/api/comments/dm/threads', { key: A.key });
+  assert.deepEqual(r.json.threads.map((t) => [t.thread_id, t.kind, t.unread, t.member_count]), [[2, 1, 2, 3], [1, 0, 2, 2]],
+    'newest conversation first; the group\'s two unread words, the held one never');
+  assert.equal(r.json.unread_total, 4, 'two plus two — a thread tally would say 2');
+  r = await api.post('/api/comments/dm/threads', { key: C.key });
+  assert.deepEqual(r.json.threads.map((t) => [t.thread_id, t.unread]), [[2, 2]], 'C is in the group alone');
+  db.close();
 });
 
 /* The tab bar's badge (2026-09-11): the same words, summed across every thread,
    so "3" on the Inbox tab means three messages waiting — and equals what the
    inbox rows add up to. A thread tally here would silently under-report. */
-test('the tab badge counts unread WORDS across all threads, by the inbox\'s own fragment', () => {
-  const t = body('handleDmUnread');
-  assert.ok(!/dmUnreadExists/.test(t) && !/dmUnreadExists/.test(libSrc), 'the thread-flag fragment is gone entirely');
-  const m = t.match(/'([^']*)' \+ dmUnreadCount\(now\) \+ '([^']*)'/);
-  assert.ok(m, 'the query is the counting fragment, summed');
-  const sql = m[1] + dmUnreadCount(dmLive, 2000) + m[2];
-  assert.ok(/JOIN dm_members mb ON mb\.thread_id = t\.id AND mb\.hash = \?1 AND mb\.left_at IS NULL/.test(m[2]), 'summed over MY seats alone (the member model, 0016)');
+test('the tab badge counts unread WORDS across all threads, and equals the inbox total', async () => {
   const db = seeded();
-  /* a second conversation — a group of three — two unread words in it (and one held, which never counts) */
-  db.exec(`INSERT INTO dm_threads (id, kind, pair_key, created_at, last_at, last_sender, msgs) VALUES (2, 1, NULL, 100, 1700, '${other}', 3)`);
-  db.exec(`INSERT INTO dm_members (thread_id, hash, joined_at) VALUES (2, '${me}', 100), (2, '${other}', 100), (2, '${'c'.repeat(64)}', 100)`);
-  const ins = db.prepare('INSERT INTO dms (id, thread_id, sender_hash, body, created_at, held, expires_at) VALUES (?, 2, ?, ?, ?, ?, NULL)');
-  ins.run(7, other, 'unread', 1650, null);
-  ins.run(8, other, 'unread as well', 1700, null);
-  ins.run(9, other, 'held — never counts', 1700, 1);
-  assert.equal(db.prepare(sql).get(me).n, 4, 'two words in one thread plus two in the other — not "2 threads"');
-  db.exec(`UPDATE dm_members SET read_at = 1700 WHERE thread_id = 1 AND hash = '${me}'`);
-  assert.equal(db.prepare(sql).get(me).n, 2, 'reading one conversation leaves the other\'s two');
-  db.exec(`UPDATE dm_members SET read_at = 1700 WHERE thread_id = 2 AND hash = '${me}'`);
-  assert.equal(db.prepare(sql).get(me).n, 0, 'all read: no badge');
+  addGroup(db);
+  const api = client(worker, makeEnv({ db }));
+  const badge = async (who) => { const r = await api.post('/api/comments/dm/unread', { key: who.key }); assert.equal(r.status, 200); return r.json.unread; };
+  assert.equal(await badge(A), 4, 'two words in one thread plus two in the other — not "2 threads"');
+  const inbox = await api.post('/api/comments/dm/threads', { key: A.key });
+  assert.equal(inbox.json.unread_total, await badge(A), 'the tab and the rows it opens onto add up');
+  readAt(db, 1, A.hash, 1700);
+  assert.equal(await badge(A), 2, 'reading one conversation leaves the other\'s two');
+  readAt(db, 2, A.hash, 1700);
+  assert.equal(await badge(A), 0, 'all read: no badge');
+  assert.equal(await badge(B), 1, 'B has A\'s one word waiting');
+  assert.equal(await badge(D), 0, 'a member of nothing has nothing');
   db.close();
 });
 
-test('the thread names what was unread BEFORE the open marks it read: the count and the first unread id', () => {
-  const t = body('handleDmThread');
-  const q = t.indexOf("'SELECT COUNT(*) AS n, MIN(m.id) AS first_id FROM dms m WHERE");
-  const upd = t.indexOf("'UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?3 AND hash = ?1 AND EXISTS(");
-  assert.ok(q > 0 && upd > q, 'the unread query runs before the read stamp is advanced');
-  assert.ok(/const myReadAt = Number\(thread\.read_at \|\| 0\);/.test(t), 'from the stamp my member row arrived with (0016)');
-  assert.ok(/\.bind\(me, thread\.id, myReadAt, floor, kind\)\.first\(\);/.test(t), 'bounded by my clear stamp and my joining, and (in a group) a sender I blocked');
-  assert.ok(/unread: \(unreadRow && unreadRow\.n\) \|\| 0, unread_from: \(unreadRow && unreadRow\.first_id\) \|\| null,\s*notif_unread: await notifUnreadCount\(env, me\) \}, 200\);/.test(t),
-    'both ride the payload — with the fresh bell count beside them (2026-09-12: opening reads the sender\'s bells)');
-  assert.ok(/blocked: iBlocked \? 1 : 0, unread: 0, unread_from: null,\s*notif_unread: await notifUnreadCount\(env, me\) \}, 200\);/.test(t), 'the empty room says so too — and its bells');
-  /* the query itself, on the real ledger */
-  const m = t.match(/'(SELECT COUNT\(\*\) AS n, MIN\(m\.id\) AS first_id[^']*)' \+\s*'([^']*)' \+ dmLive\(now\)/);
-  assert.ok(m, 'the query is two literals and the liveness fragment');
+test('the thread names what was unread BEFORE the open marks it read: the count, the first unread id, and the fresh bell count', async () => {
   const db = seeded();
-  const row = db.prepare(m[1] + m[2] + dmLive(2000)).get(me, 1, 1000, 0, 0);
-  assert.deepEqual({ n: row.n, first_id: row.first_id }, { n: 2, first_id: 2 }, 'two unread, the line stands above id 2');
-  const none = db.prepare(m[1] + m[2] + dmLive(2000)).get(me, 1, 1700, 0, 0);
-  assert.deepEqual({ n: none.n, first_id: none.first_id }, { n: 0, first_id: null });
-  const joined = db.prepare(m[1] + m[2] + dmLive(2000)).get(me, 1, 0, 1199, 1);
-  assert.deepEqual({ n: joined.n, first_id: joined.first_id }, { n: 1, first_id: 6 }, 'a member who joined at 1200 has one unread word: nothing from before their joining');
-  db.exec(`INSERT INTO dm_blocks (owner_hash, blocked_hash, created_at) VALUES ('${me}', '${other}', 1)`);
-  assert.equal(db.prepare(m[1] + m[2] + dmLive(2000)).get(me, 1, 0, 0, 1).n, 0, 'in a group (kind 1) a sender I blocked has no unread words for me');
-  assert.equal(db.prepare(m[1] + m[2] + dmLive(2000)).get(me, 1, 0, 0, 0).n, 3, 'in a pair the stored hold governs, not the block at read time');
+  const api = client(worker, makeEnv({ db }));
+  const open = (who, target) => api.post('/api/comments/dm/thread', { key: who.key, ...target });
+  let r = await open(A, { thread_id: 1 });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.messages.map((m) => m.id), [1, 2, 5, 6], 'the held and the expired words are not served');
+  assert.deepEqual({ unread: r.json.unread, from: r.json.unread_from, bells: r.json.notif_unread }, { unread: 2, from: 2, bells: 0 },
+    'two unread, the line stands above id 2; the bell count rides along');
+  assert.ok(db.prepare('SELECT read_at FROM dm_members WHERE thread_id = 1 AND hash = ?').get(A.hash).read_at > 1000, 'the open advanced my stamp');
+  r = await open(A, { thread_id: 1 });
+  assert.deepEqual({ unread: r.json.unread, from: r.json.unread_from }, { unread: 0, from: null }, 'nothing is unread after the open');
+  /* a member who joined at 1200 sees nothing from before their joining */
+  db.prepare('INSERT INTO dm_members (thread_id, hash, joined_at) VALUES (1, ?, 1200)').run(C.hash);
+  r = await open(C, { thread_id: 1 });
+  assert.deepEqual(r.json.messages.map((m) => m.id), [5, 6], 'the words since they joined (the held and the expired still not)');
+  assert.deepEqual({ unread: r.json.unread, from: r.json.unread_from }, { unread: 2, from: 5 }, 'both later words are unread to the newcomer');
+  /* the empty room: an unmade pair says so, with the bells */
+  r = await open(A, { with: D.hash });
+  assert.equal(r.status, 200);
+  assert.deepEqual({ id: r.json.thread_id, msgs: r.json.messages, unread: r.json.unread, from: r.json.unread_from, bells: r.json.notif_unread },
+    { id: null, msgs: [], unread: 0, from: null, bells: 0 });
+  /* a stranger to the conversation finds nothing */
+  r = await open(D, { thread_id: 1 });
+  assert.equal(r.status, 404);
+  assert.equal(r.json.error, 'No such conversation.');
+  /* in a group, a sender I blocked has no unread words for me; in a pair the stored hold governs, not the block */
+  db.prepare('INSERT INTO dm_blocks (owner_hash, blocked_hash, created_at) VALUES (?, ?, 1)').run(A.hash, B.hash);
+  readAt(db, 1, A.hash, null);
+  db.prepare('UPDATE dm_threads SET kind = 1, pair_key = NULL WHERE id = 1').run();
+  r = await open(A, { thread_id: 1 });
+  assert.deepEqual({ unread: r.json.unread, ids: r.json.messages.map((m) => m.id) }, { unread: 0, ids: [5] }, 'group: B is silent to A — nothing unread, nothing served');
+  readAt(db, 1, A.hash, null);
+  db.prepare('UPDATE dm_threads SET kind = 0, pair_key = ? WHERE id = 1').run(A.hash + '|' + B.hash);
+  r = await open(A, { thread_id: 1 });
+  assert.deepEqual({ unread: r.json.unread, from: r.json.unread_from, blocked: r.json.blocked }, { unread: 3, from: 1, blocked: 1 },
+    'pair: ids 1, 2 and 6 — the hold stored at send time governs, and the room says I block them');
   db.close();
 });
 
