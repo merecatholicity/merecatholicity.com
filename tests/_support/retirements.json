@@ -1,0 +1,74 @@
+[
+ {
+  "what": "POST /api/comments/dm/like — the 2026-08-03 heart, kept one deploy for cached clients",
+  "where": "comments-worker/src/index.ts",
+  "pattern": "p: '/api/comments/dm/like'",
+  "since": "2026-09-12",
+  "due": "2026-09-21",
+  "how": "drop the ROUTES line, its tests/_support/routes.json entry and API.md's mention; every client since 2026-09-12 sends /dm/react"
+ },
+ {
+  "what": "POST /wall/like · /wall/comment/like · /wall/likers — the like aliases over the reactions ledger",
+  "where": "comments-worker/src/index.ts",
+  "pattern": "p: '/api/comments/wall/like'",
+  "since": "2026-09-12",
+  "due": "2026-09-21",
+  "how": "drop the three ROUTES lines, their routes.json entries and API.md's mentions; the client sends /react and /react/who"
+ },
+ {
+  "what": "react_me / react_other / liked_me / liked_other on a pair's served DM rows",
+  "where": "comments-worker/src/routes/dm.ts",
+  "pattern": "out\\.react_me = ",
+  "since": "2026-09-12",
+  "due": "2026-09-21",
+  "how": "the client reads `reactions`; drop the four fields, app/wire.ts's optional members and API.md §4.1's note"
+ },
+ {
+  "what": "E1 (enc 1) accepted on the wire for a pair's send and edit",
+  "where": "comments-worker/src/routes/dm.ts",
+  "pattern": "data\\.enc === 1 \\|\\| data\\.enc === true",
+  "since": "2026-09-13",
+  "due": "2026-09-21",
+  "how": "refuse enc 1 on /dm/send and /dm/edit (a stored E1 word stays readable for ever); tests/js/dm_envelope"
+ },
+ {
+  "what": "the legacy actor_hash clause: a DM bell from before 0016 named its sender, not its thread",
+  "where": "comments-worker/src/lib.ts",
+  "pattern": "\\(\\?4 > 0 OR actor_hash = \\?2\\)",
+  "since": "2026-09-14",
+  "due": "2026-10-16",
+  "how": "once no unread bell with topic_id 0 remains, drop this clause and the two `topic_id = 0 AND actor_hash` clauses in routes/dm.ts; tests/worker/notif_read"
+ },
+ {
+  "what": "dm_threads.a_read_at / b_read_at / a_cleared_at / b_cleared_at — pair columns nothing reads (a_hash/b_hash are still written by ensurePairThread)",
+  "where": "comments-worker/schema.sql",
+  "pattern": "a_read_at    INTEGER",
+  "since": "2026-09-14",
+  "due": "2026-10-14",
+  "how": "migration 0018 retire_pair_columns — owner heads-up and a fresh daily backup first: drop dm_threads_ab_idx, stop writing a_hash/b_hash, DROP COLUMN ×6; make schema-snapshot"
+ },
+ {
+  "what": "dms.react_a / react_b / liked_a / liked_b — the pair reaction columns the reactions ledger replaced (0012)",
+  "where": "comments-worker/schema.sql",
+  "pattern": "ALTER TABLE dms ADD COLUMN react_a TEXT",
+  "since": "2026-09-12",
+  "due": "2026-10-14",
+  "how": "the same 0018 migration: DROP COLUMN ×4; make schema-snapshot"
+ },
+ {
+  "what": "dm_media.msg_id and its index — retired by dm_media_refs (an object dies with its last reference)",
+  "where": "comments-worker/schema.sql",
+  "pattern": "dm_media_msg_idx",
+  "since": "2026-09-13",
+  "due": "2026-10-14",
+  "how": "the same 0018 migration: DROP INDEX dm_media_msg_idx, DROP COLUMN msg_id; make schema-snapshot"
+ },
+ {
+  "what": "wall_likes and wall_comment_likes — frozen since the reactions ledger (0014's backfill read them once)",
+  "where": "comments-worker/schema.sql",
+  "pattern": "CREATE TABLE IF NOT EXISTS wall_likes",
+  "since": "2026-09-12",
+  "due": "2026-10-14",
+  "how": "the same 0018 migration: DROP TABLE ×2 (nothing reads them; the ledger holds every like as a ❤️ reaction); make schema-snapshot"
+ }
+]

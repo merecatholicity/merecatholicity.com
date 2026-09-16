@@ -114,17 +114,18 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Turnstile**: an established identity is not challenged (`Domain.Turnstile`, app_settings
   `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing context;
   its `?v=` is stamped into nav.js's `MC_ASSETS`, never by hand). **Only `loadTurnstile()` mounts,
-  only from the focus net or a press, never because a view opened, never for a spared identity** —
-  the test sweeps every call site.
+  only from the focus net or a press, never because a view opened, never for a spared identity** — the test sweeps every call site.
 - **`READ_LIMIT` is one per-IP bucket shared by every read endpoint**; the client's read-budget
   coordinator paces every poller — never add a poller outside it.
 - **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;
   the rules are `Domain.Comments`, whose polarity is the OPPOSITE of the social switch — only a
   literal `'1'` / a listed path opens anything).
-- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (the next number is the last
-  file's + 1 — `make migration NAME=<name>` creates it; never a kept number),
-  additive; `schema.sql` is a generated snapshot; the three librarian D1s are derived data.
-  Renaming an applied migration file requires renaming its `d1_migrations` row too.
+- **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (the next number is the
+  last file's + 1 — `make migration NAME=<name>`), additive; `schema.sql` is a generated snapshot; the
+  librarian D1s are derived data; a renamed applied migration renames its `d1_migrations` row too.
+  **Additive is not forever**: a shim lives one deploy and at most 30 days, a column nothing reads for
+  30 days is dropped by a `retire` migration (the one non-additive kind: a fresh backup, an owner
+  heads-up); `tests/_support/retirements.json` names each with its due date and the test goes red then.
 - **Shared constants, tables and validators live in `purescript/src/Domain/*`** and are read
   by both the client (`window.mcCore` / `app/core.ts`) and the worker. Never re-inline a copy.
 - **A NEW state store must be added to `runBackup()`'s mirror** or it is not backed up
@@ -138,15 +139,14 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   BEFORE the row is dropped or its status flips, never a `media_key = NULL` without the purge;
   the hourly sweeps (expiry, retention, orphans) are backstops, never the road. A new delete or
   expiry path joins `tests/worker/media_hygiene.test.mjs`.
-- The Cloudflare `bot_management` API is a **full replace** (Terraform sends the whole object).
-- The edge 403s `Python-urllib` and CI runners (Bot Fight Mode): use a browser UA; headless
-  verification against prod runs from the dev box.
+- The Cloudflare `bot_management` API is a **full replace** (Terraform sends the whole object); the
+  edge 403s `Python-urllib` and CI runners (Bot Fight Mode) — a browser UA, and headless verification
+  against prod runs from the dev box.
 - **Never a long generation inside a stateless invocation's `waitUntil`** — kick it into a
   Durable Object (the `ChatRoom` pattern).
-- The back room (`board:adminsonly`) must be indistinguishable from nonexistence on every
-  public read; the social kill switch (`social_enabled`) likewise answers as "no such page".
-- A symptom that moves when you move the code is evidence the code is the cause — stop
-  relocating it (the Turnstile postmortem).
+- The back room (`board:adminsonly`) and the social kill switch (`social_enabled`) answer every public
+  read as nonexistence — "no such page", never a hint.
+- A symptom that moves with the code is the code's fault — stop relocating it (the Turnstile postmortem).
 - **A touch on an overlay must never reach the page behind it**: `mc-sheet` contains its own
   overscroll, its scrim is `touch-action:none`, and it locks the document while open
   (`html.mc-sheet-open`, body fixed at the saved offset). A new overlay reuses the sheet or

@@ -95,6 +95,8 @@ tests/
                        one road registering a member and the directory listing members only (directory:
                        a keyed read leaves the row and is spared, a nick, a live post or a published key
                        lists it, a bare row or a deleted post does not);
+                       the retirement ledger's tripwire (retire: _support/retirements.json names every shim and
+                       dead column with its due date — present until then, gone from then, or the suite is red);
                        the backup — the dump replayed twice into a fresh SQLite and the same ledger both times,
                        runBackup's object, prune and record, the avatar mirror (backup); the cron chains, the
                        self-check and the health read RUN — a throwing step that stops nothing, once/quiet/recovered,
