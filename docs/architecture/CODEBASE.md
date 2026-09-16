@@ -67,8 +67,9 @@ duplicated, and the shape they moved toward.
 | `client/profile.ts` | 1,449 | Identity, faith, mute/block, prefs, the profile card and editor, avatars, notifications. |
 | `client/wall.ts` | 844 | Feed + walls. |
 | `client/boot.ts` | 6 | The `Boot` bag type the factories take. (All of `client/` bundles to `docs/comments.js`, 349 KB.) |
-| `comments-worker/src/index.ts` | 5,093 | The handlers + the declarative `ROUTES` dispatch + cron. |
-| `comments-worker/src/lib.ts` | 2,789 | The shared core: constants, crypto, auth/validation, DB/notification/broadcast helpers. A leaf — it references no handler. |
+| `comments-worker/src/index.ts` | 654 | The composition root: imports · `Env` · `handleConfig`/`handleLive` · the `ROUTES` table · `fetch`/`scheduled`. |
+| `comments-worker/src/routes/*.ts` | 5,427 | The handlers, one file per feature (2026-09-16): board 1,402 · dm 1,265 · merecat 730 · wall 540 · admin 483 · profile 430 · media 254 · calls 179 · notify 144 — each moved verbatim from `index.ts` behind the table. |
+| `comments-worker/src/lib.ts` | 3,355 | The shared core: constants, crypto, auth/validation, the settings, DB/notification/broadcast helpers, the DM primitives, the media purges, the social gate and the Discord fan-out. A leaf — it references no handler. |
 | `app/appchrome.ts` | 1,763 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
 | `app/shell.ts` | 868 | The SPA shell: soft-navigation (latest-wins, instant nav), per-page boot registry, audio dock, PWA. |
 | `docs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring (served raw, unversioned). |
