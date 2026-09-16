@@ -86,3 +86,19 @@ test('the header wears a group\'s collage and its count; presence and the call s
   const collage = fn('dmCollageInto');
   assert.ok(/window\.mcCore\.dmInboxAvatars\) \|\| 4/.test(collage), 'up to four faces, the kernel\'s number');
 });
+
+test('who has read, in a group (2026-09-15): the faces under the last word each member read, the tick that opens Message info, ✓✓ waiting only for those who report', () => {
+  assert.ok(/function paintSeen\(\) \{\s*if \(kind !== 1\) return;/.test(view), 'a pair keeps its ticks alone');
+  assert.ok(/if \(mm\.hash === state\.myHash \|\| !mm\.read_at\) return;/.test(view), 'never me, never a member without a stamp (receipts off sends none)');
+  assert.ok(/target = mo\.sender_hash === mm\.hash \? null : bubbles\[i\];/.test(view), 'never under their own word');
+  assert.ok(/row\.title = 'Seen by ' \+ under\[key\]\.map/.test(view) && /dmAvatarCell\(mm, 'dm-seen-av'\)/.test(view), 'the faces, named');
+  for (const at of ['paintSeen();\n          },\n          /* Someone was added or left', 'paintSub();\n            paintSeen();', 'pending += 1; unseenLive += 1;\n              }\n              paintSeen();\n              updateJump();']) assert.ok(view.includes(at), 'repainted live: ' + at.slice(0, 30));
+  assert.ok(/function reporting\(\) \{ return ctx\.current\(\)\.filter\(function \(mm: any\) \{ return mm\.receipts !== 0 && mm\.receipts !== '0'; \}\); \}/.test(view) && /dmReadByAll\(m\.created_at, state\.myHash, reporting\(\)\)/.test(view), '✓✓ waits only for members who report reads');
+  assert.ok(/if \(kind === 1\) \{ r\.setAttribute\('role', 'button'\); r\.tabIndex = 0; r\.addEventListener\('click', function \(e: any\) \{ e\.stopPropagation\(\); dmReadByInfo\(m, ctx\); \}\); \}/.test(view), 'the tick is the door to who has read');
+  assert.ok(/if \(sr && Number\(sr\.read_at \|\| 0\) < Number\(msg\.created_at \|\| 0\)\) \{ sr\.read_at = Number\(msg\.created_at\) \|\| 0; state\.dmView\.markRead\(msg\.sender_hash, sr\.read_at\); \}/.test(view), "a member's word says they read up to it");
+  const acts = fn('dmOpenActions');
+  assert.ok(/if \(mine && ctx && ctx\.kind === 1 && !sys\) items\.push\(\{ label: 'Info', icon: 'ⓘ', fn: function \(\) \{ dmReadByInfo\(m, ctx\); \} \}\);/.test(acts), 'Info on my word in a group');
+  const info = fn('dmReadByInfo');
+  assert.ok(/var off = mm\.receipts === 0 \|\| mm\.receipts === '0';/.test(info) && /state: read \? 'Read' : \(off \? 'Receipts off' : 'Delivered'\)/.test(info), 'Read / Delivered / Receipts off');
+  assert.ok(/window\.mcSheet\.open\('Message info', box\)/.test(info));
+});

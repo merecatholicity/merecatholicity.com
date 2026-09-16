@@ -505,6 +505,7 @@ export function installDm(B: Boot) {
     if (!sys && !m.media_expired) items.push({ label: 'Forward', icon: '↪', fn: function () { dmForwardPicker(m, ctx); } });
     var copyText = hasText ? String(m.body || '') : String((m._env && m._env.caption) || '');
     if (copyText) items.push({ label: 'Copy', icon: '⧉', fn: function () { dmCopy(copyText, ctx); } });
+    if (mine && ctx && ctx.kind === 1 && !sys) items.push({ label: 'Info', icon: 'ⓘ', fn: function () { dmReadByInfo(m, ctx); } });
     if (mine && hasText && !sys) items.push({ label: 'Edit', icon: '✎', fn: function () { dmStartEdit(m, node, ctx); } });
     var saved = !!Number(m.saved || 0);
     items.push({ label: saved ? 'Unsave' : 'Save', icon: saved ? '★' : '☆', cls: saved ? 'on' : '', fn: function () { dmSave(m, node, ctx, saved ? 0 : 1); } });
@@ -512,6 +513,32 @@ export function installDm(B: Boot) {
     openActs({ node: node, at: at, mine: mine,
       react: { current: String(m.react_me || ''), onPick: function (e: any) { dmReact(m, node, ctx, e); } },
       items: items });
+  }
+  /* Message info (a group, 2026-09-15): who has read this word of mine — each
+     other current member as Read / Delivered, or "Receipts off" for one who
+     hides their reads (WhatsApp's "Message info", Snapchat's "Opened by").
+     Opened from the surface's Info and from the tick itself. The stamps are
+     watermarks, so a member's reading is told, never the minute of it. */
+  function dmReadByInfo(m: any, ctx: any) {
+    var rows = ctx.current().filter(function (mm: any) { return mm.hash !== state.myHash; }).map(function (mm: any) {
+      var off = mm.receipts === 0 || mm.receipts === '0';
+      var read = !off && Number(mm.read_at || 0) >= Number(m.created_at || 0);
+      return { mm: mm, rank: read ? 0 : (off ? 2 : 1), state: read ? 'Read' : (off ? 'Receipts off' : 'Delivered') };
+    }).sort(function (a: any, b: any) { return a.rank - b.rank; });
+    var readN = rows.filter(function (r: any) { return r.rank === 0; }).length;
+    var box = el('div', 'dm-info dm-readby');
+    box.appendChild(el('div', 'dm-info-row-title', readN ? 'Read by ' + readN + ' of ' + rows.length : 'Read by nobody yet'));
+    var list = el('div', 'dm-members');
+    rows.forEach(function (r: any) {
+      var row = el('div', 'dm-member-row');
+      row.appendChild(dmAvatarCell(r.mm, 'dm-member-av'));
+      row.appendChild(el('span', 'dm-member-name', ctx.nameOf(r.mm.hash)));
+      row.appendChild(el('span', 'dm-member-acts dm-readby-state' + (r.rank === 0 ? ' dm-receipt-seen' : ''), r.rank === 0 ? '✓✓ Read' : r.state));
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+    if (window.mcSheet) window.mcSheet.open('Message info', box);
+    else if (ctx.note) ctx.note(readN ? 'Read by ' + rows.filter(function (r: any) { return r.rank === 0; }).map(function (r: any) { return ctx.nameOf(r.mm.hash); }).join(', ') : 'Read by nobody yet');
   }
   /* ---- Forward (2026-09-13): the press-and-hold's "Forward" — pick one or
      more conversations (mine, and any member by name), and the word goes to
@@ -1277,6 +1304,14 @@ export function installDm(B: Boot) {
       '.dm-member-name{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.dm-member-acts{flex:none;display:inline-flex;gap:.6rem;font-size:.85em}' +
       '.dm-member-row .dm-row-dot[hidden]{display:none}' +
+      /* who has read (2026-09-15): the faces under the last word each member read, the tappable tick, the info rows */
+      '.dm-seen-row{display:flex;justify-content:flex-end;align-items:center;gap:.15rem;margin:-.15rem .4rem .4rem 0}' +
+      '.dm-seen-av{width:1.1rem;height:1.1rem;border-radius:50%;overflow:hidden;background:var(--cream-2,#faf6ee);display:inline-flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:600;color:var(--maroon,#8b1a1a);border:1px solid var(--surface,#fff)}' +
+      '.dm-seen-av .dm-head-img{width:100%;height:100%;object-fit:cover;display:block;margin:0}' +
+      '.dm-seen-more{font-size:.65rem;color:var(--faint);margin-left:.1rem}' +
+      '.dm-receipt-tap{cursor:pointer}' +
+      '.dm-readby-state{font-size:.85em;color:var(--faint)}' +
+      '.dm-readby-state.dm-receipt-seen{color:var(--maroon,#8b1a1a)}' +
       '.dm-group-name{margin-bottom:.4em}' +
       '.dm-msg > .dm-react-many{padding:.1em .25em;gap:.15em;margin:0}' +
       '.dm-msg > .dm-react-many .mc-react-chip{font:inherit;font-size:.9em;line-height:1;padding:.1em .3em;border:0;background:none;cursor:pointer;display:inline-flex;align-items:center;gap:.15em;border-radius:999px}' +
@@ -2295,18 +2330,26 @@ export function installDm(B: Boot) {
         /* ✓✓ once every other current member's read stamp reaches the word
            (Domain.Dm.readByAll — the members' read_at ride the thread and the
            live dm-read frames); a pair's opened_at, one deploy, says the same. */
+        /* the members whose reads can be waited for: one who hides theirs sends no stamp */
+        function reporting() { return ctx.current().filter(function (mm: any) { return mm.receipts !== 0 && mm.receipts !== '0'; }); }
         function seenByAll(m: any) {
-          if (window.mcCore && window.mcCore.dmReadByAll && window.mcCore.dmReadByAll(m.created_at, state.myHash, ctx.current())) return true;
+          if (window.mcCore && window.mcCore.dmReadByAll && window.mcCore.dmReadByAll(m.created_at, state.myHash, reporting())) return true;
           return kind === 0 && !!m.opened_at;
+        }
+        function tickTitle(seen: boolean) {
+          if (kind === 1) return seen ? 'Read by everyone · tap for who' : 'Delivered · tap for who has read';
+          return seen ? 'Seen' : 'Delivered';
         }
         function addReceipt(node: any, m: any) {
           if (String(m.sender_hash) !== state.myHash) return;
           if (node.classList && node.classList.contains('dm-call-line')) return;   // a call's line is not a sent word: no receipt
           if (state.prefs && state.prefs.receipts === 'off') return;   // reciprocal: I send none AND see none
           var seen = seenByAll(m);
-          var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : ''), seen ? '✓✓' : '✓');
-          r.title = seen ? 'Seen' : 'Delivered';
+          var r = el('span', 'dm-receipt' + (seen ? ' dm-receipt-seen' : '') + (kind === 1 ? ' dm-receipt-tap' : ''), seen ? '✓✓' : '✓');
+          r.title = tickTitle(seen);
           r.setAttribute('aria-label', r.title);
+          /* In a group the tick is the door to who has read (2026-09-15). */
+          if (kind === 1) { r.setAttribute('role', 'button'); r.tabIndex = 0; r.addEventListener('click', function (e: any) { e.stopPropagation(); dmReadByInfo(m, ctx); }); }
           var meta = node.querySelector(':scope > .dm-meta');
           (meta || node).appendChild(r);
           receipts.push({ created: Number(m.created_at) || 0, span: r, m: m });
@@ -2328,6 +2371,41 @@ export function installDm(B: Boot) {
           return n;
         }
         d.messages.forEach(function (m: any) { placeMsg(m); });
+        /* Seen-by markers (a group, 2026-09-15; Messenger's and Snapchat's
+           way): each other member's small face sits under the last word they
+           have read — their stamp's watermark — and moves down live as they
+           read. Never under their own word (they wrote it: implied), never for
+           a member who hides their reads (no stamp comes), never in a pair
+           (the ticks say it there). */
+        function paintSeen() {
+          if (kind !== 1) return;
+          Array.prototype.forEach.call(list.querySelectorAll(':scope > .dm-seen-row'), function (n: any) { n.remove(); });
+          var bubbles: any[] = Array.prototype.filter.call(list.querySelectorAll(':scope > [data-dmid]'), function (n: any) { return !!ctx.byId[n.getAttribute('data-dmid')]; });
+          if (!bubbles.length) return;
+          var under: Record<string, any[]> = {};
+          ctx.current().forEach(function (mm: any) {
+            if (mm.hash === state.myHash || !mm.read_at) return;
+            var at = Number(mm.read_at) || 0, target: any = null;
+            for (var i = bubbles.length - 1; i >= 0; i--) {
+              var mo = ctx.byId[bubbles[i].getAttribute('data-dmid')];
+              if (Number(mo.created_at) <= at) { target = mo.sender_hash === mm.hash ? null : bubbles[i]; break; }
+            }
+            if (!target) return;
+            var key = target.getAttribute('data-dmid');
+            (under[key] = under[key] || []).push(mm);
+          });
+          Object.keys(under).forEach(function (key) {
+            var b = list.querySelector(':scope > [data-dmid="' + key + '"]');
+            if (!b) return;
+            var row = el('div', 'dm-seen-row');
+            row.title = 'Seen by ' + under[key].map(function (mm: any) { return nameOf(mm.hash); }).join(', ');
+            row.setAttribute('aria-label', row.title);
+            under[key].slice(0, 6).forEach(function (mm: any) { row.appendChild(dmAvatarCell(mm, 'dm-seen-av')); });
+            if (under[key].length > 6) row.appendChild(el('span', 'dm-seen-more', '+' + (under[key].length - 6)));
+            b.parentNode.insertBefore(row, b.nextSibling);
+          });
+        }
+        paintSeen();
         /* What this page actually weighs. A killed web view leaves no pagehide
            and no error, so the crumb ring can only say the app died — never
            how much it was carrying. Now it says. */
@@ -2436,10 +2514,11 @@ export function installDm(B: Boot) {
             if (r) r.read_at = Math.max(Number(r.read_at || 0), t);
             receipts.forEach(function (rc) {
               if (seenByAll(rc.m) || (kind === 0 && rc.created <= t)) {
-                rc.span.textContent = '✓✓'; rc.span.title = 'Seen'; rc.span.setAttribute('aria-label', 'Seen');
-                rc.span.className = 'dm-receipt dm-receipt-seen';
+                rc.span.textContent = '✓✓'; rc.span.title = tickTitle(true); rc.span.setAttribute('aria-label', rc.span.title);
+                rc.span.className = 'dm-receipt dm-receipt-seen' + (kind === 1 ? ' dm-receipt-tap' : '');
               }
             });
+            paintSeen();
           },
           /* Someone was added or left: the roster the next word seals to,
              the header's count, the names. The line itself lands as a word. */
@@ -2448,11 +2527,12 @@ export function installDm(B: Boot) {
               if (!r || !r.hash) return;
               var cur = byHash[r.hash];
               if (cur) { cur.left_at = null; cur.pubkey = r.pubkey || cur.pubkey; cur.joined_at = r.joined_at || cur.joined_at; cur.nick = r.nick || cur.nick; cur.avatar = r.avatar || cur.avatar; }
-              else { var row = { hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: r.assigned || displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at || null, left_at: null, read_at: null }; members.push(row); byHash[r.hash] = row; }
+              else { var row = { hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: r.assigned || displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at || null, left_at: null, read_at: null, receipts: r.receipts == null ? 1 : r.receipts }; members.push(row); byHash[r.hash] = row; }
             });
             (m.left || []).forEach(function (h: any) { var cur = byHash[String(h)]; if (cur) cur.left_at = Math.floor(Date.now() / 1000); setTypist(h, false); });
             if (kind === 1 && !(thr && thr.name)) { label = othersNames().join(', ') || 'Group'; shortName = label; headText.querySelector('.dm-head-name').textContent = label; }
             paintSub();
+            paintSeen();
           },
           setName: function (name: any) {
             if (kind !== 1) return;
@@ -2479,6 +2559,10 @@ export function installDm(B: Boot) {
               return;
             }
             setTypist(msg.sender_hash, false); typingOn = Object.keys(typists).length > 0; paintSub(); typingBubble(typingOn);   // a real message ends "typing"
+            /* a member's word says they have read up to it (the server stamps
+               the sender on send); their face moves, my earlier words may tick */
+            var sr = byHash[String(msg.sender_hash)];
+            if (sr && Number(sr.read_at || 0) < Number(msg.created_at || 0)) { sr.read_at = Number(msg.created_at) || 0; state.dmView.markRead(msg.sender_hash, sr.read_at); }
             var newMsgPage = Math.max(1, Math.ceil((d.total + 1) / d.per));
             d.total += 1;
             if (d.page === newMsgPage) {
@@ -2495,6 +2579,7 @@ export function installDm(B: Boot) {
                 if (!pending) setUnreadLine(1, landed); else bumpUnreadLine(pending + 1);
                 pending += 1; unseenLive += 1;
               }
+              paintSeen();
               updateJump();
             } else {
               liveDmBadge();   // in the thread but paged back in history — still a bell

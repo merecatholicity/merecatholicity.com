@@ -1956,7 +1956,8 @@ async function createDmGroup(env: any, ctx: any, me: string, wanted: string[], n
 async function announceDmMembers(env: any, ctx: any, threadId: number, by: string, added: string[], left: string[]) {
   const rows = added.length ? (await dmMembersPayload(env, threadId)).filter((r: any) => added.indexOf(r.hash) !== -1) : [];
   const ev = { v: 1, t: 'dm-members', scopes: (await dmRecipients(env, threadId, by)).map((h) => 'user:' + h), from: by, thread_id: threadId, by,
-    added: rows.map((r: any) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at })),
+    added: rows.map((r: any) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at,
+      receipts: Prefs.receiptsOn(r.receipts_mode || 'auto') ? 1 : 0 })),
     left };
   if (!ev.scopes.length) return;
   if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
@@ -2186,6 +2187,7 @@ async function handleDmThread(request: any, env: any, ctx: any) {
     hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null,
     joined_at: r.joined_at == null ? null : Number(r.joined_at), left_at: r.left_at == null ? null : Number(r.left_at),
     read_at: (r.hash === me || Prefs.receiptsOn(r.receipts_mode || 'auto')) && r.read_at != null ? Number(r.read_at) : null,
+    receipts: Prefs.receiptsOn(r.receipts_mode || 'auto') ? 1 : 0,   // whether this member reports reads at all (their stamp is withheld when not), so a group's ✓✓ waits only for those who do
     last_seen: r.last_seen_at || null,
   }));
   /* A pair's `other`, kept one deploy for bundles from before the member model. */

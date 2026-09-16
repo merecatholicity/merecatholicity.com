@@ -163,3 +163,11 @@ test('the inbox query runs on the ledger: a pair\'s other, a group\'s members an
   assert.deepEqual(rows(C), [], 'a leaver\'s inbox has no such conversation');
   db.close();
 });
+
+test('the thread tells whether each member reports reads (2026-09-15): a group\'s ✓✓ waits only for those who do, and Message info says "Receipts off"', () => {
+  const t = idxSrc.slice(idxSrc.indexOf('async function handleDmThread('), idxSrc.indexOf('\nasync function ', idxSrc.indexOf('async function handleDmThread(') + 10));
+  assert.ok(/receipts: Prefs\.receiptsOn\(r\.receipts_mode \|\| 'auto'\) \? 1 : 0,/.test(t), 'each member row carries receipts');
+  assert.ok(/read_at: \(r\.hash === me \|\| Prefs\.receiptsOn\(r\.receipts_mode \|\| 'auto'\)\) && r\.read_at != null \? Number\(r\.read_at\) : null,/.test(t), 'and a hidden stamp stays withheld');
+  const ann = idxSrc.slice(idxSrc.indexOf('async function announceDmMembers('), idxSrc.indexOf('\n}\n', idxSrc.indexOf('async function announceDmMembers(')));
+  assert.ok(/receipts: Prefs\.receiptsOn\(r\.receipts_mode \|\| 'auto'\) \? 1 : 0 \}\)\)/.test(ann), 'a newcomer announced with it too');
+});
