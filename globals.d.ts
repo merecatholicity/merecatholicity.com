@@ -3,91 +3,16 @@
    through these `window.mc*` seams — the classic client delegates to the bundle
    with `if (window.mcCore) …`, and the Lit views receive `mcKit` by reference.
    Typed loosely where the shape is genuinely dynamic (mcKit is a ~55-helper grab
-   bag), precisely where it is stable (mcCore is the PS↔JS membrane). Third-party
+   bag), derived where it can be (mcCore is `typeof` the membrane). Third-party
    globals (turnstile, nacl) are declared where they are loaded, not bundled. */
 
 export {};
 
-/* The PureScript↔JS membrane (app/core.ts). Kept in sync with core.ts's exports;
-   these are the erased, plain-JS shapes the UI consumes. */
-interface McCore {
-  rankFor(n: number): string;
-  rankLine(n: number): string;
-  bibleSrc: string;
-  bookSlug(key: string): string | null;
-  verseParts(bookKey: string, ch: number | string, v1: number | string, v2?: number | string | null):
-    { slug: string; ch: number; v1: number; v2: number; href: string } | null;
-  profileLimits: { nick: number; bio: number; sig: number };
-  handleValidate(raw: string): { ok: boolean; handle: string; error: string };
-  handleMax: number;
-  faithLabel(code: string): string;
-  faiths: ReadonlyArray<{ code: string; label: string }>;
-  displayName(hash: string): string;
-  dmTtlLabel(ttl: number | string): string;
-  dmTtlOptions: ReadonlyArray<{ secs: number; label: string }>;
-  dmQuickReactions: ReadonlyArray<string>;
-  dmReaction(raw: string): string | null;
-  quickReactions: ReadonlyArray<string>;
-  reaction(raw: string): string | null;
-  reactionTargets: ReadonlyArray<string>;
-  isReactionTarget(t: string): boolean;
-  notifKinds: ReadonlyArray<string>;
-  notifLabel(it: unknown): string;
-  notifHref(it: unknown): string;
-  notifHasSnippet(kind: string): boolean;
-  dmReplyExcerpt(s: string): string;
-  dmReplySentinel: string;
-  /* the member model (Domain.Dm, 2026-09-13) */
-  dmMaxMembers: number;
-  dmTypingFanCap: number;
-  dmInboxAvatars: number;
-  dmGroupNameMax: number;
-  dmGroupName(raw: string): string | null;
-  dmEnc: { plain: number; pair: number; system: number; sealed: number };
-  dmEnvTags: { pair: string; sealed: string };
-  dmMembersEqual(a: unknown, b: unknown): boolean;
-  dmSysLine(body: string): { tag: string; hashes: string[]; name: string } | null;
-  dmSysLineText(body: string, actor: string, nameOf: (h: string) => string): string;
-  dmSysAddLine(hashes: unknown): string;
-  dmSysLeaveLine: string;
-  dmSysNameLine(name: string): string;
-  dmMissedCallLine: string;
-  dmForwardedLabel: string;
-  dmTally(rows: unknown): { e: string; n: number }[];
-  dmReadByAll(createdAt: number, me: string, members: unknown): boolean;
-  dmMemberHue(hash: string): number;
-  callLine(body: string): { tag: string; secs: number } | null;
-  callLineText(body: string, mine: boolean): string;
-  callLineMissed(body: string, mine: boolean): boolean;
-  canInteract(author: string, me: string, bot: string): boolean;
-  canReport(author: string, me: string, bot: string, isAdmin: boolean): boolean;
-  canEdit(author: string, me: string, isAdmin?: boolean): boolean;
-  canDelete(author: string, me: string, isAdmin: boolean): boolean;
-  topicCompare(a: { sticky?: number; last?: number }, b: { sticky?: number; last?: number }): number;
-  replyPage(total: number, per: number): number;
-  pagerItems(total: number, per: number, active: number): Array<{ gap: boolean; n: number; active: boolean }>;
-  boardCatRows: ReadonlyArray<ReadonlyArray<string>>;
-  boardCatKeys: ReadonlyArray<string>;
-  adminCat: string;
-  emojiPacks: { memes: Array<[string, string]>; pepe: Array<[string, string]> };
-  emojiNamedTokens: string;
-  parseRoute(get: (k: string) => string | null): { tag: string; s: string; n: number };
-  authIsAdmin(s: Record<string, unknown>): boolean;
-  authIsMember(s: Record<string, unknown>): boolean;
-  authGate(s: Record<string, unknown>): string;
-  isMuted(bot: string, hash: string, list: string[]): boolean;
-  toggleMute(hash: string, list: string[]): { list: string[]; added: boolean };
-  blockedMessage(reason: string): string;
-  mentionsIn(text: string, picks: Array<{ token: string; hash: string }>): string[];
-  commentablePages: ReadonlyArray<{ path: string; title: string; kind: string }>;
-  commentablePaths: ReadonlyArray<string>;
-  commentsParseEnabledPages(csv: unknown): string[];
-  commentsSerializeEnabledPages(paths: string[]): string;
-  commentsPageEnabled(csv: unknown, path: string): boolean;
-  commentsJournalFrom(v: unknown): boolean;
-  commentsPageHref(page: unknown): string;
-  [k: string]: unknown;
-}
+/* The PureScript↔JS membrane (app/core.ts) — DERIVED from its exports since
+   2026-09-16: a member added to core.ts is typed here at once, and a member the
+   UI names that core.ts does not export is a compile error (three of this
+   month's tsc failures were declaration drift, not bugs). */
+type McCore = typeof import('./app/core');
 
 interface McStore {
   fetchJson(fetcher: (url: string, init?: RequestInit) => Promise<Response> | Response,

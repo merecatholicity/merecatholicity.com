@@ -1040,7 +1040,7 @@ export function installProfile(B: Boot) {
         lhint.style.color = '';
         if (!raw) { lhint.textContent = ''; return; }
         if (window.mcCore && window.mcCore.linkNormalize) {
-          var n = (window.mcCore.linkNormalize as any)(plat, raw);
+          var n = window.mcCore.linkNormalize(plat, raw);
           if (n.ok && n.url) { lhint.textContent = '→ ' + n.url; }
           else { lhint.textContent = 'Use a handle or an https:// link.'; lhint.style.color = '#a3324a'; }
         }

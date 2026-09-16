@@ -298,7 +298,7 @@ split above is the target shape; today its write path is `index.ts` → `lib.ts`
 | Phase | Move | Duplication removed | Shipped? |
 |---|---|---|---|
 | 1 | D1 `wrangler migrations` — one schema origin | — | ✅ |
-| 2A | Strict `tsc` gate (`tsconfig`, `globals.d.ts`, `McCore` contract) | — | ✅ |
+| 2A | Strict `tsc` gate (`tsconfig`, `globals.d.ts`, `McCore` contract — since 2026-09-16 `McCore` is `typeof import('./app/core')`, so the contract cannot drift from the membrane) | — | ✅ |
 | 2B | `app/**` → TypeScript, strict-green; byte-identical bundle | — | ✅ |
 | 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ✅ |
 | 2D | Both workers → TypeScript (`Env`, typed rows) | — | ✅ |

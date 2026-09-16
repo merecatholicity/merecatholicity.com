@@ -53,7 +53,7 @@ export const rankLine = (n: number): string => Rank.rankLine(n | 0);
 
 /* bibleSrc: the Scripture autolink regex fragment, byte-identical to the former
    richtext.js BIBLE.src (golden-tested), spliced into the inline-markdown regex. */
-export const bibleSrc = Scripture.bibleSrc;
+export const bibleSrc: string = Scripture.bibleSrc;
 
 /* bookSlug(key) -> canonical KJV slug string, or null. `key` is an already-
    normalized reference (lowercase, whitespace runs collapsed) — the boundary op
@@ -74,7 +74,7 @@ export const verseParts = (bookKey: string, ch: number | string, v1: number | st
    (a plain PS record). The client profile editors read these for maxLength; the
    worker's MAX_* read the same source in Phase 6. Retires the drift where the
    admin editor capped bio at 1000 while the worker rejects over 500. */
-export const profileLimits = Profile.limits;
+export const profileLimits: { nick: number; bio: number; sig: number } = Profile.limits;
 
 /* handleValidate(raw) -> { ok, handle, error }: the custom @handle format rules
    (Domain.Handle), single-sourced with the worker. `ok` true carries the
@@ -83,31 +83,31 @@ export const profileLimits = Profile.limits;
    Already a plain record (erased inside PureScript), so no further work here.
    handleMax is the max length for the input's maxLength. */
 export const handleValidate = (raw: string): { ok: boolean; handle: string; error: string } => Handle.validate(String(raw == null ? '' : raw));
-export const handleMax = Handle.maxLen;
+export const handleMax: number = Handle.maxLen;
 
 /* linkNormalize(platform, raw) -> { ok, url, error }: sanitize/normalize one
    offsite profile link (website/x/facebook/instagram/tiktok) to a safe https URL,
    single-sourced with the worker (Domain.Links). Already a plain record. */
 export const linkNormalize = (platform: string, raw: string) => Links.normalize(String(platform == null ? '' : platform))(String(raw == null ? '' : raw));
-export const linkPlatforms = Links.platforms;
+export const linkPlatforms: ReadonlyArray<string> = Links.platforms;
 
 /* faithLabel(code) -> the display label, or '' for an unrecognized code (the
    client checks truthiness). faiths -> the ordered [{code,label}] the signup
    radios render. Single-sources the FAITH/FAITH_ORDER copy in comments.js. */
 export const faithLabel = (code: string): string => Maybe.maybe('')((s: string) => s)(Faith.labelForCode(code));
-export const faiths = Faith.faithList;
+export const faiths: ReadonlyArray<{ code: string; label: string }> = Faith.faithList;
 
 /* displayName(hash) -> the "Adjective-Noun xxxx" pseudonym for an identity with
    no nick. Single-sources the ADJ/NOUN wordlists + derivation duplicated in
    comments.js and the worker (Phase 6). Returns a plain string. */
-export const displayName = Pseudonym.displayName;
+export const displayName: (hash: string) => string = Pseudonym.displayName;
 
 /* DM lifetimes: dmTtlLabel(secs) -> the label ("24 hours"/"7 days"/"30 days"),
    coercing a missing/zero value to the 7-day default as the classic did.
    dmTtlOptions -> the ordered [{secs,label}] chooser. Single-sources the
    DM_TTLS the worker also holds (Phase 6). */
 export const dmTtlLabel = (ttl: number | string): string => Dm.ttlLabel((Number(ttl) || Dm.defaultTtl) | 0);
-export const dmTtlOptions = Dm.ttlOptions;
+export const dmTtlOptions: ReadonlyArray<{ secs: number; label: string }> = Dm.ttlOptions;
 
 /* Reactions (Domain.Reaction, 2026-09-12; born in Domain.Dm 2026-09-10):
    quickReactions -> the press-and-hold bar's six; reaction(raw) -> the
@@ -117,10 +117,10 @@ export const dmTtlOptions = Dm.ttlOptions;
    ledger's three targets ('post' | 'wall' | 'wallc'), isReactionTarget the
    membership test. The dm-prefixed names are the same values, kept for the
    DM client's call sites. Nullish input coerces to ''. */
-export const quickReactions = Reaction.quickReactions;
+export const quickReactions: ReadonlyArray<string> = Reaction.quickReactions;
 export const reaction = (raw: string): string | null =>
   Maybe.maybe(null)((s: string) => s)(Reaction.normalizeReaction(String(raw == null ? '' : raw)));
-export const reactionTargets = Reaction.targets;
+export const reactionTargets: ReadonlyArray<string> = Reaction.targets;
 export const isReactionTarget = (t: string): boolean => Reaction.isTarget(String(t == null ? '' : t));
 export const dmQuickReactions = quickReactions;
 export const dmReaction = reaction;
@@ -128,7 +128,7 @@ export const dmReaction = reaction;
    dmReplySentinel -> the U+0001 that opens a reply envelope inside the E2E
    plaintext. */
 export const dmReplyExcerpt = (s: string): string => Dm.replyExcerpt(String(s == null ? '' : s));
-export const dmReplySentinel = Dm.replySentinel;
+export const dmReplySentinel: string = Dm.replySentinel;
 
 /* Conversations with members (Domain.Dm, 2026-09-13): dmMaxMembers the cap,
    dmTypingFanCap how many a typing signal may reach, dmInboxAvatars the
@@ -182,7 +182,7 @@ const notifItem = (it: any) => ({
   commentId: Number(it && it.comment_id) | 0,
   actor: String((it && it.actor_hash) || ''),
 });
-export const notifKinds = Notif.kinds;
+export const notifKinds: ReadonlyArray<string> = Notif.kinds;
 export const notifLabel = (it: any): string => Notif.label(notifItem(it));
 export const notifHref = (it: any): string => Notif.href(notifItem(it));
 export const notifHasSnippet = (kind: string): boolean => Notif.hasSnippet(String(kind == null ? '' : kind));
@@ -216,17 +216,20 @@ export const pagerItems = (total: number, per: number, active: number): Array<{ 
    = the display rows [key,label,blurb,(linkText,linkHref)] the client CATS held;
    boardCatKeys = the key order (the worker's BOARD_CATS); adminCat = the back
    room's board key. Already plain arrays/string, so no erasure. */
-export const boardCatRows = Board.catRows;
-export const boardCatKeys = Board.catKeys;
-export const adminCat = Board.adminCat;
+export const boardCatRows: ReadonlyArray<ReadonlyArray<string>> = Board.catRows;
+export const boardCatKeys: ReadonlyArray<string> = Board.catKeys;
+export const adminCat: string = Board.adminCat;
 
 /* Emoji data (Domain.Emoji), single-sourced with the worker's /config copy.
    emojiPacks = { memes:[[code,path]…], pepe:[…] } (the image packs); the
    standard ~250-emoji set stays client-only. emojiNamedTokens = the space-
    separated "name emoji …" alias source the client pairs into NAMED_EMOJI.
    Both already plain, so no erasure. */
-export const emojiPacks = Emoji.packs;
-export const emojiNamedTokens = Emoji.namedTokens;
+/* the packs are [token, src] pairs; the compiled literal types as string[][], so the
+   tuple shape is asserted here, in the membrane, once */
+type EmojiPack = Array<[string, string]>;
+export const emojiPacks: { memes: EmojiPack; pepe: EmojiPack } = Emoji.packs as { memes: EmojiPack; pepe: EmojiPack };
+export const emojiNamedTokens: string = Emoji.namedTokens;
 
 /* parseRoute(get) -> {tag, s, n}: the forum's URL→view decision (Domain.Route),
    the priority ladder comments.js route() ran. `get` is URLSearchParams.get
@@ -285,7 +288,10 @@ export const mentionsIn = (text: string, picks: Array<{ token: string; hash: str
    image,video,audio order); kindOfKey parses an R2 key `wall/<i|v|a>/<64hex>`
    strictly (the claim-time mask enforcement); the MIME helpers carry the exact
    whitelist (case-insensitive, ;codecs stripped). Maybe erased to value|null. */
-export const mediaDefaults = Media.defaults;
+export const mediaDefaults: { imageMaxBytes: number; videoMaxBytes: number; audioMaxBytes: number; audioMaxSeconds: number;
+  kindsDm: string; kindsWall: string; kindsBoard: string; capDmBytes: number; capWallBytes: number; capBoardBytes: number;
+  autocompress: boolean; scanWall: boolean; scanBoard: boolean; voiceDm: boolean; voiceWall: boolean; voiceBoard: boolean;
+  retentionWallDays: number; retentionBoardDays: number } = Media.defaults;
 export const mediaClampKindBytes = (n: number): number => Media.clampKindBytes(Number(n) || 0);
 export const mediaClampAudioSeconds = (n: number): number => Media.clampAudioSeconds(Number(n) || 0);
 export const mediaClampCapBytes = (n: number): number => Media.clampCapBytes(Number(n) || 0);
