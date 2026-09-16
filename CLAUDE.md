@@ -3,8 +3,9 @@
 Guidance for agents working in this repository: the website **merecatholicity.com**, its
 Cloudflare backend, and the build/deploy system. This file is the **rulebook and the map**,
 kept short on purpose. The long-form reference — every design decision and postmortem since
-July 2026, ~270 KB — is **`docs/architecture/INFRASTRUCTURE.md`**: before changing a
-subsystem, read its passage there (index at the end of this file; grep the bold lead-in).
+July 2026 — is the dated log under **`docs/architecture/log/`**, indexed by
+`docs/architecture/INFRASTRUCTURE.md`: before changing a subsystem, read its passage (find the
+bold lead-in in the index, grep it in the month's file).
 
 - `docs/architecture/CICD.md` — **how work ships**: the workflows, the approval gate, every
   credential, the exceptions, the traps. Read before deploying, changing infra, or touching a secret.
@@ -15,8 +16,9 @@ subsystem, read its passage there (index at the end of this file; grep the bold 
   `tests/README.md`, `terraform/README.md`.
 - If `CONTEXT_DUMP.txt` is present in the root and you work on text content, ingest it first.
 
-**Keep the documents current in the same change**: this file for rules; INFRASTRUCTURE.md for
-the why (append, dated, bold lead-in); CICD.md when a workflow, secret or make target it names
+**Keep the documents current in the same change**: this file for rules; the log for the why
+(a dated passage with a bold lead-in appended to `docs/architecture/log/<this month>.md`, then
+`scripts/infra_index.py --write`); CICD.md when a workflow, secret or make target it names
 changes; CODEBASE.md when module structure changes; README when the human story changes.
 
 ## Standing authorization, and the only road
@@ -416,20 +418,11 @@ its test in the same change; never delete a test to go green.
   and one fine-grained GitHub PAT — inventory and rotation in CICD.md §4.
 - **History** was rewritten 2026-09-09 (554 → 153 MB); every earlier sha is gone — re-clone.
 
-## INFRASTRUCTURE.md — index of the long-form reference
+## The long-form reference
 
-Each entry is the bold lead-in of a passage, by section; grep it verbatim to land there.
-
-- **Preamble**: Deploy authorization · Never store sensitive information in this file · Keep this file current · History was REWRITTEN on 2026-09-09 · Repository layout
-
-- **Hosting and delivery**: GitHub Pages serves what `.github/workflows/build.yml` deploys · Cloudflare · THE PUBLISHED PDFs LIVE IN R2, NOT ON PAGES · Deploying the site is a push to `main` · `comments.js` is BUILT from TypeScript now · Cache-busting is AUTOMATIC
-
-- **Build system**: The JS toolchain is npm · Silent build failures are impossible in the resources loops now · The stylesheet is Tailwind · The Lit interior campaign is COMPLETE · The app shell · The sheet owns the scroll while it is open · Nothing scrolls sideways on a phone · Navigation robustness + PWA hardening · The discovery + retention wave · The partials are load-bearing here · Feed/Wall · The readability makeover · DM per-message likes, the quiet bell, and UI sounds · CI builds the site · public · What made CI practical · `make html` with nothing changed went 362 s → 0.08 s · Two CI-specific traps, both silent, both handled in the workflow · Four real bugs the first CI runs surfaced, none of them CI's fault · private shelf · Navigation · Resources · The complete Schaff corpus · Curated extractions from the Schaff volumes · The schism documents · The high-church and Roman-history shelves · Project Gutenberg books · The Latin & Greek classics and Indo-European shelf · The Second Temple shelf · The Douay-Rheims Bible · The Catena Aurea · The King James Bible · The Summa Theologica · The Newman corpus · KJV Scourby audio · The Library page · Deep-linking
-
-- **The PureScript application layer**: The site's application/domain logic IS a PureScript kernel; Lit.js is… · The seam · `app/core.js` is the TRANSLATION MEMBRANE · Toolchain · The `purs` compiler is an npm devDependency · `spago` · `make psbuild` · eslint · `?v=N` law applies to PS exactly as to any bundle change · A slice ships only when all FOUR gates pass · Lit stays presentational · The worker shares the kernel
-
-- **Testing policy**: Tests here exist to CLARIFY what the code does for a human reading the… · `make tests` · Three layers, so a new test has an obvious home · `make tests` must pass before any commit or push · WHEN to add a test
-
-- **Infrastructure as code (Terraform, 2026-09-08)**: THE BOUNDARY IS THE DEPLOY, and it is the whole design · Codifying `bot_management` closes a real trap · The drift the PDF move left is ADOPTED · TERRAFORM RUNS FROM CI NOW · Four things CANNOT be managed, and the reason is the provider, not a… · State lives in R2 · Blast radius
-
-- **Cloudflare Workers (dynamic backend)**: D1 schema changes · Both workers are TypeScript now · The comments worker is a MODULE SET now, not a monolith · The worker's sibling imports name `.ts` files, and only `durable.ts` imports `cloudflare:workers` · Worker handlers run in the unit suite · The handlers live in `routes/*` now · One UI: the classic twins of the Lit screens are gone · The DM client is six factories · The bindings are typed and the DM wire shapes have a home · `comments-worker/` · Moderation is all in-platform · Direct messages · The member media platform · Perceived speed · The eighth Turnstile finding · The social layer's global kill switch · 1v1 voice calls · In-app notifications · Unread threads, mute, and profile post-history · Post count and rank · Profiles and avatars · Forum full-text search · Post preview and local drafts · merecat, the librarian bot · merecat-local, the GPU backend (retired 2026-09-10) · The reasoning dials · merecat is built by the pipeline · The Cloudflare free-tier usage monitor · The AI budget guard · Comments sections are admin-switched, per page and per journal article · The DM press-and-hold surface · The conversation is a chat screen · Phones show no footer except on the home tab · The merecat ask row is the DM composer's shape · About pared to ✕; a swipe dismisses the keyboard; Online/Offline in the thread and on profiles · Sent and received bubbles read apart in every palette · "Last seen …" beside Offline · An unread inbox row draws the eye · Wave F: the classic client is feature modules · A hold picks a message, never a word · Reading back is never interrupted, and never blind · The tab badge counts words, and the bar has no hero · Every post opens the one surface · Admins edit any post · DMs are never AI-screened · A profile picture pops out full size · The keyboard shackle · The ring that reaches a closed app, and the miss recorded once · The call log: every call leaves one event line · Haptics · Badges everywhere, and reading marks read · Media hygiene: every delete takes its media · The fixed chrome answers the finger, not the platform's click · One member model, envelope v2, and the object that outlives its message · Multi-member conversations and forwarding · Who has read, in a group · `contact-worker/` · The worker can speak: alerts by email and Discord, both from Platform settings · Backups are daily and verified, and every cron is a chain that cannot lose a step · Rollback is a drilled road, a staged rollout is a switch, and the watchdog has an outside leg · The four nits
+`docs/architecture/INFRASTRUCTURE.md` holds the standing rules and, generated at its end, the
+**index of every passage by section** (`scripts/infra_index.py --write`; the test keeps it
+current). The passages themselves live in `docs/architecture/log/YYYY-MM.md`, one file per
+month, each a bullet opening with a **bold lead-in** and a date — grep the lead-in there. A
+new passage is appended to the current month's file under its `## section` heading, wrapped
+at 100 columns (`scripts/infra_index.py --wrap <file>`), then the index is regenerated.

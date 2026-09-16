@@ -106,7 +106,7 @@ calls, media, feed, DM and readability work.
 above), the largest 2,304 lines; no hand-written file is over 5,100 lines now and
 the largest three are the worker's `index.ts`, `lib.ts` and the DM module. The
 split was mechanical — every statement of the old boot moved verbatim into the
-module that owns it (the mechanism is the Wave F passage in INFRASTRUCTURE.md) —
+module that owns it (the mechanism is the Wave F passage in the infrastructure log, `docs/architecture/log/`) —
 so the *lines* moved but the *duplication* did not; the classic-vs-Lit dual
 paths measured below are unchanged and remain the next target.
 
@@ -297,7 +297,7 @@ comments-worker/src/
 
 **Newcomer reading order** (a handler's home is `routes/<feature>.ts`; `index.ts` is the table):
 
-1. **This file**, then `README.md` (build), `CLAUDE.md` (rules) and `docs/architecture/INFRASTRUCTURE.md` (infra, long form).
+1. **This file**, then `README.md` (build), `CLAUDE.md` (rules) and `docs/architecture/INFRASTRUCTURE.md` (the standing rules and the index of the dated log under `docs/architecture/log/`).
 2. `purescript/src/Domain/Route.purs` + `Auth.purs` + `Access.purs` — the rules
    that decide what a URL shows and who may do what. Small, pure, readable.
 3. `app/core.ts` — how those rules cross into JS.

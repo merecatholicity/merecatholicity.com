@@ -524,6 +524,10 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
   CLAUDE.md's count. Five per account on the free plan; four are in use.
 - **a webtest suite** → `SUITES` in `scripts/webtest_nightly.py` if it is read-only, then
   `make nightly-baseline` and commit `webtest/nightly_baseline.json`.
+- **a passage of the long-form reference** → append it to `docs/architecture/log/<this
+  month>.md` under its `## section` heading (a bullet, a **bold lead-in**, a date, 100
+  columns — `scripts/infra_index.py --wrap`), then `scripts/infra_index.py --write`; the
+  test refuses a stale index, a duplicated lead-in or an unwrapped line.
 
 *Written 2026-09-09, the day the pipeline took over. If this document and the workflows
 disagree, the workflows are right and this document is a bug — fix it in the same commit.*
@@ -576,10 +580,10 @@ a retirement is its own dated migration (CLAUDE.md, the retirement cadence).
 
 | Act | Command | Result | Time |
 |---|---|---|---|
-| roll back | `make worker-rollback` | (recorded below the day of the drill) | |
-| roll forward | `make worker-rollback VERSION=<current>` | | |
-| stage 10% | `gh workflow run workers.yml -f mode=stage -f percent=10` | | |
-| promote | `gh workflow run workers.yml -f mode=promote` | | |
-| ops-watch green | `gh workflow run ops-watch.yml` | | |
-| ops-watch red | `gh workflow run ops-watch.yml -f host=https://nowhere.invalid` | | |
+| roll back | `make worker-rollback` | fe21d23b → c0148468 (the A3 Version); `/config` 200, `apiVersion` 1 | `wrangler rollback` 5 s; 16.6 s wall with the listings and the probe |
+| roll forward | `make worker-rollback VERSION=fe21d23b…` | c0148468 → fe21d23b; `/config` 200 | 4 s; 11.0 s wall |
+| stage 10% | `gh workflow run workers.yml -f mode=stage -f percent=10` | a Version uploaded from CI (5cb88e6a…), `deployments status`: 10% → 5cb88e6a, 90% → fe21d23b | the run 3 min 20 s (gates + upload + split) |
+| promote | `gh workflow run workers.yml -f mode=promote` | 100% → 5cb88e6a (the staged Version); `/config` 200 | the run 3 min 10 s |
+| ops-watch green | `gh workflow run ops-watch.yml` | success — the heartbeat table in the job summary, `ok: true` | ~40 s |
+| ops-watch red | `gh workflow run ops-watch.yml -f host=https://nowhere.invalid` | failure, as designed (the door did not answer 200) — the red path proven | ~40 s |
 

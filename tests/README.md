@@ -104,7 +104,9 @@ tests/
                        parser and its baseline comparison (webtest_nightly: a rise above the baseline or
                        a crash is a regression, the known admin-key shape is not), API.md's parity with the
                        route table (api_parity: every mounted route named — abbreviations resolved — and every
-                       named path mounted or documented as retired)
+                       named path mounted or documented as retired), the infrastructure log's index and rules
+                       (infra_index: the committed index equals the generated one, lead-ins unique, every passage
+                       under a section heading, prose wrapped at 100 columns)
   css/                 the Tailwind build invariants (asserted on the committed docs/style.css)
 ```
 
