@@ -153,11 +153,12 @@
     // member's home by their hash. "1" is the single instance that shipped in
     // July. Raise it (2, 8, 16 … 64) when the Health card's per-shard socket
     // count climbs into the thousands; a deploy disconnects every socket, so
-    // the clients simply reconnect under the new count — no other step. Keep
-    // it at "1" until every open tab carries the routing hint (a day after
-    // the sharding deploy), or an old bundle's private frames go to a shard
-    // it never dialled until its page reloads.
-    "HUB_SHARDS": "1",
+    // the clients simply reconnect under the new count — no other step. A tab
+    // still running a bundle without the routing hint lands off its home
+    // shard until its page reloads (logged hub_misrouted); "2" since the day
+    // of the sharding deploy, at the owner's word, so the cross-shard road
+    // runs in production every day rather than waiting untried.
+    "HUB_SHARDS": "2",
     // Comment email notifications were retired in favor of RSS + the Activity
     // Audit page, so there is no per-comment notification recipient. The
     // send_email binding EMAIL (top level) is for the ops alerts alone.
@@ -229,7 +230,7 @@
         "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d",
         // Same account as prod; set CF_USAGE_TOKEN --env staging for the monitor.
         "CF_ACCOUNT_ID": "6093bc0889c95a08f0a92a8df6750c66",
-        "HUB_SHARDS": "1"
+        "HUB_SHARDS": "2"
       }
     }
   }

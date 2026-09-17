@@ -388,8 +388,10 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   (`wrangler.jsonc` vars; `Domain.Hub` is the law). Raising it is a var change + push: a deploy
   disconnects every socket, so the clients reconnect under the new count with no other step. The
   Health card (and the ops probe's `hub`) shows sockets per shard — raise when a shard's count
-  climbs into the thousands. Never raise it within a day of a client change that touched the
-  routing hint (`app/live.ts` `?h=`): an old tab without the hint lands off its home shard.
+  climbs into the thousands. A tab still running a bundle from before a change to the routing
+  hint (`app/live.ts` `?h=`) lands off its home shard until it reloads (logged `hub_misrouted`):
+  after such a client change, watch `wrangler tail` for it before and after raising. It has
+  stood at `2` since 2026-09-17, the day the sharding shipped, so the cross-shard road runs daily.
 - **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `TURN_KEY_SECRET`,
   `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
   Never in git, never in CI. `CF_USAGE_TOKEN` (read-only, *Account Analytics: Read*)
