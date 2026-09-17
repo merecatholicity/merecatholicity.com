@@ -138,6 +138,7 @@ on page one.)
 - **Three layers, so a new test has an obvious home.** — `log/2026-09.md`
 - **`make tests` must pass before any commit or push (standing gate).** — `log/2026-09.md`
 - **WHEN to add a test (the standing rule for future work).** — `log/2026-09.md`
+- **The nightly report goes out as a browser (2026-09-17)** — `log/2026-09.md`
 
 ### Infrastructure as code (Terraform, 2026-09-08)
 

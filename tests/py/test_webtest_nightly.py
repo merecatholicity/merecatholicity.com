@@ -2,7 +2,8 @@
 line every webtest prints, and the comparison with the baseline that names a
 regression. What would break silently: a crashed suite counted as 0 FAIL and
 passed; a suite whose baseline already fails (an admin-key suite) alerting
-every night; a suite the baseline never saw judged leniently."""
+every night; a suite the baseline never saw judged leniently; the report sent
+with Python's own user agent, which Cloudflare refuses (error 1010)."""
 import os
 import sys
 import unittest
@@ -58,6 +59,37 @@ class NightlyParse(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(wt, name + '.py')), name)
         for writer in ('test_post', 'test_interactive', 'test_admin_reads', 'test_call', 'test_voice', 'test_merecat_composer'):
             self.assertNotIn(writer, wn.SUITES, writer + ' writes or needs an admin key: not for a nightly')
+
+
+class NightlyReport(unittest.TestCase):
+    def test_the_report_goes_out_as_a_browser(self):
+        seen = {}
+
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b'{"ok": true, "stored": true}'
+
+        def fake(req, timeout=None):
+            seen['ua'] = req.get_header('User-agent')
+            seen['url'] = req.full_url
+            return Resp()
+
+        real = wn.urllib.request.urlopen
+        wn.urllib.request.urlopen = fake
+        try:
+            out = wn.report({'test_x': {'pass': 1, 'fail': 0, 'exit': 0}}, [], 'k')
+        finally:
+            wn.urllib.request.urlopen = real
+        self.assertEqual(out, {'ok': True, 'stored': True})
+        self.assertEqual(seen['url'], wn.DOOR)
+        self.assertTrue(seen['ua'].startswith('Mozilla/5.0'), seen['ua'])
+        self.assertNotIn('Python-urllib', seen['ua'])
 
 
 if __name__ == '__main__':

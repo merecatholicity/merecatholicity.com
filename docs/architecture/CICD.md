@@ -417,9 +417,10 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   stood at `2` since 2026-09-17, the day the sharding shipped, so the cross-shard road runs daily.
 - **Rate limits and replicas (2026-09-17):** six rate-limit bindings live in `wrangler.jsonc` — the
   three member buckets and their per-address backstops (`*_IP_LIMIT`); a number is a one-line change
-  and a push. D1 read replication on the comments database is Terraform's (`terraform/d1.tf`,
-  `read_replication.mode`); turning it off is `"disabled"` and a push, and the worker keeps working
-  either way (without replicas every session is served by the primary). The ops probe's `d1` says
+  and a push. D1 read replication on the comments database is declared in `terraform/d1.tf`
+  (`read_replication.mode`), but the Terraform token cannot write D1, so a change to it is
+  applied by hand with the workers token (§10, exception 13). The worker keeps working either
+  way (without replicas every session is served by the primary). The ops probe's `d1` says
   where an unconstrained read ran.
 - **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `TURN_KEY_SECRET`,
   `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
@@ -545,6 +546,13 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
     dispatch is the road (the build of record). A rollback is always followed by a
     `git revert` push. **The nightly headless run** (`make nightly-install`) runs on the dev
     box for the same reason as 8, and reports through the ops door.
+13. **D1 read replication on the comments database** (2026-09-17, owner-authorised) —
+    `terraform/d1.tf` declares `read_replication.mode = "auto"`, but the Terraform token
+    holds D1 Read only (by design: it cannot write D1), so its apply failed with "failed to
+    make http request". The setting was applied once with the workers token (`PUT
+    /accounts/{id}/d1/database/{id}` with `{"read_replication":{"mode":"auto"}}`); the plan
+    then read *No changes*. A future change to any D1 database setting meets the same wall:
+    either apply it this way, written here, or give the Terraform token D1 Edit first.
 
 ---
 

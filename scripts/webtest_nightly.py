@@ -29,6 +29,11 @@ import urllib.request
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASELINE = os.path.join(ROOT, 'webtest', 'nightly_baseline.json')
 DOOR = os.environ.get('MC_OPS_DOOR', 'https://merecatholicity-comments.support-609.workers.dev/api/comments/ops/report')
+# Cloudflare answers Python-urllib's own user agent with 403 "error code: 1010",
+# on the workers.dev host as on the zone: the first scheduled run's report
+# (2026-09-17) never reached the door. A browser UA, as publish_pdfs.py sends.
+UA = ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) '
+      'Chrome/128.0 Safari/537.36')
 SUMMARY = re.compile(r'====\s*(\d+)\s+PASS\s+(\d+)\s+FAIL\s*====')
 PASS_LINE = re.compile(r'^(PASS\b|  ok )')
 FAIL_LINE = re.compile(r'^FAIL\b')
@@ -104,7 +109,7 @@ def report(results, regressions, key):
         'suites': ['%s %d/%d' % (n, r['pass'], r['pass'] + r['fail']) for n, r in results.items()],
         'regressions': regressions,
     }
-    req = urllib.request.Request(DOOR, data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'}, method='POST')
+    req = urllib.request.Request(DOOR, data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'User-Agent': UA}, method='POST')
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
 
