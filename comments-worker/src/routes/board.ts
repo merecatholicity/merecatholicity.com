@@ -467,6 +467,9 @@ async function handleFeed(request: Request, env: Env, url: URL) {
     ).bind(page).all();
     results = rows.results;
   }
+  /* before the items: a reply's title reads it (declared after them, every
+     category or page feed holding a reply threw, 2026-09-17 — found by the sweep) */
+  const pageHref = Comments.pageHref(page);   // 'journal:<id>' reads as the article's permalink
   const items = results.map(function (c: any) {
     const name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
     const link = viewLink(env, page, c.id, c.parent_id);
@@ -480,7 +483,6 @@ async function handleFeed(request: Request, env: Env, url: URL) {
       '<description>' + xmlEscape(c.body) + '</description></item>';
   }).join('');
   const isBoard = page.indexOf('board:') === 0;
-  const pageHref = Comments.pageHref(page);   // 'journal:<id>' reads as the article's permalink
   const feedTitle = topicRow
     ? topicRow.title + ' - Catholicity Board - merecatholicity.com'
     : isBoard

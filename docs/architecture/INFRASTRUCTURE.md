@@ -201,5 +201,6 @@ on page one.)
 - **A public endpoint served the worker's whole env for six weeks (2026-09-17)** — `log/2026-09.md`
 - **Four ceilings lifted in one change: replicas for the reads, presence only where it is watched, limits per member, and a librarian that stops counting its shelf (2026-09-17)** — `log/2026-09.md`
 - **Nothing the worker holds in secret leaves it: the env is sealed and every answer is scanned (2026-09-17)** — `log/2026-09.md`
+- **The category and page feeds answered 500 whenever they held a reply (2026-09-17)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

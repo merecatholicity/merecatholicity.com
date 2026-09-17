@@ -261,6 +261,20 @@ export const ROUTE_HINTS = {
   'POST /api/merecat/config': () => ({ config: { topk: 8 } }),
 };
 
+/* a public read's other modes, each asked for alone */
+export const GET_MODES = [
+  ['/api/comments/feed', () => ({ cat: 'pub' })],
+  ['/api/comments/feed', () => ({ page: '/credo.html' })],
+  ['/api/comments/feed', (ids) => ({ topic: String(ids.topic) })],
+  ['/api/comments', (ids) => ({ page: 'journal:' + ids.reply })],
+  ['/api/comments/journal', (ids) => ({ id: String(ids.reply) })],
+  ['/api/comments/board/topic', (ids) => ({ id: String(ids.topic), find: String(ids.reply) })],
+  ['/api/comments/search', () => ({ q: 'body', sort: 'new' })],
+  ['/api/comments/search', (ids, who) => ({ author: who.member.hash })],
+  ['/api/comments/profile', (ids) => ({ handle: ids.handle || 'sweepmember' })],
+  ['/api/comments/board/cat', () => ({ cat: 'pub', q: 'sweep' })],
+];
+
 function query(ids, who) {
   const q = new URLSearchParams({
     id: String(ids.topic), topic: String(ids.topic), page: '/credo.html', cat: 'pub', p: '1', q: 'body',
@@ -423,6 +437,14 @@ export async function runSweep({ only, wrap } = {}) {
         meta: { m: 'GET', p: '/api/comments/recent', as: 'anon', road: 'workers.dev' },
         m: 'GET', path: '/api/comments/recent', opts: () => ({ host: 'https://merecatholicity-comments.sweep.workers.dev' }),
       }));
+      /* the public reads whose MODE is chosen by their query (the table's call
+         sends every parameter at once, so one mode wins): each other mode alone */
+      for (const [path, variant] of GET_MODES) {
+        calls.push(await one(worker, who, vars, {
+          meta: { m: 'GET', p: path, as: 'anon', road: 'mode ' + Object.keys(variant({}, who)).join('+') },
+          m: 'GET', path: (ids) => path + '?' + new URLSearchParams(variant(ids, who)).toString(),
+        }));
+      }
       /* the back room's attachment, asked for by anyone */
       for (const as of ['anon', 'admin']) {
         calls.push(await one(worker, who, vars, {

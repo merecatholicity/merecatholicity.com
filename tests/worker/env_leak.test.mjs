@@ -129,6 +129,11 @@ test('the other roads: workers.dev opens only its doors, the back room keeps its
   const card = sweep.calls.find((c) => c.road === 'handle' && c.p === '/@sweepmember');
   assert.equal(card.status, 200);
   assert.match(card.text, /Sweep Member \(@sweepmember\)/, 'the card was rendered, so its injection was swept');
+  /* every other mode of a public read answers (the category feed threw for
+     months: a reply's title read a const declared below it) */
+  const modes = sweep.calls.filter((c) => c.road.startsWith('mode '));
+  assert.ok(modes.length >= 10);
+  assert.deepEqual(modes.filter((c) => c.status !== 200).map(label), [], 'a public read failed in one of its modes');
   const daily = sweep.crons.find((c) => c.cron === '15 3 * * *');
   assert.ok(daily.backups.length === 1, 'the daily chain wrote its backup, and the sweep read it');
   assert.ok(daily.emails.length >= 1 && daily.discord.length >= 1, 'the self-check alerted (a stale monthly heartbeat), so its words were swept');
