@@ -22,6 +22,7 @@ the first load, page hops must produce NO top-level Document request.
 import argparse
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -43,6 +44,7 @@ def wd(method, path, body=None, timeout=60):
 
 class Session:
     def __init__(self):
+        self.profile = '/tmp/mc-audit-%d' % int(time.time())   # removed again by close()
         self.drv = subprocess.Popen(
             [os.path.join(CHROME_DIR, 'chromedriver'), '--port=%d' % PORT],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -52,7 +54,7 @@ class Session:
                 'binary': os.path.join(CHROME_DIR, 'chrome'),
                 'args': ['--headless=new', '--no-sandbox', '--disable-gpu',
                          '--disable-dev-shm-usage', '--window-size=1280,900',
-                         '--user-data-dir=/tmp/mc-audit-%d' % int(time.time())],
+                         '--user-data-dir=' + self.profile],
                 'perfLoggingPrefs': {'enableNetwork': True},
             },
             'goog:loggingPrefs': {'browser': 'ALL', 'performance': 'ALL'},
@@ -80,6 +82,11 @@ class Session:
         except Exception:
             pass
         self.drv.send_signal(signal.SIGTERM)
+        try:
+            self.drv.wait(timeout=5)
+        except Exception:
+            pass
+        shutil.rmtree(self.profile, ignore_errors=True)
 
 
 def net_events(raw):

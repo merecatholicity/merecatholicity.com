@@ -23,6 +23,7 @@ hostname, the front door the zone's bot rules do not guard."""
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -68,12 +69,21 @@ def parse_summary(text):
 
 def run_suite(name, timeout=900):
     t0 = time.time()
+    # its own process group, so a suite killed at the timeout takes its
+    # chromedriver and browser with it (they used to outlive it for hours)
+    p = subprocess.Popen([sys.executable, os.path.join(ROOT, 'webtest', name + '.py')],
+                         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                         start_new_session=True)
     try:
-        p = subprocess.run([sys.executable, os.path.join(ROOT, 'webtest', name + '.py')],
-                           cwd=ROOT, capture_output=True, text=True, timeout=timeout)
-        out, code = p.stdout + p.stderr, p.returncode
-    except subprocess.TimeoutExpired as e:
-        out, code = (e.stdout or '') + (e.stderr or '') + '\nTIMEOUT', 124
+        so, se = p.communicate(timeout=timeout)
+        out, code = so + se, p.returncode
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        so, se = p.communicate()
+        out, code = (so or '') + (se or '') + '\nTIMEOUT', 124
     s = parse_summary(out)
     fails = [ln.strip()[:160] for ln in out.splitlines() if ln.startswith('FAIL')]
     return {'pass': s[0] if s else 0, 'fail': s[1] if s else 0, 'exit': code,

@@ -141,6 +141,7 @@ on page one.)
 - **The nightly report goes out as a browser (2026-09-17)** — `log/2026-09.md`
 - **A sweep that asserts absence must prove its reach (2026-09-17)** — `log/2026-09.md`
 - **Every answer keeps its committed shape, and the lists the wire promises are kept at both ends (2026-09-17)** — `log/2026-09.md`
+- **The nightly's browsers filled a RAM-backed /tmp, and every tab crashed (2026-09-17)** — `log/2026-09.md`
 
 ### Infrastructure as code (Terraform, 2026-09-08)
 

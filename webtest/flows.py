@@ -17,6 +17,7 @@ feature they guard. Stdlib only, like everything in webtest/.
 """
 import json
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -70,9 +71,13 @@ def api(path, body, ua='curl/8.14.1'):
 class Flow:
     def __init__(self, port=9560, autoplay=False, hover=False, mic=None):
         self.port = port
+        # a throwaway profile, removed again by close(): /tmp is a RAM-backed
+        # tmpfs here, and 246 leftover profiles once filled it — every tab then
+        # crashed and the nightly reported eight false regressions (2026-09-17)
+        self.profile = '/tmp/mc-flow-%d-%d' % (port, int(time.time()))
         args = ['--headless=new', '--no-sandbox', '--disable-gpu',
                 '--disable-dev-shm-usage', '--window-size=1280,900',
-                '--user-data-dir=/tmp/mc-flow-%d-%d' % (port, int(time.time()))]
+                '--user-data-dir=' + self.profile]
         if autoplay:
             args.append('--autoplay-policy=no-user-gesture-required')
         if mic == 'fake':
@@ -237,6 +242,11 @@ class Flow:
         except Exception:
             pass
         self.drv.send_signal(signal.SIGTERM)
+        try:
+            self.drv.wait(timeout=5)
+        except Exception:
+            pass
+        shutil.rmtree(self.profile, ignore_errors=True)
 
     def __enter__(self):
         return self
