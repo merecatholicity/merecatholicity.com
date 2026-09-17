@@ -28,6 +28,7 @@ import { registerHooks } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
 import { sha256hex, appSettingsCache, merecatConfigCache } from '../../comments-worker/src/lib.ts';
 import { quotaCache } from '../../comments-worker/src/quota.ts';
+import { keyCache } from '../../comments-worker/src/oidc.ts';
 
 export * from './worker_src.mjs';
 
@@ -270,11 +271,13 @@ export function netSpy(respond) {
 }
 
 /* lib.ts caches app_settings and the merecat config for five minutes; quota.ts
-   caches the meter — reset between cases or a seeded setting is ignored */
+   caches the meter; oidc.ts GitHub's signing keys — reset between cases or a
+   seeded setting (or a test's own issuer) is ignored */
 export function resetCaches() {
   appSettingsCache.at = 0; appSettingsCache.s = null;
   merecatConfigCache.at = 0; merecatConfigCache.cfg = null;
   quotaCache.reading = null; quotaCache.failedAt = 0;
+  keyCache.at = 0; keyCache.tried = 0; keyCache.keys = new Map(); keyCache.loading = null;
 }
 
 /* ---- identities ----------------------------------------------------------- */

@@ -15,7 +15,6 @@ import { loadWorker, makeEnv, freshDb, freshLibDb, identity, resetCaches, call, 
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = readFileSync(join(root, 'comments-worker', 'src', 'routes', 'merecat.ts'), 'utf8');
-const INGEST = 'ingest-key-for-tests';
 const HOST = 'https://merecatholicity-comments.example.workers.dev';
 let worker, ADMIN;
 before(async () => {
@@ -41,7 +40,7 @@ function seed(db, id, rows, stamp = true) {
 }
 
 function envWith(rooms) {
-  const env = makeEnv({ db: freshDb(), libdb: rooms[0], vars: { MERECAT_INGEST_KEY: INGEST, ADMIN_HASHES: ADMIN.hash } });
+  const env = makeEnv({ db: freshDb(), libdb: rooms[0], vars: { ADMIN_HASHES: ADMIN.hash } });
   env.LIBDB2 = d1(rooms[1]);
   env.LIBDB3 = d1(rooms[2]);
   return env;
@@ -56,7 +55,7 @@ test('a room from before the column gains it, backfilled to exactly what the old
   seed(deep2, 'cicero', [{ heading: 'De Officiis', text: 'Quamquam te, Marce fili' }]);
   const before = [scan(one), scan(deep), scan(deep2)];
   const env = envWith([one, deep, deep2]);
-  const r = await post(env, '/api/merecat/works', { key: INGEST });
+  const r = await post(env, '/api/merecat/works', { key: ADMIN.key });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   const cols = deep.prepare('PRAGMA table_info(works)').all().map((c) => c.name);
   assert.ok(cols.includes('text_bytes'), 'the deep room gained the column');
@@ -67,7 +66,7 @@ test('a room from before the column gains it, backfilled to exactly what the old
   assert.deepEqual([r.json.text_bytes, r.json.text_bytes_deep, r.json.text_bytes_deep2], [before[0], before[1] - unfinished, before[2]],
     'the same numbers the scan gave, less the push that never ended');
   /* a second call reads the column alone: rooms that have it are not altered again */
-  const again = await post(env, '/api/merecat/works', { key: INGEST });
+  const again = await post(env, '/api/merecat/works', { key: ADMIN.key });
   assert.deepEqual([again.json.text_bytes, again.json.text_bytes_deep, again.json.text_bytes_deep2], [r.json.text_bytes, r.json.text_bytes_deep, r.json.text_bytes_deep2]);
 });
 
@@ -76,10 +75,10 @@ test('the end of a push stamps the size from the work\'s own chunks; a re-push r
   const env = envWith([one, deep, deep2]);
   const work = { id: 'tract', title: 'Tract', url: '', tier: 3, kind: 'text' };
   const push = async (texts) => {
-    assert.equal((await post(env, '/api/merecat/ingest', { key: INGEST, mode: 'begin', store: 'deep', work })).status, 200);
+    assert.equal((await post(env, '/api/merecat/ingest', { key: ADMIN.key, mode: 'begin', store: 'deep', work })).status, 200);
     const chunks = texts.map((t, i) => ({ cid: 'tract#' + i, seq: i, heading: 'H' + i, anchor: '', text: t }));
-    assert.equal((await post(env, '/api/merecat/ingest', { key: INGEST, mode: 'append', store: 'deep', work, chunks })).status, 200);
-    assert.equal((await post(env, '/api/merecat/ingest', { key: INGEST, mode: 'end', store: 'deep', work: { ...work, hash: 'h' + texts.length, chunks: texts.length } })).status, 200);
+    assert.equal((await post(env, '/api/merecat/ingest', { key: ADMIN.key, mode: 'append', store: 'deep', work, chunks })).status, 200);
+    assert.equal((await post(env, '/api/merecat/ingest', { key: ADMIN.key, mode: 'end', store: 'deep', work: { ...work, hash: 'h' + texts.length, chunks: texts.length } })).status, 200);
   };
   await push(['alpha', 'beta gamma']);
   const size = () => Number(deep.prepare("SELECT text_bytes FROM works WHERE id = 'tract'").get().text_bytes);
@@ -87,7 +86,7 @@ test('the end of a push stamps the size from the work\'s own chunks; a re-push r
   assert.equal(size(), scan(deep));
   await push(['one']);
   assert.equal(size(), 'one'.length + 'H0'.length, 're-pushed: the old chunks and their size are gone');
-  const r = await post(env, '/api/merecat/works', { key: INGEST });
+  const r = await post(env, '/api/merecat/works', { key: ADMIN.key });
   assert.equal(r.json.text_bytes_deep, scan(deep));
   assert.equal(r.json.text_bytes, 0);
 });

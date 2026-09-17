@@ -946,16 +946,31 @@ All require the caller's hash in the `admins` table; all refuse non-admins with
 | `POST /api/comments/admin/usage` | `{key}` | The Cloudflare free-tier usage monitor (`admin.html?usage=1`). Reads the account's GraphQL Analytics (Workers requests, AI neurons, D1 rows/storage, DO compute/storage, R2 ops/storage, Vectorize dims, TURN egress, Turnstile count) and answers `{ok, configured, at, rows, products, free_as_of, check_utc}` — each row `{id, product, label, used, limit, unit, period: day\|month\|total, pct, band: ok\|watch\|hot\|over\|na, detail?, note?}` or `{id, product, label, error}` when that one product's fetch failed. `configured:false` until the `CF_USAGE_TOKEN` secret (read-only, scope "Account Analytics: Read") stands beside the `CF_ACCOUNT_ID` var. A daily 23:30 UTC cron runs the same report and system-DMs every admin (as merecat) when any meter crosses 80% or its ceiling — escalations at once, standing warnings weekly (state in `app_settings.usage_alert_state`). |
 | `POST /api/comments/admin/alert-test` | `{key}` | **The alerts' test door (2026-09-16).** Sends one test alert through whatever the Alerts settings open — email (the `send_email` binding, from `alerts@merecatholicity.com`), Discord, or both — and answers `{ok:true, channels:[…], email, discord, errors:[…]}`: `channels` is what the settings opened, `email`/`discord` whether each accepted, `errors` each refusal verbatim (an address not yet verified in Email Routing reads here as `email: <code> <message>`). Never a 5xx for a refused channel. |
 | `POST /api/comments/admin/health` | `{key}` | **The Health card (2026-09-16).** `health` = ops.ts `readOps`: `heartbeat[]` (name, last, age, stale, stale_after — hourly · daily · usage · monthly), `stale[]`, `never[]`, `backup` (the last run's record), `object` (today's or yesterday's backup object actually in the bucket, or null), `backup_ok`, `open[]` (conditions currently alerted), `alerts_at`, `webtest` (the nightly's last report), `egress[]` (2026-09-17: the egress guard's notes — `kind` answer · frame · enumerated, `site`, the secret `names` only, `n`, `first`, `last`, `standing`), `shapes[]` (the same rows for answers whose `Domain.Wire` list was not a list: `site`, the field `names`), and `ok` — no stale heartbeat, no open condition, a plausible backup once the daily has ever run, no egress or shape note younger than a day. |
-| `POST /api/comments/ops/report` | `{key, probe:true}` · `{key, source:'webtest', pass, fail, suites[], regressions[]}` | **The watchdog's outside legs (2026-09-16).** Keyed like the librarian's pipeline (`requireIngest`: the `MERECAT_INGEST_KEY` secret or an admin key; one of `INGEST_DOORS`, so it answers on the worker's **workers.dev** hostname — the pipeline's front door, out of Bot Fight Mode's reach — to a POST without an Origin header). A probe answers `{ok:true, health}` (the object above) — `ops-watch.yml` fails its run when `health.ok` is false. A webtest report is stored (`ops_webtest`) and a non-empty `regressions` alerts through the Alerts channels; answers `{ok, stored, alerted}`. |
+| `POST /api/comments/ops/report` | `{key, probe:true}` · `{key, source:'webtest', pass, fail, suites[], regressions[]}` | **The watchdog's outside legs (2026-09-16).** A pipeline door (one of `INGEST_DOORS`, so it answers on the worker's **workers.dev** hostname — the pipeline's front door, out of Bot Fight Mode's reach — to a POST without an Origin header). Since 2026-09-17 its callers are: `ops-watch.yml` with `Authorization: Bearer <its GitHub OIDC token>` and no `key` (the probe only — its report is `403 "No."`); the dev box's nightly with `key` = the worker secret `OPS_REPORT_KEY` (probe and report; that key opens no other door); an admin key. A probe answers `{ok:true, health}` (the object above) — `ops-watch.yml` fails its run when `health.ok` is false. A webtest report is stored (`ops_webtest`) and a non-empty `regressions` alerts through the Alerts channels; answers `{ok, stored, alerted}`. A body that is not a JSON object is `400`. |
 | `POST /api/comments/csp-report` | a browser's CSP report (`application/csp-report` or `application/reports+json`) | **The CSP report collector (2026-09-16).** Keyless, `READ_LIMIT`, body ≤ 16 KB, always `204`. Tallies — never stores — each violation by effective directive · blocked origin (extensions folded into `extension`) · document path (no query string), a count and first/last seen, the top hundred in `app_settings.csp_report_tally`; the Health card (`/admin/health` → `csp`) shows it. The zone's Report-Only policy names this door as its `report-uri`/`report-to`; the flip to an enforced policy waits on the tally reading as noise. |
 
 **merecat admin/tooling** (all `requireAdmin`): `POST /api/merecat/about`
 (model/persona/works roster — url-less rows are the private shelves, render as
-bare titles), `/works`, `/config` (live persona + config, ~5 min per-isolate
-cache), `/backends` (local GPU health probe, multi-second), `/stats`,
+bare titles), `/backends` (local GPU health probe, multi-second), `/stats`,
 `/admin/threads` + `/admin/thread` (30-day read-only observation), `/mention`
-(re-summon the bot on a comment), `/ingest` (the `librarian/ingest.py`
-begin/append/end/delete protocol).
+(re-summon the bot on a comment).
+
+**The pipeline doors** (`oidc.ts`, 2026-09-17; also on the workers.dev
+hostname): `POST /api/merecat/works` → `{ok, works:[{id,title,tier,kind,hash,chunks}],
+text_bytes, text_bytes_deep, text_bytes_deep2, persona_file_hash, config_file_hash}`
+(the roster and the file hashes of the persona and dials last pushed);
+`/ingest` (the `librarian/ingest.py` begin/append/end/delete protocol);
+`/config` (`{persona?, config:{…}}` → `{ok, set}`: the persona and the dials,
+each value coerced by `MERECAT_CONFIG_KEYS`; ~5 min per-isolate cache). Each
+takes EITHER `Authorization: Bearer <GitHub OIDC token>` — the job's token for
+audience `merecatholicity-comments`, checked against GitHub's keys and
+`Domain.Pipeline` (this repository, `main`, `merecat.yml`, a push, schedule
+or dispatch, a GitHub-hosted runner); a bearer that fails is `403 "No."` even
+beside a good key — OR an admin's `key` in the body. `/config` takes the
+persona, the dials and the file hashes only from a token whose job ran in the
+`librarian-config` environment (a reviewer approved it); the ingest job's
+token may set `last_ingest`/`last_ingest_by` alone. The static
+`MERECAT_INGEST_KEY` is honoured one deploy longer, then retired.
 
 ---
 

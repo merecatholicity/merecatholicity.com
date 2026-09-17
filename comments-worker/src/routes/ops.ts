@@ -1,7 +1,8 @@
 /* comments-worker/src/routes/ops.ts — the watchdog's outside legs (2026-09-16).
-   One door, keyed like the librarian's pipeline (`requireIngest`: the
-   MERECAT_INGEST_KEY worker secret, or an admin key), so the GitHub ops-watch
-   workflow and the dev box's nightly webtest need no new credential:
+   One door, for two callers (oidc.ts, since 2026-09-17): the GitHub ops-watch
+   workflow, by its OIDC token (Domain.Pipeline's `probe` door), and the dev
+   box's nightly webtest, by OPS_REPORT_KEY — a worker secret that opens this
+   door and nothing else. An admin key opens it too.
      {probe: true}                       → the health object (ops.ts readOps);
                                            the workflow fails its run on
                                            health.ok === false — GitHub's own
@@ -10,8 +11,10 @@
      {source: 'webtest', pass, fail,
       suites, regressions}               → stored as ops_webtest for the health
                                            panel; a regression alerts through
-                                           alerts.ts */
-import { json, requireIngest, setOpsState, getOpsState, readLimited } from '../lib.ts';
+                                           alerts.ts. Not the watchdog's: its
+                                           token reads, never reports */
+import { json, setOpsState, getOpsState, readLimited } from '../lib.ts';
+import { pipelineCaller } from '../oidc.ts';
 import { readOps } from '../ops.ts';
 import { sendAlert } from '../alerts.ts';
 import type { Env } from '../env.ts';
@@ -21,9 +24,12 @@ type Report = { key?: unknown; probe?: unknown; source?: unknown; pass?: unknown
 async function handleOpsReport(request: Request, env: Env) {
   let data: Report;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireIngest(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
+  if (!data || typeof data !== 'object') return json({ ok: false, error: 'Bad request.' }, 400);
+  const caller = await pipelineCaller(request, env, String(data.key || ''), ['probe'], { reportKey: true });
+  if (!caller) return json({ ok: false, error: 'No.' }, 403);
   if (data.probe) return json({ ok: true, health: await readOps(env) }, 200);
   if (data.source === 'webtest') {
+    if (caller.road === 'oidc') return json({ ok: false, error: 'No.' }, 403);
     const strings = (v: unknown, n: number) => (Array.isArray(v) ? v.slice(0, 40).map((x) => String(x).slice(0, n)) : []);
     const report = {
       at: Math.floor(Date.now() / 1000),

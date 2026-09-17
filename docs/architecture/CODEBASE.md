@@ -26,7 +26,7 @@ idea holds the whole thing together and is the key to reading it:
 
 ```
             ┌─────────────────────────────────────────────┐
-            │  PureScript kernel  purescript/src/Domain/*   │  33 modules
+            │  PureScript kernel  purescript/src/Domain/*   │  38 modules
             │  (validation, permissions, parsing, routing,  │  — the rulebook,
             │   ranks, FTS-safety, identity, …) ADTs +      │    pure, tested
             │   smart constructors, illegal states unrep.   │    1:1 in tests/
@@ -80,8 +80,9 @@ duplicated, and the shape they moved toward.
 | `docs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring (served raw, unversioned). |
 | `comments-worker/src/durable.ts` | 875 | The two Durable Objects (`BoardHub` — `HUB_SHARDS` instances, sockets indexed in memory, `Domain.Hub` the placing, a `watch` table naming the siblings that watch each member — and `ChatRoom`). |
 | `comments-worker/src/dbsession.ts` | 88 | The D1 session every routed request runs against: replicas for `Domain.Consistency`'s read routes, the primary for the rest, the `mc-d1` bookmark cookie after a write. |
-| `comments-worker/src/egress.ts` | 159 | The egress guard (2026-09-17): `sealEnv` (the env reads by name and refuses to be copied, listed, serialized or written), `deriveEnv`, and `guardResponse` (a textual answer carrying any non-public env value is refused). Dependency-free; contact-worker imports it too. |
-| `comments-worker/src/serve.ts` | 40 | `default.fetch`: seal the env, run the router, guard the answer, report what the seal refused. |
+| `comments-worker/src/egress.ts` | 180 | The egress guard (2026-09-17): `sealEnv` (the env reads by name and refuses to be copied, listed, serialized or written), `deriveEnv`, and `guardResponse` (a textual answer carrying any non-public env value is refused). Dependency-free; contact-worker imports it too. |
+| `comments-worker/src/serve.ts` | 64 | `default.fetch`: seal the env, run the router, guard the answer, report what the seal refused. |
+| `comments-worker/src/oidc.ts` | 188 | Who is at a pipeline door (2026-09-17): a GitHub Actions job's OIDC token, its RS256 signature checked against GitHub's published keys and its claims against `Domain.Pipeline`; an admin key; for the ops door, the nightly's `OPS_REPORT_KEY`. `pipelineGated` is the three librarian endpoints' preamble. |
 | `app/call.ts` | 521 | The 1v1 voice-call engine (shell-owned, so a call rings on any page). |
 | `docs/bible-reader.js` | 439 | KJV/DR reader boot (served raw). |
 | `app/views/board.ts` / `topic.ts` | 435 / 433 | Lit views: board index+category / topic+search. |
@@ -97,7 +98,7 @@ duplicated, and the shape they moved toward.
 | `contact-worker/src/index.ts` | 138 | The contact form worker. |
 | `comments-worker/src/db.ts` | 83 | The repository layer: typed row mappers, `inList`, the `Query` builder. |
 | `docs/{deeplink,sw,away,contact,flash,index}.js` | 8–161 ea. | Small served-raw scripts. |
-| `purescript/src/Domain/*.purs` | 31 files | The kernel (see the map); plus the generated `Domain.Writings` (`scripts/writings.py`, git-ignored). |
+| `purescript/src/Domain/*.purs` | 38 files | The kernel (see the map); plus the generated `Domain.Writings` (`scripts/writings.py`, git-ignored). |
 
 Re-measured 2026-09-08 over 35 hand-written files, **29,968 lines**: the median is
 **286 lines**, and the distribution is still bimodal — a long tail of small,
@@ -173,7 +174,7 @@ middleware layer, a repository layer, and finishing the component migration
 More than the two big files suggest. The **modular seams already exist and are
 proven**:
 
-- The **PureScript `Domain/*` kernel — 33 modules**, each a single rule family
+- The **PureScript `Domain/*` kernel — 38 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
   each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 32 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
@@ -270,7 +271,7 @@ Yes — the natural division is **by feature**, and it maps cleanly:
 Yes. **The tree** — every file named for its feature:
 
 ```
-purescript/src/Domain/*.purs        the rulebook (33 modules) — unchanged, it's the model
+purescript/src/Domain/*.purs        the rulebook (38 modules) — unchanged, it's the model
 app/
   core.ts        membrane (PS → JS)          api.ts     typed endpoints (the DM reads return their wire shapes)
   wire.ts        the DM wire shapes, types only — the worker's routes/dm.ts builds them, the views read them (2026-09-16)
@@ -295,7 +296,9 @@ comments-worker/src/
   egress.ts      the egress guard: sealEnv/deriveEnv (the env reads by name, refuses to be copied or serialized),
                  secretValues (every env string not in env.ts PUBLIC_VARS), guardResponse — no imports, shared with contact-worker
   env.ts         the bindings as wrangler.jsonc declares them, typed (2026-09-16) — a route file that takes `env: Env` gets D1's first<Row>() for free;
-                 PUBLIC_VARS / UNSCANNED, the names the egress scan skips (2026-09-17)
+                 PUBLIC_VARS, the names the egress scan skips (2026-09-17)
+  oidc.ts        the pipeline's doors (2026-09-17): a GitHub job's OIDC token (signature, then Domain.Pipeline),
+                 an admin key, the nightly's report key — pipelineCaller / pipelineGated
   alerts.ts      the worker's voice (2026-09-16): sendAlert — email through the send_email binding EMAIL, Discord through
                  sendDiscord, the channels Domain.Ops.channelsFrom opens from the four alert_* Platform settings
   ops.ts         the cron chains (runChain: every step in its own try/catch, a heartbeat per chain, failures and the
@@ -303,7 +306,7 @@ comments-worker/src/
                  noteLeak, the egress guard's tally and alert (2026-09-17)
   routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin · ops (the report door)
   lib.ts         the shared core — constants · crypto/auth · the preambles (keyed/keyedGated, and since
-                 2026-09-16 gated/adminGated/readLimited/ingestGated with the variance as options) · settings ·
+                 2026-09-16 gated/adminGated/readLimited with the variance as options) · settings ·
                  notifications/push · DM primitives · media purges · Discord · merecat · publish — references no handler
   db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList
   durable.ts     BoardHub · ChatRoom (the only importer of cloudflare:workers)

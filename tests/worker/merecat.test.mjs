@@ -50,7 +50,7 @@ test('every dial is read through the kernel, so a bad row yields its default', (
 test('the write is an allowlist MAP with coercion, and only the kernel dials are in it', () => {
   const m = index.slice(index.indexOf('const MERECAT_CONFIG_KEYS'), index.indexOf('async function handleMerecatConfigSet'));
   const keys = [...m.matchAll(/^  ([a-z_]+): \(v\) =>/gm)].map((x) => x[1]).sort();
-  assert.deepEqual(keys, ['band_weights', 'global_daily', 'last_ingest', 'last_ingest_by', 'max_tokens', 'mention_effort', 'model',
+  assert.deepEqual(keys, ['band_weights', 'config_file_hash', 'global_daily', 'last_ingest', 'last_ingest_by', 'max_tokens', 'mention_effort', 'model',
     'persona_file_hash', 'quota_guard_on', 'quota_guard_pct', 'reasoning_default', 'reasoning_max', 'reasoning_on', 'temperature',
     'topk', 'user_cap_on', 'user_daily'].sort());
   assert.ok(/quota_guard_pct: \(v\) => String\(Merecat\.quotaGuardPctFrom\(/.test(m), 'the line is stored only as the kernel would read it');
@@ -114,17 +114,21 @@ test('the client is told, so the selector can show only what is allowed', () => 
   assert.ok(/a\.effort = mode;/.test(client) && !/a\.instant = true/.test(client), 'the ask frame sends the level, and the retired instant flag is gone');
 });
 
-test('the pipeline\'s door: the ingest key opens the three librarian endpoints and the ops report door, and nothing else', () => {
-  const ri = lib.slice(lib.indexOf('export async function requireIngest'), lib.indexOf('export async function requireIngest') + 900);
-  assert.ok(/env\.MERECAT_INGEST_KEY/.test(ri) && /return requireAdmin\(env, k\)/.test(ri), 'the ingest key or an admin key');
-  assert.ok(/diff \|= a\[i\] \^ b\[i\]/.test(ri), 'compared in constant time');
-  /* the key is read through requireIngest directly, or through the ingestGated preamble (P2-1) */
-  for (const fn of ['handleMerecatWorks', 'handleMerecatConfigSet', 'handleMerecatIngest', 'handleOpsReport']) {
-    const h = index.slice(index.indexOf('async function ' + fn + '('), index.indexOf('async function ' + fn + '(') + 500);
-    assert.ok(/requireIngest\(env|ingestGated\(request, env/.test(h), fn + ' must accept the ingest key');
+test('the pipeline\'s doors: the three librarian endpoints and the ops report door take a GitHub job\'s token, and nothing else does', () => {
+  /* who each door admits is RUN in tests/worker/pipeline.test.mjs; this holds
+     which handlers open through the pipeline gate (oidc.ts, 2026-09-17) */
+  const gate = readFileSync(join(root, 'comments-worker', 'src', 'oidc.ts'), 'utf8');
+  assert.ok(/if \(auth !== null\) \{[\s\S]*?return door \? \{ road: 'oidc', door \} : null;\s*\}/.test(gate), 'a bearer is judged alone, never beside a key');
+  assert.ok(/diff \|= a\[i\] \^ b\[i\]/.test(gate), 'the keys are compared in constant time');
+  for (const [fn, doors] of [['handleMerecatWorks', "['ingest']"], ['handleMerecatIngest', "['ingest']"], ['handleMerecatConfigSet', "['config', 'ingest']"]]) {
+    const h = index.slice(index.indexOf('async function ' + fn + '('), index.indexOf('async function ' + fn + '(') + 300);
+    assert.ok(h.includes('await pipelineGated(request, env, ' + doors + ');'), fn + ' opens through the pipeline gate for ' + doors);
   }
-  const admins = [...index.matchAll(/requireIngest\(env|ingestGated\(request, env/g)].length;
-  assert.equal(admins, 4, 'exactly the three librarian endpoints and the ops report door (2026-09-16) accept the ingest key');
+  const ops = index.slice(index.indexOf('async function handleOpsReport('), index.indexOf('async function handleOpsReport(') + 500);
+  assert.ok(ops.includes("await pipelineCaller(request, env, String(data.key || ''), ['probe'], { reportKey: true });"), 'the ops door: the watchdog\'s token or the nightly\'s key');
+  const gates = [...index.matchAll(/pipelineGated\(request, env|pipelineCaller\(request, env/g)].length;
+  assert.equal(gates, 4, 'exactly the three librarian endpoints and the ops report door open for the pipeline');
+  assert.ok(!/requireIngest|ingestGated/.test(lib + index), 'the static-key gate is gone');
   /* the router (serve.ts hands it every request since 2026-09-17) */
   const f = index.slice(index.indexOf('async function route(request: Request'), index.indexOf('for (const r of ROUTES)'));
   assert.ok(f.length > 100, 'the router is where the front doors are decided');

@@ -631,9 +631,10 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
      (it cannot be skipped by any rule on the Free plan, and a GitHub runner
      is exactly what it fights). That second front door opens onto nothing
      but the three librarian endpoints and the ops report door (2026-09-16,
-     the watchdog's outside leg), each of which demands the ingest key;
-     every other path answers 404 there as though the worker did not
-     exist. The site's own origin is untouched. */
+     the watchdog's outside leg), each of which demands the pipeline's
+     credential — a GitHub job's OIDC token (oidc.ts, since 2026-09-17) or
+     an admin key; every other path answers 404 there as though the worker
+     did not exist. The site's own origin is untouched. */
   if (url.hostname.endsWith('.workers.dev') &&
       !(request.method === 'POST' && INGEST_DOORS.indexOf(path) !== -1)) {
     return json({ ok: false, error: 'Not found.' }, 404);

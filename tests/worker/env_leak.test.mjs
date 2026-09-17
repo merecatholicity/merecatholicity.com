@@ -124,6 +124,10 @@ test('the other roads: workers.dev opens only its doors, the back room keeps its
     if (c.p === '/api/comments/recent') assert.equal(c.status, 404, 'a read on workers.dev does not exist');
     else if (c.as === 'anon') assert.equal(c.status, 403, label(c));
   }
+  /* each door opened for the GitHub job whose token it takes, so its answer was swept */
+  const pipeline = sweep.calls.filter((c) => c.road === 'pipeline');
+  assert.deepEqual(pipeline.map((c) => c.p).sort(), [...INGEST_DOORS].sort());
+  assert.deepEqual(pipeline.filter((c) => c.status !== 200).map(label), [], 'a pipeline door refused its own job');
   const back = sweep.calls.filter((c) => c.road === 'back room media');
   assert.equal(back.find((c) => c.as === 'anon').status, 404, 'the back room\'s attachment answers as if absent');
   const card = sweep.calls.find((c) => c.road === 'handle' && c.p === '/@sweepmember');

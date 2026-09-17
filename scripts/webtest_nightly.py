@@ -15,9 +15,11 @@ what a probe cannot: pages rendering, the DM views, the shell's journeys.
 A regression is a suite whose FAIL count rose above the baseline, or which
 exited non-zero where the baseline had it exiting 0. The suites listed are
 READ-ONLY against production: they render and read; nothing here posts,
-messages or moderates. The report is keyed like the librarian's pipeline
-(MC_INGEST_KEY from ~/.config/merecatholicity/ci.env) and goes to the
-workers.dev hostname, the front door the zone's bot rules do not guard."""
+messages or moderates. The report carries the dev box's own narrow key
+(MC_OPS_REPORT_KEY from ~/.config/merecatholicity/ci.env — the worker's
+OPS_REPORT_KEY, which opens the ops door and nothing else; 2026-09-17, when
+the pipeline's shared static key was retired) and goes to the workers.dev
+hostname, the front door the zone's bot rules do not guard."""
 import json
 import os
 import re
@@ -115,15 +117,15 @@ def report(results, regressions, key):
         return json.loads(resp.read().decode())
 
 
-def ingest_key():
-    k = os.environ.get('MC_INGEST_KEY')
+def report_key():
+    k = os.environ.get('MC_OPS_REPORT_KEY')
     if k:
         return k
     path = os.environ.get('MC_CI_ENV', os.path.expanduser('~/.config/merecatholicity/ci.env'))
     try:
         with open(path) as f:
             for ln in f:
-                m = re.match(r'\s*(?:export\s+)?MC_INGEST_KEY=["\']?([^"\'\s]+)', ln)
+                m = re.match(r'\s*(?:export\s+)?MC_OPS_REPORT_KEY=["\']?([^"\'\s]+)', ln)
                 if m:
                     return m.group(1)
     except OSError:
@@ -156,9 +158,9 @@ def main(argv):
     for line in regressions:
         print('REGRESSION ' + line)
     if '--no-report' not in argv:
-        key = ingest_key()
+        key = report_key()
         if not key:
-            print('no MC_INGEST_KEY: not reported')
+            print('no MC_OPS_REPORT_KEY: not reported')
         else:
             try:
                 print('reported: ' + json.dumps(report(results, regressions, key)))

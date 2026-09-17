@@ -13,7 +13,8 @@
    when a sweep goes hollow.
 
    Roads taken: the ROUTES table (tests/_support/routes.json) as anon, member,
-   outsider and admin; the workers.dev front door; `/@handle`; the two
+   outsider and admin; the workers.dev front door, and each of its doors as
+   the GitHub job whose token opens it (`pipeline`); `/@handle`; the two
    WebSocket upgrades; the four cron chains (their alert mail, their Discord
    posts, the backup object). Every call runs against a fresh ledger, so a
    write in one never feeds the next.
@@ -29,6 +30,7 @@ import {
   loadWorker, makeEnv, freshDb, freshLibDb, call, ctx, netSpy, resetCaches, hubSpy, identity, establish, publishKey,
 } from './worker.mjs';
 import { PUBLIC_VARS } from '../../comments-worker/src/env.ts';
+import { githubIssuer } from './github_oidc.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(join(root, rel), 'utf8');
@@ -411,7 +413,9 @@ export async function runSweep({ only, wrap } = {}) {
   const worker = wrap ? wrap(loaded) : loaded;
   const who = await identities();
   const vars = { ...Object.fromEntries(SECRETS.map((s) => [s.name, s.value])), ADMIN_HASHES: who.admin.hash };
-  const net = netSpy(responder);
+  /* GitHub's stand-in: the pipeline road's tokens, and the key set the worker asks for */
+  const github = await githubIssuer();
+  const net = netSpy((url, init) => github.serves(url) || responder(url, init));
   const calls = [];
   const crons = [];
   try {
@@ -437,6 +441,18 @@ export async function runSweep({ only, wrap } = {}) {
             opts: () => ({ host: 'https://merecatholicity-comments.sweep.workers.dev', origin: null }),
           }));
         }
+      }
+      /* the same doors as the job that may open each (oidc.ts, Domain.Pipeline) */
+      for (const door of INGEST_DOORS) {
+        const job = door === '/api/comments/ops/report' ? 'probe' : door === '/api/merecat/config' ? 'config' : 'ingest';
+        const token = await github.token(job);
+        const hint = ROUTE_HINTS['POST ' + door];
+        calls.push(await one(worker, who, vars, {
+          meta: { m: 'POST', p: door, as: 'pipeline', road: 'pipeline' },
+          m: 'POST', path: door,
+          body: (ids) => ({ ...(hint ? hint(ids, who) : {}), probe: true }),
+          opts: () => ({ host: 'https://merecatholicity-comments.sweep.workers.dev', origin: null, headers: { Authorization: 'Bearer ' + token } }),
+        }));
       }
       calls.push(await one(worker, who, vars, {
         meta: { m: 'GET', p: '/api/comments/recent', as: 'anon', road: 'workers.dev' },

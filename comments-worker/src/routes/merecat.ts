@@ -27,10 +27,10 @@ import {
   sha256hex,
   gated,
   adminGated,
-  ingestGated,
   registerMember,
   throttle,
 } from '../lib.ts';
+import { pipelineGated } from '../oidc.ts';
 import type { Env } from '../env.ts';
 import type { Body } from '../lib.ts';
 
@@ -220,7 +220,7 @@ export async function ensureLibSchema(db: D1Database | undefined) {
 }
 
 async function handleMerecatIngest(request: Request, env: Env) {
-  const pre = await ingestGated(request, env);
+  const pre = await pipelineGated(request, env, ['ingest']);
   if (pre instanceof Response) return pre;
   const { data } = pre;
   const mode = String(data.mode || '');
@@ -544,9 +544,11 @@ async function handleMerecatAbout(request: Request, env: Env) {
   return json(out, 200);
 }
 
-/* Works roster + content hashes, so ingest.py can skip unchanged works. */
+/* Works roster + content hashes, so ingest.py can skip unchanged works, and
+   the file hashes of the persona and the dials last pushed, so the pipeline
+   knows whether its config job has anything to ask a reviewer about. */
 async function handleMerecatWorks(request: Request, env: Env) {
-  const pre = await ingestGated(request, env);
+  const pre = await pipelineGated(request, env, ['ingest']);
   if (pre instanceof Response) return pre;
   const { data } = pre;
   const works = [];
@@ -576,10 +578,11 @@ async function handleMerecatWorks(request: Request, env: Env) {
       console.log(JSON.stringify({ event: 'merecat_works' + tag + '_failed', error: String(err) }));
     }
   }
-  const pfh = await env.LIBDB.prepare(
-    "SELECT v FROM config WHERE k = 'persona_file_hash'").first();
+  const hashes = await env.LIBDB.prepare(
+    "SELECT k, v FROM config WHERE k IN ('persona_file_hash', 'config_file_hash')").all<{ k: string; v: string }>();
+  const fileHash = (k: string) => ((hashes.results || []).find((r) => r.k === k) || { v: '' }).v || '';
   return json({ ok: true, works, text_bytes: tb1, text_bytes_deep: tb2, text_bytes_deep2: tb3,
-    persona_file_hash: (pfh && pfh.v) || '' }, 200);
+    persona_file_hash: fileHash('persona_file_hash'), config_file_hash: fileHash('config_file_hash') }, 200);
 }
 
 /* Every dial the librarian has, with its coercion — the write is trusted
@@ -603,21 +606,32 @@ const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
   topk: (v) => String(Math.max(1, Math.min(40, Math.floor(Number(v)) || MERECAT_DEFAULTS.topk))),
   max_tokens: (v) => String(Math.max(64, Math.min(8192, Math.floor(Number(v)) || MERECAT_DEFAULTS.max_tokens))),
   persona_file_hash: (v) => String(v).slice(0, 64),
+  config_file_hash: (v) => String(v).slice(0, 64),
   last_ingest: (v) => String(v).slice(0, 80),
   last_ingest_by: (v) => String(v).slice(0, 80),
 };
 
+/* What the ingest job may set here: its own timestamp. */
+const INGEST_STAMP_KEYS = ['last_ingest', 'last_ingest_by'];
+
 /* Persona / dials push: from librarian/config.yml + persona.md through the
-   pipeline, and from the merecat admin page. */
+   pipeline's config job — which ran in the librarian-config environment, so
+   a reviewer approved it (Domain.Pipeline) — and from the merecat admin page. */
 async function handleMerecatConfigSet(request: Request, env: Env) {
-  const pre = await ingestGated(request, env);
+  const pre = await pipelineGated(request, env, ['config', 'ingest']);
   if (pre instanceof Response) return pre;
-  const { data } = pre;
+  const { data, caller } = pre;
   const stmts: any[] = [];
   const put = (k: any, v: any) => stmts.push(env.LIBDB.prepare(
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
-  if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   const cfg = data.config || {};
+  if (caller.road === 'oidc' && caller.door === 'ingest' &&
+      ((typeof data.persona === 'string' && data.persona) ||
+       Object.keys(cfg).some((k) => cfg[k] != null && INGEST_STAMP_KEYS.indexOf(k) === -1))) {
+    console.log(JSON.stringify({ event: 'pipeline_refused', why: ['config: the ingest job sets only its stamp'] }));
+    return json({ ok: false, error: 'No.' }, 403);
+  }
+  if (typeof data.persona === 'string' && data.persona) put('persona', data.persona);
   for (const k of Object.keys(MERECAT_CONFIG_KEYS)) {
     if (cfg[k] != null) put(k, MERECAT_CONFIG_KEYS[k](cfg[k]));
   }

@@ -144,29 +144,29 @@ test('the health read: stale, never, the object, and ok as the outside watchdog\
   db.close();
 });
 
-test('the report door: the ingest key (from any origin) probes the health and stores the nightly webtest, a regression alerts; the admin health door', async () => {
+test('the report door: the nightly\'s key (from any origin) probes the health and stores the nightly webtest, a regression alerts; the admin health door', async () => {
   const db = seeded();
-  const env = makeEnv({ db, vars: { MERECAT_INGEST_KEY: 'ingest-secret', ADMIN_HASHES: adm.hash } });
+  const env = makeEnv({ db, vars: { OPS_REPORT_KEY: 'report-secret', ADMIN_HASHES: adm.hash } });
   /* the pipeline's shape: a curl from a runner — no Origin — at the workers.dev front door */
   const DEV = { origin: null, host: 'https://merecatholicity-comments.support-609.workers.dev' };
   let r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'nope', probe: true }, DEV);
   assert.deepEqual([r.status, r.json.error], [403, 'No.']);
-  r = await call(worker, env, 'POST', '/api/comments/dm/unread', { key: 'ingest-secret' }, DEV);
+  r = await call(worker, env, 'POST', '/api/comments/dm/unread', { key: 'report-secret' }, DEV);
   assert.equal(r.status, 404, 'the front door opens onto the ingest doors alone');
-  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'ingest-secret', probe: true }, DEV);
-  assert.equal(r.status, 200, 'the report door is an ingest door: reachable as the librarian\'s pipeline is');
+  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'report-secret', probe: true }, DEV);
+  assert.equal(r.status, 200, 'the report door is a pipeline door: reachable where the librarian\'s pipeline is');
   assert.equal(typeof r.json.health.ok, 'boolean');
   assert.equal(r.json.health.heartbeat.length, 4);
-  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'ingest-secret', source: 'webtest', pass: 30, fail: 0, suites: ['worker_reads', 'audit'], regressions: [] });
+  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'report-secret', source: 'webtest', pass: 30, fail: 0, suites: ['worker_reads', 'audit'], regressions: [] });
   assert.deepEqual([r.status, r.json.stored, r.json.alerted], [200, true, false]);
   assert.deepEqual(env.emails.length, 0, 'a clean night says nothing');
-  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'ingest-secret', source: 'webtest', pass: 29, fail: 1, suites: ['worker_reads'], regressions: ['test_worker_reads: config apiVersion FAIL'] });
+  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'report-secret', source: 'webtest', pass: 29, fail: 1, suites: ['worker_reads'], regressions: ['test_worker_reads: config apiVersion FAIL'] });
   assert.deepEqual([r.status, r.json.alerted], [200, true]);
   assert.deepEqual(subjects(env), ['[merecatholicity] Nightly webtest: 1 regression']);
   assert.match(env.emails[0].text, /config apiVersion FAIL/);
   const w = state(db, 'ops_webtest');
   assert.deepEqual([w.pass, w.fail, w.regressions], [29, 1, ['test_worker_reads: config apiVersion FAIL']]);
-  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'ingest-secret' });
+  r = await call(worker, env, 'POST', '/api/comments/ops/report', { key: 'report-secret' });
   assert.equal(r.status, 400, 'neither a probe nor a report');
   /* the admin's health card */
   r = await call(worker, env, 'POST', '/api/comments/admin/health', { key: adm.key });

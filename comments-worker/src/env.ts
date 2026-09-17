@@ -59,6 +59,7 @@ export interface Env {
   TURN_KEY_SECRET?: string;
   CF_USAGE_TOKEN?: string;
   MERECAT_INGEST_KEY?: string;
+  OPS_REPORT_KEY?: string;
 }
 
 /* The vars above, by name: public by design (wrangler.jsonc prints most of

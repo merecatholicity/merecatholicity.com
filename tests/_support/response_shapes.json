@@ -2136,6 +2136,7 @@
  },
  "POST /api/merecat/works": {
   "json": [
+   "config_file_hash:string",
    "error:string",
    "ok:boolean",
    "persona_file_hash:string",

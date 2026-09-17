@@ -166,14 +166,6 @@ export async function readLimited(request: Request, env: Env, o: { limited?: str
   return ip;
 }
 
-/* The pipeline's preamble: parse, then the ingest key (or an admin's). */
-export async function ingestGated(request: Request, env: Env): Promise<Response | { data: any }> {
-  let data: any;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
-  if (!(await requireIngest(env, String((data && data.key) || '')))) return json({ ok: false, error: 'No.' }, 403);
-  return { data };
-}
-
 /* Worker environment bindings (D1 databases, R2 buckets, Vectorize, Workers AI,
    Durable Object namespaces, rate limiters) plus string vars/secrets. Typed
    loosely (index signature) on purpose — this is a typing pass, not a
@@ -2703,22 +2695,6 @@ export async function mirrorAvatars(env: Env, cap = 300) {
    can be exercised any day, not only on the first of the month. */
 export async function requireAdmin(env: Env, key: any) {
   return !!key && (await isAdminHash(env, await sha256hex(key)));
-}
-
-/* The pipeline's credential for the three librarian endpoints (/works,
-   /config, /ingest): the worker secret MERECAT_INGEST_KEY, or an admin key as
-   before. A runner secret that leaked could at worst rewrite the shelf — it
-   opens nothing else on the platform. Compared in constant time. */
-export async function requireIngest(env: Env, key: any) {
-  const k = String(key || '');
-  const want = String(env.MERECAT_INGEST_KEY || '');
-  if (want && k.length === want.length) {
-    const a = new TextEncoder().encode(k), b = new TextEncoder().encode(want);
-    let diff = 0;
-    for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
-    if (diff === 0) return true;
-  }
-  return requireAdmin(env, k);
 }
 
 /* Lock or unlock an identity: a reversible disable that logs the holder out

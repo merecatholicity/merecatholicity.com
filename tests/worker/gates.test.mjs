@@ -1,5 +1,6 @@
 /* The one preamble and its options (P2-1, 2026-09-16): `gated`, `adminGated`,
- * `readLimited`, `ingestGated` in lib.ts. Eighty handlers opened with the same
+ * `readLimited` in lib.ts, and the pipeline's `pipelineGated` (oidc.ts since
+ * 2026-09-17; its tokens are tests/worker/pipeline.test.mjs's). Eighty handlers opened with the same
  * eight lines; they differed only in the 429 sentence, the missing-key
  * refusal and whether the block gate ran — so the options carry exactly that,
  * and every wire text a handler said before it still says. What would break
@@ -9,7 +10,8 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeEnv, freshDb, identity, ORIGIN } from '../_support/worker.mjs';
-import { gated, adminGated, readLimited, ingestGated, sha256hex } from '../../comments-worker/src/lib.ts';
+import { gated, adminGated, readLimited, sha256hex } from '../../comments-worker/src/lib.ts';
+import { pipelineGated } from '../../comments-worker/src/oidc.ts';
 
 const req = (body, { method = 'POST', ip = '203.0.113.7' } = {}) => new Request(ORIGIN + '/x', {
   method, headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: ORIGIN },
@@ -67,9 +69,13 @@ test('readLimited: the ip, or the refusal — JSON, or plain text where the endp
   assert.deepEqual([plain.status, await plain.text()], [429, 'Too many requests.']);
 });
 
-test('ingestGated: the ingest key or an admin key opens; anything else is "No."', async () => {
-  const env = makeEnv({ db: freshDb(), vars: { MERECAT_INGEST_KEY: 'ingest-secret', ADMIN_HASHES: adm.hash } });
-  assert.deepEqual(await body(await ingestGated(req({ key: 'nope' }), env)), { status: 403, ok: false, error: 'No.' });
-  assert.equal((await ingestGated(req({ key: 'ingest-secret', probe: true }), env)).data.probe, true);
-  assert.equal((await ingestGated(req({ key: adm.key }), env)).data.key, adm.key);
+test('pipelineGated: parse, then the caller — an admin key opens; anything else is "No."', async () => {
+  const env = makeEnv({ db: freshDb(), vars: { ADMIN_HASHES: adm.hash, OPS_REPORT_KEY: 'report-secret-for-the-test' } });
+  assert.deepEqual(await body(await pipelineGated(req('not json'), env, ['ingest'])), { status: 400, ok: false, error: 'Bad request.' });
+  assert.deepEqual(await body(await pipelineGated(req('[1]'), env, ['ingest'])), { status: 400, ok: false, error: 'Bad request.' });
+  assert.deepEqual(await body(await pipelineGated(req({ key: 'nope' }), env, ['ingest'])), { status: 403, ok: false, error: 'No.' });
+  assert.deepEqual(await body(await pipelineGated(req({ key: 'report-secret-for-the-test' }), env, ['probe'])), { status: 403, ok: false, error: 'No.' },
+    'the nightly\'s key is the ops door\'s alone');
+  const r = await pipelineGated(req({ key: adm.key, probe: true }), env, ['ingest']);
+  assert.deepEqual([r.data.probe, r.caller], [true, { road: 'admin' }]);
 });
