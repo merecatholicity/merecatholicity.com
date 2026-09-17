@@ -146,6 +146,8 @@ test('buildReport: totals, detail, and percentages are plain arithmetic over the
   const cron = byId(rows, 'cron.triggers');
   assert.equal(cron.used, FREE.cronsUsed);
   assert.equal(cron.limit, FREE.cronsLimit);
+  assert.equal(cron.declared, true, 'a count typed into FREE, not a measurement');
+  assert.match(cron.note, /never alerted/, 'and the card says so');
 });
 
 test('buildReport: one failed product costs one card, never the report', () => {
@@ -219,6 +221,20 @@ test('error rows and unmetered rows never alert', () => {
   const out = foldUsageAlerts(rows, {}, t0);
   assert.equal(out.alerts.length, 0);
   assert.deepEqual(out.state, {});
+});
+
+test('a declared count (the cron slots) is shown but never told, at 80 or at 100', () => {
+  const t0 = 1_800_000_000;
+  const cron = { ...rowAt(80, 'cron.triggers'), product: 'cron', label: 'Cron triggers (this worker)', declared: true };
+  // the memory the 2026-09-16 check left behind, eight days old: a standing
+  // warning would re-nag today — a declared row is skipped and its memory dropped
+  const stale = { 'cron.triggers': { b: 1, at: t0 - 8 * 86400 } };
+  const out = foldUsageAlerts([cron, rowAt(85)], stale, t0);
+  assert.deepEqual(out.alerts.map((r) => r.id), ['r2.storage'], 'the measured meter speaks, the declared one never');
+  assert.equal(out.state['cron.triggers'], undefined, 'and the stale memory falls out of the state');
+  const full = foldUsageAlerts([{ ...cron, pct: 100, band: 'over' }], {}, t0);
+  assert.equal(full.alerts.length, 0, 'not even at the ceiling: a sixth cron cannot deploy, which is its own alarm');
+  assert.equal(worstPct([cron, rowAt(42)]), 42, 'nor does it set the worst meter');
 });
 
 test('worstPct and the DM body', () => {

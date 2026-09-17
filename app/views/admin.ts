@@ -201,6 +201,15 @@ customElements.define('mc-merecat-thread', McMerecatThread);
    read-only analytics token is installed. Pure read; Refresh re-asks. */
 
 const USAGE_GROUPS = ['workers', 'ai', 'd1', 'do', 'r2', 'vectorize', 'turn', 'turnstile', 'cron'];
+/* A meter as the worker serves it (usagecalc.ts's UsageRow); `declared` marks
+   a count typed into the limits table — barred, never alarmed. */
+type Meter = {
+  id: string; product: string; label: string;
+  used?: number; limit?: number | null; unit?: string;
+  pct?: number | null; band?: string; note?: string; error?: string;
+  detail?: { label: string; used: number; limit?: number; pct?: number | null }[];
+  declared?: boolean;
+};
 
 function fmtQty(n: number, unit: string): string {
   if (unit === 'bytes') {
@@ -287,21 +296,24 @@ class McUsage extends LitElement {
     if (!this.d) return html`${head}<p class="comments-status">Reading the meters…</p>`;
     const d = this.d;
     if (!d.configured) return html`${head}${this.setupTpl()}`;
-    const rows = d.rows || [];
-    const worst = rows.reduce((w: any, r: any) => (r.pct != null && (!w || r.pct > w.pct) ? r : w), null);
-    const hotN = rows.filter((r: any) => r.pct != null && r.pct >= 80).length;
+    const rows: Meter[] = d.rows || [];
+    /* the headline judges MEASURED meters — a declared count (the cron slots)
+       is barred below but never alarms, here or in the daily check */
+    const measured = rows.filter((r) => !r.declared);
+    const worst = measured.reduce<Meter | null>((w, r) => (r.pct != null && (!w || r.pct > (w.pct ?? -1)) ? r : w), null);
+    const hotN = measured.filter((r) => r.pct != null && r.pct >= 80).length;
     return html`${head}
       <p class="board-intro">Every Cloudflare free-tier meter the platform rides, live from the analytics API.
         ${hotN ? html`<strong>${hotN} meter${hotN === 1 ? ' is' : 's are'} at 80% or beyond.</strong>`
           : worst ? 'All inside the free tier — the closest to its wall is ' + worst.label.toLowerCase() + ' at ' + worst.pct + '%.' : ''}
         <a class="body-link mc-usage-refresh" href="admin.html?usage=1"
           @click=${(e: Event) => { e.preventDefault(); this.refresh(); }}>Refresh</a></p>
-      ${USAGE_GROUPS.filter((p) => rows.some((r: any) => r.product === p)).map((p) => html`
+      ${USAGE_GROUPS.filter((p) => rows.some((r) => r.product === p)).map((p) => html`
         <div class="mc-usage-group">
           <h3>${(d.products && d.products[p]) || p}</h3>
-          ${rows.filter((r: any) => r.product === p).map((r: any) => this.rowTpl(r))}
+          ${rows.filter((r) => r.product === p).map((r) => this.rowTpl(r))}
         </div>`)}
-      <p class="mc-usage-foot">Daily meters reset at 00:00 UTC; monthly ones follow the calendar month; “stored” bars are standing totals. A check runs daily at ${d.check_utc || '23:30'} UTC and DMs every admin when a meter crosses 80% or its ceiling — escalations at once, standing warnings weekly. Unmetered on the free plan and so not barred here: CDN bandwidth in front of GitHub Pages, Email Routing, rate-limit bindings, and WebSocket traffic. Free-plan ceilings as published ${d.free_as_of || ''}.</p>`;
+      <p class="mc-usage-foot">Daily meters reset at 00:00 UTC; monthly ones follow the calendar month; “stored” bars are standing totals. A check runs daily at ${d.check_utc || '23:30'} UTC and DMs every admin when a meter crosses 80% or its ceiling — escalations at once, standing warnings weekly. A declared count — the cron slots — is shown but never told. Unmetered on the free plan and so not barred here: CDN bandwidth in front of GitHub Pages, Email Routing, rate-limit bindings, and WebSocket traffic. Free-plan ceilings as published ${d.free_as_of || ''}.</p>`;
   }
 }
 customElements.define('mc-usage', McUsage);

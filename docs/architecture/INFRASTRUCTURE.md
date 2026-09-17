@@ -188,5 +188,6 @@ on page one.)
 - **The CSP has somewhere to report (2026-09-16)** — `log/2026-09.md`
 - **The key is the account, said plainly; and the bundles have a budget (2026-09-16)** — `log/2026-09.md`
 - **The classic client is split: three lazy chunks, and a reader of a KJV chapter no longer downloads the admin console (2026-09-16)** — `log/2026-09.md`
+- **A declared count is shown, never told (2026-09-16)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

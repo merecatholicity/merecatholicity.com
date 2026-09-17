@@ -131,6 +131,8 @@ export type UsageRow = {
   used?: number; limit?: number | null; unit?: string;
   period?: 'day' | 'month' | 'total'; pct?: number | null; band?: string;
   detail?: Detail[]; note?: string; error?: string;
+  /* a count typed into FREE, not a measurement — barred, never alerted */
+  declared?: boolean;
 };
 
 function row(id: string, product: string, label: string, used: number, limit: number | null,
@@ -282,9 +284,16 @@ export function buildReport(raw: any): UsageRow[] {
       'Unmetered on every plan — shown for the picture, not the budget.'));
   }
 
-  rows.push(row('cron.triggers', 'cron', 'Cron triggers (this worker)',
-    FREE.cronsUsed, FREE.cronsLimit, 'count', 'total', undefined,
-    'Monthly backup, hourly sweeps, and the daily usage check, of the five the account may hold.'));
+  /* A DECLARED count, not a measurement: it moves only when wrangler.jsonc
+     does, and a sixth cron could not deploy at all — so the bar shows it and
+     the daily check never tells it (foldUsageAlerts skips `declared` rows; the
+     4-of-5 that would have nagged weekly for ever — 2026-09-16). */
+  rows.push({
+    ...row('cron.triggers', 'cron', 'Cron triggers (this worker)',
+      FREE.cronsUsed, FREE.cronsLimit, 'count', 'total', undefined,
+      'The hourly sweeps, the 03:15 daily backup, the 23:30 usage check and the monthly housekeeping — four of the five a free account may hold. A declared count, shown but never alerted: it changes only with a deploy, and a sixth could not deploy at all.'),
+    declared: true,
+  });
 
   return rows;
 }
@@ -292,14 +301,15 @@ export function buildReport(raw: any): UsageRow[] {
 /* The daily check's memory: for each metric, the loudest band already told
    (1 = hot, 2 = over) and when. Speak on ESCALATION at once; while a warning
    merely stands, repeat it weekly; below 80% forget it entirely so a later
-   re-cross alerts fresh. Pure fold — the cron passes the stored state in and
-   persists what comes back. */
+   re-cross alerts fresh. A `declared` row (the cron slots) is never told and
+   leaves no memory: an alert is something a human must act on. Pure fold —
+   the cron passes the stored state in and persists what comes back. */
 export const ALERT_RENAG_SECS = 7 * 86400;
 export function foldUsageAlerts(rows: UsageRow[], prev: any, nowSec: number) {
   const state: any = {};
   const alerts: UsageRow[] = [];
   for (const r of rows || []) {
-    if (!r || r.pct == null || r.error) continue;
+    if (!r || r.pct == null || r.error || r.declared) continue;
     const band = r.pct >= 100 ? 2 : r.pct >= 80 ? 1 : 0;
     if (band === 0) continue;
     const p = prev && prev[r.id] && typeof prev[r.id].b === 'number' ? prev[r.id] : null;
@@ -311,8 +321,9 @@ export function foldUsageAlerts(rows: UsageRow[], prev: any, nowSec: number) {
   return { alerts, state };
 }
 
+/* Measured meters only — a declared count is not a wall anyone is nearing. */
 export function worstPct(rows: UsageRow[]): number {
-  return (rows || []).reduce((w, r) => (r && r.pct != null && r.pct > w ? r.pct : w), 0);
+  return (rows || []).reduce((w, r) => (r && !r.declared && r.pct != null && r.pct > w ? r.pct : w), 0);
 }
 
 /* The DM the admins get. Plain text (a system DM renders as an Automated
