@@ -97,8 +97,9 @@ test('what stays open when a section is closed', () => {
 });
 
 test('a journal article can carry a section only while it is a live entry of the standing journal', () => {
-  assert.ok(idxSrc.includes('async function journalTopic(env: any, s: any) {'));
-  assert.ok(idxSrc.includes('async function journalArticleLive(env: any, s: any, id: number) {'));
+  /* the predicates exist and are shared; their parameter types are not the law (2026-09-17) */
+  assert.ok(/async function journalTopic\(/.test(idxSrc));
+  assert.ok(/async function journalArticleLive\(/.test(idxSrc));
   assert.ok(/journalArticleLive\(env, s, id\)/.test(body('commentsPageKey')), 'the resolver must ask the same predicate the journal read uses');
   assert.ok(/journalTopic\(env, s\)/.test(body('handleJournal')), 'handleJournal must share journalTopic — one predicate, not two');
   const jt = body('journalTopic');

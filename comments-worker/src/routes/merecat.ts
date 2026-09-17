@@ -30,6 +30,8 @@ import {
   ingestGated,
   registerMember,
 } from '../lib.ts';
+import type { Env } from '../env.ts';
+import type { Body } from '../lib.ts';
 
 /* ---- Admin observation of merecat Q&A (2026-07-29). The terms disclose that
    questions may be reviewed for the improvement of the service; these two
@@ -37,7 +39,7 @@ import {
    librarian (to guide what to teach it next) WITHOUT participating. They only
    ever SELECT — no prune, no write, nothing touched. This deliberately adds
    the admin-read path the design once withheld, now that the terms allow it. */
-async function handleMerecatAdminThreads(request: Request, env: any) {
+async function handleMerecatAdminThreads(request: Request, env: Env) {
   const pre = await adminGated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { data } = pre;
@@ -53,21 +55,22 @@ async function handleMerecatAdminThreads(request: Request, env: any) {
   const rows = await env.LIBDB.prepare(
     'SELECT id, hash, title, COALESCE(msgs, 0) AS msgs, created_at, last_at, COALESCE(saved, 0) AS saved ' +
     'FROM chats WHERE last_at >= ?1 ORDER BY last_at DESC LIMIT ?2 OFFSET ?3'
-  ).bind(cut, per, (pg - 1) * per).all();
-  const threads = rows.results || [];
+  ).bind(cut, per, (pg - 1) * per).all<ChatThreadRow>();
+  const threads: ChatThreadRow[] = rows.results || [];
   /* Nicks live in the comments DB, not LIBDB — resolve them in one batch. */
-  const hashes = [...new Set(threads.map((t: any) => t.hash).filter(Boolean))];
-  const nicks: any = {};
+  const hashes = [...new Set(threads.map((t) => t.hash).filter(Boolean))];
+  const nicks: Record<string, string | null> = {};
   if (hashes.length) {
     const ph = inList(hashes.length);
-    const prof = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')').bind(...hashes).all();
+    const prof = await env.DB.prepare('SELECT hash, nick FROM profiles WHERE hash IN (' + ph + ')').bind(...hashes)
+      .all<{ hash: string; nick: string | null }>();
     for (const r of (prof.results || [])) nicks[r.hash] = r.nick;
   }
   for (const t of threads) t.nick = nicks[t.hash] || null;
   return json({ ok: true, threads, total: (total && total.n) || 0, page: pg, per }, 200);
 }
 
-async function handleMerecatAdminThread(request: Request, env: any) {
+async function handleMerecatAdminThread(request: Request, env: Env) {
   const pre = await adminGated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { data } = pre;
@@ -90,7 +93,7 @@ async function handleMerecatAdminThread(request: Request, env: any) {
    stands against its daily budget. Admin only. The GPU box this used to probe
    over Tailscale was retired on 2026-09-10; `backend` is kept in the answer
    for one deploy so a client built before that still reads it. */
-async function handleMerecatBackends(request: any, env: any) {
+async function handleMerecatBackends(request: Request, env: Env) {
   let data: any = {};
   try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
@@ -109,7 +112,7 @@ async function handleMerecatBackends(request: any, env: any) {
    the verbatim window, condense them into the thread's running summary with
    one cheap model call, made after the answer is already on its way so it
    never adds latency. A failed fold just waits for the next turn. */
-async function handleMerecatChats(request: Request, env: any) {
+async function handleMerecatChats(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.', block: true });
   if (pre instanceof Response) return pre;
   const { me } = pre;
@@ -127,7 +130,7 @@ async function handleMerecatChats(request: Request, env: any) {
   return json({ ok: true, chats: rows.results || [] }, 200);
 }
 
-async function handleMerecatChat(request: Request, env: any) {
+async function handleMerecatChat(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -145,7 +148,7 @@ async function handleMerecatChat(request: Request, env: any) {
   return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
 }
 
-async function handleMerecatChatDelete(request: Request, env: any) {
+async function handleMerecatChatDelete(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -167,9 +170,9 @@ async function handleMerecatChatDelete(request: Request, env: any) {
    thirty-day expiry — both the listing's opportunistic prune and the monthly
    cron pass it by — until its owner unsaves or deletes it. Unsaving a thread
    already past the cut lets the next sweep take it, which the client warns of. */
-async function handleMerecatChatSave(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleMerecatChatSave(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   // READ_LIMIT, not POST_LIMIT: a save is a metadata toggle, and a burst of
   // save/unsave clicks is legitimate — the 5-writes-a-minute throttle once
@@ -194,7 +197,7 @@ async function handleMerecatChatSave(request: any, env: any) {
 /* Monthly sweep of expired threads (the opportunistic per-owner prune in
    handleMerecatChats covers everyone who returns; this catches the rest).
    Self-contained like every prune, so a failure never stops the backup. */
-async function handleMerecatIngest(request: Request, env: any) {
+async function handleMerecatIngest(request: Request, env: Env) {
   const pre = await ingestGated(request, env);
   if (pre instanceof Response) return pre;
   const { data } = pre;
@@ -230,7 +233,7 @@ async function handleMerecatIngest(request: Request, env: any) {
     // of a real-sized work fail silently into this catch, which is how two
     // de-vectorized works kept their stale vectors (found 2026-07-28).
     for (let i = 0; i < cids.length; i += 50) {
-      try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 50)); }
+      try { await env.MERECAT_INDEX.deleteByIds(cids.slice(i, i + 50) as string[]); }
       catch (err) { console.log(JSON.stringify({ event: 'merecat_vecdel_failed', error: String(err) })); }
       // breathe between batches: a multi-work prune once fired ~60 calls
       // back-to-back and the API rate-limited some sweeps into the catch
@@ -291,9 +294,11 @@ async function handleMerecatIngest(request: Request, env: any) {
         let vecs = null;
         for (let attempt = 0; attempt < 2 && !vecs; attempt++) {
           try {
+            /* the embedding model answers { data: number[][] }; the binding's
+               overloads carry an async-queue shape too, which this call never takes */
             const emb = await env.AI.run('@cf/baai/bge-m3', {
               text: slice.map((r: any) => (r.heading ? r.heading + ': ' : '') + String(r.text || '').slice(0, 1800)),
-            });
+            }) as { data?: number[][] };
             vecs = (emb && emb.data) || null;
           } catch (err) {
             console.log(JSON.stringify({ event: 'merecat_embed_failed', work: id, at: i, attempt, error: String(err) }));
@@ -355,7 +360,7 @@ async function merecatMentionKick(env: any, id: any) {
    R2 under its hash like anyone's): Nicene by confession, bio and signature
    fixed, upserted on every reply so this code stays the source of truth. The
    avatar column is left alone — it carries the upload stamp. */
-async function handleMerecatMention(request: Request, env: any) {
+async function handleMerecatMention(request: Request, env: Env) {
   const pre = await adminGated(request, env);
   if (pre instanceof Response) return pre;
   const { data } = pre;
@@ -370,9 +375,9 @@ async function handleMerecatMention(request: Request, env: any) {
    forwarded by the member, with the question quoted and the cited-sources
    footer rebuilt — bot words stay under the bot's name, and nothing private
    goes public except by the owner's hand. */
-async function handleMerecatForward(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleMerecatForward(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -388,13 +393,15 @@ async function handleMerecatForward(request: any, env: any) {
   const own = await env.LIBDB.prepare('SELECT id FROM chats WHERE id = ?1 AND hash = ?2')
     .bind(chatId, me).first();
   if (!own) return json({ ok: false, error: 'No such conversation.' }, 404);
+  /* the answer being forwarded: the conversation's last, or one named by id */
+  type AnswerRow = { id: number; body: string | null; sources: string | null };
   const msg = data.msg === 'last'
     ? await env.LIBDB.prepare(
         "SELECT id, body, sources FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' ORDER BY id DESC LIMIT 1"
-      ).bind(chatId).first()
+      ).bind(chatId).first<AnswerRow>()
     : await env.LIBDB.prepare(
         "SELECT id, body, sources FROM chat_msgs WHERE id = ?1 AND chat_id = ?2 AND role = 'assistant'"
-      ).bind(Number(data.msg), chatId).first();
+      ).bind(Number(data.msg), chatId).first<AnswerRow>();
   if (!msg) return json({ ok: false, error: 'No such answer in that conversation.' }, 404);
   const topic = await env.DB.prepare(
     "SELECT id, page, locked, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
@@ -407,8 +414,8 @@ async function handleMerecatForward(request: any, env: any) {
 
   const q = await env.LIBDB.prepare(
     "SELECT body FROM chat_msgs WHERE chat_id = ?1 AND role = 'user' AND id < ?2 ORDER BY id DESC LIMIT 1"
-  ).bind(chatId, msg.id).first();
-  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(me).first();
+  ).bind(chatId, msg.id).first<{ body: string | null }>();
+  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(me).first<{ nick: string | null }>();
   const who = (prof && prof.nick) || 'a member';
   let srcs = [];
   try { srcs = JSON.parse(msg.sources || '[]'); } catch { /* footer just stays off */ }
@@ -435,7 +442,7 @@ async function handleMerecatForward(request: any, env: any) {
    "you have used N of M today" the moment it opens (the ask preamble keeps
    it fresh afterward). Admins read their true count against the same cap
    they are allowed to exceed. */
-async function handleMerecatUsage(request: Request, env: any) {
+async function handleMerecatUsage(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { data, key, me } = pre;
@@ -461,7 +468,7 @@ async function handleMerecatUsage(request: Request, env: any) {
    key rides along. Everything here is public site content or the reader's
    own number — no per-question data exists to disclose, since the server
    keeps counters only. */
-async function handleMerecatAbout(request: any, env: any) {
+async function handleMerecatAbout(request: Request, env: Env) {
   /* Admin-only since the public transparency panel retired (2026-07-28):
      this returns the persona verbatim and the whole roster, and the owner
      wills neither public. The administration page is the one consumer. */
@@ -515,27 +522,28 @@ async function handleMerecatAbout(request: any, env: any) {
 }
 
 /* Works roster + content hashes, so ingest.py can skip unchanged works. */
-async function handleMerecatWorks(request: Request, env: any) {
+async function handleMerecatWorks(request: Request, env: Env) {
   const pre = await ingestGated(request, env);
   if (pre instanceof Response) return pre;
   const { data } = pre;
   const works = [];
   let tb1 = 0, tb2 = 0;
   const rows = await env.LIBDB.prepare(
-    'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all();
+    'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all<WorkRow>();
   for (const r of rows.results || []) works.push(r);
   const t1 = await env.LIBDB.prepare(
-    "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
+    "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first<{ b: number }>();
   tb1 = (t1 && t1.b) || 0;
   let tb3 = 0;
-  for (const [db, tag] of [[env.LIBDB2, 2], [env.LIBDB3, 3]]) {
+  const deepRooms: [D1Database | undefined, number][] = [[env.LIBDB2, 2], [env.LIBDB3, 3]];
+  for (const [db, tag] of deepRooms) {
     if (!db) continue;
     try {
       const rows2 = await db.prepare(
-        'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all();
+        'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all<WorkRow>();
       for (const r of rows2.results || []) works.push(r);
       const t2 = await db.prepare(
-        "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first();
+        "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first<{ b: number }>();
       if (tag === 2) tb2 = (t2 && t2.b) || 0; else tb3 = (t2 && t2.b) || 0;
     } catch (err) {
       console.log(JSON.stringify({ event: 'merecat_works' + tag + '_failed', error: String(err) }));
@@ -574,7 +582,7 @@ const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
 
 /* Persona / dials push: from librarian/config.yml + persona.md through the
    pipeline, and from the merecat admin page. */
-async function handleMerecatConfigSet(request: Request, env: any) {
+async function handleMerecatConfigSet(request: Request, env: Env) {
   const pre = await ingestGated(request, env);
   if (pre instanceof Response) return pre;
   const { data } = pre;
@@ -594,25 +602,25 @@ async function handleMerecatConfigSet(request: Request, env: any) {
 
 /* Usage counters for the admin: the last fourteen days, questions and rough
    token spend, distinct askers per day. Counters only — no question text. */
-async function handleMerecatStats(request: Request, env: any) {
+async function handleMerecatStats(request: Request, env: Env) {
   const pre = await adminGated(request, env);
   if (pre instanceof Response) return pre;
   const use = await env.LIBDB.prepare(
     'SELECT day, q, in_tok, out_tok FROM usage ORDER BY day DESC LIMIT 14').all();
   const users = await env.LIBDB.prepare(
     'SELECT day, COUNT(*) AS users FROM user_usage GROUP BY day ORDER BY day DESC LIMIT 14').all();
-  const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chunks').first();
+  const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chunks').first<{ n: number }>();
   let deepN = 0;
   for (const db of [env.LIBDB2, env.LIBDB3]) {
     if (!db) continue;
     try {
-      const d2 = await db.prepare('SELECT COUNT(*) AS n FROM chunks').first();
+      const d2 = await db.prepare('SELECT COUNT(*) AS n FROM chunks').first<{ n: number }>();
       deepN += (d2 && d2.n) || 0;
     } catch { /* the first room still reports */ }
   }
-  const byDay: any = {};
-  for (const r of users.results || []) byDay[r.day] = r.users;
-  const days = (use.results || []).map((r: any) => ({ ...r, users: byDay[r.day] || 0 }));
+  const byDay: Record<string, number> = {};
+  for (const r of users.results || []) byDay[String(r.day)] = Number(r.users) || 0;
+  const days = (use.results || []).map((r) => ({ ...r, users: byDay[String(r.day)] || 0 }));
   return json({ ok: true, days, chunks: ((total && total.n) || 0) + deepN }, 200);
 }
 
@@ -620,7 +628,16 @@ async function handleMerecatStats(request: Request, env: any) {
    the back-room privacy gate is one predicate in one place and a future
    subscriber (webhook / Discord / Matrix) is a single addition here — no forum
    handler ever changes. Returns a promise; env-guarded (no-op without the DO). */
-async function handleMerecatAskInit(request: Request, env: any) {
+/* A librarian conversation as the admin list selects it; `nick` is filled from
+   the comments DB below (the two rooms are different databases). */
+type ChatThreadRow = {
+  id: number; hash: string; title: string | null; msgs: number;
+  created_at: number; last_at: number; saved: number; nick?: string | null;
+};
+
+type WorkRow = { id: number; title: string; tier: number; kind: string; hash: string; chunks: number };
+
+async function handleMerecatAskInit(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many questions at once. Wait a minute.', block: true });
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -644,16 +661,16 @@ async function handleMerecatAskInit(request: Request, env: any) {
     const now = Math.floor(Date.now() / 1000);
     const ins = await env.LIBDB.prepare(
       'INSERT INTO chats (hash, title, created_at, last_at, msgs) VALUES (?1, ?2, ?3, ?3, 0) RETURNING id'
-    ).bind(me, title, now).first();
+    ).bind(me, title, now).first<{ id: number }>() as { id: number };
     chatId = ins.id;
   }
   const day = merecatDay();
   const admin = await isAdminHash(env, me);
   let youQ = 0; let todayQ = 0;
   try {
-    const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+    const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first<{ q: number }>();
     todayQ = (g && g.q) || 0;
-    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first();
+    const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first<{ q: number }>();
     youQ = (u && u.q) || 0;
   } catch { /* preview only */ }
   return json({ ok: true, chatId, backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
@@ -663,7 +680,7 @@ async function handleMerecatAskInit(request: Request, env: any) {
 
 /* The merecat WebSocket upgrade → the per-conversation ChatRoom (getByName by id
    so it is the same instance the ask-init minted). Not READ_LIMIT-gated. */
-async function handleMerecatLive(request: any, env: any) {
+async function handleMerecatLive(request: Request, env: Env) {
   if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.CHAT) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';

@@ -66,6 +66,8 @@ import {
   registerMember,
 } from '../lib.ts';
 import { merecatMentionKick } from './merecat.ts';
+import type { Env } from '../env.ts';
+import type { Body } from '../lib.ts';
 
 /* Resolve a comments read/write target to its page key, or null when the
    caller may not have it: an unknown path, one of the site's own pages whose
@@ -83,7 +85,7 @@ async function commentsPageKey(env: any, raw: any): Promise<string | null> {
   return (await journalArticleLive(env, s, id)) ? journalKey(raw) : null;
 }
 
-async function handleGet(request: Request, env: any, url: any) {
+async function handleGet(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   const page = await commentsPageKey(env, url.searchParams.get('page'));
@@ -100,10 +102,32 @@ async function handleGet(request: Request, env: any, url: any) {
     cacheHeader(url));
 }
 
-async function handlePost(request: any, env: any, ctx: any) {
-  let data;
+/* A topic head as the board reads select it; `page` is the room, which decides
+   the back room's silence and every live scope. */
+type TopicRow = {
+  id: number; page: string; title: string | null; author_hash: string;
+  nick?: string | null; signature?: string | null; avatar?: string | null; faith?: string | null;
+  body?: string | null; created_at: number; edited_at?: number | null;
+  locked?: number | null; sticky?: number | null;
+} & Record<string, unknown>;
+/* One address row of the admin fingerprint drawer. */
+type IpRow = { hash: string; ip_display: string; ip_key: string; family: string; source: string; banned: number };
+
+/* What a delete returns: the room it left (the live scopes read it), whether it
+   was a reply, and the attachment whose bytes go with it. */
+type DeletedRow = { page: string; parent_id: number | null; media_key: string | null };
+
+/* A post row as the delete/edit reads select it. */
+type PostRow = {
+  page: string; parent_id: number | null; title: string | null; author_hash: string;
+  ip: string | null; ua: string | null; os: string | null; tz: string | null;
+  lang: string | null; created_at: number;
+};
+
+async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -129,7 +153,7 @@ async function handlePost(request: any, env: any, ctx: any) {
     if (!Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
     const topic = await env.DB.prepare(
       "SELECT id, page, locked, COALESCE(readonly, 0) AS readonly, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
-    ).bind(topicId).first();
+    ).bind(topicId).first<{ id: number; page: string; locked: number | null; readonly: number; author_hash: string }>();
     if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
     if (topic.locked) return json({ ok: false, error: 'This topic is locked.' }, 403);
     page = topic.page;
@@ -218,7 +242,7 @@ async function handlePost(request: any, env: any, ctx: any) {
     'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, ai_verdict, ip, ua, os, tz, lang, media_key, media_size) ' +
     'VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15) RETURNING id'
   ).bind(page, parentId, title, authorHash, body, status, createdAt, verdict, ip || null, ua || null, os || null,
-    tz || null, lang || null, media ? media.key : null, media ? media.size : null).first();
+    tz || null, lang || null, media ? media.key : null, media ? media.size : null).first<{ id: number }>() as { id: number };
 
   /* Link the attachment as ref_type 'board' ('comment' means a WALL comment —
      the two id spaces are unrelated). The ref_id IS NULL guard closes the
@@ -350,10 +374,10 @@ async function handlePost(request: any, env: any, ctx: any) {
     body, created_at: createdAt, media_key: media ? media.key : null } }, 200);
 }
 
-async function handleSelfDelete(request: any, env: any, ctx: any) {
-  let data;
+async function handleSelfDelete(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -370,10 +394,10 @@ async function handleSelfDelete(request: any, env: any, ctx: any) {
   const row = isAdmin
     ? await env.DB.prepare(
         "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND status != 'deleted' RETURNING page, parent_id, media_key"
-      ).bind(id).first()
+      ).bind(id).first<DeletedRow>()
     : await env.DB.prepare(
         "UPDATE comments SET status = 'deleted' WHERE id = ?1 AND author_hash = ?2 AND status != 'deleted' RETURNING page, parent_id, media_key"
-      ).bind(id, authorHash).first();
+      ).bind(id, authorHash).first<DeletedRow>();
   if (!row) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
   /* Retraction semantics: the attachment's bytes go NOW, not at the row's
      30-day hard prune (the soft-deleted text row never renders anyway). The
@@ -409,7 +433,7 @@ async function handleSelfDelete(request: any, env: any, ctx: any) {
   return json({ ok: true }, 200);
 }
 
-async function handleFeed(request: Request, env: any, url: any) {
+async function handleFeed(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { plain: true });
   if (limited instanceof Response) return limited;
   const cat = url.searchParams.get('cat');
@@ -490,7 +514,7 @@ async function handleFeed(request: Request, env: any, url: any) {
    alone, and the worker's commentsPageKey holds the same rule at the read. */
 const JOURNAL_PER_PAGE = 6;
 
-async function handleJournal(request: Request, env: any, url: any) {
+async function handleJournal(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   const s = await getAppSettings(env);
@@ -516,7 +540,7 @@ async function handleJournal(request: Request, env: any, url: any) {
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
   const totalRow = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM comments c WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' AND " + shadowExcl('c')
-  ).bind(topicId).first();
+  ).bind(topicId).first<{ n: number }>();
   const rows = await env.DB.prepare(
     "SELECT c.id, c.author_hash, pr.nick, c.body, c.created_at, c.edited_at FROM comments c " +
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
@@ -528,20 +552,20 @@ async function handleJournal(request: Request, env: any, url: any) {
     return { id: r.id, title: a.title, body: a.body, author: r.nick || displayName(r.author_hash),
       created_at: r.created_at, edited_at: r.edited_at };
   });
-  return json({ ok: true, journal: topic.title, comments: commentsOn, articles, total: totalRow.n, page: p, per: JOURNAL_PER_PAGE },
+  return json({ ok: true, journal: topic.title, comments: commentsOn, articles, total: (totalRow && totalRow.n) || 0, page: p, per: JOURNAL_PER_PAGE },
     200, cacheHeader(url));
 }
 
 /* The journal's topic, if the journal stands: journal_enabled on, and the
    topic a live board topic outside the back room by an unmuted author. The
    head row (id, page, title, body, created_at) or null. */
-async function journalTopic(env: any, s: any) {
+async function journalTopic(env: Env, s: Record<string, string | undefined>) {
   const topicId = Math.floor(Number(s.journal_topic) || 0);
   if (s.journal_enabled !== '1' || topicId < 1) return null;
   const topic = await env.DB.prepare(
     "SELECT c.id, c.page, c.title, c.body, c.created_at FROM comments c " +
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
-  ).bind(topicId).first();
+  ).bind(topicId).first<TopicRow>();
   if (!topic || !boardKey(topic.page) || topic.page === ADMIN_CAT) return null;
   return topic;
 }
@@ -564,10 +588,10 @@ async function journalArticleLive(env: any, s: any, id: number) {
    admins included only for their own comments. Every edit passes the same
    screen as a new post, or a clean comment could be edited into filth
    after approval, and a flagged edit drops the comment to pending. */
-async function handleEdit(request: any, env: any, ctx: any) {
-  let data;
+async function handleEdit(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -589,7 +613,7 @@ async function handleEdit(request: any, env: any, ctx: any) {
      is one string for "not yours" and "gone" alike. */
   const row = await env.DB.prepare(
     "SELECT page, parent_id, title, author_hash, ip, ua, os, tz, lang, created_at FROM comments WHERE id = ?1 AND status != 'deleted'"
-  ).bind(id).first();
+  ).bind(id).first<PostRow>();
   const asAdmin = !!row && row.author_hash !== authorHash;
   if (!row || (asAdmin && !(await isAdminHash(env, authorHash)))) return json({ ok: false, error: 'Not yours, or already gone.' }, 403);
   /* A comment under a CLOSED section cannot be edited either — closed is closed
@@ -621,10 +645,10 @@ async function handleEdit(request: any, env: any, ctx: any) {
    post's captured header, the identity-level trust and lock flags, and every
    known IP with its ban state. Same shape as one per-comment meta row so the
    client builds the identical drawer. */
-async function handleMeta(request: any, env: any) {
-  let data;
+async function handleMeta(request: Request, env: Env) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -680,7 +704,7 @@ async function handleMeta(request: any, env: any) {
       'WHERE ii.hash IN (' + ph + ') AND (ii.last_seen >= ' + cutoffPh + ' OR ib.ip IS NOT NULL) ' +
       'ORDER BY ii.family, ii.last_seen DESC'
     ).bind(...hashes, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all();
-    for (const r of ipRows.results) {
+    for (const r of ipRows.results as IpRow[]) {
       (identities[r.hash] = identities[r.hash] || []).push({
         ip_display: r.ip_display, ip_key: r.ip_key, family: r.family,
         source: r.source, banned: r.banned,
@@ -691,7 +715,7 @@ async function handleMeta(request: any, env: any) {
 }
 
 /* The board index: per-category topic and post counts with last activity. */
-async function handleBoardIndex(request: Request, env: any, url: any) {
+async function handleBoardIndex(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   /* One pass: per room, window counts plus the newest post whose thread
@@ -727,7 +751,7 @@ async function handleBoardIndex(request: Request, env: any, url: any) {
 
 /* One category page: twenty topics by newest activity, read from the
    denormalized topic rows alone, the replies never scanned. */
-async function handleBoardCat(request: Request, env: any, url: any) {
+async function handleBoardCat(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   const page = boardKey('board:' + url.searchParams.get('cat'));
@@ -738,7 +762,7 @@ async function handleBoardCat(request: Request, env: any, url: any) {
   return json(await boardCatPayload(env, page, p, url.searchParams.get('q')), 200, cacheHeader(url));
 }
 
-async function handleAuthorPosts(request: Request, env: any, url: any) {
+async function handleAuthorPosts(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   const hash = String(url.searchParams.get('hash') || '');
@@ -766,7 +790,7 @@ async function handleAuthorPosts(request: Request, env: any, url: any) {
   return json({ ok: true, items, total: (total && total.n) || 0, page: p, per }, 200, cacheHeader(url));
 }
 
-async function handleSearch(request: Request, env: any, url: any) {
+async function handleSearch(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   const qRaw = String(url.searchParams.get('q') || '');
@@ -805,7 +829,7 @@ async function handleSearch(request: Request, env: any, url: any) {
     const totalRow = await env.DB.prepare(
       'SELECT COUNT(*) AS n FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid ' +
       'LEFT JOIN comments pt ON pt.id = c.parent_id ' + where
-    ).bind(...binds).first();
+    ).bind(...binds).first<{ n: number }>();
     const items = (rows.results || []).map((r: any) => withNames({
       comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
       author_hash: r.author_hash, nick: r.nick, cat: String(r.page).slice(6),
@@ -819,7 +843,7 @@ async function handleSearch(request: Request, env: any, url: any) {
 }
 
 /* One topic with its live replies in order. */
-async function handleTopicView(request: Request, env: any, url: any) {
+async function handleTopicView(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   const id = Number(url.searchParams.get('id'));
@@ -828,7 +852,7 @@ async function handleTopicView(request: Request, env: any, url: any) {
     "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies, c.media_key, c.media_expired " +
     "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
-  ).bind(id).first();
+  ).bind(id).first<TopicRow>();
   /* A muted author's whole thread reads as absent to everyone else. */
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   /* answer exactly as if the topic did not exist: a prober learns nothing */
@@ -836,7 +860,7 @@ async function handleTopicView(request: Request, env: any, url: any) {
   return json(await topicViewPayload(env, topic, url.searchParams.get('p'), url.searchParams.get('find')), 200, cacheHeader(url));
 }
 
-async function handleBoardAdmin(request: Request, env: any) {
+async function handleBoardAdmin(request: Request, env: Env) {
   const pre = await adminGated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { data } = pre;
@@ -847,7 +871,7 @@ async function handleBoardAdmin(request: Request, env: any) {
       "SELECT c.id, c.page, c.title, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, c.replies, c.media_key, c.media_expired " +
       "FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
       "WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live'"
-    ).bind(id).first();
+    ).bind(id).first<TopicRow>();
     if (!topic || topic.page !== ADMIN_CAT) return json({ ok: false, error: 'No such topic.' }, 404);
     return json(await topicViewPayload(env, topic, data.p, data.find), 200);
   }
@@ -857,10 +881,10 @@ async function handleBoardAdmin(request: Request, env: any) {
 
 /* Admin-only topic moderation from the page: lock and unlock close and
    reopen a thread to new replies, delete takes the topic down. */
-async function handleModerate(request: any, env: any, ctx: any) {
-  let data;
+async function handleModerate(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -876,7 +900,7 @@ async function handleModerate(request: any, env: any, ctx: any) {
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   const topic = await env.DB.prepare(
     "SELECT id, page FROM comments WHERE id = ?1 AND parent_id IS NULL AND status != 'deleted'"
-  ).bind(id).first();
+  ).bind(id).first<TopicRow>();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   /* Live push of the moderation (Phase 1b): gated out for the back room. */
   const catKey = topic.page.slice(6);
@@ -929,10 +953,10 @@ async function handleModerate(request: any, env: any, ctx: any) {
 /* Admin-only: move a whole thread to another category, then DM the original
    poster an automated notice with a link to its new home. The topic row and
    every reply row carry their own page, so all move together. */
-async function handleMove(request: any, env: any, ctx: any) {
-  let data;
+async function handleMove(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -948,7 +972,7 @@ async function handleMove(request: any, env: any, ctx: any) {
   if (!newPage) return json({ ok: false, error: 'Unknown category.' }, 400);
   const topic = await env.DB.prepare(
     "SELECT id, page, title, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status != 'deleted'"
-  ).bind(id).first();
+  ).bind(id).first<TopicRow>();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   if (topic.page === newPage) return json({ ok: false, error: 'It is already in that category.' }, 400);
   /* Moving INTO the back room is a retraction from public view, and the back
@@ -1009,10 +1033,10 @@ async function handleMove(request: any, env: any, ctx: any) {
 
 /* Admin-only trust toggle. A trusted author's posts skip the AI screen.
    The flag lives by fingerprint and its holder never learns it exists. */
-async function handleTrust(request: any, env: any) {
-  let data;
+async function handleTrust(request: Request, env: Env) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -1035,10 +1059,10 @@ async function handleTrust(request: any, env: any) {
 /* Admin-only activity audit: the newest non-deleted post on every site
    page and in every board topic, author and moment, nothing else. Pending
    posts count as activity, they are exactly what an admin wants to see. */
-async function handleAudit(request: any, env: any) {
-  let data;
+async function handleAudit(request: Request, env: Env) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -1085,9 +1109,9 @@ async function handleAudit(request: any, env: any) {
 /* Watch, unwatch, or read the state of a thread. Posting a reply auto-watches;
    this is the manual toggle in the topic header. 'status' is a cheap read, so it
    rides READ_LIMIT; the mutations ride the stricter write limit. */
-async function handleWatch(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleWatch(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(data.key || '');
   const topicId = Number(data.topic);
   const act = String(data.act || 'status');
@@ -1112,7 +1136,7 @@ async function handleWatch(request: any, env: any) {
 /* Board read state ("new since last visit"). A thread reads as new when its
    last activity is newer than the reader's read stamp for it, or than the floor
    (the topic_id=0 row) when they have never opened it. */
-async function handleBoardUnread(request: any, env: any) {
+async function handleBoardUnread(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -1131,16 +1155,16 @@ async function handleBoardUnread(request: any, env: any) {
     (adm ? '' : "AND c.page != 'board:adminsonly' ") +
     'AND COALESCE(c.last_at, c.created_at) > COALESCE(tr.read_at, ?2) GROUP BY c.page'
   ).bind(me, floor).all();
-  const byCat: any = {};
+  const byCat: Record<string, number> = {};
   let total = 0;
-  for (const r of (rows.results || [])) { byCat[String(r.page).slice(6)] = r.n; total += r.n; }
+  for (const r of (rows.results || []) as { page: string; n: number }[]) { byCat[String(r.page).slice(6)] = r.n; total += r.n; }
   return json({ ok: true, total, byCat }, 200);
 }
 
 /* The unread topic ids in one category, so the listing can mark them "new". */
-async function handleBoardReads(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleBoardReads(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
@@ -1161,7 +1185,7 @@ async function handleBoardReads(request: any, env: any) {
 }
 
 /* Mark one thread read — fired on opening a topic. */
-async function handleBoardRead(request: Request, env: any) {
+async function handleBoardRead(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -1186,7 +1210,7 @@ async function handleBoardRead(request: Request, env: any) {
 
 /* Mark everything read: raise the floor to now and drop the per-thread rows it
    now subsumes, so the table stays lean. */
-async function handleBoardReadAll(request: any, env: any) {
+async function handleBoardReadAll(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -1204,7 +1228,7 @@ async function handleBoardReadAll(request: any, env: any) {
    only surfaces it in the Activity audit's Reported queue. One report per member
    per post (INSERT OR IGNORE against the UNIQUE), so no brigade can inflate a
    count or hide anything. An optional short reason rides along. */
-async function handleReport(request: Request, env: any) {
+async function handleReport(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many reports at once. Wait a minute.' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -1226,9 +1250,9 @@ async function handleReport(request: Request, env: any) {
 
 /* An admin dismisses a post's reports, clearing it from the Reported queue while
    leaving the post itself alone. */
-async function handleReportDismiss(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleReportDismiss(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
@@ -1241,9 +1265,9 @@ async function handleReportDismiss(request: any, env: any) {
 }
 
 /* Approve a held comment: the in-platform replacement for the old email link. */
-async function handleApprove(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleApprove(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
@@ -1295,8 +1319,8 @@ async function handleApprove(request: any, env: any, ctx: any) {
       if (!c) return [];
       /* A muted author's approved post enters the stream silently — the read
          paths already hide it; it must not announce itself either. */
-      if (await isShadowBanned(env, c.author_hash)) return [];
-      const catKey = c.page.slice(6);
+      if (await isShadowBanned(env, String(c.author_hash))) return [];
+      const catKey = String(c.page).slice(6);
       const topicId = c.parent_id || c.id;
       if (c.parent_id == null) {
         const t = await env.DB.prepare('SELECT replies, COALESCE(last_at, created_at) AS last FROM comments WHERE id = ?1').bind(c.id).first();
@@ -1321,7 +1345,7 @@ async function handleApprove(request: any, env: any, ctx: any) {
 }
 
 /* The pending-review queue: every held comment, newest first. */
-async function handlePending(request: Request, env: any) {
+async function handlePending(request: Request, env: Env) {
   const pre = await adminGated(request, env, { bucket: 'READ_LIMIT' });
   if (pre instanceof Response) return pre;
   const rows = await env.DB.prepare(

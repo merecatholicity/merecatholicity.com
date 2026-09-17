@@ -65,8 +65,10 @@ import {
   readLimited,
 } from '../lib.ts';
 import type { DmRosterPayload, DmThreadPayload, DmThreadsPayload } from '../../../app/wire.ts';
+import type { Env } from '../env.ts';
+import type { Body } from '../lib.ts';
 
-async function handleDmSend(request: Request, env: any, ctx: any) {
+async function handleDmSend(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many messages at once. Wait a minute and try again.', block: true });
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -241,7 +243,7 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
    because the forwarder can read it, and the object lives until its last
    reference goes. One gate for the batch — throttle, ban, Turnstile — then
    the delivery core per word, each answered on its own. */
-async function handleDmForward(request: Request, env: any, ctx: any) {
+async function handleDmForward(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many messages at once. Wait a minute and try again.' });
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -267,7 +269,7 @@ async function handleDmForward(request: Request, env: any, ctx: any) {
    what a sender seals to — read without a mark (opening a thread marks it
    read and starts clocks; a picker and a re-seal must not). An unmade pair's
    room answers with its two. A stranger's ask is "no such conversation". */
-async function handleDmRoster(request: any, env: any) {
+async function handleDmRoster(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -311,7 +313,7 @@ async function announceDmMembers(env: any, ctx: any, threadId: number, by: strin
 }
 
 /* Start a group: `members` the hashes to bring in, an optional name. */
-async function handleDmGroups(request: Request, env: any, ctx: any) {
+async function handleDmGroups(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.', block: true });
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -332,7 +334,7 @@ async function handleDmGroups(request: Request, env: any, ctx: any) {
    new group of the three or more (Snapchat's and WhatsApp's way — the pair
    and its private history stay as they were). Any current member may add;
    nobody owns the thread. */
-async function handleDmMembers(request: Request, env: any, ctx: any) {
+async function handleDmMembers(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -373,7 +375,7 @@ async function handleDmMembers(request: Request, env: any, ctx: any) {
    left" is my last word in it. When nobody remains, the thread and all its
    words go — nobody owns it, nobody is left to. A pair cannot be left (delete
    it instead). */
-async function handleDmLeave(request: any, env: any, ctx: any) {
+async function handleDmLeave(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -385,7 +387,7 @@ async function handleDmLeave(request: any, env: any, ctx: any) {
   await sendSystemDmLine(env, thread.id, me, Dm.sysLeaveLine, { quiet: true });
   await env.DB.prepare('UPDATE dm_members SET left_at = ?1 WHERE thread_id = ?2 AND hash = ?3').bind(now, thread.id, me).run();
   await announceDmMembers(env, ctx, thread.id, me, [], [me]);
-  const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM dm_members WHERE thread_id = ?1 AND left_at IS NULL').bind(thread.id).first();
+  const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM dm_members WHERE thread_id = ?1 AND left_at IS NULL').bind(thread.id).first<{ n: number }>();
   let purged = false;
   if (!(left && left.n > 0)) {
     const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
@@ -405,7 +407,7 @@ async function handleDmLeave(request: any, env: any, ctx: any) {
    kernel's normalisation). Server-visible metadata by design: the inbox row,
    the bell's sentence and the ⓘ sheet all need it, and there is no per-thread
    key to seal it under. */
-async function handleDmName(request: any, env: any, ctx: any) {
+async function handleDmName(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -426,7 +428,7 @@ async function handleDmName(request: any, env: any, ctx: any) {
    their nick and avatar, a group's name and up to four members for its
    collage (2026-09-13) — and the total unread count riding along so one call
    feeds both the list and the badge. */
-async function handleDmThreads(request: Request, env: any) {
+async function handleDmThreads(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -456,7 +458,7 @@ async function handleDmThreads(request: Request, env: any) {
   ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
   const totals = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'   // unread_total counts WORDS now (2026-09-11), the same number /dm/unread returns
-  ).bind(me).first();
+  ).bind(me).first<{ n: number; unread: number }>();
   const threads = (rows.results || []).map((r: any) => {
     let members: any[] = [];
     try { members = JSON.parse(r.members_json || '[]'); } catch { members = []; }
@@ -467,8 +469,8 @@ async function handleDmThreads(request: Request, env: any) {
     delete out.members_json;
     return out;
   });
-  const inbox: DmThreadsPayload = { ok: true, threads, total: totals.n || 0,
-    unread_total: totals.unread || 0, page: p, per: DM_PER_PAGE };
+  const inbox: DmThreadsPayload = { ok: true, threads, total: (totals && totals.n) || 0,
+    unread_total: (totals && totals.unread) || 0, page: p, per: DM_PER_PAGE };
   return json(inbox, 200);
 }
 
@@ -477,7 +479,7 @@ async function handleDmThreads(request: Request, env: any) {
    room) — paged by twenty like everything else, defaulting to the LAST page
    so it opens at its newest words. The members ride along with their keys.
    Opening marks it read with at most one write, none when nothing was unread. */
-async function handleDmThread(request: Request, env: any, ctx: any) {
+async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { data, key, me } = pre;
@@ -530,8 +532,8 @@ async function handleDmThread(request: Request, env: any, ctx: any) {
   const floor = Math.max(myCleared, Number(thread.joined_at || 0) - 1);   // "> cleared AND >= joined" as one bound
   const from = ' FROM dms m JOIN dm_threads t ON t.id = m.thread_id JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 ' +
     'WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now);
-  const totRow = await env.DB.prepare('SELECT COUNT(*) AS n' + from).bind(me, thread.id).first();
-  const total = totRow.n || 0;
+  const totRow = await env.DB.prepare('SELECT COUNT(*) AS n' + from).bind(me, thread.id).first<{ n: number }>();
+  const total = (totRow && totRow.n) || 0;
   const lastPage = Math.max(1, Math.ceil(total / DM_PER_PAGE));
   /* A permalink into the conversation (a reaction's bell lands on the very
      message, 2026-09-12) arrives as find=<message id> and one indexed count
@@ -539,7 +541,7 @@ async function handleDmThread(request: Request, env: any, ctx: any) {
   const find = Math.floor(Number(data.find) || 0);
   let p = data.p == null ? lastPage : Math.min(1000, Math.max(1, Math.floor(Number(data.p) || 1)));
   if (find > 0 && data.p == null) {
-    const pos = await env.DB.prepare('SELECT COUNT(*) AS n' + from + ' AND m.id < ?3').bind(me, thread.id, find).first();
+    const pos = await env.DB.prepare('SELECT COUNT(*) AS n' + from + ' AND m.id < ?3').bind(me, thread.id, find).first<{ n: number }>();
     p = Math.floor(((pos && pos.n) || 0) / DM_PER_PAGE) + 1;
   }
   /* One query per page: the words, MY sealed key beside each (k.sealed —
@@ -578,7 +580,7 @@ async function handleDmThread(request: Request, env: any, ctx: any) {
   const unreadRow = await env.DB.prepare(
     'SELECT COUNT(*) AS n, MIN(m.id) AS first_id FROM dms m WHERE m.thread_id = ?2 AND COALESCE(m.held, 0) = 0 AND m.sender_hash != ?1 ' +
     'AND m.created_at > ?3 AND m.created_at > ?4 AND (?5 = 0 OR NOT EXISTS (SELECT 1 FROM dm_blocks bk WHERE bk.owner_hash = ?1 AND bk.blocked_hash = m.sender_hash)) AND ' + dmLive(now)
-  ).bind(me, thread.id, myReadAt, floor, kind).first();
+  ).bind(me, thread.id, myReadAt, floor, kind).first<{ n: number; first_id: number | null }>();
   /* One conditional write: only when a visible word from someone else is
      newer than my stamp. Held, cleared and pre-joining words never trigger it. */
   await env.DB.prepare(
@@ -632,7 +634,7 @@ async function handleDmThread(request: Request, env: any, ctx: any) {
    pass of the same fragment the inbox rows carry — the tab's badge and the row
    badges now add up, and "3" means three messages waiting, not three threads.
    The client asks at most once per ninety seconds, so this stays cheap. */
-async function handleDmUnread(request: Request, env: any) {
+async function handleDmUnread(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'READ_LIMIT' });
   if (pre instanceof Response) return pre;
   const { ip, me } = pre;
@@ -643,14 +645,14 @@ async function handleDmUnread(request: Request, env: any) {
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(
     'SELECT COALESCE(SUM(' + dmUnreadCount(now) + '), 0) AS n FROM dm_threads t JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 AND mb.left_at IS NULL'
-  ).bind(me).first();
-  return json({ ok: true, unread: row.n || 0 }, 200);
+  ).bind(me).first<{ n: number }>();
+  return json({ ok: true, unread: (row && row.n) || 0 }, 200);
 }
 
 /* The batched inbox presence check: given a list of correspondent hashes, which
    are online right now (honouring appear-offline)? One keyed request per inbox
    load, answered by the BoardHub DO's live socket set — no polling. */
-async function handleDmPresence(request: any, env: any) {
+async function handleDmPresence(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -672,7 +674,7 @@ async function handleDmPresence(request: any, env: any) {
 /* The blocked-members roster for the settings gear: the members this reader has
    blocked, so they can be seen and unblocked from one place (unblocking reuses
    the existing /dm/block with blocked:false). Keyed + private. */
-async function handleDmBlocked(request: any, env: any) {
+async function handleDmBlocked(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -690,7 +692,7 @@ async function handleDmBlocked(request: any, env: any) {
    the other members are told live so their headers update. A pair's room is
    made if it does not exist yet (a still-empty room, invisible in the inbox),
    so the choice sticks before the first message is even sent. */
-async function handleDmTtl(request: Request, env: any, ctx: any) {
+async function handleDmTtl(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -719,7 +721,7 @@ async function handleDmTtl(request: Request, env: any, ctx: any) {
    which is how expiry stays identical for all — and the saver is named
    (saved_by, Snapchat's "saved by"). Unsaving resumes the clock. The message
    id alone names it: membership is checked through its thread. */
-async function handleDmSave(request: Request, env: any, ctx: any) {
+async function handleDmSave(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -735,8 +737,8 @@ async function handleDmSave(request: Request, env: any, ctx: any) {
   ).bind(id, me).first();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   const settings = await getAppSettings(env);
-  const ttl = row.ttl || dmDefaultTtl(settings);
-  const expires = saved ? null : (row.opened_at ? (row.opened_at + ttl) : (row.created_at + dmBackstopSeconds(settings)));
+  const ttl = Number(row.ttl) || dmDefaultTtl(settings);
+  const expires = saved ? null : (row.opened_at ? (Number(row.opened_at) + ttl) : (Number(row.created_at) + dmBackstopSeconds(settings)));
   await env.DB.prepare('UPDATE dms SET saved = ?1, saved_by = ?4, expires_at = ?2 WHERE id = ?3').bind(saved, expires, id, saved ? me : null).run();
   /* A save is for all: every other member's open thread lights the bubble
      live (the Snapchat convention — a kept message looks kept to everyone). */
@@ -756,9 +758,9 @@ async function handleDmSave(request: Request, env: any, ctx: any) {
    other member's open thread hears it live. The 2026-08-03 heart rides the
    same road: `/dm/like {like}` is this handler with ❤️ or nothing, kept one
    deploy for cached clients. */
-async function handleDmReact(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleDmReact(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -798,8 +800,8 @@ async function handleDmReact(request: any, env: any, ctx: any) {
          on screen lands on the pill in front of their eyes — no bell. */
       let onScreen = false;
       if (env.HUB) {
-        onScreen = (await hubViewersOf(env, 't' + row.thread_id, [row.sender_hash])).length > 0;
-        if (!onScreen && Number(row.kind) === 0) onScreen = await hubDmViewing(env, row.sender_hash, me);
+        onScreen = (await hubViewersOf(env, 't' + row.thread_id, [String(row.sender_hash)])).length > 0;
+        if (!onScreen && Number(row.kind) === 0) onScreen = await hubDmViewing(env, String(row.sender_hash), me);
       }
       if (!onScreen) { const ring = notifyReact(env, bell); if (ctx) ctx.waitUntil(ring); else await ring; }
     } else await retractReactNotif(env, bell);
@@ -812,7 +814,7 @@ async function handleDmReact(request: any, env: any, ctx: any) {
    already-rung dm notification settle exactly as a thread (re)load would set
    them — without refetching the thread. The same three writes handleDmThread
    makes on open, kept in step with it. */
-async function handleDmSeen(request: any, env: any, ctx: any) {
+async function handleDmSeen(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -860,9 +862,9 @@ async function handleDmSeen(request: any, env: any, ctx: any) {
    "(edited)" marker. Everything else — the expiry clock, opened_at, saved, the
    sealed keys, any media pointer — is untouched. Only the sender may edit,
    only a live (unexpired), un-redacted, non-system message. */
-async function handleDmEdit(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleDmEdit(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
@@ -887,7 +889,7 @@ async function handleDmEdit(request: any, env: any, ctx: any) {
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
   if (Number(row.enc) === 2) return json({ ok: false, error: 'That message cannot be edited.' }, 403);
-  if (row.expires_at != null && row.expires_at <= now) return json({ ok: false, error: 'That message has expired.' }, 410);
+  if (row.expires_at != null && Number(row.expires_at) <= now) return json({ ok: false, error: 'That message has expired.' }, 410);
   await env.DB.prepare('UPDATE dms SET body = ?1, enc = ?2, edited_at = ?3 WHERE id = ?4').bind(body, enc, now, id).run();
   /* Push the new ciphertext to every other member's open thread so their
      bubble re-renders (decrypts) live and shows "(edited)". */
@@ -902,7 +904,7 @@ async function handleDmEdit(request: any, env: any, ctx: any) {
    with its ORIGINAL expires_at, so a "<redacted>" placeholder stands where the
    message was until the moment it would have disappeared anyway — then the
    ordinary sweep removes it. Only the sender may redact, and only once. */
-async function handleDmRedact(request: Request, env: any, ctx: any) {
+async function handleDmRedact(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many requests. Wait a minute and try again.' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -937,7 +939,7 @@ async function handleDmRedact(request: Request, env: any, ctx: any) {
    up to 1000 keys per call; the D1 delete is chunked to stay well inside the
    invocation's 1,000 binding calls (the 50 cap is for external fetches). Keys
    are opaque server-minted ids. */
-async function handleDmMediaUpload(request: any, env: any) {
+async function handleDmMediaUpload(request: Request, env: Env) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -964,13 +966,14 @@ async function handleDmMediaUpload(request: any, env: any) {
     return json({ ok: false, error: 'Attachments unlock after your first post or profile save.' }, 403);
   }
   const file = form.get('file');
-  if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: 'No file.' }, 400);
+  /* a FormData value is a string or a File; only a File carries the bytes */
+  if (!file || typeof file === 'string') return json({ ok: false, error: 'No file.' }, 400);
   if (file.size > maxBytes) return json({ ok: false, error: 'That file is too large.' }, 413);
   /* LIVE byte accounting at upload time — the sweep-maintained counter is up to
      an hour stale, which a flood laughs at. One cheap indexed SUM. */
-  const usedRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM dm_media').first();
+  const usedRow = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM dm_media').first<{ total: number }>();
   const capDm = Number(settings.media_cap_dm_bytes) || Number(Media.defaults.capDmBytes);
-  if ((usedRow.total || 0) + file.size > Math.floor(capDm * 0.90)) {
+  if (((usedRow && usedRow.total) || 0) + file.size > Math.floor(capDm * 0.90)) {
     return json({ ok: false, error: 'Media storage is full right now — older files clear soon, try again later.' }, 507);
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -988,13 +991,13 @@ async function handleDmMediaUpload(request: any, env: any) {
    a leaver, or an expired reference gets an indistinguishable 404. The bytes
    are opaque ciphertext, useless without the key the reader holds from the
    E2E message body. */
-async function handleDmMediaGet(request: any, env: any) {
+async function handleDmMediaGet(request: Request, env: Env) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(data.key || '');
   const mediaKey = String(data.media_key || '');
   if (!key || !/^dm\/[0-9a-f]{64}$/.test(mediaKey)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -1014,7 +1017,7 @@ async function handleDmMediaGet(request: any, env: any) {
 }
 
 /* Block and unblock, owner-side only. */
-async function handleDmBlock(request: Request, env: any) {
+async function handleDmBlock(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -1031,7 +1034,7 @@ async function handleDmBlock(request: Request, env: any) {
     if (t) {
       const mn = await env.DB.prepare(
         'SELECT MIN(created_at) AS mn FROM dms WHERE thread_id = ?1 AND sender_hash = ?2 AND COALESCE(held, 0) = 1'
-      ).bind(t.id, hash).first();
+      ).bind(t.id, hash).first<{ mn: number | null }>();
       await env.DB.prepare(
         'UPDATE dms SET held = 0 WHERE thread_id = ?1 AND sender_hash = ?2 AND COALESCE(held, 0) = 1'
       ).bind(t.id, hash).run();
@@ -1040,7 +1043,7 @@ async function handleDmBlock(request: Request, env: any) {
       if (mn && mn.mn != null) {
         await env.DB.prepare(
           'UPDATE dm_members SET read_at = ?2 WHERE thread_id = ?1 AND hash = ?3 AND read_at IS NOT NULL AND read_at >= ?2'
-        ).bind(t.id, mn.mn - 1, me).run();
+        ).bind(t.id, Number(mn.mn) - 1, me).run();
       }
       await env.DB.prepare(
         'UPDATE dm_threads SET ' +
@@ -1061,7 +1064,7 @@ async function handleDmBlock(request: Request, env: any) {
    clear, the thread and all its words — the keys, the reactions, the
    references — are purged so nothing persists. Keyed, not admin — you delete
    your own. */
-async function handleDmDelete(request: Request, env: any) {
+async function handleDmDelete(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', block: true });
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -1082,8 +1085,8 @@ async function handleDmDelete(request: Request, env: any) {
   let purged = false;
   if (cur && Number(cur.open) === 0) {
     const surv = await env.DB.prepare('SELECT COUNT(*) AS n FROM dms WHERE thread_id = ?1 AND created_at > ?2')
-      .bind(thread.id, Number(cur.n) > 0 ? Number(cur.floor) : now).first();
-    if (!surv.n) {
+      .bind(thread.id, Number(cur.n) > 0 ? Number(cur.floor) : now).first<{ n: number }>();
+    if (!(surv && surv.n)) {
       /* The objects go by their references (a forward elsewhere keeps its copy);
          D1 can't cascade to R2. */
       const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
@@ -1104,7 +1107,7 @@ async function handleDmDelete(request: Request, env: any) {
    its nick when one is set and its server-resolved `assigned` pseudonym (the web
    client derives the same value from the hash; native clients read it here).
    Public-by-construction data, cacheable. */
-async function handleDmDirectory(request: Request, env: any, url: any) {
+async function handleDmDirectory(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   /* Each member with the moment they first appeared (earliest live comment or
@@ -1146,10 +1149,10 @@ async function handleDmDirectory(request: Request, env: any, url: any) {
    idempotent — keygen is deterministic, so re-publishing the same key is a
    no-op, and only the key's owner can ever change the row. The server never sees
    or can derive the private key from the hash it holds. */
-async function handleDmPubkey(request: any, env: any) {
-  let data;
+async function handleDmPubkey(request: Request, env: Env) {
+  let data: Body;
   try {
-    data = await request.json();
+    data = await request.json<Body>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
