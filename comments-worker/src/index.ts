@@ -216,12 +216,12 @@ import { handleAdminUsage, runUsageCheck } from './usage.ts';
 
 import type { Env } from './env.ts';
 
-async function handleConfig(request: any, env: any, url: any) {
+async function handleConfig(request: Request, env: Env, url: URL) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const custom: any = {};
-  for (const k of Object.keys(EMOJI_PACKS)) for (const [code, path] of (EMOJI_PACKS as any)[k]) custom[code] = path;
+  const custom: Record<string, string> = {};
+  for (const k of Object.keys(EMOJI_PACKS)) for (const [code, path] of (EMOJI_PACKS as Record<string, string[][]>)[k]) custom[code] = path;
   /* The served media limits: every composer gates client-side from THIS (never a
      hardcoded number — the old 60 MB client gate vs 25 MB server refusal bug).
      Cacheable ~5 min like the worker's own settings cache, so a settings change
@@ -283,11 +283,12 @@ async function handleConfig(request: any, env: any, url: any) {
       idle_seconds: CallK.idleClampSecs(Math.floor(Number(s.calls_idle_seconds)) || CallK.idleDefaultSecs),
     },
     cats: CAT_META.filter((c) => BOARD_CATS.includes(c[0])).map((c, i) => {
-      const o: any = { key: c[0], label: c[1], blurb: c[2], order: i };
+      const o: { key: string; label: string; blurb: string; order: number; link?: { text: string; url: string } } =
+        { key: c[0], label: c[1], blurb: c[2], order: i };
       if (c[3]) o.link = { text: c[3], url: c[4] };
       return o;
     }),
-    faiths: FAITHS.map((code: any, i: any) => ({ code, label: FAITH_LABELS[code] || code, order: i })),
+    faiths: FAITHS.map((code: string, i: number) => ({ code, label: FAITH_LABELS[code] || code, order: i })),
     ranks: Rank.rankTable,
     pages: PAGES,
     bot_hash: MERECAT_BOT.hash,

@@ -33,8 +33,28 @@ import {
   readLimited,
   registerMember,
 } from '../lib.ts';
+import type { Env } from '../env.ts';
 
-async function handleProfileGet(request: Request, env: any, url: any) {
+/* A profile row as the reads above select it (the columns, not the table). */
+type ProfileRow = {
+  nick?: string | null; bio?: string | null; signature?: string | null;
+  avatar?: string | null; faith?: string | null; handle?: string | null; links?: string | null;
+};
+type PrefsRow = {
+  receipts_mode: string | null; notify_reply: number | null; notify_mention: number | null;
+  notify_dm: number | null; calls_ok: number | null; muted: string | null;
+};
+/* The bodies these handlers read. Every field is coerced below (String/cleanField
+   /normalizeLinks), so `unknown` is what the wire honestly carries. */
+type ProfileSaveBody = {
+  key?: unknown; token?: unknown; nick?: unknown; bio?: unknown; signature?: unknown;
+  faith?: unknown; handle?: unknown; links?: unknown;
+};
+type AdminEditBody = {
+  key?: unknown; hash?: unknown; nick?: unknown; bio?: unknown; signature?: unknown; clear_avatar?: unknown;
+};
+
+async function handleProfileGet(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   /* Address a profile by its 64-hex hash OR by a custom ?handle=<name> (the URL
@@ -45,13 +65,14 @@ async function handleProfileGet(request: Request, env: any, url: any) {
   if (!hash && handleParam) {
     const v = Handle.validate(handleParam);
     if (v.ok) {
-      const owner = await env.DB.prepare('SELECT hash FROM profiles WHERE handle = ?1').bind(v.handle).first();
+      const owner = await env.DB.prepare('SELECT hash FROM profiles WHERE handle = ?1').bind(v.handle).first<{ hash: string }>();
       if (owner && owner.hash) hash = owner.hash;
     }
     if (!hash) return json({ ok: false, error: 'No such profile.' }, 404, cacheHeader(url));
   }
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith, handle, links FROM profiles WHERE hash = ?1').bind(hash).first();
+  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith, handle, links FROM profiles WHERE hash = ?1')
+    .bind(hash).first<ProfileRow>();
   const counts = await postCountsFor(env, [hash]);
   return json({
     ok: true,
@@ -75,10 +96,10 @@ async function handleProfileGet(request: Request, env: any, url: any) {
 /* One profile field, normalized like a comment body: CRLF folded, trimmed,
    control characters (bar newline and tab) refused. Empty becomes null,
    which clears the field and falls the name back to the assigned pseudonym. */
-async function handleProfileSave(request: any, env: any) {
-  let data;
+async function handleProfileSave(request: Request, env: Env) {
+  let data: ProfileSaveBody;
   try {
-    data = await request.json();
+    data = await request.json<ProfileSaveBody>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -155,7 +176,7 @@ async function handleProfileSave(request: any, env: any) {
   }
   /* The text upsert leaves the avatar and faith columns as they stand when not
      given; read them back (with the handle + links) so the client's re-render keeps them. */
-  const av = await env.DB.prepare('SELECT avatar, faith, handle, links FROM profiles WHERE hash = ?1').bind(authorHash).first();
+  const av = await env.DB.prepare('SELECT avatar, faith, handle, links FROM profiles WHERE hash = ?1').bind(authorHash).first<ProfileRow>();
   return json({
     ok: true,
     profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
@@ -166,7 +187,7 @@ async function handleProfileSave(request: any, env: any) {
 }
 
 /* Map a Domain.Handle rejection tag to a member-facing message. */
-function handleErrorMessage(tag: any) {
+function handleErrorMessage(tag: string) {
   switch (tag) {
     case 'too_short': return 'That handle is too short (3 to 30 characters).';
     case 'too_long': return 'That handle is too long (3 to 30 characters).';
@@ -180,10 +201,10 @@ function handleErrorMessage(tag: any) {
 
 /* Admin-only: wipe an abusive profile back to the assigned pseudonym without
    banning the author. Bans still only stop posting. */
-async function handleProfileClear(request: any, env: any) {
-  let data;
+async function handleProfileClear(request: Request, env: Env) {
+  let data: { key?: unknown; hash?: unknown };
   try {
-    data = await request.json();
+    data = await request.json<{ key?: unknown; hash?: unknown }>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -203,7 +224,7 @@ async function handleProfileClear(request: any, env: any) {
 /* Settings-gear preferences (keyed + private): read your own read-receipts mode
    and per-type notification switches, and set them. Never exposed on the public
    profile read. */
-async function handlePrefs(request: any, env: any) {
+async function handlePrefs(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -224,7 +245,7 @@ async function handlePrefs(request: any, env: any) {
     /* The mute list follows the member across devices (the client merges and
        writes through). Hashes only, clamped, stored as a JSON array. */
     if ('muted' in set && Array.isArray(set.muted)) {
-      const clean = set.muted.filter((h: any) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 300);
+      const clean = set.muted.filter((h: unknown) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 300);
       parts.push('muted = ?'); vals.push(JSON.stringify(clean));
     }
     if (parts.length) {
@@ -232,9 +253,10 @@ async function handlePrefs(request: any, env: any) {
       await env.DB.prepare('UPDATE profiles SET ' + parts.join(', ') + ' WHERE hash = ?').bind(...vals, me).run();
     }
   }
-  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm, calls_ok, muted FROM profiles WHERE hash = ?1').bind(me).first();
-  const onOff = (v: any) => (v == null ? 1 : (v ? 1 : 0));
-  let muted: any = [];
+  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm, calls_ok, muted FROM profiles WHERE hash = ?1')
+    .bind(me).first<PrefsRow>();
+  const onOff = (v: number | null | undefined) => (v == null ? 1 : (v ? 1 : 0));
+  let muted: unknown = [];
   try { muted = row && row.muted ? JSON.parse(row.muted) : []; } catch { muted = []; }
   return json({ ok: true, prefs: {
     receipts: (row && row.receipts_mode === 'off') ? 'off' : 'auto',
@@ -246,9 +268,9 @@ async function handlePrefs(request: any, env: any) {
   } }, 200);
 }
 
-async function handleProfileAdminEdit(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleProfileAdminEdit(request: Request, env: Env) {
+  let data: AdminEditBody;
+  try { data = await request.json<AdminEditBody>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
@@ -280,7 +302,7 @@ async function handleProfileAdminEdit(request: any, env: any) {
   return json({ ok: true }, 200);
 }
 
-async function handleAvatarUpload(request: any, env: any) {
+async function handleAvatarUpload(request: Request, env: Env) {
   if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -304,7 +326,10 @@ async function handleAvatarUpload(request: any, env: any) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
   const file = form.get('avatar');
-  if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: 'No image arrived.' }, 400);
+  /* Same guard as before, in the form the types understand (and the one
+     routes/media.ts's upload already uses): a FormData value is a string or
+     a File, and only a File carries arrayBuffer. */
+  if (!file || typeof file === 'string') return json({ ok: false, error: 'No image arrived.' }, 400);
   if (file.size > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 1 MB at most.' }, 413);
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (bytes.length > MAX_AVATAR_BYTES) return json({ ok: false, error: 'The image is too large. 1 MB at most.' }, 413);
@@ -330,11 +355,11 @@ async function handleAvatarUpload(request: any, env: any) {
 
 /* Owner removes their own avatar: the object is deleted and the profile flag
    cleared. Same gates as self-deleting a comment. */
-async function handleAvatarDelete(request: any, env: any) {
+async function handleAvatarDelete(request: Request, env: Env) {
   if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
-  let data;
+  let data: { key?: unknown };
   try {
-    data = await request.json();
+    data = await request.json<{ key?: unknown }>();
   } catch {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
@@ -354,7 +379,7 @@ async function handleAvatarDelete(request: any, env: any) {
    a deny-all CSP, so the bytes can never run as anything. Long browser cache;
    the URL carries the upload stamp as a cache-buster, so a new avatar is a
    new URL. No rate limiter: one page can hold many authors. */
-async function handleAvatarGet(request: any, env: any, url: any) {
+async function handleAvatarGet(request: Request, env: Env, url: URL) {
   if (!env.AVATARS) return new Response('No avatar.', { status: 404 });
   const hash = String(url.searchParams.get('hash') || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return new Response('Bad request.', { status: 400 });
@@ -373,7 +398,7 @@ async function handleAvatarGet(request: any, env: any, url: any) {
 
 /* Sets one attribute on a matched element (HTMLRewriter handler). Used to
    overwrite the static profile.html OG tags with per-profile values. */
-async function handleHandleCard(request: any, env: any, url: any) {
+async function handleHandleCard(request: Request, env: Env, url: URL) {
   const raw = decodeURIComponent(url.pathname.slice(2)).replace(/\/+$/, '');
   const pageReq = new URL('/profile.html', url.origin).toString();
   try {
@@ -382,7 +407,8 @@ async function handleHandleCard(request: any, env: any, url: any) {
     let prof = null;
     const v = Handle.validate(raw);
     if (v.ok) {
-      const row = await env.DB.prepare('SELECT hash, nick, bio, avatar, handle FROM profiles WHERE handle = ?1').bind(v.handle).first();
+      const row = await env.DB.prepare('SELECT hash, nick, bio, avatar, handle FROM profiles WHERE handle = ?1').bind(v.handle)
+        .first<{ hash: string; nick: string | null; bio: string | null; avatar: string | null; handle: string }>();
       if (row && row.hash) prof = row;
     }
     if (!prof) return originResp;   // unknown handle: the plain page (client shows "No such profile")

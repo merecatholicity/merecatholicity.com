@@ -16,6 +16,7 @@
    reads the neurons dataset through the very same select. */
 
 import { json, requireAdmin, sendSystemDm, siteBase, MERECAT_BOT } from './lib.ts';
+import type { Env } from './env.ts';
 import { sendAlert } from './alerts.ts';
 import { gqlSelect } from './analytics.ts';
 import { aiNeuronsSelect } from './quota.ts';
@@ -24,7 +25,7 @@ import {
   iso, utcDayStart, utcMonthStart, FREE, PRODUCT_LABELS,
 } from './usagecalc.ts';
 
-export async function fetchUsageReport(env: any) {
+export async function fetchUsageReport(env: Env) {
   const now = Date.now();
   const day = iso(utcDayStart(now));
   const monDate = iso(utcMonthStart(now)).slice(0, 10);
@@ -48,18 +49,19 @@ export async function fetchUsageReport(env: any) {
   };
   const keys = Object.keys(Q);
   const settled = await Promise.allSettled(keys.map((k) => gqlSelect(env, Q[k])));
-  const raw: any = {};
+  /* One product per settled promise: its datasets, or the one error card. */
+  const raw: Record<string, unknown> = {};
   keys.forEach((k, i) => {
-    const s: any = settled[i];
+    const s = settled[i];
     raw[k] = s.status === 'fulfilled' ? s.value
       : { error: String((s.reason && s.reason.message) || s.reason || 'failed').slice(0, 200) };
   });
   return { rows: buildReport(raw), at: Math.floor(now / 1000) };
 }
 
-export async function handleAdminUsage(request: any, env: any) {
-  let data: any = null;
-  try { data = await request.json(); } catch (e) { return json({ ok: false, error: 'Bad request.' }, 400); }
+export async function handleAdminUsage(request: Request, env: Env) {
+  let data: { key?: unknown } | null = null;
+  try { data = await request.json<{ key?: unknown }>(); } catch (e) { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!(await requireAdmin(env, String((data && data.key) || '')))) return json({ ok: false, error: 'No.' }, 403);
   if (!env.CF_USAGE_TOKEN || !env.CF_ACCOUNT_ID) {
     return json({ ok: true, configured: false, products: PRODUCT_LABELS, free_as_of: FREE.asOf });
@@ -72,16 +74,17 @@ export async function handleAdminUsage(request: any, env: any) {
    app_settings under 'usage_alert_state', read/written directly — the 5-minute
    getAppSettings cache has no business in a once-a-day path. Failures log and
    stand down; the next day tries again. */
-export async function runUsageCheck(env: any) {
+export async function runUsageCheck(env: Env) {
   if (!env.CF_USAGE_TOKEN || !env.CF_ACCOUNT_ID) {
     console.log(JSON.stringify({ event: 'usage_check_skipped', why: 'CF_USAGE_TOKEN / CF_ACCOUNT_ID not set' }));
     return;
   }
   try {
     const rep = await fetchUsageReport(env);
-    let prev: any = {};
+    /* the fold's memory: the loudest band told per metric, and when */
+    let prev: Record<string, { b: number; at: number }> = {};
     try {
-      const st: any = await env.DB.prepare("SELECT v FROM app_settings WHERE k = 'usage_alert_state'").first();
+      const st = await env.DB.prepare("SELECT v FROM app_settings WHERE k = 'usage_alert_state'").first<{ v: string | null }>();
       if (st && st.v) prev = JSON.parse(st.v);
     } catch (e) { /* fresh state */ }
     const { alerts, state } = foldUsageAlerts(rep.rows, prev, rep.at);
@@ -94,9 +97,9 @@ export async function runUsageCheck(env: any) {
       return;
     }
     const body = alertBody(alerts, siteBase(env));
-    const adm = await env.DB.prepare('SELECT hash FROM admins').all();
+    const adm = await env.DB.prepare('SELECT hash FROM admins').all<{ hash: string }>();
     let sent = 0;
-    for (const a of (adm.results || []) as any[]) {
+    for (const a of adm.results || []) {
       if (!a.hash || a.hash === MERECAT_BOT.hash) continue;
       try { await sendSystemDm(env, MERECAT_BOT.hash, a.hash, body); sent++; } catch (e) { /* next admin */ }
     }

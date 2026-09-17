@@ -14,6 +14,11 @@
 
 import * as Rank from '../../purescript/output/Domain.Rank/index.js';
 import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
+import type { Env } from './env.ts';
+
+/* A row carrying an author, as every board/wall read selects it. Open on the
+   rest: the callers add their own columns and pass the row through. */
+export type AuthoredRow = { author_hash?: string | null } & Record<string, unknown>;
 
 /* ---- Bind-placeholder helpers (retire the hand-rolled `?N` loops) ---- */
 
@@ -49,7 +54,7 @@ export class Query {
 /* ---- Identity mappers (moved verbatim from index.ts) ---- */
 
 /** Rank ladder label for a post count (Domain.Rank). */
-export function rankFor(n: any): string {
+export function rankFor(n: unknown): string {
   return Rank.rankLabel(Rank.rankFor((Number(n) || 0) | 0));
 }
 
@@ -57,8 +62,8 @@ export function rankFor(n: any): string {
  *  pseudonym the client would otherwise derive itself (displayName), and `rank`
  *  the ladder label — supplied whenever the post count is known. Additive: the
  *  existing `nick`/`posts` fields are unchanged. */
-export function withNames(row: any, posts?: any): any {
-  const out = Object.assign({}, row);
+export function withNames(row: AuthoredRow, posts?: number | null): AuthoredRow {
+  const out: AuthoredRow = Object.assign({}, row);
   out.assigned = row.author_hash ? Pseudonym.displayName(row.author_hash) : null;
   if (posts != null) { out.posts = posts; out.rank = rankFor(posts); }
   return out;
@@ -66,9 +71,9 @@ export function withNames(row: any, posts?: any): any {
 
 /** Total live-forum post count per author hash (topics always; replies only
  *  under a live topic; back room excluded), keyed by hash. Moved verbatim. */
-export async function postCountsFor(env: any, hashes: any): Promise<any> {
-  const uniq = [...new Set((hashes || []).filter((h: any) => /^[0-9a-f]{64}$/.test(h)))];
-  const out: any = {};
+export async function postCountsFor(env: Env, hashes: readonly unknown[]): Promise<Record<string, number>> {
+  const uniq = [...new Set((hashes || []).filter((h) => /^[0-9a-f]{64}$/.test(String(h))).map(String))];
+  const out: Record<string, number> = {};
   if (!uniq.length) return out;
   const ph = inList(uniq.length);
   const rows = await env.DB.prepare(
@@ -76,8 +81,8 @@ export async function postCountsFor(env: any, hashes: any): Promise<any> {
     'LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' +
     'WHERE c.author_hash IN (' + ph + ") AND c.page LIKE 'board:%' AND c.page != 'board:adminsonly' AND c.status = 'live' " +
     "AND (c.parent_id IS NULL OR t.status = 'live') GROUP BY c.author_hash"
-  ).bind(...uniq).all();
-  uniq.forEach((h: any) => { out[h] = 0; });
-  (rows.results || []).forEach((r: any) => { out[r.h] = r.n; });
+  ).bind(...uniq).all<{ h: string; n: number }>();
+  uniq.forEach((h) => { out[h] = 0; });
+  (rows.results || []).forEach((r) => { out[r.h] = r.n; });
   return out;
 }

@@ -84,10 +84,13 @@ test('the prompt closes with /think and a directive, or /no_think', () => {
 
 test('temperature and headroom ride every model call from the config, not a literal', () => {
   const gen = uncommented(durable.slice(durable.indexOf('async #generate('), durable.indexOf('async #emit') > 0 ? durable.indexOf('async #emit') : durable.length));
-  assert.ok(/max_tokens: cfg\.max_tokens \+ merecatHeadroom\(this\.gen\.effort\), temperature: cfg\.temperature/.test(gen),
+  /* `this.gen` or the local alias #generate takes of it (2026-09-17, the typing
+     pass): the law is the SOURCE of the level and the temperature, not the name
+     the generation object goes by inside one method. */
+  assert.ok(/max_tokens: cfg\.max_tokens \+ merecatHeadroom\((?:this\.)?gen\.effort\), temperature: cfg\.temperature/.test(gen),
     'the ask must add the level\'s headroom and use the configured temperature');
-  assert.ok(/merecatPrompt\(this\.env, q, history, summary, cfg, this\.gen\.effort\)/.test(gen), 'the prompt must be built at the clamped level');
-  assert.ok(/effort: this\.gen\.effort/.test(gen), 'the meta frame must tell the reader the level that actually ran');
+  assert.ok(/merecatPrompt\(this\.env, q, history, summary, cfg, (?:this\.)?gen\.effort\)/.test(gen), 'the prompt must be built at the clamped level');
+  assert.ok(/effort: (?:this\.)?gen\.effort/.test(gen), 'the meta frame must tell the reader the level that actually ran');
   const mention = uncommented(lib.slice(lib.indexOf('const mentionEffort = merecatEffortFor(cfg, cfg.mention_effort);'), lib.indexOf('answer = merecatFinishAnswer(answer, sources);')));
   assert.ok(/max_tokens: 900 \+ merecatHeadroom\(mentionEffort\), temperature: cfg\.temperature/.test(mention));
   assert.ok(!/temperature: 0\.35/.test(uncommented(durable)) && !/temperature: 0\.35/.test(uncommented(lib)), 'no ask or mention may hardcode the temperature');

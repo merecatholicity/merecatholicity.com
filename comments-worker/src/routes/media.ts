@@ -23,22 +23,23 @@ import {
   sniffImage,
   adminGated,
 } from '../lib.ts';
+import type { Env } from '../env.ts';
 
 /* Purge ALL DM media from the bucket (admin, destructive). Cursor-paginated list +
    batched delete, then clear the pointers and the usage counter. Message text is
    untouched; only the shared attachments are removed. */
-async function handleDmMediaPurge(request: Request, env: any) {
+async function handleDmMediaPurge(request: Request, env: Env) {
   const pre = await adminGated(request, env);
   if (pre instanceof Response) return pre;
   const { ip, key, me } = pre;
   let deleted = 0;
   if (env.MEDIA) {
-    let cursor: any;
+    let cursor: string | undefined;
     do {
       const list = await env.MEDIA.list({ prefix: 'dm/', cursor, limit: 1000 });
-      const keys = (list.objects || []).map((o: any) => o.key);
+      const keys = (list.objects || []).map((o) => o.key);
       if (keys.length) { try { await env.MEDIA.delete(keys); } catch (e) { /* keep going */ } deleted += keys.length; }
-      cursor = list.truncated ? list.cursor : null;
+      cursor = list.truncated ? list.cursor : undefined;
     } while (cursor);
   }
   await env.DB.prepare('DELETE FROM dm_media').run();
@@ -65,7 +66,7 @@ async function handleDmMediaPurge(request: Request, env: any) {
    (uploads are not Turnstile-gated — the linking post is), and the store
    budget is checked with a LIVE per-section SUM so a flood is refused rather
    than discovered by a stale counter an hour later. */
-async function mediaUpload(request: any, env: any, ctxKind: string) {
+async function mediaUpload(request: Request, env: Env, ctxKind: string) {
   if (!env.WALLMEDIA) return json({ ok: false, error: 'Media is unavailable.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -119,11 +120,11 @@ async function mediaUpload(request: any, env: any, ctxKind: string) {
      95% valve in enforceWallMediaCap is only the emergency. */
   const used = await env.DB.prepare(
     "SELECT COALESCE(SUM(size), 0) AS total FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1"
-  ).bind(ctxKind).first();
+  ).bind(ctxKind).first<{ total: number }>();
   const cap = ctxKind === 'board'
     ? (Number(settings.media_cap_board_bytes) || Number(Media.defaults.capBoardBytes))
     : (Number(settings.media_cap_wall_bytes) || Number(Media.defaults.capWallBytes));
-  if ((used.total || 0) + bytes.length > Math.floor(cap * 0.90)) {
+  if (((used && used.total) || 0) + bytes.length > Math.floor(cap * 0.90)) {
     return json({ ok: false, error: 'Media storage is full right now. Try again later.' }, 507);
   }
   const objKey = 'wall/' + kind + '/' + randomHex(32);
@@ -143,19 +144,20 @@ async function mediaUpload(request: any, env: any, ctxKind: string) {
    worker invocations — a route's worker runs in front of the cache; the request
    budget's real protector is the browser cache via max-age). Only gate-passing
    2xx responses are ever put, so a cache hit can never leak a gated object. */
-async function handleWallMediaGet(request: any, env: any, url: any, ctx?: any) {
+async function handleWallMediaGet(request: Request, env: Env, url: URL, ctx?: ExecutionContext) {
   if (!env.WALLMEDIA) return new Response('gone', { status: 404 });
   const k = String(url.searchParams.get('key') || '');
   if (!WALL_MEDIA_RE.test(k)) return new Response('bad request', { status: 400 });
   const notFound = () => new Response('not found', { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });
-  const cache = (caches as any).default;
+  const cache = caches.default;
   try { const hit = await cache.match(request); if (hit) return hit; } catch (e) { /* cache is best-effort */ }
   const obj = await env.WALLMEDIA.get(k);
   if (!obj) return notFound();
   try {
-    const lk = await env.DB.prepare('SELECT ref_type, ref_id FROM wall_media WHERE key = ?1').bind(k).first();
+    const lk = await env.DB.prepare('SELECT ref_type, ref_id FROM wall_media WHERE key = ?1').bind(k)
+      .first<{ ref_type: string | null; ref_id: number | null }>();
     if (lk && lk.ref_type === 'board' && lk.ref_id != null) {
-      const c = await env.DB.prepare('SELECT page FROM comments WHERE id = ?1').bind(lk.ref_id).first();
+      const c = await env.DB.prepare('SELECT page FROM comments WHERE id = ?1').bind(lk.ref_id).first<{ page: string }>();
       if (c && c.page === ADMIN_CAT) return notFound();
     }
   } catch (e) { /* a failed linkage read must not take public media down */ }
@@ -172,7 +174,7 @@ async function handleWallMediaGet(request: any, env: any, url: any, ctx?: any) {
 
 /* Delete public posts/comments older than `days` and purge their media. Shared by
    the cron (only when auto-prune is enabled) and the admin "prune now" button. */
-async function handleWallPrune(request: Request, env: any) {
+async function handleWallPrune(request: Request, env: Env) {
   const pre = await adminGated(request, env);
   if (pre instanceof Response) return pre;
   const { data } = pre;
@@ -197,7 +199,7 @@ async function handleWallPrune(request: Request, env: any) {
    (a partial run must not orphan the surviving rows' pointers). Edge/browser
    caches may serve purged bytes up to a day, the standing property of every
    delete path. */
-async function handleWallMediaPurge(request: Request, env: any, section: string) {
+async function handleWallMediaPurge(request: Request, env: Env, section: string) {
   const pre = await adminGated(request, env);
   if (pre instanceof Response) return pre;
   const { key } = pre;
@@ -208,8 +210,8 @@ async function handleWallMediaPurge(request: Request, env: any, section: string)
   for (let round = 0; round < 2; round++) {
     const batch = await env.DB.prepare(
       "SELECT key FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 ORDER BY key LIMIT 500"
-    ).bind(section).all();
-    const keys = (batch.results || []).map((o: any) => o.key);
+    ).bind(section).all<{ key: string }>();
+    const keys = (batch.results || []).map((o) => o.key);
     if (!keys.length) break;
     try { if (env.WALLMEDIA) await env.WALLMEDIA.delete(keys); }
     catch (e) { break; /* keep these rows — the D1 handle IS the retry state */ }
@@ -222,7 +224,7 @@ async function handleWallMediaPurge(request: Request, env: any, section: string)
   }
   const left = await env.DB.prepare(
     "SELECT COUNT(*) AS n FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1"
-  ).bind(section).first();
+  ).bind(section).first<{ n: number }>();
   const remaining = (left && left.n) || 0;
   if (!remaining) {
     if (section === 'board') {

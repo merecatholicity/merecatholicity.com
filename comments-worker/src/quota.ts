@@ -24,9 +24,14 @@
 import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import { gqlSelect } from './analytics.ts';
 import { buildReport, iso, utcDayStart } from './usagecalc.ts';
+import type { Env } from './env.ts';
 
 export const QUOTA_FRESH_MS = 60_000;          // a reading answers every ask this long
 export const QUOTA_STALE_MS = 15 * 60_000;     // ...and still stands this long when a fresh read fails
+/* The two dials this module reads out of merecatConfig's record — the guard's
+   switch and its line. Everything else on that config belongs to the callers. */
+export type QuotaCfg = { quota_guard_on?: unknown; quota_guard_pct?: unknown };
+
 export const QUOTA_FETCH_TIMEOUT_MS = 5000;    // an ask waits at most this long on the meter
 
 /* The dataset the guard and the monitor both read: today's neurons by model. */
@@ -39,7 +44,7 @@ export const quotaCache: { reading: QuotaReading | null; failedAt: number } = { 
 
 /* One select, aggregated by the monitor's own rulebook so the guard and the
    health bar can never disagree about the day's figure or its ceiling. */
-export async function fetchAiNeurons(env: any, nowMs = Date.now()): Promise<QuotaReading> {
+export async function fetchAiNeurons(env: Env, nowMs = Date.now()): Promise<QuotaReading> {
   const acct = await gqlSelect(env, aiNeuronsSelect(iso(utcDayStart(nowMs))), QUOTA_FETCH_TIMEOUT_MS);
   const row = buildReport({ ai: acct }).find((r) => r.id === 'ai.neurons');
   if (!row || row.error || !row.limit) throw new Error((row && row.error) || 'no neuron row');
@@ -53,7 +58,7 @@ export type QuotaView = {
   read_at: number | null; stale: boolean; unread: boolean;
 };
 
-export async function merecatQuota(env: any, cfg: any, nowMs = Date.now()): Promise<QuotaView> {
+export async function merecatQuota(env: Env, cfg: QuotaCfg, nowMs = Date.now()): Promise<QuotaView> {
   const on = !!cfg.quota_guard_on;
   const pct = Merecat.quotaGuardPctFrom(String(cfg.quota_guard_pct == null ? '' : cfg.quota_guard_pct));
   const reset_in_h = Merecat.hoursUntilUtcMidnight(nowMs);

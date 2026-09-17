@@ -4,11 +4,23 @@
    READ-ONLY CF_USAGE_TOKEN secret (single scope "Account Analytics: Read")
    beside the CF_ACCOUNT_ID var; the callers decide what to do while neither
    stands. No worker imports, so a Node test can stub `fetch` and drive the
-   modules built on it. */
+   modules built on it (the Env import is a TYPE import — erased, no runtime
+   dependency). */
+
+import type { Env } from './env.ts';
 
 const GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql';
 
-export async function gqlSelect(env: any, sel: string, timeoutMs = 12000) {
+/* What the API answers: one account object under viewer.accounts, or errors.
+   The datasets inside the account are the callers' business (usagecalc.ts
+   reads them), so the account itself stays an open record. */
+type GqlAccount = Record<string, unknown>;
+type GqlResponse = {
+  data?: { viewer?: { accounts?: GqlAccount[] } };
+  errors?: { message?: string }[];
+};
+
+export async function gqlSelect(env: Env, sel: string, timeoutMs = 12000): Promise<GqlAccount> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort('usage-timeout'), timeoutMs);
   try {
@@ -18,7 +30,7 @@ export async function gqlSelect(env: any, sel: string, timeoutMs = 12000) {
       body: JSON.stringify({ query: 'query { viewer { accounts(filter: {accountTag: "' + env.CF_ACCOUNT_ID + '"}) { ' + sel + ' } } }' }),
       signal: ctl.signal,
     });
-    const d: any = await r.json().catch(() => null);
+    const d = await r.json<GqlResponse>().catch(() => null);
     if (!d) throw new Error('bad analytics response (' + r.status + ')');
     if (d.errors && d.errors.length) throw new Error(String(d.errors[0].message || 'GraphQL error').slice(0, 200));
     const acct = d.data && d.data.viewer && d.data.viewer.accounts && d.data.viewer.accounts[0];

@@ -16,6 +16,7 @@ import {
   notifUnreadCount,
   gated,
 } from '../lib.ts';
+import type { Env } from '../env.ts';
 
 /* Fan notifications out from a fresh board post. The author always comes to
    watch the thread (even a held post, so approval finds them already subscribed).
@@ -24,7 +25,14 @@ import {
    anyone already mentioned so no one is told twice for one post. One batch write. */
 /* Batch-load the per-type notification prefs for a set of recipients. A member
    with no profile row (or a NULL column) keeps the default (on). */
-async function handlePushRegister(request: Request, env: any) {
+/* One row of the list, as the SELECT above shapes it. */
+type NotifRow = {
+  id: number; kind: string; topic_id: number | null; comment_id: number | null;
+  actor_hash: string | null; created_at: number; read_at: number | null;
+  topic_title: string | null; actor_nick: string | null; snippet: string | null;
+};
+
+async function handlePushRegister(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
@@ -39,7 +47,7 @@ async function handlePushRegister(request: Request, env: any) {
 }
 
 /* Drop one device token (logout / uninstall). */
-async function handlePushUnregister(request: Request, env: any) {
+async function handlePushUnregister(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
   if (pre instanceof Response) return pre;
   const { data, key, me } = pre;
@@ -55,14 +63,14 @@ async function handlePushUnregister(request: Request, env: any) {
    means swapping this var + the VAPID_PRIVATE_KEY secret; an already-subscribed
    client re-subscribes with the new key on its next Settings open (_reflectPush
    compares this against its subscription's key). */
-async function handleVapidKey(request: any, env: any, url: any) {
+async function handleVapidKey(request: Request, env: Env, url: URL) {
   return json({ ok: true, key: String(env.VAPID_PUBLIC_KEY || '') }, 200, cacheHeader(url));
 }
 
 /* The notification badge count: unread rows for this reader, one indexed COUNT.
    Like the DM poll it fires at most once per ninety seconds and doubles as the
    logout trip for a locked or banned identity. */
-async function handleNotifUnread(request: any, env: any) {
+async function handleNotifUnread(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
@@ -72,7 +80,7 @@ async function handleNotifUnread(request: any, env: any) {
 /* The notification list, newest first, paged by twenty. Each row carries the
    thread title, a snippet of the post, and the actor's nick so the client can
    render "X replied/mentioned you in <title>" and jump to the exact comment. */
-async function handleNotifList(request: Request, env: any) {
+async function handleNotifList(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' });
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -98,20 +106,20 @@ async function handleNotifList(request: Request, env: any) {
     'LEFT JOIN profiles pr ON pr.hash = n.actor_hash ' +
     'WHERE n.recipient_hash = ?1' + (hideWall ? notifHideWall('n.') : ' ') +
     'ORDER BY n.id DESC LIMIT ?2 OFFSET ?3'
-  ).bind(me, NOTIF_PER_PAGE, (p - 1) * NOTIF_PER_PAGE).all();
+  ).bind(me, NOTIF_PER_PAGE, (p - 1) * NOTIF_PER_PAGE).all<NotifRow>();
   const totals = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END), 0) AS unread ' +
     'FROM notifications WHERE recipient_hash = ?1' + hideWall
-  ).bind(me).first();
-  const items = (rows.results || []).map((r: any) => Object.assign({}, r,
+  ).bind(me).first<{ n: number; unread: number }>();
+  const items = (rows.results || []).map((r) => Object.assign({}, r,
     { actor_assigned: r.actor_hash ? displayName(r.actor_hash) : null }));
-  return json({ ok: true, items, total: totals.n || 0,
-    unread_total: totals.unread || 0, page: p, per: NOTIF_PER_PAGE }, 200);
+  return json({ ok: true, items, total: (totals && totals.n) || 0,
+    unread_total: (totals && totals.unread) || 0, page: p, per: NOTIF_PER_PAGE }, 200);
 }
 
 /* Opening the list marks everything read, the notifications analogue of opening
    a DM thread. One write; the badge clears on the client's next poll. */
-async function handleNotifRead(request: any, env: any) {
+async function handleNotifRead(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;

@@ -428,13 +428,43 @@ export class BoardHub extends DurableObject<Env> {
    verbatim. This is the ONLY merecat generation path — the HTTP /ask
    streaming endpoint and its store callback were retired once this was
    proven live. */
-export class ChatRoom extends DurableObject<Env> {
-  declare phase: any;
-  declare chatId: any;
-  declare gen: any;
-  declare mentionsPending: any;
+/* What a ChatRoom socket carries: whether #auth accepted it, who it belongs
+   to, the conversation, and the IP the block gate reads. */
+type ChatAtt = { auth: boolean; me?: string; admin?: boolean; chatId: number; ip: string };
 
-  constructor(ctx: any, env: any) {
+/* The merecat config record (lib.ts's merecatConfig): the dials this file
+   reads by name, open on the rest (the prompt builder and the fold read their
+   own). It moves to lib.ts when merecatConfig itself is typed. */
+type MerecatCfg = {
+  model: string; max_tokens: number; temperature: number;
+  global_daily: number; user_daily: number; user_cap_on: number;
+  [k: string]: unknown;
+};
+
+/* The room's state machine, in the words the frames use. */
+type ChatPhase = 'idle' | 'queued' | 'thinking' | 'streaming' | 'done' | 'error';
+
+/* One in-flight generation. It is created whole in #ask and read by
+   #generate and the finalize path; `stopped` is set by #stop, `_msgLen` by
+   the prompt builder for the token estimate. */
+type Gen = {
+  userMsgId: number;
+  answer: string;
+  sources: unknown[];
+  used: Record<string, unknown>;
+  startedAtMs: number;
+  effort: string;
+  stopped?: boolean;
+  _msgLen?: number;
+};
+
+export class ChatRoom extends DurableObject<Env> {
+  declare phase: ChatPhase;
+  declare chatId: number;
+  declare gen: Gen | null;
+  declare mentionsPending: number;
+
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.phase = 'idle';
     this.chatId = 0;
@@ -449,7 +479,7 @@ export class ChatRoom extends DurableObject<Env> {
      someone-else's) socket — only #auth, which checks chats(id, hash=me), can set
      auth:true, so the authed set is exactly the owner's connections. The hello
      resume frame is sent per-socket from #auth, not here. */
-  #emit(obj: any) {
+  #emit(obj: Record<string, unknown>) {
     const s = JSON.stringify(obj);
     for (const ws of this.ctx.getWebSockets()) {
       let a; try { a = ws.deserializeAttachment(); } catch { a = null; }
@@ -458,7 +488,7 @@ export class ChatRoom extends DurableObject<Env> {
     }
   }
 
-  async fetch(request: any) {
+  async fetch(request: Request) {
     /* The internal mention lane ('mention:<comment id>' instances): the ack
        returns at once and the generation runs on the DO's own lifetime. A
        stateless worker's waitUntil is cancelled ~30 seconds after its response,
@@ -468,12 +498,12 @@ export class ChatRoom extends DurableObject<Env> {
        this needs no auth of its own; the kickers gate. */
     if (request.method === 'POST' && new URL(request.url).pathname === '/mention') {
       let id = 0;
-      try { id = Number((await request.json()).id) || 0; } catch { /* bad body */ }
+      try { id = Number((await request.json<{ id?: unknown }>()).id) || 0; } catch { /* bad body */ }
       if (!id) return json({ ok: false, error: 'Bad request.' }, 400);
       this.mentionsPending += 1;
       this.ctx.storage.setAlarm(Date.now() + 30000);   // keep-alive while it works
       merecatMentionReply(this.env, id)
-        .catch((e: any) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e), id })))
+        .catch((e: unknown) => console.log(JSON.stringify({ event: 'merecat_mention_failed', error: String(e), id })))
         .finally(() => { this.mentionsPending -= 1; });
       return json({ ok: true });
     }
@@ -489,7 +519,7 @@ export class ChatRoom extends DurableObject<Env> {
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
-  async webSocketMessage(ws: any, msg: any) {
+  async webSocketMessage(ws: WebSocket, msg: string | ArrayBuffer) {
     let m;
     try { m = JSON.parse(typeof msg === 'string' ? msg : ''); } catch { return; }
     if (!m) return;
@@ -502,26 +532,26 @@ export class ChatRoom extends DurableObject<Env> {
      cancel their model reads, and the finalize path keeps whatever streamed
      (done=1), so a stop is just an early, honest end — and an economy win
      (cloud neurons and the single local GPU stop burning). */
-  #stop(ws: any) {
+  #stop(ws: WebSocket) {
     let a; try { a = ws.deserializeAttachment(); } catch { a = null; }
     if (!a || a.auth !== true) return;
     if (!this.gen || (this.phase !== 'thinking' && this.phase !== 'streaming' && this.phase !== 'queued')) return;
     this.gen.stopped = true;
   }
 
-  webSocketError(ws: any, err: any) { console.log(JSON.stringify({ event: 'chat_ws_error', error: String(err) })); }
+  webSocketError(ws: WebSocket, err: unknown) { console.log(JSON.stringify({ event: 'chat_ws_error', error: String(err) })); }
   /* A closing reader does NOT stop the generation — that is the whole point. */
 
-  #hello(ws: any) {
+  #hello(ws: WebSocket) {
     const g = this.gen;
     ws.send(JSON.stringify({ t: 'hello', chatId: this.chatId, phase: this.phase,
       answer: (g && g.answer) || '', sources: (g && g.sources) || [], used: (g && g.used) || null,
-      startedAtMs: (g && g.startedAtMs) || 0, backend: (g && g.backend) || 'cloudflare' }));
+      startedAtMs: (g && g.startedAtMs) || 0, backend: 'cloudflare' }));
   }
 
-  async #auth(ws: any, m: any) {
+  async #auth(ws: WebSocket, m: Record<string, unknown>) {
     const a = ws.deserializeAttachment() || {};
-    const fail = (err: any) => { try { ws.send(JSON.stringify({ t: 'state', phase: 'error', error: err })); } catch { /* gone */ }
+    const fail = (err: string) => { try { ws.send(JSON.stringify({ t: 'state', phase: 'error', error: err })); } catch { /* gone */ }
       try { ws.close(1008, 'unauthorized'); } catch { /* gone */ } };
     const key = String(m.key || '');
     if (!key) { fail('Missing key.'); return; }
@@ -537,7 +567,7 @@ export class ChatRoom extends DurableObject<Env> {
     this.#hello(ws);
   }
 
-  async #ask(ws: any, m: any) {
+  async #ask(ws: WebSocket, m: Record<string, unknown>) {
     const a = ws.deserializeAttachment() || {};
     if (!a.auth) { ws.send('{"t":"state","phase":"error","error":"Authenticate first."}'); return; }
     if (this.phase === 'thinking' || this.phase === 'streaming' || this.phase === 'queued') {
@@ -591,8 +621,8 @@ export class ChatRoom extends DurableObject<Env> {
       summary = String((own && own.summary) || '');
       const rows = await this.env.LIBDB.prepare(
         'SELECT role, body FROM chat_msgs WHERE chat_id = ?1 AND COALESCE(done, 1) = 1 ORDER BY id DESC LIMIT ' + MERECAT_WINDOW
-      ).bind(this.chatId).all();
-      history = (rows.results || []).reverse().map((r: any) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
+      ).bind(this.chatId).all<{ role: string; body: string }>();
+      history = (rows.results || []).reverse().map((r) => ({ role: r.role, content: String(r.body).slice(0, 1200) }));
     }
     const urs = await this.env.LIBDB.batch<{ id: number }>([
       this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, created_at) VALUES (?1, 'user', ?2, ?3) RETURNING id").bind(this.chatId, q, now),
@@ -618,47 +648,51 @@ export class ChatRoom extends DurableObject<Env> {
     });
   }
 
-  async #generate(q: any, history: any, summary: any, cfg: any, me: any, day: any) {
+  async #generate(q: string, history: { role: string; content: string }[], summary: string,
+    cfg: MerecatCfg, me: string, day: string) {
+    /* The generation this call was started for. #ask creates it whole and
+       nothing replaces it while this runs, so the alias IS this.gen. */
+    const gen = this.gen!;
     /* Shared token sink: batch to the socket (~60ms) and persist the growing
        answer to D1 (done=0) every few seconds. The DO is the SOLE writer. */
     let batch = ''; let lastSend = 0; let lastPersist = 0;
-    let sources: any[] = [];
+    let sources: unknown[] = [];
     const sendBatch = () => { if (batch) { this.#emit({ t: 'tokens', d: batch }); batch = ''; lastSend = Date.now(); } };
     const persist = async () => {
-      const body = this.gen.answer.trim();
-      if (!body || !this.gen.userMsgId) return;
+      const body = gen.answer.trim();
+      if (!body || !gen.userMsgId) return;
       lastPersist = Date.now();
       try {
-        const row = await this.env.LIBDB.prepare("SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1").bind(this.chatId, this.gen.userMsgId).first();
+        const row = await this.env.LIBDB.prepare("SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1").bind(this.chatId, gen.userMsgId).first();
         if (row) { await this.env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2 WHERE id = ?1').bind(row.id, body).run(); }
         else {
           const t = Math.floor(Date.now() / 1000);
-          await this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 0)").bind(this.chatId, body, JSON.stringify(sources), t, this.gen.userMsgId).run();
+          await this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 0)").bind(this.chatId, body, JSON.stringify(sources), t, gen.userMsgId).run();
           await this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, t).run();
         }
       } catch { /* a failed flush just waits for the next */ }
     };
-    const onToken = async (vis: any) => {
+    const onToken = async (vis: string) => {
       if (this.phase !== 'streaming') { this.phase = 'streaming'; this.#emit({ t: 'state', phase: 'streaming' }); }
-      this.gen.answer += vis; batch += vis;
+      gen.answer += vis; batch += vis;
       if (Date.now() - lastSend > 60) sendBatch();
       if (Date.now() - lastPersist > 6000) await persist();
     };
 
     let usage = null;
-    const built = await merecatPrompt(this.env, q, history, summary, cfg, this.gen.effort);
-    sources = built.sources; this.gen.sources = sources;
-    this.gen._msgLen = JSON.stringify(built.messages).length;
-    this.#emit({ t: 'meta', sources, used: this.gen.used, rv: MERECAT_RV, backend: 'cloudflare', effort: this.gen.effort, chatId: this.chatId });
-    if (this.gen.stopped) {
+    const built = await merecatPrompt(this.env, q, history, summary, cfg, gen.effort);
+    sources = built.sources; gen.sources = sources;
+    gen._msgLen = JSON.stringify(built.messages).length;
+    this.#emit({ t: 'meta', sources, used: gen.used, rv: MERECAT_RV, backend: 'cloudflare', effort: gen.effort, chatId: this.chatId });
+    if (gen.stopped) {
       /* stopped during retrieval: no model call at all */
     } else {
     const aiStream = await this.env.AI.run(cfg.model, { messages: built.messages, stream: true,
-      max_tokens: cfg.max_tokens + merecatHeadroom(this.gen.effort), temperature: cfg.temperature });
+      max_tokens: cfg.max_tokens + merecatHeadroom(gen.effort), temperature: cfg.temperature }) as unknown as ReadableStream<Uint8Array>;
     const strip = merecatThinkStripper();
     const reader = aiStream.getReader(); const dec = new TextDecoder(); let buf = '';
     for (;;) {
-      if (this.gen.stopped) { try { reader.cancel(); } catch { /* done */ } break; }
+      if (gen.stopped) { try { reader.cancel(); } catch { /* done */ } break; }
       const { done, value } = await reader.read();
       if (done) break;
       buf += dec.decode(value, { stream: true });
@@ -679,28 +713,28 @@ export class ChatRoom extends DurableObject<Env> {
     }
 
     sendBatch();
-    if (this.gen.stopped && !this.gen.answer.trim()) this.gen.answer = 'Stopped at your request.';
-    if (!this.gen.answer.trim()) this.gen.answer = 'The librarian could not draw an answer this time. Ask again shortly.';
+    if (gen.stopped && !gen.answer.trim()) gen.answer = 'Stopped at your request.';
+    if (!gen.answer.trim()) gen.answer = 'The librarian could not draw an answer this time. Ask again shortly.';
 
     /* Finalize: one authoritative write (done=1), tally, fold. */
-    const answer = this.gen.answer.trim();
+    const answer = gen.answer.trim();
     const nowS = Math.floor(Date.now() / 1000);
     const stmts = [];
-    const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : Math.ceil((this.gen._msgLen || answer.length) / 4);
+    const inTok = usage && usage.prompt_tokens ? usage.prompt_tokens : Math.ceil((gen._msgLen || answer.length) / 4);
     const outTok = usage && usage.completion_tokens ? usage.completion_tokens : Math.ceil(answer.length / 4);
     stmts.push(this.env.LIBDB.prepare('INSERT INTO usage (day, q, in_tok, out_tok) VALUES (?1, 1, ?2, ?3) ON CONFLICT(day) DO UPDATE SET q = q + 1, in_tok = in_tok + ?2, out_tok = out_tok + ?3').bind(day, inTok, outTok));
     stmts.push(this.env.LIBDB.prepare('INSERT INTO user_usage (day, hash, q) VALUES (?1, ?2, 1) ON CONFLICT(day, hash) DO UPDATE SET q = q + 1').bind(day, me));
-    const existing = this.gen.userMsgId ? await this.env.LIBDB.prepare("SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1").bind(this.chatId, this.gen.userMsgId).first() : null;
+    const existing = gen.userMsgId ? await this.env.LIBDB.prepare("SELECT id FROM chat_msgs WHERE chat_id = ?1 AND role = 'assistant' AND answers = ?2 LIMIT 1").bind(this.chatId, gen.userMsgId).first() : null;
     if (existing) {
       stmts.push(this.env.LIBDB.prepare('UPDATE chat_msgs SET body = ?2, sources = ?3, done = 1 WHERE id = ?1').bind(existing.id, answer, JSON.stringify(sources)));
       stmts.push(this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2 WHERE id = ?1').bind(this.chatId, nowS));
     } else {
-      stmts.push(this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 1)").bind(this.chatId, answer, JSON.stringify(sources), nowS, this.gen.userMsgId || null));
+      stmts.push(this.env.LIBDB.prepare("INSERT INTO chat_msgs (chat_id, role, body, sources, created_at, answers, done) VALUES (?1, 'assistant', ?2, ?3, ?4, ?5, 1)").bind(this.chatId, answer, JSON.stringify(sources), nowS, gen.userMsgId || null));
       stmts.push(this.env.LIBDB.prepare('UPDATE chats SET last_at = ?2, msgs = msgs + 1 WHERE id = ?1').bind(this.chatId, nowS));
     }
     await this.env.LIBDB.batch(stmts);
     this.phase = 'done';
-    const wasStopped = !!this.gen.stopped;
+    const wasStopped = !!gen.stopped;
     this.#emit({ t: 'state', phase: 'done', chatId: this.chatId, stopped: wasStopped });
     /* Answer-ready bell: a long generation that finished with NOBODY attached
        (the asker walked away, as the disconnect contract invites) rings the
