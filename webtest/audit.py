@@ -24,13 +24,13 @@ import json
 import os
 import shutil
 import signal
-import subprocess
 import sys
 import time
 import urllib.request
 
-CHROME_DIR = os.path.expanduser('~/.cloakbrowser/chromium-146.0.7680.177.5')
-PORT = 9530
+from flows import CHROME_DIR, driver_port, start_driver
+
+PORT = 9530   # preferred; Session takes a free one if a leftover driver holds it
 
 
 def wd(method, path, body=None, timeout=60):
@@ -44,11 +44,10 @@ def wd(method, path, body=None, timeout=60):
 
 class Session:
     def __init__(self):
+        global PORT
+        PORT = driver_port(PORT)
         self.profile = '/tmp/mc-audit-%d' % int(time.time())   # removed again by close()
-        self.drv = subprocess.Popen(
-            [os.path.join(CHROME_DIR, 'chromedriver'), '--port=%d' % PORT],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(1.5)
+        self.drv = start_driver(PORT)
         caps = {'capabilities': {'alwaysMatch': {
             'goog:chromeOptions': {
                 'binary': os.path.join(CHROME_DIR, 'chrome'),

@@ -144,7 +144,9 @@ tests/
                        checker (backup_check: twice to the same counts, the FTS tail skipped where the
                        box's sqlite lacks FTS5, a non-idempotent dump named), the nightly run's summary
                        parser and its baseline comparison (webtest_nightly: a rise above the baseline or
-                       a crash a re-run repeats is a regression, the admin-key shape is not), API.md's parity with the
+                       a crash a re-run repeats is a regression, the admin-key shape is not), the webtest kit's
+                       driver start (webtest_kit: a port a leftover driver holds passed over, a driver that
+                       exited at start an error), API.md's parity with the
                        route table (api_parity: every mounted route named — abbreviations resolved — and every
                        named path mounted or documented as retired), the infrastructure log's index and rules
                        (infra_index: the committed index equals the generated one, lead-ins unique, every passage

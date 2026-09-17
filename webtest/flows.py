@@ -19,6 +19,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import time
 import urllib.error
@@ -41,6 +42,37 @@ BENIGN_CONSOLE = (
     # bare 'icanhazip.com'.
     'ipv6.icanhazip.com',
 )
+
+
+def driver_port(preferred):
+    """The port a new chromedriver starts on: the suite's own, unless something
+    already listens there, then any free one. A driver a killed run left behind
+    keeps its port; the new driver exits at once (address in use), the session
+    is asked of the leftover instead, and close() stops only the driver that
+    had already gone, so the leftover lives on — two nightly suites ran that
+    way, 2026-09-17."""
+    for port in (preferred, 0):
+        s = socket.socket()
+        try:
+            s.bind(('127.0.0.1', port))
+            return s.getsockname()[1]
+        except OSError:
+            pass
+        finally:
+            s.close()
+    raise RuntimeError('webtest: no free port for chromedriver')
+
+
+def start_driver(port):
+    """A chromedriver of this run's own on `port`, given a moment to listen;
+    one that has already exited is an error, never a session asked of
+    whatever else answers there."""
+    drv = subprocess.Popen([os.path.join(CHROME_DIR, 'chromedriver'), '--port=%d' % port],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(1.5)
+    if drv.poll() is not None:
+        raise RuntimeError('webtest: chromedriver exited at start on port %d (code %s)' % (port, drv.returncode))
+    return drv
 
 
 def owner_key():
@@ -70,6 +102,7 @@ def api(path, body, ua='curl/8.14.1'):
 
 class Flow:
     def __init__(self, port=9560, autoplay=False, hover=False, mic=None):
+        port = driver_port(port)
         self.port = port
         # a throwaway profile, removed again by close(): /tmp is a RAM-backed
         # tmpfs here, and 246 leftover profiles once filled it — every tab then
@@ -95,10 +128,7 @@ class Flow:
             # (the scripture tips) need an emulated fine pointer
             args.append('--blink-settings=primaryHoverType=2,availableHoverTypes=2,'
                         'primaryPointerType=4,availablePointerTypes=4')
-        self.drv = subprocess.Popen(
-            [os.path.join(CHROME_DIR, 'chromedriver'), '--port=%d' % port],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(1.5)
+        self.drv = start_driver(port)
         self.sid = self._wd('POST', '/session', {'capabilities': {'alwaysMatch': {
             'goog:chromeOptions': {'binary': os.path.join(CHROME_DIR, 'chrome'),
                                    'args': args,
