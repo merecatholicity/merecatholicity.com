@@ -39,7 +39,8 @@ test("the flag is seeded ON and read through the kernel's rule, not a bare compa
 });
 
 test('an admin can actually save it: allowlist + boolean coercion', () => {
-  const allowed = idxSrc.slice(idxSrc.indexOf('const allowed: any = {'));
+  /* anchored on the declaration, not its type (2026-09-17) */
+  const allowed = idxSrc.slice(idxSrc.indexOf('const allowed'));
   assert.ok(allowed.slice(0, allowed.indexOf('};')).includes('social_enabled: 1'),
     "handleAdminSettings drops any key not in `allowed` SILENTLY — the save would report success and do nothing");
   /* Assert the RULE, not the line. The first version of this pinned the exact

@@ -87,6 +87,12 @@ export type GateOpts = {
   missing?: string;                              // the 400 sentence for a missing key (default 'Bad request.')
   block?: boolean;                               // the lock/ban gate (blockedReason → blockedJson)
 };
+/* A request body as the wire carries it: an object whose fields are unknown
+   until the handler coerces them — which every handler does (String/Number/
+   Array.isArray). A handler that parses for itself says `request.json<Body>()`;
+   `Gated.data` keeps `any` until the gates themselves are typed. */
+export type Body = Record<string, unknown>;
+
 export type Gated = { ip: string; data: any; key: string; me: string };
 export async function gated(request: Request, env: any, o: GateOpts = {}): Promise<Response | Gated> {
   let data: any;

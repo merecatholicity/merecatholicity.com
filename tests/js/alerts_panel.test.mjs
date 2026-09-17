@@ -19,7 +19,8 @@ const core = readFileSync(join(root, 'app', 'core.ts'), 'utf8');
 const KEYS = ['alert_email', 'alert_email_on', 'alert_discord_webhook', 'alert_discord_on'];
 
 test('every alert key the panel saves is a key the settings door allows', () => {
-  const allowed = door.slice(door.indexOf('const allowed: any = {'), door.indexOf('};', door.indexOf('const allowed: any = {')));
+  /* anchored on the declaration, not its type (2026-09-17) */
+  const allowed = door.slice(door.indexOf('const allowed'), door.indexOf('};', door.indexOf('const allowed')));
   for (const k of KEYS) {
     assert.ok(new RegExp('\\b' + k + ': 1').test(allowed), k + ' is in the door\'s allowed map');
     assert.ok(new RegExp(k + ': ').test(admin), k + ' is sent by the panel');

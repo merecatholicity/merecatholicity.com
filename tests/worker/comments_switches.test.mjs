@@ -49,7 +49,9 @@ test('both switches are seeded OFF from the kernel and read through its rules', 
 });
 
 test('an admin can actually save them: allowlist + coercion through the kernel', () => {
-  const allowed = idxSrc.slice(idxSrc.indexOf('const allowed: any = {'));
+  /* anchored on the declaration, not its type: the annotation became
+     Record<string, 1> in the 2026-09-17 typing pass */
+  const allowed = idxSrc.slice(idxSrc.indexOf('const allowed'));
   const map = allowed.slice(0, allowed.indexOf('};'));
   assert.ok(map.includes('comments_pages: 1'), 'comments_pages missing from `allowed` — the save would report success and do nothing');
   assert.ok(map.includes('comments_journal: 1'), 'comments_journal missing from `allowed`');

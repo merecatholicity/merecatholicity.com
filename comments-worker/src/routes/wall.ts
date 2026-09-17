@@ -2,7 +2,7 @@
    Every handler here moved verbatim from index.ts (2026-09-16, the route split);
    index.ts keeps the ROUTES table and imports what it mounts. */
 import * as Wall from '../../../purescript/output/Domain.Wall/index.js';
-import { inList, withNames } from '../db.ts';
+import { inList, withNames, postCountsFor } from '../db.ts';
 import {
   ADMIN_CAT,
   CONTROL_RE,
@@ -45,10 +45,12 @@ import {
   socialOff,
   readLimited,
 } from '../lib.ts';
+import type { Env } from '../env.ts';
+import type { Body } from '../lib.ts';
 
-async function handleWallFeed(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleWallFeed(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
   if (r.resp) return r.resp;
   if (await socialOff(env)) return noSuchPage();
@@ -64,9 +66,9 @@ async function handleWallFeed(request: any, env: any) {
 }
 
 /* One member's wall (their own posts), keyset-paged like the feed. */
-async function handleWall(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleWall(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
   if (r.resp) return r.resp;
   if (await socialOff(env)) return noSuchPage();
@@ -89,9 +91,9 @@ async function handleWall(request: any, env: any) {
    OPTIONAL — when supplied it resolves the reader's like-state and is still
    refused if blocked; without one, me is null (no personal like flags). Returns
    only public post/comment content (no IPs, no keys). */
-async function handleWallPostGet(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleWallPostGet(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -172,9 +174,9 @@ async function reactTarget(env: any, target: string, id: number, me: string) {
   return null;
 }
 
-async function handleReact(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleReact(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -216,7 +218,7 @@ async function handleReact(request: any, env: any, ctx: any) {
    → {ok, mine: {id: emoji}}. Sixty ids a call (three pages of replies). A
    member's own reactions are theirs to see; the back room's ids answer
    nothing to a non-admin (they hold nothing of theirs). */
-async function handleReactMine(request: any, env: any) {
+async function handleReactMine(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -240,9 +242,9 @@ async function handleReactMine(request: any, env: any) {
    that never existed answers; so do the wall's targets with the social layer
    off. The old {post|comment} body is an alias; `likers` rides beside `who`
    for one deploy of cached clients. */
-async function handleReactWho(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleReactWho(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.READ_LIMIT.limit({ key: ip });
   if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
@@ -270,9 +272,9 @@ async function handleReactWho(request: any, env: any) {
    (recipient, actor, post), so re-liking while unread never duplicates, but two
    different posts liked by the same person are two rows. Bell rings only on a
    fresh insert; a live push tells the author's open tab. */
-async function handleWallPost(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleWallPost(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -296,7 +298,7 @@ async function handleWallPost(request: any, env: any, ctx: any) {
   const now = Math.floor(Date.now() / 1000);
   const ins = await env.DB.prepare(
     'INSERT INTO wall_posts (author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id'
-  ).bind(me, body, now, status, media ? media.key : null, media ? media.size : null).first();
+  ).bind(me, body, now, status, media ? media.key : null, media ? media.size : null).first<{ id: number }>() as { id: number };
   if (media) {
     /* ref_id IS NULL closes the double-claim race (the board path's guard, now
        uniform); ctx re-stamps to follow the claiming parent, so accounting
@@ -322,9 +324,9 @@ async function handleWallPost(request: any, env: any, ctx: any) {
 }
 
 /* Comment on a post (text + optional media). Notifies the post author + mentions. */
-async function handleWallComment(request: any, env: any, ctx: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleWallComment(request: Request, env: Env, ctx: ExecutionContext) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.POST_LIMIT.limit({ key: ip });
@@ -351,7 +353,7 @@ async function handleWallComment(request: any, env: any, ctx: any) {
   const now = Math.floor(Date.now() / 1000);
   const ins = await env.DB.prepare(
     'INSERT INTO wall_comments (post_id, author_hash, body, created_at, status, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id'
-  ).bind(postId, me, body, now, status, media ? media.key : null, media ? media.size : null).first();
+  ).bind(postId, me, body, now, status, media ? media.key : null, media ? media.size : null).first<{ id: number }>() as { id: number };
   if (media) {
     /* Same double-claim guard + ctx re-stamp as the post path above. */
     const link = await env.DB.prepare(
@@ -378,7 +380,7 @@ async function handleWallComment(request: any, env: any, ctx: any) {
 /* Edit your own wall post or comment in place (the forum and even the E2E DMs
    already edit; delete-only walls were the inconsistency). Same re-screen as a
    fresh post, so an edit cannot smuggle past the safety check. */
-async function handleWallEdit(request: any, env: any) {
+async function handleWallEdit(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -409,7 +411,7 @@ async function handleWallEdit(request: any, env: any) {
 /* Saved posts: one row per member per item, toggled on and off. kind 'topic'
    is a forum topic, 'wall' a feed post. The list joins the source tables so
    dead items fall away naturally. */
-async function handleBookmark(request: any, env: any) {
+async function handleBookmark(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'POST_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -429,7 +431,7 @@ async function handleBookmark(request: any, env: any) {
   return json({ ok: true, on: !!data.on }, 200);
 }
 
-async function handleBookmarks(request: any, env: any) {
+async function handleBookmarks(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
@@ -455,7 +457,12 @@ async function handleBookmarks(request: any, env: any) {
 /* A member-safe recent-activity window: the last live forum posts across the
    PUBLIC rooms (never the back room), each under its topic's title. Cacheable,
    keyless, one query — "what happened since I left" for everyone. */
-async function handleRecent(request: Request, env: any, url: any) {
+type RecentRow = {
+  id: number; page: string; parent_id: number | null; author_hash: string;
+  created_at: number; body: string; topic_title: string | null; topic_id: number;
+};
+
+async function handleRecent(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
   const p = Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1));
@@ -467,9 +474,15 @@ async function handleRecent(request: Request, env: any, url: any) {
     "WHERE c.page LIKE 'board:%' AND c.page != ?1 AND c.status = 'live' " +
     "  AND (c.parent_id IS NULL OR t.status = 'live') " +
     'ORDER BY c.id DESC LIMIT ?2 OFFSET ?3'
-  ).bind(ADMIN_CAT, PER + 1, (p - 1) * PER).all();
-  let items = (rows.results || []).slice(0, PER);
-  items = await withNames(env, items);
+  ).bind(ADMIN_CAT, PER + 1, (p - 1) * PER).all<RecentRow>();
+  const page = (rows.results || []).slice(0, PER);
+  /* The same enrichment every other list does (routes/board.ts, lib.ts's topic
+     view): the assigned pseudonym and the rank, per author. Until 2026-09-17
+     this line read `withNames(env, items)` — two arguments to a (row, posts)
+     mapper — so the ROW it copied was the worker env and this public, keyless,
+     CACHEABLE endpoint served every binding and secret it holds. */
+  const counts = await postCountsFor(env, page.map((r) => r.author_hash));
+  const items = page.map((r) => withNames(r, counts[r.author_hash] || 0));
   return json({ ok: true, items, page: p, more: (rows.results || []).length > PER },
     200, cacheHeader(url));
 }
@@ -477,9 +490,9 @@ async function handleRecent(request: Request, env: any, url: any) {
 /* Delete a post (and its comments + all their media) or a single comment. Author
    or admin only (Domain.Wall.canDelete). Hard delete — public content, no soft
    state to keep. */
-async function handleWallDelete(request: any, env: any) {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+async function handleWallDelete(request: Request, env: Env) {
+  let data: Body;
+  try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
