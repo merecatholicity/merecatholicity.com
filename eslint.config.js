@@ -1,19 +1,9 @@
 // Static guard for the hand-maintained JS: an undefined identifier once
 // shipped inside the comments worker (the LIB ReferenceError that silenced
-// @merecat mentions) and no default deno tool catches that class. Run via:
+// @merecat mentions). The workers are all TypeScript since 2026-09-17 (tsc
+// strict guards them); what is linted here is the served JS. Run via:
 //   make jscheck        (part of make check)
 // and never deploy the worker except through:  make worker-deploy
-const workerGlobals = {
-  Response: 'readonly', Request: 'readonly', Headers: 'readonly', URL: 'readonly',
-  fetch: 'readonly', caches: 'readonly', crypto: 'readonly', console: 'readonly',
-  TextEncoder: 'readonly', TextDecoder: 'readonly', TransformStream: 'readonly',
-  ReadableStream: 'readonly', WritableStream: 'readonly', FormData: 'readonly',
-  setTimeout: 'readonly', clearTimeout: 'readonly', atob: 'readonly', btoa: 'readonly',
-  AbortController: 'readonly', structuredClone: 'readonly', Blob: 'readonly',
-  URLSearchParams: 'readonly', CompressionStream: 'readonly',
-  WebSocketPair: 'readonly', WebSocketRequestResponsePair: 'readonly', WebSocket: 'readonly',
-  HTMLRewriter: 'readonly',
-};
 const browserGlobals = {
   window: 'readonly', document: 'readonly', location: 'readonly', history: 'readonly',
   navigator: 'readonly', localStorage: 'readonly', sessionStorage: 'readonly',
@@ -37,11 +27,6 @@ export default [
   // FFI .js under purescript/src/ gets its own block when the first one lands
   // (Phase 4+).
   { ignores: ['purescript/output/**'] },
-  {
-    files: ['comments-worker/src/*.js'],
-    languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: workerGlobals },
-    rules: { 'no-undef': 'error', 'no-dupe-keys': 'error', 'no-unreachable': 'error' },
-  },
   {
     /* docs/comments.js is BUILT (minified) from client/comments.ts now — tsc
        strict covers the source, so the generated file left the lint list when

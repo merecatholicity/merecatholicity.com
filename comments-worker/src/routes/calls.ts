@@ -164,7 +164,7 @@ async function handleCallTurn(request: Request, env: Env) {
       signal: ctl.signal,
     });
     if (!r.ok) return fallback();
-    const d: any = await r.json();
+    const d = await r.json<{ iceServers?: unknown } | null>();
     const servers = d && d.iceServers ? (Array.isArray(d.iceServers) ? d.iceServers : [d.iceServers]) : null;
     if (!servers || !servers.length) return fallback();
     return json({ ok: true, iceServers: servers, relay: true }, 200);

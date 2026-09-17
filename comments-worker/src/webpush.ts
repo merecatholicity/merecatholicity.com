@@ -1,8 +1,8 @@
 /* Web Push (RFC 8291 aes128gcm + RFC 8188 + VAPID RFC 8292), hand-rolled on
    crypto.subtle so the worker sends real push with NO external service and NO
    Node 'crypto' lib (Cloudflare Workers do this natively). deliverPush in
-   index.js is the only caller; it stays non-fatal — a push that fails must never
-   affect the post or DM that triggered it.
+   lib.ts is the only caller; it stays non-fatal — a push that fails must never
+   affect the post or DM that triggered it. TypeScript since 2026-09-17.
 
    The math, once, so it can be checked against the RFCs:
      VAPID JWT (ES256): header.payload signed with the P-256 private key; the
@@ -13,9 +13,11 @@
        standard aes128gcm single record (salt | rs | idlen | as_public | ct).
    tests/worker/webpush.test.mjs decrypts a real round-trip to prove it. */
 
+import type { Env } from './env.ts';
+
 const enc = new TextEncoder();
 
-function concat(...arrays) {
+function concat(...arrays: Uint8Array[]): Uint8Array {
   let total = 0;
   for (const a of arrays) total += a.length;
   const out = new Uint8Array(total);
@@ -25,13 +27,13 @@ function concat(...arrays) {
 }
 
 /* base64url <-> bytes (no padding on the way out; tolerant on the way in). */
-export function bytesToB64u(bytes) {
+export function bytesToB64u(bytes: Uint8Array | ArrayBuffer): string {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   let s = '';
   for (let i = 0; i < b.length; i += 1) s += String.fromCharCode(b[i]);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-export function b64uToBytes(str) {
+export function b64uToBytes(str: unknown): Uint8Array {
   const norm = String(str || '').replace(/-/g, '+').replace(/_/g, '/');
   const padded = norm + '==='.slice((norm.length + 3) % 4);
   const bin = atob(padded);
@@ -40,24 +42,24 @@ export function b64uToBytes(str) {
   return out;
 }
 
-function b64uStr(str) { return bytesToB64u(enc.encode(str)); }
+function b64uStr(str: string) { return bytesToB64u(enc.encode(str)); }
 
 /* HKDF-SHA256 (extract + expand in one) via crypto.subtle. length <= 32 here, so
    the single-block expand WebCrypto performs is exactly what the RFCs specify. */
-async function hkdf(salt, ikm, info, length) {
+async function hkdf(salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, length: number): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, length * 8);
   return new Uint8Array(bits);
 }
 
 /* The VAPID private key is stored (secret) as base64url(PKCS8 DER). */
-export function importVapidPrivateKey(b64u) {
+export function importVapidPrivateKey(b64u: unknown): Promise<CryptoKey> {
   return crypto.subtle.importKey('pkcs8', b64uToBytes(b64u), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
 }
 
 /* Build the VAPID Authorization header for one endpoint: a 12-hour ES256 JWT
    audienced at the push service origin, plus the public key as k=. */
-export async function vapidAuthHeader(privKey, pubB64u, subject, endpoint) {
+export async function vapidAuthHeader(privKey: CryptoKey, pubB64u: string, subject: string, endpoint: string): Promise<string> {
   const header = { typ: 'JWT', alg: 'ES256' };
   const payload = {
     aud: new URL(endpoint).origin,
@@ -72,12 +74,19 @@ export async function vapidAuthHeader(privKey, pubB64u, subject, endpoint) {
 
 /* Encrypt `plaintext` (bytes) for a subscription's p256dh/auth into the aes128gcm
    body a push service expects. Returns the full RFC 8188 record. */
-export async function encryptContent(uaPubRaw, authSecret, plaintext) {
+export async function encryptContent(uaPubRaw: Uint8Array, authSecret: Uint8Array, plaintext: Uint8Array): Promise<Uint8Array> {
   // Ephemeral (application-server) ECDH keypair, fresh per message.
   const asKeys = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
-  const asPubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', asKeys.publicKey));   // 65 bytes, 0x04||X||Y
+  if (!('privateKey' in asKeys)) throw new Error('ECDH generateKey returned no key pair');
+  const exported = await crypto.subtle.exportKey('raw', asKeys.publicKey);   // a 'raw' export is bytes, never a JWK
+  if (!(exported instanceof ArrayBuffer)) throw new Error('ECDH exportKey returned no raw key');
+  const asPubRaw = new Uint8Array(exported);   // 65 bytes, 0x04||X||Y
   const uaPubKey = await crypto.subtle.importKey('raw', uaPubRaw, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-  const ecdh = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaPubKey }, asKeys.privateKey, 256));
+  /* WebCrypto names the peer key `public`; the Workers types spell it `$public`
+     (a reserved word in their generator), so the parameters travel as a named
+     object — the runtime reads `public`, which is what it needs. */
+  const ecdhParams = { name: 'ECDH', public: uaPubKey };
+  const ecdh = new Uint8Array(await crypto.subtle.deriveBits(ecdhParams, asKeys.privateKey, 256));
 
   // RFC 8291 §3.4: combine the ECDH secret with the auth secret into the IKM.
   const keyInfo = concat(enc.encode('WebPush: info\0'), uaPubRaw, asPubRaw);
@@ -102,24 +111,29 @@ export async function encryptContent(uaPubRaw, authSecret, plaintext) {
    ONCE, then `send(subscription, payloadObj)` handles one endpoint. Returns
    { status, ok, gone } — `gone` (404/410) tells deliverPush to prune the token.
    Never throws; a transport/crypto failure resolves to { ok:false }. */
-export async function createPusher(env) {
+/* A stored subscription (push_tokens.token, parsed): whatever the browser gave. */
+export type PushSub = { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
+export type PushResult = { status: number; ok: boolean; gone: boolean; error?: string };
+
+export async function createPusher(env: Pick<Env, 'VAPID_PRIVATE_KEY' | 'VAPID_PUBLIC_KEY' | 'VAPID_SUBJECT'>) {
   const privKey = await importVapidPrivateKey(env.VAPID_PRIVATE_KEY);
   const pubB64u = String(env.VAPID_PUBLIC_KEY || '');
   const subject = String(env.VAPID_SUBJECT || 'mailto:admin@merecatholicity.com');
   return {
-    async send(subscription, payloadObj) {
+    async send(subscription: PushSub, payloadObj: unknown): Promise<PushResult> {
       try {
         if (!subscription || !subscription.endpoint || !subscription.keys ||
             !subscription.keys.p256dh || !subscription.keys.auth) {
           return { status: 0, ok: false, gone: true };   // malformed token: drop it
         }
-        const authHeader = await vapidAuthHeader(privKey, pubB64u, subject, subscription.endpoint);
+        const endpoint = String(subscription.endpoint);
+        const authHeader = await vapidAuthHeader(privKey, pubB64u, subject, endpoint);
         const body = await encryptContent(
           b64uToBytes(subscription.keys.p256dh),
           b64uToBytes(subscription.keys.auth),
           enc.encode(JSON.stringify(payloadObj || {})),
         );
-        const res = await fetch(subscription.endpoint, {
+        const res = await fetch(endpoint, {
           method: 'POST',
           headers: {
             Authorization: authHeader,

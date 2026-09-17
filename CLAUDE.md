@@ -88,9 +88,8 @@ never a submodule, never committed.
 - **Gates**: `make tests` (the unit suite: PureScript, JS, worker, Python, CSS; runs `psbuild`
   first); `make jscheck` (eslint + tsc + psbuild); `make check` (jscheck + linkcheck);
   `make check-pdfs` (bucket vs manifest vs local PDFs; CI runs it with the site token).
-- **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `html` (one target per
-  work) · `pdf` · `migrate` · `serve` (binds 127.0.0.1 only — load-bearing) · `librarian` and the
-  rest are in README's target reference.
+- **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `html` (one target per work) ·
+  `pdf` · `migrate` · `serve` (binds 127.0.0.1 only — load-bearing) · the rest: README's target reference.
 - Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` and byte-deterministic: a double
   `make bundle` must leave `docs/app.js` unchanged. Toolchain is npm (`npm ci` only, never `sudo`
   or `-g`; esbuild exact-pinned, purs by pinned sha256 — `make toolchain`); this dev box is Ubuntu/WSL2 (Node 24 in `~/.local`, a
@@ -102,9 +101,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 
 - **Nothing secret leaves the worker** (2026-09-17; `/recent` served the whole env for six weeks):
   every entry seals the env (`egress.ts`: copying, listing or serializing it throws) and every answer
-  and hub frame is scanned for each non-`PUBLIC_VARS` env value, refused and told. `env_leak.test`
-  sweeps every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and
-  API.md shape in its own commit, is documented by CALLING it, and ships after `/security-review`.
+  and hub frame is scanned for each non-`PUBLIC_VARS` env value, refused and told. The workers hold
+  no `any` and the env's type brand is refused as an answer, a row or an event. `env_leak.test` sweeps
+  every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and API.md
+  shape in its own commit, is documented by CALLING it, and ships after `/security-review`.
 - **`?v=` keys are stamped** (`scripts/stamp_versions.py`: nav.js, the pages, `partials/*`,
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new

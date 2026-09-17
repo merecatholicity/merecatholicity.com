@@ -33,6 +33,7 @@ import {
   readLimited,
   registerMember,
   throttle,
+  bodyOf,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 
@@ -230,7 +231,7 @@ async function handlePrefs(request: Request, env: Env) {
   const now = Math.floor(Date.now() / 1000);
   if (data.set && typeof data.set === 'object') {
     await registerMember(env, me, now);
-    const set = data.set;
+    const set = bodyOf(data.set);
     const parts = [];
     const vals = [];
     if ('receipts' in set) { parts.push('receipts_mode = ?'); vals.push(String(set.receipts) === 'off' ? 'off' : 'auto'); }

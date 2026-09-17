@@ -17,7 +17,6 @@ interface Env {
   CONTACT_TO?: string;
   SEND_LIMIT: { limit(o: { key: string }): Promise<{ success: boolean }> };
   EMAIL: { send(msg: unknown): Promise<void> };
-  [k: string]: unknown;
 }
 
 const DEFAULT_ORIGINS = ['https://merecatholicity.com', 'https://www.merecatholicity.com'];

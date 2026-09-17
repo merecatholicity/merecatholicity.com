@@ -2,7 +2,7 @@
    Every handler here moved verbatim from index.ts (2026-09-16, the route split);
    index.ts keeps the ROUTES table and imports what it mounts. */
 import * as Comments from '../../../purescript/output/Domain.Comments/index.js';
-import { ipKey } from '../pure.js';
+import { ipKey } from '../pure.ts';
 import { inList, withNames, postCountsFor } from '../db.ts';
 import {
   ADMIN_CAT,
@@ -66,6 +66,8 @@ import {
   registerMember,
   throttle,
 } from '../lib.ts';
+import type { HubEvent, Settings, TopicRow } from '../lib.ts';
+import type { AuthoredRow } from '../db.ts';
 import { merecatMentionKick } from './merecat.ts';
 import type { Env } from '../env.ts';
 import type { Body } from '../lib.ts';
@@ -77,7 +79,7 @@ import type { Body } from '../lib.ts';
    the write, the edit and the feed, so no two can disagree — and every caller
    answers null exactly as it answers an unknown page, because a closed section
    must be indistinguishable from a page that never had one. */
-async function commentsPageKey(env: any, raw: any): Promise<string | null> {
+async function commentsPageKey(env: Env, raw: unknown): Promise<string | null> {
   const s = await getAppSettings(env);
   const page = normalizePage(raw);
   if (page) return commentsPageOn(s, page) ? page : null;
@@ -95,9 +97,9 @@ async function handleGet(request: Request, env: Env, url: URL) {
     'SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at ' +
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     "WHERE c.page = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id LIMIT 500"
-  ).bind(page).all();
-  const counts = await postCountsFor(env, (rows.results || []).map((r: any) => r.author_hash));
-  const comments = (rows.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0));
+  ).bind(page).all<AuthoredRow>();
+  const counts = await postCountsFor(env, (rows.results || []).map((r) => r.author_hash));
+  const comments = (rows.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0));
   await stampReactions(env, 'post', comments, null);   // the tallies; the viewer's own ride /reacts
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
@@ -105,12 +107,6 @@ async function handleGet(request: Request, env: Env, url: URL) {
 
 /* A topic head as the board reads select it; `page` is the room, which decides
    the back room's silence and every live scope. */
-type TopicRow = {
-  id: number; page: string; title: string | null; author_hash: string;
-  nick?: string | null; signature?: string | null; avatar?: string | null; faith?: string | null;
-  body?: string | null; created_at: number; edited_at?: number | null;
-  locked?: number | null; sticky?: number | null;
-} & Record<string, unknown>;
 /* One address row of the admin fingerprint drawer. */
 type IpRow = { hash: string; ip_display: string; ip_key: string; family: string; source: string; banned: number };
 
@@ -185,7 +181,7 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
      media GET stay keyless). Claimed before Turnstile like the wall's, and
      validated against the BOARD mask + per-kind caps AT CLAIM TIME — the upload
      context cannot be trusted, since an upload does not know its destination. */
-  let media: any = null;
+  let media: Awaited<ReturnType<typeof wallClaimMedia>> = null;
   if (String(data.media_key || '')) {
     if (!boardKey(page)) return json({ ok: false, error: 'Attachments live on the forum only.' }, 400);
     if (page === ADMIN_CAT) return json({ ok: false, error: 'No attachments in this room.' }, 400);
@@ -320,7 +316,8 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
 
   /* Carry the poster's own nick, signature, and faith back so their fresh
      comment renders with them at once, before any cache refresh. */
-  const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash).first() : null;
+  const prof = authorHash ? await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(authorHash)
+    .first<{ nick: string | null; signature: string | null; avatar: string | null; faith: string | null }>() : null;
 
   /* Live push: broadcast the fresh post to everyone watching this scope through
      the one board sink (broadcastBoard gates the back room). Only a live post is
@@ -437,13 +434,16 @@ async function handleFeed(request: Request, env: Env, url: URL) {
   if (limited instanceof Response) return limited;
   const cat = url.searchParams.get('cat');
   const topicParam = Number(url.searchParams.get('topic'));
-  let page, results, topicRow = null;
+  type FeedRow = { id: number; parent_id: number | null; title: string | null; author_hash: string | null; nick: string | null; body: string; created_at: number };
+  let page: string | null;
+  let results: FeedRow[];
+  let topicRow: { id: number; page: string; title: string } | null = null;
   if (Number.isInteger(topicParam) && topicParam > 0) {
     /* A single thread's feed: the topic and its live replies, so anyone
        can follow one conversation, their own included. */
     topicRow = await env.DB.prepare(
       "SELECT c.id, c.page, c.title FROM comments c WHERE c.id = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c')
-    ).bind(topicParam).first();
+    ).bind(topicParam).first<{ id: number; page: string; title: string }>();
     if (!topicRow || !boardKey(topicRow.page) || topicRow.page === ADMIN_CAT) {
       return new Response('No such topic.', { status: 404 });
     }
@@ -452,7 +452,7 @@ async function handleFeed(request: Request, env: Env, url: URL) {
       "SELECT c.id, c.parent_id, c.title, c.author_hash, pr.nick, c.body, c.created_at FROM comments c " +
       "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
       "WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id DESC LIMIT 50"
-    ).bind(topicParam).all();
+    ).bind(topicParam).all<FeedRow>();
     results = rows.results;
   } else {
     /* A page feed exists only while its section is open (the same rule as the
@@ -464,13 +464,13 @@ async function handleFeed(request: Request, env: Env, url: URL) {
       "LEFT JOIN comments pt ON pt.id = c.parent_id " +
       "LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.page = ?1 AND c.status = 'live' AND " + shadowExcl('c') +
       " AND (c.parent_id IS NULL OR " + shadowExcl('pt') + ") ORDER BY c.id DESC LIMIT 50"
-    ).bind(page).all();
+    ).bind(page).all<FeedRow>();
     results = rows.results;
   }
   /* before the items: a reply's title reads it (declared after them, every
      category or page feed holding a reply threw, 2026-09-17 — found by the sweep) */
   const pageHref = Comments.pageHref(page);   // 'journal:<id>' reads as the article's permalink
-  const items = results.map(function (c: any) {
+  const items = results.map(function (c) {
     const name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
     const link = viewLink(env, page, c.id, c.parent_id);
     const itemTitle = c.title ? c.title
@@ -547,8 +547,9 @@ async function handleJournal(request: Request, env: Env, url: URL) {
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE (c.id = ?1 OR c.parent_id = ?1) AND c.status = 'live' AND " + shadowExcl('c') +
     " ORDER BY c.id DESC LIMIT ?2 OFFSET ?3"
-  ).bind(topicId, JOURNAL_PER_PAGE, (p - 1) * JOURNAL_PER_PAGE).all();
-  const articles = (rows.results || []).map((r: any) => {
+  ).bind(topicId, JOURNAL_PER_PAGE, (p - 1) * JOURNAL_PER_PAGE)
+    .all<{ id: number; author_hash: string; nick: string | null; body: string; created_at: number; edited_at: number | null }>();
+  const articles = (rows.results || []).map((r) => {
     const a = journalArticle(r.body);
     return { id: r.id, title: a.title, body: a.body, author: r.nick || displayName(r.author_hash),
       created_at: r.created_at, edited_at: r.edited_at };
@@ -575,7 +576,7 @@ async function journalTopic(env: Env, s: Record<string, string | undefined>) {
    its live, unmuted replies? The ONE predicate the journal read and the
    comments gate share, so a section can stand only under an article a reader
    can open; anything else answers as an unknown page. */
-async function journalArticleLive(env: any, s: any, id: number) {
+async function journalArticleLive(env: Env, s: Settings, id: number) {
   const topic = await journalTopic(env, s);
   if (!topic) return false;
   if (id === topic.id) return true;
@@ -674,24 +675,24 @@ async function handleMeta(request: Request, env: Env) {
     'LEFT JOIN shadowbans sh ON sh.hash = c.author_hash ' +
     'LEFT JOIN ip_bans ib ON ib.ip = c.ip ' +
     'WHERE c.page = ?1 ORDER BY c.id LIMIT 500'
-  ).bind(page).all();
+  ).bind(page).all<{ id: number; ip: string | null; author_hash: string | null; ipbanned: number } & Record<string, unknown>>();
   const list = rows.results;
 
   /* ip_bans now stores v6 as a /64 the raw c.ip will not equal, so recompute
      each comment's banned flag against the normalized key. */
-  const commentKeys = [...new Set(list.map((r: any) => ipKey(r.ip)).filter(Boolean))];
-  const bannedSet = new Set();
+  const commentKeys = [...new Set(list.map((r) => ipKey(r.ip)).filter(Boolean))];
+  const bannedSet = new Set<string>();
   if (commentKeys.length) {
     const ph = inList(commentKeys.length);
-    const b = await env.DB.prepare('SELECT ip FROM ip_bans WHERE ip IN (' + ph + ')').bind(...commentKeys).all();
+    const b = await env.DB.prepare('SELECT ip FROM ip_bans WHERE ip IN (' + ph + ')').bind(...commentKeys).all<{ ip: string }>();
     for (const x of b.results) bannedSet.add(x.ip);
   }
   for (const r of list) r.ipbanned = bannedSet.has(ipKey(r.ip)) ? 1 : 0;
 
   /* Every IP tied to each identity on the page, each with its ban state, so the
      drawer can show and ban both families of a dual-stack user together. */
-  const hashes = [...new Set(list.map((r: any) => r.author_hash).filter(Boolean))];
-  const identities: any = {};
+  const hashes = [...new Set(list.map((r) => r.author_hash).filter(Boolean))];
+  const identities: Record<string, Array<Omit<IpRow, 'hash'>>> = {};
   if (hashes.length) {
     const ph = inList(hashes.length);
     /* Only the recent window shows, banned keys always. */
@@ -702,8 +703,8 @@ async function handleMeta(request: Request, env: Env) {
       'FROM identity_ips ii LEFT JOIN ip_bans ib ON ib.ip = ii.ip_key ' +
       'WHERE ii.hash IN (' + ph + ') AND (ii.last_seen >= ' + cutoffPh + ' OR ib.ip IS NOT NULL) ' +
       'ORDER BY ii.family, ii.last_seen DESC'
-    ).bind(...hashes, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all();
-    for (const r of ipRows.results as IpRow[]) {
+    ).bind(...hashes, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all<IpRow>();
+    for (const r of ipRows.results) {
       (identities[r.hash] = identities[r.hash] || []).push({
         ip_display: r.ip_display, ip_key: r.ip_key, family: r.family,
         source: r.source, banned: r.banned,
@@ -735,9 +736,9 @@ async function handleBoardIndex(request: Request, env: Env, url: URL) {
        the index counts and the latest-poster for everyone. */
     '    AND ' + shadowExcl('c') + ' AND (c.parent_id IS NULL OR ' + shadowExcl('p') + ')' +
     ') WHERE rn = 1'
-  ).all();
-  const cats: any = {};
-  rows.results.forEach(function (r: any) {
+  ).all<{ page: string; author_hash: string | null; nick: string | null; created_at: number; title: string | null; post_id: number; topic_id: number; topics: number; posts: number }>();
+  const cats: Record<string, Body> = {};
+  rows.results.forEach(function (r) {
     cats[r.page.slice(6)] = {
       topics: r.topics,
       posts: r.posts,
@@ -775,14 +776,15 @@ async function handleAuthorPosts(request: Request, env: Env, url: URL) {
     "AND (c.parent_id IS NULL OR t.status = 'live') AND " + shadowExcl('c');
   const total = await env.DB.prepare(
     'SELECT COUNT(*) AS n FROM comments c LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' + where
-  ).bind(hash).first();
+  ).bind(hash).first<{ n: number }>();
   const rows = await env.DB.prepare(
     'SELECT c.id AS comment_id, COALESCE(c.parent_id, c.id) AS topic_id, ' +
     'COALESCE(c.title, t.title) AS title, c.page, c.created_at, substr(c.body, 1, 160) AS snippet ' +
     'FROM comments c LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) ' + where +
     ' ORDER BY c.id DESC LIMIT ?2 OFFSET ?3'
-  ).bind(hash, per, (p - 1) * per).all();
-  const items = (rows.results || []).map((r: any) => ({
+  ).bind(hash, per, (p - 1) * per)
+    .all<{ comment_id: number; topic_id: number; title: string | null; page: string; created_at: number; snippet: string }>();
+  const items = (rows.results || []).map((r) => ({
     comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
     cat: String(r.page).slice(6), created_at: r.created_at, snippet: r.snippet,
   }));
@@ -805,8 +807,8 @@ async function handleSearch(request: Request, env: Env, url: URL) {
   const author = /^[0-9a-f]{64}$/.test(authorRaw) ? authorRaw : null;
   const order = url.searchParams.get('sort') === 'new' ? 'c.id DESC' : 'bm25(comments_fts)';
 
-  const filters = [];
-  const binds = [match];
+  const filters: string[] = [];
+  const binds: string[] = [match];
   if (catPage) { binds.push(catPage); filters.push('AND c.page = ?' + binds.length); }
   if (author) { binds.push(author); filters.push('AND c.author_hash = ?' + binds.length); }
   const where =
@@ -824,12 +826,13 @@ async function handleSearch(request: Request, env: Env, url: URL) {
       'LEFT JOIN comments pt ON pt.id = c.parent_id ' +
       'LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
       where + ' ORDER BY ' + order + ' LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
-    ).bind(...binds, per, (p - 1) * per).all();
+    ).bind(...binds, per, (p - 1) * per)
+      .all<{ comment_id: number; topic_id: number; title: string | null; author_hash: string | null; nick: string | null; page: string; created_at: number; snip: string }>();
     const totalRow = await env.DB.prepare(
       'SELECT COUNT(*) AS n FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid ' +
       'LEFT JOIN comments pt ON pt.id = c.parent_id ' + where
     ).bind(...binds).first<{ n: number }>();
-    const items = (rows.results || []).map((r: any) => withNames({
+    const items = (rows.results || []).map((r) => withNames({
       comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
       author_hash: r.author_hash, nick: r.nick, cat: String(r.page).slice(6),
       created_at: r.created_at, snip: r.snip,
@@ -902,7 +905,7 @@ async function handleModerate(request: Request, env: Env, ctx: ExecutionContext)
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   /* Live push of the moderation (Phase 1b): gated out for the back room. */
   const catKey = topic.page.slice(6);
-  const emit = (ev: any) => { if (topic.page !== ADMIN_CAT) publishLive(env, ctx, ev); };
+  const emit = (ev: HubEvent) => { if (topic.page !== ADMIN_CAT) publishLive(env, ctx, ev); };
   if (act === 'delete') {
     /* A topic delete leaves its replies as live orphans (existing behavior),
        but every attachment in the thread — head and replies — is purged now:
@@ -910,8 +913,8 @@ async function handleModerate(request: Request, env: Env, ctx: ExecutionContext)
     try {
       const mk = await env.DB.prepare(
         'SELECT media_key FROM comments WHERE (id = ?1 OR parent_id = ?1) AND media_key IS NOT NULL'
-      ).bind(id).all();
-      const keys = (mk.results || []).map((r: any) => r.media_key).filter(Boolean);
+      ).bind(id).all<{ media_key: string }>();
+      const keys = (mk.results || []).map((r) => r.media_key).filter(Boolean);
       if (keys.length) {
         await purgeWallMedia(env, keys);
         await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL WHERE id = ?1 OR parent_id = ?1').bind(id).run();
@@ -981,8 +984,8 @@ async function handleMove(request: Request, env: Env, ctx: ExecutionContext) {
     try {
       const mk = await env.DB.prepare(
         'SELECT media_key FROM comments WHERE (id = ?1 OR parent_id = ?1) AND media_key IS NOT NULL'
-      ).bind(id).all();
-      const keys = (mk.results || []).map((r: any) => r.media_key).filter(Boolean);
+      ).bind(id).all<{ media_key: string }>();
+      const keys = (mk.results || []).map((r) => r.media_key).filter(Boolean);
       if (keys.length) {
         await purgeWallMedia(env, keys);
         await env.DB.prepare('UPDATE comments SET media_key = NULL, media_size = NULL WHERE id = ?1 OR parent_id = ?1').bind(id).run();
@@ -1172,8 +1175,8 @@ async function handleBoardReads(request: Request, env: Env) {
     'SELECT c.id FROM comments c LEFT JOIN thread_reads tr ON tr.hash = ?1 AND tr.topic_id = c.id ' +
     "WHERE c.page = ?2 AND c.parent_id IS NULL AND c.status = 'live' " +
     'AND COALESCE(c.last_at, c.created_at) > COALESCE(tr.read_at, ?3)'
-  ).bind(me, catPage, floor).all();
-  return json({ ok: true, unread: (rows.results || []).map((r: any) => r.id) }, 200);
+  ).bind(me, catPage, floor).all<{ id: number }>();
+  return json({ ok: true, unread: (rows.results || []).map((r) => r.id) }, 200);
 }
 
 /* Mark one thread read — fired on opening a topic. */
@@ -1277,7 +1280,7 @@ async function handleApprove(request: Request, env: Env, ctx: ExecutionContext) 
     if (wkind === 'wall-comment') {
       const row = await env.DB.prepare(
         "UPDATE wall_comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING id, post_id, author_hash"
-      ).bind(id).first();
+      ).bind(id).first<{ id: number; post_id: number; author_hash: string | null }>();
       if (row && !(await isShadowBanned(env, row.author_hash))) {
         await env.DB.prepare('UPDATE wall_posts SET comments = comments + 1 WHERE id = ?1').bind(row.post_id).run();
         publishLive(env, ctx, { v: 1, t: 'wall-comment', scopes: ['feed:global'], post: row.post_id });
@@ -1286,7 +1289,7 @@ async function handleApprove(request: Request, env: Env, ctx: ExecutionContext) 
     }
     const row = await env.DB.prepare(
       "UPDATE wall_posts SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING id, author_hash"
-    ).bind(id).first();
+    ).bind(id).first<{ id: number; author_hash: string | null }>();
     if (row && !(await isShadowBanned(env, row.author_hash))) {
       publishLive(env, ctx, { v: 1, t: 'wall-post', scopes: ['feed:global'], id });
     }
@@ -1294,7 +1297,7 @@ async function handleApprove(request: Request, env: Env, ctx: ExecutionContext) 
   }
   const row = await env.DB.prepare(
     "UPDATE comments SET status = 'live' WHERE id = ?1 AND status = 'pending' RETURNING page, parent_id"
-  ).bind(id).first();
+  ).bind(id).first<{ page: string; parent_id: number | null }>();
   if (row && boardKey(row.page)) await refreshTopicStats(env, row.parent_id || id);
   /* Live push (Phase 1b): a held post, once approved, enters the stream — the
      one place besides handlePost where a post becomes live. Same events, so the

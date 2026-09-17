@@ -14,11 +14,11 @@
 
 import * as Rank from '../../purescript/output/Domain.Rank/index.js';
 import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
-import type { Env } from './env.ts';
+import type { Env, NotEnv } from './env.ts';
 
 /* A row carrying an author, as every board/wall read selects it. Open on the
    rest: the callers add their own columns and pass the row through. */
-export type AuthoredRow = { author_hash?: string | null } & Record<string, unknown>;
+export type AuthoredRow = { author_hash?: string | null } & Record<string, unknown> & NotEnv;
 
 /* ---- Bind-placeholder helpers (retire the hand-rolled `?N` loops) ---- */
 

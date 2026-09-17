@@ -38,7 +38,7 @@ tests/
   _support/client.mjs  the browser client's sources for the source-rule tests (the root and the
                        thirteen feature modules of client/ — the DM family is six since 2026-09-16 —
                        as one text, one at a time, or the DM family alone (clientDm))
-  _support/any_baseline.json  the two `: any` counts the ratchet holds (see js/any_ratchet)
+  _support/any_baseline.json  the two `any` counts the ratchet holds (see js/any_ratchet): the client's, and the workers' zero
   _support/worker.mjs  the worker, RUN: loadWorker() (index.ts in plain Node behind one resolve hook), freshDb()
                        (every migration on node:sqlite), d1() (the D1-shaped shim), makeEnv() (limiters that allow,
                        R2 buckets that record, an EMAIL spy that records into env.emails or refuses on demand,
@@ -84,8 +84,9 @@ tests/
                        the Alerts section and the Health card of Platform settings (alerts_panel: the four
                        keys the panel saves are the door's, the address rule shared through the membrane,
                        the card reads the one health object and Back up now presses the documented door),
-                       and the `: any` ratchet (any_ratchet: each tsc project's count equals
-                       _support/any_baseline.json, a number that only ever falls)
+                       and the `any` ratchet (any_ratchet: counted exactly — the word minus what
+                       survives type stripping — the workers held at zero with no .js, the client
+                       at _support/any_baseline.json, a number that only ever falls)
   worker/              the security-critical worker helpers (IP/ban keys, back-room privacy,
                        the usage monitor's maths, the librarian's config chain and its AI budget guard,
                        the comments switches and the journal sweep's SQL on real migrations,

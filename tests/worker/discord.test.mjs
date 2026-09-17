@@ -1,4 +1,4 @@
-/* comments-worker/src/pure.js — the Discord webhook helpers.
+/* comments-worker/src/pure.ts — the Discord webhook helpers.
 
    isDiscordWebhook is a SECURITY validator: it is the ONE gate that decides
    whether the worker will POST member post-bodies to a given URL. If it ever
@@ -9,7 +9,7 @@
    length so an embed is never over-long. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isDiscordWebhook, discordSnippet, parseFeedScope, scopeLabel } from '../../comments-worker/src/pure.js';
+import { isDiscordWebhook, discordSnippet, parseFeedScope, scopeLabel } from '../../comments-worker/src/pure.ts';
 
 test('isDiscordWebhook accepts genuine Discord webhook URLs', () => {
   assert.equal(isDiscordWebhook('https://discord.com/api/webhooks/123456789012345678/AbC-dEf_123'), true);

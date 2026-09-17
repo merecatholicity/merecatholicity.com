@@ -29,18 +29,20 @@ import * as Throttle from '../../purescript/output/Domain.Throttle/index.js';
 import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 import type { Env } from './env.ts';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
-// extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
+// extracted so they can be unit-tested in plain Node. See src/pure.ts. (pure.ts
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
 // there or client-side; imported here only what index.js calls directly.)
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
   isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel, journalArticle,
-} from './pure.js';
+} from './pure.ts';
 export { isDiscordWebhook, discordSnippet, shadowExcl, parseFeedScope, scopeLabel, journalArticle };   // re-exported so index.ts imports them from here
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
-import { createPusher } from './webpush.js';
+import { createPusher } from './webpush.ts';
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
 import { inList, rankFor, withNames, postCountsFor } from './db.ts';
+import type { AuthoredRow } from './db.ts';
+import type { EnvFree, NotEnv } from './env.ts';
 /* The librarian's AI budget guard: its own module (no lib import, Node-
    tested), re-exported below so the ChatRoom and the handlers keep one
    import site for the librarian helpers. */
@@ -83,9 +85,9 @@ export async function throttle(env: Pick<Env, Bucket> & Partial<Pick<Env, 'READ_
    blocked-identity gate (a locked/banned hash is refused). These replicate,
    verbatim, the preamble that used to open each keyed handler. */
 
-export async function keyed(request: any, env: Env, bucket: 'POST_LIMIT' | 'READ_LIMIT' | 'CONNECT_LIMIT'): Promise<Response | { ip: string; data: any; key: string; me: string }> {
-  let data;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+export async function keyed(request: Request, env: Env, bucket: 'POST_LIMIT' | 'READ_LIMIT' | 'CONNECT_LIMIT'): Promise<Response | Gated> {
+  const data = await readBody(request);
+  if (!data) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, bucket, ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
@@ -93,7 +95,7 @@ export async function keyed(request: any, env: Env, bucket: 'POST_LIMIT' | 'READ
   const me = await sha256hex(key);
   return { ip, data, key, me };
 }
-export async function keyedGated(request: any, env: Env, bucket: 'POST_LIMIT' | 'READ_LIMIT' | 'CONNECT_LIMIT'): Promise<Response | { ip: string; data: any; key: string; me: string }> {
+export async function keyedGated(request: Request, env: Env, bucket: 'POST_LIMIT' | 'READ_LIMIT' | 'CONNECT_LIMIT'): Promise<Response | Gated> {
   const pre = await keyed(request, env, bucket);
   if (pre instanceof Response) return pre;
   const gate = await blockedReason(env, pre.me, pre.ip);
@@ -120,13 +122,26 @@ export type GateOpts = {
 /* A request body as the wire carries it: an object whose fields are unknown
    until the handler coerces them — which every handler does (String/Number/
    Array.isArray). A handler that parses for itself says `request.json<Body>()`;
-   `Gated.data` keeps `any` until the gates themselves are typed. */
+   every gate hands one over (2026-09-17). */
 export type Body = Record<string, unknown>;
 
-export type Gated = { ip: string; data: any; key: string; me: string };
+/* The request's JSON body as a Body (a non-object reads as an empty one), or
+   null when it does not parse. */
+export async function readBody(request: Request): Promise<Body | null> {
+  try { return bodyOf(await request.json()); } catch (e) { return null; }
+}
+
+/* A nested object in a body (`data.work`, `data.set`, `data.config`): the field
+   when it is a plain object, else an empty one — so a string, an array or null
+   where an object belongs reads as "nothing given", never as its characters. */
+export function bodyOf(v: unknown): Body {
+  return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Body) : {};
+}
+
+export type Gated = { ip: string; data: Body; key: string; me: string };
 export async function gated(request: Request, env: Env, o: GateOpts = {}): Promise<Response | Gated> {
-  let data: any;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const data = await readBody(request);
+  if (!data) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (o.bucket && !(await throttle(env, o.bucket, ip, { key: data && data.key }))) {
     return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
@@ -144,8 +159,8 @@ export async function gated(request: Request, env: Env, o: GateOpts = {}): Promi
 /* The admin preamble: parse, an optional limit, `requireAdmin` (403 "No."),
    the admin's own hash for `updated_by`. */
 export async function adminGated(request: Request, env: Env, o: { bucket?: 'POST_LIMIT' | 'READ_LIMIT' | null; limited?: string } = {}): Promise<Response | Gated> {
-  let data: any;
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  const data = await readBody(request);
+  if (!data) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (o.bucket && !(await throttle(env, o.bucket, ip, { key: data && data.key }))) {
     return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
@@ -192,9 +207,10 @@ export const BOARD_CATS = Board.catKeys;
    (a retraction from public view, not a move the poster can follow). */
 export const ADMIN_CAT = Board.adminCat;
 
-export function boardKey(raw: any) {
-  const m = /^board:([a-z]+)$/.exec(String(raw || ''));
-  return m && BOARD_CATS.includes(m[1]) ? raw : null;
+export function boardKey(raw: unknown): string | null {
+  const page = String(raw || '');
+  const m = /^board:([a-z]+)$/.exec(page);
+  return m && BOARD_CATS.includes(m[1]) ? page : null;
 }
 
 /* The site's own origin, used to build human-facing links (feed items, the
@@ -224,8 +240,8 @@ export const NOTIF_PER_PAGE = 20;
 /* The faith declaration every member picks at signup: one of three, stored as
    a short code, its display wording owned by the client. Kept in step with the
    FAITH map in comments.js. */
-export const FAITHS = Faith.faithList.map((f: any) => f.code);   // single-sourced from Domain.Faith
-export function cleanFaith(raw: any) {
+export const FAITHS: string[] = Faith.faithList.map((f: { code: string }) => f.code);   // single-sourced from Domain.Faith
+export function cleanFaith(raw: unknown) {
   const v = String(raw || '').trim();
   return FAITHS.includes(v) ? v : null;
 }
@@ -257,14 +273,14 @@ export const displayName = Pseudonym.displayName;
    against BOARD_CATS so the two rosters cannot drift. Single-sourced from
    Domain.Board.catRows, the same table the client renders. */
 export const CAT_META = Board.catRows;
-export const FAITH_LABELS = Object.fromEntries(Faith.faithList.map((f: any) => [f.code, f.label]));
+export const FAITH_LABELS: Record<string, string> = Object.fromEntries(Faith.faithList.map((f: { code: string; label: string }) => [f.code, f.label]));
 /* Emoji packs + named-alias tokens single-sourced from Domain.Emoji (the same
    data the client renders); the building code (whitelist derive, alias pairing)
    is trivial and stays per-consumer. */
 export const EMOJI_PACKS = Emoji.packs;
 export const NAMED_EMOJI = (() => {
-  const out: any = {};
-  const toks = Emoji.namedTokens.trim().split(/\s+/);
+  const out: Record<string, string> = {};
+  const toks: string[] = Emoji.namedTokens.trim().split(/\s+/);
   for (let i = 0; i < toks.length; i += 2) out[toks[i]] = toks[i + 1];
   return out;
 })();
@@ -275,7 +291,7 @@ export const NAMED_EMOJI = (() => {
 
 export const enc = new TextEncoder();
 
-export async function sha256hex(text: any) {
+export async function sha256hex(text: string) {
   const digest = await crypto.subtle.digest('SHA-256', enc.encode(text));
   return [...new Uint8Array(digest)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
@@ -291,19 +307,20 @@ export function allowedOrigins(env: Env) {
   const v = env && env.ALLOWED_ORIGINS;
   return v ? String(v).split(',').map((s) => s.trim()).filter(Boolean) : DEFAULT_ORIGINS;
 }
-export function originOk(request: any, env: Env) {
+export function originOk(request: Request, env: Env) {
   const o = request.headers.get('Origin');
   return !o || allowedOrigins(env).includes(o);
 }
 
-export function json(body: any, status?: any, headers?: any) {
+/* An answer is any object but the env or a copy of it (env.ts EnvFree). */
+export function json<T extends object>(body: T & EnvFree<T>, status?: number, headers?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status: status,
     headers: { 'Content-Type': 'application/json', ...headers },
   });
 }
 
-export function parseOS(ua: any) {
+export function parseOS(ua: string) {
   if (/iphone|ipad|ipod/i.test(ua)) return 'iOS';
   if (/android/i.test(ua)) return 'Android';
   if (/windows nt/i.test(ua)) return 'Windows';
@@ -319,19 +336,19 @@ export function parseOS(ua: any) {
    board can never be permanently locked out. Once the table holds anyone, it is
    the sole authority and every admin is an equal, removable row, owners included. */
 export function rootAdmins(env: Env) {
-  return (env.ADMIN_HASHES || '').split(',').map((s: any) => s.trim()).filter((h: any) => /^[0-9a-f]{64}$/.test(h));
+  return (env.ADMIN_HASHES || '').split(',').map((s) => s.trim()).filter((h) => /^[0-9a-f]{64}$/.test(h));
 }
 
 /* Admin status is membership in the admins table. The env owners count only
    while the table is still empty (bootstrap), so a live board is governed
    entirely by the table and no admin is privileged over another. */
-export async function isAdminHash(env: Env, hash: any) {
+export async function isAdminHash(env: Env, hash: string | null | undefined) {
   if (!hash) return false;
   const row = await env.DB.prepare('SELECT 1 AS a FROM admins WHERE hash = ?1').bind(hash).first();
   if (row) return true;
   if (rootAdmins(env).includes(hash)) {
-    const any = await env.DB.prepare('SELECT 1 AS a FROM admins LIMIT 1').first();
-    return !any;
+    const seeded = await env.DB.prepare('SELECT 1 AS a FROM admins LIMIT 1').first();
+    return !seeded;
   }
   return false;
 }
@@ -340,8 +357,8 @@ export async function isAdminHash(env: Env, hash: any) {
    they show as ordinary, removable rows rather than a hidden privileged set. A
    no-op once anyone is in the table (including after owners are removed). */
 export async function ensureAdminsSeeded(env: Env) {
-  const any = await env.DB.prepare('SELECT 1 AS a FROM admins LIMIT 1').first();
-  if (any) return;
+  const seeded = await env.DB.prepare('SELECT 1 AS a FROM admins LIMIT 1').first();
+  if (seeded) return;
   const now = Math.floor(Date.now() / 1000);
   for (const h of rootAdmins(env)) {
     await env.DB.prepare('INSERT OR IGNORE INTO admins (hash, added_by, created_at) VALUES (?1, ?2, ?3)')
@@ -349,7 +366,7 @@ export async function ensureAdminsSeeded(env: Env) {
   }
 }
 
-export function normalizePage(raw: any) {
+export function normalizePage(raw: unknown) {
   let p = String(raw || '').split('?')[0].split('#')[0];
   if (!p.startsWith('/')) return null;
   if (p.endsWith('/')) p += 'index.html';
@@ -369,7 +386,7 @@ export function hiddenHashes(env: { HIDDEN_HASHES?: string }): string[] {
 
 /* Fails closed. A blip reaching siteverify refuses the post rather than
    crashing the worker or waving the post through unverified. */
-export async function verifyTurnstile(env: Env, token: any, ip: any, key: any) {
+export async function verifyTurnstile(env: Env, token: string, ip: string, key: string) {
   /* No token offered? An identity that has ALREADY passed a challenge is not
      asked again — the whole reason this path exists (Domain.Turnstile). A token
      that IS offered is still verified normally, so nothing about the existing
@@ -389,12 +406,12 @@ export async function verifyTurnstile(env: Env, token: any, ip: any, key: any) {
       method: 'POST',
       body: new URLSearchParams({ secret: String(env.TURNSTILE_SECRET || ''), response: token, remoteip: ip }),
     });
-    const verdict: any = await res.json();
+    const verdict = await res.json<{ success?: boolean; hostname?: string }>();
     if (!verdict.success) return false;
     /* Defense in depth on top of the sitekey's own domain lock: if a host
        allow-list is configured, the token must have been solved on one. */
-    const allow = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h: any) => h.trim()).filter(Boolean);
-    if (allow.length && !allow.includes(verdict.hostname)) {
+    const allow = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h) => h.trim()).filter(Boolean);
+    if (allow.length && !allow.includes(String(verdict.hostname))) {
       console.log(JSON.stringify({ event: 'turnstile_hostname', hostname: verdict.hostname }));
       return false;
     }
@@ -414,10 +431,10 @@ export async function verifyTurnstile(env: Env, token: any, ip: any, key: any) {
    read-side filter, appended to a query's WHERE to drop rows whose <alias>.author_hash
    is shadowbanned; the per-call subquery table alias (sb_<alias>) keeps two of
    them side by side (a reply AND its topic owner). shadowExcl is the pure SQL
-   builder (in pure.js, unit-tested — a typo there would silently un-mute
+   builder (in pure.ts, unit-tested — a typo there would silently un-mute
    everyone); isShadowBanned is the write-side point check. Both hit the tiny
    PK-indexed shadowbans table. */
-export async function isShadowBanned(env: Env, hash: any) {
+export async function isShadowBanned(env: Env, hash: string | null | undefined) {
   if (!hash) return false;
   const row = await env.DB.prepare('SELECT 1 AS s FROM shadowbans WHERE hash = ?1').bind(hash).first();
   return !!row;
@@ -428,7 +445,7 @@ export async function isShadowBanned(env: Env, hash: any) {
    indexed replies whenever anything in the thread mutates, so the numbers
    cannot drift. A shadowbanned author's replies are excluded here too, so a
    muted reply never bumps a thread's count or last-activity for anyone. */
-export async function refreshTopicStats(env: Env, topicId: any) {
+export async function refreshTopicStats(env: Env, topicId: number) {
   await env.DB.prepare(
     'UPDATE comments SET ' +
     "replies = (SELECT COUNT(*) FROM comments r WHERE r.parent_id = ?1 AND r.status = 'live' AND " + shadowExcl('r') + '), ' +
@@ -437,7 +454,7 @@ export async function refreshTopicStats(env: Env, topicId: any) {
   ).bind(topicId).run();
 }
 
-export async function isTrusted(env: Env, hash: any) {
+export async function isTrusted(env: Env, hash: string | null | undefined) {
   if (!hash) return false;
   const row = await env.DB.prepare('SELECT 1 AS t FROM trusted WHERE hash = ?1').bind(hash).first();
   return !!row;
@@ -445,13 +462,13 @@ export async function isTrusted(env: Env, hash: any) {
 
 /* IP normalization + ban-key helpers (ipFamily/ipv6Groups/ipv6Prefix64/
    ipv6Full/ipKey/toBanKey/isSharedV4/reverseDnsName/looksLikeIp) live in
-   src/pure.js, imported at the top — extracted so they can be unit-tested in
+   src/pure.ts, imported at the top — extracted so they can be unit-tested in
    plain Node. A dual-stack user's v6 interface id rotates daily while the /64
    stays fixed, so bans match on a normalized key (v4 verbatim, v6 as /64). */
 
 /* Reverse-DNS one address via Cloudflare DoH JSON. Best-effort: the PTR
    hostname without its trailing dot, or null on any failure or timeout. */
-export async function ptrLookup(ip: any) {
+export async function ptrLookup(ip: string) {
   const name = reverseDnsName(ip);
   if (!name) return null;
   const ctl = new AbortController();
@@ -460,8 +477,8 @@ export async function ptrLookup(ip: any) {
     const r = await fetch('https://cloudflare-dns.com/dns-query?type=PTR&name=' + encodeURIComponent(name),
       { headers: { accept: 'application/dns-json' }, signal: ctl.signal });
     if (!r.ok) return null;
-    const j: any = await r.json();
-    const ans = j && j.Answer && j.Answer.find((a: any) => a.type === 12);
+    const j = await r.json<{ Answer?: { type?: number; data?: string }[] } | null>();
+    const ans = j && j.Answer && j.Answer.find((a) => a.type === 12);
     return ans && ans.data ? String(ans.data).replace(/\.$/, '') : null;
   } catch {
     return null;
@@ -475,7 +492,7 @@ export async function ptrLookup(ip: any) {
    echo, the opposite-family address it reported (source 'claimed'). Stored
    under the normalized key so a ban on any one closes every door. Best-effort:
    a failure here must never break a post that already succeeded. */
-export async function recordIps(env: Env, hash: any, connIp: any, data: any) {
+export async function recordIps(env: Env, hash: string | null, connIp: string, data: Body | null) {
   if (!hash) return;
   const now = Math.floor(Date.now() / 1000);
   const connFam = ipFamily(connIp);
@@ -509,16 +526,16 @@ export async function recordIps(env: Env, hash: any, connIp: any, data: any) {
    IP, or a legacy ban. Returns null when clear, else the reason a keyed
    endpoint hands back as {blocked}. Public reads never call this, so cached
    and anonymous browsing is untouched. */
-export async function blockedReason(env: Env, hash: any, ip: any) {
+export async function blockedReason(env: Env, hash: string | null, ip: string): Promise<string | null> {
   const row = await env.DB.prepare(
     "SELECT 'locked' AS r FROM locks WHERE hash = ?1 " +
     "UNION ALL SELECT 'ipban' FROM ip_bans WHERE ip = ?2 " +
     "UNION ALL SELECT 'banned' FROM bans WHERE hash = ?1 LIMIT 1"
-  ).bind(hash || '-', ipKey(ip) || '-').first();
+  ).bind(hash || '-', ipKey(ip) || '-').first<{ r: string }>();
   return row ? row.r : null;
 }
 
-export function blockedJson(reason: any) {
+export function blockedJson(reason: string) {
   return json({ ok: false, blocked: reason, error: 'Interaction is not available.' }, 403);
 }
 
@@ -526,7 +543,7 @@ export function blockedJson(reason: any) {
    failure mode must be a delay for the poster, never a silent publish.
    A trusted author skips the screen entirely, though hold-all, the
    emergency brake, still holds everyone, and bans are checked upstream. */
-export async function screen(env: Env, body: any, trusted: any) {
+export async function screen(env: Env, body: string, trusted: boolean) {
   const mode = env.MODERATION_MODE || 'ai';
   if (mode === 'hold-all') return { status: 'pending', verdict: 'hold-all' };
   if (trusted) return { status: 'live', verdict: 'trusted' };
@@ -548,7 +565,7 @@ export async function screen(env: Env, body: any, trusted: any) {
 
 /* Where a human clicks to see the comment: the page anchor for site
    comments, the topic view for board posts. */
-export function viewLink(env: Env, page: any, id: any, parentId: any) {
+export function viewLink(env: Env, page: string, id: number, parentId: number | null) {
   if (page.indexOf('board:') === 0) {
     return siteBase(env) + '/community.html?topic=' + (parentId || id) + '#comment-' + id;
   }
@@ -565,7 +582,7 @@ export function viewLink(env: Env, page: any, id: any, parentId: any) {
    for the fresh one with ?fresh=1 and live as they always have. Anonymous
    readers ride a five-minute cache, their repeat views never reaching the
    worker at all. */
-export function cacheHeader(url: any) {
+export function cacheHeader(url: URL) {
   return { 'Cache-Control': 'public, max-age=' + (url.searchParams.get('fresh') ? 60 : 300) };
 }
 
@@ -575,33 +592,40 @@ export function cacheHeader(url: any) {
    autolink table, and the emoji whitelists — plus an explicit apiVersion. Public
    and edge-cacheable like every other read. Additive: nothing consumes it yet;
    the web client keeps its inline copies. */
-export async function notifyPrefsFor(env: Env, hashes: any) {
-  const map: any = {};
-  const list = [...new Set((hashes || []).filter(Boolean))];
+export type PrefRow = { hash: string; notify_reply: number | null; notify_mention: number | null; notify_dm: number | null };
+export async function notifyPrefsFor(env: Env, hashes: readonly (string | null | undefined)[]): Promise<Record<string, PrefRow>> {
+  const map: Record<string, PrefRow> = {};
+  const list = [...new Set(hashes.filter((h): h is string => !!h))];
   for (let i = 0; i < list.length; i += 50) {
     const chunk = list.slice(i, i + 50);
     const ph = inList(chunk.length);
     try {
-      const rows = await env.DB.prepare('SELECT hash, notify_reply, notify_mention, notify_dm FROM profiles WHERE hash IN (' + ph + ')').bind(...chunk).all<{ hash: string; notify_reply: number | null; notify_mention: number | null; notify_dm: number | null }>();
+      const rows = await env.DB.prepare('SELECT hash, notify_reply, notify_mention, notify_dm FROM profiles WHERE hash IN (' + ph + ')').bind(...chunk).all<PrefRow>();
       for (const r of (rows.results || [])) map[r.hash] = r;
     } catch (e) { /* defaults (all on) stand */ }
   }
   return map;
 }
 /* Is a kind enabled for this recipient? NULL / missing profile = on (default). */
-export function notifyEnabled(prefRow: any, kind: any) {
+export function notifyEnabled(prefRow: PrefRow | null | undefined, kind: 'reply' | 'mention' | 'dm') {
   if (!prefRow) return true;
-  const v = prefRow['notify_' + kind];
+  const v = prefRow[`notify_${kind}` as const];
   return v == null ? true : Prefs.notifyOn(Number(v) || 0);
 }
 
-export async function deliverNotifications(env: Env, o: any) {
+/* A board post's notice: who wrote what where, for the fan-out below. */
+export type BoardNotice = {
+  authorHash: string | null; status: string; page?: string;
+  topicId: number; commentId: number; isReply: boolean;
+  topicAuthorHash?: string | null; mentions?: unknown;
+};
+export async function deliverNotifications(env: Env, o: BoardNotice) {
   const now = Math.floor(Date.now() / 1000);
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
-  const stmts = [];
-  const pushMention = new Set();   // recipients to nudge by native push, per kind (disjoint sets)
-  const pushReply = new Set();
-  const liveEvents = [];      // per-recipient live 'notification' events (WebSocket)
+  const stmts: D1PreparedStatement[] = [];
+  const pushMention = new Set<string>();   // recipients to nudge by native push, per kind (disjoint sets)
+  const pushReply = new Set<string>();
+  const liveEvents: HubEvent[] = [];      // per-recipient live 'notification' events (WebSocket)
 
   if (o.authorHash && o.authorHash !== MERECAT_BOT.hash) {
     stmts.push(env.DB.prepare('INSERT OR IGNORE INTO watches (hash, topic_id, created_at) VALUES (?1, ?2, ?3)')
@@ -609,7 +633,7 @@ export async function deliverNotifications(env: Env, o: any) {
   }
 
   if (o.status === 'live') {
-    const mentions = [];
+    const mentions: string[] = [];
     if (Array.isArray(o.mentions)) {
       for (const m of o.mentions) {
         const h = String(m || '').toLowerCase();
@@ -621,10 +645,10 @@ export async function deliverNotifications(env: Env, o: any) {
     }
     /* A post in the back room tells admins alone — a mentioned or watching
        outsider must learn nothing, not even that the thread exists. */
-    let admSet = null;
+    let admSet: Set<string> | null = null;
     if (o.page === ADMIN_CAT) {
-      const admRows = await env.DB.prepare('SELECT hash FROM admins').all();
-      admSet = new Set((admRows.results || []).map((r: any) => r.hash));
+      const admRows = await env.DB.prepare('SELECT hash FROM admins').all<{ hash: string }>();
+      admSet = new Set((admRows.results || []).map((r) => r.hash));
     }
     const mPrefs = await notifyPrefsFor(env, mentions);
     for (const h of mentions) {
@@ -639,9 +663,9 @@ export async function deliverNotifications(env: Env, o: any) {
       const skip = new Set(mentions);
       if (o.authorHash) skip.add(o.authorHash);
       skip.add(MERECAT_BOT.hash);
-      const recips: any = new Set();
+      const recips = new Set<string>();
       if (o.topicAuthorHash) recips.add(o.topicAuthorHash);
-      const rows = await env.DB.prepare('SELECT hash FROM watches WHERE topic_id = ?1').bind(o.topicId).all();
+      const rows = await env.DB.prepare('SELECT hash FROM watches WHERE topic_id = ?1').bind(o.topicId).all<{ hash: string }>();
       for (const r of (rows.results || [])) recips.add(r.hash);
       const rPrefs = await notifyPrefsFor(env, [...recips]);
       for (const h of recips) {
@@ -675,7 +699,7 @@ export async function deliverNotifications(env: Env, o: any) {
    "X sent you a message" until it is read, rather than burying the list. A 'dm'
    notification carries no topic/comment (both 0) and jumps to the conversation.
    A DM must never fail because its notification did, so this never throws out. */
-export async function notifyDm(env: Env, toHash: any, fromHash: any, threadId?: any) {
+export async function notifyDm(env: Env, toHash: string, fromHash: string, threadId?: number) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     /* "Direct messages" notifications off silences the BELL only — the message
@@ -713,7 +737,7 @@ export async function notifyDm(env: Env, toHash: any, fromHash: any, threadId?: 
    the swipe). The push carries no names (the DM-push privacy idiom) and a
    tag per caller, so the miss's push replaces it rather than piling up. Rides
    the notify_dm pref. A ring must never fail because its push did. */
-export async function ringCall(env: Env, toHash: any, fromHash: any, callId: any) {
+export async function ringCall(env: Env, toHash: string, fromHash: string, callId: string) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
@@ -736,7 +760,7 @@ export async function ringCall(env: Env, toHash: any, fromHash: any, callId: any
    caller) — a ring-burst never piles up rows — plus the live badge ping, and
    a Web Push ("Missed call", replacing the ring's push by its tag) only when
    the callee has no live socket. Never throws out. */
-export async function notifyMissedCall(env: Env, toHash: any, fromHash: any, opts?: { late?: boolean }, threadId?: any) {
+export async function notifyMissedCall(env: Env, toHash: string, fromHash: string, opts?: { late?: boolean }, threadId?: number) {
   try {
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
@@ -778,7 +802,7 @@ export async function notifyMissedCall(env: Env, toHash: any, fromHash: any, opt
    so both sides agree; a failed setup ('failed') is stamped and nothing is
    written — no app logs "couldn't connect". Returns whether this call was
    the one that recorded it. */
-export async function recordCallEnd(env: Env, row: { call: string; from_hash: string; to_hash: string; answered_at?: any }, outcome: string, opts?: { late?: boolean }) {
+export async function recordCallEnd(env: Env, row: { call: string; from_hash: string; to_hash: string; answered_at?: number | null }, outcome: string, opts?: { late?: boolean }) {
   const now = Math.floor(Date.now() / 1000);
   const r = await env.DB.prepare(
     'UPDATE calls_pending SET ended_at = ?2, outcome = ?3, missed_at = CASE WHEN ?3 = \'missed\' THEN ?2 ELSE missed_at END ' +
@@ -791,7 +815,7 @@ export async function recordCallEnd(env: Env, row: { call: string; from_hash: st
   else if (outcome === 'answered') line = CallK.answeredCallLine(Math.max(0, now - (Number(row.answered_at) || now)));
   /* The pair's room (made if this call was its first word), so the line and
      the bell both name the conversation (0016). */
-  let thread: any = null;
+  let thread: { id: number } | null = null;
   try { thread = await ensurePairThread(env, row.from_hash, row.to_hash, now, { bump: false, sender: row.from_hash }); } catch (e) { thread = null; }
   if (line && thread) {
     try { await sendSystemDmLine(env, thread.id, row.from_hash, line, { quiet: true }); } catch (e) { console.log(JSON.stringify({ event: 'call_line_failed', outcome, error: String(e) })); }
@@ -825,20 +849,22 @@ export async function sweepCalls(env: Env) {
 }
 
 /* Best-effort push fan-out — real Web Push (VAPID + aes128gcm) over crypto.subtle,
-   no external service (see webpush.js). A NO-OP unless PUSH_ENABLED === 'true'
+   no external service (see webpush.ts). A NO-OP unless PUSH_ENABLED === 'true'
    AND the VAPID keypair is configured (VAPID_PRIVATE_KEY secret + VAPID_PUBLIC_KEY
    var). Looks up each recipient's registered subscriptions and sends `payload`
    (title/body/url, never message content — privacy + E2E). A dead subscription
    (404/410) is pruned. Never throws into the caller (a push failure must never
    affect a post or a DM). */
-export async function deliverPush(env: Env, hashes: any, payload: any) {
+/* What a push says: never names, never message content (the privacy rule). */
+export type PushPayload = { kind: string; title: string; body: string; url: string; tag?: string };
+export async function deliverPush(env: Env, hashes: readonly (string | null | undefined)[], payload: PushPayload) {
   try {
     if (env.PUSH_ENABLED !== 'true') return;
     if (!env.VAPID_PRIVATE_KEY || !env.VAPID_PUBLIC_KEY) {
       console.log(JSON.stringify({ event: 'push_unconfigured' }));   // enabled but no keys set yet
       return;
     }
-    const uniq = [...new Set((hashes || []).filter(Boolean))];
+    const uniq = [...new Set(hashes.filter((h): h is string => !!h))];
     if (!uniq.length) return;
     const ph = inList(uniq.length);
     const rows = await env.DB.prepare('SELECT hash, platform, token FROM push_tokens WHERE hash IN (' + ph + ')').bind(...uniq).all<{ hash: string; platform: string; token: string }>();
@@ -854,8 +880,8 @@ export async function deliverPush(env: Env, hashes: any, payload: any) {
     const PUSH_LANE = 20;
     for (let i = 0; i < tokens.length; i += PUSH_LANE) {
       const lane = tokens.slice(i, i + PUSH_LANE);
-      const results = await Promise.allSettled(lane.map(async (row: any) => {
-        let sub = null;
+      const results = await Promise.allSettled(lane.map(async (row) => {
+        let sub: { endpoint?: unknown } | null = null;
         try { sub = JSON.parse(row.token); } catch { sub = null; }
         if (!sub || !sub.endpoint) return 'dead';   // unparseable => prune
         const res = await pusher.send(sub, payload);
@@ -882,22 +908,22 @@ export async function deliverPush(env: Env, hashes: any, payload: any) {
 /* Register a device's push token to the caller's identity (one row per token, so
    re-registering the same token just refreshes it). Additive and gated: it fills
    push_tokens, which deliverPush reads only when PUSH_ENABLED is on. */
-export function xmlEscape(s: any) {
+export function xmlEscape(s: unknown) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
 /* RSS 2.0 feed of a page's live comments, so anyone can follow a thread
    with a feed reader and nobody has to hand this site an email address. */
-export async function metaForHash(env: Env, hash: any) {
+export async function metaForHash(env: Env, hash: string) {
   const last = await env.DB.prepare(
     'SELECT id, ip, ua, os, tz, lang FROM comments WHERE author_hash = ?1 ORDER BY id DESC LIMIT 1'
-  ).bind(hash).first();
+  ).bind(hash).first<{ id: number; ip: string | null; ua: string | null; os: string | null; tz: string | null; lang: string | null }>();
   const flags = await env.DB.prepare(
     'SELECT (SELECT 1 FROM trusted WHERE hash = ?1) AS trusted, ' +
     '(SELECT 1 FROM locks WHERE hash = ?1) AS locked, ' +
     '(SELECT 1 FROM shadowbans WHERE hash = ?1) AS shadowbanned'
-  ).bind(hash).first();
+  ).bind(hash).first<{ trusted: number | null; locked: number | null; shadowbanned: number | null }>();
   /* Only the recent window shows, banned keys always. */
   const ipRows = await env.DB.prepare(
     'SELECT ii.ip_key, ii.ip_display, ii.family, ii.source, ' +
@@ -905,9 +931,9 @@ export async function metaForHash(env: Env, hash: any) {
     'FROM identity_ips ii LEFT JOIN ip_bans ib ON ib.ip = ii.ip_key ' +
     'WHERE ii.hash = ?1 AND (ii.last_seen >= ?2 OR ib.ip IS NOT NULL) ' +
     'ORDER BY ii.family, ii.last_seen DESC'
-  ).bind(hash, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all();
-  const identities: any = {};
-  identities[hash] = ipRows.results.map((r: any) => ({
+  ).bind(hash, Math.floor(Date.now() / 1000) - IP_SHOW_DAYS * 86400).all<{ ip_key: string; ip_display: string; family: number; source: string; banned: number }>();
+  const identities: Record<string, Array<{ ip_display: string; ip_key: string; family: number; source: string; banned: number }>> = {};
+  identities[hash] = ipRows.results.map((r) => ({
     ip_display: r.ip_display, ip_key: r.ip_key, family: r.family, source: r.source, banned: r.banned,
   }));
   let ipbanned = 0;
@@ -929,7 +955,7 @@ export async function metaForHash(env: Env, hash: any) {
 }
 
 export const TOPICS_PER_PAGE = 20;
-export async function boardCatPayload(env: Env, page: any, p: any, q: any) {
+export async function boardCatPayload(env: Env, page: string, p: number, q: unknown) {
   /* Optional title narrowing (the merecat forward picker's type-to-narrow):
      up to five typed words, each a case-insensitive substring of the topic
      title, ANDed in any order. The LIKE walk covers only this category's
@@ -938,14 +964,14 @@ export async function boardCatPayload(env: Env, page: any, p: any, q: any) {
   const toks = String(q || '').slice(0, 120).split(/\s+/).filter(Boolean).slice(0, 5);
   /* Shadowbanned authors' topics never list for anyone (shadowExcl). */
   let where = "c.page = ?1 AND c.parent_id IS NULL AND c.status = 'live' AND " + shadowExcl('c');
-  const binds = [page];
+  const binds: string[] = [page];
   for (const t of toks) {
     binds.push('%' + t.replace(/[\\%_]/g, '\\$&') + '%');
     where += ' AND c.title LIKE ?' + binds.length + " ESCAPE '\\'";
   }
   const total = await env.DB.prepare(
     'SELECT COUNT(*) AS n FROM comments c WHERE ' + where
-  ).bind(...binds).first();
+  ).bind(...binds).first<{ n: number }>();
   const rows = await env.DB.prepare(
     'SELECT c.id, c.title, c.author_hash, pr.nick, c.created_at, c.locked, c.sticky, COALESCE(c.readonly, 0) AS readonly, ' +
     'COALESCE(c.replies, 0) AS replies, COALESCE(c.last_at, c.created_at) AS last, ' +
@@ -953,8 +979,8 @@ export async function boardCatPayload(env: Env, page: any, p: any, q: any) {
     'FROM comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash ' +
     'WHERE ' + where + ' ' +
     'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
-  ).bind(...binds, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all<{ n?: number } & Record<string, unknown>>();
-  return { ok: true, topics: (rows.results || []).map((r: any) => withNames(r)), total: (total && total.n) || 0, page: p, per: TOPICS_PER_PAGE };
+  ).bind(...binds, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all<AuthoredRow>();
+  return { ok: true, topics: (rows.results || []).map((r) => withNames(r)), total: (total && total.n) || 0, page: p, per: TOPICS_PER_PAGE };
 }
 
 /* A member's own recent forum posts, newest first — the "recent posts" list on a
@@ -968,7 +994,7 @@ export const SEARCH_PER_PAGE = 20;
    operator (- * : ^ NEAR AND OR NOT parentheses) can be injected, cap at ten — is
    single-sourced in Domain.Fts, which returns a `SafeMatch` whose only exit is
    `unSafeMatch`. The injection guarantee lives in that type, not here. */
-export function buildMatch(q: any) {
+export function buildMatch(q: unknown): string {
   return Fts.unSafeMatch(Fts.buildMatch(String(q ?? '')));
 }
 
@@ -978,7 +1004,14 @@ export function buildMatch(q: any) {
    control characters for the client to highlight, and is cacheable like every
    public read. An unknown category or malformed author is dropped, not errored,
    so a stray filter never blanks the results. */
-export async function topicViewPayload(env: Env, topic: any, pRaw: any, findRaw: any) {
+/* A topic head as the board reads select it. */
+export type TopicRow = {
+  id: number; page: string; title: string | null; author_hash: string;
+  nick?: string | null; signature?: string | null; avatar?: string | null; faith?: string | null;
+  body?: string | null; created_at: number; edited_at?: number | null;
+  locked?: number | null; sticky?: number | null;
+} & Record<string, unknown>;
+export async function topicViewPayload(env: Env, topic: TopicRow, pRaw: unknown, findRaw: unknown) {
   const id = topic.id;
   /* Twenty replies a page. A permalink arrives with find=<reply id> and
      one indexed count places it on the right page. */
@@ -994,14 +1027,14 @@ export async function topicViewPayload(env: Env, topic: any, pRaw: any, findRaw:
     "SELECT c.id, c.author_hash, pr.nick, pr.signature, pr.avatar, pr.faith, c.body, c.created_at, c.edited_at, c.media_key, c.media_expired FROM comments c " +
     "LEFT JOIN profiles pr ON pr.hash = c.author_hash " +
     "WHERE c.parent_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id LIMIT ?2 OFFSET ?3"
-  ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all();
+  ).bind(id, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all<AuthoredRow>();
   /* Each post carries its author's total forum-post count, for the rank the
      client shows under the name. One grouped query for every author on the page. */
-  const counts = await postCountsFor(env, [topic.author_hash].concat((replies.results || []).map((r: any) => r.author_hash)));
+  const counts = await postCountsFor(env, [topic.author_hash, ...(replies.results || []).map((r) => r.author_hash)]);
   /* The reactions' tallies ride the public payload (a reaction is public); the
      viewer's OWN ride the keyed /reacts read, since this payload is cached. */
   const head = withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0);
-  const posts = (replies.results || []).map((r: any) => withNames(r, counts[r.author_hash] || 0));
+  const posts = (replies.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0));
   await stampReactions(env, 'post', [head].concat(posts), null);
   return {
     ok: true,
@@ -1026,26 +1059,26 @@ export const MAX_SIG = Profile.limits.sig;
 /* Public read of a profile: the custom fields plus the assigned pseudonym,
    never any private fingerprint or trust/ban state. Missing profile still
    answers, with null fields, so any hash resolves to at least its name. */
-export function cleanField(raw: any, max: any) {
+export function cleanField(raw: unknown, max: number): { error: boolean; value: string | null } {
   const v = String(raw || '').replace(/\r\n?/g, '\n').trim();
-  if (v.length > max) return { error: true };
-  if (CONTROL_RE.test(v)) return { error: true };
-  return { value: v || null };
+  if (v.length > max) return { error: true, value: null };
+  if (CONTROL_RE.test(v)) return { error: true, value: null };
+  return { error: false, value: v || null };
 }
 
 /* Parse the stored offsite-links JSON back to an object for the client. */
-export function safeParseLinks(s: any) {
-  try { const o = JSON.parse(s); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : null; } catch { return null; }
+export function safeParseLinks(s: unknown): Record<string, unknown> | null {
+  try { const o: unknown = JSON.parse(String(s)); return (o && typeof o === 'object' && !Array.isArray(o)) ? bodyOf(o) : null; } catch { return null; }
 }
 
 /* Sanitize a client-supplied links object to a JSON string of ONLY safe,
    normalized https URLs — Domain.Links drops anything that is not an http(s) URL
    or a normalizable handle. Returns the JSON string, or null when nothing valid
    remains (which clears the column). */
-export function normalizeLinks(raw: any) {
-  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-  const out: any = {};
-  for (const plat of Links.platforms) {
+export function normalizeLinks(raw: unknown) {
+  const src = bodyOf(raw);
+  const out: Record<string, string> = {};
+  for (const plat of Links.platforms as string[]) {
     const v = src[plat];
     if (v == null || String(v).trim() === '') continue;
     const n = Links.normalize(plat)(String(v));
@@ -1060,20 +1093,20 @@ export function normalizeLinks(raw: any) {
    state); an unscreenable blob is allowed, being low-risk and admin-clearable. */
 export const DM_PER_PAGE = 20;
 
-export function dmPair(h1: any, h2: any) {
+export function dmPair(h1: string, h2: string): [string, string] {
   return h1 < h2 ? [h1, h2] : [h2, h1];
 }
 
 /* The one-thread-per-pair key (migration 0016): the canonical pair joined by
    a bar, unique across dm_threads. A group thread has none. */
-export function dmPairKey(h1: any, h2: any) {
+export function dmPairKey(h1: string, h2: string) {
   const [a, b] = dmPair(h1, h2);
   return a + '|' + b;
 }
 
 /* The other side of a pair key, from my seat ('' when I am not in it, or it
    is a group's). */
-export function dmPairOther(pairKey: any, me: any) {
+export function dmPairOther(pairKey: string | null, me: string) {
   const k = String(pairKey || '');
   if (!k) return '';
   const [a, b] = k.split('|');
@@ -1092,7 +1125,7 @@ export const DM_VIS = "(COALESCE(m.held, 0) = 0 OR m.sender_hash = ?1) AND (t.ki
    message carries expires_at NULL and so is always live. `now` is a server
    integer interpolated straight into the SQL (never a bind param), so this can be
    appended to any DM query without shifting the numbered binds. */
-export function dmLive(now: any) { return '(m.expires_at IS NULL OR m.expires_at > ' + Math.floor(Number(now) || 0) + ')'; }
+export function dmLive(now: number) { return '(m.expires_at IS NULL OR m.expires_at > ' + Math.floor(Number(now) || 0) + ')'; }
 
 /* Unread, per viewer, COUNTED: unheld, unexpired, uncleared words from someone
    else, newer than my read stamp and no older than my joining. The one
@@ -1101,7 +1134,7 @@ export function dmLive(now: any) { return '(m.expires_at IS NULL OR m.expires_at
    they can never disagree. Held, cleared, pre-joining and expired words never
    count, nor (in a group) a sender I blocked, and so never trip my badge. `t`
    must be the thread and `mb` MY member row (DM_MINE) in scope; ?1 the viewer. */
-export function dmUnreadCount(now: any) {
+export function dmUnreadCount(now: number) {
   return '(SELECT COUNT(*) FROM dms m WHERE m.thread_id = t.id AND COALESCE(m.held, 0) = 0 ' +
     'AND m.sender_hash != ?1 ' +
     'AND (t.kind = 0 OR NOT EXISTS (SELECT 1 FROM dm_blocks bk WHERE bk.owner_hash = ?1 AND bk.blocked_hash = m.sender_hash)) ' +
@@ -1126,22 +1159,28 @@ export const DM_MINE = 'JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = 
 
 const DM_THREAD_COLS = 't.id, t.kind, t.pair_key, t.name, t.created_at, t.created_by, t.last_at, t.last_sender, t.msgs, t.ttl, ' +
   'mb.joined_at, mb.left_at, mb.read_at, mb.cleared_at';
+/* A conversation from the viewer's seat (DM_THREAD_COLS; migration 0016). */
+export type DmThreadRow = {
+  id: number; kind: number; pair_key: string | null; name: string | null; created_at: number; created_by: string | null;
+  last_at: number; last_sender: string; msgs: number; ttl: number | null;
+  joined_at: number; left_at: number | null; read_at: number | null; cleared_at: number | null;
+};
 
 /* The conversation a request names, from this member's seat: by `thread_id`
    (a current member's thread, else null — a stranger's ask is
    indistinguishable from nonexistence) or by the pair behind `with` (a room
    that may not exist yet: `thread` null with `other` set, so the caller may
    make it). The row carries the viewer's own member stamps. */
-export async function dmThreadFor(env: Env, me: any, data: any): Promise<{ thread: any; other: string } | null> {
+export async function dmThreadFor(env: Env, me: string, data: Body | null): Promise<{ thread: DmThreadRow | null; other: string } | null> {
   const id = Math.floor(Number(data && data.thread_id) || 0);
   if (id > 0) {
-    const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.id = ?2').bind(me, id).first();
+    const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.id = ?2').bind(me, id).first<DmThreadRow>();
     if (!t) return null;
     return { thread: t, other: Number(t.kind) === 0 ? dmPairOther(t.pair_key, me) : '' };
   }
   const other = String((data && data.with) || '');
   if (!/^[0-9a-f]{64}$/.test(other) || other === me) return null;
-  const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.pair_key = ?2').bind(me, dmPairKey(me, other)).first();
+  const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.pair_key = ?2').bind(me, dmPairKey(me, other)).first<DmThreadRow>();
   return { thread: t || null, other };
 }
 
@@ -1152,7 +1191,7 @@ export async function dmThreadFor(env: Env, me: any, data: any): Promise<{ threa
    read by this code — so a rolled-back worker would still find the room;
    the target-less ON CONFLICT covers the pair index and the legacy one alike,
    and heals a room the old worker made without its pair_key. */
-export async function ensurePairThread(env: Env, h1: any, h2: any, now: any, opts?: { bump?: boolean; sender?: any }) {
+export async function ensurePairThread(env: Env, h1: string, h2: string, now: number, opts?: { bump?: boolean; sender?: string }) {
   const [a, b] = dmPair(h1, h2);
   const sender = (opts && opts.sender) || h1;
   const row = await env.DB.prepare(
@@ -1167,54 +1206,60 @@ export async function ensurePairThread(env: Env, h1: any, h2: any, now: any, opt
 }
 
 /* The current members of a thread with their published keys, joined-first. */
-export async function dmCurrentMembers(env: Env, threadId: any): Promise<{ hash: string; pubkey: string | null }[]> {
+export async function dmCurrentMembers(env: Env, threadId: number): Promise<{ hash: string; pubkey: string | null }[]> {
   const r = await env.DB.prepare(
     'SELECT mb.hash, pk.pubkey FROM dm_members mb LEFT JOIN dm_pubkeys pk ON pk.hash = mb.hash ' +
     'WHERE mb.thread_id = ?1 AND mb.left_at IS NULL ORDER BY mb.joined_at, mb.hash'
-  ).bind(threadId).all();
-  return (r.results || []).map((m: any) => ({ hash: String(m.hash), pubkey: m.pubkey || null }));
+  ).bind(threadId).all<{ hash: string; pubkey: string | null }>();
+  return (r.results || []).map((m) => ({ hash: String(m.hash), pubkey: m.pubkey || null }));
 }
 
 /* These members' published keys (an unmade pair's room: the two of them). */
-export async function dmPubkeysOf(env: Env, hashes: any): Promise<{ hash: string; pubkey: string | null }[]> {
-  const list = (Array.isArray(hashes) ? hashes : []).filter((h: any) => /^[0-9a-f]{64}$/.test(String(h)));
+export async function dmPubkeysOf(env: Env, hashes: readonly string[]): Promise<{ hash: string; pubkey: string | null }[]> {
+  const list = hashes.filter((h) => /^[0-9a-f]{64}$/.test(h));
   if (!list.length) return [];
-  const r = await env.DB.prepare('SELECT hash, pubkey FROM dm_pubkeys WHERE hash IN (' + inList(list.length) + ')').bind(...list).all();
+  const r = await env.DB.prepare('SELECT hash, pubkey FROM dm_pubkeys WHERE hash IN (' + inList(list.length) + ')').bind(...list).all<{ hash: string; pubkey: string }>();
   const by: Record<string, string> = {};
-  for (const row of (r.results || []) as any[]) by[row.hash] = row.pubkey;
-  return list.map((h: string) => ({ hash: h, pubkey: by[h] || null }));
+  for (const row of (r.results || [])) by[row.hash] = row.pubkey;
+  return list.map((h) => ({ hash: h, pubkey: by[h] || null }));
 }
 
 /* Who a word from `me` reaches: every current member but me, minus any who
    block me — their world stays untouched (in a group the block is theirs
    alone; a pair's held send never reaches here). */
-export async function dmRecipients(env: Env, threadId: any, me: any): Promise<string[]> {
+export async function dmRecipients(env: Env, threadId: number, me: string): Promise<string[]> {
   const r = await env.DB.prepare(
     'SELECT mb.hash FROM dm_members mb WHERE mb.thread_id = ?1 AND mb.left_at IS NULL AND mb.hash != ?2 ' +
     'AND NOT EXISTS (SELECT 1 FROM dm_blocks b WHERE b.owner_hash = mb.hash AND b.blocked_hash = ?2)'
-  ).bind(threadId, me).all();
-  return (r.results || []).map((m: any) => String(m.hash));
+  ).bind(threadId, me).all<{ hash: string }>();
+  return (r.results || []).map((m) => String(m.hash));
 }
 
 /* Every member row of a thread, the departed included (their names and keys
    still open the words they sent), with the profile fields the thread shows:
    nick, avatar, the hub's last_seen_at, the receipts mode (a stamp is served
    only under it), and the published key. */
-export async function dmMembersPayload(env: Env, threadId: any) {
+/* A member row as a thread shows it (dmMembersPayload, dmPairRoomRows). */
+export type DmMemberRow = {
+  hash: string; joined_at: number | null; left_at: number | null; read_at: number | null; added_by: string | null;
+  nick: string | null; avatar: string | null; last_seen_at: number | null; receipts_mode: string | null; pubkey: string | null;
+};
+export async function dmMembersPayload(env: Env, threadId: number): Promise<DmMemberRow[]> {
   const r = await env.DB.prepare(
     'SELECT mb.hash, mb.joined_at, mb.left_at, mb.read_at, mb.added_by, pr.nick, pr.avatar, pr.last_seen_at, pr.receipts_mode, pk.pubkey ' +
     'FROM dm_members mb LEFT JOIN profiles pr ON pr.hash = mb.hash LEFT JOIN dm_pubkeys pk ON pk.hash = mb.hash ' +
     'WHERE mb.thread_id = ?1 ORDER BY mb.joined_at, mb.hash'
-  ).bind(threadId).all();
-  return (r.results || []) as any[];
+  ).bind(threadId).all<DmMemberRow>();
+  return r.results || [];
 }
 
 /* An unmade pair's room: its two would-be members in the same shape, no stamps. */
-export async function dmPairRoomRows(env: Env, me: any, other: any) {
-  const out: any[] = [];
+export async function dmPairRoomRows(env: Env, me: string, other: string): Promise<DmMemberRow[]> {
+  const out: DmMemberRow[] = [];
   for (const h of [me, other]) {
-    const pr = await env.DB.prepare('SELECT nick, avatar, last_seen_at, receipts_mode FROM profiles WHERE hash = ?1').bind(h).first();
-    const pk = await env.DB.prepare('SELECT pubkey FROM dm_pubkeys WHERE hash = ?1').bind(h).first();
+    const pr = await env.DB.prepare('SELECT nick, avatar, last_seen_at, receipts_mode FROM profiles WHERE hash = ?1').bind(h)
+      .first<{ nick: string | null; avatar: string | null; last_seen_at: number | null; receipts_mode: string | null }>();
+    const pk = await env.DB.prepare('SELECT pubkey FROM dm_pubkeys WHERE hash = ?1').bind(h).first<{ pubkey: string }>();
     out.push({ hash: h, joined_at: null, left_at: null, read_at: null, added_by: null, nick: pr && pr.nick || null, avatar: pr && pr.avatar || null,
       last_seen_at: (pr && pr.last_seen_at) || null, receipts_mode: (pr && pr.receipts_mode) || null, pubkey: pk ? pk.pubkey : null });
   }
@@ -1224,7 +1269,7 @@ export async function dmPairRoomRows(env: Env, me: any, other: any) {
 /* May `me` read this object? Iff a live, visible, unredacted message naming
    it stands in a thread where I am a current member — the media GET's rule,
    and the rule a forward must pass to name the object again. */
-export async function dmMediaReadable(env: Env, me: any, key: any, now: any) {
+export async function dmMediaReadable(env: Env, me: string, key: string, now: number) {
   const row = await env.DB.prepare(
     'SELECT 1 AS ok FROM dm_media_refs r JOIN dms m ON m.id = r.msg_id JOIN dm_threads t ON t.id = m.thread_id ' + DM_MINE + ' ' +
     'WHERE r.key = ?2 AND COALESCE(m.redacted, 0) = 0 AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ' LIMIT 1'
@@ -1339,11 +1384,13 @@ export const APP_SETTING_DEFAULTS = {
   alert_discord_webhook: '',
   alert_discord_on: '1',
 };
-export const appSettingsCache: { at: number; s: any } = { at: 0, s: null };
-export async function getAppSettings(env: Env) {
+/* The settings as the table holds them: every value a string. */
+export type Settings = Record<string, string>;
+export const appSettingsCache: { at: number; s: Settings | null } = { at: 0, s: null };
+export async function getAppSettings(env: Env): Promise<Settings> {
   const now = Date.now();
   if (appSettingsCache.s && now - appSettingsCache.at < 300000) return appSettingsCache.s;
-  const s: any = Object.assign({}, APP_SETTING_DEFAULTS);
+  const s: Settings = Object.assign({}, APP_SETTING_DEFAULTS);
   try {
     const rows = await env.DB.prepare('SELECT k, v FROM app_settings').all<{ k: string; v: string }>();
     for (const r of (rows.results || [])) s[r.k] = r.v;
@@ -1351,13 +1398,13 @@ export async function getAppSettings(env: Env) {
   appSettingsCache.at = now; appSettingsCache.s = s;
   return s;
 }
-export function dmDefaultTtl(s: any) { return Number(s.dm_default_ttl) || Dm.defaultTtl; }
-export function dmBackstopSeconds(s: any) { return (Number(s.dm_backstop_days) || 30) * 86400; }
+export function dmDefaultTtl(s: Settings): number { return Number(s.dm_default_ttl) || Dm.defaultTtl; }
+export function dmBackstopSeconds(s: Settings) { return (Number(s.dm_backstop_days) || 30) * 86400; }
 
 /* ---- Per-kind media limits and context masks (single-sourced in Domain.Media).
    This is the worker-side membrane over the kernel: Maybe is erased here and
    nowhere else, mirroring app/core.ts on the client side. ---- */
-const psOrNull = (m: any) => MaybeM.maybe(null)((x: any) => x)(m);
+const psOrNull = <T>(m: unknown): T | null => MaybeM.maybe(null)((x: T) => x)(m);
 
 /* One DM reaction, validated by the kernel (Domain.Dm.normalizeReaction):
    exactly one emoji, or one of our own custom-pack :tokens: lower-cased; null
@@ -1369,33 +1416,38 @@ const psOrNull = (m: any) => MaybeM.maybe(null)((x: any) => x)(m);
    side (handleDmReact) and the public ledger (handleReact) — never an inline
    regex. `dmReaction` is the same function under the name the DM handler and
    its tests have carried since 2026-09-10. */
-export function reactionOf(raw: any): string | null {
-  return psOrNull(Reaction.normalizeReaction(String(raw == null ? '' : raw)));
+export function reactionOf(raw: unknown): string | null {
+  return psOrNull<string>(Reaction.normalizeReaction(String(raw == null ? '' : raw)));
 }
 export const dmReaction = reactionOf;
 
 /* A group's name as stored (Domain.Dm.normalizeGroupName): trimmed, folded,
    cut to the cap, control characters dropped; null when nothing is left. */
-export function dmGroupName(raw: any): string | null {
-  return psOrNull(Dm.normalizeGroupName(String(raw == null ? '' : raw)));
+export function dmGroupName(raw: unknown): string | null {
+  return psOrNull<string>(Dm.normalizeGroupName(String(raw == null ? '' : raw)));
 }
 
 /* Who may be added by `me` (2026-09-13): a member with a published key (the
    envelope needs it) who does not block me — the two refusals wear ONE
    generic word at the handler, so a block is indistinguishable from "no key
    yet" (the standing rule). The bot is never a member. */
-export async function dmEligible(env: Env, me: any, hashes: any): Promise<{ ok: string[]; missing: string[] }> {
-  const want = Array.from(new Set((Array.isArray(hashes) ? hashes : []).map((h: any) => String(h || '')).filter((h: string) => /^[0-9a-f]{64}$/.test(h) && h !== me && h !== MERECAT_BOT.hash)));
+/* A list in a body: the field when it is an array, else an empty one. */
+export function listOf(v: unknown): unknown[] {
+  return Array.isArray(v) ? v : [];
+}
+
+export async function dmEligible(env: Env, me: string, hashes: unknown): Promise<{ ok: string[]; missing: string[] }> {
+  const want = Array.from(new Set(listOf(hashes).map((h) => String(h || '')).filter((h) => /^[0-9a-f]{64}$/.test(h) && h !== me && h !== MERECAT_BOT.hash)));
   if (!want.length) return { ok: [], missing: [] };
   const r = await env.DB.prepare(
     'SELECT pk.hash FROM dm_pubkeys pk WHERE pk.hash IN (' + inList(want.length, 2) + ') ' +
     'AND NOT EXISTS (SELECT 1 FROM dm_blocks b WHERE b.owner_hash = pk.hash AND b.blocked_hash = ?1)'
-  ).bind(me, ...want).all();
-  const ok = new Set(((r.results || []) as any[]).map((x: any) => String(x.hash)));
+  ).bind(me, ...want).all<{ hash: string }>();
+  const ok = new Set((r.results || []).map((x) => String(x.hash)));
   return { ok: want.filter((h) => ok.has(h)), missing: want.filter((h) => !ok.has(h)) };
 }
 export const REACT_TARGETS: string[] = Reaction.targets;
-export const isReactTarget = (t: any): boolean => Reaction.isTarget(String(t == null ? '' : t));
+export const isReactTarget = (t: unknown): boolean => Reaction.isTarget(String(t == null ? '' : t));
 /* The notification kinds by family, from Domain.Notif.kinds: the kinds whose
    topic_id/comment_id name a board thread and post (joinable to `comments`),
    and the wall's kinds (joinable to `wall_posts`, hidden with the social
@@ -1409,16 +1461,20 @@ const sqlList = (xs: string[]) => "('" + xs.join("','") + "')";
    with the most-given first (ties by first given). Public — a reaction is
    public — so the rows are the caller's to serve; only rows for ids the
    caller may show are ever asked for. */
-export async function reactionsFor(env: Env, target: any, ids: any): Promise<Record<string, Array<{ e: string; n: number }>>> {
+/* the positive whole ids in a list, once each */
+function idsOf(ids: readonly unknown[]): number[] {
+  return [...new Set(ids.map((x) => Math.floor(Number(x) || 0)).filter((x) => x > 0))];
+}
+export async function reactionsFor(env: Env, target: string, ids: readonly unknown[]): Promise<Record<string, Array<{ e: string; n: number }>>> {
   const out: Record<string, Array<{ e: string; n: number }>> = {};
-  const uniq = [...new Set((ids || []).map((x: any) => Math.floor(Number(x) || 0)).filter((x: any) => x > 0))] as number[];
+  const uniq = idsOf(ids);
   if (!uniq.length || !isReactTarget(target)) return out;
   for (let i = 0; i < uniq.length; i += 80) {
     const chunk = uniq.slice(i, i + 80);
     const rows = await env.DB.prepare(
       'SELECT target_id, emoji, COUNT(*) AS n, MIN(created_at) AS first FROM reactions WHERE target = ?1 AND target_id IN (' + inList(chunk.length, 2) + ') ' +
       'GROUP BY target_id, emoji ORDER BY target_id, n DESC, first'
-    ).bind(target, ...chunk).all();
+    ).bind(target, ...chunk).all<{ target_id: number; emoji: string; n: number }>();
     for (const r of (rows.results || [])) {
       (out[String(r.target_id)] = out[String(r.target_id)] || []).push({ e: String(r.emoji), n: Number(r.n) || 0 });
     }
@@ -1427,15 +1483,15 @@ export async function reactionsFor(env: Env, target: any, ids: any): Promise<Rec
 }
 /* What the viewer put on each of a batch of targets: { id: emoji } for the
    ones they reacted to. One indexed lookup (reactions_author_idx). */
-export async function myReactionsFor(env: Env, me: any, target: any, ids: any): Promise<Record<string, string>> {
+export async function myReactionsFor(env: Env, me: string | null, target: string, ids: readonly unknown[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
-  const uniq = [...new Set((ids || []).map((x: any) => Math.floor(Number(x) || 0)).filter((x: any) => x > 0))] as number[];
+  const uniq = idsOf(ids);
   if (!me || !uniq.length || !isReactTarget(target)) return out;
   for (let i = 0; i < uniq.length; i += 80) {
     const chunk = uniq.slice(i, i + 80);
     const rows = await env.DB.prepare(
       'SELECT target_id, emoji FROM reactions WHERE author_hash = ?1 AND target = ?2 AND target_id IN (' + inList(chunk.length, 3) + ')'
-    ).bind(me, target, ...chunk).all();
+    ).bind(me, target, ...chunk).all<{ target_id: number; emoji: string }>();
     for (const r of (rows.results || [])) out[String(r.target_id)] = String(r.emoji);
   }
   return out;
@@ -1445,49 +1501,51 @@ export async function myReactionsFor(env: Env, me: any, target: any, ids: any): 
    row whose `id` is a target of `target`. `likes` (the total) and `liked`
    (react_me ? 1 : 0) ride along for one deploy of clients cached before the
    picker. */
-export async function stampReactions(env: Env, target: any, rows: any[], me: any) {
-  const ids = (rows || []).map((r: any) => r && r.id);
+export async function stampReactions<R extends Record<string, unknown>>(env: Env, target: string, rows: R[], me: string | null): Promise<R[]> {
+  const ids = rows.map((r) => r && r.id);
   const tally = await reactionsFor(env, target, ids);
   const mine: Record<string, string> = me ? await myReactionsFor(env, me, target, ids) : {};
-  for (const r of (rows || [])) {
-    if (!r) continue;
+  for (const row of rows) {
+    if (!row) continue;
+    const r: Record<string, unknown> = row;
     const cells = tally[String(r.id)] || [];
     r.reacts = cells;
     r.react_me = mine[String(r.id)] || '';
-    r.likes = cells.reduce((a: number, c: any) => a + c.n, 0);
+    r.likes = cells.reduce((a, c) => a + c.n, 0);
     r.liked = r.react_me ? 1 : 0;
   }
   return rows;
 }
 /* The kind ('image'|'video'|'audio') encoded in a wall/<i|v|a>/<64hex> object
    key, or null for anything malformed. Strictness lives in the kernel. */
-export function mediaKindOfKey(key: any) { return psOrNull(Media.kindOfKey(String(key || ''))); }
+export function mediaKindOfKey(key: unknown) { return psOrNull<string>(Media.kindOfKey(String(key || ''))); }
 /* Effective per-file cap for one kind: the per-SECTION override when ctx is
    given and its key is stored, else the admin's legacy global per-kind setting,
    else the kernel default — always bounded by the media_max_bytes ceiling
    (safe-by-default: raising a kind past the ceiling needs both knobs, and the
    settings page says so). Called WITHOUT ctx it behaves exactly as before the
    per-section split — that is what keeps the legacy /config block honest. */
-export function mediaKindMax(s: any, kind: string, ctx?: string) {
+export function mediaKindMax(s: Settings, kind: string, ctx?: string) {
   let stored = 0;
   if (ctx) {
-    const sk = psOrNull(Media.sectionKindBytesKey(ctx)(kind));
+    const sk = psOrNull<string>(Media.sectionKindBytesKey(ctx)(kind));
     if (sk && s[sk] != null) stored = Math.floor(Number(s[sk])) || 0;
   }
   if (!(stored > 0)) stored = Math.floor(Number(s['media_' + kind + '_max_bytes'])) || 0;
-  const fallback = Number((Media.defaults as any)[kind + 'MaxBytes']) || (10 * 1024 * 1024);
+  const defaults: Record<string, unknown> = Media.defaults;
+  const fallback = Number(defaults[kind + 'MaxBytes']) || (10 * 1024 * 1024);
   const ceiling = Number(s.media_max_bytes) || (25 * 1024 * 1024);
   return Math.min(stored > 0 ? stored : fallback, ceiling);
 }
 /* The kinds an upload context (dm | wall | board) accepts. Empty = off. */
-export function mediaKindsFor(s: any, ctx: string) {
+export function mediaKindsFor(s: Settings, ctx: string): string[] {
   const raw = s['media_kinds_' + ctx];
   return Media.parseKinds(String(raw == null ? '' : raw));
 }
 /* The largest per-file cap across a context's allowed kinds — the pre-parse
    Content-Length gate (the kind is unknown before the form parses) and the DM
    ciphertext cap (E2E blinds the server to the kind, so the max is the wall). */
-export function mediaMaxAcross(s: any, kinds: string[], ctx?: string) {
+export function mediaMaxAcross(s: Settings, kinds: string[], ctx?: string) {
   let m = 0;
   for (const k of kinds) m = Math.max(m, mediaKindMax(s, k, ctx));
   return m;
@@ -1495,20 +1553,20 @@ export function mediaMaxAcross(s: any, kinds: string[], ctx?: string) {
 /* Whether a section's image uploads pass the AI screen. The kernel returns no
    key for 'dm' — E2E ciphertext is structurally unscannable — so this is false
    there by construction, not by configuration. */
-export function mediaScanEnabled(s: any, ctx: string) {
-  const k = psOrNull(Media.sectionScanKey(String(ctx || '')));
+export function mediaScanEnabled(s: Settings, ctx: string) {
+  const k = psOrNull<string>(Media.sectionScanKey(String(ctx || '')));
   return k ? s[k] !== '0' : false;
 }
 /* The per-section 🎙 voice-recorder feature flag (served in /config; enforced
    client-side — the server cannot tell a voice note from any other audio). */
-export function mediaVoiceEnabled(s: any, ctx: string) {
-  const k = psOrNull(Media.sectionVoiceKey(String(ctx || '')));
+export function mediaVoiceEnabled(s: Settings, ctx: string) {
+  const k = psOrNull<string>(Media.sectionVoiceKey(String(ctx || '')));
   return k ? s[k] !== '0' : false;
 }
 /* The social layer's on/off state, read through the kernel so the '1'/'0'
    polarity lives in exactly one place (Domain.Wall). Every /wall* gate and the
    /config block below go through this — never a bare string compare. */
-export function socialEnabled(s: any) { return Wall.enabledFrom(String(s.social_enabled)); }
+export function socialEnabled(s: Settings): boolean { return Wall.enabledFrom(String(s.social_enabled)); }
 
 /* The refusal a disabled feed/wall surface gives: indistinguishable from a path
    the platform never had. */
@@ -1523,7 +1581,7 @@ export const notifHideWall = (alias: string) => " AND " + alias + "kind NOT IN (
 export async function notifHideWallSql(env: Env, alias: string) {
   return (await socialOff(env)) ? notifHideWall(alias) : '';
 }
-export async function notifUnreadCount(env: Env, me: any) {
+export async function notifUnreadCount(env: Env, me: string) {
   const row = await env.DB.prepare(
     'SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ?1 AND read_at IS NULL'
     + await notifHideWallSql(env, '')
@@ -1534,28 +1592,28 @@ export async function notifUnreadCount(env: Env, me: any) {
    one (app_settings `turnstile_skip_established`). See Domain.Turnstile for why
    this exists at all: in the installed iOS app, mounting the widget took the
    document down, and a challenge that cannot run is not a gate but an outage. */
-export function turnstileSkipEstablished(s: any) { return Turnstile.skipFrom(String(s.turnstile_skip_established)); }
+export function turnstileSkipEstablished(s: Settings): boolean { return Turnstile.skipFrom(String(s.turnstile_skip_established)); }
 /* Comments sections (Domain.Comments). A page's section is open only when its
    path is in the stored CSV; the journal's only on a literal '1' (the kernel
    holds the polarity — see its module note). The worker decides every read
    and write; /config carries the client's courtesy copy. */
-export function commentsPagesOn(s: any): string[] { return Comments.parseEnabledPages(String(s.comments_pages == null ? '' : s.comments_pages)); }
-export function commentsPageOn(s: any, page: any) { return Comments.pageEnabled(String(s.comments_pages == null ? '' : s.comments_pages))(String(page || '')); }
-export function commentsJournalOn(s: any) { return Comments.journalEnabledFrom(String(s.comments_journal == null ? '' : s.comments_journal)); }
+export function commentsPagesOn(s: Settings): string[] { return Comments.parseEnabledPages(String(s.comments_pages == null ? '' : s.comments_pages)); }
+export function commentsPageOn(s: Settings, page: unknown): boolean { return Comments.pageEnabled(String(s.comments_pages == null ? '' : s.comments_pages))(String(page || '')); }
+export function commentsJournalOn(s: Settings): boolean { return Comments.journalEnabledFrom(String(s.comments_journal == null ? '' : s.comments_journal)); }
 /* A journal article's comments page key ('journal:<article id>'), vetted by
    the kernel — the canonical key or null, the boardKey idiom. Whether that
    article is LIVE in the current journal topic is a separate question
    (journalArticleLive in index.ts), asked at every read and write. */
-export function journalKeyId(raw: any): number | null { return psOrNull(Comments.journalKeyId(String(raw || ''))); }
-export function journalKey(raw: any): string | null {
+export function journalKeyId(raw: unknown): number | null { return psOrNull<number>(Comments.journalKeyId(String(raw || ''))); }
+export function journalKey(raw: unknown): string | null {
   const n = journalKeyId(raw);
   return n == null ? null : Comments.journalKey(n);
 }
 /* The voice-note length limit for a section: per-section override, else the
    legacy global, else the kernel default. Client-advisory, like the global. */
-export function mediaAudioSeconds(s: any, ctx?: string) {
+export function mediaAudioSeconds(s: Settings, ctx?: string): number {
   if (ctx) {
-    const k = psOrNull(Media.sectionAudioSecondsKey(ctx));
+    const k = psOrNull<string>(Media.sectionAudioSecondsKey(ctx));
     const sec = k && s[k] != null ? Math.floor(Number(s[k])) || 0 : 0;
     if (sec > 0) return sec;
   }
@@ -1564,8 +1622,8 @@ export function mediaAudioSeconds(s: any, ctx?: string) {
 /* A section's media age retention in days. wall/board: 0 = keep forever (the
    default). dm: the knob replaces the old hardcoded Dm.mediaMaxSeconds 30-day
    hard cap and is clamped 1..90 — DM media can never be "forever". */
-export function mediaRetentionDays(s: any, ctx: string) {
-  const k = psOrNull(Media.sectionRetentionKey(String(ctx || '')));
+export function mediaRetentionDays(s: Settings, ctx: string) {
+  const k = psOrNull<string>(Media.sectionRetentionKey(String(ctx || '')));
   if (!k) return 0;
   const n = Math.floor(Number(s[k])) || 0;
   if (ctx === 'dm') return Number(Media.clampDmRetentionDays(n || (Dm.mediaMaxSeconds / 86400)));
@@ -1576,7 +1634,7 @@ export function mediaRetentionDays(s: any, ctx: string) {
    least once (a saved profile, a comment, or a wall post). Uploads themselves
    are not Turnstile-gated (the linking send/post is), so without this a
    drive-by random key could store megabytes in R2 unchallenged. */
-export async function isEstablished(env: Env, hash: any) {
+export async function isEstablished(env: Env, hash: string | null | undefined) {
   if (!hash) return false;
   const p = await env.DB.prepare('SELECT hash FROM profiles WHERE hash = ?1').bind(hash).first();
   if (p) return true;
@@ -1601,19 +1659,19 @@ export async function registerMember(env: Env, hash: string, now = Math.floor(Da
 /* ================= Discord webhook fan-out =================
    Two OPTIONAL webhooks (forum posts, feed posts) live in app_settings as full
    Discord webhook URLs; empty = off. The URL is validated by isDiscordWebhook
-   (pure.js) so a corrupted/hostile setting can never make the worker POST member
+   (pure.ts) so a corrupted/hostile setting can never make the worker POST member
    content to an arbitrary host. Member text rides ONLY in an embed (embeds never
    ping) and allowed_mentions is emptied, so no post body can @everyone or @here
    the channel. Fire-and-forget with a hard timeout: a dead or slow webhook never
    delays or breaks a post. Callers exclude the back room. Answers whether
    Discord accepted the post (the alerts road reports it; the feed hooks
    ignore it, as before). */
-export async function sendDiscord(hookUrl: any, embed: any): Promise<boolean> {
+export async function sendDiscord(hookUrl: unknown, embed: Record<string, unknown>): Promise<boolean> {
   if (!isDiscordWebhook(hookUrl)) return false;
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 5000);
   try {
-    const r = await fetch(hookUrl.trim(), {
+    const r = await fetch(String(hookUrl).trim(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1635,17 +1693,18 @@ export async function sendDiscord(hookUrl: any, embed: any): Promise<boolean> {
    swallowed, so Discord being down or misconfigured never touches the post. */
 export async function notifyDiscordForum(env: Env, p: {
   page: string; commentId: number; topicId: number; isReply: boolean;
-  title: any; authorHash: any; nick: any; body: any; hasMedia?: boolean; createdAt: number;
+  title: string | null; authorHash: string | null; nick: string | null; body: string; hasMedia?: boolean; createdAt: number;
 }) {
   const s = await getAppSettings(env);
   const hook = s.discord_forum_webhook;
   if (!isDiscordWebhook(hook)) return;
   let topicTitle = p.title;
   if (p.isReply || !topicTitle) {
-    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(p.topicId).first();
+    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(p.topicId).first<{ title: string | null }>();
     topicTitle = (t && t.title) || 'a thread';
   }
-  const name = p.nick || displayName(p.authorHash);
+  /* an anonymous post has no hash to name (displayName throws on null) */
+  const name = p.nick || (p.authorHash ? displayName(p.authorHash) : 'Anonymous');
   const link = siteBase(env) + '/community.html?topic=' + p.topicId + '#comment-' + p.commentId;
   const heading = p.isReply ? (name + ' replied in “' + topicTitle + '”')
     : (name + ' started a new topic');
@@ -1668,7 +1727,7 @@ export async function notifyDiscordFeed(env: Env, p: {
   const s = await getAppSettings(env);
   const hook = s.discord_feed_webhook;
   if (!isDiscordWebhook(hook)) return;
-  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first();
+  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first<{ nick: string | null }>();
   const name = (prof && prof.nick) || displayName(p.authorHash);
   const link = siteBase(env) + '/feed.html?post=' + p.postId;
   await sendDiscord(hook, {
@@ -1691,7 +1750,7 @@ export async function notifyDiscordFeedComment(env: Env, p: {
   const s = await getAppSettings(env);
   const hook = s.discord_feed_webhook;
   if (s.discord_feed_comments !== '1' || !isDiscordWebhook(hook)) return;
-  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first();
+  const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first<{ nick: string | null }>();
   const name = (prof && prof.nick) || displayName(p.authorHash);
   const link = siteBase(env) + '/feed.html?post=' + p.postId;
   await sendDiscord(hook, {
@@ -1713,8 +1772,8 @@ export async function notifyDiscordFeedComment(env: Env, p: {
    Fire-and-forget per subscription so one bad webhook never blocks the others or
    the poster's response. */
 export async function deliverDiscordFeedHooks(env: Env, p: {
-  commentId: number; parentId: any; page: string; isReply: boolean;
-  title: any; authorHash: any; nick: any; body: any; hasMedia: boolean; createdAt: number;
+  commentId: number; parentId: number | null; page: string; isReply: boolean;
+  title: string | null; authorHash: string | null; nick: string | null; body: string; hasMedia: boolean; createdAt: number;
 }) {
   const scopes: string[] = [];
   const topicId = p.isReply ? Number(p.parentId) : p.commentId;
@@ -1725,14 +1784,14 @@ export async function deliverDiscordFeedHooks(env: Env, p: {
   const rows = await env.DB.prepare(
     'SELECT id, scope, hook_url FROM discord_hooks WHERE scope IN (' +
     scopes.map((_, i) => '?' + (i + 1)).join(',') + ')'
-  ).bind(...scopes).all();
+  ).bind(...scopes).all<{ id: number; scope: string; hook_url: string }>();
   const hooks = (rows && rows.results) || [];
   if (!hooks.length) return;
   const name = p.nick || (p.authorHash ? displayName(p.authorHash) : 'Anonymous');
   const isBoard = boardKey(p.page);
   let topicTitle = p.title;
   if (isBoard && (p.isReply || !topicTitle)) {
-    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(topicId).first();
+    const t = await env.DB.prepare('SELECT title FROM comments WHERE id = ?1').bind(topicId).first<{ title: string | null }>();
     topicTitle = (t && t.title) || 'a thread';
   }
   const link = viewLink(env, p.page, p.commentId, p.isReply ? p.parentId : null);
@@ -1743,8 +1802,8 @@ export async function deliverDiscordFeedHooks(env: Env, p: {
      category) pointing at the SAME channel post only once. */
   const seen = new Set<string>();
   const jobs = hooks
-    .filter((h: any) => { if (seen.has(h.hook_url)) return false; seen.add(h.hook_url); return true; })
-    .map((h: any) => sendDiscord(h.hook_url, {
+    .filter((h) => { if (seen.has(h.hook_url)) return false; seen.add(h.hook_url); return true; })
+    .map((h) => sendDiscord(h.hook_url, {
       title: (isBoard ? (topicTitle || 'New forum post') : 'New comment').slice(0, 240),
       url: link,
       description: discordSnippet(p.body) || (p.hasMedia ? '(shared an attachment)' : (p.isReply ? '(reply)' : '')),
@@ -1752,7 +1811,7 @@ export async function deliverDiscordFeedHooks(env: Env, p: {
       color: 0x7a1f2b,
       footer: { text: 'Mere Catholicity · ' + scopeLabel(h.scope) },
       timestamp: new Date(p.createdAt * 1000).toISOString(),
-    }).catch((e: any) => console.log(JSON.stringify({ event: 'discord_hook_failed', id: h.id, error: String(e) }))));
+    }).catch((e: unknown) => console.log(JSON.stringify({ event: 'discord_hook_failed', id: h.id, error: String(e) }))));
   await Promise.all(jobs);
 }
 
@@ -1765,12 +1824,12 @@ export async function deliverDiscordFeedHooks(env: Env, p: {
    every other current member's own connections; a bell for each unless the
    caller rings its own (a call's line rides the 'call' bell, never a second
    'dm' one). Returns the message id. */
-export async function sendSystemDmLine(env: Env, threadId: any, actorHash: any, body: any, opts?: { quiet?: boolean }) {
+export async function sendSystemDmLine(env: Env, threadId: number, actorHash: string, body: string, opts?: { quiet?: boolean }) {
   if (!threadId || !actorHash || !body) return 0;
   const now = Math.floor(Date.now() / 1000);
   const msg = await env.DB.prepare(
     'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc, expires_at) VALUES (?1, ?2, ?3, ?4, 0, 2, ?5) RETURNING id'
-  ).bind(threadId, actorHash, body, now, now + dmBackstopSeconds(await getAppSettings(env))).first();
+  ).bind(threadId, actorHash, body, now, now + dmBackstopSeconds(await getAppSettings(env))).first<{ id: number }>();
   await env.DB.prepare(
     'UPDATE dm_threads SET msgs = (SELECT COUNT(*) FROM dms WHERE thread_id = ?1 AND COALESCE(held, 0) = 0), last_at = ?2, last_sender = ?3 WHERE id = ?1'
   ).bind(threadId, now, actorHash).run();
@@ -1793,7 +1852,7 @@ export async function sendSystemDmLine(env: Env, threadId: any, actorHash: any, 
    room is made on it if need be, then the line rides sendSystemDmLine. The
    callers from before the member model (a topic-move notice, the usage
    alerts) keep this signature. Returns whether it delivered. */
-export async function sendSystemDm(env: Env, fromHash: any, toHash: any, body: any, opts?: { quiet?: boolean }) {
+export async function sendSystemDm(env: Env, fromHash: string, toHash: string, body: string, opts?: { quiet?: boolean }) {
   if (!fromHash || !toHash || fromHash === toHash || !body) return false;
   const now = Math.floor(Date.now() / 1000);
   const thread = await ensurePairThread(env, fromHash, toHash, now, { bump: false, sender: fromHash });
@@ -1804,7 +1863,7 @@ export async function sendSystemDm(env: Env, fromHash: any, toHash: any, body: a
 /* Inbox: my threads by newest activity, the other party resolved with their
    nick and avatar, and the total unread count riding along so one call feeds
    both the list and the badge. */
-export async function purgeMediaKeys(env: Env, keys: any) {
+export async function purgeMediaKeys(env: Env, keys: readonly string[]) {
   if (!keys || !keys.length) return;
   if (env.MEDIA) {
     for (let i = 0; i < keys.length; i += 1000) {
@@ -1824,9 +1883,11 @@ export async function purgeMediaKeys(env: Env, keys: any) {
    this with the rows it is removing — the references go, then only the
    objects nothing names any more are purged (R2 and the accounting row).
    Never purgeMediaKeys straight from a message road. */
-export async function releaseMediaRefs(env: Env, rows: any) {
-  const ids = (rows || []).map((r: any) => Number(r && r.id) || 0).filter((n: number) => n > 0);
-  const keys: string[] = Array.from(new Set((rows || []).map((r: any) => r && r.media_key).filter(Boolean).map(String)));
+/* a message row being removed: its id and the object it names */
+export type MediaRef = { id?: unknown; media_key?: unknown } | null;
+export async function releaseMediaRefs(env: Env, rows: readonly MediaRef[]) {
+  const ids = rows.map((r) => Number(r && r.id) || 0).filter((n) => n > 0);
+  const keys: string[] = Array.from(new Set(rows.map((r) => r && r.media_key).filter(Boolean).map(String)));
   if (!ids.length && !keys.length) return;
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
@@ -1838,22 +1899,22 @@ export async function releaseMediaRefs(env: Env, rows: any) {
     try {
       const r = await env.DB.prepare(
         'SELECT md.key FROM dm_media md WHERE md.key IN (' + inList(chunk.length) + ') AND NOT EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key)'
-      ).bind(...chunk).all();
-      for (const row of (r.results || []) as any[]) dead.push(String(row.key));
+      ).bind(...chunk).all<{ key: string }>();
+      for (const row of (r.results || [])) dead.push(String(row.key));
     } catch (e) { /* keep going */ }
   }
   if (dead.length) await purgeMediaKeys(env, dead);
 }
 
 /* The messages naming these objects (through the references). */
-export async function dmRefMessageIds(env: Env, keys: any): Promise<number[]> {
+export async function dmRefMessageIds(env: Env, keys: readonly string[]): Promise<number[]> {
   const ids: number[] = [];
-  const list = (keys || []).filter(Boolean);
+  const list = keys.filter(Boolean);
   for (let i = 0; i < list.length; i += 50) {
     const chunk = list.slice(i, i + 50);
     try {
-      const r = await env.DB.prepare('SELECT msg_id FROM dm_media_refs WHERE key IN (' + inList(chunk.length) + ')').bind(...chunk).all();
-      for (const row of (r.results || []) as any[]) ids.push(Number(row.msg_id));
+      const r = await env.DB.prepare('SELECT msg_id FROM dm_media_refs WHERE key IN (' + inList(chunk.length) + ')').bind(...chunk).all<{ msg_id: number }>();
+      for (const row of (r.results || [])) ids.push(Number(row.msg_id));
     } catch (e) { /* keep going */ }
   }
   return ids;
@@ -1899,8 +1960,8 @@ export async function enforceMediaCap(env: Env) {
     const old = await env.DB.prepare(
       'SELECT md.key, md.size FROM dm_media md WHERE EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key) ORDER BY md.created_at ASC LIMIT 1000'
     ).all<{ key: string; size: number }>();
-    const kill: any[] = [];
-    for (const r of (old.results || []) as any[]) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
+    const kill: Array<{ key: string; size: number }> = [];
+    for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
     if (kill.length) await dmExpireObjects(env, kill.map((r) => String(r.key)));
   }
   try {
@@ -1922,8 +1983,8 @@ export async function sweepExpiredDms(env: Env) {
   try {
     const gone = await env.DB.prepare(
       'SELECT id, media_key FROM dms WHERE expires_at IS NOT NULL AND expires_at < ?1 AND COALESCE(saved, 0) = 0 AND media_key IS NOT NULL LIMIT 5000'
-    ).bind(now).all();
-    const rows = (gone.results || []) as any[];
+    ).bind(now).all<{ id: number; media_key: string | null }>();
+    const rows = gone.results || [];
     /* The references go first, then only the objects nothing names any more
        (a forward elsewhere keeps its object): an object dies with its last
        reference, never with its first message. */
@@ -1948,8 +2009,8 @@ export async function sweepExpiredDms(env: Env) {
     const cap = now - mediaRetentionDays(settings, 'dm') * 86400;
     const capped = await env.DB.prepare(
       'SELECT md.key AS key FROM dm_media md WHERE md.created_at < ?1 AND EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key) LIMIT 5000'
-    ).bind(cap).all();
-    const keys = ((capped.results || []) as any[]).map((r: any) => String(r.key)).filter(Boolean);
+    ).bind(cap).all<{ key: string }>();
+    const keys = (capped.results || []).map((r) => String(r.key)).filter(Boolean);
     if (keys.length) await dmExpireObjects(env, keys);
   } catch (e) { console.log(JSON.stringify({ event: 'sweep_media_cap_failed', error: String(e) })); }
   try {
@@ -1959,8 +2020,8 @@ export async function sweepExpiredDms(env: Env) {
        object whose last message went the way of a purge is caught here too. */
     const orphan = await env.DB.prepare(
       'SELECT key FROM dm_media md WHERE md.created_at < ?1 AND NOT EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key) LIMIT 2000'
-    ).bind(now - 900).all();
-    await purgeMediaKeys(env, (orphan.results || []).map((r: any) => r.key));
+    ).bind(now - 900).all<{ key: string }>();
+    await purgeMediaKeys(env, (orphan.results || []).map((r) => r.key));
   } catch (e) { /* keep going */ }
   try { await sweepDms(env); } catch (e) { /* empty-thread tidy */ }
   try { await enforceMediaCap(env); } catch (e) { /* cap/accounting */ }
@@ -1968,7 +2029,7 @@ export async function sweepExpiredDms(env: Env) {
 
 /* A random opaque R2 object id for a DM media blob. Reveals nothing about who
    uploaded it or to whom, so the bucket cannot be traced to a member. */
-export function randomHex(n: any) {
+export function randomHex(n: number) {
   const b = new Uint8Array(n);
   crypto.getRandomValues(b);
   return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -1995,29 +2056,28 @@ export const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.av
    and the reactions (2026-09-12): every post row is a 'wall' target and every
    comment row a 'wallc' target, each stamped with its tally and the viewer's
    own reaction in two batched reads, the same shape the board's posts carry. */
-export async function wallEnrich(env: Env, rows: any, me: any) {
-  const list = rows || [];
-  const counts = await postCountsFor(env, list.map((r: any) => r.author_hash));
-  const out = list.map((r: any) => withNames(r, counts[r.author_hash] || 0));
-  await stampReactions(env, 'wall', out.filter((r: any) => r.post_id === undefined), me);
-  await stampReactions(env, 'wallc', out.filter((r: any) => r.post_id !== undefined), me);
+export async function wallEnrich(env: Env, rows: readonly AuthoredRow[], me: string | null): Promise<AuthoredRow[]> {
+  const counts = await postCountsFor(env, rows.map((r) => r.author_hash));
+  const out = rows.map((r) => withNames(r, counts[r.author_hash || ''] || 0));
+  await stampReactions(env, 'wall', out.filter((r) => r.post_id === undefined), me);
+  await stampReactions(env, 'wallc', out.filter((r) => r.post_id !== undefined), me);
   return out;
 }
 
 /* The wall's own notifications (kind 'wall', comment_id = the post id, jumps to
    ?post=<id>): a comment tells the post author, and an @mention tells the picked
    member. Reuses the private user:<hash> live push. */
-export async function deliverWallNotifications(env: Env, o: any) {
+export async function deliverWallNotifications(env: Env, o: { authorHash: string; postId: number; postAuthorHash?: string | null; mentions?: unknown }) {
   const now = Math.floor(Date.now() / 1000);
   const NOTIF = 'INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)';
-  const stmts: any[] = [];
-  const live: any[] = [];
-  const pushComment = new Set();   // native-push recipients, split by copy (disjoint via `seen`)
-  const pushMention = new Set();
-  const seen = new Set([o.authorHash, MERECAT_BOT.hash]);
+  const stmts: D1PreparedStatement[] = [];
+  const live: HubEvent[] = [];
+  const pushComment = new Set<string>();   // native-push recipients, split by copy (disjoint via `seen`)
+  const pushMention = new Set<string>();
+  const seen = new Set<string>([o.authorHash, MERECAT_BOT.hash]);
   // topic_id encodes the wall sub-kind for the label: 1 = a comment on your post,
   // 0 = an @mention. comment_id is always the post id (jumps to ?post=<id>).
-  const add = (h: any, commented: any) => {
+  const add = (h: string, commented: boolean) => {
     const flag = commented ? 1 : 0;
     stmts.push(env.DB.prepare(NOTIF).bind(h, 'wall', flag, o.postId, o.authorHash, now));
     live.push({ v: 1, t: 'notification', scopes: ['user:' + h], kind: 'wall', topic_id: flag, comment_id: o.postId, actor_hash: o.authorHash, created_at: now });
@@ -2044,7 +2104,7 @@ export async function deliverWallNotifications(env: Env, o: any) {
 }
 
 /* Shared R2 purge for public post/comment media (mirror of purgeMediaKeys). */
-export async function purgeWallMedia(env: Env, keys: any) {
+export async function purgeWallMedia(env: Env, keys: readonly string[]) {
   if (!keys || !keys.length) return;
   if (env.WALLMEDIA) {
     for (let i = 0; i < keys.length; i += 1000) {
@@ -2063,10 +2123,10 @@ export async function purgeWallMedia(env: Env, keys: any) {
    costs a branch. Shared by the cap valve, the retention sweep, and the
    purge-all endpoints; rows with no known ref_type are skipped (an unlinked
    orphan has no parent to stamp). */
-export async function stampWallMediaExpired(env: Env, rows: any) {
-  const tableFor: any = { post: 'wall_posts', comment: 'wall_comments', board: 'comments' };
-  const byTable: any = { wall_posts: [], wall_comments: [], comments: [] };
-  for (const r of (rows || [])) { const t = tableFor[r.ref_type]; if (t) byTable[t].push(r.ref_id); }
+export async function stampWallMediaExpired(env: Env, rows: ReadonlyArray<{ ref_type: string | null; ref_id: number | null }>) {
+  const tableFor: Record<string, string> = { post: 'wall_posts', comment: 'wall_comments', board: 'comments' };
+  const byTable: Record<string, Array<number | null>> = { wall_posts: [], wall_comments: [], comments: [] };
+  for (const r of rows) { const t = tableFor[String(r.ref_type)]; if (t) byTable[t].push(r.ref_id); }
   for (const t of Object.keys(byTable)) {
     const ids = byTable[t];
     for (let i = 0; i < ids.length; i += 50) {
@@ -2096,8 +2156,8 @@ export async function sweepWallOrphanMedia(env: Env) {
       "OR (ref_type = 'post' AND ref_id NOT IN (SELECT id FROM wall_posts)) " +
       "OR (ref_type = 'comment' AND ref_id NOT IN (SELECT id FROM wall_comments)) " +
       "OR (ref_type = 'board' AND ref_id NOT IN (SELECT id FROM comments WHERE status IN ('live', 'pending'))) LIMIT 2000"
-    ).bind(now - 900).all();
-    await purgeWallMedia(env, (orphan.results || []).map((r: any) => r.key));
+    ).bind(now - 900).all<{ key: string }>();
+    await purgeWallMedia(env, (orphan.results || []).map((r) => r.key));
   } catch (e) { /* keep going */ }
 }
 
@@ -2129,7 +2189,7 @@ export async function enforceWallMediaCap(env: Env) {
       const old = await env.DB.prepare(
         "SELECT key, size, ref_type, ref_id FROM wall_media WHERE ref_id IS NOT NULL AND COALESCE(ctx, 'wall') = ?1 ORDER BY created_at ASC LIMIT 200"
       ).bind(sec.ctx).all<{ key: string; size: number; ref_type: string | null; ref_id: number | null }>();
-      const kill: any[] = [];
+      const kill: Array<{ key: string; size: number; ref_type: string | null; ref_id: number | null }> = [];
       for (const r of (old.results || [])) { if (total <= TARGET) break; kill.push(r); total -= (r.size || 0); }
       if (kill.length) {
         /* Stamp FIRST, purge second: a stamped parent whose object still
@@ -2171,18 +2231,18 @@ export async function sweepMediaRetention(env: Env) {
     try {
       const old = await env.DB.prepare(
         "SELECT key, ref_type, ref_id FROM wall_media WHERE COALESCE(ctx, 'wall') = ?1 AND created_at < ?2 ORDER BY created_at ASC LIMIT 200"
-      ).bind(ctx, now - days * 86400).all();
+      ).bind(ctx, now - days * 86400).all<{ key: string; ref_type: string | null; ref_id: number | null }>();
       const rows = old.results || [];
       if (!rows.length) continue;
       await stampWallMediaExpired(env, rows);
-      await purgeWallMedia(env, rows.map((r: any) => r.key));
+      await purgeWallMedia(env, rows.map((r) => r.key));
     } catch (e) { console.log(JSON.stringify({ event: 'sweep_retention_failed', ctx, error: String(e) })); }
   }
 }
 
 /* Read gate shared by the members-only feed/wall/post reads. Returns the member
    hash, or a Response to return immediately (401 / blocked / 429). */
-export async function wallReader(request: any, env: Env, data: any) {
+export async function wallReader(request: Request, env: Env, data: Body | null): Promise<{ resp: Response } | { me: string }> {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return { resp: json({ ok: false, error: 'Too many requests. Slow down.' }, 429) };
   const key = String((data && data.key) || '');
@@ -2205,7 +2265,9 @@ export async function wallReader(request: any, env: Env, data: any) {
    rings only on a row actually reopened or added. Never for your own post,
    never for the bot, and the caller has already dropped a muted reactor. A
    reaction must never fail because its bell did, so this never throws out. */
-export async function notifyReact(env: Env, o: { to: any; from: any; kind: string; topicId: number; commentId: number; target?: string; targetId?: number }) {
+/* A reaction's bell: who is told, by whom, and where it lands. */
+export type ReactBell = { to: string | null; from: string; kind: string; topicId: number; commentId: number; target?: string; targetId?: number };
+export async function notifyReact(env: Env, o: ReactBell) {
   try {
     if (!o.to || !o.from || o.to === o.from || o.to === MERECAT_BOT.hash || o.from === MERECAT_BOT.hash) return;
     if (!NOTIF_KINDS.includes(o.kind)) return;
@@ -2215,7 +2277,7 @@ export async function notifyReact(env: Env, o: { to: any; from: any; kind: strin
     if (!notifyEnabled(pref, o.kind === 'dm-react' ? 'dm' : 'reply')) return;
     const now = Math.floor(Date.now() / 1000);
     const stands = o.target ? ' AND EXISTS (SELECT 1 FROM reactions WHERE target = ?6 AND target_id = ?7 AND author_hash = ?3)' : '';
-    const binds = o.target ? [o.to, o.commentId, o.from, now, o.topicId, o.target, o.targetId] : [o.to, o.commentId, o.from, now, o.topicId];
+    const binds: Array<string | number | undefined> = o.target ? [o.to, o.commentId, o.from, now, o.topicId, o.target, o.targetId] : [o.to, o.commentId, o.from, now, o.topicId];
     const up = await env.DB.prepare(
       "UPDATE notifications SET read_at = NULL, created_at = ?4 " +
       "WHERE recipient_hash = ?1 AND kind = '" + o.kind + "' AND actor_hash = ?3 AND comment_id = ?2 AND topic_id = ?5 AND read_at IS NOT NULL" + stands
@@ -2239,7 +2301,7 @@ export async function notifyReact(env: Env, o: { to: any; from: any; kind: strin
 }
 /* A withdrawn reaction takes back its bell if the author has not seen it yet
    (a read one stays, Facebook style). Never throws out. */
-export async function retractReactNotif(env: Env, o: { to: any; from: any; kind: string; topicId: number; commentId: number }) {
+export async function retractReactNotif(env: Env, o: ReactBell) {
   try {
     if (!o.to || !o.from) return;
     await env.DB.prepare(
@@ -2254,10 +2316,11 @@ export async function retractReactNotif(env: Env, o: { to: any; from: any; kind:
    Claim-time enforcement is what stops a wall-context upload from smuggling a
    video onto a board whose mask excludes it: upload cannot know its destination.
    Returns { key, size, kind } or null. */
-export async function wallClaimMedia(env: Env, mediaKey: any, allowedKinds?: any, settings?: any, ctx?: string) {
+export async function wallClaimMedia(env: Env, mediaKey: unknown, allowedKinds?: readonly string[], settings?: Settings, ctx?: string) {
   if (!mediaKey || !WALL_MEDIA_RE.test(String(mediaKey))) return null;
   const kind = mediaKindOfKey(mediaKey);
   if (!kind) return null;
+  /* the key is the pattern's, so a string */
   if (allowedKinds && allowedKinds.indexOf(kind) === -1) return null;
   const mr = await env.DB.prepare('SELECT size FROM wall_media WHERE key = ?1 AND ref_id IS NULL').bind(String(mediaKey)).first<{ size: number }>();
   if (!mr) return null;
@@ -2267,14 +2330,14 @@ export async function wallClaimMedia(env: Env, mediaKey: any, allowedKinds?: any
 
 /* Create a post on my own wall (author = me), which also lands it in the feed.
    Turnstile + AI screen (held-if-flagged) exactly like a forum comment. */
-export async function runWallPrune(env: Env, days: any) {
+export async function runWallPrune(env: Env, days: number) {
   const cutoff = Math.floor(Date.now() / 1000) - Wall.clampPruneDays(days) * 86400;
   let deleted = 0;
   try {
-    const pm = await env.DB.prepare('SELECT media_key FROM wall_posts WHERE created_at < ?1 AND media_key IS NOT NULL LIMIT 5000').bind(cutoff).all();
-    const keys = (pm.results || []).map((r: any) => r.media_key);
-    const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE media_key IS NOT NULL AND (created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)) LIMIT 5000').bind(cutoff).all();
-    (cm.results || []).forEach((r: any) => keys.push(r.media_key));
+    const pm = await env.DB.prepare('SELECT media_key FROM wall_posts WHERE created_at < ?1 AND media_key IS NOT NULL LIMIT 5000').bind(cutoff).all<{ media_key: string }>();
+    const keys = (pm.results || []).map((r) => r.media_key);
+    const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE media_key IS NOT NULL AND (created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)) LIMIT 5000').bind(cutoff).all<{ media_key: string }>();
+    (cm.results || []).forEach((r) => keys.push(r.media_key));
     if (keys.length) await purgeWallMedia(env, keys);
     await env.DB.prepare("DELETE FROM reactions WHERE target = 'wallc' AND target_id IN (SELECT id FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1))").bind(cutoff).run();
     await env.DB.prepare('DELETE FROM wall_comments WHERE created_at < ?1 OR post_id IN (SELECT id FROM wall_posts WHERE created_at < ?1)').bind(cutoff).run();
@@ -2294,8 +2357,8 @@ export async function pruneWallPosts(env: Env) {
 
 /* Admin "prune now" — runs regardless of the enabled flag, using the configured
    (or a passed) retention. */
-export async function boardFloor(env: Env, me: any) {
-  const row = await env.DB.prepare('SELECT read_at FROM thread_reads WHERE hash = ?1 AND topic_id = 0').bind(me).first();
+export async function boardFloor(env: Env, me: string): Promise<number | null> {
+  const row = await env.DB.prepare('SELECT read_at FROM thread_reads WHERE hash = ?1 AND topic_id = 0').bind(me).first<{ read_at: number }>();
   return row ? row.read_at : null;
 }
 
@@ -2308,11 +2371,11 @@ export const MAX_AVATAR_BYTES = 1024 * 1024;
 export const AVATAR_MIN = 96;
 export const AVATAR_MAX = 1024;
 
-export function be16(b: any, i: any) { return (b[i] << 8) | b[i + 1]; }
+export function be16(b: Uint8Array, i: number) { return (b[i] << 8) | b[i + 1]; }
 
 /* Returns {mime, width, height} or null. Only the three raster formats a
    browser canvas emits are recognized; everything else is refused. */
-export function sniffImage(b: any) {
+export function sniffImage(b: Uint8Array): { mime: string; width: number; height: number } | null {
   if (b.length > 24 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47 &&
       b[4] === 0x0D && b[5] === 0x0A && b[6] === 0x1A && b[7] === 0x0A) {
     return { mime: 'image/png',
@@ -2357,7 +2420,7 @@ export function sniffImage(b: any) {
    error: a throttled or broken model must not block every avatar, and the
    owner still sees and can clear any that slip through. Not a guarantee, and
    never a substitute for CSAM hash-scanning, which is a separate control. */
-export async function screenImage(env: Env, bytes: any) {
+export async function screenImage(env: Env, bytes: Uint8Array) {
   try {
     const result = await env.AI.run('@cf/llava-hf/llava-1.5-7b-hf', {
       image: [...bytes],
@@ -2385,13 +2448,13 @@ export async function screenImage(env: Env, bytes: any) {
    librarian's reserved-name guard, empty fields clearing their columns, and
    clear_avatar removing both the R2 object and the column. Only admins pass;
    a regular key is refused before anything is read. */
-export function sqlLit(v: any) {
+export function sqlLit(v: unknown) {
   if (v === null || v === undefined) return 'NULL';
   if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'NULL';
   /* A BLOB column (none today) would otherwise be dumped as "[object
      ArrayBuffer]" and restore as garbage — a silent corruption; X'…' is SQL. */
   if (v instanceof ArrayBuffer || ArrayBuffer.isView(v)) {
-    const bytes = v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array((v as ArrayBufferView).buffer, (v as ArrayBufferView).byteOffset, (v as ArrayBufferView).byteLength);
+    const bytes = v instanceof ArrayBuffer ? new Uint8Array(v) : new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
     let hex = '';
     for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
     return "X'" + hex + "'";
@@ -2417,7 +2480,7 @@ export async function dumpDatabase(env: Env, stats?: { tables: number; rows: num
     if (m.type === 'table') {
       parts.push(m.sql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS ') + ';');
       if (stats) stats.tables++;
-      const rows = await env.DB.prepare('SELECT * FROM "' + m.name + '"').all();
+      const rows = await env.DB.prepare('SELECT * FROM "' + m.name + '"').all<Record<string, unknown>>();
       const rs = rows.results;
       if (stats) stats.rows += rs.length;
       if (!rs.length) continue;
@@ -2425,7 +2488,7 @@ export async function dumpDatabase(env: Env, stats?: { tables: number; rows: num
       const colList = cols.map((c) => '"' + c + '"').join(', ');
       for (let i = 0; i < rs.length; i += 50) {
         const values = rs.slice(i, i + 50)
-          .map((r: any) => '(' + cols.map((c) => sqlLit(r[c])).join(', ') + ')').join(',\n');
+          .map((r) => '(' + cols.map((c) => sqlLit(r[c])).join(', ') + ')').join(',\n');
         parts.push('INSERT OR REPLACE INTO "' + m.name + '" (' + colList + ') VALUES\n' + values + ';');
       }
     } else if (m.type === 'index') {
@@ -2446,7 +2509,7 @@ export async function dumpDatabase(env: Env, stats?: { tables: number; rows: num
   return parts.join('\n');
 }
 
-export async function gzipBytes(text: any) {
+export async function gzipBytes(text: string) {
   const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
@@ -2697,7 +2760,7 @@ export async function mirrorAvatars(env: Env, cap = 300) {
 
 /* Admin-only manual run of the same backup the cron performs, so the path
    can be exercised any day, not only on the first of the month. */
-export async function requireAdmin(env: Env, key: any) {
+export async function requireAdmin(env: Env, key: string) {
   return !!key && (await isAdminHash(env, await sha256hex(key)));
 }
 
@@ -2728,25 +2791,27 @@ export const MERECAT_DEFAULTS = {
   last_ingest: '',        // stamped by ingest.py at the end of every push (ISO time)
   last_ingest_by: '',     // the CI run id, or "local"
 };
+/* The librarian's dials as merecatConfig resolves them. */
+export type MerecatCfg = typeof MERECAT_DEFAULTS & { persona: string };
 /* The reasoning dials as the client reads them (a courtesy copy: the
    ChatRoom clamps every ask against the same values). */
-export function merecatReasoningView(cfg: any) {
+export function merecatReasoningView(cfg: MerecatCfg) {
   return { on: !!cfg.reasoning_on, default: cfg.reasoning_default, max: cfg.reasoning_max,
     mention: cfg.mention_effort, ladder: Merecat.effortLadder };
 }
 /* The level an ask may actually run at: the kill switch first, then the
    reader's (or the mention's) choice parsed against the default and clamped
    to the admin's ceiling. Off when the switch is off, whatever was asked. */
-export function merecatEffortFor(cfg: any, asked: any) {
+export function merecatEffortFor(cfg: MerecatCfg, asked: unknown): string {
   if (!cfg.reasoning_on) return 'off';
   return Merecat.effortClamp(String(cfg.reasoning_max))(Merecat.effortParse(String(cfg.reasoning_default))(asked == null ? '' : String(asked)));
 }
 /* The prompt's closing: the token that tells Qwen3 whether it may think, and
    the directive for how deeply. `off` is the literal the site always sent. */
-export function merecatThinkSuffix(effort: any) {
+export function merecatThinkSuffix(effort: string) {
   return Merecat.effortThinks(String(effort)) ? '\n\n' + Merecat.effortDirective(String(effort)) + '\n/think' : '/no_think';
 }
-export function merecatHeadroom(effort: any) { return Merecat.effortHeadroom(String(effort)); }
+export function merecatHeadroom(effort: string): number { return Merecat.effortHeadroom(String(effort)); }
 /* What a resting librarian says — the question cap and the budget guard
    alike: the hours until the day renews at 00:00 UTC (Domain.Merecat). */
 export function merecatRestingNote(nowMs = Date.now()) {
@@ -2758,7 +2823,7 @@ export const MERECAT_SITE = 'https://merecatholicity.com/';
    councils and the schism documents, the deep Schaff/Summa sets, and Newman
    entire. Band feeds the retrieval boost, the prompt label, and the
    transparency panel's grouping. */
-export const MERECAT_TIER_LABEL = {
+export const MERECAT_TIER_LABEL: Record<number, string> = {
   1: 'site position', 2: 'scripture', 3: 'the Fathers',
   4: 'councils, confessions, and the schism', 5: 'deep shelf', 6: 'Newman',
   7: 'the Roman world', 8: 'the worldview shelf', 9: "the scholars' shelf",
@@ -2780,7 +2845,7 @@ export const MERECAT_MENTION_RE = /@merecat\b/i;
 /* A mention inside a quoted line is someone else's words: quoting a summons
    must not resummon (nor charge the quoter a question). Only unquoted text
    can call the librarian. */
-export function merecatMentioned(body: any) {
+export function merecatMentioned(body: unknown) {
   const unquoted = String(body || '').split('\n')
     .filter((l) => !/^\s*>/.test(l)).join('\n');
   return MERECAT_MENTION_RE.test(unquoted);
@@ -2790,13 +2855,17 @@ export const MERECAT_RV = 16;  // retrieval build: bump when retrieval logic cha
 /* Config (persona, model, caps) lives in LIBDB so `make librarian` can change
    the bot's behavior with no redeploy. Cached per isolate for five minutes;
    a config push clears this isolate at once and the rest lag out the TTL. */
-export const merecatConfigCache: { at: number; cfg: any } = { at: 0, cfg: null };
+export const merecatConfigCache: { at: number; cfg: MerecatCfg | null } = { at: 0, cfg: null };
+/* the dials that are plain counts: a bad row reads as the default */
+const MERECAT_COUNT_DIALS: Record<string, 'user_daily' | 'global_daily' | 'topk' | 'max_tokens'> = {
+  user_daily: 'user_daily', global_daily: 'global_daily', topk: 'topk', max_tokens: 'max_tokens',
+};
 
-export async function merecatConfig(env: Env) {
+export async function merecatConfig(env: Env): Promise<MerecatCfg> {
   if (merecatConfigCache.cfg && Date.now() - merecatConfigCache.at < 300000) {
     return merecatConfigCache.cfg;
   }
-  const cfg: any = { ...MERECAT_DEFAULTS, persona: '' };
+  const cfg: MerecatCfg = { ...MERECAT_DEFAULTS, persona: '' };
   try {
     const { results } = await env.LIBDB.prepare('SELECT k, v FROM config').all<{ k: string; v: string }>();
     for (const r of results || []) {
@@ -2813,7 +2882,7 @@ export async function merecatConfig(env: Env) {
       else if (r.k === 'quota_guard_pct') cfg.quota_guard_pct = Merecat.quotaGuardPctFrom(String(r.v));
       else if (r.k === 'last_ingest' || r.k === 'last_ingest_by') cfg[r.k] = String(r.v).slice(0, 80);
       else if (r.k === 'user_cap_on') cfg.user_cap_on = Number(r.v) ? 1 : 0;
-      else if (r.k in MERECAT_DEFAULTS) (cfg as any)[r.k] = Number(r.v) || (MERECAT_DEFAULTS as any)[r.k];
+      else if (MERECAT_COUNT_DIALS[r.k]) { const k = MERECAT_COUNT_DIALS[r.k]; cfg[k] = Number(r.v) || MERECAT_DEFAULTS[k]; }
     }
   } catch (err) {
     console.log(JSON.stringify({ event: 'merecat_config_failed', error: String(err) }));
@@ -2826,9 +2895,9 @@ export function merecatDay() {
   return new Date().toISOString().slice(0, 10);
 }
 
-/* merecatThinkStripper lives in pure.js (plain-Node testable); re-exported here so
+/* merecatThinkStripper lives in pure.ts (plain-Node testable); re-exported here so
    durable.ts keeps one import site for the librarian helpers. */
-export { merecatThinkStripper } from './pure.js';
+export { merecatThinkStripper } from './pure.ts';
 
 /* A question is not a search string. The forum's buildMatch ANDs its first
    ten tokens — right for terse searches, fatal for natural questions, whose
@@ -2840,7 +2909,7 @@ export { merecatThinkStripper } from './pure.js';
    matches. Every token is double-quoted, so no FTS5 operator can ride in. The
    stopword set, the sub-2-char/dedup filter, and the quoting are single-sourced
    in Domain.Fts (a `SafeMatch`, injection-proof by construction). */
-export function merecatMatch(q: any) {
+export function merecatMatch(q: unknown): string {
   return Fts.unSafeMatch(Fts.merecatMatch(String(q ?? '')));
 }
 
@@ -2849,10 +2918,10 @@ export function merecatMatch(q: any) {
    six-word phrase that texts merely discussing it rarely reproduce. Slide
    windows over the question's tokens (stopwords kept, phrases need them)
    and offer the longest few as FTS phrase alternatives. */
-export function merecatPhrases(q: any) {
+export function merecatPhrases(q: unknown) {
   const words = String(q || '').match(/[A-Za-z0-9À-ɏ'’]+/g) || [];
   if (words.length < 5) return '';
-  const phrases = [];
+  const phrases: string[] = [];
   // EVERY contiguous five-gram, stride one: any strided comb leaves gaps
   // (a stride-three comb twice straddled "the souls of the just" and the
   // primary text went unfound). A quotation of five words or more in the
@@ -2872,11 +2941,11 @@ export function merecatPhrases(q: any) {
    against), so they can no longer drift; only the Vulgate namings and the
    deuterocanon are worker-only additions layered on top. */
 export const MERECAT_BIBLE = (() => {
-  const spec = [
+  const spec: Array<[string, string]> = [
     // The 66-book KJV core is single-sourced from Domain.Scripture (the same
     // table the client autolinks against), so the "must stay in step" hazard
     // cannot recur. Only the Vulgate namings and deuterocanon below are added.
-    ...Scripture.bibleSpec.map((r: any) => [r.slug, r.spellings.join('|')]),
+    ...Scripture.bibleSpec.map((r: { slug: string; spellings: string[] }): [string, string] => [r.slug, r.spellings.join('|')]),
     // Vulgate namings and the deuterocanon, resolved to the canonical slug
     ['joshua', 'josue'], ['ezra', '1 esdras'], ['nehemiah', '2 esdras'],
     ['1-chronicles', '1 paralipomenon|i paralipomenon'],
@@ -2893,7 +2962,7 @@ export const MERECAT_BIBLE = (() => {
     ['1-machabees', '1 machabees|1 maccabees|1 macc|1 mac|i machabees|i maccabees|first machabees'],
     ['2-machabees', '2 machabees|2 maccabees|2 macc|2 mac|ii machabees|ii maccabees|second machabees']
   ];
-  const map: any = {}; const forms = [];
+  const map: Record<string, string> = {}; const forms: string[] = [];
   for (const row of spec) for (let f of row[1].split('|')) {
     f = f.trim(); if (f) { map[f] = row[0]; forms.push(f); }
   }
@@ -2905,7 +2974,7 @@ export const MERECAT_BIBLE = (() => {
 /* The DR names its books in the Vulgate way and its 1-4 Kings are NOT the
    KJV's: canonical (KJV-side) slug -> the slug dr.json uses. Identity where
    the two agree. */
-export const MERECAT_KJV2DR = {
+export const MERECAT_KJV2DR: Record<string, string> = {
   'joshua': 'josue', '1-samuel': '1-kings', '2-samuel': '2-kings',
   '1-kings': '3-kings', '2-kings': '4-kings',
   '1-chronicles': '1-paralipomenon', '2-chronicles': '2-paralipomenon',
@@ -2917,10 +2986,15 @@ export const MERECAT_KJV2DR = {
   'malachi': 'malachias', 'obadiah': 'abdias', 'revelation': 'apocalypse',
 };
 
-export async function merecatVerseSeats(env: Env, q: any, add: any) {
-  const jobs = []; const seen = new Set();
+/* A shelf chunk as retrieval selects it (schema-librarian.sql). */
+export type ShelfRow = { cid: string; work_id: string; heading: string | null; anchor: string | null; text: string; title: string; url: string; tier: number };
+/* How a leg seats a chunk in the pool: semantic, and a phrase hit. */
+type SeatFn = (r: ShelfRow | null | undefined, sem: boolean, phr?: boolean) => void;
+
+export async function merecatVerseSeats(env: Env, q: string, add: SeatFn) {
+  const jobs: Array<{ slug: string; ch: number; v: number }> = []; const seen = new Set<string>();
   MERECAT_BIBLE.re.lastIndex = 0;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = MERECAT_BIBLE.re.exec(q)) && jobs.length < 4) {
     const slug = MERECAT_BIBLE.map[m[1].toLowerCase().replace(/\s+/g, ' ')];
     if (!slug) continue;
@@ -2933,19 +3007,19 @@ export async function merecatVerseSeats(env: Env, q: any, add: any) {
   for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
     if (!db) continue;
     for (const j of jobs) {
-      for (const s of new Set([j.slug, (MERECAT_KJV2DR as any)[j.slug] || j.slug])) {
+      for (const s of new Set([j.slug, MERECAT_KJV2DR[j.slug] || j.slug])) {
         try {
           const base = s + '-' + j.ch;
           const rows = await db.prepare(
             'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
             "FROM chunks c JOIN works w ON w.id = c.work_id WHERE w.kind LIKE 'bible%' " +
             'AND (c.anchor = ?1 OR c.anchor LIKE ?2) LIMIT 12'
-          ).bind(base, base + '-%').all<{ cid: string; work_id: number; heading: string | null; anchor: string; text: string; title: string; url: string; tier: number }>();
+          ).bind(base, base + '-%').all<ShelfRow>();
           // a chapter packs into a few chunks whose anchors carry their first
           // verse: per work, seat the pack whose start is greatest but <= v
-          const byWork = new Map();
+          const byWork = new Map<string, { r: ShelfRow; start: number }>();
           for (const r of rows.results || []) {
-            const t = /-(\d+)$/.exec(r.anchor.slice(base.length));
+            const t = /-(\d+)$/.exec(String(r.anchor).slice(base.length));
             const start = t ? +t[1] : 1;
             if (start > j.v) continue;
             const had = byWork.get(r.work_id);
@@ -2964,7 +3038,7 @@ export async function merecatVerseSeats(env: Env, q: any, add: any) {
    and prompt windows must read as plain text wherever they surface (the
    footer, the board, the model's own eyes) — including sources stored in
    old chats before the ingest-side scrub existed. */
-export function merecatScrub(t: any, keepNl?: any) {
+export function merecatScrub(t: unknown, keepNl?: boolean) {
   let x = String(t || '').replace(/<\/?[a-zA-Z][^>]{0,300}?>/g, ' ')
     .replace(/&#x([0-9a-fA-F]{1,6});/g, (m, h) => { try { return String.fromCodePoint(parseInt(h, 16)); } catch { return ' '; } })
     .replace(/&#(\d{1,7});/g, (m, n) => { try { return String.fromCodePoint(+n); } catch { return ' '; } })
@@ -2976,9 +3050,12 @@ export function merecatScrub(t: any, keepNl?: any) {
 /* Hybrid retrieval: returns up to cfg.topk chunks, each
    { cid, title, url, anchor, heading, tier, text }. Every leg fails soft so a
    broken index degrades the answer instead of killing it. */
-export async function merecatRetrieve(env: Env, q: any, cfg: any) {
-  const pool = new Map(); // cid -> chunk row stub
-  const add = (r: any, sem: any, phr?: any) => {
+/* A pooled chunk, as the prompt and the sources read it. */
+export type PoolChunk = { cid: string; work: string; title: string; url: string; anchor: string; heading: string; tier: number; text: string; sem: boolean; phr: boolean };
+
+export async function merecatRetrieve(env: Env, q: string, cfg: MerecatCfg): Promise<PoolChunk[]> {
+  const pool = new Map<string, PoolChunk>(); // cid -> chunk row stub
+  const add: SeatFn = (r, sem, phr) => {
     if (!r || !r.cid) return;
     const had = pool.get(r.cid);
     if (had) { if (phr) had.phr = true; return; }
@@ -2988,13 +3065,13 @@ export async function merecatRetrieve(env: Env, q: any, cfg: any) {
   };
 
   // Semantic leg: Tier-1 vectors.
-  let semIds = [];
+  let semIds: string[] = [];
   try {
     const emb = await env.AI.run('@cf/baai/bge-m3', { text: [q] }) as { data?: number[][] };
     const vec = emb && emb.data && emb.data[0];
     if (vec) {
       const res = await env.MERECAT_INDEX.query(vec, { topK: 8, returnMetadata: 'none' });
-      semIds = (res && res.matches ? res.matches : []).map((m: any) => m.id);
+      semIds = (res && res.matches ? res.matches : []).map((m) => m.id);
     }
   } catch (err) {
     console.log(JSON.stringify({ event: 'merecat_semantic_failed', error: String(err) }));
@@ -3002,7 +3079,7 @@ export async function merecatRetrieve(env: Env, q: any, cfg: any) {
   if (semIds.length) {
     // hydrate matches from whichever room holds them: vectorized works may
     // live in any database (the worldview core rides deep2)
-    const byCid: any = {};
+    const byCid: Record<string, ShelfRow> = {};
     const ph = inList(semIds.length);
     for (const db of [env.LIBDB, env.LIBDB2, env.LIBDB3]) {
       if (!db) continue;
@@ -3010,8 +3087,7 @@ export async function merecatRetrieve(env: Env, q: any, cfg: any) {
         const rows = await db.prepare(
           'SELECT c.cid, c.work_id, c.heading, c.anchor, c.text, w.title, w.url, w.tier ' +
           'FROM chunks c JOIN works w ON w.id = c.work_id WHERE c.cid IN (' + ph + ')'
-        ).bind(...semIds).all<{ cid: string; work_id: number; heading: string | null; anchor: string;
-          text: string; title: string; url: string; tier: number }>();
+        ).bind(...semIds).all<ShelfRow>();
         for (const r of rows.results || []) byCid[r.cid] = r;
       } catch (err) {
         console.log(JSON.stringify({ event: 'merecat_semfetch_failed', error: String(err) }));
@@ -3043,17 +3119,17 @@ export async function merecatRetrieve(env: Env, q: any, cfg: any) {
         // and the Roman world at the very bottom of the totem.
         const weighted = await db.prepare(SEL +
           'ORDER BY bm25(chunks_fts) * ' + Merecat.bandCaseSql(Merecat.bandWeightsFrom(String(cfg.band_weights || ''))) + ' ' +
-          'LIMIT 18').bind(match).all();
+          'LIMIT 18').bind(match).all<ShelfRow>();
         for (const r of weighted.results || []) add(r, false);
         const raw = await db.prepare(SEL +
-          'ORDER BY bm25(chunks_fts) LIMIT 12').bind(match).all();
+          'ORDER BY bm25(chunks_fts) LIMIT 12').bind(match).all<ShelfRow>();
         for (const r of raw.results || []) add(r, false);
         if (phr) {
           // a deep LIMIT: bm25 ranks heavy quoters of a phrase above the
           // text that says it once — the reranker and the guaranteed
           // phrase seats sort the pool out
           const hits = await db.prepare(SEL +
-            'ORDER BY bm25(chunks_fts) LIMIT 20').bind(phr).all();
+            'ORDER BY bm25(chunks_fts) LIMIT 20').bind(phr).all<ShelfRow>();
           for (const r of hits.results || []) add(r, false, true);
         }
       } catch (err) {
@@ -3084,8 +3160,8 @@ export async function merecatRetrieve(env: Env, q: any, cfg: any) {
         .filter((x) => x && Number.isInteger(x.id) && candidates[x.id])
         .sort((a, b) => b.score - a.score);
       if (scored.length) {
-        const seen = new Set();
-        const ranked = [];
+        const seen = new Set<number>();
+        const ranked: PoolChunk[] = [];
         for (const s of scored) {
           if (seen.has(s.id)) continue;
           seen.add(s.id);
@@ -3119,15 +3195,18 @@ export async function merecatRetrieve(env: Env, q: any, cfg: any) {
    tail and the proxy pump's mid-flight failover, so the two can never drift:
    persona, the thread's condensed summary when one exists, the numbered
    sources, the recent turns verbatim, the question. */
-export async function merecatPrompt(env: Env, q: any, history: any, summary: any, cfg: any, effort: any = 'off') {
+/* A cited source, numbered as the answer cites it. */
+export type MerecatSource = { n: number; title: string; heading: string; url: string };
+export type ChatTurn = { role: string; content: string };
+export async function merecatPrompt(env: Env, q: string, history: readonly ChatTurn[], summary: string, cfg: MerecatCfg, effort = 'off') {
   const chunks = await merecatRetrieve(env, q, cfg);
-  const sources = chunks.map((c, i) => ({
+  const sources: MerecatSource[] = chunks.map((c, i) => ({
     n: i + 1, title: merecatScrub(c.title), heading: merecatScrub(c.heading),
     url: !c.url ? '' : /^https?:\/\//.test(c.url) ? c.url : MERECAT_SITE + c.url + (c.anchor ? '#' + c.anchor : ''),
   }));
   let srcBlock = '';
   chunks.forEach((c, i) => {
-    srcBlock += '[' + (i + 1) + '] (' + ((MERECAT_TIER_LABEL as any)[c.tier] || 'shelf') + ') ' + merecatScrub(c.title) +
+    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[c.tier] || 'shelf') + ') ' + merecatScrub(c.title) +
       (c.heading ? ' — ' + merecatScrub(c.heading) : '') + '\n' + merecatScrub(c.text.slice(0, 2800), true) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com. Answer from the sources given, citing each by its bracketed number, like [2].') +
@@ -3135,7 +3214,7 @@ export async function merecatPrompt(env: Env, q: any, history: any, summary: any
     '\n\nSOURCES (cite by bracketed number, like [3] — write the digit; cite 2-4 distinct sources for an answer of 250-500 words and 4-8 for 500 words and beyond, spreading them across every source that genuinely informed the answer rather than leaning on one or two; these are the only citable sources this turn' +
     (srcBlock ? '' : '; none were retrieved, so say the shelf does not cover this directly and answer from general knowledge, labeled as such') +
     '):\n\n' + (srcBlock || '(none)') + merecatThinkSuffix(effort);
-  const messages = [{ role: 'system', content: sys }];
+  const messages: ChatTurn[] = [{ role: 'system', content: sys }];
   for (const h of history) messages.push(h);
   messages.push({ role: 'user', content: q });
   return { sources, messages };
@@ -3145,19 +3224,19 @@ export async function merecatPrompt(env: Env, q: any, history: any, summary: any
 export const MERECAT_WINDOW = 10;   // newest turns sent verbatim
 export const MERECAT_FOLD_MIN = 4;  // fold only when this many turns have aged out
 
-export async function merecatFold(env: Env, cfg: any, chatId: any) {
+export async function merecatFold(env: Env, cfg: MerecatCfg, chatId: number) {
   try {
     const chat = await env.LIBDB.prepare(
-      'SELECT summary, summarized_to FROM chats WHERE id = ?1').bind(chatId).first();
+      'SELECT summary, summarized_to FROM chats WHERE id = ?1').bind(chatId).first<{ summary: string | null; summarized_to: number | null }>();
     if (!chat) return;
     const all = await env.LIBDB.prepare(
       'SELECT id, role, body FROM chat_msgs WHERE chat_id = ?1 AND COALESCE(done, 1) = 1 ORDER BY id').bind(chatId).all<{ id: number; role: string; body: string }>();
     const rows = all.results || [];
     if (rows.length <= MERECAT_WINDOW) return;
     const cutoff = rows[rows.length - MERECAT_WINDOW].id;
-    const aged = rows.filter((r: any) => r.id < cutoff && r.id > (chat.summarized_to || 0));
+    const aged = rows.filter((r) => r.id < cutoff && r.id > (chat.summarized_to || 0));
     if (aged.length < MERECAT_FOLD_MIN) return;
-    const notes = aged.map((r: any) =>
+    const notes = aged.map((r) =>
       (r.role === 'user' ? 'Reader: ' : 'Librarian: ') + String(r.body).slice(0, 800)).join('\n');
     const res = await env.AI.run(cfg.model, {
       messages: [
@@ -3245,7 +3324,8 @@ export async function merecatNames(env: Env, hashes: readonly unknown[]): Promis
 /* Post the bot's comment: a reply under the topic on the board, a flat (or
    same-parent) comment on an article page. Board replies bump the topic and
    fan out notifications like anyone's reply, so the asker hears back. */
-export async function merecatInsertComment(env: Env, src: any, isBoard: any, topicId: any, topicAuthorHash: any, body: any) {
+export async function merecatInsertComment(env: Env, src: { page: string; parent_id: number | null }, isBoard: boolean,
+  topicId: number, topicAuthorHash: string | null, body: string) {
   await merecatEnsureProfile(env);
   const now = Math.floor(Date.now() / 1000);
   const parent = isBoard ? topicId : (src.parent_id || null);
@@ -3265,9 +3345,10 @@ export async function merecatInsertComment(env: Env, src: any, isBoard: any, top
        the back-room gate is central (publishBoardEvents no-ops for it). */
     try {
       const catKey = src.page.slice(6);
-      const prof = await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(MERECAT_BOT.hash).first();
+      const prof = await env.DB.prepare('SELECT nick, signature, avatar, faith FROM profiles WHERE hash = ?1').bind(MERECAT_BOT.hash)
+        .first<{ nick: string | null; signature: string | null; avatar: string | null; faith: string | null }>();
       const nick = (prof && prof.nick) || null;
-      const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first();
+      const stat = await env.DB.prepare('SELECT replies, title FROM comments WHERE id = ?1').bind(topicId).first<{ replies: number | null; title: string | null }>();
       await publishBoardEvents(env, src.page, [
         { v: 1, t: 'new-reply', scopes: ['topic:' + topicId], topic_id: topicId,
           comment: { id: ins.id, author_hash: MERECAT_BOT.hash, nick,
@@ -3287,32 +3368,32 @@ export async function merecatInsertComment(env: Env, src: any, isBoard: any, top
    footer labels bracket-sanitized (a heading like "[The Contemporary
    Review]" nested in [text](url) breaks the markdown link and prints raw).
    Shared by @merecat thread replies and forwarded chat answers. */
-export function merecatFinishAnswer(answer: any, sources: any) {
-  const firstAt = new Map();
-  answer.replace(/\[(\d+)\]/g, (m: any, n: any, at: any) => {
+export function merecatFinishAnswer(answer: string, sources: readonly MerecatSource[]) {
+  const firstAt = new Map<number, number>();
+  answer.replace(/\[(\d+)\]/g, (m: string, n: string, at: number) => {
     const num = Number(n);
-    if (sources.some((s: any) => s.n === num) && !firstAt.has(num)) firstAt.set(num, at);
+    if (sources.some((s) => s.n === num) && !firstAt.has(num)) firstAt.set(num, at);
     return m;
   });
-  const order = [...firstAt.keys()].sort((a, b) => firstAt.get(a) - firstAt.get(b));
+  const order = [...firstAt.keys()].sort((a, b) => (firstAt.get(a) || 0) - (firstAt.get(b) || 0));
   const renum = new Map(order.map((n, i) => [n, i + 1]));
   if (renum.size) {
-    answer = answer.replace(/\[(\d+)\]/g, (m: any, n: any) =>
+    answer = answer.replace(/\[(\d+)\]/g, (m: string, n: string) =>
       renum.has(Number(n)) ? '[' + renum.get(Number(n)) + ']' : m);
-    const cited = sources.filter((s: any) => renum.has(s.n))
-      .sort((a: any, b: any) => renum.get(a.n)! - renum.get(b.n)!);
-    const label = (s: any) => merecatScrub(s.title + (s.heading ? ' — ' + s.heading : ''))
+    const cited = sources.filter((s) => renum.has(s.n))
+      .sort((a, b) => (renum.get(a.n) || 0) - (renum.get(b.n) || 0));
+    const label = (s: MerecatSource) => merecatScrub(s.title + (s.heading ? ' — ' + s.heading : ''))
       .replace(/\[/g, '(').replace(/\]/g, ')');
-    answer += '\n\nSources:\n' + cited.map((s: any) =>
+    answer += '\n\nSources:\n' + cited.map((s) =>
       '[' + renum.get(s.n) + '] ' + (s.url ? '[' + label(s) + '](' + s.url + ')' : label(s))).join('\n');
   }
   return answer;
 }
 
-export async function merecatMentionReply(env: Env, commentId: any) {
+export async function merecatMentionReply(env: Env, commentId: number) {
   const c = await env.DB.prepare(
     "SELECT id, page, parent_id, title, author_hash, body FROM comments WHERE id = ?1 AND status = 'live'"
-  ).bind(commentId).first();
+  ).bind(commentId).first<{ id: number; page: string; parent_id: number | null; title: string | null; author_hash: string | null; body: string }>();
   if (!c || !c.author_hash || c.author_hash === MERECAT_BOT.hash) return null;
   if (!merecatMentioned(c.body)) return null;
   const cfg = await merecatConfig(env);
@@ -3345,10 +3426,10 @@ export async function merecatMentionReply(env: Env, commentId: any) {
     }
   }
 
-  let topicAuthorHash = null;
+  let topicAuthorHash: string | null = null;
   if (refuse) {
     if (isBoard) {
-      const t = await env.DB.prepare('SELECT author_hash FROM comments WHERE id = ?1').bind(topicId).first();
+      const t = await env.DB.prepare('SELECT author_hash FROM comments WHERE id = ?1').bind(topicId).first<{ author_hash: string | null }>();
       topicAuthorHash = t && t.author_hash;
     }
     return await merecatInsertComment(env, c, isBoard, topicId, topicAuthorHash, refuse);
@@ -3364,13 +3445,14 @@ export async function merecatMentionReply(env: Env, commentId: any) {
   const talk: [string, string][] = [];        // [hash, text] oldest first
   if (isBoard) {
     const topic = await env.DB.prepare(
-      'SELECT id, title, author_hash, body FROM comments WHERE id = ?1').bind(topicId).first();
+      'SELECT id, title, author_hash, body FROM comments WHERE id = ?1').bind(topicId)
+      .first<{ id: number; title: string | null; author_hash: string | null; body: string }>();
     topicAuthorHash = topic && topic.author_hash;
     topicTitle = String((topic && topic.title) || '').slice(0, MAX_TITLE);
     where = 'the forum topic “' + topicTitle + '” on this site’s Catholicity Board';
     const replies = await env.DB.prepare(
       "SELECT author_hash, body FROM comments WHERE parent_id = ?1 AND status = 'live' AND id != ?2 " +
-      'ORDER BY id DESC LIMIT 12').bind(topicId, c.id).all();
+      'ORDER BY id DESC LIMIT 12').bind(topicId, c.id).all<{ author_hash: string | null; body: string | null }>();
     for (const r of (replies.results || []).reverse()) talk.push([String(r.author_hash), String(r.body || '')]);
     const names0 = await merecatNames(env, [String((topic && topic.author_hash) || '')]);
     opening = 'TOPIC TITLE: “' + topicTitle + '” (a title often carries the question itself — treat it as part of what is asked)\n' +
@@ -3383,11 +3465,11 @@ export async function merecatMentionReply(env: Env, commentId: any) {
       ' (that page’s text is on your shelf)';
     const recent = await env.DB.prepare(
       "SELECT author_hash, body FROM comments WHERE page = ?1 AND status = 'live' AND id != ?2 " +
-      'ORDER BY id DESC LIMIT 10').bind(c.page, c.id).all();
+      'ORDER BY id DESC LIMIT 10').bind(c.page, c.id).all<{ author_hash: string | null; body: string | null }>();
     for (const r of (recent.results || []).reverse()) talk.push([String(r.author_hash), String(r.body || '')]);
   }
   const names = await merecatNames(env, talk.map((t) => t[0]).concat([String(c.author_hash)]));
-  const nameOf = (h: any) => names[h] || (h === MERECAT_BOT.hash ? MERECAT_BOT.nick : 'a member');
+  const nameOf = (h: string) => names[h] || (h === MERECAT_BOT.hash ? MERECAT_BOT.nick : 'a member');
   const talkBlock = (opening ? opening + '\n---\n' : '') +
     talk.map((t) => nameOf(t[0]) + ': ' + t[1].slice(0, 700)).join('\n---\n');
 
@@ -3417,7 +3499,7 @@ export async function merecatMentionReply(env: Env, commentId: any) {
   }));
   let srcBlock = '';
   chunks.forEach((cc, i) => {
-    srcBlock += '[' + (i + 1) + '] (' + ((MERECAT_TIER_LABEL as any)[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
+    srcBlock += '[' + (i + 1) + '] (' + (MERECAT_TIER_LABEL[cc.tier] || 'shelf') + ') ' + merecatScrub(cc.title) +
       (cc.heading ? ' — ' + merecatScrub(cc.heading) : '') + '\n' + merecatScrub(cc.text.slice(0, 2800), true) + '\n\n';
   });
   const sys = (cfg.persona || 'You are merecat, the librarian of merecatholicity.com.') +
@@ -3482,6 +3564,9 @@ export type HubStub = {
   stats(): Promise<HubShardStats>;
 };
 export type HubShardStats = { shard: number; sockets: number; members: number };
+/* A live event: its schema version, its type, the scopes that receive it, and
+   the fields its type carries (API.md §5). */
+export type HubEvent = { v: number; t: string; scopes: string[] } & Record<string, unknown> & NotEnv;
 type HubEnv = { HUB?: DurableObjectNamespace; HUB_SHARDS?: string };
 
 export function hubShards(env: HubEnv): number {
@@ -3509,7 +3594,7 @@ function hubGroups(env: HubEnv, hashes: string[]): Array<[number, string[]]> {
 /* Publish one event to the shards it belongs on: the home shards of its
    `user:` scopes when every scope is private, all of them otherwise. A shard
    that fails is logged and never fails its siblings. */
-export async function sendToHub(env: Env, event: any) {
+export async function sendToHub(env: Env, event: HubEvent) {
   if (!env.HUB || !boardEventPublic(event)) return;
   const n = hubShards(env);
   const routed = Hub.routeScopes(n)(Array.isArray(event.scopes) ? event.scopes.map(String) : []);
@@ -3555,7 +3640,7 @@ export async function hubStats(env: HubEnv): Promise<HubShardStats[]> {
 /* Publish a batch of board events (awaitable), with a cheap page pre-gate (a
    non-board or admins-only page emits nothing). Each event still passes the
    central gate in sendToHub. Shared by broadcastBoard and the bot's inline reply. */
-export async function publishBoardEvents(env: Env, page: any, events: any) {
+export async function publishBoardEvents(env: Env, page: string, events: HubEvent | HubEvent[]) {
   if (!boardKey(page) || page === ADMIN_CAT) return;
   const list = Array.isArray(events) ? events : [events];
   for (const e of list) await sendToHub(env, e);
@@ -3565,7 +3650,8 @@ export async function publishBoardEvents(env: Env, page: any, events: any) {
    so it never delays or breaks the write. `events` is an array, or a function
    returning one (sync or async) for sites that must query per-event data — the
    page pre-gate runs first, so the builder is skipped for the back room. */
-export function broadcastBoard(env: Env, ctx: any, page: any, events: any) {
+export function broadcastBoard(env: Env, ctx: ExecutionContext, page: string,
+  events: HubEvent[] | (() => HubEvent[] | Promise<HubEvent[]>)) {
   if (!env.HUB || !boardKey(page) || page === ADMIN_CAT) return;
   ctx.waitUntil((async () => {
     const list = typeof events === 'function' ? await events() : events;
@@ -3575,10 +3661,10 @@ export function broadcastBoard(env: Env, ctx: any, page: any, events: any) {
 
 /* Fire-and-forget a single live event through the one sink; deferred via
    waitUntil so it never delays or breaks a write. */
-export function publishLive(env: Env, ctx: any, event: any) {
+export function publishLive(env: Env, ctx: ExecutionContext, event: HubEvent) {
   if (!env.HUB) return;
   ctx.waitUntil(sendToHub(env, event)
-    .catch((e: any) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
+    .catch((e: unknown) => console.log(JSON.stringify({ event: 'publish_failed', error: String(e) }))));
 }
 
 /* Fire PRIVATE per-member live events (DMs, notifications) through the one hub.
@@ -3586,7 +3672,7 @@ export function publishLive(env: Env, ctx: any, event: any) {
    sockets that authenticated as that hash — so a member's own connections alone
    receive it. Awaitable: a caller already inside a waitUntil (deliverNotifications)
    just awaits it; a plain handler passes ctx to publishLive-style fire-and-forget. */
-export async function publishUser(env: Env, events: any) {
+export async function publishUser(env: Env, events: HubEvent | HubEvent[]) {
   if (!env.HUB) return;
   const list = (Array.isArray(events) ? events : [events]).filter(Boolean);
   for (const e of list) await sendToHub(env, e);
@@ -3597,17 +3683,17 @@ export async function publishUser(env: Env, events: any) {
    ?chat=<id> at once and dials the ChatRoom instance that matches the id (the DO
    name = 'chat:'+id, so a reconnect always reaches the same generator). */
 export class MetaAttr {
-  declare value: any;
-  constructor(value: any) { this.value = value; }
-  element(el: any) { el.setAttribute('content', this.value); }
+  declare value: string;
+  constructor(value: string) { this.value = value; }
+  element(el: Element) { el.setAttribute('content', this.value); }
 }
 export class TitleText {
-  declare value: any;
+  declare value: string;
   /* NB: the field is `value`, not `text` — HTMLRewriter treats a `text` field on
      a handler object as a text-node handler (must be a function), so naming it
      `text` makes .on() reject the handler. */
-  constructor(value: any) { this.value = value; }
-  element(el: any) { el.setInnerContent(this.value); }
+  constructor(value: string) { this.value = value; }
+  element(el: Element) { el.setInnerContent(this.value); }
 }
 
 /* Serve /@handle: fetch the static profile.html from the origin and inject the

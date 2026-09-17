@@ -70,7 +70,7 @@ test('the client is told, so it mounts nothing for a closed page', () => {
 });
 
 test('one resolver, used by every read and write, and a closed section reads as an unknown page', () => {
-  assert.ok(idxSrc.includes('async function commentsPageKey(env: any, raw: any): Promise<string | null> {'));
+  assert.ok(idxSrc.includes('async function commentsPageKey(env: Env, raw: unknown): Promise<string | null> {'));
   for (const h of ['handleGet', 'handlePost', 'handleFeed', 'handleEdit']) {
     assert.ok(/commentsPageKey\(env,/.test(body(h)), `${h} does not resolve its page through commentsPageKey`);
   }

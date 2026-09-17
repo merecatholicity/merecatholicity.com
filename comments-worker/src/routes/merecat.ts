@@ -29,10 +29,13 @@ import {
   adminGated,
   registerMember,
   throttle,
+  bodyOf,
+  listOf,
+  readBody,
 } from '../lib.ts';
 import { pipelineGated } from '../oidc.ts';
 import type { Env } from '../env.ts';
-import type { Body } from '../lib.ts';
+import type { Body, MerecatSource } from '../lib.ts';
 
 /* ---- Admin observation of merecat Q&A (2026-07-29). The terms disclose that
    questions may be reviewed for the improvement of the service; these two
@@ -95,12 +98,12 @@ async function handleMerecatAdminThread(request: Request, env: Env) {
    over Tailscale was retired on 2026-09-10; `backend` is kept in the answer
    for one deploy so a client built before that still reads it. */
 async function handleMerecatBackends(request: Request, env: Env) {
-  let data: any = {};
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
+  const data = await readBody(request);
+  if (!data) return json({ ok: false, error: 'No.' }, 403);
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const cfg = await merecatConfig(env);
   const day = merecatDay();
-  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first<{ q: number }>();
   const today = (g && g.q) || 0;
   return json({ ok: true, backend: 'cloudflare', model: cfg.model, mention_effort: cfg.mention_effort,
     reasoning: merecatReasoningView(cfg), quota: await merecatQuota(env, cfg),
@@ -224,7 +227,7 @@ async function handleMerecatIngest(request: Request, env: Env) {
   if (pre instanceof Response) return pre;
   const { data } = pre;
   const mode = String(data.mode || '');
-  const work = data.work || {};
+  const work = bodyOf(data.work);
   const id = String(work.id || '');
   if (!id || !/^[a-z0-9-]{1,40}$/.test(id)) return json({ ok: false, error: 'Bad work id.' }, 400);
   // which room: works.yml store: deep -> LIBDB2, deep2 -> LIBDB3, else room one
@@ -288,15 +291,15 @@ async function handleMerecatIngest(request: Request, env: Env) {
   }
 
   if (mode === 'append') {
-    const rows = Array.isArray(data.chunks) ? data.chunks : [];
+    const rows = listOf(data.chunks).map(bodyOf);
     if (!rows.length || rows.length > 480) return json({ ok: false, error: 'Bad batch size.' }, 400);
     // Multi-row inserts: 6 params a row, 16 rows a statement, well inside
     // D1's 100-bound-params and 50-queries-per-invocation limits.
-    const stmts = [];
+    const stmts: D1PreparedStatement[] = [];
     for (let i = 0; i < rows.length; i += 16) {
       const slice = rows.slice(i, i + 16);
       const values = slice.map(() => '(?, ?, ?, ?, ?, ?)').join(',');
-      const binds = [];
+      const binds: Array<string | number> = [];
       for (const r of slice) {
         binds.push(String(r.cid || ''), id, Number(r.seq) || 0,
           String(r.heading || ''), String(r.anchor || ''), String(r.text || ''));
@@ -313,13 +316,13 @@ async function handleMerecatIngest(request: Request, env: Env) {
       // instead of failing the whole push — the next content-hash push heals it
       for (let i = 0; i < rows.length; i += 40) {
         const slice = rows.slice(i, i + 40);
-        let vecs = null;
+        let vecs: number[][] | null = null;
         for (let attempt = 0; attempt < 2 && !vecs; attempt++) {
           try {
             /* the embedding model answers { data: number[][] }; the binding's
                overloads carry an async-queue shape too, which this call never takes */
             const emb = await env.AI.run('@cf/baai/bge-m3', {
-              text: slice.map((r: any) => (r.heading ? r.heading + ': ' : '') + String(r.text || '').slice(0, 1800)),
+              text: slice.map((r) => (r.heading ? String(r.heading) + ': ' : '') + String(r.text || '').slice(0, 1800)),
             }) as { data?: number[][] };
             vecs = (emb && emb.data) || null;
           } catch (err) {
@@ -327,13 +330,13 @@ async function handleMerecatIngest(request: Request, env: Env) {
           }
         }
         if (!vecs) continue;
-        const upserts = [];
+        const upserts: VectorizeVector[] = [];
         for (let j = 0; j < slice.length; j++) {
           if (!vecs[j]) continue;
           upserts.push({
             id: String(slice[j].cid), values: vecs[j],
             metadata: { work: id, title: meta.title, tier: meta.tier,
-              url: meta.url + (slice[j].anchor ? '#' + slice[j].anchor : '') },
+              url: meta.url + (slice[j].anchor ? '#' + String(slice[j].anchor) : '') },
           });
         }
         if (upserts.length) {
@@ -365,7 +368,7 @@ async function handleMerecatIngest(request: Request, env: Env) {
    on the DO's own lifetime — a stateless invocation's waitUntil is cancelled
    ~30s after the response, far short of a local-backend generation. The
    direct call survives only as the no-binding fallback. */
-async function merecatMentionKick(env: any, id: any) {
+async function merecatMentionKick(env: Env, id: number) {
   try {
     if (env.CHAT) {
       const r = await env.CHAT.get(env.CHAT.idFromName('mention:' + id)).fetch('https://do/mention', {
@@ -429,7 +432,7 @@ async function handleMerecatForward(request: Request, env: Env) {
   if (!msg) return json({ ok: false, error: 'No such answer in that conversation.' }, 404);
   const topic = await env.DB.prepare(
     "SELECT id, page, locked, author_hash FROM comments WHERE id = ?1 AND parent_id IS NULL AND status = 'live'"
-  ).bind(topicId).first();
+  ).bind(topicId).first<{ id: number; page: string; locked: number | null; author_hash: string | null }>();
   if (!topic || !boardKey(topic.page)) return json({ ok: false, error: 'No such topic.' }, 404);
   if (topic.page === ADMIN_CAT && !(await isAdminHash(env, me))) {
     return json({ ok: false, error: 'That topic is for admins only.' }, 403);
@@ -441,8 +444,12 @@ async function handleMerecatForward(request: Request, env: Env) {
   ).bind(chatId, msg.id).first<{ body: string | null }>();
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(me).first<{ nick: string | null }>();
   const who = (prof && prof.nick) || 'a member';
-  let srcs = [];
-  try { srcs = JSON.parse(msg.sources || '[]'); } catch { /* footer just stays off */ }
+  let srcs: MerecatSource[] = [];
+  try {
+    srcs = listOf(JSON.parse(msg.sources || '[]')).map(bodyOf).map((x) => ({
+      n: Number(x.n), title: String(x.title || ''), heading: String(x.heading || ''), url: String(x.url || ''),
+    }));
+  } catch { /* footer just stays off */ }
   let finished = merecatFinishAnswer(String(msg.body || ''), srcs);
   const head = 'Forwarded from the librarian\u2019s desk by ' + who + '.' +
     (q && q.body ? '\n\n> ' + String(q.body).replace(/\s+/g, ' ').slice(0, 300) : '') + '\n\n';
@@ -496,8 +503,8 @@ async function handleMerecatAbout(request: Request, env: Env) {
   /* Admin-only since the public transparency panel retired (2026-07-28):
      this returns the persona verbatim and the whole roster, and the owner
      wills neither public. The administration page is the one consumer. */
-  let data: any = {};
-  try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
+  const data = await readBody(request);
+  if (!data) return json({ ok: false, error: 'No.' }, 403);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
@@ -507,7 +514,7 @@ async function handleMerecatAbout(request: Request, env: Env) {
   // stays a 91-row read, not a scan of the whole chunk store
   const works = await env.LIBDB.prepare(
     'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title'
-  ).all();
+  ).all<{ id: string; title: string; url: string; tier: number; chunks: number }>();
   // url-less works are the private shelves; the panel lists them under an
   // "additional works" heading with no links (the owner's standing word,
   // reversed 2026-07-28 from the earlier omission rule)
@@ -516,20 +523,20 @@ async function handleMerecatAbout(request: Request, env: Env) {
     if (!db) continue;
     try {
       const deep = await db.prepare(
-        'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title').all();
+        'SELECT id, title, url, tier, chunks FROM works ORDER BY tier, title').all<{ id: string; title: string; url: string; tier: number; chunks: number }>();
       for (const r of deep.results || []) list.push(r);
     } catch (err) {
       console.log(JSON.stringify({ event: 'merecat_about2_failed', error: String(err) }));
     }
   }
-  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first();
-  const out: any = {
+  const g = await env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first<{ q: number }>();
+  const out: Body = {
     ok: true,
     model: cfg.model, topk: cfg.topk,
     user_daily: cfg.user_daily, user_cap_on: cfg.user_cap_on, global_daily: cfg.global_daily,
     backend: 'cloudflare',   // kept one deploy for clients built before the GPU box retired
     persona: cfg.persona,
-    chunks: list.reduce((n: any, w: any) => n + (w.chunks || 0), 0),
+    chunks: list.reduce((n, w) => n + (w.chunks || 0), 0),
     works: list,
     today: (g && g.q) || 0,
   };
@@ -537,7 +544,7 @@ async function handleMerecatAbout(request: Request, env: Env) {
   if (key) {
     const me = await sha256hex(key);
     const u = await env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2')
-      .bind(day, me).first();
+      .bind(day, me).first<{ q: number }>();
     out.you = (u && u.q) || 0;
     out.admin = await isAdminHash(env, me);
   }
@@ -590,7 +597,7 @@ async function handleMerecatWorks(request: Request, env: Env) {
    the reader (merecatConfig) would produce from it, so the dashboard, the
    file push and the read agree byte for byte. A key not here is dropped
    silently, as the app_settings allowlist drops its strangers. */
-const MERECAT_CONFIG_KEYS: Record<string, (v: any) => string> = {
+const MERECAT_CONFIG_KEYS: Record<string, (v: unknown) => string> = {
   model: (v) => String(v).trim().slice(0, 120),
   mention_effort: (v) => Merecat.effortParse(Merecat.reasoningDefaults.mention)(String(v)),
   reasoning_on: (v) => (String(v) === '1' || String(v) === 'true') ? '1' : '0',
@@ -621,10 +628,10 @@ async function handleMerecatConfigSet(request: Request, env: Env) {
   const pre = await pipelineGated(request, env, ['config', 'ingest']);
   if (pre instanceof Response) return pre;
   const { data, caller } = pre;
-  const stmts: any[] = [];
-  const put = (k: any, v: any) => stmts.push(env.LIBDB.prepare(
+  const stmts: D1PreparedStatement[] = [];
+  const put = (k: string, v: unknown) => stmts.push(env.LIBDB.prepare(
     'INSERT INTO config (k, v) VALUES (?1, ?2) ON CONFLICT(k) DO UPDATE SET v = ?2').bind(k, String(v)));
-  const cfg = data.config || {};
+  const cfg = bodyOf(data.config);
   if (caller.road === 'oidc' && caller.door === 'ingest' &&
       ((typeof data.persona === 'string' && data.persona) ||
        Object.keys(cfg).some((k) => cfg[k] != null && INGEST_STAMP_KEYS.indexOf(k) === -1))) {

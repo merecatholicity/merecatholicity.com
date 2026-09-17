@@ -10,10 +10,10 @@ import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
-// extracted so they can be unit-tested in plain Node. See src/pure.js. (pure.js
+// extracted so they can be unit-tested in plain Node. See src/pure.ts. (pure.ts
 // also exports ipv6Groups/ipv6Prefix64/ipv6Full/isSharedV4, used internally
 // there or client-side; imported here only what index.js calls directly.)
-import { boardEventPublic, sanitizeScopes } from './pure.js';
+import { boardEventPublic, sanitizeScopes } from './pure.ts';
 // Real Web Push (VAPID + aes128gcm) on crypto.subtle — no external service.
 // Repository layer: bind-placeholder helpers + identity mappers (see db.ts).
 import { postCountsFor } from './db.ts';
@@ -415,7 +415,7 @@ async function handleConfig(request: Request, env: Env, url: URL) {
    the socket authenticated as that exact hash (`me`), so a member's DM and
    notification pushes reach their own connections alone. Anything else is
    dropped; at most 5 kept (one private + up to four forum scopes). */
-/* sanitizeScopes (the WebSocket subscription allowlist) lives in src/pure.js —
+/* sanitizeScopes (the WebSocket subscription allowlist) lives in src/pure.ts —
    security-critical and unit-tested there. BOARD_CATS is passed in so the pure
    helper stays dependency-free. */
 
@@ -437,7 +437,7 @@ async function handleLive(request: Request, env: Env) {
 }
 
 /* boardEventPublic — the back-room privacy gate for live events — lives in
-   src/pure.js (imported at top): the ONE predicate every emit path runs through,
+   src/pure.ts (imported at top): the ONE predicate every emit path runs through,
    so a future emit site cannot leak the admins-only room. sendToHub is its use. */
 
 /* Declarative route table (was a 91-branch if-chain in fetch). Every entry

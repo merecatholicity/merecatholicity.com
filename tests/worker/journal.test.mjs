@@ -5,7 +5,7 @@
    line with the whole body kept. Never the old hardcoded "Journal entry". */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { journalArticle } from '../../comments-worker/src/pure.js';
+import { journalArticle } from '../../comments-worker/src/pure.ts';
 
 test('an explicit markdown heading becomes the title and is stripped', () => {
   const a = journalArticle('# On the Communion of Saints\n\nThe body follows here.');

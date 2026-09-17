@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { merecatThinkStripper } from '../../comments-worker/src/pure.js';
+import { merecatThinkStripper } from '../../comments-worker/src/pure.ts';
 
 function stripStream(chunks) {
   const feed = merecatThinkStripper();

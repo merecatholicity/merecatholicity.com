@@ -22,6 +22,7 @@
    door and nothing else. */
 import * as Pipeline from '../../purescript/output/Domain.Pipeline/index.js';
 import { json, requireAdmin } from './lib.ts';
+import type { Body } from './lib.ts';
 import type { Env } from './env.ts';
 
 /* what a token is for (Domain.Pipeline.workflowOf) */
@@ -170,7 +171,7 @@ export async function pipelineCaller(request: Request, env: Env, key: string, do
 }
 
 /* The pipeline's preamble: parse, then the caller. */
-export async function pipelineGated(request: Request, env: Env, doors: readonly Door[]): Promise<Response | { data: any; caller: Caller }> {
+export async function pipelineGated(request: Request, env: Env, doors: readonly Door[]): Promise<Response | { data: Body; caller: Caller }> {
   let data: unknown;
   try { data = await request.json(); } catch (err) { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (!data || typeof data !== 'object' || Array.isArray(data)) return json({ ok: false, error: 'Bad request.' }, 400);

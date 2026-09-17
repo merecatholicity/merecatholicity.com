@@ -64,10 +64,12 @@ import {
   gated,
   readLimited,
   throttle,
+  listOf,
+  bodyOf,
 } from '../lib.ts';
-import type { DmRosterPayload, DmThreadPayload, DmThreadsPayload } from '../../../app/wire.ts';
+import type { DmMessage, DmReaction, DmRosterPayload, DmThreadPayload, DmThreadsPayload, DmThreadsRow } from '../../../app/wire.ts';
 import type { Env } from '../env.ts';
-import type { Body } from '../lib.ts';
+import type { Body, HubEvent } from '../lib.ts';
 
 async function handleDmSend(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many messages at once. Wait a minute and try again.', block: true });
@@ -84,7 +86,7 @@ async function handleDmSend(request: Request, env: Env, ctx: ExecutionContext) {
    conversation, the shadow hold, the envelope's roster, the attachment's
    claim, the row and what hangs off it, the fan-out, the bells. Everything
    before it — the throttle, the ban, Turnstile — is the caller's. */
-async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: number) {
+async function deliverDmWord(env: Env, ctx: ExecutionContext | undefined, me: string, data: Body, now: number) {
   const to = String(data.to || '');
   const threadId = Math.floor(Number(data.thread_id) || 0);
   if (!threadId && !/^[0-9a-f]{64}$/.test(to)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -105,7 +107,7 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
   /* The conversation: an existing one by id (mine, current — a stranger's id
      is "no such conversation"), or a pair's room by its other, made on this
      first word. */
-  let thread: any = null, other = '';
+  let thread: { id: number; kind?: number } | null = null, other = '';
   if (threadId) {
     const found = await dmThreadFor(env, me, { thread_id: threadId });
     if (!found || !found.thread) return json({ ok: false, error: 'No such conversation.' }, 404);
@@ -129,7 +131,7 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
      but the envelope. */
   let keys: Record<string, string> | null = null;
   if (enc === 3) {
-    const raw = data.keys && typeof data.keys === 'object' && !Array.isArray(data.keys) ? data.keys : null;
+    const raw = data.keys && typeof data.keys === 'object' && !Array.isArray(data.keys) ? bodyOf(data.keys) : null;
     if (!raw) return json({ ok: false, error: 'Bad request.' }, 400);
     keys = {};
     for (const h of Object.keys(raw)) {
@@ -138,7 +140,7 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
       keys[h] = v;
     }
     const roster = thread ? await dmCurrentMembers(env, thread.id) : await dmPubkeysOf(env, [me, other]);
-    if (!Dm.membersEqual(Object.keys(keys))(roster.map((m: any) => m.hash))) {
+    if (!Dm.membersEqual(Object.keys(keys))(roster.map((m) => m.hash))) {
       return json({ ok: false, error: 'roster', members: roster }, 409);
     }
   } else if (kind === 1) {
@@ -149,13 +151,13 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
      message; an object already named by a message (a forward, 2026-09-13)
      may be named again ONLY by a member who can read it — the media GET's
      own rule — and gains one more reference. */
-  let mediaKey = null, mediaSize = null;
+  let mediaKey: string | null = null, mediaSize: number | null = null;
   const rawMediaKey = String(data.media_key || '');
   if (rawMediaKey) {
     if (!/^dm\/[0-9a-f]{64}$/.test(rawMediaKey)) return json({ ok: false, error: 'Bad request.' }, 400);
-    const mrow = await env.DB.prepare('SELECT size FROM dm_media WHERE key = ?1').bind(rawMediaKey).first();
+    const mrow = await env.DB.prepare('SELECT size FROM dm_media WHERE key = ?1').bind(rawMediaKey).first<{ size: number }>();
     if (!mrow) return json({ ok: false, error: 'That attachment is not available.' }, 400);
-    const refRow = await env.DB.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?1').bind(rawMediaKey).first();
+    const refRow = await env.DB.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?1').bind(rawMediaKey).first<{ n: number }>();
     if (refRow && refRow.n > 0 && !(await dmMediaReadable(env, me, rawMediaKey, now))) {
       return json({ ok: false, error: 'That attachment is not available.' }, 400);
     }
@@ -172,12 +174,12 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
   const msgExpires = now + dmBackstopSeconds(await getAppSettings(env));
   const msg = await env.DB.prepare(
     'INSERT INTO dms (thread_id, sender_hash, body, created_at, held, enc, expires_at, media_key, media_size) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) RETURNING id'
-  ).bind(thread.id, me, body, now, held, enc, msgExpires, mediaKey, mediaSize).first();
+  ).bind(thread.id, me, body, now, held, enc, msgExpires, mediaKey, mediaSize).first<{ id: number }>() as { id: number };
   /* What hangs off the word, in one batch: each member's sealed key, the
      object's reference, the thread's last-word fields (never for a held
      send), and the sender's own read stamp — what you just said is read by
      you. msgs is recomputed, never incremented, over the visible words alone. */
-  const stmts: any[] = [];
+  const stmts: D1PreparedStatement[] = [];
   if (keys) for (const h of Object.keys(keys)) stmts.push(env.DB.prepare('INSERT OR REPLACE INTO dm_keys (msg_id, hash, sealed) VALUES (?1, ?2, ?3)').bind(msg.id, h, keys[h]));
   if (mediaKey) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO dm_media_refs (key, msg_id) VALUES (?1, ?2)').bind(mediaKey, msg.id));
   if (!held) {
@@ -248,7 +250,7 @@ async function handleDmForward(request: Request, env: Env, ctx: ExecutionContext
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many messages at once. Wait a minute and try again.' });
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
-  const items = Array.isArray(data.items) ? data.items : [];
+  const items = listOf(data.items);
   if (!items.length || items.length > 10) return json({ ok: false, error: 'Bad request.' }, 400);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
@@ -256,12 +258,12 @@ async function handleDmForward(request: Request, env: Env, ctx: ExecutionContext
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
   const now = Math.floor(Date.now() / 1000);
-  const results: any[] = [];
+  const results: Body[] = [];
   for (const item of items) {
-    const r = await deliverDmWord(env, ctx, me, item && typeof item === 'object' ? item : {}, now);
-    let j: any = null;
+    const r = await deliverDmWord(env, ctx, me, bodyOf(item), now);
+    let j: unknown = null;
     try { j = await r.json(); } catch { j = null; }
-    results.push(Object.assign({ status: r.status }, j || { ok: false, error: 'Bad request.' }));
+    results.push(Object.assign({ status: r.status }, j ? bodyOf(j) : { ok: false, error: 'Bad request.' }));
   }
   return json({ ok: true, results }, 200);
 }
@@ -288,11 +290,11 @@ async function handleDmRoster(request: Request, env: Env) {
    word is the system line "X added Y and Z", which is what tells each new
    member of it (their bell, their inbox). Shared by /dm/groups and the fork
    /dm/members makes from a pair. */
-async function createDmGroup(env: any, ctx: any, me: string, wanted: string[], name: string | null, now: number) {
+async function createDmGroup(env: Env, ctx: ExecutionContext | undefined, me: string, wanted: string[], name: string | null, now: number) {
   const thread = await env.DB.prepare(
     'INSERT INTO dm_threads (kind, pair_key, name, created_at, created_by, last_at, last_sender, msgs) VALUES (1, NULL, ?1, ?2, ?3, ?2, ?3, 0) RETURNING id'
-  ).bind(name, now, me).first();
-  const stmts: any[] = [env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(thread.id, me, now)];
+  ).bind(name, now, me).first<{ id: number }>() as { id: number };
+  const stmts: D1PreparedStatement[] = [env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(thread.id, me, now)];
   for (const h of wanted) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at, added_by) VALUES (?1, ?2, ?3, ?4)').bind(thread.id, h, now, me));
   await env.DB.batch(stmts);
   await sendSystemDmLine(env, thread.id, me, Dm.sysAddLine(wanted));
@@ -303,10 +305,10 @@ async function createDmGroup(env: any, ctx: any, me: string, wanted: string[], n
 /* The roster changed: every current member's open thread (the newcomers'
    included) learns who came or went, with the newcomers' names and keys so
    the composer seals to them at once. */
-async function announceDmMembers(env: any, ctx: any, threadId: number, by: string, added: string[], left: string[]) {
-  const rows = added.length ? (await dmMembersPayload(env, threadId)).filter((r: any) => added.indexOf(r.hash) !== -1) : [];
-  const ev = { v: 1, t: 'dm-members', scopes: (await dmRecipients(env, threadId, by)).map((h) => 'user:' + h), from: by, thread_id: threadId, by,
-    added: rows.map((r: any) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at,
+async function announceDmMembers(env: Env, ctx: ExecutionContext | undefined, threadId: number, by: string, added: string[], left: string[]) {
+  const rows = added.length ? (await dmMembersPayload(env, threadId)).filter((r) => added.indexOf(r.hash) !== -1) : [];
+  const ev: HubEvent = { v: 1, t: 'dm-members', scopes: (await dmRecipients(env, threadId, by)).map((h) => 'user:' + h), from: by, thread_id: threadId, by,
+    added: rows.map((r) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null, joined_at: r.joined_at,
       receipts: Prefs.receiptsOn(r.receipts_mode || 'auto') ? 1 : 0 })),
     left };
   if (!ev.scopes.length) return;
@@ -348,7 +350,7 @@ async function handleDmMembers(request: Request, env: Env, ctx: ExecutionContext
   const thread = found.thread;
   const kind = Number(thread.kind) || 0;
   const current = (await dmCurrentMembers(env, thread.id)).map((m) => m.hash);
-  const asked = (Array.isArray(data.add) ? data.add : []).map((h: any) => String(h || '')).filter((h: string) => current.indexOf(h) === -1);
+  const asked = listOf(data.add).map((h) => String(h || '')).filter((h) => current.indexOf(h) === -1);
   const { ok: wanted, missing } = await dmEligible(env, me, asked);
   if (!wanted.length && !missing.length) return json({ ok: false, error: 'Bad request.' }, 400);
   if (current.length + wanted.length + missing.length > Dm.maxMembers) return json({ ok: false, error: 'A conversation holds at most ' + Dm.maxMembers + ' members.' }, 400);
@@ -391,8 +393,8 @@ async function handleDmLeave(request: Request, env: Env, ctx: ExecutionContext) 
   const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM dm_members WHERE thread_id = ?1 AND left_at IS NULL').bind(thread.id).first<{ n: number }>();
   let purged = false;
   if (!(left && left.n > 0)) {
-    const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
-    await releaseMediaRefs(env, (media.results || []) as any[]);
+    const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all<{ id: number; media_key: string }>();
+    await releaseMediaRefs(env, media.results || []);
     for (const tbl of ['dm_keys', 'dm_reactions', 'dm_media_refs']) {
       await env.DB.prepare('DELETE FROM ' + tbl + ' WHERE msg_id IN (SELECT id FROM dms WHERE thread_id = ?1)').bind(thread.id).run();
     }
@@ -456,19 +458,18 @@ async function handleDmThreads(request: Request, env: Env) {
     'LEFT JOIN profiles pr ON t.kind = 0 AND pr.hash = ' + otherOf;
   const rows = await env.DB.prepare(
     'SELECT * FROM (' + inner + ') WHERE msgs > 0 ORDER BY last_at DESC LIMIT ?2 OFFSET ?3'
-  ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
+  ).bind(me, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all<Omit<DmThreadsRow, 'members' | 'assigned'> & { members_json: string | null }>();
   const totals = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(unread), 0) AS unread FROM (' + inner + ') WHERE msgs > 0'   // unread_total counts WORDS now (2026-09-11), the same number /dm/unread returns
   ).bind(me).first<{ n: number; unread: number }>();
-  const threads = (rows.results || []).map((r: any) => {
-    let members: any[] = [];
-    try { members = JSON.parse(r.members_json || '[]'); } catch { members = []; }
-    const out = Object.assign({}, r, {
-      members: members.map((m: any) => ({ hash: m.hash, nick: m.nick || null, avatar: m.avatar || null, assigned: m.hash ? displayName(m.hash) : null })),
+  const threads: DmThreadsRow[] = (rows.results || []).map(({ members_json, ...r }) => {
+    let members: Body[] = [];
+    try { members = listOf(JSON.parse(members_json || '[]')).map(bodyOf); } catch { members = []; }
+    return Object.assign({}, r, {
+      members: members.map((m) => ({ hash: String(m.hash || ''), nick: m.nick ? String(m.nick) : null,
+        avatar: m.avatar ? String(m.avatar) : null, assigned: m.hash ? displayName(String(m.hash)) : null })),
       assigned: r.other_hash ? displayName(r.other_hash) : null,
     });
-    delete out.members_json;
-    return out;
   });
   const inbox: DmThreadsPayload = { ok: true, threads, total: (totals && totals.n) || 0,
     unread_total: (totals && totals.unread) || 0, page: p, per: DM_PER_PAGE };
@@ -506,7 +507,7 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
      appear-offline (the hub clears it) — serving it as-is IS the privacy
      rule. An unmade pair's room lists its two. */
   const memberRows = thread ? await dmMembersPayload(env, thread.id) : await dmPairRoomRows(env, me, other);
-  const members = memberRows.map((r: any) => ({
+  const members = memberRows.map((r) => ({
     hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash), pubkey: r.pubkey || null,
     joined_at: r.joined_at == null ? null : Number(r.joined_at), left_at: r.left_at == null ? null : Number(r.left_at),
     read_at: (r.hash === me || Prefs.receiptsOn(r.receipts_mode || 'auto')) && r.read_at != null ? Number(r.read_at) : null,
@@ -515,7 +516,7 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
   }));
   /* A pair's `other`, kept one deploy for bundles from before the member model. */
   const otherRow = kind === 0 && other
-    ? (members.find((m: any) => m.hash === other) || { hash: other, nick: null, avatar: null, assigned: displayName(other), pubkey: null, last_seen: null })
+    ? (members.find((m) => m.hash === other) || { hash: other, nick: null, avatar: null, assigned: displayName(other), pubkey: null, last_seen: null })
     : null;
   const threadOut = { id: thread ? thread.id : null, kind, name: (thread && thread.name) || null, ttl, members };
   if (!thread) {
@@ -553,20 +554,21 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
     'COALESCE(m.media_expired, 0) AS media_expired, COALESCE(m.redacted, 0) AS redacted, m.edited_at, m.opened_at, m.expires_at, k.sealed, ' +
     "(SELECT json_group_array(json_object('hash', r.hash, 'emoji', r.emoji)) FROM dm_reactions r WHERE r.msg_id = m.id) AS reactions_json" +
     from.replace(' FROM dms m ', ' FROM dms m LEFT JOIN dm_keys k ON k.msg_id = m.id AND k.hash = ?1 ') + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
-  ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all();
+  ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all<Omit<DmMessage, 'reactions'> & { reactions_json: string | null }>();
   /* Per-message reactions, one per member (dm_reactions since 0016), told as
      the ledger holds them; for a pair, react_me / react_other and the
      2026-08-03 heart's liked_* fields are derived — kept one deploy for
      clients cached before the member model. */
-  const messages = (msgs.results || []).map((m: any) => {
-    const out: any = Object.assign({}, m);
-    let reactions: any[] = [];
-    try { reactions = JSON.parse(m.reactions_json || '[]'); } catch { reactions = []; }
-    out.reactions = reactions.filter((r: any) => r && r.emoji);
-    delete out.reactions_json;
+  const messages: DmMessage[] = (msgs.results || []).map(({ reactions_json, ...m }) => {
+    let reactions: DmReaction[] = [];
+    try {
+      reactions = listOf(JSON.parse(reactions_json || '[]')).map(bodyOf)
+        .filter((r) => r.emoji).map((r) => ({ hash: String(r.hash), emoji: String(r.emoji) }));
+    } catch { reactions = []; }
+    const out: DmMessage = Object.assign({}, m, { reactions });
     if (kind === 0) {
-      out.react_me = String(((out.reactions.find((r: any) => r.hash === me)) || {}).emoji || '');
-      out.react_other = String(((out.reactions.find((r: any) => r.hash !== me)) || {}).emoji || '');
+      out.react_me = String((reactions.find((r) => r.hash === me) || { emoji: '' }).emoji || '');
+      out.react_other = String((reactions.find((r) => r.hash !== me) || { emoji: '' }).emoji || '');
       out.liked_me = out.react_me ? 1 : 0;
       out.liked_other = out.react_other ? 1 : 0;
     }
@@ -615,11 +617,11 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
   if (openRes && openRes.meta && openRes.meta.changes > 0) {
     /* Reciprocal read receipts: a reader who set receipts to "off" sends none
        (and, client-side, sees none), so we only emit when their mode allows it. */
-    const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first();
+    const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first<{ receipts_mode: string | null }>();
     if (Prefs.receiptsOn((myPref && myPref.receipts_mode) || 'auto')) {
       const to = await dmRecipients(env, thread.id, me);
       if (to.length) {
-        const ev = { v: 1, t: 'dm-read', scopes: to.map((h) => 'user:' + h), thread_id: thread.id, reader: me, at: now };
+        const ev: HubEvent = { v: 1, t: 'dm-read', scopes: to.map((h) => 'user:' + h), thread_id: thread.id, reader: me, at: now };
         if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
       }
     }
@@ -657,8 +659,8 @@ async function handleDmPresence(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
-  const hashes = (Array.isArray(data.hashes) ? data.hashes : [])
-    .filter((h: any) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 50);
+  const hashes = listOf(data.hashes)
+    .filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)).slice(0, 50);
   if (!hashes.length || !env.HUB) return json({ ok: true, online: [], seen: {} }, 200);
   const on = await hubPresenceOf(env, hashes);
   /* "Last seen" for those not online now: the hub's stamp, absent for a member
@@ -667,8 +669,8 @@ async function handleDmPresence(request: Request, env: Env) {
   const seen: Record<string, number> = {};
   const rows = await env.DB.prepare(
     'SELECT hash, last_seen_at FROM profiles WHERE last_seen_at IS NOT NULL AND hash IN (' + inList(hashes.length, 1) + ')'
-  ).bind(...hashes).all();
-  for (const r of (rows.results || []) as any[]) if (on.indexOf(r.hash) === -1) seen[r.hash] = Number(r.last_seen_at);
+  ).bind(...hashes).all<{ hash: string; last_seen_at: number }>();
+  for (const r of (rows.results || [])) if (on.indexOf(r.hash) === -1) seen[r.hash] = Number(r.last_seen_at);
   return json({ ok: true, online: on, seen }, 200);
 }
 
@@ -682,8 +684,8 @@ async function handleDmBlocked(request: Request, env: Env) {
   const rows = await env.DB.prepare(
     'SELECT b.blocked_hash AS hash, pr.nick AS nick, pr.avatar AS avatar FROM dm_blocks b ' +
     'LEFT JOIN profiles pr ON pr.hash = b.blocked_hash WHERE b.owner_hash = ?1 ORDER BY b.created_at DESC LIMIT 200'
-  ).bind(me).all();
-  const blocked = (rows.results || []).map((r: any) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash) }));
+  ).bind(me).all<{ hash: string; nick: string | null; avatar: string | null }>();
+  const blocked = (rows.results || []).map((r) => ({ hash: r.hash, nick: r.nick || null, avatar: r.avatar || null, assigned: displayName(r.hash) }));
   return json({ ok: true, blocked }, 200);
 }
 
@@ -735,7 +737,7 @@ async function handleDmSave(request: Request, env: Env, ctx: ExecutionContext) {
   const row = await env.DB.prepare(
     'SELECT m.id, m.thread_id, m.created_at, m.opened_at, t.ttl FROM dms m JOIN dm_threads t ON t.id = m.thread_id ' +
     'JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?2 AND mb.left_at IS NULL WHERE m.id = ?1'
-  ).bind(id, me).first();
+  ).bind(id, me).first<{ id: number; thread_id: number; created_at: number; opened_at: number | null; ttl: number | null }>();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   const settings = await getAppSettings(env);
   const ttl = Number(row.ttl) || dmDefaultTtl(settings);
@@ -777,7 +779,7 @@ async function handleDmReact(request: Request, env: Env, ctx: ExecutionContext) 
     'SELECT m.id, m.thread_id, m.sender_hash, COALESCE(m.redacted, 0) AS redacted, t.kind FROM dms m JOIN dm_threads t ON t.id = m.thread_id ' +
     'JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 AND mb.left_at IS NULL ' +
     'WHERE m.id = ?2 AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now)
-  ).bind(me, id).first();
+  ).bind(me, id).first<{ id: number; thread_id: number; sender_hash: string; redacted: number; kind: number }>();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
   if (emoji) {
@@ -835,11 +837,11 @@ async function handleDmSeen(request: Request, env: Env, ctx: ExecutionContext) {
     'AND COALESCE(held, 0) = 0 AND opened_at IS NULL AND COALESCE(saved, 0) = 0 AND created_at > ?4'
   ).bind(me, now, thread.id, floor, ttl).run();
   if (openRes && openRes.meta && openRes.meta.changes > 0) {
-    const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first();
+    const myPref = await env.DB.prepare('SELECT receipts_mode FROM profiles WHERE hash = ?1').bind(me).first<{ receipts_mode: string | null }>();
     if (Prefs.receiptsOn((myPref && myPref.receipts_mode) || 'auto')) {
       const to = await dmRecipients(env, thread.id, me);
       if (to.length) {
-        const ev = { v: 1, t: 'dm-read', scopes: to.map((h) => 'user:' + h), thread_id: thread.id, reader: me, at: now };
+        const ev: HubEvent = { v: 1, t: 'dm-read', scopes: to.map((h) => 'user:' + h), thread_id: thread.id, reader: me, at: now };
         if (ctx) publishLive(env, ctx, ev); else await publishUser(env, [ev]);
       }
     }
@@ -884,7 +886,7 @@ async function handleDmEdit(request: Request, env: Env, ctx: ExecutionContext) {
     'SELECT m.id, m.thread_id, COALESCE(m.enc, 0) AS enc, COALESCE(m.redacted, 0) AS redacted, m.expires_at ' +
     'FROM dms m JOIN dm_threads t ON t.id = m.thread_id JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?2 AND mb.left_at IS NULL ' +
     'WHERE m.id = ?1 AND m.sender_hash = ?2'
-  ).bind(id, me).first();
+  ).bind(id, me).first<{ id: number; thread_id: number; enc: number; redacted: number; expires_at: number | null }>();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
   if (Number(row.enc) === 2) return json({ ok: false, error: 'That message cannot be edited.' }, 403);
@@ -915,7 +917,7 @@ async function handleDmRedact(request: Request, env: Env, ctx: ExecutionContext)
     'SELECT m.id, m.thread_id, m.media_key, COALESCE(m.redacted, 0) AS redacted ' +
     'FROM dms m JOIN dm_threads t ON t.id = m.thread_id JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?2 AND mb.left_at IS NULL ' +
     'WHERE m.id = ?1 AND m.sender_hash = ?2'
-  ).bind(id, me).first();
+  ).bind(id, me).first<{ id: number; thread_id: number; media_key: string | null; redacted: number }>();
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: true, id, redacted: true }, 200);   // already gone; idempotent
   /* Let go of the object at once (D1 can't cascade to R2): this word's
@@ -1079,7 +1081,7 @@ async function handleDmDelete(request: Request, env: Env) {
   const cur = await env.DB.prepare(
     'SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN cleared_at IS NULL THEN 1 ELSE 0 END), 0) AS open, COALESCE(MIN(cleared_at), 0) AS floor ' +
     'FROM dm_members WHERE thread_id = ?1 AND left_at IS NULL'
-  ).bind(thread.id).first();
+  ).bind(thread.id).first<{ n: number; open: number; floor: number }>();
   let purged = false;
   if (cur && Number(cur.open) === 0) {
     const surv = await env.DB.prepare('SELECT COUNT(*) AS n FROM dms WHERE thread_id = ?1 AND created_at > ?2')
@@ -1087,8 +1089,8 @@ async function handleDmDelete(request: Request, env: Env) {
     if (!(surv && surv.n)) {
       /* The objects go by their references (a forward elsewhere keeps its copy);
          D1 can't cascade to R2. */
-      const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all();
-      await releaseMediaRefs(env, (media.results || []) as any[]);
+      const media = await env.DB.prepare('SELECT id, media_key FROM dms WHERE thread_id = ?1 AND media_key IS NOT NULL').bind(thread.id).all<{ id: number; media_key: string }>();
+      await releaseMediaRefs(env, media.results || []);
       for (const tbl of ['dm_keys', 'dm_reactions', 'dm_media_refs']) {
         await env.DB.prepare('DELETE FROM ' + tbl + ' WHERE msg_id IN (SELECT id FROM dms WHERE thread_id = ?1)').bind(thread.id).run();
       }
@@ -1134,8 +1136,8 @@ async function handleDmDirectory(request: Request, env: Env, url: URL) {
     "  OR EXISTS (SELECT 1 FROM wall_posts w WHERE w.author_hash = u.hash AND w.status = 'live') " +
     '  OR EXISTS (SELECT 1 FROM dm_pubkeys k WHERE k.hash = u.hash)) ' +
     'ORDER BY u.joined DESC LIMIT 2000'
-  ).bind(MERECAT_BOT.hash, ...hidden).all();
-  const users = (rows.results || []).map((r: any) => Object.assign({}, r,
+  ).bind(MERECAT_BOT.hash, ...hidden).all<{ hash: string; joined: number; nick: string | null }>();
+  const users = (rows.results || []).map((r) => Object.assign({}, r,
     { assigned: r.hash ? displayName(r.hash) : null }));
   return json({ ok: true, users }, 200, cacheHeader(url));
 }

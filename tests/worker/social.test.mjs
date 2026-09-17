@@ -28,7 +28,7 @@ test("the flag is seeded ON and read through the kernel's rule, not a bare compa
   assert.ok(libSrc.includes("social_enabled: '1',"),
     'APP_SETTING_DEFAULTS must seed social_enabled ON — a fresh database has no row');
   assert.ok(libSrc.includes(
-    "export function socialEnabled(s: any) { return Wall.enabledFrom(String(s.social_enabled)); }"),
+    "export function socialEnabled(s: Settings): boolean { return Wall.enabledFrom(String(s.social_enabled)); }"),
     'the membrane must go through Domain.Wall so client and worker share one polarity');
   /* The polarity is the trap: the codebase carries `!== '0'` (default-on) beside
      `=== '1'` (default-off). Reading this one as `=== '1'` would still pass a

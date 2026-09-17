@@ -45,21 +45,26 @@ import {
   socialOff,
   readLimited,
   throttle,
+  listOf,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 import type { Body } from '../lib.ts';
+import type { AuthoredRow } from '../db.ts';
+
+/* A feed post or comment row as the wall reads select it (WALL_*_COLS). */
+type WallRow = AuthoredRow & { id: number };
 
 async function handleWallFeed(request: Request, env: Env) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
-  if (r.resp) return r.resp;
+  if ('resp' in r) return r.resp;
   if (await socialOff(env)) return noSuchPage();
   const cursor = Math.floor(Number(data.cursor) || 0);
   /* Muted authors' posts never appear in anyone else's feed. */
   const rows = cursor > 0
-    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND " + shadowExcl('p') + " AND p.id < ?1 ORDER BY p.id DESC LIMIT ?2").bind(cursor, WALL_PER_PAGE).all()
-    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND " + shadowExcl('p') + " ORDER BY p.id DESC LIMIT ?1").bind(WALL_PER_PAGE).all();
+    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND " + shadowExcl('p') + " AND p.id < ?1 ORDER BY p.id DESC LIMIT ?2").bind(cursor, WALL_PER_PAGE).all<WallRow>()
+    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.status = 'live' AND " + shadowExcl('p') + " ORDER BY p.id DESC LIMIT ?1").bind(WALL_PER_PAGE).all<WallRow>();
   const list = rows.results || [];
   const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
@@ -71,15 +76,15 @@ async function handleWall(request: Request, env: Env) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const r = await wallReader(request, env, data);
-  if (r.resp) return r.resp;
+  if ('resp' in r) return r.resp;
   if (await socialOff(env)) return noSuchPage();
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'No such member.' }, 400);
   const cursor = Math.floor(Number(data.cursor) || 0);
   /* A muted member's own wall reads as empty to everyone else. */
   const rows = cursor > 0
-    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND " + shadowExcl('p') + " AND p.id < ?2 ORDER BY p.id DESC LIMIT ?3").bind(hash, cursor, WALL_PER_PAGE).all()
-    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND " + shadowExcl('p') + " ORDER BY p.id DESC LIMIT ?2").bind(hash, WALL_PER_PAGE).all();
+    ? await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND " + shadowExcl('p') + " AND p.id < ?2 ORDER BY p.id DESC LIMIT ?3").bind(hash, cursor, WALL_PER_PAGE).all<WallRow>()
+    : await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.author_hash = ?1 AND p.status = 'live' AND " + shadowExcl('p') + " ORDER BY p.id DESC LIMIT ?2").bind(hash, WALL_PER_PAGE).all<WallRow>();
   const list = rows.results || [];
   const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
@@ -97,7 +102,7 @@ async function handleWallPostGet(request: Request, env: Env) {
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  let me = null;
+  let me: string | null = null;
   const key = String((data && data.key) || '');
   if (key) {
     me = await sha256hex(key);
@@ -110,10 +115,10 @@ async function handleWallPostGet(request: Request, env: Env) {
   if (await socialOff(env)) return json({ ok: false, error: 'That post is gone.' }, 404);
   /* A muted author's post reads as gone to everyone else; and any muted
      commenter's comments are dropped from a post others can still see. */
-  const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live' AND " + shadowExcl('p')).bind(id).first();
+  const post = await env.DB.prepare('SELECT ' + WALL_POST_COLS + " FROM wall_posts p LEFT JOIN profiles pr ON pr.hash = p.author_hash WHERE p.id = ?1 AND p.status = 'live' AND " + shadowExcl('p')).bind(id).first<WallRow>();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
-  const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id").bind(id).all();
-  const enriched = await wallEnrich(env, [post].concat(crows.results || []), me);
+  const crows = await env.DB.prepare('SELECT ' + WALL_COMMENT_COLS + " FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.post_id = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id").bind(id).all<WallRow>();
+  const enriched = await wallEnrich(env, [post, ...(crows.results || [])], me);
   const comments = enriched.slice(1);
   /* Opening the post READS its bells (2026-09-12): a comment on it, a mention
      in it, a like, a reaction — and the fresh count rides back. */
@@ -142,7 +147,7 @@ async function handleWallPostGet(request: Request, env: Env) {
    wall's targets behind the social switch. POST_LIMIT like a DM reaction, no
    Turnstile, gated like any write. The tally goes out live over the target's
    own scope, so every open page repaints the pill. */
-function reactAlias(data: any) {
+function reactAlias(data: Body) {
   if (data.target != null) return { target: String(data.target || ''), id: Math.floor(Number(data.id) || 0), raw: data.emoji != null ? String(data.emoji) : '' };
   const like = !(data.like === false || data.like === 0 || data.like === 'false');
   if (data.comment != null) return { target: 'wallc', id: Math.floor(Number(data.comment) || 0), raw: like ? '❤️' : '' };
@@ -152,9 +157,11 @@ function reactAlias(data: any) {
 /* The row a target names, as the viewer may see it: its author, the bell to
    ring, the thread/post pair the bell carries, and the live scope the tally
    goes out on. null = not visible to this viewer (= not there). */
-async function reactTarget(env: any, target: string, id: number, me: string) {
+async function reactTarget(env: Env, target: string, id: number, me: string):
+  Promise<{ author: string | null; kind: string; topicId: number; commentId: number; scopes: string[] } | null> {
   if (target === 'post') {
-    const row = await env.DB.prepare("SELECT id, author_hash, parent_id, page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+    const row = await env.DB.prepare("SELECT id, author_hash, parent_id, page FROM comments WHERE id = ?1 AND status = 'live'").bind(id)
+      .first<{ id: number; author_hash: string | null; parent_id: number | null; page: string }>();
     if (!row) return null;
     if (row.page === ADMIN_CAT && !(await isAdminHash(env, me))) return null;
     const topicId = row.parent_id || row.id;
@@ -162,12 +169,12 @@ async function reactTarget(env: any, target: string, id: number, me: string) {
   }
   if (await socialOff(env)) return null;
   if (target === 'wall') {
-    const row = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(id).first();
+    const row = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(id).first<{ id: number; author_hash: string | null }>();
     if (!row) return null;
     return { author: row.author_hash, kind: 'wall-react', topicId: 0, commentId: row.id, scopes: ['feed:global'] };
   }
   if (target === 'wallc') {
-    const row = await env.DB.prepare("SELECT id, post_id, author_hash FROM wall_comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+    const row = await env.DB.prepare("SELECT id, post_id, author_hash FROM wall_comments WHERE id = ?1 AND status = 'live'").bind(id).first<{ id: number; post_id: number; author_hash: string | null }>();
     if (!row) return null;
     return { author: row.author_hash, kind: 'wall-react', topicId: row.id, commentId: row.post_id, scopes: ['feed:global'] };
   }
@@ -209,7 +216,7 @@ async function handleReact(request: Request, env: Env, ctx: ExecutionContext) {
   const tally = await reactionsFor(env, target, [id]);
   const reacts = tally[String(id)] || [];
   if (ctx) publishLive(env, ctx, { v: 1, t: 'react', scopes: t.scopes, target, id, reacts });
-  return json({ ok: true, target, id, emoji, reacts, liked: emoji ? 1 : 0, likes: reacts.reduce((a: number, c: any) => a + c.n, 0) }, 200);
+  return json({ ok: true, target, id, emoji, reacts, liked: emoji ? 1 : 0, likes: reacts.reduce((a, c) => a + c.n, 0) }, 200);
 }
 
 /* The viewer's own reactions over a batch of targets — the board's public
@@ -222,12 +229,12 @@ async function handleReactMine(request: Request, env: Env) {
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
   const target = String(data.target || '');
-  const ids = (Array.isArray(data.ids) ? data.ids : []).slice(0, 60);
+  const ids = listOf(data.ids).slice(0, 60);
   if (!isReactTarget(target)) return json({ ok: false, error: 'Bad request.' }, 400);
   let mine = await myReactionsFor(env, me, target, ids);
   if (target === 'post' && Object.keys(mine).length && !(await isAdminHash(env, me))) {
-    const keep = await env.DB.prepare("SELECT id FROM comments WHERE page != ?1 AND id IN (" + inList(Object.keys(mine).length, 2) + ')').bind(ADMIN_CAT, ...Object.keys(mine).map(Number)).all();
-    const ok = new Set((keep.results || []).map((r: any) => String(r.id)));
+    const keep = await env.DB.prepare("SELECT id FROM comments WHERE page != ?1 AND id IN (" + inList(Object.keys(mine).length, 2) + ')').bind(ADMIN_CAT, ...Object.keys(mine).map(Number)).all<{ id: number }>();
+    const ok = new Set((keep.results || []).map((r) => String(r.id)));
     mine = Object.fromEntries(Object.entries(mine).filter(([k]) => ok.has(k)));
   }
   return json({ ok: true, target, mine }, 200);
@@ -251,16 +258,16 @@ async function handleReactWho(request: Request, env: Env) {
   const LIMIT = 60;
   const none = json({ ok: true, target, id, who: [], likers: [], more: false }, 200);
   if (target === 'post') {
-    const row = await env.DB.prepare("SELECT page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first();
+    const row = await env.DB.prepare("SELECT page FROM comments WHERE id = ?1 AND status = 'live'").bind(id).first<{ page: string }>();
     if (!row || row.page === ADMIN_CAT) return none;
   } else if (await socialOff(env)) return none;
   const rows = await env.DB.prepare(
     'SELECT r.author_hash, r.emoji, pr.nick, pr.avatar FROM reactions r LEFT JOIN profiles pr ON pr.hash = r.author_hash ' +
     'WHERE r.target = ?1 AND r.target_id = ?2 AND ' + shadowExcl('r') + ' ORDER BY r.created_at DESC LIMIT ?3'
-  ).bind(target, id, LIMIT + 1).all();
+  ).bind(target, id, LIMIT + 1).all<{ author_hash: string; emoji: string; nick: string | null; avatar: string | null }>();
   const all = rows.results || [];
   const more = all.length > LIMIT;
-  const who = all.slice(0, LIMIT).map((r: any) => ({
+  const who = all.slice(0, LIMIT).map((r) => ({
     hash: r.author_hash, nick: r.nick || displayName(r.author_hash), avatar: r.avatar || null, emoji: String(r.emoji || ''),
   }));
   return json({ ok: true, target, id, who, likers: who, more }, 200);
@@ -331,7 +338,7 @@ async function handleWallComment(request: Request, env: Env, ctx: ExecutionConte
   if (!key) return json({ ok: false, error: 'Sign in to comment.' }, 401);
   if (await socialOff(env)) return noSuchPage();
   const postId = Math.floor(Number(data.post) || 0);
-  const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first();
+  const post = await env.DB.prepare("SELECT id, author_hash FROM wall_posts WHERE id = ?1 AND status = 'live'").bind(postId).first<{ id: number; author_hash: string | null }>();
   if (!post) return json({ ok: false, error: 'That post is gone.' }, 404);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   const wallSettings = await getAppSettings(env);
@@ -498,7 +505,7 @@ async function handleWallDelete(request: Request, env: Env) {
   const admin = await isAdminHash(env, me);
   const id = Math.floor(Number(data.id) || 0);
   if (data.kind === 'comment') {
-    const row = await env.DB.prepare('SELECT post_id, author_hash, media_key, status FROM wall_comments WHERE id = ?1').bind(id).first();
+    const row = await env.DB.prepare('SELECT post_id, author_hash, media_key, status FROM wall_comments WHERE id = ?1').bind(id).first<{ post_id: number; author_hash: string | null; media_key: string | null; status: string }>();
     if (!row) return json({ ok: true }, 200);
     if (!Wall.canDelete(row.author_hash)(me)(admin)) return json({ ok: false, error: 'No.' }, 403);
     if (row.media_key) await purgeWallMedia(env, [row.media_key]);
@@ -513,13 +520,13 @@ async function handleWallDelete(request: Request, env: Env) {
     }
     return json({ ok: true }, 200);
   }
-  const row = await env.DB.prepare('SELECT author_hash, media_key FROM wall_posts WHERE id = ?1').bind(id).first();
+  const row = await env.DB.prepare('SELECT author_hash, media_key FROM wall_posts WHERE id = ?1').bind(id).first<{ author_hash: string | null; media_key: string | null }>();
   if (!row) return json({ ok: true }, 200);
   if (!Wall.canDelete(row.author_hash)(me)(admin)) return json({ ok: false, error: 'No.' }, 403);
-  const keys = [];
+  const keys: string[] = [];
   if (row.media_key) keys.push(row.media_key);
-  const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE post_id = ?1 AND media_key IS NOT NULL').bind(id).all();
-  (cm.results || []).forEach((r: any) => keys.push(r.media_key));
+  const cm = await env.DB.prepare('SELECT media_key FROM wall_comments WHERE post_id = ?1 AND media_key IS NOT NULL').bind(id).all<{ media_key: string }>();
+  (cm.results || []).forEach((r) => keys.push(r.media_key));
   if (keys.length) await purgeWallMedia(env, keys);
   await env.DB.prepare("DELETE FROM reactions WHERE target = 'wallc' AND target_id IN (SELECT id FROM wall_comments WHERE post_id = ?1)").bind(id).run();
   await env.DB.prepare('DELETE FROM wall_comments WHERE post_id = ?1').bind(id).run();

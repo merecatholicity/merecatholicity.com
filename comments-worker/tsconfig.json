@@ -3,8 +3,10 @@
   // tsconfig because the Worker has Cloudflare's runtime globals (from
   // @cloudflare/workers-types), NOT the browser DOM — the two lib/global sets
   // conflict. noEmit: wrangler's esbuild does the transpile; tsc only checks.
-  // checkJs off + allowJs on so index.ts may import the still-JS pure.js /
-  // webpush.js and the untyped PureScript output (all typed as any).
+  // checkJs off + allowJs on so the worker may import the PureScript output
+  // (its types inferred from the JS). The worker's own modules are all .ts
+  // since 2026-09-17 (pure.ts, webpush.ts): a plain .js module is `any` to
+  // every caller, and tests/js/any_ratchet.test.mjs holds the workers at zero.
   // allowImportingTsExtensions (noEmit makes it legal) so the Node-tested
   // modules (quota.ts) may import their siblings with .ts extensions, which
   // Node's type stripping resolves and esbuild bundles like any other.
@@ -22,6 +24,6 @@
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "types/**/*.ts"],
   "exclude": ["node_modules"]
 }

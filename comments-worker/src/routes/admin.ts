@@ -7,10 +7,11 @@ import * as Media from '../../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../../purescript/output/Domain.Call/index.js';
 import * as Comments from '../../../purescript/output/Domain.Comments/index.js';
 import * as OpsK from '../../../purescript/output/Domain.Ops/index.js';
-import { toBanKey, looksLikeIp } from '../pure.js';
+import { toBanKey, looksLikeIp } from '../pure.ts';
 import { sendAlert } from '../alerts.ts';
 import { readOps } from '../ops.ts';
 import type { Env } from '../env.ts';
+import type { Settings } from '../lib.ts';
 import { inList } from '../db.ts';
 import {
   APP_SETTING_DEFAULTS,
@@ -34,10 +35,14 @@ import {
   sweepJournalComments,
   adminGated,
   throttle,
+  bodyOf,
 } from '../lib.ts';
 
 /* Admin platform settings: read them (with the current media usage), and set the
    tunable ones with sanity clamps. The growing home for site-wide toggles. */
+/* the defaults by name (every value a string) */
+const SETTING_DEFAULTS: Settings = APP_SETTING_DEFAULTS;
+
 async function handleAdminSettings(request: Request, env: Env) {
   const pre = await adminGated(request, env);
   if (pre instanceof Response) return pre;
@@ -66,9 +71,10 @@ async function handleAdminSettings(request: Request, env: Env) {
       media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
       media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1 };
     const stmts = [];
-    for (const k of Object.keys(data.set)) {
+    const set = bodyOf(data.set);
+    for (const k of Object.keys(set)) {
       if (!allowed[k]) continue;
-      let v = String(data.set[k]);
+      let v = String(set[k]);
       if (overrideKeys[k] && v.trim() === '') {
         stmts.push(env.DB.prepare('DELETE FROM app_settings WHERE k = ?1').bind(k));
         continue;
@@ -90,15 +96,15 @@ async function handleAdminSettings(request: Request, env: Env) {
          single-sourced. An empty kinds mask is legal (= that context's uploads
          are off). NOTE the retention clamps use `|| 0`, NOT a defaults
          fallback: 0 is a legal, meaningful value (keep forever). */
-      else if (k === 'media_image_max_bytes' || k === 'media_video_max_bytes' || k === 'media_audio_max_bytes') v = String(Media.clampKindBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
+      else if (k === 'media_image_max_bytes' || k === 'media_video_max_bytes' || k === 'media_audio_max_bytes') v = String(Media.clampKindBytes(Math.floor(Number(v)) || Number(SETTING_DEFAULTS[k])));
       else if (overrideKeys[k] && k.indexOf('_max_bytes') !== -1) {
         /* Garbage input on a per-section byte override falls back to ITS kind's
            legacy global default (the key ends media_<ctx>_<kind>_max_bytes). */
         const kindWord = k.split('_').slice(-3)[0];
-        v = String(Media.clampKindBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)['media_' + kindWord + '_max_bytes']) || Number(APP_SETTING_DEFAULTS.media_image_max_bytes)));
+        v = String(Media.clampKindBytes(Math.floor(Number(v)) || Number(SETTING_DEFAULTS['media_' + kindWord + '_max_bytes']) || Number(APP_SETTING_DEFAULTS.media_image_max_bytes)));
       }
       else if (k === 'media_audio_max_seconds' || k.indexOf('media_audio_max_seconds_') === 0) v = String(Media.clampAudioSeconds(Math.floor(Number(v)) || Number(APP_SETTING_DEFAULTS.media_audio_max_seconds)));
-      else if (k === 'media_cap_dm_bytes' || k === 'media_cap_wall_bytes' || k === 'media_cap_board_bytes') v = String(Media.clampCapBytes(Math.floor(Number(v)) || Number((APP_SETTING_DEFAULTS as any)[k])));
+      else if (k === 'media_cap_dm_bytes' || k === 'media_cap_wall_bytes' || k === 'media_cap_board_bytes') v = String(Media.clampCapBytes(Math.floor(Number(v)) || Number(SETTING_DEFAULTS[k])));
       else if (k === 'media_wall_retention_days' || k === 'media_board_retention_days') v = String(Media.clampRetentionDays(Math.floor(Number(v)) || 0));
       else if (k === 'media_dm_retention_days') v = String(Media.clampDmRetentionDays(Math.floor(Number(v)) || Number(APP_SETTING_DEFAULTS.media_dm_retention_days)));
       else if (k === 'media_kinds_dm' || k === 'media_kinds_wall' || k === 'media_kinds_board') v = Media.serializeKinds(Media.parseKinds(v));

@@ -8,7 +8,7 @@ import * as Dm from '../../purescript/output/Domain.Dm/index.js';
 import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
-} from './pure.js';
+} from './pure.ts';
 import {
   BOARD_CATS,
   MERECAT_RESTING,
@@ -34,7 +34,7 @@ import {
   hubShards,
   hubShard,
 } from './lib.ts';
-import type { HubStub, HubShardStats } from './lib.ts';
+import type { HubStub, HubShardStats, MerecatCfg } from './lib.ts';
 import { leakedNames, sealEnv, secretValues } from './egress.ts';
 import { noteLeak } from './ops.ts';
 import { PUBLIC_VARS } from './env.ts';
@@ -547,14 +547,6 @@ export class BoardHub extends DurableObject<Env> {
    to, the conversation, and the IP the block gate reads. */
 type ChatAtt = { auth: boolean; me?: string; admin?: boolean; chatId: number; ip: string };
 
-/* The merecat config record (lib.ts's merecatConfig): the dials this file
-   reads by name, open on the rest (the prompt builder and the fold read their
-   own). It moves to lib.ts when merecatConfig itself is typed. */
-type MerecatCfg = {
-  model: string; max_tokens: number; temperature: number;
-  global_daily: number; user_daily: number; user_cap_on: number;
-  [k: string]: unknown;
-};
 
 /* The room's state machine, in the words the frames use. */
 type ChatPhase = 'idle' | 'queued' | 'thinking' | 'streaming' | 'done' | 'error';

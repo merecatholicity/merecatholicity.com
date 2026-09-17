@@ -146,7 +146,7 @@ as floors.
 - **`app/richtext.ts`: 78.8%** — not internal repetition; the body renderer is
   **duplicated across the bundle (`richtext.ts`) and the `comments.js` fallback**.
   This is the single largest cross-file clone and the clearest Wave-F target.
-- Everything else (`pure.js`, `webpush.js`, the contact worker, every small
+- Everything else (`pure.ts`, `webpush.ts`, the contact worker, every small
   served script, `api.ts`/`core.ts`/`store.ts`/`shell.ts`/most views): **0%**.
   The already-modular files are already clean.
 
@@ -184,7 +184,7 @@ proven**:
   PureScript types are erased for JS.
 - **`app/**`** — 17 files, one Lit component per view, over `app/store.ts` (cache)
   and `app/api.ts` (typed client). Median ~150 lines. Already modular.
-- **`comments-worker/src/pure.js`** — the pure worker helpers, extracted so they
+- **`comments-worker/src/pure.ts`** — the pure worker helpers, extracted so they
   can be unit-tested in plain Node (the stepping-stone toward the ORM).
 
 What is **not** yet modular: the worker's SQL (inline in the route files, the
@@ -311,7 +311,7 @@ comments-worker/src/
   db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList
   durable.ts     BoardHub · ChatRoom (the only importer of cloudflare:workers)
   quota.ts · usage.ts · usagecalc.ts · analytics.ts   the AI budget guard, the usage monitor and the TURN guard
-  pure.js · webpush.js   pure helpers (no imports)
+  pure.ts · webpush.ts   pure helpers and the Web Push crypto (TypeScript since 2026-09-17)
 ```
 
 **Newcomer reading order** (a handler's home is `routes/<feature>.ts`; `index.ts` is the table):
@@ -338,7 +338,7 @@ comments-worker/src/
 | 2A | Strict `tsc` gate (`tsconfig`, `globals.d.ts`, `McCore` contract — since 2026-09-16 `McCore` is `typeof import('./app/core')`, so the contract cannot drift from the membrane) | — | ✅ |
 | 2B | `app/**` → TypeScript, strict-green; byte-identical bundle | — | ✅ |
 | 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ✅ |
-| 2D | Both workers → TypeScript (`Env`, typed rows) — and since 2026-09-16 `Env` is REAL (`comments-worker/src/env.ts`: every binding wrangler.jsonc declares, the vars and secrets optional strings), taken by `index.ts`, the Durable Objects and `routes/calls.ts` (the worked example: `first<Row>()` per query). **Since 2026-09-17 EVERY handler takes it** — the nine small modules, then admin, board, dm, merecat and `lib.ts`'s 100 signatures — with row shapes at the query and `Body` for a parsed request; worker `: any` 799 → 388 under the ratchet. The pass paid for itself on its first file: typing `handleRecent`'s env is what found the six-week secret disclosure (`docs/architecture/log/2026-09.md`, and `tests/worker/env_leak.test.mjs` sweeps for its class) | — | ✅ |
+| 2D | Both workers → TypeScript (`Env`, typed rows) — and since 2026-09-16 `Env` is REAL (`comments-worker/src/env.ts`: every binding wrangler.jsonc declares, the vars and secrets optional strings), taken by `index.ts`, the Durable Objects and `routes/calls.ts` (the worked example: `first<Row>()` per query). **Since 2026-09-17 EVERY handler takes it** — the nine small modules, then admin, board, dm, merecat and `lib.ts`'s 100 signatures — with row shapes at the query and `Body` for a parsed request; worker `: any` 799 → 388 under the ratchet, and **to zero** the same day (a hard gate since; `pure.ts`/`webpush.ts`; the env's type brand refuses to be an answer, a row or an event — `comments-worker/types/env_brand.check.ts`). The pass paid for itself on its first file: typing `handleRecent`'s env is what found the six-week secret disclosure (`docs/architecture/log/2026-09.md`, and `tests/worker/env_leak.test.mjs` sweeps for its class) | — | ✅ |
 | F | **Wave F: the classic client is feature modules** — `client/comments.ts` (12,584 lines, one boot function) → the root + seven `install<Feature>(B)` factories, every statement moved verbatim, names bound from the boot object after install, top-level effects in `run()`; `build:client` bundles; source-rule tests read `tests/_support/client.mjs` | — (lines moved, not deduplicated; the classic-vs-Lit clone is the remaining target) **2026-09-16: `dm.ts` (3,015 lines) became six factories** — `dm-{crypto,message,pickers,inbox,thread,styles}.ts` — every declaration verbatim, cross-module names bound through `B` like any other, the wiring law extended by `tests/_support/client.mjs`'s list. | ✅ |
 | 3 | **`db.ts` repository** — foundation shipped (`inList` retires the 13 hand-rolled `?N` loops, the `Query` builder, the `rankFor`/`withNames`/`postCountsFor` mappers moved in, unit-tested). The fuller repository layer `PLAN-TODO.md` proposed (no inline `prepare()` in handlers, typed rows, a builder everywhere) is **not pursued** (2026-09-16): with the handlers running in the unit suite against a real SQLite, inline SQL is testable where it sits — and the plan file is retired. | −13 `?N` loops; mappers single-sourced | ✅ |
 | 4 | **Middleware + declarative routes + file-split** — the 91-branch chain is a declarative `ROUTES` table (route-parity diff = identical); `keyed`/`keyedGated` middleware on the byte-exact handlers; the monolith split into `lib.ts` / `durable.ts` / `db.ts` (2026-08-01); and — **2026-09-16 — the handlers into `routes/{calls,notify,media,wall,profile,dm,merecat,board,admin}.ts`**, every one moved verbatim (its declaration line and comment intact) behind the table `index.ts` keeps, which is now the composition root (654 lines). The 2026-08-01 attempt was reverted because an esbuild tree-shake around the Durable Object re-export dropped live code with no coverage to catch it; this pass first made the handlers runnable in the unit suite (`tests/_support/worker.mjs`, `tests/worker/routes.test.mjs` holding the table to its snapshot and dispatching every entry) and proved each commit with `scripts/worker_bundle_set.sh` — function-name set and code-line set identical before and after. | monolith → composition root + 9 route files, core/DO seams | ✅ |

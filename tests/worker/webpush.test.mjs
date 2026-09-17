@@ -1,4 +1,4 @@
-/* comments-worker/src/webpush.js — the hand-rolled Web Push crypto (RFC 8291
+/* comments-worker/src/webpush.ts — the hand-rolled Web Push crypto (RFC 8291
    aes128gcm + RFC 8188 + VAPID RFC 8292). This is the one genuinely hard bit of
    the push feature, so it is proven end-to-end:
 
@@ -14,7 +14,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   encryptContent, vapidAuthHeader, importVapidPrivateKey, bytesToB64u, b64uToBytes,
-} from '../../comments-worker/src/webpush.js';
+} from '../../comments-worker/src/webpush.ts';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -27,7 +27,7 @@ function concat(...arrays) {
   for (const a of arrays) { out.set(a, off); off += a.length; }
   return out;
 }
-// Independent HKDF-SHA256 for the decrypt side (does NOT reuse webpush.js).
+// Independent HKDF-SHA256 for the decrypt side (does NOT reuse webpush.ts).
 async function hkdf(salt, ikm, info, length) {
   const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, length * 8);

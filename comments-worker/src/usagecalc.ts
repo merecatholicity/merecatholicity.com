@@ -143,72 +143,84 @@ function row(id: string, product: string, label: string, used: number, limit: nu
   if (note) r.note = note;
   return r;
 }
-function errRow(id: string, product: string, label: string, src: any): UsageRow {
-  return { id, product, label, error: String((src && src.error) || 'unavailable') };
-}
-const num = (v: any) => (typeof v === 'number' && isFinite(v) ? v : 0);
-const sumBy = (rows: any[], f: (g: any) => any) => (rows || []).reduce((t, g) => t + num(f(g)), 0);
+/* The raw answer is Cloudflare's JSON, read through these: a field that is
+   missing or of another shape reads as nothing — 0, '' or no rows — and the
+   report goes on, where a bare `x.sum.requests` would throw it away. */
+type Json = Record<string, unknown>;
+const obj = (v: unknown): Json => (v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Json) : {});
+const at = (v: unknown, ...path: string[]): unknown => path.reduce<unknown>((o, k) => obj(o)[k], v);
+const num = (v: unknown) => (typeof v === 'number' && isFinite(v) ? v : 0);
+const numAt = (v: unknown, ...path: string[]) => num(at(v, ...path));
+const strAt = (v: unknown, ...path: string[]) => { const x = at(v, ...path); return x == null ? '' : String(x); };
+const groups = (src: Json, dataset: string): Json[] => { const g = src[dataset]; return Array.isArray(g) ? g.map(obj) : []; };
+const sumBy = (rows: Json[], f: (g: Json) => number) => rows.reduce((t, g) => t + num(f(g)), 0);
 const desc = (d: Detail[]) => d.sort((a, b) => b.used - a.used);
+
+function errRow(id: string, product: string, label: string, src: unknown): UsageRow {
+  return { id, product, label, error: String(obj(src).error || 'unavailable') };
+}
 
 /* raw: one entry per product, each either the GraphQL account object (dataset
    name -> rows) or { error } when that fetch failed. Aggregation only — every
    number here is arithmetic over what Cloudflare answered. */
-export function buildReport(raw: any): UsageRow[] {
+export function buildReport(raw: Json): UsageRow[] {
   const rows: UsageRow[] = [];
+  /* a product's account object, or null when it is absent or answered an error */
+  const product = (k: string): Json | null => (raw[k] && !obj(raw[k]).error ? obj(raw[k]) : null);
 
-  const w = raw.workers;
-  if (!w || w.error) rows.push(errRow('workers.requests', 'workers', 'Requests today', w));
+  const w = product('workers');
+  if (!w) rows.push(errRow('workers.requests', 'workers', 'Requests today', raw.workers));
   else {
-    const g = w.workersInvocationsAdaptive || [];
+    const g = groups(w, 'workersInvocationsAdaptive');
     rows.push(row('workers.requests', 'workers', 'Requests today',
-      sumBy(g, (x) => x.sum.requests), FREE.workersRequestsDay, 'req', 'day',
-      desc(g.map((x: any) => ({ label: x.dimensions.scriptName, used: num(x.sum.requests) }))),
+      sumBy(g, (x) => numAt(x, 'sum', 'requests')), FREE.workersRequestsDay, 'req', 'day',
+      desc(g.map((x) => ({ label: strAt(x, 'dimensions', 'scriptName'), used: numAt(x, 'sum', 'requests') }))),
       'Every Worker on the account draws on this one daily pool.'));
   }
 
-  const ai = raw.ai;
-  if (!ai || ai.error) rows.push(errRow('ai.neurons', 'ai', 'Neurons today', ai));
+  const ai = product('ai');
+  if (!ai) rows.push(errRow('ai.neurons', 'ai', 'Neurons today', raw.ai));
   else {
-    const g = ai.aiInferenceAdaptiveGroups || [];
+    const g = groups(ai, 'aiInferenceAdaptiveGroups');
     rows.push(row('ai.neurons', 'ai', 'Neurons today',
-      Math.round(sumBy(g, (x) => x.sum.totalNeurons) * 10) / 10, FREE.aiNeuronsDay, 'neurons', 'day',
-      desc(g.map((x: any) => ({ label: x.dimensions.modelId, used: Math.round(num(x.sum.totalNeurons) * 10) / 10 }))),
+      Math.round(sumBy(g, (x) => numAt(x, 'sum', 'totalNeurons')) * 10) / 10, FREE.aiNeuronsDay, 'neurons', 'day',
+      desc(g.map((x) => ({ label: strAt(x, 'dimensions', 'modelId'), used: Math.round(numAt(x, 'sum', 'totalNeurons') * 10) / 10 }))),
       'Screening (Llama Guard), avatar checks (LLaVA), embeddings, reranking, and cloud-mode merecat all spend from here.'));
   }
 
-  const d1 = raw.d1;
-  if (!d1 || d1.error) rows.push(errRow('d1.rows_read', 'd1', 'Rows read today', d1));
+  const d1 = product('d1');
+  if (!d1) rows.push(errRow('d1.rows_read', 'd1', 'Rows read today', raw.d1));
   else {
-    const an = d1.d1AnalyticsAdaptiveGroups || [];
-    const st = d1.d1StorageAdaptiveGroups || [];
+    const an = groups(d1, 'd1AnalyticsAdaptiveGroups');
+    const st = groups(d1, 'd1StorageAdaptiveGroups');
     rows.push(row('d1.rows_read', 'd1', 'Rows read today',
-      sumBy(an, (x) => x.sum.rowsRead), FREE.d1RowsReadDay, 'rows', 'day',
-      desc(an.map((x: any) => ({ label: d1Name(x.dimensions.databaseId), used: num(x.sum.rowsRead) })))));
+      sumBy(an, (x) => numAt(x, 'sum', 'rowsRead')), FREE.d1RowsReadDay, 'rows', 'day',
+      desc(an.map((x) => ({ label: d1Name(strAt(x, 'dimensions', 'databaseId')), used: numAt(x, 'sum', 'rowsRead') })))));
     rows.push(row('d1.rows_written', 'd1', 'Rows written today',
-      sumBy(an, (x) => x.sum.rowsWritten), FREE.d1RowsWrittenDay, 'rows', 'day',
-      desc(an.map((x: any) => ({ label: d1Name(x.dimensions.databaseId), used: num(x.sum.rowsWritten) })))));
+      sumBy(an, (x) => numAt(x, 'sum', 'rowsWritten')), FREE.d1RowsWrittenDay, 'rows', 'day',
+      desc(an.map((x) => ({ label: d1Name(strAt(x, 'dimensions', 'databaseId')), used: numAt(x, 'sum', 'rowsWritten') })))));
     rows.push(row('d1.storage', 'd1', 'Stored bytes',
-      sumBy(st, (x) => x.max.databaseSizeBytes), FREE.d1StorageBytes, 'bytes', 'total',
-      desc(st.map((x: any) => {
-        const used = num(x.max.databaseSizeBytes);
-        return { label: d1Name(x.dimensions.databaseId), used, limit: FREE.d1PerDbBytes,
+      sumBy(st, (x) => numAt(x, 'max', 'databaseSizeBytes')), FREE.d1StorageBytes, 'bytes', 'total',
+      desc(st.map((x) => {
+        const used = numAt(x, 'max', 'databaseSizeBytes');
+        return { label: d1Name(strAt(x, 'dimensions', 'databaseId')), used, limit: FREE.d1PerDbBytes,
           pct: Math.round((used / FREE.d1PerDbBytes) * 1000) / 10 };
       })),
       'Each database also has its own 500 MB wall on the free plan — the librarian rooms have hit it before.'));
   }
 
-  const r2 = raw.r2;
-  if (!r2 || r2.error) rows.push(errRow('r2.storage', 'r2', 'Stored bytes', r2));
+  const r2 = product('r2');
+  if (!r2) rows.push(errRow('r2.storage', 'r2', 'Stored bytes', raw.r2));
   else {
-    const ops = r2.r2OperationsAdaptiveGroups || [];
-    const st = r2.r2StorageAdaptiveGroups || [];
+    const ops = groups(r2, 'r2OperationsAdaptiveGroups');
+    const st = groups(r2, 'r2StorageAdaptiveGroups');
     let a = 0, b = 0;
     const perA = new Map<string, number>(), perB = new Map<string, number>();
     const strange = new Set<string>();
     for (const g of ops) {
-      const action = g.dimensions.actionType || '';
-      const bucket = g.dimensions.bucketName || '?';
-      const n = num(g.sum.requests);
+      const action = strAt(g, 'dimensions', 'actionType');
+      const bucket = strAt(g, 'dimensions', 'bucketName') || '?';
+      const n = numAt(g, 'sum', 'requests');
       const cls = classifyR2(action);
       if (!r2Known(action)) strange.add(action);
       if (cls === 'a') { a += n; perA.set(bucket, (perA.get(bucket) || 0) + n); }
@@ -223,64 +235,64 @@ export function buildReport(raw: any): UsageRow[] {
       b, FREE.r2ClassBMonth, 'ops', 'month', mapDetail(perB),
       'Object reads and heads — mostly avatar/media serving that misses the edge cache.'));
     rows.push(row('r2.storage', 'r2', 'Stored bytes',
-      sumBy(st, (x) => num(x.max.payloadSize) + num(x.max.metadataSize)), FREE.r2StorageBytes, 'bytes', 'total',
-      desc(st.map((x: any) => ({ label: x.dimensions.bucketName,
-        used: num(x.max.payloadSize) + num(x.max.metadataSize) }))),
+      sumBy(st, (x) => numAt(x, 'max', 'payloadSize') + numAt(x, 'max', 'metadataSize')), FREE.r2StorageBytes, 'bytes', 'total',
+      desc(st.map((x) => ({ label: strAt(x, 'dimensions', 'bucketName'),
+        used: numAt(x, 'max', 'payloadSize') + numAt(x, 'max', 'metadataSize') }))),
       'The free tier is 10 GB-month of Standard storage; this bar is the current snapshot. The KJV audio is the fixed resident.'));
   }
 
-  const du = raw.do;
-  if (!du || du.error) rows.push(errRow('do.requests', 'do', 'Requests today', du));
+  const du = product('do');
+  if (!du) rows.push(errRow('do.requests', 'do', 'Requests today', raw.do));
   else {
-    const inv = du.durableObjectsInvocationsAdaptiveGroups || [];
-    const per = du.durableObjectsPeriodicGroups || [];
-    const sql = du.durableObjectsSqlStorageGroups || [];
+    const inv = groups(du, 'durableObjectsInvocationsAdaptiveGroups');
+    const per = groups(du, 'durableObjectsPeriodicGroups');
+    const sql = groups(du, 'durableObjectsSqlStorageGroups');
     rows.push(row('do.requests', 'do', 'Requests today',
-      sumBy(inv, (x) => x.sum.requests), FREE.doRequestsDay, 'req', 'day', undefined,
+      sumBy(inv, (x) => numAt(x, 'sum', 'requests')), FREE.doRequestsDay, 'req', 'day', undefined,
       'Live-forum sockets (BoardHub) and merecat conversations (ChatRoom).'));
     /* activeTime arrives in microseconds; duration bills as GB-seconds at the
        128 MB (1/8 GB) instance size, so GB-s = seconds / 8. */
-    const gbs = Math.round((sumBy(per, (x) => x.sum.activeTime) / 1_000_000) * 0.125 * 100) / 100;
+    const gbs = Math.round((sumBy(per, (x) => numAt(x, 'sum', 'activeTime')) / 1_000_000) * 0.125 * 100) / 100;
     rows.push(row('do.duration', 'do', 'Compute duration today',
       gbs, FREE.doDurationGbsDay, 'gbs', 'day', undefined,
       'Wall-clock while an object is awake. Hibernating WebSockets cost zero here — the design that keeps live forums free.'));
     rows.push(row('do.rows_read', 'do', 'Storage reads today',
-      sumBy(per, (x) => x.sum.storageReadUnits), FREE.doRowsReadDay, 'rows', 'day'));
+      sumBy(per, (x) => numAt(x, 'sum', 'storageReadUnits')), FREE.doRowsReadDay, 'rows', 'day'));
     rows.push(row('do.rows_written', 'do', 'Storage writes today',
-      sumBy(per, (x) => x.sum.storageWriteUnits), FREE.doRowsWrittenDay, 'rows', 'day'));
+      sumBy(per, (x) => numAt(x, 'sum', 'storageWriteUnits')), FREE.doRowsWrittenDay, 'rows', 'day'));
     rows.push(row('do.storage', 'do', 'SQLite stored bytes',
-      sumBy(sql, (x) => x.max.storedBytes), FREE.doStorageBytes, 'bytes', 'total', undefined,
+      sumBy(sql, (x) => numAt(x, 'max', 'storedBytes')), FREE.doStorageBytes, 'bytes', 'total', undefined,
       'The hubs keep almost nothing — connections are the state.'));
   }
 
-  const v = raw.vectorize;
-  if (!v || v.error) rows.push(errRow('vectorize.stored', 'vectorize', 'Stored dimensions', v));
+  const v = product('vectorize');
+  if (!v) rows.push(errRow('vectorize.stored', 'vectorize', 'Stored dimensions', raw.vectorize));
   else {
-    const q = v.vectorizeV2QueriesAdaptiveGroups || [];
-    const st = v.vectorizeV2StorageAdaptiveGroups || [];
+    const q = groups(v, 'vectorizeV2QueriesAdaptiveGroups');
+    const st = groups(v, 'vectorizeV2StorageAdaptiveGroups');
     rows.push(row('vectorize.queried', 'vectorize', 'Queried dimensions this month',
-      sumBy(q, (x) => x.sum.queriedVectorDimensions), FREE.vecQueriedDimsMonth, 'dims', 'month', undefined,
+      sumBy(q, (x) => numAt(x, 'sum', 'queriedVectorDimensions')), FREE.vecQueriedDimsMonth, 'dims', 'month', undefined,
       'Each merecat semantic lookup reads topK × 1024 dims.'));
     rows.push(row('vectorize.stored', 'vectorize', 'Stored dimensions',
-      sumBy(st, (x) => x.max.storedVectorDimensions), FREE.vecStoredDims, 'dims', 'total', undefined,
+      sumBy(st, (x) => numAt(x, 'max', 'storedVectorDimensions')), FREE.vecStoredDims, 'dims', 'total', undefined,
       'The ~4,880-vector budget at 1024 dims each — why vectorize: flags are rationed in works.yml.'));
   }
 
-  const t = raw.turn;
-  if (!t || t.error) rows.push(errRow('turn.egress', 'turn', 'Relayed egress this month', t));
+  const t = product('turn');
+  if (!t) rows.push(errRow('turn.egress', 'turn', 'Relayed egress this month', raw.turn));
   else {
-    const g = t.callsTurnUsageAdaptiveGroups || [];
+    const g = groups(t, 'callsTurnUsageAdaptiveGroups');
     rows.push(row('turn.egress', 'turn', 'Relayed egress this month',
-      sumBy(g, (x) => x.sum.egressBytes), FREE.turnEgressBytesMonth, 'bytes', 'month', undefined,
+      sumBy(g, (x) => numAt(x, 'sum', 'egressBytes')), FREE.turnEgressBytesMonth, 'bytes', 'month', undefined,
       'Only calls that need the relay (~15–20%) spend here; P2P and STUN are free. Past the pool it BILLS per GB — calls_turn in Platform settings is the kill switch.'));
   }
 
-  const ts = raw.turnstile;
-  if (!ts || ts.error) rows.push(errRow('turnstile.solves', 'turnstile', 'Challenges this month', ts));
+  const ts = product('turnstile');
+  if (!ts) rows.push(errRow('turnstile.solves', 'turnstile', 'Challenges this month', raw.turnstile));
   else {
-    const g = ts.turnstileAdaptiveGroups || [];
+    const g = groups(ts, 'turnstileAdaptiveGroups');
     rows.push(row('turnstile.solves', 'turnstile', 'Challenges this month',
-      sumBy(g, (x) => x.count), null, 'count', 'month', undefined,
+      sumBy(g, (x) => numAt(x, 'count')), null, 'count', 'month', undefined,
       'Unmetered on every plan — shown for the picture, not the budget.'));
   }
 
@@ -305,14 +317,16 @@ export function buildReport(raw: any): UsageRow[] {
    leaves no memory: an alert is something a human must act on. Pure fold —
    the cron passes the stored state in and persists what comes back. */
 export const ALERT_RENAG_SECS = 7 * 86400;
-export function foldUsageAlerts(rows: UsageRow[], prev: any, nowSec: number) {
-  const state: any = {};
+type Told = { b: number; at: number };
+export function foldUsageAlerts(rows: UsageRow[], prev: Json | null, nowSec: number) {
+  const state: Record<string, Told> = {};
   const alerts: UsageRow[] = [];
   for (const r of rows || []) {
     if (!r || r.pct == null || r.error || r.declared) continue;
     const band = r.pct >= 100 ? 2 : r.pct >= 80 ? 1 : 0;
     if (band === 0) continue;
-    const p = prev && prev[r.id] && typeof prev[r.id].b === 'number' ? prev[r.id] : null;
+    const was = obj(prev && prev[r.id]);
+    const p: Told | null = typeof was.b === 'number' ? { b: was.b, at: num(was.at) } : null;
     const escalated = !p || band > p.b;
     const renag = !!p && band <= p.b && nowSec - num(p.at) >= ALERT_RENAG_SECS;
     if (escalated || renag) { alerts.push(r); state[r.id] = { b: band, at: nowSec }; }

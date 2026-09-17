@@ -133,8 +133,8 @@ tests/           The unit suite (`make tests`): PureScript + JS via `node --test
                  Python + CSS invariants via stdlib `unittest`. One file per concern.
 
 Makefile         The build entrypoint (`make …`); scripts/nav.yml is the site-menu source.
-eslint.config.js Lints what is still JS (the worker's pure.js/webpush.js, the served page
-                 scripts); tsc covers every .ts (root by eslint convention).
+eslint.config.js Lints what is still JS (the served page scripts); tsc covers every .ts,
+                 the workers entirely (root by eslint convention).
 package.json     npm project: the dev toolchain (Tailwind, esbuild, eslint, wrangler),
 package-lock.json  the app's UI library (lit, bundled into app.js), and the build/lint
                  scripts. Restored per-project with `npm ci`; never global.

@@ -1,4 +1,4 @@
-/* comments-worker/src/pure.js — the pure worker helpers extracted for testing.
+/* comments-worker/src/pure.ts — the pure worker helpers extracted for testing.
    Two security-critical jobs live here, and this file guards both:
 
    1. IP/ban-key normalization. A ban must not be evadable by an IPv6 client whose
@@ -14,7 +14,7 @@ import {
   ipFamily, ipv6Groups, ipv6Prefix64, ipv6Full, ipKey, toBanKey,
   isSharedV4, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
   shadowExcl,
-} from '../../comments-worker/src/pure.js';
+} from '../../comments-worker/src/pure.ts';
 
 test('ipFamily distinguishes v4 / v6 / neither', () => {
   assert.equal(ipFamily('203.0.113.7'), 4);

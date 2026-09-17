@@ -88,7 +88,7 @@ test('sweep SQL in this test matches lib.ts verbatim (drift guard)', () => {
     assert.ok(libSrc.includes(frag), 'lib.ts still carries: ' + frag);
   }
   // The 15-minute unlinked-orphan window (not the old hour).
-  assert.ok(libSrc.includes('.bind(now - 900).all()'), 'orphan age is 15 minutes');
+  assert.ok(libSrc.includes('.bind(now - 900).all<{ key: string }>()'), 'orphan age is 15 minutes');
 });
 
 test('the orphan sweep spares live/pending board media and never cross-wires wall-comment ids', () => {

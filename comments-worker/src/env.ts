@@ -2,11 +2,24 @@
    them (2026-09-16). One place, typed: a handler that takes `env: Env` gets
    D1's `first<Row>()`, R2's object shapes and the limiter's verdict for free;
    a binding renamed in wrangler.jsonc is a compile error here, not a 500 in
-   production. The handlers are adopting it one route file at a time (the
-   `: any` ratchet in tests/js/any_ratchet.test.mjs records each step); the
-   ones not yet converted still take `env: any` and read the same object. */
+   production. Every handler takes it (2026-09-17: the workers hold no `any`,
+   tests/js/any_ratchet.test.mjs).
+
+   The BRAND (2026-09-17): a type-only mark on the env that nothing else
+   carries, and that every answer, row and live event refuses (`NotEnv`) — so
+   the swapped argument that served the whole env from `/recent` for six weeks
+   (`withNames(env, items)`), or a `json({ ...env })`, is a compile error. It
+   exists in the types alone; comments-worker/types/env_brand.check.ts proves
+   the refusal compiles as one. */
+declare const ENV_BRAND: unique symbol;
+/* an open record (a row, a live event) that may not carry the brand */
+export type NotEnv = { readonly [ENV_BRAND]?: never };
+/* `unknown` for any object but the env or a copy of it, `never` for those —
+   json()'s parameter is `T & EnvFree<T>` */
+export type EnvFree<T> = typeof ENV_BRAND extends keyof T ? never : unknown;
 
 export interface Env {
+  readonly [ENV_BRAND]: 'the worker env: never an answer, a row or an event';
   /* D1: the platform, and the three librarian rooms (derived data) */
   DB: D1Database;
   LIBDB: D1Database;
