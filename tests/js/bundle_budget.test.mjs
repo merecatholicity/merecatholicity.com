@@ -33,6 +33,28 @@ for (const name of Object.keys(budget).filter((k) => !k.startsWith('_'))) {
  * chunks are reached by import(), which a classic script may use. esbuild would
  * add a static import the day a lazy module shared runtime code with the
  * entry; this says so before the soft-navigation road breaks. */
+/* The shell is an ES MODULE since 2026-09-17 (the write-path port's P0): built
+ * with --splitting so a later phase's code lands in a content-hashed chunk
+ * app.js import()s, not in app.js itself. The two halves of that have to agree
+ * — an ESM bundle injected as a classic script dies at its first static import,
+ * and the only injector is docs/nav.js. */
+test('docs/app.js is an ES module, and nav.js injects it as one', () => {
+  const app = join(root, 'docs', 'app.js');
+  assert.ok(existsSync(app), 'app.js is not built — make bundle first');
+  const nav = readFileSync(join(root, 'docs', 'nav.js'), 'utf8');
+  const at = nav.indexOf("s.src = 'app.js");
+  assert.ok(at > 0, 'nav.js injects app.js');
+  /* to the appendChild that FOLLOWS it — nav.js appends other scripts earlier */
+  const inject = nav.slice(at, nav.indexOf('document.head.appendChild(s)', at));
+  assert.ok(/s\.type = 'module';/.test(inject), "nav.js must set s.type = 'module' — the bundle is ESM");
+  /* the chunk directory is wiped ONCE, before both bundles: the shell's build
+     must not delete the client's chunks, nor the client's the shell's */
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.ok(/--format=esm --splitting/.test(pkg.scripts['build:js']), 'the shell builds as a split ESM bundle');
+  assert.equal((pkg.scripts['build:js'].match(/rm -rf docs\/chunks/g) || []).length, 1, 'the chunk wipe runs once');
+  assert.ok(!/rm -rf docs\/chunks/.test(pkg.scripts['build:client']), 'and not again in the client build, which would take the shell\'s chunks');
+});
+
 test('docs/comments.js is an ES module a classic script tag can still load: no static import or export, chunks by import() only', () => {
   const path = join(root, 'docs', 'comments.js');
   assert.ok(existsSync(path), 'comments.js is not built — make bundle first');

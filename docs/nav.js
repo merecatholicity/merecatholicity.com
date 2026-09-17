@@ -291,7 +291,13 @@ window.mcAsset = function (name) {
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=2530889777';
+    s.src = 'app.js?v=3012297798';
+    /* A MODULE since 2026-09-17 (the write-path port's P0): the shell is an
+       ESM bundle so later phases land in content-hashed chunks it import()s
+       rather than in app.js itself. A dynamically inserted script is async
+       either way, and the shell's ready handshake (__mcShellReady + the
+       mc-shell-ready event) is what comments.js waits on, not load order. */
+    s.type = 'module';
     s.defer = true;
     document.head.appendChild(s);
   } catch (e) { /* storage blocked: the site stays a website */ }
