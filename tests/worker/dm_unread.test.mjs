@@ -152,7 +152,7 @@ test('the thread names what was unread BEFORE the open marks it read: the count,
 });
 
 test('a member who appears offline is not seen typing: the hub drops their signal by the kernel\'s own rule', () => {
-  const typing = hubSrc.slice(hubSrc.indexOf("if (m.t === 'typing')"), hubSrc.indexOf("for (const to of Array.from(new Set(list))) this.#fan('user:' + to, frame);"));
+  const typing = hubSrc.slice(hubSrc.indexOf("if (m.t === 'typing')"), hubSrc.indexOf("await this.#toUsers(Array.from(new Set(list)).map((to) => ({ scope: 'user:' + to, payload: frame })));"));
   assert.ok(typing.length > 0, 'the typing branch fans to each named member');
   assert.ok(/if \(!Presence\.isVisible\(\(a && a\.presenceMode\) \|\| 'auto'\)\(true\)\) return;/.test(typing),
     'the same rule that hides their socket hides their keystrokes (Domain.Presence.isVisible)');

@@ -24,6 +24,7 @@ import * as CallK from '../../purescript/output/Domain.Call/index.js';
 import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import * as Comments from '../../purescript/output/Domain.Comments/index.js';
 import * as Ops from '../../purescript/output/Domain.Ops/index.js';
+import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 import type { Env } from './env.ts';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
@@ -703,12 +704,9 @@ export async function ringCall(env: any, toHash: any, fromHash: any, callId: any
     if (!toHash || !fromHash || toHash === fromHash || fromHash === MERECAT_BOT.hash) return;
     const pref = (await notifyPrefsFor(env, [toHash]))[toHash];
     if (!notifyEnabled(pref, 'dm')) return;
-    let online = false;
-    try {
-      /* presenceOf returns the ONLINE SUBSET as an array. */
-      const p = await env.HUB.get(env.HUB.idFromName('board')).presenceOf([toHash]);
-      online = Array.isArray(p) ? p.indexOf(toHash) !== -1 : false;
-    } catch (e) { /* hub unreachable => treat as away, send the push */ }
+    /* hubPresenceOf returns the ONLINE SUBSET; a hub it cannot reach answers
+       nobody, so the callee is treated as away and the push goes. */
+    const online = (await hubPresenceOf(env, [toHash])).indexOf(toHash) !== -1;
     if (!online) {
       await deliverPush(env, [toHash], { kind: 'call', title: 'Incoming call', body: 'Someone is calling you — tap to answer',
         url: '/messages.html?dm=' + fromHash + '&call=' + String(callId || ''), tag: 'call:' + fromHash });
@@ -742,11 +740,7 @@ export async function notifyMissedCall(env: any, toHash: any, fromHash: any, opt
         kind: 'call', topic_id: tid, comment_id: 0, actor_hash: fromHash, created_at: now }]);
     }
     if (opts && opts.late) return;   // the sweep's backstop: the record, never an hour-late buzz
-    let online = false;
-    try {
-      const p = await env.HUB.get(env.HUB.idFromName('board')).presenceOf([toHash]);
-      online = Array.isArray(p) ? p.indexOf(toHash) !== -1 : false;
-    } catch (e) { /* away */ }
+    const online = (await hubPresenceOf(env, [toHash])).indexOf(toHash) !== -1;
     if (!online) {
       await deliverPush(env, [toHash], { kind: 'call-missed', title: 'Missed call', body: 'You missed a call',
         url: tid > 0 ? '/messages.html?t=' + tid : '/messages.html?dm=' + fromHash, tag: 'call:' + fromHash });
@@ -837,15 +831,27 @@ export async function deliverPush(env: any, hashes: any, payload: any) {
     const tokens = rows.results || [];
     if (!tokens.length) return;
     const pusher = await createPusher(env);
-    const dead = [];   // { hash, token } rows whose subscription is gone
+    const dead: Array<{ hash: string; token: string }> = [];   // rows whose subscription is gone
     let sent = 0;
-    for (const row of tokens) {
-      let sub = null;
-      try { sub = JSON.parse(row.token); } catch { sub = null; }
-      if (!sub || !sub.endpoint) { dead.push(row); continue; }   // unparseable => prune
-      const res = await pusher.send(sub, payload);
-      if (res.ok) sent += 1;
-      else if (res.gone) dead.push(row);
+    /* Twenty at a time, never one after another (2026-09-17): a thread with
+       hundreds of watchers used to push serially inside a waitUntil that the
+       runtime ends thirty seconds after the response — the tail of the list
+       was never told. A send that throws counts as neither sent nor gone. */
+    const PUSH_LANE = 20;
+    for (let i = 0; i < tokens.length; i += PUSH_LANE) {
+      const lane = tokens.slice(i, i + PUSH_LANE);
+      const results = await Promise.allSettled(lane.map(async (row: any) => {
+        let sub = null;
+        try { sub = JSON.parse(row.token); } catch { sub = null; }
+        if (!sub || !sub.endpoint) return 'dead';   // unparseable => prune
+        const res = await pusher.send(sub, payload);
+        return res.ok ? 'sent' : (res.gone ? 'dead' : 'failed');
+      }));
+      results.forEach((r, k) => {
+        if (r.status !== 'fulfilled') return;
+        if (r.value === 'sent') sent += 1;
+        else if (r.value === 'dead') dead.push(lane[k]);
+      });
     }
     /* Prune expired/removed subscriptions so the table doesn't accrete dead rows
        (a browser that unsubscribes or an OS that rotates the endpoint). */
@@ -3449,9 +3455,90 @@ export async function merecatMentionReply(env: any, commentId: any) {
 /* Admin lever: run the mention pipeline on any existing comment — the
    manual re-summon for a post that was held and approved later, and the
    test hook. */
-export function sendToHub(env: any, event: any) {
-  if (!env.HUB || !boardEventPublic(event)) return Promise.resolve();
-  return env.HUB.get(env.HUB.idFromName('board')).publish(event);
+/* ---- The hub, sharded (2026-09-17; the law is Domain.Hub) ----
+   The BoardHub is HUB_SHARDS Durable Object instances (shard 0 keeps the
+   name "board"). A member's sockets all live on ONE shard — the one their
+   identity hash names — so a private `user:<hash>` event is routed to that
+   shard alone, while a public scope (board, feed, presence watches) is
+   fanned to every shard in parallel. These are the only functions that dial
+   a hub instance; a route file never spells `idFromName('board')` again. */
+export type HubStub = {
+  fetch(request: Request): Promise<Response>;
+  publish(event: unknown): Promise<void>;
+  relay(items: Array<{ scope: string; payload: string }>): Promise<void>;
+  presenceOf(hashes: string[]): Promise<string[]>;
+  viewersOf(tag: string, hashes: string[]): Promise<string[]>;
+  dmViewing(recipient: string, sender: string): Promise<boolean>;
+  stats(): Promise<HubShardStats>;
+};
+export type HubShardStats = { shard: number; sockets: number; members: number };
+type HubEnv = { HUB?: DurableObjectNamespace; HUB_SHARDS?: string };
+
+export function hubShards(env: HubEnv): number {
+  return Hub.normalizeShards(String(env.HUB_SHARDS || ''));
+}
+export function hubShard(env: HubEnv, i: number): HubStub {
+  const ns = env.HUB as DurableObjectNamespace;
+  return ns.get(ns.idFromName(Hub.shardName(i))) as unknown as HubStub;
+}
+/* The shard that holds every socket of the member with this hash. */
+export function hubHome(env: HubEnv, hash: string): HubStub {
+  return hubShard(env, Hub.shardOf(hubShards(env))(hash));
+}
+/* Group hashes by their home shard: [shard index, the hashes it may hold]. */
+function hubGroups(env: HubEnv, hashes: string[]): Array<[number, string[]]> {
+  const n = hubShards(env);
+  const by = new Map<number, string[]>();
+  for (const h of hashes) {
+    const i = Hub.shardOf(n)(h);
+    const list = by.get(i);
+    if (list) list.push(h); else by.set(i, [h]);
+  }
+  return Array.from(by.entries());
+}
+/* Publish one event to the shards it belongs on: the home shards of its
+   `user:` scopes when every scope is private, all of them otherwise. A shard
+   that fails is logged and never fails its siblings. */
+export async function sendToHub(env: any, event: any) {
+  if (!env.HUB || !boardEventPublic(event)) return;
+  const n = hubShards(env);
+  const routed = Hub.routeScopes(n)(Array.isArray(event.scopes) ? event.scopes.map(String) : []);
+  const targets: number[] = routed.value0 === undefined ? Array.from({ length: n }, (_, i) => i) : routed.value0;
+  const results = await Promise.allSettled(targets.map((i) => hubShard(env, i).publish(event)));
+  results.forEach((r, k) => {
+    if (r.status === 'rejected') console.log(JSON.stringify({ event: 'publish_failed', shard: targets[k], error: String(r.reason).slice(0, 200) }));
+  });
+}
+/* Of these members, who is online now (honouring appear-offline)? Each home
+   shard is asked only about the hashes it can hold; the answer is the union. */
+export async function hubPresenceOf(env: HubEnv, hashes: string[]): Promise<string[]> {
+  if (!env.HUB || !hashes.length) return [];
+  const parts = await Promise.allSettled(hubGroups(env, hashes).map(([i, list]) => hubShard(env, i).presenceOf(list)));
+  const out: string[] = [];
+  for (const p of parts) if (p.status === 'fulfilled' && Array.isArray(p.value)) out.push(...p.value.map(String));
+  return out;
+}
+/* Of these members, who has the conversation tagged `tag` on screen? */
+export async function hubViewersOf(env: HubEnv, tag: string, hashes: string[]): Promise<string[]> {
+  if (!env.HUB || !hashes.length) return [];
+  const parts = await Promise.allSettled(hubGroups(env, hashes).map(([i, list]) => hubShard(env, i).viewersOf(tag, list)));
+  const out: string[] = [];
+  for (const p of parts) if (p.status === 'fulfilled' && Array.isArray(p.value)) out.push(...p.value.map(String));
+  return out;
+}
+/* Does `recipient` have the pair with `sender` on screen (the pre-0016 claim,
+   honoured one deploy longer)? Their home shard alone can say. */
+export async function hubDmViewing(env: HubEnv, recipient: string, sender: string): Promise<boolean> {
+  if (!env.HUB) return false;
+  try { return !!(await hubHome(env, recipient).dmViewing(recipient, sender)); } catch { return false; }
+}
+/* Every shard's socket count — the Health card's number for "when to raise
+   HUB_SHARDS". A shard that cannot answer reports -1. */
+export async function hubStats(env: HubEnv): Promise<HubShardStats[]> {
+  if (!env.HUB) return [];
+  const n = hubShards(env);
+  const parts = await Promise.allSettled(Array.from({ length: n }, (_, i) => hubShard(env, i).stats()));
+  return parts.map((p, i) => (p.status === 'fulfilled' && p.value ? { shard: i, sockets: Number(p.value.sockets) || 0, members: Number(p.value.members) || 0 } : { shard: i, sockets: -1, members: -1 }));
 }
 
 /* Publish a batch of board events (awaitable), with a cheap page pre-gate (a

@@ -189,5 +189,6 @@ on page one.)
 - **The key is the account, said plainly; and the bundles have a budget (2026-09-16)** — `log/2026-09.md`
 - **The classic client is split: three lazy chunks, and a reader of a KJV chapter no longer downloads the admin console (2026-09-16)** — `log/2026-09.md`
 - **A declared count is shown, never told (2026-09-16)** — `log/2026-09.md`
+- **The live hub is sharded, and every operation inside a shard is the size of its audience (2026-09-17)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

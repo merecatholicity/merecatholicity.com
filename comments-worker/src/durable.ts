@@ -5,6 +5,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import * as Presence from '../../purescript/output/Domain.Presence/index.js';
 import * as Dm from '../../purescript/output/Domain.Dm/index.js';
+import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 import {
   ipFamily, ipKey, toBanKey, reverseDnsName, looksLikeIp, boardEventPublic, sanitizeScopes,
 } from './pure.js';
@@ -30,37 +31,120 @@ import {
   quotaPublic,
   sha256hex,
   registerMember,
+  hubShards,
+  hubShard,
 } from './lib.ts';
+import type { HubStub, HubShardStats } from './lib.ts';
 
 import type { Env } from './env.ts';
 
+/* What one socket's attachment holds (it survives hibernation; the in-memory
+   index below is rebuilt from it when the object wakes). */
+type Att = { subs: string[]; n: number; me: string; presenceMode: string };
+type RelayItem = { scope: string; payload: string };
+
+const HEX64 = /^[0-9a-f]{64}$/;
+
+function readAtt(ws: WebSocket): Att {
+  let a: Partial<Att> | null = null;
+  try { a = ws.deserializeAttachment() as Partial<Att> | null; } catch { a = null; }
+  return {
+    subs: a && Array.isArray(a.subs) ? a.subs.map(String) : [],
+    n: (a && Number(a.n)) || 0,
+    me: (a && a.me) ? String(a.me) : '',
+    presenceMode: (a && a.presenceMode) ? String(a.presenceMode) : 'auto',
+  };
+}
+function addTo(map: Map<string, Set<WebSocket>>, key: string, ws: WebSocket) {
+  const set = map.get(key);
+  if (set) set.add(ws); else map.set(key, new Set([ws]));
+}
+function dropFrom(map: Map<string, Set<WebSocket>>, key: string, ws: WebSocket) {
+  const set = map.get(key);
+  if (!set) return;
+  set.delete(ws);
+  if (!set.size) map.delete(key);
+}
+
+/* The BoardHub: ONE of HUB_SHARDS instances (Domain.Hub, 2026-09-17). A
+   socket is placed by its member's hash, so every socket of one member lives
+   here or on exactly one sibling, never split — "their last socket closed" is
+   a local fact, and a private `user:<hash>` event is routed by the worker to
+   this shard alone. What crosses between shards: a presence change (a watcher
+   sits anywhere), a typing or call-signal relay to a member whose home is a
+   sibling, and the presence seed a new subscriber asks for. Inside, every
+   operation is O(its recipients): the sockets are indexed in memory by scope
+   and by member, built once from the attachments when the object wakes and
+   kept current by every accept, auth, sub, close and failed send — never a
+   walk of every socket per event. */
 export class BoardHub extends DurableObject<Env> {
-  constructor(ctx: any, env: any) {
+  #idx: number;
+  #ready = false;
+  #att = new Map<WebSocket, Att>();
+  #bySub = new Map<string, Set<WebSocket>>();
+  #byMe = new Map<string, Set<WebSocket>>();
+  #misrouted = new WeakSet<WebSocket>();
+
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    /* Which shard this is, from its own name (idFromName keeps it). */
+    this.#idx = Hub.shardIndex(String((ctx.id && ctx.id.name) || 'board'));
     /* The client's {t:'ping'} is answered {t:'pong'} by the runtime without
        waking the object, so a hibernating socket stays warm at zero cost. */
     this.ctx.setWebSocketAutoResponse(
       new WebSocketRequestResponsePair(JSON.stringify({ t: 'ping' }), JSON.stringify({ t: 'pong' })));
   }
 
-  async fetch(request: any) {
+  /* ---- the index ---- */
+  #index() {
+    if (this.#ready) return;
+    this.#ready = true;
+    for (const ws of this.ctx.getWebSockets()) this.#track(ws, readAtt(ws));
+  }
+  #track(ws: WebSocket, a: Att) {
+    if (this.#att.has(ws)) this.#untrack(ws);
+    this.#att.set(ws, a);
+    for (const s of a.subs) addTo(this.#bySub, s, ws);
+    if (a.me) addTo(this.#byMe, a.me, ws);
+  }
+  #untrack(ws: WebSocket) {
+    const a = this.#att.get(ws);
+    if (!a) return;
+    this.#att.delete(ws);
+    for (const s of a.subs) dropFrom(this.#bySub, s, ws);
+    if (a.me) dropFrom(this.#byMe, a.me, ws);
+  }
+  /* Store the attachment (the truth across hibernation) AND index it. */
+  #set(ws: WebSocket, a: Att) {
+    ws.serializeAttachment(a);
+    this.#track(ws, a);
+  }
+  #attOf(ws: WebSocket): Att {
+    return this.#att.get(ws) || readAtt(ws);
+  }
+  #send(ws: WebSocket, payload: string) {
+    try { ws.send(payload); } catch { this.#untrack(ws); }   // a socket the runtime never closed
+  }
+
+  async fetch(request: Request) {
     if ((request.headers.get('Upgrade') || '').toLowerCase() !== 'websocket') {
       return new Response('expected websocket', { status: 426 });
     }
+    this.#index();
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
     this.ctx.acceptWebSocket(server, ['v1']);   // hibernation-eligible; one static tag
-    server.serializeAttachment({ subs: [], n: 0 });
+    this.#set(server, { subs: [], n: 0, me: '', presenceMode: 'auto' });
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  async webSocketMessage(ws: any, msg: any) {
+  async webSocketMessage(ws: WebSocket, msg: string | ArrayBuffer) {
+    this.#index();
     let m;
     try { m = JSON.parse(typeof msg === 'string' ? msg : ''); } catch { return; }
     if (!m) return;   // a stray {t:'ping'} is handled by the auto-responder
-    let a;
-    try { a = ws.deserializeAttachment(); } catch { a = null; }
+    const a = this.#attOf(ws);
     /* A member authenticates so this socket may subscribe to its own private
        user:<hash> scope (DMs, notifications). The key rides the frame, never the
        URL; the hash is stored on the attachment and gates every later sub. The
@@ -71,8 +155,15 @@ export class BoardHub extends DurableObject<Env> {
       const key = String(m.key || '');
       const me = key ? await sha256hex(key) : '';
       const presenceMode = Presence.normalizeMode(String(m.presence || 'auto'));
-      ws.serializeAttachment({ subs: (a && a.subs) || [], n: (a && a.n) || 0, me, presenceMode });
-      if (me) this.#broadcastPresence(me, this.#isOnline(me));
+      this.#set(ws, { subs: a.subs, n: a.n, me, presenceMode });
+      /* A socket whose member belongs on a sibling (a bundle from before the
+         routing hint, or a hint that lies): accepted — the loss is theirs
+         alone (their private frames go to their home shard) — and said once. */
+      if (me && Hub.shardOf(hubShards(this.env))(me) !== this.#idx && !this.#misrouted.has(ws)) {
+        this.#misrouted.add(ws);
+        console.log(JSON.stringify({ event: 'hub_misrouted', shard: this.#idx, home: Hub.shardOf(hubShards(this.env))(me) }));
+      }
+      if (me) await this.#broadcastPresence(me, this.#isOnline(me));
       /* Appear-offline hides the "last seen" moment too: a socket authenticating
          under "off" clears any stamp the member holds, so nothing stale can be
          served after the choice (Domain.Presence.recordsLastSeen — the same
@@ -85,17 +176,18 @@ export class BoardHub extends DurableObject<Env> {
        the conversation. `to` is one hash (a pair) or the members of a group
        (at most Domain.Dm.typingFanCap — the hub keeps no roster, the client
        names who it is typing to, exactly as a send does); the typist is never
-       told of their own keystrokes. */
+       told of their own keystrokes. Each recipient is reached on their home
+       shard (here, or a sibling by relay). */
     if (m.t === 'typing') {
-      const me = (a && a.me) || '';
-      const list = (Array.isArray(m.to) ? m.to : [m.to]).map((h: any) => String(h || '')).filter((h: string) => /^[0-9a-f]{64}$/.test(h) && h !== me);
+      const me = a.me;
+      const list = (Array.isArray(m.to) ? m.to : [m.to]).map((h: unknown) => String(h || '')).filter((h: string) => HEX64.test(h) && h !== me);
       if (!me || !list.length || list.length > Dm.typingFanCap) return;
       /* A member who chose to appear offline is not seen typing either: the
          kernel rule that hides their socket hides their keystrokes (2026-09-11). */
       if (!Presence.isVisible((a && a.presenceMode) || 'auto')(true)) return;
       const thread = Math.floor(Number(m.thread) || 0);
       const frame = JSON.stringify({ v: 1, t: 'typing', from: me, thread, state: m.state === 'stop' ? 'stop' : 'start' });
-      for (const to of Array.from(new Set(list))) this.#fan('user:' + to, frame);
+      await this.#toUsers(Array.from(new Set(list)).map((to) => ({ scope: 'user:' + to, payload: frame })));
       return;
     }
     /* Transient 1v1 call signaling (client → client, no storage): the ICE
@@ -107,42 +199,43 @@ export class BoardHub extends DurableObject<Env> {
        an ICE batch is a few hundred bytes — anything past 4 KB is not call
        signaling. */
     if (m.t === 'call-sig') {
-      const me = (a && a.me) || '';
+      const me = a.me;
       const to = String(m.to || '');
       const call = String(m.call || '');
       const kind = String(m.kind || '');
-      if (!me || !/^[0-9a-f]{64}$/.test(to)) return;
+      if (!me || !HEX64.test(to)) return;
       if (!/^[0-9a-f]{16,64}$/.test(call)) return;
       if (['ice', 'end', 'decline', 'busy', 'taken'].indexOf(kind) === -1) return;
       if (typeof msg !== 'string' || msg.length > 4096) return;
-      this.#fan('user:' + to, JSON.stringify({ v: 1, t: 'call-sig', from: me, call, kind, payload: m.payload }));
+      await this.#toUsers([{ scope: 'user:' + to, payload: JSON.stringify({ v: 1, t: 'call-sig', from: me, call, kind, payload: m.payload }) }]);
       return;
     }
     if (m.t !== 'sub') return;
-    const me = (a && a.me) || '';
+    const me = a.me;
     const subs = sanitizeScopes(m.scope, me, BOARD_CATS);
-    const n = ((a && a.n) || 0) + 1;
-    if (n > 500) { try { ws.close(1008, 'too many'); } catch { /* gone */ } return; }
-    ws.serializeAttachment({ subs, n, me, presenceMode: (a && a.presenceMode) || 'auto' });
-    /* Seed each newly-watched member's current presence to this socket. */
-    for (const s of subs) {
-      if (s.startsWith('presence:')) {
-        const h = s.slice(9);
-        try { ws.send(JSON.stringify({ v: 1, t: 'presence', hash: h, online: this.#isOnline(h) })); } catch { /* gone */ }
-      }
+    const n = a.n + 1;
+    if (n > 500) { try { ws.close(1008, 'too many'); } catch { /* gone */ } this.#untrack(ws); return; }
+    this.#set(ws, { subs, n, me, presenceMode: a.presenceMode });
+    /* Seed each newly-watched member's current presence to this socket — from
+       their home shard, which alone holds their sockets. */
+    const watched = subs.filter((s) => s.startsWith('presence:')).map((s) => s.slice(9));
+    if (watched.length) {
+      const online = new Set(await this.#presenceAcross(watched));
+      for (const h of watched) this.#send(ws, JSON.stringify({ v: 1, t: 'presence', hash: h, online: online.has(h) }));
     }
   }
 
   /* A socket dropped: if it was the member's last online connection, tell anyone
      watching that they went offline. (webSocketError has no such last-socket
      meaning; it just logs.) */
-  async webSocketClose(ws: any) {
-    let a;
-    try { a = ws.deserializeAttachment(); } catch { a = null; }
+  async webSocketClose(ws: WebSocket) {
+    this.#index();
+    const a = this.#attOf(ws);
+    this.#untrack(ws);
     const me = a && a.me;
     if (!me) return;
     if (this.#isOnline(me, ws)) return;
-    this.#broadcastPresence(me, false);
+    await this.#broadcastPresence(me, false);
     /* The member's last live socket closed: stamp the moment for the "Last
        seen …" line — only under "auto". The hub is the ONE writer of this
        column, being the one party that knows the mode (it rides the auth
@@ -150,60 +243,116 @@ export class BoardHub extends DurableObject<Env> {
     if (Presence.recordsLastSeen((a && a.presenceMode) || 'auto')) await this.#stampLastSeen(me);
   }
 
-  async #stampLastSeen(hash: any) {
+  async #stampLastSeen(hash: string) {
     const now = Math.floor(Date.now() / 1000);
     try {
       await registerMember(this.env, hash, now);
       await this.env.DB.prepare('UPDATE profiles SET last_seen_at = ?2 WHERE hash = ?1').bind(hash, now).run();
     } catch (e) { console.log(JSON.stringify({ event: 'hub_last_seen_error', error: String(e) })); }
   }
-  async #clearLastSeen(hash: any) {
+  async #clearLastSeen(hash: string) {
     try {
       await this.env.DB.prepare('UPDATE profiles SET last_seen_at = NULL WHERE hash = ?1').bind(hash).run();
     } catch (e) { console.log(JSON.stringify({ event: 'hub_last_seen_error', error: String(e) })); }
   }
 
-  webSocketError(ws: any, err: any) {
+  webSocketError(ws: WebSocket, err: unknown) {
+    this.#index();
+    this.#untrack(ws);
     console.log(JSON.stringify({ event: 'hub_ws_error', error: String(err) }));
   }
 
-  /* Is <hash> online? True iff some live socket authenticated as that hash with a
-     non-"off" presence mode. `exclude` skips one socket (the one closing). */
-  #isOnline(hash: any, exclude?: any) {
-    for (const s of this.ctx.getWebSockets()) {
+  /* Is <hash> online HERE? True iff some live socket of theirs authenticated
+     with a non-"off" presence mode. `exclude` skips one socket (the one
+     closing). A member's sockets all live on their home shard, so "here" is
+     the whole answer for a member whose home this is. */
+  #isOnline(hash: string, exclude?: WebSocket) {
+    const set = this.#byMe.get(hash);
+    if (!set) return false;
+    for (const s of set) {
       if (exclude && s === exclude) continue;
-      let a;
-      try { a = s.deserializeAttachment(); } catch { a = null; }
-      if (a && a.me === hash && a.presenceMode !== 'off') return true;
+      const a = this.#att.get(s);
+      if (a && a.presenceMode !== 'off') return true;
     }
     return false;
   }
 
-  /* Send a frame to every socket subscribed to `scope`. */
-  #fan(scope: any, payload: any) {
-    for (const s of this.ctx.getWebSockets()) {
-      let a;
-      try { a = s.deserializeAttachment(); } catch { a = null; }
-      if (a && Array.isArray(a.subs) && a.subs.includes(scope)) {
-        try { s.send(payload); } catch { /* dropped */ }
-      }
-    }
+  /* Send a frame to every socket subscribed to `scope`, here. */
+  #fan(scope: string, payload: string) {
+    const set = this.#bySub.get(scope);
+    if (!set) return;
+    for (const s of Array.from(set)) this.#send(s, payload);
   }
 
-  #broadcastPresence(hash: any, online: any) {
-    this.#fan('presence:' + hash, JSON.stringify({ v: 1, t: 'presence', hash, online: !!online }));
+  /* The sibling shards' stubs (none when HUB_SHARDS is 1). */
+  #siblings(): Array<{ i: number; stub: HubStub }> {
+    const n = hubShards(this.env);
+    const out: Array<{ i: number; stub: HubStub }> = [];
+    for (let i = 0; i < n; i++) if (i !== this.#idx) out.push({ i, stub: hubShard(this.env, i) });
+    return out;
+  }
+  async #relayTo(targets: Array<{ i: number; stub: HubStub }>, items: RelayItem[]) {
+    if (!targets.length || !items.length) return;
+    const results = await Promise.allSettled(targets.map((t) => t.stub.relay(items)));
+    results.forEach((r, k) => {
+      if (r.status === 'rejected') console.log(JSON.stringify({ event: 'hub_relay_failed', from: this.#idx, to: targets[k].i, error: String(r.reason).slice(0, 200) }));
+    });
+  }
+
+  /* A presence change reaches every watcher, on every shard. */
+  async #broadcastPresence(hash: string, online: boolean) {
+    const scope = 'presence:' + hash;
+    const payload = JSON.stringify({ v: 1, t: 'presence', hash, online: !!online });
+    this.#fan(scope, payload);
+    await this.#relayTo(this.#siblings(), [{ scope, payload }]);
+  }
+
+  /* Frames for members' private scopes, each delivered on that member's home
+     shard: here directly, a sibling by one relay per shard. */
+  async #toUsers(items: RelayItem[]) {
+    const n = hubShards(this.env);
+    const bound = new Map<number, RelayItem[]>();
+    for (const it of items) {
+      const i = Hub.shardOf(n)(it.scope.slice(5));
+      if (i === this.#idx) { this.#fan(it.scope, it.payload); continue; }
+      const list = bound.get(i);
+      if (list) list.push(it); else bound.set(i, [it]);
+    }
+    await Promise.allSettled(Array.from(bound.entries()).map(([i, list]) => this.#relayTo([{ i, stub: hubShard(this.env, i) }], list)));
+  }
+
+  /* Who, of these, is online — each asked of their home shard. */
+  async #presenceAcross(hashes: string[]): Promise<string[]> {
+    const n = hubShards(this.env);
+    const bound = new Map<number, string[]>();
+    const online: string[] = [];
+    for (const h of hashes) {
+      const i = Hub.shardOf(n)(h);
+      if (i === this.#idx) { if (this.#isOnline(h)) online.push(h); continue; }
+      const list = bound.get(i);
+      if (list) list.push(h); else bound.set(i, [h]);
+    }
+    const parts = await Promise.allSettled(Array.from(bound.entries()).map(([i, list]) => hubShard(this.env, i).presenceOf(list)));
+    for (const p of parts) if (p.status === 'fulfilled' && Array.isArray(p.value)) online.push(...p.value.map(String));
+    return online;
+  }
+
+  /* ---- RPC, from the worker and from sibling shards ---- */
+
+  /* A sibling's frames for scopes held here (presence changes, typing, call
+     signals). Local delivery only — a relay never relays. */
+  async relay(items: RelayItem[]) {
+    this.#index();
+    for (const it of Array.isArray(items) ? items : []) {
+      if (it && typeof it.scope === 'string' && typeof it.payload === 'string') this.#fan(it.scope, it.payload);
+    }
   }
 
   /* RPC for the batched inbox check: of these hashes, which are online now
-     (honouring appear-offline)? One request per inbox load. */
-  async presenceOf(hashes: any) {
-    const live = new Set();
-    for (const s of this.ctx.getWebSockets()) {
-      let a;
-      try { a = s.deserializeAttachment(); } catch { a = null; }
-      if (a && a.me && a.presenceMode !== 'off') live.add(a.me);
-    }
-    return (Array.isArray(hashes) ? hashes : []).filter((h) => live.has(h));
+     (honouring appear-offline)? The worker asks each home shard about its own. */
+  async presenceOf(hashes: string[]) {
+    this.#index();
+    return (Array.isArray(hashes) ? hashes : []).map(String).filter((h) => this.#isOnline(h));
   }
 
   /* RPC for the quiet-bell check: does `recipient` have the DM thread with
@@ -213,43 +362,54 @@ export class BoardHub extends DurableObject<Env> {
      backgrounded or navigated-away reader still gets the bell. Since
      2026-09-13 the claim is dmview:t<thread id> (viewersOf below); this form,
      by the counterpart's hash, is honoured one deploy for the older bundle. */
-  async dmViewing(recipient: any, sender: any) {
+  async dmViewing(recipient: string, sender: string) {
+    this.#index();
     const want = 'dmview:' + sender;
-    for (const s of this.ctx.getWebSockets()) {
-      let a;
-      try { a = s.deserializeAttachment(); } catch { a = null; }
-      if (a && a.me === recipient && Array.isArray(a.subs) && a.subs.includes(want)) return true;
+    const set = this.#byMe.get(String(recipient));
+    if (!set) return false;
+    for (const s of set) {
+      const a = this.#att.get(s);
+      if (a && a.subs.includes(want)) return true;
     }
     return false;
   }
 
   /* RPC for the quiet bell of a conversation with members (2026-09-13): of
      these members, which have the thread tagged `tag` ('t' + id) ON SCREEN
-     right now — an authenticated socket of theirs carrying dmview:<tag>. One
-     call per send, however many members. */
-  async viewersOf(tag: any, hashes: any) {
+     right now — an authenticated socket of theirs carrying dmview:<tag>. */
+  async viewersOf(tag: string, hashes: string[]) {
+    this.#index();
     const want = 'dmview:' + String(tag || '');
-    const asked = new Set((Array.isArray(hashes) ? hashes : []).map((h: any) => String(h)));
-    const seen = new Set<string>();
-    for (const s of this.ctx.getWebSockets()) {
-      let a;
-      try { a = s.deserializeAttachment(); } catch { a = null; }
-      if (a && a.me && asked.has(a.me) && Array.isArray(a.subs) && a.subs.includes(want)) seen.add(a.me);
-    }
-    return Array.from(seen);
-  }
-
-  /* RPC, called by the worker on every live public board mutation. */
-  async publish(event: any) {
-    if (!event || !Array.isArray(event.scopes)) return;
-    const payload = JSON.stringify(event);
-    for (const ws of this.ctx.getWebSockets()) {
-      let a;
-      try { a = ws.deserializeAttachment(); } catch { a = null; }
-      if (a && Array.isArray(a.subs) && a.subs.some((s: any) => event.scopes.includes(s))) {
-        try { ws.send(payload); } catch { /* a dropped socket; the close handler cleans up */ }
+    const seen: string[] = [];
+    for (const h of new Set((Array.isArray(hashes) ? hashes : []).map(String))) {
+      const set = this.#byMe.get(h);
+      if (!set) continue;
+      for (const s of set) {
+        const a = this.#att.get(s);
+        if (a && a.subs.includes(want)) { seen.push(h); break; }
       }
     }
+    return seen;
+  }
+
+  /* RPC, called by the worker for every live event this shard should carry
+     (sendToHub routes: a private event to its home shard, a public one to all). */
+  async publish(event: { scopes?: unknown }) {
+    if (!event || !Array.isArray(event.scopes)) return;
+    this.#index();
+    const payload = JSON.stringify(event);
+    const targets = new Set<WebSocket>();
+    for (const scope of event.scopes) {
+      const set = this.#bySub.get(String(scope));
+      if (set) for (const s of set) targets.add(s);
+    }
+    for (const s of targets) this.#send(s, payload);
+  }
+
+  /* RPC for the Health card: this shard's load. */
+  async stats(): Promise<HubShardStats> {
+    this.#index();
+    return { shard: this.#idx, sockets: this.#att.size, members: this.#byMe.size };
   }
 }
 

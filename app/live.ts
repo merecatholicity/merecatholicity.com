@@ -37,6 +37,9 @@ interface ConnState {
   want: boolean;
   desired: string[];
   userScope: string;
+  /* the routing hint on the upgrade URL (`?h=<hash>`, 2026-09-17): the worker
+     places a member's every socket on the one hub shard their hash names */
+  hint: string;
   authFrame: string | null;
   ix: number;
   failures: number;
@@ -54,7 +57,7 @@ interface ConnState {
    client's; the server DO holds no timer and hibernates when idle. */
 function Conn(path: string, onFrame: (m: any) => void): ConnState {
   const c = {
-    ws: null, want: false, desired: [], userScope: '', authFrame: null,
+    ws: null, want: false, desired: [], userScope: '', hint: '', authFrame: null,
     ix: 0, failures: 0, reconnectT: 0, pingT: 0, lastRx: 0, closing: false,
   } as unknown as ConnState;
 
@@ -65,8 +68,8 @@ function Conn(path: string, onFrame: (m: any) => void): ConnState {
 
   function open() {
     if (c.ws || !c.want) return;
-    let sock;
-    try { sock = new WebSocket(wsUrl(path)); } catch (e) { schedule(); return; }
+    let sock: WebSocket;
+    try { sock = new WebSocket(wsUrl(path + c.hint)); } catch (e) { schedule(); return; }
     c.ws = sock;
     sock.addEventListener('open', function () {
       c.ix = 0; c.failures = 0; c.lastRx = Date.now();
@@ -81,8 +84,16 @@ function Conn(path: string, onFrame: (m: any) => void): ConnState {
       if (!m || m.t === 'pong') return;
       onFrame(m);
     });
-    sock.addEventListener('close', dropped);
-    sock.addEventListener('error', dropped);
+    /* Only the socket the connection still holds may report a drop: one it
+       already let go of (a close-and-redial, 2026-09-17) ends later, on its
+       own, and must neither kill its successor nor schedule a reconnect —
+       it only settles the `closing` mark `close()` left for it. */
+    function ended() {
+      if (c.ws === sock) { dropped(); return; }
+      c.closing = false;
+    }
+    sock.addEventListener('close', ended);
+    sock.addEventListener('error', ended);
   }
 
   function dropped() {
@@ -183,14 +194,25 @@ const memberApi = {
     board.authFrame = JSON.stringify({ t: 'auth', key: key, presence: presenceMode() });
     board.userScope = next;
     board.want = true;
-    if (board.ws && board.ws.readyState === 1) {
+    /* The socket must live on THIS member's hub shard (the `?h=` hint picks
+       it). One opened before the identity was known dialled the anonymous
+       shard: close it and dial again rather than authenticate in place —
+       otherwise the private frames would go to a shard it never reached. */
+    const hint = '?h=' + hash;
+    const moved = board.hint !== hint;
+    board.hint = hint;
+    if (board.ws && board.ws.readyState === 1 && !moved) {
       try { board.ws.send(board.authFrame); } catch (e) { /* reconnect re-auths */ }
       board._sendSub();
+    } else if (board.ws) {
+      board._close();
+      if (!hidden) board._open();
     } else if (!hidden) { board._open(); }
   },
   disable: function () {
     board.authFrame = null;
     board.userScope = '';
+    board.hint = '';
     memberKey = '';
     if (board.desired.length === 0) { board.want = false; board._close(); }
     else board._sendSub();

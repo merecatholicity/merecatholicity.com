@@ -34,7 +34,8 @@ test('the ledger builds through 0013 and profiles carries last_seen_at', () => {
 });
 
 test('the hub is the one writer: a stamp at the last disconnect under auto, cleared under appear-offline', () => {
-  const close = hubSrc.slice(hubSrc.indexOf('async webSocketClose(ws: any)'), hubSrc.indexOf('async #stampLastSeen('));
+  const close = hubSrc.slice(hubSrc.indexOf('async webSocketClose(ws: WebSocket)'), hubSrc.indexOf('async #stampLastSeen('));
+  assert.ok(close.length > 0, 'the close handler is where the slice begins');
   assert.ok(/if \(this\.#isOnline\(me, ws\)\) return;/.test(close), 'only the member\'s LAST socket closing counts');
   assert.ok(/if \(Presence\.recordsLastSeen\(\(a && a\.presenceMode\) \|\| 'auto'\)\) await this\.#stampLastSeen\(me\);/.test(close),
     'the stamp is gated by the kernel rule on the closing socket\'s own mode');

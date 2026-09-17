@@ -148,6 +148,16 @@
     // directory or its count (src/lib.ts hiddenHashes; the TEST_HASHES secret's
     // write-bypass identities are hidden the same way). Hashes are public.
     "HIDDEN_HASHES": "2a2f97abc4dd1649ef31bb815f6181dcee63b76963cb73cd8fe15b77bf53a681,431230bb0b4e1fab7e2299b612b21bbcc7cf54016b56389d9ac30d1ef70dabf8,ff116db3c9e37db220330232046fddff87119e0339d668469ee911597536ddb0",
+    // The scale lever for the live sockets (2026-09-17, Domain.Hub): how many
+    // BoardHub Durable Object instances the sockets are spread over, each a
+    // member's home by their hash. "1" is the single instance that shipped in
+    // July. Raise it (2, 8, 16 … 64) when the Health card's per-shard socket
+    // count climbs into the thousands; a deploy disconnects every socket, so
+    // the clients simply reconnect under the new count — no other step. Keep
+    // it at "1" until every open tab carries the routing hint (a day after
+    // the sharding deploy), or an old bundle's private frames go to a shard
+    // it never dialled until its page reloads.
+    "HUB_SHARDS": "1",
     // Comment email notifications were retired in favor of RSS + the Activity
     // Audit page, so there is no per-comment notification recipient. The
     // send_email binding EMAIL (top level) is for the ops alerts alone.
@@ -218,7 +228,8 @@
         // Same TURN key as prod; set TURN_KEY_SECRET --env staging too.
         "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d",
         // Same account as prod; set CF_USAGE_TOKEN --env staging for the monitor.
-        "CF_ACCOUNT_ID": "6093bc0889c95a08f0a92a8df6750c66"
+        "CF_ACCOUNT_ID": "6093bc0889c95a08f0a92a8df6750c66",
+        "HUB_SHARDS": "1"
       }
     }
   }

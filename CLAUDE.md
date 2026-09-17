@@ -215,11 +215,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   the window so the sheet under it stays). `FOOTER_LINKS` is the one list — a new footer door goes
   there. Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the
   document's.
-- **Presence is the hub's word alone**: online is a live socket under mode "auto"
-  (`Domain.Presence.isVisible`), and `profiles.last_seen_at` is written by the BoardHub only —
-  stamped at a member's last disconnect under "auto", cleared by an auth under "off"
-  (`recordsLastSeen`); the mode rides the auth frame, never a column, so no worker handler may
-  write the stamp or second-guess it — serving the column as-is IS the privacy rule.
+- **Presence is the hub's word alone, and the hub is SHARDED** (`Domain.Hub`, 2026-09-17): online
+  is a live socket under mode "auto" (`Domain.Presence.isVisible`); `profiles.last_seen_at` is the
+  BoardHub's alone (the last disconnect under "auto" stamps, an "off" auth clears; the mode rides
+  the auth frame, never a column — served as-is, which IS the privacy rule). `HUB_SHARDS` instances,
+  a member's every socket on the shard their hash names (`?h=`), reached only via `lib.ts` `hub*`.
 - **The fixed chrome answers the finger, not the platform's click** (2026-09-13): a phone
   synthesizes the click after the finger lifts and withholds it at will (iOS: a tap that stops a
   decelerating page; a tap whose hover it judges to have changed content — live: Inbox pressed,

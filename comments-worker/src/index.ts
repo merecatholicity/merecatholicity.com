@@ -50,6 +50,8 @@ import {
   keyedGated,
   sweepCalls,
   originOk,
+  hubHome,
+  sha256hex,
   pruneComments,
   pruneIdentityIps,
   pruneMerecatChats,
@@ -385,19 +387,24 @@ async function handleConfig(request: any, env: any, url: any) {
    uncapped as everywhere). */
 
 /* ---- Live updates over WebSockets (Phase 1) ----
-   The BoardHub is ONE global Durable Object (getByName('board')) that fans a
-   fresh board post out to every browser watching the affected scope, over a
-   hibernatable WebSocket. Connections are the only state: each socket's
-   subscriptions live in its serializeAttachment (survives hibernation), so the
-   object uses no ctx.storage and NO timers (either would block hibernation and
-   start billing idle duration). The socket is READ-ONLY — it carries {t:'sub'}
-   (and, for a member, {t:'auth'}) up and broadcast events down; every write
-   stays on the authenticated, Turnstile-gated, rate-limited HTTP path. The back
-   room never crosses the wire (sanitizeScopes refuses cat:adminsonly; the worker
-   emits nothing for it). A member may authenticate to add a PRIVATE
-   'user:<hash>' scope — kept only for the hash their key proves — over which the
-   worker pushes that member's own DMs and notifications (nobody else's socket
-   can hold that scope, so the private events reach their connections alone). */
+   The BoardHub is a Durable Object that fans a fresh board post out to every
+   browser watching the affected scope, over a hibernatable WebSocket. Since
+   2026-09-17 it is HUB_SHARDS instances (Domain.Hub; shard 0 keeps the name
+   'board'): a socket is placed by the member's hash — the client's `?h=` hint
+   on the upgrade URL, an anonymous socket by a hash of its address — so every
+   socket of one member lives on ONE shard, a private event is routed to that
+   shard alone (lib.ts sendToHub) and a public one is fanned to all. Connections
+   are the only state: each socket's subscriptions live in its
+   serializeAttachment (survives hibernation), so the object uses no ctx.storage
+   and NO timers (either would block hibernation and start billing idle
+   duration). The socket is READ-ONLY — it carries {t:'sub'} (and, for a member,
+   {t:'auth'}) up and broadcast events down; every write stays on the
+   authenticated, Turnstile-gated, rate-limited HTTP path. The back room never
+   crosses the wire (sanitizeScopes refuses cat:adminsonly; the worker emits
+   nothing for it). A member may authenticate to add a PRIVATE 'user:<hash>'
+   scope — kept only for the hash their key proves — over which the worker
+   pushes that member's own DMs and notifications (nobody else's socket can hold
+   that scope, so the private events reach their connections alone). */
 
 /* A subscription scope is one of 'board:index', 'cat:<key>' (never the back
    room), 'topic:<positive int>', or the PRIVATE 'user:<hash>' — kept ONLY when
@@ -411,13 +418,18 @@ async function handleConfig(request: any, env: any, url: any) {
 /* The two Durable Objects live in ./durable.ts; re-exported so wrangler
    finds BoardHub/ChatRoom on the main module. */
 export { BoardHub, ChatRoom } from './durable.ts';
-async function handleLive(request: any, env: any) {
+async function handleLive(request: Request, env: Env) {
   if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.HUB) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';
   const { success } = await env.CONNECT_LIMIT.limit({ key: ip });
   if (!success) return new Response('slow down', { status: 429 });
-  return env.HUB.get(env.HUB.idFromName('board')).fetch(request);
+  /* The shard: the member's hash when the client names it (`?h=`), else the
+     address's — an anonymous reader has no presence, so its shard is only a
+     spread. The hash is public by design; the auth frame still proves it. */
+  const hint = String(new URL(request.url).searchParams.get('h') || '');
+  const key = /^[0-9a-f]{64}$/.test(hint) ? hint : await sha256hex(ip);
+  return hubHome(env, key).fetch(request);
 }
 
 /* boardEventPublic — the back-room privacy gate for live events — lives in

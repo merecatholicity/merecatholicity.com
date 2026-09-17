@@ -22,7 +22,7 @@
    ops_webtest), no table. */
 import * as OpsK from '../../purescript/output/Domain.Ops/index.js';
 import { sendAlert } from './alerts.ts';
-import { getOpsState, setOpsState } from './lib.ts';
+import { getOpsState, setOpsState, hubStats } from './lib.ts';
 import type { Env } from './env.ts';
 
 export type Condition = { kind: string; subject: string; detail: string };
@@ -140,5 +140,9 @@ export async function readOps(env: Env) {
   const open = Array.isArray(alerts.open) ? alerts.open.map(String) : [];
   const backupOk = !hb.daily || (!!object && object.size >= OpsK.minBackupBytes);
   const ok = stale.length === 0 && open.length === 0 && backupOk;
-  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest, csp };
+  /* The live hub, shard by shard (2026-09-17): how many sockets each holds
+     is the number that says when to raise HUB_SHARDS. Shown, never told. */
+  let hub: Awaited<ReturnType<typeof hubStats>> = [];
+  try { hub = await hubStats(env); } catch (e) { hub = []; }
+  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest, csp, hub };
 }

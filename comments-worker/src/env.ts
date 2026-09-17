@@ -45,6 +45,9 @@ export interface Env {
   CF_ACCOUNT_ID?: string;
   ALERT_FROM?: string;
   HIDDEN_HASHES?: string;
+  /* how many BoardHub shards the live sockets are spread over (Domain.Hub;
+     absent = 1, the single "board" instance) */
+  HUB_SHARDS?: string;
   /* secrets (`wrangler secret put`, never in a file) */
   TURNSTILE_SECRET?: string;
   VAPID_PRIVATE_KEY?: string;

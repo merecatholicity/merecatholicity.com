@@ -52,6 +52,9 @@ import {
   retractReactNotif,
   publishLive,
   publishUser,
+  hubViewersOf,
+  hubDmViewing,
+  hubPresenceOf,
   randomHex,
   dmReaction,
   sha256hex,
@@ -203,9 +206,8 @@ async function deliverDmWord(env: any, ctx: any, me: string, data: any, now: num
        the bell as before. */
     let viewing: string[] = [];
     if (ctx && env.HUB && recipients.length) {
-      const hub = env.HUB.get(env.HUB.idFromName('board'));
-      try { viewing = await hub.viewersOf('t' + thread.id, recipients); } catch { viewing = []; }
-      if (kind === 0 && other && viewing.indexOf(other) === -1) { try { if (await hub.dmViewing(other, me)) viewing.push(other); } catch { /* rings */ } }
+      viewing = await hubViewersOf(env, 't' + thread.id, recipients);
+      if (kind === 0 && other && viewing.indexOf(other) === -1 && (await hubDmViewing(env, other, me))) viewing.push(other);
     }
     const away = recipients.filter((h) => viewing.indexOf(h) === -1);
     /* A DM also lands in each absent member's notifications list (the inbox
@@ -655,9 +657,7 @@ async function handleDmPresence(request: any, env: any) {
   const hashes = (Array.isArray(data.hashes) ? data.hashes : [])
     .filter((h: any) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 50);
   if (!hashes.length || !env.HUB) return json({ ok: true, online: [], seen: {} }, 200);
-  let online = [];
-  try { online = await env.HUB.get(env.HUB.idFromName('board')).presenceOf(hashes); } catch { online = []; }
-  const on = Array.isArray(online) ? online : [];
+  const on = await hubPresenceOf(env, hashes);
   /* "Last seen" for those not online now: the hub's stamp, absent for a member
      who chose appear-offline (the hub clears it), so serving it as-is IS the
      privacy rule; an online member's stamp is not served (they are Online). */
@@ -798,9 +798,8 @@ async function handleDmReact(request: any, env: any, ctx: any) {
          on screen lands on the pill in front of their eyes — no bell. */
       let onScreen = false;
       if (env.HUB) {
-        const hub = env.HUB.get(env.HUB.idFromName('board'));
-        try { onScreen = ((await hub.viewersOf('t' + row.thread_id, [row.sender_hash])) || []).length > 0; } catch { onScreen = false; }
-        if (!onScreen && Number(row.kind) === 0) { try { onScreen = !!(await hub.dmViewing(row.sender_hash, me)); } catch { onScreen = false; } }
+        onScreen = (await hubViewersOf(env, 't' + row.thread_id, [row.sender_hash])).length > 0;
+        if (!onScreen && Number(row.kind) === 0) onScreen = await hubDmViewing(env, row.sender_hash, me);
       }
       if (!onScreen) { const ring = notifyReact(env, bell); if (ctx) ctx.waitUntil(ring); else await ring; }
     } else await retractReactNotif(env, bell);

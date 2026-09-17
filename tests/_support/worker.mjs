@@ -154,18 +154,27 @@ export function r2Bucket(name, calls, snapshot) {
 }
 
 /* the BoardHub as the worker sees it (env.HUB.get(id).method): every call
-   recorded; who is "viewing" and who is online are the test's to say */
-export function hubSpy({ viewersOf = () => [], viewing = () => false, online = () => [] } = {}) {
-  const spy = { events: [], viewing: [], viewersOf: [], presence: [] };
+   recorded; who is "viewing" and who is online are the test's to say. Since
+   the hub is sharded (Domain.Hub, 2026-09-17) the spy also records WHICH
+   instance each call went to — `spy.calls` is [{name, method, args}] — so a
+   test can prove a private event reached its home shard alone and a public
+   one every shard; one stub answers for every name. */
+export function hubSpy({ viewersOf = () => [], viewing = () => false, online = () => [], stats = () => ({ sockets: 0, members: 0 }) } = {}) {
+  const spy = { events: [], viewing: [], viewersOf: [], presence: [], calls: [], fetched: [] };
+  let current = 'board';
+  const rec = (method, args) => spy.calls.push({ name: current, method, args });
   const stub = {
-    publish: async (event) => { spy.events.push(event); },
-    presenceOf: async (hashes) => { spy.presence.push(hashes); return online(hashes); },
-    dmViewing: async (recipient, sender) => { spy.viewing.push([recipient, sender]); return viewing(recipient, sender); },
-    viewersOf: async (tag, hashes) => { spy.viewersOf.push([tag, hashes]); return viewersOf(tag, hashes); },
-    fetch: async () => new Response('hub', { status: 200 }),
+    publish: async (event) => { rec('publish', [event]); spy.events.push(event); },
+    relay: async (items) => { rec('relay', [items]); },
+    presenceOf: async (hashes) => { rec('presenceOf', [hashes]); spy.presence.push(hashes); return online(hashes); },
+    dmViewing: async (recipient, sender) => { rec('dmViewing', [recipient, sender]); spy.viewing.push([recipient, sender]); return viewing(recipient, sender); },
+    viewersOf: async (tag, hashes) => { rec('viewersOf', [tag, hashes]); spy.viewersOf.push([tag, hashes]); return viewersOf(tag, hashes); },
+    stats: async () => { rec('stats', []); return stats(); },
+    fetch: async (request) => { rec('fetch', [request && request.url]); spy.fetched.push(current); return new Response('hub', { status: 200 }); },
   };
-  spy.namespace = { idFromName: (n) => n, get: () => stub };
+  spy.namespace = { idFromName: (n) => n, get: (name) => { current = String(name); return stub; } };
   spy.frames = (t) => spy.events.filter((e) => e.t === t);
+  spy.names = (method) => spy.calls.filter((c) => c.method === method).map((c) => c.name);
   return spy;
 }
 

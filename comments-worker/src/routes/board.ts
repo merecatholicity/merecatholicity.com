@@ -40,6 +40,7 @@ import {
   stampReactions,
   parseOS,
   publishLive,
+  sendToHub,
   purgeWallMedia,
   recordIps,
   refreshTopicStats,
@@ -996,7 +997,7 @@ async function handleMove(request: any, env: any, ctx: any) {
       const lastRow = await env.DB.prepare(
         "SELECT MAX(id) AS m FROM comments WHERE (id = ?1 OR parent_id = ?1) AND status = 'live'").bind(id).first();
       const newCat = newPage.slice(6);
-      await env.HUB.get(env.HUB.idFromName('board')).publish({ v: 1, t: 'new-topic',
+      await sendToHub(env, { v: 1, t: 'new-topic',
         scopes: ['cat:' + newCat, 'board:index'], cat: newCat,
         topic: { id: c.id, title: c.title, author_hash: c.author_hash, nick: c.nick || null,
           created_at: c.created_at, locked: c.locked || 0, sticky: c.sticky || 0, replies: c.replies || 0,
