@@ -2,8 +2,9 @@
 line every webtest prints, and the comparison with the baseline that names a
 regression. What would break silently: a crashed suite counted as 0 FAIL and
 passed; a suite whose baseline already fails (an admin-key suite) alerting
-every night; a suite the baseline never saw judged leniently; the report sent
-with Python's own user agent, which Cloudflare refuses (error 1010)."""
+every night; a suite the baseline never saw judged leniently; a failure that
+did not come back on a re-run told to the owner as a regression; the report
+sent with Python's own user agent, which Cloudflare refuses (error 1010)."""
 import os
 import sys
 import unittest
@@ -52,6 +53,45 @@ class NightlyParse(unittest.TestCase):
     def test_a_suite_the_baseline_never_saw_is_judged_against_zero(self):
         new = {'test_new': {'pass': 3, 'fail': 1, 'exit': 1, 'summary': True, 'fails': ['FAIL z']}}
         self.assertEqual(wn.compare({}, new), ['test_new: 1 FAIL (baseline 0): FAIL z'])
+
+    def test_a_failure_is_told_only_when_it_comes_back(self):
+        """2026-09-17: one GitHub Pages 503 on dr.json, minutes after a deploy,
+        alerted the owner as a regression; the re-run was clean."""
+        baseline = {
+            'test_hscroll': {'pass': 114, 'fail': 0, 'exit': 0, 'summary': True},
+            'test_worker_reads': {'pass': 30, 'fail': 0, 'exit': 0, 'summary': True},
+            'test_board_views': {'pass': 1, 'fail': 7, 'exit': 1, 'summary': True},
+        }
+        first = {'pass': 112, 'fail': 2, 'exit': 2, 'summary': True,
+                 'fails': ["FAIL hscroll console: ['https://merecatholicity.com/dr.json - 503']"]}
+        results = {
+            'test_hscroll': first,
+            'test_worker_reads': {'pass': 29, 'fail': 1, 'exit': 1, 'summary': True, 'fails': ['FAIL  config: apiVersion']},
+            'test_board_views': {'pass': 1, 'fail': 7, 'exit': 1, 'summary': True, 'fails': ['FAIL a'] * 7},
+        }
+        again = {
+            'test_hscroll': {'pass': 114, 'fail': 0, 'exit': 0, 'summary': True, 'fails': []},
+            'test_worker_reads': {'pass': 29, 'fail': 1, 'exit': 1, 'summary': True, 'fails': ['FAIL  config: apiVersion (again)']},
+        }
+        asked = []
+
+        def rerun(name):
+            asked.append(name)
+            return dict(again[name])
+
+        clean = wn.confirm(baseline, results, rerun)
+        self.assertEqual(asked, ['test_hscroll', 'test_worker_reads'], 'only a regressed suite runs again, once; the known admin-key shape never')
+        self.assertEqual(clean, ['test_hscroll'])
+        self.assertEqual(results['test_hscroll']['fail'], 0, 'the clean re-run is the verdict')
+        self.assertIs(results['test_hscroll']['once'], first, 'and the first run is kept beside it')
+        self.assertEqual(wn.compare(baseline, results),
+                         ['test_worker_reads: 1 FAIL (baseline 0): FAIL  config: apiVersion'],
+                         'a failure that comes back is the regression, told in the words first seen')
+        self.assertEqual(wn.suite_line('test_hscroll', results['test_hscroll']), 'test_hscroll 114/114 (clean on a re-run; first 112/114)')
+        self.assertEqual(wn.suite_line('test_worker_reads', results['test_worker_reads']), 'test_worker_reads 29/30')
+        longest = max(wn.SUITES, key=len)
+        self.assertLessEqual(len(wn.suite_line(longest, {'pass': 999, 'fail': 999, 'once': {'pass': 999, 'fail': 999}})), 80,
+                             'the ops door keeps 80 characters of a suite line')
 
     def test_every_listed_suite_exists_and_is_read_only_by_name(self):
         wt = os.path.join(os.path.dirname(__file__), '..', '..', 'webtest')

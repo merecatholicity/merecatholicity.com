@@ -331,17 +331,17 @@ are on, and would refuse the push.
 | `SITE_DISPATCH_TOKEN` | secret **in the private-shelf repository** | its `notify-site.yml` | fine-grained PAT on `merecatholicity.com` only, *Actions: write* + *Metadata: read* — enough to `gh workflow run merecat.yml`, nothing more (set 2026-09-10; dev-box copy in `ci.env`; verified: cannot see the private repo, cannot write the site's contents) |
 
 **The pipeline holds no key** (2026-09-17): `merecat.yml` and `ops-watch.yml` prove themselves
-with the OIDC token GitHub signs for each job (§2.5), so there is nothing of theirs to leak or
-rotate. The dev box's nightly (`scripts/webtest_nightly.py`) reports with `MC_OPS_REPORT_KEY`
-from `ci.env` — the worker secret `OPS_REPORT_KEY`, which opens the ops report door and nothing
-else.
+with the OIDC token GitHub signs for each job (§2.5 `merecat.yml`, §2.6), so there is nothing of
+theirs to leak or rotate. The dev box's nightly (`scripts/webtest_nightly.py`) reports with
+`MC_OPS_REPORT_KEY` from `ci.env` — the worker secret `OPS_REPORT_KEY`, which opens the ops report
+door and nothing else.
 
-Environments: **`github-pages`** (deploy-pages' own; no rules),
-**`terraform-production`** (§3) and **`librarian-config`** (2026-09-17: merecat's persona and
-dials reach production only from a `merecat.yml` job that ran in it — the owner is its required
-reviewer, main only, no admin bypass; §2.5). Repository policy (all Terraform-managed):
-`allowed_actions = selected` (GitHub-owned + verified creators), **`sha_pinning_required`**,
-secret scanning + push protection + Dependabot security updates **on**.
+Environments: **`github-pages`** (deploy-pages' own; no rules), **`terraform-production`** (§3)
+and **`librarian-config`** (2026-09-17: merecat's persona and dials reach production only from a
+`merecat.yml` job that ran in it — the owner is its required reviewer, main only, no admin bypass;
+§2.5 `merecat.yml`). Repository policy (all Terraform-managed): `allowed_actions = selected`
+(GitHub-owned + verified creators), **`sha_pinning_required`**, secret scanning + push
+protection + Dependabot security updates **on**.
 
 **Rotating a Cloudflare token:** mint a new account token with the same policy (dashboard,
 or the API with a token that has *Account API Tokens Write* — the three CI tokens
@@ -366,10 +366,10 @@ the log has the full record). Each is changed and then PROVEN, never assumed:
 `MC_TEST_BYPASS` and `TEST_HASHES` are no longer secrets of this worker (2026-09-17): the
 Turnstile test bypass they gated was retired, since the established-identity skip already spares
 the kit's test identities, and both were deleted with `wrangler secret delete`. Nor is
-`MERECAT_INGEST_KEY`, the pipeline's static key, nor its Actions twin `MC_INGEST_KEY`: the pipeline
-proves itself with GitHub's OIDC tokens (§2.5), and both were deleted once the tokens ran green. A secret added
-later needs no registration anywhere: the egress guard scans every env string that is not in
-`env.ts` `PUBLIC_VARS`.
+`MERECAT_INGEST_KEY`, the pipeline's static key, nor its Actions twin `MC_INGEST_KEY`: the
+pipeline proves itself with GitHub's OIDC tokens (§2.5 `merecat.yml`), and both were deleted once
+the tokens ran green. A secret added later needs no registration anywhere: the egress guard scans
+every env string that is not in `env.ts` `PUBLIC_VARS`.
 
 ---
 
@@ -441,8 +441,9 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   Until then *Send a test alert* reports the refusal verbatim; Discord works at once. The
   daily backup (03:15 UTC) and the self-check ride the same road; the Health card there is
   the truth, and `POST /api/comments/ops/report {probe:true}` (the job's OIDC token; from the
-  dev box, `{key: $MC_OPS_REPORT_KEY, probe: true}`) is the outside probe `ops-watch.yml` runs. **The restore drill** is `make comments-backup`: the site token
-  fetches the latest daily object from R2 (outside the repo) and `scripts/backup_check.py`
+  dev box, `{key: $MC_OPS_REPORT_KEY, probe: true}`) is the outside probe `ops-watch.yml`
+  runs. **The restore drill** is `make comments-backup`: the site token fetches the latest
+  daily object from R2 (outside the repo) and `scripts/backup_check.py`
   replays it twice into a local SQLite — `wrangler d1 export` is gone (it refuses FTS5).
 - **Rollback and staged rollout** → §12 (`make worker-rollback`; `gh workflow run workers.yml
   -f mode=stage -f percent=10`, then `-f mode=promote`).

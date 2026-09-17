@@ -13,13 +13,15 @@ what a probe cannot: pages rendering, the DM views, the shell's journeys.
   compare    (for tests) compare a results JSON with the baseline on stdin
 
 A regression is a suite whose FAIL count rose above the baseline, or which
-exited non-zero where the baseline had it exiting 0. The suites listed are
-READ-ONLY against production: they render and read; nothing here posts,
-messages or moderates. The report carries the dev box's own narrow key
-(MC_OPS_REPORT_KEY from ~/.config/merecatholicity/ci.env — the worker's
-OPS_REPORT_KEY, which opens the ops door and nothing else; 2026-09-17, when
-the pipeline's shared static key was retired) and goes to the workers.dev
-hostname, the front door the zone's bot rules do not guard."""
+exited non-zero where the baseline had it exiting 0 — on two runs running: a
+regressed suite is run once more, and only a failure that comes back is told
+(2026-09-17). The suites listed are READ-ONLY against production: they render
+and read; nothing here posts, messages or moderates. The report carries the
+dev box's own narrow key (MC_OPS_REPORT_KEY from
+~/.config/merecatholicity/ci.env — the worker's OPS_REPORT_KEY, which opens
+the ops door and nothing else; 2026-09-17, when the pipeline's shared static
+key was retired) and goes to the workers.dev hostname, the front door the
+zone's bot rules do not guard."""
 import json
 import os
 import re
@@ -106,6 +108,35 @@ def compare(baseline, results):
     return out
 
 
+def confirm(baseline, results, rerun):
+    """Run each regressed suite once more (`rerun(name)`) and judge that run:
+    a failure that does not come back (a GitHub Pages 503 minutes after a
+    deploy, a tab the box starved) is weather, and the owner is told only what
+    a human must act on. A suite clean on its re-run takes the re-run's result,
+    keeping the first as `once`; one that fails again keeps its first result,
+    so the regression is told in the words first seen. Returns the names clean
+    on their re-run."""
+    clean = []
+    for name in list(results):
+        if not compare(baseline, {name: results[name]}):
+            continue
+        again = rerun(name)
+        if not compare(baseline, {name: again}):
+            results[name] = dict(again, once=results[name])
+            clean.append(name)
+    return clean
+
+
+def suite_line(name, r):
+    """A suite as the report names it: `name pass/total`, and the first run's
+    count when only its re-run was clean (the door keeps 80 characters)."""
+    line = '%s %d/%d' % (name, r['pass'], r['pass'] + r['fail'])
+    once = r.get('once')
+    if once:
+        line += ' (clean on a re-run; first %d/%d)' % (once['pass'], once['pass'] + once['fail'])
+    return line
+
+
 def load_baseline():
     try:
         with open(BASELINE) as f:
@@ -119,7 +150,7 @@ def report(results, regressions, key):
         'key': key, 'source': 'webtest',
         'pass': sum(r['pass'] for r in results.values()),
         'fail': sum(r['fail'] for r in results.values()),
-        'suites': ['%s %d/%d' % (n, r['pass'], r['pass'] + r['fail']) for n, r in results.items()],
+        'suites': [suite_line(n, r) for n, r in results.items()],
         'regressions': regressions,
     }
     req = urllib.request.Request(DOOR, data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'User-Agent': UA}, method='POST')
@@ -161,7 +192,13 @@ def main(argv):
             f.write('\n')
         print('baseline written: ' + BASELINE)
         return 0
-    regressions = compare(load_baseline(), results)
+    baseline = load_baseline()
+    for name in confirm(baseline, results, run_suite):
+        first = results[name]['once']
+        print('%-24s clean on a re-run; the first run: %d PASS %d FAIL, exit %d%s' % (
+            name, first['pass'], first['fail'], first['exit'],
+            (': ' + '; '.join(first['fails']))[:300] if first['fails'] else ''))
+    regressions = compare(baseline, results)
     total_pass = sum(r['pass'] for r in results.values())
     total_fail = sum(r['fail'] for r in results.values())
     print('%d PASS %d FAIL; %d regression(s)' % (total_pass, total_fail, len(regressions)))

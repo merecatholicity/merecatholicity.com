@@ -458,7 +458,8 @@ a pull request runs the same gates **with no credentials and no deploy of any ki
 | `workers.yml` | changes under `comments-worker/`, `contact-worker/`, `purescript/`, the npm lockfile and TS/eslint configs | `make jscheck` + `make tests` + `wrangler deploy --dry-run`; on `main`: apply the D1 migration ledger, `wrangler deploy` |
 | `terraform.yml` | changes under `terraform/` | `plan` with a public-safe summary; on `main`: `apply` behind the `terraform-production` approval gate — refuses any destroy/replace, refuses if the plan changed since review; PRs get `fmt` + `validate` only |
 | `purge-cache.yml` | a manual button | purge the two unkeyed files, or the whole zone |
-| `merecat.yml` | changes under `librarian/`, `content/`, `resources/`, `book/`, `partials/`; daily; a dispatch (the private shelf's pushes) | wait for the Build, restore its `docs/`, clone the private shelf (deploy key), ingest only the works whose chunks changed (parse ledger + server hash), within the day's D1 row budget |
+| `merecat.yml` | changes under `librarian/`, `content/`, `resources/`, `book/`, `partials/`; daily; a dispatch (the private shelf's pushes) | wait for the Build, restore its `docs/`, clone the private shelf (deploy key), ingest only the works whose chunks changed (parse ledger + server hash), within the day's D1 row budget; when `persona.md` or `config.yml` changed, a `config` job pushes them after a reviewer approves (`librarian-config`) |
+| `ops-watch.yml` | daily 03:45 UTC; a dispatch | ask the worker's ops door how it is, and fail the run when the health says not ok |
 
 **Approving a Terraform apply:** open the run and press *Review deployments*, or from a
 shell `scripts/ci_approve.sh` (list), `scripts/ci_approve.sh <run-id>` (summary + what is
@@ -471,15 +472,17 @@ dev box): three least-privilege Cloudflare tokens — `CLOUDFLARE_API_TOKEN` (Te
 `CLOUDFLARE_SITE_TOKEN` (publish + purge), `CLOUDFLARE_WORKERS_TOKEN` (worker deploys) —
 their scopes in `terraform/README.md`; `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (the
 Terraform token's derived R2 pair); `TF_GITHUB_TOKEN`, a fine-grained PAT scoped to the two
-repositories. Every action is pinned to a commit SHA (the repository requires it), Dependabot
-keeps the pins current, secret scanning and push protection are on.
+repositories. The librarian's pipeline and the watchdog hold **no** key: each job proves
+itself with the OIDC token GitHub signs for its run, and the worker checks it (2026-09-17).
+Every action is pinned to a commit SHA (the repository requires it), Dependabot keeps the
+pins current, secret scanning and push protection are on.
 
 **Deliberately NOT in the pipeline** (the full list with reasons is the runbook's §10):
-worker secrets (`wrangler secret put`); the librarian ingest; the bootstrap secrets and the
-state bucket; the PAT and the org's PAT policy (GitHub has no API for them); Email Routing
-settings, the R2 custom-domain bindings, the TURN key and Vectorize (provider limits); the
-one-off audio and private-shelf uploads; headless verification against production; history
-rewrites; branch protection on `main`.
+worker secrets (`wrangler secret put`); the librarian's hand road (`make librarian`, an
+admin's key); the bootstrap secrets and the state bucket; the PAT and the org's PAT policy
+(GitHub has no API for them); Email Routing settings, the R2 custom-domain bindings, the
+TURN key and Vectorize (provider limits); the one-off audio and private-shelf uploads;
+headless verification against production; history rewrites; branch protection on `main`.
 
 **Why the build is practical in CI:** the repo is public (free minutes) and the build is
 incremental (one target per work; an unchanged tree rebuilds nothing). Two traps the
@@ -507,7 +510,7 @@ only the diffed files touched; TeX Live is installed only when LaTeX is involved
 | `make publish-pdfs` / `make check-pdfs` | Upload the local PDFs that differ from R2 and purge their URLs / prove the bucket matches `docs/pdfs.txt` (needs `CLOUDFLARE_API_TOKEN`) |
 | `make mirrored-pdfs` | Copy the one PDF nothing builds (`resources/docs-src/The_Bishop_of_Rome.pdf`) into `docs/` (run inside `make html`) |
 | `make worker-deploy` | The MANUAL road: lint, then deploy the comments worker (CI does this on push since 2026-09-09) |
-| `make librarian` | Rebuild + push merecat's corpus/persona/config |
+| `make librarian` | The hand road (an admin's key): push merecat's changed works, then its persona/dials if their files changed — the pipeline is `merecat.yml` |
 | `make comments-backup` | Export the live D1 comments DB (kept out of git) |
 | `make clean` | Sweep LaTeX aux/log detritus and `__pycache__` |
 
@@ -591,13 +594,15 @@ worker. Its corpus is **decoupled and rebuilt from `librarian/`**:
   Scriptures, the Fathers, Newman, the councils, and the deep shelf beneath.
 - `librarian/persona.md` — the system prompt (also live-editable from the admin page).
 - `librarian/config.yml` — model id, caps, top-k (the reasoning dials and the AI budget
-  guard are set on the merecat admin page).
+  guard are set on the merecat admin page). A pushed change to either file reaches the
+  bot only after a reviewer approves the pipeline's `config` job.
 - `librarian/ingest.py` — parses every work into anchored chunks, pushes them to the D1
   rooms + Vectorize, and prunes removed works. Retrieval is five-legged (semantic +
   weighted BM25 + raw BM25 + phrase + verse), merged and reranked.
 
 ```sh
-make librarian          # = cd librarian && python ingest.py --push --ledger .ledger.json   (incremental; daily-safe)
+make librarian          # the hand road, with an admin's key: ingest.py --push --ledger .ledger.json && ingest.py --config
+gh workflow run merecat.yml   # the pipeline, which needs no key
 ```
 
 `librarian/private/` is a **separate private git repo** cloned into place — its texts are
