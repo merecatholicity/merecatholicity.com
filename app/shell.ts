@@ -37,6 +37,7 @@ import { installPtr } from './ptr.ts';
 import { installHaptic } from './haptic.ts';
 import { installBadges } from './badges.ts';
 import { installChrome } from './appchrome.ts';
+import { installPushHeal } from './push.ts';
 import './richtext.js';
 import './views/board.js';
 import './views/post.js';
@@ -353,6 +354,10 @@ customElements.define('mc-audio-dock', McAudioDock);
   if ('serviceWorker' in navigator) {
     try { navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) { /* no sw */ }
   }
+  /* Keep a member's push subscription on the worker's current VAPID key, once
+     per document, after first paint (app/push.ts). Here and not in boots():
+     it is a per-open repair, never a per-hop one. */
+  installPushHeal();
   if (!document.querySelector('link[rel="manifest"]')) {
     var mf = document.createElement('link');
     mf.rel = 'manifest';

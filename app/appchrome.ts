@@ -10,6 +10,7 @@
 import { LitElement, html } from 'lit';
 import { mountLibrary } from './views/library.ts';
 import { notifLabel, notifHref, tapExcursion, tapVerdict, tapEchoMs } from './core.ts';
+import { urlBase64ToUint8Array, healPushSubscription, browserPushEnv } from './push.ts';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -233,19 +234,6 @@ function isAdmin() {
 
 /* The standard VAPID applicationServerKey decoder: base64url string -> Uint8Array
    (pushManager.subscribe needs raw bytes, not the string). */
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
-  return out;
-}
-function sameBytes(a: Uint8Array | null, b: Uint8Array | null) {
-  if (!a || !b || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
-  return true;
-}
 
 /* ---- key backup + device linking helpers (the key-loss cliff work) ---- */
 
@@ -707,6 +695,7 @@ class McSettings extends LitElement {
   declare pushBusy: boolean;
   declare pushMsg: string;
   declare _onInstall: () => void;
+  declare _onPushHealed: () => void;
   constructor() {
     super();
     this.keyShown = false; this.theme = this._theme(); this.art = artOn(); this.copied = false;
@@ -718,10 +707,11 @@ class McSettings extends LitElement {
     this.canInstall = !!(window.mcInstall && window.mcInstall.evt);
     this.pushOn = null; this.pushBusy = false; this.pushMsg = '';   // null = state not yet reflected
     this._onInstall = () => { this.canInstall = !!(window.mcInstall && window.mcInstall.evt); };
+    this._onPushHealed = () => { this._reflectPush(); };
   }
   createRenderRoot() { return this; }
-  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-install-available', this._onInstall); this._loadPrefs(); this._reflectPush(); }
-  disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-install-available', this._onInstall); }
+  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-install-available', this._onInstall); document.addEventListener('mc-push-healed', this._onPushHealed); this._loadPrefs(); this._reflectPush(); }
+  disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-install-available', this._onInstall); document.removeEventListener('mc-push-healed', this._onPushHealed); }
   _api() { return '/api/comments'; }
   _loadPrefs() {
     const k = readKey(); if (!k) return;
@@ -823,36 +813,17 @@ class McSettings extends LitElement {
     if (!this._pushSupported() || (this._isIOS() && !this._isStandalone())) { this.pushOn = false; return; }
     try {
       const reg = await navigator.serviceWorker.ready;
-      let sub = await reg.pushManager.getSubscription();
       const key = readKey();
       let owner = '';
       try { owner = localStorage.getItem('mc-push-owner') || ''; } catch (e) { owner = ''; }
-      // Not this identity's subscription (or none, or permission revoked): show
-      // OFF and touch nothing — never re-register someone else's device to this key.
-      if (!sub || Notification.permission !== 'granted' || !key || owner !== key) {
-        this.pushOn = !!(sub && Notification.permission === 'granted' && key && owner === key);
-        return;
-      }
-      // Self-heal a VAPID key rotation: the old subscription's pushes would be
-      // rejected (403, never pruned server-side), so re-subscribe with the new key.
-      try {
-        const kr = await fetch(this._api() + '/push/vapid-key').then((r) => r.json()).catch(() => null);
-        if (kr && kr.ok && kr.key) {
-          const want = urlBase64ToUint8Array(kr.key);
-          const have = (sub.options && sub.options.applicationServerKey) ? new Uint8Array(sub.options.applicationServerKey) : null;
-          if (have && !sameBytes(have, want)) {
-            const oldToken = JSON.stringify(sub.toJSON());
-            try { await sub.unsubscribe(); } catch (e) { /* ignore */ }
-            fetch(this._api() + '/push/unregister', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ key, token: oldToken }),
-            }).catch(() => { /* drop the stale binding */ });
-            sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
-          }
-        }
-      } catch (e) { /* rotation re-subscribe failed — fall through and re-check */ }
-      // Confirm a live subscription still exists (a failed rotation may have torn
-      // the old one down) before claiming ON and registering its token.
+      // Not this identity's subscription (or permission revoked): show OFF and
+      // touch nothing — never re-register someone else's device to this key.
+      if (Notification.permission !== 'granted' || !key || owner !== key) { this.pushOn = false; return; }
+      // The VAPID rotation repair — the same code the shell runs on every app
+      // open (app/push.ts), so opening Settings is never what a member needs.
+      await healPushSubscription(browserPushEnv());
+      // Confirm a live subscription still exists (a move may be waiting for the
+      // next tap) before claiming ON and refreshing its token binding.
       const live = await reg.pushManager.getSubscription().catch(() => null);
       if (!live) { this.pushOn = false; return; }
       this.pushOn = true;

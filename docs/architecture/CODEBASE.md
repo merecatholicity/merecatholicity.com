@@ -86,6 +86,7 @@ duplicated, and the shape they moved toward.
 | `comments-worker/src/usagecalc.ts` | 327 | Pure free-tier limit maths for the usage monitor (`usage.ts`, 106, does the fetch through `analytics.ts`, the GraphQL glue; `quota.ts`, 90, is the librarian's AI budget guard over the same neurons select — no lib import, Node-tested with a stubbed fetch). |
 | `app/live.ts` | 322 | WebSocket lifecycle (board + merecat chat conns; the `?h=` shard hint). |
 | `app/core.ts` | 286 | The membrane — the one audited place PureScript types are erased. |
+| `app/push.ts` | 166 | Keeps a member's push subscription on the worker's current VAPID key, once per app open (shell) and from Settings; a move a browser will not make without a gesture finishes on the next tap. |
 | `comments-worker/src/{pure,webpush}.js` | 268 / 138 | Extracted pure helpers (tested) / VAPID push crypto. |
 | `app/views/{admin,library,member,post,profile}.ts` | 186–321 ea. | One Lit view per feature (`util.ts` 67). |
 | `app/{store,ptr,api}.ts` | 218 / 194 / 101 | Request cache + persisted SWR / pull-to-refresh / typed API client. |
