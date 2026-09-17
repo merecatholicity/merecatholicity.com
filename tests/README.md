@@ -111,7 +111,7 @@ tests/
                        router — a forged key, a swapped payload, alg none, a refused bearer beside a good
                        key, every claim the policy reads, the key set's hour and its once-a-minute refetch;
                        the persona and dials only from the reviewed job, the ingest job's stamp, the ops
-                       door's two callers, the static key's last deploy);
+                       door's two callers, the retired static key opening nothing);
                        one road registering a member and the directory listing members only (directory:
                        a keyed read leaves the row and is spared, a nick, a live post or a published key
                        lists it, a bare row or a deleted post does not);

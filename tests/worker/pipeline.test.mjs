@@ -59,7 +59,6 @@ test('the librarian\'s job opens the corpus doors with its token alone, and the 
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(jwksAsked(), 1, 'GitHub\'s keys are cached for the isolate');
   assert.deepEqual(said('pipeline_refused'), []);
-  assert.deepEqual(said('pipeline_static_key'), []);
 });
 
 test('a token GitHub did not sign opens nothing', async () => {
@@ -90,13 +89,13 @@ test('a token GitHub did not sign opens nothing', async () => {
 });
 
 test('a refused bearer never falls through to a key in the body', async () => {
-  const e = env({ MERECAT_INGEST_KEY: 'the-static-key-for-this-test' });
-  const late = await gh.token('ingest', { exp: Math.floor(Date.now() / 1000) - 3600 });
-  for (const key of [ADMIN.key, 'the-static-key-for-this-test']) {
-    const r = await call(worker, e, 'POST', '/api/merecat/works', { key }, bearer(late));
+  const e = env();
+  const late = await gh.token('probe', { exp: Math.floor(Date.now() / 1000) - 3600 });
+  for (const key of [ADMIN.key, REPORT_KEY]) {
+    const r = await call(worker, e, 'POST', '/api/comments/ops/report', { key, probe: true }, bearer(late));
     assert.equal(r.status, 403, 'an expired token with a good key beside it');
   }
-  assert.deepEqual(said('pipeline_refused').map((x) => x.why), [['ingest: expired'], ['ingest: expired']], 'the log says why, never a claim');
+  assert.deepEqual(said('pipeline_refused').map((x) => x.why), [['probe: expired'], ['probe: expired']], 'the log says why, never a claim');
 });
 
 test('the claims decide: another branch, a pull request, another workflow, a lapsed token', async () => {
@@ -225,17 +224,16 @@ test('the ops door: the watchdog\'s token reads the health; the nightly\'s key r
   assert.equal(r.status, 400, 'a body that is not an object');
 });
 
-test('the static key, for the deploy the workflows take to move: it still opens the three doors, and says so', async () => {
-  const e = env({ MERECAT_INGEST_KEY: 'the-static-key-for-this-test' });
+test('the retired static key opens nothing, even were it still set', async () => {
+  const e = env({ MERECAT_INGEST_KEY: 'the-retired-static-key-value' });
   for (const [path, body] of [
     ['/api/merecat/works', {}],
     ['/api/merecat/config', { persona: 'Pushed the old way.' }],
+    ['/api/merecat/ingest', { mode: 'delete', work: { id: 'x' } }],
     ['/api/comments/ops/report', { probe: true }],
   ]) {
-    const r = await call(worker, e, 'POST', path, { key: 'the-static-key-for-this-test', ...body }, asRunner);
-    assert.equal(r.status, 200, path);
+    const r = await call(worker, e, 'POST', path, { key: 'the-retired-static-key-value', ...body }, asRunner);
+    assert.equal(r.status, 403, path);
   }
-  assert.equal(said('pipeline_static_key').length, 3, 'every use is logged, so the tail shows when nothing uses it');
-  const r = await call(worker, env(), 'POST', '/api/merecat/works', { key: '' }, asRunner);
-  assert.equal(r.status, 403, 'an unset static key matches nothing');
+  assert.equal(await libConfig(e, 'persona'), null);
 });

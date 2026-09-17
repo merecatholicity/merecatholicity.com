@@ -70,13 +70,5 @@
   "since": "2026-09-12",
   "due": "2026-10-14",
   "how": "the same 0018 migration: DROP TABLE ×2 (nothing reads them; the ledger holds every like as a ❤️ reaction); make schema-snapshot"
- },
- {
-  "what": "the static pipeline key (MERECAT_INGEST_KEY) still opening the pipeline doors, for the one deploy the workflows take to move to OIDC",
-  "where": "comments-worker/src/oidc.ts",
-  "pattern": "env\\.MERECAT_INGEST_KEY",
-  "since": "2026-09-17",
-  "due": "2026-09-24",
-  "how": "once merecat.yml and ops-watch.yml are green on OIDC and the tail shows no pipeline_static_key: drop the branch in pipelineCaller (and the Caller road, and MERECAT_INGEST_KEY in env.ts), the static-key test in pipeline.test.mjs; then wrangler secret delete MERECAT_INGEST_KEY, gh secret delete MC_INGEST_KEY, and the ci.env line"
  }
 ]

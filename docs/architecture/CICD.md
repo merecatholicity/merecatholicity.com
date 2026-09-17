@@ -230,8 +230,8 @@ the worker checks GitHub's signature (`comments-worker/src/oidc.ts` — GitHub's
 cached an hour, fail closed) and then the claims (`Domain.Pipeline`: this repository by its
 ids, `main`, a push/schedule/dispatch, a GitHub-hosted runner, this workflow file, and — for
 the persona and the dials — the `librarian-config` environment). The static key it replaced
-(`MC_INGEST_KEY`, the worker's `MERECAT_INGEST_KEY`, published by the env disclosure) is
-honoured for the one deploy the move takes, then deleted (§4).
+(`MC_INGEST_KEY`, the worker's `MERECAT_INGEST_KEY`, published by the env disclosure) was
+deleted the same day, once the tokens had run green (§4).
 
 *The `ingest` job:* wait for this commit's **Build** to finish (a schedule/dispatch takes the
 newest successful Build on `main` and checks out its sha); restore the built site from the
@@ -325,7 +325,6 @@ are on, and would refuse the push.
 | `CLOUDFLARE_WORKERS_TOKEN` | secret | `workers.yml` | account token `merecatholicity-ci-workers` — Workers Scripts Write, D1 Write, Account Settings Read (account); Workers Routes Write (zone) |
 | `TF_GITHUB_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT**, no expiry, on `merecatholicity.com` + `private-shelf` only: Administration, Environments, Variables, Pages read/write; Metadata read |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | **variables** | all | public ids; **Terraform-managed** (`github_actions_variable`) — workflows carry hardcoded fallbacks too |
-| `MC_INGEST_KEY` | secret | nothing, since 2026-09-17 | **retiring**: the static key the pipeline used before its OIDC tokens (the worker's `MERECAT_INGEST_KEY`); the worker honours it one deploy longer, then it is deleted here, from the worker and from `ci.env` (`tests/_support/retirements.json`) |
 | `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf` (dev-box copy: `~/.ssh/private-shelf-ci`); its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
 | `PRIVATE_SHELF_DEPLOY_PUBLIC_KEY` | **variable** | `terraform.yml` (`TF_VAR_private_shelf_deploy_key`) | the public half; empty = no key resource |
 | `MERECAT_INGEST_API` | **variable** (optional) | `merecat.yml` | overrides the ingest URL; default is the worker's workers.dev hostname |
@@ -366,7 +365,9 @@ the log has the full record). Each is changed and then PROVEN, never assumed:
 
 `MC_TEST_BYPASS` and `TEST_HASHES` are no longer secrets of this worker (2026-09-17): the
 Turnstile test bypass they gated was retired, since the established-identity skip already spares
-the kit's test identities, and both were deleted with `wrangler secret delete`. A secret added
+the kit's test identities, and both were deleted with `wrangler secret delete`. Nor is
+`MERECAT_INGEST_KEY`, the pipeline's static key, nor its Actions twin `MC_INGEST_KEY`: the pipeline
+proves itself with GitHub's OIDC tokens (§2.5), and both were deleted once the tokens ran green. A secret added
 later needs no registration anywhere: the egress guard scans every env string that is not in
 `env.ts` `PUBLIC_VARS`.
 

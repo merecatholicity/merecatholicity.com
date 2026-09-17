@@ -31,8 +31,7 @@ export type Door = 'ingest' | 'config' | 'probe';
 export type Caller =
   | { road: 'oidc'; door: Door }
   | { road: 'admin' }
-  | { road: 'report-key' }
-  | { road: 'ingest-key' };
+  | { road: 'report-key' };
 
 export const JWKS_URL = 'https://token.actions.githubusercontent.com/.well-known/jwks';
 const KEYS_LIVE_MS = 3600_000;
@@ -167,12 +166,6 @@ export async function pipelineCaller(request: Request, env: Env, key: string, do
   }
   if (await requireAdmin(env, key)) return { road: 'admin' };
   if (o.reportKey && sameKey(key, String(env.OPS_REPORT_KEY || ''))) return { road: 'report-key' };
-  /* the static key, for the one deploy the workflows take to move
-     (tests/_support/retirements.json) */
-  if (sameKey(key, String(env.MERECAT_INGEST_KEY || ''))) {
-    console.log(JSON.stringify({ event: 'pipeline_static_key', doors }));
-    return { road: 'ingest-key' };
-  }
   return null;
 }
 

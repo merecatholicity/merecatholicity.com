@@ -970,7 +970,7 @@ beside a good key — OR an admin's `key` in the body. `/config` takes the
 persona, the dials and the file hashes only from a token whose job ran in the
 `librarian-config` environment (a reviewer approved it); the ingest job's
 token may set `last_ingest`/`last_ingest_by` alone. The static
-`MERECAT_INGEST_KEY` is honoured one deploy longer, then retired.
+`MERECAT_INGEST_KEY` that opened these doors until 2026-09-17 is gone.
 
 ---
 

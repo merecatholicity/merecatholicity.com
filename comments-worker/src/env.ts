@@ -58,7 +58,6 @@ export interface Env {
   VAPID_PRIVATE_KEY?: string;
   TURN_KEY_SECRET?: string;
   CF_USAGE_TOKEN?: string;
-  MERECAT_INGEST_KEY?: string;
   OPS_REPORT_KEY?: string;
 }
 
