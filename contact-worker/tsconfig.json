@@ -1,10 +1,9 @@
 {
-  // Strict type-check for the comments Worker. Separate project from the client
-  // tsconfig because the Worker has Cloudflare's runtime globals (from
-  // @cloudflare/workers-types), NOT the browser DOM — the two lib/global sets
-  // conflict. noEmit: wrangler's esbuild does the transpile; tsc only checks.
-  // checkJs off + allowJs on so index.ts may import the still-JS pure.js /
-  // webpush.js and the untyped PureScript output (all typed as any).
+  // Strict type-check for the contact Worker (the comments worker's twin
+  // config: Cloudflare's runtime globals, not the browser DOM). noEmit:
+  // wrangler's esbuild does the transpile; tsc only checks.
+  // allowImportingTsExtensions (legal under noEmit) because index.ts imports
+  // the egress guard it shares with the comments worker by its .ts path.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
@@ -13,6 +12,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "allowJs": true,
+    "allowImportingTsExtensions": true,
     "checkJs": false,
     "forceConsistentCasingInFileNames": true,
     "lib": ["ES2022"],

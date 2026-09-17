@@ -48,6 +48,12 @@ tests/
   _support/worker_src.mjs  the worker's sources for the source-rule locks: routesSource() (routes/*.ts + index.ts),
                        libSource(), workerSource(), handlerBody(name) — bounded by the next top-level declaration
   _support/routes.json the ROUTES table's committed snapshot (worker/routes)
+  _support/sweep.mjs   the leak sweep (2026-09-17): every road as anon/member/outsider/admin against a fresh ledger
+                       seeded with SENTINELS — every non-public env string, every private column, each with the
+                       readers allowed to see it — plus ROUTE_HINTS (the bodies a success path needs), the
+                       workers.dev doors, /@handle, the upgrades and the four crons; runSweep({ only, wrap })
+  _support/env_flow.mjs  the env-flow law as a function: the env reaches only a parameter named env (worker/env_leak)
+  _support/hub_runtime.mjs  the Workers runtime a Durable Object touches, in Node: FakeSocket, fakeCtx, the 101 Response
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
                        the build ↔ kernel parity of the commentable pages, the DM press-and-hold
@@ -149,6 +155,13 @@ tests/
   `profiles` row. Lock source text (`worker_src.mjs`) only for a law that IS
   textual — the privacy sweep, the Turnstile sweep, the one-fragment rule; prove
   a road by running it.
+- **A test that asserts ABSENCE counts what it reached (2026-09-17)**: the
+  first leak sweep passed while 114 of its 129 calls stopped at the origin
+  gate. `worker/env_leak` holds per-identity reach floors and requires every
+  route to answer SOME identity with success — a new route brings its
+  `ROUTE_HINTS` entry (or its seed) in the same commit — and
+  `worker/sweep_control` plants leaks (around the worker, never in it) to show
+  each detector firing. Never sentinel a var the gates themselves read.
 
 ## Running
 

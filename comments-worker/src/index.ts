@@ -90,7 +90,9 @@ import {
   handleShadowbanList,
 } from './routes/admin.ts';
 import { handleOpsReport, handleCspReport } from './routes/ops.ts';
-import { runChain, runSelfCheck } from './ops.ts';
+import { runChain, runSelfCheck, noteLeak } from './ops.ts';
+import { serve } from './serve.ts';
+import { sealEnv, takeTrips } from './egress.ts';
 import type { Step } from './ops.ts';
 import {
   handleApprove,
@@ -617,61 +619,64 @@ const MONTHLY_STEPS: Step[] = [
   ['mirrorAvatars', mirrorAvatars],
 ];
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-    try {
-      const url = new URL(request.url);
-      const path = url.pathname.replace(/\/+$/, '') || '/';
+/* The router: every request serve.ts hands it, against the SEALED env
+   (egress.ts). A throw leaves through serve(), which logs it and answers the
+   usual 500; the answer leaves through serve() too, scanned. */
+async function route(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const url = new URL(request.url);
+  const path = url.pathname.replace(/\/+$/, '') || '/';
 
-      /* The workers.dev hostname exists for ONE caller: the pipeline's ingest,
-         which the zone's Bot Fight Mode would turn away at merecatholicity.com
-         (it cannot be skipped by any rule on the Free plan, and a GitHub runner
-         is exactly what it fights). That second front door opens onto nothing
-         but the three librarian endpoints and the ops report door (2026-09-16,
-         the watchdog's outside leg), each of which demands the ingest key;
-         every other path answers 404 there as though the worker did not
-         exist. The site's own origin is untouched. */
-      if (url.hostname.endsWith('.workers.dev') &&
-          !(request.method === 'POST' && INGEST_DOORS.indexOf(path) !== -1)) {
-        return json({ ok: false, error: 'Not found.' }, 404);
-      }
+  /* The workers.dev hostname exists for ONE caller: the pipeline's ingest,
+     which the zone's Bot Fight Mode would turn away at merecatholicity.com
+     (it cannot be skipped by any rule on the Free plan, and a GitHub runner
+     is exactly what it fights). That second front door opens onto nothing
+     but the three librarian endpoints and the ops report door (2026-09-16,
+     the watchdog's outside leg), each of which demands the ingest key;
+     every other path answers 404 there as though the worker did not
+     exist. The site's own origin is untouched. */
+  if (url.hostname.endsWith('.workers.dev') &&
+      !(request.method === 'POST' && INGEST_DOORS.indexOf(path) !== -1)) {
+    return json({ ok: false, error: 'Not found.' }, 404);
+  }
 
-      /* Pretty profile URLs: /@handle is served by this worker — it fetches the
-         static profile.html from the origin (which is NOT routed here, so no loop)
-         and injects the member's share-card OG (name, avatar, bio), so a shared
-         /@handle previews as the person. Humans get the same page; the client
-         resolves the handle from the path. Only /@* reaches the worker. */
-      if (path.startsWith('/@') && request.method === 'GET') return await handleHandleCard(request, env, url);
+  /* Pretty profile URLs: /@handle is served by this worker — it fetches the
+     static profile.html from the origin (which is NOT routed here, so no loop)
+     and injects the member's share-card OG (name, avatar, bio), so a shared
+     /@handle previews as the person. Humans get the same page; the client
+     resolves the handle from the path. Only /@* reaches the worker. */
+  if (path.startsWith('/@') && request.method === 'GET') return await handleHandleCard(request, env, url);
 
-      if (request.method === 'POST' && !originOk(request, env)) {
-        return json({ ok: false, error: 'Bad origin.' }, 403);
-      }
+  if (request.method === 'POST' && !originOk(request, env)) {
+    return json({ ok: false, error: 'Bad origin.' }, 403);
+  }
 
-      /* Live updates: the WebSocket upgrade to the board hub (a GET, so it never
-         hits the POST origin guard above; handleLive does its own origin check). */
-      if (path === '/api/comments/live' && request.method === 'GET' &&
-          (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') {
-        return await handleLive(request, env);
-      }
+  /* Live updates: the WebSocket upgrade to the board hub (a GET, so it never
+     hits the POST origin guard above; handleLive does its own origin check). */
+  if (path === '/api/comments/live' && request.method === 'GET' &&
+      (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') {
+    return await handleLive(request, env);
+  }
 
-      /* Every routed handler runs against a D1 session (dbsession.ts): the
-         kernel's read routes may read a replica, the rest start at the
-         primary, and a request that wrote answers with its bookmark. */
-      for (const r of ROUTES) {
-        if (request.method === r.m && path === r.p) {
-          const s = sessionEnv(env, request, r.m, r.p);
-          return finishSession(await r.fn(request, s.env, ctx, url), s);
-        }
-      }
-      /* merecat live chat WebSocket upgrade (GET, so it skips the POST origin
-         guard; handleMerecatLive does its own auth). */
-      if (path === '/api/merecat/live' && request.method === 'GET' &&
-          (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') return await handleMerecatLive(request, env);
-      return json({ ok: false, error: 'Not found.' }, 404);
-    } catch (err) {
-      console.log(JSON.stringify({ event: 'unhandled', error: String(err) }));
-      return json({ ok: false, error: 'Server hiccup. Please try again shortly.' }, 500);
+  /* Every routed handler runs against a D1 session (dbsession.ts): the
+     kernel's read routes may read a replica, the rest start at the
+     primary, and a request that wrote answers with its bookmark. */
+  for (const r of ROUTES) {
+    if (request.method === r.m && path === r.p) {
+      const s = sessionEnv(env, request, r.m, r.p);
+      return finishSession(await r.fn(request, s.env, ctx, url), s);
     }
+  }
+  /* merecat live chat WebSocket upgrade (GET, so it skips the POST origin
+     guard; handleMerecatLive does its own auth). */
+  if (path === '/api/merecat/live' && request.method === 'GET' &&
+      (request.headers.get('Upgrade') || '').toLowerCase() === 'websocket') return await handleMerecatLive(request, env);
+  return json({ ok: false, error: 'Not found.' }, 404);
+}
+
+export default {
+  /* serve.ts seals the env, runs the router, and scans what it answers */
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    return serve(request, env, ctx, route);
   },
   /* The four crons (2026-09-16), each a chain through ops.ts's runChain: every
      step in its own try/catch (a failed prune no longer skips the step behind
@@ -682,12 +687,17 @@ export default {
      near-complete): the usage check, then the self-check. Monthly (1st,
      00:00 UTC): the housekeeping and the avatar mirror — the backup itself is
      daily now, and the 1st's object is kept 400 days (Domain.Ops.keepBackup). */
-  async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledController, rawEnv: Env, ctx: ExecutionContext) {
+    const env = sealEnv(rawEnv);
     const cron = event && event.cron;
-    if (cron === '0 * * * *') { ctx.waitUntil(runChain(env, 'hourly', HOURLY_STEPS)); return; }
-    if (cron === '15 3 * * *') { ctx.waitUntil(runChain(env, 'daily', DAILY_STEPS)); return; }
-    if (cron === '30 23 * * *') { ctx.waitUntil(runChain(env, 'usage', USAGE_STEPS)); return; }
-    ctx.waitUntil(runChain(env, 'monthly', MONTHLY_STEPS));
+    const chain = cron === '0 * * * *' ? ['hourly', HOURLY_STEPS] as const
+      : cron === '15 3 * * *' ? ['daily', DAILY_STEPS] as const
+        : cron === '30 23 * * *' ? ['usage', USAGE_STEPS] as const
+          : ['monthly', MONTHLY_STEPS] as const;
+    /* a step that trips the seal fails as a step; the trip is noted as well */
+    ctx.waitUntil(runChain(env, chain[0], chain[1]).finally(() => {
+      if (takeTrips(env).length) return noteLeak(env, { kind: 'enumerated', site: 'cron ' + chain[0], names: [] });
+    }));
   },
 };
 

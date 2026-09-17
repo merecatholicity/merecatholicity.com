@@ -506,6 +506,8 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 | `gh run list --commit <sha>` returns nothing for a run that exists | the filter is flaky with short shas | list unfiltered and match `headSha` |
 | a rebuilt PDF keeps serving old bytes | the edge caches PDFs | `publish_pdfs` purges exactly the changed URLs |
 | the artifact is 400 MB, not 113 | PDFs built by a LaTeX-touching run rode along | held back at packaging, returned to the cache |
+| a public endpoint served the whole worker env (every secret) for six weeks, every check green | a handler passed `env` to a row mapper (`withNames(env, items)`), both typed `any`; no test read an answer for what it must NOT contain | the env is sealed and every answer scanned (`egress.ts`, `serve.ts`); `tests/worker/env_leak.test.mjs` sweeps every road as four identities |
+| the first leak sweep was green while proving nothing for 114 of 129 routes | it set `ALLOWED_ORIGINS` to a sentinel, so every POST stopped at the origin gate | the sweep keeps the gates real and holds reach floors; `sweep_control.test.mjs` shows each detector firing |
 | every Build fails at *Set up job* the moment SHA pinning is required | GitHub's own `upload-pages-artifact` composite references `upload-artifact@v4` by tag internally; the policy applies to nested references | the composite is inlined (tar + pinned upload named `github-pages`) — prefer plain actions over composites under this policy |
 
 ---

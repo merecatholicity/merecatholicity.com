@@ -88,11 +88,9 @@ never a submodule, never committed.
 - **Gates**: `make tests` (the unit suite: PureScript, JS, worker, Python, CSS; runs `psbuild`
   first); `make jscheck` (eslint + tsc + psbuild); `make check` (jscheck + linkcheck);
   `make check-pdfs` (bucket vs manifest vs local PDFs; CI runs it with the site token).
-- **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `content` · `writings` ·
-  `html` (incremental, one target per work) · `menu` · `pdf`/`publish`/`chart-pdfs`/`logos` ·
-  `publish-pdfs`/`mirrored-pdfs`/`pdf-manifest` · `migrate`/`migrate-status`/`schema-snapshot`/
-  `migration` · `serve` (binds 127.0.0.1 only — load-bearing) · `comments-backup` · `librarian`;
-  README's target reference describes each.
+- **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `html` (one target per
+  work) · `pdf` · `migrate` · `serve` (binds 127.0.0.1 only — load-bearing) · `librarian` and the
+  rest are in README's target reference.
 - Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` and byte-deterministic: a double
   `make bundle` must leave `docs/app.js` unchanged. Toolchain is npm (`npm ci` only, never `sudo`
   or `-g`; esbuild exact-pinned, purs by pinned sha256 — `make toolchain`); this dev box is Ubuntu/WSL2 (Node 24 in `~/.local`, a
@@ -102,11 +100,15 @@ never a submodule, never committed.
 
 Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the area.
 
+- **Nothing secret leaves the worker** (2026-09-17; `/recent` served the whole env for six weeks):
+  every entry seals the env (`egress.ts`: copying, listing or serializing it throws) and every answer
+  and hub frame is scanned for each non-`PUBLIC_VARS` env value, refused and told. `env_leak.test`
+  sweeps every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and
+  API.md shape in its own commit, is documented by CALLING it, and ships after `/security-review`.
 - **`?v=` keys are stamped** (`scripts/stamp_versions.py`: nav.js, the pages, `partials/*`,
-  content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is
-  unkeyed. Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes
-  under the new key for ever. The deploy job purges `sw.js` + `version.json`; HTML is never
-  edge-cached.
+  content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
+  Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new
+  key for ever. The deploy job purges `sw.js` + `version.json`; HTML is never edge-cached.
 - **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client)
   re-runs on every soft navigation, so anything inside it that owns a resource leaks per hop —
   keep page-scoped state above it, and every document/window listener it installs carries the boot
@@ -154,12 +156,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **A DM message's acts live on ONE surface**, the press-and-hold (right-click, the hover ⌄, or
   the reaction pill on desktop): react · reply · copy · edit · save · delete — never a link row or
   a ⋯ on the bubble.
-- **Every unread number is WORDS, from one fragment** (`dmUnreadCount` in the worker's
-  `lib.ts`): the inbox row's badge, `/dm/threads`'s `unread_total`, the thread's unread line
-  and the tab bar's own `/dm/unread` all sum it — the tab and the rows it opens onto must
-  add up, and both roads feed the one `mc-dm-unread` cache. Never re-inline the fragment,
-  never let one road count threads. It counts from the viewer's OWN member row (`mb`, the
-  `DM_MINE` join) — never a pair column.
+- **Every unread number is WORDS, from one fragment** (`dmUnreadCount` in the worker's `lib.ts`):
+  the inbox row's badge, `/dm/threads`'s `unread_total`, the thread's unread line and the tab bar's
+  own `/dm/unread` all sum it — the tab and the rows it opens onto must add up, and both roads feed
+  the one `mc-dm-unread` cache. Never re-inline the fragment, never let one road count threads. It
+  counts from the viewer's OWN member row (`mb`, the `DM_MINE` join) — never a pair column.
 - **One member model** (migration 0016, 2026-09-13): a conversation is a thread with member rows
   (`dm_members`) — a pair is two of them, keyed once by `pair_key`; a group (`kind` 1) up to
   `Domain.Dm.maxMembers`, nobody owns it. Every read runs from the viewer's seat: what they may
@@ -172,12 +173,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and sealed once more; an
   edit re-seals under the SAME key; a pair's `E1` words stay readable for ever (and are accepted
   on the wire one deploy longer).
-- **An object dies with its LAST reference** (`dm_media_refs`): a forwarded attachment is
-  never uploaded twice — the copy names the same object, allowed only to a member who can
-  read it (the media GET's own rule, `dmMediaReadable`) — so every message road calls
-  `releaseMediaRefs`, never `purgeMediaKeys` directly; the 30-day cap and the LRU valve take
-  an object from under EVERY message naming it; the orphan sweep takes what nothing names;
-  `dm_media.msg_id` is retired.
+- **An object dies with its LAST reference** (`dm_media_refs`): a forwarded attachment is never
+  uploaded twice — the copy names the same object, allowed only to a member who can read it (the
+  media GET's own rule, `dmMediaReadable`) — so every message road calls `releaseMediaRefs`, never
+  `purgeMediaKeys` directly; the 30-day cap and the LRU valve take an object from under EVERY
+  message naming it; the orphan sweep takes what nothing names; `dm_media.msg_id` is retired.
 - **The bottom bar is SIX EQUAL TABS** — no raised hero (a six-item bar cannot centre one).
   Each is `flex: 1 1 0; min-width: 0` with a nowrap, viewport-scaled label: a tab left at
   the default `min-width: auto` lets its longest word refuse to shrink and eat its

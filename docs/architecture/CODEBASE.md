@@ -80,6 +80,8 @@ duplicated, and the shape they moved toward.
 | `docs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring (served raw, unversioned). |
 | `comments-worker/src/durable.ts` | 875 | The two Durable Objects (`BoardHub` — `HUB_SHARDS` instances, sockets indexed in memory, `Domain.Hub` the placing, a `watch` table naming the siblings that watch each member — and `ChatRoom`). |
 | `comments-worker/src/dbsession.ts` | 88 | The D1 session every routed request runs against: replicas for `Domain.Consistency`'s read routes, the primary for the rest, the `mc-d1` bookmark cookie after a write. |
+| `comments-worker/src/egress.ts` | 159 | The egress guard (2026-09-17): `sealEnv` (the env reads by name and refuses to be copied, listed, serialized or written), `deriveEnv`, and `guardResponse` (a textual answer carrying any non-public env value is refused). Dependency-free; contact-worker imports it too. |
+| `comments-worker/src/serve.ts` | 40 | `default.fetch`: seal the env, run the router, guard the answer, report what the seal refused. |
 | `app/call.ts` | 521 | The 1v1 voice-call engine (shell-owned, so a call rings on any page). |
 | `docs/bible-reader.js` | 439 | KJV/DR reader boot (served raw). |
 | `app/views/board.ts` / `topic.ts` | 435 / 433 | Lit views: board index+category / topic+search. |
@@ -287,12 +289,17 @@ client/                              the classic client (Wave F, shipped 2026-09
   admin.ts (the admin views) · merecat.ts (the librarian's screens) · dm-thread.ts (the chat screen)
                  install<Feature>(B) factories: bind() · run() · exports
 comments-worker/src/
-  index.ts       the composition root: imports · handleConfig/handleLive · the ROUTES table · fetch/scheduled
-  env.ts         the bindings as wrangler.jsonc declares them, typed (2026-09-16) — a route file that takes `env: Env` gets D1's first<Row>() for free
+  index.ts       the composition root: imports · handleConfig/handleLive · the ROUTES table · route() · fetch/scheduled
+  serve.ts       default.fetch (2026-09-17): seal the env → route → guard the answer (egress.ts) → note a refusal
+  egress.ts      the egress guard: sealEnv/deriveEnv (the env reads by name, refuses to be copied or serialized),
+                 secretValues (every env string not in env.ts PUBLIC_VARS), guardResponse — no imports, shared with contact-worker
+  env.ts         the bindings as wrangler.jsonc declares them, typed (2026-09-16) — a route file that takes `env: Env` gets D1's first<Row>() for free;
+                 PUBLIC_VARS / UNSCANNED, the names the egress scan skips (2026-09-17)
   alerts.ts      the worker's voice (2026-09-16): sendAlert — email through the send_email binding EMAIL, Discord through
                  sendDiscord, the channels Domain.Ops.channelsFrom opens from the four alert_* Platform settings
   ops.ts         the cron chains (runChain: every step in its own try/catch, a heartbeat per chain, failures and the
-                 self-check's findings folded into alerts), runSelfCheck, readOps (the health object) — 2026-09-16
+                 self-check's findings folded into alerts), runSelfCheck, readOps (the health object) — 2026-09-16;
+                 noteLeak, the egress guard's tally and alert (2026-09-17)
   routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin · ops (the report door)
   lib.ts         the shared core — constants · crypto/auth · the preambles (keyed/keyedGated, and since
                  2026-09-16 gated/adminGated/readLimited/ingestGated with the variance as options) · settings ·

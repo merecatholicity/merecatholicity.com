@@ -925,6 +925,7 @@ export function installAdmin(B: Boot) {
           now: number; ok: boolean; heartbeat: HealthBeat[]; never: string[]; open: string[];
           backup: HealthBackup | null; object: { key: string; size: number } | null;
           webtest: { at: number; pass: number; fail: number; regressions: string[] } | null;
+          egress?: Array<{ kind: string; site: string; names: string[]; n: number; last: number; standing: boolean }>;
         };
         function ago(secs: unknown) {
           var n = Number(secs);
@@ -956,6 +957,14 @@ export function installAdmin(B: Boot) {
           });
           hlBox.appendChild(hb);
           hlBox.appendChild(el('p', 'board-cat-desc', (h.open && h.open.length) ? 'Alerted and still standing: ' + h.open.join(', ') : 'No condition is currently alerted.'));
+          /* the egress guard (2026-09-17): an answer or a live frame refused for
+             carrying a secret, or a handler that tried to copy the sealed env */
+          var eg = (h.egress || []).filter(function (x) { return h.now - Number(x.last) < 7 * 86400; });
+          hlBox.appendChild(el('p', eg.some(function (x) { return x.standing; }) ? 'board-cat-desc admin-health-stale' : 'board-cat-desc', eg.length
+            ? 'Refused for carrying a secret (7 days): ' + eg.map(function (x) {
+              return x.site + (x.kind === 'enumerated' ? ' (tried to copy the env)' : x.kind === 'frame' ? ' (a live frame' + (x.names.length ? ': ' + x.names.join(', ') : '') + ')' : (x.names.length ? ' (' + x.names.join(', ') + ')' : '')) + ', ' + x.n + '\u00d7, last ' + ago(h.now - Number(x.last));
+            }).join('; ')
+            : 'Nothing refused for carrying a secret.'));
           var w = h.webtest;
           hlBox.appendChild(el('p', 'board-cat-desc', w
             ? 'Nightly headless run ' + ago(h.now - Number(w.at)) + ': ' + w.pass + ' passed, ' + w.fail + ' failed' + (w.regressions && w.regressions.length ? ' \u2014 ' + w.regressions.length + ' regression(s): ' + w.regressions.join('; ') : '.')

@@ -35,7 +35,9 @@ import {
   hubShard,
 } from './lib.ts';
 import type { HubStub, HubShardStats } from './lib.ts';
-
+import { leakedNames, sealEnv, secretValues } from './egress.ts';
+import { noteLeak } from './ops.ts';
+import { UNSCANNED } from './env.ts';
 import type { Env } from './env.ts';
 
 /* What one socket's attachment holds (it survives hibernation; the in-memory
@@ -89,9 +91,15 @@ export class BoardHub extends DurableObject<Env> {
   #registered = new Set<string>();
   #storeReady = false;
   #lastAt = 0;
+  /* the egress guard (egress.ts): the secret values, read once from the raw
+     env, and the last payload found clean — a fan-out hands the same payload
+     to every socket, so it is scanned once */
+  #secrets: Array<[string, string]>;
+  #clean = '';
 
   constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+    super(ctx, sealEnv(env));
+    this.#secrets = secretValues(env, UNSCANNED);
     /* Which shard this is, from its own name (idFromName keeps it). */
     this.#idx = Hub.shardIndex(String((ctx.id && ctx.id.name) || 'board'));
     /* The client's {t:'ping'} is answered {t:'pong'} by the runtime without
@@ -127,7 +135,18 @@ export class BoardHub extends DurableObject<Env> {
   #attOf(ws: WebSocket): Att {
     return this.#att.get(ws) || readAtt(ws);
   }
+  /* Every frame this hub sends passes here: a payload carrying a secret's
+     value is dropped and noted, never sent (egress.ts). */
   #send(ws: WebSocket, payload: string) {
+    if (payload !== this.#clean) {
+      const names = leakedNames(payload, this.#secrets);
+      if (names.length) {
+        console.log(JSON.stringify({ event: 'egress_blocked', site: 'BoardHub', names }));
+        this.ctx.waitUntil(noteLeak(this.env, { kind: 'frame', site: 'BoardHub', names }));
+        return;
+      }
+      this.#clean = payload;
+    }
     try { ws.send(payload); } catch { this.#untrack(ws); }   // a socket the runtime never closed
   }
 
@@ -560,8 +579,12 @@ export class ChatRoom extends DurableObject<Env> {
   declare gen: Gen | null;
   declare mentionsPending: number;
 
+  #secrets: Array<[string, string]>;
+  #clean = '';
+
   constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
+    super(ctx, sealEnv(env));
+    this.#secrets = secretValues(env, UNSCANNED);
     this.phase = 'idle';
     this.chatId = 0;
     this.gen = null;   // in-flight: { userMsgId, answer, sources, used, startedAtMs, backend }
@@ -580,8 +603,24 @@ export class ChatRoom extends DurableObject<Env> {
     for (const ws of this.ctx.getWebSockets()) {
       let a; try { a = ws.deserializeAttachment(); } catch { a = null; }
       if (!a || a.auth !== true) continue;
-      try { ws.send(s); } catch { /* dropped */ }
+      this.#send(ws, s);
     }
+  }
+
+  /* Every frame this room sends passes here: a payload carrying a secret's
+     value is dropped and noted, never sent (egress.ts). A socket that is gone
+     drops the frame quietly, as it always did. */
+  #send(ws: WebSocket, s: string) {
+    if (s !== this.#clean) {
+      const names = leakedNames(s, this.#secrets);
+      if (names.length) {
+        console.log(JSON.stringify({ event: 'egress_blocked', site: 'ChatRoom', names }));
+        this.ctx.waitUntil(noteLeak(this.env, { kind: 'frame', site: 'ChatRoom', names }));
+        return;
+      }
+      this.#clean = s;
+    }
+    try { ws.send(s); } catch { /* dropped */ }
   }
 
   async fetch(request: Request) {
@@ -640,14 +679,14 @@ export class ChatRoom extends DurableObject<Env> {
 
   #hello(ws: WebSocket) {
     const g = this.gen;
-    ws.send(JSON.stringify({ t: 'hello', chatId: this.chatId, phase: this.phase,
+    this.#send(ws, JSON.stringify({ t: 'hello', chatId: this.chatId, phase: this.phase,
       answer: (g && g.answer) || '', sources: (g && g.sources) || [], used: (g && g.used) || null,
       startedAtMs: (g && g.startedAtMs) || 0, backend: 'cloudflare' }));
   }
 
   async #auth(ws: WebSocket, m: Record<string, unknown>) {
     const a = ws.deserializeAttachment() || {};
-    const fail = (err: string) => { try { ws.send(JSON.stringify({ t: 'state', phase: 'error', error: err })); } catch { /* gone */ }
+    const fail = (err: string) => { this.#send(ws, JSON.stringify({ t: 'state', phase: 'error', error: err }));
       try { ws.close(1008, 'unauthorized'); } catch { /* gone */ } };
     const key = String(m.key || '');
     if (!key) { fail('Missing key.'); return; }
@@ -665,16 +704,16 @@ export class ChatRoom extends DurableObject<Env> {
 
   async #ask(ws: WebSocket, m: Record<string, unknown>) {
     const a = ws.deserializeAttachment() || {};
-    if (!a.auth) { ws.send('{"t":"state","phase":"error","error":"Authenticate first."}'); return; }
+    if (!a.auth) { this.#send(ws, '{"t":"state","phase":"error","error":"Authenticate first."}'); return; }
     if (this.phase === 'thinking' || this.phase === 'streaming' || this.phase === 'queued') {
-      ws.send('{"t":"state","phase":"busy"}'); return;   // single-flight per conversation
+      this.#send(ws, '{"t":"state","phase":"busy"}'); return;   // single-flight per conversation
     }
     const q = String(m.q || '').trim().slice(0, 2000);
     if (!q) return;
     const me = a.me;
     const admin = !!a.admin;
     const gate = await blockedReason(this.env, me, a.ip || '');
-    if (gate) { ws.send('{"t":"state","phase":"error","error":"blocked"}'); return; }
+    if (gate) { this.#send(ws, '{"t":"state","phase":"error","error":"blocked"}'); return; }
     const cfg = await merecatConfig(this.env);
     const day = merecatDay();
     let youQ = 0; let todayQ = 0;
@@ -682,12 +721,12 @@ export class ChatRoom extends DurableObject<Env> {
       const g = await this.env.LIBDB.prepare('SELECT q FROM usage WHERE day = ?1').bind(day).first<{ q: number }>();
       todayQ = (g && g.q) || 0;
       if (!admin && todayQ >= cfg.global_daily) {
-        ws.send(JSON.stringify({ t: 'state', phase: 'error', resting: true, error: merecatRestingNote() })); return;
+        this.#send(ws, JSON.stringify({ t: 'state', phase: 'error', resting: true, error: merecatRestingNote() })); return;
       }
       const u = await this.env.LIBDB.prepare('SELECT q FROM user_usage WHERE day = ?1 AND hash = ?2').bind(day, me).first<{ q: number }>();
       youQ = (u && u.q) || 0;
       if (!admin && cfg.user_cap_on && youQ >= cfg.user_daily) {
-        ws.send(JSON.stringify({ t: 'state', phase: 'error', capped: true,
+        this.#send(ws, JSON.stringify({ t: 'state', phase: 'error', capped: true,
           error: 'You have used your ' + cfg.user_daily + ' questions for today. The counter resets at midnight UTC.' }));
         return;
       }
@@ -698,7 +737,7 @@ export class ChatRoom extends DurableObject<Env> {
     const quota = await merecatQuota(this.env, cfg);
     if (quota.resting) {
       console.log(JSON.stringify({ event: 'merecat_quota_rest', meter_pct: quota.meter_pct, line: quota.pct }));
-      ws.send(JSON.stringify({ t: 'state', phase: 'error', resting: true, quota: true, reset_in_h: quota.reset_in_h, error: quota.note }));
+      this.#send(ws, JSON.stringify({ t: 'state', phase: 'error', resting: true, quota: true, reset_in_h: quota.reset_in_h, error: quota.note }));
       return;
     }
 

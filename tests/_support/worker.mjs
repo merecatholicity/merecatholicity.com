@@ -305,7 +305,9 @@ export async function call(worker, env, method, path, body, { ip = '203.0.113.7'
   const init = { method, headers: h };
   if (method !== 'GET' && method !== 'HEAD') {
     if (origin !== null) h.Origin = origin;
-    if (body !== undefined) { h['Content-Type'] = h['Content-Type'] || 'application/json'; init.body = typeof body === 'string' ? body : JSON.stringify(body); }
+    /* a FormData body travels as multipart (the Request writes its boundary) */
+    if (body instanceof FormData) init.body = body;
+    else if (body !== undefined) { h['Content-Type'] = h['Content-Type'] || 'application/json'; init.body = typeof body === 'string' ? body : JSON.stringify(body); }
   }
   const cx = c || ctx();
   const res = await worker.fetch(new Request(host + path, init), env, cx);

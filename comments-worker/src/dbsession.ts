@@ -19,6 +19,7 @@
    binding) so a handler cannot tell the difference, and it marks the request
    as having written when it prepares a statement the kernel calls a write. */
 import * as Consistency from '../../purescript/output/Domain.Consistency/index.js';
+import { deriveEnv } from './egress.ts';
 import type { Env } from './env.ts';
 
 export type DbSession = { env: Env; wrote: () => boolean; bookmark: () => string | null };
@@ -58,8 +59,8 @@ export function sessionEnv(env: Env, request: Request, method: string, path: str
     dump() { return real.dump(); },
     withSession(c?: string) { return real.withSession(c); },
   } as unknown as D1Database;
-  const scoped = Object.create(env) as Env;
-  Object.defineProperty(scoped, 'DB', { value: db, enumerable: true });
+  /* sealed like the env it derives from (egress.ts), with the session as DB */
+  const scoped = deriveEnv(env, { DB: db });
   return { env: scoped, wrote: () => wrote, bookmark: () => session.getBookmark() };
 }
 

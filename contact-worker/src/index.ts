@@ -6,6 +6,9 @@
    address are overridable per deployment (ALLOWED_ORIGINS / CONTACT_FROM vars),
    falling back to the production values so prod is unchanged. */
 
+import { guardResponse, sealEnv, secretValues } from '../../comments-worker/src/egress.ts';
+import { PUBLIC_VARS } from './vars.ts';
+
 interface Env {
   ALLOWED_ORIGINS?: string;
   CONTACT_FROM?: string;
@@ -46,93 +49,103 @@ function json(body: unknown, status: number, request: Request, env: Env) {
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
-    if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(request, env) });
-    }
-    if (request.method !== 'POST') {
-      return json({ ok: false, error: 'Method not allowed.' }, 405, request, env);
-    }
-
-    /* Enforce the origin allow-list server-side; CORS only advises browsers. */
-    const origin = request.headers.get('Origin');
-    if (origin && !allowedOrigins(env).includes(origin)) {
-      return json({ ok: false, error: 'Bad origin.' }, 403, request, env);
-    }
-
-    /* Rate limit before the Turnstile call and the send, so a flood cannot
-       burn the verify or email quotas. Turnstile alone is not a throttle. */
-    const ip = request.headers.get('CF-Connecting-IP') || '';
-    const limit = await env.SEND_LIMIT.limit({ key: ip });
-    if (!limit.success) {
-      return json({ ok: false, error: 'Too many messages. Wait a minute and try again.' }, 429, request, env);
-    }
-
-    let form;
-    try {
-      form = await request.formData();
-    } catch {
-      return json({ ok: false, error: 'Bad request.' }, 400, request, env);
-    }
-
-    /* Honeypot field. Bots fill it, people never see it. Pretend success. */
-    if (form.get('website')) {
-      return json({ ok: true }, 200, request, env);
-    }
-
-    const name = String(form.get('name') || '').replace(/[\r\n\t]+/g, ' ').slice(0, 200).trim();
-    const email = String(form.get('email') || '').slice(0, 200).trim();
-    const message = String(form.get('message') || '').slice(0, 5000).trim();
-    if (!message) {
-      return json({ ok: false, error: 'The message is empty.' }, 400, request, env);
-    }
-
-    const token = String(form.get('cf-turnstile-response') || '');
-    const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: new URLSearchParams({
-        secret: env.TURNSTILE_SECRET,
-        response: token,
-        remoteip: ip,
-      }),
+  /* The env is sealed before the handler sees it, and the answer is scanned
+     before it leaves (2026-09-17, after the comments worker's disclosure). */
+  async fetch(request: Request, rawEnv: Env) {
+    const env = sealEnv(rawEnv);
+    const res = await handle(request, env);
+    return guardResponse(res, secretValues(rawEnv, PUBLIC_VARS), (names) => {
+      console.log(JSON.stringify({ event: 'egress_blocked', site: request.method + ' contact', names }));
     });
-    const verdict = await verifyResponse.json() as { success?: boolean; hostname?: string };
-    /* Defense in depth on top of the sitekey's own domain lock. */
-    const allowedHosts = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h: string) => h.trim()).filter(Boolean);
-    if (!verdict.success || (allowedHosts.length && !allowedHosts.includes(verdict.hostname as string))) {
-      return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403, request, env);
-    }
-
-    const to = String(env.CONTACT_TO || '').trim();
-    if (!to) {
-      console.log(JSON.stringify({ event: 'contact_to_unset' }));
-      return json({ ok: false, error: 'Could not deliver the message. Please try again later.' }, 502, request, env);
-    }
-    const send: {
-      to: string; from: { email: string; name: string }; subject: string; text: string;
-      replyTo?: { email: string; name: string | undefined };
-    } = {
-      to: to,
-      from: fromAddress(env),
-      subject: 'merecatholicity.com: message from ' + (name || 'anonymous'),
-      text:
-        'Name: ' + (name || '(none given)') + '\n' +
-        'Email: ' + (email || '(none given)') + '\n\n' +
-        message + '\n',
-    };
-    /* Reply-to the sender when they left a plausible address, so answering
-       is one click. A bad address must not block the send. */
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      send.replyTo = { email: email, name: name || undefined };
-    }
-
-    try {
-      await env.EMAIL.send(send);
-    } catch (err) {
-      console.log(JSON.stringify({ event: 'send_failed', error: String(err) }));
-      return json({ ok: false, error: 'Could not deliver the message. Please try again later.' }, 502, request, env);
-    }
-
-    return json({ ok: true }, 200, request, env);
   },
 };
+
+async function handle(request: Request, env: Env): Promise<Response> {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders(request, env) });
+  }
+  if (request.method !== 'POST') {
+    return json({ ok: false, error: 'Method not allowed.' }, 405, request, env);
+  }
+
+  /* Enforce the origin allow-list server-side; CORS only advises browsers. */
+  const origin = request.headers.get('Origin');
+  if (origin && !allowedOrigins(env).includes(origin)) {
+    return json({ ok: false, error: 'Bad origin.' }, 403, request, env);
+  }
+
+  /* Rate limit before the Turnstile call and the send, so a flood cannot
+     burn the verify or email quotas. Turnstile alone is not a throttle. */
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  const limit = await env.SEND_LIMIT.limit({ key: ip });
+  if (!limit.success) {
+    return json({ ok: false, error: 'Too many messages. Wait a minute and try again.' }, 429, request, env);
+  }
+
+  let form;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ ok: false, error: 'Bad request.' }, 400, request, env);
+  }
+
+  /* Honeypot field. Bots fill it, people never see it. Pretend success. */
+  if (form.get('website')) {
+    return json({ ok: true }, 200, request, env);
+  }
+
+  const name = String(form.get('name') || '').replace(/[\r\n\t]+/g, ' ').slice(0, 200).trim();
+  const email = String(form.get('email') || '').slice(0, 200).trim();
+  const message = String(form.get('message') || '').slice(0, 5000).trim();
+  if (!message) {
+    return json({ ok: false, error: 'The message is empty.' }, 400, request, env);
+  }
+
+  const token = String(form.get('cf-turnstile-response') || '');
+  const verifyResponse = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+    method: 'POST',
+    body: new URLSearchParams({
+      secret: env.TURNSTILE_SECRET,
+      response: token,
+      remoteip: ip,
+    }),
+  });
+  const verdict = await verifyResponse.json() as { success?: boolean; hostname?: string };
+  /* Defense in depth on top of the sitekey's own domain lock. */
+  const allowedHosts = (env.TURNSTILE_HOSTNAMES || '').split(',').map((h: string) => h.trim()).filter(Boolean);
+  if (!verdict.success || (allowedHosts.length && !allowedHosts.includes(verdict.hostname as string))) {
+    return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403, request, env);
+  }
+
+  const to = String(env.CONTACT_TO || '').trim();
+  if (!to) {
+    console.log(JSON.stringify({ event: 'contact_to_unset' }));
+    return json({ ok: false, error: 'Could not deliver the message. Please try again later.' }, 502, request, env);
+  }
+  const send: {
+    to: string; from: { email: string; name: string }; subject: string; text: string;
+    replyTo?: { email: string; name: string | undefined };
+  } = {
+    to: to,
+    from: fromAddress(env),
+    subject: 'merecatholicity.com: message from ' + (name || 'anonymous'),
+    text:
+      'Name: ' + (name || '(none given)') + '\n' +
+      'Email: ' + (email || '(none given)') + '\n\n' +
+      message + '\n',
+  };
+  /* Reply-to the sender when they left a plausible address, so answering
+     is one click. A bad address must not block the send. */
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    send.replyTo = { email: email, name: name || undefined };
+  }
+
+  try {
+    await env.EMAIL.send(send);
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'send_failed', error: String(err) }));
+    return json({ ok: false, error: 'Could not deliver the message. Please try again later.' }, 502, request, env);
+  }
+
+  return json({ ok: true }, 200, request, env);
+}

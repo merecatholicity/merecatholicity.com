@@ -12,59 +12,12 @@
  * the harness's SQLite. */
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
 import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches, hubSpy, call } from '../_support/worker.mjs';
+import { fakeCtx } from '../_support/hub_runtime.mjs';
 import { sendToHub, hubPresenceOf, hubViewersOf, hubDmViewing, hubStats, hubShards } from '../../comments-worker/src/lib.ts';
 
-/* ---- the Workers runtime the hub touches, in Node ------------------------ */
-class FakeSocket {
-  constructor() { this.att = undefined; this.sent = []; this.closed = null; this.broken = false; }
-  serializeAttachment(a) { this.att = structuredClone(a); }
-  deserializeAttachment() { return this.att === undefined ? undefined : structuredClone(this.att); }
-  send(p) { if (this.broken) throw new Error('gone'); this.sent.push(JSON.parse(p)); }
-  close(code, reason) { this.closed = [code, reason]; }
-  frames(t) { return this.sent.filter((f) => f.t === t); }
-}
-globalThis.WebSocketPair = class { constructor() { this[0] = new FakeSocket(); this[1] = new FakeSocket(); } };
-globalThis.WebSocketRequestResponsePair = class { constructor(req, res) { this.req = req; this.res = res; } };
-/* a 101 with a webSocket is a Workers extension; Node's Response refuses the status */
-const RealResponse = globalThis.Response;
-globalThis.Response = class extends RealResponse {
-  constructor(body, init) {
-    const upgraded = !!(init && init.status === 101);
-    super(body, upgraded ? { ...init, status: 200 } : init);
-    if (upgraded) { this.upgraded = true; this.webSocket = init.webSocket; }
-  }
-};
-
-/* ctx.storage.sql over node:sqlite: exec(query, ...binds) → a cursor; every
-   statement is recorded, so a test can say storage was never touched */
-function fakeSql() {
-  const db = new DatabaseSync(':memory:');
-  const calls = [];
-  return {
-    calls,
-    db,
-    exec(query, ...binds) {
-      calls.push(query);
-      const st = db.prepare(query);
-      const rows = /^\s*(SELECT|PRAGMA)/i.test(query) ? st.all(...binds).map((r) => ({ ...r })) : (st.run(...binds), []);
-      return { toArray: () => rows, one: () => rows[0], [Symbol.iterator]: () => rows[Symbol.iterator]() };
-    },
-  };
-}
-function fakeCtx(name) {
-  const sockets = [];
-  return {
-    id: { name },
-    storage: { sql: fakeSql() },
-    sockets,
-    getWebSockets: () => sockets.slice(),
-    acceptWebSocket: (ws) => { sockets.push(ws); },
-    setWebSocketAutoResponse: () => {},
-  };
-}
+/* the Workers runtime the hub touches, in Node (FakeSocket, fakeCtx) */
 /* N shards, one env, the namespace resolving each shard's name to its instance */
 function cluster(BoardHub, n, db) {
   const instances = new Map();

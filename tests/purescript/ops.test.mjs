@@ -141,3 +141,43 @@ test('a run\'s digest names the first condition and how many more; every sentenc
   assert.equal(r.text, 'The condition cron_stale:hourly is no longer present.\nThe condition backup_missing:x is no longer present.');
 });
 
+
+/* The egress guard's notes (2026-09-17, comments-worker/src/egress.ts). What
+   would break silently: a leak attempt told on every request (the owner mutes
+   the channel), or never told again while it continues; a note that never
+   stops keeping the health verdict red; an alert that carries a secret's
+   value; a short secret the scan cannot see and nobody names. */
+test('a leak note is told at once, then at most hourly while it continues, and keeps the verdict red for a day', () => {
+  assert.equal(Ops.leakRetellAfter, 3600);
+  assert.equal(Ops.leakWindow, 86400);
+  assert.equal(Ops.shouldRetell({ told: 0, now: 1000 }), true, 'never told: tell now');
+  assert.equal(Ops.shouldRetell({ told: 1000, now: 1000 + 3599 }), false);
+  assert.equal(Ops.shouldRetell({ told: 1000, now: 1000 + 3600 }), true);
+  assert.equal(Ops.leakStanding({ last: 0, now: 5 }), false, 'no note, nothing standing');
+  assert.equal(Ops.leakStanding({ last: 100, now: 100 + 86399 }), true);
+  assert.equal(Ops.leakStanding({ last: 100, now: 100 + 86400 }), false);
+});
+
+test('a leak alert names the road and the secrets, never a value, and says what to do', () => {
+  const a = Ops.leakDigest({ kind: 'answer', site: 'GET /api/comments/recent', names: ['TURN_KEY_SECRET', 'VAPID_PRIVATE_KEY'], n: 3 });
+  assert.equal(a.subject, 'Answer refused (it carried a secret): GET /api/comments/recent');
+  assert.match(a.text, /replaced it with a 500\. It carried: TURN_KEY_SECRET, VAPID_PRIVATE_KEY\./);
+  assert.match(a.text, /Seen 3 times so far; while it continues you hear of it at most once an hour\./);
+  assert.match(a.text, /rotate the named secrets \(CICD\.md §4\)/);
+  const f = Ops.leakDigest({ kind: 'frame', site: 'BoardHub', names: ['TURN_KEY_SECRET'], n: 1 });
+  assert.equal(f.subject, 'Hub frame refused (it carried a secret): BoardHub');
+  assert.match(f.text, /Seen 1 time so far/);
+  const e = Ops.leakDigest({ kind: 'enumerated', site: 'cron daily', names: [], n: 2 });
+  assert.equal(e.subject, 'The sealed env was enumerated: cron daily');
+  assert.ok(!/It carried/.test(e.text), 'an enumeration carried nothing to name');
+});
+
+test('a secret too short to guard is a self-check condition the daily and usage chains judge', () => {
+  const c = Ops.secretShort('A_SHORT_SECRET');
+  assert.equal(Ops.conditionKey(c), 'secret_short:A_SHORT_SECRET');
+  assert.equal(Ops.conditionSubject(c), 'Secret too short to guard: A_SHORT_SECRET');
+  assert.match(Ops.conditionText(c), /shorter than the egress scan's floor/);
+  assert.equal(Ops.alertScope({ chain: 'daily', selfCheck: true })('secret_short:A_SHORT_SECRET'), true);
+  assert.equal(Ops.alertScope({ chain: 'hourly', selfCheck: false })('secret_short:A_SHORT_SECRET'), false,
+    'a chain without the self-check cannot see a secret, so it never recovers one');
+});

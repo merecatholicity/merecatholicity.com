@@ -43,6 +43,12 @@ module Domain.Ops
   , alertScope
   , digest
   , recoveredDigest
+  , secretShort
+  , leakRetellAfter
+  , leakWindow
+  , shouldRetell
+  , leakDigest
+  , leakStanding
   ) where
 
 import Prelude
@@ -152,6 +158,12 @@ cronStale name ageSecs = { kind: "cron_stale", subject: name, detail: show ageSe
 stepFailed :: String -> String -> String -> Condition
 stepFailed chain step err = { kind: "step_failed", subject: chain <> "/" <> step, detail: err }
 
+-- | A secret the egress scan cannot guard: a non-public env string shorter
+-- | than the scan's floor (egress.ts MIN_SECRET_LENGTH). The subject is its
+-- | NAME; a value never enters a condition.
+secretShort :: String -> Condition
+secretShort name = { kind: "secret_short", subject: name, detail: "" }
+
 conditionKey :: Condition -> String
 conditionKey c = c.kind <> ":" <> c.subject
 
@@ -161,6 +173,7 @@ conditionSubject c = case c.kind of
   "backup_failed" -> "Backup failed: " <> c.subject
   "cron_stale" -> "Cron stale: " <> c.subject
   "step_failed" -> "Cron step failed: " <> c.subject
+  "secret_short" -> "Secret too short to guard: " <> c.subject
   _ -> c.kind <> ": " <> c.subject
 
 conditionText :: Condition -> String
@@ -173,6 +186,9 @@ conditionText c = case c.kind of
     "The " <> c.subject <> " cron last beat " <> hours c.detail <> " ago; it is presumed dead after "
       <> show (staleAfter c.subject / 3600) <> " hours."
   "step_failed" -> "The cron step " <> c.subject <> " threw: " <> c.detail <> ". The other steps of its chain still ran."
+  "secret_short" ->
+    "The worker secret " <> c.subject <> " is shorter than the egress scan's floor, so an answer carrying it "
+      <> "would not be refused. Replace it with a long random value (wrangler secret put)."
   _ -> c.detail
   where
   hours secs = case Int.fromString secs of
@@ -201,13 +217,14 @@ foldOpsAlerts r =
     { open: keys, fire, clear }
 
 -- | Which open conditions a chain's run may judge: its own step failures, and
--- | — when it ran the self-check — every backup and staleness condition. A
--- | chain never clears a condition it cannot observe: the hourly chain finding
--- | no failures of its own must not "recover" the daily's missing backup.
+-- | — when it ran the self-check — every backup, staleness and short-secret
+-- | condition. A chain never clears a condition it cannot observe: the hourly
+-- | chain finding no failures of its own must not "recover" the daily's
+-- | missing backup.
 alertScope :: { chain :: String, selfCheck :: Boolean } -> String -> Boolean
 alertScope r key =
   startsWith ("step_failed:" <> r.chain <> "/")
-    || (r.selfCheck && (startsWith "backup_" || startsWith "cron_stale:"))
+    || (r.selfCheck && (startsWith "backup_" || startsWith "cron_stale:" || startsWith "secret_short:"))
   where
   startsWith p = S.indexOf (S.Pattern p) key == Just 0
 
@@ -232,3 +249,45 @@ recoveredDigest keys = case A.uncons keys of
 
 more :: forall a. Array a -> String
 more tail = if A.null tail then "" else " (+" <> show (A.length tail) <> " more)"
+
+-- | The egress guard (egress.ts, 2026-09-17). A refused answer, a refused hub
+-- | frame, or a handler that tried to enumerate or serialize the sealed env is
+-- | a LEAK NOTE: its key is the kind and the site (the route or the object). A note is told at
+-- | once and, while it keeps happening, at most once an hour: the owner must
+-- | hear of a leak attempt now, and must not have the channel flooded by a
+-- | route that trips on every request.
+leakRetellAfter :: Int
+leakRetellAfter = 3600
+
+-- | How long a note keeps the health verdict red (`readOps.ok`), so the
+-- | outside watchdog fails its run too: a day.
+leakWindow :: Int
+leakWindow = 86400
+
+-- | `told` is when the note was last told (0 = never).
+shouldRetell :: { told :: Int, now :: Int } -> Boolean
+shouldRetell r = r.told <= 0 || r.now - r.told >= leakRetellAfter
+
+-- | Whether a note seen `last` still stands at `now`.
+leakStanding :: { last :: Int, now :: Int } -> Boolean
+leakStanding r = r.last > 0 && r.now - r.last < leakWindow
+
+-- | The alert for one note. `names` are the secret NAMES the answer or frame
+-- | carried (empty for an enumeration); a value never reaches this function.
+leakDigest :: { kind :: String, site :: String, names :: Array String, n :: Int } -> { subject :: String, text :: String }
+leakDigest r =
+  { subject: head <> r.site
+  , text: body <> "\n\n" <> seen <> "\n\n" <> advice
+  }
+  where
+  head = case r.kind of
+    "answer" -> "Answer refused (it carried a secret): "
+    "frame" -> "Hub frame refused (it carried a secret): "
+    _ -> "The sealed env was enumerated: "
+  names = if A.null r.names then "" else " It carried: " <> S.joinWith ", " r.names <> "."
+  body = case r.kind of
+    "answer" -> "The worker was about to send " <> r.site <> " an answer containing the value of a secret. The guard replaced it with a 500." <> names
+    "frame" -> "A live frame from " <> r.site <> " contained the value of a secret. The guard dropped it." <> names
+    _ -> "A handler behind " <> r.site <> " tried to copy, list or serialize the worker env. The seal refused it (a 500, or a caught throw)."
+  seen = "Seen " <> show r.n <> " time" <> (if r.n == 1 then "" else "s") <> " so far; while it continues you hear of it at most once an hour."
+  advice = "Nothing left the worker. Find the handler (Workers Logs: egress_blocked / env_enumerated) and fix it; if you cannot rule out an earlier leak, rotate the named secrets (CICD.md §4)."

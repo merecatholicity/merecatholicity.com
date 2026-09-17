@@ -63,6 +63,23 @@ export interface Env {
   TEST_HASHES?: string;
 }
 
+/* The vars above, by name: public by design (wrangler.jsonc prints most of
+   them), so the egress scan (egress.ts) never looks for their values. Every
+   OTHER env string is treated as a secret, so a `wrangler secret put` needs
+   no line here. Held to the vars section above and to wrangler.jsonc by
+   tests/worker/egress.test.mjs. */
+export const PUBLIC_VARS: readonly string[] = [
+  'MODERATION_MODE', 'ALLOW_ANON', 'ADMIN_HASHES', 'TURNSTILE_HOSTNAMES', 'SITE', 'ALLOWED_ORIGINS',
+  'PUSH_ENABLED', 'VAPID_PUBLIC_KEY', 'VAPID_SUBJECT', 'TURN_KEY_ID', 'CF_ACCOUNT_ID', 'ALERT_FROM',
+  'HIDDEN_HASHES', 'HUB_SHARDS',
+];
+
+/* What the scan skips: the public vars, and TEST_HASHES, a secret LIST OF
+   IDENTITY HASHES. Hashes are public by design and appear in every answer
+   that names a test identity's post, so scanning for them would refuse those
+   answers. It goes when the Turnstile test bypass is retired. */
+export const UNSCANNED: readonly string[] = [...PUBLIC_VARS, 'TEST_HASHES'];
+
 /* the send_email binding's message (the shape contact-worker sends) */
 export type EmailAddress = string | { email: string; name?: string };
 export type EmailSend = {

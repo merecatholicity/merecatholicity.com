@@ -125,7 +125,9 @@ test('the pipeline\'s door: the ingest key opens the three librarian endpoints a
   }
   const admins = [...index.matchAll(/requireIngest\(env|ingestGated\(request, env/g)].length;
   assert.equal(admins, 4, 'exactly the three librarian endpoints and the ops report door (2026-09-16) accept the ingest key');
-  const f = index.slice(index.indexOf('async fetch(request: Request'), index.indexOf('for (const r of ROUTES)'));
+  /* the router (serve.ts hands it every request since 2026-09-17) */
+  const f = index.slice(index.indexOf('async function route(request: Request'), index.indexOf('for (const r of ROUTES)'));
+  assert.ok(f.length > 100, 'the router is where the front doors are decided');
   assert.ok(/url\.hostname\.endsWith\('\.workers\.dev'\)/.test(f) && /INGEST_DOORS\.indexOf\(path\) !== -1/.test(f),
     'workers.dev must serve only the ingest doors');
   assert.ok(/INGEST_DOORS = \['\/api\/merecat\/works', '\/api\/merecat\/config', '\/api\/merecat\/ingest', '\/api\/comments\/ops\/report'\]/.test(index),
@@ -156,7 +158,7 @@ test('the budget guard binds every ask before anything is minted, admins include
 
 test('a resting librarian names the hours wherever the day is spent', () => {
   assert.ok(/export function merecatRestingNote\(nowMs = Date\.now\(\)\) \{\s*return Merecat\.restingNote\(Merecat\.hoursUntilUtcMidnight\(nowMs\)\);/.test(lib));
-  assert.ok(/todayQ >= cfg\.global_daily\) \{\s*ws\.send\(JSON\.stringify\(\{ t: 'state', phase: 'error', resting: true, error: merecatRestingNote\(\) \}\)\)/.test(durable),
+  assert.ok(/todayQ >= cfg\.global_daily\) \{\s*this\.#send\(ws, JSON\.stringify\(\{ t: 'state', phase: 'error', resting: true, error: merecatRestingNote\(\) \}\)\)/.test(durable),
     'the question cap says the hours too');
   assert.ok(/refuse = merecatRestingNote\(\) \+ seeWhen;/.test(lib), 'and so does the mention at the question cap');
 });
