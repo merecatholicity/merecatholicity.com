@@ -23,7 +23,7 @@
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
     "esbuild": "0.28.2",
-    "eslint": "^10.8.0",
+    "eslint": "^10.10.0",
     "spago": "^1.0.4",
     "tailwindcss": "^4.3.3",
     "typescript": "7.0.2",
