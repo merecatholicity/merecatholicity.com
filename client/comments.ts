@@ -253,8 +253,7 @@ import type { Boot } from './boot';
      Thresholds ascend; rankFor returns the highest one reached. The count itself
      rides each post and the profile from the worker (postCountsFor). */
   /* The rank ladder is the first slice migrated to the PureScript domain layer
-     (Domain.Rank). When the app shell is present it computes rank; the classic
-     body below is the no-bundle fallback, kept as the deliberate no-bundle fallback. See CLAUDE.md. */
+     (Domain.Rank): the kernel computes rank, through window.mcCore. See CLAUDE.md. */
   function rankFor(n: any) {
     return window.mcCore!.rankFor(n);
   }
@@ -376,8 +375,9 @@ import type { Boot } from './boot';
      (a link inside bold works) by recursing on the strictly-shorter inner text.
      Shared by the body renderer and each quoted/list line. */
   function appendRich(target: HTMLElement, str: any, plain?: boolean): any {
-    /* Wave B3a: the living renderer is app/richtext.js when the bundle
-       stands; this body is the frozen no-bundle fallback (the deliberate no-bundle fallback). */
+    /* Wave B3a: the living renderer is app/richtext.ts (window.mcRich, always
+       present — the boot waits for the bundle); the body below is the plain-mode
+       copy that retires with the port (P1, docs/architecture/reviews/2026-09-17-port-plan.md). */
     if (window.mcRich) return window.mcRich.appendRich(target, str, plain);
     /* plain mode — the librarian's leash: every markdown feature is consumed
        but none applies, so the bot may write **bold** all day and the reader

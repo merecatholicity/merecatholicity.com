@@ -2,8 +2,8 @@
    VERBATIM from comments.js, parameterized by the per-boot kit — the one
    builder every view will render posts through (the topic view consumes it
    at B4; merecat and the page threads follow). Bodies render through the
-   living richtext module (window.mcRich). The old copy in comments.js
-   stands as the no-bundle fallback and retires at Wave F. */
+   living richtext module (window.mcRich). The classic copy was deleted on
+   2026-09-16 (One UI): client/board.ts's commentNode is a one-line door here. */
 
 import * as Core from '../core.ts';
 

@@ -62,8 +62,8 @@ window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, met
   peek: store.peek, keyFor: store.keyFor, hydrate: store.hydrate, forget: store.forget };
 
 /* The PureScript domain kernel — the app/core.js barrel over the compiled
-   purescript/output/. The un-bundled docs/comments.js delegates to it via
-   `if (window.mcCore) …`, exactly like window.mcRich; the Lit views import
+   purescript/output/. docs/comments.js (the classic client) reads it
+   unconditionally — its boot waits for this bundle; the Lit views import
    app/core.js directly. Importing it above is what inlines compiled PureScript
    into docs/app.js (the bundle route). See CLAUDE.md. */
 window.mcCore = core;

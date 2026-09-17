@@ -5,9 +5,9 @@
    PureScript Domain.Scripture (via the app/core.js barrel, imported below);
    the frozen fallback copy in comments.js and MERECAT_BIBLE in the worker are
    the two remaining copies (Phase 1b / Phase 6). comments.js defers here
-   whenever the bundle stands (the default for everyone), keeping ONE living
-   source; its own copies serve only the no-bundle fallback and retire at
-   Wave F. Assigned to window.mcRich. */
+   always (the bundle always stands — 2026-09-16), keeping ONE living source;
+   the copy comments.ts still carries behind `if (window.mcRich)` retires with
+   the port (P1). Assigned to window.mcRich. */
 
 import * as Core from './core.ts';
 

@@ -191,7 +191,7 @@ export function installProfile(B: Boot) {
   }
   /* A resolved, logged-in member (key + hash). Single-sources the "is member"
      decision (Domain.Auth.isMember) that was inlined as the raw key-and-hash
-     conjunction across the board; the classic conjunction is the no-bundle fallback. */
+     conjunction across the board. */
   function isMember() {
     if (window.mcCore) return window.mcCore.authIsMember(authSig());
     return !!(state.key && state.myHash);
@@ -671,8 +671,7 @@ export function installProfile(B: Boot) {
   }
 
   /* The profile field caps, single-sourced from the PureScript Domain.Profile
-     (via window.mcCore); the fallback matches the worker (the no-bundle path,
-     the deliberate no-bundle fallback). Fixes the drift where the admin editor capped bio at
+     (via window.mcCore). Fixes the drift where the admin editor capped bio at
      1000 while the worker rejects anything over 500. See CLAUDE.md. */
   function profileLimits() {
     return (window.mcCore && window.mcCore.profileLimits) || { nick: 40, bio: 500, sig: 200 };
