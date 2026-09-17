@@ -90,6 +90,9 @@ maxBytes :: Int
 maxBytes = 524288
 
 -- | Bumped whenever the stored shape changes, so a deploy discards what it can
--- | no longer read instead of trying to interpret it.
+-- | no longer read instead of trying to interpret it — or when what was stored
+-- | must not stay on a device: 2 (2026-09-17) drops every member's copy of the
+-- | `/api/comments/recent` answers that carried the worker's env for six
+-- | weeks (the secrets are rotated; the copies go too).
 schema :: Int
-schema = 1
+schema = 2

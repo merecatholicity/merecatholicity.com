@@ -77,5 +77,5 @@ test('the store has a ceiling and a schema stamp', () => {
      discard a shape it can no longer read instead of interpreting it. */
   assert.equal(Cache.maxBytes, 524288);
   assert.equal(typeof Cache.schema, 'number');
-  assert.ok(Cache.schema >= 1);
+  assert.ok(Cache.schema >= 2, 'schema 2 (2026-09-17) drops the stored /recent answers that carried the worker env');
 });
