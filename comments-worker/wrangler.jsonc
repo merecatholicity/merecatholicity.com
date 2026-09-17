@@ -186,7 +186,7 @@
     // starting 0x04). Public by design — served to clients at
     // /api/comments/push/vapid-key. The matching private key is the
     // VAPID_PRIVATE_KEY secret (never in source). Rotate BOTH together.
-    "VAPID_PUBLIC_KEY": "BGu90jVwRuyDpx_lnCMDdsuvF-1mHEHSS1IunwbOdhTq7f1G4ImfS0DFZac3ikV8a-sGQFqSaVuXLu67wBPS-uQ",
+    "VAPID_PUBLIC_KEY": "BGea7-hq4KzrRx1Q5TgNNIOJUuUMvUuU4OK2892tHavC8I8OkP7lU8hKiUWpTqbKAEB1l1J7eXXgtDzmN2Klddc",
     // The VAPID JWT "sub" claim: a mailto: (or https:) the push service can reach.
     "VAPID_SUBJECT": "mailto:admin@merecatholicity.com",
     // Cloudflare Realtime TURN for 1v1 calls: the TURN key's public id. The
@@ -224,7 +224,7 @@
         "PUSH_ENABLED": "true",
         // Same VAPID public key as prod; the VAPID_PRIVATE_KEY secret must also be
         // set for the staging env (`wrangler secret put VAPID_PRIVATE_KEY --env staging`).
-        "VAPID_PUBLIC_KEY": "BGu90jVwRuyDpx_lnCMDdsuvF-1mHEHSS1IunwbOdhTq7f1G4ImfS0DFZac3ikV8a-sGQFqSaVuXLu67wBPS-uQ",
+        "VAPID_PUBLIC_KEY": "BGea7-hq4KzrRx1Q5TgNNIOJUuUMvUuU4OK2892tHavC8I8OkP7lU8hKiUWpTqbKAEB1l1J7eXXgtDzmN2Klddc",
         "VAPID_SUBJECT": "mailto:admin@merecatholicity.com",
         // Same TURN key as prod; set TURN_KEY_SECRET --env staging too.
         "TURN_KEY_ID": "048d5fbeb99939e25ab175142d69ab6d",
