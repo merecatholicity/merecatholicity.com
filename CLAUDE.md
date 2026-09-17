@@ -60,7 +60,7 @@ worker that reads it; otherwise it goes on a branch.
    (`app.js?probe123`) instead. To force a cold site rebuild in CI, bump the cache
    generation (`site-2-`) in both workflows.
 9. Every `uses:` is SHA-pinned — the repository requires it, nested references included;
-   Dependabot bumps the pins by PR; secret scanning and push protection are on.
+   Dependabot bumps the pins and the npm toolchain by PR; secret scanning and push protection are on.
 10. The manual exceptions are enumerated in CICD.md §10. A manual act not on that list is drift.
 11. **Verify, don't assume**: `gh run list --limit 6`; `terraform -chdir=terraform plan` →
     *No changes*; `python3 scripts/publish_pdfs.py --check`;
@@ -95,7 +95,7 @@ never a submodule, never committed.
   README's target reference describes each.
 - Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` and byte-deterministic: a double
   `make bundle` must leave `docs/app.js` unchanged. Toolchain is npm (`npm ci` only, never `sudo`
-  or `-g`; esbuild and purs exact-pinned); this dev box is Ubuntu/WSL2 (Node 24 in `~/.local`, a
+  or `-g`; esbuild exact-pinned, purs by pinned sha256 — `make toolchain`); this dev box is Ubuntu/WSL2 (Node 24 in `~/.local`, a
   `python` shim — the toolchain memory). Every pandoc call in a resources loop ends `|| exit 1`.
 
 ## Laws that break silently

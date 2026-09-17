@@ -11,3 +11,17 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  # The npm toolchain too (2026-09-17): the audit had drifted from zero to ten
+  # advisories with nobody watching. Development dependencies arrive as one
+  # weekly grouped PR for minor and patch bumps; a major, and `lit` (a runtime
+  # dependency whose bytes ship in app.js), each come alone. The gates run on
+  # every such PR without secrets; the exact pins (esbuild, typescript, lit)
+  # move only through a PR that shows the bundle budget and the byte-diff.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      toolchain:
+        dependency-type: development
+        update-types: ["minor", "patch"]

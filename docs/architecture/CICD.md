@@ -96,7 +96,8 @@ holds `pages: write` + `id-token: write`.
    it guards `[ -e ]` now.)
 3. Node 24 (official build — Ubuntu's `+dfsg` node cannot run the `.ts` tests), Python
    3.12, `pandoc`, `poppler-utils`, `pyyaml`; **TeX Live only when `latex=yes`**.
-4. `npm ci`; restore the PureScript output cache; **restore the built site cache** (`docs/`
+4. `npm ci`; **fetch the PureScript compiler by pinned hash** (`make toolchain`; `local/bin`
+   cached under `tests/_support/toolchain.json`'s hash); restore the PureScript output cache; **restore the built site cache** (`docs/`
    keyed `site-2-<sha>`, fallback `site-2-`; the prefix is a generation — bump it to force one
    cold rebuild; a miss costs time, never correctness) — then
    **`git checkout -- docs` + `git clean -fd -- docs`, and the step fails if a tracked file
@@ -141,7 +142,7 @@ matches the manifest and every local PDF`, `{"success":true,…}` from the purge
 has no diff base, so it redeploys BOTH workers). *Concurrency:* `workers`, **never
 cancelled** mid-deploy.
 
-*`check`* (every event, no credentials): pandoc + pyyaml + `npm ci`; restore the PureScript
+*`check`* (every event, no credentials): pandoc + pyyaml + `npm ci` + `make toolchain`; restore the PureScript
 cache; **restore the built site (read-only), re-assert the tracked half from the commit
 (`git checkout -- docs`, as in `build.yml`) and `make css`** — `make tests` is not entirely
 hermetic (tests/css reads the stylesheet, two Python suites read the baked corpus); on a
@@ -195,9 +196,19 @@ mid-deploy** (that is the re-cache trap).
 
 ### 2.5 `dependabot.yml`
 
-Weekly grouped PRs bumping the SHA-pinned actions. Such a PR carries no secrets (rule 3),
-so it can only fail the gates, never touch production. Merge it; the next push to `main`
-ships with the new pins.
+Weekly grouped PRs bumping the SHA-pinned actions and — since 2026-09-17 — the npm toolchain:
+development dependencies as one grouped minor/patch PR; a major, or `lit` (its bytes ship in
+`app.js`), alone. Such a PR carries no secrets (rule 3), so it can only fail the gates, never
+touch production. Merge it; the next push to `main` ships with the new pins.
+
+**The dependency policy.** One runtime dependency (`lit`). `esbuild`, `typescript` and `lit`
+exact-pinned, because their bytes are the bundle and the byte-diff gate must mean something. The
+PureScript compiler by sha256 (`tests/_support/toolchain.json`, `make toolchain`,
+`scripts/toolchain.py`), never from npm — its installer carried four advisories nothing upstream
+fixes. `npm audit` reads zero and the repository's Dependabot alerts (security updates are on,
+`github.tf`) are the standing watch; an advisory nothing upstream fixes is written down as an
+exception (§10), never lived with silently. Before 09-17 the audit had drifted from zero to ten
+with nobody watching — Dependabot watched only the actions.
 
 ### 2.5 `merecat.yml` — **merecat** (the librarian's shelf, since 2026-09-10)
 
@@ -550,6 +561,10 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 - **an inline `<script>`** (there are two: the anti-flash script every page carries and
   turnstile.html's bridge) → its hash in the CSP: `python3 scripts/csp_hashes.py`, the value in
   `terraform/rulesets.tf`; `tests/py/test_csp.py` refuses a policy that does not match.
+- **a toolchain version** → `tests/_support/toolchain.json` (the tarball's and the binary's
+  sha256 from the release, cross-checked against a known copy), `make toolchain`; both workflows'
+  caches follow the pin file. **A JS dependency** → `npm install` (the lockfile is committed; exact
+  for anything whose bytes ship); Dependabot proposes the rest weekly; `npm audit` stays at zero.
 - **a passage of the long-form reference** → append it to `docs/architecture/log/<this
   month>.md` under its `## section` heading (a bullet, a **bold lead-in**, a date, 100
   columns — `scripts/infra_index.py --wrap`), then `scripts/infra_index.py --write`; the

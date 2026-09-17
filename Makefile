@@ -24,25 +24,30 @@ jscheck: psbuild
 	npm run lint
 	npm run tsc
 
-# The app shell bundle: Lit (vendored under vendor/, not from npm) plus the
-# app/ modules, esbuild pinned EXACT in package.json for byte-stable output,
+# The app shell bundle: Lit (from npm, pinned exact) plus the app/ modules,
+# esbuild pinned EXACT in package.json for byte-stable output,
 # committed like every built artifact. Pages carrying it load app.js?v=N (nav.js).
 bundle: jscheck
 	npm run build:js
 	python scripts/stamp_versions.py
 
-# The PureScript domain layer (see PURESCRIPT.md). The compiler (purs) and spago
-# are npm devDependencies like the rest of the toolchain: `npm ci` restores them
-# from the lockfile, and purs's install-script is approved in package.json's
-# `allowScripts`, so `npm ci` materializes the pinned binary
-# (node_modules/.bin/purs) that spago compiles with — no vendored binary. The
-# compile lives in the npm `build:ps` script (spago finds purs on PATH), so both
-# `make bundle` and a bare `npm run build:js` are self-sufficient.
-.PHONY: psbuild pstest tests
+# The PureScript domain layer. spago is an npm devDependency; the compiler
+# (purs) is a release binary fetched by pinned sha256 (2026-09-17 — the npm
+# package's installer carried four advisories nothing upstream fixes):
+# scripts/toolchain.py reads tests/_support/toolchain.json, downloads the
+# tarball from the GitHub release on a miss, verifies it and the binary, and
+# puts local/bin/purs in place (git-ignored); a matching copy costs no network.
+# The npm `build:ps` script puts local/bin on PATH so spago finds purs there,
+# so `make bundle` and a bare `npm run build:js` (after `make toolchain`) are
+# both self-sufficient. Both workflows cache local/bin by the pin file's hash.
+.PHONY: toolchain psbuild pstest tests
+toolchain:
+	python3 scripts/toolchain.py
+
 # Compile purescript/src -> purescript/output (ESM). Delegates to the npm script
 # (single source), which wipes output/ for byte-reproducible codegen. `make
 # bundle` reaches this through `npm run build:js`.
-psbuild:
+psbuild: toolchain
 	npm run build:ps
 
 # Detect the site's own writings (every content/ page unless it opts out, every

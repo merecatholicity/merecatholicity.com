@@ -145,11 +145,23 @@ jobs:
 
       - run: npm ci
 
+      # The PureScript compiler is a release binary fetched by pinned sha256
+      # (scripts/toolchain.py, tests/_support/toolchain.json — 2026-09-17), not
+      # an npm package: cached under the pin file's hash, fetched on a miss.
+      - name: Restore the PureScript compiler
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: local/bin
+          key: purs-bin-${{ hashFiles('tests/_support/toolchain.json') }}
+
+      - name: Fetch the PureScript compiler
+        run: make toolchain
+
       - name: Restore the PureScript output
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: purescript/output
-          key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json') }}
+          key: purs-${{ hashFiles('purescript/src/**', 'purescript/spago.yaml', 'package-lock.json', 'tests/_support/toolchain.json') }}
 
       - name: Restore the built site
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0

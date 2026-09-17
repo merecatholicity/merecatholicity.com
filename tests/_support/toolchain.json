@@ -1,0 +1,24 @@
+{
+ "_note": "The PureScript compiler by pinned hash (2026-09-17): scripts/toolchain.py downloads the asset for this platform from the release, verifies the tarball against `sha256`, takes purescript/purs out of it and verifies the binary against `purs_sha256` — so a copy already in local/bin is re-verified without a download. A version bump edits this file and nothing else; tests/py/test_toolchain.py holds the shape and the verify road. The pins were taken from the release and the linux binary cross-checked byte-for-byte against the npm package's purs.bin of the same version before it was retired.",
+ "purs": {
+  "version": "0.15.16",
+  "release": "https://github.com/purescript/purescript/releases/download/v0.15.16/",
+  "assets": {
+   "linux-x64": {
+    "asset": "linux64.tar.gz",
+    "sha256": "44da9efb8a4e14519e8fd5350acc377a4b981e42351a78c53e9f84045bf38e22",
+    "purs_sha256": "8b7eb6529363b88d3d9ed913fbd969399290a29c65a394aead433b12d74a0932"
+   },
+   "darwin-x64": {
+    "asset": "macos.tar.gz",
+    "sha256": "9f5bfdb7a468241c7106660bc6bd0209ce3f19ad197516ccdcd5c17df81958b6",
+    "purs_sha256": "4640a8b5ab8f045802c2c4604604dfbf55fdfb8ba17a58afd553382fcb44661e"
+   },
+   "darwin-arm64": {
+    "asset": "macos-arm64.tar.gz",
+    "sha256": "63f15a13e226efc260fb025c4a4ad7f66429b6685da607040b7bcc209332fcc4",
+    "purs_sha256": "ae313bebeb0c150dd71d94a95e6654966806e4911602dfc1e5b6329162aaa9b9"
+   }
+  }
+ }
+}

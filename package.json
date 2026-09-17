@@ -2,7 +2,7 @@
   "name": "merecatholicity",
   "version": "0.0.0",
   "private": true,
-  "description": "Build tooling for merecatholicity.com \u2014 the static site (docs/) and its Cloudflare Workers. Not a published package; it manages the whole front-end toolchain behind a committed lockfile: Tailwind, esbuild, eslint, wrangler, the PureScript compiler (purs) + spago, and Lit (the app's UI library, bundled into app.js).",
+  "description": "Build tooling for merecatholicity.com — the static site (docs/) and its Cloudflare Workers. Not a published package; it manages the whole front-end toolchain behind a committed lockfile: Tailwind, esbuild, eslint, wrangler, spago (the PureScript compiler itself comes by pinned hash: scripts/toolchain.py), and Lit (the app's UI library, bundled into app.js).",
   "license": "CC0-1.0",
   "type": "module",
   "engines": {
@@ -10,7 +10,7 @@
   },
   "scripts": {
     "lint": "eslint comments-worker/src/pure.js comments-worker/src/webpush.js docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js ",
-    "build:ps": "python3 scripts/writings.py && rm -rf purescript/output && cd purescript && spago build",
+    "build:ps": "python3 scripts/writings.py && rm -rf purescript/output && cd purescript && PATH=\"$PWD/../local/bin:$PATH\" spago build",
     "build:js": "npm run build:ps && esbuild app/shell.ts --bundle --minify --format=iife --outfile=docs/app.js --log-level=warning && npm run build:client",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
     "tsc": "tsc -p tsconfig.json && tsc -p comments-worker/tsconfig.json && tsc -p contact-worker/tsconfig.json",
@@ -19,21 +19,17 @@
     "build:client": "rm -rf docs/chunks && esbuild client/comments.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260801.1",
+    "@cloudflare/workers-types": "^5.20260917.1",
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/typography": "^0.5.20",
-    "esbuild": "0.24.2",
+    "esbuild": "0.28.2",
     "eslint": "^10.8.0",
-    "purescript": "0.15.16",
     "spago": "^1.0.4",
     "tailwindcss": "^4.3.3",
     "typescript": "7.0.2",
-    "wrangler": "^4.118.0"
+    "wrangler": "^4.133.0"
   },
   "dependencies": {
-    "lit": "3.2.1"
-  },
-  "allowScripts": {
-    "purescript@0.15.16": true
+    "lit": "3.3.3"
   }
 }

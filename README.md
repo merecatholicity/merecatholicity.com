@@ -290,7 +290,7 @@ Worker globals (`@cloudflare/workers-types`); the two lib sets conflict, so they
 share a project. `tsc` type-checks; **esbuild does the transpile** (types erase to
 nothing), which is why the JS→TS migration shipped byte-identical bundles. The pure
 domain logic stays **PureScript** (see below), not TypeScript — TS is for the effectful
-edges. `esbuild`, `typescript`, `purescript`, and `lit` are pinned to exact versions
+edges. `esbuild`, `typescript`, and `lit` are pinned to exact versions (and `purs` by sha256)
 (byte-stable, reproducible bundles); the rest float within the lockfile. Adding a JS
 dependency is `npm install --save-dev <pkg>` (commit the lockfile); **never** install
 globally or with `sudo`.
@@ -317,15 +317,18 @@ design: DOM/Lit rendering, the Turnstile/nacl/WebCrypto/fetch/WebSocket effects,
 crypto, and the raw identity key/hash storage.
 
 ```sh
-make psbuild   # rm -rf purescript/output; compile purescript/src -> purescript/output (ESM)
+make toolchain # fetch purs by pinned sha256 into local/bin (a matching copy costs nothing)
+make psbuild   # toolchain, then rm -rf purescript/output; compile purescript/src -> purescript/output (ESM)
 make pstest    # run the Node-native pure-unit tests over the compiled output
 make bundle    # psbuild, then esbuild app/ -> docs/app.js and client/ -> docs/comments.js, then the version stamp
 ```
 
-The `purs` compiler and `spago` are **npm devDependencies** restored by `npm ci`, like the
-rest of the toolchain. npm-12 blocks the `purescript` package's install-script by default, so
-its approval is committed in `package.json`'s `allowScripts`; `npm ci` then materializes the
-pinned binary (`node_modules/.bin/purs`, `purescript@0.15.16`) that `spago` compiles with.
+`spago` is an **npm devDependency** restored by `npm ci`; the `purs` compiler is a release
+binary fetched by pinned sha256 — `make toolchain` runs `scripts/toolchain.py`, which reads
+`tests/_support/toolchain.json`, downloads the tarball from the PureScript GitHub release on a
+miss, verifies it and the binary it takes out of it, and puts `local/bin/purs` in place
+(git-ignored; the npm `build:ps` script puts it on PATH for `spago`). The npm `purescript`
+package is gone (2026-09-17: its installer carried four advisories nothing upstream fixes).
 Codegen is deterministic (pinned `purs` + pinned package set in `purescript/spago.yaml` + the
 `rm -rf output` guard), so a rebuild changes `docs/app.js` only when the content did, and
 the version stamp then gives it a new `?v=` key by itself. `purescript/output/` and the
@@ -494,6 +497,7 @@ only the diffed files touched; TeX Live is installed only when LaTeX is involved
 | `make content` | Content pages (`content/` → `docs/`) |
 | `make menu` | Regenerate nav from `scripts/nav.yml`, then rebuild |
 | `make css` | Build `styles/main.css` (Tailwind) → `docs/style.css` |
+| `make toolchain` | Fetch the PureScript compiler by pinned sha256 into `local/bin/` (`tests/_support/toolchain.json`); `psbuild` runs it first |
 | `make psbuild` | Compile `purescript/src/` → `purescript/output/` (ESM) |
 | `make tests` | Run the whole unit suite (PureScript + JS + Python + CSS) |
 | `make pstest` | Run the PureScript unit tests (fast; the PS slice of `make tests`) |
@@ -676,6 +680,7 @@ the plan is the real defence.
 git clone git@github.com:merecatholicity/merecatholicity.com.git
 cd merecatholicity.com
 npm ci             # restore the JS toolchain (Tailwind, esbuild, eslint, wrangler) from the lockfile
+make toolchain     # the PureScript compiler by pinned hash -> local/bin/purs
 # The private librarian shelf is a separate private repo; clone it into place if you
 # have access (anonymous clones simply won't have it, which is fine for the public build):
 #   git clone git@github.com:merecatholicity/private-shelf.git librarian/private

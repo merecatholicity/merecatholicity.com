@@ -118,6 +118,7 @@ on page one.)
 - **The long-form reference is a monthly log with a generated index (2026-09-16)** — `log/2026-09.md`
 - **CLAUDE.md compacted: the laws in full (2026-09-16)** — `log/2026-09.md`
 - **The corpus sources ride a GitHub Release, not git (2026-09-16)** — `log/2026-09.md`
+- **The compiler comes by pinned hash, and the npm toolchain is watched (2026-09-17)** — `log/2026-09.md`
 
 ### The PureScript application layer
 
