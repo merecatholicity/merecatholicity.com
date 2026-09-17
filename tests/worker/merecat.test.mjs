@@ -76,7 +76,9 @@ test('the ChatRoom clamps every ask: the switch first, then the ceiling', () => 
 test('the prompt closes with /think and a directive, or /no_think', () => {
   const s = lib.slice(lib.indexOf('export function merecatThinkSuffix'), lib.indexOf('export function merecatHeadroom'));
   assert.ok(/Merecat\.effortThinks\(String\(effort\)\)/.test(s) && /\/think'/.test(s) && /'\/no_think'/.test(s));
-  assert.ok(/export async function merecatPrompt\(env: any, q: any, history: any, summary: any, cfg: any, effort: any = 'off'\)/.test(lib),
+  /* the level is the LAST parameter and defaults to off; its neighbours' types
+     are not the law (the Env typing pass, 2026-09-17) */
+  assert.ok(/export async function merecatPrompt\([^)]*effort[^)]*= 'off'\)/.test(lib),
     'merecatPrompt must take the level and default to off');
   const code = uncommented(lib);
   assert.equal([...code.matchAll(/\/no_think/g)].length, 2, 'only the suffix helper and the fold (which never reasons) may name /no_think');

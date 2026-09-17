@@ -63,7 +63,8 @@ test('the client is told, so it can hide what it cannot have', () => {
 
 test('one guard, spelled one way, on every feed/wall surface', () => {
   assert.ok(allSrc.includes("export const noSuchPage = () => json({ ok: false, error: 'No such page.' }, 404);"));
-  assert.ok(allSrc.includes('export async function socialOff(env: any) { return !socialEnabled(await getAppSettings(env)); }'));
+  /* one spelling of the guard; `env: any` became `env: Env` on 2026-09-17 */
+  assert.ok(/export async function socialOff\(env: \w+\) \{ return !socialEnabled\(await getAppSettings\(env\)\); \}/.test(allSrc));
   /* Eight gated surfaces: the two members-only reads, the public post read,
      the reaction target and the who-reacted read (2026-09-12: the three like
      roads folded into these two), the three writes, and the wall media upload. */
