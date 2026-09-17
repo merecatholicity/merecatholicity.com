@@ -1,0 +1,2152 @@
+{
+ "_dynamic": {
+  "GET /api/comments/board": [
+   "cats"
+  ],
+  "GET /api/comments/config": [
+   "emoji.custom",
+   "emoji.named"
+  ],
+  "POST /api/comments/admin/settings": [
+   "settings"
+  ],
+  "POST /api/comments/board/unread": [
+   "byCat"
+  ],
+  "POST /api/comments/dm/presence": [
+   "seen"
+  ],
+  "POST /api/comments/meta": [
+   "identities"
+  ],
+  "POST /api/comments/rdns": [
+   "rdns"
+  ],
+  "POST /api/comments/reacts": [
+   "mine"
+  ]
+ },
+ "GET /api/comments": {
+  "json": [
+   "anon:boolean",
+   "comments:array",
+   "comments[].assigned:string",
+   "comments[].author_hash:string",
+   "comments[].avatar:null",
+   "comments[].body:string",
+   "comments[].created_at:number",
+   "comments[].edited_at:null",
+   "comments[].faith:null",
+   "comments[].id:number",
+   "comments[].liked:number",
+   "comments[].likes:number",
+   "comments[].nick:string",
+   "comments[].posts:number",
+   "comments[].rank:string",
+   "comments[].react_me:string",
+   "comments[].reacts:array",
+   "comments[].signature:null",
+   "comments[]:object",
+   "ok:boolean"
+  ],
+  "lists": [
+   "comments"
+  ],
+  "text": []
+ },
+ "GET /api/comments/avatar": {
+  "json": [],
+  "lists": [],
+  "text": [
+   "image/jpeg"
+  ]
+ },
+ "GET /api/comments/board": {
+  "json": [
+   "cats.*.last:number",
+   "cats.*.latest.assigned:string",
+   "cats.*.latest.author_hash:string",
+   "cats.*.latest.created_at:number",
+   "cats.*.latest.id:number",
+   "cats.*.latest.nick:null",
+   "cats.*.latest.title:string",
+   "cats.*.latest.topic_id:number",
+   "cats.*.latest:object",
+   "cats.*.posts:number",
+   "cats.*.topics:number",
+   "cats.*:object",
+   "cats:object",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "GET /api/comments/board/author": {
+  "json": [
+   "items:array",
+   "items[].cat:string",
+   "items[].comment_id:number",
+   "items[].created_at:number",
+   "items[].snippet:string",
+   "items[].title:string",
+   "items[].topic_id:number",
+   "items[]:object",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "total:number"
+  ],
+  "lists": [
+   "items"
+  ],
+  "text": []
+ },
+ "GET /api/comments/board/cat": {
+  "json": [
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "topics:array",
+   "topics[].assigned:string",
+   "topics[].author_hash:string",
+   "topics[].created_at:number",
+   "topics[].id:number",
+   "topics[].last:number",
+   "topics[].last_id:number",
+   "topics[].locked:null",
+   "topics[].nick:string",
+   "topics[].readonly:number",
+   "topics[].replies:number",
+   "topics[].sticky:null",
+   "topics[].title:string",
+   "topics[]:object",
+   "total:number"
+  ],
+  "lists": [
+   "topics"
+  ],
+  "text": []
+ },
+ "GET /api/comments/board/topic": {
+  "json": [
+   "anon:boolean",
+   "cat:string",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "replies:array",
+   "replies[].assigned:string",
+   "replies[].author_hash:string",
+   "replies[].avatar:null",
+   "replies[].body:string",
+   "replies[].created_at:number",
+   "replies[].edited_at:null",
+   "replies[].faith:null",
+   "replies[].id:number",
+   "replies[].liked:number",
+   "replies[].likes:number",
+   "replies[].media_expired:null",
+   "replies[].media_key:null",
+   "replies[].nick:null|string",
+   "replies[].posts:number",
+   "replies[].rank:string",
+   "replies[].react_me:string",
+   "replies[].reacts:array",
+   "replies[].signature:null",
+   "replies[]:object",
+   "topic.assigned:string",
+   "topic.author_hash:string",
+   "topic.avatar:null",
+   "topic.body:string",
+   "topic.created_at:number",
+   "topic.edited_at:null",
+   "topic.faith:null",
+   "topic.id:number",
+   "topic.liked:number",
+   "topic.likes:number",
+   "topic.locked:number",
+   "topic.media_expired:number",
+   "topic.media_key:null",
+   "topic.nick:string",
+   "topic.posts:number",
+   "topic.rank:string",
+   "topic.react_me:string",
+   "topic.reacts:array",
+   "topic.readonly:number",
+   "topic.signature:null",
+   "topic.sticky:number",
+   "topic.title:string",
+   "topic:object",
+   "total:number"
+  ],
+  "lists": [
+   "replies"
+  ],
+  "text": []
+ },
+ "GET /api/comments/config": {
+  "json": [
+   "apiVersion:number",
+   "bible:array",
+   "bible[].slug:string",
+   "bible[].spellings:array",
+   "bible[].spellings[]:string",
+   "bible[]:object",
+   "bot_hash:string",
+   "calls.enabled:boolean",
+   "calls.idle_hangup:boolean",
+   "calls.idle_seconds:number",
+   "calls:object",
+   "cats:array",
+   "cats[].blurb:string",
+   "cats[].key:string",
+   "cats[].label:string",
+   "cats[].link.text:string",
+   "cats[].link.url:string",
+   "cats[].link:object",
+   "cats[].order:number",
+   "cats[]:object",
+   "comments.journal:boolean",
+   "comments.pages:array",
+   "comments.pages[]:string",
+   "comments:object",
+   "emoji.custom.*:string",
+   "emoji.custom:object",
+   "emoji.data_url:string",
+   "emoji.named.*:string",
+   "emoji.named:object",
+   "emoji:object",
+   "faiths:array",
+   "faiths[].code:string",
+   "faiths[].label:string",
+   "faiths[].order:number",
+   "faiths[]:object",
+   "media.audio_max_seconds:number",
+   "media.autocompress:boolean",
+   "media.enabled:boolean",
+   "media.kinds.board:array",
+   "media.kinds.board[]:string",
+   "media.kinds.dm:array",
+   "media.kinds.dm[]:string",
+   "media.kinds.wall:array",
+   "media.kinds.wall[]:string",
+   "media.kinds:object",
+   "media.max_bytes.audio:number",
+   "media.max_bytes.image:number",
+   "media.max_bytes.video:number",
+   "media.max_bytes:object",
+   "media.sections.board.audio_max_seconds:number",
+   "media.sections.board.kinds:array",
+   "media.sections.board.kinds[]:string",
+   "media.sections.board.max_bytes.audio:number",
+   "media.sections.board.max_bytes.image:number",
+   "media.sections.board.max_bytes.video:number",
+   "media.sections.board.max_bytes:object",
+   "media.sections.board.scan:boolean",
+   "media.sections.board.voice:boolean",
+   "media.sections.board:object",
+   "media.sections.dm.audio_max_seconds:number",
+   "media.sections.dm.kinds:array",
+   "media.sections.dm.kinds[]:string",
+   "media.sections.dm.max_bytes.audio:number",
+   "media.sections.dm.max_bytes.image:number",
+   "media.sections.dm.max_bytes.video:number",
+   "media.sections.dm.max_bytes:object",
+   "media.sections.dm.voice:boolean",
+   "media.sections.dm:object",
+   "media.sections.wall.audio_max_seconds:number",
+   "media.sections.wall.kinds:array",
+   "media.sections.wall.kinds[]:string",
+   "media.sections.wall.max_bytes.audio:number",
+   "media.sections.wall.max_bytes.image:number",
+   "media.sections.wall.max_bytes.video:number",
+   "media.sections.wall.max_bytes:object",
+   "media.sections.wall.scan:boolean",
+   "media.sections.wall.voice:boolean",
+   "media.sections.wall:object",
+   "media.sections:object",
+   "media:object",
+   "ok:boolean",
+   "pages:array",
+   "pages[]:string",
+   "ranks:array",
+   "ranks[].label:string",
+   "ranks[].min:number",
+   "ranks[]:object",
+   "social.enabled:boolean",
+   "social:object",
+   "turnstile.skip_established:boolean",
+   "turnstile:object"
+  ],
+  "lists": [
+   "bible",
+   "cats",
+   "faiths",
+   "pages",
+   "ranks"
+  ],
+  "text": []
+ },
+ "GET /api/comments/dm/directory": {
+  "json": [
+   "ok:boolean",
+   "users:array",
+   "users[].assigned:string",
+   "users[].hash:string",
+   "users[].joined:number",
+   "users[].nick:null|string",
+   "users[]:object"
+  ],
+  "lists": [
+   "users"
+  ],
+  "text": []
+ },
+ "GET /api/comments/feed": {
+  "json": [],
+  "lists": [],
+  "text": [
+   "application/rss+xml"
+  ]
+ },
+ "GET /api/comments/journal": {
+  "json": [
+   "article.author:string",
+   "article.body:string",
+   "article.created_at:number",
+   "article.edited_at:null",
+   "article.id:number",
+   "article.title:string",
+   "article:object",
+   "articles:array",
+   "articles[].author:string",
+   "articles[].body:string",
+   "articles[].created_at:number",
+   "articles[].edited_at:null",
+   "articles[].id:number",
+   "articles[].title:string",
+   "articles[]:object",
+   "comments:boolean",
+   "journal:string",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "total:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "GET /api/comments/profile": {
+  "json": [
+   "ok:boolean",
+   "profile.admin:boolean",
+   "profile.assigned:string",
+   "profile.avatar:null",
+   "profile.bio:string",
+   "profile.faith:null",
+   "profile.handle:string",
+   "profile.hash:string",
+   "profile.links:null",
+   "profile.nick:string",
+   "profile.posts:number",
+   "profile.rank:string",
+   "profile.signature:null",
+   "profile:object"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "GET /api/comments/push/vapid-key": {
+  "json": [
+   "key:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "GET /api/comments/recent": {
+  "json": [
+   "items:array",
+   "items[].assigned:string",
+   "items[].author_hash:string",
+   "items[].body:string",
+   "items[].created_at:number",
+   "items[].id:number",
+   "items[].page:string",
+   "items[].parent_id:null|number",
+   "items[].posts:number",
+   "items[].rank:string",
+   "items[].topic_id:number",
+   "items[].topic_title:string",
+   "items[]:object",
+   "more:boolean",
+   "ok:boolean",
+   "page:number"
+  ],
+  "lists": [
+   "items"
+  ],
+  "text": []
+ },
+ "GET /api/comments/search": {
+  "json": [
+   "items:array",
+   "items[].assigned:string",
+   "items[].author_hash:string",
+   "items[].cat:string",
+   "items[].comment_id:number",
+   "items[].created_at:number",
+   "items[].nick:string",
+   "items[].snip:string",
+   "items[].title:string",
+   "items[].topic_id:number",
+   "items[]:object",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "q:string",
+   "total:number"
+  ],
+  "lists": [
+   "items"
+  ],
+  "text": []
+ },
+ "GET /api/comments/wall/media": {
+  "json": [],
+  "lists": [],
+  "text": [
+   "image/webp"
+  ]
+ },
+ "POST /api/comments": {
+  "json": [
+   "comment.author_hash:string",
+   "comment.avatar:null",
+   "comment.body:string",
+   "comment.created_at:number",
+   "comment.faith:null",
+   "comment.id:number",
+   "comment.media_key:null",
+   "comment.nick:null|string",
+   "comment.signature:null",
+   "comment.title:null",
+   "comment:object",
+   "error:string",
+   "ok:boolean",
+   "status:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/admin": {
+  "json": [
+   "admin:boolean",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/admin/alert-test": {
+  "json": [
+   "channels:array",
+   "channels[]:string",
+   "discord:boolean",
+   "email:boolean",
+   "error:string",
+   "errors:array",
+   "ok:boolean"
+  ],
+  "lists": [
+   "channels",
+   "errors"
+  ],
+  "text": []
+ },
+ "POST /api/comments/admin/discord/add": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "scope:string",
+   "scope_label:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/admin/discord/delete": {
+  "json": [
+   "error:string",
+   "id:number",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/admin/discord/list": {
+  "json": [
+   "error:string",
+   "hooks:array",
+   "hooks[].created_at:number",
+   "hooks[].feed_url:string",
+   "hooks[].hook_hint:string",
+   "hooks[].id:number",
+   "hooks[].label:string",
+   "hooks[].scope:string",
+   "hooks[].scope_label:string",
+   "hooks[]:object",
+   "ok:boolean"
+  ],
+  "lists": [
+   "hooks"
+  ],
+  "text": []
+ },
+ "POST /api/comments/admin/health": {
+  "json": [
+   "error:string",
+   "health.alerts_at:null",
+   "health.backup:null",
+   "health.backup_ok:boolean",
+   "health.csp:null",
+   "health.d1.served_by_primary:null",
+   "health.d1.served_by_region:null",
+   "health.d1:object",
+   "health.egress:array",
+   "health.heartbeat:array",
+   "health.heartbeat[].age:null|number",
+   "health.heartbeat[].last:number",
+   "health.heartbeat[].name:string",
+   "health.heartbeat[].stale:boolean",
+   "health.heartbeat[].stale_after:number",
+   "health.heartbeat[]:object",
+   "health.hub:array",
+   "health.hub[].members:number",
+   "health.hub[].shard:number",
+   "health.hub[].sockets:number",
+   "health.hub[]:object",
+   "health.never:array",
+   "health.never[]:string",
+   "health.now:number",
+   "health.object:null",
+   "health.ok:boolean",
+   "health.open:array",
+   "health.shapes:array",
+   "health.stale:array",
+   "health.stale[]:string",
+   "health.webtest:null",
+   "health:object",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/admin/settings": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "settings.*:string",
+   "settings:object",
+   "ttls:array",
+   "ttls[]:number",
+   "wall_prune_options:array",
+   "wall_prune_options[]:number"
+  ],
+  "lists": [
+   "ttls",
+   "wall_prune_options"
+  ],
+  "text": []
+ },
+ "POST /api/comments/admin/usage": {
+  "json": [
+   "configured:boolean",
+   "error:string",
+   "free_as_of:string",
+   "ok:boolean",
+   "products.ai:string",
+   "products.cron:string",
+   "products.d1:string",
+   "products.do:string",
+   "products.r2:string",
+   "products.turn:string",
+   "products.turnstile:string",
+   "products.vectorize:string",
+   "products.workers:string",
+   "products:object"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/admins": {
+  "json": [
+   "admins:array",
+   "admins[].assigned:string",
+   "admins[].created_at:number",
+   "admins[].hash:string",
+   "admins[].nick:null",
+   "admins[]:object",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [
+   "admins"
+  ],
+  "text": []
+ },
+ "POST /api/comments/approve": {
+  "json": [
+   "approved:boolean",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/audit": {
+  "json": [
+   "days:number",
+   "error:string",
+   "ok:boolean",
+   "pages:array",
+   "pages[].author_hash:string",
+   "pages[].created_at:number",
+   "pages[].id:number",
+   "pages[].nick:string",
+   "pages[].page:string",
+   "pages[].snippet:string",
+   "pages[].status:string",
+   "pages[]:object",
+   "reports:array",
+   "reports[].author_hash:string",
+   "reports[].id:number",
+   "reports[].last_reported:number",
+   "reports[].locked:null",
+   "reports[].media_key:null",
+   "reports[].nick:string",
+   "reports[].page:string",
+   "reports[].reasons:string",
+   "reports[].report_count:number",
+   "reports[].snippet:string",
+   "reports[].status:string",
+   "reports[].sticky:null",
+   "reports[].title:string",
+   "reports[].topic_id:number",
+   "reports[]:object",
+   "topics:array",
+   "topics[].author_hash:string",
+   "topics[].created_at:number",
+   "topics[].id:number",
+   "topics[].locked:null",
+   "topics[].media_key:null",
+   "topics[].nick:null|string",
+   "topics[].page:string",
+   "topics[].snippet:string",
+   "topics[].status:string",
+   "topics[].sticky:null",
+   "topics[].title:string",
+   "topics[].topic_id:number",
+   "topics[]:object"
+  ],
+  "lists": [
+   "pages",
+   "reports",
+   "topics"
+  ],
+  "text": []
+ },
+ "POST /api/comments/avatar": {
+  "json": [
+   "avatar:string",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/avatar/delete": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/backup": {
+  "json": [
+   "backup.at:number",
+   "backup.bytes:number",
+   "backup.kept:number",
+   "backup.key:string",
+   "backup.ms:number",
+   "backup.pruned:number",
+   "backup.rows:number",
+   "backup.sqlBytes:number",
+   "backup.tables:number",
+   "backup:object",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/board/admin": {
+  "json": [
+   "anon:boolean",
+   "cat:string",
+   "error:string",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "replies:array",
+   "topic.assigned:string",
+   "topic.author_hash:string",
+   "topic.avatar:null",
+   "topic.body:string",
+   "topic.created_at:number",
+   "topic.edited_at:null",
+   "topic.faith:null",
+   "topic.id:number",
+   "topic.liked:number",
+   "topic.likes:number",
+   "topic.locked:number",
+   "topic.media_expired:number",
+   "topic.media_key:null",
+   "topic.nick:null",
+   "topic.posts:number",
+   "topic.rank:string",
+   "topic.react_me:string",
+   "topic.reacts:array",
+   "topic.readonly:number",
+   "topic.signature:null",
+   "topic.sticky:number",
+   "topic.title:string",
+   "topic:object",
+   "total:number"
+  ],
+  "lists": [
+   "replies"
+  ],
+  "text": []
+ },
+ "POST /api/comments/board/media": {
+  "json": [
+   "error:string",
+   "kind:string",
+   "media_key:string",
+   "ok:boolean",
+   "size:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/board/media/purge": {
+  "json": [
+   "deleted:number",
+   "error:string",
+   "ok:boolean",
+   "remaining:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/board/read": {
+  "json": [
+   "error:string",
+   "notif_unread:number",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/board/read-all": {
+  "json": [
+   "error:string",
+   "notif_unread:number",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/board/reads": {
+  "json": [
+   "ok:boolean",
+   "unread:array",
+   "unread[]:number"
+  ],
+  "lists": [
+   "unread"
+  ],
+  "text": []
+ },
+ "POST /api/comments/board/unread": {
+  "json": [
+   "byCat.*:number",
+   "byCat:object",
+   "error:string",
+   "ok:boolean",
+   "total:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/bookmark": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "on:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/bookmarks": {
+  "json": [
+   "error:string",
+   "items:array",
+   "items[].created_at:number",
+   "items[].kind:string",
+   "items[].label:string",
+   "items[].ref:number",
+   "items[]:object",
+   "more:boolean",
+   "ok:boolean",
+   "page:number"
+  ],
+  "lists": [
+   "items"
+  ],
+  "text": []
+ },
+ "POST /api/comments/call/answer": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/call/end": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/call/offer": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/call/pending": {
+  "json": [
+   "age:number",
+   "answered:boolean",
+   "error:string",
+   "from:string",
+   "ok:boolean",
+   "pending:boolean",
+   "sdp:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/call/turn": {
+  "json": [
+   "error:string",
+   "iceServers:array",
+   "iceServers[].urls:array",
+   "iceServers[].urls[]:string",
+   "iceServers[]:object",
+   "ok:boolean",
+   "relay:boolean"
+  ],
+  "lists": [
+   "iceServers"
+  ],
+  "text": []
+ },
+ "POST /api/comments/csp-report": {
+  "json": [],
+  "lists": [],
+  "text": [
+   "none"
+  ]
+ },
+ "POST /api/comments/delete": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/deleteuser": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/block": {
+  "json": [
+   "blocked:boolean",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/blocked": {
+  "json": [
+   "blocked:array",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [
+   "blocked"
+  ],
+  "text": []
+ },
+ "POST /api/comments/dm/delete": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "purged:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/edit": {
+  "json": [
+   "edited_at:number",
+   "error:string",
+   "id:number",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/forward": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "results:array",
+   "results[].created_at:number",
+   "results[].id:number",
+   "results[].ok:boolean",
+   "results[].status:number",
+   "results[].thread_id:number",
+   "results[]:object"
+  ],
+  "lists": [
+   "results"
+  ],
+  "text": []
+ },
+ "POST /api/comments/dm/groups": {
+  "json": [
+   "error:string",
+   "name:string",
+   "ok:boolean",
+   "thread_id:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/leave": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "purged:boolean",
+   "thread_id:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/like": {
+  "json": [
+   "emoji:string",
+   "error:string",
+   "id:number",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/media": {
+  "json": [
+   "error:string",
+   "media_key:string",
+   "ok:boolean",
+   "size:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/media/get": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": [
+   "application/octet-stream"
+  ]
+ },
+ "POST /api/comments/dm/media/purge": {
+  "json": [
+   "deleted:number",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/members": {
+  "json": [
+   "added:array",
+   "added[]:string",
+   "error:string",
+   "forked:number",
+   "ok:boolean",
+   "thread_id:number"
+  ],
+  "lists": [
+   "added"
+  ],
+  "text": []
+ },
+ "POST /api/comments/dm/name": {
+  "json": [
+   "error:string",
+   "name:string",
+   "ok:boolean",
+   "thread_id:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/presence": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "online:array",
+   "seen:object"
+  ],
+  "lists": [
+   "online"
+  ],
+  "text": []
+ },
+ "POST /api/comments/dm/pubkey": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/react": {
+  "json": [
+   "emoji:string",
+   "error:string",
+   "id:number",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/redact": {
+  "json": [
+   "error:string",
+   "id:number",
+   "ok:boolean",
+   "redacted:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/roster": {
+  "json": [
+   "error:string",
+   "kind:number",
+   "members:array",
+   "members[].hash:string",
+   "members[].pubkey:string",
+   "members[]:object",
+   "name:null",
+   "ok:boolean",
+   "thread_id:number"
+  ],
+  "lists": [
+   "members"
+  ],
+  "text": []
+ },
+ "POST /api/comments/dm/save": {
+  "json": [
+   "error:string",
+   "expires_at:number",
+   "ok:boolean",
+   "saved:number",
+   "saved_by:null"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/seen": {
+  "json": [
+   "error:string",
+   "notif_unread:number",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/send": {
+  "json": [
+   "created_at:number",
+   "error:string",
+   "id:number",
+   "ok:boolean",
+   "thread_id:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/thread": {
+  "json": [
+   "blocked:number",
+   "error:string",
+   "messages:array",
+   "messages[].body:string",
+   "messages[].created_at:number",
+   "messages[].edited_at:null",
+   "messages[].enc:number",
+   "messages[].expires_at:null",
+   "messages[].id:number",
+   "messages[].liked_me:number",
+   "messages[].liked_other:number",
+   "messages[].media_expired:number",
+   "messages[].media_key:string",
+   "messages[].media_size:number",
+   "messages[].opened_at:null",
+   "messages[].react_me:string",
+   "messages[].react_other:string",
+   "messages[].reactions:array",
+   "messages[].redacted:number",
+   "messages[].saved:number",
+   "messages[].saved_by:null",
+   "messages[].sealed:string",
+   "messages[].sender_hash:string",
+   "messages[]:object",
+   "notif_unread:number",
+   "ok:boolean",
+   "other.assigned:string",
+   "other.avatar:null",
+   "other.hash:string",
+   "other.joined_at:number",
+   "other.last_seen:null",
+   "other.left_at:null",
+   "other.nick:null|string",
+   "other.pubkey:string",
+   "other.read_at:null",
+   "other.receipts:number",
+   "other:object",
+   "page:number",
+   "per:number",
+   "thread.id:number",
+   "thread.kind:number",
+   "thread.members:array",
+   "thread.members[].assigned:string",
+   "thread.members[].avatar:null",
+   "thread.members[].hash:string",
+   "thread.members[].joined_at:number",
+   "thread.members[].last_seen:null",
+   "thread.members[].left_at:null",
+   "thread.members[].nick:null|string",
+   "thread.members[].pubkey:string",
+   "thread.members[].read_at:null",
+   "thread.members[].receipts:number",
+   "thread.members[]:object",
+   "thread.name:null",
+   "thread.ttl:number",
+   "thread:object",
+   "thread_id:number",
+   "total:number",
+   "ttl:number",
+   "unread:number",
+   "unread_from:null|number"
+  ],
+  "lists": [
+   "messages"
+  ],
+  "text": []
+ },
+ "POST /api/comments/dm/threads": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "threads:array",
+   "threads[].assigned:string",
+   "threads[].avatar:null",
+   "threads[].id:number",
+   "threads[].kind:number",
+   "threads[].last_at:number",
+   "threads[].member_count:number",
+   "threads[].members:array",
+   "threads[].members[].assigned:string",
+   "threads[].members[].avatar:null",
+   "threads[].members[].hash:string",
+   "threads[].members[].nick:null|string",
+   "threads[].members[]:object",
+   "threads[].msgs:number",
+   "threads[].name:null",
+   "threads[].nick:null|string",
+   "threads[].other_hash:string",
+   "threads[].thread_id:number",
+   "threads[].unread:number",
+   "threads[]:object",
+   "total:number",
+   "unread_total:number"
+  ],
+  "lists": [
+   "threads"
+  ],
+  "text": []
+ },
+ "POST /api/comments/dm/ttl": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "ttl:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/unread": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "unread:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/edit": {
+  "json": [
+   "edited_at:number",
+   "error:string",
+   "ok:boolean",
+   "status:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/ipban": {
+  "json": [
+   "banned:boolean",
+   "error:string",
+   "keys:array",
+   "keys[]:string",
+   "ok:boolean"
+  ],
+  "lists": [
+   "keys"
+  ],
+  "text": []
+ },
+ "POST /api/comments/ipbans": {
+  "json": [
+   "error:string",
+   "ips:array",
+   "ips[].created_at:number",
+   "ips[].ip:string",
+   "ips[]:object",
+   "ok:boolean"
+  ],
+  "lists": [
+   "ips"
+  ],
+  "text": []
+ },
+ "POST /api/comments/lock": {
+  "json": [
+   "error:string",
+   "locked:boolean",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/meta": {
+  "json": [
+   "error:string",
+   "identities.*:array",
+   "identities.*[].banned:number",
+   "identities.*[].family:number",
+   "identities.*[].ip_display:string",
+   "identities.*[].ip_key:string",
+   "identities.*[].source:string",
+   "identities.*[]:object",
+   "identities:object",
+   "meta:array",
+   "meta[].author_hash:string",
+   "meta[].id:number",
+   "meta[].ip:string",
+   "meta[].ipbanned:number",
+   "meta[].lang:string",
+   "meta[].locked:number",
+   "meta[].os:string",
+   "meta[].shadowbanned:number",
+   "meta[].trusted:number",
+   "meta[].tz:string",
+   "meta[].ua:string",
+   "meta[]:object",
+   "ok:boolean"
+  ],
+  "lists": [
+   "meta"
+  ],
+  "text": []
+ },
+ "POST /api/comments/moderate": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "sticky:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/move": {
+  "json": [
+   "error:string",
+   "moved:boolean",
+   "notified:boolean",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/notifications": {
+  "json": [
+   "error:string",
+   "items:array",
+   "items[].actor_assigned:string",
+   "items[].actor_hash:string",
+   "items[].actor_nick:null",
+   "items[].comment_id:number",
+   "items[].created_at:number",
+   "items[].id:number",
+   "items[].kind:string",
+   "items[].read_at:null",
+   "items[].snippet:string",
+   "items[].topic_id:number",
+   "items[].topic_title:string",
+   "items[]:object",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "total:number",
+   "unread_total:number"
+  ],
+  "lists": [
+   "items"
+  ],
+  "text": []
+ },
+ "POST /api/comments/notifications/read": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/notifications/unread": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "unread:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/ops/report": {
+  "json": [
+   "error:string",
+   "health.alerts_at:null",
+   "health.backup:null",
+   "health.backup_ok:boolean",
+   "health.csp:null",
+   "health.d1.served_by_primary:null",
+   "health.d1.served_by_region:null",
+   "health.d1:object",
+   "health.egress:array",
+   "health.heartbeat:array",
+   "health.heartbeat[].age:null|number",
+   "health.heartbeat[].last:number",
+   "health.heartbeat[].name:string",
+   "health.heartbeat[].stale:boolean",
+   "health.heartbeat[].stale_after:number",
+   "health.heartbeat[]:object",
+   "health.hub:array",
+   "health.hub[].members:number",
+   "health.hub[].shard:number",
+   "health.hub[].sockets:number",
+   "health.hub[]:object",
+   "health.never:array",
+   "health.never[]:string",
+   "health.now:number",
+   "health.object:null",
+   "health.ok:boolean",
+   "health.open:array",
+   "health.shapes:array",
+   "health.stale:array",
+   "health.stale[]:string",
+   "health.webtest:null",
+   "health:object",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/pending": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "pending:array",
+   "pending[].ai_verdict:string",
+   "pending[].author_hash:string",
+   "pending[].body:string",
+   "pending[].created_at:number",
+   "pending[].id:number",
+   "pending[].media_key:null",
+   "pending[].nick:null",
+   "pending[].page:string",
+   "pending[].parent_id:null",
+   "pending[].title:string",
+   "pending[]:object",
+   "pending_wall:array"
+  ],
+  "lists": [
+   "pending",
+   "pending_wall"
+  ],
+  "text": []
+ },
+ "POST /api/comments/prefs": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "prefs.calls:number",
+   "prefs.muted:array",
+   "prefs.notify_dm:number",
+   "prefs.notify_mention:number",
+   "prefs.notify_reply:number",
+   "prefs.receipts:string",
+   "prefs:object"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/profile": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "profile.admin:boolean",
+   "profile.assigned:string",
+   "profile.avatar:null",
+   "profile.bio:null",
+   "profile.faith:null",
+   "profile.handle:null|string",
+   "profile.hash:string",
+   "profile.links:null",
+   "profile.nick:null",
+   "profile.signature:null",
+   "profile:object"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/profile/admin": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/profile/clear": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/push/register": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/push/unregister": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/rdns": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "rdns:object"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/react": {
+  "json": [
+   "emoji:string",
+   "error:string",
+   "id:number",
+   "liked:number",
+   "likes:number",
+   "ok:boolean",
+   "reacts:array",
+   "reacts[].e:string",
+   "reacts[].n:number",
+   "reacts[]:object",
+   "target:string"
+  ],
+  "lists": [
+   "reacts"
+  ],
+  "text": []
+ },
+ "POST /api/comments/react/who": {
+  "json": [
+   "id:number",
+   "likers:array",
+   "more:boolean",
+   "ok:boolean",
+   "target:string",
+   "who:array"
+  ],
+  "lists": [
+   "likers",
+   "who"
+  ],
+  "text": []
+ },
+ "POST /api/comments/reacts": {
+  "json": [
+   "error:string",
+   "mine:object",
+   "ok:boolean",
+   "target:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/report": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/report/dismiss": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/shadowban": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "shadowbanned:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/shadowban/list": {
+  "json": [
+   "bans:array",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [
+   "bans"
+  ],
+  "text": []
+ },
+ "POST /api/comments/trust": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "trusted:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/wall": {
+  "json": [
+   "error:string",
+   "hash:string",
+   "me:string",
+   "next:number",
+   "ok:boolean",
+   "posts:array",
+   "posts[].assigned:string",
+   "posts[].author_hash:string",
+   "posts[].avatar:null",
+   "posts[].body:string",
+   "posts[].comments:number",
+   "posts[].created_at:number",
+   "posts[].edited_at:null",
+   "posts[].faith:null",
+   "posts[].id:number",
+   "posts[].liked:number",
+   "posts[].likes:number",
+   "posts[].media_expired:null",
+   "posts[].media_key:null",
+   "posts[].media_size:null",
+   "posts[].nick:string",
+   "posts[].posts:number",
+   "posts[].rank:string",
+   "posts[].react_me:string",
+   "posts[].reacts:array",
+   "posts[]:object"
+  ],
+  "lists": [
+   "posts"
+  ],
+  "text": []
+ },
+ "POST /api/comments/wall/comment": {
+  "json": [
+   "error:string",
+   "id:number",
+   "ok:boolean",
+   "status:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/wall/comment/like": {
+  "json": [
+   "emoji:string",
+   "error:string",
+   "id:number",
+   "liked:number",
+   "likes:number",
+   "ok:boolean",
+   "reacts:array",
+   "reacts[].e:string",
+   "reacts[].n:number",
+   "reacts[]:object",
+   "target:string"
+  ],
+  "lists": [
+   "reacts"
+  ],
+  "text": []
+ },
+ "POST /api/comments/wall/delete": {
+  "json": [
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/wall/edit": {
+  "json": [
+   "edited_at:number",
+   "error:string",
+   "ok:boolean",
+   "status:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/wall/feed": {
+  "json": [
+   "error:string",
+   "me:string",
+   "next:number",
+   "ok:boolean",
+   "posts:array",
+   "posts[].assigned:string",
+   "posts[].author_hash:string",
+   "posts[].avatar:null",
+   "posts[].body:string",
+   "posts[].comments:number",
+   "posts[].created_at:number",
+   "posts[].edited_at:null",
+   "posts[].faith:null",
+   "posts[].id:number",
+   "posts[].liked:number",
+   "posts[].likes:number",
+   "posts[].media_expired:null",
+   "posts[].media_key:null",
+   "posts[].media_size:null",
+   "posts[].nick:string",
+   "posts[].posts:number",
+   "posts[].rank:string",
+   "posts[].react_me:string",
+   "posts[].reacts:array",
+   "posts[]:object"
+  ],
+  "lists": [
+   "posts"
+  ],
+  "text": []
+ },
+ "POST /api/comments/wall/like": {
+  "json": [
+   "emoji:string",
+   "error:string",
+   "id:number",
+   "liked:number",
+   "likes:number",
+   "ok:boolean",
+   "reacts:array",
+   "reacts[].e:string",
+   "reacts[].n:number",
+   "reacts[]:object",
+   "target:string"
+  ],
+  "lists": [
+   "reacts"
+  ],
+  "text": []
+ },
+ "POST /api/comments/wall/likers": {
+  "json": [
+   "id:number",
+   "likers:array",
+   "more:boolean",
+   "ok:boolean",
+   "target:string",
+   "who:array"
+  ],
+  "lists": [
+   "likers",
+   "who"
+  ],
+  "text": []
+ },
+ "POST /api/comments/wall/media": {
+  "json": [
+   "error:string",
+   "kind:string",
+   "media_key:string",
+   "ok:boolean",
+   "size:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/wall/media/purge": {
+  "json": [
+   "deleted:number",
+   "error:string",
+   "ok:boolean",
+   "remaining:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/wall/post": {
+  "json": [
+   "error:string",
+   "id:number",
+   "ok:boolean",
+   "status:string"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/wall/post/get": {
+  "json": [
+   "comments:array",
+   "comments[].assigned:string",
+   "comments[].author_hash:string",
+   "comments[].avatar:null",
+   "comments[].body:string",
+   "comments[].created_at:number",
+   "comments[].faith:null",
+   "comments[].id:number",
+   "comments[].liked:number",
+   "comments[].likes:number",
+   "comments[].media_expired:null",
+   "comments[].media_key:null",
+   "comments[].media_size:null",
+   "comments[].nick:null",
+   "comments[].post_id:number",
+   "comments[].posts:number",
+   "comments[].rank:string",
+   "comments[].react_me:string",
+   "comments[].reacts:array",
+   "comments[]:object",
+   "me:null|string",
+   "notif_unread:number",
+   "ok:boolean",
+   "post.assigned:string",
+   "post.author_hash:string",
+   "post.avatar:null",
+   "post.body:string",
+   "post.comments:number",
+   "post.created_at:number",
+   "post.edited_at:null",
+   "post.faith:null",
+   "post.id:number",
+   "post.liked:number",
+   "post.likes:number",
+   "post.media_expired:null",
+   "post.media_key:null",
+   "post.media_size:null",
+   "post.nick:string",
+   "post.posts:number",
+   "post.rank:string",
+   "post.react_me:string",
+   "post.reacts:array",
+   "post:object"
+  ],
+  "lists": [
+   "comments"
+  ],
+  "text": []
+ },
+ "POST /api/comments/wall/prune": {
+  "json": [
+   "deleted:number",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/watch": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "watching:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/about": {
+  "json": [
+   "admin:boolean",
+   "backend:string",
+   "chunks:number",
+   "error:string",
+   "global_daily:number",
+   "model:string",
+   "ok:boolean",
+   "persona:string",
+   "today:number",
+   "topk:number",
+   "user_cap_on:number",
+   "user_daily:number",
+   "works:array",
+   "you:number"
+  ],
+  "lists": [
+   "works"
+  ],
+  "text": []
+ },
+ "POST /api/merecat/admin/thread": {
+  "json": [
+   "chat.created_at:number",
+   "chat.hash:string",
+   "chat.id:number",
+   "chat.last_at:number",
+   "chat.msgs:number",
+   "chat.nick:string",
+   "chat.saved:number",
+   "chat.title:string",
+   "chat:object",
+   "error:string",
+   "msgs:array",
+   "msgs[].body:string",
+   "msgs[].created_at:number",
+   "msgs[].done:number",
+   "msgs[].id:number",
+   "msgs[].role:string",
+   "msgs[].sources:null|string",
+   "msgs[]:object",
+   "ok:boolean"
+  ],
+  "lists": [
+   "msgs"
+  ],
+  "text": []
+ },
+ "POST /api/merecat/admin/threads": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "page:number",
+   "per:number",
+   "threads:array",
+   "threads[].created_at:number",
+   "threads[].hash:string",
+   "threads[].id:number",
+   "threads[].last_at:number",
+   "threads[].msgs:number",
+   "threads[].nick:string",
+   "threads[].saved:number",
+   "threads[].title:string",
+   "threads[]:object",
+   "total:number"
+  ],
+  "lists": [
+   "threads"
+  ],
+  "text": []
+ },
+ "POST /api/merecat/ask-init": {
+  "json": [
+   "backend:string",
+   "chatId:number",
+   "error:string",
+   "ok:boolean",
+   "used.admin:boolean",
+   "used.cap:number",
+   "used.cap_on:number",
+   "used.gcap:number",
+   "used.quota.configured:boolean",
+   "used.quota.meter_pct:null",
+   "used.quota.note:string",
+   "used.quota.on:boolean",
+   "used.quota.pct:number",
+   "used.quota.reset_in_h:number",
+   "used.quota.resting:boolean",
+   "used.quota.unread:boolean",
+   "used.quota:object",
+   "used.today:number",
+   "used.you:number",
+   "used:object"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/backends": {
+  "json": [
+   "backend:string",
+   "band_weights:string",
+   "cloudflare.gcap:number",
+   "cloudflare.online:boolean",
+   "cloudflare.today:number",
+   "cloudflare:object",
+   "error:string",
+   "last_ingest:string",
+   "last_ingest_by:string",
+   "max_tokens:number",
+   "mention_effort:string",
+   "model:string",
+   "ok:boolean",
+   "quota.configured:boolean",
+   "quota.limit:null",
+   "quota.meter_pct:null",
+   "quota.note:string",
+   "quota.on:boolean",
+   "quota.pct:number",
+   "quota.read_at:null",
+   "quota.reset_in_h:number",
+   "quota.resting:boolean",
+   "quota.stale:boolean",
+   "quota.unread:boolean",
+   "quota.used:null",
+   "quota:object",
+   "reasoning.default:string",
+   "reasoning.ladder:array",
+   "reasoning.ladder[]:string",
+   "reasoning.max:string",
+   "reasoning.mention:string",
+   "reasoning.on:boolean",
+   "reasoning:object",
+   "temperature:number",
+   "topk:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/chat": {
+  "json": [
+   "chat.created_at:number",
+   "chat.id:number",
+   "chat.last_at:number",
+   "chat.msgs:number",
+   "chat.title:string",
+   "chat:object",
+   "error:string",
+   "msgs:array",
+   "msgs[].body:string",
+   "msgs[].created_at:number",
+   "msgs[].done:number",
+   "msgs[].id:number",
+   "msgs[].role:string",
+   "msgs[].sources:null|string",
+   "msgs[]:object",
+   "ok:boolean"
+  ],
+  "lists": [
+   "msgs"
+  ],
+  "text": []
+ },
+ "POST /api/merecat/chat/delete": {
+  "json": [
+   "deleted:number",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/chat/save": {
+  "json": [
+   "error:string",
+   "id:number",
+   "ok:boolean",
+   "saved:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/chats": {
+  "json": [
+   "chats:array",
+   "chats[].id:number",
+   "chats[].last_at:number",
+   "chats[].msgs:number",
+   "chats[].saved:number",
+   "chats[].title:string",
+   "chats[]:object",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [
+   "chats"
+  ],
+  "text": []
+ },
+ "POST /api/merecat/config": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "set:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/forward": {
+  "json": [
+   "error:string",
+   "id:number",
+   "ok:boolean",
+   "topic:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/ingest": {
+  "json": [
+   "began:string",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/mention": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "queued:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/stats": {
+  "json": [
+   "chunks:number",
+   "days:array",
+   "error:string",
+   "ok:boolean"
+  ],
+  "lists": [
+   "days"
+  ],
+  "text": []
+ },
+ "POST /api/merecat/usage": {
+  "json": [
+   "admin:boolean",
+   "backend:string",
+   "cap:number",
+   "cap_on:number",
+   "error:string",
+   "gcap:number",
+   "ok:boolean",
+   "quota.configured:boolean",
+   "quota.meter_pct:null",
+   "quota.note:string",
+   "quota.on:boolean",
+   "quota.pct:number",
+   "quota.reset_in_h:number",
+   "quota.resting:boolean",
+   "quota.unread:boolean",
+   "quota:object",
+   "reasoning.default:string",
+   "reasoning.ladder:array",
+   "reasoning.ladder[]:string",
+   "reasoning.max:string",
+   "reasoning.mention:string",
+   "reasoning.on:boolean",
+   "reasoning:object",
+   "today:number",
+   "you:number"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/merecat/works": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "persona_file_hash:string",
+   "text_bytes:number",
+   "text_bytes_deep2:number",
+   "text_bytes_deep:number",
+   "works:array"
+  ],
+  "lists": [
+   "works"
+  ],
+  "text": []
+ }
+}

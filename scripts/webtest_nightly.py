@@ -44,6 +44,7 @@ SUITES = [
     'test_hscroll', 'test_core_rank', 'test_richtext', 'test_store', 'test_tap',
     'test_theme_toggle', 'test_about_dialog', 'test_sheet_lock', 'test_ptr',
     'test_zoomproof', 'test_settings_page', 'test_turnstile_mount',
+    'test_public_shapes',   # 2026-09-17: public answers keep their committed shape
 ]
 
 

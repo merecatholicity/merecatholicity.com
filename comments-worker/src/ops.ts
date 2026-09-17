@@ -19,7 +19,7 @@
    A watchdog inside a dead worker says nothing — the outside leg is
    .github/workflows/ops-watch.yml probing `readOps` through the report door.
    State: app_settings rows only (ops_heartbeat, ops_backup, ops_alert_state,
-   ops_webtest, ops_egress), no table. */
+   ops_webtest, ops_egress, ops_shapes), no table. */
 import * as OpsK from '../../purescript/output/Domain.Ops/index.js';
 import { sendAlert } from './alerts.ts';
 import { getOpsState, setOpsState, hubStats } from './lib.ts';
@@ -117,48 +117,73 @@ export async function runSelfCheck(env: Env): Promise<Condition[]> {
   return conds;
 }
 
-/* The egress guard's notes (egress.ts, 2026-09-17): an answer or a hub frame
-   refused for carrying a secret, or a handler that tried to enumerate or
-   serialize the sealed env. One app_settings row, `ops_egress`: a row per
-   (kind, site), the secret NAMES seen, how many notes, first and last, when
-   it was last told. Told at once, then at most once an hour while it
-   continues (Domain.Ops.shouldRetell). An isolate writes one key at most once
-   a minute, so a route that trips on every request cannot turn the note into
-   a D1 write per request; `n` counts notes written, not requests refused. */
+/* The guard's notes (2026-09-17): an answer or a hub frame refused for
+   carrying a secret, a handler that tried to enumerate or serialize the sealed
+   env (egress.ts) — and an answer whose listed field was not a list
+   (Domain.Wire). Each kind has one app_settings row, `ops_egress` and
+   `ops_shapes`: a row per (kind, site), the NAMES involved (secret names or
+   field names, never a value), how many notes, first and last, when it was last
+   told. Told at once, then no sooner than its kind's quiet time
+   (Domain.Ops.shouldRetell: an hour for a leak; a day for a shape). An isolate
+   writes one key at most once a minute, so a road that trips on every request
+   cannot turn the note into a D1 write per request; `n` counts notes written,
+   not requests. */
 export type LeakNote = { kind: 'answer' | 'frame' | 'enumerated'; site: string; names: string[] };
-type LeakRow = { key: string; kind: string; site: string; names: string[]; n: number; first: number; last: number; told: number };
-type LeakTally = { rows: LeakRow[] };
-const LEAK_ROWS = 50;
+export type ShapeNote = { site: string; fields: string[] };
+type NoteRow = { key: string; kind: string; site: string; names: string[]; n: number; first: number; last: number; told: number };
+type NoteTally = { rows: NoteRow[] };
+const NOTE_ROWS = 50;
 const lastNoted = new Map<string, number>();
 
-export async function noteLeak(env: Env, note: LeakNote) {
-  const key = note.kind + ' ' + note.site;
+async function tally(env: Env, state: 'ops_egress' | 'ops_shapes', kind: string, site: string, names: string[],
+  quiet: number, tell: (row: NoteRow) => { subject: string; text: string }, alertKind: string) {
+  const key = state + ' ' + kind + ' ' + site;
   const ms = Date.now();
   if (ms - (lastNoted.get(key) || 0) < 60000) return;
   lastNoted.set(key, ms);
   const now = Math.floor(ms / 1000);
   try {
-    const tally = await getOpsState<LeakTally>(env, 'ops_egress', { rows: [] });
-    const rows = Array.isArray(tally.rows) ? tally.rows : [];
-    let row = rows.find((r) => r.key === key);
+    const t = await getOpsState<NoteTally>(env, state, { rows: [] });
+    const rows = Array.isArray(t.rows) ? t.rows : [];
+    const rowKey = kind + ' ' + site;
+    let row = rows.find((r) => r.key === rowKey);
     if (!row) {
-      row = { key, kind: note.kind, site: note.site, names: [], n: 0, first: now, last: now, told: 0 };
+      row = { key: rowKey, kind, site, names: [], n: 0, first: now, last: now, told: 0 };
       rows.push(row);
     }
     row.n += 1;
     row.last = now;
-    row.names = Array.from(new Set(row.names.concat(note.names))).sort().slice(0, 12);
-    const tell = OpsK.shouldRetell({ told: row.told, now });
-    if (tell) row.told = now;
+    row.names = Array.from(new Set(row.names.concat(names))).sort().slice(0, 12);
+    const due = OpsK.shouldRetell({ told: row.told, now, quiet });
+    if (due) row.told = now;
     rows.sort((a, b) => b.last - a.last);
-    await setOpsState(env, 'ops_egress', { rows: rows.slice(0, LEAK_ROWS) });
-    if (tell) {
-      const d = OpsK.leakDigest({ kind: row.kind, site: row.site, names: row.names, n: row.n });
-      await sendAlert(env, { kind: 'egress', subject: d.subject, text: d.text });
+    await setOpsState(env, state, { rows: rows.slice(0, NOTE_ROWS) });
+    if (due) {
+      const d = tell(row);
+      await sendAlert(env, { kind: alertKind, subject: d.subject, text: d.text });
     }
   } catch (e) {
-    console.log(JSON.stringify({ event: 'egress_note_failed', key, error: String(e).slice(0, 200) }));
+    console.log(JSON.stringify({ event: 'ops_note_failed', key, error: String(e).slice(0, 200) }));
   }
+}
+
+export async function noteLeak(env: Env, note: LeakNote) {
+  await tally(env, 'ops_egress', note.kind, note.site, note.names, OpsK.leakRetellAfter,
+    (row) => OpsK.leakDigest({ kind: row.kind, site: row.site, names: row.names, n: row.n }), 'egress');
+}
+
+export async function noteShape(env: Env, note: ShapeNote) {
+  await tally(env, 'ops_shapes', 'shape', note.site, note.fields, OpsK.shapeRetellAfter,
+    (row) => OpsK.shapeDigest({ site: row.site, fields: row.names, n: row.n }), 'shape');
+}
+
+/* the health card's view of a tally: the rows, and whether each still stands */
+async function notes(env: Env, state: 'ops_egress' | 'ops_shapes', now: number) {
+  const t = await getOpsState<NoteTally>(env, state, { rows: [] });
+  return (Array.isArray(t.rows) ? t.rows : []).map((r) => ({
+    kind: r.kind, site: r.site, names: r.names, n: r.n, first: r.first, last: r.last,
+    standing: OpsK.noteStanding({ last: Number(r.last) || 0, now }),
+  }));
 }
 
 /* The health object: the admin panel's card and the report door's probe.
@@ -187,19 +212,16 @@ export async function readOps(env: Env) {
   } catch (e) { object = null; }
   const open = Array.isArray(alerts.open) ? alerts.open.map(String) : [];
   const backupOk = !hb.daily || (!!object && object.size >= OpsK.minBackupBytes);
-  /* the egress guard's notes — a note from the last day keeps the verdict red */
-  const leakTally = await getOpsState<LeakTally>(env, 'ops_egress', { rows: [] });
-  const egress = (Array.isArray(leakTally.rows) ? leakTally.rows : []).map((r) => ({
-    kind: r.kind, site: r.site, names: r.names, n: r.n, first: r.first, last: r.last,
-    standing: OpsK.leakStanding({ last: Number(r.last) || 0, now }),
-  }));
-  const leaking = egress.some((r) => r.standing);
-  const ok = stale.length === 0 && open.length === 0 && backupOk && !leaking;
+  /* the guard's notes — one from the last day keeps the verdict red */
+  const egress = await notes(env, 'ops_egress', now);
+  const shapes = await notes(env, 'ops_shapes', now);
+  const noted = egress.concat(shapes).some((r) => r.standing);
+  const ok = stale.length === 0 && open.length === 0 && backupOk && !noted;
   /* The live hub, shard by shard (2026-09-17): how many sockets each holds
      is the number that says when to raise HUB_SHARDS. Shown, never told. */
   let hub: Awaited<ReturnType<typeof hubStats>> = [];
   try { hub = await hubStats(env); } catch (e) { hub = []; }
   /* where one unconstrained D1 read ran (2026-09-17): replicas at work, or not */
   const d1 = await servedBy(env);
-  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest, csp, hub, d1, egress };
+  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest, csp, hub, d1, egress, shapes };
 }

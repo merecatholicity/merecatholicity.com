@@ -31,6 +31,7 @@ import { LitElement, html } from 'lit';
 import * as store from './store.ts';
 import * as api from './api.ts';
 import * as core from './core.ts';
+import { installWireCheck } from './wirecheck.ts';
 import { installLive } from './live.ts';
 import { installCall } from './call.ts';
 import { installPtr } from './ptr.ts';
@@ -68,6 +69,8 @@ window.mcStore = { fetchJson: store.fetchJson, invalidate: store.invalidate, met
    app/core.js directly. Importing it above is what inlines compiled PureScript
    into docs/app.js (the bundle route). See CLAUDE.md. */
 window.mcCore = core;
+/* every /api answer's lists are checked before a view reads them (Domain.Wire) */
+installWireCheck(window);
 
 /* The headless-API client SDK (app/api.js) rides the shell too — the single
    documented seam (comments-worker/API.md) new features call. Transport +

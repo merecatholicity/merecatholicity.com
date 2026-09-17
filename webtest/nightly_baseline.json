@@ -35,6 +35,12 @@
   "pass": 8,
   "summary": true
  },
+ "test_public_shapes": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 52,
+  "summary": true
+ },
  "test_richtext": {
   "exit": 0,
   "fail": 0,

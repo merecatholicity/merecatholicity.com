@@ -150,12 +150,15 @@ test('a run\'s digest names the first condition and how many more; every sentenc
 test('a leak note is told at once, then at most hourly while it continues, and keeps the verdict red for a day', () => {
   assert.equal(Ops.leakRetellAfter, 3600);
   assert.equal(Ops.leakWindow, 86400);
-  assert.equal(Ops.shouldRetell({ told: 0, now: 1000 }), true, 'never told: tell now');
-  assert.equal(Ops.shouldRetell({ told: 1000, now: 1000 + 3599 }), false);
-  assert.equal(Ops.shouldRetell({ told: 1000, now: 1000 + 3600 }), true);
-  assert.equal(Ops.leakStanding({ last: 0, now: 5 }), false, 'no note, nothing standing');
-  assert.equal(Ops.leakStanding({ last: 100, now: 100 + 86399 }), true);
-  assert.equal(Ops.leakStanding({ last: 100, now: 100 + 86400 }), false);
+  const quiet = Ops.leakRetellAfter;
+  assert.equal(Ops.shouldRetell({ told: 0, now: 1000, quiet }), true, 'never told: tell now');
+  assert.equal(Ops.shouldRetell({ told: 1000, now: 1000 + 3599, quiet }), false);
+  assert.equal(Ops.shouldRetell({ told: 1000, now: 1000 + 3600, quiet }), true);
+  assert.equal(Ops.shapeRetellAfter, 86400, 'a broken shape is told once a day');
+  assert.equal(Ops.shouldRetell({ told: 1000, now: 1000 + 3600, quiet: Ops.shapeRetellAfter }), false);
+  assert.equal(Ops.noteStanding({ last: 0, now: 5 }), false, 'no note, nothing standing');
+  assert.equal(Ops.noteStanding({ last: 100, now: 100 + 86399 }), true);
+  assert.equal(Ops.noteStanding({ last: 100, now: 100 + 86400 }), false);
 });
 
 test('a leak alert names the road and the secrets, never a value, and says what to do', () => {
@@ -180,4 +183,11 @@ test('a secret too short to guard is a self-check condition the daily and usage 
   assert.equal(Ops.alertScope({ chain: 'daily', selfCheck: true })('secret_short:A_SHORT_SECRET'), true);
   assert.equal(Ops.alertScope({ chain: 'hourly', selfCheck: false })('secret_short:A_SHORT_SECRET'), false,
     'a chain without the self-check cannot see a secret, so it never recovers one');
+});
+
+test('a broken shape names the road and the fields, and says the readers refuse it', () => {
+  const d = Ops.shapeDigest({ site: 'GET /api/comments/recent', fields: ['items'], n: 2 });
+  assert.equal(d.subject, 'Answer with a broken shape: GET /api/comments/recent');
+  assert.match(d.text, /with items holding something other than the list Domain\.Wire promises/);
+  assert.match(d.text, /Seen 2 times; you hear of it at most once a day/);
 });

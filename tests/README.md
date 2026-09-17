@@ -53,6 +53,9 @@ tests/
                        readers allowed to see it — plus ROUTE_HINTS (the bodies a success path needs), the
                        workers.dev doors, /@handle, the upgrades and the four crons; runSweep({ only, wrap })
   _support/env_flow.mjs  the env-flow law as a function: the env reaches only a parameter named env (worker/env_leak)
+  _support/shapes.mjs  an answer read into key paths and types; the snapshot and its diff (worker/response_shapes)
+  _support/response_shapes.json  every route's committed answer shape — `node scripts/response_shapes.mjs --write`,
+                       from the sweep; also read by webtest/test_public_shapes.py every night
   _support/hub_runtime.mjs  the Workers runtime a Durable Object touches, in Node: FakeSocket, fakeCtx, the 101 Response
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),

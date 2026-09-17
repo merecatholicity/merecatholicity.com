@@ -48,7 +48,9 @@ module Domain.Ops
   , leakWindow
   , shouldRetell
   , leakDigest
-  , leakStanding
+  , noteStanding
+  , shapeRetellAfter
+  , shapeDigest
   ) where
 
 import Prelude
@@ -264,13 +266,14 @@ leakRetellAfter = 3600
 leakWindow :: Int
 leakWindow = 86400
 
--- | `told` is when the note was last told (0 = never).
-shouldRetell :: { told :: Int, now :: Int } -> Boolean
-shouldRetell r = r.told <= 0 || r.now - r.told >= leakRetellAfter
+-- | `told` is when the note was last told (0 = never); `quiet` is its kind's
+-- | quiet time (`leakRetellAfter`, `shapeRetellAfter`).
+shouldRetell :: { told :: Int, now :: Int, quiet :: Int } -> Boolean
+shouldRetell r = r.told <= 0 || r.now - r.told >= r.quiet
 
--- | Whether a note seen `last` still stands at `now`.
-leakStanding :: { last :: Int, now :: Int } -> Boolean
-leakStanding r = r.last > 0 && r.now - r.last < leakWindow
+-- | Whether a note (a leak, a broken shape) seen `last` still stands at `now`.
+noteStanding :: { last :: Int, now :: Int } -> Boolean
+noteStanding r = r.last > 0 && r.now - r.last < leakWindow
 
 -- | The alert for one note. `names` are the secret NAMES the answer or frame
 -- | carried (empty for an enumeration); a value never reaches this function.
@@ -291,3 +294,19 @@ leakDigest r =
     _ -> "A handler behind " <> r.site <> " tried to copy, list or serialize the worker env. The seal refused it (a 500, or a caught throw)."
   seen = "Seen " <> show r.n <> " time" <> (if r.n == 1 then "" else "s") <> " so far; while it continues you hear of it at most once an hour."
   advice = "Nothing left the worker. Find the handler (Workers Logs: egress_blocked / env_enumerated) and fix it; if you cannot rule out an earlier leak, rotate the named secrets (CICD.md §4)."
+
+-- | A broken shape (Domain.Wire, 2026-09-17): an answer whose listed field was
+-- | neither a list nor null. The answer still went — a reader's view refuses
+-- | it — so the owner hears once a day per road, not once an hour.
+shapeRetellAfter :: Int
+shapeRetellAfter = 86400
+
+shapeDigest :: { site :: String, fields :: Array String, n :: Int } -> { subject :: String, text :: String }
+shapeDigest r =
+  { subject: "Answer with a broken shape: " <> r.site
+  , text: "The worker answered " <> r.site <> " with " <> S.joinWith ", " r.fields
+      <> " holding something other than the list Domain.Wire promises. Readers' views refuse such an answer "
+      <> "(\"could not be loaded\"), so the road is broken for them until it is fixed. Seen "
+      <> show r.n <> " time" <> (if r.n == 1 then "" else "s") <> "; you hear of it at most once a day. "
+      <> "Workers Logs: shape_broken."
+  }

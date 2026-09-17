@@ -42,6 +42,7 @@ import * as Cache from '../purescript/output/Domain.Cache/index.js';
 import * as Ptr from '../purescript/output/Domain.Ptr/index.js';
 import * as Tap from '../purescript/output/Domain.Tap/index.js';
 import * as Ops from '../purescript/output/Domain.Ops/index.js';
+import * as Wire from '../purescript/output/Domain.Wire/index.js';
 import * as Maybe from '../purescript/output/Data.Maybe/index.js';
 
 /* rankFor(n) -> label string. Erases the `Rank` ADT to the label the classic
@@ -424,6 +425,21 @@ export const cachePersistable = (key: string): boolean => Cache.persistable(Stri
 export const cacheStaleMaxMs: number = Cache.staleMaxMs;
 export const cacheMaxBytes: number = Cache.maxBytes;
 export const cacheSchema: number = Cache.schema;
+
+/* The lists the wire promises (Domain.Wire, 2026-09-17): the listed fields a
+   JSON answer breaks — present, and neither a list nor null. The URL may be
+   absolute or relative; its query and trailing slash are not the route. A
+   refusal (`ok: false`) or a non-object promises nothing. The store and the
+   classic transport refuse an answer this names, so a view says "could not be
+   loaded" instead of reading a broken list as an empty one. */
+export const wireBroken = (method: string, url: string, json: unknown): string[] => {
+  if (!json || typeof json !== 'object' || Array.isArray(json) || (json as { ok?: unknown }).ok === false) return [];
+  const path = String(url || '').replace(/^[a-z][a-z0-9+.-]*:\/\/[^/]+/i, '').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
+  const j = json as Record<string, unknown>;
+  const kind = (f: string): string => (!Object.prototype.hasOwnProperty.call(j, f) ? 'absent'
+    : j[f] === null ? 'null' : Array.isArray(j[f]) ? 'list' : 'other');
+  return Wire.brokenFields(String(method || 'GET').toUpperCase())(path)(kind);
+};
 
 /* Pull-to-refresh (Domain.Ptr). The Stage ADT is erased to its tag for the
    same reason every other one is: a PS constructor reads as a truthy object on

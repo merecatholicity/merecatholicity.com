@@ -93,6 +93,7 @@ duplicated, and the shape they moved toward.
 | `comments-worker/src/{pure,webpush}.js` | 268 / 138 | Extracted pure helpers (tested) / VAPID push crypto. |
 | `app/views/{admin,library,member,post,profile}.ts` | 186–321 ea. | One Lit view per feature (`util.ts` 67). |
 | `app/{store,ptr,api}.ts` | 218 / 194 / 101 | Request cache + persisted SWR / pull-to-refresh / typed API client. |
+| `app/wirecheck.ts` | 49 | The shell's `fetch` wrapper (2026-09-17): an `/api/` answer whose listed field (`Domain.Wire`) is neither a list nor null makes `json()` reject, so a view says "could not be loaded", never "nothing here". |
 | `contact-worker/src/index.ts` | 138 | The contact form worker. |
 | `comments-worker/src/db.ts` | 83 | The repository layer: typed row mappers, `inList`, the `Query` builder. |
 | `docs/{deeplink,sw,away,contact,flash,index}.js` | 8–161 ea. | Small served-raw scripts. |

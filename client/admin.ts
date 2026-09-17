@@ -926,6 +926,7 @@ export function installAdmin(B: Boot) {
           backup: HealthBackup | null; object: { key: string; size: number } | null;
           webtest: { at: number; pass: number; fail: number; regressions: string[] } | null;
           egress?: Array<{ kind: string; site: string; names: string[]; n: number; last: number; standing: boolean }>;
+          shapes?: Array<{ site: string; names: string[]; n: number; last: number; standing: boolean }>;
         };
         function ago(secs: unknown) {
           var n = Number(secs);
@@ -965,6 +966,13 @@ export function installAdmin(B: Boot) {
               return x.site + (x.kind === 'enumerated' ? ' (tried to copy the env)' : x.kind === 'frame' ? ' (a live frame' + (x.names.length ? ': ' + x.names.join(', ') : '') + ')' : (x.names.length ? ' (' + x.names.join(', ') + ')' : '')) + ', ' + x.n + '\u00d7, last ' + ago(h.now - Number(x.last));
             }).join('; ')
             : 'Nothing refused for carrying a secret.'));
+          /* answers whose list was not a list (Domain.Wire, 2026-09-17): readers see "could not be loaded" */
+          var sh = (h.shapes || []).filter(function (x) { return h.now - Number(x.last) < 7 * 86400; });
+          hlBox.appendChild(el('p', sh.some(function (x) { return x.standing; }) ? 'board-cat-desc admin-health-stale' : 'board-cat-desc', sh.length
+            ? 'Answers with a broken shape (7 days): ' + sh.map(function (x) {
+              return x.site + ' (' + x.names.join(', ') + '), ' + x.n + '\u00d7, last ' + ago(h.now - Number(x.last));
+            }).join('; ')
+            : 'Every answer kept its shape.'));
           var w = h.webtest;
           hlBox.appendChild(el('p', 'board-cat-desc', w
             ? 'Nightly headless run ' + ago(h.now - Number(w.at)) + ': ' + w.pass + ' passed, ' + w.fail + ' failed' + (w.regressions && w.regressions.length ? ' \u2014 ' + w.regressions.length + ' regression(s): ' + w.regressions.join('; ') : '.')

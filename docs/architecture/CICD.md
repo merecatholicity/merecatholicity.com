@@ -584,6 +584,15 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 - **a cron** → `wrangler.jsonc` `triggers`, `usagecalc.ts` `cronsUsed`, a step list in
   `index.ts` run through `ops.ts` (`runChain`), `Domain.Ops.staleAfter` for its heartbeat,
   CLAUDE.md's count. Five per account on the free plan; four are in use.
+- **a worker route** (2026-09-17) → its own commit; a `ROUTE_HINTS` entry (or seed) in
+  `tests/_support/sweep.mjs` until `env_leak.test.mjs` sees it answer someone with success;
+  `node scripts/response_shapes.mjs --write` and a read of the diff; its `{ok, …}` shape in
+  `comments-worker/API.md` (a GET is held to it by `test_api_parity.py`, which is documenting
+  by calling); a list it always answers goes into `Domain.Wire`; `/security-review` before a
+  public one ships.
+- **a worker secret** → nothing to register: the egress guard scans every env string that is
+  not in `env.ts` `PUBLIC_VARS`. **A public var** → `PUBLIC_VARS` and the Env's vars section
+  (the egress test holds both to `wrangler.jsonc`).
 - **a webtest suite** → `SUITES` in `scripts/webtest_nightly.py` if it is read-only, then
   `make nightly-baseline` and commit `webtest/nightly_baseline.json`.
 - **an inline `<script>`** (there are two: the anti-flash script every page carries and

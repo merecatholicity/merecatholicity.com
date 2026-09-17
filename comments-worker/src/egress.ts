@@ -148,13 +148,16 @@ export function refusal(): Response {
   });
 }
 
-/* The answer as it would leave, or the refusal when it carries a secret. */
+/* The answer as it would leave, or the refusal when it carries a secret.
+   `inspect` (serve.ts's shape check) is handed a clean textual body it would
+   otherwise have to read a second time. */
 export async function guardResponse(
   res: Response,
   secrets: ReadonlyArray<[string, string]>,
   onBlock: (names: string[]) => void,
+  inspect?: (text: string, type: string) => void,
 ): Promise<Response> {
-  if (!secrets.length) return res;
+  if (!secrets.length && !inspect) return res;
   /* the headers of every answer (a Location, a cookie), the body of a textual one */
   const heads: string[] = [];
   res.headers.forEach((value, name) => { heads.push(name + ': ' + value); });
@@ -172,5 +175,6 @@ export async function guardResponse(
     onBlock(names);
     return refusal();
   }
+  if (inspect) inspect(text, res.headers.get('Content-Type') || '');
   return new Response(text, { status: res.status, statusText: res.statusText, headers: res.headers });
 }

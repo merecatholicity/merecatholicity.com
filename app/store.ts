@@ -193,6 +193,9 @@ export function fetchJson(
   const flying = inflight.get(key);
   if (flying) { metrics.dedup++; return flying; }
   metrics.misses++;
+  /* An answer that breaks a list the wire promises (Domain.Wire) never gets
+     here: the shell's fetch wrapper (app/wirecheck.ts) makes its json()
+     reject, so it is refused and never cached. */
   const ask = (attempt: number): Promise<any> =>
     Promise.resolve(fetcher(url, init))
       .then((r) => r.json())

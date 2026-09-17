@@ -29,6 +29,41 @@ RETIRED = {
 }
 # mounted outside the ROUTES table, by fetch() itself
 OUTSIDE_THE_TABLE = {'/api/comments/live', '/api/merecat/live'}
+SHAPES = os.path.join(ROOT, 'tests', '_support', 'response_shapes.json')
+
+
+def top_keys(shape):
+    """The top-level keys of a documented `{ok, items:[…], page}` shape."""
+    inner = shape.strip()[1:-1]
+    items, depth, cur = [], 0, ''
+    for ch in inner:
+        if ch in '{[(':
+            depth += 1
+        elif ch in '}])':
+            depth -= 1
+        if ch == ',' and depth == 0:
+            items.append(cur)
+            cur = ''
+        else:
+            cur += ch
+    items.append(cur)
+    return {m.group(1) for m in (re.match(r'\s*([A-Za-z_][A-Za-z0-9_]*)', i) for i in items) if m}
+
+
+def documented_shapes(api, path):
+    """Every `{ok…}` answer API.md gives a GET route: its own table row (a line
+    whose first cell names `GET <path>`), else a paragraph that opens with it."""
+    pat = re.compile(r'`GET ' + re.escape(path) + r'(?:\?[^`]*)?`')
+    for line in api.split('\n'):
+        if line.startswith('|') and line.count('|') > 2 and pat.search(line.split('|')[1]):
+            return re.findall(r'`(\{ok[^`]*\})`', line)
+    for para in api.split('\n\n'):
+        head = para.lstrip()[:200]
+        if pat.search(head) and head.lstrip('*').startswith('`GET'):
+            spans = re.findall(r'`(\{ok[^`]*\})`', para)
+            if spans:
+                return spans
+    return []
 
 
 def named(path, api, ticks):
@@ -62,6 +97,34 @@ class ApiParity(unittest.TestCase):
         self.assertEqual(stale, [], 'paths API.md names that no route mounts (document them as retired in RETIRED, with the reason, or remove the paragraph)')
         for p, why in RETIRED.items():
             self.assertIn(p, named_paths, p + ' is in RETIRED but API.md no longer mentions it: drop it here (' + why + ')')
+
+
+    def test_every_public_read_documents_exactly_the_keys_it_answers(self):
+        """Documenting a route means calling it (2026-09-17): API.md called
+        `/recent` "member-safe" the day before it was found serving the worker
+        env. Each GET route that answers JSON documents a `{ok, …}` shape whose
+        top-level keys are the ones the leak sweep saw it answer
+        (tests/_support/response_shapes.json, `error` aside) — a key added to
+        an answer is added here, and a key the doc names is really sent."""
+        with open(SHAPES, encoding='utf-8') as f:
+            shapes = json.load(f)
+        drift = []
+        for r in self.routes:
+            if r['m'] != 'GET':
+                continue
+            snap = shapes['GET ' + r['p']]
+            answered = {p.split(':')[0] for p in snap['json']}
+            top = {p for p in answered if '.' not in p and '[]' not in p} - {'error'}
+            if not top:
+                continue   # a binary or RSS answer: no JSON to document
+            spans = documented_shapes(self.api, r['p'])
+            if not spans:
+                drift.append('GET %s answers %s but API.md documents no {ok, …} shape' % (r['p'], sorted(top)))
+                continue
+            doc = set().union(*(top_keys(sp) for sp in spans))
+            if doc != top:
+                drift.append('GET %s: documented only %s, answered only %s' % (r['p'], sorted(doc - top), sorted(top - doc)))
+        self.assertEqual(drift, [], 'API.md and the answers disagree (node scripts/response_shapes.mjs --write, then fix the doc)')
 
 
 if __name__ == '__main__':

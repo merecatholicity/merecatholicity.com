@@ -144,6 +144,9 @@ export function seed(who) {
   const topic = Number(post.run('board:pub', null, 'A sweep topic', who.member.hash, 'the topic body', 'live', now - 100, ...fp, now - 50, 1).lastInsertRowid);
   const reply = Number(post.run('board:pub', topic, null, who.member.hash, 'a reply body', 'live', now - 50, ...fp, now - 50, 0).lastInsertRowid);
   const pageComment = Number(post.run('/credo.html', null, null, who.member.hash, 'a page comment', 'live', now - 40, ...fp, now - 40, 0).lastInsertRowid);
+  /* someone else's reply, after the member's first board visit: something unread */
+  post.run('board:pub', topic, null, who.author.hash, 'a reply from someone else', 'live', now - 35, ...fp, now - 35, 0);
+  db.prepare('INSERT INTO thread_reads (hash, topic_id, read_at) VALUES (?, 0, ?)').run(who.member.hash, now - 3600);
   const held = Number(post.run('board:pub', null, v('held post title'), who.author.hash, v('held post body'), 'pending', now - 30, ...fp, now - 30, 0).lastInsertRowid);
   const back = Number(post.run('board:adminsonly', null, v('back room title'), who.admin.hash, v('back room body'), 'live', now - 20, ...fp, now - 20, 0).lastInsertRowid);
   set.run('journal_topic', String(topic));
@@ -267,6 +270,7 @@ export const GET_MODES = [
   ['/api/comments/feed', () => ({ page: '/credo.html' })],
   ['/api/comments/feed', (ids) => ({ topic: String(ids.topic) })],
   ['/api/comments', (ids) => ({ page: 'journal:' + ids.reply })],
+  ['/api/comments/journal', () => ({ p: '1' })],
   ['/api/comments/journal', (ids) => ({ id: String(ids.reply) })],
   ['/api/comments/board/topic', (ids) => ({ id: String(ids.topic), find: String(ids.reply) })],
   ['/api/comments/search', () => ({ q: 'body', sort: 'new' })],
@@ -393,7 +397,8 @@ async function one(worker, who, vars, road) {
   } finally {
     console.log = log;
   }
-  return { ...road.meta, status: r.status, text: r.text || '', json: r.json, events: hub.events, emails: env.emails, egress: egressRows(db), said, ids };
+  const contentType = (r.res.headers.get('Content-Type') || 'none').split(';')[0].trim();
+  return { ...road.meta, status: r.status, text: r.text || '', json: r.json, contentType, events: hub.events, emails: env.emails, egress: egressRows(db), said, ids };
 }
 
 /* Every road, every identity. Returns { calls, crons, net }: a call is
