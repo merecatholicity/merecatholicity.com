@@ -140,6 +140,37 @@ resource "github_repository_environment_deployment_policy" "terraform_production
   branch_pattern = "main"
 }
 
+# The approval gate for merecat's persona and dials (2026-09-17). The librarian
+# pipeline (.github/workflows/merecat.yml) authenticates with GitHub's signed
+# OIDC token, and the worker takes a persona or dials push only from a job that
+# ran in THIS environment (the token's `environment` claim) — so persona.md and
+# config.yml reach production only after a required reviewer presses Review
+# deployments; the pipeline holds no key, and the worker none that opens this
+# door (the owner's admin key still can, by hand). Declared here
+# before any workflow names it: GitHub auto-creates a referenced environment
+# with no protection.
+resource "github_repository_environment" "librarian_config" {
+  repository          = github_repository.site.name
+  environment         = "librarian-config"
+  can_admins_bypass   = false
+  prevent_self_review = false
+
+  reviewers {
+    users = [26800291] # a-schaefers
+  }
+
+  deployment_branch_policy {
+    protected_branches     = false
+    custom_branch_policies = true
+  }
+}
+
+resource "github_repository_environment_deployment_policy" "librarian_config_main" {
+  repository     = github_repository.site.name
+  environment    = github_repository_environment.librarian_config.environment
+  branch_pattern = "main"
+}
+
 # The environment actions/deploy-pages made for itself. Declared so the whole
 # set of environments is known here; it carries no protection rules.
 resource "github_repository_environment" "github_pages" {

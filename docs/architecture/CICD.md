@@ -306,8 +306,10 @@ are on, and would refuse the push.
 | `MERECAT_INGEST_API` | **variable** (optional) | `merecat.yml` | overrides the ingest URL; default is the worker's workers.dev hostname |
 | `SITE_DISPATCH_TOKEN` | secret **in the private-shelf repository** | its `notify-site.yml` | fine-grained PAT on `merecatholicity.com` only, *Actions: write* + *Metadata: read* — enough to `gh workflow run merecat.yml`, nothing more (set 2026-09-10; dev-box copy in `ci.env`; verified: cannot see the private repo, cannot write the site's contents) |
 
-Environments: **`github-pages`** (deploy-pages' own; no rules) and
-**`terraform-production`** (§3). Repository policy (all Terraform-managed):
+Environments: **`github-pages`** (deploy-pages' own; no rules),
+**`terraform-production`** (§3) and **`librarian-config`** (2026-09-17: merecat's persona and
+dials reach production only from a `merecat.yml` job that ran in it — the owner is its required
+reviewer, main only, no admin bypass; §2.5). Repository policy (all Terraform-managed):
 `allowed_actions = selected` (GitHub-owned + verified creators), **`sha_pinning_required`**,
 secret scanning + push protection + Dependabot security updates **on**.
 

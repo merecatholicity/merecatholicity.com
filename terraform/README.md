@@ -18,9 +18,10 @@ records, the three custom rulesets (response headers, custom firewall, rate
 limiting), bot management, the six R2 buckets, the four D1 databases *as records
 that they exist*, the two Turnstile widgets, both GitHub repositories, the
 GitHub Pages configuration (`github_repository_pages`, adopted 2026-09-09 with
-a no-op plan), the two GitHub environments (`github-pages`, and the
-`terraform-production` approval gate with its main-only branch policy) and the
-two public-id Actions variables. Forty-eight resources in all.
+a no-op plan), the three GitHub environments (`github-pages`, the
+`terraform-production` approval gate with its main-only branch policy, and —
+created here on 2026-09-17 — the `librarian-config` gate for merecat's persona
+and dials) and the two public-id Actions variables. Fifty resources in all.
 
 **wrangler owns** — worker scripts and versions, all bindings, vars, secrets,
 `routes`, `triggers.crons`, and D1 migrations. None of that appears here. The
