@@ -192,6 +192,7 @@ on page one.)
 - **The classic client is split: three lazy chunks, and a reader of a KJV chapter no longer downloads the admin console (2026-09-16)** — `log/2026-09.md`
 - **A declared count is shown, never told (2026-09-16)** — `log/2026-09.md`
 - **The live hub is sharded, and every operation inside a shard is the size of its audience (2026-09-17)** — `log/2026-09.md`
+- **The rotation after the disclosure: four of six done by the agent, two need the owner (2026-09-17)** — `log/2026-09.md`
 - **The shell is an ES module: the port's frame, half of P0 (2026-09-17)** — `log/2026-09.md`
 - **The worker's handlers take the real `Env` (2026-09-17)** — `log/2026-09.md`
 - **A public endpoint served the worker's whole env for six weeks (2026-09-17)** — `log/2026-09.md`

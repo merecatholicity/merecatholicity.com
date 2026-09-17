@@ -320,6 +320,18 @@ same permissions, `gh secret set TF_GITHUB_TOKEN`, `terraform plan` locally, dis
 Terraform plan. The org must allow fine-grained PATs and not require expiry — two org
 toggles with neither a Terraform resource nor an endpoint.
 
+**Rotating the worker's own secrets** (the drill run on 2026-09-17 after the env disclosure;
+the log has the full record). Each is changed and then PROVEN, never assumed:
+
+| Secret | How it is rotated | How it is proven | Also lives in |
+|---|---|---|---|
+| `MERECAT_INGEST_KEY` | a fresh `secrets.token_urlsafe(36)`, `wrangler secret put` | the ops door: new key 200, old key 403 | `MC_INGEST_KEY` Actions secret (`gh secret set`) and `ci.env` — all three back to back |
+| `MC_TEST_BYPASS` | a fresh value, `wrangler secret put` | — (test-only) | `webtest/.testkeys` as `MC_TEST_TOKEN=TEST:<value>` |
+| `TURNSTILE_SECRET` | `POST …/challenges/widgets/<sitekey>/rotate_secret` with `invalidate_immediately: false` (the Terraform token can), then `wrangler secret put` | `siteverify` with a dummy token answers `invalid-input-response`, not `invalid-input-secret` | — |
+| `VAPID_PRIVATE_KEY` | a P-256 pair from WebCrypto (PKCS8 private, raw public), round-tripped sign→verify; the private half by `wrangler secret put`, the public half in BOTH `VAPID_PUBLIC_KEY` entries of `wrangler.jsonc`; deploy them together | `/push/vapid-key` serves the new key, and a signature from the private key verifies against it | existing subscriptions re-subscribe on the next Settings open |
+| `TURN_KEY_SECRET` (+ the `TURN_KEY_ID` var) | a new TURN key in the dashboard or with a *Realtime/Calls: Edit* token — **no CI token has it**; then delete the old key | a relay credential mints with the new pair | — |
+| `CF_USAGE_TOKEN` | a new *Account Analytics: Read* token — **no CI token can mint one**; then delete the old token | the usage page draws its bars | — |
+
 ---
 
 ## 5. Terraform — the operating procedure
