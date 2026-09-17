@@ -54,7 +54,7 @@ async function handleAdminSettings(request: Request, env: Env) {
       media_wall_image_max_bytes: 1, media_wall_video_max_bytes: 1, media_wall_audio_max_bytes: 1,
       media_board_image_max_bytes: 1, media_board_video_max_bytes: 1, media_board_audio_max_bytes: 1,
       media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1,
-      calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1,
+      calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1, turn_guard_on: 1, turn_guard_pct: 1,
       social_enabled: 1, turnstile_skip_established: 1,
       alert_email: 1, alert_email_on: 1, alert_discord_webhook: 1, alert_discord_on: 1 };
     /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
@@ -80,6 +80,9 @@ async function handleAdminSettings(request: Request, env: Env) {
         || k === 'social_enabled' || k === 'turnstile_skip_established' || k === 'comments_journal'
         || k === 'alert_email_on' || k === 'alert_discord_on') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'calls_idle_seconds') v = String(CallK.idleClampSecs(Math.floor(Number(v)) || CallK.idleDefaultSecs));
+      /* the TURN guard is default-ON: only an explicit no switches it off (Domain.Call) */
+      else if (k === 'turn_guard_on') v = (v === '0' || v === 'false') ? '0' : '1';
+      else if (k === 'turn_guard_pct') v = String(CallK.turnGuardPctFrom(v));
       else if (k === 'media_max_bytes') v = String(Math.max(65536, Math.min(100 * 1024 * 1024, Math.floor(Number(v)) || (25 * 1024 * 1024))));
       /* Per-kind caps, the recorder stop, the store budgets, the retention
          windows, and the context kinds masks all clamp/normalize through the

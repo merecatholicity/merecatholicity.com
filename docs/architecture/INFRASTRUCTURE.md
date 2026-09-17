@@ -205,5 +205,6 @@ on page one.)
 - **The category and page feeds answered 500 whenever they held a reply (2026-09-17)** — `log/2026-09.md`
 - **The Turnstile test bypass is retired, not rotated (2026-09-17)** — `log/2026-09.md`
 - **The pipeline holds no key (2026-09-17)** — `log/2026-09.md`
+- **The TURN relay switches itself off near the end of its free pool (2026-09-17)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

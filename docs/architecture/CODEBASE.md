@@ -310,7 +310,7 @@ comments-worker/src/
                  notifications/push · DM primitives · media purges · Discord · merecat · publish — references no handler
   db.ts          the row mappers (rankFor · withNames · postCountsFor) and inList
   durable.ts     BoardHub · ChatRoom (the only importer of cloudflare:workers)
-  quota.ts · usage.ts · usagecalc.ts · analytics.ts   the AI budget guard and the usage monitor
+  quota.ts · usage.ts · usagecalc.ts · analytics.ts   the AI budget guard, the usage monitor and the TURN guard
   pure.js · webpush.js   pure helpers (no imports)
 ```
 

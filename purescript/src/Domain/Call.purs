@@ -37,13 +37,17 @@ module Domain.Call
   , callLineText
   , callLineMissedFor
   , durationLabel
+  , turnGuardDefaults
+  , turnGuardOnFrom
+  , turnGuardPctFrom
+  , turnGuardStep
   ) where
 
 import Prelude
 
-import Data.Int (fromString)
+import Data.Int (fromString, toNumber)
 import Data.Maybe (Maybe(..))
-import Data.String (Pattern(..), stripPrefix)
+import Data.String (Pattern(..), stripPrefix, trim)
 
 -- | The call lifecycle. Ended carries the reason tag the UI speaks from:
 -- | "hangup" | "declined" | "busy" | "canceled" | "noanswer" | "missed"
@@ -299,3 +303,48 @@ callOutcome r
   | r.caller && (r.reason == "noanswer" || r.reason == "canceled" || r.reason == "busy") = Just "missed"
   | r.reason == "hangup" || r.reason == "failed" = Just "failed"
   | otherwise = Nothing
+
+-- | The TURN guard (2026-09-17). The relay is free for the month's first
+-- | 1,000 GB of relayed egress and then bills per GB with no cap, and the
+-- | admin's `calls_turn` switch is the only brake. So the usage check reads
+-- | the month's relayed egress and switches the relay off when it reaches
+-- | the admin's line — on by default at 95%, the AI budget guard's polarity
+-- | and clamps — and the monthly chain switches it back on when the new
+-- | month's pool opens, if the guard switched it off and it is still off.
+-- | (A leaked TURN key is spent without the worker: that one is rotated.)
+turnGuardDefaults :: { on :: Boolean, pct :: Int }
+turnGuardDefaults = { on: true, pct: 95 }
+
+-- | The switch (`turn_guard_on`): only a literal "0" is off, because an
+-- | absent row must mean guarded — unguarded is the side that bills.
+turnGuardOnFrom :: String -> Boolean
+turnGuardOnFrom v = trim v /= "0"
+
+-- | The line (`turn_guard_pct`): a whole percent from 10 to 99, anything
+-- | else the default. 100 is not a line, it is where the billing starts.
+turnGuardPctFrom :: String -> Int
+turnGuardPctFrom v = case fromString (trim v) of
+  Just n -> if n < 10 then 10 else if n > 99 then 99 else n
+  Nothing -> turnGuardDefaults.pct
+
+-- | What the guard does now, as a word:
+-- |   "trip"    — the relay is on and the month's relayed egress has reached
+-- |               the line: switch it off, and remember this month;
+-- |   "restore" — the guard switched the relay off in an EARLIER month and it
+-- |               is still off: this month's pool is fresh, switch it on;
+-- |   "forget"  — the guard switched it off, but the relay is on again (an
+-- |               admin's hand): drop the memory, switch nothing;
+-- |   "stay"    — nothing. A guard that is off does nothing at all, so an
+-- |               admin who wants the relay kept off switches the guard off.
+-- | `tripped` is the month (YYYY-MM) of the guard's own switch-off, "" for
+-- | none; `used` of `limit` is the month's meter (no limit, no reading, no
+-- | trip).
+turnGuardStep
+  :: { on :: Boolean, pct :: Int, relayOn :: Boolean, tripped :: String, month :: String, used :: Number, limit :: Number }
+  -> String
+turnGuardStep r
+  | not r.on = "stay"
+  | r.tripped /= "" && r.relayOn = "forget"
+  | r.tripped /= "" = if r.tripped /= r.month then "restore" else "stay"
+  | r.relayOn && r.limit > 0.0 && r.used * 100.0 >= r.limit * toNumber r.pct = "trip"
+  | otherwise = "stay"

@@ -81,7 +81,11 @@ else:
         # 2026-09-10: the endpoint answered a list of plain strings once; print
         # whatever shape arrives, the approval itself had already gone through.
         if not isinstance(d, dict): print('  response:', str(d)[:300]); continue
-        print(f"  {d.get('environment', {}).get('name')} -> {d.get('state') or 'reviewed'} ({d.get('url', '').split('/')[-1]})")
+        # 2026-09-17: and `environment` arrived as the environment's NAME, not
+        # an object — the traceback that followed every approval
+        env = d.get('environment')
+        name = env.get('name') if isinstance(env, dict) else env
+        print(f"  {name} -> {d.get('state') or 'reviewed'} ({str(d.get('url') or '').split('/')[-1]})")
 PY
     rm -f "$tmp.body" "$tmp.resp"
     echo "== $state: $run"

@@ -820,6 +820,15 @@ export function installAdmin(B: Boot) {
         var vcEn = checkRow(wrap, 'Voice calls are on (off refuses every call server-side and hides the Call button)', s.calls_enabled !== '0');
         var vcTurn = checkRow(wrap, 'Use the TURN relay for strict networks (~15–20% of calls need it to connect)', s.calls_turn !== '0');
         desc(wrap, 'TURN relays encrypted call traffic through Cloudflare when a direct connection is impossible. Free up to 1,000 GB per month (roughly a million relayed call-minutes); past that it bills per GB with no cap — turning it off removes ALL billing exposure, at the price of calls failing on the strictest networks (they will say so honestly).');
+        /* The TURN guard (2026-09-17, Domain.Call.turnGuardStep; usage.ts). */
+        var vcGuard = checkRow(wrap, 'Switch the relay off by itself near the end of the free pool', s.turn_guard_on !== '0');
+        var vcGuardPct = numRow(wrap, 'At this share of the month’s 1,000 GB (%, 10–99)', Number(s.turn_guard_pct) || 95, 10, 99);
+        var guardSt: { month?: string; at?: number; used?: number } | null = null;
+        try { guardSt = s.turn_guard_state ? JSON.parse(s.turn_guard_state) : null; } catch (e) { guardSt = null; }
+        var guardDay = guardSt && guardSt.month ? new Date(Number(guardSt.at) * 1000) : null;
+        desc(wrap, (guardDay && isFinite(guardDay.getTime())
+          ? 'The guard switched the relay off on ' + guardDay.toISOString().slice(0, 10) + ', at ' + (Number(guardSt!.used) / 1e9).toFixed(1) + ' GB relayed. '
+          : '') + 'The nightly usage check reads the month’s relayed traffic and, at this line, switches the relay off and tells you through Alerts; the 1st of the month switches it back on — only if the guard switched it off. Switching the guard off leaves the relay as it stands.');
         var vcIdle = checkRow(wrap, 'End a call automatically when nobody has spoken for a while (a forgotten call should not run all night)', s.calls_idle_hangup !== '0');
         var vcIdleSecs = numRow(wrap, 'Silence before auto-hangup (seconds, 15–600)', Number(s.calls_idle_seconds) || 60, 15, 600);
         desc(wrap, 'Both phones watch the call’s own audio levels — either side speaking resets the clock, and the check never leaves the devices (the server cannot hear a call).');
@@ -1048,6 +1057,8 @@ export function installAdmin(B: Boot) {
             turnstile_skip_established: tsCb.checked ? '1' : '0',
             calls_enabled: vcEn.checked ? '1' : '0',
             calls_turn: vcTurn.checked ? '1' : '0',
+            turn_guard_on: vcGuard.checked ? '1' : '0',
+            turn_guard_pct: vcGuardPct.value,
             calls_idle_hangup: vcIdle.checked ? '1' : '0',
             calls_idle_seconds: vcIdleSecs.value,
             journal_enabled: jEn.checked ? '1' : '0',

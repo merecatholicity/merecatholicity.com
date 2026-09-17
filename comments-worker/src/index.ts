@@ -215,7 +215,7 @@ import {
   handleCallPending,
   handleCallTurn,
 } from './routes/calls.ts';
-import { handleAdminUsage, runUsageCheck } from './usage.ts';
+import { handleAdminUsage, runUsageCheck, runTurnGuard, turnGuardRollover } from './usage.ts';
 
 import type { Env } from './env.ts';
 import { sessionEnv, finishSession } from './dbsession.ts';
@@ -587,8 +587,10 @@ const ROUTES: Route[] = [
 
 /* The cron chains' step lists — ops.ts runs them (each step in its own
    try/catch), the locks in tests/worker read them here. Order matters in the
-   monthly: the journal sweep right after the comment prune that may have
-   hard-deleted its articles; the avatar mirror last. */
+   monthly: the TURN guard's rollover first (the new month's pool is open, and
+   no long step should delay the relay); the journal sweep right after the
+   comment prune that may have hard-deleted its articles; the avatar mirror
+   last. */
 const HOURLY_STEPS: Step[] = [
   ['sweepExpiredDms', sweepExpiredDms],
   ['sweepWallOrphanMedia', sweepWallOrphanMedia],
@@ -601,9 +603,11 @@ const DAILY_STEPS: Step[] = [
 ];
 const USAGE_STEPS: Step[] = [
   ['runUsageCheck', runUsageCheck],
+  ['runTurnGuard', runTurnGuard],
   ['runSelfCheck', runSelfCheck],
 ];
 const MONTHLY_STEPS: Step[] = [
+  ['turnGuardRollover', turnGuardRollover],
   ['sweepExpiredDms', sweepExpiredDms],
   ['pruneIdentityIps', pruneIdentityIps],
   ['pruneComments', pruneComments],

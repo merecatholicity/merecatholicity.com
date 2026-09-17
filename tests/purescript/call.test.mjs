@@ -173,3 +173,33 @@ test('callOutcome: the server\'s one rule for what a report records', () => {
   for (const r of ['noanswer', 'canceled', 'busy', 'declined']) assert.equal(out(true, true, r), null, 'after the answer, ' + r + ' is stale');
   assert.equal(out(true, false, 'bogus'), null);
 });
+
+/* The TURN guard (2026-09-17): the relay bills past its monthly pool with no
+   cap, so the usage check switches it off at the admin's line, and the new
+   month switches it back on — only what the guard itself switched off. */
+test('turn guard: default on at 95, only a literal 0 is off, the line clamped to 10–99', () => {
+  assert.deepEqual(Call.turnGuardDefaults, { on: true, pct: 95 });
+  for (const v of ['', '1', 'true', ' 1 ', 'off', 'no']) assert.equal(Call.turnGuardOnFrom(v), true, JSON.stringify(v));
+  for (const v of ['0', ' 0 ']) assert.equal(Call.turnGuardOnFrom(v), false, JSON.stringify(v));
+  for (const [v, want] of [['', 95], ['abc', 95], ['95', 95], [' 80 ', 80], ['5', 10], ['10', 10], ['99', 99], ['100', 99], ['-3', 10], ['90.5', 95]]) {
+    assert.equal(Call.turnGuardPctFrom(v), want, JSON.stringify(v));
+  }
+});
+
+test('turn guard: trip at the line, restore in a later month, forget an admin\'s hand, do nothing when off', () => {
+  const GB = 1e9;
+  const base = { on: true, pct: 95, relayOn: true, tripped: '', month: '2026-09', used: 0, limit: 1000 * GB };
+  const step = (over) => Call.turnGuardStep({ ...base, ...over });
+  assert.equal(step({ used: 949 * GB }), 'stay', 'under the line');
+  assert.equal(step({ used: 950 * GB }), 'trip', 'at the line');
+  assert.equal(step({ used: 1400 * GB }), 'trip', 'past the pool');
+  assert.equal(step({ used: 800 * GB, pct: 80 }), 'trip', 'the admin\'s line');
+  assert.equal(step({ used: 5000 * GB, limit: 0 }), 'stay', 'no reading, no trip');
+  assert.equal(step({ used: 999 * GB, relayOn: false }), 'stay', 'an admin\'s own switch-off is not the guard\'s to undo');
+  assert.equal(step({ relayOn: false, tripped: '2026-08' }), 'restore', 'a new month: the pool is fresh');
+  assert.equal(step({ relayOn: false, tripped: '2026-09', used: 0 }), 'stay', 'the same month: it stays off');
+  assert.equal(step({ relayOn: true, tripped: '2026-09', used: 990 * GB }), 'forget', 'an admin switched it back on');
+  assert.equal(step({ relayOn: true, tripped: '2026-08' }), 'forget');
+  assert.equal(step({ on: false, used: 999 * GB }), 'stay', 'a guard that is off never trips');
+  assert.equal(step({ on: false, relayOn: false, tripped: '2026-08' }), 'stay', '...nor restores: switching it off keeps the relay as it stands');
+});

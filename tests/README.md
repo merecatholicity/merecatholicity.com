@@ -107,6 +107,10 @@ tests/
                        the one preamble and its options (gates: gated/adminGated/readLimited, and the
                        pipeline's pipelineGated — each refusal with the text the option names, an optional
                        key hashing to the empty identity as before, the block gate only when asked);
+                       the TURN guard RUN (turn_guard: the relay off at the line with the owner told and
+                       /call/turn at once STUN-only, back on only in a later month and only if the guard
+                       threw it, an admin's hand forgotten not overruled, no meter no trip, both chains,
+                       the settings door's default-on coercion);
                        the pipeline's doors keyless (pipeline: a GitHub job's OIDC token RUN through the
                        router — a forged key, a swapped payload, alg none, a refused bearer beside a good
                        key, every claim the policy reads, the key set's hour and its once-a-minute refetch;

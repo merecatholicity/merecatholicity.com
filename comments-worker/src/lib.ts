@@ -1320,6 +1320,10 @@ export const APP_SETTING_DEFAULTS = {
      past its 1,000 GB/month free pool bills per GB with no cap. */
   calls_enabled: '1',
   calls_turn: '1',
+  /* The TURN guard (2026-09-17, usage.ts turnGuard): switch the relay off at
+     this share of the month's free pool, back on when the month renews. */
+  turn_guard_on: CallK.turnGuardDefaults.on ? '1' : '0',
+  turn_guard_pct: String(CallK.turnGuardDefaults.pct),
   /* Silence auto-hangup: an Active call where NEITHER side clears the voice
      floor for this many seconds ends itself (both clients run the watch off
      /config; the default and clamp are Domain.Call's). */
