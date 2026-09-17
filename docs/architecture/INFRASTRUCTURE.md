@@ -204,5 +204,6 @@ on page one.)
 - **Nothing the worker holds in secret leaves it: the env is sealed and every answer is scanned (2026-09-17)** — `log/2026-09.md`
 - **The category and page feeds answered 500 whenever they held a reply (2026-09-17)** — `log/2026-09.md`
 - **The Turnstile test bypass is retired, not rotated (2026-09-17)** — `log/2026-09.md`
+- **The pipeline holds no key (2026-09-17)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

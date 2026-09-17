@@ -22,12 +22,21 @@
 # What it needs, and what it does NOT: the built docs/ tree (restored from the
 # Build workflow's cache — an EXACT hit is required; a fallback would ingest
 # an older site); the private shelf (a read-only deploy key, PRIVATE_SHELF_DEPLOY_KEY;
-# absent, its 31 works are skipped, never pruned); and MC_INGEST_KEY, the
-# worker's own credential for the three librarian endpoints. It needs no
-# Cloudflare token at all. It reaches the worker on its workers.dev hostname,
-# because the zone's Bot Fight Mode turns a GitHub runner away and cannot be
-# skipped on the Free plan; that hostname serves nothing but the ingest doors.
-# Never on a pull_request: no secret is present there (Principle 3).
+# absent, its 31 works are skipped, never pruned). No credential for the
+# worker (2026-09-17): each job asks GitHub for its OIDC token (`id-token:
+# write`), and the worker checks GitHub's signature and the claims —
+# this repository, main, this file, a push, schedule or dispatch
+# (comments-worker/src/oidc.ts, Domain.Pipeline). No Cloudflare token either.
+# It reaches the worker on its workers.dev hostname, because the zone's Bot
+# Fight Mode turns a GitHub runner away and cannot be skipped on the Free plan;
+# that hostname serves nothing but the pipeline doors. Never on a pull_request.
+#
+# The persona and the dials travel apart from the corpus. `config-status`
+# asks whether persona.md or config.yml differs from what the server last
+# took; when one does, `config` runs in the `librarian-config` environment —
+# it waits for a required reviewer (Review deployments, or
+# scripts/ci_approve.sh) — and the worker takes the persona and the dials
+# from no other job. `config: force` on a dispatch pushes both (the drill).
 
 name: merecat
 
@@ -55,20 +64,31 @@ on:
         description: 'Comma list of work ids to ingest, or empty for the whole manifest'
         required: false
         default: ''
+      config:
+        description: 'force = push persona.md and config.yml even if unchanged (after review); empty = only what changed'
+        required: false
+        default: ''
 
 permissions:
   contents: read
-  actions: read
 
-concurrency:
-  group: merecat
-  cancel-in-progress: false
+env:
+  MERECAT_API: ${{ vars.MERECAT_INGEST_API || 'https://merecatholicity-comments.support-609.workers.dev/api/merecat' }}
 
 jobs:
   ingest:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    # per job, not per run: a config job waiting days for its reviewer must
+    # never hold the daily ingest behind it
+    concurrency:
+      group: merecat-ingest
+      cancel-in-progress: false
     env:
       # true/false only — the secret's presence, never its value
       HAVE_SHELF_KEY: ${{ secrets.PRIVATE_SHELF_DEPLOY_KEY != '' }}
@@ -143,18 +163,74 @@ jobs:
           key: merecat-ledger-${{ github.run_id }}
           restore-keys: merecat-ledger-
 
-      - name: Ingest
+      - name: Ingest (the corpus; the job's OIDC token is its credential)
         env:
-          MC_INGEST_KEY: ${{ secrets.MC_INGEST_KEY }}
-          MERECAT_API: ${{ vars.MERECAT_INGEST_API || 'https://merecatholicity-comments.support-609.workers.dev/api/merecat' }}
           ONLY: ${{ github.event.inputs.only }}
         run: |
-          if [ -z "$MC_INGEST_KEY" ]; then
-            echo "::notice::MC_INGEST_KEY is not set — the ingest stays a hand job (make librarian) until it is"
-            exit 0
-          fi
           if [ -d librarian/private ]; then echo "private shelf present"; else echo "::notice::no private shelf: its works are skipped this run (skipping never prunes)"; fi
+          # `only` is a dispatcher's text: work ids and commas, one argument — never
+          # a way to add flags (an --api of their choosing would receive the job's token)
+          set --
+          if [ -n "$ONLY" ]; then
+            case "$ONLY" in
+              *[!a-z0-9,-]*) echo "::error::only takes work ids (a-z, 0-9, -) separated by commas"; exit 1 ;;
+            esac
+            set -- --only "$ONLY"
+          fi
           # paths are relative to librarian/, where the script runs; the cache key above names the same file from the root
-          args="--push --api $MERECAT_API --ledger .ledger.json --summary $GITHUB_STEP_SUMMARY"
-          if [ -n "$ONLY" ]; then args="$args --only $ONLY"; fi
-          cd librarian && python3 ingest.py $args
+          cd librarian && python3 ingest.py --push --api "$MERECAT_API" --ledger .ledger.json --summary "$GITHUB_STEP_SUMMARY" "$@"
+
+  config-status:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      changed: ${{ steps.status.outputs.changed }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - run: python3 -m pip install --quiet pyyaml
+
+      - name: Do persona.md or config.yml differ from the server?
+        id: status
+        run: cd librarian && python3 ingest.py --config-status --api "$MERECAT_API" --summary "$GITHUB_STEP_SUMMARY"
+
+  config:
+    needs: config-status
+    if: needs.config-status.outputs.changed == 'true' || github.event.inputs.config == 'force'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # the reviewer's gate: the worker takes a persona or dials push only from
+    # a job whose token names this environment (terraform/github.tf)
+    environment: librarian-config
+    permissions:
+      contents: read
+      id-token: write
+    # a newer change supersedes one still waiting for its reviewer
+    concurrency:
+      group: merecat-config
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - run: python3 -m pip install --quiet pyyaml
+
+      - name: Push the persona and the dials (approved)
+        env:
+          FORCE: ${{ github.event.inputs.config == 'force' && '--force' || '' }}
+        run: cd librarian && python3 ingest.py --config --api "$MERECAT_API" --summary "$GITHUB_STEP_SUMMARY" $FORCE

@@ -51,7 +51,10 @@ tests/
   _support/sweep.mjs   the leak sweep (2026-09-17): every road as anon/member/outsider/admin against a fresh ledger
                        seeded with SENTINELS — every non-public env string, every private column, each with the
                        readers allowed to see it — plus ROUTE_HINTS (the bodies a success path needs), the
-                       workers.dev doors, /@handle, the upgrades and the four crons; runSweep({ only, wrap })
+                       workers.dev doors (anonymous, admin, and as the GitHub job each admits), /@handle, the
+                       upgrades and the four crons; runSweep({ only, wrap })
+  _support/github_oidc.mjs  a stand-in GitHub OIDC issuer: its own RSA key, the key set it serves at GitHub's URL,
+                       the claims a merecat.yml / ops-watch.yml job is given, signed (worker/pipeline, the sweep)
   _support/env_flow.mjs  the env-flow law as a function: the env reaches only a parameter named env (worker/env_leak)
   _support/shapes.mjs  an answer read into key paths and types; the snapshot and its diff (worker/response_shapes)
   _support/response_shapes.json  every route's committed answer shape — `node scripts/response_shapes.mjs --write`,
@@ -101,9 +104,14 @@ tests/
                        through exactly the channels the settings open and reporting each refusal (alerts);
                        the member directory hiding the test and probe identities (hidden_hashes: the secret's
                        and the var's lists joined, whole hashes only, run through the door);
-                       the one preamble and its options (gates: gated/adminGated/readLimited/ingestGated —
-                       each refusal with the text the option names, an optional key hashing to the empty
-                       identity as before, the block gate only when asked);
+                       the one preamble and its options (gates: gated/adminGated/readLimited, and the
+                       pipeline's pipelineGated — each refusal with the text the option names, an optional
+                       key hashing to the empty identity as before, the block gate only when asked);
+                       the pipeline's doors keyless (pipeline: a GitHub job's OIDC token RUN through the
+                       router — a forged key, a swapped payload, alg none, a refused bearer beside a good
+                       key, every claim the policy reads, the key set's hour and its once-a-minute refetch;
+                       the persona and dials only from the reviewed job, the ingest job's stamp, the ops
+                       door's two callers, the static key's last deploy);
                        one road registering a member and the directory listing members only (directory:
                        a keyed read leaves the row and is spared, a nick, a live post or a published key
                        lists it, a bare row or a deleted post does not);
@@ -120,7 +128,10 @@ tests/
   py/                  the Python build tooling: nav, the content pages' frontmatter, the converters,
                        slug parity, the docs/ source-vs-generated split and its orphans, the version
                        stamp, the boot splash, the baked partials, the librarian's sources and ingest
-                       ledger, the writings detector behind the comments switches, the corpus sources' manifest (sources_manifest: every body and
+                       ledger (and its credential: the job's OIDC token, renewed, masked, no key in the body;
+                       the persona and dials pushed apart, only what changed), the pipeline's workflows
+                       (pipeline_workflows: no stored key, a token grant only on the jobs that call a door,
+                       no pull request, the reviewer's environment and its separate queue), the writings detector behind the comments switches, the corpus sources' manifest (sources_manifest: every body and
                        source under resources/ listed and untracked, every shard a published asset, a present
                        file matching its sha), the CSP's hashes (csp: the
                        ruleset carries exactly the two inline scripts' hashes from scripts/csp_hashes.py, names

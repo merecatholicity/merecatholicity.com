@@ -10,13 +10,15 @@
 # condition, no plausible backup object). GitHub's own failed-run email is
 # the alert that needs no worker at all.
 #
-# The door is keyed like the librarian's pipeline (MC_INGEST_KEY, the same
-# secret merecat.yml uses — no new credential) and is reached on the worker's
-# workers.dev hostname: the zone's Bot Fight Mode turns a GitHub runner away
-# and cannot be skipped on the Free plan; that hostname serves nothing but the
-# ingest doors, each of which demands the key. Never on a pull_request: no
-# secret is present there (CICD.md Principle 3). `host` exists for the drill:
-# point it at nowhere and the run must go red.
+# The job holds no key (2026-09-17): it asks GitHub for its OIDC token and the
+# worker checks GitHub's signature and the claims — this repository, main,
+# this file (comments-worker/src/oidc.ts, Domain.Pipeline's `probe` door,
+# which reads the health and nothing else). The door is reached on the
+# worker's workers.dev hostname: the zone's Bot Fight Mode turns a GitHub
+# runner away and cannot be skipped on the Free plan; that hostname serves
+# nothing but the pipeline doors. Never on a pull_request. `host` exists for
+# the drill: point it at nowhere and the run must go red (the token goes to
+# the worker's own host only).
 name: ops-watch
 
 on:
@@ -40,20 +42,32 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Ask the worker how it is
         env:
-          MC_INGEST_KEY: ${{ secrets.MC_INGEST_KEY }}
+          WORKER: https://merecatholicity-comments.support-609.workers.dev
           HOST: ${{ github.event.inputs.host || 'https://merecatholicity-comments.support-609.workers.dev' }}
         run: |
-          if [ -z "$MC_INGEST_KEY" ]; then
-            echo "::error::MC_INGEST_KEY is not set — the probe cannot open the door"; exit 1
+          tok=$(curl -sS -m 30 -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=merecatholicity-comments" \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["value"])') || tok=''
+          if [ -z "$tok" ]; then
+            echo "::error::GitHub gave the job no OIDC token (the workflow needs id-token: write)"; exit 1
+          fi
+          echo "::add-mask::$tok"
+          auth="Authorization: Bearer $tok"
+          if [ "$HOST" != "$WORKER" ]; then
+            auth="X-Drill: the token goes to the worker's host only"
+            echo "::notice::the host is not the worker's: asking without the token (a drill)"
           fi
           code=$(curl -s -m 30 -o /tmp/health.json -w '%{http_code}' -X POST "$HOST/api/comments/ops/report" \
-            -H 'Content-Type: application/json' --data-binary "{\"key\":\"$MC_INGEST_KEY\",\"probe\":true}" || true)
-          echo "POST $HOST/api/comments/ops/report -> $code"
+            -H 'Content-Type: application/json' -H "$auth" --data-binary '{"probe":true}' || true)
+          echo "POST <host>/api/comments/ops/report -> $code"
           if [ "$code" != "200" ]; then
-            echo "::error::the door did not answer 200 (got $code) — the worker is unreachable or the key is refused"; exit 1
+            echo "::error::the door did not answer 200 (got $code) — the worker is unreachable or refused the job's token"; exit 1
           fi
           python3 - <<'PY'
           import json, sys, time

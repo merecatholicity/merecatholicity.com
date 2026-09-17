@@ -266,9 +266,9 @@ brings its test in the same change; never delete a test to go green.
   D1 records, the Turnstile widgets, both GitHub repos, Pages, the environments, the Actions policy
   and variables; state is in R2 (`merecatholicity-tfstate`, unmanaged, SECRET). It cannot hold
   Vectorize, the R2 custom domains, the TURN key, or Email Routing. wrangler owns what a deploy rewrites.
-- **Credentials**: three Cloudflare account tokens (terraform / site / workers), their R2 pair, one
-  fine-grained GitHub PAT — inventory and rotation in CICD §4. **History** was rewritten 2026-09-09
-  (554 → 153 MB); every earlier sha is gone — re-clone.
+- **Credentials**: three Cloudflare tokens (terraform / site / workers), their R2 pair, one GitHub
+  PAT (CICD §4); the pipeline holds none — GitHub OIDC (`oidc.ts`), and merecat's persona and dials
+  come only from the reviewed `librarian-config` job. **History** rewritten 2026-09-09 — re-clone.
 
 ## The long-form reference
 

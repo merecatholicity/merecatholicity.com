@@ -349,12 +349,14 @@ comments-backup-check:
 	@test -n "$(FILE)" || { echo "usage: make comments-backup-check FILE=path/to/comments-YYYY-MM-DD.sql.gz"; exit 2; }
 	python3 scripts/backup_check.py "$(FILE)"
 
-# Rebuild and push everything merecat (the librarian bot) knows: the corpus
-# chunks, the persona, and the config, all from librarian/. Incremental, so
-# it is cheap to run after any content edit; see librarian/README.md.
+# The hand road for what merecat (the librarian bot) knows: the corpus chunks,
+# then the persona and the dials — whichever file differs from the server —
+# all from librarian/. It needs an ADMIN's key (MC_ADMIN_KEY or librarian/.key);
+# the pipeline is `gh workflow run merecat.yml`, which needs none (2026-09-17).
+# Incremental, so it is cheap after any content edit; see librarian/README.md.
 .PHONY: librarian
 librarian:
-	cd librarian && python ingest.py --push --ledger .ledger.json
+	cd librarian && python ingest.py --push --ledger .ledger.json && python ingest.py --config
 
 # Sweep local build detritus: the LaTeX aux/log churn in book/ and resources/,
 # the temp html-tex, and Python bytecode. Never touches committed sources, the

@@ -3,20 +3,26 @@
 
 Reads works.yml (what the bot knows), persona.md (how it speaks), and
 config.yml (its dials), turns every listed work into anchored chunks, and
-pushes the lot to the admin-keyed /api/merecat endpoints. Incremental: a
+pushes them to the worker's /api/merecat pipeline doors. Incremental: a
 work is re-pushed only when its source bytes, its manifest entry, or this
 parser's version changed (the content hash on the server is the state, so
 an interrupted push simply resumes on the next run). Works removed from
 works.yml are pruned from the server.
 
   python ingest.py                  # dry run: parse, count, validate anchors
-  python ingest.py --push           # push config + persona + changed works
+  python ingest.py --push           # push the changed works (never the persona or dials)
   python ingest.py --push --tiers 1,2
   python ingest.py --push --only anf01,anf02
   python ingest.py --budget-rows 90000   # stop before D1's daily write cap
+  python ingest.py --config-status  # do persona.md / config.yml differ from the server?
+  python ingest.py --config         # push whichever of the two differs (--force: both)
 
-The admin key (the raw board key of an admin identity) comes from the
-MC_ADMIN_KEY environment variable or the git-ignored file librarian/.key.
+The persona and the dials travel apart from the corpus (2026-09-17): in the
+pipeline they are pushed by merecat.yml's `config` job, which runs in the
+`librarian-config` environment and so waits for a reviewer; the worker takes
+them from no other job. The credential (pipeline_auth): in a GitHub Actions
+job, the job's own OIDC token; at a keyboard, an admin's raw board key from
+MC_ADMIN_KEY or the git-ignored file librarian/.key.
 
 Anchors are the load-bearing part: every chunk carries the URL fragment a
 citation lands on. Pandoc pages keep their static heading ids; paragraph
@@ -26,6 +32,7 @@ THIS WALK MUST MIRROR deeplink.js; change them together. Bible anchors come
 straight from kjv.json/dr.json the way bible-reader.js resolves them.
 """
 import argparse
+import base64
 import html
 import hashlib
 import json
@@ -70,6 +77,7 @@ PARSER_VERSION = "1"          # bump to force a full re-ingest
 TARGET = 350                  # words a chunk aims for
 HARD_MAX = 480                # words a chunk never exceeds
 API_DEFAULT = "https://merecatholicity.com/api/merecat"
+OIDC_AUDIENCE = "merecatholicity-comments"   # Domain.Pipeline.audience
 VEC_BUDGET = 4800             # free Vectorize: ~4,880 vectors at 1024 dims
 
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
@@ -478,7 +486,7 @@ def build(entry):
     return chunks, bad
 
 
-def write_summary(path, tally, spent, budget, picked, persona_pushed):
+def write_summary(path, tally, spent, budget, picked):
     """A markdown account of the run, appended to `path` (the CI step summary)."""
     lines = ["## merecat ingest", ""]
     lines.append(f"- works considered: **{picked}** — pushed **{len(tally['pushed'])}**, "
@@ -486,7 +494,7 @@ def write_summary(path, tally, spent, budget, picked, persona_pushed):
                  f"waiting on their build {tally['waiting']}, pruned {len(tally['pruned'])}")
     lines.append(f"- estimated D1 rows written: **{spent}** of the {budget} budget"
                  + (f" — **stopped before `{tally['stopped']}`; the next run resumes**" if tally["stopped"] else ""))
-    lines.append("- persona.md: " + ("pushed (it changed)" if persona_pushed else "left as it stands on the server"))
+    lines.append("- persona.md and config.yml: the `config` job's (it waits for a reviewer when either changed)")
     if tally["pushed"]:
         lines.append("")
         lines.append("| pushed | chunks |")
@@ -581,38 +589,74 @@ def ledger_lookup(ledger, wid, sig):
 
 
 # --- push -------------------------------------------------------------------
-def push_key():
-    """The credential the push carries. The pipeline holds MC_INGEST_KEY — the
-    worker's MERECAT_INGEST_KEY, honoured by the three librarian endpoints and
-    nothing else, so a leaked runner secret could at worst rewrite the shelf,
-    never touch the platform. A person at the keyboard uses the admin key
-    (MC_ADMIN_KEY, or librarian/.key)."""
-    key = os.environ.get("MC_INGEST_KEY", "") or os.environ.get("MC_ADMIN_KEY", "")
-    keyfile = os.path.join(HERE, ".key")
-    if not key and os.path.exists(keyfile):
-        key = open(keyfile).read().strip()
-    if not key:
-        sys.exit("no key: set MC_INGEST_KEY (the pipeline), MC_ADMIN_KEY, or write "
-                 "librarian/.key (your board key, Show my key on the Community page)")
-    return key
+class PipelineAuth:
+    """The credential every push carries (2026-09-17).
+
+    In a GitHub Actions job granted `id-token: write`, the job's OIDC token:
+    asked of the runner with the worker's audience, sent as a Bearer header,
+    and asked for again a minute before it expires (an ingest outlives one).
+    The worker holds no key for the pipeline; it checks GitHub's signature and
+    the claims (comments-worker/src/oidc.ts, Domain.Pipeline). Anywhere else,
+    an admin's raw board key, in the body: MC_ADMIN_KEY, or librarian/.key."""
+
+    def __init__(self, env=None):
+        env = os.environ if env is None else env
+        self.url = env.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
+        self.grant = env.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+        self.in_actions = env.get("GITHUB_ACTIONS", "") == "true"
+        self.token, self.exp = "", 0
+        self.key = ""
+        if self.oidc:
+            return
+        self.key = env.get("MC_ADMIN_KEY", "")
+        keyfile = os.path.join(HERE, ".key")
+        if not self.key and os.path.exists(keyfile):
+            self.key = open(keyfile).read().strip()
+        if not self.key:
+            sys.exit("no credential: in the pipeline the job needs `id-token: write` "
+                     "(gh workflow run merecat.yml runs it there); by hand, set MC_ADMIN_KEY "
+                     "or write librarian/.key (an admin's board key, Show my key on the Community page)")
+
+    @property
+    def oidc(self):
+        return bool(self.url and self.grant)
+
+    def _token(self):
+        if self.token and self.exp - time.time() > 60:
+            return self.token
+        sep = "&" if "?" in self.url else "?"
+        req = urllib.request.Request(self.url + sep + "audience=" + OIDC_AUDIENCE,
+                                     headers={"Authorization": "bearer " + self.grant,
+                                              "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            value = json.loads(r.read())["value"]
+        if self.in_actions:
+            print("::add-mask::" + value, flush=True)
+        payload = value.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+        self.token, self.exp = value, int(claims.get("exp") or 0)
+        return value
+
+    def sign(self, body):
+        """The headers and the body one request carries."""
+        if self.oidc:
+            return {"Authorization": "Bearer " + self._token()}, dict(body)
+        return {}, dict(body, key=self.key)
 
 
-def admin_key():
-    return push_key()
-
-
-def post(api, path, body, tries=6):
+def post(api, path, body, auth, tries=6):
     # the zone's bot protection challenges the default python-urllib agent
     # (curl passes), so wear a plain tool UA. Ask nicely: on any refusal or
     # hiccup, back off with growing patience (up to two minutes) before
     # giving up — transient throttles pass if we stop knocking for a while,
     # and a genuinely failed run just resumes on the next invocation.
-    req = urllib.request.Request(api + path, data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json",
-                                          "User-Agent": "curl/8.14.1"})
     waits = [3, 9, 27, 60, 120]
     for i in range(tries):
         try:
+            headers, signed = auth.sign(body)
+            req = urllib.request.Request(api + path, data=json.dumps(signed).encode(),
+                                         headers={"Content-Type": "application/json",
+                                                  "User-Agent": "curl/8.14.1", **headers})
             with urllib.request.urlopen(req, timeout=300) as r:
                 out = json.loads(r.read())
             if not out.get("ok"):
@@ -625,24 +669,90 @@ def post(api, path, body, tries=6):
             time.sleep(waits[i])
 
 
-def push_work(api, key, wid, entry, chunks, chash):
+def config_files():
+    """persona.md and config.yml as pushed, each with the hash of its bytes."""
+    with open(os.path.join(HERE, "persona.md"), encoding="utf-8") as f:
+        persona = f.read()
+    with open(os.path.join(HERE, "config.yml"), "rb") as f:
+        raw = f.read()
+    return {"persona": persona, "persona_hash": hashlib.sha256(persona.encode()).hexdigest(),
+            "config": yaml.safe_load(raw) or {}, "config_hash": hashlib.sha256(raw).hexdigest()}
+
+
+def config_changes(roster, files):
+    """Which of the two files differ from what the server last took."""
+    return {"persona": files["persona_hash"] != roster.get("persona_file_hash", ""),
+            "dials": files["config_hash"] != roster.get("config_file_hash", "")}
+
+
+def config_body(changes, files, force=False):
+    """The /config body for what changed (both, forced) — None when nothing did.
+    A file's hash rides with it, so the server remembers what it took; the
+    dials ride only with config.yml, so a dashboard edit stands until the FILE
+    is next touched, as the persona's always has."""
+    body = {}
+    if force or changes["dials"]:
+        body["config"] = dict(files["config"], config_file_hash=files["config_hash"])
+    if force or changes["persona"]:
+        body["persona"] = files["persona"]
+        body["config"] = dict(body.get("config", {}), persona_file_hash=files["persona_hash"])
+    return body or None
+
+
+def write_output(name, value):
+    path = os.environ.get("GITHUB_OUTPUT", "")
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"{name}={value}\n")
+
+
+def push_work(api, auth, wid, entry, chunks, chash):
     vec = bool(entry.get("vectorize"))
     store = entry.get("store", "")
     workmeta = {"id": wid, "title": entry["title"], "url": entry["url"],
                 "tier": entry["tier"], "kind": entry["kind"]}
-    post(api, "/ingest", {"key": key, "mode": "begin", "work": workmeta, "store": store})
+    post(api, "/ingest", {"mode": "begin", "work": workmeta, "store": store}, auth)
     # modest bodies: the free plan's per-request CPU allowance is small, and
     # JSON parsing is the ingest endpoint's main CPU cost
     batch = 100 if vec else 250
     for i in range(0, len(chunks), batch):
         rows = [{"cid": f"{wid}#{i + j}", "seq": i + j, **c}
                 for j, c in enumerate(chunks[i:i + batch])]
-        post(api, "/ingest", {"key": key, "mode": "append", "work": workmeta,
-                              "chunks": rows, "vectorize": vec, "store": store})
+        post(api, "/ingest", {"mode": "append", "work": workmeta,
+                              "chunks": rows, "vectorize": vec, "store": store}, auth)
         print(f"    {min(i + batch, len(chunks))}/{len(chunks)}", flush=True)
         time.sleep(0.3)
-    post(api, "/ingest", {"key": key, "mode": "end",
-                          "work": {"id": wid, "hash": chash, "chunks": len(chunks)}, "store": store})
+    post(api, "/ingest", {"mode": "end",
+                          "work": {"id": wid, "hash": chash, "chunks": len(chunks)}, "store": store}, auth)
+
+
+def run_config(args):
+    """--config-status / --config: the persona and the dials, apart from the corpus."""
+    auth = PipelineAuth()
+    roster = post(args.api, "/works", {}, auth)
+    files = config_files()
+    changes = config_changes(roster, files)
+    changed = [name for name, moved in (("persona.md", changes["persona"]), ("config.yml", changes["dials"])) if moved]
+    if args.config_status:
+        write_output("changed", "true" if changed else "false")
+        line = ("differ from the server: " + ", ".join(changed) + " — the config job waits for a reviewer"
+                if changed else "match the server: nothing for a reviewer")
+        print("persona.md / config.yml " + line)
+        if args.summary:
+            with open(args.summary, "a", encoding="utf-8") as f:
+                f.write("## merecat config\n\n- persona.md / config.yml " + line + "\n")
+        return 0
+    body = config_body(changes, files, force=args.force)
+    if body is None:
+        print("persona.md and config.yml match the server: nothing pushed")
+        return 0
+    out = post(args.api, "/config", body, auth)
+    what = ("persona.md, " if "persona" in body else "") + ("config.yml" if "config_file_hash" in body["config"] else "")
+    print(f"pushed {what.rstrip(', ')} ({out.get('set')} values) — this overwrites any dashboard edit of the same")
+    if args.summary:
+        with open(args.summary, "a", encoding="utf-8") as f:
+            f.write(f"## merecat config\n\n- pushed {what.rstrip(', ')}" + (" (forced)" if args.force else "") + "\n")
+    return 0
 
 
 def main():
@@ -657,7 +767,14 @@ def main():
                     help="JSON memory of parsed sources (skips the parse of an unchanged work)")
     ap.add_argument("--summary", default="",
                     help="append a markdown summary of the run to this file (a CI step summary)")
+    ap.add_argument("--config-status", action="store_true",
+                    help="say whether persona.md or config.yml differs from the server (GITHUB_OUTPUT changed=)")
+    ap.add_argument("--config", action="store_true",
+                    help="push persona.md and/or config.yml, whichever differs from the server")
+    ap.add_argument("--force", action="store_true", help="with --config: push both files")
     args = ap.parse_args()
+    if args.config_status or args.config:
+        return run_config(args)
     ledger = load_ledger(args.ledger)
     tally = {"pushed": [], "unchanged": 0, "reused": 0, "waiting": 0, "pruned": [], "stopped": ""}
 
@@ -709,21 +826,10 @@ def main():
     # vectorize may ride any room since the semantic leg hydrates across
     # all three databases (RV 15); the only wall is the vector budget below.
 
-    key = push_key()
-    roster = post(args.api, "/works", {"key": key})
-    # The dials ride every push. The persona rides only when persona.md
-    # itself changed since its last push, so an on-the-fly edit made in the
-    # merecat administration page stands until the FILE is next touched.
-    persona = open(os.path.join(HERE, "persona.md"), encoding="utf-8").read()
-    pfh = hashlib.sha256(persona.encode()).hexdigest()
-    cfg = yaml.safe_load(open(os.path.join(HERE, "config.yml")))
-    body = {"key": key, "config": cfg}
-    if pfh != roster.get("persona_file_hash"):
-        body["persona"] = persona
-        body["config"] = dict(cfg, persona_file_hash=pfh)
-        print("persona.md changed: pushing it (this overwrites any dashboard edit)")
-    post(args.api, "/config", body)
-    print("config pushed" + ("" if "persona" in body else " (persona left as it stands on the server)"))
+    # The corpus only: the persona and the dials are the config job's
+    # (run_config), which the worker admits only after a reviewer.
+    auth = PipelineAuth()
+    roster = post(args.api, "/works", {}, auth)
     server = {w["id"]: w for w in roster["works"]}
     # early warning on D1's 500 MB per-database cap: the database runs about
     # 2.1x the stored text (search index and btrees); past ~450 MB projected,
@@ -743,8 +849,8 @@ def main():
     if not only and not tiers:
         for wid in [w for w in server if w not in manifest]:
             print(f"pruning {wid} (no longer in works.yml)")
-            post(args.api, "/ingest", {"key": key, "mode": "delete",
-                                       "work": {"id": wid}})
+            post(args.api, "/ingest", {"mode": "delete",
+                                       "work": {"id": wid}}, auth)
             tally["pruned"].append(wid)
 
     vec_total = sum(server[w]["chunks"] for w in server
@@ -783,7 +889,7 @@ def main():
                   f"daily budget ({spent} spent). Re-run tomorrow to resume.")
             tally["stopped"] = wid
             break
-        push_work(args.api, key, wid, entry, chunks, chash)
+        push_work(args.api, auth, wid, entry, chunks, chash)
         spent += est
         tally["pushed"].append((wid, len(chunks)))
         save_ledger(args.ledger, ledger)   # survive an interruption mid-run
@@ -798,11 +904,11 @@ def main():
     stamp = {"last_ingest": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
              "last_ingest_by": os.environ.get("GITHUB_RUN_ID", "local")}
     try:
-        post(args.api, "/config", {"key": key, "config": stamp}, tries=2)
+        post(args.api, "/config", {"config": stamp}, auth, tries=2)
     except Exception as e:
         print(f"(could not stamp last_ingest: {e})")
     if args.summary:
-        write_summary(args.summary, tally, spent, args.budget_rows, len(picked), "persona" in body)
+        write_summary(args.summary, tally, spent, args.budget_rows, len(picked))
 
 
 if __name__ == "__main__":

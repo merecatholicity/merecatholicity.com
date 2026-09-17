@@ -11,14 +11,15 @@ on the Cloudflare free tier. This directory is its whole mind:
 | `persona.md` | the system prompt: voice, rules, how it argues |
 | `config.yml` | model id, daily caps, retrieval dials, temperature, the nine band weights (the reasoning dials and the AI budget guard are set on the merecat admin page) |
 | `extra/`     | drop-in folder for AI-only content (plain .txt/.md) |
-| `ingest.py`  | builds chunks from the sources and pushes everything |
-| `.key`       | your admin board key (git-ignored; or use `MC_ADMIN_KEY`) |
+| `ingest.py`  | builds chunks from the sources and pushes them; pushes the persona and dials apart (`--config`) |
+| `.key`       | your admin board key, for the hand road (git-ignored; or use `MC_ADMIN_KEY`) |
 
 ## Growing the bot
 
 **Add content.** Add one entry to `works.yml` pointing at a site page (or
 drop a `.txt`/`.md` into `extra/` and list it with `kind: text`), pick its
-tier, then from the repo root:
+tier, then commit and push — `merecat.yml` ingests it against the freshly built
+site. Or, by hand with an admin's key, from the repo root:
 
     make librarian
 
@@ -27,11 +28,17 @@ source bytes or manifest entry changed are re-sent, so re-running is cheap
 and an interrupted run resumes where it left off. Removing an entry from
 `works.yml` prunes it from the bot on the next full push.
 
-**Change the voice or rules.** Edit `persona.md`, commit, push — `merecat.yml` runs the ingest against the freshly built site (or run `make librarian` by hand).
-No redeploy: the worker reads the persona from its database (isolates pick
+**Change the voice or rules.** Edit `persona.md`, commit, push. `merecat.yml`
+sees the file differ from what the server last took, and its `config` job
+**waits for the owner's review** (the `librarian-config` environment: *Review
+deployments* on the run, or `scripts/ci_approve.sh <run-id> --approve "why"`);
+once approved it pushes the persona. The worker takes a persona or dials push
+from no other job — the pipeline holds no key, it proves itself with GitHub's
+OIDC token (2026-09-17). By hand, `make librarian` pushes it with an admin's
+key. No redeploy: the worker reads the persona from its database (isolates pick
 the change up within five minutes).
 
-**Change the model, caps, temperature or band weights.** Edit `config.yml`, commit, push (or `make librarian`). The reasoning dials and the AI budget guard are set on the merecat admin page.
+**Change the model, caps, temperature or band weights.** Edit `config.yml`, commit, push — the same reviewed `config` job pushes the dials (or `make librarian`). They travel only when the FILE changes, so an edit made on the merecat admin page stands until `config.yml` is next touched, as a persona edit always has. The reasoning dials and the AI budget guard are set on the merecat admin page.
 The default model is the strongest answer-per-neuron on the free Workers AI
 catalog; `config.yml` explains the trade if you want a bigger one.
 
@@ -96,6 +103,13 @@ and it resumes from the works that didn't finish. First-time full corpus:
     python ingest.py --push --tiers 1,2 # day one: positions + the shelf
     python ingest.py --push             # following days: the deep corpus,
                                         # rerun until "done" lists no stops
+    python ingest.py --config-status    # do persona.md / config.yml differ from the server?
+    python ingest.py --config [--force] # push the one that differs (or both)
+
+The credential: inside a GitHub Actions job granted `id-token: write`, the
+job's OIDC token (asked for with the worker's audience and renewed before it
+lapses); anywhere else, an admin's board key (`MC_ADMIN_KEY` or `.key`). The
+corpus run never pushes the persona or the dials.
 
 ## The server side
 

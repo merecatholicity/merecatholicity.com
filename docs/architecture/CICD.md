@@ -217,30 +217,55 @@ manifest, persona, dials), `content/**`, `resources/**`, `book/**`, `partials/**
 `scripts/content.py`, `scripts/nav.py`, the workflow itself; `schedule` daily at 04:10 UTC
 (finishes a budgeted ingest, prunes works that left the manifest, takes the private shelf);
 `workflow_dispatch` (`reason`, `only`) — which is how the private shelf's own pushes arrive
-(a one-line workflow in that repository runs `gh workflow run merecat.yml`). Never on a
-`pull_request`. *Concurrency:* `merecat`, never cancelled. *Permissions:* `contents: read`,
-`actions: read` (to find the Build).
+(a one-line workflow in that repository runs `gh workflow run merecat.yml`), and `config:
+force` for the approval drill. Never on a `pull_request`. *Concurrency:* per job —
+`merecat-ingest`, never cancelled, and `merecat-config`, where a newer change supersedes one
+still waiting — so a reviewer's wait never holds the daily ingest. *Permissions:* `contents:
+read` for the run; `actions: read` (to find the Build) and `id-token: write` on the jobs that
+call the worker.
+
+*The credential (2026-09-17): none is stored.* Each job that calls the worker asks GitHub for
+its OIDC token (audience `merecatholicity-comments`) and sends it as `Authorization: Bearer`;
+the worker checks GitHub's signature (`comments-worker/src/oidc.ts` — GitHub's published keys,
+cached an hour, fail closed) and then the claims (`Domain.Pipeline`: this repository by its
+ids, `main`, a push/schedule/dispatch, a GitHub-hosted runner, this workflow file, and — for
+the persona and the dials — the `librarian-config` environment). The static key it replaced
+(`MC_INGEST_KEY`, the worker's `MERECAT_INGEST_KEY`, published by the env disclosure) is
+honoured for the one deploy the move takes, then deleted (§4).
 
 *The `ingest` job:* wait for this commit's **Build** to finish (a schedule/dispatch takes the
 newest successful Build on `main` and checks out its sha); restore the built site from the
 `site-2-<sha>` cache — **an exact hit is required**, a fallback would ingest an older site;
 `git checkout -- docs` (the commit wins); clone the private shelf with the read-only deploy
 key (absent → its works are skipped, and skipping never prunes); restore the parse ledger
-(`merecat-ledger-*`); run `librarian/ingest.py --push --ledger --summary` with
-`MC_INGEST_KEY` against **the worker's workers.dev hostname** (`MERECAT_INGEST_API`
-variable, default `https://merecatholicity-comments.support-609.workers.dev/api/merecat`)
-— the zone's Bot Fight Mode turns a GitHub runner away and cannot be skipped on the Free
-plan, and that hostname serves nothing but the three librarian endpoints, each behind the
-ingest key; save the ledger. The job summary says what was pushed, skipped, pruned, and
-whether the D1 row budget stopped it (the next run resumes). **It needs no Cloudflare token.**
-Without `MC_INGEST_KEY` it exits 0 with a notice: the shelf stays a hand job (`make
-librarian`) until the secret exists.
+(`merecat-ledger-*`); run `librarian/ingest.py --push --ledger --summary` against **the
+worker's workers.dev hostname** (`MERECAT_INGEST_API` variable, default
+`https://merecatholicity-comments.support-609.workers.dev/api/merecat`) — the zone's Bot Fight
+Mode turns a GitHub runner away and cannot be skipped on the Free plan, and that hostname
+serves nothing but the pipeline doors; save the ledger. The corpus only: it stamps
+`last_ingest` and never pushes the persona or the dials (the worker would refuse them from this
+job). The job summary says what was pushed, skipped, pruned, and whether the D1 row budget
+stopped it (the next run resumes). **It needs no Cloudflare token.**
+
+*The `config-status` job:* `ingest.py --config-status` — do `persona.md` or `config.yml` differ
+from the file hashes the server last took (`/works` answers `persona_file_hash` and
+`config_file_hash`)? Its output `changed` decides the next job.
+
+*The `config` job:* when `changed` (or on a dispatch with `config: force`), in the
+**`librarian-config`** environment, so it **waits for the owner's review** — *Review
+deployments* in the browser, or `scripts/ci_approve.sh <run-id> --approve "why"` after reading
+the two files' diff — then `ingest.py --config [--force]` pushes whichever file changed, with
+its hash. The dials travel only when `config.yml` changes (before 2026-09-17 they rode every
+ingest), so a dashboard edit stands until the file is next touched, as the persona's always
+has. The hand road, `make librarian`, runs both halves with an admin's key.
 
 ### 2.6 `ops-watch.yml` — **ops-watch** (the watchdog's outside leg, since 2026-09-16)
 
 Daily at 03:45 UTC (half an hour after the worker's backup) and on dispatch. One step: POST
 `{probe: true}` to `/api/comments/ops/report` on the worker's **workers.dev** hostname with
-`MC_INGEST_KEY` (the same secret merecat.yml holds — nothing new), print the heartbeat table
+the job's OIDC token (no stored credential since 2026-09-17: `Domain.Pipeline`'s `probe` door,
+which reads the health and nothing else; the token goes to the worker's own host only, so the
+drill asks without it), print the heartbeat table
 into the job summary, and **fail the run when `health.ok` is false** (a stale cron heartbeat, an
 open alert condition, no plausible backup object for today or yesterday). GitHub's failed-run
 email is the alert that needs no part of the worker to be alive; the worker's own self-check
@@ -300,11 +325,17 @@ are on, and would refuse the push.
 | `CLOUDFLARE_WORKERS_TOKEN` | secret | `workers.yml` | account token `merecatholicity-ci-workers` — Workers Scripts Write, D1 Write, Account Settings Read (account); Workers Routes Write (zone) |
 | `TF_GITHUB_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT**, no expiry, on `merecatholicity.com` + `private-shelf` only: Administration, Environments, Variables, Pages read/write; Metadata read |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | **variables** | all | public ids; **Terraform-managed** (`github_actions_variable`) — workflows carry hardcoded fallbacks too |
-| `MC_INGEST_KEY` | secret | `merecat.yml` | the worker secret `MERECAT_INGEST_KEY` (set with `wrangler secret put`, the same value `gh secret set` here): honoured by `/api/merecat/{works,config,ingest}` and nothing else — a leak could rewrite the shelf, never touch the platform |
+| `MC_INGEST_KEY` | secret | nothing, since 2026-09-17 | **retiring**: the static key the pipeline used before its OIDC tokens (the worker's `MERECAT_INGEST_KEY`); the worker honours it one deploy longer, then it is deleted here, from the worker and from `ci.env` (`tests/_support/retirements.json`) |
 | `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf` (dev-box copy: `~/.ssh/private-shelf-ci`); its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
 | `PRIVATE_SHELF_DEPLOY_PUBLIC_KEY` | **variable** | `terraform.yml` (`TF_VAR_private_shelf_deploy_key`) | the public half; empty = no key resource |
 | `MERECAT_INGEST_API` | **variable** (optional) | `merecat.yml` | overrides the ingest URL; default is the worker's workers.dev hostname |
 | `SITE_DISPATCH_TOKEN` | secret **in the private-shelf repository** | its `notify-site.yml` | fine-grained PAT on `merecatholicity.com` only, *Actions: write* + *Metadata: read* — enough to `gh workflow run merecat.yml`, nothing more (set 2026-09-10; dev-box copy in `ci.env`; verified: cannot see the private repo, cannot write the site's contents) |
+
+**The pipeline holds no key** (2026-09-17): `merecat.yml` and `ops-watch.yml` prove themselves
+with the OIDC token GitHub signs for each job (§2.5), so there is nothing of theirs to leak or
+rotate. The dev box's nightly (`scripts/webtest_nightly.py`) reports with `MC_OPS_REPORT_KEY`
+from `ci.env` — the worker secret `OPS_REPORT_KEY`, which opens the ops report door and nothing
+else.
 
 Environments: **`github-pages`** (deploy-pages' own; no rules),
 **`terraform-production`** (§3) and **`librarian-config`** (2026-09-17: merecat's persona and
@@ -327,7 +358,7 @@ the log has the full record). Each is changed and then PROVEN, never assumed:
 
 | Secret | How it is rotated | How it is proven | Also lives in |
 |---|---|---|---|
-| `MERECAT_INGEST_KEY` | a fresh `secrets.token_urlsafe(36)`, `wrangler secret put` | the ops door: new key 200, old key 403 | `MC_INGEST_KEY` Actions secret (`gh secret set`) and `ci.env` — all three back to back |
+| `OPS_REPORT_KEY` (since 2026-09-17; it replaced `MERECAT_INGEST_KEY` for the nightly, while the pipeline moved to OIDC and needs none) | a fresh `secrets.token_urlsafe(36)`, `wrangler secret put` | the ops door: new key 200, old key 403 | `MC_OPS_REPORT_KEY` in `ci.env` — back to back |
 | `TURNSTILE_SECRET` | `POST …/challenges/widgets/<sitekey>/rotate_secret` with `invalidate_immediately: false` (the Terraform token can), then `wrangler secret put` | `siteverify` with a dummy token answers `invalid-input-response`, not `invalid-input-secret` | — |
 | `VAPID_PRIVATE_KEY` | a P-256 pair from WebCrypto (PKCS8 private, raw public), round-tripped sign→verify; the private half by `wrangler secret put`, the public half in BOTH `VAPID_PUBLIC_KEY` entries of `wrangler.jsonc`; deploy them together | `/push/vapid-key` serves the new key, and a signature from the private key verifies against it | existing subscriptions move to the new key on the member's next app open (`app/push.ts`), or on their first tap after it where the browser wants a gesture — no toggle, no Settings visit |
 | `TURN_KEY_SECRET` (+ the `TURN_KEY_ID` var) | a new TURN key in the dashboard or with a *Realtime/Calls: Edit* token — **no CI token has it**; then delete the old key | a relay credential mints with the new pair | — |
@@ -408,8 +439,8 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   it → click the link Cloudflare mails (a dashboard act — Email Routing is §10 exception 5).
   Until then *Send a test alert* reports the refusal verbatim; Discord works at once. The
   daily backup (03:15 UTC) and the self-check ride the same road; the Health card there is
-  the truth, and `POST /api/comments/ops/report {probe:true}` (ingest key) is the outside
-  probe `ops-watch.yml` runs. **The restore drill** is `make comments-backup`: the site token
+  the truth, and `POST /api/comments/ops/report {probe:true}` (the job's OIDC token; from the
+  dev box, `{key: $MC_OPS_REPORT_KEY, probe: true}`) is the outside probe `ops-watch.yml` runs. **The restore drill** is `make comments-backup`: the site token
   fetches the latest daily object from R2 (outside the repo) and `scripts/backup_check.py`
   replays it twice into a local SQLite — `wrangler d1 export` is gone (it refuses FTS5).
 - **Rollback and staged rollout** → §12 (`make worker-rollback`; `gh workflow run workers.yml
@@ -514,6 +545,7 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 | a rebuilt PDF keeps serving old bytes | the edge caches PDFs | `publish_pdfs` purges exactly the changed URLs |
 | the artifact is 400 MB, not 113 | PDFs built by a LaTeX-touching run rode along | held back at packaging, returned to the cache |
 | a public endpoint served the whole worker env (every secret) for six weeks, every check green | a handler passed `env` to a row mapper (`withNames(env, items)`), both typed `any`; no test read an answer for what it must NOT contain | the env is sealed and every answer scanned (`egress.ts`, `serve.ts`); `tests/worker/env_leak.test.mjs` sweeps every road as four identities |
+| the env disclosure published the pipeline's key, which opened the librarian's shelf, persona and dials | a static secret shared by the worker (`MERECAT_INGEST_KEY`) and the runners (`MC_INGEST_KEY`) — a worker that holds a pipeline key can lose it | the pipeline holds no key: each job's GitHub OIDC token, checked by `oidc.ts` against `Domain.Pipeline`; the persona and dials only from the `librarian-config` job a reviewer approved |
 | the first leak sweep was green while proving nothing for 114 of 129 routes | it set `ALLOWED_ORIGINS` to a sentinel, so every POST stopped at the origin gate | the sweep keeps the gates real and holds reach floors; `sweep_control.test.mjs` shows each detector firing |
 | every Build fails at *Set up job* the moment SHA pinning is required | GitHub's own `upload-pages-artifact` composite references `upload-artifact@v4` by tag internally; the policy applies to nested references | the composite is inlined (tar + pinned upload named `github-pages`) — prefer plain actions over composites under this policy |
 
@@ -523,11 +555,12 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 
 1. **Worker secrets** — `wrangler secret put`; a secret does not belong in git or CI.
 2. **The pipeline's own credentials for the librarian** — the ingest is a job since
-   2026-09-10 (§2.5), but its credentials are minted by hand like every other:
-   `MERECAT_INGEST_KEY` (`wrangler secret put`, mirrored as the Actions secret
-   `MC_INGEST_KEY`), the private shelf's deploy key pair (`ssh-keygen`; the private half a
-   secret, the public half a variable Terraform declares on the private repository), and
-   the private repository's dispatch PAT. `make librarian` survives as the hand road.
+   2026-09-10 (§2.5) and holds no key for the worker since 2026-09-17 (GitHub OIDC); what
+   remains is minted by hand like every other: the private shelf's deploy key pair
+   (`ssh-keygen`; the private half a secret, the public half a variable Terraform declares on
+   the private repository), the private repository's dispatch PAT, and the dev box's
+   `OPS_REPORT_KEY` (`wrangler secret put`, mirrored in `ci.env`). `make librarian` survives as
+   the hand road, with an admin's key.
 3. **The bootstrap secrets and the state bucket** — `gh secret set` for the five secrets;
    `merecatholicity-tfstate` unmanaged. A credential cannot be minted by the automation it
    authorises; a state store cannot manage itself.
@@ -597,6 +630,9 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
   `comments-worker/API.md` (a GET is held to it by `test_api_parity.py`, which is documenting
   by calling); a list it always answers goes into `Domain.Wire`; `/security-review` before a
   public one ships.
+- **a workflow job that calls the worker** → no stored key: `id-token: write` on that job
+  alone (never the workflow), its door in `Domain.Pipeline` (`workflowOf`, and an environment
+  if a reviewer must approve), the job in `tests/py/test_pipeline_workflows.py`'s `DOOR_JOBS`.
 - **a worker secret** → nothing to register: the egress guard scans every env string that is
   not in `env.ts` `PUBLIC_VARS`. **A public var** → `PUBLIC_VARS` and the Env's vars section
   (the egress test holds both to `wrangler.jsonc`).
