@@ -39,23 +39,24 @@ the whole community platform.
 Every write (post / reply / topic / DM / profile / avatar) is Turnstile-gated
 with a **real production managed sitekey**; cloakbrowser cannot obtain a token
 (headless or headful — proven 2026-07-31, see `probe_turnstile.py`). So the kit
-writes through the **server API with a secret-gated test token**, gated to the
-two throwaway test identities:
+writes through the **server API as the two ESTABLISHED test identities, sending
+no token at all**: the worker spares an established identity that offers none
+(`Domain.Turnstile`, the `turnstile_skip_established` Platform setting, on by
+default), and every other gate — rate limits, the AI screen, IP/identity
+blocks — still applies. With the skip switched off, a write is refused and the
+kit reports `BLOCKED` (observation still runs) rather than falsely passing.
 
-- **Worker:** `verifyTurnstile()` skips Turnstile when
-  `token === 'TEST:' + env.MC_TEST_BYPASS` **and** the author's hash is in
-  `env.TEST_HASHES` (both are `wrangler secret`s). The branch is dead code unless
-  both secrets are set. Everything else — rate-limit, AI screen, IP/identity
-  blocks — still applies. Only the two disposable test accounts can use it.
-- **Kit:** set `MC_TEST_TOKEN='TEST:<the MC_TEST_BYPASS value>'` in the
-  environment or in `webtest/.testkeys`. With no token, write scenarios report
-  `BLOCKED` (observation still runs) rather than falsely passing.
+Until 2026-09-17 the kit sent a secret-gated `TEST:` token that the worker
+accepted for the identities in a `TEST_HASHES` secret. The env disclosure
+published that secret; since the skip already covered the kit, the branch, both
+secrets and the kit's `MC_TEST_TOKEN` were retired rather than rotated. A `TEST:`
+token is now a token like any other — refused by siteverify.
 
 ## Secrets
 
 `webtest/.testkeys` (git-ignored, never committed) holds the two identity keys
-and `MC_TEST_TOKEN`. To rotate: `wrangler secret put MC_TEST_BYPASS` (in
-`comments-worker/`) and update `.testkeys`. Blast radius of a leak is the two
+(`alice`, `bob`). Their hashes are in the public `HIDDEN_HASHES` var, so the
+member directory never lists them. Blast radius of a leak is the two
 disposable accounts (deletable / bannable like any member).
 
 ## Running

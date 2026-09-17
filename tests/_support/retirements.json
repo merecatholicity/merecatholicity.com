@@ -70,5 +70,13 @@
   "since": "2026-09-12",
   "due": "2026-10-14",
   "how": "the same 0018 migration: DROP TABLE ×2 (nothing reads them; the ledger holds every like as a ❤️ reaction); make schema-snapshot"
+ },
+ {
+  "what": "TEST_HASHES in the egress scan's skip list — the retired Turnstile bypass's secret, until it is deleted",
+  "where": "comments-worker/src/env.ts",
+  "pattern": "\\[\\.\\.\\.PUBLIC_VARS, 'TEST_HASHES'\\]",
+  "since": "2026-09-17",
+  "due": "2026-09-24",
+  "how": "after `wrangler secret delete TEST_HASHES` (and MC_TEST_BYPASS), make UNSCANNED plain PUBLIC_VARS and update tests/worker/egress.test.mjs's unscanned assertion"
  }
 ]

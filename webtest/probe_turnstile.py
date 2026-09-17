@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """probe_turnstile.py — the write-path precheck for the interactive suite.
 
-The definitive Turnstile finding (2026-07-31): the live site runs a REAL
-production managed Turnstile sitekey (0x4AAAAAAD8IYH9_xQ0HE0yB). cloakbrowser
-cannot clear it headless OR headful (both stall on "Verifying...", no token is
-ever issued). So the interactive suite drives writes through the server API with
-a secret-gated test token, gated to the two throwaway test identities:
-  - worker: verifyTurnstile() skips Turnstile when token === 'TEST:'+MC_TEST_BYPASS
-    AND the author hash is in TEST_HASHES (both wrangler secrets; inert without them).
-  - kit: MC_TEST_TOKEN='TEST:<secret>' (env or webtest/.testkeys).
+The live site runs a REAL production managed Turnstile sitekey
+(0x4AAAAAAD8IYH9_xQ0HE0yB); cloakbrowser cannot clear it headless or headful
+(proven 2026-07-31). The interactive suite therefore writes through the server
+API as the two ESTABLISHED test identities, sending no token: the worker spares
+an established identity that offers none (Domain.Turnstile,
+`turnstile_skip_established`). The secret-gated `TEST:` bypass that did this
+job was retired on 2026-09-17 after the env disclosure published its secret.
 
 This precheck verifies the write path is healthy AND still safe:
-  1. real Turnstile REJECTS a fake token (protection intact for real users),
-  2. the bypass is GATED (a non-test key + the token is still rejected),
-  3. the configured test token WRITES (bypass working).
+  1. a fake token is refused (a token that IS offered is always verified);
+  2. the retired `TEST:` token is refused like any fake token;
+  3. a fresh, unestablished key with no token is refused (the skip is earned);
+  4. an established test identity writes with no token (then deletes it).
 
 Run:  python3 webtest/probe_turnstile.py
 """
@@ -23,7 +23,7 @@ import time
 import urllib.error
 import urllib.request
 
-from live_kit import BASE, TEST_TOKEN, keys, hash_of
+from live_kit import BASE, keys
 
 
 def api(path, body):
@@ -45,28 +45,30 @@ def main():
     alice = ks['alice']
     checks = []
 
-    # 1. real Turnstile rejects a fake token (still protecting real users)
+    # 1. a fake token is refused (a presented token is always verified)
     st, _ = api('/api/comments', {'key': alice, 'cat': 'pub',
                                   'title': 'probe fake token', 'body': 'body', 'token': 'not-a-real-token'})
-    checks.append(('real Turnstile rejects a fake token', st == 403, 'HTTP %s' % st))
+    checks.append(('a fake token is refused', st == 403, 'HTTP %s' % st))
 
-    # 2. bypass is gated: a non-test key presenting the real token is still rejected
-    st, _ = api('/api/comments', {'key': 'ZZnotAtestKey_' + ('9' * 30), 'cat': 'pub',
-                                  'title': 'probe gating', 'body': 'body', 'token': TEST_TOKEN or 'TEST:none'})
-    checks.append(('bypass gated to test identities (others 403)', st == 403, 'HTTP %s' % st))
+    # 2. the retired bypass token is just another fake token
+    st, _ = api('/api/comments', {'key': alice, 'cat': 'pub',
+                                  'title': 'probe retired bypass', 'body': 'body', 'token': 'TEST:retired'})
+    checks.append(('the retired TEST: token is refused', st == 403, 'HTTP %s' % st))
 
-    # 3. the configured test token writes
-    if TEST_TOKEN:
-        st, d = api('/api/comments', {'key': alice, 'cat': 'pub',
-                                      'title': 'probe write %d' % int(time.time()),
-                                      'body': 'A benign automated write-path check.', 'token': TEST_TOKEN})
-        cid = (d.get('comment') or {}).get('id')
-        checks.append(('test token writes (status=%s)' % d.get('status'), bool(d.get('ok') and cid),
-                       json.dumps(d)[:90]))
-        if cid:
-            api('/api/comments/delete', {'key': alice, 'id': cid})
-    else:
-        checks.append(('MC_TEST_TOKEN configured', False, 'set it in webtest/.testkeys to enable writes'))
+    # 3. a fresh key sending no token is not spared
+    st, _ = api('/api/comments', {'key': 'ZZprobeUnestablished_' + str(int(time.time())) + ('9' * 20), 'cat': 'pub',
+                                  'title': 'probe fresh key', 'body': 'body'})
+    checks.append(('a fresh key without a token is refused', st == 403, 'HTTP %s' % st))
+
+    # 4. the established test identity writes with no token, and the row goes again
+    st, d = api('/api/comments', {'key': alice, 'cat': 'pub',
+                                  'title': 'probe write %d' % int(time.time()),
+                                  'body': 'A benign automated write-path check.'})
+    cid = (d.get('comment') or {}).get('id')
+    checks.append(('an established identity writes with no token (status=%s)' % d.get('status'),
+                   bool(d.get('ok') and cid), json.dumps(d)[:90]))
+    if cid:
+        api('/api/comments/delete', {'key': alice, 'id': cid})
 
     ok = True
     for name, passed, detail in checks:

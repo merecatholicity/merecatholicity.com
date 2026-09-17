@@ -70,7 +70,7 @@ def check(cond, name, detail=''):
 
 def _read_testkeys():
     """webtest/.testkeys -> {NAME: value}. Same tiny format live_kit.py reads
-    (git-ignored, never committed): identity keys plus MC_TEST_TOKEN."""
+    (git-ignored, never committed): the identity keys."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.testkeys')
     out = {}
     if os.path.exists(path):

@@ -6,20 +6,21 @@ interactive platform end-to-end: a write by one user must reach the other's open
 views instantly (board index, category, thread, DM, notification bell) over the
 WebSocket, with the right recipients and a clean console/network the whole time.
 
-Writes go through the server API with the secret-gated test token (see
-live_kit.py + the worker's MC_TEST_BYPASS). Run:
+Writes go through the server API as the two ESTABLISHED test identities, with
+no Turnstile token (the worker's established-identity skip; see live_kit.py).
+Run:
 
-    MC_TEST_TOKEN='TEST:<secret>' python3 webtest/test_interactive.py
+    python3 webtest/test_interactive.py
 
-Each scenario reports PASS / FAIL / BLOCKED. BLOCKED means the write token isn't
-configured (no MC_TEST_TOKEN) — the observation still runs, writes are skipped.
-Every created row is deleted at the end.
+Each scenario reports PASS / FAIL / BLOCKED. BLOCKED means the worker refused
+the unverified write (the skip is off) — the observation still runs. Every
+created row is deleted at the end.
 """
 import os
 import sys
 import time
 
-from live_kit import (LiveUser, keys, hash_of, TEST_TOKEN,
+from live_kit import (LiveUser, keys, hash_of,
                       write_post, write_dm, watch, notif_unread, dm_unread, delete_comment)
 
 KS = keys()
@@ -52,8 +53,6 @@ def scenario_new_topic_fanout(A, B):
     (on the category page) sees the topic prepend to the list. A new topic emits
     `new-topic` (NOT `topic-stats` — that fires for replies)."""
     print('\n[1] New-topic fan-out (index + category)')
-    if not TEST_TOKEN:
-        rec('1 new-topic fan-out', 'BLOCKED', 'no MC_TEST_TOKEN'); return
     A.nav('community.html?cat=pub'); B.nav('community.html')
     A.clear_live(); A.drain(); B.clear_live(); B.drain()
     time.sleep(1)
@@ -112,8 +111,6 @@ def scenario_notifications_watch(A, B):
     the watch toggle: B (neither author nor replier) is notified only while
     watching."""
     print('\n[3] Notifications: author notified, replier not; watch toggle')
-    if not TEST_TOKEN:
-        rec('3 notifications', 'BLOCKED', 'no MC_TEST_TOKEN'); return
     # A holds an open board so its user:<A> socket is authed to receive notifications
     A.nav('community.html'); A.clear_live(); A.drain()
     B.nav('community.html'); B.clear_live(); B.drain()
@@ -160,8 +157,6 @@ def scenario_dm(A, B):
     """A DMs B -> B (inbox open) and B (thread open) update live; the DM badge
     increments; B replies -> A sees it."""
     print('\n[4] Direct messages, both directions, live')
-    if not TEST_TOKEN:
-        rec('4 DM', 'BLOCKED', 'no MC_TEST_TOKEN'); return
     # B opens its inbox so its member socket is authed + McInbox is mounted
     B.nav('community.html?inbox=1'); B.clear_live(); B.drain()
     time.sleep(1)
@@ -194,8 +189,6 @@ def scenario_dm(A, B):
 def scenario_held_post_gate(A, B):
     """A held/pending post (AI-screened) must NOT broadcast or notify."""
     print('\n[5] Held-post gate (pending posts do not fan out)')
-    if not TEST_TOKEN:
-        rec('5 held-post gate', 'BLOCKED', 'no MC_TEST_TOKEN'); return
     B.nav('community.html'); B.clear_live(); B.drain()
     time.sleep(1)
     # content designed to trip the AI screen (violent/hateful). If it still posts
@@ -213,8 +206,7 @@ def scenario_held_post_gate(A, B):
 
 
 def main():
-    print('Interactive 2-user live suite | write path:',
-          'ENABLED (MC_TEST_TOKEN set)' if TEST_TOKEN else 'DISABLED (observe-only, writes BLOCKED)')
+    print('Interactive 2-user live suite | writes as the established test identities (no token)')
     print('users: alice=%s… bob=%s…' % (AH[:10], BH[:10]))
     A = LiveUser('A', ALICE, 9570)
     B = LiveUser('B', BOB, 9571)

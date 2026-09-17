@@ -59,8 +59,6 @@ export interface Env {
   TURN_KEY_SECRET?: string;
   CF_USAGE_TOKEN?: string;
   MERECAT_INGEST_KEY?: string;
-  MC_TEST_BYPASS?: string;
-  TEST_HASHES?: string;
 }
 
 /* The vars above, by name: public by design (wrangler.jsonc prints most of
@@ -74,10 +72,10 @@ export const PUBLIC_VARS: readonly string[] = [
   'HIDDEN_HASHES', 'HUB_SHARDS',
 ];
 
-/* What the scan skips: the public vars, and TEST_HASHES, a secret LIST OF
-   IDENTITY HASHES. Hashes are public by design and appear in every answer
-   that names a test identity's post, so scanning for them would refuse those
-   answers. It goes when the Turnstile test bypass is retired. */
+/* What the scan skips: the public vars, and — for the one deploy until the
+   secret is deleted — TEST_HASHES, the retired bypass's LIST OF IDENTITY
+   HASHES, which appear in every answer that names a test identity's post
+   (tests/_support/retirements.json holds the date). */
 export const UNSCANNED: readonly string[] = [...PUBLIC_VARS, 'TEST_HASHES'];
 
 /* the send_email binding's message (the shape contact-worker sends) */

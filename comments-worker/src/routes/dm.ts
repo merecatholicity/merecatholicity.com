@@ -1121,7 +1121,7 @@ async function handleDmDirectory(request: Request, env: Env, url: URL) {
     ') u LEFT JOIN profiles pr ON pr.hash = u.hash ' +
     /* The librarian and its machinery identities (merecat-named, which the
        nick guard denies to members) belong in no roster or picker — nor do the
-       test and probe identities (hiddenHashes: TEST_HASHES + HIDDEN_HASHES). */
+       test and probe identities (hiddenHashes: the HIDDEN_HASHES var). */
     "WHERE u.hash != ?1 AND (pr.nick IS NULL OR pr.nick NOT LIKE 'merecat%') " +
     (hidden.length ? 'AND u.hash NOT IN (' + hidden.map((_h: string, i: number) => '?' + (i + 2)).join(', ') + ') ' : '') +
     /* A member is someone who has said or shown something: a nick, a live post

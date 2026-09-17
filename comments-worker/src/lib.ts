@@ -366,29 +366,18 @@ export function normalizePage(raw: any) {
 }
 
 /* The identities that are machinery, not members (P3-3, 2026-09-16): the
-   TEST_HASHES secret (the write-bypass identities of the interactive kit) and
-   the HIDDEN_HASHES var (the read-only probes — the nightly webtest's, a
-   second agent's). Never listed in the member directory, never counted as a
-   member; their hashes are public by design, like the admins'. */
-export function hiddenHashes(env: { TEST_HASHES?: string; HIDDEN_HASHES?: string }): string[] {
-  const list = String(env.TEST_HASHES || '') + ',' + String(env.HIDDEN_HASHES || '');
-  return list.split(',').map((h) => h.trim()).filter((h) => /^[0-9a-f]{64}$/.test(h));
+   HIDDEN_HASHES var — the interactive kit's two test identities, the nightly
+   webtest's probe, a second agent's. Never listed in the member directory,
+   never counted as a member; their hashes are public by design, like the
+   admins'. (The TEST_HASHES secret that also listed the kit's identities
+   went with the Turnstile test bypass, 2026-09-17.) */
+export function hiddenHashes(env: { HIDDEN_HASHES?: string }): string[] {
+  return String(env.HIDDEN_HASHES || '').split(',').map((h) => h.trim()).filter((h) => /^[0-9a-f]{64}$/.test(h));
 }
 
 /* Fails closed. A blip reaching siteverify refuses the post rather than
    crashing the worker or waving the post through unverified. */
 export async function verifyTurnstile(env: Env, token: any, ip: any, key: any) {
-  /* TEST BYPASS (interactive regression kit, webtest/live_kit.py): a designated
-     throwaway test identity may skip Turnstile by presenting the shared secret as
-     its token, so the two-user cloakbrowser suite can drive real writes (headless
-     browsers cannot solve the production managed challenge). INERT unless BOTH
-     env secrets are set (MC_TEST_BYPASS + TEST_HASHES); gated to the listed
-     hashes; every other gate (rate-limit, AI screen, IP/identity blocks) still
-     applies. Without the secrets set this whole branch is dead code. */
-  if (env.MC_TEST_BYPASS && key && token === 'TEST:' + env.MC_TEST_BYPASS) {
-    const h = await sha256hex(key);
-    if ((env.TEST_HASHES || '').split(',').map((s: any) => s.trim()).includes(h)) return true;
-  }
   /* No token offered? An identity that has ALREADY passed a challenge is not
      asked again — the whole reason this path exists (Domain.Turnstile). A token
      that IS offered is still verified normally, so nothing about the existing

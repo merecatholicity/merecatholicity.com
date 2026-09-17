@@ -41,7 +41,7 @@ Scenarios (each runnable alone: python3 webtest/test_call.py [p2p|stun|block|tab
          race and just saw the peer's end signal).
 
 Needs webtest/.testkeys (alice/bob) and the mic-capable Flow kit. Calls are
-deliberately NOT Turnstile-gated, so no MC_TEST_TOKEN is required. Residue per
+deliberately NOT Turnstile-gated, so no Turnstile token is involved. Residue per
 ring: one coalesced 'call' notification row for the callee (read-marked by the
 answer handler in p2p/tabs; the block scenario's control ring leaves one for
 bob — acceptable, it is a true record).

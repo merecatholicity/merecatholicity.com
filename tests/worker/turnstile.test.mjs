@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { routesSource } from '../_support/worker_src.mjs';
+import { loadWorker, makeEnv, freshDb, identity, establish, call, netSpy, resetCaches } from '../_support/worker.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
@@ -59,4 +60,34 @@ test('the setting is reachable, coerced, and served', () => {
     '/config must tell the client whether a challenge is worth mounting');
   assert.ok(/turnstile_skip_established: Turnstile\.skipEstablishedDefault/.test(lib),
     'the default must come from the kernel, not a literal');
+});
+
+/* The Turnstile test bypass is gone (2026-09-17). It let a `TEST:<secret>`
+   token through for the kit's identities; the disclosure published the
+   secret, and the established-identity skip already spares those identities
+   when they send no token at all — so the branch, its two secrets and the
+   kit's token went, and a `TEST:` token is a token like any other. */
+test('a TEST: token is verified like any token, and an established identity with none needs no bypass', async () => {
+  assert.ok(!/MC_TEST_BYPASS|TEST_HASHES|'TEST:'/.test(verify), 'no bypass branch in verifyTurnstile');
+  const { worker } = await loadWorker();
+  const kit = await identity('turnstile-kit');
+  const asked = [];
+  const net = netSpy((url, init) => {
+    asked.push(String(init && init.body));
+    return Response.json({ success: false, 'error-codes': ['invalid-input-response'] });
+  });
+  try {
+    resetCaches();
+    const db = freshDb();
+    establish(db, kit.hash);
+    db.prepare("INSERT INTO comments (id, page, title, author_hash, body, status, created_at, last_at) VALUES (1, 'board:pub', 'A topic', ?, 'x', 'live', 5, 5)").run(kit.hash);
+    const env = makeEnv({ db, vars: { MC_TEST_BYPASS: 'the-old-bypass-secret-value', TEST_HASHES: kit.hash } });
+    const forged = await call(worker, env, 'POST', '/api/comments', { key: kit.key, topic: 1, body: 'a reply', token: 'TEST:the-old-bypass-secret-value' });
+    assert.equal(forged.status, 403, 'the old token is refused even with the old secrets in the env');
+    assert.equal(asked.length, 1, 'and it was asked of siteverify, like any token');
+    resetCaches();
+    const spared = await call(worker, env, 'POST', '/api/comments', { key: kit.key, topic: 1, body: 'a reply' });
+    assert.equal(spared.status, 200, 'an established identity sending no token is spared by the rule, not by a bypass');
+    assert.equal(asked.length, 1, 'without asking siteverify');
+  } finally { net.restore(); }
 });

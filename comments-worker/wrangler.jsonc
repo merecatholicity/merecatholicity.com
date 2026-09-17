@@ -157,10 +157,11 @@
     // the site owners. A delete signed by a key hashing to one of these works
     // on any comment. The hash is safe to publish, the power is in the key.
     "ADMIN_HASHES": "d1915a05c2583f437b1316971563b3c4c404cff016a016770d91af1f2645f7f6,c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03",
-    // Identities that are machinery, not members (2026-09-16): the read-only
-    // probes the nightly webtest and a second agent hold. Never in the member
-    // directory or its count (src/lib.ts hiddenHashes; the TEST_HASHES secret's
-    // write-bypass identities are hidden the same way). Hashes are public.
+    // Identities that are machinery, not members (2026-09-16): the interactive
+    // kit's two test identities (alice, bob) and the probes the nightly webtest
+    // and a second agent hold. Never in the member directory or its count
+    // (src/lib.ts hiddenHashes — this var alone since the TEST_HASHES secret
+    // went with the Turnstile test bypass, 2026-09-17). Hashes are public.
     "HIDDEN_HASHES": "2a2f97abc4dd1649ef31bb815f6181dcee63b76963cb73cd8fe15b77bf53a681,431230bb0b4e1fab7e2299b612b21bbcc7cf54016b56389d9ac30d1ef70dabf8,ff116db3c9e37db220330232046fddff87119e0339d668469ee911597536ddb0",
     // The scale lever for the live sockets (2026-09-17, Domain.Hub): how many
     // BoardHub Durable Object instances the sockets are spread over, each a

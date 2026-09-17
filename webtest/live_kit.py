@@ -15,12 +15,14 @@ Design
   detections lifted from audit.py.
 - WRITES go through the server API (`api()`), not the browser, because every
   write is Turnstile-gated and headless/headful cloakbrowser cannot clear the
-  production managed challenge (proven 2026-07-31). A write therefore needs a
-  token the server will accept: set `MC_TEST_TOKEN` in the environment to the
-  secret-gated test token (see the worker's TEST-bypass). With no token the
-  write helpers return {'blocked': True} and the write scenarios report BLOCKED
+  production managed challenge (proven 2026-07-31). The two test identities are
+  ESTABLISHED members, and the worker spares an established identity that sends
+  no token (`turnstile_skip_established`, on by default), so the writes send
+  none. (The secret-gated `TEST:` token that did this job until 2026-09-17 went
+  with the disclosure.) If the owner turns the skip off, a write is refused and
+  the helpers return {'blocked': True}: the write scenarios report BLOCKED
   rather than falsely passing. Observation (login, sockets, DOM, console/net)
-  needs no token and always runs.
+  always runs.
 
 Usage
 -----
@@ -47,8 +49,8 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _read_testkeys():
-    """The git-ignored webtest/.testkeys -> {NAME: value}. Holds the identity
-    keys AND the MC_TEST_TOKEN write token. Never committed."""
+    """The git-ignored webtest/.testkeys -> {NAME: value}: the identity keys.
+    Never committed."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.testkeys')
     out = {}
     if os.path.exists(path):
@@ -61,10 +63,6 @@ def _read_testkeys():
 
 
 _TESTKEYS = _read_testkeys()
-# The secret-gated test token the worker accepts in place of a Turnstile token
-# for the designated test identities (from env, or the .testkeys file). Empty =>
-# writes are blocked (observe-only).
-TEST_TOKEN = os.environ.get('MC_TEST_TOKEN', '') or _TESTKEYS.get('MC_TEST_TOKEN', '')
 
 
 def _newest_chrome():
@@ -75,28 +73,30 @@ def _newest_chrome():
 
 def keys():
     """Identity keys from the git-ignored webtest/.testkeys -> {name: key}
-    (config entries like MC_TEST_TOKEN excluded)."""
-    return {k: v for k, v in _TESTKEYS.items() if k.isupper() is False and k != 'MC_TEST_TOKEN'}
+    (upper-case config entries excluded)."""
+    return {k: v for k, v in _TESTKEYS.items() if k.isupper() is False}
 
 
 def hash_of(key):
     return hashlib.sha256(key.encode()).hexdigest()
 
 
-# ---- server-side write helpers (Turnstile-gated => need MC_TEST_TOKEN) -------
+# ---- server-side write helpers (an established identity sends no token) -----
 
 def _write(key, body):
-    """POST a write. Injects the test token; returns {'blocked':True} if none."""
-    if not TEST_TOKEN and 'token' not in body:
-        return {'blocked': True, 'error': 'no MC_TEST_TOKEN (Turnstile write path unavailable)'}
+    """POST a write as an established test identity, with no Turnstile token.
+    A refusal of the verification (the skip turned off, or the identity not
+    established) comes back as {'blocked': True}."""
     payload = dict(body)
-    payload.setdefault('token', TEST_TOKEN)
     payload['key'] = key
     ep = payload.pop('_ep')
     try:
-        return _post(ep, payload)
+        d = _post(ep, payload)
     except Exception as e:
         return {'ok': False, 'error': str(e)}
+    if not d.get('ok') and 'verification failed' in str(d.get('error', '')).lower():
+        return {'blocked': True, 'error': 'Turnstile: the identity was not spared (is turnstile_skip_established on?)'}
+    return d
 
 
 def _post(ep, payload, retries=4, wait=22):
