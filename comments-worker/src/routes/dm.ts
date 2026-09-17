@@ -63,6 +63,7 @@ import {
   hiddenHashes,
   gated,
   readLimited,
+  throttle,
 } from '../lib.ts';
 import type { DmRosterPayload, DmThreadPayload, DmThreadsPayload } from '../../../app/wire.ts';
 import type { Env } from '../env.ts';
@@ -762,8 +763,7 @@ async function handleDmReact(request: Request, env: Env, ctx: ExecutionContext) 
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   const id = Math.floor(Number(data.id) || 0);
   const raw = data.emoji != null ? String(data.emoji) : (data.like ? '❤️' : '');
@@ -866,8 +866,7 @@ async function handleDmEdit(request: Request, env: Env, ctx: ExecutionContext) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
   const key = String(data.key || '');
   const id = Math.floor(Number(data.id) || 0);
   if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -942,8 +941,7 @@ async function handleDmRedact(request: Request, env: Env, ctx: ExecutionContext)
 async function handleDmMediaUpload(request: Request, env: Env) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many uploads at once. Wait a minute.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip))) return json({ ok: false, error: 'Too many uploads at once. Wait a minute.' }, 429);
   const settings = await getAppSettings(env);
   if (settings.media_enabled !== '1') return json({ ok: false, error: 'Media sharing is turned off.' }, 403);
   /* The bytes are E2E ciphertext, so the server can never know the KIND — the
@@ -994,10 +992,10 @@ async function handleDmMediaUpload(request: Request, env: Env) {
 async function handleDmMediaGet(request: Request, env: Env) {
   if (!env.MEDIA) return json({ ok: false, error: 'Media storage is not available.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  /* the small JSON body first, so the limit is the member's (2026-09-17) */
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   const mediaKey = String(data.media_key || '');
   if (!key || !/^dm\/[0-9a-f]{64}$/.test(mediaKey)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -1157,8 +1155,7 @@ async function handleDmPubkey(request: Request, env: Env) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   const pubkey = String(data.pubkey || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);

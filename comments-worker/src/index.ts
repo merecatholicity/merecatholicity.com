@@ -69,6 +69,7 @@ import {
   verifyTurnstile,
   noSuchPage,
   socialOff,
+  throttle,
 } from './lib.ts';
 import {
   handleAdmin,
@@ -215,11 +216,11 @@ import {
 import { handleAdminUsage, runUsageCheck } from './usage.ts';
 
 import type { Env } from './env.ts';
+import { sessionEnv, finishSession } from './dbsession.ts';
 
 async function handleConfig(request: Request, env: Env, url: URL) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const custom: Record<string, string> = {};
   for (const k of Object.keys(EMOJI_PACKS)) for (const [code, path] of (EMOJI_PACKS as Record<string, string[][]>)[k]) custom[code] = path;
   /* The served media limits: every composer gates client-side from THIS (never a
@@ -423,12 +424,12 @@ async function handleLive(request: Request, env: Env) {
   if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.HUB) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.CONNECT_LIMIT.limit({ key: ip });
-  if (!success) return new Response('slow down', { status: 429 });
   /* The shard: the member's hash when the client names it (`?h=`), else the
      address's — an anonymous reader has no presence, so its shard is only a
-     spread. The hash is public by design; the auth frame still proves it. */
+     spread. The hash is public by design; the auth frame still proves it. It
+     also names the connect bucket, as the key does for a request. */
   const hint = String(new URL(request.url).searchParams.get('h') || '');
+  if (!(await throttle(env, 'CONNECT_LIMIT', ip, { hash: hint }))) return new Response('slow down', { status: 429 });
   const key = /^[0-9a-f]{64}$/.test(hint) ? hint : await sha256hex(ip);
   return hubHome(env, key).fetch(request);
 }
@@ -653,8 +654,14 @@ export default {
         return await handleLive(request, env);
       }
 
+      /* Every routed handler runs against a D1 session (dbsession.ts): the
+         kernel's read routes may read a replica, the rest start at the
+         primary, and a request that wrote answers with its bookmark. */
       for (const r of ROUTES) {
-        if (request.method === r.m && path === r.p) return await r.fn(request, env, ctx, url);
+        if (request.method === r.m && path === r.p) {
+          const s = sessionEnv(env, request, r.m, r.p);
+          return finishSession(await r.fn(request, s.env, ctx, url), s);
+        }
       }
       /* merecat live chat WebSocket upgrade (GET, so it skips the POST origin
          guard; handleMerecatLive does its own auth). */

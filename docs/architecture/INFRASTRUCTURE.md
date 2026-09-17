@@ -197,5 +197,6 @@ on page one.)
 - **The shell is an ES module: the port's frame, half of P0 (2026-09-17)** — `log/2026-09.md`
 - **The worker's handlers take the real `Env` (2026-09-17)** — `log/2026-09.md`
 - **A public endpoint served the worker's whole env for six weeks (2026-09-17)** — `log/2026-09.md`
+- **Four ceilings lifted in one change: replicas for the reads, presence only where it is watched, limits per member, and a librarian that stops counting its shelf (2026-09-17)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

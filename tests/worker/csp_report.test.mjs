@@ -50,7 +50,8 @@ test('a collector never argues: garbage, an empty report, an oversize body are a
   const r = await call(worker, env, 'POST', '/api/comments/csp-report', big, { headers: { 'Content-Type': 'application/csp-report' }, origin: null });
   assert.equal(r.status, 204);
   assert.equal(tally(db), null, 'nothing tallied');
-  const slow = { ...env, READ_LIMIT: { limit: async () => ({ success: false }) } };
+  /* a keyless report counts against the address backstop (2026-09-17) */
+  const slow = { ...env, READ_IP_LIMIT: { limit: async () => ({ success: false }) } };
   const lim = await call(worker, slow, 'POST', '/api/comments/csp-report', { 'csp-report': { 'effective-directive': 'img-src', 'blocked-uri': 'inline' } }, { origin: null });
   assert.equal(lim.status, 429);
   db.close();

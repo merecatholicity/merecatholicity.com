@@ -74,9 +74,10 @@
   ],
   "ai": { "binding": "AI" },
   // Live updates: the board hub Durable Object fans new posts to browsers over
-  // hibernatable WebSockets (free tier; idle sockets cost zero duration). SQLite
-  // backing is required on the free plan even though the hub keeps no stored
-  // state (connections are the state).
+  // hibernatable WebSockets (idle sockets cost zero duration). SQLite-backed:
+  // since 2026-09-17 each shard keeps one small table, the shards watching its
+  // members' presence (only when HUB_SHARDS > 1; storage does not block
+  // hibernation); the connections themselves are the rest of the state.
   "durable_objects": {
     "bindings": [
       { "name": "HUB", "class_name": "BoardHub" },
@@ -111,9 +112,16 @@
   // Daily 03:15 UTC: the D1→R2 backup, then the self-check. Daily 23:30 UTC:
   // the Cloudflare free-tier usage check (usage.ts), then the self-check.
   "triggers": { "crons": ["0 0 1 * *", "0 * * * *", "15 3 * * *", "30 23 * * *"] },
+  // The rate limiters (2026-09-17, src/lib.ts throttle, Domain.Throttle). The
+  // first three are PER MEMBER: a request naming an identity counts against
+  // that member's bucket, so a parish on one Wi-Fi no longer shares one
+  // allowance. The *_IP_LIMIT three are the per-address backstop every request
+  // also counts against (and the only bucket for a keyless request), sized for
+  // a congregation of about a hundred active members behind one address — a
+  // claimed key is not a proven one, and rotating keys must not escape it.
   "ratelimits": [
     // Writes. These pass Turnstile + AI moderation before they land, so the
-    // limiter is only an abuse backstop, not the primary gate. 30/min/IP lets an
+    // limiter is only an abuse backstop, not the primary gate. 30/min/member lets an
     // engaged member start a topic and fire off a burst of replies/edits/DMs
     // without ever meeting a wall; a spam flood still trips it. Policy: err
     // generous on the free tier, tighten later if abused (rate-limit bindings
@@ -121,14 +129,20 @@
     { "name": "POST_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
     // Reads are cached and cheap; ONE bucket serves topic pages, the two
     // background badge polls, merecat resume/reconcile polling, AND the reader's
-    // own clicks. 120/min/IP gives generous headroom so quick page-hopping,
+    // own clicks. 120/min/member gives generous headroom so quick page-hopping,
     // resume polling, and normal browsing never collide. Keep the client's
     // READ_CEIL (comments.ts) in step with this number.
     { "name": "READ_LIMIT", "namespace_id": "1002", "simple": { "limit": 120, "period": 60 } },
     // WebSocket connect throttle (its own bucket, NOT shared with READ_LIMIT) so
     // a reconnect storm can never starve normal reads. Generous enough for a
     // flaky mobile link cycling board + chat sockets across a few page hops.
-    { "name": "CONNECT_LIMIT", "namespace_id": "1003", "simple": { "limit": 40, "period": 60 } }
+    { "name": "CONNECT_LIMIT", "namespace_id": "1003", "simple": { "limit": 40, "period": 60 } },
+    // The per-address backstops: ten times the member numbers for reads, and
+    // for writes and connects enough for a crowd (uploads, whose key sits in a
+    // multipart body, count here alone).
+    { "name": "POST_IP_LIMIT", "namespace_id": "1004", "simple": { "limit": 300, "period": 60 } },
+    { "name": "READ_IP_LIMIT", "namespace_id": "1005", "simple": { "limit": 1200, "period": 60 } },
+    { "name": "CONNECT_IP_LIMIT", "namespace_id": "1006", "simple": { "limit": 300, "period": 60 } }
   ],
   "vars": {
     // "ai": Llama Guard screens each comment, clean ones publish instantly,
@@ -216,7 +230,10 @@
       "ratelimits": [
         { "name": "POST_LIMIT", "namespace_id": "9001", "simple": { "limit": 30, "period": 60 } },
         { "name": "READ_LIMIT", "namespace_id": "9002", "simple": { "limit": 120, "period": 60 } },
-        { "name": "CONNECT_LIMIT", "namespace_id": "9003", "simple": { "limit": 40, "period": 60 } }
+        { "name": "CONNECT_LIMIT", "namespace_id": "9003", "simple": { "limit": 40, "period": 60 } },
+        { "name": "POST_IP_LIMIT", "namespace_id": "9004", "simple": { "limit": 300, "period": 60 } },
+        { "name": "READ_IP_LIMIT", "namespace_id": "9005", "simple": { "limit": 1200, "period": 60 } },
+        { "name": "CONNECT_IP_LIMIT", "namespace_id": "9006", "simple": { "limit": 300, "period": 60 } }
       ],
       "vars": {
         "MODERATION_MODE": "ai",

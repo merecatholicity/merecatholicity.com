@@ -27,10 +27,15 @@ export interface Env {
   AVATARS: R2Bucket;
   MEDIA: R2Bucket;
   WALLMEDIA: R2Bucket;
-  /* the per-IP rate limiters, looked up by name in keyed()/keyedGated() */
+  /* the rate limiters, only ever reached through lib.ts throttle() (2026-09-17):
+     the three member buckets (keyed by identity; by address for a keyless
+     request when no backstop exists) and their per-address backstops */
   POST_LIMIT: RateLimit;
   READ_LIMIT: RateLimit;
   CONNECT_LIMIT: RateLimit;
+  POST_IP_LIMIT?: RateLimit;
+  READ_IP_LIMIT?: RateLimit;
+  CONNECT_IP_LIMIT?: RateLimit;
   /* vars (wrangler.jsonc "vars") — every one optional: the code falls back */
   MODERATION_MODE?: string;
   ALLOW_ANON?: string;

@@ -22,6 +22,7 @@ import {
   sha256hex,
   sniffImage,
   adminGated,
+  throttle,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 
@@ -69,8 +70,7 @@ async function handleDmMediaPurge(request: Request, env: Env) {
 async function mediaUpload(request: Request, env: Env, ctxKind: string) {
   if (!env.WALLMEDIA) return json({ ok: false, error: 'Media is unavailable.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const settings = await getAppSettings(env);
   if (settings.media_enabled !== '1') return json({ ok: false, error: 'Media uploads are turned off.' }, 403);
   const allowed = mediaKindsFor(settings, ctxKind);

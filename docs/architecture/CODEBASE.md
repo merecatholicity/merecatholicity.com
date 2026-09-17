@@ -74,11 +74,12 @@ duplicated, and the shape they moved toward.
 | `client/boot.ts` | 6 | The `Boot` bag type the factories take. (All of `client/` bundles to `docs/comments.js`, 349 KB.) |
 | `comments-worker/src/index.ts` | 654 | The composition root: imports · `Env` · `handleConfig`/`handleLive` · the `ROUTES` table · `fetch`/`scheduled`. |
 | `comments-worker/src/routes/*.ts` | 5,427 | The handlers, one file per feature (2026-09-16): board 1,402 · dm 1,265 · merecat 730 · wall 540 · admin 483 · profile 430 · media 254 · calls 179 · notify 144 — each moved verbatim from `index.ts` behind the table. |
-| `comments-worker/src/lib.ts` | 3,606 | The shared core: constants, crypto, auth/validation, the settings, DB/notification/broadcast helpers, the DM primitives, the media purges, the social gate and the Discord fan-out. A leaf — it references no handler. |
+| `comments-worker/src/lib.ts` | 3,648 | The shared core: constants, crypto, auth/validation, the settings, DB/notification/broadcast helpers, the DM primitives, the media purges, the social gate and the Discord fan-out. A leaf — it references no handler. |
 | `app/appchrome.ts` | 1,763 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
 | `app/shell.ts` | 868 | The SPA shell: soft-navigation (latest-wins, instant nav), per-page boot registry, audio dock, PWA. |
 | `docs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring (served raw, unversioned). |
-| `comments-worker/src/durable.ts` | 745 | The two Durable Objects (`BoardHub` — `HUB_SHARDS` instances, sockets indexed in memory, `Domain.Hub` the placing — and `ChatRoom`). |
+| `comments-worker/src/durable.ts` | 875 | The two Durable Objects (`BoardHub` — `HUB_SHARDS` instances, sockets indexed in memory, `Domain.Hub` the placing, a `watch` table naming the siblings that watch each member — and `ChatRoom`). |
+| `comments-worker/src/dbsession.ts` | 88 | The D1 session every routed request runs against: replicas for `Domain.Consistency`'s read routes, the primary for the rest, the `mc-d1` bookmark cookie after a write. |
 | `app/call.ts` | 521 | The 1v1 voice-call engine (shell-owned, so a call rings on any page). |
 | `docs/bible-reader.js` | 439 | KJV/DR reader boot (served raw). |
 | `app/views/board.ts` / `topic.ts` | 435 / 433 | Lit views: board index+category / topic+search. |

@@ -25,6 +25,7 @@ import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import * as Comments from '../../purescript/output/Domain.Comments/index.js';
 import * as Ops from '../../purescript/output/Domain.Ops/index.js';
 import * as Hub from '../../purescript/output/Domain.Hub/index.js';
+import * as Throttle from '../../purescript/output/Domain.Throttle/index.js';
 import * as MaybeM from '../../purescript/output/Data.Maybe/index.js';
 import type { Env } from './env.ts';
 // Pure, dependency-free helpers (IP/ban-key normalization + back-room privacy),
@@ -46,8 +47,38 @@ import { inList, rankFor, withNames, postCountsFor } from './db.ts';
 import { merecatQuota, quotaPublic } from './quota.ts';
 export { merecatQuota, quotaPublic };
 
-/* Keyed-request preamble, single-sourced. Parse the JSON body, rate-limit by IP
-   on `bucket`, then require + hash the identity key. Returns the resolved
+/* ---- The rate limiter (2026-09-17; the rule is Domain.Throttle) ----
+   Every limit in the worker goes through `throttle`. A request that names an
+   identity counts against THAT MEMBER's bucket (`bucket`, keyed "m:<hash>"),
+   so members behind one address — a parish Wi-Fi, a carrier's shared IP —
+   no longer spend each other's allowance; and every request also counts
+   against the per-address backstop (`*_IP_LIMIT`, sized for a congregation),
+   because the key is only claimed here, not proven: rotating keys escapes a
+   member bucket, never the backstop. A keyless request counts against the
+   backstop alone; without a backstop binding it falls back to `bucket` keyed
+   by address, the behaviour before this change. Nothing else in the worker
+   may call `.limit(` (tests/worker/throttle.test.mjs sweeps for it). */
+export type Bucket = 'READ_LIMIT' | 'POST_LIMIT' | 'CONNECT_LIMIT';
+const BACKSTOP: Record<Bucket, 'READ_IP_LIMIT' | 'POST_IP_LIMIT' | 'CONNECT_IP_LIMIT'> = {
+  READ_LIMIT: 'READ_IP_LIMIT', POST_LIMIT: 'POST_IP_LIMIT', CONNECT_LIMIT: 'CONNECT_IP_LIMIT',
+};
+export type Who = { key?: unknown; hash?: string };
+export async function throttle(env: Pick<Env, Bucket> & Partial<Pick<Env, 'READ_IP_LIMIT' | 'POST_IP_LIMIT' | 'CONNECT_IP_LIMIT'>>, bucket: Bucket, ip: string, who: Who = {}): Promise<boolean> {
+  const rawKey = who.key == null ? '' : String(who.key);
+  const hash = who.hash != null ? String(who.hash) : (rawKey ? await sha256hex(rawKey) : '');
+  const member: string | null = psOrNull(Throttle.memberBucket(hash));
+  const backstop = env[BACKSTOP[bucket]];
+  const checks: Array<Promise<{ success: boolean }>> = [];
+  if (member) checks.push(env[bucket].limit({ key: member }));
+  if (backstop) checks.push(backstop.limit({ key: ip }));
+  else if (!member) checks.push(env[bucket].limit({ key: ip }));
+  const verdicts = await Promise.all(checks);
+  return verdicts.every((v) => v.success);
+}
+
+/* Keyed-request preamble, single-sourced. Parse the JSON body, rate-limit
+   (per member, with the address backstop) on `bucket`, then require + hash
+   the identity key. Returns the resolved
    {ip, data, key, me} or a Response to return early. `keyedGated` adds the
    blocked-identity gate (a locked/banned hash is refused). These replicate,
    verbatim, the preamble that used to open each keyed handler. */
@@ -56,8 +87,7 @@ export async function keyed(request: any, env: Env, bucket: 'POST_LIMIT' | 'READ
   let data;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env[bucket].limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, bucket, ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
@@ -98,9 +128,8 @@ export async function gated(request: Request, env: Env, o: GateOpts = {}): Promi
   let data: any;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  if (o.bucket) {
-    const { success } = await env[o.bucket].limit({ key: ip });
-    if (!success) return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
+  if (o.bucket && !(await throttle(env, o.bucket, ip, { key: data && data.key }))) {
+    return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
   }
   const key = String((data && data.key) || '');
   if (o.key !== 'optional' && !key) return json({ ok: false, error: o.missing || 'Bad request.' }, 400);
@@ -118,9 +147,8 @@ export async function adminGated(request: Request, env: Env, o: { bucket?: 'POST
   let data: any;
   try { data = await request.json(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  if (o.bucket) {
-    const { success } = await env[o.bucket].limit({ key: ip });
-    if (!success) return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
+  if (o.bucket && !(await throttle(env, o.bucket, ip, { key: data && data.key }))) {
+    return json({ ok: false, error: o.limited || 'Too many requests.' }, 429);
   }
   const key = String((data && data.key) || '');
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
@@ -131,8 +159,7 @@ export async function adminGated(request: Request, env: Env, o: { bucket?: 'POST
    refusal is JSON, or plain text where the endpoint has always answered so. */
 export async function readLimited(request: Request, env: Env, o: { limited?: string; plain?: boolean } = {}): Promise<Response | string> {
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) {
+  if (!(await throttle(env, 'READ_LIMIT', ip))) {
     const text = o.limited || 'Too many requests.';
     return o.plain ? new Response(text, { status: 429 }) : json({ ok: false, error: text }, 429);
   }
@@ -2172,8 +2199,7 @@ export async function sweepMediaRetention(env: Env) {
    hash, or a Response to return immediately (401 / blocked / 429). */
 export async function wallReader(request: any, env: Env, data: any) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return { resp: json({ ok: false, error: 'Too many requests. Slow down.' }, 429) };
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return { resp: json({ ok: false, error: 'Too many requests. Slow down.' }, 429) };
   const key = String((data && data.key) || '');
   if (!key) return { resp: json({ ok: false, error: 'Sign in to see the feed.' }, 401) };
   const me = await sha256hex(key);
@@ -3479,7 +3505,8 @@ export async function merecatMentionReply(env: Env, commentId: any) {
 export type HubStub = {
   fetch(request: Request): Promise<Response>;
   publish(event: unknown): Promise<void>;
-  relay(items: Array<{ scope: string; payload: string }>): Promise<void>;
+  relay(items: Array<{ scope: string; payload: string }>): Promise<{ idle: string[] } | void>;
+  watch(from: number, register: string[], also: string[]): Promise<string[]>;
   presenceOf(hashes: string[]): Promise<string[]>;
   viewersOf(tag: string, hashes: string[]): Promise<string[]>;
   dmViewing(recipient: string, sender: string): Promise<boolean>;
@@ -3517,7 +3544,8 @@ export async function sendToHub(env: Env, event: any) {
   if (!env.HUB || !boardEventPublic(event)) return;
   const n = hubShards(env);
   const routed = Hub.routeScopes(n)(Array.isArray(event.scopes) ? event.scopes.map(String) : []);
-  const targets: number[] = routed.value0 === undefined ? Array.from({ length: n }, (_, i) => i) : routed.value0;
+  const homes: number[] | null = psOrNull(routed);
+  const targets: number[] = homes || Array.from({ length: n }, (_, i) => i);
   const results = await Promise.allSettled(targets.map((i) => hubShard(env, i).publish(event)));
   results.forEach((r, k) => {
     if (r.status === 'rejected') console.log(JSON.stringify({ event: 'publish_failed', shard: targets[k], error: String(r.reason).slice(0, 200) }));

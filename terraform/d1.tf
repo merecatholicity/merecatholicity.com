@@ -35,8 +35,11 @@ resource "cloudflare_d1_database" "comments" {
   jurisdiction          = null
   name                  = "merecatholicity-comments"
   primary_location_hint = null
+  # Read replicas (2026-09-17): the worker reads them through the Sessions API
+  # for the read routes Domain.Consistency lists (comments-worker/src/dbsession.ts);
+  # every other route, the crons and the Durable Objects use the primary.
   read_replication = {
-    mode = "disabled"
+    mode = "auto"
   }
 
   lifecycle {

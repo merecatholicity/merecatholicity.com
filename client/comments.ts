@@ -663,7 +663,7 @@ import type { Boot } from './boot';
      ledger empty while the server's window lives on, so the reactive ease (any
      429, from any poller or click) is the true safety net; the ledger only
      smooths the steady state. */
-  var READ_CEIL = 120;                // the server bucket: reads per minute per IP (keep in step with wrangler.jsonc READ_LIMIT)
+  var READ_CEIL = 120;                // the server bucket: reads per minute per member (keep in step with wrangler.jsonc READ_LIMIT)
   var readStamps: any[] = [];                // times of recent polled reads
   var readEaseUntil = 0;              // a throttle anywhere eases every poller until here
   function readTrim(now: any) { while (readStamps.length && readStamps[0] <= now - 60000) readStamps.shift(); }

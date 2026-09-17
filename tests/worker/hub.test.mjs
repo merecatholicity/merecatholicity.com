@@ -12,6 +12,7 @@
  * the harness's SQLite. */
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
 import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches, hubSpy, call } from '../_support/worker.mjs';
 import { sendToHub, hubPresenceOf, hubViewersOf, hubDmViewing, hubStats, hubShards } from '../../comments-worker/src/lib.ts';
@@ -37,10 +38,27 @@ globalThis.Response = class extends RealResponse {
   }
 };
 
+/* ctx.storage.sql over node:sqlite: exec(query, ...binds) → a cursor; every
+   statement is recorded, so a test can say storage was never touched */
+function fakeSql() {
+  const db = new DatabaseSync(':memory:');
+  const calls = [];
+  return {
+    calls,
+    db,
+    exec(query, ...binds) {
+      calls.push(query);
+      const st = db.prepare(query);
+      const rows = /^\s*(SELECT|PRAGMA)/i.test(query) ? st.all(...binds).map((r) => ({ ...r })) : (st.run(...binds), []);
+      return { toArray: () => rows, one: () => rows[0], [Symbol.iterator]: () => rows[Symbol.iterator]() };
+    },
+  };
+}
 function fakeCtx(name) {
   const sockets = [];
   return {
     id: { name },
+    storage: { sql: fakeSql() },
     sockets,
     getWebSockets: () => sockets.slice(),
     acceptWebSocket: (ws) => { sockets.push(ws); },
@@ -248,4 +266,93 @@ test('the upgrade is placed by the hint, or by the address without one; the hint
   await call(worker, one, 'GET', '/api/comments/live?h=' + A.hash, undefined, ws);
   assert.equal(hubShards(one), 1);
   assert.deepEqual(spy1.fetched, ['board'], 'no var: one shard, the historic name');
+});
+
+/* ---- targeted presence (the watch registry) ---- */
+
+/* count the relays each shard receives */
+function countRelays(c, n) {
+  const got = Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const inst = c.shard(i);
+    const orig = inst.relay.bind(inst);
+    inst.relay = async (items) => { got[i] += 1; return orig(items); };
+  }
+  return got;
+}
+const watchRows = (c, i) => c.ctxs.get(Hub.shardName(i)).storage.sql.db.prepare('SELECT hash, shard, n FROM watch ORDER BY shard').all().map((r) => ({ ...r }));
+
+test('a presence change is relayed only to the shards that watch the member, and a watch that ended is forgotten', async () => {
+  const c = cluster(BoardHub, N, freshDb());
+  const A = home[0], W = home[2];
+  const got = countRelays(c, N);
+  const w = await c.connect(2); await c.send(2, w, { t: 'auth', key: W.key });
+  await c.send(2, w, { t: 'sub', scope: ['user:' + W.hash, 'presence:' + A.hash] });
+  assert.deepEqual(watchRows(c, 0), [{ hash: A.hash, shard: 2, n: N }], 'shard 0 knows shard 2 watches A');
+  got.fill(0);
+  const a = await c.connect(0); await c.send(0, a, { t: 'auth', key: A.key });
+  assert.deepEqual(got, [0, 0, 1], 'A online: one relay, to shard 2 only');
+  assert.deepEqual(w.frames('presence').slice(-1), [{ v: 1, t: 'presence', hash: A.hash, online: true }]);
+  /* W moves on: the next change finds shard 2 idle, and the row goes */
+  await c.send(2, w, { t: 'sub', scope: ['user:' + W.hash, 'board:index'] });
+  got.fill(0);
+  await c.close(0, a);
+  assert.deepEqual(got, [0, 0, 1], 'one relay, answered idle');
+  assert.deepEqual(watchRows(c, 0), [], 'the ended watch is forgotten');
+  got.fill(0);
+  const a2 = await c.connect(0); await c.send(0, a2, { t: 'auth', key: A.key });
+  assert.deepEqual(got, [0, 0, 0], 'nobody watches: no relay at all');
+  /* W watches again: shard 2 registers afresh, though it had registered once */
+  await c.send(2, w, { t: 'sub', scope: ['user:' + W.hash, 'presence:' + A.hash] });
+  assert.deepEqual(w.frames('presence').slice(-1), [{ v: 1, t: 'presence', hash: A.hash, online: true }], 'the seed');
+  assert.deepEqual(watchRows(c, 0), [{ hash: A.hash, shard: 2, n: N }]);
+  got.fill(0);
+  await c.close(0, a2);
+  assert.deepEqual(got, [0, 0, 1]);
+  assert.deepEqual(w.frames('presence').slice(-1), [{ v: 1, t: 'presence', hash: A.hash, online: false }]);
+});
+
+test('a registration that lands while an idle answer is in flight survives it', async () => {
+  const c = cluster(BoardHub, N, freshDb());
+  const A = home[0], W = home[2];
+  const w = await c.connect(2); await c.send(2, w, { t: 'auth', key: W.key });
+  await c.send(2, w, { t: 'sub', scope: ['presence:' + A.hash] });
+  await c.send(2, w, { t: 'sub', scope: [] });   // the watch ends; the row still stands
+  const s2 = c.shard(2);
+  const orig = s2.relay.bind(s2);
+  s2.relay = async (items) => {
+    const answer = await orig(items);                         // idle: nobody watches A here…
+    await c.send(2, w, { t: 'sub', scope: ['presence:' + A.hash] });   // …and a watcher returns before the answer lands
+    return answer;
+  };
+  const a = await c.connect(0); await c.send(0, a, { t: 'auth', key: A.key });
+  assert.deepEqual(watchRows(c, 0), [{ hash: A.hash, shard: 2, n: N }], 'the fresh registration was not deleted by the stale idle');
+  s2.relay = orig;
+  await c.close(0, a);
+  assert.deepEqual(w.frames('presence').slice(-1), [{ v: 1, t: 'presence', hash: A.hash, online: false }], 'and the returning watcher hears the change');
+});
+
+test('one shard never touches storage; a misrouted member is relayed to every sibling; a reshard\'s rows go on wake', async () => {
+  const one = cluster(BoardHub, 1, freshDb());
+  const A = home[0];
+  const x = await one.connect(0); await one.send(0, x, { t: 'auth', key: A.key });
+  await one.send(0, x, { t: 'sub', scope: ['presence:' + home[1].hash, 'user:' + A.hash] });
+  await one.close(0, x);
+  assert.deepEqual(one.ctxs.get('board').storage.sql.calls, [], 'HUB_SHARDS=1: no storage at all');
+
+  const c = cluster(BoardHub, N, freshDb());
+  const got = countRelays(c, N);
+  const B = home[1];
+  const b = await c.connect(0); await c.send(0, b, { t: 'auth', key: B.key });   // B's home is shard 1
+  assert.deepEqual(got, [0, 1, 1], 'off its home shard: every sibling hears, as before the registry');
+
+  /* rows written under another shard count are dropped the next time the shard wakes */
+  const sql = c.ctxs.get('board').storage.sql;
+  sql.exec("INSERT INTO watch (hash, shard, n, at) VALUES (?, 5, 8, 1)", A.hash);
+  sql.exec("INSERT INTO watch (hash, shard, n, at) VALUES (?, 2, ?, 2)", A.hash, N);
+  const woke = c.wake(0);
+  await woke.watch(1, [], []);
+  assert.deepEqual(watchRows(c, 0), [{ hash: A.hash, shard: 2, n: N }], 'the n=8 row went, the current one stayed');
+  assert.deepEqual(await woke.watch(0, [A.hash], []), [], 'a shard never registers itself');
+  assert.equal(watchRows(c, 0).length, 1);
 });

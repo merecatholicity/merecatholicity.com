@@ -98,21 +98,48 @@ export function d1(db) {
       _step: () => { const results = s.all(...a).map(plain); return { results, success: true, meta: { changes: changes() } }; },
     };
   };
-  return {
+  const batch = async (stmts) => {
+    db.exec('BEGIN');
+    try { const out = stmts.map((st) => st._step()); db.exec('COMMIT'); return out; }
+    catch (e) { db.exec('ROLLBACK'); throw e; }
+  };
+  /* the Sessions API (2026-09-17): every withSession constraint is recorded
+     in `sessions`; one database answers them all, and the bookmark is a
+     counter of the statements run, shaped like D1's */
+  const sessions = [];
+  let ticks = 0;
+  const bookmark = () => (ticks++).toString(16).padStart(8, '0') + '-00000000-00000000-' + 'a'.repeat(32);
+  const api = {
     prepare: (sql) => make(sql, []),
-    batch: async (stmts) => {
-      db.exec('BEGIN');
-      try { const out = stmts.map((st) => st._step()); db.exec('COMMIT'); return out; }
-      catch (e) { db.exec('ROLLBACK'); throw e; }
-    },
+    batch,
     exec: async (sql) => { db.exec(sql); return { count: 1, duration: 0 }; },
+    withSession: (constraint) => {
+      if (constraint === 'refuse-me') throw new Error('D1_ERROR: bad bookmark');
+      sessions.push(constraint);
+      return { prepare: (sql) => make(sql, []), batch, getBookmark: () => bookmark() };
+    },
+    sessions,
     _db: db,
   };
+  return api;
 }
 
 /* ---- the environment ------------------------------------------------------ */
 
-const limiter = () => ({ limit: async () => ({ success: true }) });
+/* a rate-limit binding that counts per key and records every call in `log`
+   as [binding, key]; `max` is the per-key allowance (unlimited by default) */
+export const limiter = (name = '', log = [], max = Infinity) => {
+  const seen = new Map();
+  return {
+    limit: async ({ key }) => {
+      const n = (seen.get(key) || 0) + 1;
+      seen.set(key, n);
+      log.push([name, key]);
+      return { success: n <= max };
+    },
+  };
+};
+const LIMITERS = ['POST_LIMIT', 'READ_LIMIT', 'CONNECT_LIMIT', 'POST_IP_LIMIT', 'READ_IP_LIMIT', 'CONNECT_IP_LIMIT'];
 /* a binding whose real methods throw when reached (Workers AI, Vectorize); any
    other property reads as undefined so a stringify or a truthiness check passes */
 const untouchable = (name, methods) => Object.fromEntries(methods.map((k) =>
@@ -165,7 +192,8 @@ export function hubSpy({ viewersOf = () => [], viewing = () => false, online = (
   const rec = (method, args) => spy.calls.push({ name: current, method, args });
   const stub = {
     publish: async (event) => { rec('publish', [event]); spy.events.push(event); },
-    relay: async (items) => { rec('relay', [items]); },
+    relay: async (items) => { rec('relay', [items]); return { idle: [] }; },
+    watch: async (from, register, also = []) => { rec('watch', [from, register, also]); return online([...register, ...also]); },
     presenceOf: async (hashes) => { rec('presenceOf', [hashes]); spy.presence.push(hashes); return online(hashes); },
     dmViewing: async (recipient, sender) => { rec('dmViewing', [recipient, sender]); spy.viewing.push([recipient, sender]); return viewing(recipient, sender); },
     viewersOf: async (tag, hashes) => { rec('viewersOf', [tag, hashes]); spy.viewersOf.push([tag, hashes]); return viewersOf(tag, hashes); },
@@ -192,14 +220,15 @@ export function emailSpy(sent, fail) {
   };
 }
 
-export function makeEnv({ db, libdb, hub, vars = {}, snapshot, emailFail, email = true } = {}) {
+export function makeEnv({ db, libdb, hub, vars = {}, snapshot, emailFail, email = true, limits = {} } = {}) {
   const r2 = [];
   const emails = [];
+  const limited = [];
   const lib = libdb || freshLibDb();
   return {
     DB: d1(db || freshDb()),
     LIBDB: d1(lib), LIBDB2: d1(lib), LIBDB3: d1(lib),
-    POST_LIMIT: limiter(), READ_LIMIT: limiter(), CONNECT_LIMIT: limiter(),
+    ...Object.fromEntries(LIMITERS.map((n) => [n, limiter(n, limited, limits[n] == null ? Infinity : limits[n])])),
     AVATARS: r2Bucket('AVATARS', r2, snapshot), MEDIA: r2Bucket('MEDIA', r2, snapshot),
     WALLMEDIA: r2Bucket('WALLMEDIA', r2, snapshot), BACKUPS: r2Bucket('BACKUPS', r2, snapshot),
     AI: untouchable('AI', ['run']), MERECAT_INDEX: untouchable('MERECAT_INDEX', ['query', 'upsert', 'deleteByIds', 'getByIds']),
@@ -210,6 +239,8 @@ export function makeEnv({ db, libdb, hub, vars = {}, snapshot, emailFail, email 
     /* the R2 call log, for the hygiene rules; the mails the alerts sent */
     r2,
     emails,
+    /* every rate-limit call, [binding, key] */
+    limited,
   };
 }
 

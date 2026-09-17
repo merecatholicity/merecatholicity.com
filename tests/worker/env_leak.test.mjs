@@ -46,7 +46,8 @@ const vars = Object.fromEntries(SECRET_VARS.map((k) => [k, SENTINEL + k]));
    whole (a leak whose values the harness stubs, so the sentinel sweep alone
    would not see it). */
 const BINDINGS = ['DB', 'LIBDB', 'LIBDB2', 'LIBDB3', 'MERECAT_INDEX', 'AI', 'HUB', 'CHAT',
-  'BACKUPS', 'AVATARS', 'MEDIA', 'WALLMEDIA', 'POST_LIMIT', 'READ_LIMIT', 'CONNECT_LIMIT'];
+  'BACKUPS', 'AVATARS', 'MEDIA', 'WALLMEDIA', 'POST_LIMIT', 'READ_LIMIT', 'CONNECT_LIMIT',
+  'POST_IP_LIMIT', 'READ_IP_LIMIT', 'CONNECT_IP_LIMIT'];
 
 let worker, env, net;
 before(async () => {

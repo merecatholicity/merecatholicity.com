@@ -32,6 +32,7 @@ import {
   verifyTurnstile,
   readLimited,
   registerMember,
+  throttle,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 
@@ -106,8 +107,7 @@ async function handleProfileSave(request: Request, env: Env) {
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'An identity is required.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many changes at once. Wait a minute and try again.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many changes at once. Wait a minute and try again.' }, 429);
   /* Same Turnstile gate as posting: a profile is public text a bot could
      otherwise write with a self-made key and no challenge. */
   if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
@@ -209,8 +209,7 @@ async function handleProfileClear(request: Request, env: Env) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -272,8 +271,7 @@ async function handleProfileAdminEdit(request: Request, env: Env) {
   let data: AdminEditBody;
   try { data = await request.json<AdminEditBody>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const target = String(data.hash || '');
   if (!key || !/^[0-9a-f]{64}$/.test(target)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -305,8 +303,7 @@ async function handleProfileAdminEdit(request: Request, env: Env) {
 async function handleAvatarUpload(request: Request, env: Env) {
   if (!env.AVATARS) return json({ ok: false, error: 'Avatars are not enabled yet. Soon.' }, 503);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Wait a minute and try again.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip))) return json({ ok: false, error: 'Too many requests. Wait a minute and try again.' }, 429);
   const declared = Number(request.headers.get('Content-Length'));
   if (Number.isFinite(declared) && declared > MAX_AVATAR_BYTES + 8192) {
     return json({ ok: false, error: 'The image is too large. 1 MB at most.' }, 413);
@@ -364,8 +361,7 @@ async function handleAvatarDelete(request: Request, env: Env) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const authorHash = await sha256hex(key);

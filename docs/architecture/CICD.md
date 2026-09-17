@@ -415,6 +415,12 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   hint (`app/live.ts` `?h=`) lands off its home shard until it reloads (logged `hub_misrouted`):
   after such a client change, watch `wrangler tail` for it before and after raising. It has
   stood at `2` since 2026-09-17, the day the sharding shipped, so the cross-shard road runs daily.
+- **Rate limits and replicas (2026-09-17):** six rate-limit bindings live in `wrangler.jsonc` — the
+  three member buckets and their per-address backstops (`*_IP_LIMIT`); a number is a one-line change
+  and a push. D1 read replication on the comments database is Terraform's (`terraform/d1.tf`,
+  `read_replication.mode`); turning it off is `"disabled"` and a push, and the worker keeps working
+  either way (without replicas every session is served by the primary). The ops probe's `d1` says
+  where an unconstrained read ran.
 - **Worker secrets** (`TURNSTILE_SECRET`, `VAPID_PRIVATE_KEY`, `TURN_KEY_SECRET`,
   `CF_USAGE_TOKEN`): `cd comments-worker && npx wrangler secret put NAME`.
   Never in git, never in CI. `CF_USAGE_TOKEN` (read-only, *Account Analytics: Read*)

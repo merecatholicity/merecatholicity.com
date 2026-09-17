@@ -26,7 +26,7 @@ test('gated: parse, limit, key, hash, block — each refusal with the text the o
   let r = await gated(req({ key: me.key, x: 1 }), env, { bucket: 'POST_LIMIT', block: true });
   assert.deepEqual([r.ip, r.key, r.me, r.data.x], ['203.0.113.7', me.key, me.hash, 1]);
   /* the 429 sentence is the option's, default 'Too many requests.' */
-  const slow = { ...env, POST_LIMIT: refusing, READ_LIMIT: refusing };
+  const slow = { ...env, POST_LIMIT: refusing, READ_LIMIT: refusing, READ_IP_LIMIT: refusing };
   assert.deepEqual(await body(await gated(req({ key: me.key }), slow, { bucket: 'POST_LIMIT' })), { status: 429, ok: false, error: 'Too many requests.' });
   assert.deepEqual(await body(await gated(req({ key: me.key }), slow, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.' })), { status: 429, ok: false, error: 'Too many requests. Slow down.' });
   assert.ok(!((await gated(req({ key: me.key }), slow, { bucket: null })) instanceof Response), 'bucket null: no limiter consulted');
@@ -52,7 +52,7 @@ test('adminGated: a stranger gets "No.", an admin gets the data and their own ha
   assert.deepEqual(await body(await adminGated(req({}), env)), { status: 403, ok: false, error: 'No.' });
   const r = await adminGated(req({ key: adm.key, hash: 'abc' }), env, { bucket: 'READ_LIMIT' });
   assert.deepEqual([r.me, r.data.hash], [adm.hash, 'abc']);
-  const slow = { ...env, READ_LIMIT: refusing };
+  const slow = { ...env, READ_LIMIT: refusing, READ_IP_LIMIT: refusing };
   assert.equal((await adminGated(req({ key: adm.key }), slow, { bucket: 'READ_LIMIT' })).status, 429);
   assert.equal((await adminGated(req({ key: adm.key }), slow)).me, adm.hash, 'no bucket: no limiter');
   assert.deepEqual(await body(await adminGated(req('{'), env)), { status: 400, ok: false, error: 'Bad request.' });
@@ -61,7 +61,7 @@ test('adminGated: a stranger gets "No.", an admin gets the data and their own ha
 test('readLimited: the ip, or the refusal — JSON, or plain text where the endpoint always answered so', async () => {
   const env = makeEnv({ db: freshDb() });
   assert.equal(await readLimited(req(undefined, { method: 'GET', ip: '198.51.100.9' }), env), '198.51.100.9');
-  const slow = { ...env, READ_LIMIT: refusing };
+  const slow = { ...env, READ_LIMIT: refusing, READ_IP_LIMIT: refusing };
   assert.deepEqual(await body(await readLimited(req(undefined, { method: 'GET' }), slow, { limited: 'Too many requests. Slow down.' })), { status: 429, ok: false, error: 'Too many requests. Slow down.' });
   const plain = await readLimited(req(undefined, { method: 'GET' }), slow, { plain: true });
   assert.deepEqual([plain.status, await plain.text()], [429, 'Too many requests.']);

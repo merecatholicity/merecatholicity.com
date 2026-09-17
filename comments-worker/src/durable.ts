@@ -84,6 +84,11 @@ export class BoardHub extends DurableObject<Env> {
   #bySub = new Map<string, Set<WebSocket>>();
   #byMe = new Map<string, Set<WebSocket>>();
   #misrouted = new WeakSet<WebSocket>();
+  /* the watch registry (2026-09-17): members homed on a sibling that this
+     shard has registered a presence watch for, in this lifetime */
+  #registered = new Set<string>();
+  #storeReady = false;
+  #lastAt = 0;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -299,12 +304,62 @@ export class BoardHub extends DurableObject<Env> {
     });
   }
 
-  /* A presence change reaches every watcher, on every shard. */
+  /* ---- the watch registry (2026-09-17) ----
+     A presence change used to be relayed to EVERY sibling, so each shard
+     received every login and logout on the site — a ceiling no shard count
+     could lift. Now a member's home shard keeps, in its own SQLite, which
+     siblings hold a watcher of that member (`watch`: registered by the
+     watcher's shard when a socket subscribes, in the same turn that answers
+     the presence seed), and relays a change to those alone. A sibling that
+     finds nobody watching answers `idle`, and the row goes — guarded by the
+     row's `at`, so a registration that lands while that answer is in flight
+     survives it. Rows left by another shard count are dropped on wake.
+     Untouched when HUB_SHARDS is 1 (no siblings, no storage). Storage does
+     not keep an object from hibernating. */
+  #store(): SqlStorage | null {
+    const n = hubShards(this.env);
+    const sql = n > 1 && this.ctx.storage ? this.ctx.storage.sql : null;
+    if (!sql) return null;
+    if (!this.#storeReady) {
+      sql.exec('CREATE TABLE IF NOT EXISTS watch (hash TEXT NOT NULL, shard INTEGER NOT NULL, n INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (hash, shard)) WITHOUT ROWID');
+      sql.exec('DELETE FROM watch WHERE n != ?', n);
+      this.#storeReady = true;
+    }
+    return sql;
+  }
+  /* A registration stamp that only ever grows within a lifetime (the clock
+     does not advance inside one event). */
+  #tick(): number {
+    this.#lastAt = Math.max(Date.now(), this.#lastAt + 1);
+    return this.#lastAt;
+  }
+
+  /* A presence change reaches every watcher: here, and on each sibling the
+     registry names. A member whose socket sits off their home shard (an old
+     bundle, `hub_misrouted`) has no registry here, so their change goes to
+     every sibling, as before the registry. */
   async #broadcastPresence(hash: string, online: boolean) {
     const scope = 'presence:' + hash;
     const payload = JSON.stringify({ v: 1, t: 'presence', hash, online: !!online });
     this.#fan(scope, payload);
-    await this.#relayTo(this.#siblings(), [{ scope, payload }]);
+    const n = hubShards(this.env);
+    if (n <= 1) return;
+    const items = [{ scope, payload }];
+    const sql = this.#store();
+    if (!sql || Hub.shardOf(n)(hash) !== this.#idx) { await this.#relayTo(this.#siblings(), items); return; }
+    const rows = sql.exec<{ shard: number; at: number }>('SELECT shard, at FROM watch WHERE hash = ?', hash).toArray();
+    const targets = rows.filter((r) => r.shard !== this.#idx && r.shard >= 0 && r.shard < n);
+    if (!targets.length) return;
+    const answers = await Promise.allSettled(targets.map((t) => hubShard(this.env, t.shard).relay(items)));
+    answers.forEach((a, k) => {
+      const t = targets[k];
+      if (a.status === 'rejected') {
+        console.log(JSON.stringify({ event: 'hub_relay_failed', from: this.#idx, to: t.shard, error: String(a.reason).slice(0, 200) }));
+        return;
+      }
+      const idle = a.value && Array.isArray(a.value.idle) ? a.value.idle : [];
+      if (idle.indexOf(scope) !== -1) sql.exec('DELETE FROM watch WHERE hash = ? AND shard = ? AND at = ?', hash, t.shard, t.at);
+    });
   }
 
   /* Frames for members' private scopes, each delivered on that member's home
@@ -321,7 +376,9 @@ export class BoardHub extends DurableObject<Env> {
     await Promise.allSettled(Array.from(bound.entries()).map(([i, list]) => this.#relayTo([{ i, stub: hubShard(this.env, i) }], list)));
   }
 
-  /* Who, of these, is online — each asked of their home shard. */
+  /* Who, of these, is online — each asked of their home shard, which in the
+     same turn registers this shard as a watcher of the ones not yet
+     registered here (the seed and the registration cannot be split). */
   async #presenceAcross(hashes: string[]): Promise<string[]> {
     const n = hubShards(this.env);
     const bound = new Map<number, string[]>();
@@ -332,20 +389,59 @@ export class BoardHub extends DurableObject<Env> {
       const list = bound.get(i);
       if (list) list.push(h); else bound.set(i, [h]);
     }
-    const parts = await Promise.allSettled(Array.from(bound.entries()).map(([i, list]) => hubShard(this.env, i).presenceOf(list)));
-    for (const p of parts) if (p.status === 'fulfilled' && Array.isArray(p.value)) online.push(...p.value.map(String));
+    const asks = Array.from(bound.entries()).map(([i, list]) => {
+      const fresh = list.filter((h) => !this.#registered.has(h));
+      const known = list.filter((h) => this.#registered.has(h));
+      return { fresh, answer: hubShard(this.env, i).watch(this.#idx, fresh, known) };
+    });
+    const parts = await Promise.allSettled(asks.map((a) => a.answer));
+    parts.forEach((p, k) => {
+      if (p.status !== 'fulfilled') return;
+      for (const h of asks[k].fresh) this.#registered.add(h);
+      if (Array.isArray(p.value)) online.push(...p.value.map(String));
+    });
     return online;
   }
 
   /* ---- RPC, from the worker and from sibling shards ---- */
 
   /* A sibling's frames for scopes held here (presence changes, typing, call
-     signals). Local delivery only — a relay never relays. */
-  async relay(items: RelayItem[]) {
+     signals). Local delivery only — a relay never relays. The answer names the
+     scopes nobody here holds, so a home shard can forget a watch that ended;
+     this shard forgets it registered one too, and registers afresh on the
+     next subscribe. */
+  async relay(items: RelayItem[]): Promise<{ idle: string[] }> {
     this.#index();
+    const idle: string[] = [];
     for (const it of Array.isArray(items) ? items : []) {
-      if (it && typeof it.scope === 'string' && typeof it.payload === 'string') this.#fan(it.scope, it.payload);
+      if (!it || typeof it.scope !== 'string' || typeof it.payload !== 'string') continue;
+      if (!this.#bySub.has(it.scope)) {
+        idle.push(it.scope);
+        if (it.scope.startsWith('presence:')) this.#registered.delete(it.scope.slice(9));
+        continue;
+      }
+      this.#fan(it.scope, it.payload);
     }
+    return { idle };
+  }
+
+  /* RPC from a sibling whose socket subscribed to these members' presence:
+     register it as a watcher of `register` (members homed here), and answer
+     which of `register` and `also` are online now — one turn, no await. */
+  async watch(from: number, register: string[], also: string[] = []) {
+    this.#index();
+    const n = hubShards(this.env);
+    const src = Math.floor(Number(from));
+    const fresh = (Array.isArray(register) ? register : []).map(String).filter((h) => HEX64.test(h));
+    const known = (Array.isArray(also) ? also : []).map(String).filter((h) => HEX64.test(h));
+    const sql = src >= 0 && src < n && src !== this.#idx ? this.#store() : null;
+    if (sql && fresh.length) {
+      const at = this.#tick();
+      for (const h of fresh) {
+        sql.exec('INSERT INTO watch (hash, shard, n, at) VALUES (?, ?, ?, ?) ON CONFLICT (hash, shard) DO UPDATE SET n = excluded.n, at = excluded.at', h, src, n, at);
+      }
+    }
+    return fresh.concat(known).filter((h) => this.#isOnline(h));
   }
 
   /* RPC for the batched inbox check: of these hashes, which are online now

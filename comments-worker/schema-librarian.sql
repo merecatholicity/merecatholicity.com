@@ -18,7 +18,12 @@ CREATE TABLE IF NOT EXISTS works (
   kind       TEXT,                      -- parser used: pandoc | hand | bible | text
   hash       TEXT,                      -- ingest content hash
   chunks     INTEGER NOT NULL DEFAULT 0,-- stamped at ingest end, so rosters never scan
-  updated_at INTEGER
+  updated_at INTEGER,
+  -- the work's stored text, in characters (LENGTH of text + heading over its
+  -- chunks), stamped at ingest end so the pipeline's size projection never
+  -- scans the chunk store (2026-09-17; rooms made before it gain the column
+  -- and a backfill from ensureLibSchema in routes/merecat.ts)
+  text_bytes INTEGER NOT NULL DEFAULT 0
 );
 
 -- The retrieval unit: a few hundred words of one work, carrying the deep

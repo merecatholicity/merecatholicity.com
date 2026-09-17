@@ -64,6 +64,7 @@ import {
   adminGated,
   readLimited,
   registerMember,
+  throttle,
 } from '../lib.ts';
 import { merecatMentionKick } from './merecat.ts';
 import type { Env } from '../env.ts';
@@ -138,8 +139,7 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
   /* Throttle before any lookup work, so a flood cannot cost a DB read per
      request before the limit engages. */
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many comments at once. Wait a minute and try again.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many comments at once. Wait a minute and try again.' }, 429);
 
   /* Three targets share this pipeline: a site page, a new board topic
      under a category, or a reply to an existing topic. */
@@ -385,8 +385,7 @@ async function handleSelfDelete(request: Request, env: Env, ctx: ExecutionContex
   const key = String(data.key || '');
   if (!Number.isInteger(id) || id < 1 || !key) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
@@ -603,8 +602,7 @@ async function handleEdit(request: Request, env: Env, ctx: ExecutionContext) {
   if (body.length > MAX_BODY) return json({ ok: false, error: 'The comment is too long.' }, 400);
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
@@ -653,8 +651,7 @@ async function handleMeta(request: Request, env: Env) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
@@ -889,8 +886,7 @@ async function handleModerate(request: Request, env: Env, ctx: ExecutionContext)
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const id = Number(data.id);
   const act = String(data.act || '');
@@ -961,8 +957,7 @@ async function handleMove(request: Request, env: Env, ctx: ExecutionContext) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const id = Number(data.id);
   if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -1041,8 +1036,7 @@ async function handleTrust(request: Request, env: Env) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -1067,8 +1061,7 @@ async function handleAudit(request: Request, env: Env) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
@@ -1117,9 +1110,7 @@ async function handleWatch(request: Request, env: Env) {
   const act = String(data.act || 'status');
   if (!key || !Number.isInteger(topicId) || topicId < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const limiter = act === 'status' ? env.READ_LIMIT : env.POST_LIMIT;
-  const { success } = await limiter.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, act === 'status' ? 'READ_LIMIT' : 'POST_LIMIT', ip, { key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
@@ -1166,8 +1157,7 @@ async function handleBoardReads(request: Request, env: Env) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const catPage = boardKey('board:' + String(data.cat || ''));
   if (!key || !catPage) return json({ ok: true, unread: [] }, 200);
@@ -1254,8 +1244,7 @@ async function handleReportDismiss(request: Request, env: Env) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const id = Number(data.id);
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
@@ -1269,8 +1258,7 @@ async function handleApprove(request: Request, env: Env, ctx: ExecutionContext) 
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const id = Number(data.id);
   if (!Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);

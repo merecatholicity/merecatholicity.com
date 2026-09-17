@@ -44,6 +44,7 @@ import {
   notifyDiscordFeedComment,
   socialOff,
   readLimited,
+  throttle,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 import type { Body } from '../lib.ts';
@@ -95,8 +96,7 @@ async function handleWallPostGet(request: Request, env: Env) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   let me = null;
   const key = String((data && data.key) || '');
   if (key) {
@@ -178,8 +178,7 @@ async function handleReact(request: Request, env: Env, ctx: ExecutionContext) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Sign in to react.' }, 401);
   const { target, id, raw } = reactAlias(data);
@@ -246,8 +245,7 @@ async function handleReactWho(request: Request, env: Env) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const { target, id } = reactAlias(data);
   if (!isReactTarget(target) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const LIMIT = 60;
@@ -277,8 +275,7 @@ async function handleWallPost(request: Request, env: Env, ctx: ExecutionContext)
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Sign in to post.' }, 401);
   if (await socialOff(env)) return noSuchPage();
@@ -329,8 +326,7 @@ async function handleWallComment(request: Request, env: Env, ctx: ExecutionConte
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   if (String(data.website || '')) return json({ ok: true }, 200);   // honeypot
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Sign in to comment.' }, 401);
   if (await socialOff(env)) return noSuchPage();

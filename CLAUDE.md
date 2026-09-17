@@ -115,8 +115,8 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing context;
   its `?v=` is stamped into nav.js's `MC_ASSETS`, never by hand). **Only `loadTurnstile()` mounts,
   only from the focus net or a press, never because a view opened, never for a spared identity** — the test sweeps every call site.
-- **`READ_LIMIT` is one per-IP bucket shared by every read endpoint**; the client's read-budget
-  coordinator paces every poller — never add a poller outside it.
+- **Limits are per MEMBER plus an address backstop** (`throttle`, the one `.limit(` caller); one
+  `READ_LIMIT` for all reads, client-paced — no stray poller. **D1 replicas: `Domain.Consistency`'s list only**.
 - **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;
   the rules are `Domain.Comments`, whose polarity is the OPPOSITE of the social switch — only a
   literal `'1'` / a listed path opens anything).

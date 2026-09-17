@@ -24,6 +24,7 @@ import * as OpsK from '../../purescript/output/Domain.Ops/index.js';
 import { sendAlert } from './alerts.ts';
 import { getOpsState, setOpsState, hubStats } from './lib.ts';
 import type { Env } from './env.ts';
+import { servedBy } from './dbsession.ts';
 
 export type Condition = { kind: string; subject: string; detail: string };
 export type Step = [string, (env: Env) => Promise<unknown>];
@@ -144,5 +145,7 @@ export async function readOps(env: Env) {
      is the number that says when to raise HUB_SHARDS. Shown, never told. */
   let hub: Awaited<ReturnType<typeof hubStats>> = [];
   try { hub = await hubStats(env); } catch (e) { hub = []; }
-  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest, csp, hub };
+  /* where one unconstrained D1 read ran (2026-09-17): replicas at work, or not */
+  const d1 = await servedBy(env);
+  return { now, ok, heartbeat, stale, never, backup, object, backup_ok: backupOk, open, alerts_at: alerts.at || null, webtest, csp, hub, d1 };
 }

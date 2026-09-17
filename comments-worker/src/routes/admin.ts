@@ -33,6 +33,7 @@ import {
   sha256hex,
   sweepJournalComments,
   adminGated,
+  throttle,
 } from '../lib.ts';
 
 /* Admin platform settings: read them (with the current media usage), and set the
@@ -224,8 +225,7 @@ async function handleBackup(request: Request, env: Env) {
     return json({ ok: false, error: 'Bad request.' }, 400);
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
@@ -252,8 +252,7 @@ async function handleLock(request: Request, env: Env) {
   let data: { key?: unknown; hash?: unknown; locked?: unknown };
   try { data = await request.json<{ key?: unknown; hash?: unknown; locked?: unknown }>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -278,8 +277,7 @@ async function handleShadowban(request: Request, env: Env) {
   let data: { key?: unknown; hash?: unknown; on?: unknown; shadowbanned?: unknown };
   try { data = await request.json<{ key?: unknown; hash?: unknown; on?: unknown; shadowbanned?: unknown }>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -323,8 +321,7 @@ async function handleDeleteUser(request: Request, env: Env) {
   let data: { key?: unknown; hash?: unknown };
   try { data = await request.json<{ key?: unknown; hash?: unknown }>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -404,8 +401,7 @@ async function handleIpBan(request: Request, env: Env) {
   let data: { key?: unknown; ip?: unknown; ips?: unknown; banned?: unknown };
   try { data = await request.json<{ key?: unknown; ip?: unknown; ips?: unknown; banned?: unknown }>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const cip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: cip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', cip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const raw = Array.isArray(data.ips) ? data.ips : [data.ip];
   const keys = [...new Set(raw.map(toBanKey).filter(Boolean))];
@@ -483,8 +479,7 @@ async function handleAdmin(request: Request, env: Env) {
   let data: { key?: unknown; hash?: unknown; admin?: unknown; on?: unknown };
   try { data = await request.json<{ key?: unknown; hash?: unknown; admin?: unknown; on?: unknown }>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);

@@ -29,6 +29,7 @@ import {
   adminGated,
   ingestGated,
   registerMember,
+  throttle,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 import type { Body } from '../lib.ts';
@@ -178,8 +179,7 @@ async function handleMerecatChatSave(request: Request, env: Env) {
   // save/unsave clicks is legitimate — the 5-writes-a-minute throttle once
   // 429'd a retried save that the first (response-lost) attempt had already
   // landed, which the client then swallowed in silence.
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   const id = Number(data.id);
   if (!key || !Number.isInteger(id) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -197,6 +197,28 @@ async function handleMerecatChatSave(request: Request, env: Env) {
 /* Monthly sweep of expired threads (the opportunistic per-owner prune in
    handleMerecatChats covers everyone who returns; this catches the rest).
    Self-contained like every prune, so a failure never stops the backup. */
+/* The librarian rooms are derived data with no migration ledger: a column the
+   worker starts to read is added here, once per isolate per room, and
+   backfilled for the rows that predate it (2026-09-17: works.text_bytes, so
+   the pipeline's size projection sums a column instead of scanning every
+   chunk — the deep rooms were reading 49,076 and 25,046 rows a call). The
+   backfill touches only works that have chunks and no size yet, through the
+   chunks_work_idx index; a second isolate racing the ALTER meets "duplicate
+   column" and carries on. */
+const LIB_TEXT_BYTES = "SELECT COALESCE(SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))), 0) FROM chunks WHERE work_id = works.id";
+const libSchemaReady = new WeakSet<D1Database>();
+export async function ensureLibSchema(db: D1Database | undefined) {
+  if (!db || libSchemaReady.has(db)) return;
+  const cols = await db.prepare('PRAGMA table_info(works)').all<{ name: string }>();
+  if (!(cols.results || []).some((c) => c.name === 'text_bytes')) {
+    try { await db.prepare('ALTER TABLE works ADD COLUMN text_bytes INTEGER NOT NULL DEFAULT 0').run(); } catch (err) {
+      if (!/duplicate column/i.test(String(err))) throw err;
+    }
+  }
+  await db.prepare('UPDATE works SET text_bytes = (' + LIB_TEXT_BYTES + ') WHERE text_bytes = 0 AND chunks > 0').run();
+  libSchemaReady.add(db);
+}
+
 async function handleMerecatIngest(request: Request, env: Env) {
   const pre = await ingestGated(request, env);
   if (pre instanceof Response) return pre;
@@ -326,8 +348,11 @@ async function handleMerecatIngest(request: Request, env: Env) {
   }
 
   if (mode === 'end') {
-    // the chunk count stamps the works row here so roster reads never scan
-    await LIB.prepare('UPDATE works SET hash = ?2, chunks = ?3, updated_at = ?4 WHERE id = ?1')
+    // the chunk count and the text size stamp the works row here, so roster
+    // reads and the size projection never scan (the size is one indexed
+    // aggregate over this work's own chunks)
+    await ensureLibSchema(LIB);
+    await LIB.prepare('UPDATE works SET hash = ?2, chunks = ?3, updated_at = ?4, text_bytes = (' + LIB_TEXT_BYTES + ') WHERE id = ?1')
       .bind(id, String(work.hash || ''), Number(work.chunks) || 0, Math.floor(Date.now() / 1000)).run();
     return json({ ok: true, ended: id }, 200);
   }
@@ -379,8 +404,7 @@ async function handleMerecatForward(request: Request, env: Env) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.POST_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   const key = String(data.key || '');
   const chatId = Number(data.chat);
   const topicId = Number(data.topic);
@@ -475,8 +499,7 @@ async function handleMerecatAbout(request: Request, env: Env) {
   let data: any = {};
   try { data = await request.json(); } catch { return json({ ok: false, error: 'No.' }, 403); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.READ_LIMIT.limit({ key: ip });
-  if (!success) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
   if (!(await requireAdmin(env, String(data.key || '')))) return json({ ok: false, error: 'No.' }, 403);
   const cfg = await merecatConfig(env);
   const day = merecatDay();
@@ -531,8 +554,11 @@ async function handleMerecatWorks(request: Request, env: Env) {
   const rows = await env.LIBDB.prepare(
     'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all<WorkRow>();
   for (const r of rows.results || []) works.push(r);
+  // the stored text per room, from the sizes stamped at ingest end — never a
+  // scan of the chunk store (2026-09-17)
+  await ensureLibSchema(env.LIBDB);
   const t1 = await env.LIBDB.prepare(
-    "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first<{ b: number }>();
+    'SELECT COALESCE(SUM(text_bytes), 0) AS b FROM works').first<{ b: number }>();
   tb1 = (t1 && t1.b) || 0;
   let tb3 = 0;
   const deepRooms: [D1Database | undefined, number][] = [[env.LIBDB2, 2], [env.LIBDB3, 3]];
@@ -542,8 +568,9 @@ async function handleMerecatWorks(request: Request, env: Env) {
       const rows2 = await db.prepare(
         'SELECT id, title, tier, kind, hash, chunks FROM works ORDER BY tier, id').all<WorkRow>();
       for (const r of rows2.results || []) works.push(r);
+      await ensureLibSchema(db);
       const t2 = await db.prepare(
-        "SELECT SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))) AS b FROM chunks").first<{ b: number }>();
+        'SELECT COALESCE(SUM(text_bytes), 0) AS b FROM works').first<{ b: number }>();
       if (tag === 2) tb2 = (t2 && t2.b) || 0; else tb3 = (t2 && t2.b) || 0;
     } catch (err) {
       console.log(JSON.stringify({ event: 'merecat_works' + tag + '_failed', error: String(err) }));
@@ -609,12 +636,13 @@ async function handleMerecatStats(request: Request, env: Env) {
     'SELECT day, q, in_tok, out_tok FROM usage ORDER BY day DESC LIMIT 14').all();
   const users = await env.LIBDB.prepare(
     'SELECT day, COUNT(*) AS users FROM user_usage GROUP BY day ORDER BY day DESC LIMIT 14').all();
-  const total = await env.LIBDB.prepare('SELECT COUNT(*) AS n FROM chunks').first<{ n: number }>();
+  // the chunk counts stamped at ingest end, summed — not a count of the store
+  const total = await env.LIBDB.prepare('SELECT COALESCE(SUM(chunks), 0) AS n FROM works').first<{ n: number }>();
   let deepN = 0;
   for (const db of [env.LIBDB2, env.LIBDB3]) {
     if (!db) continue;
     try {
-      const d2 = await db.prepare('SELECT COUNT(*) AS n FROM chunks').first<{ n: number }>();
+      const d2 = await db.prepare('SELECT COALESCE(SUM(chunks), 0) AS n FROM works').first<{ n: number }>();
       deepN += (d2 && d2.n) || 0;
     } catch { /* the first room still reports */ }
   }
@@ -684,8 +712,7 @@ async function handleMerecatLive(request: Request, env: Env) {
   if (!originOk(request, env)) return new Response('bad origin', { status: 403 });
   if (!env.CHAT) return new Response('unavailable', { status: 503 });
   const ip = request.headers.get('CF-Connecting-IP') || '';
-  const { success } = await env.CONNECT_LIMIT.limit({ key: ip });
-  if (!success) return new Response('slow down', { status: 429 });
+  if (!(await throttle(env, 'CONNECT_LIMIT', ip))) return new Response('slow down', { status: 429 });
   const cid = Number(new URL(request.url).searchParams.get('chat')) || 0;
   if (!cid) return new Response('need a conversation id (call ask-init first)', { status: 400 });
   return env.CHAT.get(env.CHAT.idFromName('chat:' + cid)).fetch(request);
