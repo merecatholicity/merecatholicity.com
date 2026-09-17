@@ -9,7 +9,7 @@
    is not a place to plant a leak. */
 import * as Wire from '../../purescript/output/Domain.Wire/index.js';
 import { EnvLeak, guardResponse, refusal, sealEnv, secretValues, takeTrips } from './egress.ts';
-import { UNSCANNED } from './env.ts';
+import { PUBLIC_VARS } from './env.ts';
 import type { Env } from './env.ts';
 import { noteLeak, noteShape } from './ops.ts';
 
@@ -57,7 +57,7 @@ export async function serve(request: Request, rawEnv: Env, ctx: ExecutionContext
     console.log(JSON.stringify({ event: 'shape_broken', site, fields: broken }));
     ctx.waitUntil(noteShape(env, { site, fields: broken }));
   } : undefined;
-  return guardResponse(res, secretValues(rawEnv, UNSCANNED), (names) => {
+  return guardResponse(res, secretValues(rawEnv, PUBLIC_VARS), (names) => {
     console.log(JSON.stringify({ event: 'egress_blocked', site, status, names }));
     ctx.waitUntil(noteLeak(env, { kind: 'answer', site, names }));
   }, inspect);

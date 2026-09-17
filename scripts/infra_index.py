@@ -161,7 +161,8 @@ def wrap_text(text):
         if fence or len(ln) <= WIDTH or ln.startswith('|') or ln.startswith('    ') or ln.startswith('#'):
             out.append(ln)
             continue
-        indent = '  ' if ln.startswith('- ') else ''
+        # a bullet's continuation keeps the bullet's indent, as its first line gives it
+        indent = '  ' if ln.startswith('- ') or ln.startswith('  ') else ''
         out.extend(textwrap.fill(ln, width=WIDTH, break_long_words=False, break_on_hyphens=False,
                                  subsequent_indent=indent).split('\n'))
     return '\n'.join(out)

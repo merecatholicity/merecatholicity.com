@@ -21,7 +21,7 @@ import {
   EnvLeak, MIN_SECRET_LENGTH, REFUSAL_TEXT, deriveEnv, guardResponse, leakedNames, sealEnv,
   secretValues, shortSecrets, takeTrips,
 } from '../../comments-worker/src/egress.ts';
-import { PUBLIC_VARS, UNSCANNED } from '../../comments-worker/src/env.ts';
+import { PUBLIC_VARS } from '../../comments-worker/src/env.ts';
 import { PUBLIC_VARS as CONTACT_PUBLIC } from '../../contact-worker/src/vars.ts';
 import { withNames } from '../../comments-worker/src/db.ts';
 import { readOps, runSelfCheck } from '../../comments-worker/src/ops.ts';
@@ -106,7 +106,7 @@ test('each request gets its own seal; a derived env (the D1 session) keeps the s
   assert.throws(() => Object.assign({}, derived), EnvLeak);
   assert.deepEqual(takeTrips(a), ['enumerated'], 'the request hears of a trip made through the derived env');
   assert.deepEqual(takeTrips(b), []);
-  assert.deepEqual(secretValues(derived, UNSCANNED), [['TURN_KEY_SECRET', SECRET]]);
+  assert.deepEqual(secretValues(derived, PUBLIC_VARS), [['TURN_KEY_SECRET', SECRET]]);
   /* an unsealed base (a unit test calling the helper directly) keeps the prototype road */
   const plain = deriveEnv(raw, { DB: 'session' });
   assert.equal(plain.DB, 'session');
@@ -122,15 +122,14 @@ test('the scan looks for every non-public env string long enough to find, and fo
     VAPID_PUBLIC_KEY: 'B'.repeat(87),
     TURNSTILE_SECRET: '0x4AAAAAAAsecret-for-the-test',
     A_SECRET_NOBODY_LISTED: 'n'.repeat(MIN_SECRET_LENGTH),
-    TEST_HASHES: 'a'.repeat(64) + ',' + 'b'.repeat(64),
     SHORT: 'abc',
     EMPTY: '',
     NUMBER: 5,
   };
   const want = [['TURNSTILE_SECRET', raw.TURNSTILE_SECRET], ['A_SECRET_NOBODY_LISTED', raw.A_SECRET_NOBODY_LISTED]];
-  assert.deepEqual(secretValues(raw, UNSCANNED), want, 'default-deny: a secret nobody listed is scanned for');
-  assert.deepEqual(secretValues(sealEnv(raw), UNSCANNED), want, 'the same census from the sealed env');
-  assert.deepEqual(shortSecrets(sealEnv(raw), UNSCANNED), ['SHORT'], 'a short secret is named for the self-check');
+  assert.deepEqual(secretValues(raw, PUBLIC_VARS), want, 'default-deny: a secret nobody listed is scanned for');
+  assert.deepEqual(secretValues(sealEnv(raw), PUBLIC_VARS), want, 'the same census from the sealed env');
+  assert.deepEqual(shortSecrets(sealEnv(raw), PUBLIC_VARS), ['SHORT'], 'a short secret is named for the self-check');
   assert.deepEqual(leakedNames('{"q":"0x4AAAAAAAsecret-for-the-test"}', want), ['TURNSTILE_SECRET']);
   assert.deepEqual(leakedNames('{"q":"0x4AAAAAAAsecret"}', want), [], 'a fragment is not the secret');
 });
@@ -313,7 +312,6 @@ test('the public vars are exactly the vars env.ts declares, and cover every var 
   const secrets = [...secretsSection.matchAll(/^\s*([A-Z][A-Z0-9_]*)\?: string;/gm)].map((m) => m[1]);
   assert.ok(secrets.length >= 5);
   assert.deepEqual(secrets.filter((k) => PUBLIC_VARS.includes(k)), [], 'no secret is declared public');
-  assert.deepEqual(UNSCANNED.filter((k) => !PUBLIC_VARS.includes(k)), ['TEST_HASHES'], 'the one unscanned secret is the hash list');
   /* the contact worker */
   const c = jsonc('contact-worker/wrangler.jsonc');
   assert.deepEqual(Object.keys(c.vars || {}).filter((k) => !CONTACT_PUBLIC.includes(k)), []);
@@ -331,7 +329,7 @@ test('every entry seals the env, and every frame leaves through the guarded help
   assert.ok(!/\basync fetch\(request: Request, env: Env/.test(index), 'no second fetch entry');
   const serveSrc = src('comments-worker/src/serve.ts');
   assert.match(serveSrc, /const env = sealEnv\(rawEnv\);/);
-  assert.match(serveSrc, /return guardResponse\(res, secretValues\(rawEnv, UNSCANNED\)/);
+  assert.match(serveSrc, /return guardResponse\(res, secretValues\(rawEnv, PUBLIC_VARS\)/);
   const hub = src('comments-worker/src/durable.ts');
   assert.equal((hub.match(/super\(ctx, sealEnv\(env\)\);/g) || []).length, 2, 'both Durable Objects seal');
   assert.ok(!/super\(ctx, env\)/.test(hub));

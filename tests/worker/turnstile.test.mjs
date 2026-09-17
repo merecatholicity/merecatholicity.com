@@ -81,9 +81,11 @@ test('a TEST: token is verified like any token, and an established identity with
     const db = freshDb();
     establish(db, kit.hash);
     db.prepare("INSERT INTO comments (id, page, title, author_hash, body, status, created_at, last_at) VALUES (1, 'board:pub', 'A topic', ?, 'x', 'live', 5, 5)").run(kit.hash);
-    const env = makeEnv({ db, vars: { MC_TEST_BYPASS: 'the-old-bypass-secret-value', TEST_HASHES: kit.hash } });
+    /* the old secret, as if it were still set (TEST_HASHES is gone too: a
+       secret holding identity hashes would now refuse every answer naming one) */
+    const env = makeEnv({ db, vars: { MC_TEST_BYPASS: 'the-old-bypass-secret-value' } });
     const forged = await call(worker, env, 'POST', '/api/comments', { key: kit.key, topic: 1, body: 'a reply', token: 'TEST:the-old-bypass-secret-value' });
-    assert.equal(forged.status, 403, 'the old token is refused even with the old secrets in the env');
+    assert.equal(forged.status, 403, 'the old token is refused even with the old secret in the env');
     assert.equal(asked.length, 1, 'and it was asked of siteverify, like any token');
     resetCaches();
     const spared = await call(worker, env, 'POST', '/api/comments', { key: kit.key, topic: 1, body: 'a reply' });

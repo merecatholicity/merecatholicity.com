@@ -23,7 +23,7 @@
 import * as OpsK from '../../purescript/output/Domain.Ops/index.js';
 import { sendAlert } from './alerts.ts';
 import { getOpsState, setOpsState, hubStats } from './lib.ts';
-import { UNSCANNED } from './env.ts';
+import { PUBLIC_VARS } from './env.ts';
 import type { Env } from './env.ts';
 import { servedBy } from './dbsession.ts';
 import { shortSecrets } from './egress.ts';
@@ -113,7 +113,7 @@ export async function runSelfCheck(env: Env): Promise<Condition[]> {
     const last = Number(hb[name] || 0);
     if (OpsK.isStale({ name, last, now })) conds.push(OpsK.cronStale(name)(now - last));
   }
-  for (const name of shortSecrets(env, UNSCANNED)) conds.push(OpsK.secretShort(name));
+  for (const name of shortSecrets(env, PUBLIC_VARS)) conds.push(OpsK.secretShort(name));
   return conds;
 }
 

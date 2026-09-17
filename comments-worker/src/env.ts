@@ -72,12 +72,6 @@ export const PUBLIC_VARS: readonly string[] = [
   'HIDDEN_HASHES', 'HUB_SHARDS',
 ];
 
-/* What the scan skips: the public vars, and — for the one deploy until the
-   secret is deleted — TEST_HASHES, the retired bypass's LIST OF IDENTITY
-   HASHES, which appear in every answer that names a test identity's post
-   (tests/_support/retirements.json holds the date). */
-export const UNSCANNED: readonly string[] = [...PUBLIC_VARS, 'TEST_HASHES'];
-
 /* the send_email binding's message (the shape contact-worker sends) */
 export type EmailAddress = string | { email: string; name?: string };
 export type EmailSend = {

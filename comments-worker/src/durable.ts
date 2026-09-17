@@ -37,7 +37,7 @@ import {
 import type { HubStub, HubShardStats } from './lib.ts';
 import { leakedNames, sealEnv, secretValues } from './egress.ts';
 import { noteLeak } from './ops.ts';
-import { UNSCANNED } from './env.ts';
+import { PUBLIC_VARS } from './env.ts';
 import type { Env } from './env.ts';
 
 /* What one socket's attachment holds (it survives hibernation; the in-memory
@@ -99,7 +99,7 @@ export class BoardHub extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, sealEnv(env));
-    this.#secrets = secretValues(env, UNSCANNED);
+    this.#secrets = secretValues(env, PUBLIC_VARS);
     /* Which shard this is, from its own name (idFromName keeps it). */
     this.#idx = Hub.shardIndex(String((ctx.id && ctx.id.name) || 'board'));
     /* The client's {t:'ping'} is answered {t:'pong'} by the runtime without
@@ -584,7 +584,7 @@ export class ChatRoom extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, sealEnv(env));
-    this.#secrets = secretValues(env, UNSCANNED);
+    this.#secrets = secretValues(env, PUBLIC_VARS);
     this.phase = 'idle';
     this.chatId = 0;
     this.gen = null;   // in-flight: { userMsgId, answer, sources, used, startedAtMs, backend }
