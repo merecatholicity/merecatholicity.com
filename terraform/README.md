@@ -15,13 +15,16 @@ at the deploy:
 
 **Terraform owns** — the zone and three deliberate zone settings, all 18 DNS
 records, the three custom rulesets (response headers, custom firewall, rate
-limiting), bot management, the six R2 buckets, the four D1 databases *as records
-that they exist*, the two Turnstile widgets, both GitHub repositories, the
+limiting), bot management, the seven R2 buckets and each one's public r2.dev
+switch (all off since 2026-09-17: the audio bucket's was a second public door
+beside its custom domain; provider 5.24.0 has no import for the switch, so it
+was adopted by a create, which is a PUT of the setting), the four D1 databases
+*as records that they exist*, the two Turnstile widgets, both GitHub repositories, the
 GitHub Pages configuration (`github_repository_pages`, adopted 2026-09-09 with
 a no-op plan), the three GitHub environments (`github-pages`, the
 `terraform-production` approval gate with its main-only branch policy, and —
 created here on 2026-09-17 — the `librarian-config` gate for merecat's persona
-and dials) and the two public-id Actions variables. Fifty resources in all.
+and dials) and the two public-id Actions variables. Fifty-seven resources in all.
 
 **wrangler owns** — worker scripts and versions, all bindings, vars, secrets,
 `routes`, `triggers.crons`, and D1 migrations. None of that appears here. The

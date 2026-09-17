@@ -152,6 +152,7 @@ on page one.)
 - **Four things CANNOT be managed, and the reason is the provider, not a preference:** — `log/2026-09.md`
 - **State lives in R2** — `log/2026-09.md`
 - **Blast radius:** — `log/2026-09.md`
+- **Every bucket's r2.dev URL is off, and declared (2026-09-17)** — `log/2026-09.md`
 
 ### Cloudflare Workers (dynamic backend)
 
