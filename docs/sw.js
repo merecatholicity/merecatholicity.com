@@ -162,26 +162,44 @@ self.addEventListener('message', function (e) {
 });
 
 /* ---- what counts as "this document changed" ----
-   The edge REWRITES every HTML body it serves. Cloudflare's JavaScript
-   Detections (zone bot management, `enable_js` in terraform/zone.tf) appends a
-   <script> carrying a per-RESPONSE ray id — window.__CF$cv$params={r:'<ray>',…}
-   — so two fetches of the SAME unchanged page are never byte-equal. Measured
-   2026-09-17: three fetches of /index.html, three distinct bodies, one line
-   apart. A byte comparison therefore answered "this page changed" on EVERY
-   revalidation, every open page heard mc-page-updated for its own path, and
-   nav.js healed any page under 30 s old with a reload — on Home, a reload that
-   replayed the launch splash (the owner's report, 2026-09-17).
-   So compare the document THE SITE serves: our own markup, with whatever
-   /cdn-cgi/ script the edge injected taken out of both sides. A deploy still
-   differs; a ray id no longer does. Our own markup never mentions /cdn-cgi/,
-   and every other script — the inline theme/splash script most of all — is
-   compared in full, so a real change to one is still seen.
-   Held by tests/js/sw_revalidate.test.mjs, which runs this very function. */
+   The edge REWRITES every HTML body it serves, and it does not rewrite it the
+   same way twice. The zone's bot management (terraform/zone.tf) injects, per
+   RESPONSE and per client:
+     · a hidden crawler-protection link, <a href="…/cdn-cgi/content?id=<token>"
+       aria-hidden rel="nofollow noopener"> right after <body> — what a real
+       browser gets, measured headless against prod 2026-09-18: two fetches of
+       each of the four cached pages, four pairs of different bodies;
+     · JavaScript Detections' <script> carrying a ray, window.__CF$cv$params=
+       {r:'<ray>',…} — what curl gets, three fetches three bodies (2026-09-17).
+   So two fetches of an unchanged page are never byte-equal. A byte comparison
+   answered "this page changed" on EVERY revalidation, every open page heard
+   mc-page-updated for its own path, and nav.js healed any page under 30 s old
+   with a reload — on Home, a reload that replayed the launch splash (the
+   owner's report, 2026-09-17).
+   The cure is in two parts, because the edge may inject a THIRD thing next
+   year and this must not come back:
+     1. `siteBytes` compares the document the SITE serves — any <script> naming
+        /cdn-cgi/ is dropped, and every remaining /cdn-cgi/ URL is collapsed to
+        its bare path, so the honeypot's token cannot vary. Our own markup
+        never mentions /cdn-cgi/, and every other script — the inline
+        theme/splash script most of all — is compared in full.
+     2. `codeKeys` decides whether anyone is TOLD. A reload is only ever
+        justified by CODE: the ?v= keys the document carries (nav.js's key
+        moves with every asset, MC_ASSETS being part of its bytes). Markup that
+        moved without them refreshes the cache and wakes nobody — and no future
+        injection can cost a reader their page, whatever it looks like.
+   Held by tests/js/sw_revalidate.test.mjs, which runs these very functions. */
 var SCRIPT_TAG = /<script\b[^>]*>[\s\S]*?<\/script>/gi;
+var EDGE_URL = /\/cdn-cgi\/[^"'\s<>]*/g;
+var ASSET_KEY = /[\w./-]+\?v=[0-9a-z]+/g;
 function siteBytes(body) {
   return String(body).replace(SCRIPT_TAG, function (tag) {
     return /__CF\$cv\$params|\/cdn-cgi\//.test(tag) ? '' : tag;
-  });
+  }).replace(EDGE_URL, '/cdn-cgi/');
+}
+function codeKeys(body) {
+  var found = String(body).match(ASSET_KEY);
+  return found ? found.sort().join(' ') : '';
 }
 /* end of the edge filter */
 
@@ -215,8 +233,10 @@ self.addEventListener('fetch', function (e) {
               var forPut = res.clone();
               return res.text().then(function (fresh) {
                 return hitCmp.text().then(function (stale) {
-                  if (siteBytes(fresh) === siteBytes(stale)) return;
+                  var f = siteBytes(fresh), s = siteBytes(stale);
+                  if (f === s) return;                       // the edge moved, we did not
                   return putKnown(cache, pageKey, forPut).then(function () {
+                    if (codeKeys(f) === codeKeys(s)) return;  // markup moved, the code did not
                     return tellClients({ t: 'mc-page-updated', path: url.pathname });
                   });
                 });

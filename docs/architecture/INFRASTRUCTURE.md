@@ -134,6 +134,7 @@ on page one.)
 - **The worker shares the kernel — DONE.** — `log/2026-09.md`
 - **The review's "two UIs" was stale; nine comments still said "no-bundle fallback" (2026-09-17)** — `log/2026-09.md`
 - **The read transport leaves the boot, and the shell stops waiting for the client it serves (2026-09-18).** — `log/2026-09.md`
+- **The edge injects a DIFFERENT token into a browser's copy, and the first fix met only half of it (2026-09-18).** — `log/2026-09.md`
 
 ### Testing policy
 
