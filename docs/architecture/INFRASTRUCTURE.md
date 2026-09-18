@@ -222,5 +222,6 @@ on page one.)
 - **The TURN relay switches itself off near the end of its free pool (2026-09-17)** — `log/2026-09.md`
 - **The workers hold no `any`, and the env's type refuses to be an answer (2026-09-17)** — `log/2026-09.md`
 - **The challenge was asking nobody anything: established now means a challenge was passed (2026-09-17)** — `log/2026-09.md`
+- **Somewhere to go: a thread is a page now (2026-09-17)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

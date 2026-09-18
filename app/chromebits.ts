@@ -72,7 +72,13 @@ export const TABS: Tab[] = [
 
 
 export function activeTab(at?: string) {
-  const path = (at == null ? location.pathname : at).split('/').pop() || 'index.html';
+  const whole = at == null ? location.pathname : at;
+  /* A thread's own URL (/t/<id>-<slug>, the worker's page) is the board: a
+     reader who arrives from search sees the Community tab lit, as they would
+     have coming from the board itself. The client rewrites the URL to
+     community.html?topic=<id> the moment it boots. */
+  if (/^\/t\/\d+/.test(whole)) return 'community';
+  const path = whole.split('/').pop() || 'index.html';
   if (path === 'index.html' || path === '') return 'home';
   if (path === 'merecat-ai.html') return 'merecat';
   if (path === 'messages.html') return 'messages';

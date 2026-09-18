@@ -90,6 +90,14 @@ import {
   handleShadowbanList,
 } from './routes/admin.ts';
 import { handleOpsReport, handleCspReport } from './routes/ops.ts';
+import {
+  FEED_PATHS,
+  SITEMAP_PATH,
+  THREAD_PATH,
+  handleSiteFeed,
+  handleThreadPage,
+  handleThreadSitemap,
+} from './routes/seo.ts';
 import { runChain, runSelfCheck, noteLeak } from './ops.ts';
 import { serve } from './serve.ts';
 import { sealEnv, takeTrips } from './egress.ts';
@@ -650,6 +658,16 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
      /@handle previews as the person. Humans get the same page; the client
      resolves the handle from the path. Only /@* reaches the worker. */
   if (path.startsWith('/@') && request.method === 'GET') return await handleHandleCard(request, env, url);
+
+  /* Somewhere to go (2026-09-17): a thread's own URL, the feed addresses a
+     reader's feed reader guesses, and the sitemap that names every thread.
+     Same road as /@handle — the static page from the origin with the thread
+     injected — so a conversation is a page search can read. routes/seo.ts. */
+  if (request.method === 'GET') {
+    if (THREAD_PATH.test(path)) return await handleThreadPage(request, env, url);
+    if (FEED_PATHS.indexOf(path) !== -1) return await handleSiteFeed(request, env, url);
+    if (path === SITEMAP_PATH) return await handleThreadSitemap(request, env, url);
+  }
 
   if (request.method === 'POST' && !originOk(request, env)) {
     return json({ ok: false, error: 'Bad origin.' }, 403);

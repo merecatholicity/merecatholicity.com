@@ -73,7 +73,7 @@ duplicated, and the shape they moved toward.
 | `client/wall.ts` | 844 | Feed + walls. |
 | `client/boot.ts` | 6 | The `Boot` bag type the factories take. (All of `client/` bundles to `docs/comments.js`, 349 KB.) |
 | `comments-worker/src/index.ts` | 654 | The composition root: imports · `Env` · `handleConfig`/`handleLive` · the `ROUTES` table · `fetch`/`scheduled`. |
-| `comments-worker/src/routes/*.ts` | 5,427 | The handlers, one file per feature (2026-09-16): board 1,402 · dm 1,265 · merecat 730 · wall 540 · admin 483 · profile 430 · media 254 · calls 179 · notify 144 — each moved verbatim from `index.ts` behind the table. |
+| `comments-worker/src/routes/*.ts` | 5,427 | The handlers, one file per feature (2026-09-16): board 1,402 · dm 1,265 · merecat 730 · wall 540 · admin 483 · profile 430 · media 254 · calls 179 · notify 144 — each moved verbatim from `index.ts` behind the table. Since 2026-09-17 `seo.ts` too: the thread page, the site feed and the thread sitemap, the three roads outside the table (with `/@handle`) that answer a document instead of an envelope. |
 | `comments-worker/src/lib.ts` | 3,648 | The shared core: constants, crypto, auth/validation, the settings, DB/notification/broadcast helpers, the DM primitives, the media purges, the social gate and the Discord fan-out. A leaf — it references no handler. |
 | `app/appchrome.ts` | 1930 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
 | `app/shell.ts` | 868 | The SPA shell: soft-navigation (latest-wins, instant nav), per-page boot registry, audio dock, PWA. |
@@ -309,6 +309,7 @@ comments-worker/src/
                  self-check's findings folded into alerts), runSelfCheck, readOps (the health object) — 2026-09-16;
                  noteLeak, the egress guard's tally and alert (2026-09-17)
   routes/        the handlers, one file per feature (2026-09-16): calls · notify · media · wall · profile · dm · merecat · board · admin · ops (the report door)
+                 seo (2026-09-17: /t/<id>-<slug>, the five feed addresses, /sitemap-threads.xml — HTML and XML, not JSON)
   lib.ts         the shared core — constants · crypto/auth · the preambles (keyed/keyedGated, and since
                  2026-09-16 gated/adminGated/readLimited with the variance as options) · settings ·
                  notifications/push · DM primitives · media purges · Discord · merecat · publish — references no handler

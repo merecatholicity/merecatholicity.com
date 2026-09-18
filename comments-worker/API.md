@@ -261,6 +261,20 @@ raw `posts` count is still there. `faith` is a raw code
 those control bytes into highlight spans; never display them raw, and never
 `innerHTML`.
 
+### 3.1b The pages a stranger arrives by (HTML and XML, not JSON)
+
+Four roads on the zone itself answer with a document rather than an envelope.
+They take `READ_LIMIT` like every other read, need no identity, and show only
+what the public RSS feed already shows — a `live` topic in a board category,
+never the back room (`board:adminsonly`), never a held or shadowed post.
+
+| Route | Returns |
+|---|---|
+| `GET /@<handle>` | `profile.html` from the origin with the member's share card injected (`lib.ts`). |
+| `GET /t/<id>-<slug>` | `community.html` from the origin with the THREAD injected (`routes/seo.ts`): `<title>`, the OG/Twitter card, `<link rel="canonical">` pointing at this URL, and the topic plus its first 50 replies as escaped paragraphs where the board section stands. The id decides; the slug is cosmetic and any slug (or none) resolves. A `<base href="/">` rides in the head because this path is one directory deep — the client removes it on boot and puts the reader on `community.html?topic=<id>`. Unknown, held, back-room or shadowed → `404 "No such thread."` |
+| `GET /feed` · `/feed.xml` · `/rss` · `/rss.xml` · `/atom.xml` | RSS 2.0: the 50 newest live board posts across every open category, each linked to its thread's own `/t/` URL. The per-topic and per-category feeds stay at `/api/comments/feed?topic=|cat=`. |
+| `GET /sitemap-threads.xml` | A sitemap of every live thread's `/t/` URL (2000 newest), `lastmod` from its last post. `docs/robots.txt` names it beside the static `sitemap.xml`. |
+
 ### 3.2 Writes (keyed)
 
 **`POST /api/comments`** — the single write pipeline. `POST_LIMIT`, **Turnstile

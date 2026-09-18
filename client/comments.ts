@@ -1326,6 +1326,21 @@ import type { Boot } from './boot';
       return viewProfileByHandle(atMatch[1].toLowerCase());
     }
 
+    /* A thread's own URL: /t/<id>-<slug> is community.html served by the worker
+       with the thread's text already in it (routes/seo.ts), so search and a
+       shared link have a real page. The reader is handed straight on to the
+       app's own URL — this path is one directory deep, and every link and asset
+       the client writes is relative to the site root; the worker's <base href="/">
+       holds until here, then goes, so a fragment link resolves normally again. */
+    var tMatch = location.pathname.match(/^\/t\/(\d+)(?:-[^/]*)?\/?$/);
+    if (tMatch) {
+      var tNum = Math.floor(Number(tMatch[1]));
+      try { history.replaceState(history.state, '', '/community.html?topic=' + tNum + location.hash); } catch (e) { /* the path stays; the base below is what matters */ }
+      var baseEl = document.querySelector('base');
+      if (baseEl && baseEl.parentNode) baseEl.parentNode.removeChild(baseEl);
+      return viewTopic(tNum);
+    }
+
     /* The platform split (2026-08): direct messages, the profile, and the AI each
        live on their own page now. They all boot this same client — route by page. */
     if (page === 'messages.html') {

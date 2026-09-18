@@ -12,8 +12,15 @@ Allow: /
 User-agent: Google-Extended
 Allow: /
 
+# The board's threads have their own URLs now (/t/<id>-<slug>, served by the
+# worker with the thread's text in the page). They are the worker's requests to
+# pay for, so the same rule holds: Google may read them, every other bot stays
+# out of the forum, its feeds and its sitemap.
 User-agent: *
 Disallow: /community.html
+Disallow: /t/
+Disallow: /sitemap-threads.xml
 Disallow: /api/
 
 Sitemap: https://merecatholicity.com/sitemap.xml
+Sitemap: https://merecatholicity.com/sitemap-threads.xml

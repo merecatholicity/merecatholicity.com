@@ -34,7 +34,20 @@
     // profile.html from the origin and injects per-profile share-card OG). Only
     // /@* is routed here, so profile.html itself is never fronted (no fetch loop).
     { "pattern": "merecatholicity.com/@*", "zone_name": "merecatholicity.com" },
-    { "pattern": "www.merecatholicity.com/@*", "zone_name": "merecatholicity.com" }
+    { "pattern": "www.merecatholicity.com/@*", "zone_name": "merecatholicity.com" },
+    // Somewhere to go (2026-09-17): a board thread at its own URL (/t/<id>-<slug>,
+    // the static community.html with the thread's text injected), the site feed at
+    // the five addresses a feed reader guesses, and the sitemap that names every
+    // thread. src/routes/seo.ts. Every feed pattern is an EXACT path, so
+    // /feed.html (the social feed page, a Pages file) is never matched.
+    { "pattern": "merecatholicity.com/t/*", "zone_name": "merecatholicity.com" },
+    { "pattern": "www.merecatholicity.com/t/*", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/feed", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/feed.xml", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/rss", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/rss.xml", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/atom.xml", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/sitemap-threads.xml", "zone_name": "merecatholicity.com" }
   ],
   "d1_databases": [
     {

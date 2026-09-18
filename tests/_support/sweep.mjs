@@ -318,16 +318,27 @@ const PROFILE_HTML = '<!doctype html><html><head><title>Profile</title>' +
   '<meta name="twitter:image" content=""><meta property="og:url" content=""><meta property="og:type" content="">' +
   '</head><body></body></html>';
 
+/* community.html as the origin serves it: the head the thread page rewrites
+   and the one section it fills. */
+const COMMUNITY_HTML = '<!doctype html><html><head><title>Community</title>' +
+  '<meta name="description" content=""><meta property="og:title" content=""><meta name="twitter:title" content="">' +
+  '<meta property="og:description" content=""><meta name="twitter:description" content="">' +
+  '<meta property="og:url" content=""><meta property="og:type" content="">' +
+  '</head><body><section class="comments board" data-board></section></body></html>';
+
 export function responder(url) {
   if (/\/profile\.html$/.test(url)) return new Response(PROFILE_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  if (/\/community\.html$/.test(url)) return new Response(COMMUNITY_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   if (url.startsWith('https://discord.com/api/webhooks/')) return new Response(null, { status: 204 });
   if (url.startsWith('https://challenges.cloudflare.com/')) return Response.json({ success: false, 'error-codes': ['invalid-input-response'] });
   throw new Error('the network was reached from the sweep: ' + url);
 }
 
 /* HTMLRewriter is a Workers global. The handle card needs `on(selector,
-   handler).transform(response)` with `setAttribute` and `setInnerContent`;
-   this does that much over the page text, escaping what it writes. */
+   handler).transform(response)` with `setAttribute` and `setInnerContent`; the
+   thread page (routes/seo.ts) adds `prepend` and a `{ html: true }` content.
+   This does that much over the page text, escaping what it writes unless the
+   handler said the value is already html. */
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 class MiniRewriter {
   constructor() { this.rules = []; }
@@ -337,21 +348,24 @@ class MiniRewriter {
     const rewrite = async () => {
       let html = await res.text();
       for (const [selector, handler] of rules) {
-        const m = /^(\w+)(?:\[([\w:-]+)="([^"]*)"\])?$/.exec(selector);
+        const m = /^(\w+)(?:\[([\w:-]+)(?:="([^"]*)")?\])?$/.exec(selector);
         if (!m) continue;
         const [, tag, attr, want] = m;
         html = html.replace(new RegExp('<' + tag + '\\b([^>]*)>(?:([^<]*)</' + tag + '>)?', 'gi'), (whole, attrs, inner) => {
-          if (attr && !new RegExp('\\b' + attr + '="' + want + '"').test(attrs)) return whole;
+          if (attr && want === undefined && !new RegExp('\\b' + attr + '\\b').test(attrs)) return whole;
+          if (attr && want !== undefined && !new RegExp('\\b' + attr + '="' + want + '"').test(attrs)) return whole;
           let a = attrs;
           let content = inner;
+          let pre = '';
           handler.element({
             setAttribute: (name, value) => {
               const re = new RegExp('\\b' + name + '="[^"]*"');
               a = re.test(a) ? a.replace(re, name + '="' + esc(value) + '"') : a + ' ' + name + '="' + esc(value) + '"';
             },
-            setInnerContent: (text) => { content = esc(text); },
+            setInnerContent: (text, opts) => { content = opts && opts.html ? String(text) : esc(text); },
+            prepend: (text, opts) => { pre += opts && opts.html ? String(text) : esc(text); },
           });
-          return '<' + tag + a + '>' + (content === undefined ? '' : content + '</' + tag + '>');
+          return '<' + tag + a + '>' + pre + (content === undefined ? '' : content + '</' + tag + '>');
         });
       }
       return html;
@@ -477,6 +491,22 @@ export async function runSweep({ only, wrap } = {}) {
       for (const handle of ['sweepmember', 'nobody-here']) {
         calls.push(await one(worker, who, vars, { meta: { m: 'GET', p: '/@' + handle, as: 'anon', road: 'handle' }, m: 'GET', path: '/@' + handle }));
       }
+      /* the public roads a stranger arrives by (2026-09-17): a thread at its
+         own URL — the live one, a held post and the back room's topic, which
+         must read as nothing at all — the site feed, and the thread sitemap */
+      for (const [road, path] of [
+        ['thread', (ids) => '/t/' + ids.topic + '-a-sweep-topic'],
+        ['thread held', (ids) => '/t/' + ids.held],
+        ['thread back room', (ids) => '/t/' + ids.back],
+        ['site feed', () => '/feed.xml'],
+        ['thread sitemap', () => '/sitemap-threads.xml'],
+      ]) {
+        calls.push(await one(worker, who, vars, {
+          meta: { m: 'GET', p: road === 'thread' ? '/t/<id>' : road, as: 'anon', road: road },
+          m: 'GET', path,
+        }));
+      }
+
       /* the two upgrades */
       for (const as of ['anon', 'member']) {
         calls.push(await one(worker, who, vars, {
