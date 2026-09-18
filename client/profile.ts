@@ -16,6 +16,9 @@ export function installProfile(B: Boot) {
   let SOCIAL_ORDER: any;
   let adminProfileEditor: (card: any, hash: any, prof: any) => any;
   let appConfirm: (msg: any, opts: any, cb: any) => any;
+  let ensureNacl: (cb: () => void) => void;
+  let dmRekeyReseal: (sealed: string, senderPub: string | null, newKey: string) => string | null;
+  let dmNewPubkey: (newKey: string) => string;
   let asset: any;
   let badgeChanged: () => any;
   let bootSig: any;
@@ -517,6 +520,33 @@ export function installProfile(B: Boot) {
     row.appendChild(copy);
     box.appendChild(row);
     box.appendChild(identityAction('Hide', hideKeyBox));
+    /* Rotate: mint a fresh key when this one is weak or exposed. The member's
+       posts and messages come with them (the server moves every row); their
+       public name changes, and they must save the new key. */
+    var rot = el('p', 'key-rotate');
+    var rotStatus = el('span', 'form-status');
+    rot.appendChild(identityAction('Rotate my key', function () {
+      appConfirm(
+        'Rotate your key? You will get a NEW key — save it when it appears. Your posts and private messages stay with you, but your OLD key stops working and your public name changes. Do this if your key is weak or someone else has seen it.',
+        { okLabel: 'Rotate', danger: true },
+        function (ok: boolean) {
+          if (!ok) return;
+          rotStatus.textContent = 'Rotating — re-sealing your messages…';
+          rotateKey(function (good: boolean, msg?: string) {
+            if (good) {
+              rotStatus.textContent = '';
+              showKeyBox();   // re-renders with the NEW key for saving
+              if (window.mcToast) window.mcToast('Your key was rotated. Save the new key shown above — the old one no longer works.');
+            } else {
+              rotStatus.textContent = msg || 'Rotation failed.';
+            }
+          });
+        }
+      );
+    }));
+    rot.appendChild(document.createTextNode(' '));
+    rot.appendChild(rotStatus);
+    box.appendChild(rot);
     box.hidden = false;
   }
 
@@ -577,9 +607,9 @@ export function installProfile(B: Boot) {
      onboarding sheet's paste box, and a scanned QR all arrive at this function,
      so the weak-key question lives here rather than at each door (the lesson of
      the Turnstile sweep: a law named at one call site is a list, not a law).
-     A weak key is ASKED about, never refused: the key IS the account, there is
-     no rotation road yet, and refusing a pasted key would lock a member who
-     already holds a weak one out of their own history on a new device. The
+     A weak key is ASKED about, never refused: the key IS the account, and
+     refusing a pasted key would lock a member who already holds a weak one out
+     of their own history on a new device (rotateKey below lets them upgrade). The
      REFUSAL is the server's, and only on a write (Domain.Auth.keyRefusal).
      Resolves true (signed in), 'declined' (the reader read the question and said
      no) or false (that is not a key at all) — three answers because a caller
@@ -602,6 +632,57 @@ export function installProfile(B: Boot) {
         enableMemberLive();
         return true;
       });
+    });
+  }
+
+  /* Rotate the secret behind this identity (the P0 chain's last piece). Mint a
+     fresh generated key, re-seal every DM key from the old key to the new one
+     (the server refuses the swap if one is missing), then move every row to the
+     new account hash in one atomic call and adopt the new key. The member's
+     public id and pseudonym change with it — right for a security rotation. cb
+     is called (true) on success or (false, message) on failure; nothing has
+     changed on a failure (the batch is all-or-nothing). */
+  function rotateKey(cb: (ok: boolean, msg?: string) => void) {
+    var oldKey = state.key;
+    if (!oldKey) { cb(false, 'You are not signed in.'); return; }
+    ensureNacl(function () {
+      var newKey = makeKey();               // 43-char generated: always clears the floor
+      let newPub: string;
+      try { newPub = dmNewPubkey(newKey); } catch (e) { cb(false, 'Could not prepare the new key.'); return; }
+      /* fetch every sealed DM key and re-seal it to the new key first */
+      fetchRetry(API + '/dm/mykeys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: oldKey }) }, [1000, 3000])
+        .then(function (r) { return r.json(); })
+        .then(function (d: { ok?: boolean; keys?: Array<{ msg_id: number; sealed: string; sender_pubkey: string | null }> }) {
+          if (!d || !d.ok) { cb(false, 'Could not read your message keys — try again.'); return; }
+          const resealed: Record<string, string> = {};
+          let failed = 0;
+          (d.keys || []).forEach(function (k) {
+            const s = dmRekeyReseal(k.sealed, k.sender_pubkey, newKey);
+            if (s) resealed[k.msg_id] = s; else failed++;
+          });
+          /* a key we cannot re-open must not be dropped: abort rather than lose it */
+          if (failed) { cb(false, 'Some messages could not be re-sealed, so your key was NOT changed. Nothing was lost — try again in a moment.'); return; }
+          fetchRetry(API + '/profile/rekey', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: oldKey, newkey: newKey, pubkey: newPub, resealed: resealed }) }, [1000, 3000])
+            .then(function (r) { return r.json(); })
+            .then(function (rr: { ok?: boolean; hash?: string; error?: string }) {
+              if (rr && rr.ok) {
+                /* adopt the new key: it is the account now, and rr.hash is the
+                   new public id every served row will match against */
+                setKey(newKey);
+                state.key = newKey;
+                state.myHash = rr.hash;
+                try { localStorage.removeItem(DM_CACHE); } catch (e) { /* memory only */ }
+                /* every cached read still names the old public id; drop it, and
+                   re-auth the live socket under the new key so frames and
+                   presence resume for the new identity */
+                try { if (window.mcStore && window.mcStore.invalidate) window.mcStore.invalidate(); } catch (e) { /* no store: memory only */ }
+                enableMemberLive();
+                cb(true);
+              } else { cb(false, (rr && rr.error) || 'The rotation was refused.'); }
+            })
+            .catch(function () { cb(false, 'The rotation could not be completed — your key is unchanged.'); });
+        })
+        .catch(function () { cb(false, 'Could not read your message keys — try again.'); });
     });
   }
 
@@ -1317,6 +1398,9 @@ export function installProfile(B: Boot) {
     SOCIAL_ORDER = B.SOCIAL_ORDER;
     adminProfileEditor = B.adminProfileEditor;
     appConfirm = B.appConfirm;
+    ensureNacl = B.ensureNacl;
+    dmRekeyReseal = B.dmRekeyReseal;
+    dmNewPubkey = B.dmNewPubkey;
     asset = B.asset;
     badgeChanged = B.badgeChanged;
     bootSig = B.bootSig;
@@ -1374,5 +1458,5 @@ export function installProfile(B: Boot) {
        identity line too; the classic's own writes already do. */
     document.addEventListener('mc-badge', function (ev: any) { if (ev && ev.detail && ev.detail.from === 'shell') renderIdentity(); }, { signal: bootSig });
   }
-  return { bind, run, exports: { BLOCK_CONFIRM, MUTED_STORE, NOTIF_CACHE, annotateProfileMeta, authSig, blockedOut, faithLabel, getFaith, getMuted, identityAction, isBlocked, isMember, isMuted, keyFromFragment, keyNudge, loadMyProfile, loginWithKey, mintIdentity, myAvatar, myNick, notifCacheSet, notifUnreadCheck, onLiveNotif, profileHref, profileLimits, renderIdentity, renderProfile, setBlock, syncMutedUp, toggleMute, viewNotifications, viewProfile, viewProfileByHandle } };
+  return { bind, run, exports: { BLOCK_CONFIRM, MUTED_STORE, NOTIF_CACHE, annotateProfileMeta, authSig, blockedOut, faithLabel, getFaith, getMuted, identityAction, isBlocked, isMember, isMuted, keyFromFragment, keyNudge, loadMyProfile, loginWithKey, mintIdentity, myAvatar, myNick, notifCacheSet, notifUnreadCheck, onLiveNotif, profileHref, profileLimits, renderIdentity, renderProfile, rotateKey, setBlock, syncMutedUp, toggleMute, viewNotifications, viewProfile, viewProfileByHandle } };
 }

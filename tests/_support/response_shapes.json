@@ -1022,6 +1022,21 @@
   ],
   "text": []
  },
+ "POST /api/comments/dm/mykeys": {
+  "json": [
+   "error:string",
+   "keys:array",
+   "keys[].msg_id:number",
+   "keys[].sealed:string",
+   "keys[].sender_pubkey:string",
+   "keys[]:object",
+   "ok:boolean"
+  ],
+  "lists": [
+   "keys"
+  ],
+  "text": []
+ },
  "POST /api/comments/dm/name": {
   "json": [
    "error:string",
@@ -1492,6 +1507,15 @@
  "POST /api/comments/profile/clear": {
   "json": [
    "error:string",
+   "ok:boolean"
+  ],
+  "lists": [],
+  "text": []
+ },
+ "POST /api/comments/profile/rekey": {
+  "json": [
+   "error:string",
+   "hash:string",
    "ok:boolean"
   ],
   "lists": [],

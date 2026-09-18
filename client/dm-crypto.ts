@@ -92,13 +92,51 @@ export function installDmCrypto(B: Boot) {
   }
 
   function dmOpenKey(sealedB64: any, senderPubB64: any) {
-    if (!sealedB64 || !senderPubB64) return null;
+    if (!sealedB64) return null;
+    /* An `S3.` self-seal (from a key rotation, client/../routes/rekey.ts): K
+       wrapped to ME under a symmetric key derived from my account key — no
+       sender, so it opens without a sender pubkey. */
+    if (typeof sealedB64 === 'string' && sealedB64.slice(0, 3) === 'S3.') return dmOpenSelfKey(sealedB64, state.key);
+    if (!senderPubB64) return null;
     try {
       var raw = dmB64uDec(sealedB64);
       if (raw.length <= 24) return null;
       var K = nacl.box.open(raw.subarray(24), raw.subarray(0, 24), dmB64uDec(senderPubB64), myDmKeypair().secretKey);
       return K && K.length === 32 ? K : null;
     } catch (e) { return null; }
+  }
+
+  /* ---- Key rotation (the P0 chain's last piece): the X25519 keypair and the
+     re-seal symmetric key both derive from the account key, so a NEW key needs
+     both derived from IT, not from state.key. These take the key explicitly. ---- */
+  function dmSymOf(key: string) { return nacl.hash(new TextEncoder().encode('mc/dm/reseal/v1|' + key)).subarray(0, 32); }
+  function dmKeypairOf(key: string) { return nacl.box.keyPair.fromSecretKey(new Uint8Array(nacl.hash(new TextEncoder().encode('mc/dm/x25519/v1|' + key)).subarray(0, 32))); }
+
+  /* Open an S3 self-seal with the symmetric key of `key` (the current key when
+     reading, the OLD key when re-sealing during a rotation). */
+  function dmOpenSelfKey(sealedB64: string, key: string) {
+    if (typeof sealedB64 !== 'string' || sealedB64.slice(0, 3) !== 'S3.') return null;
+    var parts = sealedB64.split('.');
+    if (parts.length !== 3) return null;
+    try {
+      var K = nacl.secretbox.open(dmB64uDec(parts[2]), dmB64uDec(parts[1]), dmSymOf(key));
+      return K && K.length === 32 ? K : null;
+    } catch (e) { return null; }
+  }
+
+  /* The new X25519 public key to publish for a rotation. */
+  function dmNewPubkey(newKey: string) { return dmB64uEnc(dmKeypairOf(newKey).publicKey); }
+
+  /* Re-seal one sealed key for a rotation: open K with the CURRENT (old) key —
+     a box from a sender, or a prior S3 self-seal — then wrap K to myself under
+     the NEW key's symmetric key. Returns the `S3.` self-seal, or null if K could
+     not be opened (a caller aborts the rotation rather than drop the word). */
+  function dmRekeyReseal(sealedB64: string, senderPubB64: string | null, newKey: string) {
+    var K = dmOpenKey(sealedB64, senderPubB64);
+    if (!K || K.length !== 32) return null;
+    var n = nacl.randomBytes(24);
+    var ct = nacl.secretbox(K, n, dmSymOf(newKey));
+    return 'S3.' + dmB64uEnc(n) + '.' + dmB64uEnc(ct);
   }
 
   function dmSealBody(plaintext: any, K: any) {
@@ -240,5 +278,5 @@ export function installDmCrypto(B: Boot) {
     state = B.state;
   }
   function run() { /* nothing of this module ran at the boot's top level */ }
-  return { bind, run, exports: { dmB64uDec, dmB64uEnc, dmE2eBadge, dmE2eExplainer, dmPlain, dmReseal, dmSealFor, dmVerified, dmVerifyPanel, ensureNacl, myDmKeypair } };
+  return { bind, run, exports: { dmB64uDec, dmB64uEnc, dmE2eBadge, dmE2eExplainer, dmNewPubkey, dmPlain, dmReseal, dmRekeyReseal, dmSealFor, dmVerified, dmVerifyPanel, ensureNacl, myDmKeypair } };
 }

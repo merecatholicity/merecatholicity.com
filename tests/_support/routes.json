@@ -111,6 +111,16 @@
  },
  {
   "m": "POST",
+  "p": "/api/comments/profile/rekey",
+  "fn": "(request, env, ctx, url) => handleRekey(request, env)"
+ },
+ {
+  "m": "POST",
+  "p": "/api/comments/dm/mykeys",
+  "fn": "(request, env, ctx, url) => handleDmMyKeys(request, env)"
+ },
+ {
+  "m": "POST",
   "p": "/api/comments/backup",
   "fn": "(request, env, ctx, url) => handleBackup(request, env)"
  },

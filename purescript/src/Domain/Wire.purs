@@ -52,6 +52,7 @@ POST /api/comments/dm/blocked blocked
 POST /api/comments/dm/directory users
 POST /api/comments/dm/forward results
 POST /api/comments/dm/members added
+POST /api/comments/dm/mykeys keys
 POST /api/comments/dm/presence online
 POST /api/comments/dm/roster members
 POST /api/comments/dm/thread messages

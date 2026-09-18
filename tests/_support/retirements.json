@@ -13,7 +13,7 @@
   "pattern": "function weakKeyTolerated\\(",
   "since": "2026-09-18",
   "due": "2026-10-18",
-  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. Thirty days is the notice a member gets. Before the date: run scripts/key_audit.py over the live roster — anyone it names loses their posts, messages and profile on the day, because the key IS the account and there is no rotation road yet (that ships with layer three). If one falls and cannot be reached, move this date with the reason written here rather than locking them out."
+  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time."
  },
  {
   "what": "POST /api/comments/dm/like — the 2026-08-03 heart, kept one deploy for cached clients",

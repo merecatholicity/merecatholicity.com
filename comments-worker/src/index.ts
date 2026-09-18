@@ -202,6 +202,7 @@ import {
   handleProfileGet,
   handleProfileSave,
 } from './routes/profile.ts';
+import { handleRekey, handleDmMyKeys } from './routes/rekey.ts';
 import {
   handleDmMediaPurge,
   handleWallMediaGet,
@@ -486,6 +487,8 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/profile', fn: (request, env, ctx, url) => handleProfileSave(request, env) },
   { m: 'POST', p: '/api/comments/profile/admin', fn: (request, env, ctx, url) => handleProfileAdminEdit(request, env) },
   { m: 'POST', p: '/api/comments/profile/clear', fn: (request, env, ctx, url) => handleProfileClear(request, env) },
+  { m: 'POST', p: '/api/comments/profile/rekey', fn: (request, env, ctx, url) => handleRekey(request, env) },
+  { m: 'POST', p: '/api/comments/dm/mykeys', fn: (request, env, ctx, url) => handleDmMyKeys(request, env) },
   { m: 'POST', p: '/api/comments/backup', fn: (request, env, ctx, url) => handleBackup(request, env) },
   { m: 'POST', p: '/api/comments/dm/send', fn: (request, env, ctx, url) => handleDmSend(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/threads', fn: (request, env, ctx, url) => handleDmThreads(request, env) },
