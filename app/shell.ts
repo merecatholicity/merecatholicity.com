@@ -41,12 +41,56 @@ import { installBadges } from './badges.ts';
 import { installChrome } from './appchrome.ts';
 import { installPushHeal } from './push.ts';
 import './richtext.js';
-import './views/board.js';
 import './views/post.js';
-import './views/topic.js';
-import './views/member.js';
-import './views/profile.js';
-import './views/admin.js';
+import './views/board.js';
+
+/* Four of the six view modules load on demand (2026-09-18).
+
+   The shell is on EVERY page, including the 10,583 corpus pages where a reader
+   of Augustine never opens the board, a profile, the directory or the admin
+   console — and Lighthouse measured 57 of app.js's 80 KiB unused on the home
+   page. Deferring admin, topic, member and profile takes 38,561 B (8,672
+   gzipped, ~10% of the shell) out of what every page must fetch and parse.
+
+   board.ts and post.ts stay EAGER, each for its own reason. board.ts is
+   community.html's first paint, and that page already has the worst LCP on the
+   site (4.7 s) — putting a round-trip in front of it would buy bytes with the
+   one number we least want to move. post.ts exports `commentNode`, which
+   client/board.ts calls for its RETURN VALUE synchronously; it cannot answer
+   with a promise.
+
+   The mechanism: each registry entry starts as a stub that fetches its module.
+   The module overwrites its own entry as it evaluates, and the stub then calls
+   THAT. If it somehow failed to register, the stub returns rather than calling
+   itself for ever. Nothing upstream changes shape — the classic client already
+   reaches these through `lazyView` (client/comments.ts), which returns a
+   promise and resolves it in the router, so an entry answering with a promise
+   is exactly what that road expects. */
+const LAZY_VIEWS: Record<string, () => Promise<unknown>> = {
+  adminHome: () => import('./views/admin.ts'),
+  merecatThreads: () => import('./views/admin.ts'),
+  merecatThread: () => import('./views/admin.ts'),
+  usage: () => import('./views/admin.ts'),
+  topic: () => import('./views/topic.ts'),
+  search: () => import('./views/topic.ts'),
+  users: () => import('./views/member.ts'),
+  notifications: () => import('./views/member.ts'),
+  profile: () => import('./views/profile.ts'),
+  inbox: () => import('./views/profile.ts'),
+};
+window.mcViews = window.mcViews || {};
+for (const key of Object.keys(LAZY_VIEWS)) {
+  let pending: Promise<unknown> | null = null;
+  const stub = function (...args: unknown[]) {
+    pending = pending || LAZY_VIEWS[key]();
+    return pending.then(function () {
+      const fn = window.mcViews![key];
+      if (fn === stub) return undefined;
+      return fn.apply(null, args);
+    });
+  };
+  window.mcViews[key] = stub;
+}
 
 /* Shell-owned window seams (only referenced here among the typed files;
    declared locally to keep them off the shared globals.d.ts). */

@@ -15,22 +15,50 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const budget = JSON.parse(readFileSync(join(root, 'tests', '_support', 'bundle_budget.json'), 'utf8'));
 
-/* `chrome-chunk` is not a filename: it is the chunk docs/chrome.js (the early
-   bars) shares with app.js, whose name carries a content hash. The early bundle
-   names it in its own import, so the budget follows whatever esbuild called it
-   — and what a cold open waits on for its chrome is chrome.js PLUS this. */
-function chromeChunk() {
-  const early = readFileSync(join(root, 'docs', 'chrome.js'), 'utf8');
-  const m = /from ?["'](\.\/chunks\/[^"']+)["']/.exec(early);
-  assert.ok(m, 'docs/chrome.js imports no chunk — did the split break?');
-  return join(root, 'docs', m[1].replace('./', ''));
+/* `app-chunks` and `chrome-chunks` are not filenames: they are the SUM of every
+   content-hashed chunk the entry imports STATICALLY — what a cold open waits on
+   before that entry can run, over and above the entry itself.
+
+   Summing matters. Until 2026-09-18 this read the FIRST import only, because
+   each entry had exactly one shared chunk. Making four view modules lazy made
+   esbuild split the shared code in two, and the old one-chunk reading reported
+   chrome's cold open as 7,026 B when it was really 22,564 — a 68% "improvement"
+   that was nothing but a chunk it had stopped counting. A budget that can be
+   satisfied by moving bytes sideways is not a budget.
+
+   A DYNAMIC import is deliberately not counted: that is the point of making a
+   module lazy, and `import(` is what distinguishes the two. */
+function eagerChunks(entry) {
+  const src = readFileSync(join(root, 'docs', entry), 'utf8');
+  const names = new Set();
+  const re = /(.)["'](\.\/chunks\/[^"']+)["']/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    if (m[1] === '(') continue;            // import("./chunks/x") — lazy, not waited on
+    names.add(m[2].replace('./', ''));
+  }
+  assert.ok(names.size > 0, `docs/${entry} imports no chunk statically — did the split break?`);
+  let total = 0;
+  for (const n of names) {
+    const p = join(root, 'docs', n);
+    assert.ok(existsSync(p), `docs/${entry} names ${n}, which is not built`);
+    total += statSync(p).size;
+  }
+  return total;
 }
+
+const CHUNK_SUMS = { 'app-chunks': 'app.js', 'chrome-chunks': 'chrome.js' };
 
 for (const name of Object.keys(budget).filter((k) => !k.startsWith('_'))) {
   test(`${name} stays under its ceiling (${budget[name]} B) and the ceiling follows it down`, () => {
-    const path = name === 'chrome-chunk' ? chromeChunk() : join(root, 'docs', name);
-    assert.ok(existsSync(path), name + ' is not built — make bundle (and make css) first');
-    const size = statSync(path).size;
+    let size;
+    if (CHUNK_SUMS[name]) {
+      size = eagerChunks(CHUNK_SUMS[name]);
+    } else {
+      const path = join(root, 'docs', name);
+      assert.ok(existsSync(path), name + ' is not built — make bundle (and make css) first');
+      size = statSync(path).size;
+    }
     const ceiling = budget[name];
     assert.ok(size <= ceiling, `${name}: ${size} B > ceiling ${ceiling} B — the bundle grew; split it or move code out (P2-5), do not raise the ceiling`);
     const floor = Math.floor(ceiling * 0.95);

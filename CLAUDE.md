@@ -77,10 +77,10 @@ hand-over note is a dated file under `docs/architecture/reviews/`; `local/` is t
 ignored. **`docs/` is the served site and a MIXTURE**: hand-maintained source is tracked, everything
 the build writes is git-ignored and rebuilt, `tests/py/test_docs_sources.py` enforces the split; a
 new hand page needs an `!docs/<name>.html` line in `.gitignore` and an entry in `scripts/nav.py`'s
-`PAGES`. The directory tour (book, content, resources, partials, scripts, styles, app, client — the
-boot, its feature-module factories, three of them lazy chunks — the kernel, the two workers,
-librarian, webtest, tests, terraform, workflows) is CODEBASE.md's; `librarian/private/` is a
-separate PRIVATE clone, never a submodule, never committed.
+`PAGES`. The directory tour (book, content, resources, partials, scripts, styles, app and client —
+four lazy view chunks and three feature ones — `pagejs/` the seven page scripts minified into
+`docs/`, the kernel, the two workers, librarian, webtest, tests, terraform, workflows) is
+CODEBASE.md's; `librarian/private/` is a separate PRIVATE clone, never a submodule, never committed.
 
 ## Build and verify
 
