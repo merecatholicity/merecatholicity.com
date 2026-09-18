@@ -38,16 +38,20 @@
     // Somewhere to go (2026-09-17): a board thread at its own URL (/t/<id>-<slug>,
     // the static community.html with the thread's text injected), the site feed at
     // the five addresses a feed reader guesses, and the sitemap that names every
-    // thread. src/routes/seo.ts. Every feed pattern is an EXACT path, so
-    // /feed.html (the social feed page, a Pages file) is never matched.
+    // thread. src/routes/seo.ts. A pattern with no `*` matches the URL EXACTLY,
+    // query string included — `/feed.xml?utm=x` fell through to Pages and 404'd
+    // (found against prod, 2026-09-18) — so every address but `/feed` carries a
+    // trailing `*`, and `/feed` takes a second pattern for its query. `/feed*`
+    // is deliberately NOT used: it would swallow /feed.html, the social feed
+    // page, which is a Pages file.
     { "pattern": "merecatholicity.com/t/*", "zone_name": "merecatholicity.com" },
     { "pattern": "www.merecatholicity.com/t/*", "zone_name": "merecatholicity.com" },
     { "pattern": "merecatholicity.com/feed", "zone_name": "merecatholicity.com" },
-    { "pattern": "merecatholicity.com/feed.xml", "zone_name": "merecatholicity.com" },
-    { "pattern": "merecatholicity.com/rss", "zone_name": "merecatholicity.com" },
-    { "pattern": "merecatholicity.com/rss.xml", "zone_name": "merecatholicity.com" },
-    { "pattern": "merecatholicity.com/atom.xml", "zone_name": "merecatholicity.com" },
-    { "pattern": "merecatholicity.com/sitemap-threads.xml", "zone_name": "merecatholicity.com" }
+    { "pattern": "merecatholicity.com/feed?*", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/feed.xml*", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/rss*", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/atom.xml*", "zone_name": "merecatholicity.com" },
+    { "pattern": "merecatholicity.com/sitemap-threads.xml*", "zone_name": "merecatholicity.com" }
   ],
   "d1_databases": [
     {
