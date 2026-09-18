@@ -28,6 +28,23 @@ source bytes or manifest entry changed are re-sent, so re-running is cheap
 and an interrupted run resumes where it left off. Removing an entry from
 `works.yml` prunes it from the bot on the next full push.
 
+**A BIG INGEST YIELDS TO A PENDING MIGRATION** (2026-09-18). D1's free tier
+allows 100,000 row writes *per account per day*, shared by the three librarian
+rooms, the comments database, every migration a worker deploy applies, and
+every comment, DM and reaction a member writes. An ordinary incremental push
+costs almost nothing. A run that re-ingests the whole corpus — a
+`PARSER_VERSION` bump, a rebuilt shelf — costs most of the day: on 2026-09-18
+one spent 109,021 rows in six minutes, the next worker deploy died on its
+migration with `exceeded D1's free tier daily row write limit`, and **production
+accepted no writes at all until midnight UTC** — no comments, no DMs, no
+reactions — while reads answered normally and nothing on the site said why.
+Nothing in the pipeline can enforce the ordering (it holds no Cloudflare
+credential, by design), so it is a rule people keep: **if a worker deploy with a
+pending migration is waiting, let it deploy first.** It needs a few rows; this
+needs tens of thousands. `ingest.py` prints the same warning before it starts
+spending, and `--budget-rows` (default 60,000 estimated ≈ 72,800 actual) is what
+keeps an ordinary day's headroom.
+
 **Change the voice or rules.** Edit `persona.md`, commit, push. `merecat.yml`
 sees the file differ from what the server last took, and its `config` job
 **waits for the owner's review** (the `librarian-config` environment: *Review

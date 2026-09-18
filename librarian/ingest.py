@@ -941,6 +941,22 @@ def main():
 
     vec_total = sum(server[w]["chunks"] for w in server
                     if w in manifest and manifest[w].get("vectorize"))
+    # A LOUD LINE BEFORE AN EXPENSIVE RUN (2026-09-18). D1's free tier allows
+    # 100,000 row writes per ACCOUNT per day, shared with every migration a
+    # worker deploy applies and every comment, DM and reaction a member writes.
+    # On 2026-09-18 this ingest spent 109,021 of them in six minutes (a
+    # PARSER_VERSION bump re-ingesting the whole corpus), the next deploy died
+    # on its migration, and production took no writes at all until midnight —
+    # the error naming D1's limit while wearing an unrelated commit's title.
+    # The rule that follows is an ORDERING, and nothing in the pipeline can
+    # enforce it (no Cloudflare credential here, by design), so it is said out
+    # loud to whoever is standing here: a pending migration deploys FIRST.
+    if args.push and args.budget_rows > 5000:
+        print(f"NOTE: this run may write up to ~{int(args.budget_rows * 1.2):,} D1 rows "
+              f"of the account's 100,000/day (shared by every database, every "
+              f"migration and every member write).")
+        print("      If a worker deploy with a pending migration is waiting, LET IT "
+              "DEPLOY FIRST — it needs a few rows and this needs tens of thousands.")
     spent = 0
     waiting = 0
     for wid, entry in picked.items():
