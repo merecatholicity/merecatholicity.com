@@ -45,8 +45,10 @@ def volume(divisions, toc=True, notes=0, front='<p>Front matter.</p>\n'):
     body = front
     entries = []
     for name, level, text in divisions:
-        slug = name.lower().replace(' ', '-')
-        entries.append('<li><a href="#%s" id="toc-%s">%s</a></li>' % (slug, slug, name))
+        slug = re.sub(r'<[^>]+>', '', name).lower().replace(' ', '-')
+        # pandoc strips a footnote mark out of its contents entry, as this does
+        plain = re.sub(r'<[^>]+>', '', name)
+        entries.append('<li><a href="#%s" id="toc-%s">%s</a></li>' % (slug, slug, plain))
         body += '<h%d class="unnumbered" id="%s">%s</h%d>\n%s' % (level, slug, name, level, text)
     nav = ''
     if toc:
@@ -180,6 +182,41 @@ class TheFootnotes(unittest.TestCase):
                         1, long_text(120))], notes=5)
         _, parts, _, _ = m.split('v.html', page)
         self.assertIn('<li value="3" id="fn3">', parts[1][1])
+
+
+class WhateverPandocCallsIt(unittest.TestCase):
+    def test_the_footnotes_block_is_found_under_either_tag(self):
+        """The dev box's pandoc writes <section id="footnotes">; the runner's
+        writes <aside>. Knowing only one of them found no notes at all, moved
+        none into the parts, and left 358,049 marks pointing at nothing — the
+        CI link check was the first and only thing that said so."""
+        ref = '<p>T<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a></p>\n'
+        page = volume([('One', 1, ref + long_text(120)), ('Two', 1, long_text(120))], notes=2)
+        page = page.replace('<section id="footnotes"', '<aside id="footnotes"')
+        page = page.replace('</section>', '</aside>')
+        _, parts, _, _ = m.split('v.html', page)
+        self.assertIn('<aside id="footnotes"', parts[0][1])
+        self.assertIn('</aside>', parts[0][1])
+        self.assertIn('<li value="1" id="fn1">', parts[0][1])
+
+    def test_a_volume_it_cannot_serve_whole_is_left_whole(self):
+        """THE safety valve. Every rewrite here is invisible until a reader
+        clicks, so each part is asked whether it can answer its own references
+        before anything is written. An oversized page is a disappointment; a
+        page of dead links is a lie."""
+        page = volume([('One', 1, '<p><a href="#ghost">nowhere</a></p>\n' + long_text(120)),
+                       ('Two', 1, long_text(120))])
+        self.assertIsNone(m.split('v.html', page))
+
+    def test_an_id_that_stays_on_the_index_is_reachable_from_a_part(self):
+        """The front matter does not travel: a part pointing at it must be sent
+        back to the volume, not left with a fragment it cannot answer."""
+        page = volume([('One', 1, '<p><a href="#front-note">above</a></p>\n' + long_text(120)),
+                       ('Two', 1, long_text(120))],
+                      front='<h4 id="front-note">A note</h4>\n<p>Front matter.</p>\n')
+        got = m.split('v.html', page)
+        self.assertIsNotNone(got)
+        self.assertIn('href="v.html#front-note"', got[1][0][1])
 
 
 class APartIsItsOwnPage(unittest.TestCase):

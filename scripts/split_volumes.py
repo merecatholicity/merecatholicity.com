@@ -94,6 +94,15 @@ FN_REF_RE = re.compile(r'href="#(fn\d+)"')
 # ordinary as the unwrapped forms. A space-only pattern missed 15 footnotes and
 # the link checker was the only thing that noticed.
 FN_ITEM_RE = re.compile(r'<li\s+id="(fn\d+)">.*?</li>\n?', re.S)
+# The footnotes block, whatever pandoc is calling it this year: the dev box's
+# copy writes <section id="footnotes">, the runner's writes <aside id=…>, and
+# the tag is re-emitted verbatim so a part looks exactly like its volume. A
+# pattern that knew only one of them found no notes at all, moved none of them
+# into the parts, and left 358,049 footnote marks pointing at nothing — every
+# one of them caught by linkcheck, and by nothing before it.
+NOTES_RE = re.compile(
+    r'<(section|aside|div)\s[^>]*(?:id="footnotes"|class="[^"]*\bfootnotes\b[^"]*")[^>]*>'
+    r'.*?</\1>\n?', re.S)
 LI_OPEN_RE = re.compile(r'^<li\s+id="')
 TITLE_RE = re.compile(r'<title>(.*?)</title>', re.S)
 TAG_RE = re.compile(r'<[^>]+>', re.S)
@@ -150,8 +159,10 @@ class Page:
         t = re.search(r'<nav\s+id="TOC"[^>]*>.*?</nav>\n?', rest, re.S)
         self.toc = t.group(0) if t else ''
         body = rest[t.end():] if t else rest
-        f = re.search(r'<section\s+id="footnotes"[^>]*>.*?</section>\n?', body, re.S)
+        f = NOTES_RE.search(body)
         self.notes = f.group(0) if f else ''
+        self.notes_tag = f.group(1) if f else 'section'
+        self.notes_open = f.group(0)[:f.group(0).index('>') + 1] if f else ''
         self.body = body[:f.start()] if f else body
         ti = TITLE_RE.search(html)
         self.title = re.sub(r'\s+', ' ', ti.group(1)).strip() if ti else ''
@@ -248,7 +259,7 @@ def second_cut(body, heads, mark, start, end):
     return merge_empty(body, marks, slice_parts(marks, end))
 
 
-def notes_for(fragment, notes_by_id):
+def notes_for(fragment, notes_by_id, opening='', tag='section'):
     """The footnotes this fragment actually cites, in their original order and
     KEEPING THEIR NUMBERS: the superscript in the text is literal, so a subset
     renumbered from 1 would misnumber every note on the page."""
@@ -264,8 +275,9 @@ def notes_for(fragment, notes_by_id):
     items = []
     for fid in want:
         items.append(LI_OPEN_RE.sub('<li value="' + fid[2:] + '" id="', notes_by_id[fid], count=1))
-    return ('<section id="footnotes" class="footnotes footnotes-end-of-document"\n'
-            'role="doc-endnotes">\n<hr />\n<ol>\n' + ''.join(items) + '</ol>\n</section>\n')
+    head = opening or ('<section id="footnotes" class="footnotes '
+                       'footnotes-end-of-document"\nrole="doc-endnotes">')
+    return head + '\n<hr />\n<ol>\n' + ''.join(items) + '</ol>\n</' + tag + '>\n'
 
 
 def retarget(fragment, home, owner):
@@ -369,7 +381,7 @@ def render_part(page, volume, parts, k, body, keep_ids, owner, notes_by_id):
            partnav(volume, page.title, parts, k),
            subtoc(rest, keep_ids, p['id']),
            fragment,
-           notes_for(body, notes_by_id),
+           notes_for(body, notes_by_id, page.notes_open, page.notes_tag),
            partnav(volume, page.title, parts, k, foot=True),
            page.tail]
     return ''.join(out)
@@ -400,7 +412,7 @@ def render_index(page, volume, parts, front, owner, notes_by_id):
     return ''.join([
         page.head, page.premain, '\n' + SPLIT_MARK + '\n', page.header, lead, toc,
         retarget(front, volume, owner),
-        notes_for(front, notes_by_id),
+        notes_for(front, notes_by_id, page.notes_open, page.notes_tag),
         '<div id="mc-parts" hidden data-anchors="' + anchors_name(volume) + '"></div>\n',
         page.tail])
 
@@ -472,17 +484,46 @@ def split(name, html):
     notes_by_id = {m.group(1): m.group(0) for m in FN_ITEM_RE.finditer(page.notes)}
     keep = page.toc_ids()
     front = page.body[:spans[0][0]]
+    # An id in the front matter stays on the INDEX, so a part pointing at one
+    # must be sent there rather than left with a fragment it cannot answer.
+    reach = dict(owner)
+    for _, _, _, i, _ in headings(front):
+        if i:
+            reach.setdefault(i, volume)
     out = []
     for k, (s, e) in enumerate(spans):
         out.append((parts[k]['file'],
-                    render_part(page, volume, parts, k, page.body[s:e], keep, owner, notes_by_id)))
+                    render_part(page, volume, parts, k, page.body[s:e], keep, reach, notes_by_id)))
     index = render_index(page, volume, parts, front, owner, notes_by_id)
+    for name, text in out + [(volume, index)]:
+        bad = unresolved(text)
+        if bad:
+            print('split_volumes: %s left whole — %s would point at #%s and not hold it'
+                  % (volume, name, bad))
+            return None
     amap = anchor_map(parts, owner)
     entry = {'title': page.title, 'short': short_title(page.title), 'level': level,
              'parts': [{'file': p['file'], 'title': p['title'],
                         'group': (p['group']['title'] if p.get('group') else '')}
                        for p in parts]}
     return index, out, entry, amap
+
+
+def unresolved(text):
+    """The first `#id` this page points at and does not hold, if any.
+
+    THE SELF-CHECK. Everything this script does is a rewrite of output nobody
+    reads before it ships, and the failure mode is silent by construction: a
+    footnote container pandoc renamed between versions cost 358,049 broken
+    marks on one CI run, and the page looked perfectly ordinary. So every part
+    is asked, before it is written, whether it can answer its own references —
+    and a volume with one that cannot is left WHOLE. An oversized page is a
+    disappointment; a page of dead links is a lie."""
+    ids = set(ID_RE.findall(text))
+    for frag in HREF_FRAG_RE.findall(text):
+        if frag and frag not in ids:
+            return frag
+    return ''
 
 
 def read(path):
