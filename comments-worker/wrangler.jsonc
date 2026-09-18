@@ -40,14 +40,14 @@
     // the five addresses a feed reader guesses, and the sitemap that names every
     // thread. src/routes/seo.ts. A pattern with no `*` matches the URL EXACTLY,
     // query string included — `/feed.xml?utm=x` fell through to Pages and 404'd
-    // (found against prod, 2026-09-18) — so every address but `/feed` carries a
-    // trailing `*`, and `/feed` takes a second pattern for its query. `/feed*`
-    // is deliberately NOT used: it would swallow /feed.html, the social feed
-    // page, which is a Pages file.
+    // (found against prod, 2026-09-18) — so every address that can carries a
+    // trailing `*`. Two it cannot: the API refuses a `?` in a pattern (10022),
+    // and `/feed*` would swallow /feed.html, the social feed page, which is a
+    // Pages file — so bare `/feed` is the one address that answers only without
+    // a query. /feed.xml is the one to publish.
     { "pattern": "merecatholicity.com/t/*", "zone_name": "merecatholicity.com" },
     { "pattern": "www.merecatholicity.com/t/*", "zone_name": "merecatholicity.com" },
     { "pattern": "merecatholicity.com/feed", "zone_name": "merecatholicity.com" },
-    { "pattern": "merecatholicity.com/feed?*", "zone_name": "merecatholicity.com" },
     { "pattern": "merecatholicity.com/feed.xml*", "zone_name": "merecatholicity.com" },
     { "pattern": "merecatholicity.com/rss*", "zone_name": "merecatholicity.com" },
     { "pattern": "merecatholicity.com/atom.xml*", "zone_name": "merecatholicity.com" },
