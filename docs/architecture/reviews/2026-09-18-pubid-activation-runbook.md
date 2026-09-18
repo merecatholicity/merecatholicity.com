@@ -18,35 +18,35 @@ Three commits landed the P0 chain's layer three, all inert until `PUBLIC_ID_PEPP
 and the worker behaves EXACTLY as before. The whole suite is green with the pepper unset. So the
 code deploys safe and does nothing until the secret is set — and unsetting it rolls straight back.
 
-**Why it is not yet deployed:** the account's D1 free-tier daily row-write limit (100k) was exhausted
-on 2026-09-18 by a full merecat re-ingest (~109k actual writes, 99% the librarian's), so migration
-`0019_profile_pubid.sql` could not apply and the Workers deploy failed at the migration step —
-safely (neither migration nor worker landed; the pre-L3 worker still runs). Resets at 00:00 UTC.
+**No migration, no D1 write — the flip runs on reads (revised 2026-09-18).** The first cut stored
+`pubid` in a `profiles` column filled by a migration + a backfill; the account's D1 free-tier daily
+WRITE cap (100k) was exhausted by a full merecat re-ingest, so that migration could not apply. So
+the design was changed to need NO write: `pubid = SHA-256(PEPPER‖hash)` is deterministic, `serveId`
+just computes it, and `resolveId` rebuilds the reverse map from READS of the identity columns
+(reads have a separate, unexhausted 5M/day budget). Migration `0019` was removed. The worker now
+deploys with the write budget spent — nothing about activation writes to D1. (Site WRITES — posting,
+DMs — remain capped account-wide until 00:00 UTC regardless; that is the ingest's doing, not the
+flip's, and unrelated to it.)
 
-## The activation runbook (do this, in order, after 00:00 UTC)
+## The activation runbook (do this, in order)
 
-**Deploy MUST be the first D1 write of the day.** f5 has agreed to hold `merecat.yml` until this
-lands (the ingest is tens of thousands of rows; the migration is one statement). Confirm with them
-before starting.
-
-1. **Deploy the inert code first.** Re-run the failed Workers job (or push a no-op) so `0019` applies
-   and the valve-mode worker deploys. Verify it is healthy and UNCHANGED: `/api/comments/board`
-   still serves raw `author_hash` (no pepper yet), DMs work, `/prefs` now carries `me` equal to the
-   account hash. `curl` a board read and confirm no behaviour changed.
+1. **Deploy the inert code.** A push deploys it — there is no pending migration, so the Workers job's
+   D1 ledger step is a no-op and `wrangler deploy` runs even with the write budget spent. Verify the
+   worker is healthy and UNCHANGED: `/api/comments/board` still serves raw `author_hash` (no pepper
+   yet), DMs work, `/prefs` now carries `me` equal to the account hash. `curl` a board read and
+   confirm no behaviour changed.
 2. **Generate a STABLE pepper and set it — THE OWNER'S ACT, not an agent's.** `openssl rand -hex
    32`. It is stable FOREVER — changing it reshuffles every member's pubid and displayed name. `cd
-   comments-worker && npx wrangler secret put PUBLIC_ID_PEPPER` (workers token). This is the
-   irreversible flip. "Reversible by unsetting" is only half true: unsetting returns future reads to
-   raw hashes, but anything that read a member's pubid while it was set has already read it, and a
-   member's displayed pseudonym changed the moment it went live. Setting a secret that changes what
-   the site PUBLISHES ABOUT ITS MEMBERS is a decision for the owner, made deliberately — not
-   something an agent does because it is nearest the keyboard after the reset (f5 drew this line and
-   it is the right one). An agent may do step 1 (deploy + verify the inert worker) and prepare steps
-   3–4; a human owner sets the pepper.
-3. **Back-fill the reverse map.** `serveId` fills `profiles.pubid` lazily on first serve, but run
-   `backfillPubids` once so `resolveId` is complete from the first request (an old `?u=<hash>` link,
-   a client mid-session). It is a daily-chain step; trigger it via a `workflow_dispatch` of the ops
-   cron, or call it from a one-shot. Bounded by the member count (~dozens), well under budget.
+   comments-worker && npx wrangler secret put PUBLIC_ID_PEPPER` (workers token). This is a Cloudflare
+   secret write, NOT a D1 write, so the budget does not touch it. This is the irreversible flip.
+   "Reversible by unsetting" is only half true: unsetting returns future reads to raw hashes, but
+   anything that read a member's pubid while it was set has already read it, and a member's displayed
+   pseudonym changed the moment it went live. Setting a secret that changes what the site PUBLISHES
+   ABOUT ITS MEMBERS is a decision for the owner, made deliberately (f5 drew this line and it is the
+   right one). An agent may deploy + verify the inert worker; a human owner (or an agent with the
+   owner's EXPLICIT consent for this act) sets the pepper.
+3. **No backfill.** `resolveId` builds its reverse map from reads on the first request, so it is
+   complete at once — there is nothing to fill and no write to make.
 4. **Verify the flip.** Anonymous `curl` a board read → `author_hash` is now a pubid, and NONE of the
    known account hashes appear. Sign in on a phone: your posts still read as yours (state.myHash =
    your pubid from `/prefs`), a DM sends and opens, presence and the tab badges still work. Every

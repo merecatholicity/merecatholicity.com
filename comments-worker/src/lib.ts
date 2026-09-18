@@ -364,11 +364,11 @@ export async function sha256hex(text: string) {
    answer carrying the pepper's value (it is not a PUBLIC_VAR). */
 const _h2p = new Map<string, string>();   // hash  -> pubid (per isolate)
 const _p2h = new Map<string, string>();   // pubid -> hash
-const _stored = new Set<string>();         // hashes whose pubid we have written this isolate
+let _revLoaded = false;                    // the reverse map is built once per isolate
 
 /* Test seam: the caches persist across a worker instance; a hermetic test that
    swaps the pepper (or the db) must clear them, as it clears appSettingsCache. */
-export function clearIdCaches() { _h2p.clear(); _p2h.clear(); _stored.clear(); }
+export function clearIdCaches() { _h2p.clear(); _p2h.clear(); _revLoaded = false; }
 
 /* The pubid for a hash — pure and deterministic, cached. No D1. Returns the raw
    hash when no pepper is set (the valve). */
@@ -384,46 +384,51 @@ export async function pubidOf(env: Env, hash: string): Promise<string> {
   return pid;
 }
 
-/* Egress: the id to serve for this hash, and — on the first serve of a member in
-   this isolate — a stored `profiles.pubid` so the reverse lookup can undo it.
-   The store is guarded (only when the row lacks this pubid) and cached, so it is
-   at most one write per member per isolate; a member a client can ever name is a
-   member the client was first SERVED, so the reverse map is always filled for
-   the ids in circulation. A read path may lack a write context, so the store is
-   best-effort (a failure just means resolveId falls back to a live digest scan,
-   below). Never serves the empty/again the raw hash once a pepper is set. */
+/* Egress: the id to serve for this hash. Pure — `pubidOf` is a deterministic
+   function of pepper+hash, so nothing is stored; the reverse map resolveId needs
+   is rebuilt from a READ of the identity columns (below), never a write. That is
+   what lets the flip run with the D1 daily WRITE budget spent: serving a pubid,
+   and inverting one, cost only reads. (A larger shelf would want a stored,
+   indexed `pubid` column back — a migration when the write budget allows — and
+   resolveId would read it instead of rebuilding the map.) */
 export async function serveId(env: Env, hash: string | null | undefined): Promise<string | null> {
   if (!hash) return hash ?? null;
-  const pid = await pubidOf(env, hash);
-  if (pid === hash) return pid;   // no pepper: the valve
-  if (!_stored.has(hash)) {
-    _stored.add(hash);
-    try {
-      await env.DB.prepare(
-        'INSERT INTO profiles (hash, created_at, pubid) VALUES (?1, ?2, ?3) '
-        + 'ON CONFLICT(hash) DO UPDATE SET pubid = ?3 WHERE profiles.pubid IS NOT ?3'
-      ).bind(hash, Math.floor(Date.now() / 1000), pid).run();
-    } catch (e) { _stored.delete(hash); /* retry next time */ }
+  return pubidOf(env, hash);
+}
+
+/* Build the reverse map (pubid -> account hash) once per isolate, from READS of
+   every column a member id lives in — no stored column, so no D1 write. Bounded
+   by the member count (dozens today). */
+async function loadRevMap(env: Env): Promise<void> {
+  if (_revLoaded || !env.PUBLIC_ID_PEPPER) return;
+  const hashes = new Set<string>();
+  const add = (rows: { results?: Array<{ h: string | null }> } | null) => {
+    for (const r of (rows && rows.results) || []) if (r.h && /^[0-9a-f]{64}$/.test(r.h)) hashes.add(r.h);
+  };
+  add(await env.DB.prepare('SELECT hash AS h FROM profiles').all<{ h: string | null }>());
+  for (const [tbl, col] of [['comments', 'author_hash'], ['wall_posts', 'author_hash'], ['dms', 'sender_hash'], ['dm_members', 'hash']]) {
+    try { add(await env.DB.prepare('SELECT DISTINCT ' + col + ' AS h FROM ' + tbl + ' WHERE ' + col + ' IS NOT NULL').all<{ h: string | null }>()); } catch (e) { /* a table a deployment predates */ }
   }
-  return pid;
+  for (const h of hashes) { const pid = await pubidOf(env, h); _p2h.set(pid, h); }
+  _revLoaded = true;
 }
 
 /* Ingress: the account hash a wire id names, or null. A pubid resolves through
-   the stored map (filled by serveId / registerMember / the daily backfill); an
-   id absent from the map but present as a raw `profiles.hash` is honoured for
-   one deploy (an old `?u=<hash>` link) — drop that arm once the tolerance is due
-   (tests/_support/retirements.json). With no pepper, the id IS the hash. */
+   the read-built reverse map; an id absent from it but present as a raw
+   `profiles.hash` is honoured for one deploy (an old `?u=<hash>` link) — drop
+   that arm once the tolerance is due (tests/_support/retirements.json). With no
+   pepper, the id IS the hash. */
 export async function resolveId(env: Env, id: string | null | undefined): Promise<string | null> {
   if (!id || !/^[0-9a-f]{64}$/.test(String(id))) return null;
   const wire = String(id);
   if (!env.PUBLIC_ID_PEPPER) return wire;   // the valve: an id is a hash
-  const cached = _p2h.get(wire);
-  if (cached) return cached;
-  const row = await env.DB.prepare(
-    'SELECT hash FROM profiles WHERE pubid = ?1 OR hash = ?1 LIMIT 1'
-  ).bind(wire).first<{ hash: string }>();
-  if (row && row.hash) { _p2h.set(wire, row.hash); return row.hash; }
-  return null;
+  await loadRevMap(env);
+  const hit = _p2h.get(wire);
+  if (hit) return hit;
+  /* the tolerance, and a net for a member registered after the map loaded: an
+     id that IS a live account hash resolves to itself */
+  const row = await env.DB.prepare('SELECT hash FROM profiles WHERE hash = ?1 LIMIT 1').bind(wire).first<{ hash: string }>();
+  return row && row.hash ? row.hash : null;
 }
 
 /* Fill `profiles.pubid` for every member and every orphan identity (a hash that
@@ -488,31 +493,6 @@ export async function cloakIds<T>(env: Env, node: T): Promise<T> {
   return (await walk(node)) as T;
 }
 
-export async function backfillPubids(env: Env): Promise<number> {
-  if (!env.PUBLIC_ID_PEPPER) return 0;
-  const now = Math.floor(Date.now() / 1000);
-  /* orphan identities: everyone who wrote before registerMember, with no row */
-  const orphanCols = [
-    ['comments', 'author_hash'], ['wall_posts', 'author_hash'], ['dms', 'sender_hash'],
-    ['dm_members', 'hash'], ['notifications', 'actor_hash'], ['reactions', 'author_hash'],
-  ];
-  for (const [tbl, col] of orphanCols) {
-    try {
-      await env.DB.prepare(
-        `INSERT OR IGNORE INTO profiles (hash, created_at) `
-        + `SELECT DISTINCT ${col}, ?1 FROM ${tbl} WHERE ${col} IS NOT NULL`
-      ).bind(now).run();
-    } catch (e) { /* a table a deployment predates */ }
-  }
-  const rows = await env.DB.prepare('SELECT hash FROM profiles WHERE pubid IS NULL').all<{ hash: string }>();
-  let n = 0;
-  for (const r of (rows.results || [])) {
-    const pid = await pubidOf(env, r.hash);
-    await env.DB.prepare('UPDATE profiles SET pubid = ?2 WHERE hash = ?1').bind(r.hash, pid).run();
-    n++;
-  }
-  return n;
-}
 
 /* Same-origin API. A cross-origin browser POST always carries an Origin, so
    reject any Origin that is not ours; a missing Origin (non-browser clients,
@@ -1907,12 +1887,9 @@ export async function markVerified(env: Env, hash: string, now = Math.floor(Date
    (handleDmDirectory) — the difference between "has acted" and "is someone". */
 export async function registerMember(env: Env, hash: string, now = Math.floor(Date.now() / 1000)) {
   await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(hash, now).run();
-  /* the public id is filled the moment an identity is known, so a member is
-     resolvable (resolveId) as soon as they can be named (the P0 chain, L3) */
-  if (env.PUBLIC_ID_PEPPER) {
-    const pid = await pubidOf(env, hash);
-    try { await env.DB.prepare('UPDATE profiles SET pubid = ?2 WHERE hash = ?1 AND pubid IS NULL').bind(hash, pid).run(); } catch (e) { /* best-effort */ }
-  }
+  /* No pubid is stored: it is a pure function of the pepper and the hash
+     (pubidOf), and resolveId rebuilds the reverse map from reads, so a member is
+     resolvable the moment their hash is in any identity column (the P0 chain, L3). */
 }
 
 /* ================= Discord webhook fan-out =================
