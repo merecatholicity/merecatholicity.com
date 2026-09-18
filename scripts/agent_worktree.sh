@@ -20,7 +20,23 @@
 # directory exists: it puts back what it knows how to put back, and says so.
 set -e
 name=${1:?usage: scripts/agent_worktree.sh <name>  (run again to repair an existing one)}
-here=$(cd "$(dirname "$0")/.." && pwd)
+
+# THE MAIN CHECKOUT, not the tree this copy of the script happens to sit in
+# (2026-09-18). Every worktree carries scripts/ too, so `$(dirname $0)/..` is
+# whichever checkout you invoked it from — and "make myself a worktree" is a
+# natural thing to do from wherever you already are. Run from a worktree, the
+# old line built local/wt/<name> INSIDE that worktree: a nested worktree that
+# registers in `git worktree list`, shares the stash stack, and links its
+# node_modules to the nested parent's. `--git-common-dir` answers the SHARED
+# repository from inside any worktree (and `.git`, relatively, from the main
+# checkout), so both roads now land in the same place.
+cd "$(dirname "$0")"
+common=$(git rev-parse --git-common-dir 2>/dev/null) \
+  || { echo "not inside a git checkout of this repository" >&2; exit 1; }
+case "$common" in /*) ;; *) common="$PWD/$common" ;; esac
+here=$(cd "$common/.." && pwd)
+[ -f "$here/scripts/agent_worktree.sh" ] \
+  || { echo "cannot find the main checkout (resolved $here)" >&2; exit 1; }
 dir="$here/local/wt/$name"
 
 link_node_modules() {
