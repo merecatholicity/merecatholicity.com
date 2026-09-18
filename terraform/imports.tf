@@ -332,3 +332,13 @@ import {
   to = github_actions_repository_permissions.site
   id = "merecatholicity.com"
 }
+
+############################  web analytics  ############################
+
+# The RUM site behind Cloudflare Web Analytics (analytics.tf), made by hand
+# 2026-07-17 and read from the live API on 2026-09-18:
+#   GET /accounts/<account>/rum/site_info/list -> site_tag dfd1ea59…
+import {
+  to = cloudflare_web_analytics_site.main
+  id = "6093bc0889c95a08f0a92a8df6750c66/dfd1ea59f54f471bac79ba62608bf900"
+}

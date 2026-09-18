@@ -511,7 +511,7 @@ a:hover { color: var(--maroon-dark); }
 a.uri { overflow-wrap: anywhere; }
 
 /* Headings */
-.prose :where(h1, h2, h3, h4) {
+.prose :where(h1, h2, h3, h4, h5, h6) {
   font-weight: bold;
   color: var(--maroon);
   line-height: 1.25;
@@ -521,6 +521,33 @@ a.uri { overflow-wrap: anywhere; }
 .prose :where(h2) { font-size: 1.3rem; }
 .prose :where(h3) { font-size: 1.15rem; color: var(--maroon-dark); }
 .prose :where(h4) { font-size: 1.02rem; color: var(--maroon-dark); margin: 1.2em 0 0.2em; }
+
+/* THE CORPUS PAGES RANK ONE LEVEL DEEPER THAN THEY READ (2026-09-18). A pandoc
+   volume used to carry an <h1> per division beside the title block's own — 230
+   pages with more than one H1, flat to a screen reader and to a crawler.
+   scripts/page_meta.py demotes every division by one and marks the page
+   `main.prose.corpus`; these four rules give each demoted level the size its
+   old tag had, so the reading experience is unchanged and only the ranking
+   moved. The hand pages (main.prose, no `corpus`) keep the scale above. */
+.prose.corpus :where(h2) { font-size: 1.65rem; border-bottom: 1px solid var(--rule); padding-bottom: 0.25em; }
+.prose.corpus :where(h3) { font-size: 1.3rem; color: var(--maroon); }
+.prose.corpus :where(h4) { font-size: 1.15rem; color: var(--maroon-dark); margin: 1.6em 0 0.5em; }
+.prose.corpus :where(h5) { font-size: 1.02rem; color: var(--maroon-dark); margin: 1.2em 0 0.2em; }
+
+/* The skip link (page_meta.py): the first focusable thing inside a corpus
+   page's <main>, out of sight until a keyboard reaches it, and in the FLOW
+   when focused rather than pinned — a fixed position would put it under the
+   app bar on a phone. A reader who tabs into a volume no longer walks a
+   table of contents of several hundred entries to reach the first line. */
+.mc-skip {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.mc-skip:focus {
+  position: static; width: auto; height: auto; margin: 0.25rem 0; padding: 0.4rem 0.8rem;
+  overflow: visible; clip: auto; clip-path: none; display: inline-block;
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 6px;
+}
 
 .prose :where(header#title-block-header h1), .prose :where(.home-title) {
   text-align: center;
@@ -601,12 +628,12 @@ main.prose:has(table.reception) { max-width: none; margin-inline: 0; }
    height, so each rule lives in the media query where its --mc-*bar-h var is
    defined. */
 @media (max-width: 600px) {
-  body.mc-app :where(.dl, .bible-verse, main.prose h1, main.prose h2, main.prose h3, main.prose h4) {
+  body.mc-app :where(.dl, .bible-verse, main.prose h1, main.prose h2, main.prose h3, main.prose h4, main.prose h5) {
     scroll-margin-top: calc(var(--mc-appbar-h) + 1rem);
   }
 }
 @media (min-width: 601px) {
-  body.mc-app :where(.dl, .bible-verse, main.prose h1, main.prose h2, main.prose h3, main.prose h4) {
+  body.mc-app :where(.dl, .bible-verse, main.prose h1, main.prose h2, main.prose h3, main.prose h4, main.prose h5) {
     scroll-margin-top: calc(var(--mc-deskbar-h) + 1rem);
   }
 }
@@ -711,6 +738,7 @@ footer, .colophon {
 @media (max-width: 600px) {
   body { font-size: 1rem; --page-pad: 0.8rem; padding: 0.9rem var(--page-pad) 2rem; }
   .prose :where(h1) { font-size: 1.4rem; }
+  .prose.corpus :where(h2) { font-size: 1.4rem; }
   .prose :where(nav#TOC) { font-size: 0.9rem; }
 }
 

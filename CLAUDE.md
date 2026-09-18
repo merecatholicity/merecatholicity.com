@@ -62,9 +62,8 @@ worker that reads it; otherwise it goes on a branch.
 9. Every `uses:` is SHA-pinned — the repository requires it, nested references included;
    Dependabot bumps the pins and the npm toolchain by PR; secret scanning and push protection are on.
 10. The manual exceptions are enumerated in CICD.md §10. A manual act not on that list is drift.
-11. **Verify, don't assume**: `gh run list --limit 6`; `terraform -chdir=terraform plan` →
-    *No changes*; `python3 scripts/publish_pdfs.py --check`;
-    `curl -s "https://merecatholicity.com/version.json?probe=$RANDOM"`.
+11. **Verify, don't assume**: `gh run list --limit 6`; `terraform -chdir=terraform plan` → *No
+    changes*; `python3 scripts/publish_pdfs.py --check`; `curl -s "…/version.json?probe=$RANDOM"`.
 
 Credentials live in `~/.config/merecatholicity/ci.env` (mode 600, outside the repo) and in the
 Actions secrets — never in any committed file. The identity hashes and Turnstile sitekeys in
@@ -253,6 +252,7 @@ brings its test in the same change; never delete a test to go green.
 - **Hosting**: GitHub Pages serves the artifact `build.yml` deploys (`docs/` packaged; CNAME +
   .nojekyll asserted); Cloudflare fronts it — `ssl = full` (not strict: the origin is Pages),
   `browser_cache_ttl = 0` (what makes `?v=` work), the CSP ruleset, bot management — all Terraform.
+  **The meter is the build's**: the beacon rides `nav.js`, never automation; `auto_install` stays FALSE, or every view counts twice.
 - **PDFs**: the 244 published PDFs live in R2 `merecatholicity-files` at `files.merecatholicity.com`;
   `docs/pdfs.txt` is the manifest; `scripts/publish_pdfs.py` publishes and verifies.
 - **Workers**: `comments-worker` (`/api/comments*`, `/api/merecat*`, `/@*`; D1 + three librarian

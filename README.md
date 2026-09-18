@@ -60,6 +60,7 @@ secrets set with `wrangler secret put`. Credentials live in
 | `make toolchain` / `make psbuild` | Fetch `purs` by pinned hash / compile `purescript/src` → `purescript/output` |
 | `make pstest` | The PureScript unit tests alone (fast) |
 | `make html` / `make content` / `make menu` | Book + library + link check / content pages / regenerate nav from `scripts/nav.yml` |
+| `make page-meta` | The metadata sweep `make html` ends with: `lang`, `rel=canonical`, the skip link, one `<h1>` |
 | `make pdf` / `make publish` / `make logos` | Book letter PDF + companion / KDP paperback interior / Logos `.docx` |
 | `make publish-pdfs` / `make check-pdfs` | Upload changed PDFs to R2 and purge them / prove bucket = manifest = local |
 | `make mirrored-pdfs` | Copy the one PDF nothing builds into `docs/` |

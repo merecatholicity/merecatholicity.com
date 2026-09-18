@@ -81,6 +81,7 @@ on page one.)
 - **The app reloaded itself because the edge rewrites every page it serves (2026-09-17).** — `log/2026-09.md`
 - **An article page asks before it pays: the comments client is fetched only where a section is actually open (2026-09-18).** — `log/2026-09.md`
 - **The paintings are in the cache before the finger arrives, and the lazy load that put them there is untouched (2026-09-18).** — `log/2026-09.md`
+- **The meter was installed in July and measured nothing, because the thing that installs it had been deleted (2026-09-18).** — `log/2026-09.md`
 
 ### Build system
 
@@ -124,6 +125,7 @@ on page one.)
 - **The corpus sources ride a GitHub Release, not git (2026-09-16)** — `log/2026-09.md`
 - **The compiler comes by pinned hash, and the npm toolchain is watched (2026-09-17)** — `log/2026-09.md`
 - **One owner for every share card, and a card that says which page it is (2026-09-17)** — `log/2026-09.md`
+- **The metadata every page owes a reader who is not us (2026-09-18).** — `log/2026-09.md`
 
 ### The PureScript application layer
 

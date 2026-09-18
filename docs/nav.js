@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
    reach a phone's own cache, so a changing URL is the only real control. Before
    this, tweetnacl.min.js and lamejs.min.js were pinned at a hand-written ?v=1
    that had not moved since July. */
-var MC_ASSETS = {"avatars/presets/index.json":"1133856240","dr.json":"3308964207","emoji/emoji-data.json":"295875345","kjv.json":"856040020","lamejs.min.js":"701830801","qr.min.js":"1058418721","turnstile.html":"1895132035","tweetnacl.min.js":"2537342323"};
+var MC_ASSETS = {"avatars/presets/index.json":"1133856240","comments.js":"4116988739","dr.json":"3308964207","emoji/emoji-data.json":"295875345","kjv.json":"856040020","lamejs.min.js":"701830801","qr.min.js":"1058418721","turnstile.html":"1895132035","tweetnacl.min.js":"2537342323"};
 window.mcAssets = MC_ASSETS;
 /* `name` with its current key, or bare if we have never heard of it (which is
    the honest fallback: an unkeyed URL still works, it is merely cacheable). */
@@ -279,6 +279,38 @@ window.mcAsset = function (name) {
   }
 })();
 
+/* THE METER (2026-09-18). Cloudflare Web Analytics: no cookie, no cross-site
+   identifier, nothing to consent to — a page view, a referrer, the Core Web
+   Vitals of the page the reader actually got. It lives HERE, in the one script
+   every page already carries, for the same reason deeplink.js does: it reaches
+   all 274 pages (and every corpus part the splitter adds) without rebuilding
+   one of them, and a grep finds it.
+
+   It is NOT installed automatically at the edge, deliberately — see
+   terraform/analytics.tf. The site token is public by design, like the
+   Turnstile sitekeys; it identifies the site being measured, it authorises
+   nothing. The `?token=` form is the one Cloudflare documents for a beacon
+   injected by another script (their tag-manager recipe): a module script has
+   no document.currentScript to read a data attribute from. SPA measurement is
+   the beacon's default, so the shell's soft navigations count as the page
+   views they are.
+
+   Two gates. Off the live hostnames (a dev box on 127.0.0.1, a file:// open)
+   there is nothing to measure and the request is waste. And automation is not
+   a reader: the nightly headless run against production would otherwise post
+   itself into the numbers every night and quietly bend every decision the
+   numbers are for. */
+(function () {
+  try {
+    if (!/(^|\.)merecatholicity\.com$/.test(location.hostname)) return;
+    if (navigator.webdriver) return;
+    var b = document.createElement('script');
+    b.type = 'module';
+    b.src = 'https://static.cloudflareinsights.com/beacon.min.js?token=9eb9b8d07c9c4503bca7e8749904638f';
+    document.head.appendChild(b);
+  } catch (e) { /* a meter is never worth a broken page */ }
+})();
+
 /* The app shell (Lit soft-navigation) — THE DEFAULT since 2026-07-30:
    every reader gets soft navigation, the persistent audio dock, and the
    installable face. ?app=0 is the standing opt-out latch (sticky per
@@ -305,13 +337,13 @@ window.mcAsset = function (name) {
        this is a priority hint, not an ordering promise: whichever lands first
        does its part, and mountBars is idempotent. */
     var c = document.createElement('script');
-    c.src = 'chrome.js?v=4098711547';
+    c.src = 'chrome.js?v=2052693061';
     c.type = 'module';
     document.head.appendChild(c);
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=2183222365';
+    s.src = 'app.js?v=2984319496';
     /* A MODULE since 2026-09-17 (the write-path port's P0): the shell is an
        ESM bundle so later phases land in content-hashed chunks it import()s
        rather than in app.js itself. A dynamically inserted script is async

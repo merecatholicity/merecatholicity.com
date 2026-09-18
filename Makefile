@@ -235,7 +235,7 @@ html: fetch-sources
 	$(MAKE) -C resources bible-json
 	$(MAKE) -C resources html
 	python scripts/inject_social.py
-	$(MAKE) strip-nav sync-index library-order sitemap mirrored-pdfs pdf-manifest
+	$(MAKE) strip-nav sync-index page-meta library-order sitemap mirrored-pdfs pdf-manifest
 # The generators above (pandoc's --css=, content.py, nav.py, the resources
 # converters) emit BARE style.css / nav.js references, so the stamp has to be
 # the last word here or the two fight every build — the partials/book-tail.html
@@ -249,7 +249,14 @@ html: fetch-sources
 # (deeplink.js's end-of-work nav), and index.html re-synced from its two source
 # pages (where-to-begin.html, the-book.html). Run at the end of `html`, before
 # the linkcheck, so the checked tree is final.
-.PHONY: sitemap library-order sync-index strip-nav
+.PHONY: sitemap library-order sync-index strip-nav page-meta
+# The document metadata every page owes a reader who is not us: lang="en" (an
+# empty lang is a WCAG 3.1.1 failure, and pandoc emits one), rel=canonical from
+# the page's own og:url, a skip link past the table of contents, and ONE <h1>
+# per document. Runs after strip-nav and sync-index, which rewrite pages, and
+# before the sitemap. See scripts/page_meta.py.
+page-meta:
+	python scripts/page_meta.py
 sitemap:
 	python scripts/gen_sitemap.py
 library-order:
