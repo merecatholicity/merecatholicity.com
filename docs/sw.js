@@ -22,9 +22,10 @@
    (older same-basename keys are evicted as new ones arrive).
 
    Kept from v4: cache-hit serves revalidate against ORIGIN (cache:'no-cache';
-   the 10-min browser HTTP cache never masquerades as freshness) and when the
-   bytes differ the cache is updated and every open page told (mc-page-updated)
-   so a young page can heal with one reload (nav.js owns that policy); a newly
+   the 10-min browser HTTP cache never masquerades as freshness) and when OUR
+   bytes differ — the edge's own injection discounted, `siteBytes` below — the
+   cache is updated and every open page told (mc-page-updated) so a young page
+   can heal with one reload (nav.js owns that policy); a newly
    activated worker announces itself (mc-sw-updated) — the message channel,
    not controllerchange, which provably fails to fire on claim in some
    engines; messages are re-sent 4x over ~4.5s (a send racing document
@@ -160,6 +161,30 @@ self.addEventListener('message', function (e) {
   }).catch(function () { /* priming is best-effort */ }));
 });
 
+/* ---- what counts as "this document changed" ----
+   The edge REWRITES every HTML body it serves. Cloudflare's JavaScript
+   Detections (zone bot management, `enable_js` in terraform/zone.tf) appends a
+   <script> carrying a per-RESPONSE ray id — window.__CF$cv$params={r:'<ray>',…}
+   — so two fetches of the SAME unchanged page are never byte-equal. Measured
+   2026-09-17: three fetches of /index.html, three distinct bodies, one line
+   apart. A byte comparison therefore answered "this page changed" on EVERY
+   revalidation, every open page heard mc-page-updated for its own path, and
+   nav.js healed any page under 30 s old with a reload — on Home, a reload that
+   replayed the launch splash (the owner's report, 2026-09-17).
+   So compare the document THE SITE serves: our own markup, with whatever
+   /cdn-cgi/ script the edge injected taken out of both sides. A deploy still
+   differs; a ray id no longer does. Our own markup never mentions /cdn-cgi/,
+   and every other script — the inline theme/splash script most of all — is
+   compared in full, so a real change to one is still seen.
+   Held by tests/js/sw_revalidate.test.mjs, which runs this very function. */
+var SCRIPT_TAG = /<script\b[^>]*>[\s\S]*?<\/script>/gi;
+function siteBytes(body) {
+  return String(body).replace(SCRIPT_TAG, function (tag) {
+    return /__CF\$cv\$params|\/cdn-cgi\//.test(tag) ? '' : tag;
+  });
+}
+/* end of the edge filter */
+
 self.addEventListener('fetch', function (e) {
   try {
     if (e.request.method !== 'GET') return;
@@ -190,7 +215,7 @@ self.addEventListener('fetch', function (e) {
               var forPut = res.clone();
               return res.text().then(function (fresh) {
                 return hitCmp.text().then(function (stale) {
-                  if (fresh === stale) return;
+                  if (siteBytes(fresh) === siteBytes(stale)) return;
                   return putKnown(cache, pageKey, forPut).then(function () {
                     return tellClients({ t: 'mc-page-updated', path: url.pathname });
                   });

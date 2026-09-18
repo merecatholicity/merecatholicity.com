@@ -144,7 +144,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   expiry path joins `tests/worker/media_hygiene.test.mjs`.
 - The Cloudflare `bot_management` API is a **full replace** (Terraform sends the whole object); the
   edge 403s `Python-urllib` and CI runners (Bot Fight Mode) — a browser UA, and headless verification
-  against prod runs from the dev box.
+  against prod runs from the dev box. **JSD rewrites every HTML body**: never compare page bytes.
 - **Never a long generation inside a stateless invocation's `waitUntil`** — kick it into a
   Durable Object (the `ChatRoom` pattern).
 - The back room (`board:adminsonly`) and the social kill switch (`social_enabled`) answer every public

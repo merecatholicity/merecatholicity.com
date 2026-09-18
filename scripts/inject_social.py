@@ -100,6 +100,14 @@ NOINDEX_RE = re.compile(r'<meta name="robots" content="[^"]*noindex', re.I)
 #     only branch for the platform pages was written and then cut: it could not
 #     be verified here — Chrome does not honour Emulation.setEmulatedMedia for
 #     display-mode — and it bought nothing start_url did not already cover.)
+#     NEVER ON A RELOAD (2026-09-17): a reload is not a launch. The owner saw
+#     the splash replay mid-session — a service-worker heal-reload, fired
+#     because the edge's per-response JSD line made every page look changed
+#     (docs/sw.js siteBytes, which is the cure) — and a launch screen over a
+#     session already in progress reads as the app restarting itself. Only the
+#     RELOAD case is spared, the one no engine can disagree about; a resume or
+#     a relaunch still gets its launch screen. The FOUT gate below is NOT
+#     spared: a reload paints Home's static markup exactly as a launch does.
 #     LIFECYCLE (small and bounded): fade out once the app has actually
 #     rendered, never before ~500ms so a fast launch cannot flash, and
 #     unconditionally by 2.2s. The pseudo-elements are pointer-events:none, so
@@ -149,7 +157,10 @@ FLASH_SCRIPT = (
     "var l=c('mc-light');if(t==='light'&&(l==='mist'||l==='sepia'))e.setAttribute('data-light',l)}catch(x){}"
     "try{var a=true;try{a=localStorage.getItem('mc-app')!=='0'}catch(z){a=false}"
     "var p=location.pathname;var home=(p==='/'||p===''||p.slice(-11)==='/index.html');"
-    "if(a&&home){e.classList.add('mc-home-boot');e.classList.add('mc-splash');"
+    "var rl=false;try{var nv=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0];"
+    "rl=nv?nv.type==='reload':!!(performance.navigation&&performance.navigation.type===1)}catch(z0){}"
+    "if(a&&home)e.classList.add('mc-home-boot');"
+    "if(a&&home&&!rl){e.classList.add('mc-splash');"
     "var s=document.createElement('style');s.id='mc-boot-css';s.textContent=" + repr(SPLASH_CSS) + ";"
     "document.head.appendChild(s);"
     "var t0=Date.now();var iv=setInterval(function(){try{"

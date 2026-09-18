@@ -67,7 +67,26 @@ class SplashShape(unittest.TestCase):
         """start_url is Home, so Home is every launch of the installed app.
         Landing anywhere else is a resume, where a splash would be wrong."""
         self.assertIn("home=(p==='/'||p===''||p.slice(-11)==='/index.html')", JS)
-        self.assertIn("if(a&&home){e.classList.add('mc-home-boot');e.classList.add('mc-splash');", JS)
+        self.assertIn("if(a&&home&&!rl){e.classList.add('mc-splash');", JS)
+
+    def test_a_reload_is_not_a_launch(self):
+        """The owner saw the splash replay mid-session, on a service-worker
+        heal-reload (2026-09-17). A launch screen over a session already in
+        progress reads as the app restarting itself, so a reload never paints
+        one — and only a reload is spared, because that is the one navigation
+        type no engine disagrees about. A relaunch still gets its splash."""
+        self.assertIn("nv.type==='reload'", JS)
+        self.assertIn('performance.navigation.type===1', JS,
+                      'the deprecated navigation type is the fallback for engines '
+                      'without the timing entry')
+        self.assertIn('if(a&&home&&!rl){', JS, 'the splash must be the thing a reload skips')
+
+    def test_the_fout_gate_still_runs_on_a_reload(self):
+        """The reload spares the SPLASH, never the flash guard: a reloaded Home
+        paints its static book-promo markup exactly as a launch does, and
+        "The Book" flash is what mc-home-boot exists to hide."""
+        self.assertIn("if(a&&home)e.classList.add('mc-home-boot');", JS)
+        self.assertNotIn("if(a&&home&&!rl){e.classList.add('mc-home-boot')", JS)
 
     def test_it_respects_the_app_opt_out(self):
         """?app=0 readers get the plain website, splash included."""
