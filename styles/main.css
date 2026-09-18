@@ -77,7 +77,14 @@
    dark (data-theme on <html>, set by nav.js from a cookie) and, before the script
    runs or with JS off, when the OS prefers dark and no light choice is stored.
    The two blocks below MUST stay identical. Slate / warm-ink are delta blocks
-   further down that override only the neutral surfaces and share this accent. */
+   further down that override only the neutral surfaces and share this accent.
+
+   --faintest carries the small print (.board-row-sub, .comment-meta,
+   .board-stats, .topic-pages) and so must clear 4.5:1 against the LIGHTEST
+   surface it lands on, which is --cream-2, not --bg. Every dark variant was
+   set from --bg and failed on the cards: 3.66 here, 3.47 slate, 3.58 ink
+   (2026-09-18). Each value below is the old hue lifted until --cream-2 clears;
+   check --cream-2, not the page, when changing one. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg: #0f1113;
@@ -96,7 +103,7 @@
   --muted-b: #b3b8be;
   --muted-c: #a1a7ae;
   --muted-d: #939aa1;
-  --faintest: #7b828a;
+  --faintest: #8e949b;
   --ink-soft: #d3d6d9;
   --grade-y: #6cc47a;
   --grade-o: #c79ae0;
@@ -130,7 +137,7 @@
     --muted-b: #b3b8be;
     --muted-c: #a1a7ae;
     --muted-d: #939aa1;
-    --faintest: #7b828a;
+    --faintest: #8e949b;
     --ink-soft: #d3d6d9;
     --grade-y: #6cc47a;
     --grade-o: #c79ae0;
@@ -166,7 +173,7 @@
   --muted-b: #b1bac4;
   --muted-c: #9aa4af;
   --muted-d: #8b949e;
-  --faintest: #767e87;
+  --faintest: #8d939b;
   --ink-soft: #cdd5dd;
   --glass: rgba(28, 34, 42, 0.86);
   --creed-bg: #132019;
@@ -186,7 +193,7 @@
   --muted-b: #bcb2a0;
   --muted-c: #a99f8d;
   --muted-d: #988e7c;
-  --faintest: #837a68;
+  --faintest: #968d7a;
   --ink-soft: #d8d0c0;
   --glass: rgba(36, 32, 26, 0.86);
   --creed-bg: #1a2419;
@@ -205,6 +212,9 @@
   --rule: #cdd5dd;
   --cream: #e9eef3;
   --cream-2: #f1f5f8;
+  /* Its own, darker than :root's #6d6d6d: the cool paper is lighter than
+     white-on-white, and the inherited grey fell to 4.43:1 on --cream. */
+  --faintest: #6a6a6a;
   --bubble-mine: #efdfdf;
   --bubble-mine-rule: #beacb2;
   --glass: rgba(243, 246, 248, 0.97);
@@ -216,6 +226,9 @@
   --rule: #ccb994;
   --cream: #efe4cb;
   --cream-2: #f5edd7;
+  /* Its own, darker than :root's #6d6d6d: the tinted paper lifts every
+     background, and the inherited grey fell to 4.10:1 on --cream. */
+  --faintest: #656565;
   --bubble-mine: #ebd6c9;
   --bubble-mine-rule: #be9679;
   --brown: #7a5c28;

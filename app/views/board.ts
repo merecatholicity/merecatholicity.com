@@ -184,10 +184,14 @@ class McBoardIndex extends LitElement {
   }
   /* P3-c: the 14-room wall is grouped so a newcomer gets a map — the general
      rooms, then the confessional in-house rooms — instead of scanning look-alike
-     rows. The back room (admin-only) is its own unlabelled group at the foot. */
+     rows. The back room (admin-only) is its own unlabelled group at the foot.
+     h2, not h3: the page's own title is the h1 and nothing sits between, so an
+     h3 here skipped a level and a screen reader announced a subheading of a
+     heading that does not exist (2026-09-18). .board-group-head styles by
+     class, so the level is free to be correct. */
   _catGroup(heading: string, cats: any[]) {
     if (!cats.length) return nothing;
-    return html`${heading ? html`<h3 class="board-group-head">${heading}</h3>` : nothing}
+    return html`${heading ? html`<h2 class="board-group-head">${heading}</h2>` : nothing}
       <div class="board-cats">
         ${cats.map((cat: any) => {
           const isBack = cat[0] === 'adminsonly';

@@ -144,6 +144,7 @@ on page one.)
 - **The read transport leaves the boot, and the shell stops waiting for the client it serves (2026-09-18).** — `log/2026-09.md`
 - **The edge injects a DIFFERENT token into a browser's copy, and the first fix met only half of it (2026-09-18).** — `log/2026-09.md`
 - **The frozen twins are deleted, and the kernel is the only copy that runs (2026-09-18).** — `log/2026-09.md`
+- **Every dark theme's small print failed AA, and the surface to measure against is the card, not the page (2026-09-18).** — `log/2026-09.md`
 
 ### Testing policy
 
