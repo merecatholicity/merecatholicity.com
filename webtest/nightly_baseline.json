@@ -5,6 +5,12 @@
   "pass": 15,
   "summary": true
  },
+ "test_badge_freshness": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 7,
+  "summary": true
+ },
  "test_core_rank": {
   "exit": 0,
   "fail": 0,

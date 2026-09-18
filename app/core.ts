@@ -423,6 +423,10 @@ export const cacheClassify = (age: number, ttl: number): string =>
   Cache.freshnessTag(Cache.classify(Number(age) || 0)(Number(ttl) || 0));
 export const cachePersistable = (key: string): boolean => Cache.persistable(String(key || ''));
 export const cacheStaleMaxMs: number = Cache.staleMaxMs;
+/* An unread count may be painted only while it is fresh (Domain.Cache.badgeShows):
+   the chrome asks this before it draws a badge from a stored number. */
+export const cacheBadgeShows = (age: number): boolean => Cache.badgeShows(Number(age) || 0);
+export const cacheBadgeTtlMs: number = Cache.badgeTtlMs;
 export const cacheMaxBytes: number = Cache.maxBytes;
 export const cacheSchema: number = Cache.schema;
 

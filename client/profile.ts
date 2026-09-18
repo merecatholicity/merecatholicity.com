@@ -307,21 +307,28 @@ export function installProfile(B: Boot) {
     renderIdentity();
     badgeChanged();
   }
+  var notifAsking = false;
   function notifUnreadCheck(force?: boolean) {
     if (!state.key) return;
+    /* the shell's badges own this read where they stand (app/badges.ts) */
+    if (window.mcBadges) { window.mcBadges.refresh('notif', force ? 300 : 0); return; }
     var c = notifCacheGet();
     if (!force && c && Date.now() - c.at < 90000) return;
-    try { localStorage.setItem(NOTIF_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
+    /* an in-flight flag, never a re-stamp of the stored count: the stamp is
+       when the number was learned (2026-09-17) */
+    if (notifAsking) return;
+    notifAsking = true;
     readMark();
     fetch(API + '/notifications/unread', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key }),
     }).then(function (r) { return r.json(); }).then(function (d) {
+      notifAsking = false;
       if (blockedOut(d)) return;
       if (readThrottled(d)) readEase();
       if (d.ok) notifCacheSet(d.unread);
-    }).catch(function () {});
+    }).catch(function () { notifAsking = false; });
   }
   function liveNotifBadge() {
     if ((window as any).mcBadges) return;   // the shell's badges (app/badges.ts) hear the frame on every page — no second read, no second bell

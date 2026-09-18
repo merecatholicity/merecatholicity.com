@@ -60,7 +60,10 @@ export function installBadges() {
     lastBell = now;
     try { if (window.mcSound) window.mcSound.play('bell'); } catch (e) { /* silent */ }
   }
-  function refresh(which: string) {
+  /* `wait` is the debounce a live frame wants (a message and its bell arrive as
+     two frames); the boot asks with no wait, because until the answer lands the
+     bar shows no badge at all. */
+  function refresh(which: string, wait = 300) {
     const key = readKey();
     if (!key) return;
     clearTimeout(timers[which]);
@@ -74,6 +77,16 @@ export function installBadges() {
     }, 300);
   }
   function stale(name: string) { const c = cacheGet(name); return !c || Date.now() - c.at > TTL; }
+  /* A count the chrome may not paint (older than its TTL — Domain.Cache.badgeShows,
+     the one rule both halves read) is asked for AT ONCE on a fresh open: the
+     bar carries no badge until it lands, so the wait is what the reader sees.
+     One read per open, none per soft navigation (the shell installs once) and
+     none at all when the stored number is still fresh. */
+  function askIfUnpaintable() {
+    if (!readKey()) return;
+    if (stale(DM_CACHE)) refresh('dm', 0);
+    if (stale(NOTIF_CACHE)) refresh('notif', 0);
+  }
   document.addEventListener('mc-live', (ev: any) => {
     const m = ev.detail;
     if (!m || !readKey()) return;
@@ -91,6 +104,9 @@ export function installBadges() {
     if (stale(DM_CACHE)) refresh('dm');
     if (stale(NOTIF_CACHE)) refresh('notif');
   });
+  /* the fresh open asks now; an identity that arrives later is caught by the
+     socket's own mc-live-resync above, which refreshes whatever is stale */
+  askIfUnpaintable();
   (window as any).mcBadges = {
     refresh,
     set: (which: string, n: number) => cacheSet(which === 'dm' ? DM_CACHE : NOTIF_CACHE, n),

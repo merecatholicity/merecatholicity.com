@@ -79,3 +79,13 @@ test('the store has a ceiling and a schema stamp', () => {
   assert.equal(typeof Cache.schema, 'number');
   assert.ok(Cache.schema >= 2, 'schema 2 (2026-09-17) drops the stored /recent answers that carried the worker env');
 });
+
+test('badgeShows: an unread count is painted only while it is fresh (2026-09-17)', () => {
+  assert.equal(Cache.badgeTtlMs, 90000, 'the ninety seconds both clients have always used');
+  assert.equal(Cache.badgeShows(0), true, 'just learned');
+  assert.equal(Cache.badgeShows(89999), true, 'inside the window');
+  assert.equal(Cache.badgeShows(90000), false, 'at the window: last visit\'s number, not a smaller truth');
+  assert.equal(Cache.badgeShows(3600000), false, 'an hour old');
+  assert.equal(Cache.badgeShows(Cache.staleMaxMs + 1), false, 'and past the stale ceiling');
+  assert.equal(Cache.badgeShows(-5000), true, 'a clock that moved backwards is not evidence of staleness (classify\'s rule)');
+});

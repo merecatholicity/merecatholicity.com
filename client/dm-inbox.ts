@@ -60,22 +60,31 @@ export function installDmInbox(B: Boot) {
     badgeChanged();
   }
 
+  var dmAsking = false;
   function dmUnreadCheck(force?: boolean) {
     if (!state.key) return;
+    /* The shell's badges own this read where they stand (app/badges.ts): one
+       road, one answer. */
+    if (window.mcBadges) { window.mcBadges.refresh('dm', force ? 300 : 0); return; }
     var c = dmCacheGet();
     if (!force && c && Date.now() - c.at < 90000) return;
-    /* Stamp first, so parallel page loads inside the window stay quiet. */
-    try { localStorage.setItem(DM_CACHE, JSON.stringify({ n: c ? c.n : 0, at: Date.now() })) } catch (e) {}
+    /* An in-flight flag keeps parallel boots quiet. It used to re-stamp the
+       stored count instead, which made last visit's number look fresh — and
+       the chrome painted it (2026-09-17). The stamp is when the number was
+       LEARNED, and nothing else may move it. */
+    if (dmAsking) return;
+    dmAsking = true;
     readMark();
     fetch(API + '/dm/unread', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: state.key }),
     }).then(function (r) { return r.json(); }).then(function (d) {
+      dmAsking = false;
       if (blockedOut(d)) return;
       if (readThrottled(d)) readEase();
       if (d.ok) dmCacheSet(d.unread);
-    }).catch(function () {});
+    }).catch(function () { dmAsking = false; });
   }
 
   /* ---- Live DMs and notifications (window.mcLive private user scope) ----

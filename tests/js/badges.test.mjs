@@ -9,7 +9,9 @@
  * two bells for one message (the classic handlers not deferring); a badge
  * cache untouched when a thread or a post is opened (the bell staying lit
  * for a message the reader is looking at — the other report); the resync
- * not refreshing a stale cache. Every check reads the sources. */
+ * not refreshing a stale cache; a stored count PAINTED past its TTL (last
+ * visit's number on every fresh open, then taken away — the owner's report,
+ * 2026-09-17) or re-stamped so it looks fresh. Every check reads the sources. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -46,4 +48,26 @@ test('the fresh count every door hands back is set at once (the doors themselves
   assert.ok(/if \(typeof d\.notif_unread === 'number'\) notifCacheSet\(d\.notif_unread\);/.test(dm), 'the thread sets the bell from its payload');
   assert.ok(/\.then\(function \(d\) \{ if \(d && typeof d\.notif_unread === 'number'\) notifCacheSet\(d\.notif_unread\); \}\)/.test(dm), 'so does the seen ping');
   assert.ok(/if \(typeof d\.notif_unread === 'number'\) notifCacheSet\(d\.notif_unread\);\s*\/\/ opening read the post's bells/.test(board), 'and the feed post');
+});
+
+test('a count is painted only while it is fresh, and a fresh open asks at once (2026-09-17)', () => {
+  const chrome = readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8');
+  const count = chrome.slice(chrome.indexOf('function badgeCount('), chrome.indexOf('function badgeText('));
+  assert.ok(/core\.cacheBadgeShows\(Date\.now\(\) - \(Number\(o\.at\) \|\| 0\)\)/.test(count),
+    'the chrome asks the kernel whether the stored number may still be shown');
+  assert.ok(/if \(!core \|\| !core\.cacheBadgeShows\) return 0;/.test(count), 'no kernel: no badge, never a guess');
+  assert.ok(!/o\.n > 0 \? o\.n : 0;[\s\S]{0,40}\} catch/.test(count), 'the old unconditional paint is gone');
+  assert.ok(/function askIfUnpaintable\(\) \{[\s\S]*?if \(stale\(DM_CACHE\)\) refresh\('dm', 0\);\s*if \(stale\(NOTIF_CACHE\)\) refresh\('notif', 0\);/.test(badges),
+    'the shell asks for an unpaintable count with no debounce');
+  assert.ok(/\n  askIfUnpaintable\(\);/.test(badges), 'on the fresh open, once');
+  assert.ok(/function refresh\(which: string, wait = 300\)/.test(badges), 'a live frame keeps its debounce');
+  assert.ok(!/setInterval/.test(badges), 'still never a poller');
+  /* and neither classic check may re-stamp a stored count */
+  for (const [name, src] of [['dm-inbox', dm], ['profile', profile]]) {
+    assert.ok(/if \(window\.mcBadges\) \{ window\.mcBadges\.refresh\('(dm|notif)', force \? 300 : 0\); return; \}/.test(src),
+      name + ': the read defers to the shell where it stands');
+    assert.ok(/Asking = true;/.test(src) && /Asking = false;/.test(src), name + ': an in-flight flag keeps parallel boots quiet');
+    assert.ok(!/localStorage\.setItem\((DM|NOTIF)_CACHE, JSON\.stringify\(\{ n: c \? c\.n : 0, at: Date\.now\(\) \}\)\)/.test(src),
+      name + ': never a stamp that makes last visit\'s number look fresh');
+  }
 });

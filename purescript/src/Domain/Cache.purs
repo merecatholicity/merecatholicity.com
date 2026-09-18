@@ -27,6 +27,8 @@ module Domain.Cache
   , staleMaxMs
   , maxBytes
   , schema
+  , badgeTtlMs
+  , badgeShows
   ) where
 
 import Prelude
@@ -56,6 +58,21 @@ classify age ttl
   | age < ttl = Fresh
   | age < staleMaxMs = Stale
   | otherwise = Expired
+
+-- | An unread count's own TTL: the window the chrome may paint a stored number
+-- | in without asking again (the same ninety seconds the clients have always
+-- | used for these two counts).
+badgeTtlMs :: Number
+badgeTtlMs = 90000.0
+
+-- | May a stored unread count be PAINTED at this age (2026-09-17)? Only while
+-- | it is Fresh. A stale count is not a smaller truth, it is last visit's
+-- | number: painting it showed the reader a wrong badge on every fresh open
+-- | and took it away a moment later, which is what the owner saw. Nothing is
+-- | the honest answer until the read lands — the rungs below Fresh serve
+-- | CONTENT while it refreshes, and a count is not content.
+badgeShows :: Number -> Boolean
+badgeShows age = classify age badgeTtlMs == Fresh
 
 -- | The membrane wants a string, not an ADT (see app/core.ts).
 freshnessTag :: Freshness -> String

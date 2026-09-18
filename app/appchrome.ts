@@ -208,12 +208,22 @@ function onCommunity() {
 }
 
 /* Unread counts, read from the caches the comments client keeps current (live
-   layer + 90s poll). No fetch — the chrome only reflects what is already known. */
+   layer + the shell's event-driven refresh). No fetch — the chrome only
+   reflects what is already known, and only while it is still TRUE: a stored
+   count older than its TTL (Domain.Cache.badgeShows) is last visit's number,
+   and painting it made every fresh open show a wrong badge for as long as the
+   refresh took (the owner's report, 2026-09-17; reproduced at 211 ms on a fast
+   phone open, far longer on a slow link). No badge is the honest answer until
+   the read lands — app/badges.ts asks for it at once. Without the kernel
+   (a half-loaded bundle) nothing is painted, which is the safe side. */
 function badgeCount(which: string) {
   try {
     const raw = localStorage.getItem(which === 'dm' ? 'mc-dm-unread' : 'mc-notif-unread');
     const o = raw ? JSON.parse(raw) : null;
-    return o && o.n > 0 ? o.n : 0;
+    if (!o || !(o.n > 0)) return 0;
+    const core = window.mcCore;
+    if (!core || !core.cacheBadgeShows) return 0;
+    return core.cacheBadgeShows(Date.now() - (Number(o.at) || 0)) ? o.n : 0;
   } catch (e) { return 0; }
 }
 function badgeText(n: number) { return n > 99 ? '99+' : String(n); }

@@ -204,11 +204,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   iOS has none and no road around it (the `switch`-checkbox haptic fires only under a real
   tap, never a programmatic toggle — tried, felt not working); never before the first real
   tap, never elsewhere by hand. Tastefully: small numbers, no buzz on a send or a release.
-- **Badges are the shell's, and reading marks read** (2026-09-12). The Inbox count and the bell
-  (`mc-dm-unread` / `mc-notif-unread`) are refreshed by `app/badges.ts` on EVERY page the live
-  socket reaches — a `dm` frame not for the thread on screen, a `notification` frame unless the
-  list is open, a reconnect when a cache is stale — never inside a page boot (Home and the readers
-  have no boot), never a poller; the classic handlers defer to it.
+- **Badges are the shell's, reading marks read, and a count paints only while FRESH**
+  (`Domain.Cache.badgeShows`: past its TTL it is last visit's number, so the bar shows none and
+  `app/badges.ts` asks at once). `mc-dm-unread` / `mc-notif-unread` refresh on EVERY page the socket
+  reaches — a `dm` frame not for the thread shown, a `notification` unless the list is open, a stale
+  cache on reconnect — never in a page boot, never a poller, never re-stamped; classic defers.
 - **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"])
   mc-footer`; the shell stamps `data-mc-tab` on every navigation); the footer's information lives
   in Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on
