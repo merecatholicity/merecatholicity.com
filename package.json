@@ -9,14 +9,15 @@
     "node": ">=22"
   },
   "scripts": {
-    "lint": "eslint docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js ",
+    "lint": "eslint pagejs/nav.js pagejs/deeplink.js pagejs/flash.js pagejs/contact.js pagejs/bible-reader.js pagejs/away.js pagejs/index.js docs/sw.js",
     "build:ps": "python3 scripts/writings.py && rm -rf purescript/output && cd purescript && PATH=\"$PWD/../local/bin:$PATH\" spago build",
-    "build:js": "npm run build:ps && rm -rf docs/chunks && esbuild app/app.ts app/chrome.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning && npm run build:client",
+    "build:js": "npm run build:ps && rm -rf docs/chunks && esbuild app/app.ts app/chrome.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning && npm run build:pagejs && npm run build:client",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
     "tsc": "tsc -p tsconfig.json && tsc -p comments-worker/tsconfig.json && tsc -p contact-worker/tsconfig.json",
     "build": "npm run lint && npm run build:js && npm run build:css",
     "worker:deploy": "cd comments-worker && wrangler deploy",
-    "build:client": "esbuild client/comments.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning"
+    "build:client": "esbuild client/comments.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning",
+    "build:pagejs": "esbuild pagejs/nav.js pagejs/deeplink.js pagejs/flash.js pagejs/contact.js pagejs/bible-reader.js pagejs/away.js pagejs/index.js --minify --outdir=docs --log-level=warning"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260917.1",

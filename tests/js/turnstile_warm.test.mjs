@@ -273,7 +273,7 @@ test('the challenge never re-runs on a timer', () => {
    * stayed open. Every one of those was another chance to take the document. */
   for (const [file, what] of [['client/comments.ts', 'the in-page fallback'],
                               ['docs/turnstile.html', 'the isolated widget'],
-                              ['docs/contact.js', 'the contact form widget']]) {
+                              ['pagejs/contact.js', 'the contact form widget']]) {
     const body = readFileSync(join(root, file), 'utf8');
     assert.ok(/'refresh-expired': 'never'/.test(body), `${what} still auto-refreshes its token`);
     assert.ok(/retry: 'never'/.test(body), `${what} still retries a failed challenge on a loop`);
@@ -335,7 +335,7 @@ test('the contact page mounts nothing on arrival', () => {
   assert.ok(!/class="cf-turnstile"/.test(page),
     'the slot must not be cf-turnstile — an implicit render would scan and mount it unasked');
   assert.ok(/class="contact-ts" data-sitekey=/.test(page), 'the explicit slot is gone');
-  const js = readFileSync(join(root, 'docs', 'contact.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const js = readFileSync(join(root, 'pagejs', 'contact.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   assert.ok(/render=explicit/.test(js), 'contact.js must load api.js with render=explicit');
   /* the mount is reachable only through want(): focus or the press */
   const mounts = [...js.matchAll(/\bmount\(\)/g)].length;

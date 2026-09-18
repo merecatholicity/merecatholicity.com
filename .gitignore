@@ -114,6 +114,19 @@ docs/app.js
 # the early bundle: the two fixed bars, loaded before app.js (2026-09-17)
 docs/chrome.js
 docs/comments.js
+# The seven unbundled page scripts (2026-09-18). Their SOURCE moved to pagejs/
+# and `npm run build:pagejs` minifies each one into docs/ under the same name,
+# so what ships is ~13 KB gzipped lighter than the hand file. They are still
+# separate files from app.js, which is the point the old arrangement was
+# protecting: a page running a stale app.js can still pump updates through
+# nav.js. sw.js is NOT here — it stays a hand-maintained file in docs/.
+docs/nav.js
+docs/deeplink.js
+docs/flash.js
+docs/contact.js
+docs/away.js
+docs/index.js
+docs/bible-reader.js
 # the lazy feature modules' chunks (P2-5, 2026-09-16): content-hashed names, rebuilt by every
 # `make bundle` (rm -rf first, so a stale chunk never lingers)
 docs/chunks/

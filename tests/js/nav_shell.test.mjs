@@ -25,7 +25,7 @@ import { dirname, join } from 'node:path';
 import vm from 'node:vm';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const NAV = readFileSync(join(root, 'docs', 'nav.js'), 'utf8');
+const NAV = readFileSync(join(root, 'pagejs', 'nav.js'), 'utf8');
 
 /* The smallest document nav.js can run against: it stamps <html>, reads
    cookies and storage, appends scripts to <head>, and binds listeners. */

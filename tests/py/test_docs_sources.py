@@ -49,6 +49,10 @@ def buildable():
         names |= {n[:-4] + '.html' for n in os.listdir(res)
                   if n.endswith('.tex') and n[:-4] + '.html' not in PDF_ONLY}
     # the book, the bundles, the stylesheet and the generated data files
+    # the seven page scripts: source in pagejs/, minified into docs/ by
+    # `npm run build:pagejs` (2026-09-18). sw.js is NOT one of them.
+    names |= {n + '.js' for n in ('nav', 'deeplink', 'flash', 'contact', 'away',
+                                  'index', 'bible-reader')}
     names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'chrome.js', 'comments.js',
               'Mere_Catholicity_Logos.docx',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
@@ -107,14 +111,29 @@ class DocsIsSourceOrOutput(unittest.TestCase):
             self.assertIn(page, have, page + ' is hand-written and must stay in git')
 
     def test_the_unbundled_client_scripts_are_tracked(self):
-        """nav.js and sw.js carry the whole PWA update lifecycle and live ONLY
-        here — deliberately outside the bundle, so a page running a stale app.js
-        can still pump updates. They are not output."""
+        """sw.js and the vendored libraries live ONLY in docs/ and are not output.
+
+        sw.js carries the PWA update lifecycle and is hand-maintained: it is
+        deliberately outside the bundle AND outside pagejs/, so no build step
+        can rewrite the one file that decides whether a stale page can update
+        itself."""
         have = tracked()
-        for js in ('nav.js', 'sw.js', 'index.js', 'flash.js', 'contact.js', 'away.js',
-                   'deeplink.js', 'bible-reader.js',
-                   'tweetnacl.min.js', 'lamejs.min.js', 'qr.min.js'):
+        for js in ('sw.js', 'tweetnacl.min.js', 'lamejs.min.js', 'qr.min.js'):
             self.assertIn(js, have, 'docs/' + js + ' is source, not build output')
+
+    def test_the_page_scripts_have_a_tracked_source(self):
+        """The seven that moved to pagejs/ on 2026-09-18 are still SOURCE — they
+        just stopped being served bytes. docs/<name>.js is now minified build
+        output (~13 KB gzipped lighter across the site), so the file that must
+        never leave git is pagejs/<name>.js. They remain separate files from
+        app.js, which is what the old arrangement was protecting: a page running
+        a stale app.js can still pump updates through nav.js."""
+        out = subprocess.run(['git', 'ls-files', 'pagejs'], capture_output=True,
+                             text=True, cwd=ROOT).stdout.split()
+        have = {os.path.basename(p) for p in out}
+        for js in ('nav.js', 'deeplink.js', 'flash.js', 'contact.js', 'away.js',
+                   'index.js', 'bible-reader.js'):
+            self.assertIn(js, have, 'pagejs/' + js + ' is source and must stay in git')
 
     def test_the_things_that_bind_the_domain_are_tracked(self):
         """Losing CNAME from the served folder once unbound the custom domain

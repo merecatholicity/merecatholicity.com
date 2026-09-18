@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const nav = readFileSync(join(root, 'docs', 'nav.js'), 'utf8');
+const nav = readFileSync(join(root, 'pagejs', 'nav.js'), 'utf8');
 const block = nav.slice(nav.indexOf('IS THIS DEVICE RUNNING THE CURRENT APP?'),
   nav.indexOf('/* ?debug=1'));
 

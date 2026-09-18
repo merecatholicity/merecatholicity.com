@@ -44,6 +44,16 @@ idea holds the whole thing together and is the key to reading it:
                               rules via window.mcCore)
 ```
 
+**`pagejs/` (2026-09-18)** is the third source tree beside `app/` and `client/`:
+the seven scripts a page loads directly rather than through a bundle — `nav.js`
+(the shell injector and SW update pump), `deeplink.js`, `bible-reader.js`,
+`contact.js`, `flash.js`, `away.js`, `index.js`. `npm run build:pagejs` minifies
+each into `docs/` under the same name, so `docs/<name>.js` is build output and
+`pagejs/<name>.js` is the file to edit. They stay OUT of the bundle on purpose:
+a page running a stale `app.js` must still be able to pump its own update.
+`docs/sw.js` is the one exception — hand-maintained in `docs/`, never rewritten
+by a build, because it is the file that decides whether that update can happen.
+
 The two "how is this one file 6,000 lines?" cases were **`docs/comments.js`**
 (the browser client) and **`comments-worker/src/index.js`** (the backend). Both
 have been dissolved into feature files — the worker in Phase 4, the client in
@@ -77,14 +87,14 @@ duplicated, and the shape they moved toward.
 | `comments-worker/src/lib.ts` | 3,648 | The shared core: constants, crypto, auth/validation, the settings, DB/notification/broadcast helpers, the DM primitives, the media purges, the social gate and the Discord fan-out. A leaf — it references no handler. |
 | `app/appchrome.ts` | 1930 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
 | `app/shell.ts` | 868 | The SPA shell: soft-navigation (latest-wins, instant nav), per-page boot registry, audio dock, PWA. |
-| `docs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring (served raw, unversioned). |
+| `pagejs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring. Source since 2026-09-18: `npm run build:pagejs` minifies it into `docs/nav.js` (46,058 → 15,392 B; 16.4 → 5.4 KB gzipped, on EVERY page), and `stamp_versions.py` then writes its `?v=` keys and the `MC_ASSETS` map into that output. |
 | `comments-worker/src/durable.ts` | 875 | The two Durable Objects (`BoardHub` — `HUB_SHARDS` instances, sockets indexed in memory, `Domain.Hub` the placing, a `watch` table naming the siblings that watch each member — and `ChatRoom`). |
 | `comments-worker/src/dbsession.ts` | 88 | The D1 session every routed request runs against: replicas for `Domain.Consistency`'s read routes, the primary for the rest, the `mc-d1` bookmark cookie after a write. |
 | `comments-worker/src/egress.ts` | 180 | The egress guard (2026-09-17): `sealEnv` (the env reads by name and refuses to be copied, listed, serialized or written), `deriveEnv`, and `guardResponse` (a textual answer carrying any non-public env value is refused). Dependency-free; contact-worker imports it too. |
 | `comments-worker/src/serve.ts` | 64 | `default.fetch`: seal the env, run the router, guard the answer, report what the seal refused. |
 | `comments-worker/src/oidc.ts` | 188 | Who is at a pipeline door (2026-09-17): a GitHub Actions job's OIDC token, its RS256 signature checked against GitHub's published keys and its claims against `Domain.Pipeline`; an admin key; for the ops door, the nightly's `OPS_REPORT_KEY`. `pipelineGated` is the three librarian endpoints' preamble. |
 | `app/call.ts` | 521 | The 1v1 voice-call engine (shell-owned, so a call rings on any page). |
-| `docs/bible-reader.js` | 439 | KJV/DR reader boot (served raw). |
+| `pagejs/bible-reader.js` | 439 | KJV/DR reader boot. Minified into `docs/` with the other six page scripts. |
 | `app/views/board.ts` / `topic.ts` | 435 / 433 | Lit views: board index+category / topic+search. |
 | `app/richtext.ts` | 432 | The one living body renderer (`window.mcRich`): markdown, scripture autolink, emoji. |
 | `comments-worker/src/usagecalc.ts` | 327 | Pure free-tier limit maths for the usage monitor (`usage.ts`, 106, does the fetch through `analytics.ts`, the GraphQL glue; `quota.ts`, 90, is the librarian's AI budget guard over the same neurons select — no lib import, Node-tested with a stubbed fetch). |

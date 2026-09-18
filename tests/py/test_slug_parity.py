@@ -41,7 +41,7 @@ from ingest import PandocWalk  # noqa: E402  (path set above)
 # contributor using nvm or Homebrew — the exact people the pipeline exists to
 # welcome. What matters is that a real node runs the parity check.
 NODE = pathlib.Path(shutil.which("node") or "/usr/bin/node")
-DEEPLINK_JS = ROOT / "docs" / "deeplink.js"
+DEEPLINK_JS = ROOT / "pagejs" / "deeplink.js"
 
 # A tiny node program that reads docs/deeplink.js as TEXT, regex-extracts the
 # real `function slugify(...) { ... }` (slugify has no nested braces, so a

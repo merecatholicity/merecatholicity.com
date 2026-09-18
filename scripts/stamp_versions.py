@@ -156,7 +156,14 @@ def main():
     runtime = {n: stamps[n] for n in RUNTIME_ASSETS if n in stamps}
     # One line, sorted, no spaces: deterministic, and a single regex target.
     line = 'var MC_ASSETS = ' + json.dumps(runtime, sort_keys=True, separators=(',', ':')) + ';'
-    if sub_file(nav, r'var MC_ASSETS = \{[^\n]*\};', line):
+    # Tolerant of spacing and NON-GREEDY, because docs/nav.js is minified build
+    # output now (pagejs/nav.js is the source): esbuild writes `var MC_ASSETS={...};`
+    # on one line with the whole file, so the old `= \{[^\n]*\};` matched nothing
+    # and, had it been anchored differently, would have swallowed the file to its
+    # last `};`. The map is a flat string->string object and contains no `};`, so
+    # `.*?` stops at its own close. esbuild keeps the NAME (a top-level var in a
+    # classic script is a global it may not rename) — verified 2026-09-18.
+    if sub_file(nav, r'var MC_ASSETS\s*=\s*\{.*?\};', line):
         changed.append('nav.js: MC_ASSETS (' + str(len(runtime)) + ' runtime assets)')
 
     # ---- 3. nav.js is final now, so its own key can be taken BEFORE the page

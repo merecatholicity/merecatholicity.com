@@ -52,7 +52,7 @@ for (const name of Object.keys(budget).filter((k) => !k.startsWith('_'))) {
 test('docs/app.js is an ES module, and nav.js injects it as one', () => {
   const app = join(root, 'docs', 'app.js');
   assert.ok(existsSync(app), 'app.js is not built — make bundle first');
-  const nav = readFileSync(join(root, 'docs', 'nav.js'), 'utf8');
+  const nav = readFileSync(join(root, 'pagejs', 'nav.js'), 'utf8');
   const at = nav.indexOf("s.src = 'app.js");
   assert.ok(at > 0, 'nav.js injects app.js');
   /* to the appendChild that FOLLOWS it — nav.js appends other scripts earlier */

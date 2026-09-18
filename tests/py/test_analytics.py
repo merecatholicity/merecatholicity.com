@@ -38,7 +38,7 @@ def read(*parts):
 
 class TheBeacon(unittest.TestCase):
     def setUp(self):
-        self.nav = read('docs', 'nav.js')
+        self.nav = read('pagejs', 'nav.js')
 
     def test_every_page_carries_it(self):
         """nav.js is the one script every page already loads — the same reason

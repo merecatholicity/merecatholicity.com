@@ -394,9 +394,9 @@ class NothingScrollsSideways(unittest.TestCase):
         self.assertIn("flex:", find.group(1), "the find box must be allowed to shrink")
         # and the reader's own injected copy of the rule agrees (it is injected
         # later and wins on equal specificity)
-        reader = read(ROOT / "docs" / "bible-reader.js")
+        reader = read(ROOT / "pagejs" / "bible-reader.js")
         self.assertRegex(reader, r"\.bible-find\{[^}]*flex:1 1 11em;max-width:100%",
-                         "docs/bible-reader.js injects a .bible-find rule that no longer lets it shrink")
+                         "pagejs/bible-reader.js injects a .bible-find rule that no longer lets it shrink")
 
 
 class AHoldPicksAMessageNeverAWord(unittest.TestCase):
@@ -476,7 +476,7 @@ class PreShellPaint(unittest.TestCase):
 
     def setUp(self):
         self.css = read(BUILT)
-        self.nav = read(ROOT / "docs" / "nav.js")
+        self.nav = read(ROOT / "pagejs" / "nav.js")
 
     def test_the_page_title_and_the_static_footer_wait_for_the_shell(self):
         self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\)>footer",

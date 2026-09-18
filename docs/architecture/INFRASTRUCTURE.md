@@ -130,6 +130,7 @@ on page one.)
 - **One owner for every share card, and a card that says which page it is (2026-09-17)** — `log/2026-09.md`
 - **The metadata every page owes a reader who is not us (2026-09-18).** — `log/2026-09.md`
 - **The runner's pandoc calls the footnotes something else, and the split shipped 358,049 dead marks to the link checker (2026-09-18).** — `log/2026-09.md`
+- **The seven page scripts were shipping as hand-written source, and now ship minified (2026-09-18).** — `log/2026-09.md`
 
 ### The PureScript application layer
 
