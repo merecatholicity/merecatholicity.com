@@ -93,6 +93,7 @@ duplicated, and the shape they moved toward.
 | `app/chrome.ts` / `app/app.ts` | 26 / 5 | The two esbuild entries: the bars (docs/chrome.js, ~22 KB with its chunk, loaded first) and the shell (docs/app.js). |
 | `app/core.ts` | 286 | The membrane — the one audited place PureScript types are erased. |
 | `app/push.ts` | 166 | Keeps a member's push subscription on the worker's current VAPID key, once per app open (shell) and from Settings; a move a browser will not make without a gesture finishes on the next tap. |
+| `app/artwarm.ts` | 142 | The nineteen art pages' background paintings, walked into the browser's cache once the page in hand has loaded and the main thread is idle (2026-09-18) — the six tabs first, one at a time, at `fetchPriority: 'low'`, and only the -m or -d half this viewport will use. The lazy load in `styles/main.css` is untouched and still does the showing; the art switched off, Save-Data or a 2g link downloads nothing. `tests/js/art_warm.test.mjs` sweeps the stylesheet both ways so the two lists cannot drift. |
 | `comments-worker/src/{pure,webpush}.js` | 268 / 138 | Extracted pure helpers (tested) / VAPID push crypto. |
 | `app/views/{admin,library,member,post,profile}.ts` | 186–321 ea. | One Lit view per feature (`util.ts` 67). |
 | `app/{store,ptr,api}.ts` | 218 / 194 / 101 | Request cache + persisted SWR / pull-to-refresh / typed API client. |

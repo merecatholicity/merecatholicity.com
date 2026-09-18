@@ -15,6 +15,7 @@ import {
 import { mountLibrary } from './views/library.ts';
 import { notifLabel, notifHref, tapExcursion, tapVerdict, tapEchoMs } from './core.ts';
 import { urlBase64ToUint8Array, healPushSubscription, browserPushEnv } from './push.ts';
+import { installArtWarm } from './artwarm.ts';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -1648,6 +1649,12 @@ export function installChrome() {
   /* One marker so desktop CSS knows the shell/deskbar is present (padding under the
      fixed bar); never set under ?app=0, where installChrome never runs. */
   document.body.classList.add('mc-app');
+
+  /* The other pages' background paintings, walked into the cache once this one
+     is done and the main thread is idle — so the tab the finger reaches for
+     next already has its art (app/artwarm.ts). The CSS still does the showing,
+     and a reader with the art switched off downloads none of it. */
+  installArtWarm(artOn);
 
   window.mcSheet = {
     open: function (heading, node, onClose) { sheet.show(heading, node, onClose); },
