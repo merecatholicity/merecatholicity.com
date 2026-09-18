@@ -351,7 +351,43 @@ window.mcAsset = function (name) {
        mc-shell-ready event) is what comments.js waits on, not load order. */
     s.type = 'module';
     s.defer = true;
-    document.head.appendChild(s);
+
+    /* A READING PAGE WAITS FOR THE SHELL, IT DOES NOT WAIT ON IT (2026-09-18).
+       The review asked for the shell to be dropped on corpus pages outright —
+       "a reader of Ante-Nicene Fathers volume III will never use it". Half of
+       that is right and half of it is not. Right: a page of a Father should
+       not pay ~101 KB gzipped of application before it can be read, and since
+       the split (scripts/split_volumes.py) the median reading page is 14 KB of
+       HTML, so the SHELL is now the largest thing on it by five times. Not
+       right: the shell IS this site's navigation on a phone — the six tabs and
+       the soft navigation between them — so dropping it by class of page would
+       make the app appear and disappear depending on how a reader arrived, and
+       a reload on a library page would take the tab bar away mid-session.
+       So it is LATE, not absent: the two fixed bars still arrive within a round
+       trip (chrome.js above, ~22 KB), and the shell itself is fetched once the
+       page has loaded and the main thread is idle — or at the first touch,
+       whichever comes first, so a reader who reaches for a tab never waits for
+       an idle callback that a busy page may be slow to give.
+       Everywhere else — the app pages, the hand pages, the home launcher — it
+       loads exactly as before: those pages ARE the app. */
+    var reading = !!document.querySelector('main.prose.corpus');
+    var sent = false;
+    function shell() {
+      if (sent) return;
+      sent = true;
+      document.removeEventListener('pointerdown', shell, true);
+      document.removeEventListener('keydown', shell, true);
+      document.head.appendChild(s);
+    }
+    if (!reading) { shell(); return; }
+    document.addEventListener('pointerdown', shell, true);
+    document.addEventListener('keydown', shell, true);
+    function idle() {
+      if (window.requestIdleCallback) window.requestIdleCallback(shell, { timeout: 2500 });
+      else setTimeout(shell, 900);
+    }
+    if (document.readyState === 'complete') idle();
+    else window.addEventListener('load', idle, { once: true });
   } catch (e) { /* storage blocked: the site stays a website */ }
 })();
 

@@ -83,6 +83,7 @@ on page one.)
 - **The paintings are in the cache before the finger arrives, and the lazy load that put them there is untouched (2026-09-18).** — `log/2026-09.md`
 - **The meter was installed in July and measured nothing, because the thing that installs it had been deleted (2026-09-18).** — `log/2026-09.md`
 - **A volume is a shelf now: ninety-one pages over a megabyte become an index and ten thousand readable ones (2026-09-18).** — `log/2026-09.md`
+- **A reading page waits for the shell; it does not wait on it (2026-09-18).** — `log/2026-09.md`
 
 ### Build system
 
