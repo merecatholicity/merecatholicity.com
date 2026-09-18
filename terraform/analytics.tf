@@ -25,8 +25,15 @@
 # Analytics READ and not WRITE. Widening it is the owner's act (Cloudflare API
 # token → Account → Web Analytics → Edit). Until then the declaration states
 # the truth rather than an intention, and the doubling it guards against cannot
-# happen anyway while the injector ruleset is missing. If the token is widened,
-# set this to false and turn tests/py/test_analytics.py around with it.
+# happen anyway while the injector ruleset is missing.
+#
+# THE TWO MOVE TOGETHER. Whoever widens the token must also decide which road
+# keeps the meter, and do both in one change: flipping this to false with the
+# beacon still in docs/nav.js is fine (one road, ours), but flipping it to true
+# while nav.js also ships the beacon counts every view twice, invisibly — the
+# graph simply goes up. Turning this into an edge install means taking the
+# beacon OUT of nav.js in the same commit, and turning tests/py/test_analytics.py
+# around with it.
 #
 # The CSP already allows it: static.cloudflareinsights.com in script-src and
 # cloudflareinsights.com in connect-src (rulesets.tf) — allowlisted since the
