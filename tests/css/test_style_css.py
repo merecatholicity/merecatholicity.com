@@ -337,7 +337,9 @@ class PhonesShowNoFooterAndAboutIsADialog(unittest.TestCase):
         self.css = read(BUILT)
 
     def test_phone_footer_rule_survives(self):
-        self.assertRegex(self.css, r'body\.mc-app:not\(\[data-mc-tab="?home"?\]\) mc-footer\{display:none\}',
+        # the build merges equal declarations into one selector list, so the rule
+        # may be followed by siblings (2026-09-17: the pre-shell rules joined it)
+        self.assertRegex(self.css, r'body\.mc-app:not\(\[data-mc-tab="?home"?\]\) mc-footer[^{]*\{display:none\}',
                          "the phone rule hiding mc-footer off the home tab did not survive the build")
 
     def test_desktop_footer_base_rule_survives(self):
@@ -459,6 +461,47 @@ class SixEqualTabsInTheBottomBar(unittest.TestCase):
     def test_the_raised_hero_is_gone(self):
         self.assertNotIn("mc-tab-hero", self.css,
                          "the raised centre hero came back — six equal tabs is the rule")
+
+
+class PreShellPaint(unittest.TestCase):
+    """The first paint on a phone, before the shell mounts (2026-09-17).
+
+    What breaks silently: a phone painting the PLAIN SITE — a page title, the
+    desktop footer's link rows, no bars — for as long as app.js takes on a cold
+    cache, and then the shell replacing all three at once. Nothing turns red;
+    the reader just sees the page change identity, which is what the owner
+    reported as "a flash like an extra page reload". The rules below dress the
+    page as the app until `body.mc-app` exists, and they must stay gated on
+    `html:not(.mc-noapp)` so the ?app=0 reader keeps the plain site."""
+
+    def setUp(self):
+        self.css = read(BUILT)
+        self.nav = read(ROOT / "docs" / "nav.js")
+
+    def test_the_page_title_and_the_static_footer_wait_for_the_shell(self):
+        self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\)>footer",
+                         "the static footer must not paint before the shell decides")
+        self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\) main\.prose>\.home-title",
+                         "nor the page title the app bar replaces")
+
+    def test_both_bars_hold_their_place_from_the_first_frame(self):
+        self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\):before",
+                         "the app bar's surface must hold its place")
+        self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\):after",
+                         "and the tab bar's")
+        strips = re.search(r"html:not\(\.mc-noapp\) body:not\(\.mc-app\):before,html:not\(\.mc-noapp\) body:not\(\.mc-app\):after\{([^}]*)}", self.css)
+        self.assertIsNotNone(strips, "the two placeholders share one rule")
+        self.assertIn("position:fixed", strips.group(1))
+        self.assertIn("background:var(--surface)", strips.group(1), "the bars' own surface, not a guess")
+        self.assertIn("pointer-events:none", strips.group(1), "a placeholder must never take a press")
+        self.assertRegex(strips.group(1), r"content:(''|\"\")",
+                         "an empty box: a placeholder that painted a guessed title or tab label would be a second lie")
+        self.assertRegex(self.css, r"--mc-appbar-h.*?--mc-tabbar-h|--mc-tabbar-h", "the bars' heights are the tokens'")
+
+    def test_the_plain_site_latch_marks_itself_at_once(self):
+        self.assertIn("classList.add('mc-noapp')", self.nav,
+                      "nav.js must mark the ?app=0 reader, or the app dress never comes off for them")
+        self.assertRegex(self.nav, r"localStorage\.getItem\('mc-app'\) === '0'\) document\.documentElement\.classList\.add\('mc-noapp'\)")
 
 
 if __name__ == "__main__":

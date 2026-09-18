@@ -288,10 +288,18 @@ window.mcAsset = function (name) {
   try {
     if (/[?&]app=0\b/.test(location.search)) localStorage.setItem('mc-app', '0');
     else if (/[?&]app=1\b/.test(location.search)) localStorage.removeItem('mc-app');
+    /* A reader who asked for the plain site says so on <html> at once, because
+       the STYLESHEET has to know before the shell would have mounted: on a
+       phone it dresses the page as the app before app.js lands (the bars' own
+       surfaces, no page title, no static footer — 2026-09-17), and for this
+       reader no shell is coming, so the plain page must stay plain. */
+    try {
+      if (localStorage.getItem('mc-app') === '0') document.documentElement.classList.add('mc-noapp');
+    } catch (e) { /* storage blocked: the shell mounts, so the app dress is right */ }
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=3012297798';
+    s.src = 'app.js?v=2527231630';
     /* A MODULE since 2026-09-17 (the write-path port's P0): the shell is an
        ESM bundle so later phases land in content-hashed chunks it import()s
        rather than in app.js itself. A dynamically inserted script is async

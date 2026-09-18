@@ -2215,6 +2215,46 @@ body.mc-app > footer { display: none; }
   body.mc-app:not([data-mc-tab="home"]) mc-footer { display: none; }
 }
 
+/* ---- The first paint, before the shell mounts (2026-09-17) ----------------
+   The owner's report: a fresh open of the app, and the first visit to Inbox or
+   Community, "flashes like an extra page reload" — and it did. Until app.js
+   arrives (a cold cache on a phone link: hundreds of milliseconds) a phone
+   painted the PLAIN SITE — a centred page title, the desktop footer's link
+   rows, no app bar, no tab bar — and then the shell replaced all three at
+   once. The page changed identity in front of the reader, which is exactly
+   what a reload looks like.
+
+   So on a phone, before `body.mc-app` exists, the page is dressed as the app
+   already: the two bars' own surfaces hold their places (::before / ::after,
+   the same heights and colours the real bars use, whose space `body` padding
+   already reserved), and the two pieces of furniture the shell would take away
+   in any case — the page title and the static footer — do not appear at all.
+   Nothing here paints TEXT: a placeholder that guessed a title or a tab label
+   would be a second lie, and the real bars arrive into their own shape within
+   a frame of app.js.
+
+   `html.mc-noapp` is the escape hatch's own mark (nav.js sets it at once when
+   the `mc-app` latch is off, or ?app=0 is in the URL): a reader who asked for
+   the plain site keeps the plain site, title and footer and all. */
+@media (max-width: 600px) {
+  html:not(.mc-noapp) body:not(.mc-app) > footer { display: none; }
+  html:not(.mc-noapp) body:not(.mc-app) main.prose > .home-title,
+  html:not(.mc-noapp) body:not(.mc-app) main.prose > #title-block-header { display: none; }
+  html:not(.mc-noapp) body:not(.mc-app)::before,
+  html:not(.mc-noapp) body:not(.mc-app)::after {
+    content: ''; position: fixed; left: 0; right: 0; z-index: 40;
+    background: var(--surface); pointer-events: none;
+  }
+  html:not(.mc-noapp) body:not(.mc-app)::before {
+    top: 0; height: calc(var(--mc-appbar-h) + env(safe-area-inset-top, 0px));
+    border-bottom: 1px solid var(--rule);
+  }
+  html:not(.mc-noapp) body:not(.mc-app)::after {
+    bottom: 0; height: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--rule);
+  }
+}
+
 @media (min-width: 601px) {
   :root { --mc-deskbar-h: 3.25rem; }
 

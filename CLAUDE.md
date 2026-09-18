@@ -112,7 +112,8 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client)
   re-runs on every soft navigation, so anything inside it that owns a resource leaks per hop —
   keep page-scoped state above it, and every document/window listener it installs carries the boot
-  signal.
+  signal. **A phone's FIRST paint is already the app**: before `body.mc-app` the bars' surfaces hold
+  their places, no title or static footer shows (`html.mc-noapp` is the `?app=0` opt-out).
 - **Turnstile**: an established identity is not challenged (`Domain.Turnstile`, app_settings
   `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing context;
   its `?v=` is stamped into nav.js's `MC_ASSETS`, never by hand). **Only `loadTurnstile()` mounts,
@@ -204,11 +205,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   iOS has none and no road around it (the `switch`-checkbox haptic fires only under a real
   tap, never a programmatic toggle — tried, felt not working); never before the first real
   tap, never elsewhere by hand. Tastefully: small numbers, no buzz on a send or a release.
-- **Badges are the shell's, reading marks read, and a count paints only while FRESH**
-  (`Domain.Cache.badgeShows`: past its TTL it is last visit's number, so the bar shows none and
-  `app/badges.ts` asks at once). `mc-dm-unread` / `mc-notif-unread` refresh on EVERY page the socket
-  reaches — a `dm` frame not for the thread shown, a `notification` unless the list is open, a stale
-  cache on reconnect — never in a page boot, never a poller, never re-stamped; classic defers.
+- **Badges are the shell's, reading marks read, a count paints only while FRESH** (`Domain.Cache.badgeShows`:
+  past its TTL it is last visit's number — the bar shows none, `app/badges.ts` asks at once). Both refresh on
+  every page the socket reaches (a `dm` frame not for the thread shown, a `notification` unless its list is
+  open, a stale cache on reconnect) — never in a boot, never a poller, never re-stamped.
 - **Phones show no footer except on the home tab** (`body.mc-app:not([data-mc-tab="home"])
   mc-footer`; the shell stamps `data-mc-tab` on every navigation); the footer's information lives
   in Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on

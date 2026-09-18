@@ -51,6 +51,7 @@ SUITES = [
     'test_zoomproof', 'test_settings_page', 'test_turnstile_mount',
     'test_public_shapes',   # 2026-09-17: public answers keep their committed shape
     'test_badge_freshness',  # 2026-09-17: a fresh open never paints last visit's count
+    'test_first_paint',      # 2026-09-17: a phone's first frame is already the app
 ]
 
 

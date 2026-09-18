@@ -144,6 +144,7 @@ on page one.)
 - **The nightly's browsers filled a RAM-backed /tmp, and every tab crashed (2026-09-17)** — `log/2026-09.md`
 - **A route ships alone, is documented by calling it, and is read by a security review first (2026-09-17)** — `log/2026-09.md`
 - **A fresh open painted last visit's unread count, and now paints none (2026-09-17)** — `log/2026-09.md`
+- **A phone's first paint is already the app, so a cold open stops looking like a reload (2026-09-17)** — `log/2026-09.md`
 
 ### Infrastructure as code (Terraform, 2026-09-08)
 

@@ -23,6 +23,12 @@
   "pass": 62,
   "summary": true
  },
+ "test_first_paint": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 21,
+  "summary": true
+ },
  "test_hscroll": {
   "exit": 0,
   "fail": 0,
