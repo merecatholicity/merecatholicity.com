@@ -1,6 +1,7 @@
-# The four custom zone rulesets in this file. The fifth, the browser-cache
-# rule, is cache.tf — on its own because it is the only one that changes what a
-# reader's own browser keeps, which no purge can reach.
+# The four custom zone rulesets. A fifth, the browser-cache rule, is written and
+# planned but CANNOT be applied: the Terraform token has no Cache Rules
+# permission at all (2026-09-18 — see the log). Restore it with a revert of the
+# commit that removed terraform/cache.tf once the token is widened.
 #
 # response_headers is the one that matters most: it carries the CSP, HSTS,
 # Permissions-Policy (microphone=(self) — denying it broke the voice recorder

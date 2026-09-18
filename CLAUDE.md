@@ -262,7 +262,7 @@ brings its test in the same change; never delete a test to go green.
   over three D1 rooms + Vectorize, `librarian/` its mind, Workers AI its only backend; its dials are
   `Domain.Merecat`. **The band weighting and persona are the owner's standing law — read the merecat
   passage first.** The AI budget guard (`quota.ts`) stands OPEN when the meter cannot be read.
-- **Terraform** owns the zone settings, DNS, the five rulesets, bot management, the R2 buckets, the
+- **Terraform** owns the zone settings, DNS, the four rulesets, bot management, the R2 buckets, the
   D1 records, the Turnstile widgets, both GitHub repos, Pages, the environments, the Actions policy
   and variables; state is in R2 (`merecatholicity-tfstate`, unmanaged, SECRET). It cannot hold
   Vectorize, the R2 custom domains, the TURN key, or Email Routing. wrangler owns what a deploy rewrites.
