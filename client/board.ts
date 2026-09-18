@@ -158,7 +158,7 @@ export function installBoard(B: Boot) {
   /* May I edit this post? Its author, or any admin — the kernel's rule
      (Domain.Access.canEdit through mcCore), the server's too. */
   function canEditPost(authorHash: any) {
-    if (window.mcCore) return window.mcCore.canEdit(authorHash, state.myHash, isAdmin());
+    return window.mcCore!.canEdit(authorHash, state.myHash, isAdmin());
     return !!state.myHash && (authorHash === state.myHash || isAdmin());
   }
   function commentNode(c: any, pending: any, quoteCtx: any, reveal?: boolean): any {

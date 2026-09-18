@@ -163,7 +163,6 @@ import type { Boot } from './boot';
   let dmSearchBox: () => any;
   let dmSeenLabel: (epoch: any) => any;
   let dmUnreadCheck: (force?: boolean) => any;
-  let emojiToken: (code: any, raw: any) => any;
   let ensureEmojiStyles: () => any;
   let ensureNacl: () => Promise<any>;
   let faithLabel: (code: any) => any;
@@ -300,147 +299,23 @@ import type { Boot } from './boot';
      :shortcode: emoji resolved against a fixed whitelist to a same-origin path
      (CUSTOM_EMOJI); an unknown :token: stays literal text, so a body can never
      name an arbitrary image source. */
-  /* Scripture references ("Rom 8:28-30", "John 3:16", "1 Cor 13:4") link to the
-     exact verse in our own KJV (kjv.html, where deeplink.js has stamped every
-     verse with a <slug>-<chapter>-<verse> id). A bare book name never links: a
-     chapter:verse is required. BIBLE maps every accepted spelling/abbreviation
-     to the verse-anchor slug and yields the regex fragment (book, chapter,
-     verse) spliced into INLINE_MD below. Two-letter forms that are common
-     English words (is/am/so/re) are deliberately omitted to avoid false hits. */
-  var BIBLE = (function () {
-    var spec = [
-      ['genesis', 'genesis|gen|ge|gn'], ['exodus', 'exodus|exod|exo|ex'],
-      ['leviticus', 'leviticus|lev|lv'], ['numbers', 'numbers|num|nm|nb'],
-      ['deuteronomy', 'deuteronomy|deut|deu|dt'], ['joshua', 'joshua|josh|jos|jsh'],
-      ['judges', 'judges|judg|jdg|jg'], ['ruth', 'ruth|rth|ru'],
-      ['1-samuel', '1 samuel|1samuel|1 sam|1sam|1 sa|i samuel|i sam|first samuel'],
-      ['2-samuel', '2 samuel|2samuel|2 sam|2sam|2 sa|ii samuel|ii sam|second samuel'],
-      ['1-kings', '1 kings|1kings|1 kgs|1kgs|1 ki|i kings|i kgs|first kings'],
-      ['2-kings', '2 kings|2kings|2 kgs|2kgs|2 ki|ii kings|ii kgs|second kings'],
-      ['1-chronicles', '1 chronicles|1 chron|1 chr|1chr|1 ch|i chronicles|i chron|first chronicles'],
-      ['2-chronicles', '2 chronicles|2 chron|2 chr|2chr|2 ch|ii chronicles|ii chron|second chronicles'],
-      ['ezra', 'ezra|ezr|ez'], ['nehemiah', 'nehemiah|neh|ne'],
-      ['esther', 'esther|esth|est|es'], ['job', 'job|jb'],
-      ['psalms', 'psalms|psalm|pslm|psa|ps|pss|psm'], ['proverbs', 'proverbs|prov|pro|prv|pr'],
-      ['ecclesiastes', 'ecclesiastes|eccles|eccl|ecc|ec|qoh'],
-      ['song-of-solomon', 'song of solomon|song of songs|song|sos|canticles|cant'],
-      ['isaiah', 'isaiah|isa|isai'], ['jeremiah', 'jeremiah|jer|je|jr'],
-      ['lamentations', 'lamentations|lam|la'], ['ezekiel', 'ezekiel|ezek|eze|ezk'],
-      ['daniel', 'daniel|dan|da|dn'], ['hosea', 'hosea|hos|ho'],
-      ['joel', 'joel|joe|jl'], ['amos', 'amos|amo'], ['obadiah', 'obadiah|obad|oba|ob'],
-      ['jonah', 'jonah|jon|jnh'], ['micah', 'micah|mic|mc'], ['nahum', 'nahum|nah|na'],
-      ['habakkuk', 'habakkuk|hab|hb'], ['zephaniah', 'zephaniah|zeph|zep|zp'],
-      ['haggai', 'haggai|hag|hg'], ['zechariah', 'zechariah|zech|zec|zc'],
-      ['malachi', 'malachi|mal|ml'], ['matthew', 'matthew|matt|mat|mt'],
-      ['mark', 'mark|mrk|mar|mk|mr'], ['luke', 'luke|luk|lk'],
-      ['john', 'john|jhn|joh|jn'], ['acts', 'acts|act|ac'],
-      ['romans', 'romans|rom|ro|rm'],
-      ['1-corinthians', '1 corinthians|1 cor|1cor|1 co|i corinthians|i cor|first corinthians'],
-      ['2-corinthians', '2 corinthians|2 cor|2cor|2 co|ii corinthians|ii cor|second corinthians'],
-      ['galatians', 'galatians|gal|ga'], ['ephesians', 'ephesians|ephes|eph'],
-      ['philippians', 'philippians|phil|php|pp'], ['colossians', 'colossians|col'],
-      ['1-thessalonians', '1 thessalonians|1 thess|1thess|1 thes|1 th|i thessalonians|i thess|first thessalonians'],
-      ['2-thessalonians', '2 thessalonians|2 thess|2thess|2 thes|2 th|ii thessalonians|ii thess|second thessalonians'],
-      ['1-timothy', '1 timothy|1 tim|1tim|1 ti|i timothy|i tim|first timothy'],
-      ['2-timothy', '2 timothy|2 tim|2tim|2 ti|ii timothy|ii tim|second timothy'],
-      ['titus', 'titus|tit|ti'], ['philemon', 'philemon|philem|phlm|phm|pm'],
-      ['hebrews', 'hebrews|heb|hb'], ['james', 'james|jas|jm'],
-      ['1-peter', '1 peter|1 pet|1pet|1 pe|1 pt|i peter|i pet|first peter'],
-      ['2-peter', '2 peter|2 pet|2pet|2 pe|2 pt|ii peter|ii pet|second peter'],
-      ['1-john', '1 john|1 jhn|1 jn|1jn|i john|i jn|first john'],
-      ['2-john', '2 john|2 jhn|2 jn|2jn|ii john|ii jn|second john'],
-      ['3-john', '3 john|3 jhn|3 jn|3jn|iii john|iii jn|third john'],
-      ['jude', 'jude|jud|jd'], ['revelation', 'revelation|revelations|rev|apocalypse|apoc']
-    ];
-    var map: Record<string, string> = {}, forms: any[] = [];
-    spec.forEach(function (row) {
-      row[1].split('|').forEach(function (f) {
-        f = f.trim(); if (!f) return; map[f] = row[0]; forms.push(f);
-      });
-    });
-    forms.sort(function (a, b) { return b.length - a.length; });   // longest-first
-    var alt = forms.map(function (f) {
-      return f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+');
-    }).join('|');
-    return { map: map, src: '(' + alt + ')\\.?[ \\t]+(\\d+):(\\d+)(?:[\\-\\u2013](\\d+))?' };
-  })();
-
-  /* The base inline grammar; the scripture group (book=6, chapter=7, verse=8) is
-     appended so a reference becomes a same-site verse link in appendRich. */
-  var INLINE_BASE = /\*\*([^\n]+?)\*\*|\*(\S[^*\n]*?)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s<>"')]+)\)|https?:\/\/[^\s<>"']+|:([a-z0-9_+-]{1,40}):/gi;
-  var INLINE_MD = new RegExp(INLINE_BASE.source + '|' + BIBLE.src, 'gi');
+  /* The scripture map (BIBLE), the inline grammar (INLINE_BASE) and the
+     matcher spliced from them (INLINE_MD) went with the frozen renderer in
+     P1 (2026-09-18): app/richtext.ts holds the living copies, and these were
+     read by nothing else here. Sixty-nine lines, every one of them a twin. */
 
   /* Append rich inline text to a node: the marked spans above become <strong>,
      <em>, and same-site <a> nodes, everything else plain text. Emphasis nests
      (a link inside bold works) by recursing on the strictly-shorter inner text.
      Shared by the body renderer and each quoted/list line. */
+  /* The living renderer is app/richtext.ts (window.mcRich) and always has been
+     the one that runs: the boot waits for the bundle, so the plain-mode copy
+     that sat here rendered for nobody. Deleted with P1 (2026-09-18) — the law
+     is CLAUDE.md's "never re-inline a copy", and a frozen twin of the body
+     renderer is the largest clone the codebase had (CODEBASE.md measured it at
+     78.8% of richtext.ts). */
   function appendRich(target: HTMLElement, str: any, plain?: boolean): any {
-    /* Wave B3a: the living renderer is app/richtext.ts (window.mcRich, always
-       present — the boot waits for the bundle); the body below is the plain-mode
-       copy that retires with the port (P1, docs/architecture/reviews/2026-09-17-port-plan.md). */
-    if (window.mcRich) return window.mcRich.appendRich(target, str, plain);
-    /* plain mode — the librarian's leash: every markdown feature is consumed
-       but none applies, so the bot may write **bold** all day and the reader
-       sees only "bold". Scripture autolinks and [text](url) links stay live
-       (the sources depend on them). Humans always render in full. */
-    var s = String(str == null ? '' : str);
-    /* A fresh matcher per call: appendRich recurses into emphasis, and a single
-       shared global regex's lastIndex would be clobbered by the inner call. */
-    var re = new RegExp(INLINE_MD.source, 'gi');
-    var last = 0, m;
-    while ((m = re.exec(s))) {
-      if (m[0].length === 0) { re.lastIndex++; continue; }
-      if (m.index > last) target.appendChild(document.createTextNode(s.slice(last, m.index)));
-      if (m[1] !== undefined) {
-        if (plain) { appendRich(target, m[1], plain); } else {
-          var strong = el('strong');
-          appendRich(strong, m[1]);
-          target.appendChild(strong);
-        }
-      } else if (m[2] !== undefined) {
-        if (plain) { appendRich(target, m[2], plain); } else {
-          var em = el('em');
-          appendRich(em, m[2]);
-          target.appendChild(em);
-        }
-      } else if (m[5] !== undefined) {
-        target.appendChild(emojiToken(m[5], m[0]));
-      } else if (m[6] !== undefined) {
-        /* A scripture reference: link to the exact verse in our KJV, or, if the
-           book isn't one we know, leave the whole thing as plain text. A range
-           (8:28-30) points at its first verse. */
-        var slug = BIBLE.map[m[6].toLowerCase().replace(/\s+/g, ' ')];
-        if (slug) {
-          var sa = el('a', 'body-link scripture-link');
-          sa.href = 'kjv.html#' + slug + '-' + m[7] + '-' + m[8];
-          /* Parts kept for the on-hover verse preview (see scriptureHover). */
-          sa.setAttribute('data-slug', slug);
-          sa.setAttribute('data-ch', m[7]);
-          sa.setAttribute('data-v1', m[8]);
-          sa.setAttribute('data-v2', m[9] || m[8]);
-          sa.appendChild(document.createTextNode(m[0]));
-          target.appendChild(sa);
-        } else {
-          target.appendChild(document.createTextNode(m[0]));
-        }
-      } else {
-        var url = m[3] !== undefined ? m[4] : m[0];
-        var a = el('a', 'body-link', m[3] !== undefined ? m[3] : m[0]);
-        if (/^https?:\/\/(?:www\.)?merecatholicity\.com(?:[\/?#]|$)/i.test(url)) {
-          a.href = url;
-          scriptureDecor(a, url);
-        } else {
-          /* Off-site: link to our own warning page, which names the destination
-             and requires a click. rel keeps referrer/opener from leaking and
-             tells crawlers we gate outbound clicks. */
-          a.href = 'away.html?url=' + encodeURIComponent(url);
-          a.rel = 'nofollow ugc noopener';
-        }
-        target.appendChild(a);
-      }
-      last = m.index + m[0].length;
-    }
-    if (last < s.length) target.appendChild(document.createTextNode(s.slice(last)));
+    return window.mcRich!.appendRich(target, str, plain);
   }
 
   /* Render a body as text (trusted links clickable), with runs of lines that
@@ -449,75 +324,7 @@ import type { Boot } from './boot';
      and anchors, never innerHTML, so a body can never inject markup. Use this
      in place of a plain textContent wherever a user body is shown. */
   function fillBody(node: HTMLElement, text: any, plain?: boolean): any {
-    if (window.mcRich) return window.mcRich.fillBody(node, text, plain);
-    node.textContent = '';
-    var lines = String(text == null ? '' : text).split('\n');
-    var i = 0;
-    while (i < lines.length) {
-      if (/^>/.test(lines[i])) {
-        var quoted = [];
-        while (i < lines.length && /^>/.test(lines[i])) {
-          quoted.push(lines[i].replace(/^>\s?/, ''));
-          i++;
-        }
-        if (plain) {
-          var qp = el('p');
-          appendRich(qp, quoted.join('\n'), plain);
-          node.appendChild(qp);
-        } else {
-          var bq = el('blockquote', 'comment-quote');
-          appendRich(bq, quoted.join('\n'));
-          node.appendChild(bq);
-        }
-      } else if (/^[-*] /.test(lines[i])) {
-        if (plain) {
-          var items = [];
-          while (i < lines.length && /^[-*] /.test(lines[i])) {
-            items.push(lines[i].replace(/^[-*] +/, ''));
-            i++;
-          }
-          var lp = el('p');
-          appendRich(lp, items.join('\n'), plain);
-          node.appendChild(lp);
-        } else {
-          var ul = el('ul', 'comment-list');
-          while (i < lines.length && /^[-*] /.test(lines[i])) {
-            var li = el('li');
-            appendRich(li, lines[i].replace(/^[-*] +/, ''));
-            ul.appendChild(li);
-            i++;
-          }
-          node.appendChild(ul);
-        }
-      } else if (/^#{1,5} /.test(lines[i])) {
-        /* A heading line: one to five #-marks then a space. Rendered as a
-           styled paragraph, not a real h-element, so a comment can never
-           pollute the page's own outline; inline markdown still applies
-           inside. Six or more marks, or no space, stays literal text. In
-           plain mode the marks are consumed and the text stands unstyled. */
-        var hm = /^(#{1,5}) +(.*)$/.exec(lines[i])!;
-        if (plain) {
-          var hp = el('p');
-          appendRich(hp, hm[2], plain);
-          node.appendChild(hp);
-        } else {
-          ensureEmojiStyles();
-          var hd = el('p', 'mc-hd mc-hd' + hm[1].length);
-          appendRich(hd, hm[2]);
-          node.appendChild(hd);
-        }
-        i++;
-      } else {
-        var run = [];
-        while (i < lines.length && !/^>/.test(lines[i]) && !/^[-*] /.test(lines[i]) &&
-               !/^#{1,5} /.test(lines[i])) {
-          run.push(lines[i]);
-          i++;
-        }
-        appendRich(node, run.join('\n'), plain);
-      }
-    }
-    return node;
+    return window.mcRich!.fillBody(node, text, plain);
   }
 
   /* An author's visible name: the custom nick when set, the assigned pseudonym
@@ -1500,34 +1307,10 @@ import type { Boot } from './boot';
   /* The URL→view decision is single-sourced in Domain.Route (parseRoute); this
      is the effect dispatch over its {tag, s, n}. classicRoute below is the exact
      same priority ladder, kept as the no-app fallback (no window.mcCore). */
-  function classicRoute(params: any) {
-    if (params.get('ipbans')) return { tag: 'IpBans' };
-    if (params.get('settings')) return { tag: 'Settings' };
-    if (params.get('admins')) return { tag: 'Admins' };
-    if (params.get('admin')) return { tag: 'AdminHome' };
-    if (params.get('discord')) return { tag: 'Discord' };
-    if (params.get('shadowbans')) return { tag: 'Shadowbans' };
-    if (params.get('usage')) return { tag: 'Usage' };
-    if (params.get('merecatadmin')) return { tag: 'MerecatAdmin' };
-    if (params.get('merecatthread')) return { tag: 'MerecatThread', s: params.get('merecatthread') };
-    if (params.get('merecatthreads') !== null) return { tag: 'MerecatThreads' };
-    if (params.get('merecat')) return { tag: 'Merecat' };
-    if (params.get('feed')) return { tag: 'Feed' };
-    if (params.get('notifications')) return { tag: 'Notifications' };
-    if (params.get('inbox')) return { tag: 'Inbox' };
-    if (params.get('users')) return { tag: 'Users' };
-    if (params.get('q') !== null) return { tag: 'Search' };
-    if (Number(params.get('t')) > 0) return { tag: 'Thread', n: Math.floor(Number(params.get('t'))) };
-    if (params.get('dm')) return { tag: 'Dm', s: params.get('dm') };
-    if (params.get('me')) return { tag: 'Me' };
-    if (params.get('profile')) return { tag: 'Profile', s: params.get('profile') };
-    if (params.get('post')) return { tag: 'Post', s: params.get('post') };
-    if (params.get('audit')) return { tag: 'Audit' };
-    var topic = Number(params.get('topic'));
-    if (Number.isInteger(topic) && topic > 0) return { tag: 'Topic', n: topic };
-    if (params.get('cat')) return { tag: 'Cat', s: params.get('cat') };
-    return { tag: 'Index' };
-  }
+  /* classicRoute — a hand-written JS twin of Domain.Route.parseRoute — is gone
+     with P1 (2026-09-18). It was the kernel's routing decision re-inlined, and
+     the kernel is read unconditionally now (the boot waits for the bundle), so
+     the twin was a drift risk that decided nothing. */
 
   function route() {
     section.textContent = '';
@@ -1612,13 +1395,12 @@ import type { Boot } from './boot';
     /* community.html — the forum + its administration. Legacy ?dm/?inbox/?me/
        ?profile/?merecat links (old bookmarks, already-delivered notifications)
        redirect to their new home so nothing that was ever shared breaks. */
-    var r = window.mcCore
-      ? window.mcCore.parseRoute(function (k) { return params.get(k); })
-      : classicRoute(params);
+    var r = window.mcCore!.parseRoute(function (k) { return params.get(k); });
     /* admin.html is the administration area's own page: bare admin.html is the
        hub, and its ?settings=/?discord=/… sub-params route as usual. (Old
        community.html?admin=1 links still resolve to the hub too.) */
-    if (page === 'admin.html' && r.tag === 'Index') r = { tag: 'AdminHome' };
+    /* s/n are the kernel's shape, unread on this branch — AdminHome carries neither. */
+    if (page === 'admin.html' && r.tag === 'Index') r = { tag: 'AdminHome', s: '', n: 0 };
     switch (r.tag) {
       case 'Thread': go('messages.html?t=' + r.n + location.hash, true); return;
       case 'Dm': go('messages.html?dm=' + encodeURIComponent(r.s) + location.hash, true); return;
@@ -1834,7 +1616,6 @@ import type { Boot } from './boot';
   dmSearchBox = B.dmSearchBox;
   dmSeenLabel = B.dmSeenLabel;
   dmUnreadCheck = B.dmUnreadCheck;
-  emojiToken = B.emojiToken;
   ensureEmojiStyles = B.ensureEmojiStyles;
   ensureNacl = B.ensureNacl;
   faithLabel = B.faithLabel;

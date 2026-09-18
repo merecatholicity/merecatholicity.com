@@ -59,24 +59,7 @@ export function installComposer(B: Boot) {
      1-corinthians-6-9 splits book/chapter/verse correctly; a chapter-only
      hash (no verse) stays undecorated since there is nothing to preview. */
   function scriptureDecor(a: any, url: any) {
-    if (window.mcRich) return window.mcRich.scriptureDecor(a, url);
-    var m = /(?:^|\/)kjv\.html#([a-z0-9-]+)-(\d+)-(\d+)$/.exec(String(url || ''));
-    var dr = null;
-    if (!m) {
-      dr = /(?:^|\/)douay-rheims\.html#([a-z0-9-]+)-(\d+)-(\d+)$/.exec(String(url || ''));
-      m = dr;
-    }
-    if (!m) return;
-    a.className += ' scripture-link';
-    if (dr) a.setAttribute('data-bible', 'dr');
-    a.setAttribute('data-slug', m[1]);
-    a.setAttribute('data-ch', m[2]);
-    a.setAttribute('data-v1', m[3]);
-    /* A range written in the link's own text ("1 Cor 6:9-10") previews whole,
-       as a plainly written reference would; the URL carries only the first
-       verse. The text's range must start at the URL's verse or the URL wins. */
-    var r = /:(\d+)\s*[-\u2013]\s*(\d+)\s*$/.exec(a.textContent || '');
-    a.setAttribute('data-v2', (r && r[1] === m[3]) ? r[2] : m[3]);
+    return window.mcRich!.scriptureDecor(a, url);
   }
 
   /* ---- The served media settings: one cached read of /api/comments/config's
@@ -889,72 +872,7 @@ export function installComposer(B: Boot) {
   /* Inject the emoji styles once, matched to the site palette, rather than touch
      the shared stylesheet. The inner scroll keeps the panel and : list compact. */
   function ensureEmojiStyles() {
-    if (window.mcRich) return window.mcRich.ensureEmojiStyles();
-    if (document.getElementById('mc-emoji-css')) return;
-    var css = '' +
-      /* Markdown headings inside bodies: sized within reason for a comment —
-         # a touch larger, ### about normal, ##### slightly small — never a
-         page-title shout, and dressed in the site's maroon. */
-      '.mc-hd{font-weight:bold;color:var(--maroon,#8b1a1a);margin:0.65em 0 0.3em;line-height:1.25}' +
-      '.mc-hd:first-child{margin-top:0.1em}' +
-      '.mc-hd1{font-size:1.28em}' +
-      '.mc-hd2{font-size:1.18em}' +
-      '.mc-hd3{font-size:1.09em}' +
-      '.mc-hd4{font-size:1em}' +
-      '.mc-hd5{font-size:0.92em}' +
-      /* display explicit: a site-wide img{display:block} (05-home.css) would
-         otherwise drop every inline emoji onto its own line. */
-      '.mc-emoji{display:inline-block;height:1.35em;width:auto;vertical-align:-0.28em;margin:0 .04em}' +
-      '.emoji-suggest{max-height:15em;overflow-y:auto}' +
-      'a.emoji-suggest-row{align-items:center}' +
-      '.emoji-suggest-glyph{display:inline-flex;align-items:center;justify-content:center;min-width:1.6em;font-size:1.15rem}' +
-      '.emoji-suggest-glyph .mc-emoji{height:1.4em}' +
-      '.emoji-panel{margin:.45em 0 0;border:1px solid var(--rule);border-radius:8px;background:var(--surface,#fff);box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden}' +
-      '.emoji-search-row{padding:.5em;border-bottom:1px solid var(--rule)}' +
-      '.emoji-search{width:100%;box-sizing:border-box;padding:.4em .6em;border:1px solid var(--rule);border-radius:6px;font:inherit;background:var(--surface,#fff);color:var(--ink,#1a1a1a)}' +
-      '.emoji-search:focus,.scripture-sel:focus{outline:1px solid var(--maroon);border-color:var(--maroon)}' +
-      '.emoji-tabs{display:flex;gap:.3em;flex-wrap:wrap;padding:.45em .5em 0}' +
-      '.emoji-tab{font:inherit;font-size:.92rem;padding:.25em .8em;border:1px solid var(--rule);border-bottom:none;border-radius:6px 6px 0 0;background:var(--cream,#f7f1e3);color:var(--faint);cursor:pointer}' +
-      '.emoji-tab-on{background:var(--surface,#fff);color:var(--maroon);font-weight:600}' +
-      '.emoji-body{max-height:15em;overflow-y:auto;padding:.4em .5em .6em}' +
-      '.emoji-group-head{position:sticky;top:0;background:var(--surface,#fff);color:var(--faint);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;padding:.4em .15em .2em}' +
-      '.emoji-grid{display:flex;flex-wrap:wrap;gap:.1em}' +
-      '.emoji-cell{width:2em;height:2em;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;border-radius:6px;cursor:pointer;font-size:1.25rem;line-height:1;padding:0}' +
-      '.emoji-cell:hover{background:var(--cream,#f9f3e6)}' +
-      '.emoji-cell .mc-emoji{height:1.5em}' +
-      '.emoji-empty{color:var(--faint);padding:.5em;margin:0}' +
-      '.av-body{max-height:17em}' +
-      '.av-grid{gap:.35em}' +
-      '.av-cell{width:3em;height:3em;padding:2px;border:1px solid var(--rule);background:var(--cream-2,#faf6ee);border-radius:8px}' +
-      '.av-cell:hover{background:var(--cream,#f2e7d0);border-color:var(--maroon)}' +
-      '.av-cell img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;margin:0}' +
-      '.btn-gallery{display:inline-block;margin:.15em 0 .1em}' +
-      /* Scripture picker + autolink + hover preview */
-      '.scripture-panel{padding:.6em}' +
-      '.scripture-row{display:flex;flex-wrap:wrap;align-items:center;gap:.25em}' +
-      '.scripture-sel{font:inherit;font-size:.95rem;padding:.15em .3em;border:1px solid var(--rule);border-radius:5px;background:var(--cream-2,#faf6ee);color:var(--ink);max-width:14em}' +
-      '.scripture-sel-sm{max-width:6em}' +
-      '.scripture-colon,.scripture-dash{color:var(--faint);padding:0 .05em}' +
-      '.scripture-status{color:var(--faint);font-size:.9rem;padding:.4em 0}' +
-      '.scripture-preview{margin:.6em 0;padding:.4em .7em;border-left:3px solid var(--rule);color:var(--ink-soft);font-size:.95rem;max-height:9em;overflow:auto}' +
-      '.scripture-insert{font:inherit;cursor:pointer;margin-top:.3em;padding:.3em .8em;border:1px solid var(--maroon);border-radius:6px;background:var(--maroon);color:var(--bg,#faf6ee)}' +
-      '.scripture-insert:hover{background:var(--maroon-dark)}' +
-      '.scripture-link{white-space:nowrap}' +
-      '.scripture-tip{position:fixed;z-index:1200;max-width:30rem;max-height:60vh;overflow:auto;background:var(--surface,#fff);color:var(--ink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 3px 14px rgba(0,0,0,.22);padding:.55em .7em;font-size:.92rem;line-height:1.5;pointer-events:none}' +
-      '.scripture-tip-ref{display:block;color:var(--maroon);margin-bottom:.25em}' +
-      '.scripture-tip-v{color:var(--faint);font-size:.72em;margin-right:.1em}' +
-      /* Post preview: the composer swaps for the rendered body */
-      '.md-editor.md-previewing>:not(.md-preview){display:none}' +
-      '.md-preview{border:1px dashed var(--rule);border-radius:8px;padding:.55em .8em;min-height:5em}' +
-      '.md-preview-title{font-weight:700}' +
-      '.md-preview-empty{color:var(--faint);margin:0}' +
-      '.btn-preview{background:transparent;border-color:var(--maroon);color:var(--maroon);font:inherit;cursor:pointer}' +
-      '.btn-preview:hover{background:var(--maroon);color:var(--bg,#fff)}' +
-      '.btn-preview:disabled{opacity:.6;cursor:default}' +
-      // scripture-sel 16px on phones: a sub-16px focused control zooms the iOS viewport (and the zoom outlives it)
-      '@media (max-width:620px){.emoji-body,.emoji-suggest{max-height:40vh}.emoji-cell{width:2.4em;height:2.4em;font-size:1.45rem}.av-cell{width:3.4em;height:3.4em}.scripture-sel{max-width:9em;font-size:16px}}';
-    var st = el('style'); st.id = 'mc-emoji-css'; st.textContent = css;
-    document.head.appendChild(st);
+    return window.mcRich!.ensureEmojiStyles();
   }
 
   /* ---- Drafts. Whatever you type is kept in this browser's localStorage as
@@ -1285,13 +1203,7 @@ export function installComposer(B: Boot) {
       .catch(function () { mentionDirLoading = false; });
   }
   function collectMentions(text: any) {
-    if (window.mcCore) return window.mcCore.mentionsIn(text, pendingMentions);
-    var out = [];
-    for (var i = 0; i < pendingMentions.length; i++) {
-      var m = pendingMentions[i];
-      if (text.indexOf(m.token) > -1 && out.indexOf(m.hash) === -1) out.push(m.hash);
-    }
-    return out;
+    return window.mcCore!.mentionsIn(text, pendingMentions);
   }
   function attachMentions(textarea: any) {
     if (!textarea || textarea.dataset.mentions) return;
@@ -1490,87 +1402,10 @@ export function installComposer(B: Boot) {
        the same cached KJV text the picker uses. Desktop only — there is no hover
        on touch, and reading the passage is a tap away on the link. A large span is
        allowed but capped so a whole-chapter reference can't fill the screen. */
-    if (window.mcRich) { window.mcRich.initScriptureHover(bootSig); } else (function scriptureHover() {
-      try { if (!window.matchMedia || !window.matchMedia('(hover: hover)').matches) return; } catch (e) { return; }
-      var tip: any = null, maps: Record<string, any> = {}, hideTimer: any = null, CAP = 30;
-      function bySlug(which: any, data: any, slug: any) {
-        if (!maps[which] && data) {
-          maps[which] = {};
-          data.books.forEach(function (b: any) { maps[which][b.slug] = b; });
-        }
-        return maps[which] ? maps[which][slug] : null;
-      }
-      function place(a: any, ex: any, ey: any) {
-        /* A reference that wraps across lines has a union box spanning the
-           whole paragraph width, and a tip placed from it lands far from the
-           cursor (in the narrow merecat bubbles this happened constantly and
-           read as "no tooltip"). Place from the line fragment actually under
-           the pointer, first fragment as the fallback. */
-        var r = a.getBoundingClientRect();
-        var rs = a.getClientRects();
-        if (rs && rs.length) {
-          r = rs[0];
-          if (ey != null) {
-            for (var i = 0; i < rs.length; i++) {
-              if (ey >= rs[i].top - 2 && ey <= rs[i].bottom + 2) { r = rs[i]; break; }
-            }
-          }
-        }
-        tip.style.left = Math.max(6, Math.min(r.left, window.innerWidth - tip.offsetWidth - 10)) + 'px';
-        /* Below the fragment if it fits, above if not, and always clamped into
-           the viewport: a tall tip near the top edge once fled off-screen. The
-           tip scrolls internally and ignores the pointer, so overlap is safe. */
-        var below = r.bottom + 8;
-        var top = below;
-        if (below + tip.offsetHeight > window.innerHeight) {
-          var above = r.top - tip.offsetHeight - 8;
-          top = above > 6 ? above : Math.max(6, window.innerHeight - tip.offsetHeight - 6);
-        }
-        tip.style.top = top + 'px';
-      }
-      function show(a: any, ex: any, ey: any) {
-        var dr = a.getAttribute('data-bible') === 'dr';
-        (dr ? loadDr() : loadKjv()).then(function () {
-          var b = bySlug(dr ? 'dr' : 'kjv', dr ? drData : kjvData, a.getAttribute('data-slug')); if (!b) return;
-          var c = +a.getAttribute('data-ch'), ch = b.chapters[c - 1]; if (!ch) return;
-          var v1 = +a.getAttribute('data-v1'), v2 = +a.getAttribute('data-v2');
-          if (!tip) {
-            /* The tip's CSS rides ensureEmojiStyles, which composer views call
-               and the merecat chat does not: without it the tip is an unstyled
-               static div at the end of the body, invisible below the fold —
-               the whole "no tooltip in the chat" mystery. Idempotent, so call
-               it here and the hover owns its own dress in every view. */
-            ensureEmojiStyles();
-            tip = el('div', 'scripture-tip');
-            document.body.appendChild(tip);
-          }
-          tip.textContent = '';
-          var h = el('strong', 'scripture-tip-ref', b.name + ' ' + c + ':' + v1 + (v2 > v1 ? '-' + v2 : ''));
-          tip.appendChild(h);
-          var body = el('div'), n = 0;
-          for (var v = v1; v <= v2 && n < CAP; v++, n++) {
-            if (!ch[v - 1]) continue;
-            if (v2 > v1) { var vn = el('sup', 'scripture-tip-v', v + ' '); body.appendChild(vn); }
-            body.appendChild(document.createTextNode(ch[v - 1] + ' '));
-          }
-          if (v2 - v1 + 1 > CAP) body.appendChild(document.createTextNode('…'));
-          tip.appendChild(body);
-          tip.hidden = false;
-          place(a, ex, ey);
-        });
-      }
-      document.addEventListener('mouseover', function (e) {
-        var a = (e.target as any) && (e.target as any).closest && (e.target as any).closest('a.scripture-link');
-        if (!a) return;
-        clearTimeout(hideTimer);
-        show(a, e.clientX, e.clientY);
-      }, { signal: bootSig });
-      document.addEventListener('mouseout', function (e) {
-        var a = (e.target as any) && (e.target as any).closest && (e.target as any).closest('a.scripture-link');
-        if (!a) return;
-        hideTimer = setTimeout(function () { if (tip) tip.hidden = true; }, 160);
-      }, { signal: bootSig });
-    })();
+    /* The hover preview is app/richtext.ts's (window.mcRich, always present —
+       the boot waits for the bundle). The 80-line copy that stood behind this
+       `else` rendered for nobody and is gone with P1 (2026-09-18). */
+    window.mcRich!.initScriptureHover(bootSig);
 
     (function pruneDrafts() {
       try {

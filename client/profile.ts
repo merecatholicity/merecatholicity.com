@@ -105,9 +105,7 @@ export function installProfile(B: Boot) {
   /* The librarian cannot be muted: it speaks only when summoned, so a muted
      bot would read as a broken summons (a stale stored mute is ignored too). */
   function isMuted(hash: any) {
-    if (window.mcCore) return window.mcCore.isMuted(MERECAT_BOT_HASH, hash, getMuted());
-    if (hash === MERECAT_BOT_HASH) return false;
-    return !!hash && getMuted().indexOf(hash) !== -1;
+    return window.mcCore!.isMuted(MERECAT_BOT_HASH, hash, getMuted());
   }
   /* Mutes follow the member now: the list rides the prefs row server-side
      (like blocks), so a second device sees the same quiet. localStorage stays
@@ -122,19 +120,10 @@ export function installProfile(B: Boot) {
   }
   function toggleMute(hash: any) {
     if (!hash) return false;
-    var added;
-    if (window.mcCore) {
-      var r = window.mcCore.toggleMute(hash, getMuted());
-      try { localStorage.setItem(MUTED_STORE, JSON.stringify(r.list)); } catch (e) {}
-      added = r.added;
-    } else {
-      var a = getMuted(), i = a.indexOf(hash);
-      if (i === -1) a.push(hash); else a.splice(i, 1);
-      try { localStorage.setItem(MUTED_STORE, JSON.stringify(a)); } catch (e) {}
-      added = i === -1;
-    }
+    var r = window.mcCore!.toggleMute(hash, getMuted());
+    try { localStorage.setItem(MUTED_STORE, JSON.stringify(r.list)); } catch (e) {}
     syncMutedUp();
-    return added;
+    return r.added;
   }
   /* BLOCK is the ONE member-facing control now (the owner's 2026-08-03
      ruling: "User can block. User can unblock. that is it."). One act closes
@@ -193,8 +182,7 @@ export function installProfile(B: Boot) {
      decision (Domain.Auth.isMember) that was inlined as the raw key-and-hash
      conjunction across the board. */
   function isMember() {
-    if (window.mcCore) return window.mcCore.authIsMember(authSig());
-    return !!(state.key && state.myHash);
+    return window.mcCore!.authIsMember(authSig());
   }
 
   /* Callbacks waiting on the reader's own profile fetch, so a view that renders
@@ -347,11 +335,7 @@ export function installProfile(B: Boot) {
   function blockedOut(d: any) {
     if (!d || !d.blocked) return false;
     try {
-      localStorage.setItem('mc-flash', window.mcCore
-        ? window.mcCore.blockedMessage(d.blocked)
-        : (d.blocked === 'ipban'
-          ? 'Your network is banned from merecatholicity.com for violating the Terms and Conditions.'
-          : 'This identity has been locked by the moderators for violating the Terms and Conditions.'));
+      localStorage.setItem('mc-flash', window.mcCore!.blockedMessage(d.blocked));
     } catch (e) {}
     clearKey();
     state.key = '';
@@ -681,7 +665,7 @@ export function installProfile(B: Boot) {
      (via window.mcCore). Fixes the drift where the admin editor capped bio at
      1000 while the worker rejects anything over 500. See CLAUDE.md. */
   function profileLimits() {
-    return (window.mcCore && window.mcCore.profileLimits) || { nick: 40, bio: 500, sig: 200 };
+    return window.mcCore!.profileLimits;
   }
 
   /* Read view: an avatar placeholder, the primary name (nick or assigned) with
@@ -968,7 +952,7 @@ export function installProfile(B: Boot) {
     card.appendChild(el('label', 'profile-label', 'Profile link — your @handle (optional)'));
     var handleIn = el('input', 'key-input');
     handleIn.type = 'text';
-    handleIn.maxLength = (window.mcCore && window.mcCore.handleMax) || 30;
+    handleIn.maxLength = window.mcCore!.handleMax;
     handleIn.placeholder = 'e.g. john_smith';
     handleIn.value = p.handle || '';
     handleIn.autocapitalize = 'none';

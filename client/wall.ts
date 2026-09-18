@@ -360,7 +360,7 @@ export function installWall(B: Boot) {
   }
   /* True if I may delete this authored item (mine, or I am an admin). */
   function wallCanDelete(authorHash: any) {
-    if (window.mcCore) return window.mcCore.canDelete(authorHash, state.myHash, isAdmin());
+    return window.mcCore!.canDelete(authorHash, state.myHash, isAdmin());
     return isAdmin() || (!!state.myHash && authorHash === state.myHash);
   }
   function wallDeleteLink(id: any, kind: any, node: any) {
@@ -618,7 +618,7 @@ export function installWall(B: Boot) {
     mediaCfg().then(function (cfg: any) {
       var sec = cfg.sections.wall;
       if (!cfg.enabled || !sec.kinds.length) { attach.style.display = 'none'; return; }
-      fileInput.accept = window.mcCore ? (window.mcCore as any).mediaAcceptFor(sec.kinds) : 'image/*,video/*,audio/*';
+      fileInput.accept = (window.mcCore as any).mediaAcceptFor(sec.kinds);
       if (sec.voice && sec.kinds.indexOf('audio') !== -1) btnRow.appendChild(voiceControl(form, cfg, sec, status, takeWallFile));
     });
     form.appendChild(chip); form.appendChild(fileInput); form.appendChild(btnRow);

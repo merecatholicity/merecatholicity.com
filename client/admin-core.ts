@@ -28,10 +28,7 @@ export function installAdminCore(B: Boot) {
     'c83c2b4d105771aafa662a26745ddd2172213ddf5b39d64dfb91f579b5e18b03'];
 
   function isAdmin() {
-    if (window.mcCore) return window.mcCore.authIsAdmin(authSig());
-    if (!state.key) return false;
-    if (state.profileLoaded) return state.myAdmin;
-    return state.myAdmin || ADMIN_HASHES.indexOf(state.myHash) !== -1;
+    return window.mcCore!.authIsAdmin(authSig());
   }
 
   /* Guard for an admin-only view. Owners pass at once. If we cannot yet tell (a
@@ -40,8 +37,7 @@ export function installAdminCore(B: Boot) {
      or once the profile is in, the answer is certain. Returns true when the
      caller should stop. */
   function adminGate(rerender: any) {
-    var g = window.mcCore ? window.mcCore.authGate(authSig())
-      : (isAdmin() ? 'pass' : ((!state.key || state.profileLoaded) ? 'deny' : 'wait'));
+    var g = window.mcCore!.authGate(authSig());
     if (g === 'pass') return false;
     if (g === 'deny') {
       section.appendChild(el('p', 'comments-status', 'This page is for the admins.'));
