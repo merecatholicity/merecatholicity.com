@@ -259,6 +259,53 @@ class APartIsItsOwnPage(unittest.TestCase):
             self.assertEqual(int(mk.group(2)), n)
 
 
+class ASecondBuildFindsWhatTheFirstMade(unittest.TestCase):
+    """`make html` runs over a tree the CI cache restored, so the SECOND run is
+    the ordinary one and the first is the exception."""
+
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.mkdtemp()
+        self.docs, self.manifest = m.DOCS, m.MANIFEST
+        m.DOCS = self.dir
+        m.MANIFEST = os.path.join(self.dir, 'library-parts.json')
+        big = ''.join('<h4 id="c%d">Chapter %d</h4>\n%s' % (i, i, long_text(400))
+                      for i in range(1, 8))
+        with open(os.path.join(self.dir, 'v.html'), 'w', encoding='utf-8') as f:
+            f.write(volume([('One', 1, big), ('Two', 1, long_text(200))]))
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+        m.DOCS, m.MANIFEST = self.docs, self.manifest
+
+    def read_manifest(self):
+        with open(m.MANIFEST, encoding='utf-8') as f:
+            return json.load(f)
+
+    def test_the_manifest_survives_a_build_that_finds_the_tree_already_split(self):
+        """An index is 10 KB — smaller than the threshold that made it. A run
+        that looked for volumes BY SIZE never saw one again and wrote an empty
+        manifest, which is inject_social's card formula and the librarian's
+        source list gone in one line of output nobody reads."""
+        m.main([])
+        first = self.read_manifest()
+        self.assertIn('v.html', first['volumes'])
+        m.main([])
+        second = self.read_manifest()
+        self.assertEqual(sorted(second['parts']), sorted(first['parts']))
+        self.assertEqual(second['volumes']['v.html']['title'],
+                         first['volumes']['v.html']['title'])
+
+    def test_a_sub_part_still_names_its_division_on_the_second_run(self):
+        """The group rides IN THE PART'S MARK, because the manifest is rebuilt
+        from the pages and there is nowhere else for it to come from."""
+        m.main([])
+        m.main([])
+        groups = {v['group'] for v in self.read_manifest()['parts'].values() if v['group']}
+        self.assertTrue(groups, 'every sub-part forgot which division it belongs to')
+
+
 class TheBuiltTree(unittest.TestCase):
     """The sweep, over whatever the build actually wrote."""
 

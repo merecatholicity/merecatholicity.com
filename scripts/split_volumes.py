@@ -81,7 +81,8 @@ HARD_MAX = 600_000
 MIN_SUBPARTS = 4
 
 SPLIT_MARK = '<!--mc-split-->'
-PART_MARK_RE = re.compile(r'<!--mc-part volume="([^"]+)" n="(\d+)" of="(\d+)"-->')
+PART_MARK_RE = re.compile(
+    r'<!--mc-part volume="([^"]+)" n="(\d+)" of="(\d+)"(?: group="([^"]*)")?-->')
 MAIN_OPEN_RE = re.compile(r'<main class="prose[^"]*">')
 PANDOC = '<meta name="generator" content="pandoc"'
 
@@ -375,7 +376,12 @@ def render_part(page, volume, parts, k, body, keep_ids, owner, notes_by_id):
     context = short_title(p['group']['title'] if p.get('group') else page.title)
     out = [head_for(page, p['title'] + ' — ' + context),
            '\n<!--mc-part volume="' + volume + '" n="' + str(k + 1) + '" of="'
-           + str(len(parts)) + '"-->\n',
+           + str(len(parts)) + '"'
+           # the division a sub-part belongs to travels IN THE MARK, so a build
+           # that finds the tree already split (the CI cache restores it) can
+           # rebuild the manifest without losing it
+           + (' group="' + htmllib.escape(p['group']['title'], quote=True) + '"'
+              if p.get('group') else '') + '-->\n',
            '<header id="title-block-header">\n<h1 class="title"' + title_id + '>'
            + inner + '</h1>\n</header>\n',
            partnav(volume, page.title, parts, k),
@@ -536,50 +542,57 @@ def write(path, text):
         f.write(text)
 
 
-def existing_parts(volume):
-    """What a previous run made for this volume, read back from the pages
-    themselves — so a lost manifest is rebuilt rather than believed."""
-    found = []
-    stem = volume[:-5] + '-'
-    for name in os.listdir(DOCS):
-        if not name.startswith(stem) or not name.endswith('.html'):
-            continue
-        text = read(os.path.join(DOCS, name))
-        # the WHOLE file, never a sniff of its head: the anti-flash script and
-        # the card put the mark several kilobytes down, and a 4 KB sniff found
-        # no part anywhere — stale parts were never swept and an oversized part
-        # was a volume to the next run.
-        m = PART_MARK_RE.search(text)
-        if m and m.group(1) == volume:
-            t = TITLE_RE.search(text)
-            found.append((int(m.group(2)), name,
-                          re.sub(r'\s+—\s+.*$', '', t.group(1).strip()) if t else name))
-    found.sort()
-    return [{'file': n, 'title': t} for _, n, t in found]
+def survey():
+    """ONE pass over the built tree, telling three kinds of page apart.
 
+    Returns (indexes, parts_by_volume, candidates): a volume already served as
+    an index, the parts each such volume has on disk (read back from the pages
+    themselves, so a lost manifest is rebuilt rather than believed), and the
+    pages big enough to be split that are neither.
 
-def main(argv):
-    dry = '--dry-run' in argv
-    volumes = {}
-    split_now = []
+    It reads every page WHOLE, never a sniff of its head: the anti-flash script
+    and the share card put the marks several kilobytes down, and a 4 KB sniff
+    found no part anywhere — stale parts were never swept and an oversized part
+    was a volume to the next run. And it must not skip a page by SIZE, which is
+    the trap that emptied the manifest on the second build: an index is 10 KB,
+    so a size filter would never look at one again."""
+    indexes, parts, candidates = {}, {}, []
     for name in sorted(os.listdir(DOCS)):
         if not name.endswith('.html'):
             continue
         path = os.path.join(DOCS, name)
-        if os.path.getsize(path) < SPLIT_MIN:
+        text = read(path)
+        m = PART_MARK_RE.search(text)
+        if m:
+            t = TITLE_RE.search(text)
+            title = re.sub(r'\s+—\s+.*$', '', t.group(1).strip()) if t else name
+            parts.setdefault(m.group(1), []).append(
+                (int(m.group(2)), name, title, htmllib.unescape(m.group(4) or '')))
             continue
-        html = read(path)
-        if PART_MARK_RE.search(html):
-            continue                       # a part of somebody (an oversized one)
-        if SPLIT_MARK in html:
-            parts = existing_parts(name)   # already a shelf; leave it as it is
-            if parts:
-                t = TITLE_RE.search(html)
-                title = t.group(1).strip() if t else name
-                volumes[name] = {'title': title, 'short': short_title(title),
-                                 'level': 0, 'parts': parts}
+        if SPLIT_MARK in text:
+            t = TITLE_RE.search(text)
+            indexes[name] = t.group(1).strip() if t else name
             continue
-        got = split(name, html)
+        if os.path.getsize(path) >= SPLIT_MIN:
+            candidates.append(name)
+    for v in parts:
+        parts[v].sort()
+    return indexes, parts, candidates
+
+
+def main(argv):
+    dry = '--dry-run' in argv
+    indexes, on_disk, candidates = survey()
+    volumes = {}
+    for name, title in indexes.items():           # already a shelf; left as it is
+        rows = on_disk.get(name, [])
+        if rows:
+            volumes[name] = {'title': title, 'short': short_title(title), 'level': 0,
+                             'parts': [{'file': f, 'title': t, 'group': g}
+                                       for _, f, t, g in rows]}
+    split_now = []
+    for name in candidates:
+        got = split(name, read(os.path.join(DOCS, name)))
         if got:
             split_now.append((name, got))
     for name, (index, parts, entry, amap) in split_now:
@@ -588,9 +601,10 @@ def main(argv):
             print('%-22s %2d parts, level %d, biggest %8d' % (
                 name, len(parts), entry['level'], max(len(h) for _, h in parts)))
             continue
-        stale = {p['file'] for p in existing_parts(name)} - {f for f, _ in parts}
-        for f in sorted(stale):
-            os.remove(os.path.join(DOCS, f))
+        fresh = {f for f, _ in parts}
+        for _, stale, _, _ in on_disk.get(name, []):
+            if stale not in fresh:
+                os.remove(os.path.join(DOCS, stale))
         for f, text in parts:
             write(os.path.join(DOCS, f), text)
         write(os.path.join(DOCS, name), index)
@@ -603,9 +617,11 @@ def main(argv):
     index = {'volumes': volumes, 'parts': {}}
     for vol, entry in volumes.items():
         for n, p in enumerate(entry['parts']):
-            index['parts'][p['file']] = {'volume': vol, 'volume_title': entry['title'],
-                                         'volume_short': entry.get('short', entry['title']),
-                                         'title': p['title'], 'group': p.get('group', ''),
+            # the volume's own title is NOT repeated here: ten thousand copies of
+            # it made the manifest 5.6 MB of deployed dead weight. A reader of
+            # this file joins on `volume`.
+            index['parts'][p['file']] = {'volume': vol, 'title': p['title'],
+                                         'group': p.get('group', ''),
                                          'n': n + 1, 'of': len(entry['parts'])}
     with open(MANIFEST, 'w', encoding='utf-8') as f:
         json.dump(index, f, ensure_ascii=False, indent=1, sort_keys=True)

@@ -213,16 +213,22 @@ def catalog():
 
 
 def parts_index():
-    """{'anf03-apology.html': {volume, volume_short, title, group, n, of}} —
+    """{'anf03-apology.html': {volume, title, group, n, of}}, with the volumes —
     docs/library-parts.json, written by scripts/split_volumes.py. A part page is
     not in the Library catalog (the shelf lists the VOLUME), so without this
     every one of the ten thousand parts would wear the one generic sentence —
     which is the defect this file was written to end, at a new scale."""
     try:
         with open(PARTS, encoding='utf-8') as f:
-            return json.load(f).get('parts', {})
+            manifest = json.load(f)
     except (OSError, ValueError):
         return {}
+    volumes = manifest.get('volumes', {})
+    out = {}
+    for name, part in manifest.get('parts', {}).items():
+        vol = volumes.get(part.get('volume'), {})
+        out[name] = dict(part, volume_short=vol.get('short') or vol.get('title', ''))
+    return out
 
 
 def describe_part(part):

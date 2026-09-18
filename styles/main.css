@@ -596,6 +596,9 @@ a.uri { overflow-wrap: anywhere; }
   font-size: 0.9rem;
   color: var(--faint);
   margin: 0.3rem 0 1.6rem;
+  /* a chapter title in this corpus can be one unbroken Greek or Latin word
+     longer than a phone is wide, and nothing may scroll sideways */
+  overflow-wrap: anywhere;
 }
 .prose :where(.mc-partnav.foot) {
   margin: 2.4rem 0 0;
@@ -603,6 +606,7 @@ a.uri { overflow-wrap: anywhere; }
   border-top: 1px solid var(--rule);
 }
 .prose :where(.mc-parts-lead) { color: var(--faint); font-style: italic; margin: 0.3rem 0 0; }
+.prose :where(nav.mc-subtoc a) { overflow-wrap: anywhere; }
 
 /* The acts table and any others */
 .prose :where(table) {
