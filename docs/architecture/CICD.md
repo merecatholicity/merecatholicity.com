@@ -360,8 +360,8 @@ the log has the full record). Each is changed and then PROVEN, never assumed:
 | `OPS_REPORT_KEY` (since 2026-09-17; it replaced `MERECAT_INGEST_KEY` for the nightly, while the pipeline moved to OIDC and needs none) | a fresh `secrets.token_urlsafe(36)`, `wrangler secret put` | the ops door: new key 200, old key 403 | `MC_OPS_REPORT_KEY` in `ci.env` — back to back |
 | `TURNSTILE_SECRET` | `POST …/challenges/widgets/<sitekey>/rotate_secret` with `invalidate_immediately: false` (the Terraform token can), then `wrangler secret put` | `siteverify` with a dummy token answers `invalid-input-response`, not `invalid-input-secret` | — |
 | `VAPID_PRIVATE_KEY` | a P-256 pair from WebCrypto (PKCS8 private, raw public), round-tripped sign→verify; the private half by `wrangler secret put`, the public half in BOTH `VAPID_PUBLIC_KEY` entries of `wrangler.jsonc`; deploy them together | `/push/vapid-key` serves the new key, and a signature from the private key verifies against it | existing subscriptions move to the new key on the member's next app open (`app/push.ts`), or on their first tap after it where the browser wants a gesture — no toggle, no Settings visit |
-| `TURN_KEY_SECRET` (+ the `TURN_KEY_ID` var) | a new TURN key in the dashboard or with a *Realtime/Calls: Edit* token — **no CI token has it**; then delete the old key | a relay credential mints with the new pair | — |
-| `CF_USAGE_TOKEN` | a new *Account Analytics: Read* token — **no CI token can mint one**; then delete the old token | the usage page draws its bars | — |
+| `TURN_KEY_SECRET` (+ the `TURN_KEY_ID` var) — **not rotated, by decision, §10** | a new TURN key in the dashboard or with a *Realtime/Calls: Edit* token — **no CI token has it**; then delete the old key | a relay credential mints with the new pair | — |
+| `CF_USAGE_TOKEN` — **not rotated, by decision, §10** | a new *Account Analytics: Read* token — **no CI token can mint one**; then delete the old token | the usage page draws its bars | — |
 
 `MC_TEST_BYPASS` and `TEST_HASHES` are no longer secrets of this worker (2026-09-17): the
 Turnstile test bypass they gated was retired, since the established-identity skip already spares
@@ -599,6 +599,19 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
     either apply it this way, written here, or give the Terraform token D1 Edit first.
 
 ---
+
+14. **`TURN_KEY_SECRET` and `CF_USAGE_TOKEN` were NOT rotated after the 2026-09-17 env
+    disclosure** — the owner's call, made on the evidence and recorded here rather than
+    re-argued. The other four worker secrets were rotated that day (§4). These two need
+    permissions no CI token holds (Realtime/Calls edit; API-token write), and the measured
+    picture was: **TURN relayed egress 0.000 GB this month**, nil on every day of it, so the
+    leaked TURN key had not been used; the usage token is read-only account analytics.
+    Un-measurable, and stated as such: whether anything ever fetched the leaking endpoint —
+    no token here reads zone HTTP analytics, and the free plan would not retain the six-week
+    window anyway. **What makes the decision safe is the daily check**, not luck: `turn.egress`
+    is a metered row against the 1,000 GB free pool, so abuse speaks at 800 GB — inside the
+    free pool, with 200 GB of headroom before a charge (the check runs 23:30 UTC, so a burst
+    inside one day is the gap). Revisit if that meter ever moves off zero.
 
 ## 11. Anti-drift checklist — what to update when you add…
 
