@@ -21,9 +21,12 @@ resources/*-body-html.tex
 
 # npm: the JS toolchain (Tailwind, esbuild, eslint, wrangler) is a per-project
 # devDependency set, restored from the committed package-lock.json with `npm ci`.
-# node_modules/ is build machinery — never committed, never installed with -g or
-# sudo. See README (setup) and CLAUDE.md (the npm discipline).
-node_modules/
+# node_modules is build machinery — never committed, never installed with -g or
+# sudo. See README (setup) and CLAUDE.md (the npm discipline). NO trailing slash:
+# an agent worktree's node_modules is a SYMLINK (scripts/agent_worktree.sh), and
+# `node_modules/` matches only a directory, so the symlink slipped into a commit
+# once (2026-09-18, an absolute-path symlink that would dangle on any other box).
+node_modules
 
 # Cloudflare Worker local state and secrets — never in git.
 .wrangler/
