@@ -818,8 +818,36 @@ def main():
     ap.add_argument("--push", action="store_true", help="push to the worker")
     ap.add_argument("--only", default="", help="comma list of work ids")
     ap.add_argument("--tiers", default="", help="comma list of tiers, e.g. 1,2")
-    ap.add_argument("--budget-rows", type=int, default=90000,
-                    help="stop before this many estimated D1 row writes")
+    # 60,000 ESTIMATED rows, and the arithmetic behind it is worth keeping
+    # (2026-09-18). D1's free tier allows 100,000 row writes per ACCOUNT per
+    # day — shared by the three librarian rooms, the comments database, every
+    # migration a worker deploy applies, and every comment, DM and reaction a
+    # member writes. The old 90,000 left 10,000 for all of that, and the day
+    # the volume split bumped PARSER_VERSION and the whole corpus re-ingested
+    # at once, it took the lot: measured afterwards, 109,021 rows written by
+    # the librarian in 24 hours, and the next worker deploy died on its
+    # migration with "exceeded D1's free tier daily row write limit" wearing
+    # somebody else's commit title.
+    #
+    # Two things that measurement settles. The estimate UNDERCOUNTS: 89,915
+    # estimated against 109,021 actual, a ratio of 1.21 MEASURED ON 2026-09-18
+    # OVER THIS CORPUS — not a property to trust. D1 counts index and FTS writes
+    # as rows, so the ratio is a function of how many index rows each logical
+    # row produces, and a shelf of a different shape moves it. Re-measure
+    # (`npx wrangler d1 info <db>`, `rows_written_24h` across every database on
+    # the account) before moving this number, rather than scaling by 1.21.
+    # And the pipeline cannot simply ask how much of the day is left: it holds
+    # no Cloudflare credential by design (GitHub OIDC only, CICD §4), so a
+    # fixed, conservative number is the only lever on this side of the wire.
+    # 60,000 estimated is ~72,800 actual, leaving ~27,000 for the site and its
+    # deploys — generous against fifteen identities and thin against a hundred,
+    # so it is worth revisiting if the community ever arrives. A full re-ingest
+    # then takes a few more days, which is the right price for a forum that can
+    # still be posted to.
+    ap.add_argument("--budget-rows", type=int, default=60000,
+                    help="stop before this many estimated D1 row writes "
+                         "(the account-wide free-tier cap is 100,000/day, and "
+                         "this count undercounts actual writes by ~20%%)")
     ap.add_argument("--api", default=API_DEFAULT)
     ap.add_argument("--ledger", default="",
                     help="JSON memory of parsed sources (skips the parse of an unchanged work)")

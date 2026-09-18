@@ -236,5 +236,6 @@ on page one.)
 - **The roster stops being an anonymous read: the first of the P0's three layers (2026-09-18)** — `log/2026-09.md`
 - **A real floor under the key, refused server-side: the P0's second layer (2026-09-18)** — `log/2026-09.md`
 - **The public id, egress-complete behind a valve: layer three begins (2026-09-18)** — `log/2026-09.md`
+- **The librarian spent the account's whole day of D1 writes in six minutes, and a worker deploy died wearing somebody else's name (2026-09-18).** — `log/2026-09.md`
 
 <!-- infra-index:end -->
