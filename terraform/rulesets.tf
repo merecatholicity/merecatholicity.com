@@ -1,4 +1,6 @@
-# The three custom zone rulesets.
+# The four custom zone rulesets in this file. The fifth, the browser-cache
+# rule, is cache.tf — on its own because it is the only one that changes what a
+# reader's own browser keeps, which no purge can reach.
 #
 # response_headers is the one that matters most: it carries the CSP, HSTS,
 # Permissions-Policy (microphone=(self) — denying it broke the voice recorder

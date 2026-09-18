@@ -178,6 +178,7 @@ on page one.)
 - **Blast radius:** — `log/2026-09.md`
 - **Every bucket's r2.dev URL is off, and declared (2026-09-17)** — `log/2026-09.md`
 - **An adoption that plans an update every run is a red gate for everybody, not an open item for somebody (2026-09-18).** — `log/2026-09.md`
+- **The browser was re-fetching 641 KiB of unchanged bytes every ten minutes, and the fix is one day, not one year (2026-09-18).** — `log/2026-09.md`
 
 ### Cloudflare Workers (dynamic backend)
 
