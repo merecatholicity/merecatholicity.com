@@ -51,7 +51,10 @@ test('the fresh count every door hands back is set at once (the doors themselves
 });
 
 test('a count is painted only while it is fresh, and a fresh open asks at once (2026-09-17)', () => {
-  const chrome = readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8');
+  /* the bars and their helpers moved to app/chromebits.ts, the early bundle's
+     module (2026-09-17); the chrome is the two files together */
+  const chrome = readFileSync(join(root, 'app', 'chromebits.ts'), 'utf8')
+    + readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8');
   const count = chrome.slice(chrome.indexOf('function badgeCount('), chrome.indexOf('function badgeText('));
   assert.ok(/core\.cacheBadgeShows\(Date\.now\(\) - \(Number\(o\.at\) \|\| 0\)\)/.test(count),
     'the chrome asks the kernel whether the stored number may still be shown');

@@ -15,9 +15,20 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const budget = JSON.parse(readFileSync(join(root, 'tests', '_support', 'bundle_budget.json'), 'utf8'));
 
+/* `chrome-chunk` is not a filename: it is the chunk docs/chrome.js (the early
+   bars) shares with app.js, whose name carries a content hash. The early bundle
+   names it in its own import, so the budget follows whatever esbuild called it
+   — and what a cold open waits on for its chrome is chrome.js PLUS this. */
+function chromeChunk() {
+  const early = readFileSync(join(root, 'docs', 'chrome.js'), 'utf8');
+  const m = /from ?["'](\.\/chunks\/[^"']+)["']/.exec(early);
+  assert.ok(m, 'docs/chrome.js imports no chunk — did the split break?');
+  return join(root, 'docs', m[1].replace('./', ''));
+}
+
 for (const name of Object.keys(budget).filter((k) => !k.startsWith('_'))) {
   test(`${name} stays under its ceiling (${budget[name]} B) and the ceiling follows it down`, () => {
-    const path = join(root, 'docs', name);
+    const path = name === 'chrome-chunk' ? chromeChunk() : join(root, 'docs', name);
     assert.ok(existsSync(path), name + ' is not built — make bundle (and make css) first');
     const size = statSync(path).size;
     const ceiling = budget[name];
@@ -51,6 +62,13 @@ test('docs/app.js is an ES module, and nav.js injects it as one', () => {
      must not delete the client's chunks, nor the client's the shell's */
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.ok(/--format=esm --splitting/.test(pkg.scripts['build:js']), 'the shell builds as a split ESM bundle');
+  /* The bars ride their own entry in the SAME build, so Lit and the bar code
+     live in one shared chunk instead of twice over (2026-09-17). */
+  assert.ok(/esbuild app\/app\.ts app\/chrome\.ts /.test(pkg.scripts['build:js']), 'both entries build together, sharing chunks');
+  const early = nav.indexOf("c.src = 'chrome.js");
+  assert.ok(early > 0 && early < at, 'nav.js asks for the bars BEFORE the shell');
+  const einject = nav.slice(early, nav.indexOf('document.head.appendChild(c)', early));
+  assert.ok(/c\.type = 'module';/.test(einject), 'the early bundle is ESM too');
   assert.equal((pkg.scripts['build:js'].match(/rm -rf docs\/chunks/g) || []).length, 1, 'the chunk wipe runs once');
   assert.ok(!/rm -rf docs\/chunks/.test(pkg.scripts['build:client']), 'and not again in the client build, which would take the shell\'s chunks');
 });

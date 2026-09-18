@@ -11,7 +11,7 @@
   "scripts": {
     "lint": "eslint docs/nav.js docs/deeplink.js docs/flash.js docs/contact.js docs/bible-reader.js docs/away.js docs/index.js docs/sw.js ",
     "build:ps": "python3 scripts/writings.py && rm -rf purescript/output && cd purescript && PATH=\"$PWD/../local/bin:$PATH\" spago build",
-    "build:js": "npm run build:ps && rm -rf docs/chunks && esbuild app/shell.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=app --chunk-names=chunks/[name]-[hash] --log-level=warning && npm run build:client",
+    "build:js": "npm run build:ps && rm -rf docs/chunks && esbuild app/app.ts app/chrome.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning && npm run build:client",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
     "tsc": "tsc -p tsconfig.json && tsc -p comments-worker/tsconfig.json && tsc -p contact-worker/tsconfig.json",
     "build": "npm run lint && npm run build:js && npm run build:css",

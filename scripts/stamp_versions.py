@@ -45,7 +45,7 @@ PARTIALS = os.path.join(ROOT, 'partials')
 DOCS = os.path.join(ROOT, 'docs')
 
 # Stamped into docs/nav.js's own source: nav.js injects these itself.
-NAV_ASSETS = ['app.js', 'deeplink.js']
+NAV_ASSETS = ['app.js', 'chrome.js', 'deeplink.js']
 
 # Stamped into every HTML page (docs/ + partials/). The key is optional in the
 # match so a generator's bare reference is adopted rather than fought.

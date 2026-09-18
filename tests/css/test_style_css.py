@@ -485,11 +485,11 @@ class PreShellPaint(unittest.TestCase):
                          "nor the page title the app bar replaces")
 
     def test_both_bars_hold_their_place_from_the_first_frame(self):
-        self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\):before",
-                         "the app bar's surface must hold its place")
-        self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\):after",
+        self.assertRegex(self.css, r"html:not\(\.mc-noapp\):not\(\.mc-bars\) body:not\(\.mc-app\):before",
+                         "the app bar's surface must hold its place until the real bar stands")
+        self.assertRegex(self.css, r"html:not\(\.mc-noapp\):not\(\.mc-bars\) body:not\(\.mc-app\):after",
                          "and the tab bar's")
-        strips = re.search(r"html:not\(\.mc-noapp\) body:not\(\.mc-app\):before,html:not\(\.mc-noapp\) body:not\(\.mc-app\):after\{([^}]*)}", self.css)
+        strips = re.search(r"html:not\(\.mc-noapp\):not\(\.mc-bars\) body:not\(\.mc-app\):before,html:not\(\.mc-noapp\):not\(\.mc-bars\) body:not\(\.mc-app\):after\{([^}]*)}", self.css)
         self.assertIsNotNone(strips, "the two placeholders share one rule")
         self.assertIn("position:fixed", strips.group(1))
         self.assertIn("background:var(--surface)", strips.group(1), "the bars' own surface, not a guess")

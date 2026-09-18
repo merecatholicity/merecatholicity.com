@@ -75,7 +75,7 @@ duplicated, and the shape they moved toward.
 | `comments-worker/src/index.ts` | 654 | The composition root: imports · `Env` · `handleConfig`/`handleLive` · the `ROUTES` table · `fetch`/`scheduled`. |
 | `comments-worker/src/routes/*.ts` | 5,427 | The handlers, one file per feature (2026-09-16): board 1,402 · dm 1,265 · merecat 730 · wall 540 · admin 483 · profile 430 · media 254 · calls 179 · notify 144 — each moved verbatim from `index.ts` behind the table. |
 | `comments-worker/src/lib.ts` | 3,648 | The shared core: constants, crypto, auth/validation, the settings, DB/notification/broadcast helpers, the DM primitives, the media purges, the social gate and the Discord fan-out. A leaf — it references no handler. |
-| `app/appchrome.ts` | 1,763 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
+| `app/appchrome.ts` | 1930 | Desktop+mobile chrome: sidebar, deskbar, home launcher, settings, footer (Lit). |
 | `app/shell.ts` | 868 | The SPA shell: soft-navigation (latest-wins, instant nav), per-page boot registry, audio dock, PWA. |
 | `docs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring (served raw, unversioned). |
 | `comments-worker/src/durable.ts` | 875 | The two Durable Objects (`BoardHub` — `HUB_SHARDS` instances, sockets indexed in memory, `Domain.Hub` the placing, a `watch` table naming the siblings that watch each member — and `ChatRoom`). |
@@ -89,6 +89,8 @@ duplicated, and the shape they moved toward.
 | `app/richtext.ts` | 432 | The one living body renderer (`window.mcRich`): markdown, scripture autolink, emoji. |
 | `comments-worker/src/usagecalc.ts` | 327 | Pure free-tier limit maths for the usage monitor (`usage.ts`, 106, does the fetch through `analytics.ts`, the GraphQL glue; `quota.ts`, 90, is the librarian's AI budget guard over the same neurons select — no lib import, Node-tested with a stubbed fetch). |
 | `app/live.ts` | 322 | WebSocket lifecycle (board + merecat chat conns; the `?h=` shard hint). |
+| `app/chromebits.ts` | 228 | The two fixed bars (`mc-appbar`, `mc-tabbar`), their icons, tabs and badge readers — the EARLY bundle's module: Lit and nothing else. |
+| `app/chrome.ts` / `app/app.ts` | 26 / 5 | The two esbuild entries: the bars (docs/chrome.js, ~22 KB with its chunk, loaded first) and the shell (docs/app.js). |
 | `app/core.ts` | 286 | The membrane — the one audited place PureScript types are erased. |
 | `app/push.ts` | 166 | Keeps a member's push subscription on the worker's current VAPID key, once per app open (shell) and from Settings; a move a browser will not make without a gesture finishes on the next tap. |
 | `comments-worker/src/{pure,webpush}.js` | 268 / 138 | Extracted pure helpers (tested) / VAPID push crypto. |

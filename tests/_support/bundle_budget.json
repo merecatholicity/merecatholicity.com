@@ -1,6 +1,8 @@
 {
- "_note": "ceilings = the size at 2026-09-16 + 2%; a build over its ceiling fails, a build more than 5% under it asks for the ceiling to come down (tests/js/bundle_budget)",
+ "_note": "ceilings = the size on the day + 2%; a build over its ceiling fails, a build more than 5% under it asks for the ceiling to come down (tests/js/bundle_budget). chrome.js is the EARLY bundle (the two fixed bars) and chrome-chunk is the chunk it shares with app.js: together they are what a cold open waits on before the app has its chrome, so they are the ceiling that matters most (2026-09-17)",
+ "app.js": 274938,
+ "chrome-chunk": 22696,
+ "chrome.js": 220,
  "comments.js": 247107,
- "app.js": 291439,
  "style.css": 98667
 }

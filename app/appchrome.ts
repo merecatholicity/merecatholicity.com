@@ -8,6 +8,10 @@
    click delegate in shell.js soft-navigates the tabs' <a href>s for free. */
 
 import { LitElement, html } from 'lit';
+import {
+  ICON, TABS, McAppbar, McTabbar, activeTab, badgeCount, badgeLabel, badgeText,
+  mountBars, onCommunity, pageTitle, socialOn, visibleTabs,
+} from './chromebits.ts';
 import { mountLibrary } from './views/library.ts';
 import { notifLabel, notifHref, tapExcursion, tapVerdict, tapEchoMs } from './core.ts';
 import { urlBase64ToUint8Array, healPushSubscription, browserPushEnv } from './push.ts';
@@ -15,19 +19,6 @@ import { urlBase64ToUint8Array, healPushSubscription, browserPushEnv } from './p
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
    hero keeps the 🐈 mascot on purpose (it IS the brand). */
-const ICON = {
-  home: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="M3 10.8 12 3.5l9 7.3"/><path d="M5.5 9.6V20h13V9.6"/></svg>`,
-  community: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="M20 14a2 2 0 0 1-2 2H8.5L4.5 20V6a2 2 0 0 1 2-2H18a2 2 0 0 1 2 2z"/></svg>`,
-  inbox: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7.5 8.5 6 8.5-6"/></svg>`,
-  profile: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.4-3.6 3.4-5.6 7-5.6s6.6 2 7 5.6"/></svg>`,
-  search: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4-4"/></svg>`,
-  bell: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8"/><path d="M10.2 19a1.9 1.9 0 0 0 3.6 0"/></svg>`,
-  gear: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>`,
-  cross: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="M12 3.5v17M7.5 8.5h9"/></svg>`,
-  back: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>`,
-  forward: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg>`,
-  feed: html`<svg viewBox="0 0 24 24" width="24" height="24" class="mc-ico" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M7 8.5h6M7 12h10M7 15.5h10"/></svg>`,
-};
 
 /* The primary destinations. SIX EQUAL TABS (2026-09-11): Community used to be a
    raised circular hero, but a 6-item bar cannot optically centre one — it sat at
@@ -36,36 +27,6 @@ const ICON = {
    alone. Merecat 🐈 keeps its mascot emoji (a deliberate brand mark), Feed uses a
    stroke SVG like the other structural tabs. hrefs are ordinary same-origin links
    the shell intercepts + soft-navs. */
-interface Tab {
-  key: string;
-  label: string;
-  href: string;
-  svg?: keyof typeof ICON;
-  icon?: string;
-  badge?: string;
-}
-/* The social layer's mirror (written by client/comments.ts from /config, absence
-   = on). The chrome must decide whether to draw the Feed tab SYNCHRONOUSLY, on
-   every page, before any fetch — adding a /config read to the shell would put
-   API traffic on all ~270 corpus pages and break the free-tier budget law. A
-   reader who only ever opens corpus pages can hold a stale mirror; the tab then
-   leads to the same "No such page." the worker gives, and self-corrects on
-   their next platform page. */
-function socialOn(): boolean {
-  try { return localStorage.getItem('mc-social') !== '0'; } catch (e) { return true; }
-}
-/* The tabs to draw right now: Feed disappears with the social layer. */
-function visibleTabs(): Tab[] {
-  return socialOn() ? TABS : TABS.filter((t) => t.key !== 'feed');
-}
-const TABS: Tab[] = [
-  { key: 'home', label: 'Home', svg: 'home', href: 'index.html' },
-  { key: 'merecat', label: 'Merecat', icon: '🐈', href: 'merecat-ai.html' },
-  { key: 'feed', label: 'Feed', svg: 'feed', href: 'feed.html' },
-  { key: 'community', label: 'Community', svg: 'community', href: 'community.html' },
-  { key: 'messages', label: 'Inbox', svg: 'inbox', href: 'messages.html', badge: 'dm' },
-  { key: 'profile', label: 'Profile', svg: 'profile', href: 'profile.html' },
-];
 
 /* The Home launcher: standout BROWSE features first, then the reading shelf
    (mirrors scripts/nav.yml). Static links only — the shell adds no API traffic
@@ -124,16 +85,6 @@ const HOME_SECTIONS = [
 /* `at` lets the shell ask "which tab WOULD this path light?" before the
    navigation has happened, so a tap can move the chrome in its own event —
    the whole point of the instant-nav work. Absent, it means "wherever we are". */
-function activeTab(at?: string) {
-  const path = (at == null ? location.pathname : at).split('/').pop() || 'index.html';
-  if (path === 'index.html' || path === '') return 'home';
-  if (path === 'merecat-ai.html') return 'merecat';
-  if (path === 'messages.html') return 'messages';
-  if (path === 'profile.html') return 'profile';
-  if (path === 'feed.html') return 'feed';
-  if (path === 'community.html') return 'community';
-  return '';
-}
 
 /* The sacred-art theme accent: each primary feature carries a background painting
    (see styles/main.css `body[data-art]`). The art key mostly follows the active
@@ -189,49 +140,8 @@ function applyArt() {
    page uses document.title with the trailing " | site" / " — site" suffix stripped
    (each forum view + content page keeps document.title current, and a title
    MutationObserver re-syncs the bar whenever an async view updates it). */
-function pageTitle() {
-  var tab = activeTab();
-  if (tab === 'home') return 'Mere Catholicity';
-  /* The forum's tabbed views share community.html, and its static <title> reads
-     "Community" until the async view resets it — so name the Feed explicitly to
-     keep the chrome from briefly (or, on a slow view, lastingly) labelling the
-     Feed screen "Community", contradicting the tab. */
-  if (tab === 'feed') return 'Feed';
-  var t = String(document.title || '').split(/\s+[|—–]\s+/)[0].trim();
-  return t || 'Mere Catholicity';
-}
 
-/* Board search only belongs where the board is — on community.html. Elsewhere the
-   top-bar search magnifier is hidden (a content page has nothing to search here). */
-function onCommunity() {
-  return (location.pathname.split('/').pop() || '') === 'community.html';
-}
 
-/* Unread counts, read from the caches the comments client keeps current (live
-   layer + the shell's event-driven refresh). No fetch — the chrome only
-   reflects what is already known, and only while it is still TRUE: a stored
-   count older than its TTL (Domain.Cache.badgeShows) is last visit's number,
-   and painting it made every fresh open show a wrong badge for as long as the
-   refresh took (the owner's report, 2026-09-17; reproduced at 211 ms on a fast
-   phone open, far longer on a slow link). No badge is the honest answer until
-   the read lands — app/badges.ts asks for it at once. Without the kernel
-   (a half-loaded bundle) nothing is painted, which is the safe side. */
-function badgeCount(which: string) {
-  try {
-    const raw = localStorage.getItem(which === 'dm' ? 'mc-dm-unread' : 'mc-notif-unread');
-    const o = raw ? JSON.parse(raw) : null;
-    if (!o || !(o.n > 0)) return 0;
-    const core = window.mcCore;
-    if (!core || !core.cacheBadgeShows) return 0;
-    return core.cacheBadgeShows(Date.now() - (Number(o.at) || 0)) ? o.n : 0;
-  } catch (e) { return 0; }
-}
-function badgeText(n: number) { return n > 99 ? '99+' : String(n); }
-/* The badge is a red disc a screen reader cannot read as anything — so the tab
-   that carries one says the count in its own label: "Inbox, 3 unread messages". */
-function badgeLabel(label: string, n: number) {
-  return n ? label + ', ' + n + (n === 1 ? ' unread message' : ' unread messages') : label;
-}
 
 function readKey() {
   try { return localStorage.getItem('mc-comment-key') || ''; } catch (e) { return ''; }
@@ -309,6 +219,15 @@ function qrSvg(text: string): SVGSVGElement | null {
   } catch (e) { return null; }
 }
 
+
+
+/* ---- the top app bar ----
+   A browser-like nav frame: a persistent back < at the far left and forward > at
+   the far right (just past the gear), so back/forward are always in the same place.
+   The center title is intentionally empty (the tab bar + content title say where
+   you are); the div stays as the flex:1 spacer that pins the two icon clusters to
+   the edges. */
+
 /* ---- The finger's own road onto the fixed chrome (2026-09-13) ----
    The shell navigates on `click`, and on a phone the click is SYNTHESIZED by
    the platform after the finger lifts — and withheld whenever the platform
@@ -374,80 +293,6 @@ function armTap(host: HTMLElement, selector: string) {
     if (e.isTrusted && firedAt && Date.now() - firedAt < tapEchoMs) { e.preventDefault(); e.stopPropagation(); }
   }, true);
 }
-
-/* ---- the bottom tab bar ---- */
-class McTabbar extends LitElement {
-  static properties = { active: { attribute: false }, dm: { attribute: false }, pending: { attribute: false } };
-  declare active: string;
-  declare dm: number;
-  /* The tab the finger just asked for, painted before the navigation has
-     resolved. `lit()` prefers it over `active`; sync() clears it once the real
-     page stands. Without this the highlight only moved after the fetch AND the
-     boot, so a tap looked ignored for a beat — the ping-pong we are killing. */
-  declare pending: string;
-  private _onSocial = () => this.requestUpdate();
-  constructor() { super(); this.active = 'home'; this.dm = 0; this.pending = ''; }
-  createRenderRoot() { return this; }
-  /* The Feed tab appears or vanishes with the social switch, without a reload. */
-  connectedCallback() { super.connectedCallback(); document.addEventListener('mc-social-change', this._onSocial); armTap(this, 'a.mc-tab'); }
-  disconnectedCallback() { super.disconnectedCallback(); document.removeEventListener('mc-social-change', this._onSocial); }
-  sync() { this.active = activeTab(); this.pending = ''; this.dm = badgeCount('dm'); }
-  lit() { return this.pending || this.active; }
-  render() {
-    const on = this.lit();
-    return html`<nav class="mc-tabbar" aria-label="Primary">
-      ${visibleTabs().map((t) => html`
-        <a class=${'mc-tab' + (on === t.key ? ' mc-tab-on' : '')}
-           href=${t.href} aria-label=${badgeLabel(t.label, t.badge === 'dm' ? this.dm : 0)}
-           aria-current=${on === t.key ? 'page' : 'false'}>
-          <span class="mc-tab-ico">${t.icon ? t.icon : ICON[t.svg!]}${t.badge === 'dm' && this.dm
-            ? html`<span class="mc-tab-badge">${badgeText(this.dm)}</span>` : ''}</span>
-          <span class="mc-tab-lbl">${t.label}</span>
-        </a>`)}
-    </nav>`;
-  }
-}
-customElements.define('mc-tabbar', McTabbar);
-
-/* ---- the top app bar ----
-   A browser-like nav frame: a persistent back < at the far left and forward > at
-   the far right (just past the gear), so back/forward are always in the same place.
-   The center title is intentionally empty (the tab bar + content title say where
-   you are); the div stays as the flex:1 spacer that pins the two icon clusters to
-   the edges. */
-class McAppbar extends LitElement {
-  static properties = { canBack: { attribute: false }, notif: { attribute: false }, title: { attribute: false } };
-  declare canBack: boolean;
-  declare notif: number;
-  constructor() { super(); this.canBack = false; this.notif = 0; this.title = ''; }
-  createRenderRoot() { return this; }
-  connectedCallback() { super.connectedCallback(); armTap(this, '.mc-ab-btn'); }
-  sync() {
-    this.canBack = history.length > 1;   // dim < at the very start of history
-    this.notif = badgeCount('notif');
-    this.title = pageTitle();             // the current page/view title, shown centered
-  }
-  goBack(e: Event) { e.preventDefault(); if (history.length > 1) history.back(); else if (window.mcNav) window.mcNav('index.html'); else { location.href = 'index.html'; } }
-  goFwd(e: Event) { e.preventDefault(); history.forward(); }
-  settings(e: Event) { e.preventDefault(); if (window.mcSheet) window.mcSheet.settings!(); }
-  notifs(e: Event) { e.preventDefault(); if (window.mcSheet) window.mcSheet.open('', document.createElement('mc-notifs')); }
-  render() {
-    return html`<header class="mc-appbar">
-      <div class="mc-appbar-side mc-appbar-l">
-        <button class=${'mc-ab-btn' + (this.canBack ? '' : ' mc-ab-dim')} @click=${(e: Event) => this.goBack(e)} aria-label="Back">${ICON.back}</button>
-      </div>
-      <div class="mc-appbar-title" title=${this.title}>${this.title}</div>
-      <div class="mc-appbar-side mc-appbar-r">
-        ${onCommunity() ? html`<a class="mc-ab-btn" href="community.html?q=" aria-label="Search">${ICON.search}</a>` : ''}
-        <button class="mc-ab-btn mc-ab-bell" @click=${(e: Event) => this.notifs(e)} aria-label="Notifications">${ICON.bell}${this.notif
-          ? html`<span class="mc-tab-badge">${badgeText(this.notif)}</span>` : ''}</button>
-        <button class="mc-ab-btn" @click=${(e: Event) => this.settings(e)} aria-label="Settings">${ICON.gear}</button>
-        <button class="mc-ab-btn" @click=${(e: Event) => this.goFwd(e)} aria-label="Forward">${ICON.forward}</button>
-      </div>
-    </header>`;
-  }
-}
-customElements.define('mc-appbar', McAppbar);
 
 /* ---- the document scroll lock a sheet holds while it is open ----
    Live report (2026-09-09, phones): scrolling the Settings sheet sometimes
@@ -1776,13 +1621,12 @@ function mcOnboard(onDone?: any, opts?: any) {
    return { sync } for boots() to call after every swap. The elements carry
    data-mc-app so swapContent skips them; CSS keeps them off desktop. */
 export function installChrome() {
-  const appbar = document.createElement('mc-appbar') as McAppbar;
-  appbar.setAttribute('data-mc-app', '');
-  document.body.appendChild(appbar);
-
-  const tabbar = document.createElement('mc-tabbar') as McTabbar;
-  tabbar.setAttribute('data-mc-app', '');
-  document.body.appendChild(tabbar);
+  /* The bars may already stand: docs/chrome.js mounts them ahead of this
+     bundle so a cold open never paints a page without its app (2026-09-17).
+     mountBars is idempotent, so this is the same pair either way. */
+  const { appbar, tabbar } = mountBars();
+  armTap(appbar, '.mc-ab-btn');
+  armTap(tabbar, 'a.mc-tab');
 
   const sheet = document.createElement('mc-sheet') as McSheet;
   sheet.setAttribute('data-mc-app', '');

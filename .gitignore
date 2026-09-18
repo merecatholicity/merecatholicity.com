@@ -108,6 +108,8 @@ docs/*.html
 !docs/kjv.html
 !docs/douay-rheims.html
 docs/app.js
+# the early bundle: the two fixed bars, loaded before app.js (2026-09-17)
+docs/chrome.js
 docs/comments.js
 # the lazy feature modules' chunks (P2-5, 2026-09-16): content-hashed names, rebuilt by every
 # `make bundle` (rm -rf first, so a stale chunk never lingers)

@@ -17,7 +17,12 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const css = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
-const chrome = readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8');
+/* The chrome is two files since 2026-09-17: app/chromebits.ts holds the two
+   bars (the early bundle's module, docs/chrome.js) and app/appchrome.ts the
+   rest. Read in THIS order — appchrome first — so a slice that runs from
+   armTap to the tab bar spans them the way the single file used to. */
+const chrome = readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8')
+  + readFileSync(join(root, 'app', 'chromebits.ts'), 'utf8');
 
 test('no tab is a hero: the markup and the stylesheet agree there is no such thing', () => {
   assert.ok(!/mc-tab-hero/.test(chrome) && !/mc-tab-hero/.test(css), 'the raised centre hero is gone from both halves');
@@ -61,7 +66,7 @@ test('the Inbox badge is the DM count, and both the phone bar and the desktop ra
  * somewhere else still counting; the road spreading to content links, where
  * the platform's judgement is the right one. */
 test('a press on a tab or an app-bar button is answered on the finger\'s lift, by the kernel\'s verdict', () => {
-  const tap = chrome.slice(chrome.indexOf('function armTap('), chrome.indexOf('/* ---- the bottom tab bar ---- */'));
+  const tap = chrome.slice(chrome.indexOf('function armTap('), chrome.indexOf('/* ---- the document scroll lock'));
   assert.ok(tap.length > 0, 'the one road, armTap');
   assert.ok(/import \{[^}]*\btapVerdict\b[^}]*\btapExcursion\b[^}]*\} from '\.\/core\.ts'|import \{[^}]*\btapExcursion\b[^}]*\btapVerdict\b[^}]*\} from '\.\/core\.ts'/.test(chrome),
     'the verdict and the travel are Domain.Tap\'s, through the membrane');
@@ -74,11 +79,15 @@ test('a press on a tab or an app-bar button is answered on the finger\'s lift, b
   assert.ok(/\}, \{ passive: false \}\);/.test(tap), 'touchend is not passive — a passive listener cannot cancel');
   assert.ok(/host\.addEventListener\('click', \(e: MouseEvent\) => \{\s*if \(e\.isTrusted && firedAt && Date\.now\(\) - firedAt < tapEchoMs\) \{ e\.preventDefault\(\); e\.stopPropagation\(\); \}\s*\}, true\);/.test(tap),
     'an engine\'s click that still arrives is an echo, swallowed in the capture phase before the shell');
-  const tabbar = chrome.slice(chrome.indexOf('class McTabbar'), chrome.indexOf("customElements.define('mc-tabbar'"));
-  const appbar = chrome.slice(chrome.indexOf('class McAppbar'), chrome.indexOf("customElements.define('mc-appbar'"));
-  assert.ok(/armTap\(this, 'a\.mc-tab'\)/.test(tabbar), 'the tab bar is armed');
-  assert.ok(/armTap\(this, '\.mc-ab-btn'\)/.test(appbar), 'and the app bar');
-  assert.equal((chrome.match(/armTap\(this, /g) || []).length, 2, 'only the two bars — a content link keeps the platform\'s judgement');
+  /* The bars no longer arm themselves on connect: they ride docs/chrome.js,
+     which must not import the kernel (2026-09-17), so installChrome arms them
+     the moment app.js lands — the one place, still only the two bars. */
+  const install = chrome.slice(chrome.indexOf('export function installChrome()'), chrome.indexOf('window.mcSheet = {'));
+  assert.ok(/armTap\(appbar, '\.mc-ab-btn'\);/.test(install), 'the app bar is armed where the shell stands');
+  assert.ok(/armTap\(tabbar, 'a\.mc-tab'\);/.test(install), 'and the tab bar');
+  assert.equal((chrome.match(/armTap\(/g) || []).length, 3, 'the definition and the two bars — a content link keeps the platform\'s judgement');
+  const bits = readFileSync(join(root, 'app', 'chromebits.ts'), 'utf8');
+  assert.ok(!/from '\.\/core\.ts'/.test(bits), 'the early bundle imports no kernel: that chunk is what a cold open waits on');
   const shell = readFileSync(join(root, 'app', 'shell.ts'), 'utf8');
   assert.ok(!/armTap|touchend/.test(shell), 'the shell\'s click road is untouched: every other road in still arrives as a click');
 });

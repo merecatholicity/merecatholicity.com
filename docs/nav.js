@@ -296,10 +296,22 @@ window.mcAsset = function (name) {
     try {
       if (localStorage.getItem('mc-app') === '0') document.documentElement.classList.add('mc-noapp');
     } catch (e) { /* storage blocked: the shell mounts, so the app dress is right */ }
+    /* The BARS FIRST (2026-09-17): docs/chrome.js is the app bar and the tab
+       bar and nothing else — a couple of hundred bytes plus a ~22 KB shared
+       chunk, against app.js's ~270 KB — so on a cold open a phone has its
+       chrome within a round trip of the first paint instead of after the whole
+       shell. app.js mounts everything else and adopts these two bars
+       (installChrome → mountBars). Both are modules and both are async, so
+       this is a priority hint, not an ordering promise: whichever lands first
+       does its part, and mountBars is idempotent. */
+    var c = document.createElement('script');
+    c.src = 'chrome.js?v=4098711547';
+    c.type = 'module';
+    document.head.appendChild(c);
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
-    s.src = 'app.js?v=2527231630';
+    s.src = 'app.js?v=2183222365';
     /* A MODULE since 2026-09-17 (the write-path port's P0): the shell is an
        ESM bundle so later phases land in content-hashed chunks it import()s
        rather than in app.js itself. A dynamically inserted script is async
@@ -513,7 +525,7 @@ window.mcAsset = function (name) {
       var urls = ['nav.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
       document.querySelectorAll('script[src], link[rel="stylesheet"][href]').forEach(function (el) {
         var u = el.getAttribute('src') || el.getAttribute('href') || '';
-        if (/(^|\/)(app\.js|deeplink\.js|style\.css)([?#]|$)/.test(u)) urls.push(u);
+        if (/(^|\/)(app\.js|chrome\.js|deeplink\.js|style\.css)([?#]|$)/.test(u)) urls.push(u);
       });
       sw.ready.then(function (reg) {
         if (reg && reg.active) reg.active.postMessage({ t: 'mc-prime', urls: urls });

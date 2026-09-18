@@ -48,7 +48,7 @@ def buildable():
         names |= {n[:-4] + '.html' for n in os.listdir(res)
                   if n.endswith('.tex') and n[:-4] + '.html' not in PDF_ONLY}
     # the book, the bundles, the stylesheet and the generated data files
-    names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'comments.js',
+    names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'chrome.js', 'comments.js',
               'Mere_Catholicity_Logos.docx',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
               'library-order.json', 'kjv.json', 'dr.json'}

@@ -2233,23 +2233,26 @@ body.mc-app > footer { display: none; }
    would be a second lie, and the real bars arrive into their own shape within
    a frame of app.js.
 
-   `html.mc-noapp` is the escape hatch's own mark (nav.js sets it at once when
-   the `mc-app` latch is off, or ?app=0 is in the URL): a reader who asked for
-   the plain site keeps the plain site, title and footer and all. */
+   Two marks gate all of it. `html.mc-noapp` is the escape hatch's own (nav.js
+   sets it at once when the `mc-app` latch is off): a reader who asked for the
+   plain site keeps it, title and footer and all. `html.mc-bars` says the REAL
+   bars now stand — docs/chrome.js, the early bundle, mounts them within a
+   round trip of this paint — so the placeholders retire and the surfaces the
+   reader is looking at are the bars themselves. */
 @media (max-width: 600px) {
   html:not(.mc-noapp) body:not(.mc-app) > footer { display: none; }
   html:not(.mc-noapp) body:not(.mc-app) main.prose > .home-title,
   html:not(.mc-noapp) body:not(.mc-app) main.prose > #title-block-header { display: none; }
-  html:not(.mc-noapp) body:not(.mc-app)::before,
-  html:not(.mc-noapp) body:not(.mc-app)::after {
+  html:not(.mc-noapp):not(.mc-bars) body:not(.mc-app)::before,
+  html:not(.mc-noapp):not(.mc-bars) body:not(.mc-app)::after {
     content: ''; position: fixed; left: 0; right: 0; z-index: 40;
     background: var(--surface); pointer-events: none;
   }
-  html:not(.mc-noapp) body:not(.mc-app)::before {
+  html:not(.mc-noapp):not(.mc-bars) body:not(.mc-app)::before {
     top: 0; height: calc(var(--mc-appbar-h) + env(safe-area-inset-top, 0px));
     border-bottom: 1px solid var(--rule);
   }
-  html:not(.mc-noapp) body:not(.mc-app)::after {
+  html:not(.mc-noapp):not(.mc-bars) body:not(.mc-app)::after {
     bottom: 0; height: calc(var(--mc-tabbar-h) + env(safe-area-inset-bottom, 0px));
     border-top: 1px solid var(--rule);
   }
