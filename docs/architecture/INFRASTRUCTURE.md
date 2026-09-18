@@ -239,5 +239,6 @@ on page one.)
 - **The librarian spent the account's whole day of D1 writes in six minutes, and a worker deploy died wearing somebody else's name (2026-09-18).** — `log/2026-09.md`
 - **The pubid flip, ingress and client — the round trip closes (2026-09-18)** — `log/2026-09.md`
 - **The pubid needs no D1 write: the stored column becomes a read-built map, so the flip deploys with the write budget spent (2026-09-18)** — `log/2026-09.md`
+- **The public id is LIVE: layer three activated and verified in production (2026-09-18)** — `log/2026-09.md`
 
 <!-- infra-index:end -->
