@@ -22,6 +22,7 @@ import * as Prefs from '../../purescript/output/Domain.Prefs/index.js';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
 import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
+import * as Auth from '../../purescript/output/Domain.Auth/index.js';
 import * as Comments from '../../purescript/output/Domain.Comments/index.js';
 import * as Ops from '../../purescript/output/Domain.Ops/index.js';
 import * as Hub from '../../purescript/output/Domain.Hub/index.js';
@@ -78,6 +79,37 @@ export async function throttle(env: Pick<Env, Bucket> & Partial<Pick<Env, 'READ_
   return verdicts.every((v) => v.success);
 }
 
+/* The key floor (the 2026-09-17 review's P0, layer two). The hash the server
+   publishes is one unsalted round of SHA-256 over the key, so a guessable key is
+   a guessable account — offline, at GPU speed, with no request to rate-limit.
+   The server cannot judge a key after the fact; it can judge it at the moment it
+   is presented, which is every request, and that is what this is.
+   Refused on WRITES only (`POST_LIMIT`): a weak key may still read, so a member
+   who has one can sign in, see where they are and be told what to do rather
+   than meeting a wall. Strong and generated keys never reach D1 here, so the
+   floor costs the ordinary case nothing. `adminGated` reads it too — a cracked
+   admin key that cannot write is the whole point, and the console's owner is
+   subject to the same floor as everyone. The sentences are the kernel's
+   (`Domain.Auth.keyRefusal`), so the client and the worker say the same thing. */
+export async function keyFloor(env: Env, bucket: Bucket | null | undefined, key: string, me: string): Promise<Response | null> {
+  /* An EMPTY key is anonymity, not a weak identity: `key: 'optional'` roads let
+     it through to hash to the empty identity, and their own rules answer it
+     ("Not yours", and the like). Refusing it here would turn every one of those
+     handlers' answers into a 400 about key strength. */
+  if (!key || bucket !== 'POST_LIMIT' || Auth.keyAcceptable(key)) return null;
+  const known = !!(await env.DB.prepare('SELECT 1 AS v FROM profiles WHERE hash = ?1').bind(me).first());
+  if (known && weakKeyTolerated()) return null;
+  return json({ ok: false, error: Auth.keyRefusal(!known)(key), weak_key: true }, 400);
+}
+
+/* RETIRES 2026-10-18 (tests/_support/retirements.json). Until then a weak key
+   with history behind it still writes: the key IS the account, there is no
+   rotation road yet, and a member locked out on the day loses their posts,
+   their messages and their profile with it. Thirty days is the notice; the
+   ledger test goes red that morning so the choice is made deliberately —
+   delete this and its caller above, and the floor holds for every write. */
+function weakKeyTolerated(): boolean { return true; }
+
 /* Keyed-request preamble, single-sourced. Parse the JSON body, rate-limit
    (per member, with the address backstop) on `bucket`, then require + hash
    the identity key. Returns the resolved
@@ -93,6 +125,8 @@ export async function keyed(request: Request, env: Env, bucket: 'POST_LIMIT' | '
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
+  const floor = await keyFloor(env, bucket, key, me);
+  if (floor) return floor;
   return { ip, data, key, me };
 }
 export async function keyedGated(request: Request, env: Env, bucket: 'POST_LIMIT' | 'READ_LIMIT' | 'CONNECT_LIMIT'): Promise<Response | Gated> {
@@ -149,6 +183,8 @@ export async function gated(request: Request, env: Env, o: GateOpts = {}): Promi
   const key = String((data && data.key) || '');
   if (o.key !== 'optional' && !key) return json({ ok: false, error: o.missing || 'Bad request.' }, 400);
   const me = await sha256hex(key);
+  const floor = await keyFloor(env, o.bucket, key, me);
+  if (floor) return floor;
   if (o.block) {
     const g = await blockedReason(env, me, ip);
     if (g) return blockedJson(g);
@@ -167,7 +203,10 @@ export async function adminGated(request: Request, env: Env, o: { bucket?: 'POST
   }
   const key = String((data && data.key) || '');
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
-  return { ip, data, key, me: await sha256hex(key) };
+  const me = await sha256hex(key);
+  const floor = await keyFloor(env, o.bucket, key, me);
+  if (floor) return floor;
+  return { ip, data, key, me };
 }
 
 /* The keyless read preamble (a GET with URL params): the READ limit alone; the

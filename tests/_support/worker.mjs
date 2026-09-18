@@ -284,7 +284,18 @@ export function resetCaches() {
 
 /* the worker knows a member by sha256hex(key); seed the key deterministically */
 export async function identity(seed) {
-  const key = 'mc-test-identity-' + String(seed);
+  /* The suffix is not decoration: a test identity's key must clear the key
+     floor (`Domain.Auth.keyAcceptable`, 2026-09-18), because a real member
+     holds the generated 43-character key and a fixture the worker refuses on
+     every write would be testing the refusal instead of the road. Twenty-plus
+     characters over three classes is the floor; `weakIdentity` below is the
+     fixture for testing the floor ITSELF. */
+  const key = 'mc-test-identity-' + String(seed) + '-Aa1';
+  return { key, hash: await sha256hex(key) };
+}
+/* An identity whose key the floor refuses — one class under twenty characters. */
+export async function weakIdentity(seed) {
+  const key = 'guessable-' + String(seed);
   return { key, hash: await sha256hex(key) };
 }
 /* an ESTABLISHED identity — one that has passed a challenge — is not

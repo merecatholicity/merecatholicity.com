@@ -9,17 +9,22 @@
  * gate dropped; the admin door answering anything but "No." to a stranger. */
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeEnv, freshDb, identity, ORIGIN } from '../_support/worker.mjs';
+import { makeEnv, freshDb, identity, weakIdentity, ORIGIN } from '../_support/worker.mjs';
 import { gated, adminGated, readLimited, sha256hex } from '../../comments-worker/src/lib.ts';
 import { pipelineGated } from '../../comments-worker/src/oidc.ts';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 const req = (body, { method = 'POST', ip = '203.0.113.7' } = {}) => new Request(ORIGIN + '/x', {
   method, headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, Origin: ORIGIN },
   body: method === 'GET' ? undefined : (typeof body === 'string' ? body : JSON.stringify(body)),
 });
 const refusing = { limit: async () => ({ success: false }) };
-let me, adm;
-before(async () => { [me, adm] = await Promise.all(['me', 'adm'].map(identity)); });
+let me, adm, weak;
+before(async () => { [me, adm] = await Promise.all(['me', 'adm'].map(identity)); weak = await weakIdentity('eve'); });
 const body = async (r) => ({ status: r.status, ...(await r.json()) });
 
 test('gated: parse, limit, key, hash, block — each refusal with the text the option names', async () => {
@@ -78,4 +83,61 @@ test('pipelineGated: parse, then the caller — an admin key opens; anything els
     'the nightly\'s key is the ops door\'s alone');
   const r = await pipelineGated(req({ key: adm.key, probe: true }), env, ['ingest']);
   assert.deepEqual([r.data.probe, r.caller], [true, { road: 'admin' }]);
+});
+
+/* The key floor (the 2026-09-17 review's P0, layer two, 2026-09-18). The hash
+ * the server publishes is one unsalted round of SHA-256 over the key, so a
+ * guessable key is a guessable account — offline, at GPU speed, with nothing to
+ * rate-limit. The server cannot judge a key after the fact; it judges it at the
+ * moment it is presented. What would break silently here: the floor put on
+ * READS (a weak-key member should be able to sign in and be TOLD, not walled);
+ * the floor put on the anonymous empty key (every `key: 'optional'` road would
+ * answer 400 about key strength instead of its own rule); a D1 read spent on
+ * every strong key; or the 2026-10-18 tolerance quietly becoming permanent. */
+test('keyFloor: a weak key is refused on a WRITE and never on a read, and the anonymous empty key is not a weak one', async () => {
+  const db = freshDb();
+  const env = makeEnv({ db });
+  /* fresh identity, weak key, write → refused, in words that say what to do */
+  const r = await body(await gated(req({ key: weak.key }), env, { bucket: 'POST_LIMIT' }));
+  assert.equal(r.status, 400);
+  assert.equal(r.ok, false);
+  assert.equal(r.weak_key, true, 'the answer names the reason, so a client can say more than "400"');
+  assert.match(r.error, /Create an identity/, 'a fresh identity is sent to the generated key');
+  /* the same key READING is not refused: sign in, look around, be told */
+  const read = await gated(req({ key: weak.key }), env, { bucket: 'READ_LIMIT' });
+  assert.equal(read.me, weak.hash, 'a weak key still reads');
+  /* an optional empty key is anonymity, not a weak identity */
+  const anon = await gated(req({ x: 1 }), env, { bucket: 'POST_LIMIT', key: 'optional' });
+  assert.equal(anon.key, '', 'the empty identity passes to the handler, as it always did');
+  /* a good key never costs a D1 read */
+  const before = db.prepare('SELECT COUNT(*) AS n FROM profiles').get().n;
+  const good = await gated(req({ key: me.key }), env, { bucket: 'POST_LIMIT' });
+  assert.equal(good.me, me.hash);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM profiles').get().n, before, 'and leaves no trace');
+  db.close();
+});
+
+test('keyFloor: a weak key with history behind it still writes until 2026-10-18, and the ledger carries the date', async () => {
+  const db = freshDb();
+  const env = makeEnv({ db });
+  db.prepare('INSERT INTO profiles (hash, created_at) VALUES (?, 1)').run(weak.hash);
+  const r = await gated(req({ key: weak.key }), env, { bucket: 'POST_LIMIT' });
+  assert.equal(r.me, weak.hash, 'an existing member is not locked out of their own account overnight');
+  /* the tolerance is dated, not permanent: tests/worker/retire.test.mjs goes red
+     on the due date, which is the whole point of putting it in the ledger */
+  const ledger = JSON.parse(readFileSync(join(root, 'tests', '_support', 'retirements.json'), 'utf8'));
+  const entry = ledger.find((e) => /weakKeyTolerated/.test(e.pattern));
+  assert.ok(entry, 'the tolerance is named in the retirement ledger');
+  assert.equal(entry.due, '2026-10-18');
+  db.close();
+});
+
+test('keyFloor: the admin console is under the same floor — a cracked admin key that cannot write is the point', async () => {
+  const db = freshDb();
+  const env = makeEnv({ db });
+  db.prepare('INSERT INTO admins (hash, added_by, created_at) VALUES (?, ?, 1)').run(weak.hash, 'seed');
+  const r = await body(await adminGated(req({ key: weak.key }), env, { bucket: 'POST_LIMIT' }));
+  assert.equal(r.status, 400);
+  assert.equal(r.weak_key, true, 'admin authority does not exempt the key that carries it');
+  db.close();
 });

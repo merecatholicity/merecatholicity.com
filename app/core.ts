@@ -268,8 +268,15 @@ export const authIsAdmin = (s: Record<string, unknown>): boolean => Auth.isAdmin
 export const authIsMember = (s: Record<string, unknown>): boolean => Auth.isMember(authSignals(s));
 export const authGate = (s: Record<string, unknown>): string => Auth.gate(authSignals(s));
 /* authKeyStrength(key) -> 'generated' | 'strong' | 'weak' (Domain.Auth.keyStrength):
-   the identity key's shape; the sign-in warns on 'weak', never refuses. */
+   the identity key's shape. authKeyWarning(key) is the sentence the sign-in
+   ASKS on a weak key and '' otherwise — a question, never a refusal, because
+   the key IS the account and there is no rotation road yet, so refusing a
+   pasted weak key would lock an existing member out of their own history on a
+   new device. The refusal is the server's, on a WRITE (Domain.Auth.keyRefusal,
+   read by the worker's own gate); this is the half a reader sees first. */
 export const authKeyStrength = (key: unknown): string => Auth.keyStrengthTag(Auth.keyStrength(key == null ? '' : String(key)));
+export const authKeyAcceptable = (key: unknown): boolean => Auth.keyAcceptable(key == null ? '' : String(key));
+export const authKeyWarning = (key: unknown): string => Auth.keyWarning(key == null ? '' : String(key));
 
 /* Mute (Domain.Mute): a client-only list of hashes whose posts collapse for this
    reader. isMuted(bot, hash, list) is bot-exempt non-empty membership;

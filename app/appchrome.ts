@@ -1603,13 +1603,12 @@ function mcOnboard(onDone?: any, opts?: any) {
     if (!kit || !kit.loginWithKey) { location.href = 'profile.html'; return; }
     pasteBtn.disabled = true; note.textContent = 'Logging in…';
     kit.loginWithKey(key).then(function (ok: any) {
-      if (ok) {
-        /* a key anyone could guess is an account anyone could be — said once, never refused (Domain.Auth.keyStrength) */
-        if (window.mcCore && window.mcCore.authKeyStrength(key) === 'weak' && window.mcToast) {
-          window.mcToast('Signed in. This key is short enough to guess — anyone who guesses it is you. Consider a new identity, and save its key.');
-        }
-        done();
-      } else { note.textContent = 'That key was not recognized.'; pasteBtn.disabled = false; }
+      /* The weak-key question is asked inside loginWithKey — the one road every
+         pasted key takes — so there is nothing to say here but the outcome. A
+         reader who declined it is not told their key was unrecognized. */
+      if (ok === true) { done(); }
+      else if (ok === 'declined') { note.textContent = ''; pasteBtn.disabled = false; }
+      else { note.textContent = 'That key was not recognized.'; pasteBtn.disabled = false; }
     }).catch(function () { note.textContent = 'Could not log in. Try again.'; pasteBtn.disabled = false; });
   });
 

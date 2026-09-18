@@ -103,7 +103,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   value, refused and told. The workers hold no `any` and the env's type brand is refused as an answer, a row or an event.
   `env_leak.test` sweeps every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and API.md shape
   in its own commit, is documented by CALLING it, and ships after `/security-review`.
-- **A member's hash is their key's unsalted SHA-256**: no keyless road serves one (`POST /dm/directory`, uncached, 2026-09-18).
+- **A member's hash is their key's unsalted SHA-256** (the P0 chain, 2026-09-18): no keyless road serves the roster (`POST
+  /dm/directory`, uncached); a `weak` key (`Domain.Auth.keyAcceptable`) is refused on WRITES (`keyFloor`, one preamble), never
+  on a read and never at sign-in (a question, not a wall: no rotation road yet); existing weak keys tolerated to 2026-10-18
+  (a ledger date). `scripts/key_audit.py` is the wordlist run against the live roster that gates layer three.
 - **`?v=` keys are stamped** (`scripts/stamp_versions.py`: nav.js, the pages, `partials/*`,
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new
@@ -167,16 +170,13 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   see is unheld or their own, after their clear stamp, no older than their joining (a newcomer
   gets no history), and in a group never from a sender they blocked (a PAIR keeps its stored
   shadow-hold — a blocked sender is never told).
-- **Envelope v2** (`enc` 3, `E3.`): a random content key per message under `nacl.secretbox`, boxed
-  once per current member (the sender included) to their published X25519 key and stored in
-  `dm_keys` — the server serves each reader ONLY their own `sealed`; the key set must equal the
-  roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and sealed once more; an
-  edit re-seals under the SAME key; a pair's `E1` words stay readable for ever (and are accepted
-  on the wire one deploy longer).
-- **An object dies with its LAST reference** (`dm_media_refs`): a forwarded attachment is never
-  uploaded twice — the copy names the same object, allowed only to a member who can read it (the
-  media GET's own rule, `dmMediaReadable`) — so every message road calls `releaseMediaRefs`, never
-  `purgeMediaKeys` directly; the 30-day cap and the LRU valve take an object from under EVERY
+- **Envelope v2** (`enc` 3, `E3.`): a random content key per message under `nacl.secretbox`, boxed once per current member (the
+  sender included) to their published X25519 key and stored in `dm_keys` — the server serves each reader ONLY their own `sealed`;
+  the key set must equal the roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and sealed once more; an edit
+  re-seals under the SAME key; a pair's `E1` words stay readable for ever (and are accepted on the wire one deploy longer).
+- **An object dies with its LAST reference** (`dm_media_refs`): a forwarded attachment is never uploaded twice — the copy names
+  the same object, allowed only to a member who can read it (the media GET's own rule, `dmMediaReadable`) — so every message road
+  calls `releaseMediaRefs`, never `purgeMediaKeys` directly; the 30-day cap and the LRU valve take an object from under EVERY
   message naming it; the orphan sweep takes what nothing names; `dm_media.msg_id` is retired.
 - **The bottom bar is SIX EQUAL TABS** — no raised hero (a six-item bar cannot centre one).
   Each is `flex: 1 1 0; min-width: 0` with a nowrap, viewport-scaled label: a tab left at
@@ -214,11 +214,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   the window so the sheet under it stays). `FOOTER_LINKS` is the one list — a new footer door goes
   there. Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the
   document's.
-- **Presence is the hub's word alone, and the hub is SHARDED** (`Domain.Hub`, 2026-09-17): online
-  is a live socket under mode "auto" (`Domain.Presence.isVisible`); `profiles.last_seen_at` is the
-  BoardHub's alone (the last disconnect under "auto" stamps, an "off" auth clears; the mode rides
-  the auth frame, never a column — served as-is, which IS the privacy rule). `HUB_SHARDS` instances,
-  a member's every socket on the shard their hash names (`?h=`), reached only via `lib.ts` `hub*`.
+- **Presence is the hub's word alone, and the hub is SHARDED** (`Domain.Hub`, 2026-09-17): online is a live socket under mode
+  "auto" (`Domain.Presence.isVisible`); `profiles.last_seen_at` is the BoardHub's alone (the last disconnect under "auto" stamps,
+  an "off" auth clears; the mode rides the auth frame, never a column — served as-is, which IS the privacy rule). `HUB_SHARDS`
+  instances, a member's every socket on the shard their hash names (`?h=`), reached only via `lib.ts` `hub*`.
 - **The fixed chrome answers the finger, not the platform's click** (2026-09-13): a phone
   synthesizes the click after the finger lifts and withholds it at will (iOS: a tap that stops a
   decelerating page; a tap whose hover it judges to have changed content — live: Inbox pressed,

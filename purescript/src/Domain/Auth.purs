@@ -19,6 +19,9 @@ module Domain.Auth
   , KeyStrength(..)
   , keyStrength
   , keyStrengthTag
+  , keyAcceptable
+  , keyRefusal
+  , keyWarning
   ) where
 
 import Prelude
@@ -85,10 +88,28 @@ stateTag st = case st of
 -- | The identity key's shape (P2-9, 2026-09-16). The key IS the account: a
 -- | guessable one is an account anyone can be. `makeKey` mints 32 random bytes
 -- | as 43 base64url characters — `Generated`; a pasted key of twenty or more
--- | characters drawing on three character classes is `Strong`; anything else
--- | that the sign-in still accepts (sixteen characters or more) is `Weak`, and
--- | the client says so — a warning, never a refusal: custom keys exist and a
--- | refusal would lock their holders out.
+-- | characters drawing on three character classes is `Strong`; anything else is
+-- | `Weak`.
+-- |
+-- | Until 2026-09-18 a `Weak` key was a toast and nothing more — "a warning,
+-- | never a refusal", because custom keys exist and a refusal locks their
+-- | holders out. That reasoning was sound about SIGN-IN and wrong about
+-- | everything else: the hash the server publishes is one unsalted round of
+-- | SHA-256 over the key, so a guessable key is a guessable account, offline,
+-- | at GPU speed (the 2026-09-17 review's P0). The law now has three parts, and
+-- | the distinction between them is the whole design:
+-- |
+-- |   * `keyRefusal` — a WRITE from a `Weak` key. A new identity is refused
+-- |     outright; an existing one is refused from 2026-10-18 (the ledger entry
+-- |     in tests/_support/retirements.json carries the date). The server cannot
+-- |     judge a key after the fact, but it sees the key on every request, so
+-- |     this is the one moment it can.
+-- |   * `keyWarning` — what a reader is told at sign-in. Never a refusal: a key
+-- |     is the account, there is no rotation road yet, and refusing a pasted
+-- |     `Weak` key would lock an existing member out of their own history on a
+-- |     new device. The client asks; the reader decides.
+-- |   * `keyAcceptable` — the predicate both sides read, so the floor is stated
+-- |     once. A generated key passes it by construction.
 data KeyStrength = Generated | Strong | Weak
 
 derive instance eqKeyStrength :: Eq KeyStrength
@@ -113,3 +134,28 @@ keyStrengthTag :: KeyStrength -> String
 keyStrengthTag Generated = "generated"
 keyStrengthTag Strong = "strong"
 keyStrengthTag Weak = "weak"
+
+-- | The floor, stated once: anything but `Weak`. Twenty characters over three
+-- | character classes, or the generated forty-three.
+keyAcceptable :: String -> Boolean
+keyAcceptable k = keyStrength k /= Weak
+
+-- | What a WRITE from this key is refused with, or "" when it stands. `fresh`
+-- | is true when the identity has no history behind it — a hash the server has
+-- | never seen. Both answers say what to do, because a refusal a reader cannot
+-- | act on is just a wall.
+keyRefusal :: Boolean -> String -> String
+keyRefusal fresh k
+  | keyAcceptable k = ""
+  | fresh =
+      "That key is short enough to guess, and a guessed key is your account. Create an identity instead — the key it generates is the only shape this is safe under."
+  | otherwise =
+      "This key is short enough to guess, and posting under it is no longer allowed. Create a new identity and save the key it gives you."
+
+-- | What a reader is TOLD when they sign in with this key, or "" when it stands.
+-- | A sentence, not a refusal — see the note above.
+keyWarning :: String -> String
+keyWarning k
+  | keyAcceptable k = ""
+  | otherwise =
+      "This key is short enough for someone to guess, and anyone who guesses it is you — they could read your messages and post as you. Sign in anyway?"

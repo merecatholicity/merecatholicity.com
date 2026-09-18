@@ -1,5 +1,13 @@
 [
  {
+  "what": "weakKeyTolerated — a WEAK identity key that already has history behind it may still write",
+  "where": "comments-worker/src/lib.ts",
+  "pattern": "function weakKeyTolerated\\(",
+  "since": "2026-09-18",
+  "due": "2026-10-18",
+  "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. Thirty days is the notice a member gets. Before the date: run scripts/key_audit.py over the live roster — anyone it names loses their posts, messages and profile on the day, because the key IS the account and there is no rotation road yet (that ships with layer three). If one falls and cannot be reached, move this date with the reason written here rather than locking them out."
+ },
+ {
   "what": "POST /api/comments/dm/like — the 2026-08-03 heart, kept one deploy for cached clients",
   "where": "comments-worker/src/index.ts",
   "pattern": "p: '/api/comments/dm/like'",

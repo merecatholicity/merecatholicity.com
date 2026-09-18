@@ -573,16 +573,35 @@ export function installProfile(B: Boot) {
       return { key: key, hash: h };
     });
   }
+  /* The ONE road a pasted key takes into an identity — the key box here, the
+     onboarding sheet's paste box, and a scanned QR all arrive at this function,
+     so the weak-key question lives here rather than at each door (the lesson of
+     the Turnstile sweep: a law named at one call site is a list, not a law).
+     A weak key is ASKED about, never refused: the key IS the account, there is
+     no rotation road yet, and refusing a pasted key would lock a member who
+     already holds a weak one out of their own history on a new device. The
+     REFUSAL is the server's, and only on a write (Domain.Auth.keyRefusal).
+     Resolves true (signed in), 'declined' (the reader read the question and said
+     no) or false (that is not a key at all) — three answers because a caller
+     must not tell a reader who declined that their key was unrecognized. */
   function loginWithKey(key: any) {
     key = String(key || '').trim();
     if (key.length < 16) return Promise.resolve(false);
-    setKey(key);
-    state.key = key;
-    try { localStorage.removeItem(DM_CACHE); } catch (e) {}
-    return sha256hex(key).then(function (h) {
-      state.myHash = h;
-      enableMemberLive();
-      return true;
+    var warn = window.mcCore ? window.mcCore.authKeyWarning(key) : '';
+    var asked: Promise<boolean> = warn
+      ? new Promise<boolean>(function (res) { appConfirm(warn, { okLabel: 'Sign in anyway' }, res); })
+      : Promise.resolve(true);
+    /* resolves true | 'declined' | false — see the note above */
+    return asked.then(function (ok: boolean): boolean | string | Promise<boolean> {
+      if (!ok) return 'declined';
+      setKey(key);
+      state.key = key;
+      try { localStorage.removeItem(DM_CACHE); } catch (e) {}
+      return sha256hex(key).then(function (h) {
+        state.myHash = h;
+        enableMemberLive();
+        return true;
+      });
     });
   }
 
@@ -1251,7 +1270,8 @@ export function installProfile(B: Boot) {
     confirmFn(msg, { okLabel: 'Sign in' }).then(function (ok: any) {
       if (!ok) return;
       loginWithKey(key).then(function (good: any) {
-        if (good) location.reload();
+        if (good === true) location.reload();
+        else if (good === 'declined') { /* they read the question and said no */ }
         else if (window.mcToast) window.mcToast('That key was not recognized.');
       });
     });

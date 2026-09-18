@@ -229,5 +229,6 @@ on page one.)
 - **The challenge was asking nobody anything: established now means a challenge was passed (2026-09-17)** — `log/2026-09.md`
 - **Somewhere to go: a thread is a page now (2026-09-17)** — `log/2026-09.md`
 - **The roster stops being an anonymous read: the first of the P0's three layers (2026-09-18)** — `log/2026-09.md`
+- **A real floor under the key, refused server-side: the P0's second layer (2026-09-18)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

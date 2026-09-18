@@ -131,7 +131,17 @@ generated 43-character key is the only shape this design is actually safe under
 — a client that lets a member invent one should say so plainly.
 
 - **Generate:** 32 random bytes → base64url (`+`→`-`, `/`→`_`, strip `=`), ~43
-  chars. (Web client: `crypto.getRandomValues` + `btoa`.)
+  chars. (Web client: `crypto.getRandomValues` + `btoa`.) **Do this; do not let a
+  member type a key.** A generated key is the only shape safe under §2.2.
+- **The weak-key floor (2026-09-18).** A key of fewer than twenty characters, or
+  drawing on fewer than three character classes, is `weak`. A WRITE (a
+  `POST_LIMIT` road) from a weak key is refused `400 {ok:false, weak_key:true,
+  error:"…"}` — outright for an identity with no history, and, from **2026-10-18**,
+  for every identity. A read is never refused, so a member holding a weak key can
+  still sign in and be told. Your client should mirror this: refuse to MINT a weak
+  key, and ask (never silently refuse) when a member pastes one, because the key
+  is the account and there is no rotation road yet. The rule is one predicate,
+  `Domain.Auth.keyAcceptable`, shared by client and server.
 - **Transport of the key:** JSON body field `key` on keyed POSTs; multipart
   field `key` on avatar upload; WS frame `{"t":"auth","key":"…"}` on the chat
   socket. Never in a URL.
