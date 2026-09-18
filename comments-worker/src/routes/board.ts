@@ -33,7 +33,10 @@ import {
   journalKey,
   journalKeyId,
   json,
+  cloakIds,
+  resolveId,
   keyFloor,
+  serveId,
   keyedGated,
   merecatMentioned,
   metaForHash,
@@ -100,7 +103,7 @@ async function handleGet(request: Request, env: Env, url: URL) {
     "WHERE c.page = ?1 AND c.status = 'live' AND " + shadowExcl('c') + " ORDER BY c.id LIMIT 500"
   ).bind(page).all<AuthoredRow>();
   const counts = await postCountsFor(env, (rows.results || []).map((r) => r.author_hash));
-  const comments = (rows.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0));
+  const comments = await Promise.all((rows.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h))));
   await stampReactions(env, 'post', comments, null);   // the tallies; the viewer's own ride /reacts
   return json({ ok: true, anon: env.ALLOW_ANON === 'true', comments: comments }, 200,
     cacheHeader(url));
@@ -367,10 +370,10 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
     }).catch((e) => console.log(JSON.stringify({ event: 'discord_hooks_failed', error: String(e) }))));
   }
 
-  return json({ ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
+  return json(await cloakIds(env, { ok: true, status, comment: { id: inserted.id, title, author_hash: authorHash,
     nick: prof && prof.nick || null, signature: prof && prof.signature || null, avatar: prof && prof.avatar || null,
     faith: prof && prof.faith || null,
-    body, created_at: createdAt, media_key: media ? media.key : null } }, 200);
+    body, created_at: createdAt, media_key: media ? media.key : null } }), 200);
 }
 
 async function handleSelfDelete(request: Request, env: Env, ctx: ExecutionContext) {
@@ -665,7 +668,9 @@ async function handleMeta(request: Request, env: Env) {
   /* A profile asks by identity hash, a page by page name. Same drawer either
      way, so both return { meta: [...], identities: {...} }. */
   const hashParam = String(data.hash || '');
-  if (/^[0-9a-f]{64}$/.test(hashParam)) return await metaForHash(env, hashParam);
+  /* the fingerprint is addressed by a pubid (the P0 chain L3) — resolve it to
+     the account hash the ledger is keyed by; an unknown id has no history */
+  if (/^[0-9a-f]{64}$/.test(hashParam)) return await metaForHash(env, (await resolveId(env, hashParam)) || hashParam);
   const page = normalizePage(data.page) || boardKey(data.page) || journalKey(data.page);
   if (!page) return json({ ok: false, error: 'Bad request.' }, 400);
   const rows = await env.DB.prepare(
@@ -715,7 +720,7 @@ async function handleMeta(request: Request, env: Env) {
       });
     }
   }
-  return json({ ok: true, meta: list, identities }, 200);
+  return json(await cloakIds(env, { ok: true, meta: list, identities }), 200);
 }
 
 /* The board index: per-category topic and post counts with last activity. */
@@ -742,14 +747,14 @@ async function handleBoardIndex(request: Request, env: Env, url: URL) {
     ') WHERE rn = 1'
   ).all<{ page: string; author_hash: string | null; nick: string | null; created_at: number; title: string | null; post_id: number; topic_id: number; topics: number; posts: number }>();
   const cats: Record<string, Body> = {};
-  rows.results.forEach(function (r) {
+  for (const r of rows.results) {
     cats[r.page.slice(6)] = {
       topics: r.topics,
       posts: r.posts,
       last: r.created_at,
-      latest: withNames({ topic_id: r.topic_id, id: r.post_id, title: r.title, author_hash: r.author_hash, nick: r.nick, created_at: r.created_at }),
+      latest: await withNames({ topic_id: r.topic_id, id: r.post_id, title: r.title, author_hash: r.author_hash, nick: r.nick, created_at: r.created_at }, null, (h) => serveId(env, h)),
     };
-  });
+  }
   return json({ ok: true, cats }, 200, cacheHeader(url));
 }
 
@@ -836,11 +841,11 @@ async function handleSearch(request: Request, env: Env, url: URL) {
       'SELECT COUNT(*) AS n FROM comments_fts JOIN comments c ON c.id = comments_fts.rowid ' +
       'LEFT JOIN comments pt ON pt.id = c.parent_id ' + where
     ).bind(...binds).first<{ n: number }>();
-    const items = (rows.results || []).map((r) => withNames({
+    const items = await Promise.all((rows.results || []).map((r) => withNames({
       comment_id: r.comment_id, topic_id: r.topic_id, title: r.title,
       author_hash: r.author_hash, nick: r.nick, cat: String(r.page).slice(6),
       created_at: r.created_at, snip: r.snip,
-    }));
+    }, null, (h) => serveId(env, h))));
     return json({ ok: true, items, total: (totalRow && totalRow.n) || 0, page: p, per, q: qRaw }, 200, cacheHeader(url));
   } catch (e) {
     console.log(JSON.stringify({ event: 'search_failed', error: String(e) }));
@@ -1105,7 +1110,7 @@ async function handleAudit(request: Request, env: Env) {
     "LEFT JOIN comments t ON t.id = COALESCE(c.parent_id, c.id) " +
     "WHERE c.status != 'deleted' GROUP BY r.comment_id ORDER BY report_count DESC, last_reported DESC LIMIT 200"
   ).all();
-  return json({ ok: true, reports: reports.results, pages: pages.results, topics: topics.results, days: 14 }, 200);
+  return json(await cloakIds(env, { ok: true, reports: reports.results, pages: pages.results, topics: topics.results, days: 14 }), 200);
 }
 
 /* Watch, unwatch, or read the state of a thread. Posting a reply auto-watches;
@@ -1364,7 +1369,7 @@ async function handlePending(request: Request, env: Env) {
     "FROM wall_comments c LEFT JOIN profiles pr ON pr.hash = c.author_hash WHERE c.status = 'pending'" +
     ") ORDER BY created_at DESC LIMIT 200"
   ).all();
-  return json({ ok: true, pending: rows.results, pending_wall: wp.results || [] }, 200);
+  return json(await cloakIds(env, { ok: true, pending: rows.results, pending_wall: wp.results || [] }), 200);
 }
 
 export {

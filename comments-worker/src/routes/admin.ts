@@ -26,6 +26,7 @@ import {
   parseFeedScope,
   scopeLabel,
   json,
+  cloakIds,
   keyFloor,
   ptrLookup,
   purgeWallMedia,
@@ -478,7 +479,7 @@ async function handleAdmins(request: Request, env: Env) {
     for (const r of (rows.results || [])) nick[r.hash] = r.nick;
     for (const a of list) { a.nick = nick[a.hash] || null; a.assigned = displayName(a.hash); }
   }
-  return json({ ok: true, admins: list }, 200);
+  return json(await cloakIds(env, { ok: true, admins: list }), 200);
 }
 
 /* Grant or revoke admin. Every admin is equal: any admin may promote a member

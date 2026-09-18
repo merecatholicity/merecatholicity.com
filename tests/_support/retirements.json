@@ -1,5 +1,13 @@
 [
  {
+  "what": "resolveId's `OR hash = ?1` arm — an old raw account hash accepted where a pubid is now the wire id",
+  "where": "comments-worker/src/lib.ts",
+  "pattern": "OR hash = \\?1",
+  "since": "2026-09-18",
+  "due": "2026-10-18",
+  "how": "once every shared `profile.html?u=<hash>` link and push `?dm=<hash>` URL minted before the L3 flip has aged out (30 days), drop the `OR hash = ?1` from resolveId so only a pubid resolves; an account hash on the wire is then simply unknown."
+ },
+ {
   "what": "weakKeyTolerated — a WEAK identity key that already has history behind it may still write",
   "where": "comments-worker/src/lib.ts",
   "pattern": "function weakKeyTolerated\\(",

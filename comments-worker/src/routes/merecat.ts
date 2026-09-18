@@ -13,6 +13,7 @@ import {
   boardKey,
   isAdminHash,
   json,
+  cloakIds,
   keyFloor,
   merecatConfig,
   merecatConfigCache,
@@ -72,7 +73,7 @@ async function handleMerecatAdminThreads(request: Request, env: Env) {
     for (const r of (prof.results || [])) nicks[r.hash] = r.nick;
   }
   for (const t of threads) t.nick = nicks[t.hash] || null;
-  return json({ ok: true, threads, total: (total && total.n) || 0, page: pg, per }, 200);
+  return json(await cloakIds(env, { ok: true, threads, total: (total && total.n) || 0, page: pg, per }), 200);
 }
 
 async function handleMerecatAdminThread(request: Request, env: Env) {
@@ -91,7 +92,7 @@ async function handleMerecatAdminThread(request: Request, env: Env) {
   ).bind(id).all();
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(chat.hash).first();
   chat.nick = (prof && prof.nick) || null;
-  return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
+  return json(await cloakIds(env, { ok: true, chat, msgs: msgs.results || [] }), 200);
 }
 
 /* Status for the admin page: which model answers and where the community
@@ -150,7 +151,7 @@ async function handleMerecatChat(request: Request, env: Env) {
   const msgs = await env.LIBDB.prepare(
     'SELECT id, role, body, sources, created_at, COALESCE(done, 1) AS done FROM chat_msgs WHERE chat_id = ?1 ORDER BY id LIMIT 400'
   ).bind(id).all();
-  return json({ ok: true, chat, msgs: msgs.results || [] }, 200);
+  return json(await cloakIds(env, { ok: true, chat, msgs: msgs.results || [] }), 200);
 }
 
 async function handleMerecatChatDelete(request: Request, env: Env) {

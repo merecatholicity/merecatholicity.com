@@ -21,7 +21,10 @@ import {
   isAdminHash,
   isTrusted,
   json,
+  cloakIds,
+  resolveId,
   keyFloor,
+  serveId,
   keyedGated,
   notifyReact,
   retractReactNotif,
@@ -69,7 +72,7 @@ async function handleWallFeed(request: Request, env: Env) {
   const list = rows.results || [];
   const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
-  return json({ ok: true, posts, next, me: r.me }, 200);
+  return json(await cloakIds(env, { ok: true, posts, next, me: r.me }), 200);
 }
 
 /* One member's wall (their own posts), keyset-paged like the feed. */
@@ -89,7 +92,7 @@ async function handleWall(request: Request, env: Env) {
   const list = rows.results || [];
   const posts = await wallEnrich(env, list, r.me);
   const next = list.length === WALL_PER_PAGE ? list[list.length - 1].id : 0;
-  return json({ ok: true, posts, next, me: r.me, hash }, 200);
+  return json(await cloakIds(env, { ok: true, posts, next, me: r.me, hash }), 200);
 }
 
 /* A single post is PUBLIC (unlike the feed listing, which stays members-only via
@@ -130,7 +133,7 @@ async function handleWallPostGet(request: Request, env: Env) {
     ).bind(me, id, Math.floor(Date.now() / 1000)).run();
     notifUnread = await notifUnreadCount(env, me);
   }
-  return json({ ok: true, post: enriched[0], comments, me, notif_unread: notifUnread }, 200);
+  return json(await cloakIds(env, { ok: true, post: enriched[0], comments, me, notif_unread: notifUnread }), 200);
 }
 
 /* ---- Reactions on public posts (2026-09-12) ----
@@ -272,7 +275,7 @@ async function handleReactWho(request: Request, env: Env) {
   const who = all.slice(0, LIMIT).map((r) => ({
     hash: r.author_hash, nick: r.nick || displayName(r.author_hash), avatar: r.avatar || null, emoji: String(r.emoji || ''),
   }));
-  return json({ ok: true, target, id, who, likers: who, more }, 200);
+  return json(await cloakIds(env, { ok: true, target, id, who, likers: who, more }), 200);
 }
 
 /* Coalesced like-notification (mirror of notifyDm): one unread row per
@@ -489,7 +492,7 @@ async function handleRecent(request: Request, env: Env, url: URL) {
      mapper — so the ROW it copied was the worker env and this public, keyless,
      CACHEABLE endpoint served every binding and secret it holds. */
   const counts = await postCountsFor(env, page.map((r) => r.author_hash));
-  const items = page.map((r) => withNames(r, counts[r.author_hash] || 0));
+  const items = await Promise.all(page.map((r) => withNames(r, counts[r.author_hash] || 0, (h) => serveId(env, h))));
   return json({ ok: true, items, page: p, more: (rows.results || []).length > PER },
     200, cacheHeader(url));
 }

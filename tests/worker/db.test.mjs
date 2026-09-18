@@ -42,18 +42,22 @@ test('rankFor maps counts to the ladder labels (Domain.Rank)', () => {
   assert.equal(rankFor('nan'), 'Novice'); // coerces junk -> 0
 });
 
-test('withNames attaches assigned pseudonym + rank only when posts known', () => {
+test('withNames attaches assigned pseudonym + rank only when posts known (async since the P0 L3 flip)', async () => {
   const hash = 'a'.repeat(64);
-  const named = withNames({ author_hash: hash, nick: 'x' }, 250);
+  /* no `serve` resolver: the raw hash rides (the valve), assigned is derived from it */
+  const named = await withNames({ author_hash: hash, nick: 'x' }, 250);
   assert.equal(typeof named.assigned, 'string');
   assert.equal(named.nick, 'x');          // existing fields preserved
   assert.equal(named.posts, 250);
   assert.equal(named.rank, 'Scribe');
   // no posts arg -> no rank/posts written, assigned still set
-  const bare = withNames({ author_hash: hash });
+  const bare = await withNames({ author_hash: hash });
   assert.equal(typeof bare.assigned, 'string');
   assert.equal(bare.posts, undefined);
   assert.equal(bare.rank, undefined);
   // null author_hash -> assigned null
-  assert.equal(withNames({ author_hash: null }).assigned, null);
+  assert.equal((await withNames({ author_hash: null })).assigned, null);
+  // WITH a resolver, author_hash becomes the pubid and assigned is derived from it
+  const cloaked = await withNames({ author_hash: hash }, null, async () => 'b'.repeat(64));
+  assert.equal(cloaked.author_hash, 'b'.repeat(64), 'the wire carries the pubid, not the account hash');
 });

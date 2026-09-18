@@ -88,9 +88,9 @@ test('the sealed env reads like the env, and refuses to be copied, listed, seria
   assert.deepEqual(takeTrips(env), [], 'and reported once');
 });
 
-test('the very bug: handing the env to the row mapper now throws instead of copying every secret', () => {
+test('the very bug: handing the env to the row mapper now rejects instead of copying every secret (withNames is async since the P0 L3 flip)', async () => {
   const env = sealEnv({ DB: {}, TURN_KEY_SECRET: SECRET });
-  assert.throws(() => withNames(env, []), EnvLeak);
+  await assert.rejects(() => withNames(env, []), EnvLeak);
   assert.deepEqual(takeTrips(env), ['enumerated']);
 });
 

@@ -62,9 +62,18 @@ export function rankFor(n: unknown): string {
  *  pseudonym the client would otherwise derive itself (displayName), and `rank`
  *  the ladder label — supplied whenever the post count is known. Additive: the
  *  existing `nick`/`posts` fields are unchanged. */
-export function withNames(row: AuthoredRow, posts?: number | null): AuthoredRow {
+/* `serve` maps an account hash to the public id that crosses the wire (lib.ts
+   serveId, the P0 chain L3). Passed IN rather than imported so db.ts stays free
+   of lib.ts (they would otherwise import each other). `author_hash` KEEPS ITS
+   NAME and takes the pubid as its value, and `assigned` is derived from that
+   pubid, so a client computes the same pseudonym from the id it receives. With
+   no `serve` (or none set), the raw hash rides — the pre-L3 valve. */
+export type IdServe = (hash: string) => Promise<string | null>;
+export async function withNames(row: AuthoredRow, posts?: number | null, serve?: IdServe): Promise<AuthoredRow> {
   const out: AuthoredRow = Object.assign({}, row);
-  out.assigned = row.author_hash ? Pseudonym.displayName(row.author_hash) : null;
+  const pid = row.author_hash ? (serve ? await serve(row.author_hash) : row.author_hash) : null;
+  if (row.author_hash) out.author_hash = pid;
+  out.assigned = pid ? Pseudonym.displayName(pid) : null;
   if (posts != null) { out.posts = posts; out.rank = rankFor(posts); }
   return out;
 }

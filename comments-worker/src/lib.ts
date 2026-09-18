@@ -342,6 +342,178 @@ export async function sha256hex(text: string) {
   return [...new Uint8Array(digest)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
+/* ================= The public id (the P0 chain, layer three) =================
+   A member's PUBLIC identifier is no longer `SHA-256(key)` — the digest the
+   server also stores to verify the key, one unsalted round from the key itself.
+   It is `pubid = SHA-256(PUBLIC_ID_PEPPER || hash)`: same 64-hex shape, so every
+   client-side `[0-9a-f]{64}` check still matches and the client keeps treating a
+   member id opaquely, but inverting it needs a secret the edge never serves. The
+   account `hash` stays D1's primary key and NEVER crosses the wire.
+
+     serveId(hash)   -> the pubid to PUT ON the wire (egress). Deterministic;
+                        also fills the reverse map so resolveId can undo it.
+     resolveId(id)   -> the account hash a wire id names (ingress), or null for
+                        an id no member wears. Accepts an OLD raw hash too, for
+                        one deploy, so shared `?u=<hash>` links do not break.
+
+   SAFETY VALVE: with no pepper set, serveId returns the raw hash and resolveId
+   treats its input as one — i.e. exactly the pre-layer-3 behaviour. So the code
+   can deploy BEFORE the secret is set (it serves hashes until the pepper lands,
+   then flips to pubids on the next request) and a lost/rotated pepper degrades
+   to the old exposure rather than breaking every read. `egress.ts` refuses every
+   answer carrying the pepper's value (it is not a PUBLIC_VAR). */
+const _h2p = new Map<string, string>();   // hash  -> pubid (per isolate)
+const _p2h = new Map<string, string>();   // pubid -> hash
+const _stored = new Set<string>();         // hashes whose pubid we have written this isolate
+
+/* Test seam: the caches persist across a worker instance; a hermetic test that
+   swaps the pepper (or the db) must clear them, as it clears appSettingsCache. */
+export function clearIdCaches() { _h2p.clear(); _p2h.clear(); _stored.clear(); }
+
+/* The pubid for a hash — pure and deterministic, cached. No D1. Returns the raw
+   hash when no pepper is set (the valve). */
+export async function pubidOf(env: Env, hash: string): Promise<string> {
+  if (!hash) return hash;
+  const pepper = env.PUBLIC_ID_PEPPER ? String(env.PUBLIC_ID_PEPPER) : '';
+  if (!pepper) return hash;
+  const hit = _h2p.get(hash);
+  if (hit) return hit;
+  const pid = await sha256hex(pepper + hash);
+  _h2p.set(hash, pid);
+  _p2h.set(pid, hash);
+  return pid;
+}
+
+/* Egress: the id to serve for this hash, and — on the first serve of a member in
+   this isolate — a stored `profiles.pubid` so the reverse lookup can undo it.
+   The store is guarded (only when the row lacks this pubid) and cached, so it is
+   at most one write per member per isolate; a member a client can ever name is a
+   member the client was first SERVED, so the reverse map is always filled for
+   the ids in circulation. A read path may lack a write context, so the store is
+   best-effort (a failure just means resolveId falls back to a live digest scan,
+   below). Never serves the empty/again the raw hash once a pepper is set. */
+export async function serveId(env: Env, hash: string | null | undefined): Promise<string | null> {
+  if (!hash) return hash ?? null;
+  const pid = await pubidOf(env, hash);
+  if (pid === hash) return pid;   // no pepper: the valve
+  if (!_stored.has(hash)) {
+    _stored.add(hash);
+    try {
+      await env.DB.prepare(
+        'INSERT INTO profiles (hash, created_at, pubid) VALUES (?1, ?2, ?3) '
+        + 'ON CONFLICT(hash) DO UPDATE SET pubid = ?3 WHERE profiles.pubid IS NOT ?3'
+      ).bind(hash, Math.floor(Date.now() / 1000), pid).run();
+    } catch (e) { _stored.delete(hash); /* retry next time */ }
+  }
+  return pid;
+}
+
+/* Ingress: the account hash a wire id names, or null. A pubid resolves through
+   the stored map (filled by serveId / registerMember / the daily backfill); an
+   id absent from the map but present as a raw `profiles.hash` is honoured for
+   one deploy (an old `?u=<hash>` link) — drop that arm once the tolerance is due
+   (tests/_support/retirements.json). With no pepper, the id IS the hash. */
+export async function resolveId(env: Env, id: string | null | undefined): Promise<string | null> {
+  if (!id || !/^[0-9a-f]{64}$/.test(String(id))) return null;
+  const wire = String(id);
+  if (!env.PUBLIC_ID_PEPPER) return wire;   // the valve: an id is a hash
+  const cached = _p2h.get(wire);
+  if (cached) return cached;
+  const row = await env.DB.prepare(
+    'SELECT hash FROM profiles WHERE pubid = ?1 OR hash = ?1 LIMIT 1'
+  ).bind(wire).first<{ hash: string }>();
+  if (row && row.hash) { _p2h.set(wire, row.hash); return row.hash; }
+  return null;
+}
+
+/* Fill `profiles.pubid` for every member and every orphan identity (a hash that
+   only ever appeared as an author/sender and never got a profiles row), so the
+   reverse map is complete without waiting to be served. Bounded by the member
+   count; a daily-chain step and a backstop the deploy can call. */
+/* Cloak every account hash inside a response body or a hub frame — the id
+   fields (single, array, and the `keys` map keyed BY id) named below — into
+   pubids, in ONE place so a new frame or row does not have to remember (the P0
+   chain L3). Only a 64-hex VALUE in a named id field is touched, so a call id
+   (`call`), a media key (`media_key`) or a nick riding an id-named field is
+   never mangled. `assigned` is recomputed from the pubid when it sits beside a
+   cloaked `hash`/`author_hash`/`sender_hash`, so the pseudonym matches the id.
+   Returns a cloaked DEEP COPY; the input is untouched. The hash_leak sweep
+   proves the field list is complete. */
+const ID_FIELDS = new Set([
+  'hash', 'author_hash', 'sender_hash', 'actor_hash', 'from_hash', 'to_hash',
+  'other_hash', 'owner_hash', 'blocked_hash', 'from', 'to', 'reader', 'by', 'saved_by', 'me',
+]);
+const ID_ARRAY_FIELDS = new Set(['left', 'muted', 'mentions', 'blocked', 'added', 'missing']);
+const ID_MAP_FIELDS = new Set(['keys', 'identities']);   // OBJECTs keyed by id (dm_keys sealed set; the admin fingerprint's per-member map)
+/* the pseudonym field beside an id, recomputed from the cloaked id */
+const ASSIGNED_BESIDE: Record<string, string> = {
+  hash: 'assigned', author_hash: 'assigned', sender_hash: 'assigned', actor_hash: 'actor_assigned',
+};
+const HEX64 = /^[0-9a-f]{64}$/;
+export async function cloakIds<T>(env: Env, node: T): Promise<T> {
+  if (!env.PUBLIC_ID_PEPPER) return node;   // the valve: ids ARE hashes
+  const walk = async (v: unknown): Promise<unknown> => {
+    if (Array.isArray(v)) return Promise.all(v.map(walk));
+    if (v && typeof v === 'object') {
+      const src = v as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(src)) {
+        const val = src[k];
+        if (ID_FIELDS.has(k) && typeof val === 'string' && HEX64.test(val)) {
+          const pid = await serveId(env, val);
+          out[k] = pid;
+          const a = ASSIGNED_BESIDE[k];
+          if (a && (a in src)) out[a] = pid ? Pseudonym.displayName(pid) : null;
+        } else if (ID_ARRAY_FIELDS.has(k) && Array.isArray(val)) {
+          out[k] = await Promise.all(val.map(async (x) => (typeof x === 'string' && HEX64.test(x) ? await serveId(env, x) : await walk(x))));
+        } else if (ID_MAP_FIELDS.has(k) && val && typeof val === 'object' && !Array.isArray(val)) {
+          const m: Record<string, unknown> = {};
+          for (const kk of Object.keys(val as Record<string, unknown>)) {
+            const nk = HEX64.test(kk) ? (await serveId(env, kk)) || kk : kk;
+            m[nk] = (val as Record<string, unknown>)[kk];
+          }
+          out[k] = m;
+        } else if (k in ASSIGNED_BESIDE ? false : false) {
+          out[k] = val;   // (unreachable; kept for clarity)
+        } else {
+          out[k] = await walk(val);
+        }
+      }
+      /* an `assigned`/`actor_assigned` already set from its id above is kept;
+         one with no cloaked id beside it is walked as an ordinary value */
+      return out;
+    }
+    return v;
+  };
+  return (await walk(node)) as T;
+}
+
+export async function backfillPubids(env: Env): Promise<number> {
+  if (!env.PUBLIC_ID_PEPPER) return 0;
+  const now = Math.floor(Date.now() / 1000);
+  /* orphan identities: everyone who wrote before registerMember, with no row */
+  const orphanCols = [
+    ['comments', 'author_hash'], ['wall_posts', 'author_hash'], ['dms', 'sender_hash'],
+    ['dm_members', 'hash'], ['notifications', 'actor_hash'], ['reactions', 'author_hash'],
+  ];
+  for (const [tbl, col] of orphanCols) {
+    try {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO profiles (hash, created_at) `
+        + `SELECT DISTINCT ${col}, ?1 FROM ${tbl} WHERE ${col} IS NOT NULL`
+      ).bind(now).run();
+    } catch (e) { /* a table a deployment predates */ }
+  }
+  const rows = await env.DB.prepare('SELECT hash FROM profiles WHERE pubid IS NULL').all<{ hash: string }>();
+  let n = 0;
+  for (const r of (rows.results || [])) {
+    const pid = await pubidOf(env, r.hash);
+    await env.DB.prepare('UPDATE profiles SET pubid = ?2 WHERE hash = ?1').bind(r.hash, pid).run();
+    n++;
+  }
+  return n;
+}
+
 /* Same-origin API. A cross-origin browser POST always carries an Origin, so
    reject any Origin that is not ours; a missing Origin (non-browser clients,
    some same-origin form posts) is allowed through to the usual gates. The
@@ -1011,7 +1183,7 @@ export async function metaForHash(env: Env, hash: string) {
     shadowbanned: flags && flags.shadowbanned ? 1 : 0,
     ipbanned,
   };
-  return json({ ok: true, meta: [row], identities }, 200);
+  return json(await cloakIds(env, { ok: true, meta: [row], identities }), 200);
 }
 
 export const TOPICS_PER_PAGE = 20;
@@ -1040,7 +1212,8 @@ export async function boardCatPayload(env: Env, page: string, p: number, q: unkn
     'WHERE ' + where + ' ' +
     'ORDER BY COALESCE(c.sticky, 0) DESC, last DESC LIMIT ?' + (binds.length + 1) + ' OFFSET ?' + (binds.length + 2)
   ).bind(...binds, TOPICS_PER_PAGE, (p - 1) * TOPICS_PER_PAGE).all<AuthoredRow>();
-  return { ok: true, topics: (rows.results || []).map((r) => withNames(r)), total: (total && total.n) || 0, page: p, per: TOPICS_PER_PAGE };
+  const topics = await Promise.all((rows.results || []).map((r) => withNames(r, null, (h) => serveId(env, h))));
+  return { ok: true, topics, total: (total && total.n) || 0, page: p, per: TOPICS_PER_PAGE };
 }
 
 /* A member's own recent forum posts, newest first — the "recent posts" list on a
@@ -1093,8 +1266,8 @@ export async function topicViewPayload(env: Env, topic: TopicRow, pRaw: unknown,
   const counts = await postCountsFor(env, [topic.author_hash, ...(replies.results || []).map((r) => r.author_hash)]);
   /* The reactions' tallies ride the public payload (a reaction is public); the
      viewer's OWN ride the keyed /reacts read, since this payload is cached. */
-  const head = withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0);
-  const posts = (replies.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0));
+  const head = await withNames({ id: topic.id, title: topic.title, author_hash: topic.author_hash, nick: topic.nick, signature: topic.signature, avatar: topic.avatar, faith: topic.faith || null, body: topic.body, created_at: topic.created_at, edited_at: topic.edited_at, locked: topic.locked ? 1 : 0, sticky: topic.sticky ? 1 : 0, readonly: topic.readonly ? 1 : 0, media_key: topic.media_key || null, media_expired: topic.media_expired || 0 }, counts[topic.author_hash] || 0, (h) => serveId(env, h));
+  const posts = await Promise.all((replies.results || []).map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h))));
   await stampReactions(env, 'post', [head].concat(posts), null);
   return {
     ok: true,
@@ -1728,6 +1901,12 @@ export async function markVerified(env: Env, hash: string, now = Math.floor(Date
    (handleDmDirectory) — the difference between "has acted" and "is someone". */
 export async function registerMember(env: Env, hash: string, now = Math.floor(Date.now() / 1000)) {
   await env.DB.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?1, ?2)').bind(hash, now).run();
+  /* the public id is filled the moment an identity is known, so a member is
+     resolvable (resolveId) as soon as they can be named (the P0 chain, L3) */
+  if (env.PUBLIC_ID_PEPPER) {
+    const pid = await pubidOf(env, hash);
+    try { await env.DB.prepare('UPDATE profiles SET pubid = ?2 WHERE hash = ?1 AND pubid IS NULL').bind(hash, pid).run(); } catch (e) { /* best-effort */ }
+  }
 }
 
 /* ================= Discord webhook fan-out =================
@@ -2132,7 +2311,7 @@ export const WALL_COMMENT_COLS = 'c.id, c.post_id, c.author_hash, pr.nick, pr.av
    own reaction in two batched reads, the same shape the board's posts carry. */
 export async function wallEnrich(env: Env, rows: readonly AuthoredRow[], me: string | null): Promise<AuthoredRow[]> {
   const counts = await postCountsFor(env, rows.map((r) => r.author_hash));
-  const out = rows.map((r) => withNames(r, counts[r.author_hash || ''] || 0));
+  const out = await Promise.all(rows.map((r) => withNames(r, counts[r.author_hash || ''] || 0, (h) => serveId(env, h))));
   await stampReactions(env, 'wall', out.filter((r) => r.post_id === undefined), me);
   await stampReactions(env, 'wallc', out.filter((r) => r.post_id !== undefined), me);
   return out;
@@ -3670,6 +3849,10 @@ function hubGroups(env: HubEnv, hashes: string[]): Array<[number, string[]]> {
    that fails is logged and never fails its siblings. */
 export async function sendToHub(env: Env, event: HubEvent) {
   if (!env.HUB || !boardEventPublic(event)) return;
+  /* Cloak every account hash in the frame's CONTENT to its pubid (the P0 chain
+     L3) — the `scopes` (server-internal routing, `user:<account hash>`) are not
+     a 64-hex id field, so cloakIds leaves them, and routing below is unchanged. */
+  event = await cloakIds(env, event);
   const n = hubShards(env);
   const routed = Hub.routeScopes(n)(Array.isArray(event.scopes) ? event.scopes.map(String) : []);
   const homes: number[] | null = psOrNull(routed);

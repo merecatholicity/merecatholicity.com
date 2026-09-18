@@ -67,6 +67,13 @@ export interface Env {
      absent = 1, the single "board" instance) */
   HUB_SHARDS?: string;
   /* secrets (`wrangler secret put`, never in a file) */
+  /* The pepper under the public id: pubid = SHA-256(PUBLIC_ID_PEPPER || hash)
+     (the P0 chain, layer three). STABLE FOREVER — changing it reshuffles every
+     member's public id and displayed name. Absent, `serveId` returns the raw
+     hash (the pre-layer-3 behaviour), so a missing secret degrades to the old
+     exposure rather than breaking a read. NOT in PUBLIC_VARS, so egress.ts
+     refuses every answer that would carry its value. */
+  PUBLIC_ID_PEPPER?: string;
   TURNSTILE_SECRET?: string;
   VAPID_PRIVATE_KEY?: string;
   TURN_KEY_SECRET?: string;

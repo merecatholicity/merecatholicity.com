@@ -8,6 +8,7 @@ import {
   cacheHeader,
   displayName,
   json,
+  cloakIds,
   keyedGated,
   NOTIF_POST_KINDS,
   NOTIF_WALL_KINDS,
@@ -113,8 +114,8 @@ async function handleNotifList(request: Request, env: Env) {
   ).bind(me).first<{ n: number; unread: number }>();
   const items = (rows.results || []).map((r) => Object.assign({}, r,
     { actor_assigned: r.actor_hash ? displayName(r.actor_hash) : null }));
-  return json({ ok: true, items, total: (totals && totals.n) || 0,
-    unread_total: (totals && totals.unread) || 0, page: p, per: NOTIF_PER_PAGE }, 200);
+  return json(await cloakIds(env, { ok: true, items, total: (totals && totals.n) || 0,
+    unread_total: (totals && totals.unread) || 0, page: p, per: NOTIF_PER_PAGE }), 200);
 }
 
 /* Opening the list marks everything read, the notifications analogue of opening

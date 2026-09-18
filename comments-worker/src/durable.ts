@@ -512,9 +512,14 @@ export class BoardHub extends DurableObject<Env> {
   async publish(event: { scopes?: unknown }) {
     if (!event || !Array.isArray(event.scopes)) return;
     this.#index();
-    const payload = JSON.stringify(event);
+    /* `scopes` is ROUTING metadata — `user:<account hash>` names a private
+       recipient — so it must NEVER reach a client (it would leak the account
+       hash the P0 chain L3 hides; no client reads an incoming frame's scopes).
+       Route on it here, then send a scopes-stripped payload. */
+    const { scopes, ...body } = event as { scopes: unknown[] } & Record<string, unknown>;
+    const payload = JSON.stringify(body);
     const targets = new Set<WebSocket>();
-    for (const scope of event.scopes) {
+    for (const scope of scopes) {
       const set = this.#bySub.get(String(scope));
       if (set) for (const s of set) targets.add(s);
     }

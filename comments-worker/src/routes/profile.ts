@@ -23,6 +23,8 @@ import {
   isTrusted,
   json,
   keyFloor,
+  serveId,
+  resolveId,
   keyedGated,
   normalizeLinks,
   safeParseLinks,
@@ -66,24 +68,31 @@ async function handleProfileGet(request: Request, env: Env, url: URL) {
   /* Address a profile by its 64-hex hash OR by a custom ?handle=<name> (the URL
      name a member claimed). A handle resolves to its owner's hash; an unclaimed
      handle is an ordinary "not found" (an empty profile, like a hashless hash). */
-  let hash = String(url.searchParams.get('hash') || '');
+  /* The `hash` param is a WIRE id (a pubid, the P0 chain L3): resolve it to the
+     account hash for the lookups, and serve the pubid back. A handle resolves to
+     the account hash internally, then to its pubid for the wire. */
+  const wireIn = String(url.searchParams.get('hash') || '');
   const handleParam = String(url.searchParams.get('handle') || '');
-  if (!hash && handleParam) {
+  let hash = wireIn ? (await resolveId(env, wireIn)) || '' : '';
+  let wireId = wireIn;
+  if (!wireIn && handleParam) {
     const v = Handle.validate(handleParam);
     if (v.ok) {
       const owner = await env.DB.prepare('SELECT hash FROM profiles WHERE handle = ?1').bind(v.handle).first<{ hash: string }>();
-      if (owner && owner.hash) hash = owner.hash;
+      if (owner && owner.hash) { hash = owner.hash; wireId = (await serveId(env, hash)) || ''; }
     }
-    if (!hash) return json({ ok: false, error: 'No such profile.' }, 404, cacheHeader(url));
+    if (!wireId) return json({ ok: false, error: 'No such profile.' }, 404, cacheHeader(url));
   }
-  if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
-  const row = await env.DB.prepare('SELECT nick, bio, signature, avatar, faith, handle, links FROM profiles WHERE hash = ?1')
-    .bind(hash).first<ProfileRow>();
-  const counts = await postCountsFor(env, [hash]);
+  if (!/^[0-9a-f]{64}$/.test(wireId)) return json({ ok: false, error: 'Bad request.' }, 400);
+  /* `hash` may be '' for an id no member wears — the empty profile, as before,
+     echoing the pubid the caller asked under. */
+  const row = hash ? await env.DB.prepare('SELECT nick, bio, signature, avatar, faith, handle, links FROM profiles WHERE hash = ?1')
+    .bind(hash).first<ProfileRow>() : null;
+  const counts = hash ? await postCountsFor(env, [hash]) : {};
   return json({
     ok: true,
     profile: {
-      hash: hash,
+      hash: hash ? (await serveId(env, hash)) : wireId,
       nick: row ? (row.nick || null) : null,
       bio: row ? (row.bio || null) : null,
       signature: row ? (row.signature || null) : null,
@@ -93,8 +102,8 @@ async function handleProfileGet(request: Request, env: Env, url: URL) {
       links: row && row.links ? safeParseLinks(row.links) : null,
       posts: counts[hash] || 0,
       rank: rankFor(counts[hash] || 0),
-      assigned: displayName(hash),
-      admin: await isAdminHash(env, hash),
+      assigned: displayName(hash ? (await serveId(env, hash)) || wireId : wireId),
+      admin: hash ? await isAdminHash(env, hash) : false,
     },
   }, 200, cacheHeader(url));
 }
@@ -185,10 +194,10 @@ async function handleProfileSave(request: Request, env: Env) {
   const av = await env.DB.prepare('SELECT avatar, faith, handle, links FROM profiles WHERE hash = ?1').bind(authorHash).first<ProfileRow>();
   return json({
     ok: true,
-    profile: { hash: authorHash, nick: nick.value, bio: bio.value, signature: signature.value,
+    profile: { hash: await serveId(env, authorHash), nick: nick.value, bio: bio.value, signature: signature.value,
       avatar: av && av.avatar || null, faith: av && av.faith || null, handle: av && av.handle || null,
       links: av && av.links ? safeParseLinks(av.links) : null,
-      assigned: displayName(authorHash), admin: await isAdminHash(env, authorHash) },
+      assigned: displayName(await serveId(env, authorHash) || authorHash), admin: await isAdminHash(env, authorHash) },
   }, 200);
 }
 

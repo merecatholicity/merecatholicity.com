@@ -8,6 +8,8 @@ import {
   getAppSettings,
   isEstablished,
   json,
+  cloakIds,
+  resolveId,
   keyedGated,
   ringCall,
   recordCallEnd,
@@ -77,7 +79,7 @@ async function handleCallPending(request: Request, env: Env) {
   if (!row || row.answered_at || row.missed_at || row.ended_at || !fresh) {
     return json({ ok: true, pending: false, answered: !!(row && row.answered_at) }, 200);
   }
-  return json({ ok: true, pending: true, from: row.from_hash, sdp: row.sdp, age: now - Number(row.created_at) }, 200);
+  return json(await cloakIds(env, { ok: true, pending: true, from: row.from_hash, sdp: row.sdp, age: now - Number(row.created_at) }), 200);
 }
 
 /* The call's outcome, from the party that saw it end: {key, call, to,

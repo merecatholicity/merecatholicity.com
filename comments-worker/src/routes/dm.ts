@@ -43,6 +43,9 @@ import {
   mediaKindsFor,
   mediaMaxAcross,
   json,
+  serveId,
+  resolveId,
+  cloakIds,
   keyFloor,
   keyedGated,
   notifyDm,
@@ -140,7 +143,7 @@ async function deliverDmWord(env: Env, ctx: ExecutionContext | undefined, me: st
     }
     const roster = thread ? await dmCurrentMembers(env, thread.id) : await dmPubkeysOf(env, [me, other]);
     if (!Dm.membersEqual(Object.keys(keys))(roster.map((m) => m.hash))) {
-      return json({ ok: false, error: 'roster', members: roster }, 409);
+      return json(await cloakIds(env, { ok: false, error: 'roster', members: roster }), 409);
     }
   } else if (kind === 1) {
     return json({ ok: false, error: 'This conversation needs the newer app. Reload and try again.' }, 400);
@@ -280,7 +283,7 @@ async function handleDmRoster(request: Request, env: Env) {
   const members = found.thread ? await dmCurrentMembers(env, found.thread.id) : await dmPubkeysOf(env, [me, found.other]);
   const roster: DmRosterPayload = { ok: true, thread_id: found.thread ? found.thread.id : null, kind: found.thread ? (Number(found.thread.kind) || 0) : 0,
     name: (found.thread && found.thread.name) || null, members };
-  return json(roster, 200);
+  return json(await cloakIds(env, roster), 200);
 }
 
 /* A group is born (2026-09-13): the creator and the members they named, each
@@ -296,7 +299,9 @@ async function createDmGroup(env: Env, ctx: ExecutionContext | undefined, me: st
   const stmts: D1PreparedStatement[] = [env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at) VALUES (?1, ?2, ?3)').bind(thread.id, me, now)];
   for (const h of wanted) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO dm_members (thread_id, hash, joined_at, added_by) VALUES (?1, ?2, ?3, ?4)').bind(thread.id, h, now, me));
   await env.DB.batch(stmts);
-  await sendSystemDmLine(env, thread.id, me, Dm.sysAddLine(wanted));
+  /* the system line is STORED text and reaches every reader — name the added
+     members by their pubid, never the account hash (the P0 chain L3) */
+  await sendSystemDmLine(env, thread.id, me, Dm.sysAddLine((await Promise.all(wanted.map((h: string) => serveId(env, h)))).filter((x): x is string => !!x)));
   await announceDmMembers(env, ctx, thread.id, me, wanted, []);
   return thread.id;
 }
@@ -322,7 +327,7 @@ async function handleDmGroups(request: Request, env: Env, ctx: ExecutionContext)
   const { ok: wanted, missing } = await dmEligible(env, me, data.members);
   if (!wanted.length && !missing.length) return json({ ok: false, error: 'Bad request.' }, 400);
   if (wanted.length + missing.length > Dm.maxMembers - 1) return json({ ok: false, error: 'A conversation holds at most ' + Dm.maxMembers + ' members.' }, 400);
-  if (missing.length) return json({ ok: false, error: 'Some members cannot be added yet.', missing }, 400);
+  if (missing.length) return json(await cloakIds(env, { ok: false, error: 'Some members cannot be added yet.', missing }), 400);
   if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
@@ -353,7 +358,7 @@ async function handleDmMembers(request: Request, env: Env, ctx: ExecutionContext
   const { ok: wanted, missing } = await dmEligible(env, me, asked);
   if (!wanted.length && !missing.length) return json({ ok: false, error: 'Bad request.' }, 400);
   if (current.length + wanted.length + missing.length > Dm.maxMembers) return json({ ok: false, error: 'A conversation holds at most ' + Dm.maxMembers + ' members.' }, 400);
-  if (missing.length) return json({ ok: false, error: 'Some members cannot be added yet.', missing }, 400);
+  if (missing.length) return json(await cloakIds(env, { ok: false, error: 'Some members cannot be added yet.', missing }), 400);
   if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
     return json({ ok: false, error: 'Verification failed. Reload the page and try again.' }, 403);
   }
@@ -361,16 +366,18 @@ async function handleDmMembers(request: Request, env: Env, ctx: ExecutionContext
   if (kind === 0) {
     /* A pair forks: the other and the newcomers, in a group of their own. */
     const id = await createDmGroup(env, ctx, me, [found.other].concat(wanted), null, now);
-    return json({ ok: true, thread_id: id, forked: 1, added: wanted }, 200);
+    return json(await cloakIds(env, { ok: true, thread_id: id, forked: 1, added: wanted }), 200);
   }
   const stmts = wanted.map((h) => env.DB.prepare(
     'INSERT INTO dm_members (thread_id, hash, joined_at, added_by) VALUES (?1, ?2, ?3, ?4) ' +
     'ON CONFLICT(thread_id, hash) DO UPDATE SET joined_at = excluded.joined_at, left_at = NULL, read_at = NULL, cleared_at = NULL, added_by = excluded.added_by'
   ).bind(thread.id, h, now, me));
   await env.DB.batch(stmts);
-  await sendSystemDmLine(env, thread.id, me, Dm.sysAddLine(wanted));
+  /* the system line is STORED text and reaches every reader — name the added
+     members by their pubid, never the account hash (the P0 chain L3) */
+  await sendSystemDmLine(env, thread.id, me, Dm.sysAddLine((await Promise.all(wanted.map((h: string) => serveId(env, h)))).filter((x): x is string => !!x)));
   await announceDmMembers(env, ctx, thread.id, me, wanted, []);
-  return json({ ok: true, thread_id: thread.id, forked: 0, added: wanted }, 200);
+  return json(await cloakIds(env, { ok: true, thread_id: thread.id, forked: 0, added: wanted }), 200);
 }
 
 /* Leave a group: my seat is stamped and I see nothing further; the line "X
@@ -472,7 +479,7 @@ async function handleDmThreads(request: Request, env: Env) {
   });
   const inbox: DmThreadsPayload = { ok: true, threads, total: (totals && totals.n) || 0,
     unread_total: (totals && totals.unread) || 0, page: p, per: DM_PER_PAGE };
-  return json(inbox, 200);
+  return json(await cloakIds(env, inbox), 200);
 }
 
 /* One conversation — by its id, or a pair's by its other (the door every
@@ -629,7 +636,7 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
     messages: messages, total: total, page: p, per: DM_PER_PAGE, blocked: iBlocked ? 1 : 0,
     unread: (unreadRow && unreadRow.n) || 0, unread_from: (unreadRow && unreadRow.first_id) || null,
     notif_unread: await notifUnreadCount(env, me) };
-  return json(payload, 200);
+  return json(await cloakIds(env, payload), 200);
 }
 
 /* The badge count: unread WORDS across every thread (2026-09-11), one summed
@@ -1153,7 +1160,7 @@ async function handleDmDirectory(request: Request, env: Env) {
   ).bind(MERECAT_BOT.hash, ...hidden).all<{ hash: string; joined: number; nick: string | null }>();
   const users = (rows.results || []).map((r) => Object.assign({}, r,
     { assigned: r.hash ? displayName(r.hash) : null }));
-  return json({ ok: true, users }, 200);
+  return json(await cloakIds(env, { ok: true, users }), 200);
 }
 
 /* Publish this member's X25519 public key for the end-to-end-encrypted inbox.
