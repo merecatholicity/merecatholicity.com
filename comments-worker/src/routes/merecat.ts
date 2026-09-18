@@ -13,6 +13,7 @@ import {
   boardKey,
   isAdminHash,
   json,
+  keyFloor,
   merecatConfig,
   merecatConfigCache,
   merecatDay,
@@ -408,6 +409,7 @@ async function handleMerecatForward(request: Request, env: Env) {
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   const chatId = Number(data.chat);
   const topicId = Number(data.topic);

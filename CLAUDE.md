@@ -103,10 +103,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   value, refused and told. The workers hold no `any` and the env's type brand is refused as an answer, a row or an event.
   `env_leak.test` sweeps every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and API.md shape
   in its own commit, is documented by CALLING it, and ships after `/security-review`.
-- **A member's hash is their key's unsalted SHA-256** (the P0 chain, 2026-09-18): no keyless road serves the roster (`POST
-  /dm/directory`, uncached); a `weak` key (`Domain.Auth.keyAcceptable`) is refused on WRITES (`keyFloor`, one preamble), never
-  on a read and never at sign-in (a question, not a wall: no rotation road yet); existing weak keys tolerated to 2026-10-18
-  (a ledger date). `scripts/key_audit.py` is the wordlist run against the live roster that gates layer three.
+- **A member's hash is their key's unsalted SHA-256** (the P0 chain, 2026-09-18): no keyless road serves the roster
+  (`POST /dm/directory`, uncached); a `weak` key (`Domain.Auth.keyAcceptable`) is refused on WRITES (`keyFloor`, every
+  POST_LIMIT road, swept), never on a read and never at sign-in (a question, not a wall: no rotation road yet);
+  existing weak keys tolerated to 2026-10-18 (a ledger date). `scripts/key_audit.py` is the wordlist run against the
+  live roster that gates layer three.
 - **`?v=` keys are stamped** (`scripts/stamp_versions.py`: nav.js, the pages, `partials/*`,
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new

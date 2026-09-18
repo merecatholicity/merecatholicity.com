@@ -16,6 +16,7 @@ import {
   mediaMaxAcross,
   mediaScanEnabled,
   json,
+  keyFloor,
   randomHex,
   runWallPrune,
   screenImage,
@@ -84,6 +85,7 @@ async function mediaUpload(request: Request, env: Env, ctxKind: string) {
   try { form = await request.formData(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(form.get('key') || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  { const floor = await keyFloor(env, 'POST_LIMIT', key); if (floor) return floor; }
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);

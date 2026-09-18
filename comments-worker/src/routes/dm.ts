@@ -43,6 +43,7 @@ import {
   mediaKindsFor,
   mediaMaxAcross,
   json,
+  keyFloor,
   keyedGated,
   notifyDm,
   notifyEnabled,
@@ -764,6 +765,7 @@ async function handleDmReact(request: Request, env: Env, ctx: ExecutionContext) 
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   const id = Math.floor(Number(data.id) || 0);
   const raw = data.emoji != null ? String(data.emoji) : (data.like ? '❤️' : '');
@@ -867,6 +869,7 @@ async function handleDmEdit(request: Request, env: Env, ctx: ExecutionContext) {
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   const id = Math.floor(Number(data.id) || 0);
   if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -957,6 +960,7 @@ async function handleDmMediaUpload(request: Request, env: Env) {
   try { form = await request.formData(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const key = String(form.get('key') || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
+  { const floor = await keyFloor(env, 'POST_LIMIT', key); if (floor) return floor; }
   const me = await sha256hex(key);
   const gate = await blockedReason(env, me, ip);
   if (gate) return blockedJson(gate);
@@ -1168,6 +1172,7 @@ async function handleDmPubkey(request: Request, env: Env) {
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   const pubkey = String(data.pubkey || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);

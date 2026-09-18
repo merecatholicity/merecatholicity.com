@@ -90,13 +90,21 @@ export async function throttle(env: Pick<Env, Bucket> & Partial<Pick<Env, 'READ_
    floor costs the ordinary case nothing. `adminGated` reads it too — a cracked
    admin key that cannot write is the whole point, and the console's owner is
    subject to the same floor as everyone. The sentences are the kernel's
-   (`Domain.Auth.keyRefusal`), so the client and the worker say the same thing. */
-export async function keyFloor(env: Env, bucket: Bucket | null | undefined, key: string, me: string): Promise<Response | null> {
+   (`Domain.Auth.keyRefusal`), so the client and the worker say the same thing.
+   Every write road calls this, whether through the shared preamble or its own
+   hand-rolled one (posting a comment, a feed post, a profile edit and the
+   uploads keep their own order for a reason and do not use `gated`): the sweep
+   in tests/worker/key_floor_reach.test.mjs runs a weak identity down the whole
+   POST_LIMIT surface and fails if one road lets it write, because a floor with
+   a hole is not a floor. */
+export async function keyFloor(env: Env, bucket: Bucket | null | undefined, key: string): Promise<Response | null> {
   /* An EMPTY key is anonymity, not a weak identity: `key: 'optional'` roads let
      it through to hash to the empty identity, and their own rules answer it
      ("Not yours", and the like). Refusing it here would turn every one of those
-     handlers' answers into a 400 about key strength. */
+     handlers' answers into a 400 about key strength. A strong or generated key
+     returns before the hash is even computed — the ordinary case is free. */
   if (!key || bucket !== 'POST_LIMIT' || Auth.keyAcceptable(key)) return null;
+  const me = await sha256hex(key);
   const known = !!(await env.DB.prepare('SELECT 1 AS v FROM profiles WHERE hash = ?1').bind(me).first());
   if (known && weakKeyTolerated()) return null;
   return json({ ok: false, error: Auth.keyRefusal(!known)(key), weak_key: true }, 400);
@@ -125,7 +133,7 @@ export async function keyed(request: Request, env: Env, bucket: 'POST_LIMIT' | '
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  const floor = await keyFloor(env, bucket, key, me);
+  const floor = await keyFloor(env, bucket, key);
   if (floor) return floor;
   return { ip, data, key, me };
 }
@@ -183,7 +191,7 @@ export async function gated(request: Request, env: Env, o: GateOpts = {}): Promi
   const key = String((data && data.key) || '');
   if (o.key !== 'optional' && !key) return json({ ok: false, error: o.missing || 'Bad request.' }, 400);
   const me = await sha256hex(key);
-  const floor = await keyFloor(env, o.bucket, key, me);
+  const floor = await keyFloor(env, o.bucket, key);
   if (floor) return floor;
   if (o.block) {
     const g = await blockedReason(env, me, ip);
@@ -203,10 +211,9 @@ export async function adminGated(request: Request, env: Env, o: { bucket?: 'POST
   }
   const key = String((data && data.key) || '');
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
-  const me = await sha256hex(key);
-  const floor = await keyFloor(env, o.bucket, key, me);
+  const floor = await keyFloor(env, o.bucket, key);
   if (floor) return floor;
-  return { ip, data, key, me };
+  return { ip, data, key, me: await sha256hex(key) };
 }
 
 /* The keyless read preamble (a GET with URL params): the READ limit alone; the

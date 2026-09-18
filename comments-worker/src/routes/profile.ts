@@ -22,6 +22,7 @@ import {
   isAdminHash,
   isTrusted,
   json,
+  keyFloor,
   keyedGated,
   normalizeLinks,
   safeParseLinks,
@@ -112,6 +113,7 @@ async function handleProfileSave(request: Request, env: Env) {
   if (!key) return json({ ok: false, error: 'An identity is required.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many changes at once. Wait a minute and try again.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   /* Same Turnstile gate as posting: a profile is public text a bot could
      otherwise write with a self-made key and no challenge. */
   if (!(await verifyTurnstile(env, String(data.token || ''), ip, String(data.key || '')))) {
@@ -326,6 +328,7 @@ async function handleAvatarUpload(request: Request, env: Env) {
   }
   const key = String(form.get('key') || '');
   if (!key) return json({ ok: false, error: 'An identity is required.' }, 400);
+  { const floor = await keyFloor(env, 'POST_LIMIT', key); if (floor) return floor; }
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
@@ -372,6 +375,7 @@ async function handleAvatarDelete(request: Request, env: Env) {
   }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Bad request.' }, 400);
   const authorHash = await sha256hex(key);

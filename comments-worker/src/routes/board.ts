@@ -33,6 +33,7 @@ import {
   journalKey,
   journalKeyId,
   json,
+  keyFloor,
   keyedGated,
   merecatMentioned,
   metaForHash,
@@ -136,6 +137,7 @@ async function handlePost(request: Request, env: Env, ctx: ExecutionContext) {
      request before the limit engages. */
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many comments at once. Wait a minute and try again.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
 
   /* Three targets share this pipeline: a site page, a new board topic
      under a category, or a reply to an existing topic. */
@@ -383,6 +385,7 @@ async function handleSelfDelete(request: Request, env: Env, ctx: ExecutionContex
   if (!Number.isInteger(id) || id < 1 || !key) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);
@@ -606,6 +609,7 @@ async function handleEdit(request: Request, env: Env, ctx: ExecutionContext) {
   if (CONTROL_RE.test(body)) return json({ ok: false, error: 'Bad request.' }, 400);
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many edits at once. Wait a minute and try again.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const authorHash = await sha256hex(key);
   const gate = await blockedReason(env, authorHash, ip);
   if (gate) return blockedJson(gate);

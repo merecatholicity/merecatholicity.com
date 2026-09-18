@@ -26,6 +26,7 @@ import {
   parseFeedScope,
   scopeLabel,
   json,
+  keyFloor,
   ptrLookup,
   purgeWallMedia,
   refreshTopicStats,
@@ -331,6 +332,7 @@ async function handleDeleteUser(request: Request, env: Env) {
   try { data = await request.json<{ key?: unknown; hash?: unknown }>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
+  { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   const hash = String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
