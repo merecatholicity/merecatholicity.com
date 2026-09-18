@@ -33,10 +33,16 @@ before starting.
    and the valve-mode worker deploys. Verify it is healthy and UNCHANGED: `/api/comments/board`
    still serves raw `author_hash` (no pepper yet), DMs work, `/prefs` now carries `me` equal to the
    account hash. `curl` a board read and confirm no behaviour changed.
-2. **Generate a STABLE pepper and set it.** `openssl rand -hex 32`. It is stable FOREVER — changing
-   it reshuffles every member's pubid and displayed name. `cd comments-worker && npx wrangler secret
-   put PUBLIC_ID_PEPPER` (workers token). This is the irreversible flip; it is reversible only by
-   UNSETTING the secret (which returns to raw hashes).
+2. **Generate a STABLE pepper and set it — THE OWNER'S ACT, not an agent's.** `openssl rand -hex
+   32`. It is stable FOREVER — changing it reshuffles every member's pubid and displayed name. `cd
+   comments-worker && npx wrangler secret put PUBLIC_ID_PEPPER` (workers token). This is the
+   irreversible flip. "Reversible by unsetting" is only half true: unsetting returns future reads to
+   raw hashes, but anything that read a member's pubid while it was set has already read it, and a
+   member's displayed pseudonym changed the moment it went live. Setting a secret that changes what
+   the site PUBLISHES ABOUT ITS MEMBERS is a decision for the owner, made deliberately — not
+   something an agent does because it is nearest the keyboard after the reset (f5 drew this line and
+   it is the right one). An agent may do step 1 (deploy + verify the inert worker) and prepare steps
+   3–4; a human owner sets the pepper.
 3. **Back-fill the reverse map.** `serveId` fills `profiles.pubid` lazily on first serve, but run
    `backfillPubids` once so `resolveId` is complete from the first request (an old `?u=<hash>` link,
    a client mid-session). It is a daily-chain step; trigger it via a `workflow_dispatch` of the ops
