@@ -36,7 +36,9 @@
   ];
 
   function inChrome(el) {          // skip site nav, the pandoc TOC, the footer
-    return el.closest("nav, header, footer, #TOC");
+    // .mc-parts-lead is the split index's one line about itself — not text of
+    // the work, and not something to hang a ¶ deep link on.
+    return el.closest("nav, header, footer, #TOC, .mc-parts-lead");
   }
   function el(tag, cls) { var n = document.createElement(tag); if (cls) n.className = cls; return n; }
 
@@ -45,8 +47,51 @@
       .replace(/^-+|-+$/g, "").slice(0, 60);
   }
 
+  // --- a corpus page, by its mark ---------------------------------------
+  // main.prose.corpus is stamped by scripts/page_meta.py on every pandoc page;
+  // .unnumbered is the OLD test, kept because a phone may still be holding a
+  // page from before the mark existed. Both mean "a reading, not a page of the
+  // site" — and the mark also reaches the works that have no .unnumbered
+  // heading at all (a short treatise, a split part of chapters).
+  function isCorpus() {
+    return !!document.querySelector("main.prose.corpus, .unnumbered");
+  }
+
+  // --- a volume is a shelf now: send an old deep link on to its part -----
+  // An oversized volume is served as an index over <volume>-<slug>.html parts
+  // (scripts/split_volumes.py). Every address anyone ever shared still names
+  // the volume, so the index answers for all of them: a contents entry WEARS
+  // the id it links to, and for the ids below the contents (a chapter, a
+  // paragraph of deeplink's own ¶) the anchor map names the part. The map is
+  // fetched only on a miss — never on an ordinary visit.
+  function partHop() {
+    var box = document.getElementById("mc-parts");
+    if (!box || !location.hash || location.hash.length < 2) return false;
+    var want;
+    try { want = decodeURIComponent(location.hash.slice(1)); } catch (_) { return false; }
+    var here = document.getElementById(want);
+    if (here) {
+      var a = here.tagName === "A" ? here : (here.querySelector && here.querySelector("a"));
+      var href = a && a.getAttribute("href");
+      if (href && href.charAt(0) !== "#") { location.replace(href); return true; }
+      return false;                       // it is on this page after all
+    }
+    var src = box.getAttribute("data-anchors");
+    if (!src) return false;
+    var base = want.replace(/__p\d+$/, "");
+    fetch(src).then(function (r) { return r.ok ? r.json() : null; }).then(function (m) {
+      if (!m || !m.ids) return;
+      var n = m.ids[want];
+      if (n === undefined) n = m.ids[base];
+      if (n === undefined || !m.files[n]) return;
+      location.replace(m.files[n] + "#" + want);
+    }).catch(function () {});
+    return true;
+  }
+
   // --- arrival: scroll to and tint the hash target ---------------------
   function reveal() {
+    if (partHop()) return;
     if (!location.hash || location.hash.length < 2) return;
     var t;
     try { t = document.getElementById(decodeURIComponent(location.hash.slice(1))); }
@@ -111,7 +156,7 @@
   }
 
   function onSelection() {
-    if (!document.querySelector(".unnumbered")) { hideChip(); return; }
+    if (!isCorpus()) { hideChip(); return; }
     var sel = window.getSelection && window.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) { hideChip(); return; }
     var text = String(sel).replace(/\s+/g, " ").trim();
@@ -149,7 +194,7 @@
 
   // --- feature 2: reading position (contract: key and shape exact) -----
   function savePos() {
-    if (!posCurId || !document.querySelector(".unnumbered")) return;
+    if (!posCurId || !isCorpus()) return;
     try {
       localStorage.setItem("mc-readpos:" + location.pathname,
         JSON.stringify({ id: posCurId, title: document.title, at: Date.now() }));
@@ -226,7 +271,7 @@
     loadOrder().then(function (data) {
       // The fetch may resolve after a soft navigation replaced the page.
       if (!main.isConnected || document.getElementById("mc-endnav")) return;
-      if (!document.querySelector(".unnumbered")) return;
+      if (!isCorpus()) return;
       var next = null;
       if (data && Array.isArray(data.works)) {
         var here = basename(location.pathname);
@@ -340,7 +385,8 @@
 
   function run() {
     cleanupExtras();   // per-page observers and chip die before any early return
-    if (!document.querySelector(".unnumbered")) return;  // hand-authored page
+    if (partHop()) return;              // an old address into a volume now served in parts
+    if (!isCorpus()) return;            // hand-authored page
     var isKJV = /(^|\/)kjv\.html$/.test(location.pathname);
 
     // --- assign ids and collect anchorable elements --------------------
@@ -366,7 +412,14 @@
       return SLUGS[bookIdx] + "-" + m[1] + "-" + m[2];
     }
 
-    var curHeadId = null, paraN = 0;         // for Fathers-style paragraph ids
+    // A SPLIT PART's title block carries its division's own heading, id and
+    // all (scripts/split_volumes.py): the page IS that division. Seed the
+    // paragraph counter with it, or the first paragraphs of every part — the
+    // ones before its first in-body heading — would be `p__p1` here and
+    // `<division>__p1` in the librarian's replay of this walk, and every
+    // citation into them would land on an anchor that exists nowhere.
+    var partHead = document.querySelector("#title-block-header h1.title[id]");
+    var curHeadId = (partHead && partHead.id) || null, paraN = 0;
     var bookIdx = -1;                        // for KJV verse ids (h2 order)
     var anchorables = [];
     for (var k = 0; k < nodes.length; k++) {

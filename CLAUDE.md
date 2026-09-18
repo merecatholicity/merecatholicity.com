@@ -72,22 +72,22 @@ the repo are public by design.
 ## Repository layout
 
 The root holds only tool-convention files (`Makefile`, `eslint.config.js`, `package.json` + lock,
-`tsconfig.json`, `globals.d.ts`, `.gitignore`, `README.md`, `CLAUDE.md`, `LICENSE*`); a review or
-a hand-over note is a dated file under `docs/architecture/reviews/`; `local/` is the box's own and
+`tsconfig.json`, `globals.d.ts`, `.gitignore`, `README.md`, `CLAUDE.md`, `LICENSE*`); a review or a
+hand-over note is a dated file under `docs/architecture/reviews/`; `local/` is the box's own and
 ignored. **`docs/` is the served site and a MIXTURE**: hand-maintained source is tracked, everything
 the build writes is git-ignored and rebuilt, `tests/py/test_docs_sources.py` enforces the split; a
 new hand page needs an `!docs/<name>.html` line in `.gitignore` and an entry in `scripts/nav.py`'s
 `PAGES`. The directory tour (book, content, resources, partials, scripts, styles, app, client — the
-boot, its feature-module factories, three of them lazy chunks — the kernel, the two workers, librarian, webtest,
-tests, terraform, workflows) is CODEBASE.md's; `librarian/private/` is a separate PRIVATE clone,
-never a submodule, never committed.
+boot, its feature-module factories, three of them lazy chunks — the kernel, the two workers,
+librarian, webtest, tests, terraform, workflows) is CODEBASE.md's; `librarian/private/` is a
+separate PRIVATE clone, never a submodule, never committed.
 
 ## Build and verify
 
 - **Gates**: `make tests` (the unit suite: PureScript, JS, worker, Python, CSS; runs `psbuild`
   first); `make jscheck` (eslint + tsc + psbuild); `make check` (jscheck + linkcheck);
   `make check-pdfs` (bucket vs manifest vs local PDFs; CI runs it with the site token).
-- **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `html` (one target per work) ·
+- **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `html` (a target per work; an oversized volume becomes an index over its parts) ·
   `pdf` · `migrate` · `serve` (binds 127.0.0.1 only — load-bearing) · the rest: README's target reference.
 - Builds are pinned to `SOURCE_DATE_EPOCH=1784160000` and byte-deterministic: a double
   `make bundle` must leave `docs/app.js` unchanged. Toolchain is npm (`npm ci` only, never `sudo`

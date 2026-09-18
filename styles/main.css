@@ -574,17 +574,35 @@ a.uri { overflow-wrap: anywhere; }
   font-style: italic;
 }
 
-/* Table of contents (pandoc) */
-.prose :where(nav#TOC) {
+/* Table of contents (pandoc), and a part's own contents, which is the same
+   thing one level down (scripts/split_volumes.py) */
+.prose :where(nav#TOC, nav.mc-subtoc) {
   border: 1px solid var(--rule);
   padding: 0.8rem 1.2rem;
   margin: 1.5rem 0;
   font-size: 0.95rem;
 }
-.prose :where(nav#TOC ul) { list-style: none; padding-left: 0.8rem; margin: 0.2rem 0; }
-.prose :where(nav#TOC > ul) { padding-left: 0; }
-.prose :where(nav#TOC a) { text-decoration: none; }
-.prose :where(nav#TOC a:hover) { text-decoration: underline; }
+.prose :where(nav#TOC ul, nav.mc-subtoc ul) { list-style: none; padding-left: 0.8rem; margin: 0.2rem 0; }
+.prose :where(nav#TOC > ul, nav.mc-subtoc > ul) { padding-left: 0; }
+.prose :where(nav#TOC a, nav.mc-subtoc a) { text-decoration: none; }
+.prose :where(nav#TOC a:hover, nav.mc-subtoc a:hover) { text-decoration: underline; }
+
+/* A VOLUME IS A SHELF (2026-09-18). An oversized volume is served as an index
+   over one page per treatise, and every part carries the way back and the way
+   on — at its head, where a reader arriving from search needs to know where
+   they are, and at its foot, where a reader who has finished needs what is
+   next. The foot copy is ruled off; the head copy is not. */
+.prose :where(.mc-partnav) {
+  font-size: 0.9rem;
+  color: var(--faint);
+  margin: 0.3rem 0 1.6rem;
+}
+.prose :where(.mc-partnav.foot) {
+  margin: 2.4rem 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--rule);
+}
+.prose :where(.mc-parts-lead) { color: var(--faint); font-style: italic; margin: 0.3rem 0 0; }
 
 /* The acts table and any others */
 .prose :where(table) {
@@ -739,7 +757,7 @@ footer, .colophon {
   body { font-size: 1rem; --page-pad: 0.8rem; padding: 0.9rem var(--page-pad) 2rem; }
   .prose :where(h1) { font-size: 1.4rem; }
   .prose.corpus :where(h2) { font-size: 1.4rem; }
-  .prose :where(nav#TOC) { font-size: 0.9rem; }
+  .prose :where(nav#TOC, nav.mc-subtoc) { font-size: 0.9rem; }
 }
 
 /* Current page in the nav: present but not a link */

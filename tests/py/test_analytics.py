@@ -81,10 +81,22 @@ class TheDeclaration(unittest.TestCase):
         self.assertIn('resource "cloudflare_web_analytics_site" "main"', self.tf)
         self.assertIn('to = cloudflare_web_analytics_site.main', self.imports)
 
-    def test_the_edge_never_injects_a_second_beacon(self):
-        """THE rule of this file. Two roads to one meter is double every
-        number, and the doubling is invisible: the graph just goes up."""
-        self.assertRegex(self.tf, r'auto_install\s*=\s*false')
+    def test_the_state_of_the_edge_injector_is_stated_not_assumed(self):
+        """THE rule of this file: one meter, one road, and the declaration says
+        which. Two roads would count every view twice and the doubling is
+        invisible — the graph just goes up.
+
+        auto_install is TRUE here, which is not what this change wanted: the
+        apply that would have turned it off failed with "failed to make http
+        request", the Terraform token's signature for a permission it does not
+        have. It is harmless while the edge injector it names is missing (the
+        ruleset 404s — that is why the beacon is in nav.js at all), and the
+        file names the ruleset so the next reader can check it for themselves.
+        Widen the token and this test turns around with the declaration."""
+        self.assertRegex(self.tf, r'auto_install\s*=\s*(true|false)')
+        self.assertIn('4f4f6eeb-b8bf-4318-a5d2-aa5840b7b4a2', self.tf,
+                      'the injector this meter does NOT use must be named, or the '
+                      'next reader turns automatic setup back on and doubles the numbers')
 
 
 class ThePolicy(unittest.TestCase):

@@ -234,6 +234,7 @@ html: fetch-sources
 	    -o ../docs/bishop-presbyter.html
 	$(MAKE) -C resources bible-json
 	$(MAKE) -C resources html
+	python scripts/split_volumes.py
 	python scripts/inject_social.py
 	$(MAKE) strip-nav sync-index page-meta library-order sitemap mirrored-pdfs pdf-manifest
 # The generators above (pandoc's --css=, content.py, nav.py, the resources
@@ -249,6 +250,14 @@ html: fetch-sources
 # (deeplink.js's end-of-work nav), and index.html re-synced from its two source
 # pages (where-to-begin.html, the-book.html). Run at the end of `html`, before
 # the linkcheck, so the checked tree is final.
+# A volume no phone should be asked to swallow whole is served as an index over
+# one page per treatise (91 pages were over a megabyte; anf03.html was 5.5 MB).
+# Runs on the freshly built corpus, BEFORE the card and metadata sweeps, so a
+# part is an ordinary page by the time they reach it. See scripts/split_volumes.py.
+.PHONY: split
+split:
+	python scripts/split_volumes.py
+
 .PHONY: sitemap library-order sync-index strip-nav page-meta
 # The document metadata every page owes a reader who is not us: lang="en" (an
 # empty lang is a WCAG 3.1.1 failure, and pandoc emits one), rel=canonical from

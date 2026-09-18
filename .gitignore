@@ -122,6 +122,12 @@ docs/version.json
 docs/pdfs.txt
 docs/sitemap.xml
 docs/library-order.json
+# The split of the oversized volumes (scripts/split_volumes.py): the part pages
+# are docs/*.html and already ignored above; these are its records — the
+# manifest every consumer reads, and one anchor map per volume, which is how an
+# address shared before the split still finds its part.
+docs/library-parts.json
+docs/*-anchors.json
 docs/kjv.json
 docs/dr.json
 # NOT ignored: emoji/emoji-data.json and avatars/presets/index.json look

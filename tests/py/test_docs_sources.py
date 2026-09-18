@@ -16,6 +16,7 @@ CI run said so. This says so before the commit.
 The rule: a file under docs/ is legitimately absent from git ONLY if something
 can rebuild it. Otherwise it is source and must be tracked.
 """
+import json
 import os
 import subprocess
 import unittest
@@ -52,6 +53,19 @@ def buildable():
               'Mere_Catholicity_Logos.docx',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
               'library-order.json', 'kjv.json', 'dr.json'}
+    # A volume too big to serve whole is split into one page per treatise by
+    # scripts/split_volumes.py, which records every part it wrote in
+    # docs/library-parts.json. The manifest IS the proof they are output: a
+    # page that claims to be a part and is in no manifest is not rebuildable,
+    # and should be caught here.
+    try:
+        with open(os.path.join(DOCS, 'library-parts.json'), encoding='utf-8') as f:
+            manifest = json.load(f)
+        names |= set(manifest.get('parts', {}))
+        names |= {v[:-5] + '-anchors.json' for v in manifest.get('volumes', {})}
+        names.add('library-parts.json')
+    except (OSError, ValueError):
+        pass
     # emoji-data.json and avatars/presets/index.json are NOT here: no build
     # target produces them. They come from one-off tooling and are regenerated
     # by hand when the packs change, which makes them source like the images.

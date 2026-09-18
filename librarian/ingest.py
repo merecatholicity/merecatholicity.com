@@ -73,7 +73,29 @@ def src_path(rel):
         if os.path.exists(moved):
             return moved
     return direct
-PARSER_VERSION = "1"          # bump to force a full re-ingest
+PARSER_VERSION = "2"          # bump to force a full re-ingest
+
+
+def part_sources(path):
+    """The files a work's text actually lives in.
+
+    Since 2026-09-18 an oversized volume is SERVED as an index over one page
+    per treatise (scripts/split_volumes.py). The work is still the volume — its
+    citation URL is still `anf03.html#<anchor>`, and the index hops a reader on
+    to the part that holds the anchor — so the ingest reads the index (for the
+    front matter it kept) and then every part, in order, as one document. A
+    tree with no manifest, or a page that is not a split volume, is itself."""
+    docs = os.path.dirname(path)
+    try:
+        with open(os.path.join(docs, "library-parts.json"), encoding="utf-8") as f:
+            manifest = json.load(f)
+    except (OSError, ValueError):
+        return [path]
+    entry = manifest.get("volumes", {}).get(os.path.basename(path))
+    if not entry:
+        return [path]
+    out = [path] + [os.path.join(docs, p["file"]) for p in entry.get("parts", [])]
+    return [p for p in out if os.path.exists(p)] or [path]
 TARGET = 350                  # words a chunk aims for
 HARD_MAX = 480                # words a chunk never exceeds
 API_DEFAULT = "https://merecatholicity.com/api/merecat"
@@ -111,6 +133,7 @@ class PandocWalk(HTMLParser):
         self.buf = []
         self.cur_head = ""
         self.para_n = 0
+        self.force = False        # capturing a split part's title heading
 
     def taken(self, i):
         return i in self.used or i in self.static_ids or ("toc-" + i) in self.static_ids
@@ -132,16 +155,33 @@ class PandocWalk(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        cls = a.get("class", "")
+        # A SPLIT PART's title block carries the division's own heading — the
+        # id and all — because the part page IS that division (see
+        # scripts/split_volumes.py). It is the only h1.title with an id, and
+        # taking it as the opening heading is what makes the paragraph anchors
+        # here agree with the ones deeplink.js assigns on the page itself:
+        # without it the first paragraphs of every part would be `p__p1` in one
+        # walk and `<division>__p1` in the other, and a citation would land on
+        # an anchor that does not exist.
+        if tag == "h1" and a.get("id") and "title" in cls.split():
+            self._flush()
+            self.used.add(a["id"])
+            self.cap = ("h", 1, a["id"])
+            self.buf = []
+            self.force = True     # it lives inside the skipped <header>
+            self.depth += 1       # and the depth ledger must stay honest
+            return
         if tag not in VOID:
             self.depth += 1
             if self.skip_from is None and (
                 tag in ("nav", "header", "footer") or a.get("id") == "TOC"
+                or "mc-parts-lead" in cls.split()
             ):
                 self.skip_from = self.depth
         if self.skip_from is not None:
             return
         if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
-            cls = a.get("class", "")
             if tag == "h1" and "unnumbered" not in cls.split():
                 return                      # the doc-title h1, as in deeplink
             self._flush()
@@ -156,6 +196,10 @@ class PandocWalk(HTMLParser):
             self.buf = []
 
     def handle_endtag(self, tag):
+        if tag == "h1" and self.force:
+            self.depth -= 1
+            self._flush()
+            return
         if self.skip_from is not None:
             if tag not in VOID:
                 self.depth -= 1
@@ -170,7 +214,7 @@ class PandocWalk(HTMLParser):
             self._flush()
 
     def handle_data(self, data):
-        if self.cap and self.skip_from is None:
+        if self.cap and (self.skip_from is None or self.force):
             self.buf.append(data)
 
     def _flush(self):
@@ -190,7 +234,7 @@ class PandocWalk(HTMLParser):
             anchor = self.unique((self.cur_head or "p") + "__p" + str(self.para_n))
             if text:
                 self.events.append(("p", anchor, text))
-        self.cap, self.buf = None, []
+        self.cap, self.buf, self.force = None, [], False
 
 
 # --- hand-authored pages: semantic-id sections ------------------------------
@@ -331,11 +375,21 @@ def crumb(stack):
 
 
 def build_pandoc(path):
-    src = open(path, encoding="utf-8", errors="replace").read()
-    static_ids = set(ID_RE.findall(src))
-    w = PandocWalk(static_ids)
-    w.feed(src)
-    w._flush()
+    srcs = part_sources(path)
+    texts = [open(s, encoding="utf-8", errors="replace").read() for s in srcs]
+    static_ids = set()
+    for t in texts:
+        static_ids |= set(ID_RE.findall(t))
+    # One walk per page but ONE used-id set across the volume: the pages of a
+    # split volume came out of a single document and their ids are unique
+    # across it, so a second page must not renumber what the first has taken.
+    events, used = [], set()
+    for t in texts:
+        w = PandocWalk(static_ids)
+        w.used = used
+        w.feed(t)
+        w._flush()
+        events.extend(w.events)
     chunks, stack, section, sec_head, first_anchor = [], {}, [], "", ""
 
     def close():
@@ -344,7 +398,7 @@ def build_pandoc(path):
             chunks.append({"heading": sec_head, "anchor": a, "text": text})
         section.clear()
 
-    for ev in w.events:
+    for ev in events:
         if ev[0] == "h":
             _, level, hid, text = ev
             close()
@@ -356,7 +410,7 @@ def build_pandoc(path):
             _, anchor, text = ev
             section.append((anchor, text))
     close()
-    valid = static_ids | w.used
+    valid = static_ids | used
     return chunks, valid
 
 
@@ -553,8 +607,12 @@ def source_sig(entry, path):
     h = hashlib.sha256()
     h.update(PARSER_VERSION.encode())
     h.update(json.dumps(entry, sort_keys=True).encode())
-    with open(path, "rb") as f:
-        h.update(f.read())
+    # EVERY source: a split volume's text is in its parts, and hashing only the
+    # index — which is a table of contents now — would call a rewritten volume
+    # unchanged for ever.
+    for src in part_sources(path) if entry.get("kind") == "pandoc" else [path]:
+        with open(src, "rb") as f:
+            h.update(f.read())
     return h.hexdigest()
 
 

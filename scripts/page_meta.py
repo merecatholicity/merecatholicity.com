@@ -58,7 +58,9 @@ OG_URL_RE = re.compile(r'<meta property="og:url" content="([^"]*)"')
 HTML_TAG_RE = re.compile(r'<html\b([^>]*)>', re.I)
 PANDOC_RE = re.compile(r'<meta name="generator" content="pandoc"')
 MAIN_OPEN_RE = re.compile(r'<main class="prose">')
-TOC_END_RE = re.compile(r'(<nav id="TOC"[^>]*>.*?</nav>)', re.S)
+# either kind of contents: a volume's own, or the contents of a part that a
+# split volume left with one (scripts/split_volumes.py)
+TOC_END_RE = re.compile(r'(<nav (?:id="TOC"|class="mc-subtoc")[^>]*>.*?</nav>)', re.S)
 HEADING_RE = re.compile(r'<(/?)(h[1-6])\b([^>]*)>')
 
 SKIP_LINK = '<a class="mc-skip" href="#mc-text">Skip to the text</a>'
@@ -140,7 +142,7 @@ def mark_corpus(html):
 
 def add_skip_link(html):
     """The skip link first inside <main>, its target right after the TOC."""
-    if 'class="mc-skip"' in html or 'id="TOC"' not in html:
+    if 'class="mc-skip"' in html or not TOC_END_RE.search(html):
         return html, False
     m = re.search(r'<main class="prose[^"]*">', html)
     if not m:

@@ -19,6 +19,7 @@ Idempotent (the fenced block is rewritten in place, so a changed formula
 reaches a cached tree) and deterministic. Wired into `make html` after the
 resources build, and after `make content` has written docs/library.html; also
 runnable standalone over the committed docs/ tree."""
+import json
 import os
 import re
 import sys
@@ -35,6 +36,7 @@ IMAGE = SITE + '/cover.jpg'
 # see describe(). Kept as the honest generic: it says what the page is.
 DESC = 'A primary source in the Mere Catholicity Library.'
 LIBRARY = os.path.join(DOCS, 'library.html')
+PARTS = os.path.join(DOCS, 'library-parts.json')
 
 # Our card is fenced, so a later run REWRITES it rather than skipping the page:
 # without this, a pages tree restored from the build cache (CI, and any local
@@ -210,6 +212,30 @@ def catalog():
     return {w['href']: (w['title'], w['shelf']) for w in cat.works if w['shelf']}
 
 
+def parts_index():
+    """{'anf03-apology.html': {volume, volume_short, title, group, n, of}} —
+    docs/library-parts.json, written by scripts/split_volumes.py. A part page is
+    not in the Library catalog (the shelf lists the VOLUME), so without this
+    every one of the ten thousand parts would wear the one generic sentence —
+    which is the defect this file was written to end, at a new scale."""
+    try:
+        with open(PARTS, encoding='utf-8') as f:
+            return json.load(f).get('parts', {})
+    except (OSError, ValueError):
+        return {}
+
+
+def describe_part(part):
+    """A part's own description: what it is, what it belongs to, and where in
+    the volume it stands — which is what makes it unlike its 175 neighbours."""
+    where = part.get('group') or part.get('volume_short') or part.get('volume_title', '')
+    # the corpus titles carry their own full stops ('Apology.', 'The Five Books
+    # Against Marcion.'), and a sentence built on one reads 'Marcion., part 142'
+    return ('%s — %s, part %d of %d, in the Mere Catholicity Library.'
+            % (part.get('title', '').rstrip(), where.rstrip().rstrip('.'),
+               part.get('n', 1), part.get('of', 1)))
+
+
 def describe(name, works):
     """A Library page's own description: the work, then the shelf it stands on.
     Mechanical on purpose — 233 works, one formula, no prose to drift — and the
@@ -284,6 +310,7 @@ def uncard(html):
 
 def main():
     works = catalog()
+    parts = parts_index()
     written = skipped = flashed = shimmed = 0
     for name in sorted(os.listdir(DOCS)):
         if not name.endswith('.html'):
@@ -327,8 +354,10 @@ def main():
             skipped += 1          # somebody's curated card — leave it untouched
         else:
             over = OVERRIDES.get(name, {})
+            desc = (describe_part(parts[name]) if name in parts
+                    else describe(name, works))
             block = card(over.get('title', title), url,
-                         over.get('desc') or describe(name, works),
+                         over.get('desc') or desc,
                          over.get('og_type', 'book'), over.get('extra', ()))
             html = place_card(html, block, m.group(0))
             written += 1

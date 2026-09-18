@@ -212,6 +212,21 @@ class EveryServedPage(unittest.TestCase):
                if len(re.findall(r'<h1\b', h)) != 1}
         self.assertEqual(bad, {}, 'pages that are not headed once')
 
+    def test_no_page_claims_another_page_s_address(self):
+        """A split volume's parts inherit the volume's <head>, canonical and
+        all: 10,000 pages each telling a search engine they are a copy of
+        anf03.html would hand away exactly the standing the split was for.
+        The canonical is the page's OWN og:url, on every page but the one that
+        points elsewhere deliberately."""
+        wrong = []
+        for n, h in self.pages.items():
+            if n == 'resources.html':      # canonical -> library.html, on purpose
+                continue
+            c, u = CANON_RE.search(h), OG_URL_RE.search(h)
+            if c and u and c.group(1) != u.group(1):
+                wrong.append(n + ': ' + c.group(1) + ' != ' + u.group(1))
+        self.assertEqual(wrong[:20], [], 'pages whose canonical is not their own address')
+
     def test_every_page_names_its_canonical_address(self):
         """A canonical that is not an address of this site is worse than none:
         it hands the page's standing to somewhere else."""

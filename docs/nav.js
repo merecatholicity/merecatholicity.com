@@ -254,7 +254,7 @@ window.mcAsset = function (name) {
    rebuilding any of them; the script itself no-ops on the hand-authored pages. */
 (function () {
   var s = document.createElement('script');
-  s.src = 'deeplink.js?v=2297687171';
+  s.src = 'deeplink.js?v=3167846308';
   document.head.appendChild(s);
 })();
 
