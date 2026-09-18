@@ -121,6 +121,17 @@ test('a reader who reaches for a tab does not wait for an idle callback', () => 
   assert.ok(has(page.srcs(), 'app.js'), 'the first touch must bring the shell at once');
 });
 
+test('a scroll is a reader too', () => {
+  /* book.html and bishop-presbyter.html carry BOTH the corpus class and a
+     comments section, so if that section is ever opened its client is fetched
+     by the shell. The one reader who could have waited out the idle timeout was
+     a desktop wheel-scroller on the way down the site's longest document — a
+     wheel tick summons the shell at the top of the page instead. */
+  const page = run({ corpus: true });
+  page.fire('window', 'scroll');
+  assert.ok(has(page.srcs(), 'app.js'), 'a wheel tick must summon the shell');
+});
+
 test('the shell is appended once however many roads reach it', () => {
   const page = run({ corpus: true });
   page.press();

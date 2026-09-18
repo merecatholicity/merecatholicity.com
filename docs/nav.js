@@ -365,9 +365,15 @@ window.mcAsset = function (name) {
        a reload on a library page would take the tab bar away mid-session.
        So it is LATE, not absent: the two fixed bars still arrive within a round
        trip (chrome.js above, ~22 KB), and the shell itself is fetched once the
-       page has loaded and the main thread is idle — or at the first touch,
-       whichever comes first, so a reader who reaches for a tab never waits for
-       an idle callback that a busy page may be slow to give.
+       page has loaded and the main thread is idle — or at the first sign of a
+       reader, whichever comes first, so nobody waits on an idle callback that a
+       busy page may be slow to give. A SCROLL counts as that sign (2026-09-18):
+       two of these pages, book.html and bishop-presbyter.html, carry both the
+       corpus class and a comments section, and if that section is ever opened
+       its client is fetched by the shell — so the one reader who could have
+       waited out the 2.5s timeout was a desktop wheel-scroller on the way down
+       the site's longest document. A wheel tick now summons the shell at the
+       top of the page instead, and a phone's scroll was already a pointerdown.
        Everywhere else — the app pages, the hand pages, the home launcher — it
        loads exactly as before: those pages ARE the app. */
     var reading = !!document.querySelector('main.prose.corpus');
@@ -377,11 +383,13 @@ window.mcAsset = function (name) {
       sent = true;
       document.removeEventListener('pointerdown', shell, true);
       document.removeEventListener('keydown', shell, true);
+      window.removeEventListener('scroll', shell);
       document.head.appendChild(s);
     }
     if (!reading) { shell(); return; }
     document.addEventListener('pointerdown', shell, true);
     document.addEventListener('keydown', shell, true);
+    window.addEventListener('scroll', shell, { once: true, passive: true });
     function idle() {
       if (window.requestIdleCallback) window.requestIdleCallback(shell, { timeout: 2500 });
       else setTimeout(shell, 900);
