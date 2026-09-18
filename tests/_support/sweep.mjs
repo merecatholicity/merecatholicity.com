@@ -238,6 +238,7 @@ export const ROUTE_HINTS = {
   'POST /api/comments/dm/forward': (ids, who, me) => (me ? { items: [{ to: otherOf(who, me).hash, body: 'E3.sweepforward', enc: 3, keys: pairKeys(me, otherOf(who, me)) }] } : {}),
   'POST /api/comments/dm/edit': (ids) => ({ id: ids.dm, body: 'E3.sweepedit', enc: 3 }),
   'POST /api/comments/dm/pubkey': () => ({ pubkey: 'A'.repeat(43) }),
+  'POST /api/comments/dm/presence': (ids, who, me) => (me ? { hashes: [who.member.hash, who.outsider.hash, who.admin.hash].filter((h) => h !== me.hash) } : {}),
   'POST /api/comments/dm/ttl': (ids) => ({ thread_id: ids.thread, ttl: 86400 }),
   'POST /api/comments/dm/media/get': () => ({ media_key: PRIVATE['dm_media.key'].value }),
   'POST /api/comments/dm/groups': (ids, who, me) => (me ? { members: [who.member.hash, who.outsider.hash, who.admin.hash].filter((h) => h !== me.hash), name: 'a new group' } : {}),

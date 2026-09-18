@@ -1449,6 +1449,7 @@
    "error:string",
    "ok:boolean",
    "prefs.calls:number",
+   "prefs.me:string",
    "prefs.muted:array",
    "prefs.notify_dm:number",
    "prefs.notify_mention:number",

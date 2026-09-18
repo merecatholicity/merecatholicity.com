@@ -33,7 +33,7 @@ async function handleCallOffer(request: Request, env: Env, ctx: ExecutionContext
   const { data, me } = pre;
   const settings = await getAppSettings(env);
   if (settings.calls_enabled !== '1') return json({ ok: false, error: 'Calls are turned off.' }, 403);
-  const to = String(data.to || '');
+  const to = (await resolveId(env, String(data.to || ''))) || String(data.to || '');  // a pubid on the wire (L3)
   const call = String(data.call || '');
   const sdp = String(data.sdp || '');
   if (!/^[0-9a-f]{64}$/.test(to) || !/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -118,7 +118,7 @@ async function handleCallAnswer(request: Request, env: Env, ctx: ExecutionContex
   const { data, me } = pre;
   const settings = await getAppSettings(env);
   if (settings.calls_enabled !== '1') return json({ ok: false, error: 'Calls are turned off.' }, 403);
-  const to = String(data.to || '');
+  const to = (await resolveId(env, String(data.to || ''))) || String(data.to || '');  // a pubid on the wire (L3)
   const call = String(data.call || '');
   const sdp = String(data.sdp || '');
   if (!/^[0-9a-f]{64}$/.test(to) || !/^[0-9a-f]{16,64}$/.test(call)) return json({ ok: false, error: 'Bad request.' }, 400);

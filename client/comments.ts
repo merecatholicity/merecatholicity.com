@@ -1080,6 +1080,12 @@ import type { Boot } from './boot';
            whole page without their prefs and never retry. */
         if (!d || !d.ok) { if (mcPrefsFor === prefsForKey) mcPrefsFor = null; return; }
         state.prefs = d.prefs; window.mcPrefs = d.prefs;
+        /* The server's word on this identity's OWN public id (the P0 chain
+           L3): state.myHash becomes the pubid every served id is compared
+           against. Absent (an old worker) or equal (the valve, no pepper)
+           it leaves the sha256hex(key) value in place, so nothing shifts
+           until the flip is live. */
+        if (d.prefs && typeof d.prefs.me === 'string' && /^[0-9a-f]{64}$/.test(d.prefs.me)) state.myHash = d.prefs.me;
         /* The same answer carries whether this identity is spared the
            challenge, so the composer's focus usually finds it already
            settled instead of paying its own round trip. */

@@ -774,7 +774,7 @@ async function handleBoardCat(request: Request, env: Env, url: URL) {
 async function handleAuthorPosts(request: Request, env: Env, url: URL) {
   const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
   if (limited instanceof Response) return limited;
-  const hash = String(url.searchParams.get('hash') || '');
+  const hash = (await resolveId(env, String(url.searchParams.get('hash') || ''))) || String(url.searchParams.get('hash') || '');  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   const p = Math.min(1000, Math.max(1, Math.floor(Number(url.searchParams.get('p')) || 1)));
   const per = 20;
@@ -813,7 +813,7 @@ async function handleSearch(request: Request, env: Env, url: URL) {
   let catPage = boardKey('board:' + (url.searchParams.get('cat') || ''));
   if (catPage === ADMIN_CAT) catPage = null;
   const authorRaw = String(url.searchParams.get('author') || '');
-  const author = /^[0-9a-f]{64}$/.test(authorRaw) ? authorRaw : null;
+  const author = /^[0-9a-f]{64}$/.test(authorRaw) ? ((await resolveId(env, authorRaw)) || authorRaw) : null;  // a pubid on the wire (L3)
   const order = url.searchParams.get('sort') === 'new' ? 'c.id DESC' : 'bm25(comments_fts)';
 
   const filters: string[] = [];
@@ -1052,7 +1052,7 @@ async function handleTrust(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (data.trusted) {

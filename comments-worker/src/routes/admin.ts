@@ -26,6 +26,7 @@ import {
   parseFeedScope,
   scopeLabel,
   json,
+  resolveId,
   cloakIds,
   keyFloor,
   ptrLookup,
@@ -265,7 +266,7 @@ async function handleLock(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
   if (data.locked) {
@@ -290,7 +291,7 @@ async function handleShadowban(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
   /* Never mute the librarian, and never mute an admin (a mute an admin can't
@@ -335,7 +336,7 @@ async function handleDeleteUser(request: Request, env: Env) {
   if (!(await throttle(env, 'POST_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await requireAdmin(env, key))) return json({ ok: false, error: 'No.' }, 403);
   const affected = await env.DB.prepare(
@@ -493,7 +494,7 @@ async function handleAdmin(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = key ? await sha256hex(key) : '';
   if (!(await isAdminHash(env, me))) return json({ ok: false, error: 'No.' }, 403);

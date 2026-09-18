@@ -89,9 +89,13 @@ async function handleDmSend(request: Request, env: Env, ctx: ExecutionContext) {
    claim, the row and what hangs off it, the fan-out, the bells. Everything
    before it — the throttle, the ban, Turnstile — is the caller's. */
 async function deliverDmWord(env: Env, ctx: ExecutionContext | undefined, me: string, data: Body, now: number) {
-  const to = String(data.to || '');
+  const toWire = String(data.to || '');
   const threadId = Math.floor(Number(data.thread_id) || 0);
-  if (!threadId && !/^[0-9a-f]{64}$/.test(to)) return json({ ok: false, error: 'Bad request.' }, 400);
+  if (!threadId && !/^[0-9a-f]{64}$/.test(toWire)) return json({ ok: false, error: 'Bad request.' }, 400);
+  /* `to` is a pubid on the wire (the P0 chain L3) — resolve it to the account
+     hash the ledger is keyed by; an unknown id is no correspondent. */
+  const to = threadId ? '' : ((await resolveId(env, toWire)) || '');
+  if (!threadId && !to) return json({ ok: false, error: 'No such conversation.' }, 404);
   /* enc = 3: the sealed envelope (2026-09-13) — a content key per message,
      boxed once per member, `keys` naming every current member (the sender
      included); enc = 1: the pair's box, accepted one deploy for a bundle
@@ -139,7 +143,10 @@ async function deliverDmWord(env: Env, ctx: ExecutionContext | undefined, me: st
     for (const h of Object.keys(raw)) {
       const v = raw[h];
       if (!/^[0-9a-f]{64}$/.test(h) || typeof v !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(v)) return json({ ok: false, error: 'Bad request.' }, 400);
-      keys[h] = v;
+      /* the sealed set is keyed by pubid on the wire; store it under the account
+         hash so dm_keys stays account-keyed and membersEqual compares hashes */
+      const acct = (await resolveId(env, h)) || h;
+      keys[acct] = v;
     }
     const roster = thread ? await dmCurrentMembers(env, thread.id) : await dmPubkeysOf(env, [me, other]);
     if (!Dm.membersEqual(Object.keys(keys))(roster.map((m) => m.hash))) {
@@ -354,7 +361,8 @@ async function handleDmMembers(request: Request, env: Env, ctx: ExecutionContext
   const thread = found.thread;
   const kind = Number(thread.kind) || 0;
   const current = (await dmCurrentMembers(env, thread.id)).map((m) => m.hash);
-  const asked = listOf(data.add).map((h) => String(h || '')).filter((h) => current.indexOf(h) === -1);
+  const askedResolved = await Promise.all(listOf(data.add).map((h) => resolveId(env, String(h || ''))));
+  const asked = askedResolved.filter((h): h is string => !!h && current.indexOf(h) === -1);
   const { ok: wanted, missing } = await dmEligible(env, me, asked);
   if (!wanted.length && !missing.length) return json({ ok: false, error: 'Bad request.' }, 400);
   if (current.length + wanted.length + missing.length > Dm.maxMembers) return json({ ok: false, error: 'A conversation holds at most ' + Dm.maxMembers + ' members.' }, 400);
@@ -492,7 +500,7 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
   if (pre instanceof Response) return pre;
   const { data, key, me } = pre;
   const threadId = Math.floor(Number(data.thread_id) || 0);
-  const withHash = String(data.with || '');
+  const withHash = (await resolveId(env, String(data.with || ''))) || String(data.with || '');
   if ((!threadId && !/^[0-9a-f]{64}$/.test(withHash))) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!threadId && me === withHash) return json({ ok: false, error: 'Bad request.' }, 400);
   const found = await dmThreadFor(env, me, { thread_id: threadId, with: withHash });
@@ -665,9 +673,14 @@ async function handleDmPresence(request: Request, env: Env) {
   const pre = await keyedGated(request, env, 'READ_LIMIT');
   if (pre instanceof Response) return pre;
   const { ip, data, key, me } = pre;
-  const hashes = listOf(data.hashes)
+  /* the correspondent ids arrive as pubids (the P0 chain L3); resolve them to
+     the account hashes the hub and profiles are keyed by, and cloak the answer
+     back (online/seen are id-array / id-map fields, so cloakIds undoes it). */
+  const wireHashes = listOf(data.hashes)
     .filter((h): h is string => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h)).slice(0, 50);
-  if (!hashes.length || !env.HUB) return json({ ok: true, online: [], seen: {} }, 200);
+  if (!wireHashes.length || !env.HUB) return json({ ok: true, online: [], seen: {} }, 200);
+  const hashes = (await Promise.all(wireHashes.map((h) => resolveId(env, h)))).filter((h): h is string => !!h);
+  if (!hashes.length) return json({ ok: true, online: [], seen: {} }, 200);
   const on = await hubPresenceOf(env, hashes);
   /* "Last seen" for those not online now: the hub's stamp, absent for a member
      who chose appear-offline (the hub clears it), so serving it as-is IS the
@@ -677,7 +690,7 @@ async function handleDmPresence(request: Request, env: Env) {
     'SELECT hash, last_seen_at FROM profiles WHERE last_seen_at IS NOT NULL AND hash IN (' + inList(hashes.length, 1) + ')'
   ).bind(...hashes).all<{ hash: string; last_seen_at: number }>();
   for (const r of (rows.results || [])) if (on.indexOf(r.hash) === -1) seen[r.hash] = Number(r.last_seen_at);
-  return json({ ok: true, online: on, seen }, 200);
+  return json(await cloakIds(env, { ok: true, online: on, seen }), 200);
 }
 
 /* The blocked-members roster for the settings gear: the members this reader has
@@ -706,7 +719,7 @@ async function handleDmTtl(request: Request, env: Env, ctx: ExecutionContext) {
   if (pre instanceof Response) return pre;
   const { ip, data, me } = pre;
   const threadId = Math.floor(Number(data.thread_id) || 0);
-  const other = String(data.with || '');
+  const other = (await resolveId(env, String(data.with || ''))) || String(data.with || '');
   const ttl = Math.floor(Number(data.ttl) || 0);
   if (DM_TTLS.indexOf(ttl) === -1 || (!threadId && !/^[0-9a-f]{64}$/.test(other))) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!threadId && me === other) return json({ ok: false, error: 'Bad request.' }, 400);
@@ -1030,7 +1043,7 @@ async function handleDmBlock(request: Request, env: Env) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT' });
   if (pre instanceof Response) return pre;
   const { data, me } = pre;
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (data.blocked) {
     await env.DB.prepare('INSERT OR IGNORE INTO dm_blocks (owner_hash, blocked_hash, created_at) VALUES (?1, ?2, ?3)')

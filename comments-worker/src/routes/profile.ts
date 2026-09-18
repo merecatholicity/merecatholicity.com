@@ -22,6 +22,7 @@ import {
   isAdminHash,
   isTrusted,
   json,
+  cloakIds,
   keyFloor,
   serveId,
   resolveId,
@@ -226,7 +227,7 @@ async function handleProfileClear(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!key || !/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (env.AVATARS) await env.AVATARS.delete('avatars/' + hash);
@@ -259,7 +260,9 @@ async function handlePrefs(request: Request, env: Env) {
     /* The mute list follows the member across devices (the client merges and
        writes through). Hashes only, clamped, stored as a JSON array. */
     if ('muted' in set && Array.isArray(set.muted)) {
-      const clean = set.muted.filter((h: unknown) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 300);
+      /* the mute list arrives as pubids (L3); store the account hashes */
+      const wire = set.muted.filter((h: unknown) => /^[0-9a-f]{64}$/.test(String(h))).slice(0, 300);
+      const clean = (await Promise.all(wire.map((h: unknown) => resolveId(env, String(h))))).filter((h): h is string => !!h);
       parts.push('muted = ?'); vals.push(JSON.stringify(clean));
     }
     if (parts.length) {
@@ -278,14 +281,19 @@ async function handlePrefs(request: Request, env: Env) {
      nobody: 2026-09-17). A hint, never a permission: the server decides again
      on every write, and a client that guesses wrong is simply refused. */
   const spared = turnstileSkipEstablished(await getAppSettings(env)) && !!(row && row.verified_at);
-  return json({ ok: true, prefs: {
+  /* `me` is the caller's OWN public id (the P0 chain L3) — the one authoritative
+     way for the client to learn its pubid, since it cannot compute one (that
+     needs the pepper). state.myHash is set from this, falling back to
+     sha256hex(key) for the old worker / the valve, where the two are equal. */
+  return json(await cloakIds(env, { ok: true, prefs: {
     receipts: (row && row.receipts_mode === 'off') ? 'off' : 'auto',
     notify_reply: onOff(row && row.notify_reply),
     notify_mention: onOff(row && row.notify_mention),
     notify_dm: onOff(row && row.notify_dm),
     calls: onOff(row && row.calls_ok),
     muted: Array.isArray(muted) ? muted : [],
-  }, turnstile: { spared } }, 200);
+    me,
+  }, turnstile: { spared } }), 200);
 }
 
 async function handleProfileAdminEdit(request: Request, env: Env) {
@@ -294,7 +302,7 @@ async function handleProfileAdminEdit(request: Request, env: Env) {
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests.' }, 429);
   const key = String(data.key || '');
-  const target = String(data.hash || '');
+  const target = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!key || !/^[0-9a-f]{64}$/.test(target)) return json({ ok: false, error: 'Bad request.' }, 400);
   if (!(await isAdminHash(env, await sha256hex(key)))) return json({ ok: false, error: 'No.' }, 403);
   if (target === MERECAT_BOT.hash) return json({ ok: false, error: 'The librarian keeps its own desk.' }, 400);
@@ -400,7 +408,7 @@ async function handleAvatarDelete(request: Request, env: Env) {
    new URL. No rate limiter: one page can hold many authors. */
 async function handleAvatarGet(request: Request, env: Env, url: URL) {
   if (!env.AVATARS) return new Response('No avatar.', { status: 404 });
-  const hash = String(url.searchParams.get('hash') || '');
+  const hash = (await resolveId(env, String(url.searchParams.get('hash') || ''))) || String(url.searchParams.get('hash') || '');  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return new Response('Bad request.', { status: 400 });
   const obj = await env.AVATARS.get('avatars/' + hash);
   if (!obj) return new Response('No avatar.', { status: 404, headers: { 'Cache-Control': 'public, max-age=300' } });

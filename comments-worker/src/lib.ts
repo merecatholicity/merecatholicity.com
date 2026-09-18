@@ -443,8 +443,8 @@ const ID_FIELDS = new Set([
   'hash', 'author_hash', 'sender_hash', 'actor_hash', 'from_hash', 'to_hash',
   'other_hash', 'owner_hash', 'blocked_hash', 'from', 'to', 'reader', 'by', 'saved_by', 'me',
 ]);
-const ID_ARRAY_FIELDS = new Set(['left', 'muted', 'mentions', 'blocked', 'added', 'missing']);
-const ID_MAP_FIELDS = new Set(['keys', 'identities']);   // OBJECTs keyed by id (dm_keys sealed set; the admin fingerprint's per-member map)
+const ID_ARRAY_FIELDS = new Set(['left', 'muted', 'mentions', 'blocked', 'added', 'missing', 'online']);
+const ID_MAP_FIELDS = new Set(['keys', 'identities', 'seen']);   // OBJECTs keyed by id (dm_keys sealed set; the admin fingerprint; presence last-seen)
 /* the pseudonym field beside an id, recomputed from the cloaked id */
 const ASSIGNED_BESIDE: Record<string, string> = {
   hash: 'assigned', author_hash: 'assigned', sender_hash: 'assigned', actor_hash: 'actor_assigned',
@@ -868,7 +868,9 @@ export async function deliverNotifications(env: Env, o: BoardNotice) {
     const mentions: string[] = [];
     if (Array.isArray(o.mentions)) {
       for (const m of o.mentions) {
-        const h = String(m || '').toLowerCase();
+        /* a mention arrives as a pubid (the P0 chain L3) — resolve it to the
+           account hash the inbox is keyed by; an unknown id notifies nobody */
+        const h = (await resolveId(env, String(m || '').toLowerCase())) || String(m || '').toLowerCase();
         // the librarian holds no inbox: its hash never receives a notification
         if (/^[0-9a-f]{64}$/.test(h) && h !== o.authorHash && h !== MERECAT_BOT.hash &&
             mentions.indexOf(h) === -1) mentions.push(h);
@@ -1670,7 +1672,11 @@ export function listOf(v: unknown): unknown[] {
 }
 
 export async function dmEligible(env: Env, me: string, hashes: unknown): Promise<{ ok: string[]; missing: string[] }> {
-  const want = Array.from(new Set(listOf(hashes).map((h) => String(h || '')).filter((h) => /^[0-9a-f]{64}$/.test(h) && h !== me && h !== MERECAT_BOT.hash)));
+  /* the ids arrive as pubids (the P0 chain L3) — resolve each to the account
+     hash the roster and dm_pubkeys are keyed by; an unknown id is dropped */
+  const wire = Array.from(new Set(listOf(hashes).map((h) => String(h || '')).filter((h) => /^[0-9a-f]{64}$/.test(h))));
+  const resolved = await Promise.all(wire.map((h) => resolveId(env, h)));
+  const want = Array.from(new Set(resolved.filter((h): h is string => !!h && h !== me && h !== MERECAT_BOT.hash)));
   if (!want.length) return { ok: [], missing: [] };
   const r = await env.DB.prepare(
     'SELECT pk.hash FROM dm_pubkeys pk WHERE pk.hash IN (' + inList(want.length, 2) + ') ' +
@@ -2341,7 +2347,8 @@ export async function deliverWallNotifications(env: Env, o: { authorHash: string
   if (Array.isArray(o.mentions)) {
     let count = 0;
     for (const m of o.mentions) {
-      const h = String(m || '').toLowerCase();
+      /* a pubid on the wire (L3) -> the account hash the inbox is keyed by */
+      const h = (await resolveId(env, String(m || '').toLowerCase())) || String(m || '').toLowerCase();
       if (/^[0-9a-f]{64}$/.test(h) && !seen.has(h) && count < 10) { add(h, false); count += 1; }
     }
   }

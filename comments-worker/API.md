@@ -130,6 +130,17 @@ keyed (`POST /dm/directory`, 2026-09-18) rather than an anonymous read, and a
 generated 43-character key is the only shape this design is actually safe under
 — a client that lets a member invent one should say so plainly.
 
+**The public id (2026-09-18, layer three): what crosses the wire is a `pubid`,
+not the account hash.** `pubid = SHA-256(PUBLIC_ID_PEPPER || hash)` — the SAME
+64-hex shape (every id field keeps its name: `author_hash`, `hash`,
+`sender_hash` still), so a client keeps treating a member id as an opaque
+token, but inverting one needs a pepper the edge never serves. Every member id
+you RECEIVE is a pubid and every member id you SEND (a DM `to`, a mention, a
+block) must be the pubid you were served; the server resolves it back. Learn
+your OWN id from `/prefs`'s `me`, never by hashing your key. Gated behind the
+pepper: until it is set the wire carries raw hashes exactly as before (the
+valve), and an old `?u=<hash>` link is honoured for one deploy.
+
 - **Generate:** 32 random bytes → base64url (`+`→`-`, `/`→`_`, strip `=`), ~43
   chars. (Web client: `crypto.getRandomValues` + `btoa`.) **Do this; do not let a
   member type a key.** A generated key is the only shape safe under §2.2.
@@ -547,7 +558,12 @@ follows the member across devices). Answers `{ok:true, prefs:{receipts, notify_r
 notify_mention, notify_dm, calls, muted}, turnstile:{spared}}` — `spared` is whether THIS
 identity will be let past the challenge on its next write (the sparing switch and
 `profiles.verified_at` together, 2026-09-17), so the client knows whether mounting a widget is
-worth it. A hint only: the server decides again on every write.
+worth it. A hint only: the server decides again on every write. **`me`** (2026-09-18, the P0 chain
+L3) is the caller's OWN public id — the one authoritative way a client learns its pubid, since it
+cannot compute one (that needs the pepper). Set your local "my id" from it; where no pepper is set
+(the pre-L3 valve) it equals `sha256hex(key)`, so a client that falls back to that stays correct.
+`muted` is a list of PUBIDS now (and a written `muted` is read as pubids), like every member id on
+the wire.
 
 **`POST /api/comments/bookmark`** (keyed, `POST_LIMIT`) — `{key, kind:'topic'|'wall', ref, on}`
 toggles a saved item (`'wall'` is not a kind while the social layer is off — the same

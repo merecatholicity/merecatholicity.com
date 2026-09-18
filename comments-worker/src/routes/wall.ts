@@ -82,7 +82,7 @@ async function handleWall(request: Request, env: Env) {
   const r = await wallReader(request, env, data);
   if ('resp' in r) return r.resp;
   if (await socialOff(env)) return noSuchPage();
-  const hash = String(data.hash || '');
+  const hash = (await resolveId(env, String(data.hash || ''))) || String(data.hash || '');  // a pubid on the wire (L3)
   if (!/^[0-9a-f]{64}$/.test(hash)) return json({ ok: false, error: 'No such member.' }, 400);
   const cursor = Math.floor(Number(data.cursor) || 0);
   /* A muted member's own wall reads as empty to everyone else. */

@@ -56,5 +56,5 @@ test('the thread carries every member\'s last_seen, and the presence read carrie
   const p = body('handleDmPresence');
   assert.ok(/last_seen_at IS NOT NULL AND hash IN \(/.test(p), 'only stamped members');
   assert.ok(/if \(on\.indexOf\(r\.hash\) === -1\) seen\[r\.hash\] = Number\(r\.last_seen_at\)/.test(p), 'an online member\'s stamp is not served');
-  assert.ok(/return json\(\{ ok: true, online: on, seen \}, 200\)/.test(p));
+  assert.ok(/return json\(await cloakIds\(env, \{ ok: true, online: on, seen \}\), 200\)/.test(p), 'the presence answer is cloaked to pubids (P0 L3)');
 });

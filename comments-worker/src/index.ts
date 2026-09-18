@@ -52,6 +52,7 @@ import {
   originOk,
   hubHome,
   sha256hex,
+  resolveId,
   pruneComments,
   pruneIdentityIps,
   pruneMerecatChats,
@@ -440,7 +441,12 @@ async function handleLive(request: Request, env: Env) {
      also names the connect bucket, as the key does for a request. */
   const hint = String(new URL(request.url).searchParams.get('h') || '');
   if (!(await throttle(env, 'CONNECT_LIMIT', ip, { hash: hint }))) return new Response('slow down', { status: 429 });
-  const key = /^[0-9a-f]{64}$/.test(hint) ? hint : await sha256hex(ip);
+  /* `?h=` is the member's PUBID (the P0 chain L3) — shard by the ACCOUNT hash it
+     resolves to, so a socket lands on the same shard sendToHub targets (which
+     shards by account hash); the auth frame still proves the key. In the valve
+     (no pepper) resolveId returns the hint unchanged, so sharding is as before. */
+  const resolved = /^[0-9a-f]{64}$/.test(hint) ? await resolveId(env, hint) : null;
+  const key = resolved || (/^[0-9a-f]{64}$/.test(hint) ? hint : await sha256hex(ip));
   return hubHome(env, key).fetch(request);
 }
 
