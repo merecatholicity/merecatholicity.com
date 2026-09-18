@@ -79,6 +79,7 @@ on page one.)
 - **GitHub Pages serves what `.github/workflows/build.yml` deploys — an ARTIFACT, not a branch (since 2026-09-08).** — `log/2026-09.md`
 - **The platform reviewed whole, and the finding is the gap between the machine and its use (2026-09-17).** — `log/2026-09.md`
 - **The app reloaded itself because the edge rewrites every page it serves (2026-09-17).** — `log/2026-09.md`
+- **An article page asks before it pays: the comments client is fetched only where a section is actually open (2026-09-18).** — `log/2026-09.md`
 
 ### Build system
 

@@ -456,6 +456,52 @@ customElements.define('mc-audio-dock', McAudioDock);
     return Promise.all(jobs);
   }
 
+  /* ---- the article pages' comments client, fetched only if there is one ----
+
+     A comments section on one of the site's own writings is ADMIN-SWITCHED and
+     ships CLOSED (Domain.Comments; the polarity is deliberate — only a listed
+     path opens anything). Its client is docs/comments.js, 227 KB, and until
+     2026-09-18 every such page carried an eager <script> for it: the reader of
+     `credo.html` downloaded the whole forum, DM and composer client, whereupon
+     comments.js read /config, found its path unlisted, and rendered nothing.
+     Measured on the day: `comments.pages` was EMPTY — seven content pages were
+     paying it in full for nothing at all.
+
+     So the page carries the mount and no script (scripts/content.py,
+     partials/book-tail.html), and the decision moves here, ahead of the
+     download. The config read is the same one comments.js used to make — same
+     URL, same 5-minute TTL, deduped and cached by app/store.ts — so this costs
+     no extra request, it just asks BEFORE paying rather than after.
+
+     Runs on the first paint and on every soft navigation (boots()); the eight
+     hand-written app pages are unaffected — they carry their own eager tag, so
+     `loadedScripts` already has it and this returns at once. */
+  function pagePath() {
+    var p = location.pathname;
+    if (p.slice(-1) === '/') p += 'index.html';
+    if (p.slice(-5) !== '.html') p += '.html';
+    return p;
+  }
+  var commentsAsked: Record<string, boolean> = {};
+  function commentsClientIfOpen() {
+    if (loadedScripts['comments.js']) return;                  // an app page, or already fetched
+    if (!document.querySelector('section[data-comments]')) return;   // no mount: nothing to open
+    var path = pagePath();
+    if (commentsAsked[path]) return;                           // one ask per path per session
+    commentsAsked[path] = true;
+    type Cfg = { ok?: boolean; comments?: { pages?: unknown } };
+    transport.cachedJson('/api/comments/config', undefined, 300000).then(function (d: Cfg) {
+      var listed = d && d.ok && d.comments ? d.comments.pages : null;
+      var pages: string[] = Array.isArray(listed) ? listed : [];
+      if (pages.indexOf(path) === -1) return;                  // closed: the reader pays nothing
+      if (loadedScripts['comments.js']) return;                // a hop got there first
+      loadedScripts['comments.js'] = true;
+      loadScript(window.mcAsset ? window.mcAsset('comments.js') : 'comments.js').then(function (ok) {
+        if (!ok) { delete loadedScripts['comments.js']; delete commentsAsked[path]; }
+      });
+    }).catch(function () { delete commentsAsked[path]; });     // unreachable reads as closed, and may be asked again
+  }
+
   /* Boot the client for a LOCALLY built platform page. Every platform document
      carries the same one script (comments.js), and on any platform hop it is
      already loaded — so there is nothing to fetch, only a boot to call, and it
@@ -639,6 +685,7 @@ customElements.define('mc-audio-dock', McAudioDock);
        <main> is a new node each swap, so the class triggers the animation once. */
     var swapped = document.querySelector('main');
     if (swapped) swapped.classList.add('mc-swapin');
+    commentsClientIfOpen();
   }
 
   /* ---- robust document fetch: per-attempt timeout + retries ----

@@ -32,10 +32,6 @@ import yaml
 # (content/, the partials/) and the built site (docs/) hang off the repo root.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONTENT_DIR = os.path.join(ROOT, 'content')
-# Keep in step with the comments.js cache-bust bump (the wordlists-style
-# discipline): a content page with comments carries this exact include.
-COMMENTS_V = '3572150943'
-
 # Social-sharing defaults (Open Graph / Twitter cards). Every built page carries
 # a correct per-page card so a shared link shows what the page IS, not a generic
 # site blurb. Per-page overrides ride the frontmatter (`description`, `image`,
@@ -145,8 +141,14 @@ def build_page(slug, source_path, nav_block, footer_block):
             parts.append('<p class="canon">' + fm['canon'] + '</p>\n')
     parts.append('\n' + body_html + '\n')
     if carries_comments(fm):
-        parts.append('\n<section class="comments" data-comments></section>\n'
-                     '<script type="module" src="comments.js?v=' + str(COMMENTS_V) + '"></script>\n')
+        # The MOUNT only. A comments section is admin-switched and ships CLOSED
+        # (Domain.Comments), and its client is 227 KB — so an article page no
+        # longer carries a <script> for it. app/shell.ts reads the (edge-cached)
+        # config and injects comments.js by window.mcAsset ONLY for a path the
+        # admin has opened: the very check comments.js used to make for itself
+        # AFTER the reader had already paid to download it. The eight app pages
+        # are hand-written and keep their eager tag.
+        parts.append('\n<section class="comments" data-comments></section>\n')
     # extra per-page scripts (a page's own light JS: flash.js, index.js,
     # bible-reader.js, contact.js…). A string or a list of srcs; each becomes
     # a deferred include just before </main>, exactly as the hand pages carried.

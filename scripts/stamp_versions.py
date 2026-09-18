@@ -56,7 +56,12 @@ PAGE_ASSETS = ['comments.js', 'bible-reader.js', 'index.js', 'flash.js',
 # reads their keys from window.mcAssets (the MC_ASSETS map in nav.js). Keeping
 # them OUT of client/comments.ts is what breaks the circularity — a key in the
 # bundle's source would change the bundle, which would change its own key.
-RUNTIME_ASSETS = ['qr.min.js', 'tweetnacl.min.js', 'lamejs.min.js',
+# comments.js is BOTH: the eight app pages carry it in a <script src=> the
+# page-asset pass stamps, and an article page carries no tag at all since
+# 2026-09-18 — the shell injects it by window.mcAsset('comments.js') only for
+# a path whose comments section the admin has actually opened, so its key must
+# also ride MC_ASSETS.
+RUNTIME_ASSETS = ['qr.min.js', 'tweetnacl.min.js', 'lamejs.min.js', 'comments.js',
                   'turnstile.html', 'kjv.json', 'dr.json',
                   'emoji/emoji-data.json', 'avatars/presets/index.json']
 
@@ -190,12 +195,10 @@ def main():
     for name, n in sorted(hits.items()):
         changed.append(name + ' -> ' + stamps[name] + ' on ' + str(n) + ' pages')
 
-    # content.py stamps fresh page builds, so its constant must carry the same
-    # key (a quoted string constant: the value is opaque to content.py).
-    cp = os.path.join(ROOT, 'scripts', 'content.py')
-    if sub_file(cp, r"COMMENTS_V = ['\"]?[0-9a-z]+['\"]?",
-                "COMMENTS_V = '" + stamps['comments.js'] + "'"):
-        changed.append('content.py COMMENTS_V -> ' + stamps['comments.js'])
+    # content.py no longer stamps a comments.js include (2026-09-18): an article
+    # page carries the mount alone and the shell names the script by
+    # window.mcAsset, so COMMENTS_V is gone and there is nothing here to keep in
+    # step. sub_file itself is still exercised by tests/py/test_stamp_versions.py.
 
     # ---- 5. The manifest the app reads to know whether it is current.
     #        `build` changes when any asset changes, and only then.
