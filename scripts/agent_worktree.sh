@@ -7,19 +7,48 @@
 # purescript/output, so one agent's build never rewrites the other's. Work,
 # commit and push FROM the worktree; the shared checkout is only ever
 # fast-forwarded (`git pull --ff-only`).
+#
+# RUN IT AGAIN ON AN EXISTING WORKTREE TO REPAIR IT (2026-09-18). The
+# node_modules symlink was briefly TRACKED — `.gitignore` said `node_modules/`
+# and a trailing slash never matches a symlink of that name — so any worktree
+# that hard-resets or checks out past the commit which untracked it (c8e3363)
+# has git DELETE the link from disk, exactly as it would any other file the new
+# commit does not carry. Nothing is broken and the fix was right; but every npm,
+# npx and make command in that worktree then fails with a missing-module error
+# that looks nothing like "a checkout removed your symlink", and it cost two
+# sessions time on the day. So this script no longer only refuses when the
+# directory exists: it puts back what it knows how to put back, and says so.
 set -e
-name=${1:?usage: scripts/agent_worktree.sh <name>}
+name=${1:?usage: scripts/agent_worktree.sh <name>  (run again to repair an existing one)}
 here=$(cd "$(dirname "$0")/.." && pwd)
 dir="$here/local/wt/$name"
-[ ! -e "$dir" ] || { echo "$dir exists" >&2; exit 1; }
+
+link_node_modules() {
+  # -n so an existing link to a DIRECTORY is replaced rather than followed into
+  # it (ln -sf alone would write inside the target); -f so a stale link goes.
+  ln -sfn "$here/node_modules" "$dir/node_modules"
+}
+
+if [ -e "$dir" ]; then
+  [ -d "$dir/.git" ] || [ -f "$dir/.git" ] || { echo "$dir exists and is not a worktree" >&2; exit 1; }
+  if [ -e "$dir/node_modules" ]; then
+    echo "worktree $dir is intact (node_modules -> $(readlink "$dir/node_modules" || echo 'a real directory'))"
+  else
+    link_node_modules
+    echo "repaired $dir: node_modules symlink restored (a checkout past c8e3363 removes it)"
+  fi
+  exit 0
+fi
+
 cd "$here"
 git fetch -q origin
 git worktree add --detach "$dir" origin/main
-ln -s "$here/node_modules" "$dir/node_modules"
+link_node_modules
 cat <<MSG
 worktree ready: $dir  (detached at origin/main)
   cd $dir
   git switch -c <branch>      # or work detached and push with: git push origin HEAD:main
   make psbuild                # its own purescript/output
+  # node_modules gone after a reset? run this script again with the same name
   # when done: cd $here && git worktree remove $dir
 MSG
