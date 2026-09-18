@@ -38,10 +38,16 @@
 # The CSP already allows it: static.cloudflareinsights.com in script-src and
 # cloudflareinsights.com in connect-src (rulesets.tf) — allowlisted since the
 # ruleset was written, for a beacon that was never served.
+# `enabled` and `lite` are NOT declared, and that is the whole reason this file
+# plans clean. The RUM read the provider imports from does not return them, so
+# they are null in state; declaring the values the dashboard shows (true/false)
+# made every plan an update — `+ enabled`, `+ lite`, token and snippet "known
+# after apply" — which under a token with Web Analytics READ and not write is a
+# failing apply on EVERY run, inherited by whoever opens the queue next for a
+# change of their own. An attribute an import cannot capture is left to the
+# remote: adopt what the API answers, declare only what we mean to hold.
 resource "cloudflare_web_analytics_site" "main" {
   account_id   = var.account_id
   zone_tag     = var.zone_id
   auto_install = true
-  enabled      = true
-  lite         = false
 }
