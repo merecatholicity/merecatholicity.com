@@ -32,8 +32,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /* Measured 2026-09-17 (200-answers per identity over the route table). A
    floor may rise; lowering one is a decision stated in the commit, because a
-   falling count is a sweep going hollow. */
-const FLOORS = { anon: 19, member: 84, outsider: 63, admin: 123 };
+   falling count is a sweep going hollow.
+   anon 19 -> 18 on 2026-09-18, deliberately: /dm/directory was the one road a
+   stranger could walk to every member's hash at once, and a hash is the
+   unsalted SHA-256 of a key (the 2026-09-17 review's P0). It is keyed now, so
+   there is one fewer anonymous success — the sweep did not go hollow, a door
+   closed. */
+const FLOORS = { anon: 18, member: 84, outsider: 63, admin: 123 };
 
 let sweep;
 before(async () => {

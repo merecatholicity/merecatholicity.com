@@ -1434,7 +1434,9 @@ import type { Boot } from './boot';
       case 'MerecatThread': return lazyView('merecat', 'viewMerecatThread', Number(r.s));
       case 'MerecatThreads': return lazyView('merecat', 'viewMerecatThreads');
       case 'Notifications': return viewNotifications();
-      case 'Users': return lazyView('admin', 'viewUsers');
+      /* The roster is keyed since 2026-09-18 (the P0 chain): the screen asks
+         for an identity rather than showing a member list that cannot load. */
+      case 'Users': return isMember() ? lazyView('admin', 'viewUsers') : viewJoin('see who else is here');
       case 'Search': return viewSearch();
       case 'Audit': return lazyView('admin', 'viewAudit');
       case 'Feed': go('feed.html' + location.hash, true); return;

@@ -254,7 +254,7 @@ export function installDmInbox(B: Boot) {
       if (dir) return cb();
       if (loading) return;
       loading = true;
-      fetch(API + '/dm/directory' + freshParam('?'))
+      fetch(API + '/dm/directory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) })
         .then(function (r) { return r.json(); })
         .then(function (d) { loading = false; if (d.ok) { dir = d.users; cb(); } })
         .catch(function () { loading = false; note.textContent = 'The member list could not be loaded.'; });

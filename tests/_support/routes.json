@@ -185,9 +185,9 @@
   "fn": "(request, env, ctx, url) => handleDmDelete(request, env)"
  },
  {
-  "m": "GET",
+  "m": "POST",
   "p": "/api/comments/dm/directory",
-  "fn": "(request, env, ctx, url) => handleDmDirectory(request, env, url)"
+  "fn": "(request, env, ctx, url) => handleDmDirectory(request, env)"
  },
  {
   "m": "POST",

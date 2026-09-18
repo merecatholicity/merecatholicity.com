@@ -293,12 +293,13 @@ check(st == 400 and d is not None and d.get('ok') is False,
       'profile: malformed hash -> 400 ok:false', str(raw[:200]))
 
 # ---------------------------------------------------------------------------
-# GET /api/comments/dm/directory — the cacheable member directory.
+# POST /api/comments/dm/directory — the member roster, KEYED since 2026-09-18.
+# The anonymous door is checked here too: a member's hash is the unsalted
+# SHA-256 of their key, so a keyless roster was a wordlist's shopping list.
 # ---------------------------------------------------------------------------
-st, d, raw = get('/api/comments/dm/directory')
-ok = st == 200 and d is not None and d.get('ok') is True and isinstance(d.get('users'), list)
-check(ok and len(d['users']) > 0 and is_hex64(d['users'][0].get('hash')) and 'assigned' in d['users'][0],
-      'dm/directory: shape (users list of {hash,assigned,...})', str(raw[:200]))
+st, d, raw = post('/api/comments/dm/directory', {})
+check(st == 400 and d is not None and d.get('ok') is False,
+      'dm/directory: no key -> 400 ok:false (the roster is not anonymous)', str(raw[:200]))
 
 # ---------------------------------------------------------------------------
 # GET /api/comments/push/vapid-key
@@ -318,6 +319,11 @@ if ALICE:
           and isinstance(d.get('quota'), dict) and isinstance(d['quota'].get('resting'), bool)
           and is_int(d['quota'].get('reset_in_h')) and is_str(d['quota'].get('note')),
           'merecat/usage: shape (cap/gcap int, admin bool, backend str, quota {resting bool, reset_in_h int, note})', str(raw[:200]))
+
+    st, d, raw = post('/api/comments/dm/directory', {'key': ALICE})
+    ok = st == 200 and d is not None and d.get('ok') is True and isinstance(d.get('users'), list)
+    check(ok and len(d['users']) > 0 and is_hex64(d['users'][0].get('hash')) and 'assigned' in d['users'][0],
+          'dm/directory: shape (users list of {hash,assigned,...})', str(raw[:200]))
 
     st, d, raw = post('/api/comments/notifications/unread', {'key': ALICE})
     check(st == 200 and d is not None and d.get('ok') is True and is_int(d.get('unread')) and d['unread'] >= 0,
@@ -339,7 +345,7 @@ if ALICE:
     check(st == 403 and d is not None and d.get('ok') is False,
           'merecat/about: non-admin identity refused (403 ok:false)', str(raw[:200]))
 else:
-    for n in ('merecat/usage', 'notifications/unread', 'dm/unread', 'board/unread',
+    for n in ('merecat/usage', 'dm/directory', 'notifications/unread', 'dm/unread', 'board/unread',
               'merecat/about (admin gate)'):
         check(False, n, 'no alice key in webtest/.testkeys')
 

@@ -1197,7 +1197,7 @@ export function installComposer(B: Boot) {
     if (B.mentionDir) return cb();
     if (mentionDirLoading) return;
     mentionDirLoading = true;
-    fetch(API + '/dm/directory' + freshParam('?'))
+    fetch(API + '/dm/directory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) })
       .then(function (r) { return r.json(); })
       .then(function (d) { mentionDirLoading = false; if (d.ok) { B.mentionDir = d.users; cb(); } })
       .catch(function () { mentionDirLoading = false; });

@@ -287,21 +287,6 @@
   ],
   "text": []
  },
- "GET /api/comments/dm/directory": {
-  "json": [
-   "ok:boolean",
-   "users:array",
-   "users[].assigned:string",
-   "users[].hash:string",
-   "users[].joined:number",
-   "users[].nick:null|string",
-   "users[]:object"
-  ],
-  "lists": [
-   "users"
-  ],
-  "text": []
- },
  "GET /api/comments/feed": {
   "json": [],
   "lists": [],
@@ -919,6 +904,22 @@
    "purged:boolean"
   ],
   "lists": [],
+  "text": []
+ },
+ "POST /api/comments/dm/directory": {
+  "json": [
+   "error:string",
+   "ok:boolean",
+   "users:array",
+   "users[].assigned:string",
+   "users[].hash:string",
+   "users[].joined:number",
+   "users[].nick:null|string",
+   "users[]:object"
+  ],
+  "lists": [
+   "users"
+  ],
   "text": []
  },
  "POST /api/comments/dm/edit": {

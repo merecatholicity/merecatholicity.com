@@ -114,7 +114,7 @@ export function installDmPickers(B: Boot) {
           .forEach(function (x: any) { rowFor('h:' + x.u.hash, dmLabel(x.u.hash, x.u.nick), 'member', { with: x.u.hash }, true); });
       };
       if (dir) return run();
-      fetch(API + '/dm/directory' + freshParam('?')).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) { dir = d.users || []; run(); } }).catch(function () { /* the list alone */ });
+      fetch(API + '/dm/directory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) { dir = d.users || []; run(); } }).catch(function () { /* the list alone */ });
     }
     search.addEventListener('input', function () { clearTimeout(dirT); dirT = setTimeout(suggest, 200); });
     box.appendChild(search);
@@ -209,7 +209,7 @@ export function installDmPickers(B: Boot) {
           .forEach(function (x: any) { rowFor(x.u); });
       };
       if (dir) return run();
-      fetch(API + '/dm/directory' + freshParam('?')).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) { dir = d.users || []; run(); } }).catch(function () { status.textContent = 'The member list could not be loaded.'; });
+      fetch(API + '/dm/directory', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) }).then(function (r) { return r.json(); }).then(function (d) { if (d && d.ok) { dir = d.users || []; run(); } }).catch(function () { status.textContent = 'The member list could not be loaded.'; });
     }
     search.addEventListener('input', function () { clearTimeout(dirT); dirT = setTimeout(suggest, 200); });
     if (nameIn) box.appendChild(nameIn);

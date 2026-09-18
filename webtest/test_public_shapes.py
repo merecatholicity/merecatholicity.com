@@ -204,7 +204,6 @@ def main():
         ('GET /api/comments/recent', '/api/comments/recent?p=2'),
         ('GET /api/comments/search', '/api/comments/search?q=history'),
         ('GET /api/comments/search', '/api/comments/search?q=church&sort=new'),
-        ('GET /api/comments/dm/directory', '/api/comments/dm/directory'),
         ('GET /api/comments/push/vapid-key', '/api/comments/push/vapid-key'),
         ('GET /api/comments/journal', '/api/comments/journal'),
     ]
@@ -223,7 +222,7 @@ def main():
 
     alice = testkey('alice')
     if alice:
-        for path in ('/api/comments/notifications/unread', '/api/comments/dm/unread', '/api/comments/board/unread', '/api/merecat/usage'):
+        for path in ('/api/comments/notifications/unread', '/api/comments/dm/unread', '/api/comments/board/unread', '/api/comments/dm/directory', '/api/merecat/usage'):
             st, body, _ = fetch('POST', path, {'key': alice})
             hold(path + ' (alice)', 'POST ' + path, st, body, snap, dynamic, forbidden)
             time.sleep(0.3)

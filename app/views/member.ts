@@ -8,7 +8,7 @@
 import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
 import { pagerItems, notifLabel, notifHref, notifHasSnippet } from '../core.ts';
-import { cachedJson, fetchRetry, freshOpts, freshParam, peekJson } from '../transport.ts';
+import { cachedJson, fetchRetry, peekJson } from '../transport.ts';
 
 const PER_USERS = 20;
 
@@ -38,9 +38,12 @@ class McUsers extends LitElement {
        previous visit — so the FIRST render is the real thing rather than a
        placeholder that is replaced a moment later. The fetch below still runs
        and patches in whatever changed. */
-    const seedR = peekJson(kit.API + '/dm/directory' + freshParam('?'), freshOpts());
+    /* Keyed since 2026-09-18 (the P0 chain): a POST carrying the identity key,
+       which the store keys by url+body exactly as it keyed the old GET. */
+    const ask: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: kit.state.key }) };
+    const seedR = peekJson(kit.API + '/dm/directory', ask);
     if (seedR && seedR.ok) this.roster = seedR.users || [];
-    cachedJson(kit.API + '/dm/directory' + freshParam('?'), freshOpts(), 45000)
+    cachedJson(kit.API + '/dm/directory', ask, 45000)
       .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.roster = d.users || [];

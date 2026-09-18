@@ -31,7 +31,6 @@ import {
   MERECAT_BOT,
   blockedJson,
   blockedReason,
-  cacheHeader,
   deliverPush,
   displayName,
   dmBackstopSeconds,
@@ -62,7 +61,6 @@ import {
   notifUnreadCount,
   hiddenHashes,
   gated,
-  readLimited,
   throttle,
   listOf,
   bodyOf,
@@ -1106,10 +1104,22 @@ async function handleDmDelete(request: Request, env: Env) {
 /* The autocomplete corpus: every hash that has ever appeared publicly, with
    its nick when one is set and its server-resolved `assigned` pseudonym (the web
    client derives the same value from the hash; native clients read it here).
-   Public-by-construction data, cacheable. */
-async function handleDmDirectory(request: Request, env: Env, url: URL) {
-  const limited = await readLimited(request, env, { limited: 'Too many requests. Slow down.' });
-  if (limited instanceof Response) return limited;
+   KEYED, and no longer cacheable, since 2026-09-18: a member's hash is the
+   unsalted SHA-256 of their key, so the whole roster in one anonymous request
+   was a wordlist's shopping list (the 2026-09-17 review's P0). Be exact about
+   what this buys, because a key here is self-minted and proves no membership —
+   identities have no registration step, so a harvester can still mint one and
+   ask, and a missing Origin passes the guard by its own deliberate rule. What
+   changed is worth exactly this much: the answer is no longer edge-cached (a
+   `max-age=300` roster was served to unlimited strangers without ever reaching
+   the limiter — every ask costs a token now), it is no longer a URL a crawler
+   or a bystander can open, and no other site can read it from a visiting
+   member's browser. The hole itself is layer 3's — a hash still rides every
+   board and feed read. No block gate: parity with /dm/threads, and a locked
+   identity reading a roster harms nobody. */
+async function handleDmDirectory(request: Request, env: Env) {
+  const pre = await gated(request, env, { bucket: 'READ_LIMIT', limited: 'Too many requests. Slow down.', key: 'required' });
+  if (pre instanceof Response) return pre;
   /* Each member with the moment they first appeared (earliest live comment or
      profile creation), newest first, so the member list leads with the latest
      to join. The DM autocomplete ignores the order and the extra column. */
@@ -1139,7 +1149,7 @@ async function handleDmDirectory(request: Request, env: Env, url: URL) {
   ).bind(MERECAT_BOT.hash, ...hidden).all<{ hash: string; joined: number; nick: string | null }>();
   const users = (rows.results || []).map((r) => Object.assign({}, r,
     { assigned: r.hash ? displayName(r.hash) : null }));
-  return json({ ok: true, users }, 200, cacheHeader(url));
+  return json({ ok: true, users }, 200);
 }
 
 /* Publish this member's X25519 public key for the end-to-end-encrypted inbox.

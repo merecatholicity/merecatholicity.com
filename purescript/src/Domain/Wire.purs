@@ -37,7 +37,6 @@ GET /api/comments/board/author items
 GET /api/comments/board/cat topics
 GET /api/comments/board/topic replies
 GET /api/comments/config bible,cats,faiths,pages,ranks
-GET /api/comments/dm/directory users
 GET /api/comments/recent items
 GET /api/comments/search items
 POST /api/comments/admin/alert-test channels,errors
@@ -50,6 +49,7 @@ POST /api/comments/board/reads unread
 POST /api/comments/bookmarks items
 POST /api/comments/call/turn iceServers
 POST /api/comments/dm/blocked blocked
+POST /api/comments/dm/directory users
 POST /api/comments/dm/forward results
 POST /api/comments/dm/members added
 POST /api/comments/dm/presence online

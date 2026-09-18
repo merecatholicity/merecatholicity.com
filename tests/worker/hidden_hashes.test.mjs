@@ -32,11 +32,11 @@ test('the directory lists the members and never the probes, whichever list names
   db.prepare("INSERT INTO comments (id, page, author_hash, body, status, created_at) VALUES (1, 'board:pub', ?, 'hello', 'live', 5), (2, 'board:pub', ?, 'probe post', 'live', 6)").run(ann.hash, probe.hash);
   db.prepare("UPDATE profiles SET nick = 'Bob' WHERE hash = ?").run(bob.hash);
   db.prepare("UPDATE profiles SET nick = 'Kit' WHERE hash = ?").run(kit.hash);
-  let r = await call(worker, makeEnv({ db }), 'GET', '/api/comments/dm/directory');
+  let r = await call(worker, makeEnv({ db }), 'POST', '/api/comments/dm/directory', { key: ann.key });
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.users.map((u) => u.hash).sort(), [ann.hash, bob.hash, probe.hash, kit.hash].sort(), 'without a hidden list everyone shows');
   resetCaches();
-  r = await call(worker, makeEnv({ db, vars: { HIDDEN_HASHES: probe.hash + ',' + kit.hash } }), 'GET', '/api/comments/dm/directory');
+  r = await call(worker, makeEnv({ db, vars: { HIDDEN_HASHES: probe.hash + ',' + kit.hash } }), 'POST', '/api/comments/dm/directory', { key: ann.key });
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.users.map((u) => u.hash).sort(), [ann.hash, bob.hash].sort(), 'the probe and the kit identity are gone, the members stay');
   db.close();

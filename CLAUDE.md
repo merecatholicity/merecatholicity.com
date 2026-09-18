@@ -98,12 +98,12 @@ never a submodule, never committed.
 
 Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the area.
 
-- **Nothing secret leaves the worker** (2026-09-17; `/recent` served the whole env for six weeks):
-  every entry seals the env (`egress.ts`: copying, listing or serializing it throws) and every answer
-  and hub frame is scanned for each non-`PUBLIC_VARS` env value, refused and told. The workers hold
-  no `any` and the env's type brand is refused as an answer, a row or an event. `env_leak.test` sweeps
-  every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and API.md
-  shape in its own commit, is documented by CALLING it, and ships after `/security-review`.
+- **Nothing secret leaves the worker** (2026-09-17; `/recent` served the whole env for six weeks): every entry seals the env
+  (`egress.ts`: copying, listing or serializing it throws) and every answer and hub frame is scanned for each non-`PUBLIC_VARS` env
+  value, refused and told. The workers hold no `any` and the env's type brand is refused as an answer, a row or an event.
+  `env_leak.test` sweeps every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and API.md shape
+  in its own commit, is documented by CALLING it, and ships after `/security-review`.
+- **A member's hash is their key's unsalted SHA-256**: no keyless road serves one (`POST /dm/directory`, uncached, 2026-09-18).
 - **`?v=` keys are stamped** (`scripts/stamp_versions.py`: nav.js, the pages, `partials/*`,
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new

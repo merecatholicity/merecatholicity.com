@@ -67,7 +67,8 @@ export const topic = (id: string | number, extra?: string) => get(API + '/board/
 export const authorPosts = (hash: string, p?: number) => get(API + '/board/author?hash=' + hash + '&p=' + (p || 1) + q('&'), 45000);
 export const search = (qs: string) => get(API + '/search?' + qs + q('&'), 30000);
 export const profile = (hash: string) => get(API + '/profile?hash=' + hash + q('&'), 30000);
-export const directory = () => get(API + '/dm/directory' + q('?'), 45000);
+/* keyed since 2026-09-18: the roster is not anonymous data (the P0 chain) */
+export const directory = () => postRead('/dm/directory', { key: keyFn() }, 45000);
 export const backroomCat = (p?: number) => postRead('/board/admin', { key: keyFn(), p: p || 1 }, 45000);
 export const backroomTopic = (id: string | number, p?: number, find?: string | number) => postRead('/board/admin', { key: keyFn(), id, p, find }, 30000);
 
