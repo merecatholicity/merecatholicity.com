@@ -6,11 +6,16 @@
  * so a later re-cross alerts fresh. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import {
   FREE, PRODUCT_LABELS, classifyR2, r2Known, d1Name,
-  utcDayStart, utcMonthStart, iso, bandFor,
+  utcDayStart, utcMonthStart, iso, bandFor, turnstileWindowStart, TURNSTILE_WINDOW_DAYS,
   buildReport, foldUsageAlerts, worstPct, alertBody, ALERT_RENAG_SECS,
 } from '../../comments-worker/src/usagecalc.ts';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 test('R2 billing classes: the published map, deletes free, the unknown counts as A', () => {
   assert.equal(classifyR2('PutObject'), 'a');
@@ -142,12 +147,42 @@ test('buildReport: totals, detail, and percentages are plain arithmetic over the
   assert.equal(ts.limit, null);
   assert.equal(ts.pct, null);
   assert.equal(ts.band, 'na', 'unmetered rows carry no bar');
+  assert.equal(ts.period, 'week', 'Cloudflare serves this dataset a week at a time');
+  assert.match(ts.label, /last 7 days/, 'and the label says so rather than claiming the month');
 
   const cron = byId(rows, 'cron.triggers');
   assert.equal(cron.used, FREE.cronsUsed);
   assert.equal(cron.limit, FREE.cronsLimit);
   assert.equal(cron.declared, true, 'a count typed into FREE, not a measurement');
   assert.match(cron.note, /never alerted/, 'and the card says so');
+});
+
+/* The live symptom (2026-09-17): the card read `unavailable — account … cannot
+   request a time range wider than 1w1h, but your query time range spans
+   2w3d5h…`. The Turnstile query had asked for the calendar month like its
+   neighbours, so it failed from the 8th of every month onward. */
+test('the Turnstile window is one Cloudflare will serve — a week, never the month', () => {
+  const mid = Date.UTC(2026, 8, 17, 5, 26, 16);       // the day the owner saw it fail
+  const CAP = 7 * 86400000 + 3600000;                 // the account's 1w1h ceiling
+  assert.ok(mid - utcMonthStart(mid) > CAP, 'the month window is what exceeded the cap');
+  const span = mid - turnstileWindowStart(mid);
+  assert.ok(span < CAP, `the week window (${span} ms) is inside the cap`);
+  assert.ok(span <= TURNSTILE_WINDOW_DAYS * 86400000, 'and no wider than the days it claims');
+  /* worst case: the last instant of a day, the widest this window ever gets */
+  const late = Date.UTC(2026, 8, 17, 23, 59, 59, 999);
+  assert.ok(late - turnstileWindowStart(late) < CAP, 'still inside the cap at the end of a day');
+  /* it starts at a UTC midnight, which is what a date_geq filter takes */
+  assert.match(iso(turnstileWindowStart(mid)), /T00:00:00Z$/);
+  assert.equal(iso(turnstileWindowStart(mid)).slice(0, 10), '2026-09-11');
+});
+
+test('and the report ASKS for that window: the query reads the week, never the month', () => {
+  const src = readFileSync(join(root, 'comments-worker', 'src', 'usage.ts'), 'utf8');
+  assert.match(src, /const tsDate = iso\(turnstileWindowStart\(now\)\)\.slice\(0, 10\);/,
+    'the turnstile date comes from the week window');
+  const line = (src.match(/^\s*turnstile: .*$/m) || [''])[0];
+  assert.match(line, /tsDate/, 'the turnstile query uses it');
+  assert.doesNotMatch(line, /monDate/, 'a month filter is what the account refuses (1w1h)');
 });
 
 test('buildReport: one failed product costs one card, never the report', () => {

@@ -23,7 +23,7 @@ import { gqlSelect } from './analytics.ts';
 import { aiNeuronsSelect } from './quota.ts';
 import {
   buildReport, foldUsageAlerts, alertBody, worstPct,
-  iso, utcDayStart, utcMonthStart, FREE, PRODUCT_LABELS,
+  iso, utcDayStart, utcMonthStart, FREE, PRODUCT_LABELS,  turnstileWindowStart,
 } from './usagecalc.ts';
 
 /* The dataset the usage page and the TURN guard both read: the month's relayed egress. */
@@ -35,6 +35,7 @@ export async function fetchUsageReport(env: Env) {
   const now = Date.now();
   const day = iso(utcDayStart(now));
   const monDate = iso(utcMonthStart(now)).slice(0, 10);
+  const tsDate = iso(turnstileWindowStart(now)).slice(0, 10);
   /* Storage datasets emit periodic samples whether or not anything moved; a
      72 h window with max() always catches the latest one. */
   const snap = iso(now - 72 * 3600 * 1000);
@@ -51,7 +52,9 @@ export async function fetchUsageReport(env: Env) {
     vectorize: 'vectorizeV2QueriesAdaptiveGroups(limit: 1000, filter: {date_geq: "' + monDate + '"}) { sum { queriedVectorDimensions } } ' +
         'vectorizeV2StorageAdaptiveGroups(limit: 1000, filter: {datetime_geq: "' + snap + '"}) { max { storedVectorDimensions } }',
     turn: turnEgressSelect(monDate),
-    turnstile: 'turnstileAdaptiveGroups(limit: 1000, filter: {date_geq: "' + monDate + '"}) { count }',
+    /* a week, never the month: this dataset refuses a wider filter (see
+       turnstileWindowStart) and the card went "unavailable" every 8th */
+    turnstile: 'turnstileAdaptiveGroups(limit: 1000, filter: {date_geq: "' + tsDate + '"}) { count }',
   };
   const keys = Object.keys(Q);
   const settled = await Promise.allSettled(keys.map((k) => gqlSelect(env, Q[k])));

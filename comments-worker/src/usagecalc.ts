@@ -111,6 +111,16 @@ export function utcMonthStart(nowMs: number): number {
   const d = new Date(nowMs);
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
 }
+/* Turnstile's dataset is served a WEEK at a time: the account answers a wider
+   filter with "cannot request a time range wider than 1w1h" and the card reads
+   "unavailable" — which it did from the 8th of every month until 2026-09-17,
+   because the query asked for the calendar month like its neighbours. Six days
+   back from today's 00:00 UTC spans at most 6 d 23 h 59 m to now, an hour
+   inside the cap. */
+export const TURNSTILE_WINDOW_DAYS = 7;
+export function turnstileWindowStart(nowMs: number): number {
+  return utcDayStart(nowMs) - (TURNSTILE_WINDOW_DAYS - 1) * 86400000;
+}
 export function iso(ms: number): string {
   return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
@@ -129,14 +139,14 @@ type Detail = { label: string; used: number; limit?: number; pct?: number | null
 export type UsageRow = {
   id: string; product: string; label: string;
   used?: number; limit?: number | null; unit?: string;
-  period?: 'day' | 'month' | 'total'; pct?: number | null; band?: string;
+  period?: 'day' | 'week' | 'month' | 'total'; pct?: number | null; band?: string;
   detail?: Detail[]; note?: string; error?: string;
   /* a count typed into FREE, not a measurement — barred, never alerted */
   declared?: boolean;
 };
 
 function row(id: string, product: string, label: string, used: number, limit: number | null,
-  unit: string, period: 'day' | 'month' | 'total', detail?: Detail[], note?: string): UsageRow {
+  unit: string, period: 'day' | 'week' | 'month' | 'total', detail?: Detail[], note?: string): UsageRow {
   const pct = limit ? Math.round((used / limit) * 1000) / 10 : null;
   const r: UsageRow = { id, product, label, used, limit, unit, period, pct, band: bandFor(pct) };
   if (detail && detail.length) r.detail = detail;
@@ -288,12 +298,12 @@ export function buildReport(raw: Json): UsageRow[] {
   }
 
   const ts = product('turnstile');
-  if (!ts) rows.push(errRow('turnstile.solves', 'turnstile', 'Challenges this month', raw.turnstile));
+  if (!ts) rows.push(errRow('turnstile.solves', 'turnstile', 'Challenges in the last 7 days', raw.turnstile));
   else {
     const g = groups(ts, 'turnstileAdaptiveGroups');
-    rows.push(row('turnstile.solves', 'turnstile', 'Challenges this month',
-      sumBy(g, (x) => numAt(x, 'count')), null, 'count', 'month', undefined,
-      'Unmetered on every plan — shown for the picture, not the budget.'));
+    rows.push(row('turnstile.solves', 'turnstile', 'Challenges in the last 7 days',
+      sumBy(g, (x) => numAt(x, 'count')), null, 'count', 'week', undefined,
+      'Unmetered on every plan — shown for the picture, not the budget. Cloudflare serves this one a week at a time, so it is the last seven days and not the month.'));
   }
 
   /* A DECLARED count, not a measurement: it moves only when wrangler.jsonc
@@ -345,7 +355,8 @@ export function worstPct(rows: UsageRow[]): number {
 export function alertBody(alerts: UsageRow[], site: string): string {
   const line = (r: UsageRow) =>
     '- ' + (PRODUCT_LABELS[r.product] || r.product) + ' — ' + r.label + ': ' + r.pct + '% of the free tier' +
-    (r.period === 'day' ? ' (resets 00:00 UTC)' : r.period === 'month' ? ' (this month)' : '');
+    (r.period === 'day' ? ' (resets 00:00 UTC)' : r.period === 'month' ? ' (this month)'
+      : r.period === 'week' ? ' (the last 7 days)' : '');
   return 'Cloudflare free-tier check: ' + alerts.length + (alerts.length === 1 ? ' meter needs' : ' meters need') +
     ' attention.\n\n' + alerts.map(line).join('\n') +
     '\n\nHealth bars: ' + site + '/admin.html?usage=1' +

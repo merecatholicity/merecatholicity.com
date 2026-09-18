@@ -162,6 +162,7 @@ on page one.)
 
 - **Both workers are TypeScript now (Phase 2D, 2026-08-01).** — `log/2026-08.md`
 - **The comments worker is a MODULE SET now, not a monolith (Phase 3–4, 2026-08-01).** — `log/2026-08.md`
+- **The Turnstile meter asked for a month of a dataset Cloudflare serves a week at a time (2026-09-17)** — `log/2026-09.md`
 - **D1 schema changes (comments DB) go through `wrangler d1 migrations` now — NOT a hand-edited `schema.sql`.** — `log/2026-09.md`
 - **The worker's sibling imports name `.ts` files, and only `durable.ts` imports `cloudflare:workers` (2026-09-16).** — `log/2026-09.md`
 - **Worker handlers run in the unit suite (2026-09-16).** — `log/2026-09.md`
