@@ -1,18 +1,28 @@
 /* app/api.js — the client SDK: one named function per operation over the LIVE
    Worker. Reads route through the store (cached), writes go direct and INVALIDATE
-   the reads they change. The transport is injected via configure(), so these
-   tests assert the wire each call produces (URL / method / body / key injection)
-   and the read-cache + write-invalidation contract — with no network. */
+   the reads they change. These tests assert the wire each call produces (URL /
+   method / body / key injection) and the read-cache + write-invalidation
+   contract — with no network.
+ *
+ * Since P1 (2026-09-17) the transport is NOT injected: app/api.ts imports
+ * app/transport.ts, which calls the global `fetch` at call time and never
+ * captures it (that is what lets the shell's wirecheck wrapper stand). So the
+ * harness stubs `globalThis.fetch` — which makes this the stronger test: the
+ * real fetchRetry runs, and the module's "never capture fetch" rule is what
+ * the stub depends on. Only the identity key is still configured. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as api from '../../app/api.ts';
 import * as store from '../../app/store.ts';
 
-// Wire a recording transport and a fixed identity key; start from a clean store.
+// Stub the global fetch, fix the identity key, start from a clean store.
 function harness(reply) {
   const calls = [];
-  const tx = (url, init) => { calls.push({ url, init }); return { json: () => Promise.resolve(reply || { ok: true }) }; };
-  api.configure({ tx, key: () => 'MYKEY', fresh: () => false });
+  globalThis.fetch = (url, init) => {
+    calls.push({ url, init });
+    return Promise.resolve({ json: () => Promise.resolve(reply || { ok: true }) });
+  };
+  api.configure({ key: () => 'MYKEY' });
   store.invalidate();
   return { calls, last: () => calls[calls.length - 1] };
 }

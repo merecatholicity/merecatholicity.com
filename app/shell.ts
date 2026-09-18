@@ -30,6 +30,7 @@
 import { LitElement, html } from 'lit';
 import * as store from './store.ts';
 import * as api from './api.ts';
+import * as transport from './transport.ts';
 import * as core from './core.ts';
 import { installWireCheck } from './wirecheck.ts';
 import { installLive } from './live.ts';
@@ -72,27 +73,20 @@ window.mcCore = core;
 /* every /api answer's lists are checked before a view reads them (Domain.Wire) */
 installWireCheck(window);
 
+/* The read transport (app/transport.js): fetchRetry, the fresh-bypass pair and
+   the two store-backed reads. It rides the shell for the classic client, which
+   bundles separately and must not import app/store.js a second time (P1,
+   2026-09-17 — the module's own header says why). */
+window.mcTransport = transport;
+
 /* The headless-API client SDK (app/api.js) rides the shell too — the single
-   documented seam (comments-worker/API.md) new features call. Transport +
-   identity + fresh-read policy are wired from the board client (window.mcKit)
-   once it boots, so api.js reuses the proven fetchRetry/key/freshOpts. */
+   documented seam (comments-worker/API.md) new features call. Its transport is
+   now imported, not handed over: the only thing still wired from outside is the
+   identity key, and it is wired as a LAZY GETTER, so the eight-second poll that
+   used to wait for window.mcKit to appear is gone (P1, 2026-09-17). The getter
+   reads the classic boot's state until P1's identity slice moves it. */
 window.mcApi = api as unknown as NonNullable<typeof window.mcApi>;
-document.addEventListener('mc-shell-ready', function wireApi() {
-  var tryWire = function () {
-    var k = window.mcKit;
-    if (!k) return false;
-    api.configure({
-      tx: function (url, init) { return k!.fetchRetry(url, init, [1000, 3000]); },
-      key: function () { return k!.state.key || ''; },
-      fresh: function () { return !!k!.freshOpts(); },
-    });
-    return true;
-  };
-  if (!tryWire()) {
-    var t = setInterval(function () { if (tryWire()) clearInterval(t); }, 500);
-    setTimeout(function () { clearInterval(t); }, 8000);
-  }
-});
+api.configure({ key: function () { var k = window.mcKit; return (k && k.state && k.state.key) || ''; } });
 
 /* A thin top progress bar while a page is on its way. Light DOM so
    style.css and the theme own it. */

@@ -133,6 +133,7 @@ on page one.)
 - **Lit stays presentational.** — `log/2026-09.md`
 - **The worker shares the kernel — DONE.** — `log/2026-09.md`
 - **The review's "two UIs" was stale; nine comments still said "no-bundle fallback" (2026-09-17)** — `log/2026-09.md`
+- **The read transport leaves the boot, and the shell stops waiting for the client it serves (2026-09-18).** — `log/2026-09.md`
 
 ### Testing policy
 

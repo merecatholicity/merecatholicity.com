@@ -8,43 +8,44 @@
    READS route through the store (app/store.js): in-memory TTL + in-flight
    dedup, invalidated by any write — the free-tier budget law's second half.
    WRITES go direct (never cached) and INVALIDATE the reads they change, so a
-   post never leaves a stale listing behind. Transport is injected at wire-up
-   (comments.js hands its proven fetchRetry), so retry/timeout semantics stay
-   exactly what the site already ships; this module adds no new behavior, only
-   a single honest surface over it. Exposed as window.mcApi by the shell. */
+   post never leaves a stale listing behind. Transport is app/transport.ts —
+   the same proven fetchRetry/freshOpts the classic client used, imported
+   rather than handed over at wire-up (P1, 2026-09-17), so this module has a
+   transport from its first line instead of from whenever comments.js booted.
+   This module adds no new behavior, only a single honest surface over it.
+   Exposed as window.mcApi by the shell. */
 
 import * as store from './store.ts';
+import { fetchRetry, freshOpts, configure as configureTransport } from './transport.ts';
 import type { DmRosterPayload, DmThreadPayload, DmThreadsPayload } from './wire.ts';
 
 const API = '/api/comments';
 const MERECAT = '/api/merecat';
 
-/* Wired once (shell): tx = the raw transport (fetchRetry-like, returns a
-   Response), keyFn = () => the caller's identity key, freshFn = () => bypass
-   the read cache while a recent writer's own change would otherwise be hidden. */
-type Transport = (url: string, init?: RequestInit) => Promise<Response> | Response;
-let tx: Transport = (url: string, init?: RequestInit) => fetch(url, init).then((r) => r);
+/* The transport is imported; only the identity key is still wired from
+   outside (the shell hands a lazy getter — the classic boot still owns
+   `state.key` until P1's identity slice). `configure` passes it to
+   app/transport.ts too, so `freshParam` there and `q()` here read ONE key. */
+const tx = (url: string, init?: RequestInit) => fetchRetry(url, init, [1000, 3000]);
 let keyFn: () => string = () => '';
-let freshFn: () => boolean = () => false;
+const freshFn = () => !!freshOpts();
 
-export function configure(opts: { tx?: Transport; key?: () => string; fresh?: () => boolean }) {
-  if (opts.tx) tx = opts.tx;
-  if (opts.key) keyFn = opts.key;
-  if (opts.fresh) freshFn = opts.fresh;
+export function configure(opts: { key?: () => string }) {
+  if (opts.key) { keyFn = opts.key; configureTransport({ key: opts.key }); }
 }
 
 function q(sep: string) { return keyFn() && freshFn() ? sep + 'fresh=1' : ''; }
 
 /* a cached GET (through the store) */
 function get<T = any>(url: string, ttl: number): Promise<T> {
-  return store.fetchJson(tx, url, undefined, { ttl, bypass: !!freshFn() }) as Promise<T>;
+  return store.fetchJson(tx, url, undefined, { ttl, bypass: freshFn() }) as Promise<T>;
 }
 /* a cached POST-read (keyed reads that are still safe to memo briefly) */
 function postRead<T = any>(path: string, body: unknown, ttl: number): Promise<T> {
   return store.fetchJson(tx, API + path, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  }, { ttl, bypass: !!freshFn() }) as Promise<T>;
+  }, { ttl, bypass: freshFn() }) as Promise<T>;
 }
 /* an uncached write; caller passes prefixes to invalidate on success */
 function write<T = any>(base: string, path: string, body: unknown, invalidate?: (string | null)[]): Promise<T> {

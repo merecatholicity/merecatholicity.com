@@ -36,6 +36,10 @@ declare global {
     mcCore?: McCore;
     mcStore?: McStore;
     mcApi?: Record<string, (...args: any[]) => any>;
+    /* the read transport (app/transport.ts), on the shell for the classic client:
+       fetchRetry · freshOpts/stampFresh · freshParam · cachedJson/peekJson. The
+       classic bundle reaches it HERE, never by import — one app/store.ts. */
+    mcTransport?: typeof import('./app/transport');
     mcRich?: { appendRich: (...a: any[]) => any; fillBody: (...a: any[]) => any; [k: string]: any };
     mcLive?: {
       board: { sub: (scopes: string[]) => void; leave: () => void };

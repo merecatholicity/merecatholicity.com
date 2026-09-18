@@ -9,6 +9,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
+import { fetchRetry } from '../transport.ts';
 
 /* Shared admin gate for a component: returns 'ok' | 'wait' | 'no', and
    registers a re-render for when the profile (hence admin status) lands. */
@@ -72,7 +73,7 @@ class McMerecatThreads extends LitElement {
     if (!kit.isAdmin()) { kit.onProfile(() => { this.requestUpdate(); this.maybeLoad(); }); return; }
     this._loading = true;
     const pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-    kit.fetchRetry(kit.MERECAT_API + '/admin/threads', {
+    fetchRetry(kit.MERECAT_API + '/admin/threads', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, p: pageNum }),
     }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
@@ -132,7 +133,7 @@ class McMerecatThread extends LitElement {
     }
     if (!Number.isInteger(this.tid) || this.tid < 1) { this.err = 'No such conversation.'; return; }
     this._loading = true;
-    kit.fetchRetry(kit.MERECAT_API + '/admin/thread', {
+    fetchRetry(kit.MERECAT_API + '/admin/thread', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, id: this.tid }),
     }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {
@@ -246,7 +247,7 @@ class McUsage extends LitElement {
       return;
     }
     this._loading = true;
-    kit.fetchRetry(kit.API + '/admin/usage', {
+    fetchRetry(kit.API + '/admin/usage', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key }),
     }, [1500, 4000]).then((r: Response) => r.json()).then((d: any) => {

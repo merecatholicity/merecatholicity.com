@@ -8,6 +8,7 @@
 import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
 import { pagerItems, notifLabel, notifHref, notifHasSnippet } from '../core.ts';
+import { cachedJson, fetchRetry, freshOpts, freshParam, peekJson } from '../transport.ts';
 
 const PER_USERS = 20;
 
@@ -37,9 +38,9 @@ class McUsers extends LitElement {
        previous visit — so the FIRST render is the real thing rather than a
        placeholder that is replaced a moment later. The fetch below still runs
        and patches in whatever changed. */
-    const seedR = kit.peekJson(kit.API + '/dm/directory' + kit.freshParam('?'), kit.freshOpts());
+    const seedR = peekJson(kit.API + '/dm/directory' + freshParam('?'), freshOpts());
     if (seedR && seedR.ok) this.roster = seedR.users || [];
-    kit.cachedJson(kit.API + '/dm/directory' + kit.freshParam('?'), kit.freshOpts(), 45000)
+    cachedJson(kit.API + '/dm/directory' + freshParam('?'), freshOpts(), 45000)
       .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.roster = d.users || [];
@@ -126,7 +127,7 @@ class McNotifications extends LitElement {
   load() {
     const kit = this.kit;
     const pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-    kit.fetchRetry(kit.API + '/notifications', {
+    fetchRetry(kit.API + '/notifications', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, p: pageNum }),
     }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {

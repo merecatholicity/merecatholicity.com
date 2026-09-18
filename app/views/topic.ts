@@ -13,6 +13,7 @@
 import { LitElement, html, nothing } from 'lit';
 import { pagerTpl, crumbTpl, retryTpl, skelTpl, goto } from './util.ts';
 import * as Core from '../core.ts';
+import { cachedJson, fetchRetry, freshOpts, freshParam, peekJson } from '../transport.ts';
 
 class McTopic extends LitElement {
   static properties = { d: { attribute: false }, err: { attribute: false },
@@ -48,12 +49,12 @@ class McTopic extends LitElement {
        previous visit — so the FIRST render is the real thing rather than a
        placeholder that is replaced a moment later. The fetch below still runs
        and patches in whatever changed. */
-    const seedT = kit.peekJson(kit.API + '/board/topic?id=' + id + extra + kit.freshParam('&'), kit.freshOpts());
+    const seedT = peekJson(kit.API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts());
     if (seedT && seedT.ok) this.d = seedT;
-    kit.cachedJson(kit.API + '/board/topic?id=' + id + extra + kit.freshParam('&'), kit.freshOpts(), 30000)
+    cachedJson(kit.API + '/board/topic?id=' + id + extra + freshParam('&'), freshOpts(), 30000)
       .then((d: any) => {
         if (d && !d.ok && kit.state.key) {
-          return kit.fetchRetry(kit.API + '/board/admin', {
+          return fetchRetry(kit.API + '/board/admin', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: kit.state.key, id: id, p: pNum || undefined,
               find: hashMatch ? hashMatch[1] : undefined }),
@@ -146,8 +147,8 @@ class McTopic extends LitElement {
     const kit = this.kit;
     const d = this.d;
     if (!kit || !d || d.topic.locked) return;
-    kit.fetchRetry(kit.API + '/board/topic?id=' + this.topicId + '&p=' + d.page + kit.freshParam('&'),
-      kit.freshOpts(), [1000]).then((r: Response) => r.json()).then((fresh: any) => {
+    fetchRetry(kit.API + '/board/topic?id=' + this.topicId + '&p=' + d.page + freshParam('&'),
+      freshOpts(), [1000]).then((r: Response) => r.json()).then((fresh: any) => {
       if (!fresh || !fresh.ok || fresh.page !== d.page) return;
       const list = this.querySelector('.comments-list');
       if (!list) return;
@@ -309,7 +310,7 @@ class McSearch extends LitElement {
     if (this.cat0) u += '&cat=' + encodeURIComponent(this.cat0);
     if (this.author0) u += '&author=' + encodeURIComponent(this.author0);
     if (this.sort0) u += '&sort=' + encodeURIComponent(this.sort0);
-    kit.cachedJson(u + '&p=' + this.page + kit.freshParam('&'), kit.freshOpts(), 30000)
+    cachedJson(u + '&p=' + this.page + freshParam('&'), freshOpts(), 30000)
       .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.d = d;

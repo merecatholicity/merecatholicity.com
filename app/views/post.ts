@@ -6,6 +6,7 @@
    2026-09-16 (One UI): client/board.ts's commentNode is a one-line door here. */
 
 import * as Core from '../core.ts';
+import { fetchRetry } from '../transport.ts';
 
 function el(tag: string, cls?: string, text?: string): HTMLElement {
   var node = document.createElement(tag);
@@ -139,7 +140,7 @@ function el(tag: string, cls?: string, text?: string): HTMLElement {
         e.preventDefault();
         var go = function (ok: boolean) {
           if (!ok) return;
-          kit.fetchRetry(kit.API + '/delete', {
+          fetchRetry(kit.API + '/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: c.id, key: kit.state.key }),

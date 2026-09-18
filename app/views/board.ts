@@ -11,6 +11,7 @@ import { LitElement, html, nothing } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import { pagerTpl, retryTpl, skelTpl, goto } from './util.ts';
 import * as Core from '../core.ts';
+import { cachedJson, fetchRetry, freshOpts, freshParam, peekJson, stampFresh } from '../transport.ts';
 
 /* The six confessional "in-house talk for [tradition]" rooms, grouped apart from
    the general rooms on the index so the 14-room wall reads as a map (P3-c). Keys
@@ -54,13 +55,13 @@ class McBoardIndex extends LitElement {
        previous visit — so the FIRST render is the real thing rather than a
        placeholder that is replaced a moment later. The fetch below still runs
        and patches in whatever changed. */
-    const seedIdx = kit.peekJson(kit.API + '/board' + kit.freshParam('?'), kit.freshOpts());
+    const seedIdx = peekJson(kit.API + '/board' + freshParam('?'), freshOpts());
     if (seedIdx && seedIdx.ok) this.stats = seedIdx.cats;
-    kit.cachedJson(kit.API + '/board' + kit.freshParam('?'), kit.freshOpts(), 45000)
+    cachedJson(kit.API + '/board' + freshParam('?'), freshOpts(), 45000)
       .then((d: any) => { if (d.ok) this.stats = d.cats; })
       .catch(() => {});
     if (kit.state.key) {
-      kit.cachedJson(kit.API + '/board/unread', {
+      cachedJson(kit.API + '/board/unread', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: kit.state.key }),
       }, 45000).then((d: any) => {
@@ -106,7 +107,7 @@ class McBoardIndex extends LitElement {
     if (this._refetchT) clearTimeout(this._refetchT);
     const kit = this.kit;
     this._refetchT = setTimeout(() => {
-      kit.fetchRetry(kit.API + '/board?cb=' + Date.now(), {}, [1000])
+      fetchRetry(kit.API + '/board?cb=' + Date.now(), {}, [1000])
         .then((r: Response) => r.json()).then((d: any) => { if (d && d.ok) this.stats = d.cats; }).catch(() => {});
     }, 1500);
   }
@@ -131,7 +132,7 @@ class McBoardIndex extends LitElement {
     fetch(kit.API + '/board/read-all', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key }),
-    }).then(() => { kit.notifCacheSet(0); kit.stampFresh(); location.reload(); })
+    }).then(() => { kit.notifCacheSet(0); stampFresh(); location.reload(); })
       .catch(() => {});
   }
   /* The whole category tile is a click target into the category — but a nested
@@ -238,17 +239,17 @@ class McBoardCat extends LitElement {
        never persisted either (Domain.Cache refuses /admin), because a moderation
        surface must not linger on a shared device. */
     if (this.catKey !== 'adminsonly') {
-      const seedC = kit.peekJson(
-        kit.API + '/board/cat?cat=' + this.catKey + '&p=' + this.pageNum + kit.freshParam('&'),
-        kit.freshOpts());
+      const seedC = peekJson(
+        kit.API + '/board/cat?cat=' + this.catKey + '&p=' + this.pageNum + freshParam('&'),
+        freshOpts());
       if (seedC && seedC.ok) this.payload = seedC;
     }
     (this.catKey === 'adminsonly'
-      ? kit.cachedJson(kit.API + '/board/admin', {
+      ? cachedJson(kit.API + '/board/admin', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key: kit.state.key || '', p: this.pageNum }),
         }, 45000)
-      : kit.cachedJson(kit.API + '/board/cat?cat=' + this.catKey + '&p=' + this.pageNum + kit.freshParam('&'), kit.freshOpts(), 45000))
+      : cachedJson(kit.API + '/board/cat?cat=' + this.catKey + '&p=' + this.pageNum + freshParam('&'), freshOpts(), 45000))
       .then((d: any) => {
         if (!d.ok) {
           if (this.catKey === 'adminsonly') { kit.goIndex(); return; }
@@ -256,7 +257,7 @@ class McBoardCat extends LitElement {
         }
         this.payload = d;
         if (kit.state.key) {
-          kit.cachedJson(kit.API + '/board/reads', {
+          cachedJson(kit.API + '/board/reads', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key: kit.state.key, cat: this.catKey }),
           }, 45000).then((rd: any) => {
@@ -282,7 +283,7 @@ class McBoardCat extends LitElement {
     if (this._refetchT) clearTimeout(this._refetchT);
     const kit = this.kit;
     this._refetchT = setTimeout(() => {
-      kit.fetchRetry(kit.API + '/board/cat?cat=' + this.catKey + '&p=1&cb=' + Date.now(), {}, [1000])
+      fetchRetry(kit.API + '/board/cat?cat=' + this.catKey + '&p=1&cb=' + Date.now(), {}, [1000])
         .then((r: Response) => r.json()).then((d: any) => { if (d && d.ok) this.payload = d; }).catch(() => {});
     }, 1500);
   }

@@ -12,6 +12,7 @@
 import { LitElement, html, nothing } from 'lit';
 import type { DmThreadsPayload, DmThreadsRow } from '../wire.ts';
 import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
+import { cachedJson, fetchRetry, freshOpts, freshParam, peekJson } from '../transport.ts';
 
 class McProfile extends LitElement {
   static properties = { profile: { attribute: false }, err: { attribute: false } };
@@ -37,9 +38,9 @@ class McProfile extends LitElement {
        previous visit — so the FIRST render is the real thing rather than a
        placeholder that is replaced a moment later. The fetch below still runs
        and patches in whatever changed. */
-    const seedP = kit.peekJson(kit.API + '/profile?hash=' + this.hash + kit.freshParam('&'), kit.freshOpts());
+    const seedP = peekJson(kit.API + '/profile?hash=' + this.hash + freshParam('&'), freshOpts());
     if (seedP && seedP.ok && seedP.profile) this.profile = seedP.profile;
-    kit.cachedJson(kit.API + '/profile?hash=' + this.hash + kit.freshParam('&'), kit.freshOpts(), 30000)
+    cachedJson(kit.API + '/profile?hash=' + this.hash + freshParam('&'), freshOpts(), 30000)
       .then((d: any) => {
         if (!d.ok) throw new Error(d.error || 'failed');
         this.profile = d.profile;
@@ -152,7 +153,7 @@ class McInbox extends LitElement {
   load() {
     const kit = this.kit;
     const pageNum = Math.max(1, Math.floor(Number(new URLSearchParams(location.search).get('p')) || 1));
-    kit.fetchRetry(kit.API + '/dm/threads', {
+    fetchRetry(kit.API + '/dm/threads', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: kit.state.key, p: pageNum }),
     }, [1000, 3000]).then((r: Response) => r.json()).then((d: any) => {

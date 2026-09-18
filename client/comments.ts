@@ -613,38 +613,29 @@ import type { Boot } from './boot';
     return !!m && +m[1] === 100 && +m[2] >= 64 && +m[2] <= 127;
   }
 
-  /* Bounded retries for network failures only. An HTTP response of any
-     status is final: the server spoke, retrying could only double an
-     action. A rejected fetch means nothing arrived, so a short backoff
-     and another try are safe, and the attempt count is small on purpose:
-     after the last one the reader's manual refresh is the only restart.
-     Every attempt also carries a hard timeout: a fetch that never settles
-     (a flaky mobile radio, service-worker limbo) once hung a view's
-     "Loading…" forever with no error and no retry — an aborted attempt is
-     a network failure and rides the same ladder. Callers that manage their
-     own AbortSignal keep it; the timeout only guards unsignalled calls. */
-  var FETCH_TIMEOUT = 15000;
+  /* The read transport moved to app/transport.ts (P1, 2026-09-17): the bounded
+     retry with its per-attempt timeout, the fresh-bypass pair, freshParam and
+     the two store-backed reads all live in the shell bundle now, and these six
+     names are the classic client's doors to them — every caller in client/*
+     keeps calling the name it always called. Reached through the shell's
+     window, never by import: client/ is a SEPARATE esbuild graph, and an
+     import here would bundle a second copy of app/store.ts (two caches, one
+     invalidating nothing). The boot waits for the shell, so mcTransport
+     always stands by the time any of these runs. */
+  var txKeyed = false;
+  function tx() {
+    var t = window.mcTransport!;
+    /* freshParam's key is THIS boot's state, handed over as a live getter the
+       first time anything actually reads — not at boot top: under ?app=0 the
+       client boots without waiting for app.js, and a hard dereference there
+       would be a new way to fail where today only an actual read can. By the
+       time one runs, the shell stands (the same requirement window.mcCore
+       already carries). */
+    if (t && !txKeyed) { txKeyed = true; t.configure({ key: function () { return state.key || ''; } }); }
+    return t;
+  }
   function fetchRetry(url: string, opts: RequestInit | undefined, delays: number[], onRetry?: () => void): Promise<Response> {
-    function attempt(i: number): Promise<Response> {
-      var init = opts;
-      var timer = 0;
-      if (typeof AbortController === 'function' && !(opts && opts.signal)) {
-        var ctrl = new AbortController();
-        init = Object.assign({}, opts, { signal: ctrl.signal });
-        timer = window.setTimeout(function () { ctrl.abort(); }, FETCH_TIMEOUT);
-      }
-      return fetch(url, init).then(function (res) {
-        if (timer) clearTimeout(timer);
-        return res;
-      }, function (err) {
-        if (timer) clearTimeout(timer);
-        if (i >= delays.length) throw new Error('Network error. Check your connection and try again.');
-        if (onRetry) onRetry();
-        return new Promise(function (resolve) { setTimeout(resolve, delays[i]); })
-          .then(function () { return attempt(i + 1); });
-      });
-    }
-    return attempt(0);
+    return tx().fetchRetry(url, opts, delays, onRetry);
   }
 
   /* ---- The shared read budget: one brain over every polling limb. ----
@@ -778,6 +769,7 @@ import type { Boot } from './boot';
     dmView: null,   // set by viewDm: the open thread's live drop-in hook
     profilePresence: null,   // set by renderProfile: the open profile's presence line
   };
+
 
   /* ---- Turnstile. Loaded lazily, challenge run only at post time so the
      token cannot expire while a long comment is being written. ---- */
@@ -1185,56 +1177,15 @@ import type { Boot } from './boot';
     });
   }
 
-  /* Reads are browser-cached for 60s. To someone who just wrote, that
-     cache makes their own change vanish on reload, so recent writers
-     bypass it until the cache would be fresh again. */
-  function freshOpts(): RequestInit | undefined {
-    var posted = 0;
-    try { posted = Number(localStorage.getItem('mc-posted-at')) || 0; } catch (e) {}
-    return (Date.now() - posted < 90000) ? { cache: 'no-store' } : undefined;
-  }
+  function freshOpts(): RequestInit | undefined { return tx().freshOpts(); }
 
-  function stampFresh() {
-    try { localStorage.setItem('mc-posted-at', String(Date.now())); } catch (e) {}
-    if (window.mcStore) window.mcStore.invalidate();
-  }
+  function stampFresh() { tx().stampFresh(); }
 
-  /* Keyed visitors ask the server for the short-cache profile and keep
-     today's behavior to the letter. Anonymous readers ride a five-minute
-     browser cache, their repeat views never reaching the worker. */
-  function freshParam(sep: any) {
-    return state.key ? sep + 'fresh=1' : '';
-  }
+  function freshParam(sep: string) { return tx().freshParam(sep); }
 
-  /* Reads route through the shell's store when it stands (in-memory TTL +
-     in-flight dedup — the free-tier budget law's second half: rapid view
-     hops render from memory instead of drawing keyed reads from the shared
-     rate bucket). Without the shell, the plain transport serves as always.
-     WRITES never come through here. */
-  function cachedJson(url: any, init: any, ttl: any): Promise<any> {
-    if (window.mcStore) {
-      return window.mcStore.fetchJson(function (u, i) { return fetchRetry(u, i, [1000, 3000]); },
-        url, init, { ttl: ttl, bypass: !!freshOpts() });
-    }
-    return fetchRetry(url, init, [1000, 3000]).then(function (r) { return r.json(); });
-  }
+  function cachedJson(url: string, init: RequestInit | undefined, ttl: number) { return tx().cachedJson(url, init, ttl); }
 
-  /* The synchronous half of cachedJson: what do we ALREADY know for this exact
-     read? Returns the stored answer (from this tab, or from disk if the reader
-     was here before) or null. A view seeds its first render from this, so a
-     revisit paints real content in the first frame instead of a placeholder
-     that is replaced a moment later — the "it was already there" feel.
-     Null whenever the bundle is absent or nothing is stored, so every caller
-     falls back to its ordinary loading state. */
-  function peekJson(url: any, init?: any): any {
-    try {
-      var st: any = window.mcStore;
-      if (!st || !st.peek || !st.keyFor) return null;
-      if (freshOpts()) return null;      // the reader just wrote: never show them stale
-      var hit = st.peek(st.keyFor(url, init));
-      return hit ? hit.json : null;
-    } catch (e) { return null; }
-  }
+  function peekJson(url: string, init?: RequestInit) { return tx().peekJson(url, init); }
 
   function load() {
     var list = section.querySelector('.comments-list') as HTMLElement;
@@ -1955,8 +1906,7 @@ import type { Boot } from './boot';
      state; views receive it by reference at delegation time. */
   window.mcKit = {
     state: state, API: API, CATS: CATS,
-    isAdmin: isAdmin, catByKey: catByKey, cachedJson: cachedJson,
-    freshParam: freshParam, freshOpts: freshOpts, blockedOut: blockedOut,
+    isAdmin: isAdmin, catByKey: catByKey, blockedOut: blockedOut,
     renderIdentity: renderIdentity, indexSearchBox: indexSearchBox,
     displayName: displayName, fmtDateTime: fmtDateTime, fmtTimeCompact: fmtTimeCompact,
     postMenu: postMenu, notifCacheSet: notifCacheSet,
@@ -1965,10 +1915,8 @@ import type { Boot } from './boot';
     topicAdminCorner: topicAdminCorner, buildBoardForm: buildBoardForm,
     boardButtons: boardButtons, armBoardForm: armBoardForm,
     attachMentions: attachMentions, attachDraft: attachDraft, boardPost: boardPost,
-    stampFresh: stampFresh,
     goIndex: function () { section.textContent = ''; viewIndex(); },
     /* the post renderer's organs (Wave B3b) */
-    fetchRetry: fetchRetry,
     isMuted: isMuted, toggleMute: toggleMute,
     /* the unified member block (2026-08-03): one act = DM shadow-block + hide */
     isBlocked: isBlocked, setBlock: setBlock, appConfirm: appConfirm, BLOCK_CONFIRM: BLOCK_CONFIRM,
@@ -1992,7 +1940,6 @@ import type { Boot } from './boot';
     /* profile + inbox read views (Wave C-reads 2) */
     el: el,
     renderProfile: renderProfile, adminProfileEditor: adminProfileEditor,
-    peekJson: peekJson,
     dmSearchBox: dmSearchBox, dmLabel: dmLabel, dmSeenLabel: dmSeenLabel,
     dmCacheSet: dmCacheSet, dmUnreadCheck: dmUnreadCheck, markThreadRead: markThreadRead,
     mintIdentity: mintIdentity, loginWithKey: loginWithKey,
