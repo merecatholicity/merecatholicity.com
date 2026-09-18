@@ -35,6 +35,12 @@
   "pass": 113,
   "summary": true
  },
+ "test_library_parts": {
+  "exit": 0,
+  "fail": 0,
+  "pass": 11,
+  "summary": true
+ },
  "test_member_views": {
   "exit": 0,
   "fail": 0,

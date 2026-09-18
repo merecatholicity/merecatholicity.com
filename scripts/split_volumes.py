@@ -83,6 +83,11 @@ MIN_SUBPARTS = 4
 SPLIT_MARK = '<!--mc-split-->'
 PART_MARK_RE = re.compile(
     r'<!--mc-part volume="([^"]+)" n="(\d+)" of="(\d+)"(?: group="([^"]*)")?-->')
+# The head part-navigation, for reading a division's name back off a page that
+# was written before the mark carried it: volume · division · prev · next, and
+# only the division link has neither a rel nor the volume's own address.
+PARTNAV_RE = re.compile(r'<nav class="mc-partnav[^"]*"[^>]*>(.*?)</nav>', re.S)
+NAV_LINK_RE = re.compile(r'<a href="([^"]+)"([^>]*)>(.*?)</a>', re.S)
 MAIN_OPEN_RE = re.compile(r'<main class="prose[^"]*">')
 PANDOC = '<meta name="generator" content="pandoc"'
 
@@ -542,6 +547,25 @@ def write(path, text):
         f.write(text)
 
 
+def group_crumb(text, volume):
+    """The division a part belongs to, read back off its own navigation.
+
+    The mark carries it now, but the pages already served do not: rather than
+    rebuild the whole corpus from LaTeX to recover a sentence, take it from the
+    crumb the page is wearing. Belt and braces for the manifest, which is what
+    the card formula and the librarian read."""
+    nav = PARTNAV_RE.search(text)
+    if not nav:
+        return ''
+    links = NAV_LINK_RE.findall(nav.group(1))
+    if len(links) < 2:
+        return ''
+    href, attrs, label = links[1]
+    if 'rel=' in attrs or href == volume:
+        return ''
+    return htmllib.unescape(TAG_RE.sub('', label)).strip()
+
+
 def survey():
     """ONE pass over the built tree, telling three kinds of page apart.
 
@@ -567,7 +591,8 @@ def survey():
             t = TITLE_RE.search(text)
             title = re.sub(r'\s+—\s+.*$', '', t.group(1).strip()) if t else name
             parts.setdefault(m.group(1), []).append(
-                (int(m.group(2)), name, title, htmllib.unescape(m.group(4) or '')))
+                (int(m.group(2)), name, title,
+                 htmllib.unescape(m.group(4) or '') or group_crumb(text, m.group(1))))
             continue
         if SPLIT_MARK in text:
             t = TITLE_RE.search(text)
