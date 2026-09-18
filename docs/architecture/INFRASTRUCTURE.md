@@ -120,6 +120,7 @@ on page one.)
 - **CLAUDE.md compacted: the laws in full (2026-09-16)** — `log/2026-09.md`
 - **The corpus sources ride a GitHub Release, not git (2026-09-16)** — `log/2026-09.md`
 - **The compiler comes by pinned hash, and the npm toolchain is watched (2026-09-17)** — `log/2026-09.md`
+- **One owner for every share card, and a card that says which page it is (2026-09-17)** — `log/2026-09.md`
 
 ### The PureScript application layer
 

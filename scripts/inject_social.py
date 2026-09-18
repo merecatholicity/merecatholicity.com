@@ -1,26 +1,78 @@
 #!/usr/bin/env python3
-"""Give every docs/*.html a social-share card, derived from its own <title>.
+"""Give every docs/*.html a social-share card, derived from its own title and shelf.
 
 The primary-source Library pages (Schaff, Newman, the Fathers, the Bibles, the
 Summa, the Catena, the classics) are pandoc-built with no Open Graph tags; this
-injects a title-specific card into each without editing the dozens of build
-stanzas (and the generated *.mk files) that produce them. Pages that ALREADY
-carry an og:title — the hand pages and the content.py pages, which have curated
-per-page cards — are skipped untouched.
+injects a page-specific card into each without editing the dozens of build
+stanzas (and the generated *.mk files) that produce them. The description is the
+work's own title on its own shelf, read from docs/library.html — the page that
+IS the catalog — so a shared link says WHICH work it is, not merely that the site
+has a library (until 2026-09-17, 234 of 274 pages shared one sentence).
 
-Idempotent (the og:title guard) and deterministic (fixed tags from the title).
-Wired into `make html` after the resources build so a corpus rebuild re-injects;
-also runnable standalone over the committed docs/ tree."""
+This is the ONE owner of a card for every page content.py does not build: the
+two works pandoc builds --standalone from LaTeX carry theirs in OVERRIDES, not
+in a head partial of their own. Pages that already carry an og:title and no fence
+of ours — the hand pages and the content.py pages, with their curated cards
+— are skipped untouched; a noindex page is never given a card at all.
+
+Idempotent (the fenced block is rewritten in place, so a changed formula
+reaches a cached tree) and deterministic. Wired into `make html` after the
+resources build, and after `make content` has written docs/library.html; also
+runnable standalone over the committed docs/ tree."""
 import os
 import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from library_order import Catalog  # noqa: E402  (the Library catalog's one parser)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS = os.path.join(ROOT, 'docs')
 SITE = 'https://merecatholicity.com'
 IMAGE = SITE + '/cover.jpg'
+# The fallback description, for a page the catalog does not name (and for a tree
+# with no docs/library.html yet). Every Library work gets its own line instead —
+# see describe(). Kept as the honest generic: it says what the page is.
 DESC = 'A primary source in the Mere Catholicity Library.'
+LIBRARY = os.path.join(DOCS, 'library.html')
+
+# Our card is fenced, so a later run REWRITES it rather than skipping the page:
+# without this, a pages tree restored from the build cache (CI, and any local
+# incremental build) would keep the card its previous formula wrote for ever.
+# A page carrying an og:title and NO fence is somebody else's curated card.
+FENCE_OPEN = '<!--mc-card-->'
+FENCE_CLOSE = '<!--/mc-card-->'
+FENCE_RE = re.compile(re.escape(FENCE_OPEN) + '.*?' + re.escape(FENCE_CLOSE), re.S)
+# the same block with the newline that precedes it, for taking a card away
+UNCARD_RE = re.compile(r'\n?' + re.escape(FENCE_OPEN) + '.*?' + re.escape(FENCE_CLOSE), re.S)
+
+# The two works pandoc builds --standalone from LaTeX (Makefile's `html` target)
+# had their card in a -H head partial each — partials/social.html and
+# partials/social-bishop.html — which is the whole reason the bishop paper looked
+# like the one page with "its own social partial": -H is pandoc's only door into
+# a head it writes itself, and a curated card had nowhere else to live. They live
+# here now, beside every other page's (2026-09-17); partials/head.html carries
+# what is not a card (the favicon) for both.
+OVERRIDES = {
+    'book.html': {
+        'title': 'Mere Catholicity',
+        'desc': 'What has been believed everywhere, always, and by all.',
+        'og_type': 'book',
+        # the cover's true pixels, so a card renders it large rather than cropped
+        'extra': [('meta property="og:image:width"', '1300'),
+                  ('meta property="og:image:height"', '1625'),
+                  ('meta property="og:image:alt"', 'Mere Catholicity')],
+    },
+    'bishop-presbyter.html': {
+        'title': 'The bishop and the presbyter',
+        'desc': ('A companion paper on the question of bishop and presbyter in '
+                 'the early Church, recorded.'),
+        'og_type': 'article',
+    },
+}
 
 TITLE_RE = re.compile(r'<title>(.*?)</title>', re.S)
+NOINDEX_RE = re.compile(r'<meta name="robots" content="[^"]*noindex', re.I)
 
 # A tiny SYNCHRONOUS head script that kills the load flashes:
 #  1) Theme: set data-theme (+ palette) from the cookie BEFORE first paint, so a
@@ -124,34 +176,104 @@ def inject_flash(html):
     return re.sub(r'(<head[^>]*>)', lambda m2: m2.group(1) + '\n' + FLASH_SCRIPT, html, count=1)
 
 
+def clean_title(title_html):
+    """The page <title>'s inner text without the brand suffix, so og:title is the
+    clean work title (the brand lives in og:site_name). Already HTML-escaped —
+    it came out of the document — so it is never escaped again."""
+    return re.sub(r'\s*\|\s*Mere Catholicity\s*$', '', title_html.strip())
+
+
+def catalog():
+    """{'anf01.html': ('Vol. I. The Apostolic Fathers…', 'Ante-Nicene Fathers')},
+    parsed from docs/library.html by the Library's one catalog parser. That page
+    IS the shelf list a reader browses, so the card and the shelf cannot
+    disagree. Absent (a tree where `make content` has not run) → {}, and every
+    page falls back to DESC rather than the build failing over a share card."""
+    try:
+        with open(LIBRARY, encoding='utf-8') as f:
+            html = f.read()
+    except FileNotFoundError:
+        return {}
+    cat = Catalog()
+    cat.feed(html)
+    return {w['href']: (w['title'], w['shelf']) for w in cat.works if w['shelf']}
+
+
+def describe(name, works):
+    """A Library page's own description: the work, then the shelf it stands on.
+    Mechanical on purpose — 233 works, one formula, no prose to drift — and the
+    shelf is what a title alone does not say ("The Aeneid of Virgil" tells a
+    reader nothing about why this site hosts Virgil; "from The philosophers, and
+    the religion of Rome" does)."""
+    work = works.get(name)
+    if not work:
+        return DESC
+    return work[0] + ' — from ' + work[1] + ', in the Mere Catholicity Library.'
+
+
 def esc(s):
     return (s.replace('&', '&amp;').replace('"', '&quot;')
             .replace('<', '&lt;').replace('>', '&gt;'))
 
 
-def card(title_html, url):
-    # title_html is the already-HTML-escaped inner text of <title>; drop a
-    # " | Mere Catholicity" suffix so og:title is the clean work title.
-    t = re.sub(r'\s*\|\s*Mere Catholicity\s*$', '', title_html.strip())
-    desc = esc(DESC)
+def card(title, url, desc, og_type='book', extra=()):
+    """One page's fenced card. `title` arrives already HTML-escaped (it is the
+    document's own <title> text); everything else is plain text and escaped."""
     tags = [
-        ('meta name="description"', t and desc or desc),
-        ('meta property="og:type"', 'book'),
+        ('meta name="description"', esc(desc)),
+        ('meta property="og:type"', og_type),
         ('meta property="og:site_name"', 'Mere Catholicity'),
-        ('meta property="og:title"', t),
-        ('meta property="og:description"', desc),
+        ('meta property="og:title"', title),
+        ('meta property="og:description"', esc(desc)),
         ('meta property="og:url"', esc(url)),
         ('meta property="og:image"', esc(IMAGE)),
         ('meta name="twitter:card"', 'summary_large_image'),
-        ('meta name="twitter:title"', t),
-        ('meta name="twitter:description"', desc),
+        ('meta name="twitter:title"', title),
+        ('meta name="twitter:description"', esc(desc)),
+        ('meta name="twitter:image"', esc(IMAGE)),
+    ] + [(a, esc(v)) for a, v in extra]
+    body = '\n'.join('<' + a + ' content="' + v + '">' for a, v in tags)
+    return FENCE_OPEN + '\n' + body + '\n' + FENCE_CLOSE
+
+
+def legacy_card(title, url):
+    """The unfenced block this script wrote before 2026-09-17 — the generic
+    "A primary source…" card, byte for byte, so a pages tree restored from the
+    build cache can have it REMOVED by exact match and the real card put in its
+    place. A shim: see tests/_support/retirements.json. Once every cached tree
+    has turned over, this and its caller go, and the fence is the only road."""
+    tags = [
+        ('meta name="description"', esc(DESC)),
+        ('meta property="og:type"', 'book'),
+        ('meta property="og:site_name"', 'Mere Catholicity'),
+        ('meta property="og:title"', title),
+        ('meta property="og:description"', esc(DESC)),
+        ('meta property="og:url"', esc(url)),
+        ('meta property="og:image"', esc(IMAGE)),
+        ('meta name="twitter:card"', 'summary_large_image'),
+        ('meta name="twitter:title"', title),
+        ('meta name="twitter:description"', esc(DESC)),
         ('meta name="twitter:image"', esc(IMAGE)),
     ]
     return '\n'.join('<' + a + ' content="' + v + '">' for a, v in tags)
 
 
+def place_card(html, block, title_tag):
+    """Rewrite the fenced card in place, or put a new one after <title>."""
+    if FENCE_RE.search(html):
+        return FENCE_RE.sub(lambda _: block, html, count=1)
+    return html.replace(title_tag, title_tag + '\n' + block, 1)
+
+
+def uncard(html):
+    """Take our card away — for a page that has become noindex since it was
+    given one. Keeping such a card current is worse than never writing it."""
+    return UNCARD_RE.sub('', html)
+
+
 def main():
-    injected = skipped = flashed = 0
+    works = catalog()
+    written = skipped = flashed = shimmed = 0
     for name in sorted(os.listdir(DOCS)):
         if not name.endswith('.html'):
             continue
@@ -171,20 +293,42 @@ def main():
         html = inject_flash(html)
         if html != orig:
             flashed += 1
-        # (2) the social card goes only in pandoc pages that lack a curated one
-        if 'og:title' in html:      # already has a curated card — leave it
+        # (2) the card. A title is the one thing a card cannot be built without.
+        m = TITLE_RE.search(html)
+        title = clean_title(m.group(1)) if m and m.group(1).strip() else ''
+        url = SITE + '/' + name
+        if title and FENCE_OPEN not in html:
+            # the shim: an old unfenced card of ours is removed, not curated
+            without = html.replace('\n' + legacy_card(title, url), '', 1)
+            if without != html:
+                html = without
+                shimmed += 1
+        if not title:
             skipped += 1
+        elif NOINDEX_RE.search(html):
+            # a page kept out of every index (away.html, admin.html) has
+            # nothing to share: it is a door, not a reading. No card is the
+            # right card — and one written before the page went noindex is
+            # taken away rather than kept current.
+            html = uncard(html)
+            skipped += 1
+        elif FENCE_OPEN not in html and 'og:title' in html:
+            skipped += 1          # somebody's curated card — leave it untouched
         else:
-            m = TITLE_RE.search(html)
-            if m and m.group(1).strip():
-                block = card(m.group(1), SITE + '/' + name)
-                html = html.replace(m.group(0), m.group(0) + '\n' + block, 1)
-                injected += 1
+            over = OVERRIDES.get(name, {})
+            block = card(over.get('title', title), url,
+                         over.get('desc') or describe(name, works),
+                         over.get('og_type', 'book'), over.get('extra', ()))
+            html = place_card(html, block, m.group(0))
+            written += 1
         if html != orig:
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(html)
-    print('inject_social: injected', injected, 'cards;', flashed, 'flash scripts; skipped',
-          skipped, '(already carded)')
+    # `asserted` is every page whose card this run wrote or re-wrote from the
+    # catalog; a page whose bytes already said exactly that is not touched.
+    print('inject_social: asserted', written, 'cards from', len(works),
+          'works on the shelves;', flashed, 'flash scripts;', shimmed,
+          'legacy cards replaced; skipped', skipped)
 
 
 if __name__ == '__main__':

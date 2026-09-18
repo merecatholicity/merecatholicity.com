@@ -70,5 +70,13 @@
   "since": "2026-09-12",
   "due": "2026-10-14",
   "how": "the same 0018 migration: DROP TABLE ×2 (nothing reads them; the ledger holds every like as a ❤️ reaction); make schema-snapshot"
+ },
+ {
+  "what": "the legacy card strip in inject_social.py — the unfenced \"A primary source…\" block a cached pages tree still carries",
+  "where": "scripts/inject_social.py",
+  "pattern": "def legacy_card\\(",
+  "since": "2026-09-17",
+  "due": "2026-10-17",
+  "how": "once every site cache has turned over (a cold rebuild, or a month of builds), drop legacy_card(), its caller in main(), the `shimmed` counter and test_social_cards.py's byte-for-byte test; the fence is then the only road"
  }
 ]

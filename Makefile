@@ -223,14 +223,14 @@ html: fetch-sources
 	    confession.tex | \
 	pandoc -f latex -t html5 --standalone --toc --toc-depth=2 \
 	    --metadata title="Mere Catholicity" \
-	    --css=style.css -H ../partials/social.html -B ../partials/nav.html -A ../partials/book-tail.html \
+	    --css=style.css -H ../partials/head.html -B ../partials/nav.html -A ../partials/book-tail.html \
 	    -o ../docs/book.html
 	python scripts/toc-prune.py
 	rm book/memorandum-body-html.tex
 	cd book && sed -e 's/\\unit{/\\paragraph{/g' -e 's/\\hrule height [0-9.]*pt//g' bishop-presbyter.tex | \
 	pandoc -f latex -t html5 --standalone \
 	    --metadata title="The bishop and the presbyter, a question recorded" \
-	    --css=style.css -H ../partials/social-bishop.html -B ../partials/nav.html -A ../partials/book-tail.html \
+	    --css=style.css -H ../partials/head.html -B ../partials/nav.html -A ../partials/book-tail.html \
 	    -o ../docs/bishop-presbyter.html
 	$(MAKE) -C resources bible-json
 	$(MAKE) -C resources html
