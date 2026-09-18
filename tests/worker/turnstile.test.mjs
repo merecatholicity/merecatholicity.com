@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { routesSource } from '../_support/worker_src.mjs';
-import { loadWorker, makeEnv, freshDb, identity, establish, call, netSpy, resetCaches } from '../_support/worker.mjs';
+import { loadWorker, makeEnv, freshDb, identity, establish, seen, call, netSpy, resetCaches } from '../_support/worker.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
@@ -92,4 +92,88 @@ test('a TEST: token is verified like any token, and an established identity with
     assert.equal(spared.status, 200, 'an established identity sending no token is spared by the rule, not by a bypass');
     assert.equal(asked.length, 1, 'without asking siteverify');
   } finally { net.restore(); }
+});
+
+/* The hole this file exists to keep shut (2026-09-17). `isEstablished` read
+   "has a profiles row", and since 2026-09-16 a keyed READ leaves one behind
+   (registerMember), so a key one minute old was established by opening the
+   board — and with the client mounting nothing for a spared identity, the
+   challenge asked nobody anything. The record is now `profiles.verified_at`,
+   written only where a challenge was actually passed. */
+test('reading does not establish an identity: only a passed challenge does', async () => {
+  const { worker } = await loadWorker();
+  const fresh = await identity('turnstile-fresh');
+  const asked = [];
+  const net = netSpy((url, init) => {
+    asked.push(String(init && init.body));
+    return Response.json({ success: false, 'error-codes': ['missing-input-response'] });
+  });
+  try {
+    resetCaches();
+    const db = freshDb();
+    db.prepare("INSERT INTO comments (id, page, title, author_hash, body, status, created_at, last_at) VALUES (1, 'board:pub', 'A topic', 'a'||substr(hex(randomblob(32)),1,63), 'x', 'live', 5, 5)").run();
+    seen(db, fresh.hash);            // what a keyed read leaves: a row, nothing more
+    const env = makeEnv({ db });
+    const bare = await call(worker, env, 'POST', '/api/comments', { key: fresh.key, topic: 1, body: 'a reply' });
+    assert.equal(bare.status, 403, 'a row from a read is not a passed challenge');
+    assert.equal(asked.length, 1, 'and the tokenless write was asked of siteverify, which refused it');
+    assert.equal(db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(fresh.hash).verified_at, null,
+      'a refused challenge records nothing');
+
+    /* the same identity, once it has passed one */
+    establish(db, fresh.hash);
+    resetCaches();
+    const spared = await call(worker, env, 'POST', '/api/comments', { key: fresh.key, topic: 1, body: 'a reply' });
+    assert.equal(spared.status, 200, 'an identity that has passed a challenge is spared the next one');
+    assert.equal(asked.length, 1, 'without asking siteverify again');
+  } finally { net.restore(); }
+});
+
+test('passing a challenge is what writes the record, and it is written once', async () => {
+  const { worker } = await loadWorker();
+  const newcomer = await identity('turnstile-newcomer');
+  const net = netSpy(() => Response.json({ success: true, hostname: 'merecatholicity.com' }));
+  try {
+    resetCaches();
+    const db = freshDb();
+    db.prepare("INSERT INTO comments (id, page, title, author_hash, body, status, created_at, last_at) VALUES (1, 'board:pub', 'A topic', 'a'||substr(hex(randomblob(32)),1,63), 'x', 'live', 5, 5)").run();
+    const env = makeEnv({ db });
+    /* no profiles row at all: the first act of a key that has read nothing */
+    const first = await call(worker, env, 'POST', '/api/comments', { key: newcomer.key, topic: 1, body: 'hello', token: 'a-solved-challenge' });
+    assert.equal(first.status, 200);
+    const stamped = db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(newcomer.hash);
+    assert.ok(stamped && stamped.verified_at > 0, 'siteverify said yes, so the identity is recorded as verified');
+
+    /* a later challenge never moves the first date (the record is of the first
+       time a person answered for this identity) */
+    db.prepare('UPDATE profiles SET verified_at = 1000 WHERE hash = ?').run(newcomer.hash);
+    resetCaches();
+    const again = await call(worker, env, 'POST', '/api/comments', { key: newcomer.key, topic: 1, body: 'hello again', token: 'another-solved-challenge' });
+    assert.equal(again.status, 200);
+    assert.equal(db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(newcomer.hash).verified_at, 1000,
+      'the first verification stands');
+  } finally { net.restore(); }
+});
+
+test('/prefs tells an identity whether IT is spared — the only honest thing to mount on', async () => {
+  const { worker } = await loadWorker();
+  const reader = await identity('turnstile-reader');
+  const member = await identity('turnstile-member');
+  resetCaches();
+  const db = freshDb();
+  seen(db, reader.hash);
+  establish(db, member.hash);
+  const env = makeEnv({ db });
+  const asReader = await call(worker, env, 'POST', '/api/comments/prefs', { key: reader.key });
+  assert.equal(asReader.status, 200);
+  assert.equal(asReader.json.turnstile.spared, false, 'a row from a read is spared nothing');
+  const asMember = await call(worker, env, 'POST', '/api/comments/prefs', { key: member.key });
+  assert.equal(asMember.json.turnstile.spared, true, 'an identity that has passed one is');
+
+  /* and when the admin switches the sparing off, nobody is spared — the one
+     answer carries the whole rule, so the client never has to combine two */
+  db.prepare("INSERT OR REPLACE INTO app_settings (k, v, updated_at, updated_by) VALUES ('turnstile_skip_established', '0', 1, 'admin')").run();
+  resetCaches();
+  const withSkipOff = await call(worker, env, 'POST', '/api/comments/prefs', { key: member.key });
+  assert.equal(withSkipOff.json.turnstile.spared, false, 'the global switch is part of the answer');
 });

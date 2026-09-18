@@ -34,6 +34,8 @@ import {
   registerMember,
   throttle,
   bodyOf,
+  getAppSettings,
+  turnstileSkipEstablished,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 
@@ -45,6 +47,7 @@ type ProfileRow = {
 type PrefsRow = {
   receipts_mode: string | null; notify_reply: number | null; notify_mention: number | null;
   notify_dm: number | null; calls_ok: number | null; muted: string | null;
+  verified_at: number | null;
 };
 /* The bodies these handlers read. Every field is coerced below (String/cleanField
    /normalizeLinks), so `unknown` is what the wire honestly carries. */
@@ -253,11 +256,17 @@ async function handlePrefs(request: Request, env: Env) {
       await env.DB.prepare('UPDATE profiles SET ' + parts.join(', ') + ' WHERE hash = ?').bind(...vals, me).run();
     }
   }
-  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm, calls_ok, muted FROM profiles WHERE hash = ?1')
+  const row = await env.DB.prepare('SELECT receipts_mode, notify_reply, notify_mention, notify_dm, calls_ok, muted, verified_at FROM profiles WHERE hash = ?1')
     .bind(me).first<PrefsRow>();
   const onOff = (v: number | null | undefined) => (v == null ? 1 : (v ? 1 : 0));
   let muted: unknown = [];
   try { muted = row && row.muted ? JSON.parse(row.muted) : []; } catch { muted = []; }
+  /* Whether THIS identity is spared the challenge — the client's only honest
+     way to know whether mounting a widget is worth it (the global switch alone
+     told it nothing about itself, so it mounted for nobody and the gate asked
+     nobody: 2026-09-17). A hint, never a permission: the server decides again
+     on every write, and a client that guesses wrong is simply refused. */
+  const spared = turnstileSkipEstablished(await getAppSettings(env)) && !!(row && row.verified_at);
   return json({ ok: true, prefs: {
     receipts: (row && row.receipts_mode === 'off') ? 'off' : 'auto',
     notify_reply: onOff(row && row.notify_reply),
@@ -265,7 +274,7 @@ async function handlePrefs(request: Request, env: Env) {
     notify_dm: onOff(row && row.notify_dm),
     calls: onOff(row && row.calls_ok),
     muted: Array.isArray(muted) ? muted : [],
-  } }, 200);
+  }, turnstile: { spared } }, 200);
 }
 
 async function handleProfileAdminEdit(request: Request, env: Env) {

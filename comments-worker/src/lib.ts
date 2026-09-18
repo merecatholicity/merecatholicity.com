@@ -415,6 +415,20 @@ export async function verifyTurnstile(env: Env, token: string, ip: string, key: 
       console.log(JSON.stringify({ event: 'turnstile_hostname', hostname: verdict.hostname }));
       return false;
     }
+    /* Passed. THIS is the moment the record is made (0018): from here on the
+       identity is spared, and its uploads, calls and first DM open. A write
+       with no key (an anonymous post, where that is allowed) records nothing —
+       there is no identity to remember. The verdict is what gates the write,
+       so a database that cannot take the record must not turn a challenge a
+       person just passed into a refusal: the write lands and the next one is
+       challenged again, which is the safe direction. */
+    if (key) {
+      try {
+        await markVerified(env, await sha256hex(key));
+      } catch (err) {
+        console.log(JSON.stringify({ event: 'verified_stamp_failed', error: String(err) }));
+      }
+    }
     return true;
   } catch (err) {
     console.log(JSON.stringify({ event: 'siteverify_failed', error: String(err) }));
@@ -1630,18 +1644,32 @@ export function mediaRetentionDays(s: Settings, ctx: string) {
   return n > 0 ? Number(Media.clampRetentionDays(n)) : 0;
 }
 
-/* An upload needs an ESTABLISHED identity — one that has passed Turnstile at
-   least once (a saved profile, a comment, or a wall post). Uploads themselves
-   are not Turnstile-gated (the linking send/post is), so without this a
-   drive-by random key could store megabytes in R2 unchallenged. */
+/* ESTABLISHED = has passed a Cloudflare challenge at least once, which is
+   `profiles.verified_at` and nothing else (0018, 2026-09-17). It spares the
+   challenge (Domain.Turnstile) and it opens what a challenge is the price of:
+   uploads (not gated themselves, so a drive-by key could otherwise store
+   megabytes in R2), calls, the first DM.
+
+   It USED to read "has a profiles row, a comment or a wall post" — and since
+   2026-09-16 any keyed read leaves a profiles row (registerMember), so reading
+   the board once established an identity and the challenge asked nothing of
+   anybody. The row means "has acted"; only the stamp means "a person answered
+   for this identity". */
 export async function isEstablished(env: Env, hash: string | null | undefined) {
   if (!hash) return false;
-  const p = await env.DB.prepare('SELECT hash FROM profiles WHERE hash = ?1').bind(hash).first();
-  if (p) return true;
-  const c = await env.DB.prepare('SELECT id FROM comments WHERE author_hash = ?1 LIMIT 1').bind(hash).first();
-  if (c) return true;
-  const w = await env.DB.prepare('SELECT id FROM wall_posts WHERE author_hash = ?1 LIMIT 1').bind(hash).first();
-  return !!w;
+  const p = await env.DB.prepare('SELECT 1 AS v FROM profiles WHERE hash = ?1 AND verified_at IS NOT NULL').bind(hash).first();
+  return !!p;
+}
+
+/* The stamp, written by verifyTurnstile the moment siteverify says yes. The
+   row may not exist yet (a first post from a key that has read nothing), and
+   an identity keeps its FIRST verification — a later challenge never moves the
+   date. Idempotent, and never undone except by an admin clearing the row. */
+export async function markVerified(env: Env, hash: string, now = Math.floor(Date.now() / 1000)) {
+  await env.DB.prepare(
+    'INSERT INTO profiles (hash, created_at, verified_at) VALUES (?1, ?2, ?2) '
+    + 'ON CONFLICT(hash) DO UPDATE SET verified_at = COALESCE(profiles.verified_at, ?2)',
+  ).bind(hash, now).run();
 }
 
 /* The one road a member row appears by (P2-2, 2026-09-16). A keyed act on a

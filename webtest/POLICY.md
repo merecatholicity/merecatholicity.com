@@ -52,6 +52,16 @@ published that secret; since the skip already covered the kit, the branch, both
 secrets and the kit's `MC_TEST_TOKEN` were retired rather than rotated. A `TEST:`
 token is now a token like any other — refused by siteverify.
 
+**What makes the kit's identities established** (2026-09-17): `profiles.verified_at`,
+the stamp a passed challenge leaves. It used to be any `profiles` row — which a
+keyed READ leaves behind, so any key was established by reading and the challenge
+asked nobody anything; migration 0018 replaced the rule with the stamp and wrote
+one for every identity that had ever posted, plus the three `HIDDEN_HASHES`
+identities by hash, because no scripted browser can earn one. **Rotating a test
+key therefore needs its new hash stamped** — an admin road, or a row of SQL
+(`UPDATE profiles SET verified_at = created_at WHERE hash = '<new>'`) — or every
+write suite will report `BLOCKED`.
+
 ## Secrets
 
 `webtest/.testkeys` (git-ignored, never committed) holds the two identity keys

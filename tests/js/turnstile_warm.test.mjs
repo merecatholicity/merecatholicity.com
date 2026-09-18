@@ -222,13 +222,20 @@ test('a spared reader never mounts, whoever asks', () => {
    * loadTurnstile() — and there were four — ran the challenge for an identity
    * the server would never have asked. The gate sits on the one road every
    * mount takes now: a known-spared identity returns at once, an unknown one
-   * asks /config first and mounts only on a "no". */
+   * is asked about first and mounts only on a "no". The answer belongs to the
+   * IDENTITY it was given for (tsSpared(), 2026-09-17) — a key change must
+   * re-ask, or a fresh identity would inherit a spare it never earned and sit
+   * in front of a composer whose writes the server refuses, with no widget. */
   const l = src.slice(src.indexOf('function loadTurnstile()'), src.indexOf('function loadTurnstile()') + 1500);
   const body = l.replace(/\/\*[\s\S]*?\*\//g, '');
   const first = body.slice(body.indexOf('{') + 1).trim().split('\n')[0];
-  assert.equal(first.trim(), 'if (mcTsSpared) return;', 'the sparing must be the FIRST thing loadTurnstile checks');
-  assert.ok(/if \(mcTsSpared === null\)/.test(body) && /tsSkipCfg\(\)/.test(body),
+  assert.equal(first.trim(), 'if (tsSpared()) return;', 'the sparing must be the FIRST thing loadTurnstile checks');
+  assert.ok(/if \(tsSpared\(\) === null\)/.test(body) && /tsSkipCfg\(\)/.test(body),
     'an unknown identity must be asked about before anything mounts');
+  assert.ok(/mcTsSparedFor === \(state\.key \|\| ''\)/.test(src),
+    'the remembered answer must be checked against the identity it was given for');
+  assert.ok(/'\/prefs'|API \+ '\/prefs'/.test(src.slice(src.indexOf('function tsSkipCfg()'), src.indexOf('function tsSkipCfg()') + 700)),
+    'the question is keyed: /config\'s switch says nothing about this identity');
 });
 
 test('the challenge runs in its own browsing context', () => {

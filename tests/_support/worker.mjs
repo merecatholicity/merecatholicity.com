@@ -287,9 +287,16 @@ export async function identity(seed) {
   const key = 'mc-test-identity-' + String(seed);
   return { key, hash: await sha256hex(key) };
 }
-/* an established identity is not challenged (Domain.Turnstile, the default):
-   a profiles row is the whole of it */
+/* an ESTABLISHED identity — one that has passed a challenge — is not
+   challenged again, and its uploads, calls and first DM are open
+   (Domain.Turnstile, the default). The whole of it is `verified_at` (0018). */
 export function establish(db, hash, now = 1_700_000_000) {
+  db.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?, ?)').run(hash, now);
+  db.prepare('UPDATE profiles SET verified_at = ? WHERE hash = ? AND verified_at IS NULL').run(now, hash);
+}
+/* what a keyed READ leaves behind (registerMember): a row, and no record of
+   anyone answering for it. Established it is NOT — that was the hole. */
+export function seen(db, hash, now = 1_700_000_000) {
   db.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?, ?)').run(hash, now);
 }
 /* a published X25519 public key (43 base64url chars), so DM roads that need one open */

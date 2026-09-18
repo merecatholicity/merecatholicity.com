@@ -17,15 +17,24 @@
 -- | So the gate moved to where it does its actual work. A challenge answers one
 -- | question — "is a person here?" — and an identity that has ALREADY answered
 -- | it does not need to answer it again on every message. `isEstablished` in the
--- | worker is exactly that record: an identity with a profile row, a comment, or
--- | a wall post has passed a challenge at least once. Everything else that
--- | guards a write is untouched and does the continuous work: the identity key,
--- | the block/lock/ban gate, the per-IP rate limits, the AI screen.
+-- | worker is exactly that record, and nothing else: `profiles.verified_at`,
+-- | stamped the second siteverify says yes (migration 0018). Everything else
+-- | that guards a write is untouched and does the continuous work: the identity
+-- | key, the block/lock/ban gate, the per-IP rate limits, the AI screen.
+-- |
+-- | It once read "has a profile row, a comment, or a wall post", which was the
+-- | same thing until a keyed READ began leaving a profiles row behind
+-- | (registerMember, 2026-09-16). From then until 2026-09-17 any fresh key was
+-- | established by opening the board once, so the challenge asked nothing of
+-- | anybody — a gate whose record can be earned by reading is not a gate.
 -- |
 -- | Single-sourced into the worker (`verifyTurnstile`) and the admin settings
--- | box; the client reads it through `/config` only to know whether to bother
--- | mounting a widget. The SERVER is the authority — a client that guesses wrong
--- | is simply refused, so this rule can never be talked around from a browser.
+-- | box. The client is told only whether to bother mounting a widget: the whole
+-- | rule as it will be applied to its next write, per identity, in `/prefs`'s
+-- | `turnstile.spared` (`/config`'s switch alone said nothing about the reader
+-- | holding the keyboard). The SERVER is the authority — a client that guesses
+-- | wrong is simply refused, so this rule can never be talked around from a
+-- | browser.
 module Domain.Turnstile
   ( skipEstablishedDefault
   , skipFrom

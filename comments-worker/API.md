@@ -513,7 +513,10 @@ the read-receipts mode — a member with receipts off sends no stamp and is not 
 `notify_reply` · `notify_mention` · `notify_dm` (1/0), `calls` (1/0 — off makes every offer to
 this member fake-succeed like a block), `muted` (an array of hashes, ≤ 300, the mute list that
 follows the member across devices). Answers `{ok:true, prefs:{receipts, notify_reply,
-notify_mention, notify_dm, calls, muted}}`.
+notify_mention, notify_dm, calls, muted}, turnstile:{spared}}` — `spared` is whether THIS
+identity will be let past the challenge on its next write (the sparing switch and
+`profiles.verified_at` together, 2026-09-17), so the client knows whether mounting a widget is
+worth it. A hint only: the server decides again on every write.
 
 **`POST /api/comments/bookmark`** (keyed, `POST_LIMIT`) — `{key, kind:'topic'|'wall', ref, on}`
 toggles a saved item (`'wall'` is not a kind while the social layer is off — the same

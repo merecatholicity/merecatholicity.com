@@ -1453,7 +1453,9 @@
    "prefs.notify_mention:number",
    "prefs.notify_reply:number",
    "prefs.receipts:string",
-   "prefs:object"
+   "prefs:object",
+   "turnstile.spared:boolean",
+   "turnstile:object"
   ],
   "lists": [],
   "text": []

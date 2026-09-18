@@ -114,10 +114,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   keep page-scoped state above it, and every document/window listener it installs carries the boot
   signal. **A phone's FIRST paint is already the app**: before `body.mc-app` the bars' surfaces hold
   their places, no title or static footer shows (`html.mc-noapp` is the `?app=0` opt-out).
-- **Turnstile**: an established identity is not challenged (`Domain.Turnstile`, app_settings
-  `turnstile_skip_established`); the widget runs in `docs/turnstile.html` (own browsing context;
-  its `?v=` is stamped into nav.js's `MC_ASSETS`, never by hand). **Only `loadTurnstile()` mounts,
-  only from the focus net or a press, never because a view opened, never for a spared identity** — the test sweeps every call site.
+- **Turnstile**: an established identity is not challenged — established is `profiles.verified_at`, stamped where a challenge was
+  PASSED, never the row a keyed read leaves (`Domain.Turnstile`, `turnstile_skip_established`; `/prefs` answers for this
+  identity); the widget runs in `docs/turnstile.html` (own context, `?v=` from `MC_ASSETS`). **Only `loadTurnstile()` mounts, only
+  from a focus or a press, never because a view opened, never for a spared identity** — swept.
 - **Limits are per MEMBER plus an address backstop** (`throttle`, the one `.limit(` caller); one
   `READ_LIMIT` for all reads, client-paced — no stray poller. **D1 replicas: `Domain.Consistency`'s list only**.
 - **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;

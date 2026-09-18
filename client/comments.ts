@@ -951,10 +951,10 @@ import type { Boot } from './boot';
        2026-09-09), which bypassed the sparing entirely and ran the challenge
        for a member who had merely arrived. Whoever asks, a spared identity
        mounts nothing; an unknown one is asked about first. */
-    if (mcTsSpared) return;
-    if (mcTsSpared === null) {
+    if (tsSpared()) return;
+    if (tsSpared() === null) {
       tsSkipCfg().then(function (spare: boolean) {
-        mcTsSpared = spare;
+        tsSparedIs(spare);
         if (spare) { trace('turnstile: spared, nothing mounted'); return; }
         loadTurnstile();
       });
@@ -1007,7 +1007,7 @@ import type { Boot } from './boot';
      opening a view. */
   function warmToken() {
     if (!state.key) return;
-    if (mcTsSpared) return;                    // nothing to warm; nothing to mount
+    if (tsSpared()) return;                    // nothing to warm; nothing to mount
     if (mcTsToken && Date.now() - mcTsToken.at < TOKEN_FRESH_MS) return;
     trace('turnstile: warming');
     loadTurnstile();   // which asks the server first whether this reader needs one at all
@@ -1073,17 +1073,30 @@ import type { Boot } from './boot';
     }
   }, { signal: bootSig });
 
-  /* Once the server has said established identities are spared, remember it for
-     the page: the challenge is then never mounted at all, which is the only
-     thing that reliably stops the installed app being taken down by it. */
+  /* The server's word on whether THIS identity is spared, remembered for the
+     page: a spared identity then mounts no challenge at all, which is the only
+     thing that reliably stops the installed app being taken down by it. The
+     answer is kept WITH the identity it was given for — a member importing
+     their identity on another phone, or a fresh key made in Settings, must not
+     inherit the last one's, or the client would mount nothing for an identity
+     the server has never watched pass a challenge and every write would be
+     refused with no widget in sight. null = not asked yet. */
   var mcTsSpared: boolean | null = null;
+  var mcTsSparedFor: string | null = null;
+  function tsSpared(): boolean | null {
+    return mcTsSparedFor === (state.key || '') ? mcTsSpared : null;
+  }
+  function tsSparedIs(spare: boolean) {
+    mcTsSpared = spare;
+    mcTsSparedFor = state.key || '';
+  }
   function getToken(): Promise<any> {
-    if (mcTsSpared) { trace('turnstile: not required for this identity'); return Promise.resolve(''); }
+    if (tsSpared()) { trace('turnstile: not required for this identity'); return Promise.resolve(''); }
     /* Not asked yet — a press that skipped the composer entirely (a voice note,
        an attachment, an avatar). Settle it before mounting anything. */
-    if (mcTsSpared === null) {
+    if (tsSpared() === null) {
       return tsSkipCfg().then(function (spare: boolean) {
-        mcTsSpared = spare;
+        tsSparedIs(spare);
         return getToken();
       });
     }
@@ -1309,6 +1322,10 @@ import type { Boot } from './boot';
            whole page without their prefs and never retry. */
         if (!d || !d.ok) { if (mcPrefsFor === prefsForKey) mcPrefsFor = null; return; }
         state.prefs = d.prefs; window.mcPrefs = d.prefs;
+        /* The same answer carries whether this identity is spared the
+           challenge, so the composer's focus usually finds it already
+           settled instead of paying its own round trip. */
+        if (d.turnstile && prefsForKey === state.key) tsSparedIs(!!d.turnstile.spared);
         /* Merge the server's mute list with this device's (union), and push
            the union back up when this device knew someone the server did not,
            so every device converges on the same list. */
@@ -1345,13 +1362,21 @@ import type { Boot } from './boot';
      not subject to this boot's teardown cycle. This file keeps only the 📞
      buttons, which delegate to window.mcCall.place(), and the /config gate
      that decides whether to render them. */
-  /* Does this reader need to solve a challenge at all? Shares mcStore's cached
-     /config with mediaCfg/socialCfg, so it costs no extra request. Advisory:
-     the server decides on every write, and refuses a client that guessed. */
+  /* Is a challenge worth mounting for the reader at this keyboard? The global
+     switch is only half the question — it says whether ESTABLISHED identities
+     are spared, never whether this one is (2026-09-17: the client read the
+     switch alone, so it mounted a widget for nobody, while the server spared
+     anyone holding a profiles row — which one keyed read leaves behind). The
+     keyed answer, `/prefs`'s `turnstile.spared`, is the whole rule as the
+     server will apply it to the next write. A reader with no identity is
+     nobody the server can have watched pass a challenge, so they mount one. */
   function tsSkipCfg(): Promise<boolean> {
-    return cachedJson(API + '/config', undefined, 300000)
-      .then(function (d: any) { return !!(d && d.ok && d.turnstile && d.turnstile.skip_established); })
-      .catch(function () { return false; });   // unknown: behave as before
+    if (!state.key) return Promise.resolve(false);
+    return fetch(API + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: state.key }) })
+      .then(function (r) { return r.json(); })
+      .then(function (d: any) { return !!(d && d.ok && d.turnstile && d.turnstile.spared); })
+      .catch(function () { return false; });   // unknown: mount one, as before
   }
 
   /* ---- The Community ---- */
