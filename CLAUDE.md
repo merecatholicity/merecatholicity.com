@@ -7,8 +7,8 @@ long-form reference — every design decision and postmortem since July 2026 —
 under **`docs/architecture/log/`**, indexed by `docs/architecture/INFRASTRUCTURE.md`: before
 changing a subsystem, read its passage. The other documents: `docs/architecture/CICD.md` (**how
 work ships** — read before deploying, changing infra or touching a secret),
-`docs/architecture/CODEBASE.md` (the code map and reading order), `README.md` (the human
-how-it-works), `comments-worker/API.md` (the wire contract), `librarian/README.md`,
+`docs/architecture/CODEBASE.md` (the code map and reading order), `README.md` (the operating
+manual: prerequisites, targets, recipes), `comments-worker/API.md` (the wire contract), `librarian/README.md`,
 `tests/README.md`, `terraform/README.md`. If `CONTEXT_DUMP.txt` is present in the root and you
 work on text content, ingest it first.
 
