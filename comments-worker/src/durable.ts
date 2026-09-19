@@ -30,6 +30,8 @@ import {
   publishUser,
   quotaPublic,
   sha256hex,
+  serveId,
+  resolveId,
   registerMember,
   hubShards,
   hubShard,
@@ -137,6 +139,28 @@ export class BoardHub extends DurableObject<Env> {
   }
   /* Every frame this hub sends passes here: a payload carrying a secret's
      value is dropped and noted, never sent (egress.ts). */
+  /* THE WIRE SPEAKS PUBLIC IDS; THE HUB ROUTES AND STORES ACCOUNT HASHES
+     (2026-09-19). Everything inside this object is keyed by the account hash:
+     `#byMe`, the `watch` table, `#isOnline`, and the `user:` scopes the worker
+     builds when it publishes. Everything a client sends or receives is a
+     PUBLIC id — since the L3 flip a client cannot know anyone's account hash,
+     its own included, for anyone but itself. Before the flip the two were the
+     same string and no translation existed; after it, its absence did not
+     throw, it just routed into space: a `presence:` sub on an id the hub never
+     publishes under, a typing frame fanned to `user:<a pubid>` that nobody
+     holds, a call's ICE trickle addressed to nowhere. Presence, typing and
+     call signalling all went quiet at once, and the only visible symptom was a
+     "last seen" line that never refreshed.
+     So: translate at the edge, in both directions, and nowhere else. */
+  async #wireIn(id: unknown): Promise<string> {
+    const raw = String(id || '');
+    if (!HEX64.test(raw)) return '';
+    return (await resolveId(this.env, raw)) || '';
+  }
+  async #wireOut(hash: string): Promise<string> {
+    return (await serveId(this.env, hash)) || hash;
+  }
+
   #send(ws: WebSocket, payload: string) {
     if (payload !== this.#clean) {
       const names = leakedNames(payload, this.#secrets);
@@ -204,13 +228,15 @@ export class BoardHub extends DurableObject<Env> {
        shard (here, or a sibling by relay). */
     if (m.t === 'typing') {
       const me = a.me;
-      const list = (Array.isArray(m.to) ? m.to : [m.to]).map((h: unknown) => String(h || '')).filter((h: string) => HEX64.test(h) && h !== me);
+      const asked = Array.isArray(m.to) ? m.to : [m.to];
+      if (asked.length > Dm.typingFanCap) return;
+      const list = (await Promise.all(asked.map((h: unknown) => this.#wireIn(h)))).filter((h: string) => h && h !== me);
       if (!me || !list.length || list.length > Dm.typingFanCap) return;
       /* A member who chose to appear offline is not seen typing either: the
          kernel rule that hides their socket hides their keystrokes (2026-09-11). */
       if (!Presence.isVisible((a && a.presenceMode) || 'auto')(true)) return;
       const thread = Math.floor(Number(m.thread) || 0);
-      const frame = JSON.stringify({ v: 1, t: 'typing', from: me, thread, state: m.state === 'stop' ? 'stop' : 'start' });
+      const frame = JSON.stringify({ v: 1, t: 'typing', from: await this.#wireOut(me), thread, state: m.state === 'stop' ? 'stop' : 'start' });
       await this.#toUsers(Array.from(new Set(list)).map((to) => ({ scope: 'user:' + to, payload: frame })));
       return;
     }
@@ -224,19 +250,32 @@ export class BoardHub extends DurableObject<Env> {
        signaling. */
     if (m.t === 'call-sig') {
       const me = a.me;
-      const to = String(m.to || '');
+      const to = await this.#wireIn(m.to);
       const call = String(m.call || '');
       const kind = String(m.kind || '');
-      if (!me || !HEX64.test(to)) return;
+      if (!me || !to) return;
       if (!/^[0-9a-f]{16,64}$/.test(call)) return;
       if (['ice', 'end', 'decline', 'busy', 'taken'].indexOf(kind) === -1) return;
       if (typeof msg !== 'string' || msg.length > 4096) return;
-      await this.#toUsers([{ scope: 'user:' + to, payload: JSON.stringify({ v: 1, t: 'call-sig', from: me, call, kind, payload: m.payload }) }]);
+      await this.#toUsers([{ scope: 'user:' + to, payload: JSON.stringify({ v: 1, t: 'call-sig', from: await this.#wireOut(me), call, kind, payload: m.payload }) }]);
       return;
     }
     if (m.t !== 'sub') return;
     const me = a.me;
-    const subs = sanitizeScopes(m.scope, me, BOARD_CATS);
+    /* `presence:<id>` and `dmview:<id>` name ANOTHER member, so the client can
+       only name them by their public id; `user:<id>` names the caller, who
+       knows their own account hash and sends that (pure.ts admits no other). */
+    const asked = Array.isArray(m.scope) ? m.scope : [];
+    const wanted: string[] = [];
+    for (const raw of asked) {
+      const str = String(raw || '');
+      const pre = str.startsWith('presence:') ? 'presence:' : str.startsWith('dmview:') ? 'dmview:' : '';
+      const tail = pre ? str.slice(pre.length) : '';
+      if (!pre || !HEX64.test(tail)) { wanted.push(str); continue; }   // 'dmview:t<id>' and the rest ride as they are
+      const home = await this.#wireIn(tail);
+      if (home) wanted.push(pre + home);                               // an id naming nobody is simply not watched
+    }
+    const subs = sanitizeScopes(wanted, me, BOARD_CATS);
     const n = a.n + 1;
     if (n > 500) { try { ws.close(1008, 'too many'); } catch { /* gone */ } this.#untrack(ws); return; }
     this.#set(ws, { subs, n, me, presenceMode: a.presenceMode });
@@ -245,7 +284,9 @@ export class BoardHub extends DurableObject<Env> {
     const watched = subs.filter((s) => s.startsWith('presence:')).map((s) => s.slice(9));
     if (watched.length) {
       const online = new Set(await this.#presenceAcross(watched));
-      for (const h of watched) this.#send(ws, JSON.stringify({ v: 1, t: 'presence', hash: h, online: online.has(h) }));
+      for (const h of watched) {
+        this.#send(ws, JSON.stringify({ v: 1, t: 'presence', hash: await this.#wireOut(h), online: online.has(h) }));
+      }
     }
   }
 
@@ -359,7 +400,7 @@ export class BoardHub extends DurableObject<Env> {
      every sibling, as before the registry. */
   async #broadcastPresence(hash: string, online: boolean) {
     const scope = 'presence:' + hash;
-    const payload = JSON.stringify({ v: 1, t: 'presence', hash, online: !!online });
+    const payload = JSON.stringify({ v: 1, t: 'presence', hash: await this.#wireOut(hash), online: !!online });
     this.#fan(scope, payload);
     const n = hubShards(this.env);
     if (n <= 1) return;

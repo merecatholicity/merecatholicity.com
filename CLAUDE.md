@@ -105,9 +105,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   in its own commit, is documented by CALLING it, and ships after `/security-review`.
 - **A member has TWO identities, not interchangeable** (the P0 chain, 2026-09-18/19). The ACCOUNT hash (`sha256hex(key)`)
   is D1's and the hub's: it authenticates, shards, is the ONLY `user:` scope `sanitizeScopes` takes, and never rides a row.
-  The PUBLIC id rides every row — and so does every NAME minted from an id (`publicName`, cloakIds' second pass, since a
-  pseudonym carries four hex of whatever minted it). The client cannot compute one: `/prefs` `me` is the source, cached by
-  `setMyId`, dropped by `setKey`. Either in the other's job throws NOTHING. No keyless roster; a `weak` key cannot write.
+  The PUBLIC id rides every row, and so does every NAME minted from an id (`publicName`, cloakIds' second pass — a
+  pseudonym carries four hex of whatever minted it). The client cannot compute one: `/prefs` `me`, cached by `setMyId`,
+  dropped by `setKey`. The BoardHub is the one egress `cloakIds` never sees: `#wireIn`/`#wireOut` translate at its edge.
+  Either in the other's job throws NOTHING — it routes into space, in silence. No keyless roster; `weak` cannot write.
 - **`?v=` keys are stamped** (`scripts/stamp_versions.py`: nav.js, the pages, `partials/*`,
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new
@@ -202,9 +203,8 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   notification is the swipe). A late answer re-sends the caller's ICE. The ring is 45 s.
 - **Haptics are the shell's one engine** (`app/haptic.ts`, `window.mcHaptic`): a hold, a pick,
   an armed swipe or pull, the ring's pattern — the Vibration API where it exists (Android);
-  iOS has none and no road around it (the `switch`-checkbox haptic fires only under a real
-  tap, never a programmatic toggle — tried, felt not working); never before the first real
-  tap, never elsewhere by hand. Tastefully: small numbers, no buzz on a send or a release.
+  iOS has none and no road around it; never before the first real tap, never elsewhere by
+  hand. Tastefully: small numbers, no buzz on a send or a release.
 - **Badges are the shell's, reading marks read, a count paints only while FRESH** (`Domain.Cache.badgeShows`:
   past its TTL it is last visit's number — the bar shows none, `app/badges.ts` asks at once). Both refresh on
   every page the socket reaches (a `dm` frame not for the thread shown, a `notification` unless its list is

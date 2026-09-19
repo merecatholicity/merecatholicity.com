@@ -250,5 +250,6 @@ on page one.)
 - **The reader became a stranger to their own conversation: one variable doing two jobs after the L3 flip (2026-09-19)** — `log/2026-09.md`
 - **The pseudonym is minted from an id too, and key ORDER decided which one (2026-09-19)** — `log/2026-09.md`
 - **Two rings on one screen: the placeholder was never singular, only assumed to be (2026-09-19)** — `log/2026-09.md`
+- **The hub routed into space: the one egress `cloakIds` never sees (2026-09-19)** — `log/2026-09.md`
 
 <!-- infra-index:end -->
