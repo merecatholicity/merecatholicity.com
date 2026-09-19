@@ -179,7 +179,6 @@ on page one.)
 - **Every bucket's r2.dev URL is off, and declared (2026-09-17)** — `log/2026-09.md`
 - **An adoption that plans an update every run is a red gate for everybody, not an open item for somebody (2026-09-18).** — `log/2026-09.md`
 - **The browser was re-fetching 641 KiB of unchanged bytes every ten minutes, and the fix is one day, not one year (2026-09-18).** — `log/2026-09.md`
-- **The scheduled activation fired stale and was a safe no-op — the pepper was NOT re-set (2026-09-18)** — `log/2026-09.md`
 
 ### Cloudflare Workers (dynamic backend)
 
@@ -246,5 +245,6 @@ on page one.)
 - **The pubid flip, ingress and client — the round trip closes (2026-09-18)** — `log/2026-09.md`
 - **The pubid needs no D1 write: the stored column becomes a read-built map, so the flip deploys with the write budget spent (2026-09-18)** — `log/2026-09.md`
 - **The public id is LIVE: layer three activated and verified in production (2026-09-18)** — `log/2026-09.md`
+- **The scheduled activation fired stale and was a safe no-op — the pepper was NOT re-set (2026-09-18)** — `log/2026-09.md`
 
 <!-- infra-index:end -->
