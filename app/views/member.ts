@@ -6,7 +6,7 @@
    as every board view. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl, mountView} from './util.ts';
 import { pagerItems, notifLabel, notifHref, notifHasSnippet } from '../core.ts';
 import { cachedJson, fetchRetry, peekJson } from '../transport.ts';
 
@@ -173,8 +173,8 @@ customElements.define('mc-notifications', McNotifications);
 
 window.mcViews = window.mcViews || {};
 window.mcViews.users = function (section, kit) {
-  const n = document.createElement('mc-users'); (n as any).kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-users'); (n as any).kit = kit; mountView(section, n);
 };
 window.mcViews.notifications = function (section, kit) {
-  const n = document.createElement('mc-notifications'); (n as any).kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-notifications'); (n as any).kit = kit; mountView(section, n);
 };

@@ -11,7 +11,7 @@
 
 import { LitElement, html, nothing } from 'lit';
 import type { DmThreadsPayload, DmThreadsRow } from '../wire.ts';
-import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl, mountView} from './util.ts';
 import { cachedJson, fetchRetry, freshOpts, freshParam, peekJson } from '../transport.ts';
 
 class McProfile extends LitElement {
@@ -273,8 +273,8 @@ customElements.define('mc-inbox', McInbox);
 
 window.mcViews = window.mcViews || {};
 window.mcViews.profile = function (section, kit, hash) {
-  const n = document.createElement('mc-profile') as any; n.kit = kit; n.hash = hash; section.appendChild(n);
+  const n = document.createElement('mc-profile') as any; n.kit = kit; n.hash = hash; mountView(section, n);
 };
 window.mcViews.inbox = function (section, kit) {
-  const n = document.createElement('mc-inbox') as any; n.kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-inbox') as any; n.kit = kit; mountView(section, n);
 };

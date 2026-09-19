@@ -11,7 +11,7 @@
    knocks once and the server judges. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl, skelTpl, goto } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl, goto, mountView} from './util.ts';
 import * as Core from '../core.ts';
 import { cachedJson, fetchRetry, freshOpts, freshParam, peekJson } from '../transport.ts';
 
@@ -427,10 +427,10 @@ window.mcViews = window.mcViews || {};
 window.mcViews.topic = function (section, kit, id) {
   const n = document.createElement('mc-topic') as McTopic;
   n.kit = kit; n.topicId = id;
-  section.appendChild(n);
+  mountView(section, n);
 };
 window.mcViews.search = function (section, kit) {
   const n = document.createElement('mc-search') as McSearch;
   n.kit = kit;
-  section.appendChild(n);
+  mountView(section, n);
 };

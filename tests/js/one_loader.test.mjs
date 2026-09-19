@@ -36,17 +36,47 @@ test('minting a placeholder retires the ones already standing, before it builds 
     'scoped to the page region: an overlay or sheet keeps its own spinner');
 });
 
-test('the client mints .mc-load in exactly one place, so the sweep cannot be bypassed', () => {
+/* Every producer of a page-region .mc-load, and the sweep that covers it. The
+   first cut of this rule swept `client/` alone and the test looked there alone,
+   so the shell and the Lit views went on minting unswept rings and the owner
+   saw a pair again on a board topic. The list is the point: a NEW producer must
+   join it with a sweep beside it, or this goes red. */
+const PRODUCERS = [
+  ['client/comments.ts', 'function skeleton', "el('div', 'mc-load'", 'the classic client, inside skeleton()'],
+  ['app/shell.ts', 'function skeletonInto', "createElement('div')", 'the shell, for a platform page it builds'],
+  ['app/views/util.ts', 'export function mountView', 'appendChild', 'the Lit half, swept at MOUNT since render() must stay pure'],
+];
+
+test('every half of the app mints .mc-load in one swept place — none of them alone', () => {
   const offenders = [];
-  for (const f of readdirSync(join(root, 'client')).filter((n) => n.endsWith('.ts'))) {
-    read('client/' + f).split('\n').forEach((line, i) => {
-      /* `mc-load-in` is the INLINE spinner that rides beside a word (loadingLine);
-         only the standalone block is the page's one placeholder. */
-      if (/'mc-load'/.test(line) && !/function skeleton/.test(line)) offenders.push('client/' + f + ':' + (i + 1));
-    });
+  for (const dir of ['client', 'app', 'app/views']) {
+    for (const f of readdirSync(join(root, dir)).filter((n) => n.endsWith('.ts'))) {
+      const path = dir + '/' + f;
+      read(path).split('\n').forEach((line) => {
+        /* `mc-load-in` is the INLINE spinner beside a word (loadingLine); only
+           the standalone block is the page's one placeholder. */
+        if (/mc-load/.test(line) && !/mc-load-in/.test(line) && !/^\s*(\/\*|\*|\/\/)/.test(line)) offenders.push(path);
+      });
+    }
   }
-  assert.deepEqual(offenders.filter((o) => !o.startsWith('client/comments.ts')), [],
-    'a second .mc-load minted outside skeleton() escapes the sweep and can stack');
+  const allowed = new Set(PRODUCERS.map((x) => x[0]));
+  assert.deepEqual([...new Set(offenders)].filter((o) => !allowed.has(o)), [],
+    'a .mc-load minted outside the swept producers can stack under one already standing');
+});
+
+test('each producer sweeps the page region BEFORE it paints', () => {
+  for (const [path, marker, paint, why] of PRODUCERS) {
+    const src = read(path);
+    const at = src.indexOf(marker);
+    assert.ok(at >= 0, path + ': ' + marker + ' must exist (' + why + ')');
+    const fn = src.slice(at, at + 900);
+    const swept = fn.indexOf('.mc-load');
+    const painted = fn.indexOf(paint);
+    assert.ok(swept >= 0, path + ' must find the rings already standing');
+    assert.match(fn, /closest\(['"]main['"]\)|'main \.mc-load'/, path + ' must scope the sweep to the page region');
+    assert.ok(painted >= 0, path + ': paint step ' + paint + ' not found');
+    assert.ok(fn.indexOf('remove()') < painted, path + ': sweep FIRST, then paint');
+  }
 });
 
 test('the CSS cold-start ring is mutually exclusive with a rendered one, by :empty', () => {

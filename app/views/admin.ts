@@ -8,7 +8,7 @@
    never a false refusal, exactly as the old adminGate did. */
 
 import { LitElement, html, nothing } from 'lit';
-import { pagerTpl, crumbTpl, retryTpl, skelTpl } from './util.ts';
+import { pagerTpl, crumbTpl, retryTpl, skelTpl, mountView} from './util.ts';
 import { fetchRetry } from '../transport.ts';
 
 /* Shared admin gate for a component: returns 'ok' | 'wait' | 'no', and
@@ -330,5 +330,5 @@ window.mcViews.merecatThread = function (section, kit, id) {
   const n = document.createElement('mc-merecat-thread') as any; n.kit = kit; n.tid = id; section.appendChild(n);
 };
 window.mcViews.usage = function (section, kit) {
-  const n = document.createElement('mc-usage') as any; n.kit = kit; section.appendChild(n);
+  const n = document.createElement('mc-usage') as any; n.kit = kit; mountView(section, n);
 };

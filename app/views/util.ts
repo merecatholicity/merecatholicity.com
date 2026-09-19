@@ -55,6 +55,21 @@ export function skelTpl(kind?: 'card' | 'short' | 'list'): TemplateResult {
     role="status" aria-label="Loading"></div>`;
 }
 
+/* ONE loading ring per screen, and a view takes the screen (2026-09-19).
+   `skelTpl` cannot do the retiring itself — it is called from render(), which
+   Lit may run many times and which must stay free of side effects — so the
+   sweep happens where a view is MOUNTED, once, before its first paint. Three
+   layers stand a ring up and none can see the others: the shell paints one
+   into the section it builds, the CSS paints one into an empty section, and
+   the view paints its own a network round trip later, when its lazy chunk
+   lands. The classic client sweeps inside its own skeleton(); this is the same
+   rule for the Lit half, and between them every producer is covered. */
+export function mountView(section: Element, node: Element): void {
+  const scope = section.closest('main') || section;
+  scope.querySelectorAll('.mc-load').forEach((n) => n.remove());
+  section.appendChild(node);
+}
+
 /* Where a view sends the reader after it has acted — a topic just posted, a
    reply that landed on a later page, a search submitted. It must be the
    shell's soft navigation: `location.href` is a full document load, which

@@ -622,6 +622,12 @@ customElements.define('mc-audio-dock', McAudioDock);
      NOT a spinner: a grey echo of the coming layout reads as "your page is
      here and filling in", where a spinner reads as "wait". */
   function skeletonInto(section: HTMLElement, _kind?: string) {
+    /* one ring per screen: retire whatever the last navigation left standing
+       before adding this one (the same rule client/comments.ts skeleton() and
+       app/views/util.ts mountView() keep — between the three, every producer
+       of a .mc-load sweeps before it paints). */
+    var main = section.closest('main') || section;
+    main.querySelectorAll('.mc-load').forEach(function (n) { n.remove(); });
     var wrap = document.createElement('div');
     wrap.className = 'mc-load';
     wrap.setAttribute('role', 'status');

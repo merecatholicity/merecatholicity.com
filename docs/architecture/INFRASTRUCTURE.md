@@ -251,5 +251,6 @@ on page one.)
 - **The pseudonym is minted from an id too, and key ORDER decided which one (2026-09-19)** — `log/2026-09.md`
 - **Two rings on one screen: the placeholder was never singular, only assumed to be (2026-09-19)** — `log/2026-09.md`
 - **The hub routed into space: the one egress `cloakIds` never sees (2026-09-19)** — `log/2026-09.md`
+- **A rule kept in one half is not a rule (2026-09-19)** — `log/2026-09.md`
 
 <!-- infra-index:end -->
