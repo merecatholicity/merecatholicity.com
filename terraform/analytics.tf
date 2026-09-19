@@ -23,6 +23,28 @@
 # The CSP already allows it: static.cloudflareinsights.com in script-src and
 # cloudflareinsights.com in connect-src (rulesets.tf).
 #
+# STILL INJECTING, AND STILL 404ing — measured on production 2026-09-19, after
+# this file's apply reported "plan: no changes" (so the declaration above and the
+# remote already agree). Two facts the declaration does not cover:
+#   1. Every page still carries an edge-injected beacon —
+#      static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba…
+#      — so a real reader's document holds that one AND nav.js's `?token=` one.
+#      It is NOT this resource's `auto_install` (false here, clean plan, and the
+#      named injector ruleset really does 404), so it comes from a control this
+#      file does not declare — the zone's own RUM/Browser Insights switch is the
+#      first place to look, and it is a dashboard act.
+#      Measure it with a BROWSER's Accept header or you will measure nothing:
+#        curl -s https://merecatholicity.com/about.html -H 'User-Agent: <browser>' \
+#          -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
+#          | grep -c cloudflareinsights     # 1 — while `Accept: */*` shows 0
+#      (the edge decides what to inject from the request; the same trap as
+#      bot_management's varying injections.)
+#   2. Both beacons report into a 404: one POST to /cdn-cgi/rum, 407 bytes,
+#      HTTP 404, watched in a real Chrome; a GET there answers 405, so the edge
+#      owns the path and the collector is refusing this site. Nothing has been
+#      counted by either road. Diagnosing that needs the dashboard's site record
+#      for token 9eb9b8d0…, which is the owner's act.
+#
 # `enabled` and `lite` are NOT declared, and that is the whole reason this file
 # plans clean. The RUM read the provider imports from does not return them, so
 # they are null in state; declaring the values the dashboard shows made every

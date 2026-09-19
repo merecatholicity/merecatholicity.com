@@ -85,6 +85,7 @@ on page one.)
 - **A volume is a shelf now: ninety-one pages over a megabyte become an index and ten thousand readable ones (2026-09-18).** — `log/2026-09.md`
 - **A reading page waits for the shell; it does not wait on it (2026-09-18).** — `log/2026-09.md`
 - **Two changes of the same day meet on two pages, and a scroll is what settles it (2026-09-18).** — `log/2026-09.md`
+- **The meter is dark for two reasons, and one of them is a measurement that did not look like a browser (2026-09-19)** — `log/2026-09.md`
 
 ### Build system
 

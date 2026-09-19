@@ -279,12 +279,20 @@ check(st == 200 and d is not None and d.get('ok') is True
 # GET /api/comments/profile?hash=<64hex>
 # ---------------------------------------------------------------------------
 if ALICE_HASH:
+    # The account hash is still ACCEPTED on the wire (resolveId's raw-hash
+    # tolerance, due 2026-10-18 — tests/_support/retirements.json), so the old
+    # link shape still finds the member. What comes BACK is the member's PUBLIC
+    # id since the L3 flip: an answer that echoed the account hash would be the
+    # flip failing, not the shape holding, so that is what this asserts now.
     st, d, raw = get('/api/comments/profile?hash=%s' % ALICE_HASH)
     ok = st == 200 and d is not None and d.get('ok') is True
     prof = d.get('profile') if ok else None
-    check(ok and isinstance(prof, dict) and prof.get('hash') == ALICE_HASH
+    served = prof.get('hash') if isinstance(prof, dict) else None
+    check(ok and isinstance(prof, dict) and is_str(served) and len(served or '') == 64
+          and served != ALICE_HASH
           and is_int(prof.get('posts')) and is_str(prof.get('rank')) and is_str(prof.get('assigned')),
-          'profile?hash=<alice>: shape (hash echoed, posts int, rank/assigned str)', str(raw[:200]))
+          'profile?hash=<alice>: found by the old account hash, answered with a PUBID (never the account hash)',
+          str(raw[:200]))
 else:
     check(False, 'profile?hash=<alice>: shape', 'no alice key in .testkeys')
 
