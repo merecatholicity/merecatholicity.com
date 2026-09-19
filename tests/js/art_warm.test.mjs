@@ -205,7 +205,21 @@ test('one walk per document, however often the chrome is installed', async () =>
   installArtWarm(() => true);
   installArtWarm(() => true);
   installArtWarm(() => true);
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(b.asked.length, artUrls(false).length,
+  /* Wait for the walk to SETTLE, not for a fixed 30 ms. The walk is thirteen
+     sequential hops, each a timer, and a machine running the whole suite in
+     parallel does not finish them in thirty milliseconds: the assertion read a
+     half-done walk as "nine, not thirteen" and the file flaked (2026-09-19,
+     twice in a row on a busy box). Settling proves the same thing and more —
+     a second walk would push the count past the list and still fail here. */
+  const quiet = await (async () => {
+    const until = Date.now() + 5000;
+    let last = -1, still = 0;
+    while (Date.now() < until && still < 5) {
+      await new Promise((r) => setTimeout(r, 10));
+      if (b.asked.length === last) still += 1; else { last = b.asked.length; still = 0; }
+    }
+    return b.asked.length;
+  })();
+  assert.equal(quiet, artUrls(false).length,
     'the second and third install must have walked nothing');
 });
