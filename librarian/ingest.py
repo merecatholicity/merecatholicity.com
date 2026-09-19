@@ -13,7 +13,8 @@ works.yml are pruned from the server.
   python ingest.py --push           # push the changed works (never the persona or dials)
   python ingest.py --push --tiers 1,2
   python ingest.py --push --only anf01,anf02
-  python ingest.py --budget-rows 90000   # stop before D1's daily write cap
+  python ingest.py --budget-rows 5000    # a smaller bite of D1's daily write cap
+  python ingest.py --reserve-rows 60000  # leave the site more of the day
   python ingest.py --config-status  # do persona.md / config.yml differ from the server?
   python ingest.py --config         # push whichever of the two differs (--force: both)
 
@@ -101,6 +102,10 @@ HARD_MAX = 480                # words a chunk never exceeds
 API_DEFAULT = "https://merecatholicity.com/api/merecat"
 OIDC_AUDIENCE = "merecatholicity-comments"   # Domain.Pipeline.audience
 VEC_BUDGET = 4800             # free Vectorize: ~4,880 vectors at 1024 dims
+# D1 counts index and FTS writes as rows, so a logical row costs more than
+# one: 89,915 estimated against 109,021 actual, MEASURED 2026-09-18 over this
+# corpus. Re-measure before trusting it on a shelf of a different shape.
+EST_TO_ACTUAL = 1.21
 
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
         "meta", "source", "track", "wbr"}
@@ -540,7 +545,25 @@ def build(entry):
     return chunks, bad
 
 
-def write_summary(path, tally, spent, budget, picked):
+def paced_budget(ceiling, reserve, written, cap):
+    """How many ESTIMATED D1 rows this run may spend, and the line that says why.
+
+    `written`/`cap` are the worker's reading of D1's own meter for today,
+    account-wide (absent when it could not be read). The run never exceeds
+    `ceiling`, and never digs into the `reserve` the site keeps for its own
+    writes and its deploys — so the answer is 0 on a day already spent, which
+    costs nothing but time: the server's content hash is the state, so the next
+    run resumes exactly where a paused one stopped. An UNREAD meter is not a
+    free day; the ceiling stands alone, as it did before there was a meter."""
+    if written is None or not cap:
+        return ceiling, "unread — the fixed ceiling stands alone"
+    budget = min(ceiling, int(max(0, cap - written - reserve) / EST_TO_ACTUAL))
+    return budget, (f"{written:,} of {cap:,} rows written, {reserve:,} reserved "
+                    f"for the site — {budget:,} estimated rows for this run "
+                    f"(ceiling {ceiling:,})")
+
+
+def write_summary(path, tally, spent, budget, picked, meter=""):
     """A markdown account of the run, appended to `path` (the CI step summary)."""
     lines = ["## merecat ingest", ""]
     lines.append(f"- works considered: **{picked}** — pushed **{len(tally['pushed'])}**, "
@@ -548,6 +571,8 @@ def write_summary(path, tally, spent, budget, picked):
                  f"waiting on their build {tally['waiting']}, pruned {len(tally['pruned'])}")
     lines.append(f"- estimated D1 rows written: **{spent}** of the {budget} budget"
                  + (f" — **stopped before `{tally['stopped']}`; the next run resumes**" if tally["stopped"] else ""))
+    if meter:
+        lines.append(f"- D1 today: {meter}")
     lines.append("- persona.md and config.yml: the `config` job's (it waits for a reviewer when either changed)")
     if tally["pushed"]:
         lines.append("")
@@ -818,8 +843,8 @@ def main():
     ap.add_argument("--push", action="store_true", help="push to the worker")
     ap.add_argument("--only", default="", help="comma list of work ids")
     ap.add_argument("--tiers", default="", help="comma list of tiers, e.g. 1,2")
-    # 60,000 ESTIMATED rows, and the arithmetic behind it is worth keeping
-    # (2026-09-18). D1's free tier allows 100,000 row writes per ACCOUNT per
+    # THE SHELF TAKES A SLICE OF THE DAY, NOT THE DAY (2026-09-18, revised
+    # 2026-09-19). D1's free tier allows 100,000 row writes per ACCOUNT per
     # day — shared by the three librarian rooms, the comments database, every
     # migration a worker deploy applies, and every comment, DM and reaction a
     # member writes. The old 90,000 left 10,000 for all of that, and the day
@@ -827,27 +852,34 @@ def main():
     # at once, it took the lot: measured afterwards, 109,021 rows written by
     # the librarian in 24 hours, and the next worker deploy died on its
     # migration with "exceeded D1's free tier daily row write limit" wearing
-    # somebody else's commit title.
+    # somebody else's commit title. 60,000 was the first cut, and it was still
+    # ~73,000 actual rows — most of the account's day, taken in one burst at
+    # 04:10 UTC from a site that was never asked.
     #
-    # Two things that measurement settles. The estimate UNDERCOUNTS: 89,915
-    # estimated against 109,021 actual, a ratio of 1.21 MEASURED ON 2026-09-18
-    # OVER THIS CORPUS — not a property to trust. D1 counts index and FTS writes
-    # as rows, so the ratio is a function of how many index rows each logical
-    # row produces, and a shelf of a different shape moves it. Re-measure
+    # The estimate UNDERCOUNTS by the EST_TO_ACTUAL ratio above, which is a
+    # measurement over THIS corpus and not a property to trust; re-measure
     # (`npx wrangler d1 info <db>`, `rows_written_24h` across every database on
-    # the account) before moving this number, rather than scaling by 1.21.
-    # And the pipeline cannot simply ask how much of the day is left: it holds
-    # no Cloudflare credential by design (GitHub OIDC only, CICD §4), so a
-    # fixed, conservative number is the only lever on this side of the wire.
-    # 60,000 estimated is ~72,800 actual, leaving ~27,000 for the site and its
-    # deploys — generous against fifteen identities and thin against a hundred,
-    # so it is worth revisiting if the community ever arrives. A full re-ingest
-    # then takes a few more days, which is the right price for a forum that can
-    # still be posted to.
-    ap.add_argument("--budget-rows", type=int, default=60000,
-                    help="stop before this many estimated D1 row writes "
-                         "(the account-wide free-tier cap is 100,000/day, and "
-                         "this count undercounts actual writes by ~20%%)")
+    # the account) before leaning on it.
+    #
+    # But the pipeline no longer has to guess how much of the day is left. It
+    # still holds no Cloudflare credential (GitHub OIDC only, CICD §4) — the
+    # WORKER holds one for the usage page, and now hands the day's D1 write
+    # count back on the roster this script already fetches before it pushes
+    # anything (`d1_rows_written` / `d1_rows_limit`). So this number is a
+    # CEILING and a fallback, not the whole policy: --reserve-rows is the
+    # site's share of the day, and a run spends the SMALLER of this ceiling and
+    # what is actually left beyond that reserve. A full re-ingest then takes
+    # several days instead of one, which is the right price for a forum that
+    # can still be posted to while it runs.
+    ap.add_argument("--budget-rows", type=int, default=20000,
+                    help="never spend more than this many ESTIMATED D1 row "
+                         "writes in one run (~24,000 actual, about a quarter "
+                         "of the account-wide 100,000/day cap); the live meter "
+                         "may lower it further, never raise it")
+    ap.add_argument("--reserve-rows", type=int, default=40000,
+                    help="ACTUAL D1 row writes to leave for the site and its "
+                         "deploys: a run spends only what the day has left "
+                         "beyond this (no effect when the meter is unread)")
     ap.add_argument("--api", default=API_DEFAULT)
     ap.add_argument("--ledger", default="",
                     help="JSON memory of parsed sources (skips the parse of an unchanged work)")
@@ -951,12 +983,30 @@ def main():
     # The rule that follows is an ORDERING, and nothing in the pipeline can
     # enforce it (no Cloudflare credential here, by design), so it is said out
     # loud to whoever is standing here: a pending migration deploys FIRST.
-    if args.push and args.budget_rows > 5000:
-        print(f"NOTE: this run may write up to ~{int(args.budget_rows * 1.2):,} D1 rows "
+    #
+    # HOW MUCH OF THE DAY IS ALREADY SPENT (2026-09-19). The roster carries the
+    # worker's reading of D1's own meter — rows written today, account-wide,
+    # against the free tier's 100,000 — so the run takes the SMALLER of its
+    # fixed ceiling and what the day has left once the site's reserve is set
+    # aside. An ingest arriving after a busy morning does less; one arriving
+    # after a spent day does nothing and says so, and the next run resumes from
+    # exactly where this one stopped (the server's content hash is the state,
+    # so "progress" is never a thing a paused run can lose). An ABSENT meter is
+    # not a free day: no CF_USAGE_TOKEN, a slow analytics API or an older
+    # worker all leave the fixed ceiling standing alone, which is the whole of
+    # what this was before.
+    budget, meter = paced_budget(args.budget_rows, args.reserve_rows,
+                                 roster.get("d1_rows_written"), roster.get("d1_rows_limit"))
+    print(f"D1 today: {meter}.")
+    if args.push and budget <= 0:
+        print("the day is already spoken for: pushing nothing. The next run "
+              "resumes where this one would have started.")
+    elif args.push and budget > 5000:
+        print(f"NOTE: this run may write up to ~{int(budget * EST_TO_ACTUAL):,} D1 rows "
               f"of the account's 100,000/day (shared by every database, every "
               f"migration and every member write).")
         print("      If a worker deploy with a pending migration is waiting, LET IT "
-              "DEPLOY FIRST — it needs a few rows and this needs tens of thousands.")
+              "DEPLOY FIRST — it needs a few rows and this needs thousands.")
     spent = 0
     waiting = 0
     for wid, entry in picked.items():
@@ -986,9 +1036,19 @@ def main():
                 sys.exit(f"{wid}: {len(bad)} bad anchors, first: {bad[:5]}")
         print(f"{wid}: pushing...", flush=True)
         est = len(chunks) * 5          # row + FTS shadow writes, roughly
-        if spent + est > args.budget_rows:
-            print(f"stopping before {wid}: {est} est. rows would pass the "
-                  f"daily budget ({spent} spent). Re-run tomorrow to resume.")
+        if spent + est > budget:
+            print(f"stopping before {wid}: {est} est. rows would pass this "
+                  f"run's budget of {budget} ({spent} spent). The next run resumes here.")
+            # A work larger than a WHOLE day's ceiling would stop the queue here
+            # every run, for ever, and the log would read like ordinary paced
+            # progress. Say it in a colour CI shows (2026-09-19).
+            if est > args.budget_rows:
+                print(f"::warning::{wid} needs {est} est. rows on its own, more than the "
+                      f"--budget-rows ceiling of {args.budget_rows}: it can never be pushed at "
+                      f"this setting and everything behind it waits. The daily cron has no dial "
+                      f"for this — push it by hand on a quiet day (`cd librarian && python3 "
+                      f"ingest.py --push --only {wid} --budget-rows {est + 1000}`), or split the "
+                      f"work in works.yml.")
             tally["stopped"] = wid
             break
         push_work(args.api, auth, wid, entry, chunks, chash)
@@ -1010,7 +1070,7 @@ def main():
     except Exception as e:
         print(f"(could not stamp last_ingest: {e})")
     if args.summary:
-        write_summary(args.summary, tally, spent, args.budget_rows, len(picked))
+        write_summary(args.summary, tally, spent, budget, len(picked), meter)
 
 
 if __name__ == "__main__":

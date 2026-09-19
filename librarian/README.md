@@ -41,9 +41,31 @@ reactions — while reads answered normally and nothing on the site said why.
 Nothing in the pipeline can enforce the ordering (it holds no Cloudflare
 credential, by design), so it is a rule people keep: **if a worker deploy with a
 pending migration is waiting, let it deploy first.** It needs a few rows; this
-needs tens of thousands. `ingest.py` prints the same warning before it starts
-spending, and `--budget-rows` (default 60,000 estimated ≈ 72,800 actual) is what
-keeps an ordinary day's headroom.
+needs thousands. `ingest.py` prints the same warning before it starts spending.
+
+**THE SHELF TAKES A SLICE OF THE DAY, NOT THE DAY** (2026-09-19). 60,000 was the
+first cut after that postmortem and it was still ~73,000 *actual* rows — most of
+the account's day, taken in one burst at 04:10 UTC from a site that was never
+asked. Two dials now, and a meter:
+
+- `--budget-rows` (default **20,000** estimated ≈ 24,200 actual) is a CEILING no
+  single run passes — about a quarter of the account's day.
+- `--reserve-rows` (default **40,000** actual) is the site's share, never spent
+  by the shelf.
+- The pipeline still holds no Cloudflare credential — but the **worker** does,
+  for the usage page, and now hands the day's D1 write count back on the roster
+  `ingest.py` fetches before it pushes anything (`d1_rows_written` /
+  `d1_rows_limit`). A run spends the smaller of its ceiling and what the day has
+  actually left beyond the reserve. After a busy morning it does less; on a day
+  already spent it does nothing at all and says so.
+
+An unread meter (no `CF_USAGE_TOKEN`, a slow analytics API, an older worker) is
+**not** a free day: the fixed ceiling stands alone, as it did before the meter
+existed. Nothing is lost by pausing — the server's content hash is the state, so
+the next run resumes exactly where a stopped one left off. A full re-ingest
+takes several days instead of one, which is the price of a forum that can still
+be posted to while it runs. The arithmetic is `paced_budget()`, tested in
+`tests/py/test_ingest_pacing.py`; the worker half in `tests/worker/d1_meter.test.mjs`.
 
 **Change the voice or rules.** Edit `persona.md`, commit, push. `merecat.yml`
 sees the file differ from what the server last took, and its `config` job
@@ -112,9 +134,10 @@ readers resolve. Anchors are validated at build time; a bad anchor fails
 the push.
 
 Pushes respect the free-tier ledgers: Vectorize holds vectors for Tier 1
-only (~4,880 vector budget, warned on), and `--budget-rows` (default
-90,000) stops a big push before D1's daily write cap — re-run the next day
-and it resumes from the works that didn't finish. First-time full corpus:
+only (~4,880 vector budget, warned on), and `--budget-rows` (default 20,000)
+with `--reserve-rows` (default 40,000) keeps a big push to a slice of D1's
+daily write cap — re-run the next day and it resumes from the works that
+didn't finish. First-time full corpus:
 
     python ingest.py                    # dry run: counts + anchor validation
     python ingest.py --push --tiers 1,2 # day one: positions + the shelf

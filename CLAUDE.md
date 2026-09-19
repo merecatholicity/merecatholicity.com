@@ -258,10 +258,10 @@ brings its test in the same change; never delete a test to go green.
 - **Workers**: `comments-worker` (`/api/comments*`, `/api/merecat*`, `/@*`; D1 + three librarian
   rooms; R2 avatars/backups/dm-media/wall-media; Vectorize; Workers AI; two Durable Objects; four
   crons) and `contact-worker` (`contact-api.merecatholicity.com`). `wrangler.jsonc` is the truth.
-- **merecat**, the librarian: a WebSocket state machine in the `ChatRoom` DO, five-legged retrieval
-  over three D1 rooms + Vectorize, `librarian/` its mind, Workers AI its only backend; its dials are
-  `Domain.Merecat`. **The band weighting and persona are the owner's standing law — read the merecat
-  passage first.** The AI budget guard (`quota.ts`) stands OPEN when the meter cannot be read.
+- **merecat**, the librarian: a `ChatRoom` DO state machine, five-legged retrieval over three D1
+  rooms + Vectorize, `librarian/` its mind, Workers AI its only backend, dials `Domain.Merecat`.
+  **Band weighting and persona are the owner's standing law — read the merecat passage first.** The
+  AI guard (`quota.ts`) stands OPEN when unread; the ingest takes a SLICE of D1's day, never the day.
 - **Terraform** owns the zone settings, DNS, the four rulesets, bot management, the R2 buckets, the
   D1 records, the Turnstile widgets, both GitHub repos, Pages, the environments, the Actions policy
   and variables; state is in R2 (`merecatholicity-tfstate`, unmanaged, SECRET). It cannot hold

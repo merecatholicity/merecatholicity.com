@@ -31,6 +31,33 @@ export function turnEgressSelect(monthDate: string): string {
   return 'callsTurnUsageAdaptiveGroups(limit: 1000, filter: {date_geq: "' + monthDate + '"}) { sum { egressBytes } }';
 }
 
+/* The day's D1 row-write meter alone (2026-09-19). The librarian's ingest has
+   to decide how much of the corpus to push before it pushes any of it, and the
+   figure that decides it is exactly this one — rows written today against the
+   free tier's 100,000 per ACCOUNT per day. The pipeline holds no Cloudflare
+   credential by design (GitHub OIDC only, CICD §4), so it cannot read this
+   itself; the worker can, through the very token the usage page already uses,
+   and hands the number back on the roster the ingest fetches anyway. One
+   select, a short timeout: a slow analytics API must cost the ingest a couple
+   of seconds and its fixed fallback budget, never the run. */
+export function d1WritesSelect(dayIso: string): string {
+  return 'd1AnalyticsAdaptiveGroups(limit: 1000, filter: {datetime_geq: "' + dayIso +
+    '"}) { dimensions { databaseId } sum { rowsRead rowsWritten } }';
+}
+
+export type D1WriteMeter = { used: number; limit: number; at: number };
+
+export async function fetchD1Writes(env: Env, nowMs = Date.now()): Promise<D1WriteMeter> {
+  /* No credential, no request: without the token the select would spend a
+     subrequest to be told 401, on every ingest run, for ever. Unconfigured
+     reads the same as unreadable at the other end — the fixed budget. */
+  if (!env.CF_USAGE_TOKEN || !env.CF_ACCOUNT_ID) throw new Error('no usage token');
+  const acct = await gqlSelect(env, d1WritesSelect(iso(utcDayStart(nowMs))), 5000);
+  const r = buildReport({ d1: acct }).find((x) => x.id === 'd1.rows_written');
+  if (!r || r.error || !r.limit) throw new Error((r && r.error) || 'no d1 write row');
+  return { used: r.used || 0, limit: r.limit, at: nowMs };
+}
+
 export async function fetchUsageReport(env: Env) {
   const now = Date.now();
   const day = iso(utcDayStart(now));

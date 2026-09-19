@@ -36,6 +36,7 @@ import {
   readBody,
 } from '../lib.ts';
 import { pipelineGated } from '../oidc.ts';
+import { fetchD1Writes } from '../usage.ts';
 import type { Env } from '../env.ts';
 import type { Body, MerecatSource } from '../lib.ts';
 
@@ -591,7 +592,24 @@ async function handleMerecatWorks(request: Request, env: Env) {
   const hashes = await env.LIBDB.prepare(
     "SELECT k, v FROM config WHERE k IN ('persona_file_hash', 'config_file_hash')").all<{ k: string; v: string }>();
   const fileHash = (k: string) => ((hashes.results || []).find((r) => r.k === k) || { v: '' }).v || '';
+  /* The day's D1 write meter rides the roster (2026-09-19). The ingest asks
+     for this list before it pushes anything, so this is the one place it can
+     learn how much of the account's 100,000 daily row writes is still unspent
+     — and it sizes its bite from that rather than from a fixed guess, leaving
+     the site's writes room on a day something else has already drawn. A meter
+     that cannot be read is simply ABSENT from the answer (never a zero, which
+     would read as a whole free day): the ingest then falls back to its fixed
+     conservative budget. It must never cost the roster itself. */
+  let d1Written: number | null = null;
+  let d1Limit: number | null = null;
+  try {
+    const m = await fetchD1Writes(env);
+    d1Written = m.used; d1Limit = m.limit;
+  } catch (err) {
+    console.log(JSON.stringify({ event: 'merecat_works_d1meter_unread', error: String(err).slice(0, 200) }));
+  }
   return json({ ok: true, works, text_bytes: tb1, text_bytes_deep: tb2, text_bytes_deep2: tb3,
+    ...(d1Written != null && d1Limit ? { d1_rows_written: d1Written, d1_rows_limit: d1Limit } : {}),
     persona_file_hash: fileHash('persona_file_hash'), config_file_hash: fileHash('config_file_hash') }, 200);
 }
 

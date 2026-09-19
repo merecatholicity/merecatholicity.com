@@ -1015,6 +1015,11 @@ bare titles), `/backends` (local GPU health probe, multi-second), `/stats`,
 **The pipeline doors** (`oidc.ts`, 2026-09-17; also on the workers.dev
 hostname): `POST /api/merecat/works` → `{ok, works:[{id,title,tier,kind,hash,chunks}],
 text_bytes, text_bytes_deep, text_bytes_deep2, persona_file_hash, config_file_hash}`
+— and, when the usage meter can be read, `d1_rows_written` / `d1_rows_limit`:
+the account's D1 row writes so far today against the free tier's daily cap
+(2026-09-19). The ingest sizes its push from them so it never takes the day's
+writes out from under the site; both fields are ABSENT, never zero, when the
+meter is unconfigured or unreachable (a zero would read as a free day).
 (the roster and the file hashes of the persona and dials last pushed);
 `/ingest` (the `librarian/ingest.py` begin/append/end/delete protocol);
 `/config` (`{persona?, config:{…}}` → `{ok, set}`: the persona and the dials,
