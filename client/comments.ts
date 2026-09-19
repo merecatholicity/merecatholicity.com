@@ -1236,7 +1236,18 @@ import type { Boot } from './boot';
      them — a grey block looks like content that failed, a spinner looks like
      work in progress. The 180ms fade-in (styles/main.css .mc-load) means a fast
      load never flickers one, at no cost to the content. */
+  /* ONE loading indicator on the page at a time (2026-09-19, the owner reported
+     two rings stacked on the DM screen). Three layers each stand one up and
+     none can see the others: the shell paints a spinner into the `section` it
+     builds for a platform page (app/shell.ts instantMain), styles/main.css
+     paints one into `section.comments.board:empty` while nothing has rendered,
+     and a view — often a lazy chunk, so it arrives late — paints its own on top
+     of whatever is already there. Each is right alone; together they read as a
+     fault rather than as patience. Minting one therefore retires every ring
+     already standing in the page region, which is what "the placeholder" was
+     always meant to be: singular. Scoped to `main`, so an overlay keeps its own. */
   function skeleton(kind?: string) {
+    document.querySelectorAll('main .mc-load').forEach((n) => n.remove());
     var wrap = el('div', 'mc-load' + (kind === 'short' ? ' mc-load-sm' : ''));
     wrap.setAttribute('role', 'status');
     wrap.setAttribute('aria-label', 'Loading');

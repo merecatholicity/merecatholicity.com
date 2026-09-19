@@ -190,15 +190,23 @@ class LiveUser(Flow):
         super().__init__(port=port, mic=mic)
         self.name = name
         self.key = key
-        self.hash = hash_of(key)
+        self.hash = hash_of(key)   # the ACCOUNT hash: D1's key, what the API is called with
+        self.pubid = ''            # the PUBLIC id the client holds; filled in by login()
 
     def login(self):
         """Log in with this user's key; wait for the member hash + live socket."""
         self.goto('community.html')
         self.js("localStorage.setItem('mc-comment-key', %s); return 1;" % json.dumps(self.key))
         self.goto('community.html')
-        ok = self.wait("window.mcKit && window.mcKit.state && window.mcKit.state.myHash === %s"
-                       % json.dumps(self.hash), timeout=15)
+        # state.myHash is the PUBLIC id since the L3 flip (2026-09-19) — the
+        # worker mints it with a pepper this side cannot see, so waiting for
+        # sha256hex(key) here waited for a value the client no longer holds and
+        # every keyed suite timed out. Wait for a resolved id of the right
+        # shape, and keep it: `self.pubid` is what a served row will match.
+        ok = self.wait("/^[0-9a-f]{64}$/.test(String((window.mcKit && window.mcKit.state"
+                       " && window.mcKit.state.myHash) || ''))", timeout=15)
+        self.pubid = self.js("return (window.mcKit && window.mcKit.state"
+                             " && window.mcKit.state.myHash) || '';") or ''
         self.arm()
         return ok
 
