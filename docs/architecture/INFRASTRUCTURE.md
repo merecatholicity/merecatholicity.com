@@ -247,5 +247,6 @@ on page one.)
 - **The public id is LIVE: layer three activated and verified in production (2026-09-18)** — `log/2026-09.md`
 - **The scheduled activation fired stale and was a safe no-op — the pepper was NOT re-set (2026-09-18)** — `log/2026-09.md`
 - **The shelf now asks how much of the day is left before it spends it (2026-09-19)** — `log/2026-09.md`
+- **The reader became a stranger to their own conversation: one variable doing two jobs after the L3 flip (2026-09-19)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

@@ -55,7 +55,9 @@ declare global {
        genuinely dynamic — indexed as any, with the stable fields named. */
     mcViews?: Record<string, (...args: any[]) => any>;
     mcKit?: { state: any; API: string; [k: string]: any };
-    mcPrefs?: { receipts: string; notify_reply: number; notify_mention: number; notify_dm: number };
+    /* `me` is this identity's PUBLIC id, the server's word (the P0 chain L3);
+       the client cannot compute one, so it is carried here and cached. */
+    mcPrefs?: { receipts: string; notify_reply: number; notify_mention: number; notify_dm: number; me?: string };
     mcInstall?: McInstall;
     mcOnboard?: (onDone?: any, opts?: any) => void;
     mcConfirm?: (msg: string, opts?: any) => Promise<boolean>;

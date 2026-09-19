@@ -18,6 +18,11 @@ export function installProfile(B: Boot) {
   let appConfirm: (msg: any, opts: any, cb: any) => any;
   let ensureNacl: (cb: () => void) => void;
   let dmRekeyReseal: (sealed: string, senderPub: string | null, newKey: string) => string | null;
+  /* The identity's PUBLIC id comes from the server and is cached beside the
+     key (client/comments.ts). Never sha256hex(key) here: that is the account
+     hash, which since the L3 flip matches no served row. */
+  let resolveMyId: () => Promise<string>;
+  let setMyId: (id: string) => void;
   let dmNewPubkey: (newKey: string) => string;
   let asset: any;
   let badgeChanged: () => any;
@@ -480,8 +485,7 @@ export function installProfile(B: Boot) {
       var key = makeKey();
       setKey(key);
       state.key = key;
-      sha256hex(key).then(function (h) {
-        state.myHash = h;
+      resolveMyId().then(function () {
         enableMemberLive();
         renderIdentity();
         showKeyBox();
@@ -571,8 +575,7 @@ export function installProfile(B: Boot) {
       /* On the board the cleanest login is the og one: reload, and the
          current view returns with the right name, buttons, and links. */
       trace('key import -> reload'); if (BOARD) { location.reload(); return; }
-      sha256hex(key).then(function (h) {
-        state.myHash = h;
+      resolveMyId().then(function () {
         enableMemberLive();
         hideKeyBox();
         renderIdentity();
@@ -597,8 +600,7 @@ export function installProfile(B: Boot) {
     var key = makeKey();
     setKey(key);
     state.key = key;
-    return sha256hex(key).then(function (h) {
-      state.myHash = h;
+    return resolveMyId().then(function (h: string) {
       enableMemberLive();
       return { key: key, hash: h };
     });
@@ -627,8 +629,7 @@ export function installProfile(B: Boot) {
       setKey(key);
       state.key = key;
       try { localStorage.removeItem(DM_CACHE); } catch (e) {}
-      return sha256hex(key).then(function (h) {
-        state.myHash = h;
+      return resolveMyId().then(function () {
         enableMemberLive();
         return true;
       });
@@ -668,9 +669,9 @@ export function installProfile(B: Boot) {
               if (rr && rr.ok) {
                 /* adopt the new key: it is the account now, and rr.hash is the
                    new public id every served row will match against */
-                setKey(newKey);
+                setKey(newKey);          // clears the cached public id of the OLD key
                 state.key = newKey;
-                state.myHash = rr.hash;
+                setMyId(rr.hash || '');  // the server's word on the NEW one
                 try { localStorage.removeItem(DM_CACHE); } catch (e) { /* memory only */ }
                 /* every cached read still names the old public id; drop it, and
                    re-auth the live socket under the new key so frames and
@@ -1400,6 +1401,8 @@ export function installProfile(B: Boot) {
     appConfirm = B.appConfirm;
     ensureNacl = B.ensureNacl;
     dmRekeyReseal = B.dmRekeyReseal;
+    resolveMyId = B.resolveMyId;
+    setMyId = B.setMyId;
     dmNewPubkey = B.dmNewPubkey;
     asset = B.asset;
     badgeChanged = B.badgeChanged;

@@ -45,6 +45,18 @@ function readKey() {
   try { return localStorage.getItem('mc-comment-key') || ''; } catch (e) { return ''; }
 }
 
+/* This identity's PUBLIC id, as the classic client resolved it from /prefs and
+   cached (client/comments.ts `setMyId`). The shell only ever READS it: only the
+   worker can mint one, and a shell that guessed would reintroduce exactly the
+   mismatch this cache exists to end. Empty until the client has been through a
+   boot once, which is also when calls become possible. */
+function readMyId() {
+  try {
+    const v = localStorage.getItem('mc-my-id') || '';
+    return /^[0-9a-f]{64}$/.test(v) ? v : '';
+  } catch (e) { return ''; }
+}
+
 /* One retry on network failure — the house fetchRetry's little brother. */
 function post(path: string, body: any): Promise<any> {
   const go = () => fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
@@ -109,18 +121,29 @@ export function installCall() {
   const CALL: any = (window as any).__mcCall || freshCall();
   (window as any).__mcCall = CALL;
 
+  /* TWO identities, as everywhere since the L3 flip (2026-09-19). `myRoute` is
+     the ACCOUNT hash (sha256hex of the key): the hub authenticates and shards
+     on it and admits a `user:` scope only when it matches, so it is what
+     member.enable is handed — and nothing else. `myId` is this identity's
+     PUBLIC id, the server's word cached by client/comments.ts, and it is what
+     every id off the wire (`m.from`, a signal's target) is compared against.
+     Mixing them does not throw: it silently makes a member a stranger to
+     their own frames — glare resolved backwards, a 'taken' echo never
+     recognised, a hush sent to a scope nobody holds. */
   let myKey = '';
-  let myHash = '';
+  let myRoute = '';
+  let myId = '';
   const nickCache: Record<string, string> = {};
 
   /* A member's live socket on every page: the ring's transport. Re-checked on
      pageshow/focus so a login in another tab starts ringing here too. */
   function ensureMember() {
     const k = readKey();
-    if (!k || (k === myKey && myHash)) return;
+    if (!k || (k === myKey && myRoute && myId)) return;
     myKey = k;
+    myId = readMyId();
     sha256hex(k).then((h) => {
-      myHash = h;
+      myRoute = h;
       if (window.mcLive && window.mcLive.member) window.mcLive.member.enable(k, h);
     }).catch(() => { /* no crypto.subtle = no calls */ });
   }
@@ -391,7 +414,7 @@ export function installCall() {
           .then((d: any) => {
             if (CALL.state !== 'Connecting' || CALL.id !== id) return;
             if (!d || !d.ok) { end('Failure', true); return; }
-            sig(myHash, { call: id, kind: 'taken' });   // hush my other tabs
+            sig(myId, { call: id, kind: 'taken' });     // hush my other tabs (a wire id, like every `from`)
             CALL.iceT = setInterval(flushIce, 250);
             CALL.setupT = setTimeout(() => {
               if (CALL.state === 'Connecting' && CALL.id === id) end('Timeout', true);
@@ -408,11 +431,11 @@ export function installCall() {
 
   function onOffer(m: any) {
     ensureMember();
-    if (!myHash || !m || !m.from || !m.call || !m.sdp) return;
+    if (!myId || !m || !m.from || !m.call || !m.sdp) return;
     if ((core as any).callInCall(CALL.state)) {
       if (CALL.state === 'Outgoing' && m.from === CALL.peer) {
         /* Glare — we called each other at once; the lower hash's offer wins. */
-        if ((core as any).callGlareWins(myHash, m.from)) {
+        if ((core as any).callGlareWins(myId, m.from)) {
           sig(m.from, { call: m.call, kind: 'busy' });
           return;
         }
@@ -459,7 +482,7 @@ export function installCall() {
   function onSig(m: any) {
     if (!m) return;
     if (m.kind === 'taken') {
-      if (m.from === myHash && CALL.state === 'Incoming' && m.call === CALL.id) end('Taken');
+      if (m.from === myId && CALL.state === 'Incoming' && m.call === CALL.id) end('Taken');
       return;
     }
     if (m.call !== CALL.id || m.from !== CALL.peer) return;   // stale/foreign: drop

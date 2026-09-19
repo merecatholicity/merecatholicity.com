@@ -515,10 +515,63 @@ import type { Boot } from './boot';
   function setKey(key: any) {
     if (window.mcStore) window.mcStore.invalidate();
     try { localStorage.setItem(STORAGE, key); } catch (e) {}
+    setMyId('');            // the public id belongs to the OLD key: never carry it over
   }
   function clearKey() {
     try { localStorage.removeItem(STORAGE); } catch (e) {}
     try { localStorage.removeItem('mc-admin'); } catch (e) {}
+    setMyId('');
+  }
+
+  /* ---- The two identities, which are NOT the same thing (2026-09-19) -------
+     A member has an ACCOUNT hash (SHA-256 of their key, D1's primary key, what
+     the hub authenticates and shards on) and a PUBLIC id (the pubid the worker
+     mints with its pepper, the only one that crosses the wire on a served row).
+     Before the L3 flip they were the same string and one variable did both
+     jobs; after it they are different, and every place that used the wrong one
+     failed SILENTLY — a reader became a stranger to their own conversation
+     (their own messages drawn as the other party's, the thread titled with
+     their own name, a pair's E1 words unopenable because the "other" member
+     resolved to themselves) and their live socket subscribed to a scope the
+     worker never publishes to. So they are two names here, and neither is
+     computed where the other belongs:
+
+       state.myHash — the PUBLIC id. The server's word (/prefs `me`), cached
+                      beside the key. Compared against every served row. The
+                      client CANNOT compute it: the pepper is the worker's.
+       myRoute()    — the ACCOUNT hash. sha256hex(key), used for the hub's
+                      `?h=` shard hint and its `user:` scope and NOTHING else
+                      (pure.ts admits a `user:` scope only when it equals the
+                      key's own hash). It is a private channel to a worker that
+                      already holds the key, never a published identity. */
+  var MYID = 'mc-my-id';
+  function getMyId() {
+    try { return localStorage.getItem(MYID) || ''; } catch (e) { return ''; }
+  }
+  function setMyId(id: unknown) {
+    var v = (typeof id === 'string' && /^[0-9a-f]{64}$/.test(id)) ? id : '';
+    state.myHash = v;
+    try { if (v) localStorage.setItem(MYID, v); else localStorage.removeItem(MYID); } catch (e) {}
+  }
+  /* The account hash, for hub routing only — derived from the secret on
+     demand and never stored. Not cached: mcLive.member.enable already ignores
+     a repeat of the scope it holds, so this digest is paid about once per
+     sign-in, and one SHA-256 of a short string is cheaper than the bytes a
+     cache costs in the bundle. */
+  function myRoute(): Promise<string> {
+    return state.key ? sha256hex(state.key) : Promise.resolve('');
+  }
+  /* Resolve this identity's PUBLIC id before anything renders. The cache makes
+     it free on every load after the first; a miss asks the server and waits,
+     because rendering with the wrong id is worse than rendering a moment
+     later. A failure leaves it empty — "not me anywhere", which reads as a
+     logged-out view — rather than guessing with the account hash, which reads
+     as a confident lie. */
+  function resolveMyId(): Promise<string> {
+    if (!state.key) { setMyId(''); return Promise.resolve(''); }
+    var cached = getMyId();
+    if (cached) { state.myHash = cached; return Promise.resolve(cached); }
+    return loadPrefs().then(function () { return state.myHash || ''; });
   }
   function makeKey() {
     var bytes = new Uint8Array(32);
@@ -1058,22 +1111,38 @@ import type { Boot } from './boot';
     try { if (state.myHash && window.mcStore && window.mcStore.hydrate) window.mcStore.hydrate(state.myHash); } catch (e) { /* no bundle: memory only */ }
     ensureMyPubkey();   // publish this identity's DM public key once it is live
     if (isMember() && window.mcLive && window.mcLive.member) {
-      window.mcLive.member.enable(state.key, state.myHash);
+      /* The hub authenticates and shards on sha256hex(key) and admits a
+         `user:` scope ONLY when it equals that (worker pure.ts). Handing it
+         the public id subscribes the socket to a scope nothing publishes to,
+         and every private frame — a DM, a bell, a call — is dropped in
+         silence. Routing is the one job the account hash still has. */
+      myRoute().then(function (h) {
+        if (h && isMember() && window.mcLive && window.mcLive.member) window.mcLive.member.enable(state.key, h);
+      });
     }
     loadPrefs();
   }
   /* The member's private settings-gear prefs (read-receipts mode + per-type
      notification switches). Loaded once so the DM view can honour receipts
      reciprocally; the gear reads/writes them too. */
-  function loadPrefs() {
-    if (!state.key) return;
+  function loadPrefs(): Promise<void> {
+    if (!state.key) return Promise.resolve();
     /* Already fetched for this identity on this page: reuse the answer rather
        than paying a round trip on every navigation. window.mcPrefs outlives the
        boot, so this boot's state is seeded from it directly. */
-    if (mcPrefsFor === state.key && window.mcPrefs) { state.prefs = window.mcPrefs; return; }
+    if (mcPrefsFor === state.key && window.mcPrefs) {
+      state.prefs = window.mcPrefs;
+      /* mcBoot re-runs on every soft navigation, so this road is taken far
+         more often than the fetch below. It must re-assert the public id: the
+         boot that took it set state.myHash from the cache, but a reader whose
+         cache was empty (or cleared) would otherwise navigate the whole
+         session as a stranger to their own rows. */
+      if (window.mcPrefs && typeof window.mcPrefs.me === 'string') setMyId(window.mcPrefs.me);
+      return Promise.resolve();
+    }
     mcPrefsFor = state.key;
     var prefsForKey = state.key;
-    fetch(API + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) })
+    return fetch(API + '/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: state.key }) })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         /* A refusal must not be remembered as done, or the reader would go the
@@ -1085,7 +1154,7 @@ import type { Boot } from './boot';
            against. Absent (an old worker) or equal (the valve, no pepper)
            it leaves the sha256hex(key) value in place, so nothing shifts
            until the flip is live. */
-        if (d.prefs && typeof d.prefs.me === 'string' && /^[0-9a-f]{64}$/.test(d.prefs.me)) state.myHash = d.prefs.me;
+        if (d.prefs && typeof d.prefs.me === 'string') setMyId(d.prefs.me);
         /* The same answer carries whether this identity is spared the
            challenge, so the composer's focus usually finds it already
            settled instead of paying its own round trip. */
@@ -1481,9 +1550,8 @@ import type { Boot } from './boot';
     socialCfg();
     /* Resolve the identity before any view renders, or a keyed visitor
        reads as anonymous and the owner's own links never appear. */
-    var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
-    ready.then(function (h) {
-      state.myHash = h;
+    var ready = resolveMyId();
+    ready.then(function () {
       enableMemberLive();
       loadMyProfile();
       dmUnreadCheck();
@@ -1576,9 +1644,8 @@ import type { Boot } from './boot';
 
     commentsCfg().then(function (cfg) {
       if (!cfg || cfg.pages.indexOf(pageKey()) === -1) return;
-      var ready = state.key ? sha256hex(state.key) : Promise.resolve('');
-      ready.then(function (h) {
-        state.myHash = h;
+      var ready = resolveMyId();
+      ready.then(function () {
         enableMemberLive();
         mountComments(section);
         loadMyProfile();
@@ -1588,7 +1655,7 @@ import type { Boot } from './boot';
     });
   }
   /* ---- Wave F: the feature modules, installed per boot ---- */
-  Object.assign(B, { API, BOARD, MERECAT_API, MERECAT_BOT_HASH, NACL_SRC, appConfirm, asset, authorNode, badgeChanged, bootSig, browserTz, busy, cachedJson, clampBody, clearKey, collectAltIps, crumb, displayName, el, enableMemberLive, fetchRetry, fillBody, fmtDateTime, fmtSecs, fmtTimeCompact, freshOpts, freshParam, getToken, go, isSharedV4Client, load, loadingLine, loginToInteract, makeKey, markThreadRead, mcDmBlobGet, mcDmBlobPut, mcDmBlobs, mountComments, myPostCount, pageBar, pageHref, pageKey, rankLine, readEase, readMark, readThrottled, route, section, setKey, sha256hex, skelInto, skeleton, stale, stampFresh, state, trace, warmToken });
+  Object.assign(B, { API, BOARD, MERECAT_API, MERECAT_BOT_HASH, NACL_SRC, appConfirm, asset, authorNode, badgeChanged, bootSig, browserTz, busy, cachedJson, clampBody, clearKey, collectAltIps, crumb, displayName, el, enableMemberLive, fetchRetry, fillBody, fmtDateTime, fmtSecs, fmtTimeCompact, freshOpts, freshParam, getToken, go, isSharedV4Client, load, loadingLine, loginToInteract, makeKey, markThreadRead, mcDmBlobGet, mcDmBlobPut, mcDmBlobs, mountComments, myPostCount, resolveMyId, setMyId, pageBar, pageHref, pageKey, rankLine, readEase, readMark, readThrottled, route, section, setKey, sha256hex, skelInto, skeleton, stale, stampFresh, state, trace, warmToken });
   /* Fetch a lazy module's chunk (once per document), install it into THIS boot,
      bind and run it, and put its exports on B. A later boot installs it eagerly. */
   B.ensure = function (name: string): Promise<void> {

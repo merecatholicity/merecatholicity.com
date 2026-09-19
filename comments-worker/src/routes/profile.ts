@@ -281,10 +281,13 @@ async function handlePrefs(request: Request, env: Env) {
      nobody: 2026-09-17). A hint, never a permission: the server decides again
      on every write, and a client that guesses wrong is simply refused. */
   const spared = turnstileSkipEstablished(await getAppSettings(env)) && !!(row && row.verified_at);
-  /* `me` is the caller's OWN public id (the P0 chain L3) — the one authoritative
-     way for the client to learn its pubid, since it cannot compute one (that
-     needs the pepper). state.myHash is set from this, falling back to
-     sha256hex(key) for the old worker / the valve, where the two are equal. */
+  /* `me` is the caller's OWN public id (the P0 chain L3) — the ONLY way for the
+     client to learn its pubid, since it cannot compute one (that needs the
+     pepper). state.myHash comes from here and from nowhere else: a client that
+     fell back to sha256hex(key) held its ACCOUNT hash, which matches no served
+     row, and the failure was silent — see the 2026-09-19 passage. Every key
+     gets an answer here, row or no row, so a brand-new identity can resolve
+     itself before it renders anything. */
   return json(await cloakIds(env, { ok: true, prefs: {
     receipts: (row && row.receipts_mode === 'off') ? 'off' : 'auto',
     notify_reply: onOff(row && row.notify_reply),
