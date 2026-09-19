@@ -262,13 +262,13 @@ brings its test in the same change; never delete a test to go green.
   rooms + Vectorize, `librarian/` its mind, Workers AI its only backend, dials `Domain.Merecat`.
   **Band weighting and persona are the owner's standing law — read the merecat passage first.** The
   AI guard (`quota.ts`) stands OPEN when unread; the ingest takes a SLICE of D1's day, never the day.
-- **Terraform** owns the zone settings, DNS, the four rulesets, bot management, the R2 buckets, the
+- **Terraform** owns the zone settings, DNS, the five rulesets, bot management, the R2 buckets, the
   D1 records, the Turnstile widgets, both GitHub repos, Pages, the environments, the Actions policy
   and variables; state is in R2 (`merecatholicity-tfstate`, unmanaged, SECRET). It cannot hold
   Vectorize, the R2 custom domains, the TURN key, or Email Routing. wrangler owns what a deploy rewrites.
-- **Credentials**: three Cloudflare tokens (terraform / site / workers), their R2 pair, one GitHub
-  PAT (CICD §4); the pipeline holds none — GitHub OIDC (`oidc.ts`), and merecat's persona and dials
-  come only from the reviewed `librarian-config` job. **History** rewritten 2026-09-09 — re-clone.
+- **Credentials**: ONE Cloudflare account token, `CLOUDFLARE_ROOT_TOKEN`, and one GitHub PAT (CICD §4); the
+  state backend's R2 pair DERIVES from the token (key = its id, secret = its SHA-256) and is never stored; every
+  secret is blanked on a `pull_request`, swept. The pipeline holds none — OIDC (`oidc.ts`), merecat's dials from the reviewed `librarian-config` job. **History** rewritten 2026-09-09 — re-clone.
 
 ## The long-form reference
 

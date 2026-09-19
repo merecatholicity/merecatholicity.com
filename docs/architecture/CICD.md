@@ -111,7 +111,7 @@ holds `pages: write` + `id-token: write`.
    site — they print the built pages, with `CHROMIUM=/usr/bin/google-chrome`), `make logos`
    (when the book changed or the docx is missing).
 6. **Publish the rebuilt PDFs to R2** — `make publish-pdfs`, **push to `main` only**,
-   with `CLOUDFLARE_SITE_TOKEN`. Uploads only PDFs whose MD5 differs from the bucket's
+   with `CLOUDFLARE_ROOT_TOKEN`. Uploads only PDFs whose MD5 differs from the bucket's
    ETag, purges exactly those URLs. Unconditional on push: an ordinary push costs one
    list call.
 7. **Gates** — `make tests`, `make jscheck`, `make check`, `make check-pdfs` (the token is
@@ -149,7 +149,7 @@ hermetic (tests/css reads the stylesheet, two Python suites read the baked corpu
 cold cache it builds the site; `make jscheck`, `make tests`; `wrangler deploy --dry-run`
 for both workers (needs no auth).
 
-*`deploy`* (push to `main` / dispatch): `make psbuild`; with `CLOUDFLARE_WORKERS_TOKEN`:
+*`deploy`* (push to `main` / dispatch): `make psbuild`; with `CLOUDFLARE_ROOT_TOKEN`:
 `wrangler d1 migrations apply merecatholicity-comments --remote` **then** `wrangler
 deploy` (comments worker; the contact worker only when its paths changed); then `GET
 /api/comments/config` must not 5xx (Bot Fight Mode may 403 a runner — not a verdict).
@@ -190,7 +190,7 @@ the plan file is `tfplan`, not `terraform/tfplan`.
 ### 2.4 `purge-cache.yml` — **manual purge**
 
 `workflow_dispatch` only, input `everything` (bool). Purges `sw.js` + `version.json` (or the
-whole zone) with `CLOUDFLARE_SITE_TOKEN`. For "an edge rule changed and something is being
+whole zone) with `CLOUDFLARE_ROOT_TOKEN`. For "an edge rule changed and something is being
 served stale" — never needed for a normal deploy, and **never run while a Build is
 mid-deploy** (that is the re-cache trap).
 
@@ -319,16 +319,25 @@ are on, and would refuse the push.
 
 | Name | Kind | Held by | Scope (exactly) |
 |---|---|---|---|
-| `CLOUDFLARE_API_TOKEN` | secret | `terraform.yml` | account token `merecatholicity-ci-terraform` — zone: Zone Read, Zone Settings Write, DNS Write, Bot Management Write, Zone WAF Write, Zone Transform Rules Write, Dynamic URL Redirects Write; account: Account Settings Read, Account Rulesets Read, Workers R2 Storage Write, D1 Read, Turnstile Sites Write. **Cannot purge, deploy or write D1.** |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | secrets | `terraform.yml` (state backend) | the Terraform token's derived R2 pair: key = token id, secret = SHA-256 of the token value (Cloudflare's documented scheme; the workflow can derive them itself if these are absent) |
-| `CLOUDFLARE_SITE_TOKEN` | secret | `build.yml`, `purge-cache.yml` | account token `merecatholicity-ci-site` — Cache Purge (zone) + Workers R2 Storage Write (account; bucket-scoped item permissions were tried and are refused by the list endpoint) |
-| `CLOUDFLARE_WORKERS_TOKEN` | secret | `workers.yml` | account token `merecatholicity-ci-workers` — Workers Scripts Write, D1 Write, Account Settings Read (account); Workers Routes Write (zone) |
+| `CLOUDFLARE_ROOT_TOKEN` | secret | `build.yml`, `workers.yml`, `terraform.yml`, `purge-cache.yml` | account token `merecatholicity-root` (2026-09-19) — **the one Cloudflare credential**, account-owned (`cfat_…`), full account and zone. It replaced three scoped tokens that between them still could not apply Cache Rules, D1 `read_replication` or Web Analytics: each gap cost a hand-made credential and a blocked change, which is the cost this token buys out. Its blast radius is the whole account, so the blanking below is the guard, and `tests/py/test_pipeline_workflows.py::OneCredential` sweeps it. |
+| — (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) | **derived, not stored** | `terraform.yml` (state backend) | R2's S3 pair IS the token: key = the token's id, secret = SHA-256 of its value (Cloudflare's documented scheme). `terraform.yml` derives them every run and masks both, so a rotation carries the state backend with it and there is no second credential to keep in step. The secrets of these names were deleted 2026-09-19. |
 | `TF_GITHUB_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT**, no expiry, on `merecatholicity.com` + `private-shelf` only: Administration, Environments, Variables, Pages read/write; Metadata read |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | **variables** | all | public ids; **Terraform-managed** (`github_actions_variable`) — workflows carry hardcoded fallbacks too |
 | `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf` (dev-box copy: `~/.ssh/private-shelf-ci`); its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
 | `PRIVATE_SHELF_DEPLOY_PUBLIC_KEY` | **variable** | `terraform.yml` (`TF_VAR_private_shelf_deploy_key`) | the public half; empty = no key resource |
 | `MERECAT_INGEST_API` | **variable** (optional) | `merecat.yml` | overrides the ingest URL; default is the worker's workers.dev hostname |
 | `SITE_DISPATCH_TOKEN` | secret **in the private-shelf repository** | its `notify-site.yml` | fine-grained PAT on `merecatholicity.com` only, *Actions: write* + *Metadata: read* — enough to `gh workflow run merecat.yml`, nothing more (set 2026-09-10; dev-box copy in `ci.env`; verified: cannot see the private repo, cannot write the site's contents) |
+
+**No secret reaches a pull request** (2026-09-19, and it carries the whole account now).
+`build.yml`, `terraform.yml` and `workers.yml` all run on `pull_request`, and GitHub hands a
+same-repo PR the repository's secrets. Every one of their secret references is therefore blanked
+in its own expression — `${{ github.event_name != 'pull_request' && secrets.X || '' }}` — rather
+than relying on a step's `if:`, so a step that is later ungated cannot quietly start carrying one.
+`tests/py/test_pipeline_workflows.py::OneCredential` sweeps every workflow a PR can trigger, every
+`${{ }}` in it, and fails on an unblanked secret, on a retired token name (a deleted secret reads
+as the empty string, and the road would skip in silence), and on an absent token answered with a
+notice and `exit 0` — a green run that shipped nothing. A missing `CLOUDFLARE_ROOT_TOKEN` is now
+`::error::` and `exit 1` on every road.
 
 **The pipeline holds no key** (2026-09-17): `merecat.yml` and `ops-watch.yml` prove themselves
 with the OIDC token GitHub signs for each job (§2.5 `merecat.yml`, §2.6), so there is nothing of
@@ -501,7 +510,7 @@ that would shrink existing clones is a separate, owner-authorised act (§10 ex. 
   `make check-pdfs` proves the bucket holds every manifest name and matches every local
   PDF. **CI's bytes are the record**: after a local `make -C resources pdf`, `check-pdfs`
   will say "rebuilt but unpublished" — that is the dev box differing from CI, not a reason
-  to upload. `make publish-pdfs` exists for one-offs (needs `CLOUDFLARE_SITE_TOKEN` in the
+  to upload. `make publish-pdfs` exists for one-offs (needs `CLOUDFLARE_ROOT_TOKEN` in the
   env; uploads only what differs; purges those URLs). One PDF has no build:
   `The_Bishop_of_Rome.pdf` is a mirrored source in `resources/docs-src/`, copied in by
   `make mirrored-pdfs`.

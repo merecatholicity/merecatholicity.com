@@ -5,35 +5,30 @@
 # cross-site identifier, no consent banner owed. site_token is PUBLIC — it
 # rides in the beacon tag on every page, exactly like the Turnstile sitekeys.
 #
-# auto_install = true is NOT a preference — it is the state this pipeline can
-# hold, and the reason is worth reading before anyone "fixes" it.
+# auto_install = FALSE, and that flag is the whole point of this file.
 #
 # Automatic setup asks Cloudflare to inject the beacon at the edge through a
 # zone ruleset of its own. That ruleset (4f4f6eeb-b8bf-4318-a5d2-aa5840b7b4a2,
-# named in this very site record) NO LONGER EXISTS in the zone — it answers
-# not_found — so for two months the record said "installed" while not one page
-# carried the beacon: verified against production, zero occurrences of
-# cloudflareinsights on / and on /about.html. The meter has measured nothing
-# since 2026-07-17, and nothing anywhere went red, because an empty graph looks
-# exactly like a site nobody visits.
+# named in this very site record) had ceased to exist — it answers not_found —
+# so for two months the record said "installed" while not one page carried the
+# beacon: verified against production, zero occurrences of cloudflareinsights
+# on / and on /about.html. The meter measured nothing from 2026-07-17, and
+# nothing anywhere went red, because an empty graph looks exactly like a site
+# nobody visits.
 #
-# So the beacon ships from docs/nav.js instead, the one script every page
-# already loads, where a grep finds it and a test holds it. Turning auto_install
-# OFF is what this file wanted — two roads to one meter would count every view
-# twice — but the apply failed with the provider's "failed to make http
-# request", the same signature the D1 write gave: the Terraform token has Web
-# Analytics READ and not WRITE. Widening it is the owner's act (Cloudflare API
-# token → Account → Web Analytics → Edit). Until then the declaration states
-# the truth rather than an intention, and the doubling it guards against cannot
-# happen anyway while the injector ruleset is missing.
+# So the beacon ships from pagejs/nav.js instead — the one script every page
+# already loads, where a grep finds it and tests/py/test_analytics.py holds it.
+# Turning this flag off is that decision written down: two roads to one meter
+# would count every view twice, and Cloudflare renders only one snippet per
+# page. It stood at `true` until 2026-09-19 for one reason only — the Terraform
+# token had Web Analytics READ and not write, the apply answered "failed to
+# make http request", and a declaration that cannot be applied fails every
+# later run and masks a real failure behind an expected red. The one account
+# token writes it, so the file states the intention rather than the accident.
 #
-# THE TWO MOVE TOGETHER. Whoever widens the token must also decide which road
-# keeps the meter, and do both in one change: flipping this to false with the
-# beacon still in docs/nav.js is fine (one road, ours), but flipping it to true
-# while nav.js also ships the beacon counts every view twice, invisibly — the
-# graph simply goes up. Turning this into an edge install means taking the
-# beacon OUT of nav.js in the same commit, and turning tests/py/test_analytics.py
-# around with it.
+# THE TWO MOVE TOGETHER. Whoever turns this back to true must take the beacon
+# OUT of pagejs/nav.js in the same commit and turn test_analytics.py around
+# with it; otherwise the graph simply goes up, invisibly, for ever.
 #
 # The CSP already allows it: static.cloudflareinsights.com in script-src and
 # cloudflareinsights.com in connect-src (rulesets.tf) — allowlisted since the
@@ -42,12 +37,10 @@
 # plans clean. The RUM read the provider imports from does not return them, so
 # they are null in state; declaring the values the dashboard shows (true/false)
 # made every plan an update — `+ enabled`, `+ lite`, token and snippet "known
-# after apply" — which under a token with Web Analytics READ and not write is a
-# failing apply on EVERY run, inherited by whoever opens the queue next for a
-# change of their own. An attribute an import cannot capture is left to the
-# remote: adopt what the API answers, declare only what we mean to hold.
+# after apply". An attribute an import cannot capture is left to the remote:
+# adopt what the API answers, declare only what we mean to hold.
 resource "cloudflare_web_analytics_site" "main" {
   account_id   = var.account_id
   zone_tag     = var.zone_id
-  auto_install = true
+  auto_install = false
 }

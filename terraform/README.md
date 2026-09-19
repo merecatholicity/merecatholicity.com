@@ -74,31 +74,39 @@ Three things the workflow will not do, on purpose:
   compares the set of `address action` lines; a difference fails it.
 
 The S3 credentials for the state backend are derived at run time from the
-Cloudflare token — access key = the token's `id` (`/user/tokens/verify`),
-secret = SHA-256 of the token value, Cloudflare's documented scheme — so one
-secret serves everything. Set `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` as
-repository secrets to use a dedicated R2 token instead.
+Cloudflare token — access key = the token's `id`, secret = SHA-256 of the token
+value, Cloudflare's documented scheme — so one secret serves everything, and a
+rotation carries the state backend with it. There is no override: the secrets
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` were deleted on 2026-09-19, and a
+second credential that can drift out of step with the first is the thing this
+design is avoiding.
 
-**Secrets** (repository → Settings → Secrets and variables → Actions) — three
-Cloudflare account tokens, each holding only what its workflow needs, minted
-through the API on 2026-09-09 (a compromise of one job cannot reach the others'
-ground):
+**Secrets** (repository → Settings → Secrets and variables → Actions) — ONE
+Cloudflare account token, and one GitHub PAT:
 
-- `CLOUDFLARE_API_TOKEN` — **the terraform token** (`merecatholicity-ci-terraform`).
-  Zone (merecatholicity.com only): Zone Read, Zone Settings Write, DNS Write,
-  Bot Management Write, Zone WAF Write, Zone Transform Rules Write, Dynamic URL
-  Redirects Write. Account: Account Settings Read, Account Rulesets Read,
-  Workers R2 Storage Write (bucket management and the state backend), D1 Read
-  (the per-database GET Terraform refreshes with — the list endpoint is denied,
-  and Terraform never lists), Turnstile Sites Write. It cannot purge the
-  cache, deploy a worker, or write D1. `AWS_ACCESS_KEY_ID` /
-  `AWS_SECRET_ACCESS_KEY` are its derived R2 pair (id + SHA-256).
-- `CLOUDFLARE_SITE_TOKEN` — **build.yml and the manual purge**: Cache Purge
-  (zone) + Workers R2 Storage Write (account). Bucket-scoped R2 item
-  permissions were tried first and were refused for the API's list endpoint, so
-  this token can reach every bucket; it can do nothing else.
-- `CLOUDFLARE_WORKERS_TOKEN` — **workers.yml**: Workers Scripts Write, D1 Write,
-  Account Settings Read (account) + Workers Routes Write (zone).
+- `CLOUDFLARE_ROOT_TOKEN` — **every Cloudflare road**: `build.yml` (publish the
+  PDFs to R2, `check-pdfs`, the post-deploy purge), `workers.yml` (the D1
+  migration ledger and `wrangler deploy`), `terraform.yml` (plan, apply, and the
+  state backend), `purge-cache.yml`. Account token `merecatholicity-root`,
+  account-owned (`cfat_…`), minted by the owner on 2026-09-19, full account and
+  zone.
+
+  It replaced three scoped tokens (`merecatholicity-ci-terraform`, `-site`,
+  `-workers`) minted on 2026-09-09. Least privilege was the right instinct and
+  it cost more than it bought: the terraform token turned out to be blind to
+  **Cache Rules** (not even read), **D1 write** and **Web Analytics write**, so
+  three separate correct changes planned clean and died at apply with the
+  provider's `failed to make http request`, and each one needed the owner at the
+  dashboard to mint or widen a credential before an agent could finish. One
+  token ends that. The trade is real and is written down here rather than
+  forgotten: **a leak of this secret is the whole account**, including the other
+  zones on it. What guards it is that no `pull_request` ever sees it — every
+  reference in every workflow is blanked in its own expression and
+  `tests/py/test_pipeline_workflows.py::OneCredential` sweeps for one that is
+  not — and that it is rotated whenever its value has been anywhere but the
+  Actions secret store (`PUT /accounts/{id}/tokens/{id}/value`, then
+  `gh secret set CLOUDFLARE_ROOT_TOKEN` and the `ci.env` line; the derived R2
+  pair follows automatically).
 - `TF_GITHUB_TOKEN` — for the github provider: a **fine-grained PAT** (owner-
   minted 2026-09-09, no expiry) restricted to `merecatholicity.com` and
   `private-shelf`, with Administration, Environments, Variables and Pages read/
@@ -161,10 +169,10 @@ from the environment:
 
 | Variable | What | Where from |
 | --- | --- | --- |
-| `CLOUDFLARE_API_TOKEN` | infrastructure | dashboard, scoped (below) |
-| `GITHUB_TOKEN` | repositories | `gh auth token` |
-| `AWS_ACCESS_KEY_ID` | state backend | R2 API token |
-| `AWS_SECRET_ACCESS_KEY` | state backend | R2 API token |
+| `CLOUDFLARE_API_TOKEN` | infrastructure | `CLOUDFLARE_ROOT_TOKEN` from `ci.env` |
+| `GITHUB_TOKEN` | repositories | `TF_GITHUB_TOKEN` from `ci.env` |
+| `AWS_ACCESS_KEY_ID` | state backend | derived: the token's id |
+| `AWS_SECRET_ACCESS_KEY` | state backend | derived: SHA-256 of the token value |
 
 The wrangler OAuth token in `~/.config/.wrangler` is **not** usable — it is
 short-lived and refresh-based.

@@ -6,19 +6,19 @@
 # class migration or a deleted binding — then `git revert` + push is the road.
 # A rollback does not undo D1 migrations (additive by law, so the older worker
 # keeps running). ALWAYS pair it with a `git revert` push, or the next push
-# re-deploys what you just rolled away from. Needs the workers token (ci.env).
+# re-deploys what you just rolled away from. Needs CLOUDFLARE_ROOT_TOKEN (ci.env).
 set -e
 here=$(cd "$(dirname "$0")/.." && pwd)
 env_file="${MC_CI_ENV:-$HOME/.config/merecatholicity/ci.env}"
 if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-  if [ -n "$CLOUDFLARE_WORKERS_TOKEN" ]; then CLOUDFLARE_API_TOKEN="$CLOUDFLARE_WORKERS_TOKEN"
-  elif [ -f "$env_file" ]; then
+  if [ -z "$CLOUDFLARE_ROOT_TOKEN" ] && [ -f "$env_file" ]; then
     # shellcheck disable=SC1090
-    set -a; . "$env_file"; set +a; CLOUDFLARE_API_TOKEN="$CLOUDFLARE_WORKERS_TOKEN"
+    set -a; . "$env_file"; set +a
   fi
+  CLOUDFLARE_API_TOKEN="$CLOUDFLARE_ROOT_TOKEN"
 fi
 export CLOUDFLARE_API_TOKEN
-[ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "no workers token (CLOUDFLARE_WORKERS_TOKEN in ci.env)" >&2; exit 2; }
+[ -n "$CLOUDFLARE_API_TOKEN" ] || { echo "no Cloudflare token (CLOUDFLARE_ROOT_TOKEN in ci.env, or CLOUDFLARE_API_TOKEN)" >&2; exit 2; }
 cd "$here/comments-worker"
 current=$(npx wrangler deployments status --json 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['versions'][0]['version_id'])")
 echo "current version: $current"

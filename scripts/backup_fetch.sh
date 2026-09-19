@@ -3,18 +3,17 @@
 # from R2 (bucket merecatholicity-backups, key backups/comments-<day>.sql.gz —
 # Domain.Ops.backupKey) to a file OUTSIDE the repo, and print its path.
 # Default day: today (UTC), falling back to yesterday when today's is not there
-# yet (the cron writes at 03:15 UTC). Needs the SITE token from
-# ~/.config/merecatholicity/ci.env: it is the one that reads R2 (the workers
-# token cannot); `--remote`, or wrangler reads its local store and says the key
-# does not exist. `make comments-backup` runs this and then backup_check.py.
+# yet (the cron writes at 03:15 UTC). Needs CLOUDFLARE_ROOT_TOKEN from
+# ~/.config/merecatholicity/ci.env, and `--remote` — without it wrangler reads
+# its local store and says the key does not exist. `make comments-backup` runs this and then backup_check.py.
 set -e
 here=$(cd "$(dirname "$0")/.." && pwd)
 env_file="${MC_CI_ENV:-$HOME/.config/merecatholicity/ci.env}"
-if [ -z "$CLOUDFLARE_SITE_TOKEN" ] && [ -f "$env_file" ]; then
+if [ -z "$CLOUDFLARE_ROOT_TOKEN" ] && [ -f "$env_file" ]; then
   # shellcheck disable=SC1090
   set -a; . "$env_file"; set +a
 fi
-[ -n "$CLOUDFLARE_SITE_TOKEN" ] || { echo "CLOUDFLARE_SITE_TOKEN is not set (ci.env)" >&2; exit 2; }
+[ -n "$CLOUDFLARE_ROOT_TOKEN" ] || { echo "CLOUDFLARE_ROOT_TOKEN is not set (ci.env)" >&2; exit 2; }
 out_dir="${MC_BACKUP_DIR:-$HOME/.config/merecatholicity/backups}"
 mkdir -p "$out_dir"
 bucket=merecatholicity-backups
@@ -22,7 +21,7 @@ fetch() {
   day=$1
   key="backups/comments-$day.sql.gz"
   out="$out_dir/comments-$day.sql.gz"
-  if (cd "$here/comments-worker" && CLOUDFLARE_API_TOKEN="$CLOUDFLARE_SITE_TOKEN" npx wrangler r2 object get "$bucket/$key" --remote --file "$out" >/dev/null 2>&1) && [ -s "$out" ]; then
+  if (cd "$here/comments-worker" && CLOUDFLARE_API_TOKEN="$CLOUDFLARE_ROOT_TOKEN" npx wrangler r2 object get "$bucket/$key" --remote --file "$out" >/dev/null 2>&1) && [ -s "$out" ]; then
     echo "$out"; return 0
   fi
   rm -f "$out"; return 1

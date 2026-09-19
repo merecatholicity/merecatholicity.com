@@ -102,7 +102,7 @@ jobs:
       - name: Are the credentials here?
         id: creds
         env:
-          CF: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          CF: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
           GH: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
         run: |
           if [ -n "$CF" ] && [ -n "$GH" ]; then
@@ -121,32 +121,30 @@ jobs:
       - name: Derive the state backend's S3 credentials
         if: steps.creds.outputs.present == 'yes'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          R2_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          R2_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          if [ -n "$R2_KEY" ] && [ -n "$R2_SECRET" ]; then
-            key="$R2_KEY"; secret="$R2_SECRET"
-          else
-            # An ACCOUNT-owned token (cfat_…) verifies under the account; a user
-            # token under /user. The id is the same thing either way.
-            acct="${CLOUDFLARE_ACCOUNT_ID:-6093bc0889c95a08f0a92a8df6750c66}"
-            key=$( { curl -fsS "https://api.cloudflare.com/client/v4/accounts/$acct/tokens/verify" \
-                       -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" 2>/dev/null \
-                  || curl -fsS https://api.cloudflare.com/client/v4/user/tokens/verify \
-                       -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"; } \
-                  | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["id"])')
-            secret=$(printf %s "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -d' ' -f1)
-          fi
+          # The state backend's S3 pair IS the token: key = the token's id,
+          # secret = SHA-256 of its value (Cloudflare's documented scheme). It is
+          # derived every run, so a rotation carries the backend with it and
+          # there is no second credential to keep in step.
+          # An ACCOUNT-owned token (cfat_…) verifies under the account; a user
+          # token under /user. The id is the same thing either way.
+          acct="${CLOUDFLARE_ACCOUNT_ID:-6093bc0889c95a08f0a92a8df6750c66}"
+          key=$( { curl -fsS "https://api.cloudflare.com/client/v4/accounts/$acct/tokens/verify" \
+                     -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" 2>/dev/null \
+                || curl -fsS https://api.cloudflare.com/client/v4/user/tokens/verify \
+                     -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"; } \
+                | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["id"])')
+          secret=$(printf %s "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -d' ' -f1)
           echo "::add-mask::$key"; echo "::add-mask::$secret"
           { echo "AWS_ACCESS_KEY_ID=$key"; echo "AWS_SECRET_ACCESS_KEY=$secret"; } >> "$GITHUB_ENV"
 
       - name: Init + validate
         if: steps.creds.outputs.present == 'yes'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
         run: |
           terraform -chdir=terraform init -input=false -lockfile=readonly >/dev/null
           terraform -chdir=terraform validate
@@ -155,8 +153,8 @@ jobs:
         id: plan
         if: steps.creds.outputs.present == 'yes'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
         run: |
           set +e
           terraform -chdir=terraform plan -input=false -lock-timeout=5m -detailed-exitcode \
@@ -217,31 +215,29 @@ jobs:
 
       - name: Derive the state backend's S3 credentials
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          R2_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          R2_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          if [ -n "$R2_KEY" ] && [ -n "$R2_SECRET" ]; then
-            key="$R2_KEY"; secret="$R2_SECRET"
-          else
-            # An ACCOUNT-owned token (cfat_…) verifies under the account; a user
-            # token under /user. The id is the same thing either way.
-            acct="${CLOUDFLARE_ACCOUNT_ID:-6093bc0889c95a08f0a92a8df6750c66}"
-            key=$( { curl -fsS "https://api.cloudflare.com/client/v4/accounts/$acct/tokens/verify" \
-                       -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" 2>/dev/null \
-                  || curl -fsS https://api.cloudflare.com/client/v4/user/tokens/verify \
-                       -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"; } \
-                  | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["id"])')
-            secret=$(printf %s "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -d' ' -f1)
-          fi
+          # The state backend's S3 pair IS the token: key = the token's id,
+          # secret = SHA-256 of its value (Cloudflare's documented scheme). It is
+          # derived every run, so a rotation carries the backend with it and
+          # there is no second credential to keep in step.
+          # An ACCOUNT-owned token (cfat_…) verifies under the account; a user
+          # token under /user. The id is the same thing either way.
+          acct="${CLOUDFLARE_ACCOUNT_ID:-6093bc0889c95a08f0a92a8df6750c66}"
+          key=$( { curl -fsS "https://api.cloudflare.com/client/v4/accounts/$acct/tokens/verify" \
+                     -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" 2>/dev/null \
+                || curl -fsS https://api.cloudflare.com/client/v4/user/tokens/verify \
+                     -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"; } \
+                | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["id"])')
+          secret=$(printf %s "$CLOUDFLARE_API_TOKEN" | sha256sum | cut -d' ' -f1)
           echo "::add-mask::$key"; echo "::add-mask::$secret"
           { echo "AWS_ACCESS_KEY_ID=$key"; echo "AWS_SECRET_ACCESS_KEY=$secret"; } >> "$GITHUB_ENV"
 
       - name: Re-plan, and refuse if it differs from what was reviewed
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
           REVIEWED: ${{ needs.plan.outputs.fingerprint }}
           ALLOW: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_destroy && '--allow-destroy' || '' }}
         run: |
@@ -266,8 +262,8 @@ jobs:
       - name: Apply
         if: env.SKIP != '1'
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.TF_GITHUB_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
         run: |
           # Output to a file, not the public log: apply echoes attribute values.
           set +e

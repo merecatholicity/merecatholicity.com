@@ -20,13 +20,10 @@
 # without a deploy — an edge rule changed, or something is being served stale
 # that should not be. Do not run this while a Build is mid-deploy.
 #
-# SETUP (one time, by the repository owner — shared with the automatic purge):
-#   1. Cloudflare -> My Profile -> API Tokens -> Create Token, with the single
-#      permission  Zone -> Cache Purge -> Purge  on merecatholicity.com.
-#   2. Repo -> Settings -> Secrets and variables -> Actions -> New secret:
-#        CLOUDFLARE_SITE_TOKEN  the token from step 1
-# Until both exist this skips cleanly rather than failing, so the repository is
-# never red for a feature that has not been switched on.
+# CREDENTIAL: `CLOUDFLARE_ROOT_TOKEN`, the one account token every Cloudflare
+# road in this pipeline uses (CICD.md §4). It is not optional here: if it is
+# absent this workflow fails loudly, because a human pressed the button and a
+# clean skip would look exactly like a purge that worked.
 
 name: Purge the Cloudflare edge (manual)
 
@@ -51,15 +48,14 @@ jobs:
     steps:
       - name: Purge
         env:
-          TOKEN: ${{ secrets.CLOUDFLARE_SITE_TOKEN }}
+          TOKEN: ${{ secrets.CLOUDFLARE_ROOT_TOKEN }}
           # The zone id is public: an Actions VARIABLE Terraform manages, not a secret.
           ZONE: ${{ vars.CLOUDFLARE_ZONE_ID || '2b270ffb21b7f98a39960abb6bf953ae' }}
           ALL: ${{ inputs.everything }}
         run: |
           if [ -z "$TOKEN" ]; then
-            echo "::notice::CLOUDFLARE_SITE_TOKEN not set — nothing purged."
-            echo "See the setup steps at the top of this workflow file."
-            exit 0
+            echo "::error::CLOUDFLARE_ROOT_TOKEN not set — nothing purged. One account token, and it is absent — set it with \`gh secret set CLOUDFLARE_ROOT_TOKEN\`."
+            exit 1
           fi
           if [ "$ALL" = "true" ]; then
             echo "purging the entire zone"

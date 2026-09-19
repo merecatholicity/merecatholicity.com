@@ -131,5 +131,59 @@ class TheAudience(unittest.TestCase):
         self.assertEqual(re.findall(r'--data-binary (\S+)', run), ["'{\"probe\":true}'"], 'no key in the body')
 
 
+class OneCredential(unittest.TestCase):
+    """Every Cloudflare road runs on ONE account token (2026-09-19).
+
+    Three scoped tokens plus a derived R2 pair became one, `CLOUDFLARE_ROOT_TOKEN`,
+    so an agent never has to ask for a new grant: the Terraform token was blind to
+    Cache Rules, D1 and Web Analytics, and each gap cost a hand-made credential.
+
+    What would break silently: a retired name (`CLOUDFLARE_SITE_TOKEN`,
+    `CLOUDFLARE_WORKERS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `AWS_ACCESS_KEY_ID`) read
+    again — the secret is gone, so the expression is the empty string and the road
+    skips; an unblanked secret in a workflow a pull request can trigger, which now
+    hands PR-authored code the whole account; an absent token answered with a
+    notice and `exit 0`, which is a green run that shipped nothing.
+    """
+
+    # every secret a pull request must never reach, blanked in its own expression
+    EXPR = re.compile(r'\$\{\{(.*?)\}\}', re.S)
+
+    def test_one_cloudflare_credential_in_the_whole_pipeline(self):
+        names = set()
+        for name in sorted(os.listdir(WORKFLOWS)):
+            names |= set(re.findall(r'secrets\.(CLOUDFLARE_\w+|AWS_\w+)',
+                                    read('.github', 'workflows', name)))
+        self.assertEqual(names, {'CLOUDFLARE_ROOT_TOKEN'})
+
+    def test_a_pull_request_reaches_no_secret(self):
+        swept = 0
+        for name in sorted(os.listdir(WORKFLOWS)):
+            if not {t for t in triggers(workflow(name)) if str(t).startswith('pull_request')}:
+                continue
+            for expr in self.EXPR.findall(read('.github', 'workflows', name)):
+                if 'secrets.' not in expr:
+                    continue
+                swept += 1
+                where = f'{name}: ${{{{{expr.strip()}}}}}'
+                self.assertIn('github.event_name', expr, where)
+                self.assertIn("|| ''", expr, where)
+        # a sweep that reaches nothing passes for the wrong reason
+        self.assertGreaterEqual(swept, 15, 'the sweep found no secret to check')
+
+    def test_an_absent_token_is_red_and_never_quiet(self):
+        seen = 0
+        for name in sorted(os.listdir(WORKFLOWS)):
+            for job in (workflow(name)['jobs'] or {}).values():
+                for step in job.get('steps', []):
+                    run = str(step.get('run', ''))
+                    if 'CLOUDFLARE_ROOT_TOKEN not set' not in run:
+                        continue
+                    seen += 1
+                    self.assertIn('::error::', run, name)
+                    self.assertNotIn('exit 0', run, name + ': a green run that shipped nothing')
+        self.assertGreaterEqual(seen, 4, 'every road that can find the token absent says so')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -203,8 +203,9 @@ jobs:
 
       - name: Apply the D1 migration ledger, then deploy
         env:
-          # The workers token: scripts, routes, D1 — nothing else.
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_TOKEN }}
+          # The one account token. Blank on a pull request: PR-authored code
+          # never sees a credential, and this job does not run on one anyway.
+          CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '6093bc0889c95a08f0a92a8df6750c66' }}
           CONTACT: ${{ needs.check.outputs.contact_changed }}
           # staged rollout (workflow_dispatch only; a push is always `deploy`)
@@ -213,8 +214,8 @@ jobs:
           MC_STAGE_MESSAGE: 'staged from workers.yml by ${{ github.actor }} (${{ github.sha }})'
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::notice::CLOUDFLARE_WORKERS_TOKEN not set — gates passed, nothing deployed. Add the secret to enable CI deploys; until then \`make worker-deploy\` is the road."
-            exit 0
+            echo "::error::CLOUDFLARE_ROOT_TOKEN not set — the gates passed and NOTHING was deployed. One account token, and it is absent — set it with \`gh secret set CLOUDFLARE_ROOT_TOKEN\`."
+            exit 1
           fi
           cd comments-worker
           npx wrangler d1 migrations apply merecatholicity-comments --remote
