@@ -80,7 +80,8 @@ test('the member picker: the cap is the kernel\'s, the directory searched, the c
 });
 
 test('the header wears a group\'s collage and its count; presence and the call stay a pair\'s', () => {
-  assert.ok(/if \(kind === 1\) \{ dmCollageInto\(host, members\.filter\(function \(mm: any\) \{ return !mm\.left_at && mm\.hash !== state\.myHash; \}\)\); return; \}/.test(view));
+  /* `isMe(mm)` since 2026-09-19: the reader is named by the server (`is_me`), not found by comparing ids */
+  assert.ok(/if \(kind === 1\) \{ dmCollageInto\(host, members\.filter\(function \(mm: any\) \{ return !mm\.left_at && !isMe\(mm\); \}\)\); return; \}/.test(view));
   assert.ok(/if \(kind === 1\) \{ sub\.appendChild\(document\.createTextNode\(members\.filter\(function \(mm: any\) \{ return !mm\.left_at; \}\)\.length \+ ' members · 🔒'\)\); return; \}/.test(view), 'the count under the name');
   assert.ok(/if \(kind === 0 && other && other !== MERECAT_BOT_HASH && \(window as any\)\.RTCPeerConnection/.test(view), 'the 📞 is a pair\'s');
   assert.ok(/if \(kind === 0 && other\) \{ subs\.push\('presence:' \+ other\); if \(!threadId\) subs\.push\('dmview:' \+ other\); \}/.test(view), 'live presence is a pair\'s (a group asks once, in the sheet)');
@@ -90,7 +91,7 @@ test('the header wears a group\'s collage and its count; presence and the call s
 
 test('who has read, in a group (2026-09-15): the faces under the last word each member read, the tick that opens Message info, ✓✓ waiting only for those who report', () => {
   assert.ok(/function paintSeen\(\) \{\s*if \(kind !== 1\) return;/.test(view), 'a pair keeps its ticks alone');
-  assert.ok(/if \(mm\.hash === state\.myHash \|\| !mm\.read_at\) return;/.test(view), 'never me, never a member without a stamp (receipts off sends none)');
+  assert.ok(/if \(isMe\(mm\) \|\| !mm\.read_at\) return;/.test(view), 'never me, never a member without a stamp (receipts off sends none)');
   assert.ok(/target = mo\.sender_hash === mm\.hash \? null : bubbles\[i\];/.test(view), 'never under their own word');
   assert.ok(/row\.title = 'Seen by ' \+ under\[key\]\.map/.test(view) && /dmAvatarCell\(mm, 'dm-seen-av'\)/.test(view), 'the faces, named');
   for (const at of ['paintSeen();\n          },\n          /* Someone was added or left', 'paintSub();\n            paintSeen();', 'pending += 1; unseenLive += 1;\n              }\n              paintSeen();\n              updateJump();']) assert.ok(view.includes(at), 'repainted live: ' + at.slice(0, 30));

@@ -74,6 +74,7 @@ export function installDmThread(B: Boot) {
   let ensureDmStyles: () => any;
   let ensureNacl: () => Promise<any>;
   let fmtBytes: (n: unknown) => any;
+  let fmtTimeCompact: (epoch: unknown) => string;
   let liveDmBadge: () => any;
   let myDmKeypair: () => any;
   let swipeDismissesKeyboard: (ta: unknown, composer: unknown) => any;
@@ -181,15 +182,30 @@ export function installDmThread(B: Boot) {
         if (!members.length && d.other) {
           members = [{ hash: state.myHash, nick: null, avatar: null, assigned: displayName(state.myHash), pubkey: dmB64uEnc(myDmKeypair().publicKey) }, d.other];
         }
+        /* WHO AM I, and WHICH WORDS ARE MINE — the server's word first (it
+           resolved the key; it does not guess), the id comparison only as a
+           fallback for a payload cached before the server started saying so.
+           The comparison was the whole answer until 2026-09-19, and when the
+           ids changed shape under it the reader became a stranger to their own
+           conversation: their own name in the title, every bubble drawn as the
+           other party's, a pair's E1 words unopenable. No fallback comparison
+           remains on purpose — one would be the very inference this removes,
+           and it cannot be needed: every member row and every message carries
+           the flag either way (1 or 0, never absent), the thread payload is
+           fetched fresh and never cached, and Workers deploys ahead of Pages,
+           so a page this new always meets a worker that marks. */
+        type Marked = { is_me?: unknown; mine?: unknown };
+        function isMe(mm: Marked) { return !!mm.is_me; }
+        function mineMsg(mo: Marked) { return !!mo.mine; }
         var byHash: Record<string, any> = {};
         members.forEach(function (mm: any) { if (mm && mm.hash) byHash[mm.hash] = mm; });
-        if (kind === 0 && !other) members.forEach(function (mm: any) { if (mm.hash !== state.myHash && !mm.left_at) other = mm.hash; });
+        if (kind === 0 && !other) members.forEach(function (mm: any) { if (!isMe(mm) && !mm.left_at) other = mm.hash; });
         var otherRow = other ? (byHash[other] || d.other || null) : null;
         /* The correspondent's public key drives both decrypt and encrypt of a
            pair's E1 words (the shared secret is the same in both directions). */
         var otherPub = (otherRow && otherRow.pubkey) || null;
         function nameOf(h: any) { var r = byHash[String(h)]; return r ? (r.nick || r.assigned || displayName(String(h))) : displayName(String(h || '')); }
-        function othersNames() { return members.filter(function (mm: any) { return mm.hash !== state.myHash && !mm.left_at; }).map(function (mm: any) { return nameOf(mm.hash); }); }
+        function othersNames() { return members.filter(function (mm: any) { return !isMe(mm) && !mm.left_at; }).map(function (mm: any) { return nameOf(mm.hash); }); }
         var label = kind === 1 ? ((thr && thr.name) || othersNames().join(', ') || 'Group') : dmLabel(other, otherRow && otherRow.nick);
         var shortName = kind === 1 ? label : ((otherRow && otherRow.nick) || displayName(other));
         document.title = shortName + ' | Inbox';
@@ -212,7 +228,7 @@ export function installDmThread(B: Boot) {
         if (other) avatarLink.href = profileHref(other);
         avatarLink.setAttribute('aria-label', 'Profile');
         function avatarInto(host: any, size: number) {
-          if (kind === 1) { dmCollageInto(host, members.filter(function (mm: any) { return !mm.left_at && mm.hash !== state.myHash; })); return; }
+          if (kind === 1) { dmCollageInto(host, members.filter(function (mm: any) { return !mm.left_at && !isMe(mm); })); return; }
           if (otherRow && otherRow.avatar) {
             var im = el('img', 'dm-head-img');
             im.src = API + '/avatar?hash=' + other + '&v=' + encodeURIComponent(otherRow.avatar);
@@ -308,19 +324,19 @@ export function installDmThread(B: Boot) {
               cur.forEach(function (mm: any) {
                 var mrow = el('div', 'dm-member-row');
                 mrow.appendChild(dmAvatarCell(mm, 'dm-member-av'));
-                var nm = el('a', 'dm-member-name', mm.hash === state.myHash ? 'You' : nameOf(mm.hash));
+                var nm = el('a', 'dm-member-name', isMe(mm) ? 'You' : nameOf(mm.hash));
                 nm.href = profileHref(mm.hash);
                 mrow.appendChild(nm);
                 var dot = el('span', 'dm-row-dot'); dot.hidden = true; dots[mm.hash] = dot;
                 mrow.appendChild(dot);
                 var macts = el('span', 'dm-member-acts');
-                if (mm.hash !== state.myHash && mm.pubkey) {
+                if (!isMe(mm) && mm.pubkey) {
                   var v2 = el('a', null, dmVerified(mm.hash) ? '✓ verified' : 'verify');
                   v2.href = '#';
                   v2.addEventListener('click', function (ev: any) { ev.preventDefault(); dmVerifyPanel(mm.hash, mm.pubkey, v2); });
                   macts.appendChild(v2);
                 }
-                if (mm.hash !== state.myHash) {
+                if (!isMe(mm)) {
                   var bl = el('a', null, 'block');
                   bl.href = '#'; bl.title = 'Block this member: their words here are hidden from you, and their posts and profile too';
                   bl.addEventListener('click', function (ev: any) {
@@ -333,6 +349,22 @@ export function installDmThread(B: Boot) {
                 }
                 mrow.appendChild(macts);
                 mlist.appendChild(mrow);
+                /* HOW FAR EACH MEMBER HAS READ, in words (2026-09-19). The
+                   thread's own marker is drawn against the last word a member
+                   read that they did not write themselves — so in a
+                   conversation where one person has done all the talking, it
+                   has nothing to say and everybody else sees no read state at
+                   all. That is correct and it reads as broken. Here there is
+                   room to say it plainly, for every member, whether or not
+                   they have spoken. `read_at` is already withheld by the
+                   server for anyone whose receipts are off, so showing it
+                   honours the reciprocal rule without re-deciding it. */
+                if (!isMe(mm)) {
+                  var rl = el('div', 'dm-member-read dm-fwd-sub');
+                  rl.textContent = mm.read_at ? ('Read ' + fmtTimeCompact(mm.read_at))
+                    : mm.receipts === 0 ? 'Read receipts off' : 'Not read yet';
+                  mlist.appendChild(rl);
+                }
               });
               mem.appendChild(mlist);
               /* one batched presence read for the sheet (a group holds no live presence subs) */
@@ -533,7 +565,7 @@ export function installDmThread(B: Boot) {
           if (!bubbles.length) return;
           var under: Record<string, any[]> = {};
           ctx.current().forEach(function (mm: any) {
-            if (mm.hash === state.myHash || !mm.read_at) return;
+            if (isMe(mm) || !mm.read_at) return;
             var at = Number(mm.read_at) || 0, target: any = null;
             for (var i = bubbles.length - 1; i >= 0; i--) {
               var mo = ctx.byId[bubbles[i].getAttribute('data-dmid')];
@@ -692,7 +724,7 @@ export function installDmThread(B: Boot) {
           },
           append: function (msg: any) {
             if (!msg) return;
-            if (String(msg.sender_hash) === state.myHash) {
+            if (mineMsg(msg)) {
               /* My own words are echoed locally — except a system line written
                  in my name (enc 2: my call's outcome, 2026-09-14), which has no
                  echo and lands here from the server: placed, no receipt, no
@@ -1298,6 +1330,7 @@ export function installDmThread(B: Boot) {
     ensureDmStyles = B.ensureDmStyles;
     ensureNacl = B.ensureNacl;
     fmtBytes = B.fmtBytes;
+    fmtTimeCompact = B.fmtTimeCompact;
     liveDmBadge = B.liveDmBadge;
     myDmKeypair = B.myDmKeypair;
     swipeDismissesKeyboard = B.swipeDismissesKeyboard;

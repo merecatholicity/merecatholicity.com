@@ -81,3 +81,32 @@ test('the worker refuses a `user:` scope that is not the caller\'s own account h
   assert.deepEqual(sanitizeScopes(['user:' + pub], acct, []), [],
     'a socket that offered its PUBLIC id would subscribe to nothing and never be told');
 });
+
+test('the DM screen takes the server\'s word for who the reader is, not an id comparison', () => {
+  /* The comparison is not banned — it is the fallback for a payload cached
+     before the server started marking. What is banned is doing it FIRST. When
+     the ids changed shape on 2026-09-19 the comparison matched nothing and the
+     reader became a stranger to their own conversation; `is_me` and `mine` come
+     from the seat the key was resolved in, so they cannot drift. */
+  const src = readFileSync(join(root, 'client', 'dm-thread.ts'), 'utf8');
+  for (const [fn, field] of [['isMe', 'is_me'], ['mineMsg', 'mine']]) {
+    const at = src.indexOf('function ' + fn + '(');
+    assert.ok(at >= 0, fn + '() must exist: one place decides, and the views ask it');
+    const body = src.slice(at, src.indexOf('\n', at));
+    assert.ok(body.includes(field), fn + ' must read the server\'s ' + field);
+    /* and no id comparison hiding in it as a "fallback": that IS the inference
+       this removes, and it would quietly come back the next time ids change
+       shape. Every row and message carries the flag either way, so there is
+       nothing to fall back FROM. */
+    assert.ok(!body.includes('state.myHash'),
+      fn + ': no id comparison — the server marks every row, so a fallback can only reintroduce the bug');
+  }
+  /* and no member/message site may go back to comparing by hand */
+  const strays = [];
+  src.split('\n').forEach((line, i) => {
+    if (/function (isMe|mineMsg)\(/.test(line)) return;
+    if (/\bmm\.hash (===|!==) state\.myHash/.test(line)) strays.push('member row, line ' + (i + 1));
+    if (/sender_hash\) === state\.myHash/.test(line)) strays.push('message side, line ' + (i + 1));
+  });
+  assert.deepEqual(strays, [], 'these infer the reader instead of asking isMe()/mineMsg()');
+});

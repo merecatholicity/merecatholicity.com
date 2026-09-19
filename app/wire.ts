@@ -17,6 +17,11 @@ export interface DmMember {
   read_at: number | null;       // withheld (null) when their receipts are off, and for members who never read
   receipts: number;             // 1 when this member reports reads at all — a group's ✓✓ waits only for those who do
   last_seen: number | null;     // the hub's stamp; absent for appear-offline
+  /* 1 on the READER'S OWN row. The server resolved the key, so it alone knows
+     this without guessing; a client comparing ids to find itself is how the
+     2026-09-19 "stranger to your own conversation" defect happened, and that
+     comparison is now a fallback for a cached payload, not the answer. */
+  is_me?: number;
 }
 export interface DmReaction { hash: string; emoji: string; }
 /* one message as the thread serves it; the client grafts its own fields (the plaintext, the reply, the content key) */
@@ -28,6 +33,7 @@ export interface DmMessage {
   enc: number;                  // Domain.Dm: 0 plain, 1 the pair's box, 2 a system line, 3 the sealed envelope
   saved: number;
   saved_by: string | null;
+  mine?: number;                // 1 when the reader sent it — the server's word, so a bubble never has to infer its side
   media_key: string | null;
   media_size: number | null;
   media_expired: number;

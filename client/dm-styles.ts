@@ -50,6 +50,10 @@ export function installDmStyles(B: Boot) {
       '.dm-member-name{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
       '.dm-member-acts{flex:none;display:inline-flex;gap:.6rem;font-size:.85em}' +
       '.dm-member-row .dm-row-dot[hidden]{display:none}' +
+      /* how far this member has read, under their row: the ⓘ says it in words for
+         everyone, including a member the thread's own marker has nothing to say
+         about. Rides .dm-fwd-sub's size and colour — one rule, not two. */
+      '.dm-member-read{margin:0 0 .4rem 2.6rem}' +
       /* who has read (2026-09-15): the faces under the last word each member read, the tappable tick, the info rows */
       '.dm-seen-row{display:flex;justify-content:flex-end;align-items:center;gap:.15rem;margin:-.15rem .4rem .4rem 0}' +
       '.dm-seen-av{width:1.1rem;height:1.1rem;border-radius:50%;overflow:hidden;background:var(--cream-2,#faf6ee);display:inline-flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:600;color:var(--maroon,#8b1a1a);border:1px solid var(--surface,#fff)}' +

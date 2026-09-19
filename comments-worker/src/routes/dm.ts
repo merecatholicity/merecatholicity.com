@@ -481,7 +481,8 @@ async function handleDmThreads(request: Request, env: Env) {
     try { members = listOf(JSON.parse(members_json || '[]')).map(bodyOf); } catch { members = []; }
     return Object.assign({}, r, {
       members: members.map((m) => ({ hash: String(m.hash || ''), nick: m.nick ? String(m.nick) : null,
-        avatar: m.avatar ? String(m.avatar) : null, assigned: m.hash ? displayName(String(m.hash)) : null })),
+        avatar: m.avatar ? String(m.avatar) : null, assigned: m.hash ? displayName(String(m.hash)) : null,
+        is_me: String(m.hash || '') === me ? 1 : 0 })),
       assigned: r.other_hash ? displayName(r.other_hash) : null,
     });
   });
@@ -527,6 +528,11 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
     read_at: (r.hash === me || Prefs.receiptsOn(r.receipts_mode || 'auto')) && r.read_at != null ? Number(r.read_at) : null,
     receipts: Prefs.receiptsOn(r.receipts_mode || 'auto') ? 1 : 0,   // whether this member reports reads at all (their stamp is withheld when not), so a group's ✓✓ waits only for those who do
     last_seen: r.last_seen_at || null,
+    /* The reader's own row, said outright. The key was resolved to get here, so
+       the server knows this for certain; the client used to find itself by
+       comparing ids, and when those ids changed shape under it (the L3 flip) it
+       matched nothing and became a stranger to its own conversation. */
+    is_me: r.hash === me ? 1 : 0,
   }));
   /* A pair's `other`, kept one deploy for bundles from before the member model. */
   const otherRow = kind === 0 && other
@@ -580,6 +586,7 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
         .filter((r) => r.emoji).map((r) => ({ hash: String(r.hash), emoji: String(r.emoji) }));
     } catch { reactions = []; }
     const out: DmMessage = Object.assign({}, m, { reactions });
+    out.mine = m.sender_hash === me ? 1 : 0;   // which side the bubble takes, decided here, not guessed there
     if (kind === 0) {
       out.react_me = String((reactions.find((r) => r.hash === me) || { emoji: '' }).emoji || '');
       out.react_other = String((reactions.find((r) => r.hash !== me) || { emoji: '' }).emoji || '');
