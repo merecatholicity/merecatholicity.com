@@ -39,6 +39,7 @@ import {
   adminGated,
   throttle,
   bodyOf,
+  publicName,
 } from '../lib.ts';
 
 /* Admin platform settings: read them (with the current media usage), and set the
@@ -320,9 +321,9 @@ async function handleShadowbanList(request: Request, env: Env) {
   const rows = await env.DB.prepare(
     'SELECT s.hash, s.created_at, pr.nick FROM shadowbans s LEFT JOIN profiles pr ON pr.hash = s.hash ORDER BY s.created_at DESC'
   ).all<{ hash: string; created_at: number; nick: string | null }>();
-  const bans = (rows.results || []).map((r) => ({
-    hash: r.hash, nick: r.nick || displayName(r.hash), created_at: r.created_at,
-  }));
+  const bans = await Promise.all((rows.results || []).map(async (r) => ({
+    hash: r.hash, nick: await publicName(env, r.hash, r.nick), created_at: r.created_at,
+  })));
   return json({ ok: true, bans }, 200);
 }
 

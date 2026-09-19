@@ -104,10 +104,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   `env_leak.test` sweeps every road as four identities above reach floors; a new route brings its `ROUTE_HINTS` and API.md shape
   in its own commit, is documented by CALLING it, and ships after `/security-review`.
 - **A member has TWO identities, not interchangeable** (the P0 chain, 2026-09-18/19). The ACCOUNT hash (`sha256hex(key)`)
-  is D1's key and the hub's: it authenticates, shards, and is the ONLY string `sanitizeScopes` takes as a `user:` scope —
-  it never rides a served row. The PUBLIC id rides every served row and the client CANNOT compute it: `/prefs` `me` is its
-  one source, cached by `setMyId`, dropped by `setKey`. Either doing the other's job throws NOTHING — a reader becomes a
-  stranger to their own rows, or loses every private frame. No keyless roster; a `weak` key cannot write (to 2026-10-18).
+  is D1's and the hub's: it authenticates, shards, is the ONLY `user:` scope `sanitizeScopes` takes, and never rides a row.
+  The PUBLIC id rides every row — and so does every NAME minted from an id (`publicName`, cloakIds' second pass, since a
+  pseudonym carries four hex of whatever minted it). The client cannot compute one: `/prefs` `me` is the source, cached by
+  `setMyId`, dropped by `setKey`. Either in the other's job throws NOTHING. No keyless roster; a `weak` key cannot write.
 - **`?v=` keys are stamped** (`scripts/stamp_versions.py`: nav.js, the pages, `partials/*`,
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new

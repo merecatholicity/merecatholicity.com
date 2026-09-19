@@ -40,6 +40,7 @@ import {
   bodyOf,
   getAppSettings,
   turnstileSkipEstablished,
+  publicName,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 
@@ -442,7 +443,7 @@ async function handleHandleCard(request: Request, env: Env, url: URL) {
       if (row && row.hash) prof = row;
     }
     if (!prof) return originResp;   // unknown handle: the plain page (client shows "No such profile")
-    const name = prof.nick || displayName(prof.hash);
+    const name = await publicName(env, prof.hash, prof.nick);
     const title = name + ' (@' + prof.handle + ')';
     const desc = (prof.bio ? String(prof.bio).replace(/\s+/g, ' ').trim().slice(0, 200) : '')
       || ('A member of the Mere Catholicity community. @' + prof.handle);

@@ -15,6 +15,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { runSweep } from '../_support/sweep.mjs';
+import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
 
 let calls = [], crons = [], hashes = [];
 before(async () => {
@@ -69,4 +70,38 @@ test('no cron output (a backup, a Discord embed) carries an account hash — the
     for (const d of (cr.discord || [])) for (const name of scan(d.body)) leaks.push(`${cr.cron} discord → ${name}`);
   }
   assert.deepEqual([...new Set(leaks)], [], 'account hashes in a Discord embed: ' + JSON.stringify([...new Set(leaks)]));
+});
+
+test('no answer NAMES a member by the pseudonym their account hash mints', () => {
+  /* The id is not the only thing minted from a hash. `assigned` — "Adjective-
+     Noun xxxx" — carries the first four hex of whatever id produced it, so a
+     name built from the ACCOUNT hash both calls the member something no other
+     surface calls them AND goes on publishing four hex of the digest of their
+     key. That is 16 bits of the secret's hash, which filters a wordlist hard.
+     cloakIds only recomputes a field literally named `assigned` (or
+     `actor_assigned`) BESIDE a known id field, so a name built anywhere else,
+     or beside an id field missing from ASSIGNED_BESIDE, survives the cloak
+     untouched and nothing says so. Live on 2026-09-19: /dm/threads named the
+     other member from `other_hash`, which was not in that map, so every inbox
+     row still read "Cheerful-Tower ffd9" while her profile read
+     "Upright-Bell af67". This is the sweep that would have caught it. */
+  const minted = hashes.filter(([, h]) => h).map(([name, h]) => [name, h, Pseudonym.displayName(h)]);
+  const leaks = [];
+  for (const c of calls) {
+    if (!c.text) continue;
+    for (const [name, , pn] of minted) {
+      if (c.text.includes(pn)) leaks.push(`${c.m} ${c.p} as ${c.as} → ${name} named "${pn}"`);
+    }
+  }
+  /* the same names go out to Discord and in notification bodies, which the
+     account-hash sweep above checks for IDS but never for names */
+  for (const cr of crons) {
+    for (const d of (cr.discord || [])) {
+      for (const [name, , pn] of minted) {
+        if (String(d.body).includes(pn)) leaks.push(`${cr.cron} discord → ${name} named "${pn}"`);
+      }
+    }
+  }
+  assert.deepEqual([...new Set(leaks)], [],
+    'a pseudonym minted from an account hash reached a client: ' + JSON.stringify([...new Set(leaks)].slice(0, 20)));
 });

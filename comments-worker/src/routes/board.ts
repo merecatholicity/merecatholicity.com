@@ -69,6 +69,7 @@ import {
   readLimited,
   registerMember,
   throttle,
+  publicName,
 } from '../lib.ts';
 import type { HubEvent, Settings, TopicRow } from '../lib.ts';
 import type { AuthoredRow } from '../db.ts';
@@ -476,8 +477,8 @@ async function handleFeed(request: Request, env: Env, url: URL) {
   /* before the items: a reply's title reads it (declared after them, every
      category or page feed holding a reply threw, 2026-09-17 — found by the sweep) */
   const pageHref = Comments.pageHref(page);   // 'journal:<id>' reads as the article's permalink
-  const items = results.map(function (c) {
-    const name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
+  const items = (await Promise.all(results.map(async function (c) {
+    const name = await publicName(env, c.author_hash, c.nick);
     const link = viewLink(env, page, c.id, c.parent_id);
     const itemTitle = c.title ? c.title
       : topicRow ? name + ' re: ' + topicRow.title
@@ -487,7 +488,7 @@ async function handleFeed(request: Request, env: Env, url: URL) {
       '<guid isPermaLink="true">' + xmlEscape(link) + '</guid>' +
       '<pubDate>' + new Date(c.created_at * 1000).toUTCString() + '</pubDate>' +
       '<description>' + xmlEscape(c.body) + '</description></item>';
-  }).join('');
+  }))).join('');
   const isBoard = page.indexOf('board:') === 0;
   const feedTitle = topicRow
     ? topicRow.title + ' - Catholicity Board - merecatholicity.com'
@@ -540,7 +541,7 @@ async function handleJournal(request: Request, env: Env, url: URL) {
     const a = journalArticle(row.body);
     return json({
       ok: true, journal: topic.title, comments: commentsOn,
-      article: { id: row.id, title: a.title, body: a.body, author: row.nick || displayName(row.author_hash),
+      article: { id: row.id, title: a.title, body: a.body, author: await publicName(env, String(row.author_hash || ''), row.nick as string | null),
         created_at: row.created_at, edited_at: row.edited_at },
     }, 200, cacheHeader(url));
   }
@@ -555,11 +556,11 @@ async function handleJournal(request: Request, env: Env, url: URL) {
     " ORDER BY c.id DESC LIMIT ?2 OFFSET ?3"
   ).bind(topicId, JOURNAL_PER_PAGE, (p - 1) * JOURNAL_PER_PAGE)
     .all<{ id: number; author_hash: string; nick: string | null; body: string; created_at: number; edited_at: number | null }>();
-  const articles = (rows.results || []).map((r) => {
+  const articles = await Promise.all((rows.results || []).map(async (r) => {
     const a = journalArticle(r.body);
-    return { id: r.id, title: a.title, body: a.body, author: r.nick || displayName(r.author_hash),
+    return { id: r.id, title: a.title, body: a.body, author: await publicName(env, r.author_hash, r.nick),
       created_at: r.created_at, edited_at: r.edited_at };
-  });
+  }));
   return json({ ok: true, journal: topic.title, comments: commentsOn, articles, total: (totalRow && totalRow.n) || 0, page: p, per: JOURNAL_PER_PAGE },
     200, cacheHeader(url));
 }

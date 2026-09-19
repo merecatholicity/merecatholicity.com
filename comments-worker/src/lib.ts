@@ -453,8 +453,30 @@ const ID_MAP_FIELDS = new Set(['keys', 'identities', 'seen']);   // OBJECTs keye
 /* the pseudonym field beside an id, recomputed from the cloaked id */
 const ASSIGNED_BESIDE: Record<string, string> = {
   hash: 'assigned', author_hash: 'assigned', sender_hash: 'assigned', actor_hash: 'actor_assigned',
+  /* `other_hash` was missing until 2026-09-19 and the inbox row it names was
+     the one surface still calling a member by their PRE-flip pseudonym: the id
+     beside it was cloaked, the name was not, so the same person read as
+     "Cheerful-Tower ffd9" in the inbox and "Upright-Bell af67" on their
+     profile. A pseudonym carries the first four hex of whatever id minted it,
+     so this did not merely look wrong — it went on publishing four hex of the
+     account hash the flip exists to hide. */
+  other_hash: 'assigned',
 };
 const HEX64 = /^[0-9a-f]{64}$/;
+/* The name a member wears in PUBLIC. A nick when they chose one; otherwise the
+   pseudonym — and that pseudonym is minted from their PUBLIC id, never the
+   account hash. `displayName` puts the id's first four hex in the name, so one
+   built from the account hash publishes 16 bits of the digest of their key, on
+   a surface as public as the RSS feed, and calls them something no other screen
+   calls them. Answers that carry an `assigned` beside a cloaked id are handled
+   by cloakIds; this is for the rest — a `nick || displayName(...)` that lands in
+   a field of its own (2026-09-19). */
+export async function publicName(env: Env, hash: string | null | undefined, nick?: string | null): Promise<string> {
+  if (nick) return String(nick);
+  if (!hash) return 'Anonymous';
+  return Pseudonym.displayName((await serveId(env, hash)) || String(hash));
+}
+
 export async function cloakIds<T>(env: Env, node: T): Promise<T> {
   if (!env.PUBLIC_ID_PEPPER) return node;   // the valve: ids ARE hashes
   const walk = async (v: unknown): Promise<unknown> => {
@@ -462,13 +484,21 @@ export async function cloakIds<T>(env: Env, node: T): Promise<T> {
     if (v && typeof v === 'object') {
       const src = v as Record<string, unknown>;
       const out: Record<string, unknown> = {};
+      /* Names minted from a cloaked id, applied AFTER the copy loop. They used
+         to be written inline, and a route that listed `assigned` after the id
+         it belongs to — which `Object.assign({}, row, { assigned })` always
+         does — had the freshly minted name overwritten by the stale one the
+         route had computed from the raw hash. Key ORDER decided whether a
+         member was called by their public name or their old one, silently, and
+         it decided wrong nearly everywhere (2026-09-19). */
+      const minted: Record<string, string | null> = {};
       for (const k of Object.keys(src)) {
         const val = src[k];
         if (ID_FIELDS.has(k) && typeof val === 'string' && HEX64.test(val)) {
           const pid = await serveId(env, val);
           out[k] = pid;
           const a = ASSIGNED_BESIDE[k];
-          if (a && (a in src)) out[a] = pid ? Pseudonym.displayName(pid) : null;
+          if (a && (a in src)) minted[a] = pid ? Pseudonym.displayName(pid) : null;
         } else if (ID_ARRAY_FIELDS.has(k) && Array.isArray(val)) {
           out[k] = await Promise.all(val.map(async (x) => (typeof x === 'string' && HEX64.test(x) ? await serveId(env, x) : await walk(x))));
         } else if (ID_MAP_FIELDS.has(k) && val && typeof val === 'object' && !Array.isArray(val)) {
@@ -478,14 +508,14 @@ export async function cloakIds<T>(env: Env, node: T): Promise<T> {
             m[nk] = (val as Record<string, unknown>)[kk];
           }
           out[k] = m;
-        } else if (k in ASSIGNED_BESIDE ? false : false) {
-          out[k] = val;   // (unreachable; kept for clarity)
         } else {
           out[k] = await walk(val);
         }
       }
-      /* an `assigned`/`actor_assigned` already set from its id above is kept;
-         one with no cloaked id beside it is walked as an ordinary value */
+      /* the second pass: a name minted from a cloaked id WINS, whatever order
+         the keys arrived in. A name with no cloaked id beside it was walked
+         above as an ordinary value and stands. */
+      for (const a of Object.keys(minted)) out[a] = minted[a];
       return out;
     }
     return v;
@@ -1940,7 +1970,7 @@ export async function notifyDiscordForum(env: Env, p: {
     topicTitle = (t && t.title) || 'a thread';
   }
   /* an anonymous post has no hash to name (displayName throws on null) */
-  const name = p.nick || (p.authorHash ? displayName(p.authorHash) : 'Anonymous');
+  const name = await publicName(env, p.authorHash, p.nick);
   const link = siteBase(env) + '/community.html?topic=' + p.topicId + '#comment-' + p.commentId;
   const heading = p.isReply ? (name + ' replied in “' + topicTitle + '”')
     : (name + ' started a new topic');
@@ -1964,7 +1994,7 @@ export async function notifyDiscordFeed(env: Env, p: {
   const hook = s.discord_feed_webhook;
   if (!isDiscordWebhook(hook)) return;
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first<{ nick: string | null }>();
-  const name = (prof && prof.nick) || displayName(p.authorHash);
+  const name = await publicName(env, p.authorHash, prof && prof.nick);
   const link = siteBase(env) + '/feed.html?post=' + p.postId;
   await sendDiscord(hook, {
     title: 'New post in the feed',
@@ -1987,7 +2017,7 @@ export async function notifyDiscordFeedComment(env: Env, p: {
   const hook = s.discord_feed_webhook;
   if (s.discord_feed_comments !== '1' || !isDiscordWebhook(hook)) return;
   const prof = await env.DB.prepare('SELECT nick FROM profiles WHERE hash = ?1').bind(p.authorHash).first<{ nick: string | null }>();
-  const name = (prof && prof.nick) || displayName(p.authorHash);
+  const name = await publicName(env, p.authorHash, prof && prof.nick);
   const link = siteBase(env) + '/feed.html?post=' + p.postId;
   await sendDiscord(hook, {
     title: 'New comment in the feed',
@@ -2023,7 +2053,7 @@ export async function deliverDiscordFeedHooks(env: Env, p: {
   ).bind(...scopes).all<{ id: number; scope: string; hook_url: string }>();
   const hooks = (rows && rows.results) || [];
   if (!hooks.length) return;
-  const name = p.nick || (p.authorHash ? displayName(p.authorHash) : 'Anonymous');
+  const name = await publicName(env, p.authorHash, p.nick);
   const isBoard = boardKey(p.page);
   let topicTitle = p.title;
   if (isBoard && (p.isReply || !topicTitle)) {

@@ -23,6 +23,7 @@ import {
   shadowExcl,
   siteBase,
   xmlEscape,
+  publicName,
 } from '../lib.ts';
 import type { Env } from '../env.ts';
 import { MetaAttr, TitleText } from '../lib.ts';
@@ -70,7 +71,7 @@ async function readThread(env: Env, id: number): Promise<{ topic: Post & { page:
   return { topic, replies: replies.results };
 }
 
-const author = (p: Post) => p.nick || (p.author_hash ? displayName(p.author_hash) : 'Anonymous');
+const author = (env: Env, p: Post) => publicName(env, p.author_hash, p.nick);
 const stamp = (t: number) => new Date(t * 1000).toISOString();
 
 /* One post's body as paragraphs. Deliberately NOT the markdown renderer: this
@@ -82,9 +83,9 @@ function bodyHtml(body: unknown) {
     .map((para) => '<p>' + xmlEscape(para).replace(/\n/g, '<br>') + '</p>').join('');
 }
 
-function postHtml(p: Post, head: boolean) {
+async function postHtml(env: Env, p: Post, head: boolean) {
   return '<article class="comment" id="comment-' + p.id + '">' +
-    '<p class="comment-meta">' + xmlEscape(author(p)) +
+    '<p class="comment-meta">' + xmlEscape(await author(env, p)) +
     ' <time datetime="' + xmlEscape(stamp(p.created_at)) + '">' + xmlEscape(new Date(p.created_at * 1000).toUTCString()) + '</time></p>' +
     '<div class="comment-body' + (head ? ' prose' : '') + '">' + bodyHtml(p.body) + '</div></article>';
 }
@@ -120,8 +121,8 @@ export async function handleThreadPage(request: Request, env: Env, url: URL) {
   const desc = summary(t.topic.body) || ('A conversation on the Catholicity Board, in ' + t.topic.page.slice(6) + '.');
   const body =
     '<h1 class="board-topic-head">' + xmlEscape(title) + '</h1>' +
-    postHtml(t.topic, true) +
-    t.replies.map((r) => postHtml(r, false)).join('') +
+    (await postHtml(env, t.topic, true)) +
+    (await Promise.all(t.replies.map((r) => postHtml(env, r, false)))).join('') +
     '<p class="comments-status"><a href="' + xmlEscape('/community.html?topic=' + t.topic.id) + '">' +
     'Open this thread in the Catholicity Board</a></p>';
   try {
@@ -190,8 +191,8 @@ export async function handleSiteFeed(request: Request, env: Env, url: URL) {
     " AND (c.parent_id IS NULL OR (pt.status = 'live' AND " + shadowExcl('pt') + ')) ORDER BY c.id DESC LIMIT 50'
   ).bind(ADMIN_CAT).all<Row>();
   const base = siteBase(env);
-  const items = rows.results.map(function (c) {
-    const name = c.nick || (c.author_hash ? displayName(c.author_hash) : 'Anonymous');
+  const items = (await Promise.all(rows.results.map(async function (c) {
+    const name = await publicName(env, c.author_hash, c.nick);
     const head = c.parent_id ? String(c.head_title || 'a thread') : String(c.title || 'a thread');
     const link = base + threadPath(c.parent_id || c.id, head) + (c.parent_id ? '#comment-' + c.id : '');
     const itemTitle = c.parent_id ? name + ' re: ' + head : head;
@@ -200,7 +201,7 @@ export async function handleSiteFeed(request: Request, env: Env, url: URL) {
       '<guid isPermaLink="true">' + xmlEscape(link) + '</guid>' +
       '<pubDate>' + new Date(c.created_at * 1000).toUTCString() + '</pubDate>' +
       '<description>' + xmlEscape(c.body) + '</description></item>';
-  }).join('');
+  }))).join('');
   const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
     '<rss version="2.0"><channel>' +
     '<title>Mere Catholicity - the Catholicity Board</title>' +
