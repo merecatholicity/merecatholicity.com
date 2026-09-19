@@ -182,6 +182,7 @@ on page one.)
 - **The browser was re-fetching 641 KiB of unchanged bytes every ten minutes, and the fix is one day, not one year (2026-09-18).** — `log/2026-09.md`
 - **One Cloudflare credential for the whole pipeline (2026-09-19).** — `log/2026-09.md`
 - **What that unblocked, in the same push (2026-09-19).** — `log/2026-09.md`
+- **One GitHub credential beside the Cloudflare one (2026-09-19).** — `log/2026-09.md`
 
 ### Cloudflare Workers (dynamic backend)
 

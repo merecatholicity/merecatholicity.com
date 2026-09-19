@@ -134,9 +134,10 @@ class TheAudience(unittest.TestCase):
 class OneCredential(unittest.TestCase):
     """Every Cloudflare road runs on ONE account token (2026-09-19).
 
-    Three narrower tokens and a stored R2 pair became one, `CLOUDFLARE_ROOT_TOKEN`:
-    their grants did not cover Cache Rules, D1 write or Web Analytics write, so
-    those applies could not run at all.
+    One Cloudflare credential, `CLOUDFLARE_ROOT_TOKEN`, and one GitHub credential,
+    `GH_ROOT_TOKEN`. The narrower tokens they replaced did not cover Cache Rules,
+    D1 write, Web Analytics write or Actions secrets, so those roads could not run
+    at all and each gap cost a hand-minted credential.
 
     What would break silently: a retired name read again — the secret is gone, so
     the expression is the empty string and the road skips; a secret left unblanked
@@ -153,6 +154,13 @@ class OneCredential(unittest.TestCase):
             names |= set(re.findall(r'secrets\.(CLOUDFLARE_\w+|AWS_\w+)',
                                     read('.github', 'workflows', name)))
         self.assertEqual(names, {'CLOUDFLARE_ROOT_TOKEN'})
+
+    def test_one_github_credential_in_the_whole_pipeline(self):
+        names = set()
+        for name in sorted(os.listdir(WORKFLOWS)):
+            names |= set(re.findall(r'secrets\.(GH_\w+|TF_\w+|GITHUB_\w+)',
+                                    read('.github', 'workflows', name)))
+        self.assertEqual(names, {'GH_ROOT_TOKEN'})
 
     def test_a_pull_request_reaches_no_secret(self):
         swept = 0

@@ -95,17 +95,17 @@ Cloudflare account token, and one GitHub PAT:
   not. To rotate: `PUT /accounts/{id}/tokens/{id}/value`, then
   `gh secret set CLOUDFLARE_ROOT_TOKEN` and the `ci.env` line — the derived R2
   pair follows automatically.
-- `TF_GITHUB_TOKEN` — for the github provider: a **fine-grained PAT** (owner-
-  minted 2026-09-09, no expiry) restricted to `merecatholicity.com` and
-  `private-shelf`, with Administration, Environments, Variables and Pages read/
-  write and Metadata read — nothing else, so it cannot touch contents, secrets
-  or workflow files. It replaced the `gh` CLI token, whose `workflow` scope could
-  rewrite workflows. GitHub exposes no API for creating a PAT (classic or
+- `GH_ROOT_TOKEN` — the one GitHub credential: a **fine-grained PAT**
+  (`merecatholicity-root`, owner-minted 2026-09-19, no expiry) restricted to
+  `merecatholicity.com` and `private-shelf`. Read/write on Actions,
+  Administration, Contents, Deployments, Environments, Pages, Pull requests,
+  Secrets, Variables, Webhooks and Workflows; Metadata read. The github provider
+  needs Administration, Environments, Variables and Pages; the rest is what lets
+  a workflow manage its own secrets and commit, so CI is not dependent on a
+  developer's machine. GitHub exposes no API for creating a PAT (classic or
   fine-grained), so this is the one credential only the owner can mint: the
   browser form, then one line in `~/.config/merecatholicity/ci.env` and one
-  `gh secret set`. Two org settings had to be flipped by hand for it, and
-  neither has a Terraform resource or a REST endpoint: *allow access via
-  fine-grained PATs* and *fine-grained PATs must expire* (unchecked).
+  `gh secret set`.
 
 **No pull request ever sees a secret**, not even from this repository: a PR's
 HCL is what `plan` evaluates, and an `http` or `external` data source in it
@@ -158,7 +158,7 @@ from the environment:
 | Variable | What | Where from |
 | --- | --- | --- |
 | `CLOUDFLARE_API_TOKEN` | infrastructure | `CLOUDFLARE_ROOT_TOKEN` from `ci.env` |
-| `GITHUB_TOKEN` | repositories | `TF_GITHUB_TOKEN` from `ci.env` |
+| `GITHUB_TOKEN` | repositories | `GH_ROOT_TOKEN` from `ci.env` |
 | `AWS_ACCESS_KEY_ID` | state backend | derived: the token's id |
 | `AWS_SECRET_ACCESS_KEY` | state backend | derived: SHA-256 of the token value |
 

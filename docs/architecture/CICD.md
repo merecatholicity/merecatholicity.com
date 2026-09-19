@@ -321,7 +321,7 @@ are on, and would refuse the push.
 |---|---|---|---|
 | `CLOUDFLARE_ROOT_TOKEN` | secret | `build.yml`, `workers.yml`, `terraform.yml`, `purge-cache.yml` | account token `merecatholicity-root`, account-owned (`cfat_…`) — the one Cloudflare credential; every road uses it. Blanked on `pull_request` in each expression, swept by `tests/py/test_pipeline_workflows.py::OneCredential`. |
 | — (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) | **derived, not stored** | `terraform.yml` (state backend) | R2's S3 pair is derived from the token: key = the token's id, secret = SHA-256 of its value (Cloudflare's documented scheme). `terraform.yml` derives and masks both each run, so a rotation carries the state backend with it. The secrets of these names were deleted 2026-09-19. |
-| `TF_GITHUB_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT**, no expiry, on `merecatholicity.com` + `private-shelf` only: Administration, Environments, Variables, Pages read/write; Metadata read |
+| `GH_ROOT_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT** `merecatholicity-root`, no expiry, on `merecatholicity.com` + `private-shelf` only — the one GitHub credential. Read/write on Actions, Administration, Contents, Deployments, Environments, Pages, Pull requests, Secrets, Variables, Webhooks and Workflows; Metadata read. Blanked on `pull_request` in each expression, swept by `tests/py/test_pipeline_workflows.py::OneCredential`. GitHub has no API for minting a PAT, so this is the one credential only the owner can create. |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | **variables** | all | public ids; **Terraform-managed** (`github_actions_variable`) — workflows carry hardcoded fallbacks too |
 | `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf` (dev-box copy: `~/.ssh/private-shelf-ci`); its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
 | `PRIVATE_SHELF_DEPLOY_PUBLIC_KEY` | **variable** | `terraform.yml` (`TF_VAR_private_shelf_deploy_key`) | the public half; empty = no key resource |
@@ -354,7 +354,7 @@ or the API with a token that has *Account API Tokens Write* — the three CI tok
 deliberately do not), `gh secret set …`, update `ci.env`, run one workflow that uses it
 (dispatch Workers / push a docs commit for Build / dispatch Terraform), then delete the
 old token. **Rotating the PAT:** the browser form (GitHub has no API for minting a PAT),
-same permissions, `gh secret set TF_GITHUB_TOKEN`, `terraform plan` locally, dispatch a
+same permissions, `gh secret set GH_ROOT_TOKEN`, `terraform plan` locally, dispatch a
 Terraform plan. The org must allow fine-grained PATs and not require expiry — two org
 toggles with neither a Terraform resource nor an endpoint.
 
@@ -386,7 +386,7 @@ R2 state bucket `merecatholicity-tfstate`, which is deliberately unmanaged); `GI
 set to the PAT for the github provider:
 
 ```sh
-set -a && . ~/.config/merecatholicity/ci.env && set +a && export GITHUB_TOKEN=$TF_GITHUB_TOKEN
+set -a && . ~/.config/merecatholicity/ci.env && set +a && export GITHUB_TOKEN=$GH_ROOT_TOKEN
 terraform -chdir=terraform init -lockfile=readonly
 terraform -chdir=terraform plan          # THE DRIFT CHECK — expect: No changes.
 ```

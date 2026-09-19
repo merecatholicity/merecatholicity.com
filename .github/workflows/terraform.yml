@@ -34,7 +34,7 @@
 # Secrets (Settings -> Secrets and variables -> Actions):
 #   CLOUDFLARE_API_TOKEN   the terraform-scoped token (terraform/README.md) —
 #                          it cannot purge, deploy workers, or write D1
-#   TF_GITHUB_TOKEN        for the github provider (repo scope)
+#   GH_ROOT_TOKEN          for the github provider (and every other GitHub road)
 # No pull request sees either: fmt + validate only, no plan.
 
 name: Terraform
@@ -103,7 +103,7 @@ jobs:
         id: creds
         env:
           CF: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
-          GH: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
+          GH: ${{ github.event_name != 'pull_request' && secrets.GH_ROOT_TOKEN || '' }}
         run: |
           if [ -n "$CF" ] && [ -n "$GH" ]; then
             echo "present=yes" >> "$GITHUB_OUTPUT"
@@ -144,7 +144,7 @@ jobs:
         if: steps.creds.outputs.present == 'yes'
         env:
           CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
-          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.GH_ROOT_TOKEN || '' }}
         run: |
           terraform -chdir=terraform init -input=false -lockfile=readonly >/dev/null
           terraform -chdir=terraform validate
@@ -154,7 +154,7 @@ jobs:
         if: steps.creds.outputs.present == 'yes'
         env:
           CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
-          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.GH_ROOT_TOKEN || '' }}
         run: |
           set +e
           terraform -chdir=terraform plan -input=false -lock-timeout=5m -detailed-exitcode \
@@ -237,7 +237,7 @@ jobs:
       - name: Re-plan, and refuse if it differs from what was reviewed
         env:
           CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
-          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.GH_ROOT_TOKEN || '' }}
           REVIEWED: ${{ needs.plan.outputs.fingerprint }}
           ALLOW: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_destroy && '--allow-destroy' || '' }}
         run: |
@@ -263,7 +263,7 @@ jobs:
         if: env.SKIP != '1'
         env:
           CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
-          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TF_GITHUB_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ github.event_name != 'pull_request' && secrets.GH_ROOT_TOKEN || '' }}
         run: |
           # Output to a file, not the public log: apply echoes attribute values.
           set +e
