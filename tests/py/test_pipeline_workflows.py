@@ -134,15 +134,13 @@ class TheAudience(unittest.TestCase):
 class OneCredential(unittest.TestCase):
     """Every Cloudflare road runs on ONE account token (2026-09-19).
 
-    Three scoped tokens plus a derived R2 pair became one, `CLOUDFLARE_ROOT_TOKEN`,
-    so an agent never has to ask for a new grant: the Terraform token was blind to
-    Cache Rules, D1 and Web Analytics, and each gap cost a hand-made credential.
+    Three narrower tokens and a stored R2 pair became one, `CLOUDFLARE_ROOT_TOKEN`:
+    their grants did not cover Cache Rules, D1 write or Web Analytics write, so
+    those applies could not run at all.
 
-    What would break silently: a retired name (`CLOUDFLARE_SITE_TOKEN`,
-    `CLOUDFLARE_WORKERS_TOKEN`, `CLOUDFLARE_API_TOKEN`, `AWS_ACCESS_KEY_ID`) read
-    again — the secret is gone, so the expression is the empty string and the road
-    skips; an unblanked secret in a workflow a pull request can trigger, which now
-    hands PR-authored code the whole account; an absent token answered with a
+    What would break silently: a retired name read again — the secret is gone, so
+    the expression is the empty string and the road skips; a secret left unblanked
+    in a workflow a pull request can trigger; an absent token answered with a
     notice and `exit 0`, which is a green run that shipped nothing.
     """
 

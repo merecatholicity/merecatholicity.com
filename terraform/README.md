@@ -77,9 +77,8 @@ The S3 credentials for the state backend are derived at run time from the
 Cloudflare token — access key = the token's `id`, secret = SHA-256 of the token
 value, Cloudflare's documented scheme — so one secret serves everything, and a
 rotation carries the state backend with it. There is no override: the secrets
-`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` were deleted on 2026-09-19, and a
-second credential that can drift out of step with the first is the thing this
-design is avoiding.
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` were deleted on 2026-09-19, so
+there is no second credential to keep in step.
 
 **Secrets** (repository → Settings → Secrets and variables → Actions) — ONE
 Cloudflare account token, and one GitHub PAT:
@@ -88,25 +87,14 @@ Cloudflare account token, and one GitHub PAT:
   PDFs to R2, `check-pdfs`, the post-deploy purge), `workers.yml` (the D1
   migration ledger and `wrangler deploy`), `terraform.yml` (plan, apply, and the
   state backend), `purge-cache.yml`. Account token `merecatholicity-root`,
-  account-owned (`cfat_…`), minted by the owner on 2026-09-19, full account and
-  zone.
-
-  It replaced three scoped tokens (`merecatholicity-ci-terraform`, `-site`,
-  `-workers`) minted on 2026-09-09. Least privilege was the right instinct and
-  it cost more than it bought: the terraform token turned out to be blind to
-  **Cache Rules** (not even read), **D1 write** and **Web Analytics write**, so
-  three separate correct changes planned clean and died at apply with the
-  provider's `failed to make http request`, and each one needed the owner at the
-  dashboard to mint or widen a credential before an agent could finish. One
-  token ends that. The trade is real and is written down here rather than
-  forgotten: **a leak of this secret is the whole account**, including the other
-  zones on it. What guards it is that no `pull_request` ever sees it — every
-  reference in every workflow is blanked in its own expression and
+  account-owned (`cfat_…`), minted by the owner on 2026-09-19. It replaced three
+  narrower tokens whose grants did not cover Cache Rules, D1 write or Web
+  Analytics write, so those applies could not run. Every reference to it is
+  blanked on a `pull_request` in its own expression, and
   `tests/py/test_pipeline_workflows.py::OneCredential` sweeps for one that is
-  not — and that it is rotated whenever its value has been anywhere but the
-  Actions secret store (`PUT /accounts/{id}/tokens/{id}/value`, then
-  `gh secret set CLOUDFLARE_ROOT_TOKEN` and the `ci.env` line; the derived R2
-  pair follows automatically).
+  not. To rotate: `PUT /accounts/{id}/tokens/{id}/value`, then
+  `gh secret set CLOUDFLARE_ROOT_TOKEN` and the `ci.env` line — the derived R2
+  pair follows automatically.
 - `TF_GITHUB_TOKEN` — for the github provider: a **fine-grained PAT** (owner-
   minted 2026-09-09, no expiry) restricted to `merecatholicity.com` and
   `private-shelf`, with Administration, Environments, Variables and Pages read/

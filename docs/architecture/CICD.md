@@ -319,8 +319,8 @@ are on, and would refuse the push.
 
 | Name | Kind | Held by | Scope (exactly) |
 |---|---|---|---|
-| `CLOUDFLARE_ROOT_TOKEN` | secret | `build.yml`, `workers.yml`, `terraform.yml`, `purge-cache.yml` | account token `merecatholicity-root` (2026-09-19) — **the one Cloudflare credential**, account-owned (`cfat_…`), full account and zone. It replaced three scoped tokens that between them still could not apply Cache Rules, D1 `read_replication` or Web Analytics: each gap cost a hand-made credential and a blocked change, which is the cost this token buys out. Its blast radius is the whole account, so the blanking below is the guard, and `tests/py/test_pipeline_workflows.py::OneCredential` sweeps it. |
-| — (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) | **derived, not stored** | `terraform.yml` (state backend) | R2's S3 pair IS the token: key = the token's id, secret = SHA-256 of its value (Cloudflare's documented scheme). `terraform.yml` derives them every run and masks both, so a rotation carries the state backend with it and there is no second credential to keep in step. The secrets of these names were deleted 2026-09-19. |
+| `CLOUDFLARE_ROOT_TOKEN` | secret | `build.yml`, `workers.yml`, `terraform.yml`, `purge-cache.yml` | account token `merecatholicity-root`, account-owned (`cfat_…`) — the one Cloudflare credential; every road uses it. Blanked on `pull_request` in each expression, swept by `tests/py/test_pipeline_workflows.py::OneCredential`. |
+| — (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`) | **derived, not stored** | `terraform.yml` (state backend) | R2's S3 pair is derived from the token: key = the token's id, secret = SHA-256 of its value (Cloudflare's documented scheme). `terraform.yml` derives and masks both each run, so a rotation carries the state backend with it. The secrets of these names were deleted 2026-09-19. |
 | `TF_GITHUB_TOKEN` | secret | `terraform.yml` (github provider) | **fine-grained PAT**, no expiry, on `merecatholicity.com` + `private-shelf` only: Administration, Environments, Variables, Pages read/write; Metadata read |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID` | **variables** | all | public ids; **Terraform-managed** (`github_actions_variable`) — workflows carry hardcoded fallbacks too |
 | `PRIVATE_SHELF_DEPLOY_KEY` | secret | `merecat.yml` | the PRIVATE half of a read-only deploy key on `private-shelf` (dev-box copy: `~/.ssh/private-shelf-ci`); its public half is the variable below and the Terraform resource `github_repository_deploy_key.private_shelf_ci` |
@@ -328,16 +328,13 @@ are on, and would refuse the push.
 | `MERECAT_INGEST_API` | **variable** (optional) | `merecat.yml` | overrides the ingest URL; default is the worker's workers.dev hostname |
 | `SITE_DISPATCH_TOKEN` | secret **in the private-shelf repository** | its `notify-site.yml` | fine-grained PAT on `merecatholicity.com` only, *Actions: write* + *Metadata: read* — enough to `gh workflow run merecat.yml`, nothing more (set 2026-09-10; dev-box copy in `ci.env`; verified: cannot see the private repo, cannot write the site's contents) |
 
-**No secret reaches a pull request** (2026-09-19, and it carries the whole account now).
-`build.yml`, `terraform.yml` and `workers.yml` all run on `pull_request`, and GitHub hands a
-same-repo PR the repository's secrets. Every one of their secret references is therefore blanked
-in its own expression — `${{ github.event_name != 'pull_request' && secrets.X || '' }}` — rather
-than relying on a step's `if:`, so a step that is later ungated cannot quietly start carrying one.
-`tests/py/test_pipeline_workflows.py::OneCredential` sweeps every workflow a PR can trigger, every
-`${{ }}` in it, and fails on an unblanked secret, on a retired token name (a deleted secret reads
-as the empty string, and the road would skip in silence), and on an absent token answered with a
-notice and `exit 0` — a green run that shipped nothing. A missing `CLOUDFLARE_ROOT_TOKEN` is now
-`::error::` and `exit 1` on every road.
+**Secrets are blanked on a `pull_request`.** `build.yml`, `terraform.yml` and `workers.yml` all
+run on that event, so every secret reference in them is written
+`${{ github.event_name != 'pull_request' && secrets.X || '' }}` in its own expression rather than
+relying on a step's `if:`. `tests/py/test_pipeline_workflows.py::OneCredential` sweeps every
+workflow a PR can trigger and fails on an unblanked secret, on a retired token name, and on an
+absent token answered with `exit 0`. A missing `CLOUDFLARE_ROOT_TOKEN` is `::error::` and
+`exit 1` on every road.
 
 **The pipeline holds no key** (2026-09-17): `merecat.yml` and `ops-watch.yml` prove themselves
 with the OIDC token GitHub signs for each job (§2.5 `merecat.yml`, §2.6), so there is nothing of
