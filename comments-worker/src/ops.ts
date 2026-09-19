@@ -7,9 +7,11 @@
    on), the chain's heartbeat stamped in app_settings `ops_heartbeat` at the
    end, and what failed — plus what the self-check found, when the chain ran
    one — folded through `Domain.Ops.foldOpsAlerts` into at most two alerts
-   (trouble, recovered) through alerts.ts. The fold coalesces: a condition is
-   told once when it opens and once when it closes, never twice a day while it
-   stands; and a chain judges only the conditions it can observe
+   (trouble, recovered) through alerts.ts. Each step also races a deadline
+   (2026-09-19), so that a step which HANGS cannot kill the invocation with the
+   heartbeat unwritten — the failure mode that hid a dead usage chain for 27
+   hours. The fold coalesces: a condition is told once when it opens and once
+   when it closes, never twice a day while it stands; and a chain judges only the conditions it can observe
    (`Domain.Ops.alertScope`), so the hourly sweeps finding nothing wrong of
    their own never "recover" the daily's missing backup.
 
@@ -35,14 +37,38 @@ export const CHAINS = ['hourly', 'daily', 'usage', 'monthly'];
 
 const today = (nowSecs: number) => new Date(nowSecs * 1000).toISOString().slice(0, 10);
 
+/* A step that never settles is worse than one that throws: it takes the whole
+   invocation with it, heartbeat and all, and the chain reads as one that never
+   ran (2026-09-18, the usage chain). So every step races a deadline —
+   `Domain.Ops.stepAllowance`, what is left of the chain's budget capped at one
+   step's — and a step that outlives it becomes an ordinary step failure, told
+   by name. The loser of the race is abandoned, not cancelled: a hung fetch has
+   no cancel, and it dies with the invocation a moment later. */
+function withDeadline<T>(p: Promise<T>, secs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('outlived its ' + secs + ' s deadline')), secs * 1000);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
 export async function runChain(env: Env, name: string, steps: Step[]) {
   const t0 = Date.now();
   const failures: Condition[] = [];
   let found: Condition[] = [];
   let selfCheck = false;
   for (const [label, fn] of steps) {
+    const allowed = OpsK.stepAllowance({ elapsedSecs: Math.floor((Date.now() - t0) / 1000) });
+    if (allowed <= 0) {
+      const error = 'the chain spent its ' + OpsK.chainBudgetSecs + ' s budget before this step ran';
+      console.log(JSON.stringify({ event: 'cron_step_skipped', chain: name, step: label }));
+      failures.push(OpsK.stepFailed(name)(label)(error));
+      continue;
+    }
     try {
-      const r = await fn(env);
+      const r = await withDeadline(fn(env), allowed, label);
       if (label === 'runSelfCheck') {
         selfCheck = true;
         if (Array.isArray(r)) found = found.concat(r as Condition[]);

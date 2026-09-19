@@ -23,8 +23,10 @@ test('an email address is one @, no whitespace, two non-empty labels, at most 25
     assert.equal(Ops.isEmailAddress(bad), false, JSON.stringify(bad));
 });
 
-test('the channel rule: on AND valid is live; empty, invalid or off is silent; both on is both', () => {
-  const ch = (emailOn, emailOk, discordOn, discordOk) => Ops.channelsFrom({ emailOn, emailOk, discordOn, discordOk });
+test('the channel rule: on AND valid is live; empty, invalid or off is silent; all three on is all three', () => {
+  /* the DM's "field" is the roster: dmOk is whether there is an admin to tell */
+  const ch = (emailOn, emailOk, discordOn, discordOk, dmOn = '0', dmOk = false) =>
+    Ops.channelsFrom({ emailOn, emailOk, discordOn, discordOk, dmOn, dmOk });
   assert.deepEqual(ch('1', true, '1', true), ['email', 'discord']);
   assert.deepEqual(ch('1', true, '1', false), ['email'], 'an empty or invalid webhook is no channel');
   assert.deepEqual(ch('1', false, '1', true), ['discord'], 'an empty or invalid address is no channel');
@@ -32,8 +34,24 @@ test('the channel rule: on AND valid is live; empty, invalid or off is silent; b
   assert.deepEqual(ch('1', true, '0', true), ['email']);
   assert.deepEqual(ch('0', true, '0', true), [], 'both off: silent, whatever the fields hold');
   assert.deepEqual(ch('', true, 'true', true), [], 'only the literal 1 is on — the polarity of every other admin switch');
+  assert.deepEqual(ch('1', true, '1', true, '1', true), ['email', 'discord', 'dm'], 'the DM is the third, and last');
+  assert.deepEqual(ch('0', true, '0', true, '1', true), ['dm'], 'and it stands alone when the other two are off');
+  assert.deepEqual(ch('0', true, '0', true, '1', false), [],
+    'an empty roster is no channel: an alert is never counted as told to nobody');
+  assert.deepEqual(ch('1', true, '1', true, '0', true), ['email', 'discord'], 'the switch off silences it, roster or no roster');
   assert.equal(Ops.switchOn('1'), true);
   assert.equal(Ops.switchOn('true'), false);
+});
+
+test('a cron step gets an allowance, and a chain that spends its budget has none left to give', () => {
+  assert.equal(Ops.stepDeadlineSecs, 60);
+  assert.equal(Ops.chainBudgetSecs, 600);
+  const allow = (elapsedSecs) => Ops.stepAllowance({ elapsedSecs });
+  assert.equal(allow(0), 60, 'a fresh chain gives a whole deadline');
+  assert.equal(allow(500), 60, 'and keeps giving one while the budget can afford it');
+  assert.equal(allow(560), 40, 'near the end a step gets only what is left');
+  assert.equal(allow(600), 0, 'the budget spent: the step does not run, and is told by name');
+  assert.equal(allow(9999), 0, 'never negative — a step is skipped, never given a deadline in the past');
 });
 
 test('the backup key round-trips its day, and the prune keeps 90 days, first-of-month 400, and anything it does not recognise', () => {

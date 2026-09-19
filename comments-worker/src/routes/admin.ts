@@ -65,7 +65,7 @@ async function handleAdminSettings(request: Request, env: Env) {
       media_audio_max_seconds_dm: 1, media_audio_max_seconds_wall: 1, media_audio_max_seconds_board: 1,
       calls_enabled: 1, calls_turn: 1, calls_idle_hangup: 1, calls_idle_seconds: 1, turn_guard_on: 1, turn_guard_pct: 1,
       social_enabled: 1, turnstile_skip_established: 1,
-      alert_email: 1, alert_email_on: 1, alert_discord_webhook: 1, alert_discord_on: 1 };
+      alert_email: 1, alert_email_on: 1, alert_discord_webhook: 1, alert_discord_on: 1, alert_dm_on: 1 };
     /* The 12 per-section OVERRIDE keys: an EMPTY value deletes the stored row —
        back to "inherit the legacy global" — because absence is what the
        fallback chain reads. Without this the chain would be one-way. */
@@ -88,7 +88,7 @@ async function handleAdminSettings(request: Request, env: Env) {
         || k === 'media_voice_dm' || k === 'media_voice_wall' || k === 'media_voice_board'
         || k === 'calls_enabled' || k === 'calls_turn' || k === 'calls_idle_hangup'
         || k === 'social_enabled' || k === 'turnstile_skip_established' || k === 'comments_journal'
-        || k === 'alert_email_on' || k === 'alert_discord_on') v = (v === '1' || v === 'true') ? '1' : '0';
+        || k === 'alert_email_on' || k === 'alert_discord_on' || k === 'alert_dm_on') v = (v === '1' || v === 'true') ? '1' : '0';
       else if (k === 'calls_idle_seconds') v = String(CallK.idleClampSecs(Math.floor(Number(v)) || CallK.idleDefaultSecs));
       /* the TURN guard is default-ON: only an explicit no switches it off (Domain.Call) */
       else if (k === 'turn_guard_on') v = (v === '0' || v === 'false') ? '0' : '1';

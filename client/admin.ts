@@ -853,11 +853,12 @@ export function installAdmin(B: Boot) {
         jLinkP.appendChild(jLink); jLinkP.appendChild(document.createTextNode('.'));
         wrap.appendChild(jLinkP);
 
-        /* ---- Alerts (2026-09-16): where the worker speaks. Email, Discord or
-           both — a channel speaks when its box is ticked AND its field holds a
-           valid value (Domain.Ops.channelsFrom); empty or unticked is silent. ---- */
+        /* ---- Alerts (2026-09-16): where the worker speaks. Email, Discord,
+           a DM to every admin, or all three — a channel speaks when its box is
+           ticked AND its field holds a valid value (Domain.Ops.channelsFrom);
+           empty or unticked is silent. The DM's field is the roster. ---- */
         wrap.appendChild(el('h3', null, 'Alerts'));
-        desc(wrap, 'Where the platform reports trouble — a cron step that failed, a missing daily backup, a usage meter past its band. Email, Discord, or both: a channel speaks when its box is ticked and its field is filled; empty or unticked is silent.');
+        desc(wrap, 'Where the platform reports trouble — a cron step that failed, a missing daily backup, a usage meter past its band. Email, Discord, a DM to every admin, or all three: a channel speaks when its box is ticked and its field is filled; empty or unticked is silent.');
         var alEmRow = el('p', 'admin-set-row mc-set-key');
         alEmRow.appendChild(el('label', null, 'Alert email address:'));
         var alEm = el('input') as HTMLInputElement;
@@ -876,12 +877,15 @@ export function installAdmin(B: Boot) {
         wrap.appendChild(alDcRow);
         var alDcOn = checkRow(wrap, 'Send alerts to Discord', s.alert_discord_on !== '0');
         desc(wrap, 'A channel webhook of its own (Discord: Server Settings → Integrations → Webhooks), separate from the forum and feed announcement hooks on the Discord webhooks page.');
+        var alDmOn = checkRow(wrap, 'Send alerts as a DM to every admin', s.alert_dm_on !== '0');
+        desc(wrap, 'merecat writes the same words to every admin on the roster, as an automated notice. No field to fill — the roster is the field — and it is the one channel that needs nothing set up outside the platform.');
         function alertKeys() {
           return {
             alert_email: alEm.value.trim(),
             alert_email_on: alEmOn.checked ? '1' : '0',
             alert_discord_webhook: alDc.value.trim(),
             alert_discord_on: alDcOn.checked ? '1' : '0',
+            alert_dm_on: alDmOn.checked ? '1' : '0',
           };
         }
         /* The same rule the worker's door applies, so a typo is named before

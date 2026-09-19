@@ -16,7 +16,7 @@
    reads the neurons dataset through the very same select. */
 
 import * as CallK from '../../purescript/output/Domain.Call/index.js';
-import { json, requireAdmin, sendSystemDm, siteBase, MERECAT_BOT, appSettingsCache } from './lib.ts';
+import { json, requireAdmin, siteBase, appSettingsCache } from './lib.ts';
 import type { Env } from './env.ts';
 import { sendAlert } from './alerts.ts';
 import { gqlSelect } from './analytics.ts';
@@ -133,20 +133,16 @@ export async function runUsageCheck(env: Env) {
       return;
     }
     const body = alertBody(alerts, siteBase(env));
-    const adm = await env.DB.prepare('SELECT hash FROM admins').all<{ hash: string }>();
-    let sent = 0;
-    for (const a of adm.results || []) {
-      if (!a.hash || a.hash === MERECAT_BOT.hash) continue;
-      try { await sendSystemDm(env, MERECAT_BOT.hash, a.hash, body); sent++; } catch (e) { /* next admin */ }
-    }
-    /* and the owner's channels (alerts.ts — email, Discord or both, from
-       Platform settings); the DM above stays for every admin */
+    /* Every channel Platform settings opens — email, Discord, and the DM to
+       every admin as merecat. The fan-out used to live here, and only here
+       (2026-09-19): it is alerts.ts's now, so a dead cron reaches the same
+       inbox a meter past its band does. */
     const said = await sendAlert(env, {
       kind: 'usage',
       subject: 'Usage: ' + alerts.length + ' meter' + (alerts.length === 1 ? '' : 's') + ' past a band',
       text: body,
     });
-    console.log(JSON.stringify({ event: 'usage_alerts_sent', meters: alerts.length, admins: sent, channels: said.channels }));
+    console.log(JSON.stringify({ event: 'usage_alerts_sent', meters: alerts.length, admins: said.dm, channels: said.channels }));
   } catch (e) {
     console.log(JSON.stringify({ event: 'usage_check_failed', error: String(e).slice(0, 300) }));
   }

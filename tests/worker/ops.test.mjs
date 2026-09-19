@@ -8,7 +8,10 @@
  * a condition re-alerted every run until the owner mutes the channel; the
  * hourly sweeps "recovering" the daily's missing backup; a fresh deploy
  * crying about a backup no cron has yet had the chance to write; a probe
- * that says ok while a heartbeat is a day stale. */
+ * that says ok while a heartbeat is a day stale; and — the reason for the
+ * deadline (2026-09-18) — a step that never SETTLES, which takes the whole
+ * invocation with it and leaves the heartbeat unwritten, so the chain reads
+ * as one that never ran and is heard of only as staleness, a day later. */
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches, netSpy, ctx, call } from '../_support/worker.mjs';
@@ -175,5 +178,41 @@ test('the report door: the nightly\'s key (from any origin) probes the health an
   const other = await identity('not-an-admin');
   r = await call(worker, env, 'POST', '/api/comments/admin/health', { key: other.key });
   assert.equal(r.status, 403);
+  db.close();
+});
+
+test('a step that never settles times out, is told by name, and the chain still runs its other steps and beats', async (t) => {
+  const db = seeded();
+  const env = makeEnv({ db });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let ran = 0;
+  const hangs = () => new Promise(() => { /* the fetch that never answers */ });
+  const fine = async () => { ran++; };
+  const chain = runChain(env, 'usage', [['hangs', hangs], ['fine', fine]]);
+  t.mock.timers.tick(60_000);
+  const r = await chain;
+  assert.equal(ran, 1, 'the step behind the hung one still ran');
+  assert.deepEqual([r.failed, r.fired], [['usage/hangs'], 1]);
+  assert.ok(state(db, 'ops_heartbeat').usage > 0, 'THE POINT: the heartbeat was reached, so the chain is not read as dead');
+  assert.deepEqual(subjects(env), ['[merecatholicity] Cron step failed: usage/hangs']);
+  assert.match(env.emails[0].text, /outlived its 60 s deadline/, 'the owner is told which step, not that something is late');
+  db.close();
+});
+
+test('a chain that spends its budget skips what is left rather than dying with the heartbeat unwritten', async (t) => {
+  const db = seeded();
+  const env = makeEnv({ db });
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  let ran = 0;
+  /* settles at once, but ten minutes of the chain's wall clock went by in it:
+     the step's own promise is made BEFORE its deadline is set, so the race is
+     decided and this test has no ordering to lose */
+  const slow = () => { t.mock.timers.tick(600_000); return Promise.resolve(1); };
+  const fine = async () => { ran++; };
+  const r = await runChain(env, 'monthly', [['slow', slow], ['fine', fine]]);
+  assert.equal(ran, 0, 'the budget was gone, so the step did not run');
+  assert.deepEqual([r.failed, r.fired], [['monthly/fine'], 1], 'and is a named failure, never a silence');
+  assert.match(env.emails[0].text, /spent its 600 s budget before this step ran/);
+  assert.ok(state(db, 'ops_heartbeat').monthly > 0, 'the chain still beat');
   db.close();
 });

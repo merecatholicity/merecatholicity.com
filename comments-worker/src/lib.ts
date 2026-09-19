@@ -594,6 +594,23 @@ export async function ensureAdminsSeeded(env: Env) {
   }
 }
 
+/* WHOM the platform tells: every admin's hash, the one fragment both the
+   alert fan-out (alerts.ts) and anything else that must reach the roster
+   reads. It mirrors `isAdminHash` exactly — the table governs, and the env
+   owners count only while the table is still empty — so a platform nobody has
+   seeded yet still reaches its owner, and a removed admin stops being told the
+   moment the table says so. merecat is never in it: the bot is the sender. */
+export async function adminRoster(env: Env): Promise<string[]> {
+  let rows: { hash: string }[] = [];
+  try {
+    const r = await env.DB.prepare('SELECT hash FROM admins').all<{ hash: string }>();
+    rows = r.results || [];
+  } catch (e) { rows = []; }
+  const hashes = rows.map((r) => String(r.hash || '')).filter((h) => /^[0-9a-f]{64}$/.test(h));
+  const roster = hashes.length ? hashes : rootAdmins(env);
+  return roster.filter((h) => h !== MERECAT_BOT.hash);
+}
+
 export function normalizePage(raw: unknown) {
   let p = String(raw || '').split('?')[0].split('#')[0];
   if (!p.startsWith('/')) return null;
@@ -1639,6 +1656,9 @@ export const APP_SETTING_DEFAULTS = {
   alert_email_on: '1',
   alert_discord_webhook: '',
   alert_discord_on: '1',
+  /* And the third channel (2026-09-19): the same alert as a merecat DM to
+     every admin. No field of its own — the roster IS the field. */
+  alert_dm_on: '1',
 };
 /* The settings as the table holds them: every value a string. */
 export type Settings = Record<string, string>;

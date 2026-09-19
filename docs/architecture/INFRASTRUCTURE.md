@@ -255,5 +255,7 @@ on page one.)
 - **The server says which member is you, and which words are yours (2026-09-19)** — `log/2026-09.md`
 - **Nobody could start a conversation: the send road read a field no client sends (2026-09-19)** — `log/2026-09.md`
 - **The challenge answered once and then went silent for the life of the page (2026-09-19)** — `log/2026-09.md`
+- **The alert that could not reach the inbox it was about (2026-09-19).** — `log/2026-09.md`
+- **A cron step that hangs is worse than one that throws (2026-09-19).** — `log/2026-09.md`
 
 <!-- infra-index:end -->

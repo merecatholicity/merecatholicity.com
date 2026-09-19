@@ -29,6 +29,9 @@ module Domain.Ops
   , minBackupBytes
   , staleAfter
   , isStale
+  , stepDeadlineSecs
+  , chainBudgetSecs
+  , stepAllowance
   , Condition
   , backupMissing
   , backupFailed
@@ -85,11 +88,19 @@ switchOn v = v == "1"
 -- | Where an alert goes, as channel tags in a fixed order. The caller passes
 -- | the stored switches and whether each field passed its validator (the
 -- | email one is `isEmailAddress`; the Discord one is the worker's SSRF gate,
--- | `isDiscordWebhook`). Empty or off is silent; both on is both.
-channelsFrom :: { emailOn :: String, emailOk :: Boolean, discordOn :: String, discordOk :: Boolean } -> Array String
+-- | `isDiscordWebhook`; the DM one is "there is at least one admin to tell").
+-- | Empty or off is silent; every one on is every one.
+-- |
+-- | The DM channel (2026-09-19) is the third: every alert the worker raises
+-- | also reaches every admin as a merecat DM. It was the usage monitor's
+-- | alone, so the owner who had been told of a meter past its band in their
+-- | inbox was told of a dead cron only by email — and the dead cron was the
+-- | usage one, whose DM was the only DM there was.
+channelsFrom :: { emailOn :: String, emailOk :: Boolean, discordOn :: String, discordOk :: Boolean, dmOn :: String, dmOk :: Boolean } -> Array String
 channelsFrom r =
   (if switchOn r.emailOn && r.emailOk then [ "email" ] else [])
     <> (if switchOn r.discordOn && r.discordOk then [ "discord" ] else [])
+    <> (if switchOn r.dmOn && r.dmOk then [ "dm" ] else [])
 
 backupPrefix :: String
 backupPrefix = "backups/comments-"
@@ -143,6 +154,30 @@ staleAfter name = case name of
 -- | The health panel shows "never" for a human to judge.
 isStale :: { name :: String, last :: Int, now :: Int } -> Boolean
 isStale r = r.last > 0 && r.now - r.last > staleAfter r.name
+
+-- | How long one cron step may take, and how long a whole chain may take
+-- | (2026-09-19). `runChain` gives every step its own try/catch so a failure
+-- | never skips the step behind it — but a step that never SETTLES skips them
+-- | all, and takes the heartbeat with it: the invocation is killed with the
+-- | stamp unwritten, and the chain reads as one that never ran. That is how
+-- | the usage chain vanished on 2026-09-18 (its first step is eight GraphQL
+-- | subrequests to Cloudflare's own analytics API, none of them with a
+-- | deadline) and was heard of only 27 hours later, as staleness.
+-- |
+-- | So a step gets an allowance and the chain gets a budget: what is left of
+-- | the budget, capped at one step's deadline. Zero means the budget is spent
+-- | and the step does not run at all — a named failure rather than a silence.
+stepDeadlineSecs :: Int
+stepDeadlineSecs = 60
+
+-- | The monthly chain is thirteen steps; at a full deadline each that is
+-- | longer than a cron invocation may live. The budget is what keeps the
+-- | heartbeat reachable however many steps stall.
+chainBudgetSecs :: Int
+chainBudgetSecs = 600
+
+stepAllowance :: { elapsedSecs :: Int } -> Int
+stepAllowance r = min stepDeadlineSecs (max 0 (chainBudgetSecs - r.elapsedSecs))
 
 -- | A condition is what the self-check found wrong: its kind, the thing it is
 -- | about, and a detail. `conditionKey` is its identity for coalescing.

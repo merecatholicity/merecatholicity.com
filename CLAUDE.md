@@ -138,10 +138,10 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   by both the client (`window.mcCore` / `app/core.ts`) and the worker. Never re-inline a copy.
 - **A NEW state store must be added to `runBackup()`'s mirror** or it is not backed up
   (`MEDIA`/`WALLMEDIA` are outside it on purpose; LIBDB is derived). **The backup is daily (03:15
-  UTC) and self-checked** (2026-09-16): every cron is a chain through `ops.ts` (`runChain` — a
-  failed step never skips the one behind it; a heartbeat per chain), and a missing backup, a
-  failed step or a stale heartbeat alerts through `sendAlert` — email and Discord from Platform
-  settings → Alerts, whose Health card is the truth; the outside leg is `ops-watch.yml`.
+  UTC) and self-checked**: every cron is a `runChain` chain (`ops.ts`) — a failed step never skips
+  the next, and each races a deadline so a HUNG one cannot take the heartbeat with it — and the
+  findings alert through `sendAlert`: THREE channels, Platform settings → Alerts (email · Discord ·
+  a DM to every admin), Health card the truth, `ops-watch.yml` the outside leg.
 - **Every road that removes a message takes its media with it** — the object AND its accounting
   row (`purgeMediaKeys` for DMs, `purgeWallMedia` for the feed and board attachments), keys read
   BEFORE the row is dropped or its status flips, never a `media_key = NULL` without the purge;

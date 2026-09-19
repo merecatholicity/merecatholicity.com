@@ -1,5 +1,5 @@
 /* The Alerts section of Platform settings (2026-09-16): the panel and the
- * worker's settings door agree on the four keys, and the address is validated
+ * worker's settings door agree on the five keys, and the address is validated
  * by the ONE rule (Domain.Ops.isEmailAddress through the membrane) on both
  * ends. What would break silently: a key the panel sends that the door's
  * `allowed` map does not know is dropped without a word (the owner saves,
@@ -16,7 +16,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const admin = clientModule('admin');
 const door = readFileSync(join(root, 'comments-worker', 'src', 'routes', 'admin.ts'), 'utf8');
 const core = readFileSync(join(root, 'app', 'core.ts'), 'utf8');
-const KEYS = ['alert_email', 'alert_email_on', 'alert_discord_webhook', 'alert_discord_on'];
+const KEYS = ['alert_email', 'alert_email_on', 'alert_discord_webhook', 'alert_discord_on', 'alert_dm_on'];
 
 test('every alert key the panel saves is a key the settings door allows', () => {
   /* anchored on the declaration, not its type (2026-09-17) */
@@ -26,7 +26,7 @@ test('every alert key the panel saves is a key the settings door allows', () => 
     assert.ok(new RegExp(k + ': ').test(admin), k + ' is sent by the panel');
   }
   /* the switches are normalised to 1/0 at the door, like every other switch */
-  assert.match(door, /k === 'alert_email_on' \|\| k === 'alert_discord_on'\) v = \(v === '1' \|\| v === 'true'\) \? '1' : '0'/);
+  assert.match(door, /k === 'alert_email_on' \|\| k === 'alert_discord_on' \|\| k === 'alert_dm_on'\) v = \(v === '1' \|\| v === 'true'\) \? '1' : '0'/);
 });
 
 test('the address is validated by the one kernel rule on both ends, and the test door is what the button presses', () => {
