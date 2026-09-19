@@ -234,7 +234,16 @@ export const ROUTE_HINTS = {
   'POST /api/comments/moderate': (ids) => ({ id: ids.topic, act: 'sticky' }),
   'POST /api/comments/move': (ids) => ({ id: ids.topic, cat: 'news' }),
   'POST /api/comments/board/admin': (ids) => ({ id: ids.back }),
-  'POST /api/comments/dm/send': (ids, who, me) => (me ? { to: otherOf(who, me).hash, body: 'E3.sweepword', enc: 3, keys: pairKeys(me, otherOf(who, me)) } : {}),
+  /* `with` on the send, `to` on the forward's items: each is addressed the way
+     its OWN client addresses it (client/dm-thread.ts `ctx.target()`;
+     client/dm-pickers.ts). The sweep cannot PROVE that — `base` above names a
+     member under every field any road might read, and carries a thread_id
+     besides, so every road here finds something to answer whatever it reads.
+     That is right for a leak sweep and useless for a wire mismatch: /dm/send
+     read `to` alone for six days while every client sent `with`, and this
+     line, saying `to`, was green throughout. The road that proves the shape is
+     tests/worker/dm_pair_target.test.mjs (2026-09-19). */
+  'POST /api/comments/dm/send': (ids, who, me) => (me ? { with: otherOf(who, me).hash, body: 'E3.sweepword', enc: 3, keys: pairKeys(me, otherOf(who, me)) } : {}),
   'POST /api/comments/dm/forward': (ids, who, me) => (me ? { items: [{ to: otherOf(who, me).hash, body: 'E3.sweepforward', enc: 3, keys: pairKeys(me, otherOf(who, me)) }] } : {}),
   'POST /api/comments/dm/edit': (ids) => ({ id: ids.dm, body: 'E3.sweepedit', enc: 3 }),
   'POST /api/comments/dm/pubkey': () => ({ pubkey: 'A'.repeat(43) }),

@@ -92,7 +92,11 @@ export interface DmSendBody {
   key: string;
   token?: string;
   thread_id?: number;
-  to?: string;                  // a pair's other, for a room not yet made
+  /* A pair's other, for a room not yet made — under EITHER name: `with` is what
+     the client sends (the one target shape, app/api.ts `dmTarget`), `to` what
+     /dm/forward's items send. The server takes both (2026-09-19). */
+  with?: string;
+  to?: string;
   body: string;
   enc: 0 | 1 | 3;
   keys?: Record<string, string>; // enc 3: the content key sealed once per current member, the sender included

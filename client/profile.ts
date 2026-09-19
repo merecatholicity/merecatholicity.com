@@ -1168,11 +1168,9 @@ export function installProfile(B: Boot) {
           if (!d.ok) throw new Error(d.error || 'Could not upload the avatar.');
           stampFresh();
           p.avatar = d.avatar;
-          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
           editProfile(card, p);
         }).catch(function (err) {
           avNote.textContent = err.message || 'Network error. Try again in a moment.';
-          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
         });
       };
       c.toBlob(function (blob) {
@@ -1283,13 +1281,11 @@ export function installProfile(B: Boot) {
           stampFresh();
           state.myNick = d.profile.nick || '';
           if (d.profile.faith) setFaith(d.profile.faith);
-          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
           renderProfile(card, d.profile, true);
         })
         .catch(function (err) {
           note.textContent = err.message || 'Network error. Try again in a moment.';
           save.disabled = false;
-          if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
         });
     });
   }

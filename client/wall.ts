@@ -644,10 +644,9 @@ trace('submit: feed post');
             .then(function (d) {
               send.disabled = false;
               if (blockedOut(d)) return;
-              if (!d || !d.ok) { status.textContent = (d && d.error) || 'Could not post.'; if (window.turnstile) try { turnstile.reset(); } catch (e) {} return; }
+              if (!d || !d.ok) { status.textContent = (d && d.error) || 'Could not post.'; return; }
               ta.value = ''; if (ta.mcDraftDone) ta.mcDraftDone(); clearAttach();
               if (ta.mcPreview) ta.mcPreview.off();
-              if (window.turnstile) try { turnstile.reset(); } catch (e) {}
               if (d.status === 'pending') { status.textContent = 'Held for review. It will appear once approved.'; return; }
               status.textContent = '';
               /* Build a local row to render immediately (author = me). */

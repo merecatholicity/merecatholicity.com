@@ -68,8 +68,6 @@ export function installDmPickers(B: Boot) {
       if (blockedOut(d)) return 0;
       if (!d || !d.ok) throw new Error((d && d.error) || 'Could not forward.');
       return (d.results || []).filter(function (r: any) { return r && r.ok; }).length;
-    }).finally(function () {
-      if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
     });
   }
 

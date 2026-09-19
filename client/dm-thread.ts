@@ -389,7 +389,7 @@ export function installDmThread(B: Boot) {
                     if (!d || !d.ok) throw new Error((d && d.error) || 'They could not be added.');
                     /* the actor is not fanned to: reopen the conversation as it now stands (a pair's fork opens the new group) */
                     go('messages.html?t=' + (d.thread_id || threadId));
-                  }).finally(function () { if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId); });
+                  });
                 } });
             }));
             if (kind === 1) {
@@ -1207,7 +1207,6 @@ export function installDmThread(B: Boot) {
           }).finally(function () {
             send.disabled = (kind === 0 && !otherPub);
             refresh();
-            if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
           });
         });
         /* Open a conversation at its newest word: on the last page, the foot of

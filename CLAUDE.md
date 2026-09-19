@@ -118,10 +118,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   keep page-scoped state above it, and every document/window listener it installs carries the boot
   signal. **A phone's FIRST paint is already the app**: before `body.mc-app` the bars' surfaces hold
   their places, no title or static footer shows (`html.mc-noapp` is the `?app=0` opt-out).
-- **Turnstile**: an established identity is not challenged — established is `profiles.verified_at`, stamped where a challenge was
-  PASSED, never the row a keyed read leaves (`Domain.Turnstile`, `turnstile_skip_established`; `/prefs` answers for this
-  identity); the widget runs in `docs/turnstile.html` (own context, `?v=` from `MC_ASSETS`). **Only `loadTurnstile()` mounts, only
-  from a focus or a press, never because a view opened, never for a spared identity** — swept.
+- **Turnstile**: an established identity is not challenged: `profiles.verified_at`, stamped where a challenge was PASSED, never by
+  the row a keyed read leaves (`Domain.Turnstile`, `turnstile_skip_established`; `/prefs` answers for this identity); the widget
+  runs in `docs/turnstile.html` (own context, `?v=` from `MC_ASSETS`). **Only `loadTurnstile()` mounts, only from a focus or a
+  press, never because a view opened, never for a spared identity**; a token is single-use, so `spendToken()` spends it and
+  RE-ARMS the widget (one `turnstile.reset(`) — all swept.
 - **Limits are per MEMBER plus an address backstop** (`throttle`, the one `.limit(` caller); one
   `READ_LIMIT` for all reads, client-paced — no stray poller. **D1 replicas: `Domain.Consistency`'s list only**.
 - **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;
@@ -166,12 +167,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   own `/dm/unread` all sum it — the tab and the rows it opens onto must add up, and both roads feed
   the one `mc-dm-unread` cache. Never re-inline the fragment, never let one road count threads. It
   counts from the viewer's OWN member row (`mb`, the `DM_MINE` join) — never a pair column.
-- **One member model** (migration 0016, 2026-09-13): a conversation is a thread with member rows
-  (`dm_members`) — a pair is two of them, keyed once by `pair_key`; a group (`kind` 1) up to
-  `Domain.Dm.maxMembers`, nobody owns it. Every read runs from the viewer's seat: what they may
-  see is unheld or their own, after their clear stamp, no older than their joining (a newcomer
-  gets no history), and in a group never from a sender they blocked (a PAIR keeps its stored
-  shadow-hold — a blocked sender is never told).
+- **One member model** (migration 0016, 2026-09-13): a conversation is a thread with member rows (`dm_members`): a pair is two,
+  keyed once by `pair_key`; a group (`kind` 1) up to `Domain.Dm.maxMembers`, nobody owns it — and on EVERY road it is addressed by
+  the client's one target (`ctx.target()`): `thread_id`, or `with` for a room its first word has yet to make. Every read runs from
+  the viewer's seat: unheld or their own, after their clear stamp, no older than their joining (a newcomer gets no history), and
+  in a group never from a sender they blocked (a PAIR keeps its stored shadow-hold; a blocked sender is never told).
 - **Envelope v2** (`enc` 3, `E3.`): a random content key per message under `nacl.secretbox`, boxed once per current member (the
   sender included) to their published X25519 key and stored in `dm_keys` — the server serves each reader ONLY their own `sealed`;
   the key set must equal the roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and sealed once more; an edit

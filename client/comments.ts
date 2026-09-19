@@ -55,6 +55,14 @@ import type { Boot } from './boot';
      page down. One widget per DOCUMENT now, in a host that survives the swap. */
   var mcTsWidget: any = null;
   var mcTsToken: { token: any; at: number } | null = null;
+  /* Is a challenge RUNNING right now? The widget answers exactly once per
+     mount-or-reset ('refresh-expired' and 'retry' are both 'never', by the
+     2026-09-08 postmortem), so "mounted" says nothing about whether a token is
+     on its way: a widget that has already answered is mounted, live, and
+     silent for ever. Without this flag the only cure for one was a reload —
+     2026-09-19, the owner's ring: every press after the first wrote "token
+     wanted" and, ten seconds later, "token timed out". */
+  var mcTsArmed = false;
   /* The challenge runs inside a same-origin iframe (docs/turnstile.html) so
      that a challenge-platform navigation can only ever take THAT document, not
      the app. Page-scoped like the widget id: one frame for the life of the
@@ -622,7 +630,6 @@ import type { Boot } from './boot';
     myAdmin: false,
     profileLoaded: false,
     started: false,
-    widgetId: null,
     tokenWait: null,
     anonAllowed: false,
     altIps: { ipv4: '', ipv6: '' },
@@ -640,7 +647,7 @@ import type { Boot } from './boot';
      was torn out with its old composer/view. This is the load-bearing fix for
      the SPA: once the Turnstile script is loaded (page-wide, it lives on
      document.head), any later boot/view has a fresh boot-scoped `state`
-     (widgetId=null) but window.turnstile already exists — without an explicit
+     (a fresh state) but window.turnstile already exists — without an explicit
      re-render here the widget was never created for the new view and every
      getToken() timed out ("Verification is taking a moment to load"). */
   /* One host for the life of the document. `data-mc-app` is the shell's own
@@ -717,6 +724,7 @@ import type { Boot } from './boot';
       mcTsFrame = null;
       mcTsFrameReady = false;
       mcTsToken = null;
+      mcTsArmed = false;
     }
     var f = document.createElement('iframe');
     f.className = 'mc-ts-frame';
@@ -737,7 +745,7 @@ import type { Boot } from './boot';
   function renderTurnstileWidget() {
     if (!window.turnstile) return;
     var slot = tsHost();
-    if (mcTsWidget !== null && slot.querySelector('iframe:not(.mc-ts-frame)')) { state.widgetId = mcTsWidget; return; }
+    if (mcTsWidget !== null && slot.querySelector('iframe:not(.mc-ts-frame)')) return;
     /* The mount is the challenge, so it is the moment worth naming. Without
        this crumb the ring showed a view rendering and a document dying a
        second later with nothing in between to connect them. */
@@ -758,7 +766,8 @@ import type { Boot } from './boot';
 
          appearance:'interaction-only' stays: the widget shows nothing unless a
          human check is genuinely needed, so composers look exactly as before. */
-      state.widgetId = mcTsWidget = turnstile.render(slot, {
+      mcTsArmed = true;   // in render mode the mount IS the challenge: one is running now
+      mcTsWidget = turnstile.render(slot, {
         sitekey: SITEKEY,
         appearance: 'interaction-only',
         'before-interactive-callback': function () {
@@ -773,6 +782,7 @@ import type { Boot } from './boot';
           /* Tokens are single-use, so this is a one-deep queue: held until a
              submit spends it, after which reset() earns the next one. */
           mcTsToken = { token: token, at: Date.now() };
+          mcTsArmed = false;   // it has answered; only a reset earns the next
           trace('turnstile: token ready');
           if (state.tokenWait) { state.tokenWait.resolve(token); state.tokenWait = null; }
         },
@@ -783,6 +793,7 @@ import type { Boot } from './boot';
              possible thing to diagnose from a phone. */
           trace('turnstile: challenge refused');
           mcTsToken = null;
+          mcTsArmed = false;
           if (state.tokenWait) { state.tokenWait.reject(new Error('challenge failed')); state.tokenWait = null; }
           return true;
         },
@@ -793,7 +804,7 @@ import type { Boot } from './boot';
         'refresh-expired': 'never',
         retry: 'never',
       });
-    } catch (e) { /* a double-render into the same slot throws; ignore */ }
+    } catch (e) { mcTsArmed = false; /* a double-render into the same slot throws; ignore */ }
   }
 
   function loadTurnstile() {
@@ -862,18 +873,42 @@ import type { Boot } from './boot';
     if (tsSpared()) return;                    // nothing to warm; nothing to mount
     if (mcTsToken && Date.now() - mcTsToken.at < TOKEN_FRESH_MS) return;
     trace('turnstile: warming');
+    /* Mounted, holding nothing, and nothing running: the widget answered once
+       and has been idle ever since. loadTurnstile would find the frame already
+       in the document and return, so the warm was a no-op — which is what the
+       ring showed between a spent widget and every press that followed it.
+       reset() is the one road that earns another token. */
+    if (tsMounted() && !mcTsArmed) { ensureFreshToken(); return; }
     loadTurnstile();   // which asks the server first whether this reader needs one at all
   }
   /* After a token is spent (or expires) ask the widget for another. reset()
-     re-runs the challenge and fires `callback` again. */
+     re-runs the challenge and fires `callback` again — so from here until it
+     answers, one IS running. */
   function ensureFreshToken() {
     try {
       if (mcTsFrameReady && tsFrameLive()) {
         mcTsFrame!.contentWindow!.postMessage({ mcTs: 'reset' }, location.origin);
+        mcTsArmed = true;
         return;
       }
-      if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+      if (window.turnstile && mcTsWidget !== null) { turnstile.reset(mcTsWidget); mcTsArmed = true; }
     } catch (e) { /* the next warm re-renders it */ }
+  }
+  /* THE one road a token leaves by. A Turnstile token is single-use, so taking
+     it and earning the next one are a single act — and while they were written
+     out at each spend site, the third site was written without the second
+     half. A press that beat the warm installed a waiter, the challenge
+     answered it, and the widget was never reset: with 'refresh-expired' and
+     'retry' both 'never', nothing would ask it again for the life of the
+     document. The owner's ring, 2026-09-19: "token ready"/"token ok" at the
+     first press, then "token wanted" → "token timed out" for every press
+     after. One function now, and the sweep in tests/js/turnstile_warm holds
+     every future spend to it. */
+  function spendToken(t: string) {
+    mcTsToken = null;
+    mcTsArmed = false;
+    setTimeout(ensureFreshToken, 0);
+    return t;
   }
   /* And the structural net, so coverage is not a list anyone has to maintain.
      Turnstile guards SIX actions, not one: a page/book comment, a forum post,
@@ -901,9 +936,10 @@ import type { Boot } from './boot';
     var d = e.data;
     if (!d || !d.mcTs) return;
     if (!mcTsFrame || e.source !== mcTsFrame.contentWindow) return;
-    if (d.mcTs === 'ready') { mcTsFrameReady = true; trace('turnstile: frame ready'); return; }
+    if (d.mcTs === 'ready') { mcTsFrameReady = true; mcTsArmed = true; trace('turnstile: frame ready'); return; }
     if (d.mcTs === 'token') {
       mcTsToken = { token: d.token, at: Date.now() };
+      mcTsArmed = false;   // answered; the widget is idle until it is reset
       trace('turnstile: token ready');
       if (state.tokenWait) { state.tokenWait.resolve(d.token); state.tokenWait = null; }
       return;
@@ -921,6 +957,7 @@ import type { Boot } from './boot';
     if (d.mcTs === 'error') {
       trace('turnstile: challenge refused');
       mcTsToken = null;
+      mcTsArmed = false;
       if (state.tokenWait) { state.tokenWait.reject(new Error('challenge failed')); state.tokenWait = null; }
     }
   }, { signal: bootSig });
@@ -954,10 +991,8 @@ import type { Boot } from './boot';
     }
     var w = mcTsToken;
     if (w && Date.now() - w.at < TOKEN_FRESH_MS) {
-      mcTsToken = null;                 // single-use: spend it and earn another
       trace('turnstile: spent a ready token');
-      setTimeout(ensureFreshToken, 0);
-      return Promise.resolve(w.token);
+      return Promise.resolve(spendToken(w.token));   // single-use: spending it earns another
     }
     mcTsToken = null;
     return rawToken();
@@ -976,7 +1011,7 @@ import type { Boot } from './boot';
           reject(new Error('Verification could not load. Check your connection and reload the page.'));
           return;
         }
-        if (mcTsFell && window.turnstile && state.widgetId === null) renderTurnstileWidget();
+        if (mcTsFell && window.turnstile && mcTsWidget === null) renderTurnstileWidget();
         if (!tsMounted()) {
           if (waited >= MAX) {
             reject(new Error('Verification is taking a moment to load. Give it a few seconds and press the button again.'));
@@ -991,12 +1026,16 @@ import type { Boot } from './boot';
            that killed the page. */
         if (mcTsToken) {
           var t = mcTsToken;
-          mcTsToken = null;
           trace('turnstile: token ok (was ready)');
-          setTimeout(ensureFreshToken, 0);
-          resolve(t.token);
+          resolve(spendToken(t.token));
           return;
         }
+        /* Mounted, holding nothing, and nothing running: the widget has
+           already answered and is waiting to be asked. Waiting on it would run
+           the whole ten seconds and refuse a reader who did nothing wrong, so
+           ask first — and if the challenge IS running (the ordinary case: a
+           press that beat the warm), leave it alone rather than restart it. */
+        if (!mcTsArmed) ensureFreshToken();
         /* The callback is now the ONLY road a token arrives by, so this wait
            needs its own clock: with execute() gone there is nothing to make a
            stuck challenge fail, and an unbounded wait would hang the submit
@@ -1024,7 +1063,7 @@ import type { Boot } from './boot';
           resolve: function (v: any) {
             if (settled) return;
             settled = true; clearTimeout(timer);
-            trace('turnstile: token ok'); mcTsToken = null; resolve(v);
+            trace('turnstile: token ok'); resolve(spendToken(v));
           },
           reject: function (e: any) {
             if (settled) return;

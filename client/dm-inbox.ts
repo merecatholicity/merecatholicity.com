@@ -247,7 +247,7 @@ export function installDmInbox(B: Boot) {
             if (blockedOut(d)) return;
             if (!d || !d.ok) throw new Error((d && d.error) || 'The group could not be started.');
             go('messages.html?t=' + d.thread_id);
-          }).finally(function () { if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId); });
+          });
         } });
     }
     function ensureDir(cb: any) {

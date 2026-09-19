@@ -89,7 +89,17 @@ async function handleDmSend(request: Request, env: Env, ctx: ExecutionContext) {
    claim, the row and what hangs off it, the fan-out, the bells. Everything
    before it — the throttle, the ban, Turnstile — is the caller's. */
 async function deliverDmWord(env: Env, ctx: ExecutionContext | undefined, me: string, data: Body, now: number) {
-  const toWire = String(data.to || '');
+  /* The pair a word opens, for a room that does not exist yet. BOTH names are
+     taken: `with` is what the client says — the target every other DM road
+     takes (`ctx.target()`, 2026-09-13) — and `to` is what /dm/forward's items
+     say and what this road has always documented. It read `to` ALONE from
+     2026-09-13 to 2026-09-19, so the client's `{with: …}` named nothing: the
+     FIRST word of every new conversation was answered 'Bad request.', and
+     since a pair's room is made BY that first word, no later word could carry
+     a thread_id either — nobody could start a conversation at all. A field the
+     caller does not send is not a mismatched shape, it is a road that is not
+     there; the sweep addresses this one the way the client does now. */
+  const toWire = String(data.to || data.with || '');
   const threadId = Math.floor(Number(data.thread_id) || 0);
   if (!threadId && !/^[0-9a-f]{64}$/.test(toWire)) return json({ ok: false, error: 'Bad request.' }, 400);
   /* `to` is a pubid on the wire (the P0 chain L3) — resolve it to the account

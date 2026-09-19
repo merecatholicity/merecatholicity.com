@@ -1423,8 +1423,19 @@ export async function dmThreadFor(env: Env, me: string, data: Body | null): Prom
     if (!t) return null;
     return { thread: t, other: Number(t.kind) === 0 ? dmPairOther(t.pair_key, me) : '' };
   }
-  const other = String((data && data.with) || '');
-  if (!/^[0-9a-f]{64}$/.test(other) || other === me) return null;
+  const wire = String((data && data.with) || '');
+  if (!/^[0-9a-f]{64}$/.test(wire)) return null;
+  /* A pair's other arrives as a PUBID (the P0 chain L3). The resolve sits HERE,
+     on the one road every caller takes, rather than at each call site: the flip
+     wrote it at three of them and missed /dm/roster, /dm/seen and /dm/delete,
+     which then looked for a pair_key built from an id no ledger row holds — an
+     unmade room answered with a correspondent who had no published key, so a
+     brand-new conversation's composer said "waiting for this member to sign in"
+     about someone who had. An id that resolves to nothing stays as it came (an
+     unknown correspondent is simply no conversation), and a caller that already
+     resolved hands an account hash straight back through. */
+  const other = (await resolveId(env, wire)) || wire;
+  if (other === me) return null;
   const t = await env.DB.prepare('SELECT ' + DM_THREAD_COLS + ' FROM dm_threads t ' + DM_MINE + ' WHERE t.pair_key = ?2').bind(me, dmPairKey(me, other)).first<DmThreadRow>();
   return { thread: t || null, other };
 }

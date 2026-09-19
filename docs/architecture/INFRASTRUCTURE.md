@@ -253,5 +253,7 @@ on page one.)
 - **The hub routed into space: the one egress `cloakIds` never sees (2026-09-19)** — `log/2026-09.md`
 - **A rule kept in one half is not a rule (2026-09-19)** — `log/2026-09.md`
 - **The server says which member is you, and which words are yours (2026-09-19)** — `log/2026-09.md`
+- **Nobody could start a conversation: the send road read a field no client sends (2026-09-19)** — `log/2026-09.md`
+- **The challenge answered once and then went silent for the life of the page (2026-09-19)** — `log/2026-09.md`
 
 <!-- infra-index:end -->

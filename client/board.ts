@@ -321,7 +321,6 @@ trace('submit: page comment');
       status.textContent = err.message || 'Could not reach the server. Please try again.';
     }).finally(function () {
       buttons.forEach(function (b: any) { b.disabled = false; });
-      if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
     });
   }
 
@@ -448,7 +447,6 @@ trace('submit: board post');
       status.textContent = err.message || 'Could not reach the server. Please try again.';
     }).finally(function () {
       buttons.forEach(function (b: any) { b.disabled = false; });
-      if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
     });
   }
 

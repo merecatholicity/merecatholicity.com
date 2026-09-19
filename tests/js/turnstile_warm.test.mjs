@@ -69,17 +69,74 @@ test('the avatar upload is warmed too, since a file input focuses no text', () =
     'file input, which the focusin net cannot see');
 });
 
-test('a token is spent once and never reused', () => {
-  /* Turnstile tokens are single-use server-side. Treating the warm as a cache
-     would send a second request with a token the server has already burned. */
-  /* Assert the SHAPE, not a comment: the first version of this test pinned an
-     exact comment string and broke the moment the wording changed, which tells
-     you nothing about whether the code is right. */
-  const g = src.slice(src.indexOf('function getToken()'), src.indexOf('function rawToken()'));
-  assert.ok(/mcTsToken = null;/.test(g), 'taking the token must clear it — they are single-use');
-  assert.ok(/return Promise\.resolve\(w\.token\)/.test(g), 'a ready token is spent without a round trip');
-  assert.ok(/ensureFreshToken/.test(g), 'and another is earned to replace it');
+/* The balanced argument of the call whose '(' is at `open`. */
+function argOf(s, open) {
+  let depth = 0;
+  for (let i = open; i < s.length; i++) {
+    if (s[i] === '(') depth++;
+    else if (s[i] === ')') { depth--; if (!depth) return s.slice(open + 1, i).trim(); }
+  }
+  return null;
+}
+
+test('every road that hands a token out earns the next one', () => {
+  /* Turnstile tokens are single-use server-side, so taking one and asking for
+     another are a single act — and when they were written out at each spend
+     site, the THIRD site was written without the second half. A press that
+     beat the warm installed a waiter, the challenge answered it, and the
+     widget was never reset: with 'refresh-expired' and 'retry' both 'never'
+     (the 2026-09-08 postmortem), nothing would ever ask it again. The owner's
+     ring, 2026-09-19: "token ready"/"token ok" at the first press, then
+     "token wanted" → "token timed out", ten seconds apart, for every press
+     after it — for the life of the document, on a widget that was mounted,
+     live and silent.
+
+     So this is a SWEEP, not a check of the site that was reported: every value
+     these two functions hand a caller must come through spendToken(), and a
+     fourth spend road written tomorrow fails here until it does. */
+  const region = uncommented(src.slice(src.indexOf('function getToken()'), src.indexOf('\n  function freshOpts(')));
+  const handed = [...region.matchAll(/\bresolve\(/g)].map((m) => argOf(region, m.index + m[0].length - 1));
+  assert.ok(handed.length >= 3, `expected at least 3 token hand-offs, found ${handed.length}`);
+  for (const arg of handed) {
+    assert.ok(arg === "''" || /^spendToken\(/.test(arg),
+      `a token is handed out as \`${arg}\` — every one must go through spendToken(), which clears it ` +
+      'and resets the widget, or the challenge answers once and is silent for the rest of the page.');
+  }
+  const sp = src.slice(src.indexOf('function spendToken('), src.indexOf('function spendToken(') + 400);
+  assert.ok(/mcTsToken = null;/.test(sp), 'spending must clear the token — they are single-use');
+  assert.ok(/ensureFreshToken/.test(sp), 'and earn another to replace it');
   assert.ok(/TOKEN_FRESH_MS = \d+/.test(src), 'a stale token must be discarded, not spent');
+});
+
+test('a widget that has already answered is asked again, not waited on', () => {
+  /* The second half of the same bug, and the half that does not depend on
+     anyone remembering spendToken(). "Mounted" says nothing about whether a
+     challenge is RUNNING: in render mode the widget answers once per
+     mount-or-reset and then sits there. So the warm and the press both look at
+     mcTsArmed — the warm because loadTurnstile() would find the frame already
+     in the document and return (a no-op, which is exactly what the ring showed
+     between a spent widget and every press after it), the press because
+     waiting on a widget nobody has asked runs the full ten seconds and then
+     refuses a reader who did nothing wrong. */
+  const boot = src.indexOf('function mcBoot()');
+  assert.ok(src.indexOf('var mcTsArmed') > 0 && src.indexOf('var mcTsArmed') < boot,
+    'the armed flag must live ABOVE mcBoot with the frame and the token it belongs to');
+  const warm = src.slice(src.indexOf('function warmToken()'), src.indexOf('function ensureFreshToken()'));
+  assert.ok(/if \(tsMounted\(\) && !mcTsArmed\) \{ ensureFreshToken\(\); return; \}/.test(warm),
+    'the warm must re-arm an idle widget; loadTurnstile() alone finds the frame and returns');
+  const raw = src.slice(src.indexOf('function rawToken()'), src.indexOf('\n  function freshOpts('));
+  assert.ok(/if \(!mcTsArmed\) ensureFreshToken\(\);/.test(raw),
+    'a press that finds nothing running must ask before it waits');
+  assert.ok(raw.indexOf('if (!mcTsArmed) ensureFreshToken();') < raw.indexOf('state.tokenWait = {'),
+    'and ask BEFORE installing the waiter, or the ask cannot be what answers it');
+  /* and the flag must be told the truth by the widget's own three answers */
+  for (const [what, near] of [['a token arrives', "trace('turnstile: token ready')"],
+                              ['a challenge is refused', "trace('turnstile: challenge refused')"]]) {
+    for (const i of [...src.matchAll(new RegExp(near.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))].map((m) => m.index)) {
+      assert.ok(/mcTsArmed = false/.test(src.slice(Math.max(0, i - 200), i + 200)),
+        `${what} and nothing records that the challenge stopped running`);
+    }
+  }
 });
 
 test('the warm never fires for a reader with no identity', () => {
@@ -121,6 +178,39 @@ test('the wait for the callback is bounded', () => {
 test('a spent token is replaced by resetting the widget, not by executing', () => {
   assert.ok(/turnstile\.reset\(/.test(src),
     'reset() is how render mode earns the next single-use token');
+});
+
+test('the widget is reset in ONE place, and never through a per-boot handle', () => {
+  /* TWELVE write paths across six modules — the two board composers, the
+     forward picker, the new group, Add members, the DM send, the avatar and
+     the profile save (each of the last two twice, success and failure), and
+     the feed composer's two — each ended with its own copy of
+       if (window.turnstile && state.widgetId !== null) turnstile.reset(state.widgetId);
+     the pre-frame re-arm, left where it stood when the challenge moved into
+     its own browsing context (2026-09-08). `state.widgetId` is set ONLY when
+     the in-page fallback rendered (the feed's two named no widget at all, which
+     comes to the same thing), so on the road every reader takes all twelve were
+     no-ops and the frame's widget was never reset by any of them — and being boot-scoped, each was also a handle to a widget a soft
+     navigation may have left behind. getToken() spends, spendToken() re-arms,
+     ensureFreshToken() knows both roads: one place (2026-09-19). */
+  /* over the UNCOMMENTED text, and named from the same string: a comment that
+     tells this history may quote the line, and stripping comments moves every
+     offset (an earlier cut of this test read its names out of `src` and blamed
+     three functions that hold no reset at all). */
+  /* client/ ONLY (`src` is clientAll()). Two resets elsewhere are real and must
+     stay: pagejs/contact.js renders its own in-page widget on its own page, and
+     docs/turnstile.html resets the widget it owns — that IS the road that
+     works. Widening this sweep past client/ would ask for both to be deleted. */
+  const code = uncommented(src);
+  const sites = [...code.matchAll(/turnstile\.reset\(/g)].map((m) => {
+    const fns = [...code.slice(0, m.index).matchAll(/^ {2}function (\w+)\(/gm)];
+    return fns.length ? fns[fns.length - 1][1] : '(top level)';
+  });
+  assert.deepEqual(sites, ['ensureFreshToken'],
+    'a module resets the widget itself: it will reach only the in-page fallback, and never the ' +
+    'frame that carries the challenge. Spend the token through getToken() and let spendToken() re-arm.');
+  assert.ok(!/state\.widgetId/.test(code),
+    'the per-boot widget handle is back; mcTsWidget (above mcBoot) is the widget, and the frame is the road');
 });
 
 test('exactly one widget per document, in a host that survives navigation', () => {
