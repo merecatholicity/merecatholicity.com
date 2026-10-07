@@ -168,6 +168,7 @@ on page one.)
 - **The two fixed bars ride their own bundle, ahead of the shell (2026-09-17)** — `log/2026-09.md`
 - **The hop is the one leg of the split that only a browser can check (2026-09-18).** — `log/2026-09.md`
 - **Nine regressions, twenty-four of twenty-five failures one refused beacon report: the nightly kit lists the edge's own noise by its path, and the verse hover check reads the mechanism, not the night (2026-10-07)** — `log/2026-10.md`
+- **The night was judged by whatever kit the dev box's checkout held, so PR #3's fix never reached the night it was for: the run now fetches main and judges with main's kit, in a worktree of its own (2026-10-07)** — `log/2026-10.md`
 
 ### Infrastructure as code (Terraform, 2026-09-08)
 

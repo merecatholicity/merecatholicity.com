@@ -144,7 +144,10 @@ tests/
                        checker (backup_check: twice to the same counts, the FTS tail skipped where the
                        box's sqlite lacks FTS5, a non-idempotent dump named), the nightly run's summary
                        parser and its baseline comparison (webtest_nightly: a rise above the baseline or
-                       a crash a re-run repeats is a regression, the admin-key shape is not), the webtest kit's
+                       a crash a re-run repeats is a regression, the admin-key shape is not; the kit is
+                       main's, rebuilt whole in local/nightly-kit from real repositories in a temp dir — a
+                       never-pulled checkout untouched, the keys linked and surviving the old tree, a failed
+                       fetch or a stranger at the path told in the report), the webtest kit's
                        driver start (webtest_kit: a port a leftover driver holds passed over, a driver that
                        exited at start an error), API.md's parity with the
                        route table (api_parity: every mounted route named — abbreviations resolved — and every

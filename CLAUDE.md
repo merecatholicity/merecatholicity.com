@@ -244,8 +244,8 @@ Tests clarify what the code does and guard the rules that break silently — no 
 tests for trivial getters. Layer 1 `tests/` is hermetic (`make tests`, the standing gate; one file
 per concern; a worker road is RUN against a real SQLite through `tests/_support/worker.mjs` — lock
 source text only for a law that is textual). Layer 2 `webtest/` is headless Chromium against prod
-(`audit.py`, the per-slice `test_*.py`; the nightly runs the read-only ones). A new or changed rule
-brings its test in the same change; never delete a test to go green.
+(`audit.py`, the per-slice `test_*.py`; the nightly runs main's read-only ones). A new or changed
+rule brings its test in the same change; never delete a test to go green.
 
 ## Infrastructure at a glance
 

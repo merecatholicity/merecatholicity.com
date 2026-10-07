@@ -102,7 +102,10 @@ worker-status:
 # The nightly headless run against production (2026-09-16): the read-only
 # webtest suites, compared with webtest/nightly_baseline.json, reported to the
 # worker's ops door (the Health card; a regression alerts). `nightly-install`
-# links the user systemd units (04:30 local, catches up a missed night).
+# links the user systemd units (04:30 local, catches up a missed night). The
+# kit is main's (2026-10-07): `nightly-run` fetches main, rebuilds
+# local/nightly-kit from it and runs there, whatever this checkout holds;
+# `nightly-baseline` measures in this checkout, for the commit that adds a suite.
 .PHONY: nightly-run nightly-baseline nightly-install
 nightly-run:
 	python3 scripts/webtest_nightly.py run
