@@ -37,8 +37,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
    stranger could walk to every member's hash at once, and a hash is the
    unsalted SHA-256 of a key (the 2026-09-17 review's P0). It is keyed now, so
    there is one fewer anonymous success — the sweep did not go hollow, a door
-   closed. */
-const FLOORS = { anon: 18, member: 84, outsider: 63, admin: 123 };
+   closed.
+   anon 18 -> 17, member 84 -> 82, outsider 63 -> 62, admin 123 -> 121 on
+   2026-10-07, deliberately: the four like roads (/dm/like, /wall/like,
+   /wall/comment/like, /wall/likers) were retired on the ledger's due date, and
+   six of the sixteen calls the sweep made on them were successes — now the
+   router's 404, not a sweep gone hollow. Measured on the retiring commit. */
+const FLOORS = { anon: 17, member: 82, outsider: 62, admin: 121 };
 
 let sweep;
 before(async () => {

@@ -133,11 +133,9 @@ test('the handler: the kernel validates, a back-room post is invisible to an out
   assert.ok(/shadowExcl\('r'\)/.test(who), 'muted reactors are hidden');
   const mine = body(idxSrc, 'handleReactMine');
   assert.ok(/page != \?1/.test(mine) && /ADMIN_CAT/.test(mine), 'a non-admin\'s own-reactions read never names a back-room id');
-  /* the three like roads are aliases of the one handler */
-  for (const p of ['/api/comments/wall/like', '/api/comments/wall/comment/like']) assert.ok(idxSrc.includes(`{ m: 'POST', p: '${p}', fn: (request, env, ctx, url) => handleReact(request, env, ctx) }`), p);
-  assert.ok(idxSrc.includes("{ m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleReactWho(request, env) }"));
-  const alias = idxSrc.slice(idxSrc.indexOf('function reactAlias('), idxSrc.indexOf('async function reactTarget('));
-  assert.ok(/raw: like \? '❤️' : ''/.test(alias), 'like:true is the heart, like:false withdraws');
+  /* the three like roads were aliases of the one handler, retired 2026-10-07: no route, and the {post|comment, like} shape read nowhere */
+  for (const p of ['/api/comments/wall/like', '/api/comments/wall/comment/like', '/api/comments/wall/likers']) assert.ok(!idxSrc.includes(`p: '${p}'`), p + ' is no road');
+  assert.ok(!/function reactAlias\(/.test(idxSrc) && !/data\.like\b/.test(idxSrc), 'the like shape is translated nowhere');
   assert.ok(!/wall_likes|wall_comment_likes/.test(idxSrc) && !/wall_likes|wall_comment_likes/.test(libSrc), 'the frozen like tables are read by nothing');
 });
 

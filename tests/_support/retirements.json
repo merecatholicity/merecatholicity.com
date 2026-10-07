@@ -16,38 +16,6 @@
   "how": "delete weakKeyTolerated() and the `known && weakKeyTolerated()` clause in keyFloor, so the floor holds for EVERY write. A weak-key member is no longer locked out: key rotation (POST /profile/rekey, 2026-09-18) lets them move to a strong key with their content, so on the due date a weak key is refused a write and told to rotate. Run scripts/key_audit.py first and give any cracked member a heads-up to rotate; move this date only if one cannot be reached in time."
  },
  {
-  "what": "POST /api/comments/dm/like — the 2026-08-03 heart, kept one deploy for cached clients",
-  "where": "comments-worker/src/index.ts",
-  "pattern": "p: '/api/comments/dm/like'",
-  "since": "2026-09-12",
-  "due": "2026-09-21",
-  "how": "drop the ROUTES line, its tests/_support/routes.json entry and API.md's mention; every client since 2026-09-12 sends /dm/react"
- },
- {
-  "what": "POST /wall/like · /wall/comment/like · /wall/likers — the like aliases over the reactions ledger",
-  "where": "comments-worker/src/index.ts",
-  "pattern": "p: '/api/comments/wall/like'",
-  "since": "2026-09-12",
-  "due": "2026-09-21",
-  "how": "drop the three ROUTES lines, their routes.json entries and API.md's mentions; the client sends /react and /react/who"
- },
- {
-  "what": "react_me / react_other / liked_me / liked_other on a pair's served DM rows",
-  "where": "comments-worker/src/routes/dm.ts",
-  "pattern": "out\\.react_me = ",
-  "since": "2026-09-12",
-  "due": "2026-09-21",
-  "how": "the client reads `reactions`; drop the four fields, app/wire.ts's optional members and API.md §4.1's note"
- },
- {
-  "what": "E1 (enc 1) accepted on the wire for a pair's send and edit",
-  "where": "comments-worker/src/routes/dm.ts",
-  "pattern": "data\\.enc === 1 \\|\\| data\\.enc === true",
-  "since": "2026-09-13",
-  "due": "2026-09-21",
-  "how": "refuse enc 1 on /dm/send and /dm/edit (a stored E1 word stays readable for ever); tests/js/dm_envelope"
- },
- {
   "what": "the legacy actor_hash clause: a DM bell from before 0016 named its sender, not its thread",
   "where": "comments-worker/src/lib.ts",
   "pattern": "\\(\\?4 > 0 OR actor_hash = \\?2\\)",

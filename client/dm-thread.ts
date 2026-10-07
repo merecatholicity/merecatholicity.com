@@ -1189,12 +1189,12 @@ export function installDmThread(B: Boot) {
               if (sending && d2._media_key) {
                 /* The media echo arrives with its envelope in hand (no decrypt). */
                 var mecho = { id: d2.id, sender_hash: state.myHash, media_key: d2._media_key, created_at: d2.created_at, saved: 0, enc: 1,
-                  _env: d2._env, _k: d2._k, reply: dmReplyClean(replyAt), reactions: [], react_me: '', react_other: '' };
+                  _env: d2._env, _k: d2._k, reply: dmReplyClean(replyAt), reactions: [] };
                 placeMsg(mecho);
               } else {
                 /* The text echo is already plaintext (enc 0) and carries its quote — and its K, so an edit re-seals under it. */
                 var echo = { id: d2.id, sender_hash: state.myHash, body: body, created_at: d2.created_at, saved: 0, enc: 0,
-                  _k: d2._k, reply: dmReplyClean(replyAt), reactions: [], react_me: '', react_other: '' };
+                  _k: d2._k, reply: dmReplyClean(replyAt), reactions: [] };
                 placeMsg(echo);
               }
               status.textContent = '';
