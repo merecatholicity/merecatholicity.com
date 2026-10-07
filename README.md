@@ -71,7 +71,7 @@ secrets set with `wrangler secret put`. Credentials live in
 | `make worker-rollback` / `make worker-stage` / `make worker-promote` / `make worker-status` | The rollback and staged-rollout drills (CICD §12) |
 | `make comments-backup` | Fetch the latest daily D1 backup from R2 and replay it locally |
 | `make librarian` | The hand road: push merecat's changed works, persona and dials |
-| `make nightly-run` / `make nightly-baseline` | The nightly headless run against production, and its baseline |
+| `make nightly-run` / `make nightly-baseline` | The nightly headless run against production (main's kit, rebuilt in `local/nightly-kit` each run), and its baseline (this checkout's) |
 | `make clean` | Sweep LaTeX detritus and `__pycache__` |
 
 ## Cookbook

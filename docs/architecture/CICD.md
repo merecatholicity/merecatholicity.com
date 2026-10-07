@@ -595,7 +595,9 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
     `make worker-stage`, `make worker-promote`) — the emergency hand roads of §12; the CI
     dispatch is the road (the build of record). A rollback is always followed by a
     `git revert` push. **The nightly headless run** (`make nightly-install`) runs on the dev
-    box for the same reason as 8, and reports through the ops door.
+    box for the same reason as 8, and reports through the ops door. It judges with MAIN's kit,
+    fetched and rebuilt in `local/nightly-kit` every run (2026-10-07), so a merged change to
+    `webtest/` reaches the next night with no pull on the box; the box's checkout is the door.
 13. **D1 read replication on the comments database** (2026-09-17, owner-authorised) —
     `terraform/d1.tf` declares `read_replication.mode = "auto"`, but the Terraform token
     holds D1 Read only (by design: it cannot write D1), so its apply failed with "failed to
@@ -658,7 +660,8 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
   not in `env.ts` `PUBLIC_VARS`. **A public var** → `PUBLIC_VARS` and the Env's vars section
   (the egress test holds both to `wrangler.jsonc`).
 - **a webtest suite** → `SUITES` in `scripts/webtest_nightly.py` if it is read-only, then
-  `make nightly-baseline` and commit `webtest/nightly_baseline.json`.
+  `make nightly-baseline` (it measures in the checkout that adds the suite) and commit
+  `webtest/nightly_baseline.json`; the night runs it from main once it merges.
 - **an inline `<script>`** (there are two: the anti-flash script every page carries and
   turnstile.html's bridge) → its hash in the CSP: `python3 scripts/csp_hashes.py`, the value in
   `terraform/rulesets.tf`; `tests/py/test_csp.py` refuses a policy that does not match.

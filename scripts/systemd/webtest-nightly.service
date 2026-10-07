@@ -2,7 +2,10 @@
 # scripts/webtest_nightly.py runs the read-only webtest suites, compares
 # each with webtest/nightly_baseline.json and reports to the worker's ops
 # door (the Health card shows it; a regression alerts). A user unit —
-# `make nightly-install` links and enables it with its timer.
+# `make nightly-install` links and enables it with its timer. The checkout
+# below is only the door (2026-10-07): the run fetches main and judges with
+# main's kit, rebuilt in its local/nightly-kit, so a merged fix reaches the
+# next night with nobody pulling here.
 [Unit]
 Description=merecatholicity.com nightly headless webtest against production
 After=network-online.target
