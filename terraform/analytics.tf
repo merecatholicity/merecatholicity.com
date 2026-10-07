@@ -44,6 +44,24 @@
 #      owns the path and the collector is refusing this site. Nothing has been
 #      counted by either road. Diagnosing that needs the dashboard's site record
 #      for token 9eb9b8d0…, which is the owner's act.
+#   DATED, 2026-10-07: the 404 began with THIS flag's flip. Terraform run 24
+#   applied 7fb8134 (auto_install true -> false) between 08:09 and 08:13 UTC on
+#   2026-09-19; the nightly webtest was clean through its run of 2026-09-18 and
+#   has reported the 404 on every page since the run that followed, and
+#   d9ac859 watched it in a real Chrome at 08:30 UTC that same morning. So
+#   /cdn-cgi/rum is the AUTOMATIC road's collector, closed by the flag, while
+#   the edge kept injecting its snippet -- and the injected beacon is what
+#   posts into the 404 (the manual road, nav.js's, reports to
+#   cloudflareinsights.com, which is why connect-src names that host). What is
+#   left to stop is the injection, and the first thing to read is the injected
+#   tag's data-cf-beacon token, with a browser's Accept header: ours
+#   (9eb9b8d0…) means this record's own ruleset still stands at the edge, and
+#   the dashboard's "Manage site" automatic-setup switch is the control;
+#   another token means a second site record in the account (GET
+#   /accounts/{account}/rum/site_info/list), made by the zone-level toggle, to
+#   delete or to adopt here. Until then the webtest kit lists the 404 as the
+#   edge's noise (webtest/flows.py BENIGN_CONSOLE); log/2026-10.md has the
+#   timeline.
 #
 # `enabled` and `lite` are NOT declared, and that is the whole reason this file
 # plans clean. The RUM read the provider imports from does not return them, so

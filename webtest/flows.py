@@ -32,6 +32,15 @@ BENIGN_CONSOLE = (
     "The Content Security Policy directive 'upgrade-insecure-requests' is ignored",
     'cdn-cgi/challenge-platform',
     'static.cloudflareinsights.com',
+    # The Web Analytics beacon the EDGE injects reports to /cdn-cgi/rum on this
+    # origin, and that POST has answered 404 since the site record's
+    # auto_install went false (2026-09-19; terraform/analytics.tf has the
+    # story). No code of ours makes the request — nav.js's own beacon never
+    # runs under webdriver — so it is the edge's noise, not a finding, and
+    # live_kit already exempts cdn-cgi/ from its HTTP sweep for the same
+    # reason. The PATH, never bare 'cdn-cgi/': a challenge-platform or any
+    # other edge failure stays fatal. tests/py/test_webtest_kit.py holds it.
+    'cdn-cgi/rum',
     'the server responded with a status of 429',
     # A family with no road from this machine (a v4-only box cannot reach
     # ipv6.icanhazip.com) — the browser logs the failed load itself, so the
