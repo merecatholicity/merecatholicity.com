@@ -8,7 +8,6 @@ through window.mcRich on a comments-mounted prod page (where the hover
 subsystem boots), with the desktop pointer emulated."""
 import json
 import sys
-import time
 
 from flows import Flow
 
@@ -17,13 +16,26 @@ FIX = ('# A heading\n**bold** and *ital* and :kekw: and :fire: and :nope: stay\n
        '[our credo](https://merecatholicity.com/credo.html) and '
        '[out](https://example.com/x)')
 
+# The hover's one slow step is kjv.json — the whole text, fetched on the first
+# hover, a cold edge miss most nights — so the tip is POLLED for, up to this
+# many ms, rather than given a fixed delay that measures the night's bandwidth
+# instead of the feature (2.5 s used to, 2026-10-07).
+TIP_WAIT_MS = 15000
+
 
 def main():
     with Flow(port=9571, hover=True) as f:
         f.goto('credo.html')
         f.wait('!!window.mcRich', timeout=15)
+        # The hover listener is installed by the classic client's boot
+        # (client/composer.ts run(), the last thing mcBoot does before it
+        # publishes window.mcKit) — not by the bundle. A mouseover dispatched
+        # before that boot meets no listener, shows no tip, and reads as the
+        # feature missing.
+        f.wait('!!window.mcKit', timeout=15)
         st = json.loads(f.js1("""
-          var d = document.createElement('div'); document.body.appendChild(d);
+          var d = document.createElement('div'); d.setAttribute('data-probe', 'richtext');
+          document.body.appendChild(d);
           window.mcRich.fillBody(d, %s);
           var img = d.querySelector('img.mc-emoji');
           var sl = d.querySelector('a.scripture-link');
@@ -39,12 +51,31 @@ def main():
             away: links.filter(function(h){return h && h.indexOf('away.html?url=')===0}).length,
             credo: links.indexOf('https://merecatholicity.com/credo.html') !== -1});""" % json.dumps(FIX)))
         tip = json.loads(f.js1("""
-          var sl=document.querySelector('a.scripture-link');
-          sl.dispatchEvent(new MouseEvent('mouseover',{bubbles:true,clientX:60,clientY:60}));
-          return new Promise(function(res){setTimeout(function(){
-            var t=document.querySelector('.scripture-tip');
-            res(JSON.stringify({shown: !!t && !t.hidden, text: t? t.textContent.slice(0,70):''}));},2500);});"""))
+          /* The fixture's OWN reference, never the document's first: credo.html
+             mounts a comments section above the fixture, and a comment carrying
+             a reference of its own would be the one hovered — previewing the
+             wrong verse, and reading as the hover broken. */
+          var sl = document.querySelector('[data-probe=richtext] a.scripture-link');
+          if (!sl) return JSON.stringify({shown: false, ms: 0, ref: '', text: ''});
+          var t0 = Date.now();
+          sl.dispatchEvent(new MouseEvent('mouseover', {bubbles: true, clientX: 60, clientY: 60}));
+          return new Promise(function (res) {
+            (function poll() {
+              var t = document.querySelector('.scripture-tip');
+              var shown = !!t && !t.hidden && t.textContent.length > 0;
+              if (shown || Date.now() - t0 > %d) {
+                res(JSON.stringify({shown: shown, ms: Date.now() - t0, ref: sl.textContent,
+                                    text: t ? t.textContent.slice(0, 70) : ''}));
+              } else { setTimeout(poll, 100); }
+            })();
+          });""" % TIP_WAIT_MS))
         f.assert_console_clean('richtext')
+        hovered = bool(tip['shown']) and 'God so loved' in tip['text']
+        if not hovered:
+            # the FAIL line says what was seen, so the nightly's report names
+            # the cause and not the symptom
+            f.failures.append('verse hover: tip shown=%s after %s ms over %r, text=%r'
+                              % (tip['shown'], tip['ms'], tip['ref'], tip['text']))
         checks = [
             ('heading + bold + em', st['hd'] and st['bold'] and st['em']),
             ('custom emoji from whitelist', st['emoji'] == 'emoji/memes/kekw.webp'),
@@ -54,7 +85,7 @@ def main():
             ('scripture autolink', st['slug'] == 'john'),
             ('off-site via away.html', st['away'] == 1),
             ('same-site link direct', st['credo']),
-            ('verse hover previews', tip['shown'] and 'God so loved' in tip['text']),
+            ('verse hover previews', hovered),
         ]
         sys.exit(f.verdict(checks))
 

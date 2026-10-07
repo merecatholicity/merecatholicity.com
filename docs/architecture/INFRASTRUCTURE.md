@@ -86,6 +86,7 @@ on page one.)
 - **A reading page waits for the shell; it does not wait on it (2026-09-18).** — `log/2026-09.md`
 - **Two changes of the same day meet on two pages, and a scroll is what settles it (2026-09-18).** — `log/2026-09.md`
 - **The meter is dark for two reasons, and one of them is a measurement that did not look like a browser (2026-09-19)** — `log/2026-09.md`
+- **The collector's 404 is dated: it began with the apply that turned `auto_install` off, so `/cdn-cgi/rum` is the automatic road's door and the injection is what is left to stop (2026-10-07)** — `log/2026-10.md`
 
 ### Build system
 
@@ -166,6 +167,7 @@ on page one.)
 - **A phone's first paint is already the app, so a cold open stops looking like a reload (2026-09-17)** — `log/2026-09.md`
 - **The two fixed bars ride their own bundle, ahead of the shell (2026-09-17)** — `log/2026-09.md`
 - **The hop is the one leg of the split that only a browser can check (2026-09-18).** — `log/2026-09.md`
+- **Nine regressions, twenty-four of twenty-five failures one refused beacon report: the nightly kit lists the edge's own noise by its path, and the verse hover check reads the mechanism, not the night (2026-10-07)** — `log/2026-10.md`
 
 ### Infrastructure as code (Terraform, 2026-09-08)
 
