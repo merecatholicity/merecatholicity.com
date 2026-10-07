@@ -175,7 +175,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Envelope v2** (`enc` 3, `E3.`): a random content key per message under `nacl.secretbox`, boxed once per current member (the
   sender included) to their published X25519 key and stored in `dm_keys` — the server serves each reader ONLY their own `sealed`;
   the key set must equal the roster (`Domain.Dm.membersEqual`) or the send is answered `409 roster` and sealed once more; an edit
-  re-seals under the SAME key; a pair's `E1` words stay readable for ever (and are accepted on the wire one deploy longer).
+  re-seals under the SAME key; a pair's `E1` words stay readable for ever and are refused on the wire (retired 2026-10-07).
 - **An object dies with its LAST reference** (`dm_media_refs`): a forwarded attachment is never uploaded twice — the copy names
   the same object, allowed only to a member who can read it (the media GET's own rule, `dmMediaReadable`) — so every message road
   calls `releaseMediaRefs`, never `purgeMediaKeys` directly; the 30-day cap and the LRU valve take an object from under EVERY

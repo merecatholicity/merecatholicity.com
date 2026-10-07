@@ -26,6 +26,10 @@ ROUTES = os.path.join(ROOT, 'tests', '_support', 'routes.json')
 RETIRED = {
     '/api/merecat/ask': 'replaced by ask-init + the chat WebSocket (API.md §0, §10)',
     '/api/merecat/store': 'a retired no-op (API.md §10)',
+    '/api/comments/wall/like': 'a like alias of /react, retired 2026-10-07 (API.md §10)',
+    '/api/comments/wall/comment/like': 'a like alias of /react, retired 2026-10-07 (API.md §10)',
+    '/api/comments/wall/likers': 'a like alias of /react/who, retired 2026-10-07 (API.md §10)',
+    '/api/comments/dm/like': 'the 2026-08-03 heart, an alias of /dm/react, retired 2026-10-07 (API.md §10)',
 }
 # mounted outside the ROUTES table, by fetch() itself
 OUTSIDE_THE_TABLE = {'/api/comments/live', '/api/merecat/live'}

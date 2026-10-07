@@ -221,11 +221,6 @@
  },
  {
   "m": "POST",
-  "p": "/api/comments/dm/like",
-  "fn": "(request, env, ctx, url) => handleDmReact(request, env, ctx)"
- },
- {
-  "m": "POST",
   "p": "/api/comments/dm/seen",
   "fn": "(request, env, ctx, url) => handleDmSeen(request, env, ctx)"
  },
@@ -442,21 +437,6 @@
  {
   "m": "POST",
   "p": "/api/comments/react/who",
-  "fn": "(request, env, ctx, url) => handleReactWho(request, env)"
- },
- {
-  "m": "POST",
-  "p": "/api/comments/wall/like",
-  "fn": "(request, env, ctx, url) => handleReact(request, env, ctx)"
- },
- {
-  "m": "POST",
-  "p": "/api/comments/wall/comment/like",
-  "fn": "(request, env, ctx, url) => handleReact(request, env, ctx)"
- },
- {
-  "m": "POST",
-  "p": "/api/comments/wall/likers",
   "fn": "(request, env, ctx, url) => handleReactWho(request, env)"
  },
  {

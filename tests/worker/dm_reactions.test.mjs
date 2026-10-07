@@ -4,7 +4,7 @@
  * What would break silently: a reaction stored without the kernel's validator
  * (an inline regex in the worker drifting from the picker's), the old heart
  * lost in the move (a like from August that no longer lights), `/dm/like`
- * answering 404 to a client cached before the picker, a reaction accepted on a
+ * still answering after its retirement (2026-10-07), a reaction accepted on a
  * message the reactor cannot see (held, expired, redacted, behind their own
  * clear stamp), the other side never hearing a reaction or a save, a bell rung
  * for a word its author has on screen. So: the ledger builds and 0012
@@ -115,15 +115,15 @@ test('the reaction is validated by the kernel, in the one worker membrane: the h
   db.close();
 });
 
-test('the old heart rides the new road: /dm/like is the react handler with ❤️ or nothing', async () => {
+test('the old heart\'s road is gone (retired 2026-10-07): /dm/like answers the router\'s 404, and {like} means nothing to /dm/react', async () => {
   const db = seeded();
   const api = client(worker, makeEnv({ db }));
   let r = await api.post('/api/comments/dm/like', { key: A.key, id: 1, like: 1 });
-  assert.equal(r.status, 200, 'a client cached before the picker still lands its heart');
-  assert.deepEqual(reactions(db, 1), [['A', '❤️']], '{like:1} is the ❤️ reaction');
-  r = await api.post('/api/comments/dm/like', { key: A.key, id: 1, like: 0 });
-  assert.equal(r.status, 200);
-  assert.deepEqual(reactions(db, 1), [], '{like:0} withdraws');
+  assert.deepEqual({ status: r.status, error: r.json.error }, { status: 404, error: 'Not found.' }, 'no such road');
+  assert.deepEqual(reactions(db, 1), [], 'nothing stored');
+  r = await api.post('/api/comments/dm/react', { key: A.key, id: 1, like: 1 });
+  assert.deepEqual({ status: r.status, emoji: r.json.emoji }, { status: 200, emoji: '' }, '{like} is not read: no emoji is a withdraw');
+  assert.deepEqual(reactions(db, 1), []);
   db.close();
 });
 
@@ -148,7 +148,7 @@ test('a reaction lands only on a message the reactor can see, never a redacted o
   db.close();
 });
 
-test('the thread tells every viewer the reactions as the ledger holds them (react_me / react_other derived for a pair, one deploy), every other member hears reactions and saves live, and the bell is quiet for a word on screen', async () => {
+test('the thread tells every viewer the reactions as the ledger holds them — the rows alone, a pair\'s derived react_me / react_other retired 2026-10-07 — every other member hears reactions and saves live, and the bell is quiet for a word on screen', async () => {
   const db = seeded();
   let onScreen = [];
   const hub = hubSpy({ viewersOf: (tag, hashes) => onScreen.filter((h) => hashes.includes(h)) });   // who, of those asked about, has the thread open
@@ -176,9 +176,9 @@ test('the thread tells every viewer the reactions as the ledger holds them (reac
   r = await api.post('/api/comments/dm/thread', { key: A.key, thread_id: 1 });
   const m1 = r.json.messages.find((m) => m.id === 1), m2 = r.json.messages.find((m) => m.id === 2);
   assert.deepEqual(m1.reactions, [{ hash: A.hash, emoji: '😂' }], 'the ledger\'s rows beside the word');
-  assert.deepEqual({ me: m1.react_me, other: m1.react_other, liked_me: m1.liked_me, liked_other: m1.liked_other }, { me: '😂', other: '', liked_me: 1, liked_other: 0 }, 'a pair still reads react_me / react_other and the heart fields, one deploy');
+  assert.deepEqual([m1.react_me, m1.react_other, m1.liked_me, m1.liked_other], [undefined, undefined, undefined, undefined], 'a pair reads the rows alone: the derived fields are gone (retired 2026-10-07)');
   assert.deepEqual(m2.reactions.map((x) => [who[x.hash], x.emoji]).sort(), [['A', '👍'], ['B', '❤️']]);
-  assert.deepEqual({ me: m2.react_me, other: m2.react_other }, { me: '👍', other: '❤️' });
+  assert.deepEqual([m2.react_me, m2.react_other, m2.liked_me, m2.liked_other], [undefined, undefined, undefined, undefined]);
   assert.equal(m1.reactions_json, undefined, 'the raw column never leaves');
   /* a save is for all, and names the saver */
   r = await api.post('/api/comments/dm/save', { key: B.key, id: 2, saved: 1 });

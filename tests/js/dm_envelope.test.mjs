@@ -70,7 +70,7 @@ test('a member left out of a later word cannot open it: no history for a newcome
   assert.equal(A.env.dmOpen(served(after, B, A), ctx), 'after Cy left');
 });
 
-test('an edit re-sealed under the SAME key opens for every member without new keys; a pair\'s E1 word still opens both ways', () => {
+test('an edit re-sealed under the SAME key opens for every member without new keys; a pair\'s E1 word still opens both ways and is never re-sealed', () => {
   const ctx = ctxFor([A, B, C]);
   const sent = A.env.dmSealFor('a word with a typo', roster(A, B, C));
   const mine = served(sent, A, A);
@@ -87,7 +87,7 @@ test('an edit re-sealed under the SAME key opens for every member without new ke
   assert.equal(A.env.dmPlain({ enc: 1, body: e1 }, { otherPub: B.pub }), 'an older word', 'the sender re-reads through the same secret');
   assert.equal(C.env.dmPlain({ enc: 1, body: e1 }, { otherPub: A.pub }), null, 'not a third party');
   const e1edit = A.env.dmReseal('an older word, edited', { enc: 1, body: e1 }, { otherPub: B.pub });
-  assert.equal(e1edit.enc, 1, 'an E1 word is re-sealed to the pair');
+  assert.equal(e1edit, null, 'an E1 word is read, never re-sealed: the wire takes the sealed envelope alone (2026-10-07)');
 });
 
 test('a tampered body opens for nobody; a word without its envelope is nothing', () => {

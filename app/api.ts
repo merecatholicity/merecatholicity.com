@@ -88,7 +88,7 @@ type DmTarget = string | { thread_id?: number; with?: string };
 const dmTarget = (t: DmTarget) => (typeof t === 'string' ? { with: t } : { ...(t.thread_id ? { thread_id: t.thread_id } : {}), ...(t.with ? { with: t.with } : {}) });
 export const dmThreads = (p?: number) => postRead<DmThreadsPayload>('/dm/threads', { key: keyFn(), p: p || 1 }, 20000);
 export const dmThread = (target: DmTarget, p?: number) => postRead<DmThreadPayload>('/dm/thread', { key: keyFn(), ...dmTarget(target), ...(p ? { p } : {}) }, 15000);
-/* The sealed envelope: {thread_id | to, body:'E3.…', enc:3, keys:{hash: sealed}, media_key?, token}; a pair's E1 body ({to, body, enc:1}) one deploy longer. */
+/* The sealed envelope: {thread_id | to, body:'E3.…', enc:3, keys:{hash: sealed}, media_key?, token} — the one envelope the wire takes (a pair's E1 body is refused since 2026-10-07). */
 export const dmSend = (payload: Record<string, unknown>) => write(API, '/dm/send', { ...payload, key: keyFn() }, [API + '/dm']);
 export const dmForward = (items: Record<string, unknown>[], token: string) => write(API, '/dm/forward', { items, token, key: keyFn() }, [API + '/dm']);
 export const dmRoster = (target: DmTarget) => postRead<DmRosterPayload>('/dm/roster', { key: keyFn(), ...dmTarget(target) }, 5000);

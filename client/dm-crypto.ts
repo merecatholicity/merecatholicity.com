@@ -185,11 +185,11 @@ export function installDmCrypto(B: Boot) {
     return null;
   }
 
-  /* Re-seal an edit: a sealed word under the SAME K (the keys stand), a pair's
-     E1 word to the pair's key. What /dm/edit takes. */
-  function dmReseal(plaintext: any, m: any, ctx: any) {
+  /* Re-seal an edit: a sealed word under the SAME K (the keys stand). What
+     /dm/edit takes. A pair's E1 word from before the envelope has no K and is
+     never re-sealed (the wire refuses E1 since 2026-10-07): null. */
+  function dmReseal(plaintext: any, m: any) {
     if (m._k) return { body: dmSealBody(plaintext, m._k), enc: 3 };
-    if (ctx.otherPub) return { body: dmEncrypt(plaintext, ctx.otherPub), enc: 1 };
     return null;
   }
 

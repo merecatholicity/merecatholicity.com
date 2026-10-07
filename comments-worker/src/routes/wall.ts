@@ -143,20 +143,15 @@ async function handleWallPostGet(request: Request, env: Env) {
    emoji or one custom-pack token (Domain.Reaction.normalizeReaction, the same
    rule a DM reaction runs), '' withdraws; a different emoji replaces (one
    reaction per member per target). Your own post may be reacted to (the
-   owner's ruling) — it just rings no bell. The old like roads are aliases
-   ({post|comment, like:<bool>} = the ❤️ reaction), kept one deploy for cached
-   clients, and the answer carries the old {liked, likes} beside the tally.
+   owner's ruling) — it just rings no bell. The old like roads ({post|comment,
+   like:<bool>} = the ❤️ reaction) were aliases of this one for a deploy and
+   were retired 2026-10-07; the answer still carries the old {liked, likes}
+   beside the tally.
    Visibility is the target's own: a live row; a back-room post only to an
    admin (else the same 404 a missing post gives — indistinguishable); the
    wall's targets behind the social switch. POST_LIMIT like a DM reaction, no
    Turnstile, gated like any write. The tally goes out live over the target's
    own scope, so every open page repaints the pill. */
-function reactAlias(data: Body) {
-  if (data.target != null) return { target: String(data.target || ''), id: Math.floor(Number(data.id) || 0), raw: data.emoji != null ? String(data.emoji) : '' };
-  const like = !(data.like === false || data.like === 0 || data.like === 'false');
-  if (data.comment != null) return { target: 'wallc', id: Math.floor(Number(data.comment) || 0), raw: like ? '❤️' : '' };
-  return { target: 'wall', id: Math.floor(Number(data.post || data.id) || 0), raw: like ? '❤️' : '' };
-}
 
 /* The row a target names, as the viewer may see it: its author, the bell to
    ring, the thread/post pair the bell carries, and the live scope the tally
@@ -193,7 +188,8 @@ async function handleReact(request: Request, env: Env, ctx: ExecutionContext) {
   { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   if (!key) return json({ ok: false, error: 'Sign in to react.' }, 401);
-  const { target, id, raw } = reactAlias(data);
+  const target = String(data.target || ''), id = Math.floor(Number(data.id) || 0);
+  const raw = data.emoji != null ? String(data.emoji) : '';
   const emoji: string | null = raw.trim() ? reactionOf(raw) : '';
   if (!isReactTarget(target) || id < 1 || emoji === null) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
@@ -258,7 +254,7 @@ async function handleReactWho(request: Request, env: Env) {
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
   const ip = request.headers.get('CF-Connecting-IP') || '';
   if (!(await throttle(env, 'READ_LIMIT', ip, { key: data && data.key }))) return json({ ok: false, error: 'Too many requests. Slow down.' }, 429);
-  const { target, id } = reactAlias(data);
+  const target = String(data.target || ''), id = Math.floor(Number(data.id) || 0);
   if (!isReactTarget(target) || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
   const LIMIT = 60;
   const none = json({ ok: true, target, id, who: [], likers: [], more: false }, 200);
@@ -556,6 +552,5 @@ export {
   handleWallFeed,
   handleWallPost,
   handleWallPostGet,
-  reactAlias,
   reactTarget,
 };

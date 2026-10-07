@@ -42,12 +42,7 @@ export interface DmMessage {
   opened_at: number | null;
   expires_at: number | null;
   sealed: string | null;        // MY sealed content key (enc 3), served to me alone
-  reactions: DmReaction[];
-  /* a pair's, one deploy for bundles from before the member model */
-  react_me?: string;
-  react_other?: string;
-  liked_me?: number;
-  liked_other?: number;
+  reactions: DmReaction[];      // the rows alone (a pair's derived react_me / react_other / liked_* retired 2026-10-07)
 }
 export interface DmThreadInfo { id: number | null; kind: number; name: string | null; ttl: number; members: DmMember[]; }
 /* a pair's `other`, kept one deploy: a member row, or the bare shape for an unmade pair */
@@ -98,7 +93,7 @@ export interface DmSendBody {
   with?: string;
   to?: string;
   body: string;
-  enc: 0 | 1 | 3;
+  enc: 0 | 3;                   // the pair's box (1) is refused on the wire since 2026-10-07
   keys?: Record<string, string>; // enc 3: the content key sealed once per current member, the sender included
   media_key?: string;
 }

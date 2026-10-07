@@ -509,7 +509,6 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/dm/ttl', fn: (request, env, ctx, url) => handleDmTtl(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/save', fn: (request, env, ctx, url) => handleDmSave(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/react', fn: (request, env, ctx, url) => handleDmReact(request, env, ctx) },
-  { m: 'POST', p: '/api/comments/dm/like', fn: (request, env, ctx, url) => handleDmReact(request, env, ctx) },   // the 2026-08-03 heart, one deploy for cached clients
   { m: 'POST', p: '/api/comments/dm/seen', fn: (request, env, ctx, url) => handleDmSeen(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/edit', fn: (request, env, ctx, url) => handleDmEdit(request, env, ctx) },
   { m: 'POST', p: '/api/comments/dm/redact', fn: (request, env, ctx, url) => handleDmRedact(request, env, ctx) },
@@ -551,14 +550,11 @@ const ROUTES: Route[] = [
   { m: 'POST', p: '/api/comments/bookmark', fn: (request, env, ctx, url) => handleBookmark(request, env) },
   { m: 'POST', p: '/api/comments/bookmarks', fn: (request, env, ctx, url) => handleBookmarks(request, env) },
   { m: 'GET', p: '/api/comments/recent', fn: (request, env, ctx, url) => handleRecent(request, env, url) },
-  /* Reactions (2026-09-12): one road for every public target; the three like
-     roads are aliases of it (the ❤️ reaction), kept one deploy for cached clients. */
+  /* Reactions (2026-09-12): one road for every public target (the three like
+     aliases of it, the ❤️ reaction, were retired 2026-10-07). */
   { m: 'POST', p: '/api/comments/react', fn: (request, env, ctx, url) => handleReact(request, env, ctx) },
   { m: 'POST', p: '/api/comments/reacts', fn: (request, env, ctx, url) => handleReactMine(request, env) },
   { m: 'POST', p: '/api/comments/react/who', fn: (request, env, ctx, url) => handleReactWho(request, env) },
-  { m: 'POST', p: '/api/comments/wall/like', fn: (request, env, ctx, url) => handleReact(request, env, ctx) },
-  { m: 'POST', p: '/api/comments/wall/comment/like', fn: (request, env, ctx, url) => handleReact(request, env, ctx) },
-  { m: 'POST', p: '/api/comments/wall/likers', fn: (request, env, ctx, url) => handleReactWho(request, env) },
   { m: 'POST', p: '/api/comments/wall/prune', fn: (request, env, ctx, url) => handleWallPrune(request, env) },
   { m: 'GET', p: '/api/comments/wall/media', fn: (request, env, ctx, url) => handleWallMediaGet(request, env, url, ctx) },
   /* Gated at the ROUTE, not inside mediaUpload — the board route below shares

@@ -73,6 +73,17 @@ import type { DmMessage, DmReaction, DmRosterPayload, DmThreadPayload, DmThreads
 import type { Env } from '../env.ts';
 import type { Body, HubEvent } from '../lib.ts';
 
+/* The envelope a client names on the wire (/dm/send, /dm/edit): the sealed
+   envelope (Domain.Dm.encSealed) or a plain body (encPlain). The pair's box
+   (encPair, `E1.`) was accepted one deploy past the member model and was
+   retired 2026-10-07 — a stored E1 word stays readable for ever, a new one
+   is refused: null, which the handler answers 400. */
+function wireEnc(v: unknown): 3 | 0 | null {
+  if (v === Dm.encSealed || v === '3') return 3;
+  if (v === Dm.encPair || v === true || v === '1') return null;
+  return 0;
+}
+
 async function handleDmSend(request: Request, env: Env, ctx: ExecutionContext) {
   const pre = await gated(request, env, { bucket: 'POST_LIMIT', limited: 'Too many messages at once. Wait a minute and try again.', block: true });
   if (pre instanceof Response) return pre;
@@ -108,10 +119,11 @@ async function deliverDmWord(env: Env, ctx: ExecutionContext | undefined, me: st
   if (!threadId && !to) return json({ ok: false, error: 'No such conversation.' }, 404);
   /* enc = 3: the sealed envelope (2026-09-13) — a content key per message,
      boxed once per member, `keys` naming every current member (the sender
-     included); enc = 1: the pair's box, accepted one deploy for a bundle
-     from before; enc = 0: a legacy/plain body. Either way the store is
-     verbatim — the server never reads the message content. */
-  const enc = (data.enc === 3 || data.enc === '3') ? 3 : ((data.enc === 1 || data.enc === true) ? 1 : 0);
+     included); enc = 0: a legacy/plain body; enc = 1, the pair's box, is
+     refused since 2026-10-07 (wireEnc). Either way the store is verbatim —
+     the server never reads the message content. */
+  const enc = wireEnc(data.enc);
+  if (enc === null) return json({ ok: false, error: 'Bad request.' }, 400);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
   if (body.length > (enc ? DM_ENC_MAX : MAX_BODY)) return json({ ok: false, error: 'The message is too long.' }, 400);
@@ -586,9 +598,9 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
     from.replace(' FROM dms m ', ' FROM dms m LEFT JOIN dm_keys k ON k.msg_id = m.id AND k.hash = ?1 ') + ' ORDER BY m.id LIMIT ?3 OFFSET ?4'
   ).bind(me, thread.id, DM_PER_PAGE, (p - 1) * DM_PER_PAGE).all<Omit<DmMessage, 'reactions'> & { reactions_json: string | null }>();
   /* Per-message reactions, one per member (dm_reactions since 0016), told as
-     the ledger holds them; for a pair, react_me / react_other and the
-     2026-08-03 heart's liked_* fields are derived — kept one deploy for
-     clients cached before the member model. */
+     the ledger holds them — the rows alone: a pair's derived react_me /
+     react_other and the 2026-08-03 heart's liked_* fields rode beside them
+     one deploy and were retired 2026-10-07. */
   const messages: DmMessage[] = (msgs.results || []).map(({ reactions_json, ...m }) => {
     let reactions: DmReaction[] = [];
     try {
@@ -597,12 +609,6 @@ async function handleDmThread(request: Request, env: Env, ctx: ExecutionContext)
     } catch { reactions = []; }
     const out: DmMessage = Object.assign({}, m, { reactions });
     out.mine = m.sender_hash === me ? 1 : 0;   // which side the bubble takes, decided here, not guessed there
-    if (kind === 0) {
-      out.react_me = String((reactions.find((r) => r.hash === me) || { emoji: '' }).emoji || '');
-      out.react_other = String((reactions.find((r) => r.hash !== me) || { emoji: '' }).emoji || '');
-      out.liked_me = out.react_me ? 1 : 0;
-      out.liked_other = out.react_other ? 1 : 0;
-    }
     return out;
   });
   /* What this reader has not read yet, told BEFORE this open marks it read
@@ -794,9 +800,8 @@ async function handleDmSave(request: Request, env: Env, ctx: ExecutionContext) {
    since they joined. One reaction per MEMBER per message (dm_reactions since
    0016), metadata beside opened_at, validated by the kernel through
    dmReaction (never an inline regex here); the plaintext stays sealed. Every
-   other member's open thread hears it live. The 2026-08-03 heart rides the
-   same road: `/dm/like {like}` is this handler with ❤️ or nothing, kept one
-   deploy for cached clients. */
+   other member's open thread hears it live. (The 2026-08-03 heart's `/dm/like`
+   alias of this road, `{like}` as ❤️ or nothing, was retired 2026-10-07.) */
 async function handleDmReact(request: Request, env: Env, ctx: ExecutionContext) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -805,7 +810,7 @@ async function handleDmReact(request: Request, env: Env, ctx: ExecutionContext) 
   { const floor = await keyFloor(env, 'POST_LIMIT', String(data.key || '')); if (floor) return floor; }
   const key = String(data.key || '');
   const id = Math.floor(Number(data.id) || 0);
-  const raw = data.emoji != null ? String(data.emoji) : (data.like ? '❤️' : '');
+  const raw = data.emoji != null ? String(data.emoji) : '';
   const emoji: string | null = raw.trim() ? dmReaction(raw) : '';
   if (!key || id < 1 || emoji === null) return json({ ok: false, error: 'Bad request.' }, 400);
   const me = await sha256hex(key);
@@ -894,13 +899,14 @@ async function handleDmSeen(request: Request, env: Env, ctx: ExecutionContext) {
 }
 
 /* Edit one of your OWN messages. DMs are end-to-end encrypted, so the server is
-   blind: the client re-seals the new plaintext — under the SAME content key
-   for a sealed envelope, so every member's key still opens it; to the pair
-   secret for an E1 word — and sends the fresh ciphertext, which simply
-   replaces the stored body; edited_at is stamped so everyone shows an
+   blind: the client re-seals the new plaintext under the SAME content key, so
+   every member's key still opens it, and sends the fresh ciphertext, which
+   simply replaces the stored body; edited_at is stamped so everyone shows an
    "(edited)" marker. Everything else — the expiry clock, opened_at, saved, the
    sealed keys, any media pointer — is untouched. Only the sender may edit,
-   only a live (unexpired), un-redacted, non-system message. */
+   only a live (unexpired), un-redacted, non-system, sealed message: a pair's
+   E1 word from before the envelope is read for ever and edited never, and E1
+   on the wire is refused (2026-10-07). */
 async function handleDmEdit(request: Request, env: Env, ctx: ExecutionContext) {
   let data: Body;
   try { data = await request.json<Body>(); } catch { return json({ ok: false, error: 'Bad request.' }, 400); }
@@ -910,7 +916,8 @@ async function handleDmEdit(request: Request, env: Env, ctx: ExecutionContext) {
   const key = String(data.key || '');
   const id = Math.floor(Number(data.id) || 0);
   if (!key || id < 1) return json({ ok: false, error: 'Bad request.' }, 400);
-  const enc = (data.enc === 3 || data.enc === '3') ? 3 : ((data.enc === 1 || data.enc === true) ? 1 : 0);
+  const enc = wireEnc(data.enc);
+  if (enc === null) return json({ ok: false, error: 'Bad request.' }, 400);
   const body = String(data.body || '').replace(/\r\n?/g, '\n').trim();
   if (!body) return json({ ok: false, error: 'The message is empty.' }, 400);
   if (body.length > (enc ? DM_ENC_MAX : MAX_BODY)) return json({ ok: false, error: 'The message is too long.' }, 400);
@@ -928,6 +935,7 @@ async function handleDmEdit(request: Request, env: Env, ctx: ExecutionContext) {
   if (!row) return json({ ok: false, error: 'No such message.' }, 404);
   if (row.redacted) return json({ ok: false, error: 'That message was deleted.' }, 409);
   if (Number(row.enc) === 2) return json({ ok: false, error: 'That message cannot be edited.' }, 403);
+  if (Number(row.enc) === Dm.encPair) return json({ ok: false, error: 'That message cannot be edited.' }, 403);   // a pair's E1 word: no content key to re-seal under
   if (row.expires_at != null && Number(row.expires_at) <= now) return json({ ok: false, error: 'That message has expired.' }, 410);
   await env.DB.prepare('UPDATE dms SET body = ?1, enc = ?2, edited_at = ?3 WHERE id = ?4').bind(body, enc, now, id).run();
   /* Push the new ciphertext to every other member's open thread so their
