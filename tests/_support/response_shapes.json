@@ -970,16 +970,6 @@
   "lists": [],
   "text": []
  },
- "POST /api/comments/dm/like": {
-  "json": [
-   "emoji:string",
-   "error:string",
-   "id:number",
-   "ok:boolean"
-  ],
-  "lists": [],
-  "text": []
- },
  "POST /api/comments/dm/media": {
   "json": [
    "error:string",
@@ -1147,15 +1137,11 @@
    "messages[].enc:number",
    "messages[].expires_at:null",
    "messages[].id:number",
-   "messages[].liked_me:number",
-   "messages[].liked_other:number",
    "messages[].media_expired:number",
    "messages[].media_key:string",
    "messages[].media_size:number",
    "messages[].mine:number",
    "messages[].opened_at:null",
-   "messages[].react_me:string",
-   "messages[].react_other:string",
    "messages[].reactions:array",
    "messages[].redacted:number",
    "messages[].saved:number",
@@ -1684,25 +1670,6 @@
   "lists": [],
   "text": []
  },
- "POST /api/comments/wall/comment/like": {
-  "json": [
-   "emoji:string",
-   "error:string",
-   "id:number",
-   "liked:number",
-   "likes:number",
-   "ok:boolean",
-   "reacts:array",
-   "reacts[].e:string",
-   "reacts[].n:number",
-   "reacts[]:object",
-   "target:string"
-  ],
-  "lists": [
-   "reacts"
-  ],
-  "text": []
- },
  "POST /api/comments/wall/delete": {
   "json": [
    "error:string",
@@ -1751,40 +1718,6 @@
   ],
   "lists": [
    "posts"
-  ],
-  "text": []
- },
- "POST /api/comments/wall/like": {
-  "json": [
-   "emoji:string",
-   "error:string",
-   "id:number",
-   "liked:number",
-   "likes:number",
-   "ok:boolean",
-   "reacts:array",
-   "reacts[].e:string",
-   "reacts[].n:number",
-   "reacts[]:object",
-   "target:string"
-  ],
-  "lists": [
-   "reacts"
-  ],
-  "text": []
- },
- "POST /api/comments/wall/likers": {
-  "json": [
-   "id:number",
-   "likers:array",
-   "more:boolean",
-   "ok:boolean",
-   "target:string",
-   "who:array"
-  ],
-  "lists": [
-   "likers",
-   "who"
   ],
   "text": []
  },

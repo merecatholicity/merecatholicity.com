@@ -34,7 +34,7 @@ export function installDmMessage(B: Boot) {
   let dmB64uEnc: (bytes: unknown) => any;
   let dmForwardPicker: (m: unknown, ctx: unknown) => any;
   let dmPlain: (m: unknown, ctx: unknown) => any;
-  let dmReseal: (plaintext: unknown, m: unknown, ctx: unknown) => any;
+  let dmReseal: (plaintext: unknown, m: unknown) => any;
 
   /* ---- Disappearing messages: the expiry note + chooser, and the per-message
      save toggle. The lifetime is per-conversation; either party changes it and
@@ -94,35 +94,22 @@ export function installDmMessage(B: Boot) {
   }
 
   /* A pair's two sides from the ledger's rows (0016: one row per member,
-     m.reactions) — or the react_me / react_other a pair's payload still carries
-     one deploy. */
+     m.reactions — the one place a reaction lives since the served react_me /
+     react_other were retired, 2026-10-07). */
   function dmReactSides(m: any) {
-    if (Array.isArray(m.reactions)) {
-      var mine = '', theirs = '';
-      m.reactions.forEach(function (r: any) {
-        if (!r || !r.emoji) return;
-        if (r.hash === state.myHash) mine = String(r.emoji); else if (!theirs) theirs = String(r.emoji);
-      });
-      return { mine: mine, theirs: theirs };
-    }
-    return { mine: String(m.react_me || ''), theirs: String(m.react_other || '') };
+    var mine = '', theirs = '';
+    (Array.isArray(m.reactions) ? m.reactions : []).forEach(function (r: any) {
+      if (!r || !r.emoji) return;
+      if (r.hash === state.myHash) mine = String(r.emoji); else if (!theirs) theirs = String(r.emoji);
+    });
+    return { mine: mine, theirs: theirs };
   }
 
-  /* One member's reaction set (or withdrawn) on a message object: the rows,
-     and the pair fields beside them. */
+  /* One member's reaction set (or withdrawn) on a message object: the rows. */
   function dmSetReaction(m: any, hash: any, emoji: any) {
     var h = String(hash || ''), e = String(emoji || '');
-    if (!Array.isArray(m.reactions)) {
-      /* A word that arrived in the pair shape alone (a bundle's cached payload
-         from before 0016): its two sides seed the rows, the other's under a
-         stand-in hash, so a first reaction here never loses theirs. */
-      m.reactions = [];
-      if (m.react_me) m.reactions.push({ hash: state.myHash, emoji: String(m.react_me) });
-      if (m.react_other) m.reactions.push({ hash: '*', emoji: String(m.react_other) });
-    }
-    m.reactions = m.reactions.filter(function (r: any) { return r && r.hash !== h && !(h !== state.myHash && r.hash === '*'); });
+    m.reactions = (Array.isArray(m.reactions) ? m.reactions : []).filter(function (r: any) { return r && r.hash !== h; });
     if (e) m.reactions.push({ hash: h, emoji: e });
-    if (h === state.myHash) m.react_me = e; else m.react_other = e;
   }
 
   /* Paint (or repaint) a bubble's reaction pill from the message's reactions.
@@ -230,10 +217,11 @@ export function installDmMessage(B: Boot) {
      2026-09-12, client/surface.ts openActs): a press-and-hold over one bubble
      — the reaction bar above, the bubble lit in a hole between four pieces of
      scrim, the acts below; a popover at the pointer on desktop. What is DM
-     here: my reaction on the message (react_me, one per side), and the acts
+     here: my reaction on the message (mine, from the rows), and the acts
      that apply — Reply · Forward (any word but a system line or an expired
      attachment; 2026-09-13) · Copy (text, or a media caption) · Edit (mine,
-     text, not a system notice) · Save/Unsave (★ lit when saved) · Delete
+     text, not a system notice, not a pair's E1 word — read for ever, re-sealed
+     never since 2026-10-07) · Save/Unsave (★ lit when saved) · Delete
      (mine). No Star or More. A redacted bubble opens nothing. ---- */
   function dmCloseActions() { closeActs(); }
 
@@ -248,12 +236,12 @@ export function installDmMessage(B: Boot) {
     var copyText = hasText ? String(m.body || '') : String((m._env && m._env.caption) || '');
     if (copyText) items.push({ label: 'Copy', icon: '⧉', fn: function () { dmCopy(copyText, ctx); } });
     if (mine && ctx && ctx.kind === 1 && !sys) items.push({ label: 'Info', icon: 'ⓘ', fn: function () { dmReadByInfo(m, ctx); } });
-    if (mine && hasText && !sys) items.push({ label: 'Edit', icon: '✎', fn: function () { dmStartEdit(m, node, ctx); } });
+    if (mine && hasText && !sys && Number(m.enc || 0) !== 1) items.push({ label: 'Edit', icon: '✎', fn: function () { dmStartEdit(m, node, ctx); } });
     var saved = !!Number(m.saved || 0);
     items.push({ label: saved ? 'Unsave' : 'Save', icon: saved ? '★' : '☆', cls: saved ? 'on' : '', fn: function () { dmSave(m, node, ctx, saved ? 0 : 1); } });
     if (mine && !sys) items.push({ label: 'Delete', icon: '✕', cls: 'dm-act-danger', fn: function () { dmDeleteMsg(m, node, ctx); } });
     openActs({ node: node, at: at, mine: mine,
-      react: { current: String(m.react_me || ''), onPick: function (e: any) { dmReact(m, node, ctx, e); } },
+      react: { current: dmReactSides(m).mine, onPick: function (e: any) { dmReact(m, node, ctx, e); } },
       items: items });
   }
 
@@ -690,7 +678,7 @@ export function installDmMessage(B: Boot) {
      other side is told live). One routine for the composer's Editing strip
      (the road since 2026-09-12) and the in-bubble box it replaced. */
   function dmSaveEdit(m: any, node: any, ctx: any, nv: string) {
-    var sealed = dmReseal(dmWrapText(nv, m.reply), m, ctx);
+    var sealed = dmReseal(dmWrapText(nv, m.reply), m);
     if (!sealed) return Promise.resolve({ ok: false, error: 'Could not seal the edit.' });
     return fetch(API + '/dm/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ key: state.key, id: m.id, body: sealed.body, enc: sealed.enc }, ctx.target())) })

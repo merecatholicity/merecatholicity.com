@@ -66,10 +66,7 @@ POST /api/comments/react reacts
 POST /api/comments/react/who likers,who
 POST /api/comments/shadowban/list bans
 POST /api/comments/wall posts
-POST /api/comments/wall/comment/like reacts
 POST /api/comments/wall/feed posts
-POST /api/comments/wall/like reacts
-POST /api/comments/wall/likers likers,who
 POST /api/comments/wall/post/get comments
 POST /api/merecat/about works
 POST /api/merecat/admin/thread msgs

@@ -214,7 +214,7 @@ test('a reply rides inside the ciphertext, and the media envelope carries its ow
   assert.ok(/if \(replyAt\) mm\.env\.reply = replyAt;/.test(view), 'a media reply rides in the (encrypted) media envelope');
   assert.ok(!/reply_to/.test(src), 'the server never learns what answers what');
   const edit = fn('dmSaveEdit', 'dmStartEdit');
-  assert.ok(/dmReseal\(dmWrapText\(nv, m\.reply\), m, ctx\)/.test(edit), 'an edit keeps the quote it answered, re-sealed under the same K');
+  assert.ok(/dmReseal\(dmWrapText\(nv, m\.reply\), m\)/.test(edit), 'an edit keeps the quote it answered, re-sealed under the same K');
 });
 
 test('on a phone a hold picks a message, never a word: the screen is not selectable text, the surface never is, and opening drops any selection', () => {

@@ -53,17 +53,17 @@ STUB = r"""
       return myHash().then(function (me) {
         var now = Math.floor(Date.now() / 1000);
         var msgs = [
-          { id: 101, sender_hash: OTHER, body: 'First word from them', created_at: now - 2 * 86400, enc: 0, saved: 0, reactions: [], react_me: '', react_other: '' },
-          { id: 102, sender_hash: me, body: 'My reply from yesterday', created_at: now - 86400, enc: 0, saved: 1, opened_at: now - 80000, reactions: [{ hash: OTHER, emoji: '❤️' }], react_me: '', react_other: '❤️' },
-          { id: 103, sender_hash: OTHER, body: 'Today they wrote', created_at: now - 600, enc: 0, saved: 0, edited_at: now - 500, reactions: [{ hash: me, emoji: '👍' }, { hash: OTHER, emoji: '👍' }], react_me: '👍', react_other: '👍' },
-          { id: 104, sender_hash: me, body: 'And I answered', created_at: now - 60, enc: 0, saved: 0, reactions: [], react_me: '', react_other: '',
+          { id: 101, sender_hash: OTHER, body: 'First word from them', created_at: now - 2 * 86400, enc: 0, saved: 0, reactions: [] },
+          { id: 102, sender_hash: me, body: 'My reply from yesterday', created_at: now - 86400, enc: 0, saved: 1, opened_at: now - 80000, reactions: [{ hash: OTHER, emoji: '❤️' }] },
+          { id: 103, sender_hash: OTHER, body: 'Today they wrote', created_at: now - 600, enc: 0, saved: 0, edited_at: now - 500, reactions: [{ hash: me, emoji: '👍' }, { hash: OTHER, emoji: '👍' }] },
+          { id: 104, sender_hash: me, body: 'And I answered', created_at: now - 60, enc: 0, saved: 0, reactions: [],
             reply: { id: 101, from: OTHER, kind: 'text', text: 'First word from them' } }
         ];
         /* ?mcunread=1: nine unread words from them after my last, long enough to
            stand taller than a phone screen — the unread line's and the jump
            button's fixture. The server names them BEFORE the open marks them read. */
         var unreadMode = /mcunread=1/.test(location.search);
-        if (unreadMode) for (var i = 0; i < 9; i++) msgs.push({ id: 105 + i, sender_hash: OTHER, created_at: now - 50 + i, enc: 0, saved: 0, reactions: [], react_me: '', react_other: '',
+        if (unreadMode) for (var i = 0; i < 9; i++) msgs.push({ id: 105 + i, sender_hash: OTHER, created_at: now - 50 + i, enc: 0, saved: 0, reactions: [],
           body: 'Unread word ' + (i + 1) + ' — a line long enough to wrap twice on a phone, so that nine of them stand taller than the screen and the line lands under the header.' });
         var other = { hash: OTHER, nick: 'Fixture', avatar: null, assigned: 'Fixture', pubkey: 'A'.repeat(43), last_seen: now - 90000, joined_at: now - 3 * 86400, left_at: null, read_at: now - 80000 };
         var mine = { hash: me, nick: null, avatar: null, assigned: 'Me', pubkey: 'B'.repeat(43), last_seen: null, joined_at: now - 3 * 86400, left_at: null, read_at: now - 30 };
@@ -466,7 +466,7 @@ def main():
           var q = function(s){ return document.querySelector(s); };
           window.scrollTo(0, 0);
           var now = Math.floor(Date.now() / 1000);
-          document.dispatchEvent(new CustomEvent('mc-live', { detail: { v: 1, t: 'dm', from: %s, message: { id: 120, sender_hash: %s, body: 'A live word while you read back', created_at: now, enc: 0, saved: 0, react_me: '', react_other: '' } } }));
+          document.dispatchEvent(new CustomEvent('mc-live', { detail: { v: 1, t: 'dm', from: %s, message: { id: 120, sender_hash: %s, body: 'A live word while you read back', created_at: now, enc: 0, saved: 0 } } }));
           var b = q('[data-dmid="120"]'), line = q('.dm-unread-line'), jump = q('.dm-jump'), n = q('.dm-jump-n');
           return { landed: !!b, isLast: !!b && b === q('.dm-list').lastElementChild, lineBefore: !!(line && line.nextElementSibling === b), lines: document.querySelectorAll('.dm-unread-line').length,
                    text: line ? line.textContent : '', scrollY: window.scrollY, badge: n.textContent, badgeShown: !n.hidden, jumpShown: !jump.hidden, writes: (window.__mcDmWrites||[]).join(' ') };

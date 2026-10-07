@@ -261,5 +261,6 @@ on page one.)
 - **The challenge answered once and then went silent for the life of the page (2026-09-19)** — `log/2026-09.md`
 - **The alert that could not reach the inbox it was about (2026-09-19).** — `log/2026-09.md`
 - **A cron step that hangs is worse than one that throws (2026-09-19).** — `log/2026-09.md`
+- **The first four retirements fall due: the like aliases, a pair's derived reaction fields and E1 on the wire are gone (2026-10-07)** — `log/2026-10.md`
 
 <!-- infra-index:end -->
