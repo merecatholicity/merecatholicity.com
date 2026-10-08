@@ -121,8 +121,9 @@ class EveryGateAsks(unittest.TestCase):
     GitHub notifies nobody of their own activity, and every run here is the
     owner's — so an apply sat at its gate unannounced until someone happened to
     look. Each gated job has a sibling that runs scripts/ci_ask_review.sh under
-    the job's own read-only token, and the bot's @mention, a comment on the
-    run's commit, reaches the owner.
+    the job's own token, and the bot's @mention, a comment on the run's
+    commit, reaches the owner. The comment takes `contents: write`, so the
+    asker is a sparse checkout of the one script and one step that runs it.
 
     What would break silently: a new gated job (or a new reviewed environment)
     without its asker; an asker whose condition drifts from its gate's, so it
@@ -160,8 +161,14 @@ class EveryGateAsks(unittest.TestCase):
                     continue
                 swept += 1
                 self.assertNotIn('environment', job, name + ': the asker never waits itself')
-                self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read'}, name)
+                self.assertEqual(job['permissions'], {'contents': 'write', 'actions': 'read'}, name)
                 self.assertNotIn('secrets.', yaml.safe_dump(job), name)
+                # the write is for the comment: nothing else runs beside it
+                checkout, ask = job['steps']
+                self.assertTrue(checkout['uses'].startswith('actions/checkout@'), name)
+                self.assertEqual(checkout['with']['sparse-checkout'], 'scripts/ci_ask_review.sh', name)
+                self.assertIs(checkout['with']['persist-credentials'], False, name)
+                self.assertEqual(ask['run'], 'scripts/ci_ask_review.sh', name)
         self.assertEqual(swept, 2)
 
 

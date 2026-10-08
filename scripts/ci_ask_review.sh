@@ -9,9 +9,10 @@
 # comment is github-actions[bot]'s, and its @mention reaches the reviewer as
 # anyone else's would (the web inbox, email, GitHub Mobile).
 #
-# The ask is a comment on the run's own commit (this repository has no issues,
-# and a commit comment needs only `contents: read`), so the notification opens
-# onto the change that waits. The reviewer is read from the gate itself; the
+# The ask is a comment on the run's own commit, so the notification opens onto
+# the change that waits. This repository has no issues; a commit comment takes
+# `contents: write` (GitHub's table says read; the job token is refused, 403),
+# so the asker is one step that runs nothing but this file. The reviewer is read from the gate itself; the
 # run's triggering actor stands in if GitHub will not say.
 #
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_SERVER_URL (Actions
