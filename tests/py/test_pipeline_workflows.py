@@ -121,12 +121,13 @@ class EveryGateAsks(unittest.TestCase):
     GitHub notifies nobody of their own activity, and every run here is the
     owner's — so an apply sat at its gate unannounced until someone happened to
     look. Each gated job has a sibling that runs scripts/ci_ask_review.sh under
-    the job's own token, and the bot's @mention reaches the owner.
+    the job's own read-only token, and the bot's @mention, a comment on the
+    run's commit, reaches the owner.
 
     What would break silently: a new gated job (or a new reviewed environment)
     without its asker; an asker whose condition drifts from its gate's, so it
     asks for a wait that never comes or misses the one that does; an asker
-    handed a secret it does not need.
+    handed a secret or a write it does not need.
     """
 
     def reviewed_environments(self):
@@ -159,7 +160,7 @@ class EveryGateAsks(unittest.TestCase):
                     continue
                 swept += 1
                 self.assertNotIn('environment', job, name + ': the asker never waits itself')
-                self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read', 'issues': 'write'}, name)
+                self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read'}, name)
                 self.assertNotIn('secrets.', yaml.safe_dump(job), name)
         self.assertEqual(swept, 2)
 

@@ -283,9 +283,9 @@ A push that changes `terraform/**` produces a run whose `apply` job sits in **wa
 but nobody of their own activity, and every run here is the owner's, so the wait used to go
 unannounced. Beside every gated job (`apply` here, merecat's `config`) runs an `ask` job with
 the same `needs` and `if`: `scripts/ci_ask_review.sh`, under the job's own `GITHUB_TOKEN`
-(`actions: read`, `issues: write`, no secret), waits until the gate holds the run, reads the
-reviewers from `pending_deployments` and comments on the standing, bot-locked issue *Waiting
-for your review* with an @mention, the run's link and the `ci_approve.sh` line. The comment is
+(`contents: read`, `actions: read`, no secret), waits until the gate holds the run, reads the
+reviewers from `pending_deployments` and comments on the run's commit with an @mention, the
+run's link and the `ci_approve.sh` line (the repository has no issues). The comment is
 github-actions[bot]'s, so the mention reaches the owner's inbox, email and GitHub Mobile. A wait
 approved before the asker looks is asked of nobody. `test_pipeline_workflows.py` holds every
 reviewed environment to an asker with its gate's condition.

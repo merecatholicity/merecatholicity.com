@@ -9,9 +9,10 @@
 # comment is github-actions[bot]'s, and its @mention reaches the reviewer as
 # anyone else's would (the web inbox, email, GitHub Mobile).
 #
-# One standing issue carries every ask (the bot opens it the first time, and
-# locks it so only collaborators write there). The reviewer is read from the
-# gate itself; the run's triggering actor stands in if GitHub will not say.
+# The ask is a comment on the run's own commit (this repository has no issues,
+# and a commit comment needs only `contents: read`), so the notification opens
+# onto the change that waits. The reviewer is read from the gate itself; the
+# run's triggering actor stands in if GitHub will not say.
 #
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_SERVER_URL (Actions
 # sets the last three), TRIGGERING_ACTOR.
@@ -21,7 +22,6 @@ set -euo pipefail
 repo=$GITHUB_REPOSITORY
 run=$GITHUB_RUN_ID
 url="${GITHUB_SERVER_URL:-https://github.com}/$repo/actions/runs/$run"
-title="Waiting for your review"
 
 # This job and the gated one start together; wait until the gate holds the run.
 # A run the gate never holds (a refused branch, a job skipped) is asked of nobody.
@@ -57,17 +57,9 @@ if [ -z "$who" ]; then
   exit 1
 fi
 
-name=$(gh api "repos/$repo/actions/runs/$run" --jq '.name + " · " + .display_title')
-
-issue=$(gh api --paginate "repos/$repo/issues?state=open&creator=github-actions%5Bbot%5D&per_page=100" \
-  --jq ".[] | select(.pull_request == null and .title == \"$title\") | .number" | head -1)
-if [ -z "$issue" ]; then
-  body="When a workflow run waits for a required reviewer, the run's job comments here and names the reviewer, so the wait reaches their notifications (\`scripts/ci_ask_review.sh\`)."
-  issue=$(gh api "repos/$repo/issues" -f title="$title" -f body="$body" --jq .number)
-  gh api -X PUT "repos/$repo/issues/$issue/lock" >/dev/null || echo "::warning::could not lock #$issue"
-fi
+read -r sha name < <(gh api "repos/$repo/actions/runs/$run" --jq '.head_sha + " " + .name + " · " + .display_title')
 
 body="$who — **$name** is waiting for your review at \`$gates\`.
 
 [Review deployments]($url) · or \`scripts/ci_approve.sh $run\`"
-gh api "repos/$repo/issues/$issue/comments" -f body="$body" --jq .html_url
+gh api "repos/$repo/commits/$sha/comments" -f body="$body" --jq .html_url
