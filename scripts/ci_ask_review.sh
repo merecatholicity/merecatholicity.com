@@ -58,7 +58,9 @@ if [ -z "$who" ]; then
   exit 1
 fi
 
-read -r sha name < <(gh api "repos/$repo/actions/runs/$run" --jq '.head_sha + " " + .name + " · " + .display_title')
+# a dispatch's title is the workflow's name again, so the commit's subject says what waits
+read -r sha name < <(gh api "repos/$repo/actions/runs/$run" \
+  --jq '.head_sha + " " + .name + " · " + (.head_commit.message | split("\n")[0])')
 
 body="$who — **$name** is waiting for your review at \`$gates\`.
 
