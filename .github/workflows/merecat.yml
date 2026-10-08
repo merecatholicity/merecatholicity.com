@@ -204,6 +204,31 @@ jobs:
         id: status
         run: cd librarian && python3 ingest.py --config-status --api "$MERECAT_API" --summary "$GITHUB_STEP_SUMMARY"
 
+  ask:
+    # GitHub tells no one of their own activity, and every run here is the
+    # owner's, so the gate's wait never reached them: the bot asks by name
+    # (scripts/ci_ask_review.sh). Same needs and same condition as the gate.
+    needs: config-status
+    if: needs.config-status.outputs.changed == 'true' || github.event.inputs.config == 'force'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci_ask_review.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Ask the reviewer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        run: scripts/ci_ask_review.sh
+
   config:
     needs: config-status
     if: needs.config-status.outputs.changed == 'true' || github.event.inputs.config == 'force'

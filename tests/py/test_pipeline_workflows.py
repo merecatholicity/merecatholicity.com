@@ -115,6 +115,55 @@ class TheReviewer(unittest.TestCase):
         self.assertIn('"config" -> "librarian-config"', read('purescript', 'src', 'Domain', 'Pipeline.purs'))
 
 
+class EveryGateAsks(unittest.TestCase):
+    """A run waiting on a reviewer says so to the reviewer (2026-10-08).
+
+    GitHub notifies nobody of their own activity, and every run here is the
+    owner's — so an apply sat at its gate unannounced until someone happened to
+    look. Each gated job has a sibling that runs scripts/ci_ask_review.sh under
+    the job's own token, and the bot's @mention reaches the owner.
+
+    What would break silently: a new gated job (or a new reviewed environment)
+    without its asker; an asker whose condition drifts from its gate's, so it
+    asks for a wait that never comes or misses the one that does; an asker
+    handed a secret it does not need.
+    """
+
+    def reviewed_environments(self):
+        tf = read('terraform', 'github.tf')
+        blocks = re.findall(r'resource "github_repository_environment" "\w+" \{(.*?)\n\}', tf, re.S)
+        return {re.search(r'environment\s*=\s*"([^"]+)"', b).group(1) for b in blocks if 'reviewers {' in b}
+
+    def test_every_gated_job_has_an_asker_with_its_condition(self):
+        gated = self.reviewed_environments()
+        self.assertEqual(gated, {'terraform-production', 'librarian-config'})
+        seen = set()
+        for name in sorted(os.listdir(WORKFLOWS)):
+            jobs = workflow(name).get('jobs') or {}
+            askers = [j for j in jobs.values() if 'scripts/ci_ask_review.sh' in steps_text(j)]
+            for job_name, job in jobs.items():
+                env = job.get('environment')
+                env = env.get('name') if isinstance(env, dict) else env
+                if env not in gated:
+                    continue
+                seen.add(env)
+                twins = [a for a in askers if a.get('needs') == job.get('needs') and a.get('if') == job.get('if')]
+                self.assertEqual(len(twins), 1, f'{name}: {job_name} waits on {env} and nobody asks')
+        self.assertEqual(seen, gated, 'every reviewed environment is waited on somewhere')
+
+    def test_the_asker_holds_the_job_token_and_nothing_more(self):
+        swept = 0
+        for name in sorted(os.listdir(WORKFLOWS)):
+            for job in (workflow(name).get('jobs') or {}).values():
+                if 'scripts/ci_ask_review.sh' not in steps_text(job):
+                    continue
+                swept += 1
+                self.assertNotIn('environment', job, name + ': the asker never waits itself')
+                self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read', 'issues': 'write'}, name)
+                self.assertNotIn('secrets.', yaml.safe_dump(job), name)
+        self.assertEqual(swept, 2)
+
+
 class TheAudience(unittest.TestCase):
     def test_one_audience_everywhere(self):
         policy = read('purescript', 'src', 'Domain', 'Pipeline.purs')

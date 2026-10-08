@@ -252,8 +252,8 @@ from the file hashes the server last took (`/works` answers `persona_file_hash` 
 `config_file_hash`)? Its output `changed` decides the next job.
 
 *The `config` job:* when `changed` (or on a dispatch with `config: force`), in the
-**`librarian-config`** environment, so it **waits for the owner's review** — *Review
-deployments* in the browser, or `scripts/ci_approve.sh <run-id> --approve "why"` after reading
+**`librarian-config`** environment, so it **waits for the owner's review** (the `ask` job
+beside it says so — §3) — *Review deployments* in the browser, or `scripts/ci_approve.sh <run-id> --approve "why"` after reading
 the two files' diff — then `ingest.py --config [--force]` pushes whichever file changed, with
 its hash. The dials travel only when `config.yml` changes (before 2026-09-17 they rode every
 ingest), so a dashboard edit stands until the file is next touched, as the persona's always
@@ -278,6 +278,18 @@ workflow file. Never on a pull_request (Principle 3). No `uses:` at all.
 ## 3. The approval gate (Terraform)
 
 A push that changes `terraform/**` produces a run whose `apply` job sits in **waiting**.
+
+**The ask (since 2026-10-08).** GitHub notifies a required reviewer that a deployment waits —
+but nobody of their own activity, and every run here is the owner's, so the wait used to go
+unannounced. Beside every gated job (`apply` here, merecat's `config`) runs an `ask` job with
+the same `needs` and `if`: `scripts/ci_ask_review.sh`, under the job's own `GITHUB_TOKEN`
+(`actions: read`, `issues: write`, no secret), waits until the gate holds the run, reads the
+reviewers from `pending_deployments` and comments on the standing, bot-locked issue *Waiting
+for your review* with an @mention, the run's link and the `ci_approve.sh` line. The comment is
+github-actions[bot]'s, so the mention reaches the owner's inbox, email and GitHub Mobile. A wait
+approved before the asker looks is asked of nobody. `test_pipeline_workflows.py` holds every
+reviewed environment to an asker with its gate's condition.
+
 Two ways to review and approve — they are the same API call:
 
 **Human:** open the run → *Review deployments* → tick `terraform-production` → *Approve*.
