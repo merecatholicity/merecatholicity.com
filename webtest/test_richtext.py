@@ -4,8 +4,13 @@ living renderer. A fixture body exercises every rule — headings, emphasis,
 custom emoji from the same-origin whitelist, named emoji, unknown codes
 staying literal, blockquotes, Scripture autolinks with hover previews,
 same-site links direct, off-site links routed through away.html — rendered
-through window.mcRich on a comments-mounted prod page (where the hover
-subsystem boots), with the desktop pointer emulated."""
+through window.mcRich on community.html, one of the app pages that always
+carries the classic client (where the hover subsystem boots), with the
+desktop pointer emulated. Never an article page: since 2026-09-18 the shell
+fetches comments.js for one only when the admin has opened its section, and
+they ship closed, so credo.html boots no client and no hover at all: the
+nightly's "wait: timeout on !!window.mcKit" and "verse hover previews"
+FAILs on 2026-10-08, the first night judged by main's kit."""
 import json
 import sys
 
@@ -25,7 +30,7 @@ TIP_WAIT_MS = 15000
 
 def main():
     with Flow(port=9571, hover=True) as f:
-        f.goto('credo.html')
+        f.goto('community.html')
         f.wait('!!window.mcRich', timeout=15)
         # The hover listener is installed by the classic client's boot
         # (client/composer.ts run(), the last thing mcBoot does before it
@@ -51,8 +56,8 @@ def main():
             away: links.filter(function(h){return h && h.indexOf('away.html?url=')===0}).length,
             credo: links.indexOf('https://merecatholicity.com/credo.html') !== -1});""" % json.dumps(FIX)))
         tip = json.loads(f.js1("""
-          /* The fixture's OWN reference, never the document's first: credo.html
-             mounts a comments section above the fixture, and a comment carrying
+          /* The fixture's OWN reference, never the document's first: the board
+             renders posts above the fixture, and a post carrying
              a reference of its own would be the one hovered — previewing the
              wrong verse, and reading as the hover broken. */
           var sl = document.querySelector('[data-probe=richtext] a.scripture-link');
