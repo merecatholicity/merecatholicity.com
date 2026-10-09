@@ -93,7 +93,7 @@ jobs:
       # true/false only — the secret's presence, never its value
       HAVE_SHELF_KEY: ${{ secrets.PRIVATE_SHELF_DEPLOY_KEY != '' }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -127,7 +127,7 @@ jobs:
 
       - name: Restore the built site (exact hit required)
         id: docs
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: docs
           key: site-2-${{ steps.site.outputs.sha }}
@@ -141,7 +141,7 @@ jobs:
           git checkout -- docs
           git clean -fd -- docs
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
@@ -149,7 +149,7 @@ jobs:
 
       - name: The private shelf (read-only deploy key; skipped when absent, never pruned)
         if: env.HAVE_SHELF_KEY == 'true'
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: merecatholicity/private-shelf
           ssh-key: ${{ secrets.PRIVATE_SHELF_DEPLOY_KEY }}
@@ -157,7 +157,7 @@ jobs:
           persist-credentials: false
 
       - name: The parse ledger
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: librarian/.ledger.json
           key: merecat-ledger-${{ github.run_id }}
@@ -190,11 +190,11 @@ jobs:
     outputs:
       changed: ${{ steps.status.outputs.changed }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
@@ -219,7 +219,7 @@ jobs:
     outputs:
       issue: ${{ steps.ask.outputs.issue }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: scripts/ci_ask_review.sh
@@ -243,7 +243,7 @@ jobs:
       issues: write     # the issue's outcome and its close, nothing else
       actions: read
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: scripts/ci_ask_review.sh
@@ -272,11 +272,11 @@ jobs:
       group: merecat-config
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
