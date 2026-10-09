@@ -620,6 +620,9 @@ def main(argv):
         got = split(name, read(os.path.join(DOCS, name)))
         if got:
             split_now.append((name, got))
+    cut = {name for name, _ in split_now}
+    whole_now = [v for v in on_disk if v not in indexes and v not in cut
+                 and os.path.exists(os.path.join(DOCS, v))]
     for name, (index, parts, entry, amap) in split_now:
         volumes[name] = entry
         if dry:
@@ -636,6 +639,22 @@ def main(argv):
         with open(os.path.join(DOCS, anchors_name(name)), 'w', encoding='utf-8') as f:
             json.dump(amap, f, ensure_ascii=False, separators=(',', ':'))
             f.write('\n')
+    # A volume rebuilt WHOLE that this run does not split (under the size it
+    # takes, or refused by the safety valve in split()) is served whole, so the
+    # parts an earlier build cut from it are nobody's: no index links them and
+    # the manifest no longer names them. Left on disk they were served as
+    # orphans from the CI cache (2026-10-09: nineteen oxford-sermons-* pages
+    # failed test_docs_sources once a partial change rebuilt the corpus). They
+    # go, with the volume's anchor map.
+    for name in whole_now:
+        if dry:
+            print('%-22s served whole; %d stale parts would go' % (name, len(on_disk[name])))
+            continue
+        for _, stale, _, _ in on_disk[name]:
+            os.remove(os.path.join(DOCS, stale))
+        amap = os.path.join(DOCS, anchors_name(name))
+        if os.path.exists(amap):
+            os.remove(amap)
     if dry:
         print('split_volumes: would split', len(split_now), 'volumes')
         return 0
