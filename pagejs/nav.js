@@ -1,3 +1,28 @@
+/* Trusted Types (2026-10-08): the site's ONE policy, the `default`, made by the
+   first script every page carries before anything here or in the bundles it
+   loads reaches a sink. The zone's CSP enforces `require-trusted-types-for
+   'script'` and names this policy (and Lit's own `lit-html`), so every string
+   a script URL sink is handed — a dynamic <script>'s src, the service worker's
+   register — passes through createScriptURL, which admits only the origins the
+   CSP's script-src names (tests/py/test_csp.py holds the two lists equal). No
+   createHTML and no createScript: an HTML or code string at a sink is refused,
+   which is the law tests/js/no_html_sinks.test.mjs already keeps. Guarded: a
+   browser without Trusted Types, or a second run of this file, makes nothing. */
+(function () {
+  var tt = window.trustedTypes;
+  if (!tt || !tt.createPolicy || tt.defaultPolicy) return;
+  var SCRIPT_ORIGINS = ['https://challenges.cloudflare.com', 'https://static.cloudflareinsights.com'];
+  try {
+    tt.createPolicy('default', {
+      createScriptURL: function (u) {
+        var o;
+        try { o = new URL(String(u), location.href).origin; } catch (e) { return null; }
+        return o === location.origin || SCRIPT_ORIGINS.indexOf(o) !== -1 ? String(u) : null;
+      }
+    });
+  } catch (e) { /* the name already taken: that policy stands */ }
+})();
+
 /* Light/dark theme: a reader's choice, saved in a year-long cookie, defaulting
    to CHARCOAL DARK for everyone when nothing is saved (system preference no
    longer decides the default). An explicit mc-theme=light choice always wins.

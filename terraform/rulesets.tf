@@ -2,10 +2,11 @@
 # rule, is cache.tf — on its own because it is the only one that changes what a
 # reader's own browser keeps, which no purge can reach.
 #
-# response_headers is the one that matters most: it carries the CSP, HSTS,
-# Permissions-Policy (microphone=(self) — denying it broke the voice recorder
-# site-wide) and X-Frame-Options SAMEORIGIN (DENY would block our own Turnstile
-# frame). It lived only in the dashboard until this commit.
+# response_headers is the one that matters most: it carries the enforced CSP (with
+# Trusted Types), HSTS (preloaded), COOP, Permissions-Policy (microphone=(self) —
+# denying it broke the voice recorder site-wide) and X-Frame-Options SAMEORIGIN
+# (DENY would block our own Turnstile frame). It lived only in the dashboard until
+# 2026-09-08.
 
 resource "cloudflare_ruleset" "firewall_custom" {
   account_id = null
@@ -323,16 +324,28 @@ resource "cloudflare_ruleset" "response_headers" {
         from_list                  = null
         from_value                 = null
         headers = {
-          # Report-Only until the collector (POST /api/comments/csp-report, the worker) has
-          # read as noise for a week (2026-09-16, P2-7). The two 'sha256-…' tokens are the
-          # site's ONLY inline scripts — the mc-fout anti-flash script every page carries and
-          # turnstile.html's bridge — computed by scripts/csp_hashes.py from the same sources
-          # the pages are built from; tests/py/test_csp.py holds this value to them. blob: is
-          # the decrypted DM attachment shown from an object URL; wss: is the live socket.
-          Content-Security-Policy-Report-Only = {
+          # ENFORCED since 2026-10-08 (Report-Only from 2026-09-16 until its collector,
+          # POST /api/comments/csp-report, had read as noise for three weeks). The two
+          # 'sha256-…' tokens are the site's ONLY inline scripts — the mc-fout anti-flash
+          # script every page carries and turnstile.html's bridge — computed by
+          # scripts/csp_hashes.py from the same sources the pages are built from;
+          # tests/py/test_csp.py holds this value to them. Cloudflare's own injected
+          # JavaScript Detections snippet is refused by design and filed as `cf-jsd`.
+          # require-trusted-types-for: every script-URL sink passes the `default` policy at
+          # the top of pagejs/nav.js (and turnstile.html's own), whose allowed origins equal
+          # script-src's hosts; `lit-html` is Lit's. blob: is the decrypted DM attachment
+          # shown from an object URL; wss: is the live socket.
+          Content-Security-Policy = {
             expression = null
             operation  = "set"
-            value      = "default-src 'self'; script-src 'self' 'sha256-9HBcZHKrZIORNuWdbW2RbXmZQxXXXpGaylfrgh4rWUw=' 'sha256-v9Kaa5FyIXGSjLesVHggG/AhtbqmN29QWK7luYdVMnw=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://audio.merecatholicity.com; connect-src 'self' wss://merecatholicity.com https://contact-api.merecatholicity.com https://challenges.cloudflare.com https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; form-action 'self' https://contact-api.merecatholicity.com; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; report-uri /api/comments/csp-report; report-to csp"
+            value      = "default-src 'self'; script-src 'self' 'report-sample' 'sha256-9HBcZHKrZIORNuWdbW2RbXmZQxXXXpGaylfrgh4rWUw=' 'sha256-iM5N3CwvhGHsKw/hkEiRhyFPRKw18FS+cUo4xJ4Ty6c=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://audio.merecatholicity.com; connect-src 'self' wss://merecatholicity.com https://contact-api.merecatholicity.com https://challenges.cloudflare.com https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; form-action 'self' https://contact-api.merecatholicity.com; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; require-trusted-types-for 'script'; trusted-types default mc-doc lit-html; report-uri /api/comments/csp-report; report-to csp"
+          }
+          # The top-level window shares its browsing context group with no cross-origin
+          # document: nothing here opens a window it then talks to (links are noopener).
+          Cross-Origin-Opener-Policy = {
+            expression = null
+            operation  = "set"
+            value      = "same-origin"
           }
           Permissions-Policy = {
             expression = null
@@ -353,7 +366,7 @@ resource "cloudflare_ruleset" "response_headers" {
           Strict-Transport-Security = {
             expression = null
             operation  = "set"
-            value      = "max-age=31536000; includeSubDomains"
+            value      = "max-age=63072000; includeSubDomains; preload"
           }
           X-Content-Type-Options = {
             expression = null

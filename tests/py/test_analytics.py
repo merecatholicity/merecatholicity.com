@@ -45,7 +45,7 @@ class TheBeacon(unittest.TestCase):
         deeplink.js lives there. A beacon in the page templates instead would
         have to be re-injected into 274 files, and missed the next one."""
         self.assertIn(BEACON_HOST + '/beacon.min.js', self.nav)
-        self.assertEqual(self.nav.count(BEACON_HOST), 1, 'one beacon, once')
+        self.assertEqual(self.nav.count(BEACON_HOST + '/beacon.min.js'), 1, 'one beacon, once (the host is also named by the Trusted Types policy\'s origins)')
 
     def test_the_token_is_the_zone_s_own_site(self):
         self.assertIn('token=' + SITE_TOKEN, self.nav,

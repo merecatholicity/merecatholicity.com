@@ -51,6 +51,18 @@
 <script>
 (function () {
   'use strict';
+  /* Trusted Types: this page carries no nav.js, so it makes the same `default`
+     policy itself — the challenge's script, and nothing else, may load. */
+  try {
+    var tt = window.trustedTypes;
+    if (tt && tt.createPolicy && !tt.defaultPolicy) {
+      tt.createPolicy('default', {
+        createScriptURL: function (u) {
+          return String(u).indexOf('https://challenges.cloudflare.com/') === 0 ? String(u) : null;
+        }
+      });
+    }
+  } catch (e) { /* a policy already stands */ }
   /* The parent is same-origin by construction; anything else is not ours. */
   var ORIGIN = location.origin;
   var widgetId = null;

@@ -745,6 +745,31 @@ customElements.define('mc-audio-dock', McAudioDock);
      timeout, or a 429/5xx retries after a short breath. `outer` is the
      navigation's own abort (a newer click supersedes this one): it cancels the
      in-flight attempt and stops the retry ladder cold. */
+  /* ---- the one HTML parse (Trusted Types, 2026-10-08) ----
+     The zone's CSP enforces Trusted Types, and the soft navigation is the only
+     place the site turns a string into markup: OUR page, fetched by fetchDoc
+     from this origin by path, parsed into an inert document whose scripts never
+     run. That parse, and nothing else, goes through the named policy `mc-doc`
+     (the CSP's trusted-types list names it; tests/js/no_html_sinks.test.mjs
+     admits parseFromString only through docHTML). Kept on window so a
+     re-injected bundle reuses it rather than asking for the name twice. */
+  type DocPolicy = { createHTML(s: string): string };
+  type DocWindow = Window & {
+    trustedTypes?: { createPolicy(name: string, rules: { createHTML(s: string): string }): DocPolicy };
+    __mcDocPolicy?: DocPolicy | null;
+  };
+  function docHTML(text: string): string {
+    var w = window as DocWindow;
+    if (w.__mcDocPolicy === undefined) {
+      try {
+        w.__mcDocPolicy = w.trustedTypes && w.trustedTypes.createPolicy
+          ? w.trustedTypes.createPolicy('mc-doc', { createHTML: function (s: string) { return s; } })
+          : null;
+      } catch (e) { w.__mcDocPolicy = null; }
+    }
+    return w.__mcDocPolicy ? w.__mcDocPolicy.createHTML(text) : text;
+  }
+
   var NAV_WAITS = [400, 1200];
   var NAV_TIMEOUT = 9000;
   function navSleep(ms: number) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -875,7 +900,7 @@ customElements.define('mc-audio-dock', McAudioDock);
       : fetchDoc(url.pathname, signal)
     ).then(function (text) {
       if (seq !== navSeq) return;               // a newer navigation owns the page
-      var doc = new DOMParser().parseFromString(text, 'text/html');
+      var doc = new DOMParser().parseFromString(docHTML(text), 'text/html');
       if (noShell(doc)) throw new Error('noshell');
       if (!cached) {
         cache.set(key, text);

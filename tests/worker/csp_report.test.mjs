@@ -68,3 +68,21 @@ test('extensions fold into one origin, and the top hundred is kept', async () =>
   assert.equal(t.total, 105);
   db.close();
 });
+
+test('a sample names the row: Cloudflare\'s JSD snippet folds to cf-jsd, a Trusted Types refusal keeps its sink and never its value', async () => {
+  const db = freshDb();
+  const env = makeEnv({ db });
+  const jsd = { 'csp-report': { 'document-uri': 'https://merecatholicity.com/', 'effective-directive': 'script-src-elem', 'blocked-uri': 'inline', 'script-sample': '(function(){function c(){var b=a.content' } };
+  const ext = { 'csp-report': { 'document-uri': 'https://merecatholicity.com/', 'effective-directive': 'script-src-elem', 'blocked-uri': 'inline', 'script-sample': 'window.someExtension = true;' } };
+  const tt = [{ type: 'csp-violation', url: 'https://merecatholicity.com/messages.html', body: { documentURL: 'https://merecatholicity.com/messages.html', effectiveDirective: 'require-trusted-types-for', blockedURL: 'trusted-types-sink', sample: 'HTMLScriptElement src|https://evil.example/x.js?member=secret' } }];
+  for (const body of [jsd, jsd, ext]) await call(worker, env, 'POST', '/api/comments/csp-report', body, { headers: { 'Content-Type': 'application/csp-report' }, origin: null });
+  await call(worker, env, 'POST', '/api/comments/csp-report', tt, { headers: { 'Content-Type': 'application/reports+json' }, origin: null });
+  const t = tally(db);
+  assert.deepEqual(t.rows.map((x) => [x.directive, x.blocked, x.n]).sort(), [
+    ['require-trusted-types-for', 'tt:HTMLScriptElement src', 1],
+    ['script-src-elem', 'cf-jsd', 2],
+    ['script-src-elem', 'inline', 1],
+  ].sort());
+  assert.ok(!JSON.stringify(t).includes('secret'), 'the value that reached the sink is never kept');
+  db.close();
+});

@@ -5,7 +5,11 @@ report-uri and report-to, and the Reporting-Endpoints header names it too
 (P2-7, 2026-09-16). What would break silently: a change to the anti-flash
 script or the Turnstile bridge that the policy no longer hashes — every page
 would report (and, once enforced, lose) its first script; a report directive
-pointing at a door that does not exist."""
+pointing at a door that does not exist. Since 2026-10-08 the policy is ENFORCED
+with Trusted Types, and HSTS (preload) and COOP sit beside it: a header quietly
+falling back to Report-Only, a script host the CSP admits but the `default`
+policy in nav.js refuses (or the reverse), would each break or open the site
+without a sound."""
 import os
 import re
 import sys
@@ -20,7 +24,7 @@ class Csp(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, 'terraform', 'rulesets.tf'), encoding='utf-8') as f:
             self.tf = f.read()
-        m = re.search(r'Content-Security-Policy(?:-Report-Only)? = \{\s*expression = null\s*operation\s*=\s*"set"\s*value\s*=\s*"([^"]+)"', self.tf)
+        m = re.search(r'Content-Security-Policy = \{\s*expression = null\s*operation\s*=\s*"set"\s*value\s*=\s*"([^"]+)"', self.tf)
         self.assertIsNotNone(m, 'the CSP header in the response-headers rule')
         self.policy = m.group(1)
 
@@ -48,6 +52,42 @@ class Csp(unittest.TestCase):
         media = [d for d in self.policy.split(';') if d.strip().startswith('media-src')][0]
         self.assertIn('blob:', img, 'a decrypted DM attachment is shown from an object URL')
         self.assertIn('blob:', media)
+
+
+    def header(self, name):
+        m = re.search(re.escape(name) + r' = \{\s*expression = null\s*operation\s*=\s*"set"\s*value\s*=\s*"([^"]+)"', self.tf)
+        self.assertIsNotNone(m, name + ' in the response-headers rule')
+        return m.group(1)
+
+    def test_the_policy_is_enforced_with_trusted_types(self):
+        self.assertNotIn('Content-Security-Policy-Report-Only', self.tf, 'one policy, enforced')
+        self.assertIn("require-trusted-types-for 'script'", self.policy)
+        self.assertIn('trusted-types default mc-doc lit-html', self.policy, 'nav.js\'s default, the shell\'s mc-doc, Lit\'s own')
+        script_src = [d for d in self.policy.split(';') if d.strip().startswith('script-src')][0]
+        self.assertIn("'report-sample'", script_src, 'the collector tells Cloudflare\'s snippet from ours by its sample')
+
+    def test_the_trusted_types_policy_admits_exactly_the_script_hosts(self):
+        script_src = [d for d in self.policy.split(';') if d.strip().startswith('script-src')][0]
+        hosts = sorted(t for t in script_src.split() if t.startswith('https://'))
+        with open(os.path.join(ROOT, 'pagejs', 'nav.js'), encoding='utf-8') as f:
+            nav = f.read()
+        m = re.search(r'var SCRIPT_ORIGINS = \[([^\]]*)\]', nav)
+        self.assertIsNotNone(m, 'the default policy\'s origins in nav.js')
+        self.assertEqual(sorted(re.findall(r"'([^']+)'", m.group(1))), hosts,
+                         'a script host goes in BOTH the CSP and nav.js\'s policy')
+        self.assertLess(nav.index("createPolicy('default'"), nav.index('createElement('),
+                        'the policy is made before nav.js touches its first sink')
+        with open(os.path.join(ROOT, 'docs', 'turnstile.html'), encoding='utf-8') as f:
+            ts = f.read()
+        self.assertLess(ts.index("createPolicy('default'"), ts.index("createElement('script')"))
+
+    def test_hsts_is_preloadable_and_coop_isolates(self):
+        hsts = self.header('Strict-Transport-Security')
+        age = int(re.search(r'max-age=(\d+)', hsts).group(1))
+        self.assertGreaterEqual(age, 31536000, 'the preload list asks for at least a year')
+        self.assertIn('includeSubDomains', hsts)
+        self.assertIn('preload', hsts)
+        self.assertEqual(self.header('Cross-Origin-Opener-Policy'), 'same-origin')
 
 
 if __name__ == '__main__':

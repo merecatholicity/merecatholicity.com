@@ -61,9 +61,14 @@ async function handleOpsReport(request: Request, env: Env) {
    and TALLIES, never stores a report: one row per (effective directive,
    blocked origin, document path), a count, first and last seen, the top
    hundred kept in app_settings `csp_report_tally` (the Health card reads
-   it; the flip to an enforced policy waits on this reading as noise). Keyless
-   and public by nature; READ_LIMIT by IP, the body capped at 16 KB, anything
-   unreadable answered 204 all the same — a collector never argues. */
+   it). Enforced since 2026-10-08, with 'report-sample': two kinds of row
+   are named by their sample rather than their origin — Cloudflare's own
+   JavaScript Detections snippet (Bot Fight Mode injects it inline, the hash
+   policy refuses it, by decision) folds to `cf-jsd`, and a Trusted Types
+   refusal keeps only its sink's name (`tt:<sink>`), never the value that
+   reached it. Keyless and public by nature; READ_LIMIT by IP, the body
+   capped at 16 KB, anything unreadable answered 204 all the same — a
+   collector never argues. */
 type Violation = { directive: string; blocked: string; document: string };
 type Tally = { rows: Array<{ key: string; directive: string; blocked: string; document: string; n: number; first: number; last: number }>; total: number; since: number };
 
@@ -75,6 +80,17 @@ function blockedOrigin(u: string): string {
   if (/^(blob|data|filesystem):/.test(v)) return v.split(':')[0];
   try { return new URL(v).origin; } catch (e) { return v.slice(0, 60); }
 }
+/* The JSD snippet's prologue (the outer inline script) and its parameters'
+   name (what its hidden frame writes) — Cloudflare's, so ours to recognise. */
+const CF_JSD = /^\(function\(\)\{function c\(\)\{var b=a\.content|__CF\$cv\$params/;
+function sampleKind(directive: string, blocked: string, sample: string): string {
+  if (sample && CF_JSD.test(sample)) return 'cf-jsd';
+  if (directive === 'require-trusted-types-for' || directive === 'trusted-types') {
+    /* the sample is "<Sink name>|<value…>": the sink is the fact, the value may be a member's */
+    return 'tt:' + (sample.split('|')[0] || blocked || '?').trim().slice(0, 40);
+  }
+  return blocked;
+}
 function documentPath(u: string): string {
   try { return new URL(String(u || '')).pathname.slice(0, 80) || '/'; } catch (e) { return '?'; }
 }
@@ -84,7 +100,9 @@ function violationsOf(payload: unknown): Violation[] {
     if (!b || typeof b !== 'object') return;
     const directive = String(b['effective-directive'] || b.effectiveDirective || b['violated-directive'] || b.violatedDirective || '').split(' ')[0].slice(0, 40);
     if (!directive) return;
-    out.push({ directive, blocked: blockedOrigin(String(b['blocked-uri'] || b.blockedURL || '')), document: documentPath(String(doc || b['document-uri'] || b.documentURL || '')) });
+    const sample = String(b['script-sample'] || b.sample || '').slice(0, 80);
+    const blocked = sampleKind(directive, blockedOrigin(String(b['blocked-uri'] || b.blockedURL || '')), sample);
+    out.push({ directive, blocked, document: documentPath(String(doc || b['document-uri'] || b.documentURL || '')) });
   };
   if (Array.isArray(payload)) {
     for (const r of payload.slice(0, 20)) {

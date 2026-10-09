@@ -113,6 +113,9 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new
   key for ever. The deploy job purges `sw.js` + `version.json`; HTML is never edge-cached.
+- **The CSP is ENFORCED, with Trusted Types** (2026-10-08; `rulesets.tf`, held by `test_csp.py`): inline script by hash only, every
+  script URL through the `default` policy atop `nav.js` (its origins = `script-src`'s hosts — a new one goes in BOTH), the one HTML
+  parse through the shell's `mc-doc`, no other `createPolicy`. COOP `same-origin`; HSTS preloaded — every subdomain HTTPS for good.
 - **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client)
   re-runs on every soft navigation, so anything inside it that owns a resource leaks per hop —
   keep page-scoped state above it, and every document/window listener it installs carries the boot
@@ -126,8 +129,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Limits are per MEMBER plus an address backstop** (`throttle`, the one `.limit(` caller); one
   `READ_LIMIT` for all reads, client-paced — no stray poller. **D1 replicas: `Domain.Consistency`'s list only**.
 - **Comments sections are admin-switched and ship CLOSED** (`comments_pages`, `comments_journal`;
-  the rules are `Domain.Comments`, whose polarity is the OPPOSITE of the social switch — only a
-  literal `'1'` / a listed path opens anything).
+  the rules are `Domain.Comments`, whose polarity is the OPPOSITE of the social switch — only a literal `'1'` / a listed path opens anything).
 - **D1 schema changes are a NEW `comments-worker/migrations/NNNN_*.sql`** (the next number is the
   last file's + 1 — `make migration NAME=<name>`), additive; `schema.sql` is a generated snapshot; the
   librarian D1s are derived data; a renamed applied migration renames its `d1_migrations` row too.
@@ -188,8 +190,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **ONE press-and-hold surface, ONE reaction grammar, ONE bell** (2026-09-12). The surface is
   `client/surface.ts` (`openActs` the overlay — bar · lit hole · acts — `armHold` the gestures);
   the DM, every board post (topic head, reply, article-page comment) and every feed post and
-  comment open THAT one — a post through `postMenu` (the ⋯, and the hold it arms on `opts.hold`),
-  never a menu of its own.
+  comment open THAT one — a post through `postMenu` (the ⋯, and the hold it arms on `opts.hold`), never a menu of its own.
 - **DMs are never AI-screened** — text, edits, media, system notices: none. A message is E2E
   ciphertext (the server could not read it) and privacy is the point; Turnstile on the send
   stays (a bot gate, not a reader). `tests/worker/dm_privacy.test.mjs` sweeps every DM
@@ -213,8 +214,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   mc-footer`; the shell stamps `data-mc-tab` on every navigation); the footer's information lives
   in Settings → About, a themed dialog (`mcDialog`: the overlay's three layers, Escape taken on
   the window so the sheet under it stays). `FOOTER_LINKS` is the one list — a new footer door goes
-  there. Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the
-  document's.
+  there. Desktop keeps its footers. A chat screen scrolls to ITS foot (`endGap`), never the document's.
 - **Presence is the hub's word alone, and the hub is SHARDED** (`Domain.Hub`, 2026-09-17): online is a live socket under mode
   "auto" (`Domain.Presence.isVisible`); `profiles.last_seen_at` is the BoardHub's alone (the last disconnect under "auto" stamps,
   an "off" auth clears; the mode rides the auth frame, never a column — served as-is, which IS the privacy rule). `HUB_SHARDS`
