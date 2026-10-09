@@ -604,7 +604,7 @@ customElements.define('mc-audio-dock', McAudioDock);
      document is still fetched afterwards to reconcile the title and keep the
      doc cache warm, but <main> is never re-swapped once the client has booted
      into it.
-     `tests/js/shell_template.test.mjs` asserts the served pages still match
+     `tests/js/shell_template.test.ts` asserts the served pages still match
      this table, so a future edit to one of them fails loudly here rather than
      quietly serving a wrong-looking flash. */
   var PLATFORM_PAGES: Record<string, { h1: string; title: string }> = {
@@ -750,7 +750,7 @@ customElements.define('mc-audio-dock', McAudioDock);
      place the site turns a string into markup: OUR page, fetched by fetchDoc
      from this origin by path, parsed into an inert document whose scripts never
      run. That parse, and nothing else, goes through the named policy `mc-doc`
-     (the CSP's trusted-types list names it; tests/js/no_html_sinks.test.mjs
+     (the CSP's trusted-types list names it; tests/js/no_html_sinks.test.ts
      admits parseFromString only through docHTML). Kept on window so a
      re-injected bundle reuses it rather than asking for the name twice. */
   type DocPolicy = { createHTML(s: string): string };

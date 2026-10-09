@@ -20,7 +20,7 @@ build it (make) and push.
 ```sh
 # 1. edit sources — never the generated half of docs/ (see §7)
 make tests           # the unit suite — must pass before any commit
-make jscheck         # after ANY worker/client JS/TS edit (eslint + tsc + psbuild)
+make jscheck         # after ANY TypeScript edit (tsc over every project + psbuild)
 make check           # link check over the built site (needs a local build; CI does it anyway)
 git commit … && git push origin main
 ```
@@ -30,7 +30,7 @@ Then read what the push started (`gh run list --limit 5`) and let it finish:
 | You changed…                                  | Workflow(s) that fire            | What happens on `main`                                              |
 |-----------------------------------------------|----------------------------------|---------------------------------------------------------------------|
 | anything at all                               | **Build**                        | site built incrementally, gates, PDFs published, Pages deployed, edge purged |
-| `comments-worker/`, `contact-worker/`, `purescript/`, `package*.json`, `tsconfig.json`, `globals.d.ts`, `eslint.config.js` | **Workers** (+ Build)   | gates, dry-run; then D1 migrations applied and `wrangler deploy` |
+| `comments-worker/`, `contact-worker/`, `purescript/`, `package*.json`, `tsconfig.json`, `globals.d.ts` | **Workers** (+ Build)   | gates, dry-run; then D1 migrations applied and `wrangler deploy` |
 | `terraform/`, `terraform.yml`, `scripts/tf_plan_summary.py` | **Terraform** (+ Build) | plan → **waits for approval** → apply                               |
 | `book/`, `*.tex`, `resources/*.py`            | Build (with TeX Live)            | corpus/book PDFs rebuilt and published                              |
 | a chart page (`content/charting-communions.html`, `free-churches.html`, `objections.html`) or `styles/` | Build | the three chart PDFs reprinted and published |
@@ -138,7 +138,7 @@ matches the manifest and every local PDF`, `{"success":true,…}` from the purge
 
 *Triggers:* `pull_request` and `push` to `main` touching `comments-worker/**`,
 `contact-worker/**`, `purescript/**`, `package.json`, `package-lock.json`, `tsconfig.json`,
-`globals.d.ts`, `eslint.config.js`, or the workflow itself; `workflow_dispatch` (a dispatch
+`globals.d.ts`, or the workflow itself; `workflow_dispatch` (a dispatch
 has no diff base, so it redeploys BOTH workers). *Concurrency:* `workers`, **never
 cancelled** mid-deploy.
 
@@ -507,9 +507,9 @@ caches the tarballs by the manifest's hash. The release is a shelf, not a softwa
 assets are replaced in place (`--clobber`) when a source is regenerated. The history rewrite
 that would shrink existing clones is a separate, owner-authorised act (§10 ex. 9).
 
-- **`docs/` is a mixture.** Hand-maintained source (nav.js, sw.js, the page scripts, the
-  vendored libraries, turnstile.html, images, the 17 hand pages, CNAME, .nojekyll) is
-  tracked; everything the build writes (corpus pages, bundles, style.css, version.json,
+- **`docs/` is a mixture.** Hand-maintained source (turnstile.html, images, the 17 hand pages, CNAME, .nojekyll) is
+  tracked; everything the build writes (corpus pages, bundles, the page scripts and sw.js from
+  `pagejs/*.ts`, the three npm libraries from `scripts/vendor.ts`, style.css, version.json,
   manifests, Bible JSON, the Logos docx) is git-ignored and rebuilt. `.gitignore` lists the
   generated set; `tests/py/test_docs_sources.py` fails if a new hand page is not added to it.
   **Never hand-edit a generated file; never commit one.**
@@ -570,9 +570,9 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 | `gh run list --commit <sha>` returns nothing for a run that exists | the filter is flaky with short shas | list unfiltered and match `headSha` |
 | a rebuilt PDF keeps serving old bytes | the edge caches PDFs | `publish_pdfs` purges exactly the changed URLs |
 | the artifact is 400 MB, not 113 | PDFs built by a LaTeX-touching run rode along | held back at packaging, returned to the cache |
-| a public endpoint served the whole worker env (every secret) for six weeks, every check green | a handler passed `env` to a row mapper (`withNames(env, items)`), both typed `any`; no test read an answer for what it must NOT contain | the env is sealed and every answer scanned (`egress.ts`, `serve.ts`); `tests/worker/env_leak.test.mjs` sweeps every road as four identities |
+| a public endpoint served the whole worker env (every secret) for six weeks, every check green | a handler passed `env` to a row mapper (`withNames(env, items)`), both typed `any`; no test read an answer for what it must NOT contain | the env is sealed and every answer scanned (`egress.ts`, `serve.ts`); `tests/worker/env_leak.test.ts` sweeps every road as four identities |
 | the env disclosure published the pipeline's key, which opened the librarian's shelf, persona and dials | a static secret shared by the worker (`MERECAT_INGEST_KEY`) and the runners (`MC_INGEST_KEY`) — a worker that holds a pipeline key can lose it | the pipeline holds no key: each job's GitHub OIDC token, checked by `oidc.ts` against `Domain.Pipeline`; the persona and dials only from the `librarian-config` job a reviewer approved |
-| the first leak sweep was green while proving nothing for 114 of 129 routes | it set `ALLOWED_ORIGINS` to a sentinel, so every POST stopped at the origin gate | the sweep keeps the gates real and holds reach floors; `sweep_control.test.mjs` shows each detector firing |
+| the first leak sweep was green while proving nothing for 114 of 129 routes | it set `ALLOWED_ORIGINS` to a sentinel, so every POST stopped at the origin gate | the sweep keeps the gates real and holds reach floors; `sweep_control.test.ts` shows each detector firing |
 | every Build fails at *Set up job* the moment SHA pinning is required | GitHub's own `upload-pages-artifact` composite references `upload-artifact@v4` by tag internally; the policy applies to nested references | the composite is inlined (tar + pinned upload named `github-pages`) — prefer plain actions over composites under this policy |
 
 ---
@@ -666,8 +666,8 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
   `index.ts` run through `ops.ts` (`runChain`), `Domain.Ops.staleAfter` for its heartbeat,
   CLAUDE.md's count. Five per account on the free plan; four are in use.
 - **a worker route** (2026-09-17) → its own commit; a `ROUTE_HINTS` entry (or seed) in
-  `tests/_support/sweep.mjs` until `env_leak.test.mjs` sees it answer someone with success;
-  `node scripts/response_shapes.mjs --write` and a read of the diff; its `{ok, …}` shape in
+  `tests/_support/sweep.ts` until `env_leak.test.ts` sees it answer someone with success;
+  `node scripts/response_shapes.ts --write` and a read of the diff; its `{ok, …}` shape in
   `comments-worker/API.md` (a GET is held to it by `test_api_parity.py`, which is documenting
   by calling); a list it always answers goes into `Domain.Wire`; `/security-review` before a
   public one ships.

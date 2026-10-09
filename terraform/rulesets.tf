@@ -341,7 +341,7 @@ resource "cloudflare_ruleset" "response_headers" {
           # are the site's only inline scripts (the mc-fout anti-flash script and
           # turnstile.html's bridge — scripts/csp_hashes.py, held by tests/py/test_csp.py; a
           # moving one rides csp_hashes.OVERLAP); every script URL passes the `default` policy
-          # atop pagejs/nav.js, whose origins equal script-src's hosts; the one HTML parse
+          # atop pagejs/nav.ts, whose origins equal script-src's hosts; the one HTML parse
           # passes the shell's `mc-doc`. blob: is the decrypted DM attachment shown from an
           # object URL; wss: is the live socket.
           Content-Security-Policy-Report-Only = {

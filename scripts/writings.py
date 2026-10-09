@@ -25,7 +25,7 @@ What counts as ours:
 
 The corpus under resources/ has its own Makefile and is never read here.
 Write the module with `make writings` (or any psbuild); the parity test
-(tests/js/commentable_pages.test.mjs) derives the same set independently and
+(tests/js/commentable_pages.test.ts) derives the same set independently and
 holds the kernel to it.
 """
 

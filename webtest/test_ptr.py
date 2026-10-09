@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pull to refresh (2026-09-07), driven with synthesized touch events.
 
-The gesture arithmetic is unit-tested in tests/purescript/ptr.test.mjs; this is
+The gesture arithmetic is unit-tested in tests/purescript/ptr.test.ts; this is
 the half that only exists in a real browser — that the handler is installed on
 every page, that it owns the overscroll (or Chrome on Android fires its own
 pull-to-refresh alongside ours), that an ordinary pull refetches IN PLACE, and

@@ -239,7 +239,7 @@ class SheetOwnsTheScroll(unittest.TestCase):
     """While a sheet is open, the sheet is the only thing that scrolls (2026-09-09).
 
     The live report, on phones: scrolling the Settings sheet sometimes scrolled
-    the page behind it. The source rules are held by tests/js/sheet_lock.test.mjs;
+    the page behind it. The source rules are held by tests/js/sheet_lock.test.ts;
     this class proves the BUILD carries them, since a Tailwind/Lightning pass
     that dropped or rewrote them would ship the bug back silently.
     """
@@ -394,9 +394,9 @@ class NothingScrollsSideways(unittest.TestCase):
         self.assertIn("flex:", find.group(1), "the find box must be allowed to shrink")
         # and the reader's own injected copy of the rule agrees (it is injected
         # later and wins on equal specificity)
-        reader = read(ROOT / "pagejs" / "bible-reader.js")
+        reader = read(ROOT / "pagejs" / "bible-reader.ts")
         self.assertRegex(reader, r"\.bible-find\{[^}]*flex:1 1 11em;max-width:100%",
-                         "pagejs/bible-reader.js injects a .bible-find rule that no longer lets it shrink")
+                         "pagejs/bible-reader.ts injects a .bible-find rule that no longer lets it shrink")
 
 
 class AHoldPicksAMessageNeverAWord(unittest.TestCase):
@@ -404,7 +404,7 @@ class AHoldPicksAMessageNeverAWord(unittest.TestCase):
     text: iOS anchors a long-press selection in the nearest selectable text, so
     a hold on a DM bubble beside them would seed a selection there and extend
     it. The chat screen's own rule rides the DM client's injected block
-    (tests/js/dm_actions.test.mjs); this is the stylesheet's half."""
+    (tests/js/dm_actions.test.ts); this is the stylesheet's half."""
 
     def setUp(self):
         self.css = read(BUILT)
@@ -476,7 +476,7 @@ class PreShellPaint(unittest.TestCase):
 
     def setUp(self):
         self.css = read(BUILT)
-        self.nav = read(ROOT / "pagejs" / "nav.js")
+        self.nav = read(ROOT / "pagejs" / "nav.ts")
 
     def test_the_page_title_and_the_static_footer_wait_for_the_shell(self):
         self.assertRegex(self.css, r"html:not\(\.mc-noapp\) body:not\(\.mc-app\)>footer",

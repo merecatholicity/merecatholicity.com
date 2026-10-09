@@ -32,7 +32,7 @@
      · Only the variant the viewport will actually use: -m below the
        stylesheet's 900px breakpoint, -d at or above it.
 
-   The list below is the stylesheet's own, and `tests/js/art_warm.test.mjs`
+   The list below is the stylesheet's own, and `tests/js/art_warm.test.ts`
    sweeps styles/main.css both ways so a new painting cannot be added to one
    and forgotten in the other. */
 

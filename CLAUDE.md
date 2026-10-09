@@ -71,21 +71,21 @@ the repo are public by design.
 
 ## Repository layout
 
-The root holds only tool-convention files (`Makefile`, `eslint.config.js`, `package.json` + lock,
+The root holds only tool-convention files (`Makefile`, `package.json` + lock,
 `tsconfig.json`, `globals.d.ts`, `.gitignore`, `README.md`, `CLAUDE.md`, `LICENSE*`); a review or a
 hand-over note is a dated file under `docs/architecture/reviews/`; `local/` is the box's own and
 ignored. **`docs/` is the served site and a MIXTURE**: hand-maintained source is tracked, everything
 the build writes is git-ignored and rebuilt, `tests/py/test_docs_sources.py` enforces the split; a
 new hand page needs an `!docs/<name>.html` line in `.gitignore` and an entry in `scripts/nav.py`'s
 `PAGES`. The directory tour (book, content, resources, partials, scripts, styles, app and client —
-four lazy view chunks and three feature ones — `pagejs/` the seven page scripts minified into
+four lazy view chunks and three feature ones — `pagejs/` the seven page scripts and `sw.ts`, built into
 `docs/`, the kernel, the two workers, librarian, webtest, tests, terraform, workflows) is
 CODEBASE.md's; `librarian/private/` is a separate PRIVATE clone, never a submodule, never committed.
 
 ## Build and verify
 
 - **Gates**: `make tests` (the unit suite: PureScript, JS, worker, Python, CSS; runs `psbuild`
-  first); `make jscheck` (eslint + tsc + psbuild); `make check` (jscheck + linkcheck);
+  first); `make jscheck` (tsc + psbuild); `make check` (jscheck + linkcheck);
   `make check-pdfs` (bucket vs manifest vs local PDFs; CI runs it with the site token).
 - **Build**: `make css` · `bundle` (purs + esbuild + the version stamp) · `html` (a target per work; an oversized volume becomes an index over its parts) ·
   `pdf` · `migrate` · `serve` (binds 127.0.0.1 only — load-bearing) · the rest: README's target reference.
@@ -120,7 +120,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   so anything inside it that owns a resource leaks per hop — keep page-scoped state above it, and every document/window
   listener it installs carries the boot signal. **A phone's FIRST paint is already the app**: before `body.mc-app` the bars'
   surfaces hold their places, no title or static footer shows (`html.mc-noapp` is the `?app=0` opt-out); Home's launcher is IN
-  the HTML (`app/home.ts`, `home_prerender.mjs`), nothing of the app is fetched before that paint, the splash is the installed app's.
+  the HTML (`app/home.ts`, `home_prerender.ts`), nothing of the app is fetched before that paint, the splash is the installed app's.
 - **Turnstile**: an established identity is not challenged: `profiles.verified_at`, stamped where a challenge was PASSED, never by
   the row a keyed read leaves (`Domain.Turnstile`, `turnstile_skip_established`; `/prefs` answers for this identity); the widget
   runs in `docs/turnstile.html` (own context, `?v=` from `MC_ASSETS`). **Only `loadTurnstile()` mounts, only from a focus or a
@@ -148,7 +148,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   row (`purgeMediaKeys` for DMs, `purgeWallMedia` for the feed and board attachments), keys read
   BEFORE the row is dropped or its status flips, never a `media_key = NULL` without the purge;
   the hourly sweeps (expiry, retention, orphans) are backstops, never the road. A new delete or
-  expiry path joins `tests/worker/media_hygiene.test.mjs`.
+  expiry path joins `tests/worker/media_hygiene.test.ts`.
 - The Cloudflare `bot_management` API is a **full replace** (Terraform sends the whole object); the
   edge 403s `Python-urllib` and CI runners (Bot Fight Mode) — a browser UA, and headless verification
   against prod runs from the dev box. **Its injections vary per response**: never compare page bytes.
@@ -193,7 +193,7 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   comment open THAT one — a post through `postMenu` (the ⋯, and the hold it arms on `opts.hold`), never a menu of its own.
 - **DMs are never AI-screened** — text, edits, media, system notices: none. A message is E2E
   ciphertext (the server could not read it) and privacy is the point; Turnstile on the send
-  stays (a bot gate, not a reader). `tests/worker/dm_privacy.test.mjs` sweeps every DM
+  stays (a bot gate, not a reader). `tests/worker/dm_privacy.test.ts` sweeps every DM
   handler for a screen call — a new DM road must pass it.
 - **The keyboard shackle**: a field the reader types into is ALWAYS wholly visible, directly above
   the soft keyboard.
@@ -233,16 +233,16 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 The PureScript kernel (`Domain.*`: ADTs, smart constructors, illegal states unrepresentable, pure) →
 **`app/core.ts`, the one audited membrane where types are erased** → the Lit views (`app/views/*`,
 presentational) and the classic client (`client/*.ts`: the write paths, the DM thread, merecat).
-The worker imports the same compiled kernel. **New application logic goes in PureScript**; JS is
-interop only (DOM, fetch, crypto, storage, Turnstile, WebSocket). Realtime: the `BoardHub` and
-`ChatRoom` Durable Objects. The full map, the four gates a slice ships through (byte-deterministic
-rebuild · parity · lint · headless render parity against `make serve`), the reading order: CODEBASE.md.
+The worker imports the same compiled kernel. **New application logic goes in PureScript**; TypeScript is interop only
+(DOM, fetch, crypto, storage, Turnstile, WebSocket). **No JavaScript** (2026-10-09): every source, test and script is strict
+`.ts`, the kernel has no FFI file, the three browser libraries are npm's (`scripts/vendor.ts`). Realtime: the `BoardHub` and `ChatRoom` DOs. The
+map, the four gates a slice ships through (deterministic rebuild · parity · lint · headless render parity), the reading order: CODEBASE.md.
 
 ## Testing policy
 
 Tests clarify what the code does and guard the rules that break silently — no coverage target, no
 tests for trivial getters. Layer 1 `tests/` is hermetic (`make tests`, the standing gate; one file
-per concern; a worker road is RUN against a real SQLite through `tests/_support/worker.mjs` — lock
+per concern; a worker road is RUN against a real SQLite through `tests/_support/worker.ts` — lock
 source text only for a law that is textual). Layer 2 `webtest/` is headless Chromium against prod
 (`audit.py`, the per-slice `test_*.py`; the nightly runs main's read-only ones). A new or changed
 rule brings its test in the same change; never delete a test to go green.

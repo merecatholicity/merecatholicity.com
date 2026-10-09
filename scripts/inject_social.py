@@ -116,7 +116,7 @@ NOINDEX_RE = re.compile(r'<meta name="robots" content="[^"]*noindex', re.I)
 #     already there: the launcher is in docs/index.html now (app/home.ts), so it
 #     paints with the stylesheet, and a splash over it cost every first visit
 #     ~0.9s of nothing (Lighthouse mobile counted it in FCP, LCP and Speed
-#     Index). `tests/js/head_script.test.mjs` runs this script against stubbed
+#     Index). `tests/js/head_script.test.ts` runs this script against stubbed
 #     media and storage, since no headless Chrome can be put in display-mode.
 #     LIFECYCLE (small and bounded): fade out once the app has actually
 #     rendered, never before ~500ms so a fast launch cannot flash, and

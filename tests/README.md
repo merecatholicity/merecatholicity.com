@@ -34,32 +34,32 @@ Layer 2, `webtest/`.
 
 ```
 tests/
-  _support/ps.mjs      shared Maybe/Either erasure readers for the compiled PS output
-  _support/client.mjs  the browser client's sources for the source-rule tests (the root and the
+  _support/ps.ts      shared Maybe/Either erasure readers for the compiled PS output
+  _support/client.ts  the browser client's sources for the source-rule tests (the root and the
                        thirteen feature modules of client/ — the DM family is six since 2026-09-16 —
                        as one text, one at a time, or the DM family alone (clientDm))
   _support/any_baseline.json  the two `any` counts the ratchet holds (see js/any_ratchet): the client's, and the workers' zero
-  _support/worker.mjs  the worker, RUN: loadWorker() (index.ts in plain Node behind one resolve hook), freshDb()
+  _support/worker.ts  the worker, RUN: loadWorker() (index.ts in plain Node behind one resolve hook), freshDb()
                        (every migration on node:sqlite), d1() (the D1-shaped shim), makeEnv() (limiters that allow,
                        R2 buckets that record, an EMAIL spy that records into env.emails or refuses on demand,
                        an optional hub spy, Workers AI that throws), netSpy() (a fetch that
                        throws and records), identity()/establish()/publishKey(), call()/client() through
                        default.fetch, resetCaches()
-  _support/worker_src.mjs  the worker's sources for the source-rule locks: routesSource() (routes/*.ts + index.ts),
+  _support/worker_src.ts  the worker's sources for the source-rule locks: routesSource() (routes/*.ts + index.ts),
                        libSource(), workerSource(), handlerBody(name) — bounded by the next top-level declaration
   _support/routes.json the ROUTES table's committed snapshot (worker/routes)
-  _support/sweep.mjs   the leak sweep (2026-09-17): every road as anon/member/outsider/admin against a fresh ledger
+  _support/sweep.ts   the leak sweep (2026-09-17): every road as anon/member/outsider/admin against a fresh ledger
                        seeded with SENTINELS — every non-public env string, every private column, each with the
                        readers allowed to see it — plus ROUTE_HINTS (the bodies a success path needs), the
                        workers.dev doors (anonymous, admin, and as the GitHub job each admits), /@handle, the
                        upgrades and the four crons; runSweep({ only, wrap })
-  _support/github_oidc.mjs  a stand-in GitHub OIDC issuer: its own RSA key, the key set it serves at GitHub's URL,
+  _support/github_oidc.ts  a stand-in GitHub OIDC issuer: its own RSA key, the key set it serves at GitHub's URL,
                        the claims a merecat.yml / ops-watch.yml job is given, signed (worker/pipeline, the sweep)
-  _support/env_flow.mjs  the env-flow law as a function: the env reaches only a parameter named env (worker/env_leak)
-  _support/shapes.mjs  an answer read into key paths and types; the snapshot and its diff (worker/response_shapes)
-  _support/response_shapes.json  every route's committed answer shape — `node scripts/response_shapes.mjs --write`,
+  _support/env_flow.ts  the env-flow law as a function: the env reaches only a parameter named env (worker/env_leak)
+  _support/shapes.ts  an answer read into key paths and types; the snapshot and its diff (worker/response_shapes)
+  _support/response_shapes.json  every route's committed answer shape — `node scripts/response_shapes.ts --write`,
                        from the sweep; also read by webtest/test_public_shapes.py every night
-  _support/hub_runtime.mjs  the Workers runtime a Durable Object touches, in Node: FakeSocket, fakeCtx, the 101 Response
+  _support/hub_runtime.ts  the Workers runtime a Durable Object touches, in Node: FakeSocket, fakeCtx, the 101 Response
   purescript/          one file per Domain module — the rulebook
   js/                  the app/ layer: core (the membrane), store (cache), api (the SDK),
                        the build ↔ kernel parity of the commentable pages, the DM press-and-hold
@@ -162,12 +162,19 @@ tests/
 
 ## Frameworks (stdlib only — matches the repo's no-new-deps discipline)
 
-- **JS + PureScript**: Node's built-in runner, `node --test` + `node:assert/strict`.
-  The PureScript tests import the compiled ESM from `purescript/output/`, so
+- **TypeScript + PureScript**: Node's built-in runner, `node --test` +
+  `node:assert/strict`. Every test and helper is a strict `.ts` file that Node runs
+  by stripping its types (so only erasable syntax: no enums, no parameter
+  properties, `import type` for a type), and `npm run tsc` (`make jscheck`) type-checks
+  them under two projects: `tests/tsconfig.json` (the client, kernel and script tests,
+  DOM lib) and `tests/worker/tsconfig.json` (the worker tests and their helpers,
+  against `@cloudflare/workers-types`). A test hands the worker's branded `Env` a
+  `makeEnv()` env through a cast to the function's own parameter type
+  (`as unknown as Parameters<typeof f>[0]`). The PureScript tests import the compiled ESM from `purescript/output/`, so
   `make psbuild` must have run first (`make tests` / `make pstest` do it for you).
 - **Python + CSS**: stdlib `unittest` (pytest is not installed). Each file is
   standalone-runnable and puts the source dir it targets on `sys.path`.
-- **The worker, run (2026-09-16)**: `tests/_support/worker.mjs` loads
+- **The worker, run (2026-09-16)**: `tests/_support/worker.ts` loads
   `comments-worker/src/index.ts` in plain Node and drives its handlers through
   `default.fetch` against a real SQLite behind a D1-shaped shim, every binding a
   request can touch stubbed or spying and the network a fetch that throws — a
@@ -176,7 +183,7 @@ tests/
   re-export needs the one resolve hook, and ESM links a static graph before any
   hook runs); `resetCaches()` in `beforeEach` (lib.ts caches app_settings for
   five minutes); an identity passes Turnstile once `establish()` gives it a
-  `profiles` row. Lock source text (`worker_src.mjs`) only for a law that IS
+  `profiles` row. Lock source text (`worker_src.ts`) only for a law that IS
   textual — the privacy sweep, the Turnstile sweep, the one-fragment rule; prove
   a road by running it.
 - **A test that asserts ABSENCE counts what it reached (2026-09-17)**: the
@@ -199,8 +206,8 @@ make tests          # everything (runs psbuild first)
 make pstest         # just the PureScript slice (fast)
 
 # one file at a time:
-node --test tests/purescript/fts.test.mjs
-node --test tests/js/store.test.mjs
+node --test tests/purescript/fts.test.ts
+node --test tests/js/store.test.ts
 python3 tests/py/test_nav.py
 python3 tests/css/test_style_css.py
 ```

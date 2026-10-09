@@ -24,7 +24,7 @@
    member who closes the app before that tap is repaired on the next open.
    One read (`/push/vapid-key`, cacheable, unmetered) per open, and only for a
    member who has push on — never a poller. Dependencies come in as `PushEnv`
-   so tests/js/push_heal.test.mjs drives it with no browser. */
+   so tests/js/push_heal.test.ts drives it with no browser. */
 
 const API = '/api/comments';
 

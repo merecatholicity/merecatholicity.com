@@ -38,7 +38,7 @@ export const JWKS_URL = 'https://token.actions.githubusercontent.com/.well-known
 const KEYS_LIVE_MS = 3600_000;
 const REFETCH_GAP_MS = 60_000;
 
-/* GitHub's signing keys, per isolate (tests/_support/worker.mjs resetCaches
+/* GitHub's signing keys, per isolate (tests/_support/worker.ts resetCaches
    empties it between cases) */
 export const keyCache: { at: number; tried: number; keys: Map<string, CryptoKey>; loading: Promise<void> | null } = {
   at: 0, tried: 0, keys: new Map(), loading: null,

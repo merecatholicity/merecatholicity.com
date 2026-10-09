@@ -35,7 +35,7 @@ import type { Env } from '../env.ts';
    old hash to the new. The specials (dm_pubkeys.pubkey, dm_keys.sealed,
    dm_threads.pair_key) are handled after this list, not in it. Kept in step with
    the schema; a new identity column joins here and its move is proven by
-   rekey.test.mjs's "nothing is left behind" sweep over PRAGMA table_info. */
+   rekey.test.ts's "nothing is left behind" sweep over PRAGMA table_info. */
 export const REKEY_COLS: ReadonlyArray<readonly [string, string]> = [
   ['profiles', 'hash'],
   ['comments', 'author_hash'],

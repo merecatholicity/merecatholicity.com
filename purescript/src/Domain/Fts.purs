@@ -9,11 +9,13 @@
 -- | operator (`- * : ^ NEAR AND OR NOT ( )`) into the MATCH is unrepresentable —
 -- | the guarantee lives in the type, not in a reviewer's vigilance.
 -- |
--- | Tokenization runs through a thin FFI (Fts.js) that uses the EXACT JS regexes,
--- | so `\S`/`\s` and the `[A-Za-z0-9À-ɏ'’]` word class behave byte-for-byte as the
--- | classic worker did (a hand-rolled PureScript tokenizer could drift on an exotic
--- | Unicode space). Everything security-relevant — trimming, the stopword filter,
--- | dedup, the cap, and the quoting — is pure and lives here.
+-- | Tokenization runs the EXACT regexes the classic worker ran, through
+-- | `Data.String.Regex` (a real JS RegExp underneath), so `\S`/`\s` and the
+-- | `[A-Za-z0-9À-ɏ'’]` word class behave byte-for-byte as they did (a hand-rolled
+-- | tokenizer could drift on an exotic Unicode space). It needed an FFI file until
+-- | 2026-10-09; the kernel is PureScript alone now. Everything security-relevant —
+-- | trimming, the stopword filter, dedup, the cap, and the quoting — is pure and
+-- | lives here.
 module Domain.Fts
   ( SafeMatch
   , unSafeMatch
@@ -22,13 +24,49 @@ module Domain.Fts
   ) where
 
 import Prelude
-import Data.Array (filter, take)
+import Data.Array (catMaybes, filter, take)
+import Data.Array.NonEmpty (toArray) as NEA
 import Data.Foldable (elem, foldl)
+import Data.Maybe (maybe)
 import Data.String (Pattern(..), Replacement(..), joinWith, replaceAll, split, toLower, trim)
-import Data.String.CodeUnits (length) as CU
+import Data.String.CodeUnits (drop, dropRight, length, take, takeRight) as CU
+import Data.String.Regex (Regex, match)
+import Data.String.Regex.Flags (global)
+import Data.String.Regex.Unsafe (unsafeRegex)
 
-foreign import buildMatchTokensImpl :: String -> Array String
-foreign import merecatTokensImpl :: String -> Array { phrase :: Boolean, text :: String }
+-- | Every whole match of a global regex, in order (`String.prototype.match` with
+-- | the `g` flag: no capture groups, and `lastIndex` never leaks between calls).
+matches :: Regex -> String -> Array String
+matches re s = maybe [] (catMaybes <<< NEA.toArray) (match re s)
+
+-- | The two quote marks around a phrase match come off; the capture is what is left.
+unquote :: String -> String
+unquote m = CU.drop 1 (CU.dropRight 1 m)
+
+-- | Forum search: quoted phrases, or non-whitespace runs. The RAW tokens (what the
+-- | capture would hold); `buildMatch` trims / filters / caps / quotes them. A whole
+-- | match is the phrase alternative exactly when it opens AND closes with a quote:
+-- | `\S+` reaches a `"` first only when no closing `"` follows anywhere, so its run
+-- | holds no second quote.
+buildMatchTokens :: String -> Array String
+buildMatchTokens q = map raw (matches forumToken q)
+  where
+  raw m = if CU.length m >= 2 && CU.take 1 m == "\"" && CU.takeRight 1 m == "\"" then unquote m else m
+
+forumToken :: Regex
+forumToken = unsafeRegex "\"([^\"]*)\"|(\\S+)" global
+
+-- | merecat retrieval: quoted phrases (kept verbatim) OR word runs (letters,
+-- | digits, Latin-1/extended letters, apostrophes), each tagged phrase vs word so
+-- | `merecatMatch` lower-cases and stopword-filters only the words. The word class
+-- | holds no quote, so a match opening with one is the phrase alternative.
+merecatTokens :: String -> Array { phrase :: Boolean, text :: String }
+merecatTokens q = map tag (matches merecatToken q)
+  where
+  tag m = if CU.take 1 m == "\"" then { phrase: true, text: unquote m } else { phrase: false, text: m }
+
+merecatToken :: Regex
+merecatToken = unsafeRegex "\"([^\"]*)\"|([A-Za-z0-9À-ɏ'’]+)" global
 
 -- | A query fragment proven safe to hand to FTS5 MATCH. Constructed only by the
 -- | producers below; `unSafeMatch` is the only exit.
@@ -48,7 +86,7 @@ quoteTerm t = "\"" <> replaceAll (Pattern "\"") (Replacement "\"\"") t <> "\""
 buildMatch :: String -> SafeMatch
 buildMatch q = SafeMatch (joinWith " " (map quoteTerm toks))
   where
-  toks = take 10 (filter (_ /= "") (map trim (buildMatchTokensImpl q)))
+  toks = take 10 (filter (_ /= "") (map trim (buildMatchTokens q)))
 
 -- | merecat retrieval MATCH: user-quoted phrases kept verbatim; word runs
 -- | lower-cased, apostrophes stripped, sub-2-char / stopword / duplicate words
@@ -56,7 +94,7 @@ buildMatch q = SafeMatch (joinWith " " (map quoteTerm toks))
 -- | question's meaning a chunk carries. Byte-identical to the former worker
 -- | `merecatMatch`.
 merecatMatch :: String -> SafeMatch
-merecatMatch q = SafeMatch (joinWith " OR " (take 16 (foldl step { out: [], seen: [] } (merecatTokensImpl q)).out))
+merecatMatch q = SafeMatch (joinWith " OR " (take 16 (foldl step { out: [], seen: [] } (merecatTokens q)).out))
   where
   step acc tok =
     if tok.phrase then

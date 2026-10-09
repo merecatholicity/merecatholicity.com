@@ -60,7 +60,7 @@ export { merecatQuota, quotaPublic };
    member bucket, never the backstop. A keyless request counts against the
    backstop alone; without a backstop binding it falls back to `bucket` keyed
    by address, the behaviour before this change. Nothing else in the worker
-   may call `.limit(` (tests/worker/throttle.test.mjs sweeps for it). */
+   may call `.limit(` (tests/worker/throttle.test.ts sweeps for it). */
 export type Bucket = 'READ_LIMIT' | 'POST_LIMIT' | 'CONNECT_LIMIT';
 const BACKSTOP: Record<Bucket, 'READ_IP_LIMIT' | 'POST_IP_LIMIT' | 'CONNECT_IP_LIMIT'> = {
   READ_LIMIT: 'READ_IP_LIMIT', POST_LIMIT: 'POST_IP_LIMIT', CONNECT_LIMIT: 'CONNECT_IP_LIMIT',
@@ -94,7 +94,7 @@ export async function throttle(env: Pick<Env, Bucket> & Partial<Pick<Env, 'READ_
    Every write road calls this, whether through the shared preamble or its own
    hand-rolled one (posting a comment, a feed post, a profile edit and the
    uploads keep their own order for a reason and do not use `gated`): the sweep
-   in tests/worker/key_floor_reach.test.mjs runs a weak identity down the whole
+   in tests/worker/key_floor_reach.test.ts runs a weak identity down the whole
    POST_LIMIT surface and fails if one road lets it write, because a floor with
    a hole is not a floor. */
 export async function keyFloor(env: Env, bucket: Bucket | null | undefined, key: string): Promise<Response | null> {

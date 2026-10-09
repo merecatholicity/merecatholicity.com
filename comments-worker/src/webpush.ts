@@ -11,7 +11,7 @@
        p256dh; RFC 8291 folds the shared secret with the auth secret into the
        IKM; RFC 8188 derives the AES-128-GCM key + nonce; the body is the
        standard aes128gcm single record (salt | rs | idlen | as_public | ct).
-   tests/worker/webpush.test.mjs decrypts a real round-trip to prove it. */
+   tests/worker/webpush.test.ts decrypts a real round-trip to prove it. */
 
 import type { Env } from './env.ts';
 

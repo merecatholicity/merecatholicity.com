@@ -1,9 +1,9 @@
-"""Deep-link slug parity: librarian/ingest.py  <->  docs/deeplink.js.
+"""Deep-link slug parity: librarian/ingest.py  <->  pagejs/deeplink.ts.
 
 Every generated Fathers/Scripture page is addressable down to the heading
 because two independent slugifiers agree on the id they stamp:
 
-  * the READER's client, ``slugify`` in ``docs/deeplink.js`` (stamps ids into
+  * the READER's client, ``slugify`` in ``pagejs/deeplink.ts`` (stamps ids into
     the live DOM so a ``#hash`` resolves), and
   * the RAG INGEST, ``PandocWalk.slugify`` in ``librarian/ingest.py`` (stamps
     the same ids onto the chunks it pushes to merecat so its citation anchors
@@ -12,7 +12,7 @@ because two independent slugifiers agree on the id they stamp:
 If these two ever drift, merecat's source links point at anchors that do not
 exist on the page. This has bitten before, so it is the most valuable test in
 this suite: for a battery of fixtures it runs the REAL JS function (extracted
-from and evaluated straight out of ``docs/deeplink.js`` under node -- never a
+from and evaluated straight out of ``pagejs/deeplink.ts`` (types erased) under node -- never a
 re-implementation) and asserts it produces byte-identical output to the Python
 function for the same input.
 
@@ -41,21 +41,26 @@ from ingest import PandocWalk  # noqa: E402  (path set above)
 # contributor using nvm or Homebrew — the exact people the pipeline exists to
 # welcome. What matters is that a real node runs the parity check.
 NODE = pathlib.Path(shutil.which("node") or "/usr/bin/node")
-DEEPLINK_JS = ROOT / "pagejs" / "deeplink.js"
+DEEPLINK_JS = ROOT / "pagejs" / "deeplink.ts"
 
-# A tiny node program that reads docs/deeplink.js as TEXT, regex-extracts the
+# A tiny node program that reads pagejs/deeplink.ts as TEXT, regex-extracts the
 # real `function slugify(...) { ... }` (slugify has no nested braces, so a
-# non-greedy match up to the first `}` captures the whole body), evaluates it,
+# non-greedy match up to the first `}` captures the whole body), erases its
+# types with the repo's pinned esbuild (the build's own transform, found from
+# the repo's package.json — the driver itself runs from a temp file), evaluates it,
 # runs it over the JSON array of fixtures piped in on stdin, and prints the
 # JSON array of results. It exits 2 -- loudly -- if the function cannot be
 # found, so a rename or refactor in deeplink.js can never make this test pass
 # by silently comparing nothing.
 JS_DRIVER = r"""
 import fs from 'fs';
+import { createRequire } from 'module';
 const src = fs.readFileSync(process.argv[2], 'utf8');
 const m = src.match(/function\s+slugify\s*\([^)]*\)\s*\{[^}]*\}/);
 if (!m) { console.error('SLUGIFY_NOT_FOUND'); process.exit(2); }
-const slugify = new Function('return (' + m[0] + ')')();
+const { transformSync } = createRequire(process.argv[3])('esbuild');
+const js = transformSync(m[0], { loader: 'ts', tsconfigRaw: {} }).code;
+const slugify = new Function('return (' + js + ')')();
 let input = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', d => { input += d; });
@@ -86,13 +91,13 @@ FIXTURES = [
 
 
 def _run_js_slugify(fixtures):
-    """Return docs/deeplink.js's real slugify applied to each fixture."""
+    """Return pagejs/deeplink.ts's real slugify applied to each fixture."""
     with tempfile.NamedTemporaryFile("w", suffix=".mjs", delete=False) as fh:
         fh.write(JS_DRIVER)
         driver = fh.name
     try:
         proc = subprocess.run(
-            [str(NODE), driver, str(DEEPLINK_JS)],
+            [str(NODE), driver, str(DEEPLINK_JS), str(ROOT / "package.json")],
             input=json.dumps(fixtures),
             capture_output=True,
             text=True,
@@ -103,7 +108,7 @@ def _run_js_slugify(fixtures):
 
     if proc.returncode == 2:
         raise AssertionError(
-            "docs/deeplink.js: `function slugify(...) {...}` could not be "
+            "pagejs/deeplink.ts: `function slugify(...) {...}` could not be "
             "extracted -- was it renamed, made an arrow function, or given a "
             "nested-brace body? The parity check cannot run. stderr=%r"
             % proc.stderr

@@ -38,7 +38,7 @@ def read(*parts):
 
 class TheBeacon(unittest.TestCase):
     def setUp(self):
-        self.nav = read('pagejs', 'nav.js')
+        self.nav = read('pagejs', 'nav.ts')
 
     def test_every_page_carries_it(self):
         """nav.js is the one script every page already loads — the same reason
@@ -91,7 +91,7 @@ class TheDeclaration(unittest.TestCase):
         invisible — the graph just goes up.
 
         auto_install is FALSE since 2026-09-19: one meter, one road, and the
-        road is pagejs/nav.js. The edge injector the site record names is
+        road is pagejs/nav.ts. The edge injector the site record names is
         missing anyway (the ruleset 404s — that is why the beacon is in nav.js
         at all), and the file names it so the next reader can check rather than
         assume. Turning this back to true means taking the beacon out of nav.js

@@ -122,8 +122,8 @@ function downloadKeyFile(key: string) {
   } catch (e) { /* blocked: the copy button still stands */ }
 }
 
-/* The vendored QR encoder (docs/qr.min.js, qrcode-generator 1.4.4, MIT),
-   lazy-injected same-origin like tweetnacl so script-src 'self' holds. */
+/* The QR encoder (docs/qr.min.js: qrcode-generator, MIT, pinned in package.json
+   and written by scripts/vendor.ts), lazy-injected same-origin like tweetnacl so script-src 'self' holds. */
 declare global { interface Window { qrcode?: any } }
 let qrLoading: Promise<any> | null = null;
 function ensureQr(): Promise<any> {
@@ -754,7 +754,7 @@ class McSettings extends LitElement {
        once left the page background stuck in the old theme until a hard
        refresh. The fallback (a cached pre-engine nav.js, ~10 min TTL) does the
        same by hand. */
-    if ((window as any).mcApplyTheme) (window as any).mcApplyTheme();
+    if (window.mcApplyTheme) window.mcApplyTheme();
     else {
       const e = document.documentElement;
       e.style.background = '';

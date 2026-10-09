@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """The fixed chrome answers the finger (2026-09-13), driven with real touches.
 
-The verdict is unit-tested in tests/purescript/tap.test.mjs and the road's
-shape in tests/js/tabbar.test.mjs; this is the half that only exists in a
+The verdict is unit-tested in tests/purescript/tap.test.ts and the road's
+shape in tests/js/tabbar.test.ts; this is the half that only exists in a
 browser — that a press on a tab navigates softly on the finger's lift, exactly
 ONCE (the engine's own click cancelled, or swallowed as an echo), that the
 destination is painted at once, and that a drag or a hold on the bar gets

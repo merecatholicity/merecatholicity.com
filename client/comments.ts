@@ -596,7 +596,8 @@ import type { Boot } from './boot';
      X25519(mine, theirs), which both sides compute identically — so one
      ciphertext is opened by the recipient AND re-read later by the sender. The
      server only ever holds the opaque "E1.<nonce>.<ct>" blob and cannot decrypt.
-     nacl is the vendored tweetnacl.min.js, injected once on first use. */
+     nacl is tweetnacl's nacl.min.js (npm, written by scripts/vendor.ts),
+     injected once on first use. */
   var NACL_SRC = asset('tweetnacl.min.js');
   /* Publish my public key once per session (idempotent server-side). Fired when
      an identity goes live, so any active member is reachable for an encrypted DM. */

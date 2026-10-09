@@ -6,7 +6,7 @@
  * small `?`-renumbering Query builder for new code, and the identity mappers
  * (rankFor/withNames/postCountsFor), moved verbatim.
  *
- * SAFETY: `inList` is unit-tested (tests/worker/db.test.mjs) to emit the EXACT
+ * SAFETY: `inList` is unit-tested (tests/worker/db.test.ts) to emit the EXACT
  * `?N,…` strings the hand-rolled loops did, and the mappers are moved verbatim,
  * so nothing here changes query behavior — it removes duplication and gives the
  * repository layer a home. (SQL fragment consolidation — the profile join, the

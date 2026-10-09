@@ -3,7 +3,7 @@
 # Until 2026-09-09 the comments worker shipped only by `make worker-deploy` on
 # the owner's machine. This moves that road into the pipeline: any push to main
 # that touches a worker, the shared PureScript kernel, or the npm lockfile runs
-# the same gates (`make jscheck` = psbuild + eslint + tsc; `make tests`), applies
+# the same gates (`make jscheck` = psbuild + tsc; `make tests`), applies
 # the D1 migration ledger, and deploys. A pull request runs the gates and a
 # `wrangler deploy --dry-run` per worker and touches nothing.
 #
@@ -28,7 +28,6 @@ on:
       - 'package-lock.json'
       - 'tsconfig.json'
       - 'globals.d.ts'
-      - 'eslint.config.js'
       - '.github/workflows/workers.yml'
   push:
     branches: [main]
@@ -40,7 +39,6 @@ on:
       - 'package-lock.json'
       - 'tsconfig.json'
       - 'globals.d.ts'
-      - 'eslint.config.js'
       - '.github/workflows/workers.yml'
   workflow_dispatch:
     inputs:

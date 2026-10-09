@@ -11,8 +11,8 @@
 
    ONE structure, two renderers, so the two can never drift:
      · homeTree(), plain data: the launcher's whole shape;
-     · toHtml(), the string scripts/home_prerender.mjs writes into
-       docs/index.html (`tests/js/home_prerender.test.mjs` fails when the page
+     · toHtml(), the string scripts/home_prerender.ts writes into
+       docs/index.html (`tests/js/home_prerender.test.ts` fails when the page
        is stale);
      · toDom(), the nodes the element builds when it arrives EMPTY (a page from
        an older cache, or a swap that did not carry it). It makes no HTML or code

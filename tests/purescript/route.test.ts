@@ -1,0 +1,82 @@
+/* Domain.Route — the forum's URL -> view priority ladder (the single source for
+   comments.js route()). The ORDER is load-bearing: when several params are
+   present the earlier one in the ladder wins (?merecat beats ?topic). The
+   `topic` param's integer-gate coercion is done at the JS boundary (mirrored
+   here), so topic=0 and topic=5.5 are "not a topic". */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as Route from '../../purescript/output/Domain.Route/index.js';
+
+// Mirror the app/core.js parseRoute boundary: the topic integer-gate lives in JS.
+function psRoute(qs: string) {
+  const params = new URLSearchParams(qs);
+  const topicRaw = params.get('topic');
+  const topicNum = Number(topicRaw);
+  const topic = (topicRaw != null && Number.isInteger(topicNum) && topicNum > 0) ? topicNum : null;
+  const tRaw = params.get('t');
+  const tNum = Number(tRaw);
+  const t = (tRaw != null && Number.isInteger(tNum) && tNum > 0) ? tNum : null;
+  const g = (k: string) => params.get(k);
+  return Route.routeTag(Route.parseRoute({
+    ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'), discord: g('discord'), shadowbans: g('shadowbans'),
+    usage: g('usage'), merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),
+    merecat: g('merecat'), feed: g('feed'), notifications: g('notifications'), inbox: g('inbox'), users: g('users'),
+    q: g('q'), t, dm: g('dm'), me: g('me'), profile: g('profile'), post: g('post'), audit: g('audit'), topic, cat: g('cat'),
+  }));
+}
+
+test('the common views resolve from their params', () => {
+  assert.equal(psRoute('').tag, 'Index');
+  assert.equal(psRoute('cat=rc').tag, 'Cat');
+  assert.equal(psRoute('cat=rc').s, 'rc');
+  assert.equal(psRoute('topic=42').tag, 'Topic');
+  assert.equal(psRoute('topic=42').n, 42);
+  assert.equal(psRoute('ipbans=1').tag, 'IpBans');
+  assert.equal(psRoute('discord=1').tag, 'Discord');
+  assert.equal(psRoute('shadowbans=1').tag, 'Shadowbans');
+  assert.equal(psRoute('admin=1').tag, 'AdminHome', 'admin beats discord in the ladder');
+  assert.equal(psRoute('dm=abc').tag, 'Dm');
+  assert.equal(psRoute('dm=abc').s, 'abc');
+  assert.equal(psRoute('me=1').tag, 'Me');
+});
+
+test('topic must be a positive integer, else it is not a topic', () => {
+  assert.equal(psRoute('topic=0').tag, 'Index', 'topic=0 -> not a topic');
+  assert.equal(psRoute('topic=5.5').tag, 'Index', 'non-integer -> not a topic');
+});
+
+test('presence is by truthy value; a bare empty param does not select', () => {
+  assert.equal(psRoute('q=').tag, 'Search', 'bare ?q= (present) -> search');
+  assert.equal(psRoute('merecatthreads').tag, 'MerecatThreads', 'bare ?merecatthreads (present)');
+  assert.equal(psRoute('ipbans').tag, 'Index', 'bare ?ipbans (empty value) is falsy -> not ipbans');
+});
+
+test('priority ladder: an earlier param wins over a later one', () => {
+  assert.equal(psRoute('merecat=1&topic=5').tag, 'Merecat');
+});
+
+test('the usage monitor routes as an admin door', () => {
+  assert.equal(psRoute('usage=1').tag, 'Usage');
+  assert.equal(psRoute('usage').tag, 'Index', 'bare ?usage (empty value) is falsy -> not usage');
+  assert.equal(psRoute('shadowbans=1&usage=1').tag, 'Shadowbans', 'ladder: shadowbans sits above usage');
+  assert.equal(psRoute('usage=1&merecatadmin=1').tag, 'Usage', 'ladder: usage sits above merecatadmin');
+  assert.equal(psRoute('usage=1&topic=7').tag, 'Usage', 'an admin door beats a topic id');
+});
+
+test('the public posting routes: feed and single post', () => {
+  assert.equal(psRoute('feed=1').tag, 'Feed', '?feed=1 -> the global feed');
+  assert.equal(psRoute('post=42').tag, 'Post');
+  assert.equal(psRoute('post=42').s, '42', 'post id rides as a string (JS Number()s it)');
+  assert.equal(psRoute('feed=1&topic=9').tag, 'Feed', 'feed beats topic in the ladder');
+  assert.equal(psRoute('').tag, 'Index', 'no feed/post param -> not a wall route (absent = null, not truthy)');
+});
+
+test('a conversation by id (2026-09-13): ?t=<id> is the thread, gated like topic, and beats the ?dm=<hash> door it resolves', () => {
+  assert.equal(psRoute('t=12').tag, 'Thread');
+  assert.equal(psRoute('t=12').n, 12);
+  assert.equal(psRoute('t=0').tag, 'Index', 't=0 -> not a thread');
+  assert.equal(psRoute('t=5.5').tag, 'Index', 'non-integer -> not a thread');
+  assert.equal(psRoute('t=12&dm=abc').tag, 'Thread', 'the resolved form wins over the door');
+  assert.equal(psRoute('dm=abc&t=').tag, 'Dm', 'a bare ?t= is not a thread');
+  assert.equal(psRoute('q=x&t=12').tag, 'Search', 'the ladder above it still wins');
+});
