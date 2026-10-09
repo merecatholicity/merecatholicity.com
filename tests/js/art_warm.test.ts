@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { TAB_ART, PAGE_ART, WIDE_AT, artUrls, warmArt, browserWarmEnv, installArtWarm }
   from '../../app/artwarm.ts';
+import type { WarmEnv } from '../../app/artwarm.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const css = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
@@ -82,10 +83,10 @@ test('the painting already on screen is not asked for again', () => {
 
 
 /* ---- the walk itself, against a fake world ---- */
-function world(over = {}) {
-  const log = [];
+function world(over: Partial<WarmEnv> = {}) {
+  const log: string[] = [];
   let inFlight = 0, most = 0;
-  const env = {
+  const env: WarmEnv = {
     on: () => true,
     wide: () => false,
     showing: () => '',
@@ -94,7 +95,7 @@ function world(over = {}) {
     fetchOne: (url) => {
       log.push(url);
       inFlight += 1; most = Math.max(most, inFlight);
-      return new Promise((r) => setTimeout(() => { inFlight -= 1; r(); }, 1));
+      return new Promise<void>((r) => setTimeout(() => { inFlight -= 1; r(); }, 1));
     },
     ...over,
   };
@@ -144,22 +145,23 @@ test('a painting that refuses does not end the walk', async () => {
 
 
 /* ---- the browser's own answers ---- */
-function fakeBrowser({ width = 390, art = '', conn = undefined, readyState = 'complete' } = {}) {
-  const loads = [];
+function fakeBrowser({ width = 390, art = '', conn = undefined, readyState = 'complete' }: { width?: number; art?: string; conn?: { effectiveType?: string; saveData?: boolean }; readyState?: string } = {}) {
+  const loads: (() => void)[] = [];
   globalThis.window = {
-    matchMedia: (q) => ({ matches: width >= Number((q.match(/(\d+)px/) || [])[1] || 0) }),
-    requestIdleCallback: (cb) => cb(),
-    addEventListener: (t, cb) => { if (t === 'load') loads.push(cb); },
+    matchMedia: (q: string) => ({ matches: width >= Number((q.match(/(\d+)px/) || [])[1] || 0) }),
+    requestIdleCallback: (cb: () => void) => cb(),
+    addEventListener: (t: string, cb: () => void) => { if (t === 'load') loads.push(cb); },
     setTimeout,
-  };
-  globalThis.document = { readyState, body: { dataset: art ? { art } : {} } };
+  } as unknown as Window & typeof globalThis;
+  globalThis.document = { readyState, body: { dataset: art ? { art } : {} } } as unknown as Document;
   /* node 24 defines navigator as a getter, so it is replaced, not assigned */
   Object.defineProperty(globalThis, 'navigator', {
     value: conn ? { connection: conn } : {}, configurable: true, writable: true });
-  const asked = [];
+  const asked: string[] = [];
   globalThis.Image = class {
-    set src(u) { asked.push(u); setTimeout(() => this.onload && this.onload(), 0); }
-  };
+    declare onload: (() => void) | undefined;
+    set src(u: string) { asked.push(u); setTimeout(() => this.onload && this.onload(), 0); }
+  } as unknown as typeof Image;
   return { asked, loads };
 }
 

@@ -29,16 +29,42 @@ import { dirname, join } from 'node:path';
 import {
   loadWorker, makeEnv, freshDb, freshLibDb, call, ctx, netSpy, resetCaches, hubSpy, identity, establish, publishKey,
 } from './worker.ts';
+import type { Row, Worker, TestEnv, CallOpts, Answer } from './worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
 import { PUBLIC_VARS } from '../../comments-worker/src/env.ts';
 import { githubIssuer } from './github_oidc.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (rel) => readFileSync(join(root, rel), 'utf8');
+const read = (rel: string): string => readFileSync(join(root, rel), 'utf8');
 
-export const ROUTES = JSON.parse(read('tests/_support/routes.json'));
+export type Route = { m: string; p: string; [k: string]: unknown };
+export type Person = { key: string; hash: string };
+export type Who = { member: Person; outsider: Person; admin: Person; author: Person };
+export type Ids = {
+  topic: number; reply: number; pageComment: number; held: number; back: number; wallPost: number; wallComment: number;
+  thread: number; group: number; dm: number; call: string; chat: number; answer: number; handle: string;
+};
+export type PrivateValue = { value: string; who: string[] };
+/* one call the sweep made, and what came back */
+export type SweepCall = {
+  m: string; p: string; as: string; road: string; status: number; text: string; json: any; contentType?: string; threw?: string;
+  events: Row[]; emails: any[]; egress: any[]; said: Row[]; ids: Ids;
+};
+export type SweepCron = { cron: string; emails: any[]; discord: { url: string; body: string }[]; backups: { key: string; text: string }[]; egress: any[] };
+export type SweepResult = { calls: SweepCall[]; crons: SweepCron[]; who: Who };
+type Road = {
+  meta: { m: string; p: string; as: string; road: string };
+  m: string;
+  path: string | ((ids: Ids, who: Who) => string);
+  body?: (ids: Ids, who: Who) => unknown;
+  opts?: (ids: Ids, who: Who) => CallOpts;
+};
+type Hint = (ids: Ids, who: Who, me?: Person) => Row;
+
+export const ROUTES: Route[] = JSON.parse(read('tests/_support/routes.json'));
 
 /* the doors the workers.dev hostname opens (index.ts INGEST_DOORS) */
-export const INGEST_DOORS = (() => {
+export const INGEST_DOORS: string[] = (() => {
   const m = /const INGEST_DOORS = \[([^\]]*)\]/.exec(read('comments-worker/src/index.ts'));
   return m ? [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]) : [];
 })();
@@ -48,20 +74,20 @@ export const INGEST_DOORS = (() => {
 /* Every string the Env declares that is not a public var — the worker's
    secrets, whatever their names — each given a value no answer could hold by
    chance. Long enough for the egress guard to scan for (egress.ts). */
-export function secretNames() {
+export function secretNames(): string[] {
   const src = read('comments-worker/src/env.ts');
   const start = src.indexOf('export interface Env {');
   const body = src.slice(start, src.indexOf('\n}\n', start));
   return [...body.matchAll(/^\s*([A-Z][A-Z0-9_]*)\??: string;/gm)].map((m) => m[1]).filter((k) => !PUBLIC_VARS.includes(k));
 }
-export const sentinel = (name) => 'mc-sentinel-' + name.toLowerCase().replace(/_/g, '-') + '-7f3a';
-export const SECRETS = secretNames().map((name) => ({ name, value: sentinel(name) }));
+export const sentinel = (name: string): string => 'mc-sentinel-' + name.toLowerCase().replace(/_/g, '-') + '-7f3a';
+export const SECRETS: { name: string; value: string }[] = secretNames().map((name) => ({ name, value: sentinel(name) }));
 
 /* Every private value the ledger keeps, and who may read it back. `who` is
    permission, not obligation: a reader outside it must never see the value;
    a reader inside it may. */
-const p = (value, who) => ({ value, who });
-export const PRIVATE = {
+const p = (value: string, who: string[]): PrivateValue => ({ value, who });
+export const PRIVATE: Record<string, PrivateValue> = {
   'comments.ip': p('198.51.100.99', ['admin']),
   'comments.ip_hash': p('mc-private-iphash-5b1c', ['admin']),
   'comments.ua': p('mc-private-useragent-5b1c', ['admin']),
@@ -91,14 +117,14 @@ export const PRIVATE = {
   'back room media bytes': p('mc-private-backroommedia-5b1c', ['admin']),
 };
 /* the public wall attachment, and the one hung on a back-room post */
-export const WALL_MEDIA = { open: 'wall/i/' + 'a1'.repeat(32), back: 'wall/i/' + 'b2'.repeat(32) };
-const discordHook = (tag) => 'https://discord.com/api/webhooks/1234567890/' + tag;
+export const WALL_MEDIA: { open: string; back: string } = { open: 'wall/i/' + 'a1'.repeat(32), back: 'wall/i/' + 'b2'.repeat(32) };
+const discordHook = (tag: string): string => 'https://discord.com/api/webhooks/1234567890/' + tag;
 
 /* ---- the ledger ----------------------------------------------------------- */
 
-export const IDENTITIES = ['anon', 'member', 'outsider', 'admin'];
-let people = null;
-export async function identities() {
+export const IDENTITIES: string[] = ['anon', 'member', 'outsider', 'admin'];
+let people: Who | null = null;
+export async function identities(): Promise<Who> {
   if (!people) {
     people = {
       member: await identity('sweep-member'),
@@ -112,11 +138,11 @@ export async function identities() {
 
 /* A fresh ledger (and librarian room) with every private value in place.
    Returns the ids a request needs to reach them. */
-export function seed(who) {
+export function seed(who: Who): { db: DatabaseSync; lib: DatabaseSync; ids: Ids } {
   const db = freshDb();
   const lib = freshLibDb();
   const now = Math.floor(Date.now() / 1000);
-  const v = (k) => PRIVATE[k].value;
+  const v = (k: string): string => PRIVATE[k].value;
   for (const x of [who.member, who.outsider, who.admin, who.author]) {
     establish(db, x.hash, now - 30 * 86400);
     publishKey(db, x.hash, now - 30 * 86400);
@@ -202,7 +228,7 @@ export function seed(who) {
 
 /* What the ledger's rows name in the buckets: the member's avatar, the two
    wall attachments. Called on each fresh env. */
-export async function stock(env, who) {
+export async function stock(env: TestEnv, who: Who): Promise<void> {
   await env.AVATARS.put('avatars/' + who.member.hash, 'avatar-bytes', { httpMetadata: { contentType: 'image/jpeg' } });
   await env.WALLMEDIA.put(WALL_MEDIA.open, 'public-wall-media', { httpMetadata: { contentType: 'image/webp' } });
   await env.WALLMEDIA.put(WALL_MEDIA.back, PRIVATE['back room media bytes'].value, { httpMetadata: { contentType: 'image/webp' } });
@@ -215,7 +241,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
    JPEG between its bounds); its image screen fails open without Workers AI */
 const JPEG = Buffer.from([0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 0x08, 0x00, 0x80, 0x00, 0x80, 0x03,
   0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xFF, 0xD9]);
-export const UPLOADS = {
+export const UPLOADS: Record<string, string> = {
   'POST /api/comments/dm/media': 'file',
   'POST /api/comments/wall/media': 'file',
   'POST /api/comments/board/media': 'file',
@@ -226,9 +252,9 @@ export const UPLOADS = {
 
 /* Extra body fields the generic body lacks, per route, so a call reaches the
    handler's work instead of its first refusal. A function gets (ids, who, me). */
-const pairKeys = (a, b) => ({ [a.hash]: 'sealedforone', [b.hash]: 'sealedfortwo' });
-const otherOf = (who, me) => (me === who.member ? who.admin : who.member);
-export const ROUTE_HINTS = {
+const pairKeys = (a: Person, b: Person): Record<string, string> => ({ [a.hash]: 'sealedforone', [b.hash]: 'sealedfortwo' });
+const otherOf = (who: Who, me: Person | undefined): Person => (me === who.member ? who.admin : who.member);
+export const ROUTE_HINTS: Record<string, Hint> = {
   'POST /api/comments': (ids) => ({ topic: ids.topic, body: 'a sweep reply', title: '' }),
   'POST /api/comments/edit': (ids) => ({ id: ids.reply, body: 'an edited reply' }),
   'POST /api/comments/moderate': (ids) => ({ id: ids.topic, act: 'sticky' }),
@@ -275,7 +301,7 @@ export const ROUTE_HINTS = {
 };
 
 /* a public read's other modes, each asked for alone */
-export const GET_MODES = [
+export const GET_MODES: [string, (ids: Partial<Ids>, who: Who) => Record<string, string>][] = [
   ['/api/comments/feed', () => ({ cat: 'pub' })],
   ['/api/comments/feed', () => ({ page: '/credo.html' })],
   ['/api/comments/feed', (ids) => ({ topic: String(ids.topic) })],
@@ -289,7 +315,7 @@ export const GET_MODES = [
   ['/api/comments/board/cat', () => ({ cat: 'pub', q: 'sweep' })],
 ];
 
-function query(ids, who) {
+function query(ids: Ids, who: Who): string {
   const q = new URLSearchParams({
     id: String(ids.topic), topic: String(ids.topic), page: '/credo.html', cat: 'pub', p: '1', q: 'body',
     hash: who.member.hash, author: who.member.hash, handle: ids.handle, u: who.member.hash, post: String(ids.wallPost),
@@ -297,8 +323,8 @@ function query(ids, who) {
   });
   return '?' + q.toString();
 }
-function body(route, as, ids, who) {
-  const me = who[as];
+function body(route: Route, as: string, ids: Ids, who: Who): FormData | Row {
+  const me = (who as Partial<Record<string, Person>>)[as];
   const field = UPLOADS[route.m + ' ' + route.p];
   if (field) {
     const form = new FormData();
@@ -306,7 +332,7 @@ function body(route, as, ids, who) {
     form.append(field, field === 'avatar' ? new Blob([JPEG], { type: 'image/jpeg' }) : new Blob([PNG], { type: 'image/png' }), 'sweep');
     return form;
   }
-  const base = {
+  const base: Row = {
     id: ids.topic, topic: ids.topic, topic_id: ids.topic, comment_id: ids.reply, post: ids.wallPost, post_id: ids.wallPost,
     comment: ids.wallComment, thread: ids.thread, thread_id: ids.thread, msg: ids.dm, msg_id: ids.dm, hash: who.member.hash,
     to: who.member.hash, with: who.member.hash, peer: who.member.hash, target: who.member.hash, page: 'board:pub',
@@ -334,7 +360,8 @@ const COMMUNITY_HTML = '<!doctype html><html><head><title>Community</title>' +
   '<meta property="og:url" content=""><meta property="og:type" content="">' +
   '</head><body><section class="comments board" data-board></section></body></html>';
 
-export function responder(url) {
+export function responder(url: string, init?: RequestInit): Response;
+export function responder(url: string): Response {
   if (/\/profile\.html$/.test(url)) return new Response(PROFILE_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   if (/\/community\.html$/.test(url)) return new Response(COMMUNITY_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   if (url.startsWith('https://discord.com/api/webhooks/')) return new Response(null, { status: 204 });
@@ -347,11 +374,20 @@ export function responder(url) {
    thread page (routes/seo.ts) adds `prepend` and a `{ html: true }` content.
    This does that much over the page text, escaping what it writes unless the
    handler said the value is already html. */
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s: unknown): string => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+type RewriteOpts = { html?: boolean } | undefined;
+type Handler = {
+  element: (el: {
+    setAttribute: (name: string, value: string) => void;
+    setInnerContent: (text: string, opts?: RewriteOpts) => void;
+    prepend: (text: string, opts?: RewriteOpts) => void;
+  }) => void;
+};
 class MiniRewriter {
+  rules: [string, Handler][];
   constructor() { this.rules = []; }
-  on(selector, handler) { this.rules.push([selector, handler]); return this; }
-  transform(res) {
+  on(selector: string, handler: Handler): this { this.rules.push([selector, handler]); return this; }
+  transform(res: Response): Response {
     const rules = this.rules;
     const rewrite = async () => {
       let html = await res.text();
@@ -359,19 +395,19 @@ class MiniRewriter {
         const m = /^(\w+)(?:\[([\w:-]+)(?:="([^"]*)")?\])?$/.exec(selector);
         if (!m) continue;
         const [, tag, attr, want] = m;
-        html = html.replace(new RegExp('<' + tag + '\\b([^>]*)>(?:([^<]*)</' + tag + '>)?', 'gi'), (whole, attrs, inner) => {
+        html = html.replace(new RegExp('<' + tag + '\\b([^>]*)>(?:([^<]*)</' + tag + '>)?', 'gi'), (whole: string, attrs: string, inner: string | undefined) => {
           if (attr && want === undefined && !new RegExp('\\b' + attr + '\\b').test(attrs)) return whole;
           if (attr && want !== undefined && !new RegExp('\\b' + attr + '="' + want + '"').test(attrs)) return whole;
           let a = attrs;
           let content = inner;
           let pre = '';
           handler.element({
-            setAttribute: (name, value) => {
+            setAttribute: (name: string, value: string) => {
               const re = new RegExp('\\b' + name + '="[^"]*"');
               a = re.test(a) ? a.replace(re, name + '="' + esc(value) + '"') : a + ' ' + name + '="' + esc(value) + '"';
             },
-            setInnerContent: (text, opts) => { content = opts && opts.html ? String(text) : esc(text); },
-            prepend: (text, opts) => { pre += opts && opts.html ? String(text) : esc(text); },
+            setInnerContent: (text: string, opts?: RewriteOpts) => { content = opts && opts.html ? String(text) : esc(text); },
+            prepend: (text: string, opts?: RewriteOpts) => { pre += opts && opts.html ? String(text) : esc(text); },
           });
           return '<' + tag + a + '>' + pre + (content === undefined ? '' : content + '</' + tag + '>');
         });
@@ -383,16 +419,16 @@ class MiniRewriter {
     }), { status: res.status, headers: res.headers });
   }
 }
-if (!globalThis.HTMLRewriter) globalThis.HTMLRewriter = MiniRewriter;
+if (!(globalThis as Row).HTMLRewriter) (globalThis as Row).HTMLRewriter = MiniRewriter;
 
 /* ---- the sweep ------------------------------------------------------------ */
 
-const egressRows = (db) => {
-  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'ops_egress'").get();
+const egressRows = (db: DatabaseSync): any[] => {
+  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'ops_egress'").get() as Row | undefined;
   return row ? JSON.parse(row.v).rows : [];
 };
 
-async function one(worker, who, vars, road) {
+async function one(worker: Worker, who: Who, vars: Row, road: Road): Promise<SweepCall> {
   resetCaches();
   const { db, lib, ids } = seed(who);
   const hub = hubSpy();
@@ -403,7 +439,7 @@ async function one(worker, who, vars, road) {
   const b = road.body ? road.body(ids, who) : undefined;
   /* what the worker said about itself during the call: every refusal and
      every trip logs (the D1 note is throttled per isolate; the log is not) */
-  const said = [];
+  const said: Row[] = [];
   const log = console.log;
   console.log = (...a) => {
     const t = a.map(String).join(' ');
@@ -412,7 +448,7 @@ async function one(worker, who, vars, road) {
     }
     log(...a);
   };
-  let r;
+  let r: Answer;
   try {
     r = await call(worker, env, road.m, path, b, opts);
     await r.ctx.settle();
@@ -429,7 +465,7 @@ async function one(worker, who, vars, road) {
    { m, p, as, road, status, text, json, events, emails, egress, said }; a cron is
    { cron, emails, discord, backups, egress }. `only` narrows the routes (a
    test of one road); `wrap` hands back a worker to use instead. */
-export async function runSweep({ only, wrap } = {}) {
+export async function runSweep({ only, wrap }: { only?: (route: Route) => boolean; wrap?: (worker: Worker) => Worker } = {}): Promise<SweepResult> {
   const loaded = (await loadWorker()).worker;
   /* `wrap` lets the control test put a planted leak around the worker */
   const worker = wrap ? wrap(loaded) : loaded;
@@ -438,8 +474,8 @@ export async function runSweep({ only, wrap } = {}) {
   /* GitHub's stand-in: the pipeline road's tokens, and the key set the worker asks for */
   const github = await githubIssuer();
   const net = netSpy((url, init) => github.serves(url) || responder(url, init));
-  const calls = [];
-  const crons = [];
+  const calls: SweepCall[] = [];
+  const crons: SweepCron[] = [];
   try {
     for (const route of ROUTES) {
       if (only && !only(route)) continue;
@@ -502,13 +538,13 @@ export async function runSweep({ only, wrap } = {}) {
       /* the public roads a stranger arrives by (2026-09-17): a thread at its
          own URL — the live one, a held post and the back room's topic, which
          must read as nothing at all — the site feed, and the thread sitemap */
-      for (const [road, path] of [
+      for (const [road, path] of ([
         ['thread', (ids) => '/t/' + ids.topic + '-a-sweep-topic'],
         ['thread held', (ids) => '/t/' + ids.held],
         ['thread back room', (ids) => '/t/' + ids.back],
         ['site feed', () => '/feed.xml'],
         ['thread sitemap', () => '/sitemap-threads.xml'],
-      ]) {
+      ] as [string, (ids: Ids) => string][])) {
         calls.push(await one(worker, who, vars, {
           meta: { m: 'GET', p: road === 'thread' ? '/t/<id>' : road, as: 'anon', road: road },
           m: 'GET', path,
@@ -538,10 +574,10 @@ export async function runSweep({ only, wrap } = {}) {
         const cx = ctx();
         await worker.scheduled({ cron }, env, cx);
         await cx.settle();
-        const backups = [];
-        for (const [key, o] of env.BACKUPS.objects) {
+        const backups: { key: string; text: string }[] = [];
+        for (const [key, o] of env.BACKUPS.objects as Map<string, { bytes: Uint8Array }>) {
           let text = '';
-          try { text = gunzipSync(Buffer.from(o.bytes)).toString('utf8'); } catch (e) { text = Buffer.from(o.bytes).toString('utf8'); }
+          try { text = (gunzipSync(Buffer.from(o.bytes)) as { toString(encoding: BufferEncoding): string }).toString('utf8'); } catch (e) { text = Buffer.from(o.bytes).toString('utf8'); }
           backups.push({ key, text });
         }
         const discord = net.calls.slice(before).filter((c) => c.url.startsWith('https://discord.com/'))
@@ -557,7 +593,7 @@ export async function runSweep({ only, wrap } = {}) {
 
 /* ---- what an answer carried ------------------------------------------------ */
 
-export const secretsIn = (text) => SECRETS.filter((s) => String(text).includes(s.value)).map((s) => s.name);
-export const privatesIn = (text) => Object.entries(PRIVATE).filter(([, x]) => String(text).includes(x.value)).map(([k]) => k);
+export const secretsIn = (text: unknown): string[] => SECRETS.filter((s) => String(text).includes(s.value)).map((s) => s.name);
+export const privatesIn = (text: unknown): string[] => Object.entries(PRIVATE).filter(([, x]) => String(text).includes(x.value)).map(([k]) => k);
 /* the private values a reader saw that were not theirs to see */
-export const forbiddenFor = (as, text) => privatesIn(text).filter((k) => !PRIVATE[k].who.includes(as));
+export const forbiddenFor = (as: string, text: unknown): string[] => privatesIn(text).filter((k) => !PRIVATE[k].who.includes(as));

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Live from '../../purescript/output/Domain.Live/index.js';
 
-const tc = (a, b) => Live.topicCompare(a)(b);
+const tc = (a: unknown, b: unknown) => Live.topicCompare(a)(b);
 
 test('topicCompare: stickies first, then more-recent first (Array.sort order)', () => {
   // comparator < 0 => the first argument sorts before the second.

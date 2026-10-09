@@ -12,11 +12,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadWorker, makeEnv, freshDb, freshLibDb, identity, resetCaches, call, d1 } from '../_support/worker.ts';
+import type { Worker, TestEnv } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = readFileSync(join(root, 'comments-worker', 'src', 'routes', 'merecat.ts'), 'utf8');
 const HOST = 'https://merecatholicity-comments.example.workers.dev';
-let worker, ADMIN;
+let worker: Worker, ADMIN: { key: string; hash: string };
 before(async () => {
   ({ worker } = await loadWorker());
   ADMIN = await identity('librarian-admin');
@@ -32,20 +33,20 @@ function oldRoom() {
   db.exec(schema);
   return db;
 }
-const scan = (db) => Number(db.prepare("SELECT COALESCE(SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))), 0) AS b FROM chunks").get().b);
-function seed(db, id, rows, stamp = true) {
+const scan = (db: DatabaseSync) => Number(db.prepare("SELECT COALESCE(SUM(LENGTH(text) + LENGTH(COALESCE(heading, ''))), 0) AS b FROM chunks").get()!.b);
+function seed(db: DatabaseSync, id: string, rows: { heading?: string; text: string }[], stamp = true) {
   db.prepare("INSERT INTO works (id, title, url, tier, kind, hash, chunks) VALUES (?, ?, '', 3, 'text', 'h', ?)").run(id, id, stamp ? rows.length : 0);
   rows.forEach((r, i) => db.prepare('INSERT INTO chunks (cid, work_id, seq, heading, anchor, text) VALUES (?, ?, ?, ?, ?, ?)')
     .run(id + '#' + i, id, i, r.heading ?? null, '', r.text));
 }
 
-function envWith(rooms) {
+function envWith(rooms: DatabaseSync[]) {
   const env = makeEnv({ db: freshDb(), libdb: rooms[0], vars: { ADMIN_HASHES: ADMIN.hash } });
   env.LIBDB2 = d1(rooms[1]);
   env.LIBDB3 = d1(rooms[2]);
   return env;
 }
-const post = (env, path, body) => call(worker, env, 'POST', path, body, { host: HOST, origin: null });
+const post = (env: TestEnv, path: string, body: unknown) => call(worker, env, 'POST', path, body, { host: HOST, origin: null });
 
 test('a room from before the column gains it, backfilled to exactly what the old scan measured', async () => {
   const one = freshLibDb(), deep = oldRoom(), deep2 = oldRoom();
@@ -60,7 +61,7 @@ test('a room from before the column gains it, backfilled to exactly what the old
   const cols = deep.prepare('PRAGMA table_info(works)').all().map((c) => c.name);
   assert.ok(cols.includes('text_bytes'), 'the deep room gained the column');
   /* the unfinished work (no chunk count stamped) has no size yet, as it has no count */
-  const halfDone = Number(deep.prepare("SELECT text_bytes FROM works WHERE id = 'half-done'").get().text_bytes);
+  const halfDone = Number(deep.prepare("SELECT text_bytes FROM works WHERE id = 'half-done'").get()!.text_bytes);
   assert.equal(halfDone, 0);
   const unfinished = 'an interrupted push'.length;
   assert.deepEqual([r.json.text_bytes, r.json.text_bytes_deep, r.json.text_bytes_deep2], [before[0], before[1] - unfinished, before[2]],
@@ -74,14 +75,14 @@ test('the end of a push stamps the size from the work\'s own chunks; a re-push r
   const one = freshLibDb(), deep = freshLibDb(), deep2 = freshLibDb();
   const env = envWith([one, deep, deep2]);
   const work = { id: 'tract', title: 'Tract', url: '', tier: 3, kind: 'text' };
-  const push = async (texts) => {
+  const push = async (texts: string[]) => {
     assert.equal((await post(env, '/api/merecat/ingest', { key: ADMIN.key, mode: 'begin', store: 'deep', work })).status, 200);
     const chunks = texts.map((t, i) => ({ cid: 'tract#' + i, seq: i, heading: 'H' + i, anchor: '', text: t }));
     assert.equal((await post(env, '/api/merecat/ingest', { key: ADMIN.key, mode: 'append', store: 'deep', work, chunks })).status, 200);
     assert.equal((await post(env, '/api/merecat/ingest', { key: ADMIN.key, mode: 'end', store: 'deep', work: { ...work, hash: 'h' + texts.length, chunks: texts.length } })).status, 200);
   };
   await push(['alpha', 'beta gamma']);
-  const size = () => Number(deep.prepare("SELECT text_bytes FROM works WHERE id = 'tract'").get().text_bytes);
+  const size = () => Number(deep.prepare("SELECT text_bytes FROM works WHERE id = 'tract'").get()!.text_bytes);
   assert.equal(size(), 'alpha'.length + 'H0'.length + 'beta gamma'.length + 'H1'.length);
   assert.equal(size(), scan(deep));
   await push(['one']);

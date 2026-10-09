@@ -9,9 +9,9 @@ import { fetchJson, invalidate, metrics, peek, keyFor, hydrate, forget } from '.
 
 // A fake transport: records how many times it was actually called, returns a
 // Response-shaped object whose .json() resolves to `payload`.
-function mkFetcher(payload) {
+function mkFetcher(payload: unknown) {
   const rec = { calls: 0 };
-  const fn = () => { rec.calls++; return { json: () => Promise.resolve(payload) }; };
+  const fn = () => { rec.calls++; return { json: () => Promise.resolve(payload) } as unknown as Response; };
   return { fn, rec };
 }
 
@@ -40,13 +40,13 @@ test('two concurrent identical reads share ONE in-flight request', async () => {
   let release;
   const gate = new Promise((r) => { release = r; }); // controlled upfront, resolved on demand
   let calls = 0;
-  const fn = () => { calls++; return { json: () => gate.then(() => ({ ok: true, v: 9 })) }; };
+  const fn = () => { calls++; return { json: () => gate.then(() => ({ ok: true, v: 9 })) } as unknown as Response; };
   const dedupBefore = metrics.dedup;
   const p1 = fetchJson(fn, '/u3', undefined, { ttl: 10000 });
   const p2 = fetchJson(fn, '/u3', undefined, { ttl: 10000 });
   assert.equal(metrics.dedup, dedupBefore + 1, 'the second concurrent caller was deduped');
   assert.strictEqual(p1, p2, 'both callers share the single in-flight promise');
-  release();
+  release!();
   const [r1, r2] = await Promise.all([p1, p2]);
   assert.equal(calls, 1, 'the transport ran once');
   assert.deepEqual(r1, r2);
@@ -58,7 +58,7 @@ test('a throttled read quietly re-asks and settles on the freed answer', async (
   // (bounded) instead of handing the view a dead "could not be loaded".
   // Collapse the real waits so the test stays instant.
   const realSetTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = (fn) => realSetTimeout(fn, 0);
+  globalThis.setTimeout = ((fn: () => void) => realSetTimeout(fn, 0)) as typeof setTimeout;
   try {
     let calls = 0;
     const answers = [
@@ -66,7 +66,7 @@ test('a throttled read quietly re-asks and settles on the freed answer', async (
       { ok: false, error: 'Too many requests. Slow down.' },
       { ok: true, v: 7 },
     ];
-    const fn = () => { const a = answers[calls]; calls++; return { json: () => Promise.resolve(a) }; };
+    const fn = () => { const a = answers[calls]; calls++; return { json: () => Promise.resolve(a) } as unknown as Response; };
     const d = await fetchJson(fn, '/u6', undefined, { ttl: 10000 });
     assert.equal(calls, 3, 'the two 429s each earned a quiet re-ask');
     assert.deepEqual(d, { ok: true, v: 7 });
@@ -79,7 +79,7 @@ test('a throttled read quietly re-asks and settles on the freed answer', async (
 test('a throttle past the bounded ladder reaches the caller as the refusal', async () => {
   invalidate();
   const realSetTimeout = globalThis.setTimeout;
-  globalThis.setTimeout = (fn) => realSetTimeout(fn, 0);
+  globalThis.setTimeout = ((fn: () => void) => realSetTimeout(fn, 0)) as typeof setTimeout;
   try {
     const { fn, rec } = mkFetcher({ ok: false, error: 'Too many requests.' });
     const d = await fetchJson(fn, '/u7', undefined, { ttl: 10000 });
@@ -118,23 +118,24 @@ test('invalidate(prefix) sweeps only matching keys; invalidate() clears all', as
    them up here keeps these tests hermetic while exercising the REAL code paths:
    the identity keying, the privacy refusal, and the synchronous peek that makes
    a return visit paint in its first frame. */
+type CoreStub = { mcCore: { cacheClassify: () => string } };
 function stubEnv() {
   const store = new Map();
   globalThis.localStorage = {
-    getItem: (k) => (store.has(k) ? store.get(k) : null),
-    setItem: (k, v) => store.set(k, String(v)),
-    removeItem: (k) => store.delete(k),
-  };
+    getItem: (k: string) => (store.has(k) ? store.get(k) : null),
+    setItem: (k: string, v: string) => store.set(k, String(v)),
+    removeItem: (k: string) => store.delete(k),
+  } as unknown as Storage;
   globalThis.window = {
     mcCore: {
       /* The real rules come from Domain.Cache; this mirrors them narrowly so a
          drift in the kernel shows up in cache.test.ts, not here. */
-      cachePersistable: (k) => !/\/dm\/|\/merecat\/|\/admin|\/meta|\/rdns/.test(k),
-      cacheClassify: (age, ttl) => (age < ttl ? 'fresh' : age < 86400000 ? 'stale' : 'expired'),
+      cachePersistable: (k: string) => !/\/dm\/|\/merecat\/|\/admin|\/meta|\/rdns/.test(k),
+      cacheClassify: (age: number, ttl: number) => (age < ttl ? 'fresh' : age < 86400000 ? 'stale' : 'expired'),
       cacheMaxBytes: 524288,
       cacheSchema: 1,
     },
-  };
+  } as unknown as Window & typeof globalThis;
   return store;
 }
 
@@ -145,14 +146,14 @@ test('peek: a synchronous answer, which is what makes a revisit instant', async 
   assert.equal(peek(keyFor('/p1')), null, 'nothing known yet');
   await fetchJson(fn, '/p1', undefined, { ttl: 10000 });
   const hit = peek(keyFor('/p1'));
-  assert.deepEqual(hit.json, { ok: true, v: 'seed' });
-  assert.equal(hit.stale, false, 'inside its TTL');
+  assert.deepEqual(hit!.json, { ok: true, v: 'seed' });
+  assert.equal(hit!.stale, false, 'inside its TTL');
 });
 
 test('peek: past the TTL it still answers, but says to refresh', async () => {
   invalidate();
   stubEnv();
-  globalThis.window.mcCore.cacheClassify = () => 'stale';
+  (globalThis.window as unknown as CoreStub).mcCore.cacheClassify = () => 'stale';
   const { fn } = mkFetcher({ ok: true, v: 'old' });
   await fetchJson(fn, '/p2', undefined, { ttl: 1 });
   const hit = peek(keyFor('/p2'));
@@ -163,7 +164,7 @@ test('peek: past the TTL it still answers, but says to refresh', async () => {
 test('peek: past the horizon it answers nothing at all', async () => {
   invalidate();
   stubEnv();
-  globalThis.window.mcCore.cacheClassify = () => 'expired';
+  (globalThis.window as unknown as CoreStub).mcCore.cacheClassify = () => 'expired';
   const { fn } = mkFetcher({ ok: true, v: 'ancient' });
   await fetchJson(fn, '/p3', undefined, { ttl: 1 });
   assert.equal(peek(keyFor('/p3')), null, 'a placeholder is more honest than year-old rows');

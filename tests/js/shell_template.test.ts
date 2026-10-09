@@ -23,7 +23,7 @@ function shellTable() {
     shellSrc.indexOf('var PLATFORM_PAGES'),
     shellSrc.indexOf('function platformPage'),
   );
-  const out = {};
+  const out: Record<string, { h1: string; title: string }> = {};
   for (const m of block.matchAll(
     /'([a-z-]+\.html)':\s*\{\s*h1:\s*'([^']*)',\s*title:\s*'([^']*)'\s*\}/g)) {
     out[m[1]] = { h1: m[2], title: m[3] };

@@ -28,15 +28,18 @@ import { readOps, runSelfCheck } from '../../comments-worker/src/ops.ts';
 import { serve } from '../../comments-worker/src/serve.ts';
 import { loadWorker, makeEnv, freshDb, call, ctx, netSpy, resetCaches, identity } from '../_support/worker.ts';
 import { fakeCtx } from '../_support/hub_runtime.ts';
+import type { Row, Worker, Loaded, HubSpy } from '../_support/worker.ts';
+import type { Env } from '../../comments-worker/src/env.ts';
+import type { DatabaseSync } from 'node:sqlite';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const src = (rel) => readFileSync(join(root, rel), 'utf8');
+const src = (rel: string): string => readFileSync(join(root, rel), 'utf8');
 /* wrangler.jsonc without its comments (strings kept whole) */
-const jsonc = (rel) => JSON.parse(src(rel).replace(/"(?:[^"\\]|\\.)*"|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m) => (m[0] === '"' ? m : '')));
+const jsonc = (rel: string): any => JSON.parse(src(rel).replace(/"(?:[^"\\]|\\.)*"|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m) => (m[0] === '"' ? m : '')));
 
 const SECRET = 'mc-egress-sentinel-7c1e9b2d44';   // long enough to be scanned for
-const tally = (db) => {
-  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'ops_egress'").get();
+const tally = (db: DatabaseSync): Row[] => {
+  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'ops_egress'").get() as Row | undefined;
   return row ? JSON.parse(row.v).rows : [];
 };
 function alertingDb() {
@@ -48,7 +51,7 @@ function alertingDb() {
   return db;
 }
 
-let worker, BoardHub, net;
+let worker: Worker, BoardHub: Loaded['BoardHub'], net: ReturnType<typeof netSpy>;
 before(async () => { ({ worker, BoardHub } = await loadWorker()); });
 beforeEach(() => { resetCaches(); });
 
@@ -78,7 +81,7 @@ test('the sealed env reads like the env, and refuses to be copied, listed, seria
     'a rest pattern': () => { const { SITE: _s, ...rest } = env; return rest; },
     'a write': () => { env.SITE = 'x'; },
     'a new property': () => Object.defineProperty(env, 'X', { value: 1 }),
-    'a delete': () => { delete env.SITE; },
+    'a delete': () => { delete (env as Partial<typeof env>).SITE; },
   };
   for (const [what, f] of Object.entries(refused)) assert.throws(f, EnvLeak, what);
   assert.throws(() => structuredClone(env), 'a proxy never clones');
@@ -90,7 +93,7 @@ test('the sealed env reads like the env, and refuses to be copied, listed, seria
 
 test('the very bug: handing the env to the row mapper now rejects instead of copying every secret (withNames is async since the P0 L3 flip)', async () => {
   const env = sealEnv({ DB: {}, TURN_KEY_SECRET: SECRET });
-  await assert.rejects(() => withNames(env, []), EnvLeak);
+  await assert.rejects(() => withNames(env, [] as never), EnvLeak);
   assert.deepEqual(takeTrips(env), ['enumerated']);
 });
 
@@ -126,7 +129,7 @@ test('the scan looks for every non-public env string long enough to find, and fo
     EMPTY: '',
     NUMBER: 5,
   };
-  const want = [['TURNSTILE_SECRET', raw.TURNSTILE_SECRET], ['A_SECRET_NOBODY_LISTED', raw.A_SECRET_NOBODY_LISTED]];
+  const want: [string, string][] = [['TURNSTILE_SECRET', raw.TURNSTILE_SECRET], ['A_SECRET_NOBODY_LISTED', raw.A_SECRET_NOBODY_LISTED]];
   assert.deepEqual(secretValues(raw, PUBLIC_VARS), want, 'default-deny: a secret nobody listed is scanned for');
   assert.deepEqual(secretValues(sealEnv(raw), PUBLIC_VARS), want, 'the same census from the sealed env');
   assert.deepEqual(shortSecrets(sealEnv(raw), PUBLIC_VARS), ['SHORT'], 'a short secret is named for the self-check');
@@ -135,9 +138,9 @@ test('the scan looks for every non-public env string long enough to find, and fo
 });
 
 test('guardResponse refuses a textual answer that carries a secret, and leaves everything else as it was', async () => {
-  const secrets = [['S', SECRET]];
-  const run = async (res) => {
-    const names = [];
+  const secrets: [string, string][] = [['S', SECRET]];
+  const run = async (res: Response) => {
+    const names: string[] = [];
     const out = await guardResponse(res, secrets, (n) => names.push(...n));
     return { out, names };
   };
@@ -152,18 +155,18 @@ test('guardResponse refuses a textual answer that carries a secret, and leaves e
   assert.equal(svg.out.status, 500);
   /* a secret in a HEADER is refused on any answer, a bodiless redirect included, URL-encoded or not */
   for (const location of ['https://merecatholicity.com/?t=' + SECRET, 'https://merecatholicity.com/?t=' + encodeURIComponent(SECRET + ' /&')]) {
-    const odd = [['S', SECRET], ['T', SECRET + ' /&']];
-    const names = [];
+    const odd: [string, string][] = [['S', SECRET], ['T', SECRET + ' /&']];
+    const names: string[] = [];
     const out = await guardResponse(new Response(null, { status: 302, headers: { Location: location } }), odd, (n) => names.push(...n));
     assert.equal(out.status, 500, location);
     assert.ok(names.length >= 1, location);
   }
   /* a secret the answer escaped is still the secret: inside a JSON string, inside HTML */
   const quirky = 'mc-"quoted"\\secret<&>\'value-0042';
-  const q = [['Q', quirky]];
+  const q: [string, string][] = [['Q', quirky]];
   for (const [type, body] of [['application/json', JSON.stringify({ v: quirky })],
     ['text/html', '<p>' + quirky.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;') + '</p>']]) {
-    const names = [];
+    const names: string[] = [];
     const out = await guardResponse(new Response(body, { headers: { 'Content-Type': type } }), q, (n) => names.push(...n));
     assert.equal(out.status, 500, type + ' ' + body);
     assert.deepEqual(names, ['Q']);
@@ -175,7 +178,7 @@ test('guardResponse refuses a textual answer that carries a secret, and leaves e
   assert.equal((await run(stream)).out, stream);
   const empty = new Response(null, { status: 204 });
   assert.equal((await run(empty)).out, empty);
-  const upgraded = new Response(null, { status: 101, webSocket: {} });
+  const upgraded = new Response(null, { status: 101, webSocket: {} as WebSocket });
   assert.equal((await run(upgraded)).out, upgraded);
   /* a clean answer goes out with its status, headers and bytes */
   const clean = new Response('{"ok":true}', { status: 201, statusText: 'Created', headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' } });
@@ -210,9 +213,9 @@ test('a real route that would echo a secret answers the usual 500; the owner is 
     assert.match(mail.subject, /Answer refused/);
     assert.match(mail.text, /TURN_KEY_SECRET/);
     assert.ok(!JSON.stringify(mail).includes(SECRET), 'the alert names the secret, never carries it');
-    assert.ok(!db.prepare("SELECT v FROM app_settings WHERE k = 'ops_egress'").get().v.includes(SECRET));
+    assert.ok(!(db.prepare("SELECT v FROM app_settings WHERE k = 'ops_egress'").get() as Row).v.includes(SECRET));
     /* the health verdict turns red for a day */
-    const h = await readOps(env);
+    const h = await readOps(env as unknown as Env);
     assert.equal(h.ok, false);
     assert.equal(h.egress[0].standing, true);
     /* again within the minute: the same answer refused, no second mail */
@@ -229,19 +232,19 @@ test('a real route that would echo a secret answers the usual 500; the owner is 
 test('a handler that copies the env is refused with the usual 500, and one that swallows the throw is reported anyway', async () => {
   const db = alertingDb();
   const env = makeEnv({ db, vars: { TURN_KEY_SECRET: SECRET } });
-  const copying = async (_request, e) => new Response(JSON.stringify({ ok: true, items: Object.assign({}, e) }), { headers: { 'Content-Type': 'application/json' } });
+  const copying = async (_request: Request, e: Env) => new Response(JSON.stringify({ ok: true, items: Object.assign({}, e) }), { headers: { 'Content-Type': 'application/json' } });
   const cx = ctx();
-  const r = await serve(new Request('https://merecatholicity.com/api/comments/copying'), env, cx, copying);
+  const r = await serve(new Request('https://merecatholicity.com/api/comments/copying'), env as unknown as Env, cx as unknown as ExecutionContext, copying);
   await cx.settle();
   assert.equal(r.status, 500);
   assert.deepEqual(await r.json(), { ok: false, error: REFUSAL_TEXT });
-  const swallowing = async (_request, e) => {
+  const swallowing = async (_request: Request, e: Env) => {
     let copy = null;
     try { copy = JSON.stringify(e); } catch (err) { /* a handler's own catch */ }
     return new Response(JSON.stringify({ ok: true, copy }), { headers: { 'Content-Type': 'application/json' } });
   };
   const cx2 = ctx();
-  const r2 = await serve(new Request('https://merecatholicity.com/api/comments/swallowing'), env, cx2, swallowing);
+  const r2 = await serve(new Request('https://merecatholicity.com/api/comments/swallowing'), env as unknown as Env, cx2 as unknown as ExecutionContext, swallowing);
   await cx2.settle();
   assert.equal(r2.status, 200, 'the handler chose to answer; the seal still kept the env out of it');
   assert.deepEqual(await r2.json(), { ok: true, copy: null });
@@ -253,22 +256,22 @@ test('a handler that copies the env is refused with the usual 500, and one that 
   assert.equal(env.emails.length, 2);
   assert.match(env.emails[0].subject, /sealed env was enumerated/);
   /* a handler that reads a secret by name and puts it in the answer */
-  const naming = async (_request, e) => new Response('<p>' + e.TURN_KEY_SECRET + '</p>', { headers: { 'Content-Type': 'text/html' } });
+  const naming = async (_request: Request, e: Env) => new Response('<p>' + e.TURN_KEY_SECRET + '</p>', { headers: { 'Content-Type': 'text/html' } });
   const cx3 = ctx();
-  const r3 = await serve(new Request('https://merecatholicity.com/@someone'), env, cx3, naming);
+  const r3 = await serve(new Request('https://merecatholicity.com/@someone'), env as unknown as Env, cx3 as unknown as ExecutionContext, naming);
   await cx3.settle();
   assert.equal(r3.status, 500);
-  const card = tally(db).find((x) => x.kind === 'answer');
+  const card = tally(db).find((x) => x.kind === 'answer')!;
   assert.equal(card.site, 'GET /@…', 'a handle card is reported by its road, never by the member it names');
 });
 
 test('a hub frame that carries a secret never reaches a socket; a clean one still does', async () => {
   const db = alertingDb();
-  const hubs = new Map();
-  const namespace = { idFromName: (n) => n, get: (n) => hubs.get(n) };
-  const env = makeEnv({ db, hub: { namespace }, vars: { HUB_SHARDS: '1', TURN_KEY_SECRET: SECRET } });
-  const tasks = [];
-  const state = { ...fakeCtx('board'), waitUntil: (p) => tasks.push(p) };
+  const hubs = new Map<string, any>();
+  const namespace = { idFromName: (n: string) => n, get: (n: string) => hubs.get(n) };
+  const env = makeEnv({ db, hub: { namespace } as unknown as HubSpy, vars: { HUB_SHARDS: '1', TURN_KEY_SECRET: SECRET } });
+  const tasks: Promise<unknown>[] = [];
+  const state = { ...fakeCtx('board'), waitUntil: (p: Promise<unknown>) => tasks.push(p) };
   const hub = new BoardHub(state, env);
   hubs.set('board', hub);
   const up = await hub.fetch(new Request('https://merecatholicity.com/api/comments/live', { headers: { Upgrade: 'websocket' } }));
@@ -293,7 +296,7 @@ test('a hub frame that carries a secret never reaches a socket; a clean one stil
 test('the self-check names a secret too short for the scan to guard', async () => {
   const db = freshDb();
   const env = sealEnv(makeEnv({ db, vars: { A_SHORT_SECRET: 'abc123', TURN_KEY_SECRET: SECRET } }));
-  const conds = await runSelfCheck(env);
+  const conds = await runSelfCheck(env as unknown as Env);
   assert.deepEqual(conds.filter((c) => c.kind === 'secret_short').map((c) => c.subject), ['A_SHORT_SECRET']);
 });
 
@@ -305,7 +308,7 @@ test('the public vars are exactly the vars env.ts declares, and cover every var 
   const declared = [...section.matchAll(/^\s*([A-Z][A-Z0-9_]*)\?: string;/gm)].map((m) => m[1]).sort();
   assert.deepEqual([...PUBLIC_VARS].sort(), declared, 'PUBLIC_VARS lists the vars section of Env, no more, no less');
   const w = jsonc('comments-worker/wrangler.jsonc');
-  const set = [...Object.keys(w.vars || {}), ...Object.values(w.env || {}).flatMap((e) => Object.keys(e.vars || {}))];
+  const set = [...Object.keys(w.vars || {}), ...Object.values((w.env || {}) as Record<string, Row>).flatMap((e: Row) => Object.keys(e.vars || {}))];
   assert.deepEqual(set.filter((k) => !PUBLIC_VARS.includes(k)), [], 'a var in wrangler.jsonc is public by definition: declare it');
   const secretsAt = envSrc.indexOf('/* secrets');
   const secretsSection = envSrc.slice(secretsAt, envSrc.indexOf('\n}\n', secretsAt));

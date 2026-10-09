@@ -19,7 +19,7 @@ import {
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-function concat(...arrays) {
+function concat(...arrays: Uint8Array[]) {
   let total = 0;
   for (const a of arrays) total += a.length;
   const out = new Uint8Array(total);
@@ -28,7 +28,7 @@ function concat(...arrays) {
   return out;
 }
 // Independent HKDF-SHA256 for the decrypt side (does NOT reuse webpush.ts).
-async function hkdf(salt, ikm, info, length) {
+async function hkdf(salt: Uint8Array, ikm: Uint8Array, info: Uint8Array, length: number) {
   const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'HKDF', hash: 'SHA-256', salt, info }, key, length * 8);
   return new Uint8Array(bits);
@@ -36,22 +36,23 @@ async function hkdf(salt, ikm, info, length) {
 
 // A fresh UA (recipient) subscription: an ECDH P-256 keypair + a 16-byte auth secret.
 async function makeUaSubscription() {
-  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
-  const pubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+  const kp = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']) as CryptoKeyPair;
+  const pubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey) as ArrayBuffer);
   const auth = crypto.getRandomValues(new Uint8Array(16));
   return { privateKey: kp.privateKey, pubRaw, auth };
 }
 
 // Reverse encryptContent's aes128gcm record using the UA private half — the proof
 // that the encryption matches the RFCs a real push service implements.
-async function decryptContent(ua, body) {
+type UaSubscription = Awaited<ReturnType<typeof makeUaSubscription>>;
+async function decryptContent(ua: UaSubscription, body: Uint8Array) {
   const salt = body.slice(0, 16);
   const idlen = body[20];
   const asPubRaw = body.slice(21, 21 + idlen);
   const ct = body.slice(21 + idlen);
 
   const asPub = await crypto.subtle.importKey('raw', asPubRaw, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-  const ecdh = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: asPub }, ua.privateKey, 256));
+  const ecdh = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: asPub } as SubtleCryptoDeriveKeyAlgorithm, ua.privateKey, 256));
 
   const keyInfo = concat(enc.encode('WebPush: info\0'), ua.pubRaw, asPubRaw);
   const ikm = await hkdf(ua.auth, ecdh, keyInfo, 32);
@@ -95,8 +96,8 @@ test('encryptContent uses a fresh salt + ephemeral key each call (distinct ciphe
 });
 
 test('vapidAuthHeader produces a JWT that verifies under the public key', async () => {
-  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  const pubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey));
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']) as CryptoKeyPair;
+  const pubRaw = new Uint8Array(await crypto.subtle.exportKey('raw', kp.publicKey) as ArrayBuffer);
   const pubB64u = bytesToB64u(pubRaw);
   const subject = 'mailto:admin@merecatholicity.com';
   const endpoint = 'https://fcm.googleapis.com/fcm/send/abc123';
@@ -128,8 +129,8 @@ test('vapidAuthHeader produces a JWT that verifies under the public key', async 
 });
 
 test('importVapidPrivateKey imports the PKCS8 storage format (sign+verify round-trip)', async () => {
-  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
-  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey));
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']) as CryptoKeyPair;
+  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', kp.privateKey) as ArrayBuffer);
   const stored = bytesToB64u(pkcs8);   // exactly what the VAPID_PRIVATE_KEY secret holds
 
   const priv = await importVapidPrivateKey(stored);

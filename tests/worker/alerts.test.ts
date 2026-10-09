@@ -19,13 +19,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadWorker, makeEnv, client, freshDb, identity, resetCaches, netSpy, call } from '../_support/worker.ts';
+import type { Worker } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
 /* the sender, read from the source so this test cannot drift from it */
 const MERECAT = (lib.match(/export const MERECAT_BOT = \{\s*\n\s*hash: '([0-9a-f]{64})'/) || [])[1];
 
-let worker, adm, net;
+let worker: Worker, adm: { key: string; hash: string }, net: ReturnType<typeof netSpy>;
 const HOOK = 'https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-_';
 before(async () => {
   ({ worker } = await loadWorker());
@@ -36,7 +37,7 @@ before(async () => {
 after(() => net.restore());
 beforeEach(() => { resetCaches(); net.calls.length = 0; });
 
-function seeded(settings = {}) {
+function seeded(settings: Record<string, string> = {}) {
   const db = freshDb();
   const ins = db.prepare("INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?, ?, 1, 'test')");
   for (const [k, v] of Object.entries(settings)) ins.run(k, v);
@@ -64,7 +65,7 @@ test('the settings door: a bad address or webhook is refused with its own senten
 test('the test door sends through exactly the channels the settings open — both, email alone, Discord alone, none — and says which', async () => {
   /* the DM is on by default and its field is the roster, so it rides every
      case that does not switch it off */
-  const cases = [
+  const cases: { set: Record<string, string>; want: string[]; note?: string }[] = [
     { set: { alert_email: 'owner@example.org', alert_discord_webhook: HOOK }, want: ['email', 'discord', 'dm'] },
     { set: { alert_email: 'owner@example.org', alert_discord_webhook: '' }, want: ['email', 'dm'] },
     { set: { alert_email: 'owner@example.org', alert_discord_webhook: HOOK, alert_discord_on: '0' }, want: ['email', 'dm'] },
@@ -95,7 +96,7 @@ test('the test door sends through exactly the channels the settings open — bot
       assert.match(m.text, /A test alert from merecatholicity\.com, sent by /);
     }
     if (hooks().length) {
-      const body = JSON.parse(hooks()[0].init.body);
+      const body = JSON.parse(hooks()[0].init!.body as string);
       assert.equal(body.embeds[0].title, 'Test alert');
       assert.deepEqual(body.allowed_mentions, { parse: [] }, 'an alert can never ping the channel');
     }
@@ -157,8 +158,8 @@ test('the alert reaches EVERY admin as a merecat DM — the table governs, merec
     'WHERE d.sender_hash = ? AND m.hash != ?').all(MERECAT, MERECAT);
   assert.deepEqual(said.map((x) => x.reader).sort(), [adm.hash, second.hash].sort(), 'one line each, to the two of them');
   for (const row of said) {
-    assert.match(row.body, /^Automated notice — Test alert\n\n/, 'the subject leads the line and it says it is automated');
-    assert.match(row.body, /A test alert from merecatholicity\.com, sent by /, 'and carries the alert\'s own words');
+    assert.match(row.body as string, /^Automated notice — Test alert\n\n/, 'the subject leads the line and it says it is automated');
+    assert.match(row.body as string, /A test alert from merecatholicity\.com, sent by /, 'and carries the alert\'s own words');
   }
   db.close();
 });

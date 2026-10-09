@@ -17,6 +17,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { routesSource } from '../_support/worker_src.ts';
+import type { Row } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
@@ -27,8 +28,8 @@ function freshDb() {
   for (const f of readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
   return db;
 }
-const libBody = (name) => { const i = libSrc.indexOf('async function ' + name + '('); assert.ok(i > 0, name); return libSrc.slice(i, libSrc.indexOf('\n}\n', i)); };
-const carries = (body, frags) => { for (const f of frags) assert.ok(body.includes(f), 'carries: ' + f); };
+const libBody = (name: string) => { const i = libSrc.indexOf('async function ' + name + '('); assert.ok(i > 0, name); return libSrc.slice(i, libSrc.indexOf('\n}\n', i)); };
+const carries = (body: string, frags: string[]) => { for (const f of frags) assert.ok(body.includes(f), 'carries: ' + f); };
 
 const K = 'dm/' + '1'.repeat(64), L = 'dm/' + '2'.repeat(64), FRESH = 'dm/' + '3'.repeat(64), STALE = 'dm/' + '4'.repeat(64);
 const A = 'a'.repeat(64), B = 'b'.repeat(64);
@@ -48,14 +49,14 @@ function seeded(now = 10000) {
   return db;
 }
 /* releaseMediaRefs, as the worker runs it: the references of these messages go, then the objects nothing names. */
-function release(db, rows) {
+function release(db: DatabaseSync, rows: Row[]) {
   const ids = rows.map((r) => r.id), keys = [...new Set(rows.map((r) => r.media_key))];
   db.prepare('DELETE FROM dm_media_refs WHERE msg_id IN (' + ids.map(() => '?').join(',') + ')').run(...ids);
   const dead = db.prepare('SELECT md.key FROM dm_media md WHERE md.key IN (' + keys.map(() => '?').join(',') + ') AND NOT EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key)').all(...keys).map((r) => r.key);
   if (dead.length) db.prepare('DELETE FROM dm_media WHERE key IN (' + dead.map(() => '?').join(',') + ')').run(...dead);
   return dead;
 }
-const objects = (db) => db.prepare('SELECT key FROM dm_media ORDER BY key').all().map((r) => r.key);
+const objects = (db: DatabaseSync) => db.prepare('SELECT key FROM dm_media ORDER BY key').all().map((r) => r.key);
 
 test('the statements are the worker\'s own', () => {
   carries(libBody('releaseMediaRefs'), ["'DELETE FROM dm_media_refs WHERE msg_id IN ('", "AND NOT EXISTS (SELECT 1 FROM dm_media_refs r WHERE r.key = md.key)'", 'if (dead.length) await purgeMediaKeys(env, dead);']);
@@ -80,7 +81,7 @@ test('the original expires: its reference goes, the forward keeps the object; th
 test('a redacted forward lets go of its reference alone (the original keeps the object), and delete-conversation releases by the same road', () => {
   const db = seeded();
   assert.deepEqual(release(db, [{ id: 2, media_key: K }]), []);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?').get(K).n, 1, 'the original\'s reference stands');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?').get(K)!.n, 1, 'the original\'s reference stands');
   assert.ok(/if \(row\.media_key\) await releaseMediaRefs\(env, \[\{ id: row\.id, media_key: row\.media_key \}\]\);/.test(routesSource()), 'a redact releases its own reference');
   db.close();
 });
@@ -95,7 +96,7 @@ test('the retention cap and the valve take an object from under EVERY message na
   db.prepare('UPDATE dms SET media_key = NULL, media_size = NULL, media_expired = 1 WHERE id IN (?, ?)').run(...ids);
   db.prepare('DELETE FROM dm_media_refs WHERE key IN (?)').run(K);
   assert.deepEqual(db.prepare('SELECT id, media_key, media_expired FROM dms ORDER BY id').all().map((r) => [r.id, r.media_key ? 'K/L' : null, r.media_expired]), [[1, null, 1], [2, null, 1], [3, 'K/L', null]]);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?').get(K).n, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_media_refs WHERE key = ?').get(K)!.n, 0);
   db.close();
 });
 

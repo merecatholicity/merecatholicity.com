@@ -18,11 +18,15 @@ import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { DM_VIS, DM_CLEARED, DM_MINE, dmLive, dmThreadFor, ensurePairThread, dmRecipients, dmMediaReadable } from '../../comments-worker/src/lib.ts';
 import { loadWorker, makeEnv, client, freshDb, identity, establish, publishKey, resetCaches, netSpy, hubSpy, routesSource } from '../_support/worker.ts';
+import type { Worker, Row } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
 
 const idxSrc = routesSource();
 const KEY = 'dm/' + '1'.repeat(64);
 
-let worker, A, B, C, D, net, who;
+type Id = { key: string; hash: string };
+type WEnv = Parameters<typeof dmThreadFor>[0];
+let worker: Worker, A: Id, B: Id, C: Id, D: Id, net: ReturnType<typeof netSpy>, who: Record<string, string>;
 before(async () => {
   ({ worker } = await loadWorker());
   [A, B, C, D] = await Promise.all(['a', 'b', 'c', 'd'].map(identity));
@@ -31,7 +35,7 @@ before(async () => {
 });
 after(() => { assert.deepEqual(net.calls, [], 'no request reached the network'); net.restore(); });
 beforeEach(resetCaches);
-const names = (hashes) => hashes.map((h) => who[h]).sort();
+const names = (hashes: string[]) => hashes.map((h) => who[h]).sort();
 
 /* A group of three (C added late) and a pair, with a block from A on B. */
 function seeded() {
@@ -49,11 +53,11 @@ function seeded() {
   db.prepare('INSERT INTO dm_blocks (owner_hash, blocked_hash, created_at) VALUES (?, ?, 300)').run(A.hash, B.hash);
   return db;
 }
-const visible = (db, viewer, thread, now = 1000) => db.prepare(
+const visible = (db: DatabaseSync, viewer: string, thread: number, now = 1000) => db.prepare(
   'SELECT m.id FROM dms m JOIN dm_threads t ON t.id = m.thread_id JOIN dm_members mb ON mb.thread_id = t.id AND mb.hash = ?1 ' +
   'WHERE m.thread_id = ?2 AND ' + DM_VIS + ' AND ' + DM_CLEARED + ' AND ' + dmLive(now) + ' ORDER BY m.id'
 ).all(viewer, thread).map((r) => r.id);
-const leave = (db, thread, h, at = 500) => db.prepare('UPDATE dm_members SET left_at = ? WHERE thread_id = ? AND hash = ?').run(at, thread, h);
+const leave = (db: DatabaseSync, thread: number, h: string, at = 500) => db.prepare('UPDATE dm_members SET left_at = ? WHERE thread_id = ? AND hash = ?').run(at, thread, h);
 
 test('what a member may read: since they joined, after their clear, unheld or their own — and in a group never a sender they blocked', () => {
   const db = seeded();
@@ -71,16 +75,16 @@ test('what a member may read: since they joined, after their clear, unheld or th
 
 test('a member who left has no seat: the thread is nowhere for them (DM_MINE), and dmThreadFor answers by id or by pair from that seat alone', async () => {
   const db = seeded();
-  const env = makeEnv({ db });
-  const seat = (h, id) => db.prepare('SELECT COUNT(*) AS n FROM dm_threads t ' + DM_MINE + ' WHERE t.id = ?2').get(h, id).n;
+  const env = makeEnv({ db }) as unknown as WEnv;
+  const seat = (h: string, id: number) => db.prepare('SELECT COUNT(*) AS n FROM dm_threads t ' + DM_MINE + ' WHERE t.id = ?2').get(h, id)!.n;
   assert.equal(seat(B.hash, 1), 1);
-  assert.equal((await dmThreadFor(env, B.hash, { thread_id: 1 })).thread.id, 1, 'B\'s seat finds the group');
+  assert.equal((await dmThreadFor(env, B.hash, { thread_id: 1 }))!.thread!.id, 1, 'B\'s seat finds the group');
   leave(db, 1, B.hash);
   assert.equal(seat(B.hash, 1), 0, 'left: gone');
   assert.equal(await dmThreadFor(env, B.hash, { thread_id: 1 }), null, 'left: no such conversation');
   assert.equal(await dmThreadFor(env, D.hash, { thread_id: 1 }), null, 'a stranger: no such conversation');
-  const pair = await dmThreadFor(env, A.hash, { with: B.hash });
-  assert.deepEqual({ id: pair.thread.id, other: who[pair.other], read_at: pair.thread.read_at }, { id: 2, other: 'B', read_at: null }, 'by pair: the room, with my own stamps on it');
+  const pair = (await dmThreadFor(env, A.hash, { with: B.hash }))!;
+  assert.deepEqual({ id: pair.thread!.id, other: who[pair.other], read_at: pair.thread!.read_at }, { id: 2, other: 'B', read_at: null }, 'by pair: the room, with my own stamps on it');
   assert.deepEqual(await dmThreadFor(env, A.hash, { with: D.hash }), { thread: null, other: D.hash }, 'an unmade pair: no room yet, the other named');
   assert.equal(await dmThreadFor(env, A.hash, { with: 'not-a-hash' }), null, 'a malformed `with` is null, never a room');
   assert.equal(await dmThreadFor(env, A.hash, { with: A.hash }), null, 'and so is a soliloquy');
@@ -89,7 +93,7 @@ test('a member who left has no seat: the thread is nowhere for them (DM_MINE), a
 
 test('who a word reaches (dmRecipients): every current member but the sender, minus any who block them', async () => {
   const db = seeded();
-  const env = makeEnv({ db });
+  const env = makeEnv({ db }) as unknown as WEnv;
   assert.deepEqual(names(await dmRecipients(env, 1, B.hash)), ['C'], 'B\'s word: C alone — A blocks B, A\'s world stays untouched');
   assert.deepEqual(names(await dmRecipients(env, 1, A.hash)), ['B', 'C']);
   leave(db, 1, C.hash);
@@ -99,8 +103,8 @@ test('who a word reaches (dmRecipients): every current member but the sender, mi
 
 test('who may read an attachment (dmMediaReadable): a member who can see a live, unredacted word naming it — not a stranger, a leaver, a blocker, or after a redact or an expiry', async () => {
   const db = seeded();
-  const env = makeEnv({ db });
-  const may = (h, now = 1000) => dmMediaReadable(env, h, KEY, now);
+  const env = makeEnv({ db }) as unknown as WEnv;
+  const may = (h: string, now = 1000) => dmMediaReadable(env, h, KEY, now);
   assert.equal(await may(B.hash), true, 'the sender');
   assert.equal(await may(C.hash), true, 'a member who can see the word');
   assert.equal(await may(A.hash), false, 'a member for whom the sender is silent');
@@ -124,30 +128,30 @@ test('who may read an attachment (dmMediaReadable): a member who can see a live,
 
 test('the pair\'s room is made once (ensurePairThread): the upsert survives the pair index and the legacy one, and heals a room made without its pair_key', async () => {
   const db = freshDb();
-  const env = makeEnv({ db });
+  const env = makeEnv({ db }) as unknown as WEnv;
   const first = (await ensurePairThread(env, A.hash, B.hash, 100, { bump: true, sender: A.hash })).id;
   assert.equal((await ensurePairThread(env, B.hash, A.hash, 200, { bump: true, sender: B.hash })).id, first, 'the same room on the second word, from either side');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads').get().n, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads').get()!.n, 1);
   assert.deepEqual({ ...db.prepare('SELECT last_at, last_sender FROM dm_threads WHERE id = ?').get(first) }, { last_at: 200, last_sender: B.hash }, 'bump moves the last-word fields');
   assert.equal((await ensurePairThread(env, A.hash, B.hash, 300, { bump: false })).id, first);
-  assert.equal(db.prepare('SELECT last_at FROM dm_threads WHERE id = ?').get(first).last_at, 200, 'a held send bumps nothing');
-  assert.deepEqual(names(db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(first).map((r) => r.hash)), ['A', 'B'], 'both seats, once');
+  assert.equal(db.prepare('SELECT last_at FROM dm_threads WHERE id = ?').get(first)!.last_at, 200, 'a held send bumps nothing');
+  assert.deepEqual(names(db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(first).map((r) => r.hash as string)), ['A', 'B'], 'both seats, once');
   /* A room the pre-0016 worker made in the deploy window: a_hash/b_hash, no pair_key. */
   db.prepare("INSERT INTO dm_threads (kind, created_at, last_at, last_sender, msgs, a_hash, b_hash) VALUES (0, 50, 50, ?, 0, ?, ?)").run(C.hash, A.hash, C.hash);
   const healed = await ensurePairThread(env, A.hash, C.hash, 300, { bump: true, sender: A.hash });
-  assert.equal(db.prepare('SELECT pair_key FROM dm_threads WHERE id = ?').get(healed.id).pair_key, [A.hash, C.hash].sort().join('|'), 'healed: the legacy index found it, pair_key filled');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads').get().n, 2, 'no second room');
-  assert.deepEqual(names(db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(healed.id).map((r) => r.hash)), ['A', 'C'], 'and its seats made');
+  assert.equal(db.prepare('SELECT pair_key FROM dm_threads WHERE id = ?').get(healed.id)!.pair_key, [A.hash, C.hash].sort().join('|'), 'healed: the legacy index found it, pair_key filled');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads').get()!.n, 2, 'no second room');
+  assert.deepEqual(names(db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(healed.id).map((r) => r.hash as string)), ['A', 'C'], 'and its seats made');
   db.close();
 });
 
 test('the inbox (/dm/threads) from my seat alone: a pair\'s other, a group\'s members and count, the words I may see', async () => {
   const db = seeded();
   const api = client(worker, makeEnv({ db }));
-  const rows = async (viewer) => {
+  const rows = async (viewer: Id) => {
     const r = await api.post('/api/comments/dm/threads', { key: viewer.key });
     assert.equal(r.status, 200);
-    return r.json.threads.map((t) => ({ id: t.id, kind: t.kind, other: t.other_hash ? who[t.other_hash] : null, members: names(t.members.map((m) => m.hash)), n: t.member_count, msgs: t.msgs, unread: t.unread }));
+    return r.json.threads.map((t: Row) => ({ id: t.id, kind: t.kind, other: t.other_hash ? who[t.other_hash] : null, members: names(t.members.map((m: Row) => m.hash)), n: t.member_count, msgs: t.msgs, unread: t.unread }));
   };
   assert.deepEqual(await rows(A), [
     { id: 1, kind: 1, other: null, members: ['B', 'C'], n: 3, msgs: 2, unread: 1 },    // A reads 1 and 3; unread: C's (B is silent to A)
@@ -169,7 +173,7 @@ test('the thread tells whether each member reports reads (2026-09-15): a group\'
   const api = client(worker, makeEnv({ db, hub }));
   const r = await api.post('/api/comments/dm/thread', { key: A.key, thread_id: 1 });
   assert.equal(r.status, 200);
-  const byName = Object.fromEntries(r.json.thread.members.map((m) => [who[m.hash], { read_at: m.read_at, receipts: m.receipts }]));
+  const byName = Object.fromEntries(r.json.thread.members.map((m: Row) => [who[m.hash], { read_at: m.read_at, receipts: m.receipts }]));
   assert.deepEqual(byName.B, { read_at: null, receipts: 0 }, 'receipts off: the stamp is withheld and the flag says so');
   assert.deepEqual(byName.C, { read_at: 390, receipts: 1 }, 'receipts on: the stamp is served');
   assert.equal(byName.A.receipts, 1, 'my own row carries the flag too');
@@ -181,7 +185,7 @@ test('the thread tells whether each member reports reads (2026-09-15): a group\'
   await add.ctx.settle();
   const ann = hub.frames('dm-members');
   assert.equal(ann.length, 1, 'one roster frame');
-  assert.deepEqual(ann[0].added.map((m) => ({ who: who[m.hash], receipts: m.receipts, key: !!m.pubkey })), [{ who: 'D', receipts: 1, key: true }], 'the newcomer, with receipts and their key');
-  assert.deepEqual(names(ann[0].scopes.map((s) => s.slice(5))), ['B', 'C', 'D'], 'to every other current member — the newcomer included');
+  assert.deepEqual(ann[0].added.map((m: Row) => ({ who: who[m.hash], receipts: m.receipts, key: !!m.pubkey })), [{ who: 'D', receipts: 1, key: true }], 'the newcomer, with receipts and their key');
+  assert.deepEqual(names(ann[0].scopes.map((s: string) => s.slice(5))), ['B', 'C', 'D'], 'to every other current member — the newcomer included');
   db.close();
 });

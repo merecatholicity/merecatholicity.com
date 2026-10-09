@@ -36,7 +36,7 @@ test('notifyDm coalesces per conversation, and by sender for a row with no threa
   const stmt = db.prepare('INSERT INTO notifications (recipient_hash, kind, topic_id, comment_id, actor_hash, created_at) ' +
     "SELECT :me, 'dm', :tid, 0, :from, :now WHERE NOT EXISTS (" +
     "SELECT 1 FROM notifications WHERE recipient_hash = :me AND kind = 'dm' AND topic_id = :tid AND (:tid > 0 OR actor_hash = :from) AND read_at IS NULL)");
-  const n = () => db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'dm'").get().n;
+  const n = () => db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'dm'").get()!.n;
   stmt.run({ me, from: ann, now: 1, tid: 7 });
   stmt.run({ me, from: ann, now: 2, tid: 7 });
   assert.equal(n(), 1, 'a burst is one bell');

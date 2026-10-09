@@ -18,6 +18,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { handlerBody, routesSource, workerSource } from '../_support/worker_src.ts';
+import type { Row } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
@@ -73,7 +74,7 @@ test('one guard, spelled one way, on every feed/wall surface', () => {
 
   /* Each handler carries its own guard — checked by name, so moving code around
      cannot quietly leave one behind. */
-  const body = (name) => handlerBody(name, idxSrc);
+  const body = (name: string) => handlerBody(name, idxSrc);
   for (const h of ['handleWallFeed', 'handleWall', 'handleWallPostGet', 'reactTarget',
     'handleReactWho', 'handleWallPost', 'handleWallComment', 'handleWallEdit']) {
     assert.ok(/socialOff\(env\)/.test(body(h)), `${h} has no social gate`);
@@ -149,12 +150,12 @@ test('no migration is needed: app_settings takes the flag as a plain row', () =>
     db.exec(readFileSync(join(dir, f), 'utf8'));
   }
   db.exec("INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES ('social_enabled', '0', 0, 'x')");
-  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'social_enabled'").get();
+  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'social_enabled'").get() as Row;
   assert.equal(row.v, '0');
   /* And nothing is deleted by turning it off: the tables the switch hides are
      ordinary tables the switch never touches. */
   for (const t of ['wall_posts', 'wall_comments', 'wall_likes', 'wall_comment_likes', 'bookmarks']) {
-    assert.ok(db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n === 0, `${t} must exist`);
+    assert.ok((db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as Row).n === 0, `${t} must exist`);
   }
   db.close();
 });

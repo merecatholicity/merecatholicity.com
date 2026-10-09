@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { merecatThinkStripper } from '../../comments-worker/src/pure.ts';
 
-function stripStream(chunks) {
+function stripStream(chunks: string[]) {
   const feed = merecatThinkStripper();
   let out = '';
   for (const c of chunks) out += feed(c);

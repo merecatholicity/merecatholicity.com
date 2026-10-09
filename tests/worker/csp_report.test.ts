@@ -9,11 +9,13 @@ import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, identity, call, resetCaches } from '../_support/worker.ts';
 import { readOps } from '../../comments-worker/src/ops.ts';
+import type { Worker, Row } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
 
-let worker, adm;
+let worker: Worker, adm: { key: string; hash: string };
 before(async () => { ({ worker } = await loadWorker()); adm = await identity('the-admin'); });
 beforeEach(resetCaches);
-const tally = (db) => { const r = db.prepare("SELECT v FROM app_settings WHERE k = 'csp_report_tally'").get(); return r ? JSON.parse(r.v) : null; };
+const tally = (db: DatabaseSync) => { const r = db.prepare("SELECT v FROM app_settings WHERE k = 'csp_report_tally'").get(); return r ? JSON.parse(r.v as string) : null; };
 
 test('the legacy report-uri shape and the Reporting API shape both tally by directive, blocked origin and document path', async () => {
   const db = freshDb();
@@ -30,12 +32,12 @@ test('the legacy report-uri shape and the Reporting API shape both tally by dire
   assert.equal(r.status, 204);
   const t = tally(db);
   assert.equal(t.total, 3);
-  assert.deepEqual(t.rows.map((x) => [x.directive, x.blocked, x.document, x.n]).sort(), [
+  assert.deepEqual(t.rows.map((x: Row) => [x.directive, x.blocked, x.document, x.n]).sort(), [
     ['img-src', 'blob', '/messages.html', 2],
     ['script-src', 'https://evil.example', '/community.html', 1],
   ].sort(), 'the blob: image on the messages page twice (the query string never kept), the foreign script once');
-  const h = await readOps(env);
-  assert.equal(h.csp.total, 3, 'the Health card reads the tally');
+  const h = await readOps(env as unknown as Parameters<typeof readOps>[0]);
+  assert.equal(h.csp!.total, 3, 'the Health card reads the tally');
   db.close();
 });
 
@@ -60,11 +62,11 @@ test('a collector never argues: garbage, an empty report, an oversize body are a
 test('extensions fold into one origin, and the top hundred is kept', async () => {
   const db = freshDb();
   const env = makeEnv({ db });
-  const ext = (i) => ({ 'csp-report': { 'document-uri': 'https://merecatholicity.com/p' + i + '.html', 'effective-directive': 'script-src', 'blocked-uri': 'chrome-extension://abc' + i + '/inject.js' } });
+  const ext = (i: number) => ({ 'csp-report': { 'document-uri': 'https://merecatholicity.com/p' + i + '.html', 'effective-directive': 'script-src', 'blocked-uri': 'chrome-extension://abc' + i + '/inject.js' } });
   for (let i = 0; i < 105; i++) await call(worker, env, 'POST', '/api/comments/csp-report', ext(i), { origin: null });
   const t = tally(db);
   assert.equal(t.rows.length, 100, 'the top hundred');
-  assert.ok(t.rows.every((x) => x.blocked === 'extension'), 'an extension is noise, named as such');
+  assert.ok(t.rows.every((x: Row) => x.blocked === 'extension'), 'an extension is noise, named as such');
   assert.equal(t.total, 105);
   db.close();
 });
@@ -78,7 +80,7 @@ test('a sample names the row: Cloudflare\'s JSD snippet folds to cf-jsd, a Trust
   for (const body of [jsd, jsd, ext]) await call(worker, env, 'POST', '/api/comments/csp-report', body, { headers: { 'Content-Type': 'application/csp-report' }, origin: null });
   await call(worker, env, 'POST', '/api/comments/csp-report', tt, { headers: { 'Content-Type': 'application/reports+json' }, origin: null });
   const t = tally(db);
-  assert.deepEqual(t.rows.map((x) => [x.directive, x.blocked, x.n]).sort(), [
+  assert.deepEqual(t.rows.map((x: Row) => [x.directive, x.blocked, x.n]).sort(), [
     ['require-trusted-types-for', 'tt:HTMLScriptElement src', 1],
     ['script-src-elem', 'cf-jsd', 2],
     ['script-src-elem', 'inline', 1],

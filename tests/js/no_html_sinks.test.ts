@@ -16,11 +16,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const files = [];
+const files: string[] = [];
 for (const dir of ['app', 'app/views', 'client', 'pagejs']) {
   for (const f of readdirSync(join(root, dir))) if (f.endsWith('.ts') || f.endsWith('.js')) files.push(join(dir, f));
 }
-const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 const SINKS = [/\.innerHTML\s*[+]?=/, /\.outerHTML\s*[+]?=/, /insertAdjacentHTML\(/, /document\.write\(/, /\beval\(/, /new Function\(/, /srcdoc\s*=/,
   /createContextualFragment\(/, /setHTMLUnsafe\(/, /parseHTMLUnsafe\(/, /parseFromString\((?!docHTML\()/];
 

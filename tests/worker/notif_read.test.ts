@@ -14,8 +14,12 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, client, freshDb, identity, resetCaches, netSpy } from '../_support/worker.ts';
+import type { Worker, Row } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
 
-let worker, me, ann, bob, net, who;
+type Id = { key: string; hash: string };
+
+let worker: Worker, me: Id, ann: Id, bob: Id, net: ReturnType<typeof netSpy>, who: Record<string, string>;
 before(async () => {
   ({ worker } = await loadWorker());
   [me, ann, bob] = await Promise.all(['me', 'ann', 'bob'].map(identity));
@@ -42,7 +46,7 @@ function seeded() {
   ins.run(me.hash, 'wall', 1, 3, ann.hash); ins.run(me.hash, 'wall-react', 0, 3, bob.hash); ins.run(me.hash, 'wall-like', 0, 4, ann.hash);   // the feed: post 3 twice, post 4 once
   return db;
 }
-const unread = (db) => db.prepare('SELECT kind, topic_id, actor_hash FROM notifications WHERE read_at IS NULL ORDER BY id').all().map((r) => [r.kind, r.topic_id, who[r.actor_hash]]);
+const unread = (db: DatabaseSync) => db.prepare('SELECT kind, topic_id, actor_hash FROM notifications WHERE read_at IS NULL ORDER BY id').all().map((r: Row) => [r.kind, r.topic_id, who[r.actor_hash]]);
 
 test('opening a conversation reads the three kinds it rang me — by the thread, or by the sender for a bell from before 0016 — and nothing else; the fresh count rides back', async () => {
   const db = seeded();

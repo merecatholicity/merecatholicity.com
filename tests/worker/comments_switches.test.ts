@@ -27,7 +27,7 @@ const idxSrc = routesSource();
 
 /* The body of one top-level handler, by name, so moving code around cannot
    quietly leave a guard behind (the social file's idiom). */
-const body = (name) => handlerBody(name, idxSrc);
+const body = (name: string) => handlerBody(name, idxSrc);
 
 test('the page list is the kernel\'s, never an inline copy', () => {
   assert.ok(libSrc.includes('export const PAGES: string[] = Comments.commentablePaths;'),
@@ -126,12 +126,12 @@ function freshDb() {
   for (const f of readdirSync(dir).filter((x) => x.endsWith('.sql')).sort()) db.exec(readFileSync(join(dir, f), 'utf8'));
   return db;
 }
-const SQL = (name) => {
+const SQL = (name: string) => {
   const m = new RegExp(`export const ${name} = "((?:[^"\\\\]|\\\\.)*)";`).exec(libSrc);
   assert.ok(m, `${name} not found in lib.ts`);
   return m[1];
 };
-function seed(db) {
+function seed(db: DatabaseSync) {
   const ins = db.prepare("INSERT INTO comments (id, page, parent_id, title, author_hash, body, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
   ins.run(3, 'board:pub', null, 'The Journal', 'a'.repeat(64), 'head', 'live');       // the journal topic
   ins.run(5, 'board:pub', 3, null, 'a'.repeat(64), 'article five', 'live');
@@ -144,7 +144,7 @@ function seed(db) {
   ins.run(15, 'journal:99', null, null, 'b'.repeat(64), 'on a vanished article', 'live');
   ins.run(16, '/credo.html', null, null, 'b'.repeat(64), 'a page comment', 'live');
 }
-const statuses = (db) => Object.fromEntries(db.prepare('SELECT id, status FROM comments ORDER BY id').all().map((r) => [r.id, r.status]));
+const statuses = (db: DatabaseSync) => Object.fromEntries(db.prepare('SELECT id, status FROM comments ORDER BY id').all().map((r) => [r.id, r.status]));
 
 test('the sweep retires only the comments of a deleted or vanished article', () => {
   const db = freshDb();
@@ -181,7 +181,7 @@ test("the thread form (the journal's own topic deleted) retires every article's 
 test('no migration is needed: app_settings takes both switches as plain rows', () => {
   const db = freshDb();
   db.exec("INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES ('comments_pages', '/credo.html', 0, 'x'), ('comments_journal', '1', 0, 'x')");
-  assert.equal(db.prepare("SELECT v FROM app_settings WHERE k = 'comments_pages'").get().v, '/credo.html');
-  assert.equal(db.prepare("SELECT v FROM app_settings WHERE k = 'comments_journal'").get().v, '1');
+  assert.equal(db.prepare("SELECT v FROM app_settings WHERE k = 'comments_pages'").get()!.v, '/credo.html');
+  assert.equal(db.prepare("SELECT v FROM app_settings WHERE k = 'comments_journal'").get()!.v, '1');
   db.close();
 });

@@ -62,7 +62,7 @@ test('app/transport.ts calls fetch, and never captures it', () => {
 
 test('fetchRetry: an HTTP status is final — the server spoke, so never retry it', async () => {
   let calls = 0;
-  globalThis.fetch = () => { calls++; return Promise.resolve({ status: 500, ok: false }); };
+  globalThis.fetch = (() => { calls++; return Promise.resolve({ status: 500, ok: false }); }) as unknown as typeof fetch;
   const res = await transport.fetchRetry('/x', undefined, [1, 1]);
   assert.equal(calls, 1, 'a 500 is an answer, not a network failure');
   assert.equal(res.status, 500);
@@ -70,7 +70,7 @@ test('fetchRetry: an HTTP status is final — the server spoke, so never retry i
 
 test('fetchRetry: a rejected fetch rides the ladder, then gives the reader a sentence', async () => {
   let calls = 0;
-  const seen = [];
+  const seen: number[] = [];
   globalThis.fetch = () => { calls++; return Promise.reject(new Error('offline')); };
   await assert.rejects(
     transport.fetchRetry('/x', undefined, [1, 1], () => seen.push(calls)),
@@ -81,10 +81,10 @@ test('fetchRetry: a rejected fetch rides the ladder, then gives the reader a sen
 
 test('fetchRetry: a caller that brought its own signal keeps it (no timeout is imposed)', async () => {
   const ctrl = new AbortController();
-  let got;
-  globalThis.fetch = (_u, init) => { got = init; return Promise.resolve({ ok: true }); };
+  let got: RequestInit | undefined;
+  globalThis.fetch = ((_u: string, init?: RequestInit) => { got = init; return Promise.resolve({ ok: true }); }) as unknown as typeof fetch;
   await transport.fetchRetry('/x', { signal: ctrl.signal }, []);
-  assert.equal(got.signal, ctrl.signal, 'the caller\'s own AbortSignal is passed through untouched');
+  assert.equal(got!.signal, ctrl.signal, 'the caller\'s own AbortSignal is passed through untouched');
 });
 
 test('freshParam follows the configured key, and asks for nothing without one', () => {

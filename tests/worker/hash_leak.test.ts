@@ -15,9 +15,10 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { runSweep } from '../_support/sweep.ts';
+import type { SweepCall, SweepCron } from '../_support/sweep.ts';
 import * as Pseudonym from '../../purescript/output/Domain.Pseudonym/index.js';
 
-let calls = [], crons = [], hashes = [];
+let calls: SweepCall[] = [], crons: SweepCron[] = [], hashes: [string, string][] = [];
 before(async () => {
   const log = console.log;
   console.log = () => {};
@@ -29,7 +30,7 @@ before(async () => {
   } finally { console.log = log; }
 });
 
-function scan(text) {
+function scan(text: string): string[] {
   const hit = [];
   for (const [name, hash] of hashes) if (hash && text.includes(hash)) hit.push(name);
   return hit;

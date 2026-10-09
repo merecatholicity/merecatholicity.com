@@ -10,8 +10,10 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, identity, establish, call, resetCaches } from '../_support/worker.ts';
 import { hiddenHashes } from '../../comments-worker/src/lib.ts';
+import type { Worker, Row } from '../_support/worker.ts';
 
-let worker, ann, bob, probe, kit;
+type Ident = { key: string; hash: string };
+let worker: Worker, ann: Ident, bob: Ident, probe: Ident, kit: Ident;
 before(async () => {
   ({ worker } = await loadWorker());
   [ann, bob, probe, kit] = await Promise.all(['ann', 'bob', 'probe', 'kit'].map(identity));
@@ -21,7 +23,7 @@ test('hiddenHashes reads the var, trims, and keeps only whole hashes', () => {
   assert.deepEqual(hiddenHashes({}), []);
   assert.deepEqual(hiddenHashes({ HIDDEN_HASHES: kit.hash + ', ' + probe.hash + ' , deadbeef,' }), [kit.hash, probe.hash], 'a partial hash is dropped, never matched');
   assert.deepEqual(hiddenHashes({ HIDDEN_HASHES: probe.hash }), [probe.hash]);
-  assert.deepEqual(hiddenHashes({ TEST_HASHES: kit.hash }), [], 'the retired secret hides nobody');
+  assert.deepEqual(hiddenHashes({ TEST_HASHES: kit.hash } as Parameters<typeof hiddenHashes>[0]), [], 'the retired secret hides nobody');
 });
 
 test('the directory lists the members and never the probes, whichever list names them', async () => {
@@ -34,10 +36,10 @@ test('the directory lists the members and never the probes, whichever list names
   db.prepare("UPDATE profiles SET nick = 'Kit' WHERE hash = ?").run(kit.hash);
   let r = await call(worker, makeEnv({ db }), 'POST', '/api/comments/dm/directory', { key: ann.key });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.users.map((u) => u.hash).sort(), [ann.hash, bob.hash, probe.hash, kit.hash].sort(), 'without a hidden list everyone shows');
+  assert.deepEqual(r.json.users.map((u: Row) => u.hash).sort(), [ann.hash, bob.hash, probe.hash, kit.hash].sort(), 'without a hidden list everyone shows');
   resetCaches();
   r = await call(worker, makeEnv({ db, vars: { HIDDEN_HASHES: probe.hash + ',' + kit.hash } }), 'POST', '/api/comments/dm/directory', { key: ann.key });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.users.map((u) => u.hash).sort(), [ann.hash, bob.hash].sort(), 'the probe and the kit identity are gone, the members stay');
+  assert.deepEqual(r.json.users.map((u: Row) => u.hash).sort(), [ann.hash, bob.hash].sort(), 'the probe and the kit identity are gone, the members stay');
   db.close();
 });

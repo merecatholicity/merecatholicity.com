@@ -9,20 +9,23 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { runSweep, secretsIn, forbiddenFor, SECRETS, PRIVATE } from '../_support/sweep.ts';
 import { envFlow } from '../_support/env_flow.ts';
+import type { Route } from '../_support/sweep.ts';
+import type { Source } from '../_support/env_flow.ts';
+import type { Row, Worker } from '../_support/worker.ts';
 
-const quiet = async (f) => {
+const quiet = async <T>(f: () => Promise<T>): Promise<T> => {
   const log = console.log;
   console.log = () => {};
   try { return await f(); } finally { console.log = log; }
 };
-const only = (r) => r.p === '/api/comments/recent' || r.p === '/api/comments/profile' || r.p === '/api/comments/search';
+const only = (r: Route): boolean => r.p === '/api/comments/recent' || r.p === '/api/comments/profile' || r.p === '/api/comments/search';
 
 test('a secret in an answer, a private value shown to the wrong reader, and a guard refusal are each caught', async () => {
   const secret = SECRETS.find((s) => s.name === 'TURN_KEY_SECRET');
   assert.ok(secret, 'the sweep sentinels the TURN secret');
-  const planted = (worker) => ({
+  const planted = (worker: Worker): Worker => ({
     ...worker,
-    fetch: async (request, env, cx) => {
+    fetch: async (request: Request, env: Row, cx: unknown) => {
       const url = new URL(request.url);
       /* past the guard: what a guard that failed would let out */
       if (url.pathname === '/api/comments/recent') {
@@ -52,7 +55,7 @@ test('a secret in an answer, a private value shown to the wrong reader, and a gu
 
 test('the static law refuses the very bug, a spread, a serializer and a hand-off to a stranger', () => {
   const root = '/planted';
-  const src = (rel, code) => ({ file: join(root, rel), rel, code });
+  const src = (rel: string, code: string): Source => ({ file: join(root, rel), rel, code });
   const sources = [
     src('db.ts', 'export function withNames(row, posts) { return Object.assign({}, row, { posts }); }\n'),
     src('routes.ts', [

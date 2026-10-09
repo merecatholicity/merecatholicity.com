@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import * as Ops from '../../purescript/output/Domain.Ops/index.js';
 import * as Maybe from '../../purescript/output/Data.Maybe/index.js';
 
-const just = (m) => (m instanceof Maybe.Just ? m.value0 : null);
+const just = (m: unknown) => (m instanceof Maybe.Just ? (m as { value0: any }).value0 : null);
 
 test('an email address is one @, no whitespace, two non-empty labels, at most 254 chars', () => {
   for (const ok of ['owner@example.org', 'a.b+tag@sub.example.co.uk', 'x@y.z'])
@@ -25,7 +25,7 @@ test('an email address is one @, no whitespace, two non-empty labels, at most 25
 
 test('the channel rule: on AND valid is live; empty, invalid or off is silent; all three on is all three', () => {
   /* the DM's "field" is the roster: dmOk is whether there is an admin to tell */
-  const ch = (emailOn, emailOk, discordOn, discordOk, dmOn = '0', dmOk = false) =>
+  const ch = (emailOn: string, emailOk: boolean, discordOn: string, discordOk: boolean, dmOn = '0', dmOk = false) =>
     Ops.channelsFrom({ emailOn, emailOk, discordOn, discordOk, dmOn, dmOk });
   assert.deepEqual(ch('1', true, '1', true), ['email', 'discord']);
   assert.deepEqual(ch('1', true, '1', false), ['email'], 'an empty or invalid webhook is no channel');
@@ -46,7 +46,7 @@ test('the channel rule: on AND valid is live; empty, invalid or off is silent; a
 test('a cron step gets an allowance, and a chain that spends its budget has none left to give', () => {
   assert.equal(Ops.stepDeadlineSecs, 60);
   assert.equal(Ops.chainBudgetSecs, 600);
-  const allow = (elapsedSecs) => Ops.stepAllowance({ elapsedSecs });
+  const allow = (elapsedSecs: number) => Ops.stepAllowance({ elapsedSecs });
   assert.equal(allow(0), 60, 'a fresh chain gives a whole deadline');
   assert.equal(allow(500), 60, 'and keeps giving one while the budget can afford it');
   assert.equal(allow(560), 40, 'near the end a step gets only what is left');
@@ -60,7 +60,7 @@ test('the backup key round-trips its day, and the prune keeps 90 days, first-of-
   assert.equal(just(Ops.dayOfKey('backups/comments-2026-09-01.sql.gz')), '2026-09-01', 'the monthly objects from before are first-of-month objects under this rule');
   assert.equal(just(Ops.dayOfKey('avatars/abc.png')), null);
   assert.equal(just(Ops.dayOfKey('backups/comments-2026-9-1.sql.gz')), null, 'a malformed day is not ours');
-  const keep = (key, ageDays) => Ops.keepBackup({ key, ageDays });
+  const keep = (key: string, ageDays: number) => Ops.keepBackup({ key, ageDays });
   assert.equal(keep('backups/comments-2026-09-16.sql.gz', 89), true);
   assert.equal(keep('backups/comments-2026-09-16.sql.gz', 90), true);
   assert.equal(keep('backups/comments-2026-09-16.sql.gz', 91), false);

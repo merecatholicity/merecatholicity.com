@@ -81,7 +81,7 @@ test('looksLikeIp is a loose gate: must have a dot or colon and only IP characte
 
 test('reverseDnsName builds the PTR query name for v4 and v6', () => {
   assert.equal(reverseDnsName('203.0.113.7'), '7.113.0.203.in-addr.arpa');
-  assert.equal(reverseDnsName('2605:59ca:39db:4308::1').endsWith('.ip6.arpa'), true);
+  assert.equal(reverseDnsName('2605:59ca:39db:4308::1')!.endsWith('.ip6.arpa'), true);
   assert.equal(reverseDnsName('nope'), null);
 });
 
@@ -98,7 +98,7 @@ test('sanitizeScopes: the WebSocket allowlist — the private-scope guard holds'
   const CATS = ['pub', 'rc', 'adminsonly'];
   const ME = 'a'.repeat(64);
   const OTHER = 'b'.repeat(64);
-  const san = (raw, me) => sanitizeScopes(raw, me, CATS);
+  const san = (raw: unknown, me: string | null | undefined) => sanitizeScopes(raw, me, CATS);
   // public scopes anyone may hold
   assert.deepEqual(san(['board:index'], ME), ['board:index']);
   assert.deepEqual(san(['cat:pub'], ME), ['cat:pub']);

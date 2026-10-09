@@ -38,6 +38,17 @@ const migrationsDir = join(root, 'comments-worker', 'migrations');
 
 export const ORIGIN = 'https://merecatholicity.com';
 
+/* The shapes the suite passes around. A row and a wire answer are DATA the
+   test reads by name — typed as such (`any` is the honest type of a parsed
+   JSON body or a SELECT * row), never the worker's own types, which a test
+   exists to hold the worker to rather than borrow from it. */
+export type Row = Record<string, any>;
+export type Worker = {
+  fetch: (req: Request, env: any, ctx: any) => Promise<Response>;
+  scheduled: (event: any, env: any, ctx: any) => Promise<void>;
+};
+export type Loaded = { worker: Worker; BoardHub: any; ChatRoom: any };
+
 /* ---- loading -------------------------------------------------------------- */
 
 registerHooks({
@@ -48,13 +59,14 @@ registerHooks({
     return next(specifier, context);
   },
 });
-if (!globalThis.caches) {   // one handler reads caches.default (the wall media GET)
-  globalThis.caches = { default: { match: async () => undefined, put: async () => {} } };
+const g = globalThis as { caches?: unknown };
+if (!g.caches) {   // one handler reads caches.default (the wall media GET)
+  g.caches = { default: { match: async () => undefined, put: async () => {} } };
 }
 
-let workerP = null;
+let workerP: Promise<Loaded> | null = null;
 /* → { worker: default export { fetch, scheduled }, BoardHub, ChatRoom } */
-export function loadWorker() {
+export function loadWorker(): Promise<Loaded> {
   workerP ||= import(pathToFileURL(join(src, 'index.ts')).href)
     .then((m) => ({ worker: m.default, BoardHub: m.BoardHub, ChatRoom: m.ChatRoom }));
   return workerP;
@@ -83,23 +95,31 @@ export function freshLibDb() {
    { meta: { changes } }; batch() is one transaction whose statements each
    return their rows (a RETURNING inside a batch is read by the hub). Booleans
    bind as 1/0 as D1 coerces them; undefined throws, as it does on D1. */
-export function d1(db) {
-  const fix = (v) => (v === true ? 1 : v === false ? 0 : v);
-  const plain = (r) => (r === undefined ? null : { ...r });
-  const changes = () => Number(db.prepare('SELECT changes() AS c').get().c);
-  const make = (sql, args) => {
+type SqlValue = null | number | bigint | string | Uint8Array;
+export type Stmt = {
+  bind: (...b: unknown[]) => Stmt;
+  first: (col?: string) => Promise<any>;
+  all: () => Promise<{ results: Row[]; success: true; meta: { changes: number } }>;
+  run: () => Promise<{ success: true; results: Row[]; meta: { changes: number; last_row_id: number } }>;
+  _step: () => { results: Row[]; success: true; meta: { changes: number } };
+};
+export function d1(db: DatabaseSync) {
+  const fix = (v: unknown) => (v === true ? 1 : v === false ? 0 : v) as SqlValue;
+  const plain = (r: unknown): Row | null => (r === undefined ? null : { ...(r as Row) });
+  const changes = () => Number(db.prepare('SELECT changes() AS c').get()!.c);
+  const make = (sql: string, args: unknown[]): Stmt => {
     const s = db.prepare(sql);
     const a = args.map(fix);
     return {
       bind: (...b) => make(sql, b),
       first: async (col) => { const r = plain(s.get(...a)); return col == null ? r : (r ? r[col] : null); },
-      all: async () => ({ results: s.all(...a).map(plain), success: true, meta: { changes: 0 } }),
+      all: async () => ({ results: (s.all(...a).map(plain) as Row[]), success: true, meta: { changes: 0 } }),
       run: async () => { const info = s.run(...a); return { success: true, results: [], meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) } }; },
       /* inside batch: rows and the change count, synchronously */
-      _step: () => { const results = s.all(...a).map(plain); return { results, success: true, meta: { changes: changes() } }; },
+      _step: () => { const results = (s.all(...a).map(plain) as Row[]); return { results, success: true, meta: { changes: changes() } }; },
     };
   };
-  const batch = async (stmts) => {
+  const batch = async (stmts: Stmt[]) => {
     db.exec('BEGIN');
     try { const out = stmts.map((st) => st._step()); db.exec('COMMIT'); return out; }
     catch (e) { db.exec('ROLLBACK'); throw e; }
@@ -107,17 +127,17 @@ export function d1(db) {
   /* the Sessions API (2026-09-17): every withSession constraint is recorded
      in `sessions`; one database answers them all, and the bookmark is a
      counter of the statements run, shaped like D1's */
-  const sessions = [];
+  const sessions: string[] = [];
   let ticks = 0;
   const bookmark = () => (ticks++).toString(16).padStart(8, '0') + '-00000000-00000000-' + 'a'.repeat(32);
   const api = {
-    prepare: (sql) => make(sql, []),
+    prepare: (sql: string) => make(sql, []),
     batch,
-    exec: async (sql) => { db.exec(sql); return { count: 1, duration: 0 }; },
-    withSession: (constraint) => {
+    exec: async (sql: string) => { db.exec(sql); return { count: 1, duration: 0 }; },
+    withSession: (constraint: string) => {
       if (constraint === 'refuse-me') throw new Error('D1_ERROR: bad bookmark');
       sessions.push(constraint);
-      return { prepare: (sql) => make(sql, []), batch, getBookmark: () => bookmark() };
+      return { prepare: (sql: string) => make(sql, []), batch, getBookmark: () => bookmark() };
     },
     sessions,
     _db: db,
@@ -129,10 +149,10 @@ export function d1(db) {
 
 /* a rate-limit binding that counts per key and records every call in `log`
    as [binding, key]; `max` is the per-key allowance (unlimited by default) */
-export const limiter = (name = '', log = [], max = Infinity) => {
-  const seen = new Map();
+export const limiter = (name = '', log: [string, string][] = [], max = Infinity) => {
+  const seen = new Map<string, number>();
   return {
-    limit: async ({ key }) => {
+    limit: async ({ key }: { key: string }) => {
       const n = (seen.get(key) || 0) + 1;
       seen.set(key, n);
       log.push([name, key]);
@@ -143,36 +163,38 @@ export const limiter = (name = '', log = [], max = Infinity) => {
 const LIMITERS = ['POST_LIMIT', 'READ_LIMIT', 'CONNECT_LIMIT', 'POST_IP_LIMIT', 'READ_IP_LIMIT', 'CONNECT_IP_LIMIT'];
 /* a binding whose real methods throw when reached (Workers AI, Vectorize); any
    other property reads as undefined so a stringify or a truthiness check passes */
-const untouchable = (name, methods) => Object.fromEntries(methods.map((k) =>
+const untouchable = (name: string, methods: string[]) => Object.fromEntries(methods.map((k) =>
   [k, () => { throw new Error(`env.${name}.${k} was reached from a test — stub it in makeEnv`); }]));
 
 /* an in-memory R2 bucket that records every call; `snapshot()` (if given) is
    taken at the moment of each delete, so a rule can prove the ledger still
    named the key when the object went */
-export function r2Bucket(name, calls, snapshot) {
-  const objects = new Map();
-  const bytesOf = async (v) => {
+export type R2Call = { bucket: string; op: string; key?: string; size?: number; prefix?: string; at?: any };
+type R2Stored = { bytes: Uint8Array; meta: { httpMetadata?: Row; customMetadata?: Row }; uploaded: Date };
+export function r2Bucket(name: string, calls: R2Call[], snapshot?: (key: string) => any) {
+  const objects = new Map<string, R2Stored>();
+  const bytesOf = async (v: unknown): Promise<Uint8Array> => {
     if (v == null) return new Uint8Array();
     if (typeof v === 'string') return new TextEncoder().encode(v);
     if (v instanceof Uint8Array) return v;
     if (v instanceof ArrayBuffer) return new Uint8Array(v);
-    return new Uint8Array(await new Response(v).arrayBuffer());
+    return new Uint8Array(await new Response(v as BodyInit).arrayBuffer());
   };
   return {
     objects,
-    async get(key) {
+    async get(key: string) {
       calls.push({ bucket: name, op: 'get', key });
       const o = objects.get(key);
       return o ? { key, size: o.bytes.byteLength, httpMetadata: o.meta.httpMetadata || {}, customMetadata: o.meta.customMetadata || {},
         body: new Blob([o.bytes]).stream(), arrayBuffer: async () => o.bytes.buffer.slice(o.bytes.byteOffset, o.bytes.byteOffset + o.bytes.byteLength),
         text: async () => new TextDecoder().decode(o.bytes) } : null;
     },
-    async head(key) { calls.push({ bucket: name, op: 'head', key }); const o = objects.get(key); return o ? { key, size: o.bytes.byteLength } : null; },
-    async put(key, value, meta = {}) { const bytes = await bytesOf(value); objects.set(key, { bytes, meta, uploaded: new Date() }); calls.push({ bucket: name, op: 'put', key, size: bytes.byteLength }); return { key, size: bytes.byteLength }; },
-    async delete(keys) {
+    async head(key: string) { calls.push({ bucket: name, op: 'head', key }); const o = objects.get(key); return o ? { key, size: o.bytes.byteLength } : null; },
+    async put(key: string, value: unknown, meta: R2Stored['meta'] = {}) { const bytes = await bytesOf(value); objects.set(key, { bytes, meta, uploaded: new Date() }); calls.push({ bucket: name, op: 'put', key, size: bytes.byteLength }); return { key, size: bytes.byteLength }; },
+    async delete(keys: string | string[]) {
       for (const key of Array.isArray(keys) ? keys : [keys]) { calls.push({ bucket: name, op: 'delete', key, at: snapshot ? snapshot(key) : undefined }); objects.delete(key); }
     },
-    async list(opts = {}) {
+    async list(opts: { prefix?: string; limit?: number } = {}) {
       calls.push({ bucket: name, op: 'list', prefix: opts.prefix });
       const all = [...objects.entries()].filter(([k]) => !opts.prefix || k.startsWith(opts.prefix))
         .map(([key, o]) => ({ key, size: o.bytes.byteLength, uploaded: o.uploaded }));
@@ -187,21 +209,34 @@ export function r2Bucket(name, calls, snapshot) {
    instance each call went to — `spy.calls` is [{name, method, args}] — so a
    test can prove a private event reached its home shard alone and a public
    one every shard; one stub answers for every name. */
-export function hubSpy({ viewersOf = () => [], viewing = () => false, online = () => [], stats = () => ({ sockets: 0, members: 0 }) } = {}) {
-  const spy = { events: [], viewing: [], viewersOf: [], presence: [], calls: [], fetched: [] };
+type HubOpts = {
+  viewersOf?: (tag: string, hashes: string[]) => string[];
+  viewing?: (recipient: string, sender: string) => boolean;
+  online?: (hashes: string[]) => any;
+  stats?: () => { sockets: number; members: number };
+};
+export type HubSpy = {
+  events: Row[]; viewing: [string, string][]; viewersOf: [string, string[]][]; presence: string[][];
+  calls: { name: string; method: string; args: any[] }[]; fetched: string[];
+  namespace: { idFromName: (n: string) => string; get: (name: unknown) => any };
+  frames: (t: string) => Row[];
+  names: (method: string) => string[];
+};
+export function hubSpy({ viewersOf = () => [], viewing = () => false, online = () => [], stats = () => ({ sockets: 0, members: 0 }) }: HubOpts = {}): HubSpy {
+  const spy = { events: [], viewing: [], viewersOf: [], presence: [], calls: [], fetched: [] } as unknown as HubSpy;
   let current = 'board';
-  const rec = (method, args) => spy.calls.push({ name: current, method, args });
+  const rec = (method: string, args: any[]) => spy.calls.push({ name: current, method, args });
   const stub = {
-    publish: async (event) => { rec('publish', [event]); spy.events.push(event); },
-    relay: async (items) => { rec('relay', [items]); return { idle: [] }; },
-    watch: async (from, register, also = []) => { rec('watch', [from, register, also]); return online([...register, ...also]); },
-    presenceOf: async (hashes) => { rec('presenceOf', [hashes]); spy.presence.push(hashes); return online(hashes); },
-    dmViewing: async (recipient, sender) => { rec('dmViewing', [recipient, sender]); spy.viewing.push([recipient, sender]); return viewing(recipient, sender); },
-    viewersOf: async (tag, hashes) => { rec('viewersOf', [tag, hashes]); spy.viewersOf.push([tag, hashes]); return viewersOf(tag, hashes); },
+    publish: async (event: Row) => { rec('publish', [event]); spy.events.push(event); },
+    relay: async (items: unknown) => { rec('relay', [items]); return { idle: [] }; },
+    watch: async (from: string, register: string[], also: string[] = []) => { rec('watch', [from, register, also]); return online([...register, ...also]); },
+    presenceOf: async (hashes: string[]) => { rec('presenceOf', [hashes]); spy.presence.push(hashes); return online(hashes); },
+    dmViewing: async (recipient: string, sender: string) => { rec('dmViewing', [recipient, sender]); spy.viewing.push([recipient, sender]); return viewing(recipient, sender); },
+    viewersOf: async (tag: string, hashes: string[]) => { rec('viewersOf', [tag, hashes]); spy.viewersOf.push([tag, hashes]); return viewersOf(tag, hashes); },
     stats: async () => { rec('stats', []); return stats(); },
-    fetch: async (request) => { rec('fetch', [request && request.url]); spy.fetched.push(current); return new Response('hub', { status: 200 }); },
+    fetch: async (request: Request) => { rec('fetch', [request && request.url]); spy.fetched.push(current); return new Response('hub', { status: 200 }); },
   };
-  spy.namespace = { idFromName: (n) => n, get: (name) => { current = String(name); return stub; } };
+  spy.namespace = { idFromName: (n: string) => n, get: (name: unknown) => { current = String(name); return stub; } };
   spy.frames = (t) => spy.events.filter((e) => e.t === t);
   spy.names = (method) => spy.calls.filter((c) => c.method === method).map((c) => c.name);
   return spy;
@@ -211,20 +246,27 @@ export function hubSpy({ viewersOf = () => [], viewing = () => false, online = (
    or adds plain variables/secrets (ADMIN_HASHES, ALLOW_ANON, …). */
 /* the send_email binding: records every message; `fail` makes send() throw
    with a code, the way a refused destination does */
-export function emailSpy(sent, fail) {
+export function emailSpy(sent: any[], fail?: string) {
   return {
-    send: async (msg) => {
+    send: async (msg: any) => {
       sent.push(msg);
-      if (fail) { const e = new Error(fail); e.code = 'test_refused'; throw e; }
+      if (fail) { const e = new Error(fail) as Error & { code?: string }; e.code = 'test_refused'; throw e; }
       return { messageId: 'test-' + sent.length };
     },
   };
 }
 
-export function makeEnv({ db, libdb, hub, vars = {}, snapshot, emailFail, email = true, limits = {} } = {}) {
-  const r2 = [];
-  const emails = [];
-  const limited = [];
+type EnvOpts = {
+  db?: DatabaseSync; libdb?: DatabaseSync; hub?: HubSpy; vars?: Row; snapshot?: (key: string) => any;
+  emailFail?: string; email?: boolean; limits?: Record<string, number>;
+};
+/* The env a request sees, plus the suite's own logs. Bindings are reached by
+   name and any test may add or swap one, so the bag is open (Row). */
+export type TestEnv = Row & { r2: R2Call[]; emails: any[]; limited: [string, string][] };
+export function makeEnv({ db, libdb, hub, vars = {}, snapshot, emailFail, email = true, limits = {} }: EnvOpts = {}): TestEnv {
+  const r2: R2Call[] = [];
+  const emails: any[] = [];
+  const limited: [string, string][] = [];
   const lib = libdb || freshLibDb();
   return {
     DB: d1(db || freshDb()),
@@ -246,10 +288,11 @@ export function makeEnv({ db, libdb, hub, vars = {}, snapshot, emailFail, email 
 }
 
 /* an ExecutionContext whose background work can be awaited */
-export function ctx() {
-  const tasks = [];
+export type Ctx = { waitUntil: (p: unknown) => void; passThroughOnException: () => void; settle: () => Promise<PromiseSettledResult<unknown>[]>; tasks: Promise<unknown>[] };
+export function ctx(): Ctx {
+  const tasks: Promise<unknown>[] = [];
   return {
-    waitUntil: (p) => { tasks.push(Promise.resolve(p)); },
+    waitUntil: (p: unknown) => { tasks.push(Promise.resolve(p)); },
     passThroughOnException: () => {},
     settle: () => Promise.allSettled(tasks),
     tasks,
@@ -258,15 +301,15 @@ export function ctx() {
 
 /* a fetch that never reaches the network: it records the attempt and throws
    (or answers, when a responder is given). Restore in afterEach. */
-export function netSpy(respond) {
-  const calls = [];
+export function netSpy(respond?: (url: string, init?: RequestInit) => Response | Promise<Response>) {
+  const calls: { url: string; init?: RequestInit }[] = [];
   const real = globalThis.fetch;
-  globalThis.fetch = async (input, init) => {
-    const url = typeof input === 'string' ? input : input.url;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     calls.push({ url, init });
     if (respond) return respond(url, init);
     throw new Error('the network was reached from a test: ' + url);
-  };
+  }) as typeof fetch;
   return { calls, restore: () => { globalThis.fetch = real; } };
 }
 
@@ -283,7 +326,7 @@ export function resetCaches() {
 /* ---- identities ----------------------------------------------------------- */
 
 /* the worker knows a member by sha256hex(key); seed the key deterministically */
-export async function identity(seed) {
+export async function identity(seed: unknown) {
   /* The suffix is not decoration: a test identity's key must clear the key
      floor (`Domain.Auth.keyAcceptable`, 2026-09-18), because a real member
      holds the generated 43-character key and a fixture the worker refuses on
@@ -294,24 +337,24 @@ export async function identity(seed) {
   return { key, hash: await sha256hex(key) };
 }
 /* An identity whose key the floor refuses — one class under twenty characters. */
-export async function weakIdentity(seed) {
+export async function weakIdentity(seed: unknown) {
   const key = 'guessable-' + String(seed);
   return { key, hash: await sha256hex(key) };
 }
 /* an ESTABLISHED identity — one that has passed a challenge — is not
    challenged again, and its uploads, calls and first DM are open
    (Domain.Turnstile, the default). The whole of it is `verified_at` (0018). */
-export function establish(db, hash, now = 1_700_000_000) {
+export function establish(db: DatabaseSync, hash: string, now = 1_700_000_000) {
   db.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?, ?)').run(hash, now);
   db.prepare('UPDATE profiles SET verified_at = ? WHERE hash = ? AND verified_at IS NULL').run(now, hash);
 }
 /* what a keyed READ leaves behind (registerMember): a row, and no record of
    anyone answering for it. Established it is NOT — that was the hole. */
-export function seen(db, hash, now = 1_700_000_000) {
+export function seen(db: DatabaseSync, hash: string, now = 1_700_000_000) {
   db.prepare('INSERT OR IGNORE INTO profiles (hash, created_at) VALUES (?, ?)').run(hash, now);
 }
 /* a published X25519 public key (43 base64url chars), so DM roads that need one open */
-export function publishKey(db, hash, now = 1_700_000_000) {
+export function publishKey(db: DatabaseSync, hash: string, now = 1_700_000_000) {
   const pub = Buffer.from(hash.slice(0, 32)).toString('base64url').slice(0, 43);
   db.prepare('INSERT OR REPLACE INTO dm_pubkeys (hash, pubkey, created_at) VALUES (?, ?, ?)').run(hash, pub, now);
 }
@@ -321,9 +364,11 @@ export function publishKey(db, hash, now = 1_700_000_000) {
 /* one request through default.fetch → { status, json, text, res, ctx }.
    `origin: null` sends no Origin header (a curl from CI, the pipeline's shape);
    `host` reaches the worker on another hostname (its workers.dev front door). */
-export async function call(worker, env, method, path, body, { ip = '203.0.113.7', origin = ORIGIN, headers = {}, ctx: c, host = ORIGIN } = {}) {
-  const h = { 'CF-Connecting-IP': ip, ...headers };
-  const init = { method, headers: h };
+export type CallOpts = { ip?: string; origin?: string | null; headers?: Record<string, string>; ctx?: Ctx; host?: string };
+export type Answer = { status: number; json: any; text: string; res: Response; ctx: Ctx };
+export async function call(worker: Worker, env: unknown, method: string, path: string, body?: unknown, { ip = '203.0.113.7', origin = ORIGIN, headers = {}, ctx: c, host = ORIGIN }: CallOpts = {}): Promise<Answer> {
+  const h: Record<string, string> = { 'CF-Connecting-IP': ip, ...headers };
+  const init: RequestInit = { method, headers: h };
   if (method !== 'GET' && method !== 'HEAD') {
     if (origin !== null) h.Origin = origin;
     /* a FormData body travels as multipart (the Request writes its boundary) */
@@ -338,9 +383,9 @@ export async function call(worker, env, method, path, body, { ip = '203.0.113.7'
   return { status: res.status, json, text, res, ctx: cx };
 }
 /* a client bound to one worker + env: api.post('/api/comments/dm/unread', { key }) */
-export function client(worker, env, defaults = {}) {
+export function client(worker: Worker, env: unknown, defaults: CallOpts = {}) {
   return {
-    post: (path, body, opts) => call(worker, env, 'POST', path, body, { ...defaults, ...opts }),
-    get: (path, opts) => call(worker, env, 'GET', path, undefined, { ...defaults, ...opts }),
+    post: (path: string, body?: unknown, opts?: CallOpts) => call(worker, env, 'POST', path, body, { ...defaults, ...opts }),
+    get: (path: string, opts?: CallOpts) => call(worker, env, 'GET', path, undefined, { ...defaults, ...opts }),
   };
 }

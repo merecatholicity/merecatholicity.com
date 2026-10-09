@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import * as Comments from '../../purescript/output/Domain.Comments/index.js';
 import { orNull } from '../_support/ps.ts';
 
-const journalKeyId = (k) => orNull(Comments.journalKeyId(k));
+const journalKeyId = (k: string) => orNull(Comments.journalKeyId(k));
 
 /* The members come from the generated Domain.Writings (scripts/writings.py
    over content/ and the Makefile); tests/js/commentable_pages.test.ts holds

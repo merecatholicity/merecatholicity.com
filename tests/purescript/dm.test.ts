@@ -13,7 +13,7 @@ import * as Dm from '../../purescript/output/Domain.Dm/index.js';
 import * as Emoji from '../../purescript/output/Domain.Emoji/index.js';
 import { orNull } from '../_support/ps.ts';
 
-const norm = (s) => orNull(Dm.normalizeReaction(s));
+const norm = (s: string) => orNull(Dm.normalizeReaction(s));
 
 test('ttlOptions: the three lifetimes in seconds', () => {
   assert.deepEqual(Dm.ttlOptions.map((o) => o.secs), [86400, 604800, 2592000]);
@@ -158,7 +158,7 @@ test('membersEqual is set equality: order and repeats aside, one member more or 
 
 test('the system-line grammar round-trips, and anything else is not a system line', () => {
   const b = 'b'.repeat(64), c = 'c'.repeat(64);
-  const tag = (s) => orNull(Dm.parseSysLine(s)) && Dm.sysLineTag(orNull(Dm.parseSysLine(s)));
+  const tag = (s: string) => orNull(Dm.parseSysLine(s)) && Dm.sysLineTag(orNull(Dm.parseSysLine(s)));
   assert.equal(Dm.sysAddLine([b, c]), 'sys:add:' + b + ',' + c);
   assert.deepEqual(tag(Dm.sysAddLine([b, c])), { tag: 'add', hashes: [b, c], name: '' });
   assert.deepEqual(tag(Dm.sysLeaveLine), { tag: 'leave', hashes: [], name: '' });
@@ -169,8 +169,8 @@ test('the system-line grammar round-trips, and anything else is not a system lin
 });
 
 test('sysLineText reads the sentence: names listed with commas and an "and", the leaver alone, the name quoted', () => {
-  const nameOf = (h) => ({ b: 'Bob', c: 'Cy', d: 'Di' })[h[0]];
-  const say = (s) => Dm.sysLineText('Ann')(nameOf)(orNull(Dm.parseSysLine(s)));
+  const nameOf = (h: string) => ({ b: 'Bob', c: 'Cy', d: 'Di' } as Record<string, string>)[h[0]];
+  const say = (s: string) => Dm.sysLineText('Ann')(nameOf)(orNull(Dm.parseSysLine(s)));
   assert.equal(say(Dm.sysAddLine(['b'.repeat(64)])), 'Ann added Bob');
   assert.equal(say(Dm.sysAddLine(['b'.repeat(64), 'c'.repeat(64)])), 'Ann added Bob and Cy');
   assert.equal(say(Dm.sysAddLine(['b'.repeat(64), 'c'.repeat(64), 'd'.repeat(64)])), 'Ann added Bob, Cy and Di');
@@ -188,7 +188,7 @@ test('tallyReactions: one cell per emoji with its count, most-given first, ties 
 
 test('readByAll: every OTHER current member has read; a leaver does not count; nobody else -> false', () => {
   const me = 'a'.repeat(64), b = 'b'.repeat(64), c = 'c'.repeat(64);
-  const m = (hash, readAt, leftAt = 0) => ({ hash, readAt, leftAt });
+  const m = (hash: string, readAt: number, leftAt = 0) => ({ hash, readAt, leftAt });
   assert.equal(Dm.readByAll(100)(me)([m(me, 0), m(b, 100), m(c, 150)]), true, 'read at the moment counts');
   assert.equal(Dm.readByAll(100)(me)([m(me, 200), m(b, 100), m(c, 99)]), false, 'one still reading');
   assert.equal(Dm.readByAll(100)(me)([m(me, 200), m(b, 100), m(c, 0, 90)]), true, 'a leaver is not waited for');

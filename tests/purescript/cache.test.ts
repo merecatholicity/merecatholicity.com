@@ -16,7 +16,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cache from '../../purescript/output/Domain.Cache/index.js';
 
-const tag = (age, ttl) => Cache.freshnessTag(Cache.classify(age)(ttl));
+const tag = (age: number, ttl: number) => Cache.freshnessTag(Cache.classify(age)(ttl));
 
 test('classify: three rungs, not two — stale is the whole feature', () => {
   assert.equal(tag(10, 100), 'fresh', 'inside its TTL: serve it, ask nothing');

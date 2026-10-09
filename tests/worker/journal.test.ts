@@ -25,10 +25,10 @@ test('a short first line is the title verbatim and is dropped from the body', ()
 test('a long first line yields a trimmed excerpt title with ellipsis, body kept whole', () => {
   const long = 'This is a rather long opening sentence that keeps going well past any reasonable title length and then some more.';
   const a = journalArticle(long);
-  assert.ok(a.title.endsWith('…'), 'excerpt ends with an ellipsis');
-  assert.ok(a.title.length <= 72, 'excerpt is a reasonable length');
-  assert.ok(!/[\s,.;:!?—–-]…$/.test(a.title), 'no trailing punctuation before the ellipsis');
-  assert.ok(long.startsWith(a.title.slice(0, -1)), 'excerpt is the start of the first line');
+  assert.ok(a.title!.endsWith('…'), 'excerpt ends with an ellipsis');
+  assert.ok(a.title!.length <= 72, 'excerpt is a reasonable length');
+  assert.ok(!/[\s,.;:!?—–-]…$/.test(a.title!), 'no trailing punctuation before the ellipsis');
+  assert.ok(long.startsWith(a.title!.slice(0, -1)), 'excerpt is the start of the first line');
   assert.equal(a.body, long, 'the full body is preserved when the first line is truncated');
 });
 

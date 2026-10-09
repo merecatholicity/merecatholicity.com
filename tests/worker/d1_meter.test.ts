@@ -16,13 +16,15 @@
  * side of the wire is tests/py/test_ingest_pacing.py. */
 import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
+import type { Worker, TestEnv, Row } from '../_support/worker.ts';
 import { loadWorker, makeEnv, freshDb, freshLibDb, identity, resetCaches, call, d1 } from '../_support/worker.ts';
 import { fetchD1Writes, d1WritesSelect } from '../../comments-worker/src/usage.ts';
 import { FREE } from '../../comments-worker/src/usagecalc.ts';
 
 const HOST = 'https://merecatholicity-comments.example.workers.dev';
 const ENV = { CF_USAGE_TOKEN: 't', CF_ACCOUNT_ID: 'a' };
-let worker, ADMIN;
+type MeterEnv = Parameters<typeof fetchD1Writes>[0];
+let worker: Worker, ADMIN: { key: string; hash: string };
 before(async () => {
   ({ worker } = await loadWorker());
   ADMIN = await identity('librarian-admin');
@@ -33,15 +35,15 @@ before(async () => {
 const realFetch = globalThis.fetch;
 const realLog = console.log;
 let lastQuery = '';
-function stubFetch(rows) {
-  globalThis.fetch = async (url, init) => {
-    lastQuery = JSON.parse(init.body).query;
+function stubFetch(rows: Row[] | null) {
+  globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+    lastQuery = JSON.parse(init!.body as string).query;
     if (rows == null) throw new Error('analytics down');
     return { status: 200, json: async () => ({ data: { viewer: { accounts: [
       { d1AnalyticsAdaptiveGroups: rows }] } } }) };
-  };
+  }) as unknown as typeof fetch;
 }
-const room = (id, written) => ({ dimensions: { databaseId: id }, sum: { rowsRead: 0, rowsWritten: written } });
+const room = (id: string, written: number) => ({ dimensions: { databaseId: id }, sum: { rowsRead: 0, rowsWritten: written } });
 beforeEach(() => { resetCaches(); console.log = realLog; });
 after(() => { globalThis.fetch = realFetch; console.log = realLog; });
 
@@ -51,7 +53,7 @@ test('the reading sums EVERY database on the account, against the 100,000 daily 
     room('c21d00ec-55d3-4288-b462-a373315f95e7', 33),
     room('98e30c6d-dacf-4c6b-8417-ee6ad176c9a2', 61_400),  // a librarian room mid-ingest
   ]);
-  const m = await fetchD1Writes(ENV, Date.UTC(2026, 8, 19, 4, 10, 0));
+  const m = await fetchD1Writes(ENV as unknown as MeterEnv, Date.UTC(2026, 8, 19, 4, 10, 0));
   assert.equal(m.used, 1729 + 33 + 61_400, 'the cap is account-wide, so the reading must be too');
   assert.equal(m.limit, FREE.d1RowsWrittenDay);
   assert.equal(m.limit, 100_000);
@@ -66,21 +68,21 @@ test('the select asks for today only — a window wider than the day would read 
 
 test('a meter that cannot be read THROWS — it never answers zero', async () => {
   stubFetch(null);
-  await assert.rejects(() => fetchD1Writes(ENV), /analytics down/,
+  await assert.rejects(() => fetchD1Writes(ENV as unknown as MeterEnv), /analytics down/,
     'a zero here would read to the ingest as a whole free day');
   stubFetch([]);              // the token works but the dataset is empty/absent
-  const empty = await fetchD1Writes(ENV);
+  const empty = await fetchD1Writes(ENV as unknown as MeterEnv);
   assert.equal(empty.used, 0, 'an EMPTY dataset is a real zero: nothing has been written today');
 });
 
-function libEnv() {
+function libEnv(): TestEnv {
   const env = makeEnv({ db: freshDb(), libdb: freshLibDb(), vars: { ADMIN_HASHES: ADMIN.hash } });
   env.LIBDB2 = d1(freshLibDb());
   env.LIBDB3 = d1(freshLibDb());
   env.CF_USAGE_TOKEN = 't'; env.CF_ACCOUNT_ID = 'a';
   return env;
 }
-const roster = (env) => call(worker, env, 'POST', '/api/merecat/works', { key: ADMIN.key }, { host: HOST, origin: null });
+const roster = (env: TestEnv) => call(worker, env, 'POST', '/api/merecat/works', { key: ADMIN.key }, { host: HOST, origin: null });
 
 test('the roster carries the reading, so the ingest learns the day before it spends it', async () => {
   stubFetch([room('af00d34a-c1bc-46a3-b51f-1a2fdfec3eb8', 12_500)]);

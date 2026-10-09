@@ -16,11 +16,17 @@ import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import * as espree from 'espree';
 
-export const ENV_PARAMS = new Set(['env', 'rawEnv']);
+/* an espree node with the parent links `parse` adds: walked generically, by key */
+export type AstNode = Record<string, any>;
+export type Source = { file: string; rel: string; code: string };
+export type Allowance = [string, RegExp, string?];
+export type EnvFlowResult = { checked: number; bad: string[]; used: Set<Allowance> };
 
-export function workerFiles(root) {
-  const out = [];
-  const walk = (d) => {
+export const ENV_PARAMS: Set<string> = new Set(['env', 'rawEnv']);
+
+export function workerFiles(root: string): string[] {
+  const out: string[] = [];
+  const walk = (d: string): void => {
     for (const n of readdirSync(d)) {
       const f = join(d, n);
       if (statSync(f).isDirectory()) walk(f);
@@ -31,15 +37,15 @@ export function workerFiles(root) {
   return out.sort();
 }
 
-function parse(file, source) {
+function parse(file: string, source: string): { code: string; ast: AstNode } {
   let code = source;
   if (file.endsWith('.ts')) {
     const emit = process.emitWarning;
-    process.emitWarning = (w, ...rest) => (String(w).includes('stripTypeScriptTypes') ? undefined : emit.call(process, w, ...rest));
+    process.emitWarning = ((w: string | Error, ...rest: unknown[]) => (String(w).includes('stripTypeScriptTypes') ? undefined : (emit as (...a: unknown[]) => void).call(process, w, ...rest))) as typeof process.emitWarning;
     try { code = stripTypeScriptTypes(code, { mode: 'strip' }); } finally { process.emitWarning = emit; }
   }
-  const ast = espree.parse(code, { ecmaVersion: 'latest', sourceType: 'module', loc: true, range: true });
-  const visit = (node, parent, key) => {
+  const ast: AstNode = espree.parse(code, { ecmaVersion: 'latest', sourceType: 'module', loc: true, range: true });
+  const visit = (node: AstNode, parent: AstNode | null, key: string | null): void => {
     node.parent = parent;
     node.parentKey = key;
     for (const k of Object.keys(node)) {
@@ -52,7 +58,7 @@ function parse(file, source) {
   visit(ast, null, null);
   return { code, ast };
 }
-const each = (node, f) => {
+const each = (node: AstNode, f: (n: AstNode) => void): void => {
   f(node);
   for (const k of Object.keys(node)) {
     if (k === 'parent' || k === 'loc' || k === 'range') continue;
@@ -61,20 +67,20 @@ const each = (node, f) => {
     else if (v && typeof v.type === 'string') each(v, f);
   }
 };
-const paramName = (p) => (p.type === 'Identifier' ? p.name : p.type === 'AssignmentPattern' ? paramName(p.left) : p.type);
-const keyName = (k) => (k && (k.type === 'Identifier' || k.type === 'PrivateIdentifier') ? k.name : k && k.type === 'Literal' ? String(k.value) : null);
+const paramName = (p: AstNode): string => (p.type === 'Identifier' ? p.name : p.type === 'AssignmentPattern' ? paramName(p.left) : p.type);
+const keyName = (k: AstNode | null | undefined): string | null => (k && (k.type === 'Identifier' || k.type === 'PrivateIdentifier') ? k.name : k && k.type === 'Literal' ? String(k.value) : null);
 
 /* sources: [{ file (absolute), rel, code }]; exempt: Set of rel; allowed:
    [[rel, RegExp, why]]. Returns { checked, bad: [string], used: Set }. */
-export function envFlow(sources, { exempt = new Set(), allowed = [] } = {}) {
-  const parsed = new Map(sources.map((s) => [s.file, { rel: s.rel, ...parse(s.file, s.code) }]));
+export function envFlow(sources: Source[], { exempt = new Set(), allowed = [] }: { exempt?: Set<string>; allowed?: Allowance[] } = {}): EnvFlowResult {
+  const parsed = new Map(sources.map((s): [string, { rel: string; code: string; ast: AstNode }] => [s.file, { rel: s.rel, ...parse(s.file, s.code) }]));
   /* definitions by name, per file; imports per file */
-  const defs = new Map();   // file -> Map(name -> [params])
-  const imports = new Map();   // file -> Map(local -> { file, name })
+  const defs = new Map<string, Map<string, string[][]>>();   // file -> Map(name -> [params])
+  const imports = new Map<string, Map<string, { file: string; name: string }>>();   // file -> Map(local -> { file, name })
   for (const [file, { ast }] of parsed) {
-    const d = new Map();
-    const add = (name, fn) => { if (name) { if (!d.has(name)) d.set(name, []); d.get(name).push(fn.params.map(paramName)); } };
-    const im = new Map();
+    const d = new Map<string, string[][]>();
+    const add = (name: string | null, fn: AstNode): void => { if (name) { if (!d.has(name)) d.set(name, []); d.get(name)!.push(fn.params.map(paramName)); } };
+    const im = new Map<string, { file: string; name: string }>();
     each(ast, (n) => {
       if (n.type === 'FunctionDeclaration' && n.id) add(n.id.name, n);
       else if (n.type === 'VariableDeclarator' && n.id.type === 'Identifier' && n.init && /Function/.test(n.init.type)) add(n.id.name, n.init);
@@ -87,18 +93,18 @@ export function envFlow(sources, { exempt = new Set(), allowed = [] } = {}) {
     defs.set(file, d);
     imports.set(file, im);
   }
-  const lookup = (file, name) => {
-    const own = defs.get(file).get(name);
+  const lookup = (file: string, name: string): string[][] => {
+    const own = defs.get(file)!.get(name);
     if (own) return own;
-    const im = imports.get(file).get(name);
-    if (im && defs.has(im.file) && defs.get(im.file).get(im.name)) return defs.get(im.file).get(im.name);
-    const any = [];
-    for (const d of defs.values()) if (d.get(name)) any.push(...d.get(name));
+    const im = imports.get(file)!.get(name);
+    if (im && defs.has(im.file) && defs.get(im.file)!.get(im.name)) return defs.get(im.file)!.get(im.name)!;
+    const any: string[][] = [];
+    for (const d of defs.values()) if (d.get(name)) any.push(...d.get(name)!);
     return any;
   };
 
-  const bad = [];
-  const used = new Set();
+  const bad: string[] = [];
+  const used = new Set<Allowance>();
   let checked = 0;
   for (const [file, { rel, code, ast }] of parsed) {
     if (exempt.has(rel)) continue;
@@ -132,7 +138,7 @@ export function envFlow(sources, { exempt = new Set(), allowed = [] } = {}) {
         const c = p.callee;
         const callee = c.type === 'Identifier' ? c.name : c.type === 'MemberExpression' ? keyName(c.property) : c.type === 'Super' ? 'super' : null;
         const params = callee ? lookup(file, callee) : [];
-        if (params.length && params.every((ps) => ENV_PARAMS.has(ps[i]))) return;
+        if (params.length && params.every((ps: string[]) => ENV_PARAMS.has(ps[i]))) return;
       }
       /* name the use by its statement when the env sits inside a literal */
       let at = p;

@@ -9,8 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Ptr from '../../purescript/output/Domain.Ptr/index.js';
 
-const stage = (t) => Ptr.stageTag(Ptr.stage(t));
-const esc = (n, since) => Ptr.escalates(n)(since);
+const stage = (t: number) => Ptr.stageTag(Ptr.stage(t));
+const esc = (n: number, since: number) => Ptr.escalates(n)(since);
 
 test('travel: resistance — the pull gets heavier, and it is bounded', () => {
   assert.equal(Ptr.travel(0), 0);

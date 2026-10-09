@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const src = join(root, 'comments-worker', 'src');
-const marked = (rel) => `\n/* ==== comments-worker/src/${rel} ==== */\n` + readFileSync(join(src, rel), 'utf8');
+const marked = (rel: string) => `\n/* ==== comments-worker/src/${rel} ==== */\n` + readFileSync(join(src, rel), 'utf8');
 
 /* comments-worker/src/routes/*.ts (sorted), then index.ts last — the handlers and the table */
 export function routeFiles() {
@@ -27,7 +27,7 @@ export const workerSource = () => routesSource() + marked('lib.ts');
 /* The body of one top-level function, from its declaration line to the next
    top-level declaration, an export list, or the next file's marker — so a
    handler that ends a file never bleeds into the next file's header. */
-export function handlerBody(name, text = routesSource()) {
+export function handlerBody(name: string, text: string = routesSource()) {
   const decl = new RegExp('\\n(?:export )?(?:async )?function ' + name.replace(/\$/g, '\\$') + '\\(').exec(text);
   if (!decl) throw new Error(name + ' not found in the worker sources');
   const start = decl.index + 1;

@@ -16,8 +16,14 @@ import { test, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches, netSpy, ctx, call } from '../_support/worker.ts';
 import { runChain, runSelfCheck, readOps } from '../../comments-worker/src/ops.ts';
+import type { Worker, TestEnv, r2Bucket } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
 
-let worker, adm, net;
+type Id = { key: string; hash: string };
+/* the test env, as the ops functions' parameter type reads it */
+type OpsEnv = TestEnv & Parameters<typeof readOps>[0];
+
+let worker: Worker, adm: Id, net: ReturnType<typeof netSpy>;
 before(async () => {
   ({ worker } = await loadWorker());
   adm = await identity('the-admin');
@@ -33,32 +39,32 @@ function seeded() {
   db.prepare("INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES ('alert_email', 'owner@example.org', 1, 'test')").run();
   return db;
 }
-const state = (db, k) => { const r = db.prepare('SELECT v FROM app_settings WHERE k = ?').get(k); return r ? JSON.parse(r.v) : null; };
-const setState = (db, k, v) => db.prepare("INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?, ?, 1, 'test') ON CONFLICT(k) DO UPDATE SET v = excluded.v").run(k, JSON.stringify(v));
-const subjects = (env) => env.emails.map((m) => m.subject);
+const state = (db: DatabaseSync, k: string) => { const r = db.prepare('SELECT v FROM app_settings WHERE k = ?').get(k); return r ? JSON.parse(r.v as string) : null; };
+const setState = (db: DatabaseSync, k: string, v: unknown) => db.prepare("INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES (?, ?, 1, 'test') ON CONFLICT(k) DO UPDATE SET v = excluded.v").run(k, JSON.stringify(v));
+const subjects = (env: TestEnv) => env.emails.map((m) => m.subject);
 
 test('the daily chain writes today\'s backup and beats; a fresh deploy alerts about nothing; the health read says ok', async () => {
   const db = seeded();
-  const env = makeEnv({ db });
+  const env = (makeEnv({ db }) as OpsEnv);
   const c = ctx();
   await worker.scheduled({ cron: '15 3 * * *' }, env, c);
   await c.settle();
-  assert.ok(env.BACKUPS.objects.has(TODAY_KEY()), 'the object is in the bucket');
+  assert.ok((env.BACKUPS as unknown as ReturnType<typeof r2Bucket>).objects.has(TODAY_KEY()), 'the object is in the bucket');
   const hb = state(db, 'ops_heartbeat');
   assert.ok(hb.daily > 0, 'the daily beat');
   assert.deepEqual(subjects(env), [], 'nothing was wrong: nothing was said');
   const h = await readOps(env);
   assert.equal(h.ok, true);
-  assert.equal(h.object.key, TODAY_KEY());
+  assert.equal(h.object!.key, TODAY_KEY());
   assert.deepEqual(h.never, ['hourly', 'usage', 'monthly'], 'the chains that have not yet run are named, not presumed dead');
   assert.deepEqual(h.stale, []);
-  assert.equal(h.backup.key, TODAY_KEY());
+  assert.equal(h.backup!.key, TODAY_KEY());
   db.close();
 });
 
 test('a step that throws does not stop the chain; the failure alerts once, stays quiet while it stands, and is recovered once', async () => {
   const db = seeded();
-  const env = makeEnv({ db });
+  const env = (makeEnv({ db }) as OpsEnv);
   let ran = 0;
   const boom = async () => { throw new Error('D1_ERROR: no such table: nothing'); };
   const fine = async () => { ran++; };
@@ -81,7 +87,7 @@ test('a step that throws does not stop the chain; the failure alerts once, stays
 test('a chain judges only what it can observe: the hourly sweeps never recover the daily\'s missing backup', async () => {
   const db = seeded();
   setState(db, 'ops_alert_state', { open: ['backup_missing:' + TODAY_KEY(), 'step_failed:daily/runBackup'] });
-  const env = makeEnv({ db });
+  const env = (makeEnv({ db }) as OpsEnv);
   const r = await runChain(env, 'hourly', [['ok', async () => 1]]);
   assert.deepEqual([r.fired, r.cleared, env.emails.length], [0, 0, 0]);
   assert.deepEqual(state(db, 'ops_alert_state').open, ['backup_missing:' + TODAY_KEY(), 'step_failed:daily/runBackup'], 'untouched — not the hourly\'s to clear');
@@ -91,9 +97,9 @@ test('a chain judges only what it can observe: the hourly sweeps never recover t
 test('the self-check: a missing backup (once the daily has ever beaten), a recorded failure, and stale heartbeats — then the recovery', async () => {
   const db = seeded();
   const now = Math.floor(Date.now() / 1000);
-  assert.deepEqual(await runSelfCheck(makeEnv({ db })), [], 'no heartbeat yet: nothing is expected');
+  assert.deepEqual(await runSelfCheck((makeEnv({ db }) as OpsEnv)), [], 'no heartbeat yet: nothing is expected');
   setState(db, 'ops_heartbeat', { daily: now - 3600, hourly: now - 4 * 3600, usage: now - 600, monthly: now - 5 * 86400 });
-  const env = makeEnv({ db });
+  const env = (makeEnv({ db }) as OpsEnv);
   let found = await runSelfCheck(env);
   assert.deepEqual(found.map((c) => c.kind + ':' + c.subject), ['backup_missing:' + TODAY_KEY(), 'cron_stale:hourly']);
   /* the 23:30 chain: the usage check stands down (no token), the self-check speaks */
@@ -130,17 +136,17 @@ test('the health read: stale, never, the object, and ok as the outside watchdog\
   const db = seeded();
   const now = Math.floor(Date.now() / 1000);
   setState(db, 'ops_heartbeat', { daily: now - 30 * 3600, hourly: now - 60, usage: now - 60, monthly: now - 60 });
-  const env = makeEnv({ db });
+  const env = (makeEnv({ db }) as OpsEnv);
   let h = await readOps(env);
   assert.deepEqual([h.ok, h.stale, h.never, h.backup_ok, h.object], [false, ['daily'], [], false, null]);
   const daily = h.heartbeat.find((x) => x.name === 'daily');
-  assert.deepEqual([daily.stale, daily.stale_after, daily.age >= 30 * 3600], [true, 26 * 3600, true]);
+  assert.deepEqual([daily!.stale, daily!.stale_after, daily!.age! >= 30 * 3600], [true, 26 * 3600, true]);
   /* yesterday's object counts for the panel's truth */
   const y = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   await env.BACKUPS.put('backups/comments-' + y + '.sql.gz', new Uint8Array(4000));
   setState(db, 'ops_heartbeat', { daily: now - 60, hourly: now - 60, usage: now - 60, monthly: now - 60 });
   h = await readOps(env);
-  assert.deepEqual([h.ok, h.stale, h.backup_ok, h.object.key], [true, [], true, 'backups/comments-' + y + '.sql.gz']);
+  assert.deepEqual([h.ok, h.stale, h.backup_ok, h.object!.key], [true, [], true, 'backups/comments-' + y + '.sql.gz']);
   setState(db, 'ops_alert_state', { open: ['step_failed:monthly/pruneComments'], at: now });
   h = await readOps(env);
   assert.deepEqual([h.ok, h.open], [false, ['step_failed:monthly/pruneComments']], 'an open condition is not ok');
@@ -183,7 +189,7 @@ test('the report door: the nightly\'s key (from any origin) probes the health an
 
 test('a step that never settles times out, is told by name, and the chain still runs its other steps and beats', async (t) => {
   const db = seeded();
-  const env = makeEnv({ db });
+  const env = (makeEnv({ db }) as OpsEnv);
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let ran = 0;
   const hangs = () => new Promise(() => { /* the fetch that never answers */ });
@@ -201,7 +207,7 @@ test('a step that never settles times out, is told by name, and the chain still 
 
 test('a chain that spends its budget skips what is left rather than dying with the heartbeat unwritten', async (t) => {
   const db = seeded();
-  const env = makeEnv({ db });
+  const env = (makeEnv({ db }) as OpsEnv);
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   let ran = 0;
   /* settles at once, but ten minutes of the chain's wall clock went by in it:

@@ -20,10 +20,10 @@ const idxSrc = routesSource();
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
 
 /* every top-level `async function NAME(` … up to the next one, by name */
-function bodies(src) {
-  const out = {};
+function bodies(src: string) {
+  const out: Record<string, string> = {};
   const re = /\n(?:export )?async function ([A-Za-z0-9_]+)\(/g;   // lib.ts exports its handlers
-  let m, prev = null;
+  let m, prev: { name: string; at: number } | null = null;
   while ((m = re.exec(src))) {
     if (prev) out[prev.name] = src.slice(prev.at, m.index);
     prev = { name: m[1], at: m.index };
@@ -32,10 +32,10 @@ function bodies(src) {
   return out;
 }
 const SCREEN = /\bscreen\(|\bscreenImage\(|\bscreenMedia\(/;
-const DM = (name) => /Dm|SystemDm/.test(name);
+const DM = (name: string) => /Dm|SystemDm/.test(name);
 
 test('no DM handler in the worker calls the AI screen; the send is Turnstile-gated', () => {
-  for (const [src, atLeast] of [[idxSrc, 8], [libSrc, 1]]) {
+  for (const [src, atLeast] of [[idxSrc, 8], [libSrc, 1]] as [string, number][]) {
     const all = bodies(src);
     const dm = Object.keys(all).filter(DM);
     assert.ok(dm.length >= atLeast, 'the DM handlers are found by name (' + dm.length + ')');

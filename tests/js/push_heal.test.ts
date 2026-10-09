@@ -15,27 +15,30 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { healPushSubscription, urlBase64ToUint8Array, sameBytes } from '../../app/push.ts';
+import type { PushEnv, PushManagerLike, SubLike } from '../../app/push.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (...p) => readFileSync(join(root, ...p), 'utf8');
+const read = (...p: string[]) => readFileSync(join(root, ...p), 'utf8');
 
 /* two distinct 65-byte P-256 points, as the worker serves them */
-const point = (fill) => { const b = new Uint8Array(65); b[0] = 4; b.fill(fill, 1); return b; };
-const b64u = (bytes) => Buffer.from(bytes).toString('base64url');
+const point = (fill: number) => { const b = new Uint8Array(65); b[0] = 4; b.fill(fill, 1); return b; };
+const b64u = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64url');
 const OLD = point(1), NEW = point(2);
 
+type WorldOpts = { key?: string; owner?: string; perm?: string; pending?: string; served?: string;
+  sub?: string | null; pm?: boolean; refuseUntilGesture?: boolean };
 function world({ key = 'K', owner = 'K', perm = 'granted', pending = '', served = b64u(NEW),
-  sub = 'old', pm = true, refuseUntilGesture = false } = {}) {
-  const log = [];
-  const state = { pending, gesture: null, inGesture: false, healed: 0, sub: null };
-  const makeSub = (bytes, name) => ({
+  sub = 'old', pm = true, refuseUntilGesture = false }: WorldOpts = {}) {
+  const log: string[] = [];
+  const state: { pending: string; gesture: (() => void) | null; inGesture: boolean; healed: number; sub: SubLike | null } = { pending, gesture: null, inGesture: false, healed: 0, sub: null };
+  const makeSub = (bytes: Uint8Array<ArrayBuffer>, name: string) => ({
     name,
     options: { applicationServerKey: bytes.buffer.slice(0) },
     toJSON: () => ({ endpoint: 'https://push.example/' + name }),
     unsubscribe: async () => { log.push('unsubscribe:' + name); state.sub = null; return true; },
   });
   state.sub = sub === 'old' ? makeSub(OLD, 'old') : sub === 'new' ? makeSub(NEW, 'new') : null;
-  const manager = {
+  const manager: PushManagerLike = {
     getSubscription: async () => { log.push('getSubscription'); return state.sub; },
     subscribe: (o) => {
       log.push('subscribe' + (state.inGesture ? '@gesture' : ''));
@@ -45,20 +48,20 @@ function world({ key = 'K', owner = 'K', perm = 'granted', pending = '', served 
       return Promise.resolve(state.sub);
     },
   };
-  const env = {
+  const env: PushEnv = {
     key: () => key,
     owner: () => owner,
     pending: () => state.pending,
-    setPending: (v) => { state.pending = v; },
+    setPending: (v: string) => { state.pending = v; },
     permission: () => perm,
     pushManager: async () => (pm ? manager : null),
-    getJson: async (url) => { log.push('GET ' + url); return { ok: true, key: served }; },
-    postJson: async (url, body) => { log.push('POST ' + url + ' ' + JSON.parse(body.token).endpoint); return { ok: true }; },
-    onNextGesture: (run) => { log.push('gesture armed'); state.gesture = run; },
+    getJson: async (url: string) => { log.push('GET ' + url); return { ok: true, key: served }; },
+    postJson: async (url: string, body: { token: string }) => { log.push('POST ' + url + ' ' + JSON.parse(body.token).endpoint); return { ok: true }; },
+    onNextGesture: (run: () => void) => { log.push('gesture armed'); state.gesture = run; },
     healed: () => { state.healed++; },
   };
   const tap = async () => {
-    state.inGesture = true; state.gesture(); state.inGesture = false;
+    state.inGesture = true; state.gesture!(); state.inGesture = false;
     await new Promise((r) => setTimeout(r, 0));
   };
   return { env, log, state, tap };
@@ -77,7 +80,7 @@ test('it leaves alone every device that is not this member\'s own, with push on 
     ['push turned on by someone else', { owner: 'SOMEONE' }],
     ['no service worker', { pm: false }],
     ['no subscription and no unfinished move', { sub: null }],
-  ]) {
+  ] as [string, WorldOpts][]) {
     const w = world(opts);
     assert.equal(await healPushSubscription(w.env), 'skipped', label);
     assert.ok(!w.log.some((l) => l.startsWith('GET') || l.startsWith('POST') || l.startsWith('subscribe')), label + ': no read, no write');

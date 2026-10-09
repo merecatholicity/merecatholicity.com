@@ -22,7 +22,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /* content.py's rule, re-derived: the mount is stamped unless the frontmatter
    says `comments: false` (YAML false, exactly). */
-function optsOut(src) {
+function optsOut(src: string) {
   if (!src.startsWith('---\n')) return false;
   const end = src.indexOf('\n---\n', 4);
   if (end === -1) return false;
@@ -38,7 +38,7 @@ const articles = readdirSync(contentDir)
 const mk = readFileSync(join(root, 'Makefile'), 'utf8').replace(/\\\n/g, ' ');
 const bookCalls = [...mk.matchAll(/pandoc\s[^\n]*/g)].map((m) => m[0])
   .filter((c) => /-o \.\.\/docs\/[A-Za-z0-9_-]+\.html(\s|$)/.test(c));
-const books = bookCalls.map((c) => '/' + /-o \.\.\/docs\/([A-Za-z0-9_-]+)\.html/.exec(c)[1] + '.html');
+const books = bookCalls.map((c) => '/' + /-o \.\.\/docs\/([A-Za-z0-9_-]+)\.html/.exec(c)![1] + '.html');
 
 test('the tail partial is what carries the widget onto a book, and every book is built with it', () => {
   const tail = readFileSync(join(root, 'partials', 'book-tail.html'), 'utf8');

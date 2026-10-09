@@ -20,9 +20,12 @@
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, client, freshDb, identity, establish, publishKey, resetCaches, hubSpy } from '../_support/worker.ts';
+import type { Worker, Row } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
 
 const PEPPER = 'a-test-pepper-for-selfmark';
-let worker, A, B, C;
+type Id = { key: string; hash: string };
+let worker: Worker, A: Id, B: Id, C: Id;
 before(async () => {
   ({ worker } = await loadWorker());
   [A, B, C] = await Promise.all(['mark-a', 'mark-b', 'mark-c'].map(identity));
@@ -34,14 +37,14 @@ function ready() {
   for (const x of [A, B, C]) { establish(db, x.hash); publishKey(db, x.hash); }
   return db;
 }
-const api = (db) => client(worker, makeEnv({ db, hub: hubSpy(), vars: { PUBLIC_ID_PEPPER: PEPPER } }));
+const api = (db: DatabaseSync) => client(worker, makeEnv({ db, hub: hubSpy(), vars: { PUBLIC_ID_PEPPER: PEPPER } }));
 
 async function seeded() {
   const db = ready();
   const a = api(db);
   const id = (await a.post('/api/comments/dm/groups', { key: A.key, members: [B.hash, C.hash] })).json.thread_id;
-  const send = async (who, body) => {
-    const keys = {}; for (const x of [A, B, C]) keys[x.hash] = 's-' + x.hash.slice(0, 6);
+  const send = async (who: Id, body: string) => {
+    const keys: Record<string, string> = {}; for (const x of [A, B, C]) keys[x.hash] = 's-' + x.hash.slice(0, 6);
     const r = await a.post('/api/comments/dm/send', { key: who.key, thread_id: id, body: 'E3.' + body, enc: 3, keys });
     assert.equal(r.status, 200, JSON.stringify(r.json));
   };
@@ -52,14 +55,14 @@ async function seeded() {
 
 test('each reader is told which member is them — from their own seat, never another\'s', async () => {
   const { a, id } = await seeded();
-  for (const [who, name] of [[A, 'A'], [B, 'B'], [C, 'C']]) {
+  for (const [who, name] of [[A, 'A'], [B, 'B'], [C, 'C']] as [Id, string][]) {
     const r = await a.post('/api/comments/dm/thread', { key: who.key, thread_id: id });
     assert.equal(r.status, 200, JSON.stringify(r.json));
-    const marked = r.json.thread.members.filter((m) => m.is_me);
+    const marked = r.json.thread.members.filter((m: Row) => m.is_me);
     assert.equal(marked.length, 1, name + ': exactly one member is marked as the reader');
     /* and it is the right one: their own row is the one whose pubid the /prefs
        road would hand them, so cross-check by elimination against the others */
-    const others = r.json.thread.members.filter((m) => !m.is_me).map((m) => m.hash);
+    const others = r.json.thread.members.filter((m: Row) => !m.is_me).map((m: Row) => m.hash);
     assert.equal(others.length, 2, name + ': the other two are not marked');
     assert.ok(!others.includes(marked[0].hash), name + ': a member cannot be both');
   }
@@ -67,8 +70,8 @@ test('each reader is told which member is them — from their own seat, never an
 
 test('the mark is a seat, not a property of the row: A and B are told different members', async () => {
   const { a, id } = await seeded();
-  const meFor = async (who) => (await a.post('/api/comments/dm/thread', { key: who.key, thread_id: id }))
-    .json.thread.members.find((m) => m.is_me).hash;
+  const meFor = async (who: Id) => (await a.post('/api/comments/dm/thread', { key: who.key, thread_id: id }))
+    .json.thread.members.find((m: Row) => m.is_me).hash;
   const [ma, mb] = [await meFor(A), await meFor(B)];
   assert.notEqual(ma, mb, 'every reader was told the same member is them — the mark is computed from the wrong seat');
 });
@@ -77,7 +80,7 @@ test('a reader\'s own words are marked `mine`, and only theirs', async () => {
   const { a, id } = await seeded();
   const asA = (await a.post('/api/comments/dm/thread', { key: A.key, thread_id: id })).json;
   const asB = (await a.post('/api/comments/dm/thread', { key: B.key, thread_id: id })).json;
-  const mineIds = (d) => d.messages.filter((m) => m.mine).map((m) => m.id).sort();
+  const mineIds = (d: Row): number[] => d.messages.filter((m: Row) => m.mine).map((m: Row) => m.id).sort();
   const aMine = mineIds(asA), bMine = mineIds(asB);
   assert.ok(aMine.length, 'A wrote one word and a system line; some message is theirs');
   assert.ok(bMine.length, 'B wrote one word');

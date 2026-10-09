@@ -25,7 +25,7 @@ const shell = readFileSync(join(root, 'app', 'shell.ts'), 'utf8');
 const ptr = readFileSync(join(root, 'app', 'ptr.ts'), 'utf8');
 const dm = clientDm();
 const surface = clientModule('surface');
-const fn = (src, name, next) => {
+const fn = (src: string, name: string, next?: string) => {
   const i = src.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);
   const j = next ? src.indexOf(`function ${next}(`, i + 10) : src.indexOf('\n  function ', i + 10);

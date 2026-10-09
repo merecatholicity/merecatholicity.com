@@ -18,20 +18,23 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { handlerBody, routesSource } from '../_support/worker_src.ts';
+import type { Row } from '../_support/worker.ts';
+
+type BellOpts = { to: string; from: string; kind: string; topicId: number; commentId: number; target?: string; targetId?: number; now: number };
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
 const idxSrc = routesSource();
 const libSrc = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
 
-function freshDb(upTo) {
+function freshDb(upTo?: string) {
   const db = new DatabaseSync(':memory:');
   let files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
   if (upTo) files = files.filter((f) => f.slice(0, 4) <= upTo);
   for (const f of files) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
   return { db, files };
 }
-const body = (text, name) => handlerBody(name, text);
+const body = (text: string, name: string) => handlerBody(name, text);
 const me = 'a'.repeat(64), other = 'b'.repeat(64), third = 'c'.repeat(64);
 
 test('the ledger builds through 0014: one reaction per member per target, the notification CHECK widened', () => {
@@ -79,16 +82,16 @@ function bellSql() {
   const up = src.match(/const up = await env\.DB\.prepare\(([\s\S]*?)\)\.bind\(\.\.\.binds\)\.run\(\);/);
   const ins = src.match(/const ins = await env\.DB\.prepare\(([\s\S]*?)\)\.bind\(\.\.\.binds\)\.run\(\);/);
   assert.ok(stands && up && ins, 'the two writes and the EXISTS clause, as the worker builds them');
-  const build = (expr) => new Function('o', 'stands', 'return (' + expr + ');');   // parenthesised: a newline after `return` would return nothing
+  const build = (expr: string) => new Function('o', 'stands', 'return (' + expr + ');');   // parenthesised: a newline after `return` would return nothing
   return { standsExpr: stands[1], up: build(up[1]), ins: build(ins[1]) };
 }
-function bell(db, o) {
+function bell(db: DatabaseSync, o: BellOpts) {
   const { standsExpr, up, ins } = bellSql();
   const st = o.target ? new Function('return (' + standsExpr + ');')() : '';
   const binds = o.target ? [o.to, o.commentId, o.from, o.now, o.topicId, o.target, o.targetId] : [o.to, o.commentId, o.from, o.now, o.topicId];
-  const r1 = db.prepare(up(o, st)).run(...binds);
+  const r1 = db.prepare(up(o, st)).run(...(binds as (string | number)[]));
   if (r1.changes > 0) return 'reopened';
-  const r2 = db.prepare(ins(o, st)).run(...binds);
+  const r2 = db.prepare(ins(o, st)).run(...(binds as (string | number)[]));
   return r2.changes > 0 ? 'rang' : 'quiet';
 }
 
@@ -98,10 +101,10 @@ test('the bell on the real ledger: rings once, re-reacting is quiet while unread
   const o = { to: me, from: other, kind: 'react', topicId: 5, commentId: 9, target: 'post', targetId: 9, now: 100 };
   assert.equal(bell(db, o), 'rang');
   assert.equal(bell(db, { ...o, now: 101 }), 'quiet', 'a changed emoji while the last bell is unread rings nothing');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM notifications').get().n, 1, 'one row, never a pile');
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM notifications').get() as Row).n, 1, 'one row, never a pile');
   db.exec('UPDATE notifications SET read_at = 150');
   assert.equal(bell(db, { ...o, now: 200 }), 'reopened', 'a fresh reaction after the author saw the last one');
-  assert.equal(db.prepare('SELECT read_at, created_at FROM notifications').get().read_at, null);
+  assert.equal((db.prepare('SELECT read_at, created_at FROM notifications').get() as Row).read_at, null);
   db.exec('UPDATE notifications SET read_at = 250');
   db.exec('DELETE FROM reactions');
   assert.equal(bell(db, { ...o, now: 300 }), 'quiet', 'a withdrawn reaction rings nothing — the race is closed by EXISTS');
@@ -111,7 +114,7 @@ test('the bell on the real ledger: rings once, re-reacting is quiet while unread
   db.exec(`INSERT INTO reactions (target, target_id, author_hash, emoji, created_at) VALUES ('wall', 3, '${other}', '😂', 100), ('wallc', 7, '${other}', '😂', 100)`);
   assert.equal(bell(db, { to: me, from: other, kind: 'wall-react', topicId: 0, commentId: 3, target: 'wall', targetId: 3, now: 400 }), 'rang');
   assert.equal(bell(db, { to: me, from: other, kind: 'wall-react', topicId: 7, commentId: 3, target: 'wallc', targetId: 7, now: 401 }), 'rang');
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'wall-react'").get().n, 2);
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'wall-react'").get() as Row).n, 2);
   db.close();
 });
 

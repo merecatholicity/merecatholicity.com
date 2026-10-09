@@ -9,7 +9,7 @@ import { inList, Query, rankFor, withNames } from '../../comments-worker/src/db.
 
 test('inList matches the hand-rolled placeholder loops exactly', () => {
   // the inline form was: chunk.map((_, j) => '?' + (j + 1)).join(',')
-  const handRolled = (n, offset = 1) =>
+  const handRolled = (n: number, offset = 1) =>
     Array.from({ length: n }, (_, j) => '?' + (j + offset)).join(',');
   for (const n of [0, 1, 2, 3, 50]) {
     assert.equal(inList(n), handRolled(n), `inList(${n})`);

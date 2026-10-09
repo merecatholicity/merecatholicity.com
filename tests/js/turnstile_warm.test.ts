@@ -22,12 +22,12 @@ import { clientAll, clientModule } from '../_support/client.ts';
 const src = clientAll();
 
 /* Code only: a comment that tells the history of a bug may name it. */
-function uncommented(s) {
+function uncommented(s: string) {
   return s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
 }
 
 /* The enclosing top-level function of a given offset. */
-function enclosing(idx) {
+function enclosing(idx: number) {
   const head = src.slice(0, idx);
   const m = [...head.matchAll(/^ {2}function (\w+)\(/gm)];
   return m.length ? m[m.length - 1][1] : '(top level)';
@@ -70,7 +70,7 @@ test('the avatar upload is warmed too, since a file input focuses no text', () =
 });
 
 /* The balanced argument of the call whose '(' is at `open`. */
-function argOf(s, open) {
+function argOf(s: string, open: number) {
   let depth = 0;
   for (let i = open; i < s.length; i++) {
     if (s[i] === '(') depth++;
@@ -98,7 +98,7 @@ test('every road that hands a token out earns the next one', () => {
   const handed = [...region.matchAll(/\bresolve\(/g)].map((m) => argOf(region, m.index + m[0].length - 1));
   assert.ok(handed.length >= 3, `expected at least 3 token hand-offs, found ${handed.length}`);
   for (const arg of handed) {
-    assert.ok(arg === "''" || /^spendToken\(/.test(arg),
+    assert.ok(arg === "''" || /^spendToken\(/.test(arg as string),
       `a token is handed out as \`${arg}\` — every one must go through spendToken(), which clears it ` +
       'and resets the widget, or the challenge answers once and is silent for the rest of the page.');
   }

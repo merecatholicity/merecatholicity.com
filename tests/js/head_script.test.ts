@@ -21,13 +21,13 @@ import vm from 'node:vm';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PAGE = readFileSync(join(root, 'docs', 'index.html'), 'utf8');
-const SCRIPT = PAGE.match(/<script id="mc-fout">([\s\S]*?)<\/script>/)[1];
+const SCRIPT = PAGE.match(/<script id="mc-fout">([\s\S]*?)<\/script>/)![1];
 
-function boot({ path = '/', standalone = false, iosStandalone = false, reload = false, store = {} } = {}) {
-  const classes = new Set();
+function boot({ path = '/', standalone = false, iosStandalone = false, reload = false, store = {} }: { path?: string; standalone?: boolean; iosStandalone?: boolean; reload?: boolean; store?: Record<string, string> } = {}) {
+  const classes = new Set<string>();
   const keys = Object.keys(store);
   const html = {
-    classList: { add: (...c) => c.forEach((x) => classes.add(x)), remove: (...c) => c.forEach((x) => classes.delete(x)) },
+    classList: { add: (...c: string[]) => c.forEach((x) => classes.add(x)), remove: (...c: string[]) => c.forEach((x) => classes.delete(x)) },
     setAttribute() {}, style: {},
   };
   const ctx = vm.createContext({
@@ -39,11 +39,11 @@ function boot({ path = '/', standalone = false, iosStandalone = false, reload = 
     },
     location: { pathname: path },
     localStorage: {
-      length: keys.length, key: (i) => keys[i] ?? null,
-      getItem: (k) => (k in store ? store[k] : null),
+      length: keys.length, key: (i: number) => keys[i] ?? null,
+      getItem: (k: string) => (k in store ? store[k] : null),
     },
     navigator: iosStandalone ? { standalone: true } : {},
-    matchMedia: (q) => ({ matches: standalone && q === '(display-mode: standalone)' }),
+    matchMedia: (q: string) => ({ matches: standalone && q === '(display-mode: standalone)' }),
     performance: { getEntriesByType: () => [{ type: reload ? 'reload' : 'navigate' }] },
     setInterval: () => 0, clearInterval() {}, setTimeout: () => 0, Date,
   });

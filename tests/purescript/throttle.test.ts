@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import * as T from '../../purescript/output/Domain.Throttle/index.js';
 
-const bucket = (h) => T.memberBucket(h).value0 ?? null;
+const bucket = (h: string) => T.memberBucket(h).value0 ?? null;
 
 test('the empty key hashes to the constant, and names nobody', () => {
   assert.equal(T.emptyKeyHash, createHash('sha256').update('').digest('hex'));

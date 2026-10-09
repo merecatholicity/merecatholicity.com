@@ -21,15 +21,15 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
 
-function freshDb(upTo) {
+function freshDb(upTo?: string) {
   const db = new DatabaseSync(':memory:');
   let files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
   if (upTo) files = files.filter((f) => f.slice(0, 4) <= upTo);
   for (const f of files) db.exec(readFileSync(join(migrationsDir, f), 'utf8'));
   return { db, files };
 }
-const cols = (db, table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
-const rows = (db, sql, ...args) => db.prepare(sql).all(...args).map((r) => ({ ...r }));   // node:sqlite rows have a null prototype
+const cols = (db: DatabaseSync, table: string) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+const rows = (db: DatabaseSync, sql: string, ...args: (string | number | null)[]) => db.prepare(sql).all(...args).map((r) => ({ ...r }));   // node:sqlite rows have a null prototype
 
 const A = 'a'.repeat(64), B = 'b'.repeat(64), C = 'c'.repeat(64), X = 'x'.repeat(64), Y = 'y'.repeat(64);
 const KEY = 'dm/' + '1'.repeat(64), LOOSE = 'dm/' + '2'.repeat(64);
@@ -109,7 +109,7 @@ test('the AUTOINCREMENT high-water mark survives the swap: a deleted thread\'s i
   assert.equal(seq && seq.seq, 2, 'the sequence stands at the deleted thread, above the surviving MAX id');
   const r = db.prepare(`INSERT INTO dm_threads (kind, pair_key, created_at, last_at, last_sender) VALUES (0, '${A}|${C}', 200, 200, '${A}')`).run();
   assert.equal(Number(r.lastInsertRowid), 3, 'the next thread is 3, not the recycled 2');
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM dm_threads WHERE last_sender = ''").get().n, 0, 'the sentinel is gone');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM dm_threads WHERE last_sender = ''").get()!.n, 0, 'the sentinel is gone');
   db.close();
 });
 
@@ -118,7 +118,7 @@ test('pair_key is unique; groups (NULL pair_key) never collide on it', () => {
   db.exec(`INSERT INTO dm_threads (a_hash, b_hash, created_at, last_at, last_sender, msgs) VALUES ('${A}', '${C}', 150, 150, '${A}', 0) ON CONFLICT(a_hash, b_hash) DO UPDATE SET last_at = 150`);   // the pre-0016 worker's upsert still runs
   db.exec(`INSERT INTO dm_threads (kind, pair_key, name, created_at, created_by, last_at, last_sender) VALUES (1, NULL, 'Choir', 300, '${A}', 300, '${A}')`);
   db.exec(`INSERT INTO dm_threads (kind, pair_key, name, created_at, created_by, last_at, last_sender) VALUES (1, NULL, NULL, 301, '${B}', 301, '${B}')`);
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads WHERE kind = 1').get().n, 2);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM dm_threads WHERE kind = 1').get()!.n, 2);
   assert.throws(() => db.exec(`INSERT INTO dm_threads (kind, pair_key, created_at, last_at, last_sender) VALUES (0, '${A}|${B}', 400, 400, '${A}')`),
     /UNIQUE/, 'a second thread for the same pair is refused');
   db.close();

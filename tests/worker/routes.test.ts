@@ -19,12 +19,13 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadWorker, makeEnv, call, netSpy, resetCaches, hubSpy } from '../_support/worker.ts';
+import type { Worker, TestEnv, HubSpy } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const snapshot = JSON.parse(readFileSync(join(root, 'tests', '_support', 'routes.json'), 'utf8'));
 const indexSrc = readFileSync(join(root, 'comments-worker', 'src', 'index.ts'), 'utf8');
 
-function tableTriples(src) {
+function tableTriples(src: string) {
   const i = src.indexOf('const ROUTES: Route[] = [');
   const j = src.indexOf('\n];', i);
   assert.ok(i > 0 && j > i, 'the ROUTES table is in index.ts');
@@ -41,7 +42,7 @@ test('the ROUTES table is the committed snapshot: 127 (method, path, thunk) trip
   assert.equal((one.match(/^\s*\{ m: '/gm) || []).length, triples.length, 'every entry is one line the parser reads');
 });
 
-let worker, env, hub, net;
+let worker: Worker, env: TestEnv, hub: HubSpy, net: ReturnType<typeof netSpy>;
 before(async () => {
   ({ worker } = await loadWorker());
   hub = hubSpy();
@@ -51,7 +52,7 @@ before(async () => {
 });
 
 test('every registered route dispatches to a live handler (no entry answers with the router\'s 500)', async () => {
-  const hiccups = [];
+  const hiccups: string[] = [];
   for (const r of snapshot) {
     const { status, json } = await call(worker, env, r.m, r.p, r.m === 'POST' ? {} : undefined);
     if (status === 500) hiccups.push(`${r.m} ${r.p} → 500 ${json && json.error}`);

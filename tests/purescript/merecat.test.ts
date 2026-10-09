@@ -115,7 +115,7 @@ test('a reading trips at the line, in the meter\'s own units; no limit, no trip'
 });
 
 test('hours until the day renews: whole hours, rounded up, from the UTC clock', () => {
-  const at = (iso) => M.hoursUntilUtcMidnight(Date.parse(iso));
+  const at = (iso: string) => M.hoursUntilUtcMidnight(Date.parse(iso));
   assert.equal(at('2026-09-10T00:00:00.000Z'), 24, 'midnight itself is a whole day from the next');
   assert.equal(at('2026-09-10T04:15:09.000Z'), 20, '19 h 44 m rounds up');
   assert.equal(at('2026-09-10T23:00:00.000Z'), 1);

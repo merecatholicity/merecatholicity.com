@@ -25,7 +25,7 @@ test('the polarity is generous, and only a literal 0 turns it off', () => {
 });
 
 test('an established identity is spared; a new one is not', () => {
-  const req = (established, skipEstablished) => T.required({ established, skipEstablished });
+  const req = (established: boolean, skipEstablished: boolean) => T.required({ established, skipEstablished });
   assert.equal(req(true, true), false, 'already passed one: not asked again');
   assert.equal(req(false, true), true, 'brand new: must answer');
   assert.equal(req(true, false), true, 'admin demanded it of everyone');

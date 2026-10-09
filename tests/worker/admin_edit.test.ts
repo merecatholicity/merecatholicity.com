@@ -13,7 +13,7 @@ import { handlerBody, routesSource } from '../_support/worker_src.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const idxSrc = routesSource();
-const body = (name) => handlerBody(name, idxSrc);
+const body = (name: string) => handlerBody(name, idxSrc);
 
 test('the board edit: the row by id, the author or an admin, the same refusal for everyone else, the admin logged', () => {
   const h = body('handleEdit');

@@ -19,7 +19,7 @@ export const ALL_MODULES = [...CLIENT_MODULES, ...LAZY_MODULES];
 export const CLIENT_FILES = ['client/comments.ts', ...ALL_MODULES.map((m) => `client/${m}.ts`)];
 
 export const clientRoot = () => readFileSync(join(root, 'client', 'comments.ts'), 'utf8');
-export const clientModule = (name) => readFileSync(join(root, 'client', name + '.ts'), 'utf8');
+export const clientModule = (name: string) => readFileSync(join(root, 'client', name + '.ts'), 'utf8');
 /* the six DM factories as one text (the file they were, 2026-09-16), for the rules that span them */
 export const DM_MODULES = ['dm-crypto', 'dm-message', 'dm-pickers', 'dm-inbox', 'dm-thread', 'dm-styles'];
 export const clientDm = () => DM_MODULES.map((m) => `\n/* ==== client/${m}.ts ==== */\n` + clientModule(m)).join('\n');

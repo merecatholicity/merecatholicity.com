@@ -29,38 +29,41 @@ const CSS = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
 
 /* A document just big enough for toDom, fillCont and mountLauncher, whose
    nodes serialize the way toHtml writes. */
+/* its nodes are a deliberately loose test double: `any`, typed no tighter than they are */
+type FakeNode = any;
+type FakeDoc = { createTextNode(t: string): FakeNode; createElement(tag: string): FakeNode };
 function fakeDoc() {
-  const VOID = { hr: true };
-  const doc = {
+  const VOID: Record<string, boolean> = { hr: true };
+  const doc: FakeDoc = {
     createTextNode: (t) => ({ text: t, ser() { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/ /g, '&nbsp;'); } }),
     createElement: (tag) => {
-      const el = {
+      const el: FakeNode = {
         tag, attrs: {}, kids: [], parent: null, ownerDocument: doc,
         get className() { return this.attrs.class || ''; },
         set className(v) { this.attrs.class = v; },
-        setAttribute(k, v) { this.attrs[k] = String(v); },
-        getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
-        appendChild(c) { c.parent = this; this.kids.push(c); return c; },
-        replaceChildren(...cs) { this.kids = []; cs.forEach((c) => this.appendChild(c)); },
-        remove() { if (this.parent) this.parent.kids = this.parent.kids.filter((k) => k !== this); },
+        setAttribute(k: string, v: unknown) { this.attrs[k] = String(v); },
+        getAttribute(k: string) { return k in this.attrs ? this.attrs[k] : null; },
+        appendChild(c: FakeNode) { c.parent = this; this.kids.push(c); return c; },
+        replaceChildren(...cs: FakeNode[]) { this.kids = []; cs.forEach((c) => this.appendChild(c)); },
+        remove() { if (this.parent) this.parent.kids = this.parent.kids.filter((k: FakeNode) => k !== this); },
         get classList() {
           const self = this;
-          return { add(c) { self.attrs.class = (self.className + ' ' + c).trim(); },
-            contains(c) { return self.className.split(' ').includes(c); } };
+          return { add(c: string) { self.attrs.class = (self.className + ' ' + c).trim(); },
+            contains(c: string) { return self.className.split(' ').includes(c); } };
         },
         set textContent(t) { this.kids = [doc.createTextNode(t)]; },
-        get textContent() { return this.kids.map((k) => k.text !== undefined ? k.text : k.textContent).join(''); },
-        all() { return this.kids.filter((k) => k.tag).flatMap((k) => [k, ...k.all()]); },
-        querySelector(sel) {
+        get textContent() { return this.kids.map((k: FakeNode) => k.text !== undefined ? k.text : k.textContent).join(''); },
+        all() { return this.kids.filter((k: FakeNode) => k.tag).flatMap((k: FakeNode) => [k, ...k.all()]); },
+        querySelector(sel: string) {
           const direct = sel.startsWith(':scope > ');
           const want = direct ? sel.slice(9) : sel;
-          const pool = direct ? this.kids.filter((k) => k.tag) : this.all();
-          return pool.find((k) => (want[0] === '.' ? k.classList.contains(want.slice(1)) : k.tag === want)) || null;
+          const pool = direct ? this.kids.filter((k: FakeNode) => k.tag) : this.all();
+          return pool.find((k: FakeNode) => (want[0] === '.' ? k.classList.contains(want.slice(1)) : k.tag === want)) || null;
         },
         ser() {
           let open = '<' + tag + (this.attrs.class ? ' class="' + this.attrs.class + '"' : '');
           Object.keys(this.attrs).filter((k) => k !== 'class').forEach((k) => { open += ' ' + k + '="' + this.attrs[k] + '"'; });
-          return VOID[tag] ? open + '>' : open + '>' + this.kids.map((k) => k.ser()).join('') + '</' + tag + '>';
+          return VOID[tag] ? open + '>' : open + '>' + this.kids.map((k: FakeNode) => k.ser()).join('') + '</' + tag + '>';
         },
       };
       return el;
@@ -87,7 +90,7 @@ test('every launcher link is in the page, once', () => {
 
 test('the string the build writes and the nodes the element builds are one tree', () => {
   const doc = fakeDoc();
-  assert.equal(toDom(homeTree(), doc).ser(), toHtml(homeTree()));
+  assert.equal((toDom(homeTree(), doc as unknown as Document) as FakeNode).ser(), toHtml(homeTree()));
 });
 
 test('an empty element builds the launcher; a painted one is adopted, not rebuilt', () => {
@@ -98,7 +101,7 @@ test('an empty element builds the launcher; a painted one is adopted, not rebuil
   assert.equal(empty.kids[0].className, 'mc-home');
 
   const painted = doc.createElement('mc-home');
-  const tree = toDom(homeTree(), doc);
+  const tree = toDom(homeTree(), doc as unknown as Document);
   painted.appendChild(tree);
   mountLauncher(painted, null);
   assert.equal(painted.kids[0], tree, 'the painted launcher must stay the same nodes: a rebuild is a second paint');
@@ -107,7 +110,7 @@ test('an empty element builds the launcher; a painted one is adopted, not rebuil
 test('the Continue row takes the reader\'s place, or leaves', () => {
   const doc = fakeDoc();
   const host = doc.createElement('mc-home');
-  host.appendChild(toDom(homeTree(), doc));
+  host.appendChild(toDom(homeTree(), doc as unknown as Document));
   fillCont(host, { href: 'anf03.html#c4', title: 'Tertullian' });
   const row = host.querySelector('.mc-home-cont');
   assert.equal(row.getAttribute('href'), 'anf03.html#c4');
@@ -115,7 +118,7 @@ test('the Continue row takes the reader\'s place, or leaves', () => {
   assert.ok(row.classList.contains('mc-on'));
 
   const none = doc.createElement('mc-home');
-  none.appendChild(toDom(homeTree(), doc));
+  none.appendChild(toDom(homeTree(), doc as unknown as Document));
   fillCont(none, null);
   assert.equal(none.querySelector('.mc-home-cont'), null, 'no position: no dead row');
 });
@@ -141,6 +144,6 @@ test('the newest reading position wins, and a broken entry is skipped', () => {
     ['mc-readpos:bad.html', '{'],
     ['mc-theme', 'dark'],
   ];
-  const store = { length: entries.length, key: (i) => entries[i][0], getItem: (k) => (entries.find((e) => e[0] === k) || [])[1] };
+  const store = { length: entries.length, key: (i: number) => entries[i][0], getItem: (k: string) => (entries.find((e) => e[0] === k) || [])[1] };
   assert.deepEqual(lastReadPos(store), { href: 'npnf101.html', title: 'Augustine' });
 });

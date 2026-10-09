@@ -25,7 +25,7 @@ import { clientAll } from '../_support/client.ts';
 const src = clientAll();
 const mainCss = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
 
-const fn = (name, next) => {
+const fn = (name: string, next?: string) => {
   const i = src.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);
   const j = next ? src.indexOf(`function ${next}(`, i + 10) : src.indexOf('\n  function ', i + 10);
@@ -34,7 +34,7 @@ const fn = (name, next) => {
 
 /* The injected stylesheets, as the strings they are built from: the DM's own
    block and the surface's (the overlay's rules moved there with the code). */
-const block = (fnName, id) => {
+const block = (fnName: string, id: string) => {
   const i = src.indexOf('function ' + fnName + '()');
   const j = src.indexOf("st.id = '" + id + "'", i);
   assert.ok(i > 0 && j > i, fnName + ' not found');

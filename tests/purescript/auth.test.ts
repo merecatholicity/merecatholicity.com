@@ -9,12 +9,12 @@ import assert from 'node:assert/strict';
 import * as Auth from '../../purescript/output/Domain.Auth/index.js';
 
 // The classic isAdmin/gate branches, verbatim, as the oracle.
-function cAdmin(hasKey, profileLoaded, myAdmin, hint) {
+function cAdmin(hasKey: boolean, profileLoaded: boolean, myAdmin: boolean, hint: boolean): boolean {
   if (!hasKey) return false;
   if (profileLoaded) return myAdmin;
   return myAdmin || hint;
 }
-function cGate(hasKey, profileLoaded, myAdmin, hint) {
+function cGate(hasKey: boolean, profileLoaded: boolean, myAdmin: boolean, hint: boolean): string {
   if (cAdmin(hasKey, profileLoaded, myAdmin, hint)) return 'pass';
   if (!hasKey || profileLoaded) return 'deny';
   return 'wait';
@@ -35,7 +35,7 @@ test('isAdmin / isMember / gate agree with the classic logic over all 32 combos'
 });
 
 test('classify names the identity state (Anonymous -> Authenticating -> Pending -> Member -> Admin)', () => {
-  const tag = (s) => Auth.stateTag(Auth.classify(s));
+  const tag = (s: Record<string, boolean>) => Auth.stateTag(Auth.classify(s));
   const base = { hasKey: false, hasHash: false, profileLoaded: false, myAdmin: false, hint: false };
   assert.equal(tag(base), 'Anonymous');
   assert.equal(tag({ ...base, hasKey: true }), 'Authenticating');
@@ -46,7 +46,7 @@ test('classify names the identity state (Anonymous -> Authenticating -> Pending 
 });
 
 test('the identity key\'s shape (P2-9): the minted 43-char base64url key is generated, a long mixed pasted key strong, a short one weak', () => {
-  const tag = (k) => Auth.keyStrengthTag(Auth.keyStrength(k));
+  const tag = (k: string) => Auth.keyStrengthTag(Auth.keyStrength(k));
   assert.equal(tag('mQ3v-Zt8_kL0pR2sT4uV6wX8yZ1aB3cD5eF7gH9iJ0k'), 'generated', '32 random bytes as 43 base64url chars');
   assert.equal(tag('mQ3v-Zt8_kL0pR2sT4uV6wX8yZ1aB3cD5eF7gH9iJ0'), 'strong', '42 chars: not the minted shape, but long and mixed');
   assert.equal(tag('correct horse battery staple 2026!'), 'strong', 'twenty or more, three classes');

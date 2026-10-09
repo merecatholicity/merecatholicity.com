@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { clientModule, clientAll, clientDm } from '../_support/client.ts';
 
 const src = clientDm();
-const fn = (name, next) => {
+const fn = (name: string, next?: string) => {
   const i = src.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);
   const j = next ? src.indexOf(`function ${next}(`, i + 10) : src.indexOf('\n  function ', i + 10);

@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import * as P from '../../purescript/output/Domain.Pipeline/index.js';
 
 const NOW = 1_789_650_000;
-const job = (door, over = {}) => ({
+const job = (door: string, over: Record<string, unknown> = {}) => ({
   iss: 'https://token.actions.githubusercontent.com',
   aud: 'merecatholicity-comments',
   repositoryId: '1303720165',
@@ -29,7 +29,7 @@ const job = (door, over = {}) => ({
   iat: NOW,
   ...over,
 });
-const refusal = (door, claims, now = NOW) => P.refusal(door)(claims)(now);
+const refusal = (door: string, claims: Record<string, unknown>, now = NOW) => P.refusal(door)(claims)(now);
 
 test('each door opens for its own job on main', () => {
   for (const door of ['ingest', 'config', 'probe']) {

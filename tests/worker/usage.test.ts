@@ -14,6 +14,8 @@ import {
   utcDayStart, utcMonthStart, iso, bandFor, turnstileWindowStart, TURNSTILE_WINDOW_DAYS,
   buildReport, foldUsageAlerts, worstPct, alertBody, ALERT_RENAG_SECS,
 } from '../../comments-worker/src/usagecalc.ts';
+import type { UsageRow } from '../../comments-worker/src/usagecalc.ts';
+import type { Row } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -99,7 +101,7 @@ function liveish() {
     turnstile: { turnstileAdaptiveGroups: [{ count: 242 }] },
   };
 }
-const byId = (rows, id) => rows.find((r) => r.id === id);
+const byId = (rows: UsageRow[], id: string) => rows.find((r) => r.id === id) as Row;
 
 test('buildReport: totals, detail, and percentages are plain arithmetic over the rows', () => {
   const rows = buildReport(liveish());
@@ -121,7 +123,7 @@ test('buildReport: totals, detail, and percentages are plain arithmetic over the
 
   const ds = byId(rows, 'd1.storage');
   assert.equal(ds.used, 424861700 + 610304);
-  const deep = ds.detail.find((d) => d.label === 'merecat-library-deep');
+  const deep = ds.detail.find((d: Row) => d.label === 'merecat-library-deep');
   assert.equal(deep.limit, FREE.d1PerDbBytes, 'each database carries its own 500 MB wall');
   assert.equal(deep.pct, 85, '424.9 MB of 500 MB');
 
@@ -186,7 +188,7 @@ test('and the report ASKS for that window: the query reads the week, never the m
 });
 
 test('buildReport: one failed product costs one card, never the report', () => {
-  const raw = liveish();
+  const raw: Row = liveish();
   raw.vectorize = { error: 'token missing Vectorize scope' };
   delete raw.turn; // a product that never answered at all
   const rows = buildReport(raw);
@@ -212,7 +214,7 @@ test('every report row belongs to a labeled product group', () => {
   }
 });
 
-function rowAt(pct, id = 'r2.storage') {
+function rowAt(pct: number | null, id = 'r2.storage'): UsageRow {
   return { id, product: 'r2', label: 'Stored bytes', used: 1, limit: 100, unit: 'bytes', period: 'total', pct, band: bandFor(pct) };
 }
 

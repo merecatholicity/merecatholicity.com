@@ -13,6 +13,12 @@ import assert from 'node:assert/strict';
 import { serve } from '../../comments-worker/src/serve.ts';
 import { readOps } from '../../comments-worker/src/ops.ts';
 import { makeEnv, freshDb, ctx, resetCaches } from '../_support/worker.ts';
+import type { Row, TestEnv } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
+
+type Route = Parameters<typeof serve>[3];
+type ServeEnv = Parameters<typeof serve>[1];
+type ServeCtx = Parameters<typeof serve>[2];
 
 beforeEach(() => { resetCaches(); });
 
@@ -24,15 +30,15 @@ function alertingEnv() {
   ins.run('alert_discord_on', '0');
   return { db, env: makeEnv({ db }) };
 }
-const shapes = (db) => {
-  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'ops_shapes'").get();
+const shapes = (db: DatabaseSync) => {
+  const row = db.prepare("SELECT v FROM app_settings WHERE k = 'ops_shapes'").get() as Row | undefined;
   return row ? JSON.parse(row.v).rows : [];
 };
-const answering = (body, init = {}) => async () => new Response(typeof body === 'string' ? body : JSON.stringify(body),
+const answering = (body: unknown, init: ResponseInit = {}): Route => async () => new Response(typeof body === 'string' ? body : JSON.stringify(body),
   { status: 200, headers: { 'Content-Type': 'application/json' }, ...init });
-const ask = async (env, path, route, method = 'GET') => {
+const ask = async (env: TestEnv, path: string, route: Route, method = 'GET') => {
   const cx = ctx();
-  const r = await serve(new Request('https://merecatholicity.com' + path, { method }), env, cx, route);
+  const r = await serve(new Request('https://merecatholicity.com' + path, { method }), env as unknown as ServeEnv, cx as unknown as ServeCtx, route);
   await cx.settle();
   return r;
 };
@@ -41,13 +47,13 @@ test('the leak\'s shape — items as one object — is answered, noted, told onc
   const { db, env } = alertingEnv();
   const r = await ask(env, '/api/comments/recent', answering({ ok: true, items: { DB: {}, SITE: 'x' }, page: 1, more: false }));
   assert.equal(r.status, 200, 'the answer still goes: the reader\'s view is the one that refuses it');
-  assert.deepEqual((await r.json()).items, { DB: {}, SITE: 'x' });
+  assert.deepEqual((await r.json() as Row).items, { DB: {}, SITE: 'x' });
   const rows = shapes(db);
   assert.equal(rows.length, 1);
   assert.deepEqual([rows[0].site, rows[0].names], ['GET /api/comments/recent', ['items']]);
   assert.equal(env.emails.length, 1);
   assert.match(env.emails[0].subject, /Answer with a broken shape: GET \/api\/comments\/recent/);
-  const h = await readOps(env);
+  const h = await readOps(env as unknown as ServeEnv);
   assert.equal(h.ok, false);
   assert.equal(h.shapes[0].standing, true);
 });

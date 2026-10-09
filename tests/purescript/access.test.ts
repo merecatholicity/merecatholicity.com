@@ -6,10 +6,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Access from '../../purescript/output/Domain.Access/index.js';
 
-const ci = (a, m, b) => Access.canInteract(a)(m)(b);
-const cr = (a, m, b, ad) => Access.canReport(a)(m)(b)(ad);
-const ce = (a, m, ad) => Access.canEdit(a)(m)(!!ad);
-const cd = (a, m, ad) => Access.canDelete(a)(m)(ad);
+const ci = (a: string, m: string, b: string) => Access.canInteract(a)(m)(b);
+const cr = (a: string, m: string, b: string, ad: boolean) => Access.canReport(a)(m)(b)(ad);
+const ce = (a: string, m: string, ad?: boolean) => Access.canEdit(a)(m)(!!ad);
+const cd = (a: string, m: string, ad: boolean) => Access.canDelete(a)(m)(ad);
 
 test('canInteract: someone else, only if you hold a key and it is not the bot', () => {
   assert.equal(ci('x', 'me', 'bot'), true);

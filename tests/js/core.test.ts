@@ -11,7 +11,7 @@ import * as Core from '../../app/core.ts';
 test('rankFor/rankLine coerce their argument to an Int (n | 0)', () => {
   assert.equal(Core.rankFor(10), 'Apprentice');
   assert.equal(Core.rankFor(10.9), 'Apprentice', 'truncates via | 0');
-  assert.equal(Core.rankFor('250'), 'Scribe', 'numeric string coerces');
+  assert.equal(Core.rankFor('250' as never), 'Scribe', 'numeric string coerces');
   assert.equal(Core.rankLine(1), 'Novice · 1 post');
 });
 
@@ -41,7 +41,7 @@ test('profileLimits is the plain caps record', () => {
 test('dmTtlLabel coerces a missing/zero TTL to the 30-day default', () => {
   assert.equal(Core.dmTtlLabel(86400), '24 hours');
   assert.equal(Core.dmTtlLabel(0), '30 days', '0 -> default (Domain.Dm.defaultTtl)');
-  assert.equal(Core.dmTtlLabel(null), '30 days', 'null -> default');
+  assert.equal(Core.dmTtlLabel(null as never), '30 days', 'null -> default');
   assert.equal(Core.dmTtlLabel(604800), '7 days', 'an explicit 7-day value still labels 7 days');
   assert.equal(Core.dmTtlLabel('2592000'), '30 days', 'numeric string coerces');
 });
@@ -51,21 +51,21 @@ test('the DM reaction membrane erases Maybe to string | null and coerces nullish
   assert.equal(Core.dmReaction('👍'), '👍');
   assert.equal(Core.dmReaction(':PepeHeart:'), ':pepeheart:', 'a custom token comes back lower-cased');
   assert.equal(Core.dmReaction('lol'), null, 'Nothing -> null (the picker refuses before the wire)');
-  assert.equal(Core.dmReaction(null), null, 'nullish -> "" -> null, never a throw');
+  assert.equal(Core.dmReaction(null as never), null, 'nullish -> "" -> null, never a throw');
   assert.equal(Core.dmReplyExcerpt('  a \n b  '), 'a b');
-  assert.equal(Core.dmReplyExcerpt(undefined), '', 'nullish -> ""');
+  assert.equal(Core.dmReplyExcerpt(undefined as never), '', 'nullish -> ""');
   assert.equal(Core.dmReplySentinel, '\u0001', 'the envelope opener the client tests the first character against');
 });
 
 test('the Access predicates coerce nullish hashes to a keyless viewer', () => {
   assert.equal(Core.canInteract('x', 'me', 'bot'), true);
-  assert.equal(Core.canInteract('x', null, 'bot'), false, 'null viewer = keyless -> false');
-  assert.equal(Core.canReport('x', 'me', 'bot', 1), false, 'truthy admin -> no report link');
-  assert.equal(Core.canReport('x', 'me', 'bot', 0), true);
+  assert.equal(Core.canInteract('x', null as never, 'bot'), false, 'null viewer = keyless -> false');
+  assert.equal(Core.canReport('x', 'me', 'bot', 1 as never), false, 'truthy admin -> no report link');
+  assert.equal(Core.canReport('x', 'me', 'bot', 0 as never), true);
   assert.equal(Core.canEdit('me', 'me'), true);
   assert.equal(Core.canEdit('x', 'me'), false, 'isAdmin omitted -> false');
-  assert.equal(Core.canEdit('x', 'me', 1), true, 'admin edits any (truthy coerces)');
-  assert.equal(Core.canDelete('x', 'me', 1), true, 'admin deletes any');
+  assert.equal(Core.canEdit('x', 'me', 1 as never), true, 'admin edits any (truthy coerces)');
+  assert.equal(Core.canDelete('x', 'me', 1 as never), true, 'admin deletes any');
 });
 
 test('topicCompare/replyPage coerce their record/number inputs', () => {
@@ -89,7 +89,7 @@ test('board data + emoji data pass through as plain values', () => {
 });
 
 test('parseRoute runs the topic integer-gate at the JS boundary', () => {
-  const route = (qs) => { const p = new URLSearchParams(qs); return Core.parseRoute((k) => p.get(k)); };
+  const route = (qs: string) => { const p = new URLSearchParams(qs); return Core.parseRoute((k) => p.get(k)); };
   assert.equal(route('topic=42').tag, 'Topic');
   assert.equal(route('topic=42').n, 42);
   assert.equal(route('topic=0').tag, 'Index', 'topic=0 -> not a topic');
@@ -109,15 +109,15 @@ test('auth predicates coerce every signal to Boolean', () => {
 test('mute helpers coerce null list/hash and never mute the bot', () => {
   assert.equal(Core.isMuted('bot', 'a', ['a']), true);
   assert.equal(Core.isMuted('bot', 'bot', ['bot']), false);
-  assert.equal(Core.isMuted(null, null, null), false, 'nullish inputs never throw');
-  assert.deepEqual(Core.toggleMute('x', null), { list: ['x'], added: true }, 'null list -> []');
+  assert.equal(Core.isMuted(null as never, null as never, null as never), false, 'nullish inputs never throw');
+  assert.deepEqual(Core.toggleMute('x', null as never), { list: ['x'], added: true }, 'null list -> []');
 });
 
 test('blockedMessage / mentionsIn tolerate nullish input', () => {
   assert.ok(Core.blockedMessage('ipban').startsWith('Your network is banned'));
-  assert.ok(Core.blockedMessage(null).startsWith('This identity has been locked'), 'null -> identity lock');
+  assert.ok(Core.blockedMessage(null as never).startsWith('This identity has been locked'), 'null -> identity lock');
   assert.deepEqual(Core.mentionsIn('hi @a', [{ token: '@a', hash: 'h1' }]), ['h1']);
-  assert.deepEqual(Core.mentionsIn(null, null), [], 'nullish -> []');
+  assert.deepEqual(Core.mentionsIn(null as never, null as never), [], 'nullish -> []');
 });
 
 test('wallEnabledFrom survives the boundary: nullish is the default, not "off"', () => {
@@ -156,7 +156,7 @@ test('reaction/quickReactions are the one grammar (Domain.Reaction); the dm-pref
   assert.equal(Core.reaction('two 😂😂'), null);
   assert.deepEqual([...Core.reactionTargets], ['post', 'wall', 'wallc']);
   assert.equal(Core.isReactionTarget('wallc'), true);
-  assert.equal(Core.isReactionTarget(undefined), false, 'nullish -> "" -> false, never a throw');
+  assert.equal(Core.isReactionTarget(undefined as never), false, 'nullish -> "" -> false, never a throw');
 });
 
 test('notifLabel/notifHref/notifHasSnippet coerce the wire row (missing fields -> "" / 0) and erase nothing', () => {
@@ -167,7 +167,7 @@ test('notifLabel/notifHref/notifHasSnippet coerce the wire row (missing fields -
   assert.equal(Core.notifHref({ kind: 'react', actor_nick: 'Ann' }), 'community.html?topic=0#comment-0', 'missing ids coerce to 0');
   assert.equal(Core.notifLabel(null), 'Someone replied in a thread', 'a null row never throws');
   assert.equal(Core.notifHasSnippet('dm-react'), false);
-  assert.equal(Core.notifHasSnippet(undefined), true, 'an unknown/missing kind may show its excerpt');
+  assert.equal(Core.notifHasSnippet(undefined as never), true, 'an unknown/missing kind may show its excerpt');
   assert.ok(Core.notifKinds.includes('dm-react'));
 });
 
@@ -176,16 +176,16 @@ test('the member model\'s membrane (2026-09-13): the Maybe erased, the ADT erase
   assert.equal(Core.dmMaxMembers, 25);
   assert.equal(Core.dmTypingFanCap, 24);
   assert.equal(Core.dmGroupName('  The  Choir '), 'The Choir');
-  assert.equal(Core.dmGroupName(null), null, 'nullish -> "" -> null, never a throw');
+  assert.equal(Core.dmGroupName(null as never), null, 'nullish -> "" -> null, never a throw');
   assert.deepEqual(Core.dmEnc, { plain: 0, pair: 1, system: 2, sealed: 3 });
   assert.deepEqual(Core.dmEnvTags, { pair: 'E1.', sealed: 'E3.' });
   assert.equal(Core.dmMembersEqual([a, b], [b, a]), true);
   assert.equal(Core.dmMembersEqual(null, []), true, 'a missing list is the empty list');
   assert.deepEqual(Core.dmSysLine('sys:add:' + b + ',' + c), { tag: 'add', hashes: [b, c], name: '' });
   assert.equal(Core.dmSysLine('hello'), null, 'a message is not a system line');
-  assert.equal(Core.dmSysLine(undefined), null);
+  assert.equal(Core.dmSysLine(undefined as never), null);
   assert.equal(Core.dmSysLineText('sys:leave', 'Ann', () => ''), 'Ann left');
-  assert.equal(Core.dmSysLineText(Core.dmSysAddLine([b]), 'Ann', (h) => (h === b ? 'Bob' : null)), 'Ann added Bob');
+  assert.equal(Core.dmSysLineText(Core.dmSysAddLine([b]), 'Ann', (h) => (h === b ? 'Bob' : null) as string), 'Ann added Bob');
   assert.equal(Core.dmSysLineText('just words', 'Ann', () => ''), '', 'not a system line -> ""');
   assert.equal(Core.dmSysLeaveLine, 'sys:leave');
   assert.equal(Core.dmSysNameLine('Choir'), 'sys:name:Choir');
@@ -195,11 +195,11 @@ test('the member model\'s membrane (2026-09-13): the Maybe erased, the ADT erase
   assert.equal(Core.dmReadByAll(100, a, [{ hash: a }, { hash: b, read_at: '150' }, { hash: c, read_at: 90, left_at: 95 }]), true, 'wire fields: read_at/left_at as strings or numbers, missing -> 0');
   assert.equal(Core.dmReadByAll(100, a, [{ hash: a }, { hash: b, read_at: null }]), false);
   assert.ok(Core.dmMemberHue(b) >= 0 && Core.dmMemberHue(b) < 8);
-  assert.equal(Core.dmMemberHue(undefined), Core.dmMemberHue(''), 'nullish -> ""');
+  assert.equal(Core.dmMemberHue(undefined as never), Core.dmMemberHue(''), 'nullish -> ""');
 });
 
 test('parseRoute gates ?t= like ?topic= (a positive integer or nothing)', () => {
-  const get = (qs) => (k) => new URLSearchParams(qs).get(k);
+  const get = (qs: string) => (k: string) => new URLSearchParams(qs).get(k);
   assert.deepEqual(Core.parseRoute(get('t=7')), { tag: 'Thread', s: '', n: 7 });
   assert.equal(Core.parseRoute(get('t=x')).tag, 'Index');
   assert.equal(Core.parseRoute(get('t=7&dm=' + 'a'.repeat(64))).tag, 'Thread');

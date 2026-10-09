@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (p) => readFileSync(join(root, p), 'utf8');
+const read = (p: string) => readFileSync(join(root, p), 'utf8');
 
 /* Files that navigate on the reader's behalf. */
 const SOURCES = [
@@ -37,7 +37,7 @@ const HARD_ON_PURPOSE = {
   'profile.html': 'the client is not loaded — a full load is how it arrives',
 };
 
-function hardNavs(src) {
+function hardNavs(src: string) {
   const out = [];
   const re = /location\.(?:href\s*=|replace\(|assign\()\s*'([^']*\.html[^']*)'/g;
   let m;

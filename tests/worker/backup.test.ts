@@ -17,7 +17,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { loadWorker, makeEnv, freshDb, identity, establish, call, resetCaches } from '../_support/worker.ts';
 import { dumpDatabase, runBackup, mirrorAvatars, sqlLit } from '../../comments-worker/src/lib.ts';
 
-let me, ann;
+type Env = Parameters<typeof runBackup>[0];
+
+let me: { key: string; hash: string }, ann: { key: string; hash: string };
 before(async () => { [me, ann] = await Promise.all(['me', 'ann'].map(identity)); });
 
 const QUOTE = "it's a quote — with ''two'' apostrophes, a tab\t, and unicode ✓";
@@ -32,13 +34,13 @@ function seeded() {
   db.prepare("INSERT INTO app_settings (k, v, updated_at, updated_by) VALUES ('alert_email', 'owner@example.org', 1, 'test')").run();
   return db;
 }
-const userTables = (db) => db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'comments_fts%' ORDER BY name").all().map((r) => r.name);
-const counts = (db) => Object.fromEntries(userTables(db).map((t) => [t, db.prepare('SELECT COUNT(*) AS n FROM "' + t + '"').get().n]));
+const userTables = (db: DatabaseSync) => db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'comments_fts%' ORDER BY name").all().map((r) => r.name as string);
+const counts = (db: DatabaseSync) => Object.fromEntries(userTables(db).map((t) => [t, db.prepare('SELECT COUNT(*) AS n FROM "' + t + '"').get()!.n as number]));
 
 test('the dump is a restorable, idempotent file: OR REPLACE, every index IF NOT EXISTS, the search index rebuilt, no shadow table', async () => {
   const db = seeded();
   const stats = { tables: 0, rows: 0 };
-  const sql = await dumpDatabase(makeEnv({ db }), stats);
+  const sql = await dumpDatabase(makeEnv({ db }) as unknown as Env, stats);
   assert.match(sql, /^-- merecatholicity-comments backup /);
   assert.equal((sql.match(/^INSERT INTO "/gm) || []).length, 0, 'no plain INSERT — a replay must not duplicate or die');
   assert.ok((sql.match(/^INSERT OR REPLACE INTO "/gm) || []).length >= 6);
@@ -56,8 +58,8 @@ test('the dump is a restorable, idempotent file: OR REPLACE, every index IF NOT 
   assert.deepEqual(counts(db2), src, 'the same ledger');
   db2.exec(sql);
   assert.deepEqual(counts(db2), src, 'and the same after a second replay');
-  assert.equal(db2.prepare('SELECT body FROM wall_posts WHERE id = 3').get().body, QUOTE, 'quoting round-trips');
-  assert.equal(db2.prepare("SELECT COUNT(*) AS n FROM comments_fts WHERE comments_fts MATCH 'lazy'").get().n, 1, 'search works from the rebuilt index');
+  assert.equal(db2.prepare('SELECT body FROM wall_posts WHERE id = 3').get()!.body, QUOTE, 'quoting round-trips');
+  assert.equal(db2.prepare("SELECT COUNT(*) AS n FROM comments_fts WHERE comments_fts MATCH 'lazy'").get()!.n, 1, 'search works from the rebuilt index');
   db2.close(); db.close();
 });
 
@@ -72,14 +74,14 @@ test('a BLOB is dumped as X\'…\', never as an object\'s toString', () => {
 test('runBackup writes today\'s object, prunes by the kernel\'s rule, and records the run in ops_backup', async () => {
   const db = seeded();
   const env = makeEnv({ db });
-  const old = (key, days) => env.BACKUPS.objects.set(key, { bytes: new Uint8Array(2000), meta: {}, uploaded: new Date(Date.now() - days * 86400000) });
+  const old = (key: string, days: number) => env.BACKUPS.objects.set(key, { bytes: new Uint8Array(2000), meta: {}, uploaded: new Date(Date.now() - days * 86400000) });
   old('backups/comments-2026-06-01.sql.gz', 107);   // the 1st of a month: 400 days
   old('backups/comments-2026-06-15.sql.gz', 93);    // a daily past 90
   old('backups/comments-2026-09-10.sql.gz', 6);     // a recent daily
   old('backups/comments-2025-08-01.sql.gz', 411);   // a 1st past 400
   old('backups/notes.txt', 900);                    // not the rule's: never deleted
   const before = counts(db);                        // the ledger as dumped (runBackup then records itself in app_settings)
-  const r = await runBackup(env);
+  const r = await runBackup(env as unknown as Env);
   const today = new Date().toISOString().slice(0, 10);
   assert.equal(r.key, 'backups/comments-' + today + '.sql.gz');
   assert.ok(r.bytes > 1024 && r.tables > 20 && r.rows >= 8, JSON.stringify(r));
@@ -88,12 +90,12 @@ test('runBackup writes today\'s object, prunes by the kernel\'s rule, and record
   assert.deepEqual([r.pruned, r.kept], [2, 4]);
   const put = env.r2.find((c) => c.op === 'put' && c.key === r.key);
   assert.ok(put, 'the object was put');
-  const text = gunzipSync(Buffer.from(env.BACKUPS.objects.get(r.key).bytes)).toString('utf8');
+  const text = (gunzipSync(Buffer.from(env.BACKUPS.objects.get(r.key).bytes)) as { toString(encoding: string): string }).toString('utf8');
   assert.match(text, /^-- merecatholicity-comments backup /);
   const db2 = new DatabaseSync(':memory:'); db2.exec(text);
   assert.deepEqual(counts(db2), before, 'the object in the bucket restores the ledger');
   db2.close();
-  const rec = JSON.parse(db.prepare("SELECT v FROM app_settings WHERE k = 'ops_backup'").get().v);
+  const rec = JSON.parse(db.prepare("SELECT v FROM app_settings WHERE k = 'ops_backup'").get()!.v as string);
   assert.deepEqual([rec.key, rec.bytes, rec.tables, rec.rows, rec.error], [r.key, r.bytes, r.tables, r.rows, undefined], 'the record the self-check reads');
   db.close();
 });
@@ -102,8 +104,8 @@ test('a failed backup leaves its record and rethrows; the admin door still answe
   const db = seeded();
   const env = makeEnv({ db });
   env.BACKUPS = undefined;
-  await assert.rejects(runBackup(env), /BACKUPS bucket not bound/);
-  const rec = JSON.parse(db.prepare("SELECT v FROM app_settings WHERE k = 'ops_backup'").get().v);
+  await assert.rejects(runBackup(env as unknown as Env), /BACKUPS bucket not bound/);
+  const rec = JSON.parse(db.prepare("SELECT v FROM app_settings WHERE k = 'ops_backup'").get()!.v as string);
   assert.match(rec.error, /BACKUPS bucket not bound/);
   assert.equal(rec.key, 'backups/comments-' + new Date().toISOString().slice(0, 10) + '.sql.gz');
   const { worker } = await loadWorker();
@@ -123,8 +125,8 @@ test('a failed backup leaves its record and rethrows; the admin door still answe
 test('the avatar mirror copies up to its cap into the backup bucket and says what it skipped', async () => {
   const env = makeEnv({ db: freshDb() });
   for (const n of ['a', 'b', 'c']) await env.AVATARS.put('avatars/' + n + '.png', new Uint8Array([1, 2, 3]), { httpMetadata: { contentType: 'image/png' } });
-  const r = await mirrorAvatars(env, 2);
+  const r = await mirrorAvatars(env as unknown as Env, 2);
   assert.deepEqual(r, { mirrored: 2, skipped: 1 });
   assert.deepEqual([...env.BACKUPS.objects.keys()].sort(), ['avatars-mirror/a.png', 'avatars-mirror/b.png']);
-  assert.deepEqual(await mirrorAvatars({ ...env, AVATARS: undefined }, 2), { mirrored: 0, skipped: 0 }, 'no avatars bucket: nothing to do, no throw');
+  assert.deepEqual(await mirrorAvatars({ ...env, AVATARS: undefined } as unknown as Env, 2), { mirrored: 0, skipped: 0 }, 'no avatars bucket: nothing to do, no throw');
 });

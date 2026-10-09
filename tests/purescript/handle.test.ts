@@ -8,8 +8,8 @@ import * as Handle from '../../purescript/output/Domain.Handle/index.js';
 import { isRight, isLeft } from '../_support/ps.ts';
 
 /* Right Handle -> the normalized string; Left -> the error tag string. */
-const value = (s) => Handle.unHandle(Handle.mkHandle(s).value0);
-const errOf = (s) => {
+const value = (s: string) => Handle.unHandle(Handle.mkHandle(s).value0);
+const errOf = (s: string) => {
   const e = Handle.mkHandle(s);
   assert.ok(isLeft(e), JSON.stringify(s) + ' should be rejected');
   return Handle.errorTag(e.value0);

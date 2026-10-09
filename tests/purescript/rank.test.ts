@@ -5,10 +5,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Rank from '../../purescript/output/Domain.Rank/index.js';
 
-const label = (n) => Rank.rankLabel(Rank.rankFor(n));
+const label = (n: number) => Rank.rankLabel(Rank.rankFor(n));
 
 test('rankFor: each threshold maps to the label at/above it', () => {
-  const cases = [
+  const cases: [number, string][] = [
     [0, 'Novice'], [9, 'Novice'],
     [10, 'Apprentice'], [49, 'Apprentice'],
     [50, 'Scriptorium Hand'], [99, 'Scriptorium Hand'],

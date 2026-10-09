@@ -27,6 +27,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { runSweep, secretsIn, forbiddenFor, privatesIn, SECRETS, ROUTES, INGEST_DOORS } from '../_support/sweep.ts';
 import { envFlow, workerFiles } from '../_support/env_flow.ts';
+import type { SweepCall, SweepResult } from '../_support/sweep.ts';
+import type { Allowance } from '../_support/env_flow.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -43,16 +45,16 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
    /wall/comment/like, /wall/likers) were retired on the ledger's due date, and
    six of the sixteen calls the sweep made on them were successes — now the
    router's 404, not a sweep gone hollow. Measured on the retiring commit. */
-const FLOORS = { anon: 17, member: 82, outsider: 62, admin: 121 };
+const FLOORS: Record<string, number> = { anon: 17, member: 82, outsider: 62, admin: 121 };
 
-let sweep;
+let sweep: SweepResult;
 before(async () => {
   const log = console.log;
   console.log = () => {};   // hundreds of handler log lines; the assertions say what matters
   try { sweep = await runSweep(); } finally { console.log = log; }
 });
 
-const label = (c) => `${c.m} ${c.p} as ${c.as}${c.road === 'table' ? '' : ' (' + c.road + ')'} → ${c.status}`;
+const label = (c: SweepCall): string => `${c.m} ${c.p} as ${c.as}${c.road === 'table' ? '' : ' (' + c.road + ')'} → ${c.status}`;
 
 test('no answer, alert, Discord post, hub event or backup carries a secret', () => {
   assert.ok(SECRETS.length >= 5, 'the env declares its secrets');
@@ -62,11 +64,11 @@ test('no answer, alert, Discord post, hub event or backup carries a secret', () 
     if (found.length) leaks.push(label(c) + ': ' + found.join(', '));
     /* a whole env serialized shows up as its binding names, keyed */
     if (c.json && typeof c.json === 'object') {
-      const keys = new Set();
-      const walk = (v, depth) => {
+      const keys = new Set<string>();
+      const walk = (v: unknown, depth: number): void => {
         if (!v || typeof v !== 'object' || depth > 5) return;
         if (Array.isArray(v)) { v.slice(0, 8).forEach((x) => walk(x, depth + 1)); return; }
-        for (const k of Object.keys(v)) { keys.add(k); walk(v[k], depth + 1); }
+        for (const k of Object.keys(v)) { keys.add(k); walk((v as Record<string, unknown>)[k], depth + 1); }
       };
       walk(c.json, 0);
       const bindings = ['DB', 'LIBDB', 'MERECAT_INDEX', 'HUB', 'CHAT', 'BACKUPS', 'AVATARS', 'READ_LIMIT'].filter((b) => keys.has(b));
@@ -105,7 +107,7 @@ test('the sweep reached the handlers: real origins everywhere, and the reach flo
   assert.equal(table.length, ROUTES.length * 4, 'every route, four identities');
   assert.deepEqual(table.filter((c) => c.json && c.json.error === 'Bad origin.').map(label), [], 'no call may stop at the origin gate');
   assert.deepEqual(sweep.calls.filter((c) => c.threw).map((c) => label(c) + ' ' + c.threw), [], 'a road threw in the harness');
-  const ok = {};
+  const ok: Record<string, number> = {};
   for (const c of table) if (c.status === 200) ok[c.as] = (ok[c.as] || 0) + 1;
   const low = Object.entries(FLOORS).filter(([as, floor]) => (ok[as] || 0) < floor)
     .map(([as, floor]) => `${as} reached ${ok[as] || 0} (floor ${floor})`);
@@ -139,8 +141,8 @@ test('the other roads: workers.dev opens only its doors, the back room keeps its
   assert.deepEqual(pipeline.map((c) => c.p).sort(), [...INGEST_DOORS].sort());
   assert.deepEqual(pipeline.filter((c) => c.status !== 200).map(label), [], 'a pipeline door refused its own job');
   const back = sweep.calls.filter((c) => c.road === 'back room media');
-  assert.equal(back.find((c) => c.as === 'anon').status, 404, 'the back room\'s attachment answers as if absent');
-  const card = sweep.calls.find((c) => c.road === 'handle' && c.p === '/@sweepmember');
+  assert.equal(back.find((c) => c.as === 'anon')!.status, 404, 'the back room\'s attachment answers as if absent');
+  const card = sweep.calls.find((c) => c.road === 'handle' && c.p === '/@sweepmember')!;
   assert.equal(card.status, 200);
   assert.match(card.text, /Sweep Member \(@sweepmember\)/, 'the card was rendered, so its injection was swept');
   /* every other mode of a public read answers (the category feed threw for
@@ -148,13 +150,13 @@ test('the other roads: workers.dev opens only its doors, the back room keeps its
   const modes = sweep.calls.filter((c) => c.road.startsWith('mode '));
   assert.ok(modes.length >= 10);
   assert.deepEqual(modes.filter((c) => c.status !== 200).map(label), [], 'a public read failed in one of its modes');
-  const daily = sweep.crons.find((c) => c.cron === '15 3 * * *');
+  const daily = sweep.crons.find((c) => c.cron === '15 3 * * *')!;
   assert.ok(daily.backups.length === 1, 'the daily chain wrote its backup, and the sweep read it');
   assert.ok(daily.emails.length >= 1 && daily.discord.length >= 1, 'the self-check alerted (a stale monthly heartbeat), so its words were swept');
 });
 
 test('the recent list is a LIST of posts — the shape the leak destroyed', () => {
-  const recent = sweep.calls.find((c) => c.road === 'table' && c.p === '/api/comments/recent' && c.as === 'anon');
+  const recent = sweep.calls.find((c) => c.road === 'table' && c.p === '/api/comments/recent' && c.as === 'anon')!;
   assert.equal(recent.status, 200);
   assert.ok(Array.isArray(recent.json.items) && recent.json.items.length >= 1, 'items is an array of rows, never one object');
   for (const it of recent.json.items) {
@@ -168,7 +170,7 @@ test('the recent list is a LIST of posts — the shape the leak destroyed', () =
 /* The seal's own module handles the raw env by design; the two other shapes
    are named here with their reasons. */
 const EXEMPT = new Set(['comments-worker/src/egress.ts']);
-const ALLOWED = [
+const ALLOWED: Allowance[] = [
   ['comments-worker/src/dbsession.ts', /^return \{ env, wrote/, 'the session record hands the unchanged env back to the router'],
   ['comments-worker/src/ops.ts', /^fn\(env\)$/, 'a cron Step is (env: Env) => Promise'],
 ];

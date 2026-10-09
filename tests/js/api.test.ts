@@ -16,12 +16,12 @@ import * as api from '../../app/api.ts';
 import * as store from '../../app/store.ts';
 
 // Stub the global fetch, fix the identity key, start from a clean store.
-function harness(reply) {
-  const calls = [];
-  globalThis.fetch = (url, init) => {
+function harness(reply?: unknown) {
+  const calls: { url: string; init: { method: string; body: string } }[] = [];
+  globalThis.fetch = ((url: string, init: { method: string; body: string }) => {
     calls.push({ url, init });
     return Promise.resolve({ json: () => Promise.resolve(reply || { ok: true }) });
-  };
+  }) as unknown as typeof fetch;
   api.configure({ key: () => 'MYKEY' });
   store.invalidate();
   return { calls, last: () => calls[calls.length - 1] };

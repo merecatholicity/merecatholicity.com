@@ -15,6 +15,8 @@
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, call, netSpy, resetCaches } from '../_support/worker.ts';
+import type { Worker, TestEnv } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
 import { responder } from '../_support/sweep.ts';
 import { threadPath, threadSlug } from '../../comments-worker/src/routes/seo.ts';
 
@@ -29,9 +31,9 @@ test('the slug is the title in words, and the id alone is a whole URL', () => {
   assert.ok(long.length <= 60 && !long.endsWith('-'), 'cut near sixty, at a word boundary');
 });
 
-let worker, env, db, net;
+let worker: Worker, env: TestEnv, db: DatabaseSync, net: ReturnType<typeof netSpy>;
 const now = Math.floor(Date.now() / 1000);
-const post = (page, parent, title, body, status) => Number(db.prepare(
+const post = (page: string, parent: number | null, title: string | null, body: string, status: string): number => Number(db.prepare(
   'INSERT INTO comments (page, parent_id, title, author_hash, body, status, created_at, last_at, replies) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)')
   .run(page, parent, title, 'a'.repeat(64), body, status, now - 100, now - 50).lastInsertRowid);
 

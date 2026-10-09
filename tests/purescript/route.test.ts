@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import * as Route from '../../purescript/output/Domain.Route/index.js';
 
 // Mirror the app/core.js parseRoute boundary: the topic integer-gate lives in JS.
-function psRoute(qs) {
+function psRoute(qs: string) {
   const params = new URLSearchParams(qs);
   const topicRaw = params.get('topic');
   const topicNum = Number(topicRaw);
@@ -16,7 +16,7 @@ function psRoute(qs) {
   const tRaw = params.get('t');
   const tNum = Number(tRaw);
   const t = (tRaw != null && Number.isInteger(tNum) && tNum > 0) ? tNum : null;
-  const g = (k) => params.get(k);
+  const g = (k: string) => params.get(k);
   return Route.routeTag(Route.parseRoute({
     ipbans: g('ipbans'), settings: g('settings'), admins: g('admins'), admin: g('admin'), discord: g('discord'), shadowbans: g('shadowbans'),
     usage: g('usage'), merecatadmin: g('merecatadmin'), merecatthread: g('merecatthread'), merecatthreads: g('merecatthreads'),

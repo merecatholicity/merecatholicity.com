@@ -21,7 +21,7 @@ const durable = readFileSync(join(root, 'comments-worker', 'src', 'durable.ts'),
 import { clientAll } from '../_support/client.ts';
 import { routesSource } from '../_support/worker_src.ts';
 const client = clientAll();
-const uncommented = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
+const uncommented = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"])\/\/.*$/gm, '$1');
 
 test('the defaults come from the kernel, never a literal', () => {
   const d = lib.slice(lib.indexOf('export const MERECAT_DEFAULTS'), lib.indexOf('export function merecatReasoningView'));

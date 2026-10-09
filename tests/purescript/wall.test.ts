@@ -15,7 +15,7 @@ test('canView / canPost / canComment: membership required (a non-empty hash)', (
 });
 
 test('canDelete: author or admin only', () => {
-  const cd = (a, m, ad) => Wall.canDelete(a)(m)(ad);
+  const cd = (a: string, m: string, ad: boolean) => Wall.canDelete(a)(m)(ad);
   assert.equal(cd('me', 'me', false), true, 'own post');
   assert.equal(cd('x', 'me', false), false, 'not yours, not admin');
   assert.equal(cd('x', 'me', true), true, 'admin deletes any');

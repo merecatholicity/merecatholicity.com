@@ -11,9 +11,13 @@ import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, identity, establish, publishKey, call, resetCaches } from '../_support/worker.ts';
 import { sha256hex } from '../../comments-worker/src/lib.ts';
 import { REKEY_COLS } from '../../comments-worker/src/routes/rekey.ts';
+import type { Worker, Row } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
+
+type Id = { key: string; hash: string };
 
 const STRONG = 'a-brand-new-strong-key-2026!';   // 20+ chars, 3 classes: clears the floor
-let worker, ann, bob;
+let worker: Worker, ann: Id, bob: Id;
 before(async () => {
   ({ worker } = await loadWorker());
   [ann, bob] = await Promise.all(['ann', 'bob'].map(identity));
@@ -22,7 +26,7 @@ beforeEach(resetCaches);
 
 /* ann, established, with a post, a profile, a pair DM with bob (she sent one
    word and holds a sealed key for it), a published pubkey and a reaction. */
-function seedAnn(db) {
+function seedAnn(db: DatabaseSync) {
   establish(db, ann.hash); establish(db, bob.hash);
   publishKey(db, ann.hash); publishKey(db, bob.hash);
   db.prepare("UPDATE profiles SET nick = 'Ann' WHERE hash = ?").run(ann.hash);
@@ -37,7 +41,7 @@ function seedAnn(db) {
   return pair;
 }
 
-const rekeyBody = (extra) => ({ key: ann.key, newkey: STRONG, pubkey: 'A'.repeat(43), resealed: { 9: 'S3.newsealed' }, ...extra });
+const rekeyBody = (extra?: Row) => ({ key: ann.key, newkey: STRONG, pubkey: 'A'.repeat(43), resealed: { 9: 'S3.newsealed' }, ...extra });
 
 test('a rotation moves EVERY identity column from the old hash to the new — nothing is left behind', async () => {
   const db = freshDb();
@@ -48,15 +52,15 @@ test('a rotation moves EVERY identity column from the old hash to the new — no
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(r.json.hash, hNew, 'the answer is the new account hash (a pubid once a pepper is set)');
   /* the sweep: no identity column anywhere still holds the OLD hash */
-  const left = [];
+  const left: string[] = [];
   for (const [tbl, col] of REKEY_COLS) {
-    const n = db.prepare('SELECT COUNT(*) AS n FROM ' + tbl + ' WHERE ' + col + ' = ?').get(ann.hash).n;
+    const n = (db.prepare('SELECT COUNT(*) AS n FROM ' + tbl + ' WHERE ' + col + ' = ?').get(ann.hash) as Row).n;
     if (n) left.push(tbl + '.' + col + '=' + n);
   }
   assert.deepEqual(left, [], 'these columns still name the old hash after a rotation');
   /* and the content is under the new hash */
-  assert.equal(db.prepare('SELECT nick FROM profiles WHERE hash = ?').get(hNew).nick, 'Ann', 'the profile moved');
-  assert.equal(db.prepare('SELECT author_hash FROM comments WHERE id = 1').get().author_hash, hNew, 'the post moved');
+  assert.equal((db.prepare('SELECT nick FROM profiles WHERE hash = ?').get(hNew) as Row).nick, 'Ann', 'the profile moved');
+  assert.equal((db.prepare('SELECT author_hash FROM comments WHERE id = 1').get() as Row).author_hash, hNew, 'the post moved');
   assert.equal(db.prepare('SELECT hash FROM dm_members WHERE thread_id = 7 AND hash = ?').get(hNew)?.hash, hNew, 'DM membership moved');
   db.close();
 });
@@ -68,13 +72,13 @@ test('the DM key material is re-sealed: the moved dm_keys row carries the new se
   const hNew = await sha256hex(STRONG);
   const r = await call(worker, env, 'POST', '/api/comments/profile/rekey', rekeyBody());
   assert.equal(r.status, 200);
-  const row = db.prepare('SELECT sealed FROM dm_keys WHERE msg_id = 9 AND hash = ?').get(hNew);
+  const row = db.prepare('SELECT sealed FROM dm_keys WHERE msg_id = 9 AND hash = ?').get(hNew) as Row;
   assert.equal(row.sealed, 'S3.newsealed', 'ann\'s sealed key was replaced with her re-seal under the new key');
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM dm_keys WHERE hash = ?").get(ann.hash).n, 0, 'none left under the old hash');
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM dm_keys WHERE hash = ?").get(ann.hash) as Row).n, 0, 'none left under the old hash');
   /* bob\'s key is untouched — only the rotating member\'s is re-sealed */
-  assert.equal(db.prepare('SELECT sealed FROM dm_keys WHERE msg_id = 9 AND hash = ?').get(bob.hash).sealed, 'oldsealedforbob');
+  assert.equal((db.prepare('SELECT sealed FROM dm_keys WHERE msg_id = 9 AND hash = ?').get(bob.hash) as Row).sealed, 'oldsealedforbob');
   /* the new pubkey is published */
-  assert.equal(db.prepare('SELECT pubkey FROM dm_pubkeys WHERE hash = ?').get(hNew).pubkey, 'A'.repeat(43));
+  assert.equal((db.prepare('SELECT pubkey FROM dm_pubkeys WHERE hash = ?').get(hNew) as Row).pubkey, 'A'.repeat(43));
   db.close();
 });
 
@@ -85,7 +89,7 @@ test('the pair_key is re-sorted so the conversation is still found under the new
   const hNew = await sha256hex(STRONG);
   await call(worker, env, 'POST', '/api/comments/profile/rekey', rekeyBody());
   const [a, b] = [hNew, bob.hash].sort();
-  assert.equal(db.prepare('SELECT pair_key FROM dm_threads WHERE id = 7').get().pair_key, a + '|' + b, 'pair_key recomputed from the new hash');
+  assert.equal((db.prepare('SELECT pair_key FROM dm_threads WHERE id = 7').get() as Row).pair_key, a + '|' + b, 'pair_key recomputed from the new hash');
   db.close();
 });
 
@@ -96,7 +100,7 @@ test('an incomplete re-seal is refused — a rotation never drops a conversation
   const r = await call(worker, env, 'POST', '/api/comments/profile/rekey', rekeyBody({ resealed: {} }));
   assert.equal(r.status, 409);
   assert.equal(r.json.error, 'reseal-incomplete');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM comments WHERE author_hash = ?').get(ann.hash).n, 1, 'nothing moved — the batch never ran');
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM comments WHERE author_hash = ?').get(ann.hash) as Row).n, 1, 'nothing moved — the batch never ran');
   db.close();
 });
 

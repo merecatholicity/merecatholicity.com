@@ -28,9 +28,9 @@ const budget = JSON.parse(readFileSync(join(root, 'tests', '_support', 'bundle_b
 
    A DYNAMIC import is deliberately not counted: that is the point of making a
    module lazy, and `import(` is what distinguishes the two. */
-function eagerChunks(entry) {
+function eagerChunks(entry: string) {
   const src = readFileSync(join(root, 'docs', entry), 'utf8');
-  const names = new Set();
+  const names = new Set<string>();
   const re = /(.)["'](\.\/chunks\/[^"']+)["']/g;
   let m;
   while ((m = re.exec(src)) !== null) {
@@ -47,7 +47,7 @@ function eagerChunks(entry) {
   return total;
 }
 
-const CHUNK_SUMS = { 'app-chunks': 'app.js', 'chrome-chunks': 'chrome.js' };
+const CHUNK_SUMS: Record<string, string> = { 'app-chunks': 'app.js', 'chrome-chunks': 'chrome.js' };
 
 for (const name of Object.keys(budget).filter((k) => !k.startsWith('_'))) {
   test(`${name} stays under its ceiling (${budget[name]} B) and the ceiling follows it down`, () => {

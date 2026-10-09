@@ -33,7 +33,7 @@ function freshDb() {
 test('0009 builds: kind CHECK carries the full list + call, index recreated', () => {
   const { db, files } = freshDb();
   assert.ok(files.some((f) => f.startsWith('0009_')), 'migration 0009 present');
-  const sql0009 = readFileSync(join(migrationsDir, files.find((f) => f.startsWith('0009_'))), 'utf8');
+  const sql0009 = readFileSync(join(migrationsDir, files.find((f) => f.startsWith('0009_'))!), 'utf8');
   assert.ok(sql0009.includes("CHECK (kind IN ('" + KINDS.join("','") + "'))"), 'the exact kind list');
   assert.ok(sql0009.includes('CREATE INDEX IF NOT EXISTS notifications_recipient_idx'), 'index recreation (the table-swap footgun)');
   // The CHECK actually enforces on the built schema.
@@ -60,13 +60,13 @@ test('the missed-call bell (notifyMissedCall) coalescing SQL matches lib.ts verb
     "SELECT 1 FROM notifications WHERE recipient_hash = :to AND kind = 'call' AND actor_hash = :from AND read_at IS NULL)");
   stmt.run({ to: a, from: b, now: 1, tid: 7 });
   stmt.run({ to: a, from: b, now: 2, tid: 7 });
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'call'").get().n, 1,
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'call'").get()!.n, 1,
     'a ring-burst never piles up rows');
   // read the row, ring again: a NEW unread row may now be minted
   db.prepare('UPDATE notifications SET read_at = 5').run();
   stmt.run({ to: a, from: b, now: 6, tid: 7 });
-  assert.equal(db.prepare("SELECT topic_id FROM notifications WHERE kind = 'call' ORDER BY id DESC LIMIT 1").get().topic_id, 7, 'the bell names the pair\'s conversation (0016)');
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'call'").get().n, 2,
+  assert.equal(db.prepare("SELECT topic_id FROM notifications WHERE kind = 'call' ORDER BY id DESC LIMIT 1").get()!.topic_id, 7, 'the bell names the pair\'s conversation (0016)');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'call'").get()!.n, 2,
     'a later call after reading rings anew');
   db.close();
 });
@@ -109,8 +109,8 @@ test("the member's calls-off pref gets the SAME fake success as a block (drift g
  * a callee's own /call/end recording a miss; the stored offer served to
  * anyone but its callee, or past the ring; the missed-call line ringing a
  * second 'dm' bell; the sweep left out of the cron chain. */
-const bodyOf = (name) => handlerBody(name, idxSrc);
-const libBodyOf = (name) => {
+const bodyOf = (name: string) => handlerBody(name, idxSrc);
+const libBodyOf = (name: string) => {
   const i = libSrc.indexOf(`export async function ${name}(`);
   assert.ok(i > 0, `${name} not found in lib`);
   const j = libSrc.indexOf('\nexport async function ', i + 10);
@@ -162,7 +162,7 @@ test('the outcome is recorded ONCE on the real ledger — ended_at is the lock; 
   assert.ok(/if \(outcome === 'missed'\) await notifyMissedCall\(env, row\.to_hash, row\.from_hash, opts, thread \? thread\.id : 0\);/.test(rec), 'the bell rings for a miss alone, naming the conversation');
   assert.ok(/export async function recordMissedCall\([^)]*\) \{\s*return recordCallEnd\(env, row, 'missed', opts\);/.test(libSrc), 'the miss is the general record by name');
   const { db } = freshDb();
-  const run = (call, now, outcome) => db.prepare(
+  const run = (call: string, now: number, outcome: string) => db.prepare(
     'UPDATE calls_pending SET ended_at = :now, outcome = :outcome, missed_at = CASE WHEN :outcome = \'missed\' THEN :now ELSE missed_at END ' +
     'WHERE call = :call AND ended_at IS NULL AND missed_at IS NULL' + (outcome === 'answered' ? ' AND answered_at IS NOT NULL' : '')
   ).run({ call, now, outcome }).changes;

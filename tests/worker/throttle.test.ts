@@ -14,10 +14,15 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches, call, limiter } from '../_support/worker.ts';
 import { throttle, sha256hex } from '../../comments-worker/src/lib.ts';
+import type { Worker, TestEnv } from '../_support/worker.ts';
+
+type Id = { key: string; hash: string };
+/* the test env, as throttle's parameter type reads it */
+type ThrottleEnv = TestEnv & Parameters<typeof throttle>[0];
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const IP = '198.51.100.20';
-let worker, A, B;
+let worker: Worker, A: Id, B: Id;
 before(async () => {
   ({ worker } = await loadWorker());
   [A, B] = await Promise.all(['throttle-a', 'throttle-b'].map(identity));
@@ -25,7 +30,7 @@ before(async () => {
 beforeEach(resetCaches);
 
 test('a member counts against their own bucket AND the address backstop; a keyless request against the backstop alone', async () => {
-  const env = makeEnv({ db: freshDb() });
+  const env = makeEnv({ db: freshDb() }) as ThrottleEnv;
   assert.equal(await throttle(env, 'READ_LIMIT', IP, { key: A.key }), true);
   assert.deepEqual(env.limited, [['READ_LIMIT', 'm:' + A.hash], ['READ_IP_LIMIT', IP]]);
   env.limited.length = 0;
@@ -39,7 +44,7 @@ test('a member counts against their own bucket AND the address backstop; a keyle
 });
 
 test('two members behind one address each get their own allowance; the backstop still binds them all', async () => {
-  const env = makeEnv({ db: freshDb(), limits: { READ_LIMIT: 3, READ_IP_LIMIT: 7 } });
+  const env = makeEnv({ db: freshDb(), limits: { READ_LIMIT: 3, READ_IP_LIMIT: 7 } }) as ThrottleEnv;
   const verdicts = [];
   for (let i = 0; i < 3; i++) verdicts.push(await throttle(env, 'READ_LIMIT', IP, { key: A.key }));
   for (let i = 0; i < 3; i++) verdicts.push(await throttle(env, 'READ_LIMIT', IP, { key: B.key }));
@@ -55,7 +60,7 @@ test('two members behind one address each get their own allowance; the backstop 
 });
 
 test('without a backstop binding, a keyless request falls back to the member binding keyed by address', async () => {
-  const env = makeEnv({ db: freshDb() });
+  const env = makeEnv({ db: freshDb() }) as ThrottleEnv;
   delete env.READ_IP_LIMIT;
   env.limited.length = 0;
   assert.equal(await throttle(env, 'READ_LIMIT', IP), true);
@@ -75,7 +80,7 @@ test('real routes: a keyed read and a keyed write limit the member; the socket u
   assert.deepEqual(env.limited, [['READ_IP_LIMIT', IP]], 'a public GET is keyless');
   env.limited.length = 0;
   const hubless = makeEnv({ db: freshDb() });
-  hubless.HUB = { idFromName: (n) => n, get: () => ({ fetch: async () => new Response('hub') }) };
+  hubless.HUB = { idFromName: (n: string) => n, get: () => ({ fetch: async () => new Response('hub') }) };
   await call(worker, hubless, 'GET', '/api/comments/live?h=' + B.hash, undefined, { ip: IP, headers: { Upgrade: 'websocket' } });
   assert.deepEqual(hubless.limited, [['CONNECT_LIMIT', 'm:' + B.hash], ['CONNECT_IP_LIMIT', IP]]);
   /* a member out of allowance is refused, a neighbour on the same address is not */
@@ -88,7 +93,7 @@ test('real routes: a keyed read and a keyed write limit the member; the socket u
 test('the sweep: nothing in the worker calls a limiter except throttle', () => {
   const src = join(root, 'comments-worker', 'src');
   const files = ['index.ts', 'lib.ts', 'durable.ts', 'ops.ts', 'dbsession.ts', ...readdirSync(join(src, 'routes')).map((f) => 'routes/' + f)];
-  const offenders = [];
+  const offenders: string[] = [];
   for (const f of files) {
     let text = readFileSync(join(src, f), 'utf8');
     if (f === 'lib.ts') {

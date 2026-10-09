@@ -19,11 +19,12 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadWorker, makeEnv, freshDb, weakIdentity, call, resetCaches } from '../_support/worker.ts';
+import type { Worker, Row } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const routesDir = join(root, 'comments-worker', 'src', 'routes');
 
-let worker, weak;
+let worker: Worker, weak: { key: string; hash: string };
 before(async () => {
   ({ worker } = await loadWorker());
   weak = await weakIdentity('reach');
@@ -45,7 +46,7 @@ test('a weak identity is refused with weak_key on a write from every route file'
   resetCaches();
   /* one representative POST_LIMIT write per route file; the body is minimal
      because the floor answers before the handler reads it */
-  const writes = [
+  const writes: [string, Row][] = [
     ['/api/comments', { page: 'board:pub', body: 'x', title: '' }],                 // board.ts  handlePost
     ['/api/comments/wall/post', { body: 'x' }],                                      // wall.ts   handleWallPost
     ['/api/comments/react', { target: 'wall', id: 1, emoji: '❤️' }],                // wall.ts   handleReact
@@ -93,7 +94,7 @@ test('a generated key still writes: the floor refuses the weak, never the strong
 /* Split a route file into its handler function bodies (from one `function` to
    the next), so a POST_LIMIT throttle and its floor are checked in the SAME
    handler however far apart they sit (an upload reads its key after formData). */
-function handlers(src) {
+function handlers(src: string) {
   const starts = [...src.matchAll(/^(?:export\s+)?async function (\w+)/gm)];
   const out = [];
   for (let i = 0; i < starts.length; i++) {

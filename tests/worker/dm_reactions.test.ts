@@ -19,13 +19,14 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { reactionOf, dmReaction } from '../../comments-worker/src/lib.ts';
 import { loadWorker, makeEnv, client, freshDb, identity, resetCaches, netSpy, hubSpy, handlerBody, routesSource } from '../_support/worker.ts';
+import type { Worker, Row } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const migrationsDir = join(root, 'comments-worker', 'migrations');
 const idxSrc = routesSource();
 
 /* the ledger as of one migration (the backfill test needs a pre-0012 database) */
-function ledgerUpTo(upTo) {
+function ledgerUpTo(upTo?: string) {
   const db = new DatabaseSync(':memory:');
   let files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
   if (upTo) files = files.filter((f) => f.slice(0, 4) <= upTo);
@@ -33,7 +34,8 @@ function ledgerUpTo(upTo) {
   return { db, files };
 }
 
-let worker, A, B, C, D, net, who;
+type Id = { key: string; hash: string };
+let worker: Worker, A: Id, B: Id, C: Id, D: Id, net: ReturnType<typeof netSpy>, who: Record<string, string>;
 before(async () => {
   ({ worker } = await loadWorker());
   [A, B, C, D] = await Promise.all(['a', 'b', 'c', 'd'].map(identity));
@@ -56,8 +58,8 @@ function seeded() {
   ins.run(5, 2, B.hash, 'E3.b5', 500, null, null, null);
   return db;
 }
-const reactions = (db, id) => db.prepare('SELECT hash, emoji FROM dm_reactions WHERE msg_id = ? ORDER BY hash').all(id).map((r) => [who[r.hash], r.emoji]);
-const pairCols = (db, id) => ({ ...db.prepare('SELECT react_a, react_b, liked_a, liked_b FROM dms WHERE id = ?').get(id) });
+const reactions = (db: DatabaseSync, id: number) => db.prepare('SELECT hash, emoji FROM dm_reactions WHERE msg_id = ? ORDER BY hash').all(id).map((r: Row) => [who[r.hash], r.emoji]);
+const pairCols = (db: DatabaseSync, id: number) => ({ ...db.prepare('SELECT react_a, react_b, liked_a, liked_b FROM dms WHERE id = ?').get(id) });
 
 test('the ledger builds through 0012 and dms carries one reaction column per side', () => {
   const { db, files } = ledgerUpTo();
@@ -97,7 +99,7 @@ test('the reaction is validated by the kernel, in the one worker membrane: the h
   assert.ok(!/Extended_Pictographic|\\p\{Emoji/.test(handlerBody('handleDmReact', idxSrc)), 'no emoji regex re-inlined in the handler — the kernel decides');
   const db = seeded();
   const api = client(worker, makeEnv({ db }));
-  const react = (viewer, id, emoji) => api.post('/api/comments/dm/react', { key: viewer.key, id, emoji });
+  const react = (viewer: Id, id: number, emoji: string) => api.post('/api/comments/dm/react', { key: viewer.key, id, emoji });
   let r = await react(A, 1, '🤡🤡');
   assert.deepEqual({ status: r.status, error: r.json.error }, { status: 400, error: 'Bad request.' }, 'an invalid reaction is a 400, not stored');
   assert.deepEqual(reactions(db, 1), []);
@@ -130,8 +132,8 @@ test('the old heart\'s road is gone (retired 2026-10-07): /dm/like answers the r
 test('a reaction lands only on a message the reactor can see, never a redacted one — from my own seat, since I joined, after my clear, live', async () => {
   const db = seeded();
   const api = client(worker, makeEnv({ db }));
-  const react = (viewer, id, emoji = '👍') => api.post('/api/comments/dm/react', { key: viewer.key, id, emoji });
-  const refused = async (viewer, id, status, error) => { const r = await react(viewer, id); assert.deepEqual({ status: r.status, error: r.json.error }, { status, error }, `${who[viewer.hash]} on ${id}`); };
+  const react = (viewer: Id, id: number, emoji = '👍') => api.post('/api/comments/dm/react', { key: viewer.key, id, emoji });
+  const refused = async (viewer: Id, id: number, status: number, error: string) => { const r = await react(viewer, id); assert.deepEqual({ status: r.status, error: r.json.error }, { status, error }, `${who[viewer.hash]} on ${id}`); };
   await refused(D, 1, 404, 'No such message.');            // a stranger has no seat
   await refused(C, 3, 404, 'No such message.');            // C joined at 400: word 3 is history denied
   await refused(A, 4, 404, 'No such message.');            // expired
@@ -150,34 +152,34 @@ test('a reaction lands only on a message the reactor can see, never a redacted o
 
 test('the thread tells every viewer the reactions as the ledger holds them — the rows alone, a pair\'s derived react_me / react_other retired 2026-10-07 — every other member hears reactions and saves live, and the bell is quiet for a word on screen', async () => {
   const db = seeded();
-  let onScreen = [];
+  let onScreen: string[] = [];
   const hub = hubSpy({ viewersOf: (tag, hashes) => onScreen.filter((h) => hashes.includes(h)) });   // who, of those asked about, has the thread open
   const api = client(worker, makeEnv({ db, hub }));
   let r = await api.post('/api/comments/dm/react', { key: A.key, id: 1, emoji: '👍' });
   assert.equal(r.status, 200);
   await r.ctx.settle();
   assert.deepEqual(hub.frames('dm-react').map((f) => [f.thread_id, f.message, f.scopes]), [[1, { id: 1, emoji: '👍', by: A.hash }, ['user:' + B.hash]]], 'dm-react to the other member, naming who');
-  let bells = db.prepare("SELECT kind, topic_id, comment_id, actor_hash FROM notifications WHERE recipient_hash = ?").all(B.hash).map((b) => ({ ...b, actor_hash: who[b.actor_hash] }));
+  let bells = db.prepare("SELECT kind, topic_id, comment_id, actor_hash FROM notifications WHERE recipient_hash = ?").all(B.hash).map((b: Row) => ({ ...b, actor_hash: who[b.actor_hash] }));
   assert.deepEqual(bells, [{ kind: 'dm-react', topic_id: 1, comment_id: 1, actor_hash: 'A' }], 'a reaction to another\'s word rings their bell, on the message');
   r = await api.post('/api/comments/dm/react', { key: A.key, id: 1, emoji: '' });
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ? AND kind = 'dm-react'").get(B.hash).n, 0, 'a withdraw takes an unheard bell back');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ? AND kind = 'dm-react'").get(B.hash)!.n, 0, 'a withdraw takes an unheard bell back');
   onScreen = [B.hash];
   r = await api.post('/api/comments/dm/react', { key: A.key, id: 1, emoji: '😂' });
   await r.ctx.settle();
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ? AND kind = 'dm-react'").get(B.hash).n, 0, 'the quiet bell: B has the thread on screen — the pill lights in front of them, no bell');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ? AND kind = 'dm-react'").get(B.hash)!.n, 0, 'the quiet bell: B has the thread on screen — the pill lights in front of them, no bell');
   assert.deepEqual(hub.viewersOf.slice(-1), [['t1', [B.hash]]], 'asked of the hub by the thread');
   r = await api.post('/api/comments/dm/react', { key: B.key, id: 2, emoji: '❤️' });
   await r.ctx.settle();
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ? AND kind = 'dm-react'").get(A.hash).n, 1, 'A is not on screen: their bell rings');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE recipient_hash = ? AND kind = 'dm-react'").get(A.hash)!.n, 1, 'A is not on screen: their bell rings');
   r = await api.post('/api/comments/dm/react', { key: A.key, id: 2, emoji: '👍' });
   await r.ctx.settle();
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'dm-react'").get().n, 1, 'reacting to my own word rings nothing');
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE kind = 'dm-react'").get()!.n, 1, 'reacting to my own word rings nothing');
   /* the thread payload */
   r = await api.post('/api/comments/dm/thread', { key: A.key, thread_id: 1 });
-  const m1 = r.json.messages.find((m) => m.id === 1), m2 = r.json.messages.find((m) => m.id === 2);
+  const m1 = r.json.messages.find((m: Row) => m.id === 1), m2 = r.json.messages.find((m: Row) => m.id === 2);
   assert.deepEqual(m1.reactions, [{ hash: A.hash, emoji: '😂' }], 'the ledger\'s rows beside the word');
   assert.deepEqual([m1.react_me, m1.react_other, m1.liked_me, m1.liked_other], [undefined, undefined, undefined, undefined], 'a pair reads the rows alone: the derived fields are gone (retired 2026-10-07)');
-  assert.deepEqual(m2.reactions.map((x) => [who[x.hash], x.emoji]).sort(), [['A', '👍'], ['B', '❤️']]);
+  assert.deepEqual(m2.reactions.map((x: Row) => [who[x.hash], x.emoji]).sort(), [['A', '👍'], ['B', '❤️']]);
   assert.deepEqual([m2.react_me, m2.react_other, m2.liked_me, m2.liked_other], [undefined, undefined, undefined, undefined]);
   assert.equal(m1.reactions_json, undefined, 'the raw column never leaves');
   /* a save is for all, and names the saver */
@@ -188,7 +190,7 @@ test('the thread tells every viewer the reactions as the ledger holds them — t
   assert.deepEqual(hub.frames('dm-save').map((f) => [f.thread_id, f.message, f.scopes]), [[1, { id: 2, saved: 1, by: B.hash }, ['user:' + A.hash]]], 'dm-save to every other member, naming the saver');
   r = await api.post('/api/comments/dm/save', { key: A.key, id: 2, saved: 0 });
   assert.deepEqual({ ...db.prepare('SELECT saved, saved_by FROM dms WHERE id = 2').get() }, { saved: 0, saved_by: null }, 'any member may unsave; the clock runs again');
-  assert.ok(db.prepare('SELECT expires_at FROM dms WHERE id = 2').get().expires_at > 0);
+  assert.ok((db.prepare('SELECT expires_at FROM dms WHERE id = 2').get()!.expires_at as number) > 0);
   r = await api.post('/api/comments/dm/save', { key: D.key, id: 2, saved: 1 });
   assert.equal(r.status, 404, 'a stranger saves nothing');
   db.close();

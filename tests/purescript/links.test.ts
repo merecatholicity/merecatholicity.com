@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Links from '../../purescript/output/Domain.Links/index.js';
 
-const norm = (p, raw) => Links.normalize(p)(raw);
+const norm = (p: string, raw: string) => Links.normalize(p)(raw);
 
 test('bare handles normalize to the platform URL (@ stripped)', () => {
   assert.deepEqual(norm('x', 'adam'), { ok: true, url: 'https://x.com/adam', error: '' });

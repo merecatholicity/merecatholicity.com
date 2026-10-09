@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Tap from '../../purescript/output/Domain.Tap/index.js';
 
-const v = (far, ms) => Tap.verdictTag(Tap.verdict(far)(ms));
+const v = (far: number, ms: number) => Tap.verdictTag(Tap.verdict(far)(ms));
 
 test('a press that lifts in place, quickly, is a tap', () => {
   assert.equal(v(0, 80), 'tap');

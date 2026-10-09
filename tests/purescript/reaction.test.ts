@@ -19,7 +19,7 @@ test('Domain.Dm re-exports the grammar: one validator, one quick six, one cap', 
 });
 
 test('the grammar, briefly: one emoji or one known token, nothing else', () => {
-  const norm = (s) => orNull(Reaction.normalizeReaction(s));
+  const norm = (s: string) => orNull(Reaction.normalizeReaction(s));
   assert.equal(norm('❤️'), '❤️');
   assert.equal(norm('👍🏽'), '👍🏽', 'a skin tone rides its base');
   assert.equal(norm(':PepeHeart:'), ':pepeheart:', 'a token comes back lower-cased');

@@ -19,12 +19,12 @@ const EVENTS = ['Place', 'Ring', 'Answer', 'RemoteAnswer', 'Connected', 'HangUp'
   'RemoteEnd', 'LocalDecline', 'RemoteDecline', 'RemoteBusy', 'Timeout', 'Failure', 'Taken',
   'IdleHangUp'];
 
-const tagOf = (st) => [Call.stateTag(st), Call.endReason(st)].join('|');
-const step = (evName, st) => tagOf(Call.step(Call[evName].value)(st));
+const tagOf = (st: unknown) => [Call.stateTag(st), Call.endReason(st)].join('|');
+const step = (evName: string, st: unknown) => tagOf(Call.step((Call as Record<string, any>)[evName].value)(st));
 
 /* The oracle: the transition table, verbatim from the module doc. Missing
    entry = stay put. Values are "Tag|reason". */
-const TABLE = {
+const TABLE: Record<string, Record<string, string>> = {
   Idle: { Place: 'Outgoing|', Ring: 'Incoming|' },
   Outgoing: {
     RemoteAnswer: 'Connecting|', RemoteDecline: 'Ended|declined', RemoteBusy: 'Ended|busy',
@@ -65,7 +65,7 @@ test('Timeout in Active is a no-op — a stale ring timer cannot kill a live cal
 });
 
 test('inCall: Outgoing/Incoming/Connecting/Active occupy the line; Idle/Ended do not', () => {
-  const truth = { Idle: false, Outgoing: true, Incoming: true, Connecting: true, Active: true };
+  const truth: Record<string, boolean> = { Idle: false, Outgoing: true, Incoming: true, Connecting: true, Active: true };
   for (const [name, st] of Object.entries(STATES)) assert.equal(Call.inCall(st), truth[name], name);
   assert.equal(Call.inCall(Call.Ended.create('hangup')), false, 'Ended');
 });
@@ -107,7 +107,7 @@ test('stateTag/endReason totality', () => {
    conversation, as every chat app writes one — the grammar round-trips, each
    side reads its own sentence, a decline reads as "no answer" to the caller
    (the callee's private act), and the server's one outcome rule. */
-const orNull = (m) => (m instanceof Maybe.Just ? m.value0 : null);
+const orNull = (m: unknown) => (m instanceof Maybe.Just ? (m as { value0: any }).value0 : null);
 
 test('call lines: the grammar round-trips, and anything else is a message', () => {
   assert.equal(Call.missedCallLine, 'call:missed', 'the 2026-09-12 line, unchanged');
@@ -127,8 +127,8 @@ test('call lines: the grammar round-trips, and anything else is a message', () =
 });
 
 test('call lines: each side reads its own sentence; a decline is "no answer" to the caller; a miss is tinted for the callee only', () => {
-  const text = (mine, s) => Call.callLineText(mine)(orNull(Call.parseCallLine(s)));
-  const missed = (mine, s) => Call.callLineMissedFor(mine)(orNull(Call.parseCallLine(s)));
+  const text = (mine: boolean, s: string) => Call.callLineText(mine)(orNull(Call.parseCallLine(s)));
+  const missed = (mine: boolean, s: string) => Call.callLineMissedFor(mine)(orNull(Call.parseCallLine(s)));
   assert.equal(text(true, 'call:missed'), 'Voice call · No answer');
   assert.equal(text(false, 'call:missed'), 'Missed voice call');
   assert.equal(text(true, 'call:declined'), 'Voice call · No answer', 'the callee\'s decline is private');
@@ -156,7 +156,7 @@ test('durationLabel: seconds under a minute, minutes under an hour, then hours a
 
 test('callOutcome: the server\'s one rule for what a report records', () => {
   assert.deepEqual(Call.endReasons, ['noanswer', 'canceled', 'busy', 'hangup', 'declined', 'failed']);
-  const out = (caller, answered, reason) => orNull(Call.callOutcome({ caller, answered, reason }));
+  const out = (caller: boolean, answered: boolean, reason: string) => orNull(Call.callOutcome({ caller, answered, reason }));
   // unanswered: only the CALLER's ring ending is a miss
   for (const r of ['noanswer', 'canceled', 'busy']) {
     assert.equal(out(true, false, r), 'missed', 'caller ' + r);
@@ -189,7 +189,7 @@ test('turn guard: default on at 95, only a literal 0 is off, the line clamped to
 test('turn guard: trip at the line, restore in a later month, forget an admin\'s hand, do nothing when off', () => {
   const GB = 1e9;
   const base = { on: true, pct: 95, relayOn: true, tripped: '', month: '2026-09', used: 0, limit: 1000 * GB };
-  const step = (over) => Call.turnGuardStep({ ...base, ...over });
+  const step = (over: Record<string, unknown>) => Call.turnGuardStep({ ...base, ...over });
   assert.equal(step({ used: 949 * GB }), 'stay', 'under the line');
   assert.equal(step({ used: 950 * GB }), 'trip', 'at the line');
   assert.equal(step({ used: 1400 * GB }), 'trip', 'past the pool');

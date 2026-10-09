@@ -8,10 +8,10 @@ import assert from 'node:assert/strict';
 import * as Media from '../../purescript/output/Domain.Media/index.js';
 import { orNull } from '../_support/ps.ts';
 
-const kindOfKey = (k) => orNull(Media.kindOfKey(k));
-const kindOfMime = (m) => orNull(Media.kindOfMime(m));
-const kindLetter = (k) => orNull(Media.kindLetter(k));
-const letterKind = (l) => orNull(Media.letterKind(l));
+const kindOfKey = (k: string) => orNull(Media.kindOfKey(k));
+const kindOfMime = (m: string) => orNull(Media.kindOfMime(m));
+const kindLetter = (k: string) => orNull(Media.kindLetter(k));
+const letterKind = (l: string) => orNull(Media.letterKind(l));
 const HEX64 = 'a1'.repeat(32); // 64 lowercase hex chars
 
 test('defaults: the platform settings an admin overrides', () => {
@@ -156,7 +156,7 @@ test('mimesFor: the exact whitelists; unknown kind -> []', () => {
 });
 
 test('mimeAllowed: case-insensitive, ;codecs suffix stripped, junk refused', () => {
-  const allowed = (k, m) => Media.mimeAllowed(k)(m);
+  const allowed = (k: string, m: string) => Media.mimeAllowed(k)(m);
   assert.equal(allowed('audio', 'audio/webm;codecs=opus'), true, 'MediaRecorder codecs suffix stripped');
   assert.equal(allowed('video', 'Video/MP4'), true, 'case-insensitive');
   assert.equal(allowed('image', 'image/jpeg'), true);

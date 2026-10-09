@@ -30,7 +30,7 @@ import { dirname, join } from 'node:path';
 import { sanitizeScopes } from '../../comments-worker/src/pure.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (p) => readFileSync(join(root, p), 'utf8');
+const read = (p: string) => readFileSync(join(root, p), 'utf8');
 const sources = () => ['client', 'app']
   .flatMap((d) => readdirSync(join(root, d)).filter((f) => f.endsWith('.ts')).map((f) => d + '/' + f))
   .map((p) => [p, read(p)]);
@@ -38,7 +38,7 @@ const sources = () => ['client', 'app']
 test('no client module derives its PUBLIC id from the key', () => {
   /* `state.myHash = <a digest of the key>` is the whole bug. The public id has
      one source — the server — reached through resolveMyId()/setMyId(). */
-  const bad = [];
+  const bad: string[] = [];
   for (const [path, src] of sources()) {
     src.split('\n').forEach((line, i) => {
       if (/sha256hex\s*\([^)]*\)\s*\.then\s*\(\s*(function\s*)?\(?\s*(\w+)/.test(line)) {
@@ -102,7 +102,7 @@ test('the DM screen takes the server\'s word for who the reader is, not an id co
       fn + ': no id comparison — the server marks every row, so a fallback can only reintroduce the bug');
   }
   /* and no member/message site may go back to comparing by hand */
-  const strays = [];
+  const strays: string[] = [];
   src.split('\n').forEach((line, i) => {
     if (/function (isMe|mineMsg)\(/.test(line)) return;
     if (/\bmm\.hash (===|!==) state\.myHash/.test(line)) strays.push('member row, line ' + (i + 1));

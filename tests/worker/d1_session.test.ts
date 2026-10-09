@@ -12,20 +12,21 @@ import * as Consistency from '../../purescript/output/Domain.Consistency/index.j
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import type { Worker, Answer, Row } from '../_support/worker.ts';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches, call, handlerBody, routesSource } from '../_support/worker.ts';
 
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const routesSnapshot = () => JSON.parse(readFileSync(join(root, 'tests', '_support', 'routes.json'), 'utf8'));
 
-let worker, A;
+let worker: Worker, A: { key: string; hash: string };
 before(async () => {
   ({ worker } = await loadWorker());
   A = await identity('session-a');
 });
 beforeEach(resetCaches);
 
-const setCookie = (r) => r.res.headers.get('Set-Cookie') || '';
+const setCookie = (r: Answer) => r.res.headers.get('Set-Cookie') || '';
 const BM = '0000002a-00000000-00000000-' + 'b'.repeat(32);
 
 test('a listed read starts anywhere; a route off the list starts at the primary', async () => {
@@ -63,18 +64,18 @@ test('a malformed cookie is ignored, and a bookmark D1 refuses falls back to the
   assert.deepEqual(env.DB.sessions, ['first-unconstrained', 'first-unconstrained'], 'not a bookmark: unconstrained');
   /* the shim throws for this one bookmark-shaped value, as D1 would for a stale or foreign bookmark */
   const real = env.DB.withSession;
-  env.DB.withSession = (c) => real(c === BM ? 'refuse-me' : c);
+  env.DB.withSession = (c: string) => real(c === BM ? 'refuse-me' : c);
   const r = await call(worker, env, 'GET', '/api/comments/board', undefined, { headers: { Cookie: 'mc-d1=' + BM } });
   assert.equal(r.status, 200);
   assert.equal(env.DB.sessions.at(-1), 'first-primary');
 });
 
 test('every listed route is a registered route, and its handler writes only what the list allows', () => {
-  const routes = new Map(routesSnapshot().map((r) => [r.m + ' ' + r.p, r.fn]));
+  const routes = new Map<string, string>(routesSnapshot().map((r: Row) => [r.m + ' ' + r.p, r.fn]));
   const src = routesSource();
-  for (const key of Consistency.replicaRoutes) {
+  for (const key of Consistency.replicaRoutes as string[]) {
     assert.ok(routes.has(key), key + ' is a route');
-    const name = /=> (handle[A-Za-z]+)\(/.exec(routes.get(key))[1];
+    const name = /=> (handle[A-Za-z]+)\(/.exec(routes.get(key)!)![1];
     const body = handlerBody(name, src);
     const writes = (body.match(/\b(INSERT|UPDATE|DELETE FROM|REPLACE INTO)\b|registerMember\(|notifyDm\(|\.put\(|\.delete\(/g) || []).length;
     assert.equal(writes, 0, `${key} (${name}) writes ${writes} time(s): a route that writes starts at the primary`);
@@ -84,7 +85,7 @@ test('every listed route is a registered route, and its handler writes only what
 test('crons and the ops probe use the plain binding; the probe reports where an unconstrained read ran', async () => {
   const env = makeEnv({ db: freshDb() });
   const { servedBy } = await import('../../comments-worker/src/dbsession.ts');
-  const d1 = await servedBy(env);
+  const d1 = await servedBy(env as unknown as Parameters<typeof servedBy>[0]);
   assert.deepEqual(d1, { served_by_primary: null, served_by_region: null }, 'the shim carries no meta: nulls, never a throw');
   assert.deepEqual(env.DB.sessions, ['first-unconstrained']);
 });

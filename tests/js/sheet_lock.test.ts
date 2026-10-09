@@ -20,7 +20,7 @@ const chrome = readFileSync(join(root, 'app', 'appchrome.ts'), 'utf8');
 const ptr = readFileSync(join(root, 'app', 'ptr.ts'), 'utf8');
 
 /* The body of every rule whose selector list is exactly `sel`. */
-function rules(sel) {
+function rules(sel: string) {
   const out = [];
   const re = new RegExp('(^|[}\\n])\\s*' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{([^}]*)\\}', 'g');
   let m;

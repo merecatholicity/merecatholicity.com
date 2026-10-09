@@ -7,11 +7,11 @@ import assert from 'node:assert/strict';
 import * as Faith from '../../purescript/output/Domain.Faith/index.js';
 import { orEmpty } from '../_support/ps.ts';
 
-const flabel = (c) => orEmpty(Faith.labelForCode(c));
+const flabel = (c: string) => orEmpty(Faith.labelForCode(c));
 
 test('faithList: exactly three codes, in signup order', () => {
   assert.equal(Faith.faithList.length, 3);
-  assert.deepEqual(Faith.faithList.map((f) => f.code), ['nicene', 'indo-european', 'seeker']);
+  assert.deepEqual(Faith.faithList.map((f: { code: string }) => f.code), ['nicene', 'indo-european', 'seeker']);
 });
 
 test('labelForCode: each code has its label; an unknown code has none', () => {

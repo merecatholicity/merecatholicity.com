@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 
-const H = (c) => c.repeat(64);
+const H = (c: string) => c.repeat(64);
 
 test('normalizeShards: a whole number clamped to 1..maxShards; blank or junk is 1', () => {
   assert.equal(Hub.maxShards, 64);
@@ -67,7 +67,7 @@ test('scopeHome: only user:<hash> is private', () => {
 
 test('routeScopes: private-only events go to their home shards, deduplicated; any public scope means every shard', () => {
   const a = 'user:' + H('a'), b = 'user:' + H('b');
-  const homes = (n, scopes) => { const r = Hub.routeScopes(n)(scopes); return r.value0 === undefined ? null : r.value0; };
+  const homes = (n: number, scopes: string[]) => { const r = Hub.routeScopes(n)(scopes); return r.value0 === undefined ? null : r.value0; };
   assert.deepEqual(homes(1, [a, b]), [0], 'one shard: one call');
   const n = 8;
   const ia = Hub.shardOf(n)(H('a')), ib = Hub.shardOf(n)(H('b'));

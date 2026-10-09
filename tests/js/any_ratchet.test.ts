@@ -37,8 +37,8 @@ const baseline = JSON.parse(readFileSync(BASELINE, 'utf8'));
 /* the tsc projects (tsconfig.json — the page scripts and the service worker with it — and comments-worker/ and contact-worker/ tsconfig.json) */
 const PROJECTS = { client: ['client', 'app', 'pagejs'], worker: ['comments-worker/src', 'contact-worker/src'] };
 
-function files(dir, ext) {
-  const out = [];
+function files(dir: string, ext: string): string[] {
+  const out: string[] = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.name === 'node_modules') continue;
     const p = join(dir, e.name);
@@ -47,15 +47,15 @@ function files(dir, ext) {
   }
   return out.sort();
 }
-const words = (s) => (s.match(/\bany\b/g) || []).length;
+const words = (s: string) => (s.match(/\bany\b/g) || []).length;
 /* the type-position `any`s of one file */
-function typeAnys(src) {
+function typeAnys(src: string) {
   const warn = process.emitWarning;
   process.emitWarning = () => {};   // stripTypeScriptTypes is experimental and says so on every call
   try { return words(src) - words(stripTypeScriptTypes(src, { mode: 'strip' })); } finally { process.emitWarning = warn; }
 }
-const census = (dirs) => dirs.flatMap((d) => files(join(root, d), '.ts'))
-  .map((f) => [relative(root, f), typeAnys(readFileSync(f, 'utf8'))]).filter(([, n]) => n > 0);
+const census = (dirs: string[]) => dirs.flatMap((d) => files(join(root, d), '.ts'))
+  .map((f): [string, number] => [relative(root, f), typeAnys(readFileSync(f, 'utf8'))]).filter(([, n]) => n > 0);
 
 test('the count is exact: type positions only, never a comment, a string or an identifier', () => {
   assert.equal(typeAnys('let a: any = 1; const b = x as any; let c: any[] = []; f<any>(); type T = Record<string, any>;'), 5);

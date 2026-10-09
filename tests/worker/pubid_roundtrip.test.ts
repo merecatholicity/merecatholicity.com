@@ -16,17 +16,23 @@ import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, identity, establish, publishKey, call, resetCaches } from '../_support/worker.ts';
 import { pubidOf, resolveId, clearIdCaches } from '../../comments-worker/src/lib.ts';
+import type { Worker, TestEnv, Row } from '../_support/worker.ts';
+import type { DatabaseSync } from 'node:sqlite';
+
+type Id = { key: string; hash: string };
+/* the env as lib.ts's parameter type reads it */
+type LibEnv = Parameters<typeof resolveId>[0];
 
 const PEPPER = 'a-stable-test-pepper-value';
-let worker, ann, bob;
+let worker: Worker, ann: Id, bob: Id;
 before(async () => {
   ({ worker } = await loadWorker());
   [ann, bob] = await Promise.all(['ann', 'bob'].map(identity));
 });
 beforeEach(() => { resetCaches(); clearIdCaches(); });
 
-function env(db) { return makeEnv({ db, vars: { PUBLIC_ID_PEPPER: PEPPER } }); }
-const pub = (h) => pubidOf({ PUBLIC_ID_PEPPER: PEPPER }, h);
+function env(db: DatabaseSync) { return makeEnv({ db, vars: { PUBLIC_ID_PEPPER: PEPPER } }) as TestEnv & LibEnv; }
+const pub = (h: string) => pubidOf({ PUBLIC_ID_PEPPER: PEPPER } as unknown as LibEnv, h);
 
 test('a pubid is not the account hash, and resolveId inverts it from a read (no stored column)', async () => {
   const db = freshDb();
@@ -61,14 +67,14 @@ test('a DM addressed to a pubid reaches the account the hash names', async () =>
   for (const who of [ann, bob]) { establish(db, who.hash); publishKey(db, who.hash); }
   const annPid = await pub(ann.hash);
   /* bob sends to ann's PUBID, sealing the envelope to ann's pubid + his own */
-  const keys = {}; keys[annPid] = 'x'.repeat(43); keys[await pub(bob.hash)] = 'y'.repeat(43);
+  const keys: Record<string, string> = {}; keys[annPid] = 'x'.repeat(43); keys[await pub(bob.hash)] = 'y'.repeat(43);
   const r = await call(worker, e, 'POST', '/api/comments/dm/send', { key: bob.key, to: annPid, body: 'E3.hello', enc: 3, keys });
   assert.equal(r.status, 200, 'the send is accepted: ' + JSON.stringify(r.json));
   /* the thread's members are the ACCOUNT hashes (server-internal), and ann is in it */
-  const members = db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(r.json.thread_id).map((x) => x.hash).sort();
+  const members = db.prepare('SELECT hash FROM dm_members WHERE thread_id = ?').all(r.json.thread_id).map((x: Row) => x.hash).sort();
   assert.deepEqual(members, [ann.hash, bob.hash].sort(), 'the pubid resolved to ann; the roster is account-keyed');
   /* the sealed set stored under ann's ACCOUNT hash, not her pubid */
-  const sealed = db.prepare('SELECT hash FROM dm_keys WHERE msg_id = ?').all(r.json.id).map((x) => x.hash).sort();
+  const sealed = db.prepare('SELECT hash FROM dm_keys WHERE msg_id = ?').all(r.json.id).map((x: Row) => x.hash).sort();
   assert.deepEqual(sealed, [ann.hash, bob.hash].sort(), 'dm_keys is account-keyed, so each reader gets their own sealed');
   db.close();
 });

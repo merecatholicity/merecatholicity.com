@@ -33,28 +33,31 @@ import { stripTypes } from '../_support/ts.ts';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const NAV = stripTypes(readFileSync(join(root, 'pagejs', 'nav.ts'), 'utf8'));
 
+type Listener = (e: { type: string }) => void;
+
 /* The smallest document nav.js can run against: it stamps <html>, reads
    cookies and storage, appends scripts to <head>, and binds listeners. */
-function run({ corpus = false, hostname = 'merecatholicity.com', webdriver = false, hidden = false, sw = undefined } = {}) {
-  const added = [];
-  const listeners = { document: {}, window: {} };
-  const el = (tag) => ({
+function run({ corpus = false, hostname = 'merecatholicity.com', webdriver = false, hidden = false, sw = undefined }: { corpus?: boolean; hostname?: string; webdriver?: boolean; hidden?: boolean; sw?: unknown } = {}) {
+  const added: { src?: string }[] = [];
+  const listeners: Record<string, Record<string, Listener[]>> = { document: {}, window: {} };
+  /* the stub element and window are deliberately loose (`any`): a fake DOM for vm, no tighter than it is */
+  const el = (tag: string): any => ({
     tagName: (tag || '').toUpperCase(), attrs: {}, children: [], className: '',
     style: {}, dataset: {},
-    setAttribute(k, v) { this.attrs[k] = v; },
-    getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
-    removeAttribute(k) { delete this.attrs[k]; },
-    hasAttribute(k) { return k in this.attrs; },
-    insertBefore(n) { this.children.push(n); return n; },
+    setAttribute(k: string, v: string) { this.attrs[k] = v; },
+    getAttribute(k: string) { return k in this.attrs ? this.attrs[k] : null; },
+    removeAttribute(k: string) { delete this.attrs[k]; },
+    hasAttribute(k: string) { return k in this.attrs; },
+    insertBefore(n: unknown) { this.children.push(n); return n; },
     remove() {},
-    appendChild(c) { this.children.push(c); return c; },
+    appendChild(c: unknown) { this.children.push(c); return c; },
     removeChild() {}, addEventListener() {}, removeEventListener() {},
     querySelector() { return null; }, querySelectorAll() { return []; },
     closest() { return null; },
     classList: { add() {}, remove() {}, contains() { return false; }, toggle() {} },
   });
   const html = el('html');
-  const head = { ...el('head'), appendChild(n) { added.push(n); return n; } };
+  const head = { ...el('head'), appendChild(n: { src?: string }) { added.push(n); return n; } };
   const body = el('body');
   const main = el('main');
   main.className = corpus ? 'prose corpus' : 'prose';
@@ -64,31 +67,31 @@ function run({ corpus = false, hostname = 'merecatholicity.com', webdriver = fal
     visibilityState: hidden ? 'hidden' : 'visible',
     createElement: el,
     getElementById() { return null; },
-    querySelector(sel) { return sel.indexOf('main.prose.corpus') >= 0 ? (corpus ? main : null) : null; },
+    querySelector(sel: string) { return sel.indexOf('main.prose.corpus') >= 0 ? (corpus ? main : null) : null; },
     querySelectorAll() { return []; },
-    addEventListener(t, fn) { (listeners.document[t] ||= []).push(fn); },
-    removeEventListener(t, fn) {
+    addEventListener(t: string, fn: Listener) { (listeners.document[t] ||= []).push(fn); },
+    removeEventListener(t: string, fn: Listener) {
       listeners.document[t] = (listeners.document[t] || []).filter((f) => f !== fn);
     },
   };
   const store = new Map();
-  const timers = [];
-  const frames = [];
-  const win = {
+  const timers: (() => void)[] = [];
+  const frames: (() => void)[] = [];
+  const win: Record<string, any> = {
     location: { hostname, pathname: '/anf03-apology.html', search: '', href: 'x', reload() {} },
     localStorage: {
-      getItem: (k) => (store.has(k) ? store.get(k) : null),
-      setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k),
+      getItem: (k: string) => (store.has(k) ? store.get(k) : null),
+      setItem: (k: string, v: string) => store.set(k, String(v)), removeItem: (k: string) => store.delete(k),
     },
     navigator: { webdriver, serviceWorker: sw, clipboard: undefined },
     matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
     performance: { getEntriesByType: () => [], navigation: { type: 0 } },
     // no requestIdleCallback: the setTimeout road, held until the test asks
     requestIdleCallback: undefined,
-    setTimeout: (fn) => { timers.push(fn); return timers.length; },
-    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; },
+    setTimeout: (fn: () => void) => { timers.push(fn); return timers.length; },
+    requestAnimationFrame: (fn: () => void) => { frames.push(fn); return frames.length; },
     clearTimeout() {}, setInterval: () => 0, clearInterval() {},
-    addEventListener(t, fn) { (listeners.window[t] ||= []).push(fn); },
+    addEventListener(t: string, fn: Listener) { (listeners.window[t] ||= []).push(fn); },
     removeEventListener() {},
     caches: undefined, fetch: () => Promise.resolve({ ok: false }),
   };
@@ -99,7 +102,7 @@ function run({ corpus = false, hostname = 'merecatholicity.com', webdriver = fal
   vm.runInContext(NAV, ctx, { filename: 'nav.js' });
   return {
     srcs: () => added.map((n) => n.src || '').filter(Boolean),
-    fire: (where, type) => (listeners[where][type] || []).forEach((f) => f({ type })),
+    fire: (where: string, type: string) => (listeners[where][type] || []).forEach((f) => f({ type })),
     press: () => (listeners.document.pointerdown || []).forEach((f) => f({ type: 'pointerdown' })),
     flush: () => { const q = timers.splice(0); q.forEach((f) => f()); },
     /* one frame: its callbacks, then the tasks they queued (the paint falls
@@ -112,7 +115,7 @@ function run({ corpus = false, hostname = 'merecatholicity.com', webdriver = fal
   };
 }
 
-const has = (srcs, name) => srcs.some((s) => s.indexOf(name) === 0);
+const has = (srcs: string[], name: string) => srcs.some((s) => s.indexOf(name) === 0);
 
 test('an app page loads its bars and the shell right after its first paint', () => {
   const page = run({ corpus: false });
@@ -173,7 +176,7 @@ test('the shell is appended once however many roads reach it', () => {
 });
 
 test('the beacon rides every page on the live hostname, after load', () => {
-  const beacon = (page) => page.srcs().some((s) => s.indexOf('https://static.cloudflareinsights.com/') === 0);
+  const beacon = (page: ReturnType<typeof run>) => page.srcs().some((s) => s.indexOf('https://static.cloudflareinsights.com/') === 0);
   const app = run({});
   assert.ok(!beacon(app), 'a meter must not race the page it measures for the first paint');
   app.fire('window', 'load');
@@ -199,9 +202,9 @@ test('nothing is measured from a dev box or from automation', () => {
 test('the service worker is registered after load, not during the first paint', () => {
   /* a first install primes six pages (docs/sw.js PAGES), whose fetches raced
      the page's own first frame */
-  const registered = [];
+  const registered: string[] = [];
   const sw = {
-    controller: null, register: (u) => { registered.push(u); return Promise.resolve(); },
+    controller: null, register: (u: string) => { registered.push(u); return Promise.resolve(); },
     getRegistration: () => Promise.resolve(null), addEventListener() {},
   };
   const page = run({ sw });

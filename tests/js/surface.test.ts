@@ -29,7 +29,7 @@ const wall = clientModule('wall');
 const dm = clientDm();
 const postView = readFileSync(join(root, 'app', 'views', 'post.ts'), 'utf8');
 const mainCss = readFileSync(join(root, 'styles', 'main.css'), 'utf8');
-const fn = (text, name, next) => {
+const fn = (text: string, name: string, next?: string) => {
   const i = text.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);
   const j = next ? text.indexOf(`function ${next}(`, i + 10) : text.indexOf('\n  function ', i + 10);

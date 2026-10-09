@@ -162,8 +162,15 @@ tests/
 
 ## Frameworks (stdlib only — matches the repo's no-new-deps discipline)
 
-- **JS + PureScript**: Node's built-in runner, `node --test` + `node:assert/strict`.
-  The PureScript tests import the compiled ESM from `purescript/output/`, so
+- **TypeScript + PureScript**: Node's built-in runner, `node --test` +
+  `node:assert/strict`. Every test and helper is a strict `.ts` file that Node runs
+  by stripping its types (so only erasable syntax: no enums, no parameter
+  properties, `import type` for a type), and `npm run tsc` (`make jscheck`) type-checks
+  them under two projects: `tests/tsconfig.json` (the client, kernel and script tests,
+  DOM lib) and `tests/worker/tsconfig.json` (the worker tests and their helpers,
+  against `@cloudflare/workers-types`). A test hands the worker's branded `Env` a
+  `makeEnv()` env through a cast to the function's own parameter type
+  (`as unknown as Parameters<typeof f>[0]`). The PureScript tests import the compiled ESM from `purescript/output/`, so
   `make psbuild` must have run first (`make tests` / `make pstest` do it for you).
 - **Python + CSS**: stdlib `unittest` (pytest is not installed). Each file is
   standalone-runnable and puts the source dir it targets on `sys.path`.

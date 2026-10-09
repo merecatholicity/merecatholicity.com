@@ -20,12 +20,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CLIENT_MODULES, LAZY_MODULES, ALL_MODULES, clientModule, clientRoot } from '../_support/client.ts';
 
-const cap = (s) => s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');   // dm-crypto → DmCrypto
-const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+const cap = (s: string) => s.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join('');   // dm-crypto → DmCrypto
+const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
 const ident = /[A-Za-z_$][\w$]*/;
 
 /* the contiguous `  let NAME: …;` run after a start line (comments and blanks skipped) */
-function headerLets(src, startRe) {
+function headerLets(src: string, startRe: RegExp) {
   const lines = strip(src).split('\n');
   const out = [];
   let i = lines.findIndex((l) => startRe.test(l));
@@ -39,20 +39,20 @@ function headerLets(src, startRe) {
   return out;
 }
 /* `NAME = B.NAME;` lines inside bind() */
-function bindAssigns(src) {
+function bindAssigns(src: string) {
   const i = src.indexOf('\n  function bind() {');
   assert.ok(i > 0, 'a bind() at the factory level');
   const body = src.slice(i, src.indexOf('\n  }', i));
   return [...body.matchAll(/^\s+([A-Za-z_$][\w$]*) = B\.([A-Za-z_$][\w$]*);/gm)].map((m) => [m[1], m[2]]);
 }
-function exportList(src) {
+function exportList(src: string): string[] {
   const m = src.match(/return \{ bind, run, exports: \{([^}]*)\} \};/);
   assert.ok(m, 'the factory returns { bind, run, exports: { … } }');
   return m[1].split(',').map((s) => s.trim()).filter(Boolean);
 }
 /* names a file declares at the factory / boot level: functions and vars
    (a `var a = 0, b = 0;` declares both — one extra name per line is enough here) */
-function declared(src) {
+function declared(src: string) {
   const s = strip(src);
   return new Set([
     ...[...s.matchAll(/^  (?:async )?function ([A-Za-z_$][\w$]*)\(/gm)].map((m) => m[1]),
@@ -141,7 +141,7 @@ test('a module-level var never touches a binding in its initializer (it is not b
   for (const n of ALL_MODULES) {
     const lets = headerLets(modules[n], /^export function install/);
     const lines = strip(modules[n]).split('\n');
-    const balance = (t) => (t.match(/[([{]/g) || []).length - (t.match(/[)\]}]/g) || []).length;
+    const balance = (t: string) => (t.match(/[([{]/g) || []).length - (t.match(/[)\]}]/g) || []).length;
     const hits = [];
     for (let i = 0; i < lines.length; i++) {
       if (!/^  var /.test(lines[i])) continue;
@@ -157,7 +157,7 @@ test('a module-level var never touches a binding in its initializer (it is not b
 
 test('state more than one module writes lives on B alone — never a copied binding', () => {
   const files = { comments: root, ...modules };
-  const shared = new Set();
+  const shared = new Set<string>();
   for (const src of Object.values(files)) for (const m of src.matchAll(/\bB\.([A-Za-z_$][\w$]*)\s*=[^=]/g)) shared.add(m[1]);
   for (const name of ['quotedSelection', 'mentionDir', 'notifBadgeT', 'profileWaiters', 'COMMENTS_KEY', 'COMMENTS_HREF']) {
     assert.ok(shared.has(name), `${name} is written through B`);

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { routesSource } from '../_support/worker_src.ts';
 import { loadWorker, makeEnv, freshDb, identity, establish, seen, call, netSpy, resetCaches } from '../_support/worker.ts';
+import type { Row } from '../_support/worker.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const lib = readFileSync(join(root, 'comments-worker', 'src', 'lib.ts'), 'utf8');
@@ -117,7 +118,7 @@ test('reading does not establish an identity: only a passed challenge does', asy
     const bare = await call(worker, env, 'POST', '/api/comments', { key: fresh.key, topic: 1, body: 'a reply' });
     assert.equal(bare.status, 403, 'a row from a read is not a passed challenge');
     assert.equal(asked.length, 1, 'and the tokenless write was asked of siteverify, which refused it');
-    assert.equal(db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(fresh.hash).verified_at, null,
+    assert.equal((db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(fresh.hash) as Row).verified_at, null,
       'a refused challenge records nothing');
 
     /* the same identity, once it has passed one */
@@ -141,7 +142,7 @@ test('passing a challenge is what writes the record, and it is written once', as
     /* no profiles row at all: the first act of a key that has read nothing */
     const first = await call(worker, env, 'POST', '/api/comments', { key: newcomer.key, topic: 1, body: 'hello', token: 'a-solved-challenge' });
     assert.equal(first.status, 200);
-    const stamped = db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(newcomer.hash);
+    const stamped = db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(newcomer.hash) as Row | undefined;
     assert.ok(stamped && stamped.verified_at > 0, 'siteverify said yes, so the identity is recorded as verified');
 
     /* a later challenge never moves the first date (the record is of the first
@@ -150,7 +151,7 @@ test('passing a challenge is what writes the record, and it is written once', as
     resetCaches();
     const again = await call(worker, env, 'POST', '/api/comments', { key: newcomer.key, topic: 1, body: 'hello again', token: 'another-solved-challenge' });
     assert.equal(again.status, 200);
-    assert.equal(db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(newcomer.hash).verified_at, 1000,
+    assert.equal((db.prepare('SELECT verified_at FROM profiles WHERE hash = ?').get(newcomer.hash) as Row).verified_at, 1000,
       'the first verification stands');
   } finally { net.restore(); }
 });

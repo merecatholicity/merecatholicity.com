@@ -26,7 +26,7 @@ function clearBlock() {
   return src.slice(i, j);
 }
 
-function listed(name) {
+function listed(name: string) {
   const b = clearBlock();
   const m = new RegExp(`const ${name}(?:_PREFIX)? = \\[([^\\]]*)\\]`).exec(b)
     || new RegExp(`const ${name} = \\[([^\\]]*)\\]`).exec(b);

@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const row = (o) => Object.assign({ kind: 'reply', who: 'Ann', topicTitle: '', topicId: 0, commentId: 0, actor: 'a'.repeat(64) }, o);
+const row = (o: Record<string, unknown>) => Object.assign({ kind: 'reply', who: 'Ann', topicTitle: '', topicId: 0, commentId: 0, actor: 'a'.repeat(64) }, o);
 
 test('the kind list is the ledger\'s CHECK, in the latest migration that swapped the table', () => {
   const dir = join(root, 'comments-worker', 'migrations');

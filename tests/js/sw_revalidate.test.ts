@@ -51,21 +51,21 @@ const [siteBytes, codeKeys] = new Function(stripTypes(region) + '\nreturn [siteB
    response to https://merecatholicity.com/index.html on 2026-09-17. Only r:
    (the ray) and t: move from one response to the next; nothing here is ours. */
 const CF = `<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'@RAY@',t:'@TS@'};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>`;
-const cf = (ray, ts) => (ray === null ? '' : CF.replace('@RAY@', ray).replace('@TS@', ts));
+const cf = (ray: string | null, ts: string) => (ray === null ? '' : CF.replace('@RAY@', ray).replace('@TS@', ts));
 
 /* The crawler-protection honeypot, captured verbatim from a live response to
    https://merecatholicity.com/index.html on 2026-09-18 — what a REAL browser is
    served, right after <body>. Only the id moves from one response to the next. */
 const HONEYPOT = '<a href="https://merecatholicity.com/cdn-cgi/content?id=@ID@" aria-hidden="true"' +
   ' rel="nofollow noopener" style="display: none !important; visibility: hidden !important"></a>';
-const honeypot = (id) => HONEYPOT.replace('@ID@', id);
+const honeypot = (id: string) => HONEYPOT.replace('@ID@', id);
 
 /* A page in the shape of ours: the inline theme/splash script (the one thing on
    the page that must never be filtered away), a stamped asset key, and the
    edge's two injections around our markup. */
 const page = ({ ray = 'a3ce55bcbfcaed3c', ts = 'MTc4OTcxMzM3MQ==', v = '1784160000',
   id = 'YD294hwiEd1vfTc6PnzJA65W.N2NgDM9nS4AoTqEfrA-1789715778.1143563-1.2.1.1-q0igv3HKThBA9E',
-  title = 'Mere Catholicity', boot = "e.setAttribute('data-theme','dark')" } = {}) =>
+  title = 'Mere Catholicity', boot = "e.setAttribute('data-theme','dark')" }: { ray?: string | null; ts?: string; v?: string; id?: string; title?: string; boot?: string } = {}) =>
   '<!DOCTYPE html><html><head>' +
   '<script id="mc-fout">(function(){var e=document.documentElement;' + boot + '})();</script>' +
   '<title>' + title + '</title><link rel="stylesheet" href="style.css?v=' + v + '">' +
@@ -97,7 +97,7 @@ test('nobody is told to heal unless the code moved', () => {
   /* The belt. Whatever the edge injects next — a third token, in a shape
      nothing here anticipates — it cannot reload a reader's page, because a
      reload is justified by the ?v= keys and by nothing else. */
-  const invented = (t) => page().replace('<main>Home</main>',
+  const invented = (t: string) => page().replace('<main>Home</main>',
     '<main>Home</main><img src="/cdn-cgi/beacon/' + t + '.gif" alt="">');
   assert.equal(codeKeys(siteBytes(invented('aaa'))), codeKeys(siteBytes(invented('bbb'))),
     'an unforeseen injection must never look like a code change');

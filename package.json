@@ -12,7 +12,7 @@
     "build:ps": "python3 scripts/writings.py && rm -rf purescript/output && cd purescript && PATH=\"$PWD/../local/bin:$PATH\" spago build",
     "build:js": "npm run build:ps && rm -rf docs/chunks && esbuild app/app.ts app/chrome.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning && npm run build:pagejs && npm run build:client",
     "build:css": "tailwindcss --input styles/main.css --output docs/style.css --minify",
-    "tsc": "tsc -p tsconfig.json && tsc -p pagejs/tsconfig.sw.json && tsc -p comments-worker/tsconfig.json && tsc -p contact-worker/tsconfig.json",
+    "tsc": "tsc -p tsconfig.json && tsc -p pagejs/tsconfig.sw.json && tsc -p comments-worker/tsconfig.json && tsc -p contact-worker/tsconfig.json && tsc -p tests/tsconfig.json && tsc -p tests/worker/tsconfig.json",
     "build": "npm run build:js && npm run tsc && npm run build:css",
     "worker:deploy": "cd comments-worker && wrangler deploy",
     "build:client": "esbuild client/comments.ts --bundle --format=esm --splitting --minify --outdir=docs --entry-names=[name] --chunk-names=chunks/[name]-[hash] --log-level=warning",

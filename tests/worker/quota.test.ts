@@ -17,25 +17,27 @@ import {
 } from '../../comments-worker/src/quota.ts';
 import { FREE } from '../../comments-worker/src/usagecalc.ts';
 
+type QuotaEnv = Parameters<typeof merecatQuota>[0];
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ENV = { CF_USAGE_TOKEN: 't', CF_ACCOUNT_ID: 'a' };
+const ENV = { CF_USAGE_TOKEN: 't', CF_ACCOUNT_ID: 'a' } as unknown as QuotaEnv;
 const CFG = { quota_guard_on: 1, quota_guard_pct: 95 };
 const T0 = Date.UTC(2026, 8, 10, 4, 15, 9);   // 2026-09-10T04:15:09Z: 20 h to the renewal
 
 /* A fetch that answers the neurons dataset with `neurons` spent (null = the
    analytics API is down), counting calls and keeping the last query. */
 let calls = 0;
-let answer = null;
+let answer: number | null = null;
 let lastQuery = '';
-function stubFetch(neurons) {
+function stubFetch(neurons: number | null) {
   calls = 0; answer = neurons;
-  globalThis.fetch = async (url, init) => {
+  globalThis.fetch = (async (url: unknown, init: RequestInit) => {
     calls++;
-    lastQuery = JSON.parse(init.body).query;
+    lastQuery = JSON.parse(init.body as string).query;
     if (answer == null) throw new Error('analytics down');
     return { status: 200, json: async () => ({ data: { viewer: { accounts: [{ aiInferenceAdaptiveGroups: [
       { dimensions: { modelId: '@cf/qwen/qwen3-30b-a3b-fp8' }, sum: { totalNeurons: answer } }] }] } } }) };
-  };
+  }) as unknown as typeof fetch;
 }
 const realLog = console.log;
 const quiet = () => { console.log = () => {}; };   // the unread log line is not the test's output
@@ -45,7 +47,7 @@ test('off means no meter read and never resting; unconfigured means the same, an
   stubFetch(9999);
   const off = await merecatQuota(ENV, { quota_guard_on: 0, quota_guard_pct: 95 }, T0);
   assert.equal(off.on, false); assert.equal(off.resting, false); assert.equal(calls, 0);
-  const bare = await merecatQuota({}, CFG, T0);
+  const bare = await merecatQuota({} as QuotaEnv, CFG, T0);
   assert.equal(bare.configured, false); assert.equal(bare.resting, false); assert.equal(calls, 0);
   assert.equal(bare.reset_in_h, 20, 'the hours ride even when the meter cannot');
   assert.match(bare.note, /in about 20 hours/);

@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 import * as Wire from '../../purescript/output/Domain.Wire/index.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const routes = JSON.parse(readFileSync(join(root, 'tests', '_support', 'routes.json'), 'utf8')).map((r) => r.m + ' ' + r.p);
+const routes = JSON.parse(readFileSync(join(root, 'tests', '_support', 'routes.json'), 'utf8')).map((r: { m: string; p: string }) => r.m + ' ' + r.p);
 
 test('a route names its lists by method and path; a route not in the table has none', () => {
   assert.deepEqual(Wire.listFields('GET')('/api/comments/recent'), ['items']);
@@ -27,7 +27,7 @@ test('a route names its lists by method and path; a route not in the table has n
 });
 
 test('the table is one row per real route, sorted, each naming at least one field once', () => {
-  const keys = Wire.lists.map((r) => r.route);
+  const keys = Wire.lists.map((r: { route: string }) => r.route);
   assert.deepEqual(keys, [...keys].sort(), 'sorted, so a diff reads cleanly');
   assert.equal(new Set(keys).size, keys.length, 'one row per route');
   for (const r of Wire.lists) {

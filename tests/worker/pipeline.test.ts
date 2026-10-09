@@ -17,10 +17,12 @@ import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, freshLibDb, identity, resetCaches, call, netSpy } from '../_support/worker.ts';
 import { githubIssuer } from '../_support/github_oidc.ts';
 import { keyCache } from '../../comments-worker/src/oidc.ts';
+import type { Claims, GithubIssuer } from '../_support/github_oidc.ts';
+import type { Row, Worker, TestEnv, CallOpts } from '../_support/worker.ts';
 
 const HOST = 'https://merecatholicity-comments.support-609.workers.dev';
 const REPORT_KEY = 'the-dev-box-nightly-report-key';
-let worker, gh, stranger, ADMIN, net, logs, log;
+let worker: Worker, gh: GithubIssuer, stranger: GithubIssuer, ADMIN: { key: string; hash: string }, net: ReturnType<typeof netSpy>, logs: string[], log: typeof console.log;
 
 before(async () => {
   ({ worker } = await loadWorker());
@@ -30,21 +32,21 @@ before(async () => {
 });
 beforeEach(() => {
   resetCaches();
-  net = netSpy((url) => gh.serves(url));
+  net = netSpy((url) => gh.serves(url) as Response);
   logs = [];
   log = console.log;
-  console.log = (...a) => { logs.push(a.map(String).join(' ')); };
+  console.log = (...a: unknown[]) => { logs.push(a.map(String).join(' ')); };
 });
 afterEach(() => { net.restore(); console.log = log; });
 
-function env(vars = {}) {
+function env(vars: Row = {}): TestEnv {
   return makeEnv({ db: freshDb(), libdb: freshLibDb(), vars: { ADMIN_HASHES: ADMIN.hash, OPS_REPORT_KEY: REPORT_KEY, ...vars } });
 }
-const bearer = (token) => ({ host: HOST, origin: null, headers: { Authorization: 'Bearer ' + token } });
+const bearer = (token: string): CallOpts => ({ host: HOST, origin: null, headers: { Authorization: 'Bearer ' + token } });
 const asRunner = { host: HOST, origin: null };
-const said = (event) => logs.filter((l) => l.includes('"event":"' + event + '"')).map((l) => JSON.parse(l));
+const said = (event: string): Row[] => logs.filter((l) => l.includes('"event":"' + event + '"')).map((l) => JSON.parse(l));
 const jwksAsked = () => net.calls.filter((c) => c.url === 'https://token.actions.githubusercontent.com/.well-known/jwks').length;
-const libConfig = async (e, k) => {
+const libConfig = async (e: TestEnv, k: string) => {
   const r = await e.LIBDB.prepare('SELECT v FROM config WHERE k = ?').bind(k).first();
   return r ? r.v : null;
 };
@@ -114,7 +116,7 @@ test('the claims decide: another branch, a pull request, another workflow, a lap
     ['a string expiry', { exp: String(now + 300) }, 'expired'],
     ['not yet valid', { nbf: now + 600 }, 'not yet valid'],
     ['a numeric repository id', { repository_id: 1303720165 }, 'another repository'],
-  ]) {
+  ] as [string, Claims, string][]) {
     logs.length = 0;
     const r = await call(worker, e, 'POST', '/api/merecat/works', {}, bearer(await gh.token('ingest', over)));
     assert.equal(r.status, 403, name);
@@ -142,7 +144,7 @@ test('an unknown key is looked for once a minute at most, and an unreachable key
   /* GitHub down: closed, and not asked again inside the minute */
   net.restore();
   resetCaches();
-  net = netSpy((url) => (url.includes('token.actions.githubusercontent.com') ? new Response('bad gateway', { status: 502 }) : null));
+  net = netSpy((url) => (url.includes('token.actions.githubusercontent.com') ? new Response('bad gateway', { status: 502 }) : null) as Response);
   const token = await gh.token('ingest');
   assert.equal((await call(worker, e, 'POST', '/api/merecat/works', {}, bearer(token))).status, 403);
   assert.equal((await call(worker, e, 'POST', '/api/merecat/works', {}, bearer(token))).status, 403);
@@ -169,7 +171,7 @@ test('the persona and the dials: only the job a reviewer approved, or an admin; 
     ['a dial beside the stamp', { config: { ...stamp, topk: 40 } }],
     ['the persona\'s file hash', { config: { persona_file_hash: 'f'.repeat(64) } }],
     ['the dials\' file hash', { config: { config_file_hash: 'f'.repeat(64) } }],
-  ]) {
+  ] as [string, Row][]) {
     logs.length = 0;
     r = await call(worker, e, 'POST', '/api/merecat/config', body, bearer(ingestJob));
     assert.deepEqual([r.status, r.json.error], [403, 'No.'], name);
@@ -231,7 +233,7 @@ test('the retired static key opens nothing, even were it still set', async () =>
     ['/api/merecat/config', { persona: 'Pushed the old way.' }],
     ['/api/merecat/ingest', { mode: 'delete', work: { id: 'x' } }],
     ['/api/comments/ops/report', { probe: true }],
-  ]) {
+  ] as [string, Row][]) {
     const r = await call(worker, e, 'POST', path, { key: 'the-retired-static-key-value', ...body }, asRunner);
     assert.equal(r.status, 403, path);
   }

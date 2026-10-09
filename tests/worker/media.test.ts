@@ -40,7 +40,7 @@ const SWEEP_SQL = SWEEP_FRAGMENTS.join('');
 /* Build the real schema from the ledger. `upTo` applies only migrations whose
  * number is <= the prefix — how the 0006 backfill is tested against a genuinely
  * pre-0006 database. */
-function freshDb(upTo) {
+function freshDb(upTo?: string) {
   const db = new DatabaseSync(':memory:');
   let files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).sort();
   if (upTo) files = files.filter((f) => f.slice(0, 4) <= upTo);
@@ -68,14 +68,14 @@ test('the migration ledger (0000..0006) builds a working schema', () => {
 
 test('0006 backfill: board-linked rows become ctx board, everything else the feed', () => {
   const { db } = freshDb('0005');
-  const hex = (c) => c.repeat(64);
+  const hex = (c: string) => c.repeat(64);
   const ins = db.prepare('INSERT INTO wall_media (key, size, created_at, ref_type, ref_id) VALUES (?, 100, 1, ?, ?)');
   ins.run(`wall/i/${hex('a')}`, 'board', 11);
   ins.run(`wall/i/${hex('b')}`, 'post', 1);
   ins.run(`wall/i/${hex('c')}`, 'comment', 1);
   ins.run(`wall/i/${hex('d')}`, null, null); // unlinked upload: attributed to the feed
   db.exec(readFileSync(join(migrationsDir, '0006_media_sections.sql'), 'utf8'));
-  const ctxOf = (k) => db.prepare('SELECT ctx FROM wall_media WHERE key = ?').get(k).ctx;
+  const ctxOf = (k: string) => db.prepare('SELECT ctx FROM wall_media WHERE key = ?').get(k)!.ctx;
   assert.equal(ctxOf(`wall/i/${hex('a')}`), 'board');
   assert.equal(ctxOf(`wall/i/${hex('b')}`), 'wall');
   assert.equal(ctxOf(`wall/i/${hex('c')}`), 'wall');
@@ -94,8 +94,8 @@ test('sweep SQL in this test matches lib.ts verbatim (drift guard)', () => {
 test('the orphan sweep spares live/pending board media and never cross-wires wall-comment ids', () => {
   const { db } = freshDb();
   const now = Math.floor(Date.now() / 1000);
-  const hex = (c) => c.repeat(64);
-  const key = (kind, c) => `wall/${kind}/${hex(c)}`;
+  const hex = (c: string) => c.repeat(64);
+  const key = (kind: string, c: string) => `wall/${kind}/${hex(c)}`;
 
   // A wall post (id 1) and a wall comment (id 1) — alive.
   db.prepare("INSERT INTO wall_posts (id, author_hash, body, created_at, status) VALUES (1, ?, 'p', ?, 'live')").run(hex('f'), now);
@@ -107,7 +107,7 @@ test('the orphan sweep spares live/pending board media and never cross-wires wal
   db.prepare("INSERT INTO comments (id, page, author_hash, body, status, created_at) VALUES (12, 'board:themes', ?, 'held post', 'pending', ?)").run(hex('f'), now);
   db.prepare("INSERT INTO comments (id, page, author_hash, body, status, created_at) VALUES (13, 'board:themes', ?, 'gone post', 'deleted', ?)").run(hex('f'), now);
 
-  const media = [
+  const media: [string, number, string | null, number | null, boolean][] = [
     // [key, created_at, ref_type, ref_id, expectSwept]
     [key('i', 'a'), now - 60, null, null, false],       // fresh unlinked: inside the 15-min grace
     [key('i', 'b'), now - 1200, null, null, true],      // stale unlinked: swept
@@ -174,7 +174,7 @@ test('retention selects per-section by age — and deliberately does NOT spare p
      different rule for a different job. Asserted on purpose. */
   const { db } = freshDb();
   const now = Math.floor(Date.now() / 1000);
-  const hex = (c) => c.repeat(64);
+  const hex = (c: string) => c.repeat(64);
   db.prepare("INSERT INTO comments (id, page, author_hash, body, status, created_at) VALUES (21, 'board:themes', ?, 'held', 'pending', ?)").run(hex('f'), now);
   const ins = db.prepare('INSERT INTO wall_media (key, size, created_at, ref_type, ref_id, ctx) VALUES (?, 100, ?, ?, ?, ?)');
   const media = [

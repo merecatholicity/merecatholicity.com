@@ -24,31 +24,35 @@ import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches } from '../_support/worker.ts';
 import { fakeCtx } from '../_support/hub_runtime.ts';
 import { pubidOf } from '../../comments-worker/src/lib.ts';
+import type { FakeCtx, FakeSocket } from '../_support/hub_runtime.ts';
+import type { Row, Loaded, HubSpy, TestEnv } from '../_support/worker.ts';
+import type { Env } from '../../comments-worker/src/env.ts';
+import type { DatabaseSync } from 'node:sqlite';
 
 const PEPPER = 'a-test-pepper-for-the-hub-2026';
 
-function cluster(BoardHub, n, db) {
-  const instances = new Map();
-  const ctxs = new Map();
-  const namespace = { idFromName: (name) => name, get: (name) => instances.get(name) };
-  const env = makeEnv({ db, hub: { namespace }, vars: { HUB_SHARDS: String(n), PUBLIC_ID_PEPPER: PEPPER } });
+function cluster(BoardHub: Loaded['BoardHub'], n: number, db: DatabaseSync) {
+  const instances = new Map<string, any>();
+  const ctxs = new Map<string, FakeCtx>();
+  const namespace = { idFromName: (name: string) => name, get: (name: string) => instances.get(name) };
+  const env = makeEnv({ db, hub: { namespace } as unknown as HubSpy, vars: { HUB_SHARDS: String(n), PUBLIC_ID_PEPPER: PEPPER } });
   for (const name of Hub.shardNames(n)) {
     const ctx = fakeCtx(name);
     ctxs.set(name, ctx);
     instances.set(name, new BoardHub(ctx, env));
   }
-  const shard = (i) => instances.get(Hub.shardName(i));
-  const connect = async (i) => {
+  const shard = (i: number) => instances.get(Hub.shardName(i));
+  const connect = async (i: number): Promise<FakeSocket> => {
     const r = await shard(i).fetch(new Request('https://merecatholicity.com/api/comments/live', { headers: { Upgrade: 'websocket' } }));
-    const ctx = ctxs.get(Hub.shardName(i));
+    const ctx = ctxs.get(Hub.shardName(i))!;
     return ctx.sockets[ctx.sockets.length - 1];
   };
-  const send = (i, ws, frame) => shard(i).webSocketMessage(ws, JSON.stringify(frame));
-  const close = (i, ws) => { const ctx = ctxs.get(Hub.shardName(i)); ctx.sockets.splice(ctx.sockets.indexOf(ws), 1); return shard(i).webSocketClose(ws, 1000, '', true); };
+  const send = (i: number, ws: FakeSocket, frame: Row) => shard(i).webSocketMessage(ws, JSON.stringify(frame));
+  const close = (i: number, ws: FakeSocket) => { const ctx = ctxs.get(Hub.shardName(i))!; ctx.sockets.splice(ctx.sockets.indexOf(ws), 1); return shard(i).webSocketClose(ws, 1000, '', true); };
   return { env, shard, connect, send, close };
 }
 
-let BoardHub, A, B;
+let BoardHub: Loaded['BoardHub'], A: { key: string; hash: string }, B: { key: string; hash: string };
 before(async () => {
   ({ BoardHub } = await loadWorker());
   [A, B] = await Promise.all(['hub-pub-a', 'hub-pub-b'].map(identity));
@@ -56,9 +60,9 @@ before(async () => {
 beforeEach(resetCaches);
 
 /* the ids as each side knows them */
-async function ids(env) {
-  const pa = await pubidOf(env, A.hash);
-  const pb = await pubidOf(env, B.hash);
+async function ids(env: TestEnv): Promise<{ pa: string; pb: string }> {
+  const pa = await pubidOf(env as unknown as Env, A.hash);
+  const pb = await pubidOf(env as unknown as Env, B.hash);
   assert.notEqual(pa, A.hash, 'the pepper must actually be in force, or this file proves nothing');
   return { pa, pb };
 }

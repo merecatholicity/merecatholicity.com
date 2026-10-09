@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import * as Fts from '../../purescript/output/Domain.Fts/index.js';
 
 // The classic worker buildMatch/merecatMatch, verbatim, as the parity oracle.
-function classicBuildMatch(q) {
+function classicBuildMatch(q: string) {
   const tokens = [];
   const re = /"([^"]*)"|(\S+)/g;
   let m;
@@ -23,7 +23,7 @@ const MERECAT_STOP = new Set(('a about all an and any are as at be been but by c
   'he her his how i if in into is it its just like me my no not of on one or our out over say says said she should so some ' +
   'than that the their them then there these they this to under up us was we were what when where which who why will with ' +
   'would you your').split(' '));
-function classicMerecatMatch(q) {
+function classicMerecatMatch(q: string) {
   const out = [];
   const seen = new Set();
   const re = /"([^"]*)"|([A-Za-z0-9À-ɏ'’]+)/g;
@@ -72,7 +72,7 @@ test('buildMatch + merecatMatch are byte-identical to the classic worker (64 que
 test('injection is unrepresentable: no FTS5 operator survives outside a quoted span', () => {
   // Strip well-formed "..."-quoted spans (with "" escapes); only spaces
   // (buildMatch) or " OR " joins (merecatMatch) may remain.
-  const stripQuoted = (s) => s.replace(/"(?:[^"]|"")*"/g, '');
+  const stripQuoted = (s: string) => s.replace(/"(?:[^"]|"")*"/g, '');
   for (const q of ['a OR b', 'x AND y', 'a* -b c:d NEAR(e f 2)', 'a"OR"b', '(a)']) {
     assert.equal(stripQuoted(Fts.unSafeMatch(Fts.buildMatch(q))).replace(/ /g, ''), '',
       `buildMatch injection-proof: ${JSON.stringify(q)}`);

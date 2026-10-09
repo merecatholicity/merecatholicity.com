@@ -21,7 +21,7 @@ const migrationsDir = join(root, 'comments-worker', 'migrations');
 const idxSrc = routesSource();
 const hubSrc = readFileSync(join(root, 'comments-worker', 'src', 'durable.ts'), 'utf8');
 
-const body = (name) => handlerBody(name, idxSrc);
+const body = (name: string) => handlerBody(name, idxSrc);
 
 test('the ledger builds through 0013 and profiles carries last_seen_at', () => {
   const db = new DatabaseSync(':memory:');

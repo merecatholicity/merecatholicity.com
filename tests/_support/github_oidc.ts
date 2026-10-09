@@ -10,18 +10,29 @@
      const pr = await gh.token('ingest', { environment: undefined }); // a claim removed */
 import { JWKS_URL } from '../../comments-worker/src/oidc.ts';
 
-const b64url = (bytes) => Buffer.from(bytes).toString('base64url');
+const b64url = (bytes: string | ArrayBuffer | Uint8Array): string => Buffer.from(bytes).toString('base64url');
 
-export async function githubIssuer({ kid = 'test-signing-key' } = {}) {
+export type Claims = Record<string, unknown>;
+export type GithubIssuer = {
+  kid: string;
+  jwks: { keys: { kty: string; kid: string; use: string; alg: string; n: string; e: string }[] };
+  sign: (claims: Claims, header?: Record<string, unknown>, key?: CryptoKey) => Promise<string>;
+  claims: (door: string, over?: Claims) => Claims;
+  token: (door: string, over?: Claims) => Promise<string>;
+  serves: (url: string) => Response | null;
+  readonly fetched: number;
+};
+
+export async function githubIssuer({ kid = 'test-signing-key' }: { kid?: string } = {}): Promise<GithubIssuer> {
   const pair = await crypto.subtle.generateKey(
     { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
-    true, ['sign', 'verify']);
-  const pub = await crypto.subtle.exportKey('jwk', pair.publicKey);
-  const jwks = { keys: [{ kty: 'RSA', kid, use: 'sig', alg: 'RS256', n: pub.n, e: pub.e }] };
+    true, ['sign', 'verify']) as CryptoKeyPair;
+  const pub = await crypto.subtle.exportKey('jwk', pair.publicKey) as JsonWebKey;
+  const jwks = { keys: [{ kty: 'RSA', kid, use: 'sig', alg: 'RS256', n: pub.n!, e: pub.e! }] };
   let fetched = 0;
 
   /* a JWT over any header and claims, signed with this issuer's key */
-  async function sign(claims, header = {}, key = pair.privateKey) {
+  async function sign(claims: Claims, header: Record<string, unknown> = {}, key: CryptoKey = pair.privateKey): Promise<string> {
     const head = b64url(JSON.stringify({ typ: 'JWT', alg: 'RS256', kid, ...header }));
     const body = b64url(JSON.stringify(claims));
     const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(head + '.' + body));
@@ -29,7 +40,7 @@ export async function githubIssuer({ kid = 'test-signing-key' } = {}) {
   }
 
   /* the claims GitHub gives the job that may open `door` */
-  function claims(door, over = {}) {
+  function claims(door: string, over: Claims = {}): Claims {
     const now = Math.floor(Date.now() / 1000);
     const file = door === 'probe' ? 'ops-watch.yml' : 'merecat.yml';
     const ref = 'merecatholicity/merecatholicity.com/.github/workflows/' + file + '@refs/heads/main';
@@ -51,9 +62,9 @@ export async function githubIssuer({ kid = 'test-signing-key' } = {}) {
 
   return {
     kid, jwks, sign, claims,
-    token: (door, over) => sign(claims(door, over)),
+    token: (door: string, over?: Claims) => sign(claims(door, over)),
     /* the key set, when the worker asks GitHub for it */
-    serves: (url) => (url === JWKS_URL ? (fetched++, Response.json(jwks)) : null),
+    serves: (url: string) => (url === JWKS_URL ? (fetched++, Response.json(jwks)) : null),
     get fetched() { return fetched; },
   };
 }

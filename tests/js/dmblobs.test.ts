@@ -81,7 +81,7 @@ test('every document/window listener the boot installs dies with the boot', () =
      2026-09-11). A run() body sits one indent deeper; it is de-indented so the
      boot-level shape below reads it exactly as it read the old file, and never
      sweeps a listener nested inside a function. */
-  const runBody = (text) => {
+  const runBody = (text: string) => {
     const i = text.indexOf('\n  function run() {');
     const j = text.indexOf('\n  }\n  return { bind, run', i);
     return i < 0 || j < 0 ? '' : text.slice(i, j).split('\n').map((l) => l.replace(/^  /, '')).join('\n');

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Compose from '../../purescript/output/Domain.Compose/index.js';
 
-const mentionsIn = (text, picks) => Compose.mentionsIn(text)(picks);
+const mentionsIn = (text: string, picks: unknown) => Compose.mentionsIn(text)(picks);
 
 test('mentionsIn: keeps picks whose token survives in the body, in order', () => {
   assert.deepEqual(

@@ -7,9 +7,9 @@ import assert from 'node:assert/strict';
 import * as Scripture from '../../purescript/output/Domain.Scripture/index.js';
 import { orNull } from '../_support/ps.ts';
 
-const slug = (k) => orNull(Scripture.bookSlug(k));
+const slug = (k: string) => orNull(Scripture.bookSlug(k));
 // verseParts is curried and takes a Nullable range end (null = single verse).
-const vp = (b, c, v1, v2) => Scripture.verseParts(b)(c)(v1)(v2 == null ? null : v2);
+const vp = (b: string, c: number, v1: number, v2?: number | null) => Scripture.verseParts(b)(c)(v1)(v2 == null ? null : v2);
 
 test('bibleSrc: the autolink regex fragment is byte-stable', () => {
   // Full byte-equality vs a freshly recomputed oracle is checked live in
@@ -22,7 +22,7 @@ test('bibleSrc: the autolink regex fragment is byte-stable', () => {
 });
 
 test('bookSlug: a normalized reference -> canonical KJV slug, else null', () => {
-  const cases = [
+  const cases: [string, string | null][] = [
     ['1 cor', '1-corinthians'], ['john', 'john'], ['ii samuel', '2-samuel'],
     ['song of solomon', 'song-of-solomon'], ['rev', 'revelation'], ['ps', 'psalms'],
     ['first thessalonians', '1-thessalonians'], ['nope', null], ['so', null],

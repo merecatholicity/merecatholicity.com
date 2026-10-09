@@ -15,39 +15,44 @@ import assert from 'node:assert/strict';
 import * as Hub from '../../purescript/output/Domain.Hub/index.js';
 import { loadWorker, makeEnv, freshDb, identity, resetCaches, hubSpy, call } from '../_support/worker.ts';
 import { fakeCtx } from '../_support/hub_runtime.ts';
+import type { FakeCtx, FakeSocket } from '../_support/hub_runtime.ts';
+import type { Row, Worker, Loaded, HubSpy } from '../_support/worker.ts';
+import type { Env } from '../../comments-worker/src/env.ts';
+import type { DatabaseSync } from 'node:sqlite';
 import { sendToHub, hubPresenceOf, hubViewersOf, hubDmViewing, hubStats, hubShards } from '../../comments-worker/src/lib.ts';
 
 /* the Workers runtime the hub touches, in Node (FakeSocket, fakeCtx) */
 /* N shards, one env, the namespace resolving each shard's name to its instance */
-function cluster(BoardHub, n, db) {
-  const instances = new Map();
-  const ctxs = new Map();
-  const namespace = { idFromName: (name) => name, get: (name) => instances.get(name) };
-  const env = makeEnv({ db, hub: { namespace }, vars: { HUB_SHARDS: String(n) } });
+function cluster(BoardHub: Loaded['BoardHub'], n: number, db: DatabaseSync) {
+  const instances = new Map<string, any>();
+  const ctxs = new Map<string, FakeCtx>();
+  const namespace = { idFromName: (name: string) => name, get: (name: string) => instances.get(name) };
+  const env = makeEnv({ db, hub: { namespace } as unknown as HubSpy, vars: { HUB_SHARDS: String(n) } });
   for (const name of Hub.shardNames(n)) {
     const ctx = fakeCtx(name);
     ctxs.set(name, ctx);
     instances.set(name, new BoardHub(ctx, env));
   }
-  const shard = (i) => instances.get(Hub.shardName(i));
+  const shard = (i: number) => instances.get(Hub.shardName(i));
   /* the upgrade, as handleLive forwards it; returns the SERVER socket the hub holds */
-  const connect = async (i) => {
+  const connect = async (i: number): Promise<FakeSocket> => {
     const r = await shard(i).fetch(new Request('https://merecatholicity.com/api/comments/live', { headers: { Upgrade: 'websocket' } }));
     assert.ok(r.upgraded, 'a 101');
-    const ctx = ctxs.get(Hub.shardName(i));
+    const ctx = ctxs.get(Hub.shardName(i))!;
     return ctx.sockets[ctx.sockets.length - 1];
   };
-  const send = (i, ws, frame) => shard(i).webSocketMessage(ws, JSON.stringify(frame));
-  const close = (i, ws) => { const ctx = ctxs.get(Hub.shardName(i)); ctx.sockets.splice(ctx.sockets.indexOf(ws), 1); return shard(i).webSocketClose(ws, 1000, '', true); };
+  const send = (i: number, ws: FakeSocket, frame: Row) => shard(i).webSocketMessage(ws, JSON.stringify(frame));
+  const close = (i: number, ws: FakeSocket) => { const ctx = ctxs.get(Hub.shardName(i))!; ctx.sockets.splice(ctx.sockets.indexOf(ws), 1); return shard(i).webSocketClose(ws, 1000, '', true); };
   /* "wake": the object evicted and rebuilt over the same accepted sockets */
-  const wake = (i) => { const name = Hub.shardName(i); const inst = new BoardHub(ctxs.get(name), env); instances.set(name, inst); return inst; };
+  const wake = (i: number) => { const name = Hub.shardName(i); const inst = new BoardHub(ctxs.get(name), env); instances.set(name, inst); return inst; };
   return { env, shard, connect, send, close, wake, ctxs };
 }
 
 const N = 3;
-let BoardHub, worker;
+type Cluster = ReturnType<typeof cluster>;
+let BoardHub: Loaded['BoardHub'], worker: Worker;
 /* one identity per shard under N = 3, found by seed */
-const home = {};
+const home: Record<number, { key: string; hash: string }> = {};
 before(async () => {
   ({ worker, BoardHub } = await loadWorker());
   for (let seed = 0; Object.keys(home).length < N && seed < 500; seed++) {
@@ -153,7 +158,7 @@ test('a wake rebuilds the index from the attachments: the same sockets, the same
 test('a member on the wrong shard is accepted and said once; the sub cap closes and forgets the socket', async () => {
   const c = cluster(BoardHub, N, freshDb());
   const B = home[1];
-  const said = [];
+  const said: string[] = [];
   const log = console.log;
   console.log = (s) => { said.push(String(s)); };
   try {
@@ -171,10 +176,10 @@ test('a member on the wrong shard is accepted and said once; the sub cap closes 
 
 test('the worker routes: a private event to its home shards alone, a public one to every shard; presence and viewing are asked of the home shards', async () => {
   const hub = hubSpy({ online: (hs) => hs, viewersOf: (tag, hs) => hs, viewing: () => true });
-  const env = makeEnv({ db: freshDb(), hub, vars: { HUB_SHARDS: '4' } });
+  const env = makeEnv({ db: freshDb(), hub, vars: { HUB_SHARDS: '4' } }) as unknown as Env;
   assert.equal(hubShards(env), 4);
   const A = home[0], B = home[1];
-  const n4 = (h) => Hub.shardName(Hub.shardOf(4)(h));
+  const n4 = (h: string) => Hub.shardName(Hub.shardOf(4)(h));
   await sendToHub(env, { v: 1, t: 'dm', scopes: ['user:' + A.hash, 'user:' + B.hash] });
   assert.deepEqual(hub.names('publish').sort(), [...new Set([n4(A.hash), n4(B.hash)])].sort(), 'the two homes (one call each)');
   hub.calls.length = 0;
@@ -196,7 +201,7 @@ test('the worker routes: a private event to its home shards alone, a public one 
   assert.deepEqual(hub.names('dmViewing'), [n4(B.hash)]);
   assert.deepEqual(await hubStats(env), [0, 1, 2, 3].map((shard) => ({ shard, sockets: 0, members: 0 })));
   /* no hub: every question answers "nobody" */
-  const bare = makeEnv({ db: freshDb() });
+  const bare = makeEnv({ db: freshDb() }) as unknown as Env;
   assert.deepEqual(await hubPresenceOf(bare, [A.hash]), []);
   assert.deepEqual(await hubStats(bare), []);
 });
@@ -215,7 +220,7 @@ test('the upgrade is placed by the hint, or by the address without one; the hint
   assert.equal(hub.fetched.length, 2);
   assert.equal(hub.fetched[0], hub.fetched[1], 'the same address, the same shard, hint or no hint');
   const spy1 = hubSpy();
-  const one = makeEnv({ db: freshDb(), hub: spy1 });
+  const one = makeEnv({ db: freshDb(), hub: spy1 }) as unknown as Env;
   await call(worker, one, 'GET', '/api/comments/live?h=' + A.hash, undefined, ws);
   assert.equal(hubShards(one), 1);
   assert.deepEqual(spy1.fetched, ['board'], 'no var: one shard, the historic name');
@@ -224,16 +229,16 @@ test('the upgrade is placed by the hint, or by the address without one; the hint
 /* ---- targeted presence (the watch registry) ---- */
 
 /* count the relays each shard receives */
-function countRelays(c, n) {
+function countRelays(c: Cluster, n: number): number[] {
   const got = Array(n).fill(0);
   for (let i = 0; i < n; i++) {
     const inst = c.shard(i);
     const orig = inst.relay.bind(inst);
-    inst.relay = async (items) => { got[i] += 1; return orig(items); };
+    inst.relay = async (items: unknown) => { got[i] += 1; return orig(items); };
   }
   return got;
 }
-const watchRows = (c, i) => c.ctxs.get(Hub.shardName(i)).storage.sql.db.prepare('SELECT hash, shard, n FROM watch ORDER BY shard').all().map((r) => ({ ...r }));
+const watchRows = (c: Cluster, i: number) => c.ctxs.get(Hub.shardName(i))!.storage.sql.db.prepare('SELECT hash, shard, n FROM watch ORDER BY shard').all().map((r) => ({ ...r }));
 
 test('a presence change is relayed only to the shards that watch the member, and a watch that ended is forgotten', async () => {
   const c = cluster(BoardHub, N, freshDb());
@@ -273,7 +278,7 @@ test('a registration that lands while an idle answer is in flight survives it', 
   await c.send(2, w, { t: 'sub', scope: [] });   // the watch ends; the row still stands
   const s2 = c.shard(2);
   const orig = s2.relay.bind(s2);
-  s2.relay = async (items) => {
+  s2.relay = async (items: unknown) => {
     const answer = await orig(items);                         // idle: nobody watches A here…
     await c.send(2, w, { t: 'sub', scope: ['presence:' + A.hash] });   // …and a watcher returns before the answer lands
     return answer;
@@ -291,7 +296,7 @@ test('one shard never touches storage; a misrouted member is relayed to every si
   const x = await one.connect(0); await one.send(0, x, { t: 'auth', key: A.key });
   await one.send(0, x, { t: 'sub', scope: ['presence:' + home[1].hash, 'user:' + A.hash] });
   await one.close(0, x);
-  assert.deepEqual(one.ctxs.get('board').storage.sql.calls, [], 'HUB_SHARDS=1: no storage at all');
+  assert.deepEqual(one.ctxs.get('board')!.storage.sql.calls, [], 'HUB_SHARDS=1: no storage at all');
 
   const c = cluster(BoardHub, N, freshDb());
   const got = countRelays(c, N);
@@ -300,7 +305,7 @@ test('one shard never touches storage; a misrouted member is relayed to every si
   assert.deepEqual(got, [0, 1, 1], 'off its home shard: every sibling hears, as before the registry');
 
   /* rows written under another shard count are dropped the next time the shard wakes */
-  const sql = c.ctxs.get('board').storage.sql;
+  const sql = c.ctxs.get('board')!.storage.sql;
   sql.exec("INSERT INTO watch (hash, shard, n, at) VALUES (?, 5, 8, 1)", A.hash);
   sql.exec("INSERT INTO watch (hash, shard, n, at) VALUES (?, 2, ?, 2)", A.hash, N);
   const woke = c.wake(0);

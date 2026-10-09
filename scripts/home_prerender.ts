@@ -15,7 +15,7 @@ const FILE = join(root, 'docs', 'index.html');
 const MAIN = '<main class="prose">';
 const BLOCK = /\n?<mc-home>[\s\S]*?<\/mc-home>/;
 
-export function prerendered(page) {
+export function prerendered(page: string): string {
   const block = '\n<mc-home>' + toHtml(homeTree()) + '</mc-home>';
   const bare = page.replace(BLOCK, '');
   const at = bare.indexOf(MAIN);

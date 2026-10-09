@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (p) => readFileSync(join(root, p), 'utf8');
+const read = (p: string) => readFileSync(join(root, p), 'utf8');
 
 test('minting a placeholder retires the ones already standing, before it builds its own', () => {
   const src = read('client/comments.ts');
@@ -48,7 +48,7 @@ const PRODUCERS = [
 ];
 
 test('every half of the app mints .mc-load in one swept place — none of them alone', () => {
-  const offenders = [];
+  const offenders: string[] = [];
   for (const dir of ['client', 'app', 'app/views']) {
     for (const f of readdirSync(join(root, dir)).filter((n) => n.endsWith('.ts'))) {
       const path = dir + '/' + f;

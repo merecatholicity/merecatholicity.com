@@ -21,20 +21,22 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadWorker, makeEnv, freshDb, identity, establish, publishKey, call, resetCaches } from '../_support/worker.ts';
+import type { Worker, Row } from '../_support/worker.ts';
 import { pubidOf, clearIdCaches } from '../../comments-worker/src/lib.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const read = (rel) => readFileSync(join(root, rel), 'utf8');
+const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
 
 const PEPPER = 'a-stable-test-pepper-value';
-let worker, ann, bob;
+type Id = { key: string; hash: string };
+let worker: Worker, ann: Id, bob: Id;
 before(async () => {
   ({ worker } = await loadWorker());
   [ann, bob] = await Promise.all(['ann', 'bob'].map(identity));
 });
 beforeEach(() => { resetCaches(); clearIdCaches(); });
 
-const pub = (h) => pubidOf({ PUBLIC_ID_PEPPER: PEPPER }, h);
+const pub = (h: string) => pubidOf({ PUBLIC_ID_PEPPER: PEPPER } as unknown as Parameters<typeof pubidOf>[0], h);
 
 /* Every documented POST road under /dm whose request shape offers `with`. */
 const PAIR_ROADS = [...read('comments-worker/API.md')
@@ -43,7 +45,8 @@ const PAIR_ROADS = [...read('comments-worker/API.md')
   .map((m) => m[1]);
 
 /* What each road needs besides the target, so the call reaches its work. */
-const EXTRA = {
+type Ids = { ann: string; bob: string };
+const EXTRA: Record<string, (ids: Ids) => Row> = {
   '/api/comments/dm/send': (ids) => ({ body: 'E3.the-first-word', enc: 3, keys: { [ids.ann]: 'x'.repeat(43), [ids.bob]: 'y'.repeat(43) } }),
   '/api/comments/dm/ttl': () => ({ ttl: 86400 }),
 };
@@ -106,7 +109,7 @@ test('/dm/roster answers an unmade pair with both published keys', async () => {
   const r = await call(worker, env, 'POST', '/api/comments/dm/roster', { key: bob.key, with: ids.ann });
   assert.equal(r.status, 200, r.text.slice(0, 200));
   assert.equal(r.json.thread_id, null, 'no room yet');
-  const keys = Object.fromEntries(r.json.members.map((m) => [m.hash, m.pubkey]));
+  const keys = Object.fromEntries(r.json.members.map((m: Row) => [m.hash, m.pubkey]));
   assert.ok(keys[ids.ann], 'the correspondent is named by pubid and carries their published key');
   assert.ok(keys[ids.bob], 'and so does the sender, who seals to themselves too');
   db.close();

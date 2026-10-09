@@ -15,10 +15,15 @@ import assert from 'node:assert/strict';
 import { loadWorker, makeEnv, freshDb, identity, establish, resetCaches, call, ctx, netSpy } from '../_support/worker.ts';
 import { turnGuard, runTurnGuard, turnGuardRollover } from '../../comments-worker/src/usage.ts';
 import { GB } from '../../comments-worker/src/usagecalc.ts';
+import type { Worker, TestEnv, Row } from '../_support/worker.ts';
+
+type Id = { key: string; hash: string };
+/* the test env, as usage.ts's parameter type reads it */
+type UsageEnv = TestEnv & Parameters<typeof turnGuard>[0];
 
 const SEPT = Date.UTC(2026, 8, 17, 23, 30);
 const OCT_FIRST = Date.UTC(2026, 9, 1, 0, 0, 5);
-let worker, adm, member, net, relayed, logs, log;
+let worker: Worker, adm: Id, member: Id, net: ReturnType<typeof netSpy>, relayed: number | null, logs: string[], log: typeof console.log;
 
 before(async () => {
   ({ worker } = await loadWorker());
@@ -30,7 +35,7 @@ beforeEach(() => {
   relayed = 0;
   net = netSpy((url, init) => {
     if (url === 'https://api.cloudflare.com/client/v4/graphql') {
-      const q = JSON.parse(init.body).query;
+      const q = JSON.parse(init!.body as string).query;
       /* the relay's dataset; the usage page's other products are not this test's */
       if (relayed == null || !/callsTurnUsageAdaptiveGroups\(limit: 1000, filter: \{date_geq: "\d{4}-\d{2}-01"\}\)/.test(q)) {
         return Response.json({ errors: [{ message: 'analytics down' }] });
@@ -48,7 +53,7 @@ beforeEach(() => {
 });
 afterEach(() => { net.restore(); console.log = log; });
 
-function env(settings = {}, vars = {}) {
+function env(settings: Record<string, string> = {}, vars: Row = {}) {
   const db = freshDb();
   /* the owner's channel, so a told alert is a mail the test can read */
   for (const [k, v] of Object.entries({ alert_email: 'owner@example.org', ...settings })) {
@@ -56,10 +61,10 @@ function env(settings = {}, vars = {}) {
   }
   establish(db, member.hash);
   return makeEnv({ db, vars: { CF_USAGE_TOKEN: 'usage-token-for-the-test', CF_ACCOUNT_ID: 'acct', ADMIN_HASHES: adm.hash,
-    TURN_KEY_ID: 'turn-key-id', TURN_KEY_SECRET: 'turn-key-secret-for-the-test', ...vars } });
+    TURN_KEY_ID: 'turn-key-id', TURN_KEY_SECRET: 'turn-key-secret-for-the-test', ...vars } }) as UsageEnv;
 }
-const setting = async (e, k) => {
-  const r = await e.DB.prepare('SELECT v, updated_by FROM app_settings WHERE k = ?').bind(k).first();
+const setting = async (e: UsageEnv, k: string) => {
+  const r = await e.DB.prepare('SELECT v, updated_by FROM app_settings WHERE k = ?').bind(k).first<Row>();
   return r ? r.v : null;
 };
 const events = () => logs.filter((l) => l.includes('"event":"turn_guard"')).map((l) => JSON.parse(l));
@@ -75,8 +80,8 @@ test('at the line the relay is switched off, the month remembered, the owner tol
   relayed = 951 * GB;
   await runTurnGuard(e);
   assert.equal(await setting(e, 'calls_turn'), '0');
-  const row = await e.DB.prepare("SELECT updated_by FROM app_settings WHERE k = 'calls_turn'").first();
-  assert.equal(row.updated_by, 'turn-guard', 'the switch says who threw it');
+  const row = await e.DB.prepare("SELECT updated_by FROM app_settings WHERE k = 'calls_turn'").first<Row>();
+  assert.equal(row!.updated_by, 'turn-guard', 'the switch says who threw it');
   const st = JSON.parse(await setting(e, 'turn_guard_state'));
   assert.equal(st.month, new Date().toISOString().slice(0, 7));
   assert.deepEqual([st.pct, st.used, st.limit], [95, 951 * GB, 1000 * GB]);

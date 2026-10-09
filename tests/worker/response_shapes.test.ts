@@ -18,11 +18,12 @@ import { dirname, join } from 'node:path';
 import * as Wire from '../../purescript/output/Domain.Wire/index.js';
 import { runSweep, ROUTES } from '../_support/sweep.ts';
 import { shapeSnapshot, shapeDiff, DYNAMIC } from '../_support/shapes.ts';
+import type { Snapshot } from '../_support/shapes.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const { _dynamic: dynamic, ...want } = JSON.parse(readFileSync(join(root, 'tests', '_support', 'response_shapes.json'), 'utf8'));
+const { _dynamic: dynamic, ...want } = JSON.parse(readFileSync(join(root, 'tests', '_support', 'response_shapes.json'), 'utf8')) as Record<string, any>;
 
-let got;
+let got: Snapshot;
 before(async () => {
   const log = console.log;
   console.log = () => {};
@@ -43,7 +44,7 @@ test('every answer has the committed shape: no new key, no lost key, no changed 
 });
 
 test('the lists a successful answer always carries are the ones Domain.Wire promises', () => {
-  const table = Object.fromEntries(Wire.lists.map((r) => [r.route, r.fields]));
+  const table = Object.fromEntries(Wire.lists.map((r: { route: string; fields: string[] }) => [r.route, r.fields]));
   const drift = [];
   for (const [route, shape] of Object.entries(want)) {
     const promised = table[route] || [];
@@ -57,7 +58,7 @@ test('the leak that started this is a shape change the snapshot refuses', () => 
   assert.ok(recent.json.includes('items:array') && recent.json.includes('items[]:object'));
   const broken = JSON.parse(JSON.stringify(want));
   const leaked = broken['GET /api/comments/recent'];
-  leaked.json = leaked.json.filter((p) => !p.startsWith('items')).concat(['items:object', 'items.TURNSTILE_SECRET:string']);
+  leaked.json = leaked.json.filter((p: string) => !p.startsWith('items')).concat(['items:object', 'items.TURNSTILE_SECRET:string']);
   const diff = shapeDiff(want, broken);
   assert.ok(diff.some((d) => /new .*items\.TURNSTILE_SECRET:string/.test(d)), diff.join('\n'));
   assert.ok(diff.some((d) => /gone .*items:array/.test(d)), diff.join('\n'));

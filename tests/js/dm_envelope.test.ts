@@ -19,12 +19,12 @@ import { clientModule } from '../_support/client.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /* The vendored UMD reads `self` as it loads (a browser global); give Node one. */
-if (typeof globalThis.self === 'undefined') globalThis.self = globalThis;
+if (typeof globalThis.self === 'undefined') globalThis.self = globalThis as Window & typeof globalThis;
 let nacl = createRequire(import.meta.url)(join(root, 'docs', 'tweetnacl.min.js'));
-if (!nacl || !nacl.box) nacl = globalThis.self.nacl;
+if (!nacl || !nacl.box) nacl = (globalThis.self as unknown as { nacl: any }).nacl;
 assert.ok(nacl && nacl.box && nacl.secretbox, 'tweetnacl loaded with box and secretbox');
 const src = clientModule('dm-crypto');
-const fn = (name) => {
+const fn = (name: string) => {
   const i = src.indexOf(`function ${name}(`);
   assert.ok(i > 0, `${name} not found`);
   const j = src.indexOf('\n  function ', i + 10);
@@ -35,16 +35,17 @@ const names = ['dmB64uEnc', 'dmB64uDec', 'myDmKeypair', 'dmEncrypt', 'dmDecrypt'
 const body = 'var _dmKP = null, _dmKPFor = null;\n' + names.map((n) => fn(n)).join('\n').replace(/: any\b/g, '');
 const factory = new Function('nacl', 'state', body + '\nreturn { dmB64uEnc, myDmKeypair, dmEncrypt, dmDecrypt, dmSealFor, dmOpen, dmPlain, dmReseal, dmOpenBody, dmSealBody };');
 /* One seat per identity: the keypair is derived from the identity secret. */
-const seat = (key) => {
+const seat = (key: string) => {
   const state = { key, myHash: 'h' + key };   // the hash need only be distinct per seat here
   const env = factory(nacl, state);
   return { env, hash: state.myHash, pub: env.dmB64uEnc(env.myDmKeypair().publicKey) };
 };
 const A = seat('secret-of-ann'), B = seat('secret-of-bob'), C = seat('secret-of-cy'), D = seat('secret-of-di');
-const roster = (...seats) => seats.map((s) => ({ hash: s.hash, pubkey: s.pub }));
-const ctxFor = (seats) => { const by = {}; seats.forEach((s) => { by[s.hash] = s.pub; }); return { pubOf: (h) => by[h] || null, otherPub: null }; };
+type Seat = ReturnType<typeof seat>;
+const roster = (...seats: Seat[]) => seats.map((s) => ({ hash: s.hash, pubkey: s.pub }));
+const ctxFor = (seats: Seat[]) => { const by: Record<string, string> = {}; seats.forEach((s) => { by[s.hash] = s.pub; }); return { pubOf: (h: string) => by[h] || null, otherPub: null }; };
 /* the word as the server serves it to `reader`: the body, MY sealed key beside it */
-const served = (sent, sender, reader) => ({ enc: 3, sender_hash: sender.hash, body: sent.body, sealed: sent.keys[reader.hash] || null });
+const served = (sent: { body: string; keys: Record<string, string> }, sender: Seat, reader: Seat) => ({ enc: 3, sender_hash: sender.hash, body: sent.body, sealed: sent.keys[reader.hash] || null });
 
 test('a word sealed for three opens for each of them — the sender included — and for nobody else', () => {
   const sent = A.env.dmSealFor('the first word', roster(A, B, C));

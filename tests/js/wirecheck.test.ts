@@ -34,7 +34,7 @@ test('wireBroken names a listed field that is neither a list nor null, and nothi
   for (const odd of [null, undefined, 'text', 5, [1, 2]]) assert.deepEqual(Core.wireBroken('GET', '/api/comments/recent', odd), []);
 });
 
-const response = (body) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
+const response = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
 
 test('the wrapped json() rejects a broken answer, resolves a sound one, and leaves every other URL alone', async () => {
   const warn = console.warn;
@@ -48,12 +48,12 @@ test('the wrapped json() rejects a broken answer, resolves a sound one, and leav
 });
 
 test('the shell wraps fetch once, reading the method and URL from init or from a Request', async () => {
-  const seen = [];
-  const w = { fetch: async (input, init) => {
+  const seen: [string, string | undefined][] = [];
+  const w = { fetch: (async (input: string | Request, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.url;
     seen.push([url, init && init.method]);
     return response(url.includes('/dm/thread') ? { ok: true, messages: { not: 'a list' } } : leaked);
-  } };
+  }) as unknown as typeof fetch };
   installWireCheck(w);
   const once = w.fetch;
   installWireCheck(w);
@@ -71,18 +71,18 @@ test('the shell wraps fetch once, reading the method and URL from init or from a
 
 test('the store refuses a broken answer through the wrapped json() and never caches it', async () => {
   const store = new Map();
-  globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+  globalThis.localStorage = { getItem: (k: string) => (store.has(k) ? store.get(k) : null), setItem: (k: string, v: string) => store.set(k, String(v)), removeItem: (k: string) => store.delete(k) } as unknown as Storage;
   invalidate();
   let calls = 0;
   const warn = console.warn;
   console.warn = () => {};
   try {
-    const fetcher = (url, init) => { calls++; return wireChecked(response(leaked), (init && init.method) || 'GET', url); };
+    const fetcher = (url: string, init?: RequestInit) => { calls++; return wireChecked(response(leaked), (init && init.method) || 'GET', url); };
     await assert.rejects(fetchJson(fetcher, '/api/comments/recent', undefined, { ttl: 60000 }), new RegExp(MALFORMED));
     assert.equal(peek(keyFor('/api/comments/recent')), null, 'nothing cached');
     await assert.rejects(fetchJson(fetcher, '/api/comments/recent', undefined, { ttl: 60000 }));
     assert.equal(calls, 2, 'asked again, since nothing was kept');
-    const sound = (url) => wireChecked(response({ ok: true, items: [{ id: 1 }] }), 'GET', url);
+    const sound = (url: string) => wireChecked(response({ ok: true, items: [{ id: 1 }] }), 'GET', url);
     assert.deepEqual(await fetchJson(sound, '/api/comments/recent', undefined, { ttl: 60000 }), { ok: true, items: [{ id: 1 }] });
   } finally { console.warn = warn; }
 });
