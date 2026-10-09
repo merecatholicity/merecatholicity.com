@@ -79,9 +79,7 @@ resource "github_repository" "site" {
   description                 = null
   gitignore_template          = null
   has_discussions             = false
-  # On for one reader: a run waiting at a gate opens an "Approval needed"
-  # issue that @mentions the owner (scripts/ci_ask_review.sh, 2026-10-09).
-  has_issues                  = true
+  has_issues                  = true # a gate's "Approval needed" ask (scripts/ci_ask_review.sh)
   has_projects                = false
   has_wiki                    = false
   homepage_url                = "https://merecatholicity.com"
