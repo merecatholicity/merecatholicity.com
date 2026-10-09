@@ -65,7 +65,7 @@ existed. Nothing is lost by pausing — the server's content hash is the state, 
 the next run resumes exactly where a stopped one left off. A full re-ingest
 takes several days instead of one, which is the price of a forum that can still
 be posted to while it runs. The arithmetic is `paced_budget()`, tested in
-`tests/py/test_ingest_pacing.py`; the worker half in `tests/worker/d1_meter.test.mjs`.
+`tests/py/test_ingest_pacing.py`; the worker half in `tests/worker/d1_meter.test.ts`.
 
 **Change the voice or rules.** Edit `persona.md`, commit, push. `merecat.yml`
 sees the file differ from what the server last took, and its `config` job

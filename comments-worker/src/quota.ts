@@ -19,7 +19,7 @@
    the spend. Without CF_USAGE_TOKEN / CF_ACCOUNT_ID the guard has no meter
    and does nothing; the admin page says so. The decisions are the kernel's;
    this file fetches, caches and shapes. Its imports carry .ts extensions so
-   Node runs it as-is (tests/worker/quota.test.mjs drives it with a stubbed
+   Node runs it as-is (tests/worker/quota.test.ts drives it with a stubbed
    fetch). */
 import * as Merecat from '../../purescript/output/Domain.Merecat/index.js';
 import { gqlSelect } from './analytics.ts';

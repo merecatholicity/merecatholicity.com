@@ -25,6 +25,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": []
   },
-  "include": ["globals.d.ts", "app/**/*.ts", "client/**/*.ts"],
-  "exclude": ["node_modules", "purescript/output", "docs", "vendor", "**/*.min.js"]
+  "include": ["globals.d.ts", "app/**/*.ts", "client/**/*.ts", "pagejs/*.ts"],
+  "exclude": ["node_modules", "purescript/output", "docs", "vendor", "**/*.min.js", "pagejs/sw.ts"]
 }

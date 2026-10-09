@@ -12,7 +12,7 @@
 -- |    an empty one, and nothing malformed is cached.
 -- |
 -- | The table is every route's top-level fields that were a list in EVERY
--- | successful answer the leak sweep saw; `tests/worker/response_shapes.test.mjs`
+-- | successful answer the leak sweep saw; `tests/worker/response_shapes.test.ts`
 -- | holds it to the committed snapshot (`tests/_support/response_shapes.json`),
 -- | so a route that grows or drops a list changes this file in the same commit.
 module Domain.Wire

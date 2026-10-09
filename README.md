@@ -54,7 +54,7 @@ secrets set with `wrangler secret put`. Credentials live in
 | Target | What it does |
 | --- | --- |
 | `make tests` | The whole unit suite (PureScript + JS + Python + CSS). **The standing gate.** |
-| `make jscheck` / `make check` | eslint + tsc (after psbuild) / jscheck, then the link check |
+| `make jscheck` / `make check` | tsc over every project (after psbuild) / jscheck, then the link check |
 | `make bundle` | psbuild, then esbuild `app/` → `docs/app.js` and `client/` → `docs/comments.js`, then the `?v=` stamp |
 | `make css` | Tailwind: `styles/main.css` → `docs/style.css` (NOT rebuilt by `make bundle`) |
 | `make toolchain` / `make psbuild` | Fetch `purs` by pinned hash / compile `purescript/src` → `purescript/output` |

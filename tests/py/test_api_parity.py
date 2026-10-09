@@ -3,7 +3,7 @@
 that week, then fifteen more turned up when this test was written).
 
 The table is tests/_support/routes.json (the committed snapshot of ROUTES,
-held to the source by tests/worker/routes.test.mjs). API.md abbreviates: a
+held to the source by tests/worker/routes.test.ts). API.md abbreviates: a
 row may say `POST /api/comments/lock` · `/deleteuser`, so a route counts as
 named when its full path, or its path with the `/api/comments` (or
 `/api/merecat`) prefix stripped, stands in a backtick span — alone, in a
@@ -128,7 +128,7 @@ class ApiParity(unittest.TestCase):
             doc = set().union(*(top_keys(sp) for sp in spans))
             if doc != top:
                 drift.append('GET %s: documented only %s, answered only %s' % (r['p'], sorted(doc - top), sorted(top - doc)))
-        self.assertEqual(drift, [], 'API.md and the answers disagree (node scripts/response_shapes.mjs --write, then fix the doc)')
+        self.assertEqual(drift, [], 'API.md and the answers disagree (node scripts/response_shapes.ts --write, then fix the doc)')
 
 
 if __name__ == '__main__':

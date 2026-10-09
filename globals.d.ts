@@ -100,6 +100,16 @@ declare global {
        exists to explain, so anything that unloads or replaces the page
        should name itself here first. */
     mcCrumb?: (msg: string) => void;
+    /* The page scripts' boots (pagejs/), which the shell's per-page registry
+       re-runs after a soft navigation (app/shell.ts REG), and the theme engine
+       nav.js owns (the settings toggle calls it after writing the cookie). */
+    mcIndexBoot?: () => void;
+    mcFlashBoot?: () => void;
+    mcContactBoot?: () => void;
+    __mcContactTs?: () => void;
+    mcBibleBoot?: () => void;
+    mcBibleTeardown?: () => void;
+    mcApplyTheme?: () => void;
     mcCommentsBoot?: () => void;
     mcCommentsTeardown?: () => void;
     mcSelectSheet?: (...a: any[]) => any;

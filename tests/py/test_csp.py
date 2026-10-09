@@ -95,7 +95,7 @@ class Csp(unittest.TestCase):
     def test_the_trusted_types_policy_admits_exactly_the_script_hosts(self):
         script_src = [d for d in self.policy.split(';') if d.strip().startswith('script-src')][0]
         hosts = sorted(t for t in script_src.split() if t.startswith('https://'))
-        with open(os.path.join(ROOT, 'pagejs', 'nav.js'), encoding='utf-8') as f:
+        with open(os.path.join(ROOT, 'pagejs', 'nav.ts'), encoding='utf-8') as f:
             nav = f.read()
         m = re.search(r'var SCRIPT_ORIGINS = \[([^\]]*)\]', nav)
         self.assertIsNotNone(m, 'the default policy\'s origins in nav.js')

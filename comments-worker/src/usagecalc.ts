@@ -1,5 +1,5 @@
 /* Free-tier usage math — PURE, node-testable (no worker imports; the fetch/DM
-   glue lives in usage.ts, the spec in tests/worker/usage.test.mjs). This is the
+   glue lives in usage.ts, the spec in tests/worker/usage.test.ts). This is the
    monitor's rulebook: every Cloudflare meter the platform rides, the free-plan
    ceiling of each, how raw GraphQL Analytics rows aggregate into health rows,
    and when the daily check speaks. The ceilings are Cloudflare's PUBLISHED

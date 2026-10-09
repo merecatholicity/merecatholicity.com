@@ -45,14 +45,20 @@ idea holds the whole thing together and is the key to reading it:
 ```
 
 **`pagejs/` (2026-09-18)** is the third source tree beside `app/` and `client/`:
-the seven scripts a page loads directly rather than through a bundle — `nav.js`
-(the shell injector and SW update pump), `deeplink.js`, `bible-reader.js`,
-`contact.js`, `flash.js`, `away.js`, `index.js`. `npm run build:pagejs` minifies
-each into `docs/` under the same name, so `docs/<name>.js` is build output and
-`pagejs/<name>.js` is the file to edit. They stay OUT of the bundle on purpose:
-a page running a stale `app.js` must still be able to pump its own update.
-`docs/sw.js` is the one exception — hand-maintained in `docs/`, never rewritten
-by a build, because it is the file that decides whether that update can happen.
+the seven scripts a page loads directly rather than through a bundle — `nav.ts`
+(the shell injector and SW update pump), `deeplink.ts`, `bible-reader.ts`,
+`contact.ts`, `flash.ts`, `away.ts`, `index.ts` — and the service worker,
+`sw.ts`. TypeScript since 2026-10-09, strict-checked with the client
+(`tsconfig.json`; the worker under its own `pagejs/tsconfig.sw.json`, the
+WebWorker lib). They are classic scripts, not modules: `npm run build:pagejs`
+minifies each page script into `docs/` under its served name, so
+`docs/<name>.js` is build output and `pagejs/<name>.ts` is the file to edit.
+They stay OUT of the bundle on purpose: a page running a stale `app.js` must
+still be able to pump its own update. `docs/sw.js`, the file that decides
+whether that update can happen, was hand-maintained in `docs/` until the same
+day; it is built from `sw.ts` on its own, never bundled and never minified —
+the types erased and nothing else (no tsconfig is read, so no file-wide
+`"use strict"` the classic scripts never had).
 
 The two "how is this one file 6,000 lines?" cases were **`docs/comments.js`**
 (the browser client) and **`comments-worker/src/index.js`** (the backend). Both
@@ -86,16 +92,16 @@ duplicated, and the shape they moved toward.
 | `comments-worker/src/routes/*.ts` | 5,427 | The handlers, one file per feature (2026-09-16): board 1,402 · dm 1,265 · merecat 730 · wall 540 · admin 483 · profile 430 · media 254 · calls 179 · notify 144 — each moved verbatim from `index.ts` behind the table. Since 2026-09-17 `seo.ts` too: the thread page, the site feed and the thread sitemap, the three roads outside the table (with `/@handle`) that answer a document instead of an envelope. |
 | `comments-worker/src/lib.ts` | 3,648 | The shared core: constants, crypto, auth/validation, the settings, DB/notification/broadcast helpers, the DM primitives, the media purges, the social gate and the Discord fan-out. A leaf — it references no handler. |
 | `app/appchrome.ts` | 1870 | Desktop+mobile chrome: sidebar, deskbar, home launcher element, settings, footer (Lit). |
-| `app/home.ts` | 157 | The Home launcher's one structure (`homeTree`) and its two renderers: `toHtml`, which `scripts/home_prerender.mjs --write` puts into `docs/index.html` so the launcher paints with the stylesheet, and `toDom` for an element that arrives empty; `<mc-home>` adopts the painted nodes and only fills the Continue row (2026-10-08). |
+| `app/home.ts` | 157 | The Home launcher's one structure (`homeTree`) and its two renderers: `toHtml`, which `scripts/home_prerender.ts --write` puts into `docs/index.html` so the launcher paints with the stylesheet, and `toDom` for an element that arrives empty; `<mc-home>` adopts the painted nodes and only fills the Continue row (2026-10-08). |
 | `app/shell.ts` | 868 | The SPA shell: soft-navigation (latest-wins, instant nav), per-page boot registry, audio dock, PWA. |
-| `pagejs/nav.js` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring. Source since 2026-09-18: `npm run build:pagejs` minifies it into `docs/nav.js` (46,058 → 15,392 B; 16.4 → 5.4 KB gzipped, on EVERY page), and `stamp_versions.py` then writes its `?v=` keys and the `MC_ASSETS` map into that output. |
+| `pagejs/nav.ts` | 830 | Injects the shell + deeplink on every page, and owns the SW update pump, `?debug=1` overlay and crumb ring. Source since 2026-09-18: `npm run build:pagejs` minifies it into `docs/nav.js` (46,058 → 15,392 B; 16.4 → 5.4 KB gzipped, on EVERY page), and `stamp_versions.py` then writes its `?v=` keys and the `MC_ASSETS` map into that output. |
 | `comments-worker/src/durable.ts` | 875 | The two Durable Objects (`BoardHub` — `HUB_SHARDS` instances, sockets indexed in memory, `Domain.Hub` the placing, a `watch` table naming the siblings that watch each member — and `ChatRoom`). |
 | `comments-worker/src/dbsession.ts` | 88 | The D1 session every routed request runs against: replicas for `Domain.Consistency`'s read routes, the primary for the rest, the `mc-d1` bookmark cookie after a write. |
 | `comments-worker/src/egress.ts` | 180 | The egress guard (2026-09-17): `sealEnv` (the env reads by name and refuses to be copied, listed, serialized or written), `deriveEnv`, and `guardResponse` (a textual answer carrying any non-public env value is refused). Dependency-free; contact-worker imports it too. |
 | `comments-worker/src/serve.ts` | 64 | `default.fetch`: seal the env, run the router, guard the answer, report what the seal refused. |
 | `comments-worker/src/oidc.ts` | 188 | Who is at a pipeline door (2026-09-17): a GitHub Actions job's OIDC token, its RS256 signature checked against GitHub's published keys and its claims against `Domain.Pipeline`; an admin key; for the ops door, the nightly's `OPS_REPORT_KEY`. `pipelineGated` is the three librarian endpoints' preamble. |
 | `app/call.ts` | 521 | The 1v1 voice-call engine (shell-owned, so a call rings on any page). |
-| `pagejs/bible-reader.js` | 439 | KJV/DR reader boot. Minified into `docs/` with the other six page scripts. |
+| `pagejs/bible-reader.ts` | 439 | KJV/DR reader boot. Minified into `docs/` with the other six page scripts. |
 | `app/views/board.ts` / `topic.ts` | 435 / 433 | Lit views: board index+category / topic+search. |
 | `app/richtext.ts` | 432 | The one living body renderer (`window.mcRich`): markdown, scripture autolink, emoji. |
 | `comments-worker/src/usagecalc.ts` | 327 | Pure free-tier limit maths for the usage monitor (`usage.ts`, 106, does the fetch through `analytics.ts`, the GraphQL glue; `quota.ts`, 90, is the librarian's AI budget guard over the same neurons select — no lib import, Node-tested with a stubbed fetch). |
@@ -104,12 +110,12 @@ duplicated, and the shape they moved toward.
 | `app/chrome.ts` / `app/app.ts` | 26 / 5 | The two esbuild entries: the bars (docs/chrome.js, ~22 KB with its chunk, loaded first) and the shell (docs/app.js). |
 | `app/core.ts` | 286 | The membrane — the one audited place PureScript types are erased. |
 | `app/push.ts` | 166 | Keeps a member's push subscription on the worker's current VAPID key, once per app open (shell) and from Settings; a move a browser will not make without a gesture finishes on the next tap. |
-| `app/artwarm.ts` | 142 | The nineteen art pages' background paintings, walked into the browser's cache once the page in hand has loaded and the main thread is idle (2026-09-18) — the six tabs first, one at a time, at `fetchPriority: 'low'`, and only the -m or -d half this viewport will use. The lazy load in `styles/main.css` is untouched and still does the showing; the art switched off, Save-Data or a 2g link downloads nothing. `tests/js/art_warm.test.mjs` sweeps the stylesheet both ways so the two lists cannot drift. |
+| `app/artwarm.ts` | 142 | The nineteen art pages' background paintings, walked into the browser's cache once the page in hand has loaded and the main thread is idle (2026-09-18) — the six tabs first, one at a time, at `fetchPriority: 'low'`, and only the -m or -d half this viewport will use. The lazy load in `styles/main.css` is untouched and still does the showing; the art switched off, Save-Data or a 2g link downloads nothing. `tests/js/art_warm.test.ts` sweeps the stylesheet both ways so the two lists cannot drift. |
 | `comments-worker/src/{pure,webpush}.js` | 268 / 138 | Extracted pure helpers (tested) / VAPID push crypto. |
 | `app/views/{admin,library,member,post,profile}.ts` | 186–321 ea. | One Lit view per feature (`util.ts` 67). |
 | `app/{store,ptr,api}.ts` | 218 / 194 / 101 | Request cache + persisted SWR / pull-to-refresh / typed API client. |
 | `app/wirecheck.ts` | 49 | The shell's `fetch` wrapper (2026-09-17): an `/api/` answer whose listed field (`Domain.Wire`) is neither a list nor null makes `json()` reject, so a view says "could not be loaded", never "nothing here". |
-| `app/transport.ts` | 118 | The read transport, out of the classic boot (P1, 2026-09-18): `fetchRetry` (the bounded network retry with its per-attempt timeout), the fresh-bypass pair `freshOpts`/`stampFresh`, `freshParam`, and the two store-backed reads `cachedJson`/`peekJson`. The Lit views and `app/api.ts` import it; the classic client reaches it at `window.mcTransport` — never by import, because `client/` is a separate esbuild graph and a value import would bundle a SECOND `app/store.ts` (`tests/js/transport.test.mjs` sweeps for both that and a captured `fetch`). |
+| `app/transport.ts` | 118 | The read transport, out of the classic boot (P1, 2026-09-18): `fetchRetry` (the bounded network retry with its per-attempt timeout), the fresh-bypass pair `freshOpts`/`stampFresh`, `freshParam`, and the two store-backed reads `cachedJson`/`peekJson`. The Lit views and `app/api.ts` import it; the classic client reaches it at `window.mcTransport` — never by import, because `client/` is a separate esbuild graph and a value import would bundle a SECOND `app/store.ts` (`tests/js/transport.test.ts` sweeps for both that and a captured `fetch`). |
 | `contact-worker/src/index.ts` | 138 | The contact form worker. |
 | `comments-worker/src/db.ts` | 83 | The repository layer: typed row mappers, `inList`, the `Query` builder. |
 | `docs/{deeplink,sw,away,contact,flash,index}.js` | 8–161 ea. | Small served-raw scripts. |
@@ -191,7 +197,7 @@ proven**:
 
 - The **PureScript `Domain/*` kernel — 38 modules**, each a single rule family
   (`Rank`, `Fts`, `Route`, `Auth`, `Access`, `Pager`, `Scripture`, `Profile`, …),
-  each with a **1:1 unit-test spec** (`tests/purescript/*.test.mjs`, 32 of them).
+  each with a **1:1 unit-test spec** (`tests/purescript/*.test.ts`, 32 of them).
   Illegal states are unrepresentable (an un-sanitized FTS match *cannot exist*;
   an auth state can't hold a hash without a key). This is the most modular part
   of the codebase and it is shared by both the client and the worker.
@@ -208,7 +214,7 @@ run in the unit suite). The client's classic twins of the 13 Lit screens are
 gone (2026-09-16): a `viewX` with a Lit view is a one-line door to it, and the
 classic modules keep only what has no Lit view — the write paths, the DM
 thread, merecat, the acting consoles. Test layers are already modular and
-tiered: **Layer 1** unit (`tests/`, 32 PS + 26 js + 28 worker node specs, 12 py + 1 css unittest files — 2026-09-16; the worker specs run handlers through `tests/_support/worker.mjs`), **Layer 2**
+tiered: **Layer 1** unit (`tests/`, 32 PS + 26 js + 28 worker node specs, 12 py + 1 css unittest files — 2026-09-16; the worker specs run handlers through `tests/_support/worker.ts`), **Layer 2**
 headless (`webtest/`).
 
 ### 3. Why do we have 6,000+-line files?
@@ -273,7 +279,7 @@ Yes — the natural division is **by feature**, and it maps cleanly:
   The split landed on 2026-09-16 in nine commits, each proven
   behaviour-neutral by `scripts/worker_bundle_set.sh` (the dry-run bundle's
   function-name set and code-line set identical before and after) and by
-  the unit suite running the handlers (`tests/_support/worker.mjs`).
+  the unit suite running the handlers (`tests/_support/worker.ts`).
 - **Client →** one Lit component per view under `app/views/*` (already true for
   reads), `app/api.ts` (all endpoints), `app/core.ts` (the membrane); the write
   paths live in `client/<feature>.ts` now (Wave F), each a per-boot factory over
@@ -355,10 +361,10 @@ comments-worker/src/
 | 2A | Strict `tsc` gate (`tsconfig`, `globals.d.ts`, `McCore` contract — since 2026-09-16 `McCore` is `typeof import('./app/core')`, so the contract cannot drift from the membrane) | — | ✅ |
 | 2B | `app/**` → TypeScript, strict-green; byte-identical bundle | — | ✅ |
 | 2C | `comments.js` → `client/comments.ts` + client build step | (enables Wave F) | ✅ |
-| 2D | Both workers → TypeScript (`Env`, typed rows) — and since 2026-09-16 `Env` is REAL (`comments-worker/src/env.ts`: every binding wrangler.jsonc declares, the vars and secrets optional strings), taken by `index.ts`, the Durable Objects and `routes/calls.ts` (the worked example: `first<Row>()` per query). **Since 2026-09-17 EVERY handler takes it** — the nine small modules, then admin, board, dm, merecat and `lib.ts`'s 100 signatures — with row shapes at the query and `Body` for a parsed request; worker `: any` 799 → 388 under the ratchet, and **to zero** the same day (a hard gate since; `pure.ts`/`webpush.ts`; the env's type brand refuses to be an answer, a row or an event — `comments-worker/types/env_brand.check.ts`). The pass paid for itself on its first file: typing `handleRecent`'s env is what found the six-week secret disclosure (`docs/architecture/log/2026-09.md`, and `tests/worker/env_leak.test.mjs` sweeps for its class) | — | ✅ |
-| F | **Wave F: the classic client is feature modules** — `client/comments.ts` (12,584 lines, one boot function) → the root + seven `install<Feature>(B)` factories, every statement moved verbatim, names bound from the boot object after install, top-level effects in `run()`; `build:client` bundles; source-rule tests read `tests/_support/client.mjs` | — (lines moved, not deduplicated; the classic-vs-Lit clone is the remaining target) **2026-09-16: `dm.ts` (3,015 lines) became six factories** — `dm-{crypto,message,pickers,inbox,thread,styles}.ts` — every declaration verbatim, cross-module names bound through `B` like any other, the wiring law extended by `tests/_support/client.mjs`'s list. | ✅ |
+| 2D | Both workers → TypeScript (`Env`, typed rows) — and since 2026-09-16 `Env` is REAL (`comments-worker/src/env.ts`: every binding wrangler.jsonc declares, the vars and secrets optional strings), taken by `index.ts`, the Durable Objects and `routes/calls.ts` (the worked example: `first<Row>()` per query). **Since 2026-09-17 EVERY handler takes it** — the nine small modules, then admin, board, dm, merecat and `lib.ts`'s 100 signatures — with row shapes at the query and `Body` for a parsed request; worker `: any` 799 → 388 under the ratchet, and **to zero** the same day (a hard gate since; `pure.ts`/`webpush.ts`; the env's type brand refuses to be an answer, a row or an event — `comments-worker/types/env_brand.check.ts`). The pass paid for itself on its first file: typing `handleRecent`'s env is what found the six-week secret disclosure (`docs/architecture/log/2026-09.md`, and `tests/worker/env_leak.test.ts` sweeps for its class) | — | ✅ |
+| F | **Wave F: the classic client is feature modules** — `client/comments.ts` (12,584 lines, one boot function) → the root + seven `install<Feature>(B)` factories, every statement moved verbatim, names bound from the boot object after install, top-level effects in `run()`; `build:client` bundles; source-rule tests read `tests/_support/client.ts` | — (lines moved, not deduplicated; the classic-vs-Lit clone is the remaining target) **2026-09-16: `dm.ts` (3,015 lines) became six factories** — `dm-{crypto,message,pickers,inbox,thread,styles}.ts` — every declaration verbatim, cross-module names bound through `B` like any other, the wiring law extended by `tests/_support/client.ts`'s list. | ✅ |
 | 3 | **`db.ts` repository** — foundation shipped (`inList` retires the 13 hand-rolled `?N` loops, the `Query` builder, the `rankFor`/`withNames`/`postCountsFor` mappers moved in, unit-tested). The fuller repository layer `PLAN-TODO.md` proposed (no inline `prepare()` in handlers, typed rows, a builder everywhere) is **not pursued** (2026-09-16): with the handlers running in the unit suite against a real SQLite, inline SQL is testable where it sits — and the plan file is retired. | −13 `?N` loops; mappers single-sourced | ✅ |
-| 4 | **Middleware + declarative routes + file-split** — the 91-branch chain is a declarative `ROUTES` table (route-parity diff = identical); `keyed`/`keyedGated` middleware on the byte-exact handlers; the monolith split into `lib.ts` / `durable.ts` / `db.ts` (2026-08-01); and — **2026-09-16 — the handlers into `routes/{calls,notify,media,wall,profile,dm,merecat,board,admin}.ts`**, every one moved verbatim (its declaration line and comment intact) behind the table `index.ts` keeps, which is now the composition root (654 lines). The 2026-08-01 attempt was reverted because an esbuild tree-shake around the Durable Object re-export dropped live code with no coverage to catch it; this pass first made the handlers runnable in the unit suite (`tests/_support/worker.mjs`, `tests/worker/routes.test.mjs` holding the table to its snapshot and dispatching every entry) and proved each commit with `scripts/worker_bundle_set.sh` — function-name set and code-line set identical before and after. | monolith → composition root + 9 route files, core/DO seams | ✅ |
+| 4 | **Middleware + declarative routes + file-split** — the 91-branch chain is a declarative `ROUTES` table (route-parity diff = identical); `keyed`/`keyedGated` middleware on the byte-exact handlers; the monolith split into `lib.ts` / `durable.ts` / `db.ts` (2026-08-01); and — **2026-09-16 — the handlers into `routes/{calls,notify,media,wall,profile,dm,merecat,board,admin}.ts`**, every one moved verbatim (its declaration line and comment intact) behind the table `index.ts` keeps, which is now the composition root (654 lines). The 2026-08-01 attempt was reverted because an esbuild tree-shake around the Durable Object re-export dropped live code with no coverage to catch it; this pass first made the handlers runnable in the unit suite (`tests/_support/worker.ts`, `tests/worker/routes.test.ts` holding the table to its snapshot and dispatching every entry) and proved each commit with `scripts/worker_bundle_set.sh` — function-name set and code-line set identical before and after. | monolith → composition root + 9 route files, core/DO seams | ✅ |
 | 5 | **Finish single-sourcing** — the owner ruled the bundle required, so `client/comments.ts` drops its no-bundle-fallback constant copies (FAITH/RANKS/NAMED_EMOJI/EMOJI_PACKS/CATS/pseudonym wordlists) and reads them UNCONDITIONALLY from the kernel via `window.mcCore` — drift now impossible. **2026-09-16: the read-view twins are gone** — the 13 classic bodies behind `window.mcViews` delegations (board index and category, topic, search, the post renderer, profile, inbox, users, notifications, admin home, the two merecat views, usage) deleted, ~1,150 lines, each door now `return window.mcViews!.X(…)`; the Lit views are the read UI and the webtests cover them. | client↔kernel constant duplication removed; the Lit/classic clone of the read screens removed | ✅ |
 | P0–P7 | **The write-path port** (planned 2026-09-17, `docs/architecture/reviews/2026-09-17-port-plan.md`; re-sequenced 2026-09-18 — P1 pulled forward, merecat and the DM thread pushed behind the phases that have readers). **P1's first two slices shipped 2026-09-18** — the transport, then the frozen twins (the guarded `else` copies of the body renderer, the scripture hover, `classicRoute` and fourteen smaller helpers: ~330 lines, `comments.js` 237.0 → 226.9 KB). The transport slice: `app/transport.ts` holds the five the boot owned, `app/api.ts` imports its transport instead of waiting for `window.mcKit` (the shell's 500 ms × 8 s poll is deleted), the 27 view call sites import directly, and the kit fell 71 → 65. The rest: the shell bundle splits (P0), the services leave the boot (P1), then the admin consoles (P2), board writes + feed + journal (P3), the profile editors (P4), merecat (P5), the DM thread (P6) become Lit elements in lazy chunks, and `client/`, `mcBoot`, `mcKit`, `mcViews` dissolve (P7). Invariants: app.js never grows, every law's sweep moves with its code, a screen ships only with its headless suite green on prod. | the classic write half (14.4k lines), the 77-line kit bridge | ☐ planned, not begun |
 
@@ -370,10 +376,14 @@ after gets checked.
 **Toolchain note — TypeScript 7 (2026-09-16).** The pinned `typescript` 7.0.2 is the native
 (Go) compiler: exact-pinned in `package.json`, leading-edge, and without a JavaScript compiler
 API (its package exports only `version`/`versionMajorMinor`), which is why typescript-eslint
-cannot run here and the `: any` ratchet is a stdlib test instead. Expect churn between
+cannot run here and the `: any` ratchet is a stdlib test instead. Since 2026-10-09 there is
+no eslint at all: nothing in the repository is JavaScript any more (the tests, the page
+scripts, the service worker and the two node scripts are TypeScript, the kernel PureScript
+without an FFI file), so tsc's own "cannot find name" holds the line eslint's `no-undef`
+held. `espree` stays, a direct devDependency, for `tests/_support/env_flow.ts`. Expect churn between
 minors; the gate is `npm run tsc` (`make jscheck`) staying green. The re-check that a JS API
 is back — `node -e "console.log(Object.keys(require('typescript')).length)"` reading more than
-2 — sits in `tests/js/any_ratchet.test.mjs`'s header.
+2 — sits in `tests/js/any_ratchet.test.ts`'s header.
 
 *Metrics captured by `scratchpad/clonescan.py` (window=6) and direct `grep`/`wc`
 over the tree; re-run them after each phase to refresh the before/after.*

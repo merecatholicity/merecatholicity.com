@@ -59,7 +59,7 @@ export function fetchRetry(url: string, opts: RequestInit | undefined, delays: n
       init = Object.assign({}, opts, { signal: ctrl.signal });
       /* bare setTimeout, not window.setTimeout: identical in a browser (the
          clearTimeout below was already bare) and it lets this module run under
-         Node, which is what tests/js/api.test.mjs drives it with. */
+         Node, which is what tests/js/api.test.ts drives it with. */
       timer = setTimeout(function () { ctrl.abort(); }, FETCH_TIMEOUT) as unknown as number;
     }
     return fetch(url, init).then(function (res) {

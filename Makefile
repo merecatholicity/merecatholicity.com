@@ -9,10 +9,13 @@ build: pdf html logos publish check
 # Fail loudly if any page links at a file or anchor that does not exist.
 # Runs at the end of 'build' and 'html' so a missing output (a PDF stanza
 # added but never built, a typo'd href) can never ship silently again.
-# Static guard over the hand-maintained JS (worker + client): an undefined
-# identifier once shipped in the worker and silenced @merecat mentions for
-# days. eslint no-undef catches that class. Runs the npm-managed eslint
-# (node_modules/, from the committed lockfile — never a global install).
+# The static guard: tsc strict over every project — the client (app/, client/,
+# the page scripts), the service worker, both workers and the tests. An
+# undefined identifier once shipped in the worker and silenced @merecat mentions
+# for days; eslint no-undef guarded that class over the served JS until
+# 2026-10-09, when the last of it became TypeScript and tsc's own "cannot find
+# name" took the job. Runs the npm-managed tsc (node_modules/, from the
+# committed lockfile — never a global install).
 # psbuild first, ALWAYS: tsc type-checks app/core.ts, which imports the compiled
 # Domain.* modules from purescript/output/ — a directory that is git-ignored and
 # therefore absent from any clean checkout. Locally it is always there from an
@@ -21,7 +24,6 @@ build: pdf html logos publish check
 # '../purescript/output/Domain.Board/index.js'" errors. It is a real ordering
 # bug, not a CI quirk: a newcomer's first `make jscheck` would have hit it too.
 jscheck: psbuild
-	npm run lint
 	npm run tsc
 
 # The app shell bundle: Lit (from npm, pinned exact) plus the app/ modules,
@@ -62,7 +64,7 @@ writings:
 # tests/purescript/, run with Node's built-in runner over the compiled ESM.
 # A fast alias for the PureScript slice of `make tests`.
 pstest: psbuild
-	node --test $$(find tests/purescript -name '*.test.mjs' | sort)
+	node --test $$(find tests/purescript -name '*.test.ts' | sort)
 
 # The full unit suite (Layer 1): PureScript + JS via Node's built-in runner
 # (node:assert), Python + the CSS/build invariants via stdlib unittest. Hermetic
@@ -71,7 +73,7 @@ pstest: psbuild
 # the headless layer is webtest/ (against prod). See tests/README.md.
 tests: psbuild
 	@echo "== PureScript + JS unit tests (node --test) =="
-	@node --test $$(find tests -name '*.test.mjs' | sort)
+	@node --test $$(find tests -name '*.test.ts' | sort)
 	@echo "== Python + CSS unit tests (unittest) =="
 	@for f in $$(find tests -name 'test_*.py' | sort); do echo "-- $$f"; python3 "$$f" || exit 1; done
 

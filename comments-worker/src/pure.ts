@@ -7,7 +7,7 @@
 
    Nothing here touches env, D1, R2, crypto, or the network. The worker imports
    these back; behavior is byte-identical to when they lived inline. Tests:
-   tests/worker/pure.test.mjs. TypeScript since 2026-09-17: a plain .js module
+   tests/worker/pure.test.ts. TypeScript since 2026-09-17: a plain .js module
    is `any` to every caller, and the workers hold none. */
 
 /* ---- IP normalization. A dual-stack user carries both an IPv4 and an IPv6

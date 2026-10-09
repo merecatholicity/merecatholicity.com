@@ -6,7 +6,7 @@
 # beacon tag on every page, exactly like the Turnstile sitekeys.
 #
 # auto_install = FALSE, and that flag is the whole point of this file. The
-# beacon ships from pagejs/nav.js — the one script every page already loads,
+# beacon ships from pagejs/nav.ts — the one script every page already loads,
 # where a grep finds it and tests/py/test_analytics.py holds it. Automatic setup
 # would have Cloudflare inject a second beacon at the edge, and two roads to one
 # meter count every view twice: Cloudflare renders only one snippet per page.
@@ -17,7 +17,7 @@
 # the next reader can check it themselves rather than assume.
 #
 # THE TWO MOVE TOGETHER. Whoever turns this back to true must take the beacon
-# OUT of pagejs/nav.js in the same commit and turn test_analytics.py around with
+# OUT of pagejs/nav.ts in the same commit and turn test_analytics.py around with
 # it; otherwise the graph simply goes up, invisibly, for ever.
 #
 # The CSP already allows it: static.cloudflareinsights.com in script-src and

@@ -3,7 +3,7 @@
    D1's `first<Row>()`, R2's object shapes and the limiter's verdict for free;
    a binding renamed in wrangler.jsonc is a compile error here, not a 500 in
    production. Every handler takes it (2026-09-17: the workers hold no `any`,
-   tests/js/any_ratchet.test.mjs).
+   tests/js/any_ratchet.test.ts).
 
    The BRAND (2026-09-17): a type-only mark on the env that nothing else
    carries, and that every answer, row and live event refuses (`NotEnv`) — so
@@ -85,7 +85,7 @@ export interface Env {
    them), so the egress scan (egress.ts) never looks for their values. Every
    OTHER env string is treated as a secret, so a `wrangler secret put` needs
    no line here. Held to the vars section above and to wrangler.jsonc by
-   tests/worker/egress.test.mjs. */
+   tests/worker/egress.test.ts. */
 export const PUBLIC_VARS: readonly string[] = [
   'MODERATION_MODE', 'ALLOW_ANON', 'ADMIN_HASHES', 'TURNSTILE_HOSTNAMES', 'SITE', 'ALLOWED_ORIGINS',
   'PUSH_ENABLED', 'VAPID_PUBLIC_KEY', 'VAPID_SUBJECT', 'TURN_KEY_ID', 'CF_ACCOUNT_ID', 'ALERT_FROM',

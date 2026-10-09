@@ -1,0 +1,22 @@
+{
+  // The service worker's own type-check (2026-10-09). It runs in a
+  // ServiceWorkerGlobalScope, whose lib (WebWorker) conflicts with the DOM the
+  // page scripts and the app are checked against, so it cannot share the root
+  // project. moduleDetection "force" makes the file a module FOR THE CHECKER
+  // only, so sw.ts can say what `self` is (`declare const self`) without a
+  // runtime export: what ships is still the classic script esbuild writes
+  // (npm run build:pagejs, types erased and nothing else). `npm run tsc` runs it.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": ["ES2022", "WebWorker"],
+    "types": []
+  },
+  "files": ["sw.ts"]
+}

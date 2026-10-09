@@ -74,9 +74,10 @@ docs/*.pdf
 # in git. It had reached 621 MB against a hard 1 GB Pages limit, and 615 of the
 # ~800 largest blobs in history were under docs/.
 #
-# docs/ is a MIXTURE, and the distinction is load-bearing: nav.js, sw.js, the
-# vendored libraries, turnstile.html, CNAME, .nojekyll and every image are
-# HAND-MAINTAINED SOURCE that lives nowhere else. A blanket `docs/` ignore
+# docs/ is a MIXTURE, and the distinction is load-bearing: the vendored
+# libraries, turnstile.html, CNAME, .nojekyll and every image are
+# HAND-MAINTAINED SOURCE that lives nowhere else (so were nav.js and sw.js, until
+# their sources moved to pagejs/). A blanket `docs/` ignore
 # deleted them and broke the build within one commit. Only the generated set is
 # listed here — 284 files, 315 MB — and the 297 source files (10 MB) stay.
 #
@@ -119,7 +120,11 @@ docs/comments.js
 # so what ships is ~13 KB gzipped lighter than the hand file. They are still
 # separate files from app.js, which is the point the old arrangement was
 # protecting: a page running a stale app.js can still pump updates through
-# nav.js. sw.js is NOT here — it stays a hand-maintained file in docs/.
+# nav.js. They have been TypeScript since 2026-10-09 (pagejs/<name>.ts), and so
+# has the service worker, which was a hand file in docs/ until then: its source
+# is pagejs/sw.ts and the same script writes docs/sw.js with the types erased
+# and nothing else (unminified — it is not a page script, and what decides
+# whether a stale page can update itself should read as its source does).
 docs/nav.js
 docs/deeplink.js
 docs/flash.js
@@ -127,6 +132,7 @@ docs/contact.js
 docs/away.js
 docs/index.js
 docs/bible-reader.js
+docs/sw.js
 # the lazy feature modules' chunks (P2-5, 2026-09-16): content-hashed names, rebuilt by every
 # `make bundle` (rm -rf first, so a stale chunk never lingers)
 docs/chunks/

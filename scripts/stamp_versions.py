@@ -157,7 +157,7 @@ def main():
     # One line, sorted, no spaces: deterministic, and a single regex target.
     line = 'var MC_ASSETS = ' + json.dumps(runtime, sort_keys=True, separators=(',', ':')) + ';'
     # Tolerant of spacing and NON-GREEDY, because docs/nav.js is minified build
-    # output now (pagejs/nav.js is the source): esbuild writes `var MC_ASSETS={...};`
+    # output now (pagejs/nav.ts is the source): esbuild writes `var MC_ASSETS={...};`
     # on one line with the whole file, so the old `= \{[^\n]*\};` matched nothing
     # and, had it been anchored differently, would have swallowed the file to its
     # last `};`. The map is a flat string->string object and contains no `};`, so

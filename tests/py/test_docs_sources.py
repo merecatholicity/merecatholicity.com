@@ -50,9 +50,10 @@ def buildable():
                   if n.endswith('.tex') and n[:-4] + '.html' not in PDF_ONLY}
     # the book, the bundles, the stylesheet and the generated data files
     # the seven page scripts: source in pagejs/, minified into docs/ by
-    # `npm run build:pagejs` (2026-09-18). sw.js is NOT one of them.
+    # `npm run build:pagejs` (2026-09-18) — and the service worker since
+    # 2026-10-09, its types erased by the same script (pagejs/sw.ts).
     names |= {n + '.js' for n in ('nav', 'deeplink', 'flash', 'contact', 'away',
-                                  'index', 'bible-reader')}
+                                  'index', 'bible-reader', 'sw')}
     names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'chrome.js', 'comments.js',
               'Mere_Catholicity_Logos.docx',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
@@ -110,30 +111,34 @@ class DocsIsSourceOrOutput(unittest.TestCase):
                      'kjv.html', 'douay-rheims.html'):
             self.assertIn(page, have, page + ' is hand-written and must stay in git')
 
-    def test_the_unbundled_client_scripts_are_tracked(self):
-        """sw.js and the vendored libraries live ONLY in docs/ and are not output.
+    def test_the_vendored_libraries_are_tracked(self):
+        """The vendored libraries live ONLY in docs/ and are not output.
 
-        sw.js carries the PWA update lifecycle and is hand-maintained: it is
-        deliberately outside the bundle AND outside pagejs/, so no build step
-        can rewrite the one file that decides whether a stale page can update
-        itself."""
+        sw.js stood here too until 2026-10-09: it carries the PWA update
+        lifecycle, and it was kept outside the bundle and outside pagejs/ so
+        that no build step could rewrite the one file that decides whether a
+        stale page can update itself. It is TypeScript now (pagejs/sw.ts), and
+        that promise is kept by its build: on its own, never bundled, never
+        minified — the types erased and nothing else."""
         have = tracked()
-        for js in ('sw.js', 'tweetnacl.min.js', 'lamejs.min.js', 'qr.min.js'):
+        for js in ('tweetnacl.min.js', 'lamejs.min.js', 'qr.min.js'):
             self.assertIn(js, have, 'docs/' + js + ' is source, not build output')
+        self.assertNotIn('sw.js', have, 'docs/sw.js is built from pagejs/sw.ts now')
 
     def test_the_page_scripts_have_a_tracked_source(self):
         """The seven that moved to pagejs/ on 2026-09-18 are still SOURCE — they
         just stopped being served bytes. docs/<name>.js is now minified build
         output (~13 KB gzipped lighter across the site), so the file that must
-        never leave git is pagejs/<name>.js. They remain separate files from
+        never leave git is pagejs/<name>.ts (TypeScript since 2026-10-09, with
+        the service worker's sw.ts beside them). They remain separate files from
         app.js, which is what the old arrangement was protecting: a page running
         a stale app.js can still pump updates through nav.js."""
         out = subprocess.run(['git', 'ls-files', 'pagejs'], capture_output=True,
                              text=True, cwd=ROOT).stdout.split()
         have = {os.path.basename(p) for p in out}
-        for js in ('nav.js', 'deeplink.js', 'flash.js', 'contact.js', 'away.js',
-                   'index.js', 'bible-reader.js'):
-            self.assertIn(js, have, 'pagejs/' + js + ' is source and must stay in git')
+        for ts in ('nav.ts', 'deeplink.ts', 'flash.ts', 'contact.ts', 'away.ts',
+                   'index.ts', 'bible-reader.ts', 'sw.ts'):
+            self.assertIn(ts, have, 'pagejs/' + ts + ' is source and must stay in git')
 
     def test_the_things_that_bind_the_domain_are_tracked(self):
         """Losing CNAME from the served folder once unbound the custom domain

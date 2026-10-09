@@ -754,7 +754,7 @@ class McSettings extends LitElement {
        once left the page background stuck in the old theme until a hard
        refresh. The fallback (a cached pre-engine nav.js, ~10 min TTL) does the
        same by hand. */
-    if ((window as any).mcApplyTheme) (window as any).mcApplyTheme();
+    if (window.mcApplyTheme) window.mcApplyTheme();
     else {
       const e = document.documentElement;
       e.style.background = '';

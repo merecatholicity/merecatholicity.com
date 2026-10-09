@@ -7,7 +7,7 @@ Read-only, stdlib-only (urllib, json, re). The leak that ran from 2026-08-02 to
 suite asks every public JSON read on the LIVE site (and the keyed unread counts,
 as the webtest's read-only alice) and holds each answer to the snapshot the unit
 suite commits (tests/_support/response_shapes.json, written by
-`node scripts/response_shapes.mjs --write` from the leak sweep):
+`node scripts/response_shapes.ts --write` from the leak sweep):
 
   - every top-level key is one the snapshot knows (a new key on a public answer
     is a FAIL: it is either undocumented or a leak);
@@ -121,7 +121,7 @@ def type_of(v):
 
 
 def paths_of(value, route, dynamic):
-    """The snapshot's reading of an answer: {path: {types}} (tests/_support/shapes.mjs)."""
+    """The snapshot's reading of an answer: {path: {types}} (tests/_support/shapes.ts)."""
     dyn = set(dynamic.get(route, []))
     out = {}
 
