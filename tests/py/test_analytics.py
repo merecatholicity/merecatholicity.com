@@ -124,9 +124,9 @@ class ThePolicy(unittest.TestCase):
         beacon loads from static.cloudflareinsights.com and, under manual
         installation, reports to cloudflareinsights.com — not to /cdn-cgi/rum,
         which is the automatic road's endpoint."""
+        # the enforced policy is a dynamic expression (a per-response nonce, 2026-10-09)
         policy = re.search(
-            r'Content-Security-Policy(?:-Report-Only)? = \{\s*expression = null\s*'
-            r'operation\s*=\s*"set"\s*value\s*=\s*"([^"]+)"',
+            r'Content-Security-Policy = \{\s*expression = "((?:[^"\\]|\\.)*)"',
             read('terraform', 'rulesets.tf')).group(1)
         parts = {d.strip().split(' ')[0]: d for d in policy.split(';')}
         self.assertIn('https://' + BEACON_HOST, parts['script-src'])

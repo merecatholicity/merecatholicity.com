@@ -113,9 +113,9 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
   content.py; keys are content hashes; runtime keys via `window.mcAsset`); only `sw.js` is unkeyed.
   Cloudflare treats a `?v=N` URL as immutable — a probe mid-deploy freezes old bytes under the new
   key for ever. The deploy job purges `sw.js` + `version.json`; HTML is never edge-cached.
-- **The CSP is ENFORCED, with Trusted Types** (2026-10-08; `rulesets.tf`, held by `test_csp.py`): inline script by hash only, every
-  script URL through the `default` policy atop `nav.js` (its origins = `script-src`'s hosts — a new one goes in BOTH), the one HTML
-  parse through the shell's `mc-doc`, no other `createPolicy`. COOP `same-origin`; HSTS preloaded — every subdomain HTTPS for good.
+- **The CSP is ENFORCED** (2026-10-08, `test_csp.py`): our inline scripts by hash (a moving one rides `csp_hashes.OVERLAP`); a fresh
+  nonce lets Cloudflare's injected bot script run — never block what Cloudflare injects. Trusted Types REPORTS: script URLs via the
+  `default` policy atop `nav.js` (origins = `script-src`'s hosts), the HTML parse via `mc-doc`. COOP `same-origin`; HSTS preloaded.
 - **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client)
   re-runs on every soft navigation, so anything inside it that owns a resource leaks per hop —
   keep page-scoped state above it, and every document/window listener it installs carries the boot

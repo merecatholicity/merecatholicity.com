@@ -746,7 +746,7 @@ customElements.define('mc-audio-dock', McAudioDock);
      navigation's own abort (a newer click supersedes this one): it cancels the
      in-flight attempt and stops the retry ladder cold. */
   /* ---- the one HTML parse (Trusted Types, 2026-10-08) ----
-     The zone's CSP enforces Trusted Types, and the soft navigation is the only
+     The zone's CSP carries Trusted Types (Report-Only), and the soft navigation is the only
      place the site turns a string into markup: OUR page, fetched by fetchDoc
      from this origin by path, parsed into an inert document whose scripts never
      run. That parse, and nothing else, goes through the named policy `mc-doc`

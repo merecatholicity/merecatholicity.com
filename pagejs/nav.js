@@ -1,7 +1,8 @@
 /* Trusted Types (2026-10-08): the site's ONE policy, the `default`, made by the
    first script every page carries before anything here or in the bundles it
-   loads reaches a sink. The zone's CSP enforces `require-trusted-types-for
-   'script'` and names this policy (and Lit's own `lit-html`), so every string
+   loads reaches a sink. The zone's CSP carries `require-trusted-types-for
+   'script'` (Report-Only since 2026-10-09: Cloudflare's injected bot-detection
+   script writes into an iframe of its own, out of this policy's reach) and names this policy (and Lit's own `lit-html`), so every string
    a script URL sink is handed — a dynamic <script>'s src, the service worker's
    register — passes through createScriptURL, which admits only the origins the
    CSP's script-src names (tests/py/test_csp.py holds the two lists equal). No

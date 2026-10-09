@@ -2,8 +2,9 @@
 # rule, is cache.tf — on its own because it is the only one that changes what a
 # reader's own browser keeps, which no purge can reach.
 #
-# response_headers is the one that matters most: it carries the enforced CSP (with
-# Trusted Types), HSTS (preloaded), COOP, Permissions-Policy (microphone=(self) —
+# response_headers is the one that matters most: it carries the enforced CSP (a fresh
+# nonce per response for Cloudflare's injected script; Trusted Types report-only), HSTS
+# (preloaded), COOP, Permissions-Policy (microphone=(self) —
 # denying it broke the voice recorder site-wide) and X-Frame-Options SAMEORIGIN
 # (DENY would block our own Turnstile frame). It lived only in the dashboard until
 # 2026-09-08.
@@ -325,20 +326,28 @@ resource "cloudflare_ruleset" "response_headers" {
         from_value                 = null
         headers = {
           # ENFORCED since 2026-10-08 (Report-Only from 2026-09-16 until its collector,
-          # POST /api/comments/csp-report, had read as noise for three weeks). The two
-          # 'sha256-…' tokens are the site's ONLY inline scripts — the mc-fout anti-flash
-          # script every page carries and turnstile.html's bridge — computed by
-          # scripts/csp_hashes.py from the same sources the pages are built from;
-          # tests/py/test_csp.py holds this value to them. Cloudflare's own injected
-          # JavaScript Detections snippet is refused by design and filed as `cf-jsd`.
-          # require-trusted-types-for: every script-URL sink passes the `default` policy at
-          # the top of pagejs/nav.js (and turnstile.html's own), whose allowed origins equal
-          # script-src's hosts; `lit-html` is Lit's. blob: is the decrypted DM attachment
-          # shown from an object URL; wss: is the live socket.
+          # POST /api/comments/csp-report, had read as noise for three weeks). Inline script
+          # runs by hash or by NONCE: the two 'sha256-…' tokens are the site's only inline
+          # scripts (the mc-fout anti-flash script and turnstile.html's bridge, computed by
+          # scripts/csp_hashes.py and held by tests/py/test_csp.py); the nonce is minted fresh
+          # for every response by uuidv4(cf.random_seed) and exists for CLOUDFLARE: Bot Fight
+          # Mode's JavaScript Detections snippet is injected inline with different bytes each
+          # time, and Cloudflare stamps the header's nonce onto the scripts it injects. Nothing
+          # of ours carries it. blob: is the decrypted DM attachment shown from an object URL;
+          # wss: is the live socket.
           Content-Security-Policy = {
+            expression = "concat(\"default-src 'self'; script-src 'self' 'nonce-\", uuidv4(cf.random_seed), \"' 'report-sample' 'sha256-9HBcZHKrZIORNuWdbW2RbXmZQxXXXpGaylfrgh4rWUw=' 'sha256-oKrsTbdLx+aj5VrBuKGgy8rloaQIo0jU68kda9LlM20=' 'sha256-iM5N3CwvhGHsKw/hkEiRhyFPRKw18FS+cUo4xJ4Ty6c=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://audio.merecatholicity.com; connect-src 'self' wss://merecatholicity.com https://contact-api.merecatholicity.com https://challenges.cloudflare.com https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; form-action 'self' https://contact-api.merecatholicity.com; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; report-uri /api/comments/csp-report; report-to csp\")"
+            operation  = "set"
+            value      = null
+          }
+          # Trusted Types REPORTS, it does not refuse: the JSD snippet writes its script into a
+          # hidden iframe of its own, a window our `default` policy (pagejs/nav.js) and the
+          # shell's `mc-doc` cannot reach. Our sinks already pass the policies; a refusal here
+          # would stop Cloudflare's script, which the owner keeps on (2026-10-09).
+          Content-Security-Policy-Report-Only = {
             expression = null
             operation  = "set"
-            value      = "default-src 'self'; script-src 'self' 'report-sample' 'sha256-9HBcZHKrZIORNuWdbW2RbXmZQxXXXpGaylfrgh4rWUw=' 'sha256-iM5N3CwvhGHsKw/hkEiRhyFPRKw18FS+cUo4xJ4Ty6c=' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https://audio.merecatholicity.com; connect-src 'self' wss://merecatholicity.com https://contact-api.merecatholicity.com https://challenges.cloudflare.com https://ipv4.icanhazip.com https://ipv6.icanhazip.com https://cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; form-action 'self' https://contact-api.merecatholicity.com; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; require-trusted-types-for 'script'; trusted-types default mc-doc lit-html; report-uri /api/comments/csp-report; report-to csp"
+            value      = "require-trusted-types-for 'script'; trusted-types default mc-doc lit-html; report-uri /api/comments/csp-report; report-to csp"
           }
           # The top-level window shares its browsing context group with no cross-origin
           # document: nothing here opens a window it then talks to (links are noopener).

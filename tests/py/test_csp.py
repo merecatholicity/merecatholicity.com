@@ -10,6 +10,7 @@ with Trusted Types, and HSTS (preload) and COOP sit beside it: a header quietly
 falling back to Report-Only, a script host the CSP admits but the `default`
 policy in nav.js refuses (or the reverse), would each break or open the site
 without a sound."""
+import datetime
 import os
 import re
 import sys
@@ -24,9 +25,14 @@ class Csp(unittest.TestCase):
     def setUp(self):
         with open(os.path.join(ROOT, 'terraform', 'rulesets.tf'), encoding='utf-8') as f:
             self.tf = f.read()
-        m = re.search(r'Content-Security-Policy = \{\s*expression = null\s*operation\s*=\s*"set"\s*value\s*=\s*"([^"]+)"', self.tf)
+        # The enforced policy is a dynamic expression (a fresh nonce per response):
+        # concat("…'nonce-", uuidv4(cf.random_seed), "' …"). Read back as one string
+        # with NONCE where the edge mints it.
+        m = re.search(r'Content-Security-Policy = \{\s*expression = "((?:[^"\\]|\\.)*)"', self.tf)
         self.assertIsNotNone(m, 'the CSP header in the response-headers rule')
-        self.policy = m.group(1)
+        self.expr = m.group(1).replace('\\"', '"')
+        self.assertTrue(self.expr.startswith('concat("') and self.expr.endswith('")'), self.expr[:40])
+        self.policy = self.expr[len('concat("'):-2].replace('", uuidv4(cf.random_seed), "', 'NONCE')
 
     def test_exactly_the_two_inline_scripts_are_hashed(self):
         want = csp_hashes.hashes()
@@ -34,9 +40,19 @@ class Csp(unittest.TestCase):
         for name, tok in want.items():
             self.assertIn(tok, script_src, name + ' has changed: re-run scripts/csp_hashes.py and move the ruleset with it')
         hashes_in_policy = re.findall(r"'sha256-[A-Za-z0-9+/=]+'", script_src)
-        self.assertEqual(sorted(hashes_in_policy), sorted(want.values()), 'no hash the site does not need')
+        self.assertEqual(sorted(hashes_in_policy), sorted(set(want.values()) | set(csp_hashes.OVERLAP)),
+                         'no hash the site does not need, beyond a listed overlap')
         self.assertNotIn("'unsafe-inline'", script_src)
         self.assertNotIn("'unsafe-eval'", self.policy)
+
+    def test_an_overlap_is_temporary(self):
+        """A moving hash rides both ways for one deploy (csp_hashes.OVERLAP); past
+        its date the extra token is a second door nobody remembers opening."""
+        today = datetime.date.today().isoformat()
+        for tok, until in csp_hashes.OVERLAP.items():
+            self.assertRegex(until, r'^\d{4}-\d{2}-\d{2}$', tok)
+            self.assertLessEqual(today, until, tok + ' outlived its overlap: drop it from the policy and from OVERLAP')
+            self.assertNotIn(tok, csp_hashes.hashes().values(), 'a current hash is not an overlap')
 
     def test_the_reports_go_to_the_collector(self):
         self.assertIn('report-uri /api/comments/csp-report', self.policy)
@@ -59,12 +75,23 @@ class Csp(unittest.TestCase):
         self.assertIsNotNone(m, name + ' in the response-headers rule')
         return m.group(1)
 
-    def test_the_policy_is_enforced_with_trusted_types(self):
-        self.assertNotIn('Content-Security-Policy-Report-Only', self.tf, 'one policy, enforced')
-        self.assertIn("require-trusted-types-for 'script'", self.policy)
-        self.assertIn('trusted-types default mc-doc lit-html', self.policy, 'nav.js\'s default, the shell\'s mc-doc, Lit\'s own')
+    def test_the_policy_is_enforced_and_cloudflare_s_script_carries_a_fresh_nonce(self):
+        """Bot Fight Mode's JavaScript Detections snippet is injected inline with new
+        bytes every response; the owner keeps it on (2026-10-09), so the enforced
+        policy carries a nonce minted per response, which Cloudflare stamps onto the
+        scripts it injects. A static nonce would be no nonce at all."""
         script_src = [d for d in self.policy.split(';') if d.strip().startswith('script-src')][0]
+        self.assertIn("'nonce-NONCE'", script_src, 'the nonce is uuidv4(cf.random_seed), minted at the edge')
+        self.assertEqual(self.expr.count('uuidv4(cf.random_seed)'), 1)
+        self.assertNotRegex(self.tf, r"'nonce-[0-9a-f-]{8,}'", 'never a fixed nonce')
         self.assertIn("'report-sample'", script_src, 'the collector tells Cloudflare\'s snippet from ours by its sample')
+        self.assertNotIn('require-trusted-types-for', self.policy, 'Trusted Types would refuse the snippet inside its own iframe')
+
+    def test_trusted_types_reports(self):
+        tt = self.header('Content-Security-Policy-Report-Only')
+        self.assertIn("require-trusted-types-for 'script'", tt)
+        self.assertIn('trusted-types default mc-doc lit-html', tt, 'nav.js\'s default, the shell\'s mc-doc, Lit\'s own')
+        self.assertIn('report-uri /api/comments/csp-report', tt)
 
     def test_the_trusted_types_policy_admits_exactly_the_script_hosts(self):
         script_src = [d for d in self.policy.split(';') if d.strip().startswith('script-src')][0]

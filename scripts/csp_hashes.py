@@ -38,6 +38,21 @@ def turnstile_script():
     return m.group(1)
 
 
+# A HASH MOVES IN THREE DEPLOYS, NEVER ONE (2026-10-08). The policy is enforced,
+# so a page whose inline script the header does not hash loses that script, and
+# the site and the header ship on different roads: the site on push, the header
+# behind the terraform-production gate. So the policy first carries BOTH hashes
+# (the arriving one listed here, applied before the site changes), then the
+# site changes (the departing one listed here), then a third push drops it.
+# Each entry is an extra token the policy may carry and the date it must be gone
+# by; tests/py/test_csp.py fails past that date, so an overlap cannot be
+# forgotten into a permanent second door.
+OVERLAP = {
+    # the head script that puts Home's launcher in its HTML, arriving (2026-10-09)
+    "'sha256-oKrsTbdLx+aj5VrBuKGgy8rloaQIo0jU68kda9LlM20='": '2026-10-16',
+}
+
+
 def hashes():
     return {'mc-fout': token(fout_script()), 'turnstile.html': token(turnstile_script())}
 

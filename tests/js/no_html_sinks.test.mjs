@@ -4,7 +4,8 @@
  * `insertAdjacentHTML(`, `document.write(`, `eval(`, `new Function(` in
  * app/ or client/ outside comments — the renderer builds nodes
  * (app/richtext.ts) and a policy without 'unsafe-eval' can hold. Since
- * 2026-10-08 the CSP enforces Trusted Types: the sweep reaches pagejs/ too, and
+ * 2026-10-08 the CSP carries Trusted Types (Report-Only from 2026-10-09, so a
+ * stray sink reports rather than breaks): the sweep reaches pagejs/ too, and
  * the site makes TWO policies: the `default` at the top of pagejs/nav.js (and
  * turnstile.html's twin; script URLs only) and the shell's `mc-doc` for the
  * soft navigation's one parse of our own page — a third is a third door. */
