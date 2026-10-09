@@ -12,7 +12,7 @@
      lamejs.min.js     @breezystack/lamejs's IIFE build (LGPL-3.0) — global
                        `lamejs`; never bundled into app.js, so the LGPL library
                        stays a separate, replaceable file
-     qr.min.js         qrcode-generator's qrcode.js (MIT), minified here — the
+     qr.min.js         qrcode-generator's dist/qrcode.js (MIT), minified here — the
                        package ships no minified build; global `qrcode`
 
    A file is rewritten only when its bytes change, so a rebuild leaves its
@@ -38,7 +38,7 @@ const LAME_HEAD = `/*!
 export const VENDORED: Record<string, () => string> = {
   'tweetnacl.min.js': () => pkg('tweetnacl/nacl.min.js'),
   'lamejs.min.js': () => LAME_HEAD + pkg('@breezystack/lamejs/dist/lamejs.iife.js'),
-  'qr.min.js': () => transformSync(pkg('qrcode-generator/qrcode.js'), { minify: true, tsconfigRaw: {} }).code,
+  'qr.min.js': () => transformSync(pkg('qrcode-generator/dist/qrcode.js'), { minify: true, tsconfigRaw: {} }).code,
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
