@@ -90,7 +90,7 @@ on page one.)
 - **The meter counted nothing for three weeks, because its own beacon was a module script: nav.js loads it classic, and a configuration rule stops the edge's injection (2026-10-08)** — `log/2026-10.md`
 - **The CSP is enforced, with Trusted Types; HSTS is preloaded; COOP isolates the window (2026-10-08)** — `log/2026-10.md`
 - **Never block what Cloudflare injects: the script directives report, the script-free ones are enforced (2026-10-09)** — `log/2026-10.md`
-- **Home is painted by its HTML, and nothing of the app races the first frame (2026-10-09)** — `log/2026-10.md`
+- **Home is painted by its HTML, and nothing of the app races the first frame: mobile PageSpeed 96 → 100 (2026-10-09)** — `log/2026-10.md`
 - **A volume no longer split takes its old parts with it (2026-10-09)** — `log/2026-10.md`
 
 ### Build system
