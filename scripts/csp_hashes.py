@@ -47,11 +47,7 @@ def turnstile_script():
 # Each entry is an extra token the policy may carry and the date it must be gone
 # by; tests/py/test_csp.py fails past that date, so an overlap cannot be
 # forgotten into a permanent second door.
-OVERLAP = {
-    # the head script from before Home's launcher moved into its HTML, departing
-    # (2026-10-09): a page loaded before that deploy still runs it
-    "'sha256-9HBcZHKrZIORNuWdbW2RbXmZQxXXXpGaylfrgh4rWUw='": '2026-10-16',
-}
+OVERLAP = {}
 
 
 def hashes():

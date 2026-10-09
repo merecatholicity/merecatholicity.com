@@ -90,7 +90,8 @@ on page one.)
 - **The meter counted nothing for three weeks, because its own beacon was a module script: nav.js loads it classic, and a configuration rule stops the edge's injection (2026-10-08)** — `log/2026-10.md`
 - **The CSP is enforced, with Trusted Types; HSTS is preloaded; COOP isolates the window (2026-10-08)** — `log/2026-10.md`
 - **Never block what Cloudflare injects: the script directives report, the script-free ones are enforced (2026-10-09)** — `log/2026-10.md`
-- **Home is painted by its HTML, and nothing of the app races the first frame (2026-10-09)** — `log/2026-10.md`
+- **Home is painted by its HTML, and nothing of the app races the first frame: mobile PageSpeed 96 → 100 (2026-10-09)** — `log/2026-10.md`
+- **A volume no longer split takes its old parts with it (2026-10-09)** — `log/2026-10.md`
 
 ### Build system
 
@@ -192,6 +193,7 @@ on page one.)
 - **What that unblocked, in the same push (2026-09-19).** — `log/2026-09.md`
 - **One GitHub credential beside the Cloudflare one (2026-09-19).** — `log/2026-09.md`
 - **The gate waited in silence because its reviewer was its actor; a bot now asks by name (2026-10-08)** — `log/2026-10.md`
+- **A gate's ask is an issue titled "Approval needed", and it closes itself (2026-10-09)** — `log/2026-10.md`
 
 ### Cloudflare Workers (dynamic backend)
 

@@ -115,20 +115,29 @@ class TheReviewer(unittest.TestCase):
         self.assertIn('"config" -> "librarian-config"', read('purescript', 'src', 'Domain', 'Pipeline.purs'))
 
 
+def is_asker(job):
+    return any(s.get('run') == 'scripts/ci_ask_review.sh' for s in job.get('steps', []))
+
+
+def is_settler(job):
+    return any(s.get('run') == 'scripts/ci_ask_review.sh close' for s in job.get('steps', []))
+
+
 class EveryGateAsks(unittest.TestCase):
     """A run waiting on a reviewer says so to the reviewer (2026-10-08).
 
     GitHub notifies nobody of their own activity, and every run here is the
     owner's — so an apply sat at its gate unannounced until someone happened to
     look. Each gated job has a sibling that runs scripts/ci_ask_review.sh under
-    the job's own token, and the bot's @mention, a comment on the run's
-    commit, reaches the owner. The comment takes `contents: write`, so the
-    asker is a sparse checkout of the one script and one step that runs it.
+    the job's own token, and the bot's @mention, an "Approval needed" issue
+    (2026-10-09; a commit comment until then), reaches the owner. A `settle`
+    job after the gate closes it with the outcome. Both take `issues: write`,
+    so each is a sparse checkout of the one script and one step that runs it.
 
     What would break silently: a new gated job (or a new reviewed environment)
     without its asker; an asker whose condition drifts from its gate's, so it
     asks for a wait that never comes or misses the one that does; an asker
-    handed a secret or a write it does not need.
+    handed a secret or a write it does not need; an ask nobody settles.
     """
 
     def reviewed_environments(self):
@@ -142,7 +151,7 @@ class EveryGateAsks(unittest.TestCase):
         seen = set()
         for name in sorted(os.listdir(WORKFLOWS)):
             jobs = workflow(name).get('jobs') or {}
-            askers = [j for j in jobs.values() if 'scripts/ci_ask_review.sh' in steps_text(j)]
+            askers = [j for j in jobs.values() if is_asker(j)]
             for job_name, job in jobs.items():
                 env = job.get('environment')
                 env = env.get('name') if isinstance(env, dict) else env
@@ -151,25 +160,43 @@ class EveryGateAsks(unittest.TestCase):
                 seen.add(env)
                 twins = [a for a in askers if a.get('needs') == job.get('needs') and a.get('if') == job.get('if')]
                 self.assertEqual(len(twins), 1, f'{name}: {job_name} waits on {env} and nobody asks')
+                ask = next(k for k, j in jobs.items() if j is twins[0])
+                self.assertEqual(twins[0]['outputs'], {'issue': '${{ steps.ask.outputs.issue }}'}, name)
+                settlers = [j for j in jobs.values() if is_settler(j)
+                            and j.get('needs') == [ask, job_name]]
+                self.assertEqual(len(settlers), 1, f'{name}: the ask for {job_name} is never settled')
+                settle = settlers[0]
+                self.assertEqual(settle['if'], f"always() && needs.{ask}.outputs.issue != ''", name)
+                env_vars = settle['steps'][1]['env']
+                self.assertEqual(env_vars['ISSUE'], f'${{{{ needs.{ask}.outputs.issue }}}}', name)
+                self.assertEqual(env_vars['RESULT'], f'${{{{ needs.{job_name}.result }}}}', name)
         self.assertEqual(seen, gated, 'every reviewed environment is waited on somewhere')
 
     def test_the_asker_holds_the_job_token_and_nothing_more(self):
         swept = 0
         for name in sorted(os.listdir(WORKFLOWS)):
             for job in (workflow(name).get('jobs') or {}).values():
-                if 'scripts/ci_ask_review.sh' not in steps_text(job):
+                if not (is_asker(job) or is_settler(job)):
                     continue
                 swept += 1
                 self.assertNotIn('environment', job, name + ': the asker never waits itself')
-                self.assertEqual(job['permissions'], {'contents': 'write', 'actions': 'read'}, name)
+                self.assertEqual(job['permissions'], {'issues': 'write', 'actions': 'read'}, name)
                 self.assertNotIn('secrets.', yaml.safe_dump(job), name)
                 # the write is for the comment: nothing else runs beside it
                 checkout, ask = job['steps']
                 self.assertTrue(checkout['uses'].startswith('actions/checkout@'), name)
                 self.assertEqual(checkout['with']['sparse-checkout'], 'scripts/ci_ask_review.sh', name)
                 self.assertIs(checkout['with']['persist-credentials'], False, name)
-                self.assertEqual(ask['run'], 'scripts/ci_ask_review.sh', name)
-        self.assertEqual(swept, 2)
+                self.assertIn(ask['run'], ('scripts/ci_ask_review.sh', 'scripts/ci_ask_review.sh close'), name)
+        self.assertEqual(swept, 4)
+
+    def test_the_ask_is_an_issue_whose_title_says_so(self):
+        script = read('scripts', 'ci_ask_review.sh')
+        self.assertIn('title="Approval needed: $name"', script)
+        self.assertIn('"repos/$repo/issues"', script)
+        self.assertNotIn('/comments', script, 'a commit comment is titled by the commit, not the ask')
+        self.assertRegex(read('terraform', 'github.tf'),
+                         r'resource "github_repository" "site" \{[^}]*?has_issues\s*=\s*true')
 
 
 class TheAudience(unittest.TestCase):

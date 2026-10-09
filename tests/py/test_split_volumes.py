@@ -306,6 +306,24 @@ class ASecondBuildFindsWhatTheFirstMade(unittest.TestCase):
         self.assertTrue(groups, 'every sub-part forgot which division it belongs to')
 
 
+    def test_a_volume_no_longer_split_takes_its_old_parts_with_it(self):
+        """A rebuilt volume this run cannot split is served whole, and the
+        parts an earlier build cut from it belong to nobody. Left behind, the
+        CI cache served them as orphans (2026-10-09, nineteen
+        oxford-sermons-* pages)."""
+        m.main([])
+        old = sorted(self.read_manifest()['parts'])
+        self.assertTrue(old)
+        with open(os.path.join(self.dir, 'v.html'), 'w', encoding='utf-8') as f:
+            f.write(volume([('One', 1, '<p><a href="#ghost">nowhere</a></p>\n' + long_text(400)),
+                            ('Two', 1, long_text(400))]))
+        m.main([])
+        left = [p for p in old if os.path.exists(os.path.join(self.dir, p))]
+        self.assertEqual(left, [], 'parts of a volume now served whole')
+        self.assertNotIn('v.html', self.read_manifest()['volumes'])
+        self.assertFalse(os.path.exists(os.path.join(self.dir, m.anchors_name('v.html'))))
+
+
 class TheBuiltTree(unittest.TestCase):
     """The sweep, over whatever the build actually wrote."""
 

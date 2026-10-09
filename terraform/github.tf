@@ -79,7 +79,7 @@ resource "github_repository" "site" {
   description                 = null
   gitignore_template          = null
   has_discussions             = false
-  has_issues                  = false
+  has_issues                  = true # a gate's "Approval needed" ask (scripts/ci_ask_review.sh)
   has_projects                = false
   has_wiki                    = false
   homepage_url                = "https://merecatholicity.com"

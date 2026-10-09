@@ -194,8 +194,9 @@ jobs:
 
   ask:
     # GitHub tells no one of their own activity, and every run here is the
-    # owner's, so the gate's wait never reached them: the bot asks by name
-    # (scripts/ci_ask_review.sh). Same needs and same condition as the gate.
+    # owner's, so the gate's wait never reached them: the bot asks by name in
+    # an "Approval needed" issue (scripts/ci_ask_review.sh). Same needs and same
+    # condition as the gate; `settle` closes the issue when the gate is done.
     needs: plan
     if: >-
       needs.plan.outputs.creds == 'yes' && needs.plan.outputs.changes == 'yes'
@@ -206,8 +207,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write   # a commit comment, nothing else (a read token is refused, 403)
+      issues: write     # the "Approval needed" issue, nothing else
       actions: read
+    outputs:
+      issue: ${{ steps.ask.outputs.issue }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -216,10 +219,35 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Ask the reviewer
+        id: ask
         env:
           GH_TOKEN: ${{ github.token }}
           TRIGGERING_ACTOR: ${{ github.triggering_actor }}
         run: scripts/ci_ask_review.sh
+
+  settle:
+    # The ask's issue closes with the gate's outcome (approved, rejected, or
+    # never reviewed) — whatever became of the gated job, hence always().
+    needs: [ask, apply]
+    if: always() && needs.ask.outputs.issue != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write     # the issue's outcome and its close, nothing else
+      actions: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci_ask_review.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Settle the ask
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.ask.outputs.issue }}
+          RESULT: ${{ needs.apply.result }}
+        run: scripts/ci_ask_review.sh close
 
   apply:
     # Only from main (or a deliberate dispatch), only with credentials, and only
