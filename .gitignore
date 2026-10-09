@@ -74,10 +74,10 @@ docs/*.pdf
 # in git. It had reached 621 MB against a hard 1 GB Pages limit, and 615 of the
 # ~800 largest blobs in history were under docs/.
 #
-# docs/ is a MIXTURE, and the distinction is load-bearing: the vendored
-# libraries, turnstile.html, CNAME, .nojekyll and every image are
-# HAND-MAINTAINED SOURCE that lives nowhere else (so were nav.js and sw.js, until
-# their sources moved to pagejs/). A blanket `docs/` ignore
+# docs/ is a MIXTURE, and the distinction is load-bearing: turnstile.html,
+# CNAME, .nojekyll and every image are HAND-MAINTAINED SOURCE that lives
+# nowhere else (so were nav.js and sw.js, until their sources moved to pagejs/,
+# and the three third-party libraries, until npm took them). A blanket `docs/` ignore
 # deleted them and broke the build within one commit. Only the generated set is
 # listed here — 284 files, 315 MB — and the 297 source files (10 MB) stay.
 #
@@ -133,6 +133,12 @@ docs/away.js
 docs/index.js
 docs/bible-reader.js
 docs/sw.js
+# The three third-party libraries the client injects on first use (2026-10-09):
+# pinned in package.json and copied out of node_modules by scripts/vendor.ts
+# (`npm run build:vendor`). They were hand-committed bytes until then.
+docs/tweetnacl.min.js
+docs/lamejs.min.js
+docs/qr.min.js
 # the lazy feature modules' chunks (P2-5, 2026-09-16): content-hashed names, rebuilt by every
 # `make bundle` (rm -rf first, so a stale chunk never lingers)
 docs/chunks/

@@ -507,10 +507,9 @@ caches the tarballs by the manifest's hash. The release is a shelf, not a softwa
 assets are replaced in place (`--clobber`) when a source is regenerated. The history rewrite
 that would shrink existing clones is a separate, owner-authorised act (§10 ex. 9).
 
-- **`docs/` is a mixture.** Hand-maintained source (the
-  vendored libraries, turnstile.html, images, the 17 hand pages, CNAME, .nojekyll) is
+- **`docs/` is a mixture.** Hand-maintained source (turnstile.html, images, the 17 hand pages, CNAME, .nojekyll) is
   tracked; everything the build writes (corpus pages, bundles, the page scripts and sw.js from
-  `pagejs/*.ts`, style.css, version.json,
+  `pagejs/*.ts`, the three npm libraries from `scripts/vendor.ts`, style.css, version.json,
   manifests, Bible JSON, the Logos docx) is git-ignored and rebuilt. `.gitignore` lists the
   generated set; `tests/py/test_docs_sources.py` fails if a new hand page is not added to it.
   **Never hand-edit a generated file; never commit one.**

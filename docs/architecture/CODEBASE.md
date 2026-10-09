@@ -60,6 +60,14 @@ day; it is built from `sw.ts` on its own, never bundled and never minified —
 the types erased and nothing else (no tsconfig is read, so no file-wide
 `"use strict"` the classic scripts never had).
 
+**The three browser libraries** the client injects on first use (tweetnacl for
+the DM envelope, lamejs for voice notes, qrcode-generator for the profile QR)
+are npm dependencies, pinned exactly; `scripts/vendor.ts` (`npm run
+build:vendor`) writes them into `docs/` as standalone classic scripts under the
+names `window.mcAsset` keys, and `tests/js/vendor.test.ts` runs each one bare
+and asks for the global the client reads. They were hand-committed bytes in
+`docs/` until 2026-10-09.
+
 The two "how is this one file 6,000 lines?" cases were **`docs/comments.js`**
 (the browser client) and **`comments-worker/src/index.js`** (the backend). Both
 have been dissolved into feature files — the worker in Phase 4, the client in

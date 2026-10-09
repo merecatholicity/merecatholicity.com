@@ -1,7 +1,8 @@
 /* Envelope v2 (2026-09-13; Domain.Dm.encSealed): a random content key per
  * message, boxed once per member — the crypto that makes a conversation of
  * many end-to-end. Proven by RUNNING the client's own functions with the
- * vendored tweetnacl: three identities seal and open, a fourth cannot, a
+ * shipped tweetnacl (node_modules/tweetnacl/nacl.min.js, the bytes
+ * scripts/vendor.ts serves as docs/tweetnacl.min.js): three identities seal and open, a fourth cannot, a
  * member left out of a later word cannot open it, an edit re-sealed under
  * the same key opens for everyone, a pair's older E1 word still opens both
  * ways, and a tampered body opens for nobody.
@@ -18,10 +19,9 @@ import { dirname, join } from 'node:path';
 import { clientModule } from '../_support/client.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-/* The vendored UMD reads `self` as it loads (a browser global); give Node one. */
+/* The UMD reads `self` as it loads (a browser global); give Node one. */
 if (typeof globalThis.self === 'undefined') globalThis.self = globalThis as Window & typeof globalThis;
-let nacl = createRequire(import.meta.url)(join(root, 'docs', 'tweetnacl.min.js'));
-if (!nacl || !nacl.box) nacl = (globalThis.self as unknown as { nacl: any }).nacl;
+const nacl = createRequire(import.meta.url)(join(root, 'node_modules', 'tweetnacl', 'nacl.min.js'));
 assert.ok(nacl && nacl.box && nacl.secretbox, 'tweetnacl loaded with box and secretbox');
 const src = clientModule('dm-crypto');
 const fn = (name: string) => {

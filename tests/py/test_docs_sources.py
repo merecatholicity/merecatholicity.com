@@ -54,6 +54,9 @@ def buildable():
     # 2026-10-09, its types erased by the same script (pagejs/sw.ts).
     names |= {n + '.js' for n in ('nav', 'deeplink', 'flash', 'contact', 'away',
                                   'index', 'bible-reader', 'sw')}
+    # the three third-party libraries: pinned in package.json, copied out of
+    # node_modules by scripts/vendor.ts (2026-10-09)
+    names |= {'tweetnacl.min.js', 'lamejs.min.js', 'qr.min.js'}
     names |= {'book.html', 'bishop-presbyter.html', 'app.js', 'chrome.js', 'comments.js',
               'Mere_Catholicity_Logos.docx',
               'style.css', 'version.json', 'pdfs.txt', 'sitemap.xml',
@@ -111,18 +114,29 @@ class DocsIsSourceOrOutput(unittest.TestCase):
                      'kjv.html', 'douay-rheims.html'):
             self.assertIn(page, have, page + ' is hand-written and must stay in git')
 
-    def test_the_vendored_libraries_are_tracked(self):
-        """The vendored libraries live ONLY in docs/ and are not output.
+    def test_the_third_party_libraries_come_from_npm(self):
+        """tweetnacl, lamejs and qrcode-generator were hand-committed into docs/
+        until 2026-10-09, with no record of where the bytes came from. Now each
+        is pinned exactly in package.json and scripts/vendor.ts writes it into
+        docs/, so docs/<name>.min.js is build output and must not be tracked.
 
-        sw.js stood here too until 2026-10-09: it carries the PWA update
+        sw.js stood with them until the same day: it carries the PWA update
         lifecycle, and it was kept outside the bundle and outside pagejs/ so
         that no build step could rewrite the one file that decides whether a
         stale page can update itself. It is TypeScript now (pagejs/sw.ts), and
         that promise is kept by its build: on its own, never bundled, never
         minified — the types erased and nothing else."""
         have = tracked()
-        for js in ('tweetnacl.min.js', 'lamejs.min.js', 'qr.min.js'):
-            self.assertIn(js, have, 'docs/' + js + ' is source, not build output')
+        with open(os.path.join(ROOT, 'package.json'), encoding='utf-8') as f:
+            deps = json.load(f)['dependencies']
+        with open(os.path.join(ROOT, 'scripts', 'vendor.ts'), encoding='utf-8') as f:
+            vendor = f.read()
+        for js, pkg in (('tweetnacl.min.js', 'tweetnacl'), ('lamejs.min.js', '@breezystack/lamejs'),
+                        ('qr.min.js', 'qrcode-generator')):
+            self.assertNotIn(js, have, 'docs/' + js + ' is written by scripts/vendor.ts')
+            self.assertIn("'" + js + "'", vendor, 'scripts/vendor.ts must write docs/' + js)
+            self.assertRegex(deps.get(pkg, ''), r'^\d+\.\d+\.\d+$',
+                             pkg + ' must be pinned exactly: its bytes ship to the browser')
         self.assertNotIn('sw.js', have, 'docs/sw.js is built from pagejs/sw.ts now')
 
     def test_the_page_scripts_have_a_tracked_source(self):

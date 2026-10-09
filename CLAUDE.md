@@ -235,7 +235,7 @@ The PureScript kernel (`Domain.*`: ADTs, smart constructors, illegal states unre
 presentational) and the classic client (`client/*.ts`: the write paths, the DM thread, merecat).
 The worker imports the same compiled kernel. **New application logic goes in PureScript**; TypeScript is interop only
 (DOM, fetch, crypto, storage, Turnstile, WebSocket). **No JavaScript** (2026-10-09): every source, test and script is strict
-`.ts`, the kernel has no FFI file, only the vendored `docs/*.min.js` remain. Realtime: the `BoardHub` and `ChatRoom` DOs. The
+`.ts`, the kernel has no FFI file, the three browser libraries are npm's (`scripts/vendor.ts`). Realtime: the `BoardHub` and `ChatRoom` DOs. The
 map, the four gates a slice ships through (deterministic rebuild · parity · lint · headless render parity), the reading order: CODEBASE.md.
 
 ## Testing policy
