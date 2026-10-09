@@ -116,11 +116,11 @@ Each has a fuller passage in INFRASTRUCTURE.md — read it before touching the a
 - **Never block what Cloudflare injects** (2026-10-09, `test_csp.py`): the CSP ENFORCES only script-free directives; script-src (our
   inline scripts by hash, a moving one via `csp_hashes.OVERLAP`) and Trusted Types REPORT — script URLs via the `default` policy
   atop `nav.js` (origins = `script-src`'s hosts), the HTML parse via `mc-doc`. COOP `same-origin`; HSTS preloaded.
-- **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client)
-  re-runs on every soft navigation, so anything inside it that owns a resource leaks per hop —
-  keep page-scoped state above it, and every document/window listener it installs carries the boot
-  signal. **A phone's FIRST paint is already the app**: before `body.mc-app` the bars' surfaces hold
-  their places, no title or static footer shows (`html.mc-noapp` is the `?app=0` opt-out).
+- **Every page's client is a boot the shell drives**; `mcBoot()` (the whole classic client) re-runs on every soft navigation,
+  so anything inside it that owns a resource leaks per hop — keep page-scoped state above it, and every document/window
+  listener it installs carries the boot signal. **A phone's FIRST paint is already the app**: before `body.mc-app` the bars'
+  surfaces hold their places, no title or static footer shows (`html.mc-noapp` is the `?app=0` opt-out); Home's launcher is IN
+  the HTML (`app/home.ts`, `home_prerender.mjs`), nothing of the app is fetched before that paint, the splash is the installed app's.
 - **Turnstile**: an established identity is not challenged: `profiles.verified_at`, stamped where a challenge was PASSED, never by
   the row a keyed read leaves (`Domain.Turnstile`, `turnstile_skip_established`; `/prefs` answers for this identity); the widget
   runs in `docs/turnstile.html` (own context, `?v=` from `MC_ASSETS`). **Only `loadTurnstile()` mounts, only from a focus or a

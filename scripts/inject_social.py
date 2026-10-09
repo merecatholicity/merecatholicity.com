@@ -110,11 +110,23 @@ NOINDEX_RE = re.compile(r'<meta name="robots" content="[^"]*noindex', re.I)
 #     RELOAD case is spared, the one no engine can disagree about; a resume or
 #     a relaunch still gets its launch screen. The FOUT gate below is NOT
 #     spared: a reload paints Home's static markup exactly as a launch does.
+#     ONLY IN THE INSTALLED APP (2026-10-08): `display-mode: standalone`, or
+#     iOS's navigator.standalone for a home-screen web clip. A launch screen is
+#     the installed app's convention. In a browser tab it hid a page that was
+#     already there: the launcher is in docs/index.html now (app/home.ts), so it
+#     paints with the stylesheet, and a splash over it cost every first visit
+#     ~0.9s of nothing (Lighthouse mobile counted it in FCP, LCP and Speed
+#     Index). `tests/js/head_script.test.mjs` runs this script against stubbed
+#     media and storage, since no headless Chrome can be put in display-mode.
 #     LIFECYCLE (small and bounded): fade out once the app has actually
 #     rendered, never before ~500ms so a fast launch cannot flash, and
 #     unconditionally by 2.2s. The pseudo-elements are pointer-events:none, so
 #     even a splash that somehow failed to clear could not trap the reader, and
 #     the interval clears itself on any throw.
+#  4) CONTINUE READING: on Home, html.mc-cont when deeplink.js has stored any
+#     reading position (mc-readpos:*), so the launcher's hidden Continue row
+#     holds its place from the first frame instead of pushing every row below
+#     it down when the app fills it in (app/home.ts fillCont).
 # Injected right after <head> so it runs before the stylesheet paints. Replaced
 # in place when the template changes, and re-applied on every `make html`.
 
@@ -162,7 +174,10 @@ FLASH_SCRIPT = (
     "var rl=false;try{var nv=performance.getEntriesByType&&performance.getEntriesByType('navigation')[0];"
     "rl=nv?nv.type==='reload':!!(performance.navigation&&performance.navigation.type===1)}catch(z0){}"
     "if(a&&home)e.classList.add('mc-home-boot');"
-    "if(a&&home&&!rl){e.classList.add('mc-splash');"
+    "if(a&&home){try{for(var i=0;i<localStorage.length;i++)"
+    "if((localStorage.key(i)||'').indexOf('mc-readpos:')===0){e.classList.add('mc-cont');break}}catch(z1){}}"
+    "var sa=false;try{sa=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(z2){}"
+    "if(a&&home&&!rl&&sa){e.classList.add('mc-splash');"
     "var s=document.createElement('style');s.id='mc-boot-css';s.textContent=" + repr(SPLASH_CSS) + ";"
     "document.head.appendChild(s);"
     "var t0=Date.now();var iv=setInterval(function(){try{"

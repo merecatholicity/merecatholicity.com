@@ -330,14 +330,24 @@ window.mcAsset = function (name) {
    there is nothing to measure and the request is waste. And automation is not
    a reader: the nightly headless run against production would otherwise post
    itself into the numbers every night and quietly bend every decision the
-   numbers are for. */
+   numbers are for.
+
+   AFTER `load` (2026-10-08). A meter is not the page: fetched at once, it was a
+   second origin's connection and 10 KB racing the stylesheet and the launcher
+   for a phone's first paint (Lighthouse put it in the page's critical chain).
+   Its paint and Web Vitals readings come from buffered performance entries,
+   so a late beacon still sees the whole load it measures. */
 (function () {
   try {
     if (!/(^|\.)merecatholicity\.com$/.test(location.hostname)) return;
     if (navigator.webdriver) return;
-    var b = document.createElement('script');
-    b.src = 'https://static.cloudflareinsights.com/beacon.min.js?token=9eb9b8d07c9c4503bca7e8749904638f';
-    document.head.appendChild(b);
+    var meter = function () {
+      var b = document.createElement('script');
+      b.src = 'https://static.cloudflareinsights.com/beacon.min.js?token=9eb9b8d07c9c4503bca7e8749904638f';
+      document.head.appendChild(b);
+    };
+    if (document.readyState === 'complete') meter();
+    else window.addEventListener('load', meter, { once: true });
   } catch (e) { /* a meter is never worth a broken page */ }
 })();
 
@@ -366,10 +376,29 @@ window.mcAsset = function (name) {
        (installChrome → mountBars). Both are modules and both are async, so
        this is a priority hint, not an ordering promise: whichever lands first
        does its part, and mountBars is idempotent. */
+    /* AFTER THE FIRST PAINT (2026-10-08). Both are requested once the page has
+       painted, never before. A frame later costs the bars nothing, since their
+       surfaces already hold their places in the stylesheet, and Home's launcher
+       is in the HTML (app/home.ts). Requested at once, ~100 KB of module graph
+       raced the stylesheet for a phone's first frame, and the app's script sat
+       in the page's FCP and LCP (Lighthouse mobile). The first
+       requestAnimationFrame runs just before the first frame the stylesheet
+       allows; the second, a frame later, once that one has gone to the screen
+       (one alone let the request leave between the paint and its presentation,
+       which is still "before the paint" to the metric). A hidden tab paints
+       nothing, so it loads at once, and a frame that never comes (a throttled or
+       frozen page) is covered at 3s. */
+    function afterPaint(go) {
+      var done = false;
+      var once = function () { if (!done) { done = true; go(); } };
+      if (document.visibilityState === 'hidden' || !window.requestAnimationFrame) { once(); return; }
+      requestAnimationFrame(function () { requestAnimationFrame(function () { setTimeout(once, 0); }); });
+      setTimeout(once, 3000);
+    }
     var c = document.createElement('script');
     c.src = 'chrome.js?v=2052693061';
     c.type = 'module';
-    document.head.appendChild(c);
+    afterPaint(function () { document.head.appendChild(c); });
     /* the bundle always loads (it carries the single living render path);
        the latch is read inside the shell and disables only the app chrome */
     var s = document.createElement('script');
@@ -405,7 +434,7 @@ window.mcAsset = function (name) {
        the site's longest document. A wheel tick now summons the shell at the
        top of the page instead, and a phone's scroll was already a pointerdown.
        Everywhere else — the app pages, the hand pages, the home launcher — it
-       loads exactly as before: those pages ARE the app. */
+       loads right after the first paint: those pages ARE the app. */
     var reading = !!document.querySelector('main.prose.corpus');
     var sent = false;
     function shell() {
@@ -416,7 +445,7 @@ window.mcAsset = function (name) {
       window.removeEventListener('scroll', shell);
       document.head.appendChild(s);
     }
-    if (!reading) { shell(); return; }
+    if (!reading) { afterPaint(shell); return; }
     document.addEventListener('pointerdown', shell, true);
     document.addEventListener('keydown', shell, true);
     window.addEventListener('scroll', shell, { once: true, passive: true });
@@ -509,12 +538,20 @@ window.mcAsset = function (name) {
       mid-use — never yank it; the fresh copy serves the next navigation.
       Guards: once per page life, never while the reader is mid-typing, at
       most twice per 5 minutes across reloads (sessionStorage), so a surprise
-      can never become a reload loop. */
+      can never become a reload loop.
+   REGISTERED AFTER `load` (2026-10-08): a first install primes six pages
+   (sw.js PAGES), and those fetches raced the page's own first paint. A page
+   that is already controlled loses nothing by the wait. */
 (function () {
   if (!('serviceWorker' in navigator)) return;
   try { if (localStorage.getItem('mc-app') === '0') return; } catch (e) { /* latch unreadable: proceed */ }
   var sw = navigator.serviceWorker;
-  try { sw.register('sw.js', { updateViaCache: 'none' }).catch(function () {}); } catch (e) { return; }
+  if (!sw) return;
+  var register = function () {
+    try { sw.register('sw.js', { updateViaCache: 'none' }).catch(function () {}); } catch (e) { /* unsupported here */ }
+  };
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register, { once: true });
 
   var lastCheck = 0;
   function check() {

@@ -1756,6 +1756,22 @@ body.mc-app main.prose > #title-block-header {
 .mc-home-row-txt { display: flex; flex-direction: column; }
 .mc-home-row-txt strong { font-weight: 600; transition: color var(--tap); }
 .mc-home-row-txt small { color: var(--faint); font-size: 0.8rem; margin-top: 0.1rem; }
+/* docs/index.html carries the launcher (app/home.ts), so it is shown only where
+   the app is: under the head script's html.mc-home-boot, or once the shell has
+   marked main.mc-app-home. The plain site (html.mc-noapp, or no JS at all) keeps
+   the book page it always had. With the shell running (body.mc-app), a <main>
+   that carries the launcher IS Home from the frame it is swapped in: a soft
+   navigation to Home used to show the book page for two frames before
+   mountHome marked it. */
+html:not(.mc-home-boot) body:not(.mc-app) main:not(.mc-app-home) > mc-home { display: none; }
+body.mc-app main:has(> mc-home) > :not(mc-home) { display: none; }
+/* The Continue row is in the page from the start, hidden; html.mc-cont (the
+   head script found a reading position) holds its place before first paint, and
+   app/home.ts fillCont() supplies the title. One line, so a long title can never
+   move the rows below it. */
+.mc-home-cont { display: none; }
+html.mc-cont .mc-home-cont, .mc-home-cont.mc-on { display: flex; }
+.mc-home-cont small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Logged-out prompt on the members-only pages (Messages, Profile). */
 .mc-join { text-align: center; padding: 2.4rem 1rem; }

@@ -16,6 +16,7 @@ import { mountLibrary } from './views/library.ts';
 import { notifLabel, notifHref, tapExcursion, tapVerdict, tapEchoMs } from './core.ts';
 import { urlBase64ToUint8Array, healPushSubscription, browserPushEnv } from './push.ts';
 import { installArtWarm } from './artwarm.ts';
+import { lastReadPos, mountLauncher } from './home.ts';
 
 /* Crisp stroke icons (Feather-ish, 24×24, currentColor) so the chrome reads as an
    app, not a website. Static SVG templates — no unsafe injection. The Merecat
@@ -28,57 +29,6 @@ import { installArtWarm } from './artwarm.ts';
    alone. Merecat 🐈 keeps its mascot emoji (a deliberate brand mark), Feed uses a
    stroke SVG like the other structural tabs. hrefs are ordinary same-origin links
    the shell intercepts + soft-navs. */
-
-/* The Home launcher: standout BROWSE features first, then the reading shelf
-   (mirrors scripts/nav.yml). Static links only — the shell adds no API traffic
-   here. P3-e: these deliberately do NOT repeat the rail / tab-bar destinations
-   (Community, Ask Merecat, Inbox, Profile) — the rail is the quick-switch, the
-   launcher is browse — and no item appears both here and in HOME_SECTIONS. */
-const HOME_FEATURES = [
-  { icon: '🧭', title: 'Where to begin', sub: 'New here? Start here.', href: 'where-to-begin.html' },
-  { icon: '📖', title: 'The Book', sub: 'Mere Catholicity — read, download, or buy', href: 'the-book.html' },
-  { icon: '📚', title: 'Library', sub: 'The whole hosted corpus', href: 'library.html' },
-  { icon: '🎧', title: 'The audio Bible', sub: 'The King James Version read aloud, chapter by chapter', href: 'kjv.html' },
-  { icon: '📰', title: 'Journal', sub: 'The Mere Catholicity Journal', href: 'journal.html' },
-];
-
-/* The reader's way back into whatever they were last reading: deeplink.js
-   stores mc-readpos:<path> = {id, title, at} as corpus pages scroll. The most
-   recent one becomes a "Continue reading" chip atop the Home launcher. */
-function lastReadPos(): { href: string; title: string } | null {
-  try {
-    let best: { at: number; href: string; title: string } | null = null;
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const k = localStorage.key(i) || '';
-      if (k.indexOf('mc-readpos:') !== 0) continue;
-      const v = JSON.parse(localStorage.getItem(k) as string);
-      if (!v || !v.at) continue;
-      const path = k.slice('mc-readpos:'.length);
-      const title = String(v.title || '').split(/\s+[|—–]\s+/)[0].trim() || path;
-      if (!best || v.at > best.at) best = { at: v.at, href: path + (v.id ? '#' + v.id : ''), title };
-    }
-    return best ? { href: best.href, title: best.title } : null;
-  } catch (e) { return null; }
-}
-/* The reading shelf, grouped the way a newcomer reads it. Surfaces the rest of
-   the site nav (Contact lives only in the footer, kept quiet by design — not
-   here; Library + Journal are up in the feature cards, not repeated here). */
-const HOME_SECTIONS = [
-  { heading: 'Start here', items: [
-    { title: 'Credo', sub: 'What we believe, clause by clause', href: 'credo.html' },
-    { title: 'Lex orandi, lex credendi', sub: 'The rule of prayer', href: 'lex-orandi.html' },
-  ] },
-  { heading: 'The papers', items: [
-    { title: 'Charting: the historic communions', sub: 'Rome, the Orthodox, the confessional churches', href: 'charting-communions.html' },
-    { title: 'Charting: the free churches', sub: 'The same rule, turned around', href: 'free-churches.html' },
-    { title: 'The top fifty objections', sub: 'Answered one by one', href: 'objections.html' },
-    { title: 'The bishop and the presbyter', sub: 'Companion paper', href: 'bishop-presbyter.html' },
-  ] },
-  { heading: 'Explore', items: [
-    { title: 'Sources', sub: 'The primary texts, Newman included', href: 'resources.html' },
-    { title: 'About', sub: 'The project', href: 'about.html' },
-  ] },
-];
 
 /* Which tab the current URL belongs to (the forum's views live in the query
    string). '' = a content page (a paper, the library, about…): no tab is
@@ -1354,30 +1304,14 @@ class McFooter extends LitElement {
 }
 customElements.define('mc-footer', McFooter);
 
-/* ---- the Home launcher (replaces the marketing homepage on phones) ---- */
-class McHome extends LitElement {
-  createRenderRoot() { return this; }
-  render() {
-    const cont = lastReadPos();
-    return html`<div class="mc-home">
-      <div class="mc-home-hero"><span class="mc-home-cross">✝</span>
-        <p>One, holy, catholic, and apostolic.</p></div>
-      <hr class="mc-home-rule">
-      <div class="mc-home-feats">${cont ? html`<a class="mc-home-feat" href=${cont.href}>
-        <span class="mc-home-feat-ico">📖</span>
-        <span class="mc-home-feat-txt"><strong>Continue reading</strong><small>${cont.title}</small></span>
-        <span class="mc-home-go">›</span></a>` : ''}${HOME_FEATURES.map((f) => html`
-        <a class="mc-home-feat" href=${f.href}>
-          <span class="mc-home-feat-ico">${f.icon}</span>
-          <span class="mc-home-feat-txt"><strong>${f.title}</strong><small>${f.sub}</small></span>
-          <span class="mc-home-go">›</span></a>`)}</div>
-      ${HOME_SECTIONS.map((sec) => html`
-        <h2 class="mc-home-sec">${sec.heading}</h2>
-        <div class="mc-home-shelf">${sec.items.map((s) => html`
-          <a class="mc-home-row" href=${s.href}>
-            <span class="mc-home-row-txt"><strong>${s.title}</strong>${s.sub ? html`<small>${s.sub}</small>` : ''}</span>
-            <span class="mc-home-go">›</span></a>`)}</div>`)}
-    </div>`;
+/* ---- the Home launcher (replaces the marketing homepage on phones) ----
+   Painted by docs/index.html itself and adopted here; built only when it
+   arrives empty (app/home.ts). Not a LitElement: it has no state to re-render. */
+class McHome extends HTMLElement {
+  connectedCallback() {
+    let store: Storage | null = null;
+    try { store = localStorage; } catch (e) { /* blocked: no position to offer */ }
+    mountLauncher(this, store ? lastReadPos(store) : null);
   }
 }
 customElements.define('mc-home', McHome);
@@ -1880,10 +1814,10 @@ export function installChrome() {
   function mountHome() {
     const main = document.querySelector('main');
     if (!main || activeTab() !== 'home') return;
-    if (!main.querySelector('mc-home')) {
-      main.insertBefore(document.createElement('mc-home'), main.firstChild);
-      main.classList.add('mc-app-home');
-    }
+    /* docs/index.html carries its own launcher; a Home page that does not
+       (an older cached copy) gets an empty one, which builds itself */
+    if (!main.querySelector('mc-home')) main.insertBefore(document.createElement('mc-home'), main.firstChild);
+    main.classList.add('mc-app-home');
   }
 
   /* P3-a: a logged-out reader on a gated screen (Inbox, Profile, Merecat,

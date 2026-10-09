@@ -67,7 +67,14 @@ class SplashShape(unittest.TestCase):
         """start_url is Home, so Home is every launch of the installed app.
         Landing anywhere else is a resume, where a splash would be wrong."""
         self.assertIn("home=(p==='/'||p===''||p.slice(-11)==='/index.html')", JS)
-        self.assertIn("if(a&&home&&!rl){e.classList.add('mc-splash');", JS)
+        self.assertIn("if(a&&home&&!rl&&sa){e.classList.add('mc-splash');", JS)
+
+    def test_installed_app_only(self):
+        """A launch screen is the installed app's (2026-10-08): in a browser tab
+        it hid a launcher docs/index.html already paints. tests/js/head_script
+        RUNS this against stubbed display modes; this holds the gate's shape."""
+        self.assertIn("matchMedia('(display-mode: standalone)').matches", JS)
+        self.assertIn('navigator.standalone===true', JS)
 
     def test_a_reload_is_not_a_launch(self):
         """The owner saw the splash replay mid-session, on a service-worker
@@ -79,7 +86,7 @@ class SplashShape(unittest.TestCase):
         self.assertIn('performance.navigation.type===1', JS,
                       'the deprecated navigation type is the fallback for engines '
                       'without the timing entry')
-        self.assertIn('if(a&&home&&!rl){', JS, 'the splash must be the thing a reload skips')
+        self.assertIn('if(a&&home&&!rl&&sa){', JS, 'the splash must be the thing a reload skips')
 
     def test_the_fout_gate_still_runs_on_a_reload(self):
         """The reload spares the SPLASH, never the flash guard: a reloaded Home

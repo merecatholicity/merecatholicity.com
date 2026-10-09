@@ -48,8 +48,9 @@ def turnstile_script():
 # by; tests/py/test_csp.py fails past that date, so an overlap cannot be
 # forgotten into a permanent second door.
 OVERLAP = {
-    # the head script that puts Home's launcher in its HTML, arriving (2026-10-09)
-    "'sha256-oKrsTbdLx+aj5VrBuKGgy8rloaQIo0jU68kda9LlM20='": '2026-10-16',
+    # the head script from before Home's launcher moved into its HTML, departing
+    # (2026-10-09): a page loaded before that deploy still runs it
+    "'sha256-9HBcZHKrZIORNuWdbW2RbXmZQxXXXpGaylfrgh4rWUw='": '2026-10-16',
 }
 
 
