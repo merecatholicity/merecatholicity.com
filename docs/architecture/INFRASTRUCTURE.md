@@ -192,6 +192,7 @@ on page one.)
 - **What that unblocked, in the same push (2026-09-19).** — `log/2026-09.md`
 - **One GitHub credential beside the Cloudflare one (2026-09-19).** — `log/2026-09.md`
 - **The gate waited in silence because its reviewer was its actor; a bot now asks by name (2026-10-08)** — `log/2026-10.md`
+- **A gate's ask is an issue titled "Approval needed", and it closes itself (2026-10-09)** — `log/2026-10.md`
 
 ### Cloudflare Workers (dynamic backend)
 

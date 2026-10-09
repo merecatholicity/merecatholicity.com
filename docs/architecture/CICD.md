@@ -279,17 +279,22 @@ workflow file. Never on a pull_request (Principle 3). No `uses:` at all.
 
 A push that changes `terraform/**` produces a run whose `apply` job sits in **waiting**.
 
-**The ask (since 2026-10-08).** GitHub notifies a required reviewer that a deployment waits —
-but nobody of their own activity, and every run here is the owner's, so the wait used to go
-unannounced. Beside every gated job (`apply` here, merecat's `config`) runs an `ask` job with
-the same `needs` and `if`: `scripts/ci_ask_review.sh`, under the job's own `GITHUB_TOKEN`
-(`contents: write` for the comment alone, `actions: read`, no secret; a sparse checkout of the
-one script and one step), waits until the gate holds the run, reads the reviewers from
-`pending_deployments` and comments on the run's commit with an @mention, the run's link and the
-`ci_approve.sh` line (the repository has no issues). The comment is
-github-actions[bot]'s, so the mention reaches the owner's inbox, email and GitHub Mobile. A wait
+**The ask (since 2026-10-08; an issue since 2026-10-09).** GitHub notifies a required reviewer
+that a deployment waits — but nobody of their own activity, and every run here is the owner's,
+so the wait used to go unannounced. Beside every gated job (`apply` here, merecat's `config`)
+runs an `ask` job with the same `needs` and `if`: `scripts/ci_ask_review.sh`, under the job's
+own `GITHUB_TOKEN` (`issues: write`, `actions: read`, no secret; a sparse checkout of the one
+script and one step), waits until the gate holds the run, reads the reviewers from
+`pending_deployments` and opens an issue titled **Approval needed: <workflow> · <commit
+subject>** that @mentions them, with the *Review deployments* link and the `ci_approve.sh` line.
+The issue is github-actions[bot]'s, so the mention reaches the owner's inbox, email and GitHub
+Mobile, titled by what it asks and opening onto the link (a commit comment, the first form, was
+titled by the commit and opened below its diff). After the gated job, whatever its result, a
+`settle` job (`ci_ask_review.sh close`) records the outcome from the run's approvals — the title
+becomes *Approved:* / *Rejected:* / *Not reviewed:* — and closes the issue, editing rather than
+commenting. Issues are on for this (`has_issues = true` in `terraform/github.tf`). A wait
 approved before the asker looks is asked of nobody. `test_pipeline_workflows.py` holds every
-reviewed environment to an asker with its gate's condition.
+reviewed environment to an asker with its gate's condition and a settler after it.
 
 Two ways to review and approve — they are the same API call:
 
