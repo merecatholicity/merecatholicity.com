@@ -10,7 +10,8 @@ audit.py carries too): an entry that names the whole edge would hide a
 challenge-platform failure, and a list the two kits stopped sharing would let
 the audit pass what the nightly fails (2026-10-07: the nightly reported nine
 regressions, twenty-four of twenty-five failures the edge-injected beacon's
-report answered 404 at /cdn-cgi/rum)."""
+report answered 404 at /cdn-cgi/rum — listed as noise until the injection was
+stopped on 2026-10-08, and a finding again since)."""
 import os
 import socket
 import stat
@@ -75,12 +76,13 @@ class StartDriver(unittest.TestCase):
 
 
 class BenignConsole(unittest.TestCase):
-    def test_the_edge_beacons_refused_report_is_noise(self):
-        """The beacon the edge injects posts to /cdn-cgi/rum on this origin and
-        has been answered 404 since the site record's auto_install went false;
-        no code of ours makes that request (nav.js's own beacon never runs
-        under webdriver), so it is not a finding."""
-        self.assertIn('cdn-cgi/rum', flows.BENIGN_CONSOLE)
+    def test_a_refused_meter_report_is_a_finding_again(self):
+        """The edge-injected beacon's /cdn-cgi/rum report answered 404 from
+        2026-09-19 and was listed here as noise; on 2026-10-08 the injection was
+        stopped (terraform/analytics.tf, config_settings) and the entry left. A
+        same-origin /cdn-cgi/rum request now means the edge injects again — a
+        second road to the meter — so it must fail the gate, not pass it."""
+        self.assertFalse([e for e in flows.BENIGN_CONSOLE if 'cdn-cgi/rum' in e])
 
     def test_the_list_names_a_path_never_the_whole_edge(self):
         for entry in flows.BENIGN_CONSOLE:
