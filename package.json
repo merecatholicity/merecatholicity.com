@@ -34,7 +34,7 @@
   "dependencies": {
     "@breezystack/lamejs": "1.2.7",
     "lit": "3.3.3",
-    "qrcode-generator": "1.4.4",
+    "qrcode-generator": "2.0.4",
     "tweetnacl": "1.0.3"
   }
 }
