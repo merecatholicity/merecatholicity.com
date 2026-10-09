@@ -61,10 +61,10 @@ async function handleOpsReport(request: Request, env: Env) {
    and TALLIES, never stores a report: one row per (effective directive,
    blocked origin, document path), a count, first and last seen, the top
    hundred kept in app_settings `csp_report_tally` (the Health card reads
-   it). Enforced since 2026-10-08, with 'report-sample': two kinds of row
-   are named by their sample rather than their origin — Cloudflare's own
-   JavaScript Detections snippet (Bot Fight Mode injects it inline, the hash
-   policy refuses it, by decision) folds to `cf-jsd`, and a Trusted Types
+   it). With 'report-sample' (2026-10-08), two kinds of row are named by
+   their sample rather than their origin — Cloudflare's own JavaScript
+   Detections snippet (Bot Fight Mode injects it inline; the script policy
+   only reports, so it runs) folds to `cf-jsd`, and a Trusted Types
    refusal keeps only its sink's name (`tt:<sink>`), never the value that
    reached it. Keyless and public by nature; READ_LIMIT by IP, the body
    capped at 16 KB, anything unreadable answered 204 all the same — a
