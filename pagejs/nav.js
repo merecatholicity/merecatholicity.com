@@ -290,10 +290,15 @@ window.mcAsset = function (name) {
    terraform/analytics.tf. The site token is public by design, like the
    Turnstile sitekeys; it identifies the site being measured, it authorises
    nothing. The `?token=` form is the one Cloudflare documents for a beacon
-   injected by another script (their tag-manager recipe): a module script has
-   no document.currentScript to read a data attribute from. SPA measurement is
-   the beacon's default, so the shell's soft navigations count as the page
-   views they are.
+   injected by another script (their tag-manager recipe). It is a CLASSIC
+   script, never `type = 'module'` (2026-10-08): the beacon reads its token
+   from document.currentScript.src, which a module script does not have, and
+   for three weeks it fell back to the edge's injected tag instead — that
+   tag's config sent it to the same-origin /cdn-cgi/rum, a 404, so nothing was
+   counted (terraform/analytics.tf). A classic script with no config
+   attribute of its own reports to cloudflareinsights.com, which the CSP's
+   connect-src names. SPA measurement is the beacon's default, so the shell's
+   soft navigations count as the page views they are.
 
    Two gates. Off the live hostnames (a dev box on 127.0.0.1, a file:// open)
    there is nothing to measure and the request is waste. And automation is not
@@ -305,7 +310,6 @@ window.mcAsset = function (name) {
     if (!/(^|\.)merecatholicity\.com$/.test(location.hostname)) return;
     if (navigator.webdriver) return;
     var b = document.createElement('script');
-    b.type = 'module';
     b.src = 'https://static.cloudflareinsights.com/beacon.min.js?token=9eb9b8d07c9c4503bca7e8749904638f';
     document.head.appendChild(b);
   } catch (e) { /* a meter is never worth a broken page */ }

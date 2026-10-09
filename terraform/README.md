@@ -14,8 +14,9 @@ and every `terraform apply` would produce a wrangler diff. So the line is drawn
 at the deploy:
 
 **Terraform owns** — the zone and three deliberate zone settings, all 18 DNS
-records, the three custom rulesets (response headers, custom firewall, rate
-limiting), bot management, the seven R2 buckets and each one's public r2.dev
+records, the custom rulesets (response headers, custom firewall, rate
+limiting, redirects, browser cache, and the configuration rule that keeps the edge from
+injecting a Web Analytics beacon), bot management, the seven R2 buckets and each one's public r2.dev
 switch (all off since 2026-09-17: the audio bucket's was a second public door
 beside its custom domain; provider 5.24.0 has no import for the switch, so it
 was adopted by a create, which is a PUT of the setting), the four D1 databases

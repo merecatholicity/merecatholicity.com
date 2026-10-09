@@ -52,10 +52,14 @@ class TheBeacon(unittest.TestCase):
                       'the beacon names a site that is not this zone\'s')
 
     def test_the_token_rides_the_url_not_a_data_attribute(self):
-        """A module script has no document.currentScript, so a beacon injected
-        by another script cannot be handed its token through data-cf-beacon.
-        `?token=` is the form Cloudflare documents for exactly this case."""
-        self.assertIn("b.type = 'module'", self.nav)
+        """`?token=` is the form Cloudflare documents for a beacon injected by
+        another script, and the beacon reads it from document.currentScript.src.
+        A MODULE script has no currentScript (2026-10-08): the beacon then fell
+        back to whatever `script[data-cf-beacon]` the page held — the edge's
+        injected tag, whose config sends it to the same-origin /cdn-cgi/rum, a
+        404 — and with none it finds no token and counts nothing. So the tag is
+        a classic script, and carries no data-cf-beacon of its own."""
+        self.assertNotIn('b.type', self.nav.split('THE METER')[1].split('The app shell')[0])
         self.assertNotIn('data-cf-beacon', self.nav)
 
     def test_automation_is_not_a_reader(self):
@@ -97,6 +101,22 @@ class TheDeclaration(unittest.TestCase):
                       'the injector this meter does NOT use must be named, or the '
                       'next reader turns automatic setup back on and doubles the numbers')
 
+
+    def test_the_edge_injects_no_second_beacon(self):
+        """auto_install=false did not stop the edge injecting (2026-10-08): the
+        site record's RUM ruleset still answers enabled, and `enabled` cannot be
+        declared on the site without an update in every plan. The injected tag
+        reported to the same-origin collector the flip closed — a 404 on every
+        page — and, being the only `script[data-cf-beacon]`, it was also what
+        nav.js's beacon read its config from. A configuration rule turning RUM
+        off for every request is what holds the injection off."""
+        rule = re.search(r'resource "cloudflare_ruleset" "config_settings" \{(.*?)\n\}', self.tf, re.S)
+        self.assertIsNotNone(rule, 'the rule that stops the edge injecting lives beside the site')
+        body = rule.group(1)
+        self.assertIn('phase      = "http_config_settings"', body)
+        self.assertRegex(body, r'disable_rum\s+= true')
+        self.assertRegex(body, r'expression\s+= "true"')
+        self.assertRegex(body, r'enabled\s+= true')
 
 class ThePolicy(unittest.TestCase):
     def test_the_csp_lets_the_beacon_load_and_report(self):

@@ -23,45 +23,23 @@
 # The CSP already allows it: static.cloudflareinsights.com in script-src and
 # cloudflareinsights.com in connect-src (rulesets.tf).
 #
-# STILL INJECTING, AND STILL 404ing — measured on production 2026-09-19, after
-# this file's apply reported "plan: no changes" (so the declaration above and the
-# remote already agree). Two facts the declaration does not cover:
-#   1. Every page still carries an edge-injected beacon —
-#      static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba…
-#      — so a real reader's document holds that one AND nav.js's `?token=` one.
-#      It is NOT this resource's `auto_install` (false here, clean plan, and the
-#      named injector ruleset really does 404), so it comes from a control this
-#      file does not declare — the zone's own RUM/Browser Insights switch is the
-#      first place to look, and it is a dashboard act.
-#      Measure it with a BROWSER's Accept header or you will measure nothing:
-#        curl -s https://merecatholicity.com/about.html -H 'User-Agent: <browser>' \
-#          -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' \
-#          | grep -c cloudflareinsights     # 1 — while `Accept: */*` shows 0
-#      (the edge decides what to inject from the request; the same trap as
-#      bot_management's varying injections.)
-#   2. Both beacons report into a 404: one POST to /cdn-cgi/rum, 407 bytes,
-#      HTTP 404, watched in a real Chrome; a GET there answers 405, so the edge
-#      owns the path and the collector is refusing this site. Nothing has been
-#      counted by either road. Diagnosing that needs the dashboard's site record
-#      for token 9eb9b8d0…, which is the owner's act.
-#   DATED, 2026-10-07: the 404 began with THIS flag's flip. Terraform run 24
-#   applied 7fb8134 (auto_install true -> false) between 08:09 and 08:13 UTC on
-#   2026-09-19; the nightly webtest was clean through its run of 2026-09-18 and
-#   has reported the 404 on every page since the run that followed, and
-#   d9ac859 watched it in a real Chrome at 08:30 UTC that same morning. So
-#   /cdn-cgi/rum is the AUTOMATIC road's collector, closed by the flag, while
-#   the edge kept injecting its snippet -- and the injected beacon is what
-#   posts into the 404 (the manual road, nav.js's, reports to
-#   cloudflareinsights.com, which is why connect-src names that host). What is
-#   left to stop is the injection, and the first thing to read is the injected
-#   tag's data-cf-beacon token, with a browser's Accept header: ours
-#   (9eb9b8d0…) means this record's own ruleset still stands at the edge, and
-#   the dashboard's "Manage site" automatic-setup switch is the control;
-#   another token means a second site record in the account (GET
-#   /accounts/{account}/rum/site_info/list), made by the zone-level toggle, to
-#   delete or to adopt here. Until then the webtest kit lists the 404 as the
-#   edge's noise (webtest/flows.py BENIGN_CONSOLE); log/2026-10.md has the
-#   timeline.
+# THE INJECTION, AND WHY IT IS STOPPED BY A CONFIGURATION RULE (2026-10-08).
+# The edge kept injecting a beacon after the flip to false — measured with a
+# browser's Accept header (`Accept: */*` is answered with a clean page), it is
+# OUR token, 9eb9b8d0…, with `"r":1` in its data-cf-beacon. The site record's
+# own RUM ruleset (4f4f6eeb…, an account RUM object, not a zone ruleset) still
+# answers `enabled: true` beside `auto_install: false`, and the flip closed the
+# same-origin collector the injected tag reports to: every page posted to
+# /cdn-cgi/rum and logged a 404 (Lighthouse's "browser errors" finding; the
+# nightly's BENIGN_CONSOLE line), and nav.js's own beacon — a module script with
+# no document.currentScript, so it could not read its `?token=` and took the
+# injected tag's config instead — posted into the same 404. Nothing was counted
+# from 2026-09-19 to 2026-10-08. `enabled` cannot be declared here (below), so
+# the injection is stopped where Cloudflare documents it: a configuration rule
+# with `disable_rum`, which takes precedence over any Web Analytics rule. It
+# reaches only this zone's requests — the manual beacon reports to
+# cloudflareinsights.com, another host — and nav.js now loads it as a classic
+# script (watched in a real Chrome: one POST to cloudflareinsights.com, 204).
 #
 # `enabled` and `lite` are NOT declared, and that is the whole reason this file
 # plans clean. The RUM read the provider imports from does not return them, so
@@ -73,4 +51,105 @@ resource "cloudflare_web_analytics_site" "main" {
   account_id   = var.account_id
   zone_tag     = var.zone_id
   auto_install = false
+}
+
+# The one control that stops the edge injecting the beacon (above). Every
+# request: an injected tag on any HTML page is a second road to the meter, and
+# the zone has no other configuration rule for this one to sit beside.
+resource "cloudflare_ruleset" "config_settings" {
+  account_id = null
+  kind       = "zone"
+  name       = "default"
+  phase      = "http_config_settings"
+  rules = [
+    {
+      action = "set_config"
+      action_parameters = {
+        additional_cacheable_ports = null
+        algorithms                 = null
+        asset_name                 = null
+        automatic_https_rewrites   = null
+        autominify                 = null
+        bic                        = null
+        browser_ttl                = null
+        cache                      = null
+        cache_key                  = null
+        cache_reserve              = null
+        content                    = null
+        content_converter          = null
+        content_type               = null
+        cookie_fields              = null
+        disable_apps               = null
+        disable_rum                = true
+        disable_zaraz              = null
+        edge_ttl                   = null
+        email_obfuscation          = null
+        expression                 = null
+        fonts                      = null
+        from_list                  = null
+        from_value                 = null
+        headers                    = null
+        host_header                = null
+        hotlink_protection         = null
+        id                         = null
+        immutable                  = null
+        increment                  = null
+        matched_data               = null
+        max_age                    = null
+        mirage                     = null
+        must_revalidate            = null
+        must_understand            = null
+        no_cache                   = null
+        no_store                   = null
+        no_transform               = null
+        operation                  = null
+        opportunistic_encryption   = null
+        origin                     = null
+        origin_cache_control       = null
+        origin_error_page_passthru = null
+        overrides                  = null
+        phases                     = null
+        polish                     = null
+        private                    = null
+        products                   = null
+        proxy_revalidate           = null
+        public                     = null
+        raw_response_fields        = null
+        read_timeout               = null
+        redirects_for_ai_training  = null
+        request_body_buffering     = null
+        request_fields             = null
+        respect_strong_etags       = null
+        response                   = null
+        response_body_buffering    = null
+        response_fields            = null
+        rocket_loader              = null
+        rules                      = null
+        ruleset                    = null
+        rulesets                   = null
+        s_maxage                   = null
+        security_level             = null
+        serve_stale                = null
+        server_side_excludes       = null
+        sni                        = null
+        ssl                        = null
+        stale_if_error             = null
+        stale_while_revalidate     = null
+        status_code                = null
+        strip_etags                = null
+        strip_last_modified        = null
+        strip_set_cookie           = null
+        sxg                        = null
+        transformed_request_fields = null
+        uri                        = null
+        values                     = null
+        vary                       = null
+      }
+      description = "No edge-injected Web Analytics beacon: the meter is pagejs/nav.js's alone (terraform/analytics.tf)"
+      enabled     = true
+      expression  = "true"
+      ref         = null
+    },
+  ]
+  zone_id = var.zone_id
 }
