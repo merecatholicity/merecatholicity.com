@@ -17,6 +17,14 @@
 # branch, the same pull request. The pull request's pipeline report
 # (scripts/ci_pr_report.py) carries the failing step's log tail. Never from
 # the shared checkout's main: that checkout is only ever fast-forwarded.
+#
+# IT ARMS ONLY ITS OWN PULL REQUEST, AT ITS OWN COMMIT (2026-10-09). A fork can
+# open a pull request from a branch of any name, `agent/<worktree>` included,
+# and this script runs with the owner's write access: found by branch name
+# alone, a stranger's pull request would have been armed to merge itself. So
+# the pull request must come from THIS repository (not a fork), and every
+# merge it asks for names the exact commit it pushed (--match-head-commit):
+# GitHub refuses the merge if the head is anything else.
 set -euo pipefail
 
 title= bodyfile= method=--merge wait=1
@@ -57,10 +65,13 @@ if [ -z "$branch" ]; then
   fi
 fi
 
+head=$(git rev-parse HEAD)
 echo "shipping $ahead commit(s) as $branch"
 git push -q origin "HEAD:refs/heads/$branch"
 
-n=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+# this repository's own pull request for the branch — never a fork's of the same name
+n=$(gh pr list --head "$branch" --state open --json number,isCrossRepository \
+      --jq '[.[] | select(.isCrossRepository == false)][0].number // empty')
 if [ -z "$n" ]; then
   [ -n "$title" ] || title=$(git log -1 --format=%s)
   if [ -z "$bodyfile" ]; then
@@ -79,11 +90,16 @@ fi
 # is already mergeable ("clean": its checks passed) cannot be armed — merge it
 # outright. Anything else is armed, and a refusal to arm is the answer: never a
 # plain merge in its place.
+mine=$(gh pr view "$n" --json isCrossRepository,headRefOid --jq '"\(.isCrossRepository) \(.headRefOid)"')
+if [ "$mine" != "false $head" ]; then
+  echo "ship.sh: #$n is not this repository's pull request at $head ($mine) — refusing to merge it" >&2
+  exit 1
+fi
 merge_state() { gh pr view "$n" --json mergeStateStatus --jq .mergeStateStatus; }
 case "$(merge_state)" in
-  CLEAN|UNSTABLE|HAS_HOOKS) gh pr merge "$n" "$method" ;;
-  *) if ! gh pr merge "$n" --auto "$method"; then
-       [ "$(merge_state)" = CLEAN ] && gh pr merge "$n" "$method" \
+  CLEAN|UNSTABLE|HAS_HOOKS) gh pr merge "$n" "$method" --match-head-commit "$head" ;;
+  *) if ! gh pr merge "$n" --auto "$method" --match-head-commit "$head"; then
+       [ "$(merge_state)" = CLEAN ] && gh pr merge "$n" "$method" --match-head-commit "$head" \
          || { echo "ship.sh: #$n — auto-merge could not be armed (above)" >&2; exit 1; }
      fi ;;
 esac

@@ -22,6 +22,21 @@ read, pull-requests write) and never checks out or runs a pull request's
 code; it holds no secret. Edits never notify (the ask's issue is the one
 ping), so nothing here writes an @mention: a reviewer is named bare, and the
 log tails sit in code blocks, where GitHub links no mention.
+
+IT QUOTES ONLY A PULL REQUEST'S OWN RUNS (2026-10-09). Those hold no secret
+by law (CICD.md principle 3, swept by test_pipeline_workflows.OneCredential),
+so their log can carry nothing a credential could leak into. A merge's runs
+on main DO hold the credentials: GitHub masks them in the log, but a comment
+is emailed and can never be recalled, while a run's log stays in Actions,
+where it can be deleted. So a failed deploy is named — its step and its link
+— and its log is never copied here.
+
+A FORK'S PULL REQUEST IS NOT REPORTED. Its checks run the workflows as its
+author wrote them (a fork can rewrite .github/workflows in its own pull
+request, read-only and secret-less but free to name its jobs and print what
+it likes), so their names and logs are not repeated under the bot's name;
+the checks tab shows them as they are. Only this repository's own branches —
+which only its writers can push — get a report.
 """
 import argparse
 import datetime
@@ -155,7 +170,13 @@ def failures(runs, budget):
                 continue
             step = ' failed at <i>%s</i>' % html.escape(j['failed_step']) if j.get('failed_step') else ' failed'
             head = '<summary>❌ <b>%s › %s</b>%s</summary>' % (html.escape(r['workflow']), html.escape(j['name']), step)
-            body = fence(j['tail']) if j.get('tail') else '_The log has no error line — [open the job](%s)._' % j['url']
+            if j.get('tail'):
+                body = fence(j['tail'])
+            elif r.get('quotes'):
+                body = '_The log has no error line — [open the job](%s)._' % j['url']
+            else:
+                body = ('_A run on main holds the pipeline\'s credentials, so its log is never copied here — '
+                        '[open the job](%s); it stays in Actions._' % j['url'])
             out.append('<details>%s\n\n%s\n\n[the job’s log](%s)\n</details>' % (head, body, j['url']))
     return out
 
@@ -307,7 +328,9 @@ def ask_issue_of(run_id):
 
 
 def view(r, tails_left, pause=5):
-    """A run as the renderer reads it; fetches a failed job's log while `tails_left` allows."""
+    """A run as the renderer reads it; fetches a failed job's log while `tails_left`
+    allows — only for a pull request's run, never a deploy's (see the module's head)."""
+    quotes = r.get('event') == 'pull_request'
     for attempt in range(4):
         jobs = (gh('repos/%s/actions/runs/%s/jobs?filter=latest&per_page=100' % (REPO, r['id'])) or {}).get('jobs', [])
         # the jobs API can lag its run's completion the same way the runs API lags the event
@@ -318,7 +341,8 @@ def view(r, tails_left, pause=5):
     for j in jobs:
         js = {'name': j['name'], 'status': j['status'], 'conclusion': j.get('conclusion'),
               'url': j.get('html_url') or r['html_url'], 'failed_step': failed_step(j), 'tail': None}
-        if state(j['status'], j.get('conclusion')) in FAILED and tails_left[0] > 0:
+        # a pull request's runs hold no secret; a merge's runs on main hold them all
+        if quotes and state(j['status'], j.get('conclusion')) in FAILED and tails_left[0] > 0:
             tails_left[0] -= 1
             log = gh('repos/%s/actions/jobs/%s/logs' % (REPO, j['id']), raw=True, ok404=True)
             js['tail'] = log_tail(log.decode('utf-8', errors='replace')) if log else None
@@ -337,7 +361,7 @@ def view(r, tails_left, pause=5):
         plan = plan_of(r['id'])
     if pending or approvals:
         ask = ask_issue_of(r['id'])
-    return {'workflow': r['name'], 'run_id': r['id'], 'run_number': r['run_number'], 'url': r['html_url'],
+    return {'workflow': r['name'], 'quotes': quotes, 'run_id': r['id'], 'run_number': r['run_number'], 'url': r['html_url'],
             'status': r['status'], 'conclusion': r.get('conclusion'), 'started': r.get('run_started_at'),
             'updated': r.get('updated_at'), 'jobs': out_jobs, 'pending': pending, 'approvals': approvals,
             'plan': plan, 'ask': ask}
@@ -350,6 +374,9 @@ def prs_of(sha):
 
 def report(number, dry_run=False, trigger=None):
     pr = gh('repos/%s/pulls/%s' % (REPO, number))
+    if ((pr.get('head') or {}).get('repo') or {}).get('full_name') != REPO:
+        print('#%s comes from a fork (or a deleted one) — not reported' % number)
+        return
     info = {'number': number, 'head_sha': pr['head']['sha'], 'merged': bool(pr.get('merged')),
             'merge_sha': pr.get('merge_commit_sha'), 'state': pr.get('state')}
     tails = [MAX_FAILED]

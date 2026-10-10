@@ -33,7 +33,10 @@ Every change is a pull request; it merges only when the three required checks pa
 is the road: it pushes the checkout's commits to a branch (a detached agent worktree ships as
 `agent/<worktree>`), opens the pull request or finds the open one, arms auto-merge so GitHub
 merges the moment the checks are green, and waits for the merge or names the check that failed
-(auto-merge stays armed: fix, commit, run it again). Every pull request carries ONE comment from
+(auto-merge stays armed: fix, commit, run it again). It acts only on **its own** pull request — this
+repository's, never a fork's of the same branch name — and every merge it asks for names the
+exact commit it pushed (`--match-head-commit`), so the owner's write access it runs with is never
+lent to a stranger's pull request (2026-10-09). Every pull request carries ONE comment from
 github-actions — the pipeline report (§2.7): its checks with the failing step's log tail, then
 what the merge did on `main`, including a gate waiting for its reviewer.
 
@@ -312,11 +315,20 @@ request's code, with the job's token (`actions: read`, `issues: read`, `pull-req
 and no secret — which is also what lets it write to a Dependabot or fork pull request, whose own
 runs hold a read-only token. *Concurrency:* one per pull request (or merge commit), queued.
 
+**A fork's pull request is not reported:** its checks run the workflows as its author wrote them
+(read-only and secret-less, but free to name their jobs and print what they like), so nothing of
+them is repeated under the bot's name; only this repository's own branches, which only its
+writers can push, get a report.
+
 It keeps **ONE comment** per pull request (found again by the marker `<!-- mc-pipeline-report
 -->`), rendered whole from the API on every call so the runs may land in any order: the checks
 on the PR's head — each workflow's newest run, its jobs, and for a failed job the failing
 step's name and **the tail of its log** (from the step's start to its last error, in a code
-block); then, once merged, **what the merge did on `main`** — the deploy runs, and a gate
+block). **Only a pull request's own runs are quoted**: they hold no secret by law (principle 3).
+A merge's runs on `main` hold the credentials — GitHub masks them in the log, but a comment is
+emailed and can never be recalled, while a run's log stays in Actions, where it can be deleted —
+so a failed deploy is named (its step) and linked, never copied. Then, once merged, **what the
+merge did on `main`** — the deploy runs, and a gate
 waiting for its reviewer: the *Review deployments* link (GitHub offers the approve button only
 on the run page and in its notification), the `ci_approve.sh` line, the plan summary and the
 ask's issue; then the gate's outcome. The gates' `ask` and `settle` jobs re-render it too (no
@@ -444,6 +456,18 @@ nothing), not strict (a PR need not be rebased first: the merge's own runs gate 
 again), no force-push, no deletion, **no bypass actor**. With it, the repository allows
 auto-merge, deletes a branch when it merges, and offers *Update branch*. The private shelf has
 none: rulesets on a private repository need a paid plan (the API answers 403).
+
+**Who can merge — and who cannot (2026-10-09).** Merging a pull request, or arming auto-merge on
+one, takes write access to the repository: auto-merge lets a writer say "merge when the checks
+pass", and nobody else. The writers are `a-schaefers` (admin; the organization's only member,
+whose members read by default; no teams, no outside collaborators, no pending invitation, no
+deploy key on the site) and the `claude` GitHub App the owner installed for the claude.ai
+sessions (contents and pull requests write, every repository of the organization), which the
+ruleset binds like everyone. A stranger can open a pull request from a fork and nothing more: no
+merge, no auto-merge; its runs hold a read-only token and no secret; and its workflows wait for
+the owner's approval before they run at all (`approval_policy: all_external_contributors`, §10,
+exception 15). Verify: `gh api repos/merecatholicity/merecatholicity.com/collaborators` (one
+admin), `gh api orgs/merecatholicity/installations`.
 
 Environments: **`github-pages`** (deploy-pages' own; no rules), **`terraform-production`** (§3)
 and **`librarian-config`** (2026-09-17: merecat's persona and dials reach production only from a
@@ -628,6 +652,7 @@ that would shrink existing clones is a separate, owner-authorised act (§10 ex. 
 gh run list --limit 6                                   # what ran, what it concluded
 gh pr checks <n>; gh pr view <n> --comments             # a pull request's checks, and its pipeline report
 gh api repos/merecatholicity/merecatholicity.com/rulesets   # the `main` ruleset: active, no bypass
+gh api repos/merecatholicity/merecatholicity.com/actions/permissions/fork-pr-contributor-approval   # all_external_contributors
 gh run view <id> --json jobs --jq '.jobs[]|{name,conclusion}'
 gh run view <id> --log-failed                           # the failing step, only
 scripts/ci_approve.sh                                   # anything waiting on the gate?
@@ -738,6 +763,12 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
     is a metered row against the 1,000 GB free pool, so abuse speaks at 800 GB — inside the
     free pool, with 200 GB of headroom before a charge (the check runs 23:30 UTC, so a burst
     inside one day is the gap). Revisit if that meter ever moves off zero.
+15. **A fork's workflows wait for the owner's approval** (2026-10-09) — `gh api -X PUT
+    repos/merecatholicity/merecatholicity.com/actions/permissions/fork-pr-contributor-approval -f
+    approval_policy=all_external_contributors`. GitHub's default, `first_time_contributors`,
+    approves a contributor's runs for ever once one of their pull requests has merged; this asks
+    every time anyone without write access opens one. The github provider has no resource for it
+    (6.13), so it is set by hand, written here, and verified with the GET in §8.
 
 ## 11. Anti-drift checklist — what to update when you add…
 

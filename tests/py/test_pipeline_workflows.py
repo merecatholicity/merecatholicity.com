@@ -325,6 +325,14 @@ class ThePullRequestRoad(unittest.TestCase):
         self.assertIn('refusing to ship from main', ship)
         self.assertIn('--auto', ship)
         self.assertNotIn('HEAD:main', ship)
+        # it runs with the owner's write access: it may arm only its own pull request, at its own commit
+        # — a fork can open one from a branch of the same name (2026-10-09)
+        self.assertIn("select(.isCrossRepository == false)", ship)
+        self.assertIn('if [ "$mine" != "false $head" ]; then', ship)
+        merges = [ln for ln in ship.split('\n') if 'gh pr merge "$n"' in ln]
+        self.assertGreaterEqual(len(merges), 3)
+        for ln in merges:
+            self.assertIn('--match-head-commit "$head"', ln, 'every merge names the exact commit it pushed')
         self.assertNotIn('HEAD:main', read('scripts', 'agent_worktree.sh'), 'no worktree is told to push to main')
 
 

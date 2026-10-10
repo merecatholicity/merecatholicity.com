@@ -198,6 +198,7 @@ on page one.)
 - **A gate's ask is an issue titled "Approval needed", and it closes itself (2026-10-09)** — `log/2026-10.md`
 - **main takes no direct push: every change is a pull request whose three checks passed, and the merge is the deploy (2026-10-09)** — `log/2026-10.md`
 - **Every pull request carries the pipeline's report, and a gate's wait shows in its thread (2026-10-09)** — `log/2026-10.md`
+- **Nothing outside the repository can reach a merge, and the owner's access is never lent to a stranger's pull request (2026-10-09)** — `log/2026-10.md`
 
 ### Cloudflare Workers (dynamic backend)
 

@@ -189,6 +189,73 @@ class TheLag(unittest.TestCase):
         self.assertEqual(len(calls), 3, 'one call each: only a completed event on this commit waits')
 
 
+class TheQuote(unittest.TestCase):
+    """Only a pull request's own runs are quoted (2026-10-09): they hold no secret by
+    law. A merge's runs on main hold the credentials — GitHub masks them, but a comment
+    is emailed and never recalled, so a failed deploy is named and linked, never copied."""
+
+    def fake_api(self):
+        paths = []
+        def gh(path, *a, **kw):
+            paths.append(path)
+            if '/jobs?' in path:
+                return {'jobs': [{'id': 1, 'name': 'deploy', 'status': 'completed', 'conclusion': 'failure',
+                                  'html_url': 'https://x/job/1', 'steps': [{'name': 'Apply', 'conclusion': 'failure'}]}]}
+            if path.endswith('/logs'):
+                return b'2026-10-09T19:29:59.3Z ##[error]boom\n'
+            if path.endswith('/artifacts'):
+                return {'artifacts': []}
+            return []
+        old = r.gh
+        r.gh = gh
+        self.addCleanup(setattr, r, 'gh', old)
+        return paths
+
+    def run_of(self, event):
+        return {'id': 5, 'name': 'Workers', 'run_number': 3, 'html_url': 'https://x/runs/5', 'status': 'completed',
+                'conclusion': 'failure', 'event': event, 'run_started_at': 'T', 'updated_at': 'T'}
+
+    def test_a_deploy_runs_log_is_never_fetched(self):
+        paths = self.fake_api()
+        v = r.view(self.run_of('push'), [3], pause=0)
+        self.assertFalse([p for p in paths if p.endswith('/logs')], 'a run on main holds the credentials')
+        self.assertIsNone(v['jobs'][0]['tail'])
+        (block,) = r.failures([v], 3)
+        self.assertIn('failed at <i>Apply</i>', block)
+        self.assertIn('its log is never copied here', block)
+        self.assertIn('https://x/job/1', block)
+
+    def test_a_pull_requests_run_is_quoted(self):
+        paths = self.fake_api()
+        v = r.view(self.run_of('pull_request'), [3], pause=0)
+        self.assertEqual([p for p in paths if p.endswith('/logs')], ['repos/%s/actions/jobs/1/logs' % r.REPO])
+        self.assertEqual(v['jobs'][0]['tail'], 'Error: boom')
+
+
+class TheFork(unittest.TestCase):
+    """A fork's pull request runs workflows its author may have rewritten: nothing of
+    it is repeated under the bot's name (2026-10-09)."""
+
+    def test_a_forks_pull_request_is_not_reported(self):
+        paths = []
+        def gh(path, method='GET', *a, **kw):
+            paths.append((method, path))
+            return {'head': {'sha': 'abc', 'repo': {'full_name': 'stranger/merecatholicity.com'}},
+                    'merged': False, 'merge_commit_sha': None, 'state': 'open'}
+        old = r.gh
+        r.gh = gh
+        self.addCleanup(setattr, r, 'gh', old)
+        r.report(99)
+        self.assertEqual(paths, [('GET', 'repos/%s/pulls/99' % r.REPO)], 'one read, then nothing: no runs, no comment')
+        paths.clear()
+        def gh_deleted(path, method='GET', *a, **kw):
+            paths.append((method, path))
+            return {'head': {'sha': 'abc', 'repo': None}, 'merged': False, 'merge_commit_sha': None, 'state': 'open'}
+        r.gh = gh_deleted
+        r.report(98)
+        self.assertEqual(len(paths), 1, 'a deleted fork is a fork')
+
+
 class TheRuns(unittest.TestCase):
     def test_the_newest_run_of_each_workflow_on_the_event(self):
         runs = [
