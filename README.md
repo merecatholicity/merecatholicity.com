@@ -4,6 +4,11 @@ A static site (`docs/`, served by GitHub Pages behind Cloudflare) plus two Cloud
 Workers. `main` is production and takes no direct push: every change is a pull request whose
 checks must pass, and **the merge IS the deploy** (`scripts/ship.sh` is the road).
 
+[![merecatholicity.com architecture overview: developer, source, build, CI/CD, Cloudflare edge, workers, data](docs/architecture/architecture.png)](docs/architecture/architecture.png)
+
+*The whole system on one page, from the developer's box to the reader's phone (open it for full size;
+the source is the Lucidchart [Architecture Overview](https://lucid.app/lucidchart/8d7025b3-bb3a-45ce-8fa7-011004a20bcb/edit)).*
+
 **Read these first, in this order.** This file is the operating manual — prerequisites,
 targets, recipes — and nothing else.
 
