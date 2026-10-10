@@ -1,11 +1,22 @@
 # The two Cloudflare Workers, deployed from CI.
 #
 # Until 2026-09-09 the comments worker shipped only by `make worker-deploy` on
-# the owner's machine. This moves that road into the pipeline: any push to main
-# that touches a worker, the shared PureScript kernel, or the npm lockfile runs
-# the same gates (`make jscheck` = psbuild + tsc; `make tests`), applies
-# the D1 migration ledger, and deploys. A pull request runs the gates and a
-# `wrangler deploy --dry-run` per worker and touches nothing.
+# the owner's machine. This moves that road into the pipeline: a merge to main
+# that changes anything a worker is built from runs the same gates (`make
+# jscheck` = psbuild + tsc; `make tests`), applies the D1 migration ledger, and
+# deploys. A pull request runs the gates and a `wrangler deploy --dry-run` per
+# worker and touches nothing.
+#
+# NO PATH FILTER (2026-10-09). `check` is a required check on main (the ruleset
+# in terraform/github.tf), and a workflow a path filter skips never reports:
+# the pull request would wait at "Expected" for ever. So every event runs, and
+# the `scope` job decides (scripts/ci_scope.py): on a pull request, whether it
+# touches a worker input at all — `check` skips itself when not, which GitHub
+# counts as a pass; on main, whether anything a worker is built from changed
+# since the LAST SUCCESSFUL deploy, so a run cancelled in a burst of merges, or
+# a red one fixed elsewhere, is carried by the next merge. The list of inputs
+# is wider than the old filter: the purs pin, and the content/ pages whose list
+# is compiled into the worker's comments whitelist (Domain.Writings).
 #
 # What stays OUTSIDE the pipeline, on purpose:
 #   * worker SECRETS (`wrangler secret put`) — never in git, never in CI;
@@ -20,26 +31,8 @@ name: Workers
 
 on:
   pull_request:
-    paths:
-      - 'comments-worker/**'
-      - 'contact-worker/**'
-      - 'purescript/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'globals.d.ts'
-      - '.github/workflows/workers.yml'
   push:
     branches: [main]
-    paths:
-      - 'comments-worker/**'
-      - 'contact-worker/**'
-      - 'purescript/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig.json'
-      - 'globals.d.ts'
-      - '.github/workflows/workers.yml'
   workflow_dispatch:
     inputs:
       mode:
@@ -55,32 +48,72 @@ on:
 permissions:
   contents: read
 
-# Deploys queue; a deploy in flight is never cancelled.
+# Deploys queue; a deploy in flight is never cancelled. A pull request's runs
+# are their own group: a newer push to the PR cancels its older check, and no
+# check waits behind a deploy — or, as one group did, behind four Dependabot
+# PRs that cancelled each other's pending checks.
 concurrency:
-  group: workers
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('workers-pr-{0}', github.ref) || 'workers' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  check:
+  scope:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read   # the commit of the last successful deploy
     outputs:
-      contact_changed: ${{ steps.changed.outputs.contact }}
+      workers: ${{ steps.scope.outputs.workers }}
+      contact: ${{ steps.scope.outputs.contact }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Did the contact worker change?
-        id: changed
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - run: python3 -m pip install --quiet pyyaml
+
+      - name: What does this run have to check and ship?
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then base="${{ github.event.pull_request.base.sha }}"
-          else base="${{ github.event.before }}"; fi
-          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null \
-             || git diff --name-only "$base" HEAD | grep -qE '^(contact-worker/|package-lock\.json|\.github/workflows/workers\.yml)'; then
-            echo "contact=yes" >> "$GITHUB_OUTPUT"
+          case "$EVENT" in
+            pull_request)
+              # HEAD is the PR merged into its base, so its first parent IS the base
+              base=$(git rev-parse -q --verify 'HEAD^2' >/dev/null && git rev-parse 'HEAD^1' || echo "$PR_BASE") ;;
+            push)
+              # what is deployed: the newest successful run on main (a run that
+              # shipped, or one that found nothing to ship since the one before)
+              base=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/workers.yml/runs?branch=main&status=success&per_page=50" \
+                       --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].head_sha // ""') ;;
+            *) base= ;;
+          esac
+          if [ -n "$base" ]; then
+            echo "base: $base"
+            python3 scripts/ci_scope.py workers --base "$base"
           else
-            echo "contact=no" >> "$GITHUB_OUTPUT"
+            python3 scripts/ci_scope.py workers --all
           fi
+          grep -h '^why=' "$GITHUB_OUTPUT" | sed 's/^why=/**Workers scope:** /' >> "$GITHUB_STEP_SUMMARY"
+
+  check:
+    # Required on main. Skipped (a pass) only when `scope` SAID no: a scope that
+    # failed leaves no answer, and then the gates run anyway.
+    needs: scope
+    if: ${{ !cancelled() && needs.scope.outputs.workers != 'no' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -165,8 +198,11 @@ jobs:
           echo "comments worker bundle: $(du -sh /tmp/cw-dry | cut -f1)"
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: check
+    # only on scope's explicit yes, and only after the gates passed
+    if: >-
+      ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+      && needs.scope.outputs.workers == 'yes' && needs.check.result == 'success' }}
+    needs: [scope, check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -205,7 +241,7 @@ jobs:
           # never sees a credential, and this job does not run on one anyway.
           CLOUDFLARE_API_TOKEN: ${{ github.event_name != 'pull_request' && secrets.CLOUDFLARE_ROOT_TOKEN || '' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '6093bc0889c95a08f0a92a8df6750c66' }}
-          CONTACT: ${{ needs.check.outputs.contact_changed }}
+          CONTACT: ${{ needs.scope.outputs.contact }}
           # staged rollout (workflow_dispatch only; a push is always `deploy`)
           MODE: ${{ github.event.inputs.mode || 'deploy' }}
           PERCENT: ${{ github.event.inputs.percent || '10' }}

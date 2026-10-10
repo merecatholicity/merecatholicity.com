@@ -5,13 +5,14 @@ infrastructure, or touching a credential. `CLAUDE.md` carries the standing rules
 document carries the procedure, the inventory, the exceptions and the traps. Keep it
 current in the same change that alters a workflow, a secret, or a make target it names.*
 
-Everything in this repository ships through GitHub Actions. There are four workflows,
-five secrets, two variables, two environments, three Cloudflare tokens and one fine-grained
-GitHub PAT. Nothing else is needed, and — with the listed exceptions — nothing else is
-allowed. **The source of truth is git and the build of record is CI.** A thing done by
+Everything in this repository ships through GitHub Actions, and everything reaches `main`
+through a pull request. There are seven workflows, three secrets (one Cloudflare account token,
+one fine-grained GitHub PAT, one deploy key), three variables, three environments (two of them
+gated) and one ruleset on `main`. Nothing else is needed, and — with the listed exceptions —
+nothing else is allowed. **The source of truth is git and the build of record is CI.** A thing done by
 hand that CI also does will be overwritten by the next run; a thing done by hand that CI
 does not know about is drift, and the only cure for drift is to declare it (Terraform) or
-build it (make) and push.
+build it (make) and ship it.
 
 ---
 
@@ -22,22 +23,34 @@ build it (make) and push.
 make tests           # the unit suite — must pass before any commit
 make jscheck         # after ANY TypeScript edit (tsc over every project + psbuild)
 make check           # link check over the built site (needs a local build; CI does it anyway)
-git commit … && git push origin main
+git commit …         # on a branch, or in an agent worktree (scripts/agent_worktree.sh)
+scripts/ship.sh      # push the branch, open the PR, arm auto-merge, wait for the merge
 ```
 
-Then read what the push started (`gh run list --limit 5`) and let it finish:
+**`main` takes no direct push** (2026-10-09; the `main` ruleset in `terraform/github.tf`).
+Every change is a pull request; it merges only when the three required checks pass — Build's
+`build`, Workers' `check`, Terraform's `plan` — and **the merge is the deploy**. `scripts/ship.sh`
+is the road: it pushes the checkout's commits to a branch (a detached agent worktree ships as
+`agent/<worktree>`), opens the pull request or finds the open one, arms auto-merge so GitHub
+merges the moment the checks are green, and waits for the merge or names the check that failed
+(auto-merge stays armed: fix, commit, run it again). Every pull request carries ONE comment from
+github-actions — the pipeline report (§2.7): its checks with the failing step's log tail, then
+what the merge did on `main`, including a gate waiting for its reviewer.
+
+Then read what the merge started (`gh run list --limit 5`, or the PR's report) and let it finish:
 
 | You changed…                                  | Workflow(s) that fire            | What happens on `main`                                              |
 |-----------------------------------------------|----------------------------------|---------------------------------------------------------------------|
 | anything at all                               | **Build**                        | site built incrementally, gates, PDFs published, Pages deployed, edge purged |
-| `comments-worker/`, `contact-worker/`, `purescript/`, `package*.json`, `tsconfig.json`, `globals.d.ts` | **Workers** (+ Build)   | gates, dry-run; then D1 migrations applied and `wrangler deploy` |
+| anything a worker is built from, since its last deploy (`scripts/ci_scope.py`: the workers, `purescript/`, `package*.json`, the purs pin, the writings `content/` makes) | **Workers** (+ Build) | gates, dry-run; then D1 migrations applied and `wrangler deploy` |
 | `terraform/`, `terraform.yml`, `scripts/tf_plan_summary.py` | **Terraform** (+ Build) | plan → **waits for approval** → apply                               |
 | `book/`, `*.tex`, `resources/*.py`            | Build (with TeX Live)            | corpus/book PDFs rebuilt and published                              |
 | a chart page (`content/charting-communions.html`, `free-churches.html`, `objections.html`) or `styles/` | Build | the three chart PDFs reprinted and published |
 
-A **pull request** runs the same Build and Workers gates and the Terraform `fmt`+`validate`,
-**with no credentials and no deploy of any kind** — a PR from this repository is treated
-exactly like a fork's. The plan that gets reviewed is always the push's.
+A **pull request** runs all three workflows — Build's gates, Workers' gates and dry-run (its
+`check` skips itself when the PR touches no worker input), Terraform's `fmt`+`validate` —
+**with no credentials and no deploy of any kind**: a PR from this repository is treated
+exactly like a fork's. The plan that gets reviewed is always the merge's.
 
 Only Terraform ever waits for a human (or the operator): see §3.
 
@@ -45,9 +58,11 @@ Only Terraform ever waits for a human (or the operator): see §3.
 
 ## 1. Principles (the reasons behind every rule below)
 
-1. **Push is the deploy.** There is no release step, no tag, no button for the site or the
-   workers. `main` is production; a push to it is an act of deployment. Work on a branch or
-   a PR if you want the gates without the deploy.
+1. **The merge is the deploy.** There is no release step, no tag, no button for the site or
+   the workers. `main` is production and takes no direct push (since 2026-10-09; until then
+   the push was the deploy, and an agent's push or a red PR's merge went straight out): a
+   pull request runs the gates, and merging it — only once `build`, `check` and `plan` pass —
+   is an act of deployment.
 2. **CI is the build of record.** What the runner builds is what is served — the site
    artifact, the worker bundle, *and the PDFs in R2*. A local build is for previewing and
    for running the gates; its bytes are not what ships (a runner's TeX Live and Chrome emit
@@ -76,7 +91,7 @@ Only Terraform ever waits for a human (or the operator): see §3.
 
 ---
 
-## 2. The six workflows
+## 2. The seven workflows
 
 ### 2.1 `build.yml` — **Build** (every push and PR)
 
@@ -87,9 +102,16 @@ holds `pages: write` + `id-token: write`.
 
 *The `build` job, in order:*
 
-1. **Work out what changed** — `git diff --name-only $before HEAD`. A force-push or a
-   first push has no usable base and is treated as "everything changed" (full rebuild,
-   TeX installed, all PDFs built). Outputs: `latex`, `book`, `charts`.
+1. **Work out what changed** — `git diff --name-only $base HEAD`, where `$base` is **the
+   commit whose build the site cache holds** (2026-10-09: a `lookup-only` restore reads the
+   matched key, `site-2-<sha>`). It was `$before`, the previous push — but this workflow
+   cancels a run when a newer one starts, so after a burst of merges the cache could be
+   several commits behind, the cancelled commits' changes fell outside the diff, and make
+   (every source flattened to an old mtime, the cached pages keeping their build time) took
+   those pages for fresh and shipped them stale. A cache naming a commit no longer fetched (a
+   PR's own merge commit) falls back to the PR's base or `$before`; no usable base at all is
+   "everything changed" (full rebuild, TeX installed, all PDFs built). Outputs: `latex`,
+   `book`, `charts`.
 2. **Teach make what changed** — flattens every mtime to a fixed old timestamp, then
    touches only the diffed files. Without this, git's arbitrary checkout order makes `make`
    rebuild everything or nothing. (Trap: a diff ending in a deletion once failed this step;
@@ -134,24 +156,43 @@ a key the edge treats as immutable.
 *What it proves:* `linkcheck: OK, … 244 published PDFs …`, `publish_pdfs: OK — the bucket
 matches the manifest and every local PDF`, `{"success":true,…}` from the purge.
 
-### 2.2 `workers.yml` — **Workers** (path-filtered)
+### 2.2 `workers.yml` — **Workers** (every PR and merge; `scope` decides)
 
-*Triggers:* `pull_request` and `push` to `main` touching `comments-worker/**`,
-`contact-worker/**`, `purescript/**`, `package.json`, `package-lock.json`, `tsconfig.json`,
-`globals.d.ts`, or the workflow itself; `workflow_dispatch` (a dispatch
-has no diff base, so it redeploys BOTH workers). *Concurrency:* `workers`, **never
-cancelled** mid-deploy.
+*Triggers:* every `pull_request`, every `push` to `main`, `workflow_dispatch` — **no path
+filter** (2026-10-09): `check` is a required check, and a workflow a filter skips never
+reports, so the pull request would wait at "Expected" for ever. *Concurrency:* `workers` for
+the deploy road, **never cancelled** mid-deploy; a pull request's runs are their own group
+(`workers-pr-<ref>`, a newer push cancels the older) — one shared group once let four
+Dependabot PRs cancel each other's pending checks.
 
-*`check`* (every event, no credentials): pandoc + pyyaml + `npm ci` + `make toolchain`; restore the PureScript
+*`scope`* (`scripts/ci_scope.py`) decides what the run has to do. On a pull request: does it
+touch anything a worker is built from (base = the merge commit's first parent)? On `main`: did
+anything a worker is built from change **since the last successful Workers run on main** — not
+since the previous push, so a run cancelled in a burst of merges, or a red one fixed by a
+commit elsewhere, is carried by the next merge (2026-10-09: a fix to `scripts/` left a wrangler
+bump undeployed until a hand dispatch); a commit OLDER than that (a re-run) ships nothing,
+never old code over new. A dispatch ships both. "Built from" is wider than the old filter:
+the workers, `purescript/`, `package*.json`, `tsconfig.json`, `globals.d.ts`, the purs pin
+(`tests/_support/toolchain.json`, `scripts/toolchain.py`), and `Domain.Writings` — generated
+from `content/` and the Makefile, compiled into the kernel as the worker's comments
+whitelist, so a new article's comments switch was dropped in silence until some unrelated
+worker deploy. The writings are compared at both ends, so a new page redeploys and a typo fix
+does not restart the Durable Objects. The contact worker ships when its own inputs change
+(`contact-worker/`, the `egress.ts` seal it borrows, the npm toolchain).
+`tests/py/test_ci_scope.py` walks both workers' import graphs and fails on a file outside the
+lists.
+
+*`check`* (no credentials; skipped — a pass — only when `scope` said no, and run anyway when
+`scope` failed): pandoc + pyyaml + `npm ci` + `make toolchain`; restore the PureScript
 cache; **restore the built site (read-only), re-assert the tracked half from the commit
 (`git checkout -- docs`, as in `build.yml`) and `make css`** — `make tests` is not entirely
 hermetic (tests/css reads the stylesheet, two Python suites read the baked corpus); on a
 cold cache it builds the site; `make jscheck`, `make tests`; `wrangler deploy --dry-run`
 for both workers (needs no auth).
 
-*`deploy`* (push to `main` / dispatch): `make psbuild`; with `CLOUDFLARE_ROOT_TOKEN`:
-`wrangler d1 migrations apply merecatholicity-comments --remote` **then** `wrangler
-deploy` (comments worker; the contact worker only when its paths changed); then `GET
+*`deploy`* (push to `main` / dispatch, on `scope`'s yes and a green `check`): `make psbuild`;
+with `CLOUDFLARE_ROOT_TOKEN`: `wrangler d1 migrations apply merecatholicity-comments --remote`
+**then** `wrangler deploy` (comments worker; the contact worker only when `scope` says so); then `GET
 /api/comments/config` must not 5xx (Bot Fight Mode may 403 a runner — not a verdict).
 
 *Order matters:* the migration ledger is applied before the new code; every migration in
@@ -162,12 +203,14 @@ road), `stage` (upload a Version and send `percent` of traffic to it: `scripts/w
 `promote` (100% to the newest Version) — and `percent` (default 10). A push is always `deploy`.
 The D1 ledger is applied before any mode.
 
-### 2.3 `terraform.yml` — **Terraform** (path-filtered, gated)
+### 2.3 `terraform.yml` — **Terraform** (every PR; path-filtered on main; gated)
 
-*Triggers:* `pull_request` and `push` to `main` touching `terraform/**`, the workflow, or
-`scripts/tf_plan_summary.py`; `workflow_dispatch` with inputs `apply` (bool) and
-`allow_destroy` (bool). *Concurrency:* `terraform`, never cancelled. *Permissions:*
-`contents: read`.
+*Triggers:* every `pull_request` (2026-10-09: `plan` is a required check, so it must report
+on every PR — there it is `fmt` + offline `validate`, seconds); `push` to `main` touching
+`terraform/**`, the workflow, or `scripts/tf_plan_summary.py`; `workflow_dispatch` with inputs
+`apply` (bool) and `allow_destroy` (bool). *Concurrency:* `terraform`, never cancelled; a pull
+request's run is its own group (`terraform-pr-<ref>`), so it never queues behind an apply
+waiting days for its reviewer. *Permissions:* `contents: read`.
 
 *`plan`*: `fmt -check`; if there are no credentials **(every PR, by rule)** → `init
 -backend=false` + `validate` and stop. Otherwise derive the R2 state pair (or take the
@@ -199,7 +242,8 @@ mid-deploy** (that is the re-cache trap).
 Weekly grouped PRs bumping the SHA-pinned actions and — since 2026-09-17 — the npm toolchain:
 development dependencies as one grouped minor/patch PR; a major, or `lit` (its bytes ship in
 `app.js`), alone. Such a PR carries no secrets (rule 3), so it can only fail the gates, never
-touch production. Merge it; the next push to `main` ships with the new pins.
+touch production. Merge it once its checks pass (they are required: a red one cannot merge);
+the merge ships the new pins.
 
 **The dependency policy.** One runtime dependency (`lit`). `esbuild`, `typescript` and `lit`
 exact-pinned, because their bytes are the bundle and the byte-diff gate must mean something. The
@@ -259,6 +303,26 @@ its hash. The dials travel only when `config.yml` changes (before 2026-09-17 the
 ingest), so a dashboard edit stands until the file is next touched, as the persona's always
 has. The hand road, `make librarian`, runs both halves with an admin's key.
 
+### 2.7 `pr-report.yml` — **PR report** (the pipeline's report on each pull request, since 2026-10-09)
+
+*Trigger:* `workflow_run` — `requested` and `completed` — of every workflow a pull request or
+a merge runs (Build, Workers, Terraform, merecat; `test_pipeline_workflows.py` holds the list to
+that). It runs **main's** copy of itself and of `scripts/ci_pr_report.py`, never a pull
+request's code, with the job's token (`actions: read`, `issues: read`, `pull-requests: write`)
+and no secret — which is also what lets it write to a Dependabot or fork pull request, whose own
+runs hold a read-only token. *Concurrency:* one per pull request (or merge commit), queued.
+
+It keeps **ONE comment** per pull request (found again by the marker `<!-- mc-pipeline-report
+-->`), rendered whole from the API on every call so the runs may land in any order: the checks
+on the PR's head — each workflow's newest run, its jobs, and for a failed job the failing
+step's name and **the tail of its log** (from the step's start to its last error, in a code
+block); then, once merged, **what the merge did on `main`** — the deploy runs, and a gate
+waiting for its reviewer: the *Review deployments* link (GitHub offers the approve button only
+on the run page and in its notification), the `ci_approve.sh` line, the plan summary and the
+ask's issue; then the gate's outcome. The gates' `ask` and `settle` jobs re-render it too (no
+run event marks a gate starting or stopping to wait). It is EDITED, never re-posted, and writes
+no mention: the ask's issue stays the one notification (§3).
+
 ### 2.6 `ops-watch.yml` — **ops-watch** (the watchdog's outside leg, since 2026-09-16)
 
 Daily at 03:45 UTC (half an hour after the worker's backup) and on dispatch. One step: POST
@@ -277,7 +341,7 @@ workflow file. Never on a pull_request (Principle 3). No `uses:` at all.
 
 ## 3. The approval gate (Terraform)
 
-A push that changes `terraform/**` produces a run whose `apply` job sits in **waiting**.
+A merge that changes `terraform/**` produces a run whose `apply` job sits in **waiting**.
 
 **The ask (since 2026-10-08; an issue since 2026-10-09).** GitHub notifies a required reviewer
 that a deployment waits — but nobody of their own activity, and every run here is the owner's,
@@ -295,6 +359,13 @@ becomes *Approved:* / *Rejected:* / *Not reviewed:* — and closes the issue, ed
 commenting. Issues are on for this (`has_issues = true` in `terraform/github.tf`). A wait
 approved before the asker looks is asked of nobody. `test_pipeline_workflows.py` holds every
 reviewed environment to an asker with its gate's condition and a settler after it.
+
+**In the pull request's thread (2026-10-09).** Every change reaches `main` through a pull
+request, so the wait is shown where the change was argued: the issue names the pull request
+(*from #N*), and the ask and the settle each re-render that PR's pipeline report (§2.7) — the
+wait with its *Review deployments* link, the plan summary and the issue, then the outcome and
+the reviewer's reason. Both hold `pull-requests: write` for that and nothing more; a report
+that cannot be written is a warning, never the ask's failure.
 
 Two ways to review and approve — they are the same API call:
 
@@ -360,6 +431,15 @@ theirs to leak or rotate. The dev box's nightly (`scripts/webtest_nightly.py`) r
 `MC_OPS_REPORT_KEY` from `ci.env` — the worker secret `OPS_REPORT_KEY`, which opens the ops report
 door and nothing else.
 
+**The `main` ruleset** (`github_repository_ruleset.main`, 2026-10-09): a pull request for every
+change (no approving review — the owner is the only reviewer and GitHub refuses an author's
+approval), the required checks `build`, `check` and `plan`, each pinned to GitHub Actions
+(`integration_id = 15368`, so a commit status of the same name from anywhere else passes
+nothing), not strict (a PR need not be rebased first: the merge's own runs gate the deploy
+again), no force-push, no deletion, **no bypass actor**. With it, the repository allows
+auto-merge, deletes a branch when it merges, and offers *Update branch*. The private shelf has
+none: rulesets on a private repository need a paid plan (the API answers 403).
+
 Environments: **`github-pages`** (deploy-pages' own; no rules), **`terraform-production`** (§3)
 and **`librarian-config`** (2026-09-17: merecat's persona and dials reach production only from a
 `merecat.yml` job that ran in it — the owner is its required reviewer, main only, no admin bypass;
@@ -370,7 +450,7 @@ protection + Dependabot security updates **on**.
 **Rotating a Cloudflare token:** mint a new account token with the same policy (dashboard,
 or the API with a token that has *Account API Tokens Write* — the three CI tokens
 deliberately do not), `gh secret set …`, update `ci.env`, run one workflow that uses it
-(dispatch Workers / push a docs commit for Build / dispatch Terraform), then delete the
+(dispatch Workers / ship a docs commit for Build / dispatch Terraform), then delete the
 old token. **Rotating the PAT:** the browser form (GitHub has no API for minting a PAT),
 same permissions, `gh secret set GH_ROOT_TOKEN`, `terraform plan` locally, dispatch a
 Terraform plan. The org must allow fine-grained PATs and not require expiry — two org
@@ -410,7 +490,7 @@ terraform -chdir=terraform plan          # THE DRIFT CHECK — expect: No change
 ```
 
 **Changing something that is managed:** edit the `.tf`, `terraform fmt`, `validate`, plan
-locally, commit, push, approve (§3). Never `terraform apply` locally for a change that could
+locally, commit, ship it (`scripts/ship.sh`), approve (§3). Never `terraform apply` locally for a change that could
 go through the gate — the pipeline is the audit trail. (A local apply is not forbidden; it
 is simply not the road, and the next CI plan will show `No changes` if you did it right.)
 
@@ -425,7 +505,7 @@ nobody declared):
 terraform -chdir=terraform plan -generate-config-out=generated.tf
 # 4. iterate until `plan` shows the import and NOTHING ELSE (an "import+update" means your
 #    HCL differs from what exists — declare what exists, don't change it in the same move)
-# 5. commit, push, approve; the CI apply is the adoption
+# 5. commit, ship, approve; the CI apply is the adoption
 ```
 
 Strip read-only attributes the generator emits (`etag`, ids) or they show as permanent
@@ -444,15 +524,15 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
 
 ## 6. Workers and migrations
 
-- **Deploy:** push a change under a worker path; Workers runs. Watch it. Manual road (emergencies
-  only): `make worker-deploy` — it runs the gates first; never a bare `wrangler deploy`.
+- **Deploy:** merge a change to anything a worker is built from (§2.2); Workers runs. Watch it
+  (or the PR's report). Manual road (emergencies only): `make worker-deploy` — it runs the gates first; never a bare `wrangler deploy`.
   A manual deploy is not drift (the next CI deploy ships the same git source), but it skips
   the ledger step, so run `make migrate` first if a migration is pending.
 - **Schema change:** `cd comments-worker && npx wrangler d1 migrations create merecatholicity-comments <name>`
   → a NEW `migrations/NNNN_name.sql` with the **next** number — the last file's + 1, which
   `make migration NAME=<name>` derives (a kept number drifted three times; there were two
   0010s once, one is 0011 now) — additive only (`IF NOT EXISTS` / `ALTER` / table-swap);
-  `make schema-snapshot` regenerates the read-only `schema.sql`; commit; the push applies it
+  `make schema-snapshot` regenerates the read-only `schema.sql`; commit; the merge applies it
   before deploying. Check: `make migrate-status` → *No migrations to apply*.
 - **Renaming an applied migration file** makes wrangler see it as pending: rename the row in
   `d1_migrations` too (prod AND local miniflare), or the next apply fails on a duplicate
@@ -472,7 +552,7 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
 - **Rollback and staged rollout** → §12 (`make worker-rollback`; `gh workflow run workers.yml
   -f mode=stage -f percent=10`, then `-f mode=promote`).
 - **Scaling the live hub (2026-09-17):** the BoardHub is `HUB_SHARDS` Durable Object instances
-  (`wrangler.jsonc` vars; `Domain.Hub` is the law). Raising it is a var change + push: a deploy
+  (`wrangler.jsonc` vars; `Domain.Hub` is the law). Raising it is a var change, shipped: a deploy
   disconnects every socket, so the clients reconnect under the new count with no other step. The
   Health card (and the ops probe's `hub`) shows sockets per shard — raise when a shard's count
   climbs into the thousands. A tab still running a bundle from before a change to the routing
@@ -480,8 +560,8 @@ would fight forever. Worker config lives in `wrangler.jsonc`; secrets in `wrangl
   after such a client change, watch `wrangler tail` for it before and after raising. It has
   stood at `2` since 2026-09-17, the day the sharding shipped, so the cross-shard road runs daily.
 - **Rate limits and replicas (2026-09-17):** six rate-limit bindings live in `wrangler.jsonc` — the
-  three member buckets and their per-address backstops (`*_IP_LIMIT`); a number is a one-line change
-  and a push. D1 read replication on the comments database is declared in `terraform/d1.tf`
+  three member buckets and their per-address backstops (`*_IP_LIMIT`); a number is a one-line change,
+  shipped. D1 read replication on the comments database is declared in `terraform/d1.tf`
   (`read_replication.mode`), but the Terraform token cannot write D1, so a change to it is
   applied by hand with the workers token (§10, exception 13). The worker keeps working either
   way (without replicas every session is served by the primary). The ops probe's `d1` says
@@ -531,7 +611,7 @@ that would shrink existing clones is a separate, owner-authorised act (§10 ex. 
   `make mirrored-pdfs`.
 - **Adding a corpus work:** converter + `WORKS` line + html stanza in `resources/Makefile`,
   `library.html`, `librarian/works.yml`; the PDF appears in `pdfs.txt` automatically
-  (`list-pdfs`) and is published by the next `main` push that builds it.
+  (`list-pdfs`) and is published by the next merge to `main` that builds it.
 - **Adding a hand page:** the file under `docs/`, an `!docs/<name>.html` line in
   `.gitignore`, `scripts/nav.py`'s `PAGES`, the test above.
 
@@ -541,6 +621,8 @@ that would shrink existing clones is a separate, owner-authorised act (§10 ex. 
 
 ```sh
 gh run list --limit 6                                   # what ran, what it concluded
+gh pr checks <n>; gh pr view <n> --comments             # a pull request's checks, and its pipeline report
+gh api repos/merecatholicity/merecatholicity.com/rulesets   # the `main` ruleset: active, no bypass
 gh run view <id> --json jobs --jq '.jobs[]|{name,conclusion}'
 gh run view <id> --log-failed                           # the failing step, only
 scripts/ci_approve.sh                                   # anything waiting on the gate?
@@ -574,6 +656,12 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 | the env disclosure published the pipeline's key, which opened the librarian's shelf, persona and dials | a static secret shared by the worker (`MERECAT_INGEST_KEY`) and the runners (`MC_INGEST_KEY`) — a worker that holds a pipeline key can lose it | the pipeline holds no key: each job's GitHub OIDC token, checked by `oidc.ts` against `Domain.Pipeline`; the persona and dials only from the `librarian-config` job a reviewer approved |
 | the first leak sweep was green while proving nothing for 114 of 129 routes | it set `ALLOWED_ORIGINS` to a sentinel, so every POST stopped at the origin gate | the sweep keeps the gates real and holds reach floors; `sweep_control.test.ts` shows each detector firing |
 | every Build fails at *Set up job* the moment SHA pinning is required | GitHub's own `upload-pages-artifact` composite references `upload-artifact@v4` by tag internally; the policy applies to nested references | the composite is inlined (tar + pinned upload named `github-pages`) — prefer plain actions over composites under this policy |
+| a Dependabot PR whose Build was red was merged with the ordinary button, and the Build on `main` went red with it (2026-10-09, qrcode-generator 2.0 moved its file) | nothing required a check: `main` had no rule at all | the `main` ruleset: a PR, three required checks from GitHub Actions, no bypass |
+| a change made in a commit whose Build was cancelled by a newer merge could ship stale | the diff ran from the previous push, not from what the site cache held | the diff runs from the cache's own commit (`site-2-<sha>`, a `lookup-only` restore) |
+| a wrangler bump never deployed; the fix touched `scripts/` and Workers did not run | the deploy was path-filtered on the push's own diff | `scope` diffs from the last successful deploy (`scripts/ci_scope.py`) |
+| a new article's comments switch would not stay on | `Domain.Writings` (the worker's whitelist) is generated from `content/`, outside the old filter | `scope` compares the writings at both ends; `test_ci_scope.py` walks the import graphs |
+| four Dependabot PRs' Workers checks cancelled each other in seconds | one global concurrency group: a newer pending run cancels the older pending one | a pull request's runs are their own group (`workers-pr-<ref>`, `terraform-pr-<ref>`) |
+| merecat went red after every burst of merges ("the Build of X ended with: completed cancelled") | its commit's Build was cancelled by a newer merge's | it follows the newer Build on `main` that carries its commit |
 
 ---
 
@@ -606,13 +694,20 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
    runner; it runs from the dev box after a deploy.
 9. **A history rewrite** — deliberate, backed-up, owner-authorised (last: 2026-09-09,
    554 → 153 MB); never automated. Every pre-rewrite sha is gone; re-clone, don't pull.
-10. **The private-shelf repo's scanning** — GHAS is paid on private repositories.
-11. **Branch protection on `main`** — none, deliberately: the push is the deploy, and the
-    environment gate guards infrastructure.
+10. **The private-shelf repo's scanning and branch rules** — GHAS is paid on private
+    repositories, and so are rulesets (the API answers 403); its pushes run no checks to
+    require in any case.
+11. **The emergency door on the `main` ruleset** — it has no bypass actor, deliberately. When
+    the gates themselves are broken and the fix cannot pass them, the owner sets the ruleset's
+    enforcement to *Disabled* (Settings → Rules, or `gh api -X PUT
+    repos/merecatholicity/merecatholicity.com/rulesets/<id> -f enforcement=disabled`), merges
+    the fix's pull request, and sets it back — the next Terraform plan shows the drift if that
+    was forgotten. Never a bypass actor added quietly. (Until 2026-10-09 `main` had no rule at
+    all: the push was the deploy.)
 12. **A rollback or a staged rollout from the dev box** (`make worker-rollback`,
     `make worker-stage`, `make worker-promote`) — the emergency hand roads of §12; the CI
     dispatch is the road (the build of record). A rollback is always followed by a
-    `git revert` push. **The nightly headless run** (`make nightly-install`) runs on the dev
+    `git revert` shipped as a pull request. **The nightly headless run** (`make nightly-install`) runs on the dev
     box for the same reason as 8, and reports through the ops door. It judges with MAIN's kit,
     fetched and rebuilt in `local/nightly-kit` every run (2026-10-07), so a merged change to
     `webtest/` reaches the next night with no pull on the box; the box's checkout is the door.
@@ -641,7 +736,14 @@ curl -s "https://merecatholicity.com/version.json?probe=$RANDOM" | grep build
 
 ## 11. Anti-drift checklist — what to update when you add…
 
-- **a workflow or a step** → its header comment, this document (§2), the README table.
+- **a workflow or a step** → its header comment, this document (§2), the README table; a
+  workflow a pull request or a merge runs → `pr-report.yml`'s `workflows:` list (the test
+  holds it).
+- **a required check** → the `main` ruleset's `required_check` (pinned to app 15368), and its
+  workflow runs on EVERY pull request — no path filter; a job that may skip skips by its `if`,
+  and one with `needs` carries `!cancelled()` so a failed need never skips it into a pass.
+- **an input a worker is built from** (a file outside its directory, a generator) →
+  `scripts/ci_scope.py`'s lists; `test_ci_scope.py` walks both import graphs.
 - **a secret or variable** → §4 here, `terraform/README.md`, `ci.env`, and — for a
   variable — `github.tf` (`github_actions_variable`); a secret is set by hand and *named*
   in the workflow's header comment.
@@ -711,12 +813,12 @@ section was written; the record is below.
 make worker-rollback                # to the previous Version; VERSION=<id> for another
 # = scripts/worker_rollback.sh: `wrangler deployments status --json` (the current),
 #   `wrangler versions list --json` (the candidates), `wrangler rollback <id> -y`, a probe
-git revert <sha> && git push        # ALWAYS — or the next push re-deploys the bad Version
+git revert <sha> && scripts/ship.sh # ALWAYS — or the next merge re-deploys the bad Version
 ```
 
 Refusals, both wrangler's: across a **Durable Object class migration** (`BoardHub`/`ChatRoom`
-have v1/v2 migrations — a rollback that crosses one is refused; `git revert` + push is the
-road), and when a **binding** the target Version needs is gone. A rollback undoes **no D1
+have v1/v2 migrations — a rollback that crosses one is refused; a `git revert` shipped as a
+pull request is the road), and when a **binding** the target Version needs is gone. A rollback undoes **no D1
 migration**: migrations are additive by law, so the older worker runs against the newer schema.
 Verify: `curl -s "https://merecatholicity.com/api/comments/config?probe=$RANDOM"` → `ok:true`
 and the `apiVersion` you expect; `webtest/test_worker_reads.py`; the Health card.
@@ -734,9 +836,9 @@ update triggers or routes (`wrangler triggers deploy` after a cron change); a sp
 DO class migration is refused. A staged Version that misbehaves: `make worker-rollback
 VERSION=<the current id the stage printed>`.
 
-**The site.** `git revert <sha>` + push (`build.yml` redeploys). The Pages artifact is kept one
+**The site.** `git revert <sha>` shipped as a pull request (`build.yml` redeploys on the merge). The Pages artifact is kept one
 day (`retention-days: 1`), so re-running an old Build is not a rollback. **Terraform:** `git
-revert` + push, approve the plan (§3). **A migration** cannot be rolled back — it is additive;
+revert` shipped as a pull request, approve the plan (§3). **A migration** cannot be rolled back — it is additive;
 a retirement is its own dated migration (CLAUDE.md, the retirement cadence).
 
 **The drill record.**

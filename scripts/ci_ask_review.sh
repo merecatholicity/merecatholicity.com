@@ -19,6 +19,14 @@
 # The reviewer is read from the gate itself; the run's triggering actor stands
 # in if GitHub will not say.
 #
+# THE PULL REQUEST'S THREAD (2026-10-09). Every change reaches main through a
+# pull request now, and the gate's wait belongs where the change was argued:
+# the issue names the pull request, and both the ask and the settle re-render
+# that PR's pipeline report (scripts/ci_pr_report.py), which shows the wait —
+# the Review deployments link, the plan, this issue — and then its outcome.
+# The report is an EDIT, so the issue stays the one notification. A report
+# that cannot be written is a warning: it never costs the ask.
+#
 # Env: GH_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, GITHUB_SERVER_URL (Actions
 # sets the last three), TRIGGERING_ACTOR; GITHUB_OUTPUT receives `issue`.
 # `close` reads ISSUE (the ask's number) and RESULT (the gated job's result).
@@ -28,6 +36,12 @@ set -euo pipefail
 repo=$GITHUB_REPOSITORY
 run=$GITHUB_RUN_ID
 url="${GITHUB_SERVER_URL:-https://github.com}/$repo/actions/runs/$run"
+
+# the pull request's pipeline report, re-rendered: best effort, never fatal
+report() {
+  python3 "$(dirname "$0")/ci_pr_report.py" --sha "$1" \
+    || echo "::warning::the pull request's pipeline report was not updated (the ask itself stands)"
+}
 
 if [ "${1:-}" = close ]; then
   : "${ISSUE:?}"
@@ -57,6 +71,7 @@ print(json.dumps({"title": title, "body": i["body"] + "\n\n---\n" + line,
                   "state": "closed", "state_reason": reason}))
 ')
   printf %s "$patch" | gh api -X PATCH "repos/$repo/issues/$ISSUE" --input - --jq '.html_url + " " + .state'
+  report "$(gh api "repos/$repo/actions/runs/$run" --jq .head_sha)"
   exit 0
 fi
 
@@ -100,11 +115,14 @@ IFS=$'\t' read -r sha name < <(gh api "repos/$repo/actions/runs/$run" \
 
 title="Approval needed: $name"
 [ ${#title} -le 200 ] || title="${title:0:199}…"
+# the pull request the change came from, when there is one (every merge to main)
+pr=$(gh api "repos/$repo/commits/$sha/pulls" --jq '[.[] | select(.base.repo.full_name == "'"$repo"'")][0].number // empty' 2>/dev/null || true)
 body="$who — **$name** is waiting for your review at \`$gates\`.
 
 ### [Review deployments →]($url)
 
-or \`scripts/ci_approve.sh $run\` · commit $sha"
+or \`scripts/ci_approve.sh $run\` · commit $sha${pr:+ · from #$pr}"
 issue=$(gh api "repos/$repo/issues" -f title="$title" -f body="$body" --jq '.number')
 echo "asked in ${GITHUB_SERVER_URL:-https://github.com}/$repo/issues/$issue"
 echo "issue=$issue" >> "${GITHUB_OUTPUT:-/dev/null}"
+report "$sha"

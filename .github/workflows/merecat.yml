@@ -105,18 +105,34 @@ jobs:
           # The ingest reads the BUILT site. On a push that is this commit's
           # Build; wait for it (it is running alongside this workflow). On a
           # schedule or a dispatch it is the newest successful Build on main.
+          #
+          # A Build CANCELLED because a newer merge started its own (build.yml
+          # cancels in progress) is not a failure: that newer Build carries
+          # this commit, so the ingest follows it (2026-10-09; until then every
+          # burst of merges turned this run red and the ingest waited for a
+          # hand dispatch). A Build that FAILED is the end: there is no site.
           if [ "${{ github.event_name }}" = "push" ]; then
             sha="${{ github.sha }}"
-            for i in $(seq 1 80); do
-              st=$(gh run list --workflow Build --branch main --limit 10 --json headSha,status,conclusion \
+            for i in $(seq 1 120); do
+              st=$(gh run list --workflow Build --branch main --limit 20 --json headSha,status,conclusion \
                      --jq ".[] | select(.headSha==\"$sha\") | \"\(.status) \(.conclusion)\"" | head -1)
               case "$st" in
                 "completed success") break ;;
+                "completed cancelled")
+                  git fetch -q origin main
+                  tip=$(git rev-parse origin/main)
+                  if [ "$tip" != "$sha" ] && git merge-base --is-ancestor "$sha" "$tip"; then
+                    echo "::notice::the Build of $sha was superseded; ingesting against the site built from $tip, which carries it"
+                    sha=$tip
+                    git checkout -q "$sha"
+                    continue
+                  fi
+                  echo "::error::the Build of $sha was cancelled and nothing newer on main carries it — nothing to ingest against"; exit 1 ;;
                 completed*) echo "::error::the Build of $sha ended with: $st — nothing to ingest against"; exit 1 ;;
               esac
               sleep 15
             done
-            if [ "$st" != "completed success" ]; then echo "::error::the Build of $sha did not finish in 20 minutes"; exit 1; fi
+            if [ "$st" != "completed success" ]; then echo "::error::the Build of $sha did not finish in 30 minutes"; exit 1; fi
           else
             sha=$(gh run list --workflow Build --branch main --status success --limit 1 --json headSha --jq '.[0].headSha')
             [ -n "$sha" ] || { echo "::error::no successful Build on main to ingest against"; exit 1; }
@@ -207,14 +223,16 @@ jobs:
   ask:
     # GitHub tells no one of their own activity, and every run here is the
     # owner's, so the gate's wait never reached them: the bot asks by name in
-    # an "Approval needed" issue (scripts/ci_ask_review.sh). Same needs and same
+    # an "Approval needed" issue (scripts/ci_ask_review.sh), and the merged pull
+    # request's pipeline report shows the wait in its thread. Same needs and same
     # condition as the gate; `settle` closes the issue when the gate is done.
     needs: config-status
     if: needs.config-status.outputs.changed == 'true' || github.event.inputs.config == 'force'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      issues: write     # the "Approval needed" issue, nothing else
+      issues: write          # the "Approval needed" issue
+      pull-requests: write   # the pull request's report shows the wait
       actions: read
     outputs:
       issue: ${{ steps.ask.outputs.issue }}
@@ -222,7 +240,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/ci_ask_review.sh
+          sparse-checkout: |
+            scripts/ci_ask_review.sh
+            scripts/ci_pr_report.py
           sparse-checkout-cone-mode: false
 
       - name: Ask the reviewer
@@ -240,13 +260,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      issues: write     # the issue's outcome and its close, nothing else
+      issues: write          # the issue's outcome and its close
+      pull-requests: write   # the pull request's report shows the outcome
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: scripts/ci_ask_review.sh
+          sparse-checkout: |
+            scripts/ci_ask_review.sh
+            scripts/ci_pr_report.py
           sparse-checkout-cone-mode: false
 
       - name: Settle the ask

@@ -1,7 +1,8 @@
 # merecatholicity.com
 
 A static site (`docs/`, served by GitHub Pages behind Cloudflare) plus two Cloudflare
-Workers. `main` is production: **the push IS the deploy**.
+Workers. `main` is production and takes no direct push: every change is a pull request whose
+checks must pass, and **the merge IS the deploy** (`scripts/ship.sh` is the road).
 
 **Read these first, in this order.** This file is the operating manual — prerequisites,
 targets, recipes — and nothing else.
@@ -67,7 +68,7 @@ secrets set with `wrangler secret put`. Credentials live in
 | `make mirrored-pdfs` | Copy the one PDF nothing builds into `docs/` |
 | `make serve` | Local preview over `docs/` on 127.0.0.1 only |
 | `make migrate` / `make migration NAME=…` / `make schema-snapshot` | Apply the D1 ledger / new migration / regenerate the snapshot |
-| `make worker-deploy` | The EMERGENCY road (CI deploys on push) |
+| `make worker-deploy` | The EMERGENCY road (CI deploys on merge) |
 | `make worker-rollback` / `make worker-stage` / `make worker-promote` / `make worker-status` | The rollback and staged-rollout drills (CICD §12) |
 | `make comments-backup` | Fetch the latest daily D1 backup from R2 and replay it locally |
 | `make librarian` | The hand road: push merecat's changed works, persona and dials |
@@ -109,7 +110,9 @@ $EDITOR librarian/works.yml && make librarian
 ## CI/CD
 
 ```sh
-gh run list --limit 6                                    # what the last pushes did
+scripts/ship.sh                                          # ship a branch: PR → checks → auto-merge → deploy
+gh pr view <n> --comments                                # its pipeline report (checks, deploy, a gate's wait)
+gh run list --limit 6                                    # what the last merges did
 scripts/ci_approve.sh                                    # anything waiting on the Terraform gate?
 scripts/ci_approve.sh <run-id> --approve "reviewed: …"   # approve it (or --reject)
 gh workflow run workers.yml --ref main                   # redeploy both workers from CI

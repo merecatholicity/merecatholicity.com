@@ -66,16 +66,19 @@ resource "github_repository_deploy_key" "private_shelf_ci" {
 }
 
 resource "github_repository" "site" {
-  allow_auto_merge            = false
+  # the pull-request road (2026-10-09, the ruleset below): a PR merges itself
+  # when its checks pass (`gh pr merge --auto`, scripts/ship.sh), its branch
+  # goes when it merges, and a branch behind main can be brought up to date
+  allow_auto_merge            = true
   allow_forking               = true
   allow_merge_commit          = true
   allow_rebase_merge          = true
   allow_squash_merge          = true
-  allow_update_branch         = false
+  allow_update_branch         = true
   archive_on_destroy          = null
   archived                    = false
   auto_init                   = false
-  delete_branch_on_merge      = false
+  delete_branch_on_merge      = true
   description                 = null
   gitignore_template          = null
   has_discussions             = false
@@ -108,6 +111,73 @@ resource "github_repository" "site" {
 
   lifecycle {
     prevent_destroy = true
+  }
+}
+
+# main takes no direct push (2026-10-09). Every change reaches it through a
+# pull request whose required checks passed — the merge IS the deploy, and
+# scripts/ship.sh is the road (push a branch, open the PR, arm auto-merge, wait).
+# Until this ruleset a red pull request could be merged with the ordinary
+# button, and was (Dependabot #11: its Build failed, the merge took the Build
+# on main down with it), and an agent's push went straight to production.
+#
+# The three checks are the jobs that run on EVERY pull request: Build's
+# `build`, Workers' `check`, Terraform's `plan`. A required check that never
+# reports holds the PR at "Expected" for ever, so neither workflow path-filters
+# its pull_request trigger; `check` skips itself (by its `if`, which GitHub
+# reports as success) when the PR touches no worker input. integration_id pins
+# each to GitHub Actions (app 15368), so a commit status of the same name from
+# anywhere else satisfies nothing. Not strict: a PR need not be rebased onto
+# the newest main first; the push run on main gates every deploy again.
+#
+# No bypass actor, by design: the owner's PAT and the agents riding it get the
+# same rule as everyone. An emergency in which the gates themselves are broken
+# is CICD.md §10's exception (disable this ruleset in the UI, ship, re-enable),
+# never a quiet bypass list. The private shelf cannot carry one: rulesets on a
+# private repository need a paid plan, and its pushes run no checks to require.
+resource "github_repository_ruleset" "main" {
+  name        = "main: pull requests only, checks green"
+  repository  = github_repository.site.name
+  target      = "branch"
+  enforcement = "active"
+
+  conditions {
+    ref_name {
+      include = ["~DEFAULT_BRANCH"]
+      exclude = []
+    }
+  }
+
+  rules {
+    deletion         = true
+    non_fast_forward = true
+
+    # no approving review: the owner is the only reviewer, and GitHub refuses
+    # an author's approval of their own pull request
+    pull_request {
+      required_approving_review_count   = 0
+      dismiss_stale_reviews_on_push     = false
+      require_code_owner_review         = false
+      require_last_push_approval        = false
+      required_review_thread_resolution = false
+    }
+
+    required_status_checks {
+      strict_required_status_checks_policy = false
+
+      required_check {
+        context        = "build"
+        integration_id = 15368
+      }
+      required_check {
+        context        = "check"
+        integration_id = 15368
+      }
+      required_check {
+        context        = "plan"
+        integration_id = 15368
+      }
+    }
   }
 }
 

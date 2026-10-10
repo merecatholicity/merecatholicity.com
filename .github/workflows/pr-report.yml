@@ -1,0 +1,55 @@
+# The pipeline's report on each pull request (2026-10-09).
+#
+# One comment per pull request, kept current by editing it: the checks on the
+# PR's head (with the failing step's log tail), and once it is merged, what
+# the merge did on main — the deploys, a gate waiting for its reviewer (the
+# Review deployments link, the plan, the ask's issue) and how it ended.
+# scripts/ci_pr_report.py renders the whole comment from the API on every
+# call, so the runs may land in any order. The gates' `ask` and `settle` jobs
+# call it too: no run event marks the moment a gate starts or stops waiting.
+#
+# WHY workflow_run: it runs in this repository's own context, from MAIN's copy
+# of this file and the script — never a pull request's code — with the job's
+# token and no secret. That is also what lets it write to a Dependabot or a
+# fork pull request, whose own runs hold a read-only token by design; and it
+# is why no secret is needed for any of it (CICD.md principle 3 holds).
+#
+# The list below is every workflow a pull request or a merge runs;
+# tests/py/test_pipeline_workflows.py holds it to that.
+
+name: PR report
+
+on:
+  workflow_run:
+    workflows: [Build, Workers, Terraform, merecat]
+    types: [requested, completed]
+
+permissions: {}
+
+# One report at a time per pull request (or per merge commit): two runs
+# creating the comment at once would make two. A newer run replaces a pending
+# one, which is harmless — every run renders everything.
+concurrency:
+  group: pr-report-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read        # the script, and which pull request a commit belongs to
+      actions: read         # the runs, their jobs and logs, the plan summary
+      issues: read          # the gate's "Approval needed" issue, to link it
+      pull-requests: write  # the one comment
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/ci_pr_report.py
+          sparse-checkout-cone-mode: false
+
+      - name: Report on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci_pr_report.py --event "$GITHUB_EVENT_PATH"

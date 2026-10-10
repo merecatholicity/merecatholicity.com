@@ -4,9 +4,11 @@
 # worktree at local/wt/<name> on origin/main (local/ is git-ignored), shares
 # node_modules by symlink (the toolchain is the same), and leaves the kernel
 # output to `make psbuild` there — each worktree compiles its own
-# purescript/output, so one agent's build never rewrites the other's. Work,
-# commit and push FROM the worktree; the shared checkout is only ever
-# fast-forwarded (`git pull --ff-only`).
+# purescript/output, so one agent's build never rewrites the other's. Work
+# and commit in the worktree and ship FROM it with scripts/ship.sh (a pull
+# request that merges itself when its checks pass: main takes no direct push
+# since 2026-10-09); the shared checkout is only ever fast-forwarded
+# (`git pull --ff-only`).
 #
 # RUN IT AGAIN ON AN EXISTING WORKTREE TO REPAIR IT (2026-09-18). The
 # node_modules symlink was briefly TRACKED — `.gitignore` said `node_modules/`
@@ -63,7 +65,8 @@ link_node_modules
 cat <<MSG
 worktree ready: $dir  (detached at origin/main)
   cd $dir
-  git switch -c <branch>      # or work detached and push with: git push origin HEAD:main
+  git switch -c <branch>      # optional: detached, scripts/ship.sh names the branch agent/$name
+  scripts/ship.sh             # ship: a pull request that merges itself when its checks pass
   make psbuild                # its own purescript/output
   # node_modules gone after a reset? run this script again with the same name
   # when done: cd $here && git worktree remove $dir

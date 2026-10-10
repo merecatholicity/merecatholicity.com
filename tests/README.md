@@ -136,7 +136,14 @@ tests/
                        ledger (and its credential: the job's OIDC token, renewed, masked, no key in the body;
                        the persona and dials pushed apart, only what changed), the pipeline's workflows
                        (pipeline_workflows: no stored key, a token grant only on the jobs that call a door,
-                       no pull request, the reviewer's environment and its separate queue), the writings detector behind the comments switches, the corpus sources' manifest (sources_manifest: every body and
+                       no pull request, the reviewer's environment and its separate queue; the pull-request
+                       road — main's ruleset requiring three checks from GitHub Actions that report on every
+                       PR, a PR's runs in their own group, the report running main's code with no secret and
+                       hearing every workflow a change runs), what a worker is built from (ci_scope: both
+                       workers' import graphs inside the scope's lists, the writings compared at both ends, a
+                       site change shipping no worker, never old code over new), the pipeline's report on a
+                       pull request (pr_report: the failed step's own log tail, a fence no backtick closes, no
+                       mention written into an edit, one comment under GitHub's limit), the writings detector behind the comments switches, the corpus sources' manifest (sources_manifest: every body and
                        source under resources/ listed and untracked, every shard a published asset, a present
                        file matching its sha), the CSP's hashes (csp: the
                        ruleset carries exactly the two inline scripts' hashes from scripts/csp_hashes.py, names

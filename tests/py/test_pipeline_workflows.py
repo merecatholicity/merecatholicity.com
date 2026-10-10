@@ -180,15 +180,24 @@ class EveryGateAsks(unittest.TestCase):
                     continue
                 swept += 1
                 self.assertNotIn('environment', job, name + ': the asker never waits itself')
-                self.assertEqual(job['permissions'], {'issues': 'write', 'actions': 'read'}, name)
+                # the issue, and (2026-10-09) the pull request's report showing the wait
+                self.assertEqual(job['permissions'], {'issues': 'write', 'pull-requests': 'write', 'actions': 'read'}, name)
                 self.assertNotIn('secrets.', yaml.safe_dump(job), name)
-                # the write is for the comment: nothing else runs beside it
+                # the writes are for the ask and the report: nothing else runs beside them
                 checkout, ask = job['steps']
                 self.assertTrue(checkout['uses'].startswith('actions/checkout@'), name)
-                self.assertEqual(checkout['with']['sparse-checkout'], 'scripts/ci_ask_review.sh', name)
+                self.assertEqual(checkout['with']['sparse-checkout'].split(),
+                                 ['scripts/ci_ask_review.sh', 'scripts/ci_pr_report.py'], name)
                 self.assertIs(checkout['with']['persist-credentials'], False, name)
                 self.assertIn(ask['run'], ('scripts/ci_ask_review.sh', 'scripts/ci_ask_review.sh close'), name)
         self.assertEqual(swept, 4)
+
+    def test_the_ask_shows_in_the_pull_requests_thread_and_never_fails_for_it(self):
+        script = read('scripts', 'ci_ask_review.sh')
+        self.assertIn('ci_pr_report.py" --sha', script)
+        self.assertIn('|| echo "::warning::', script, 'a report that cannot be written never costs the ask')
+        self.assertEqual(script.count('report "$'), 2, 'the ask and the settle each re-render the report')
+        self.assertIn('${pr:+ · from #$pr}', script, 'the issue names the pull request it came from')
 
     def test_the_ask_is_an_issue_whose_title_says_so(self):
         script = read('scripts', 'ci_ask_review.sh')
@@ -197,6 +206,121 @@ class EveryGateAsks(unittest.TestCase):
         self.assertNotIn('/comments', script, 'a commit comment is titled by the commit, not the ask')
         self.assertRegex(read('terraform', 'github.tf'),
                          r'resource "github_repository" "site" \{[^}]*?has_issues\s*=\s*true')
+
+
+def tf_block(kind, name):
+    """The body of one Terraform resource block in terraform/github.tf."""
+    m = re.search(r'^resource "%s" "%s" \{\n(.*?)^\}' % (kind, name), read('terraform', 'github.tf'), re.S | re.M)
+    assert m, 'no resource %s.%s' % (kind, name)
+    return m.group(1)
+
+
+def workflow_names():
+    return {workflow(n)['name']: n for n in sorted(os.listdir(WORKFLOWS))}
+
+
+class ThePullRequestRoad(unittest.TestCase):
+    """main takes no direct push; every change is a pull request (2026-10-09).
+
+    A red Dependabot PR was merged with the ordinary button and took the Build on
+    main down with it, and an agent's push went straight to production. Now a
+    ruleset (terraform/github.tf) requires a pull request whose three checks
+    passed, scripts/ship.sh is the road, and scripts/ci_pr_report.py keeps one
+    report per PR from a workflow_run that never runs a PR's code.
+
+    What would break silently: a required check whose workflow a path filter
+    skips (the PR waits at "Expected" for ever, and someone reaches for a
+    bypass); a required job that a failed `needs` skips into a pass; a check
+    pinned to no app, so any commit status of that name passes it; a bypass
+    actor appearing; a PR's check queued behind a deploy, or cancelled by
+    another PR's; the report checking out a PR's code, holding a secret, or
+    missing a workflow the merge runs.
+    """
+
+    def setUp(self):
+        self.ruleset = tf_block('github_repository_ruleset', 'main')
+
+    def required(self):
+        return re.findall(r'required_check \{\s*context\s*=\s*"([^"]+)"\s*integration_id\s*=\s*(\d+)', self.ruleset)
+
+    def test_main_takes_no_direct_push(self):
+        for line in ('enforcement = "active"', 'include = ["~DEFAULT_BRANCH"]', 'deletion         = true',
+                     'non_fast_forward = true', 'pull_request {', 'required_status_checks {'):
+            self.assertIn(line, self.ruleset)
+        self.assertNotIn('bypass_actors', self.ruleset, 'no bypass: the owner and the agents get the same rule')
+        site = tf_block('github_repository', 'site')
+        self.assertRegex(site, r'allow_auto_merge\s*=\s*true', 'scripts/ship.sh arms auto-merge')
+        self.assertRegex(site, r'delete_branch_on_merge\s*=\s*true')
+
+    def test_each_required_check_is_github_actions_own(self):
+        checks = self.required()
+        self.assertEqual(sorted(c for c, _ in checks), ['build', 'check', 'plan'])
+        self.assertEqual({i for _, i in checks}, {'15368'}, 'a status of that name from anywhere else passes nothing')
+
+    def test_every_required_check_reports_on_every_pull_request(self):
+        owners = {}
+        for name in sorted(os.listdir(WORKFLOWS)):
+            wf = workflow(name)
+            on = wf.get('on', wf.get(True))
+            if not isinstance(on, dict) or 'pull_request' not in on:
+                continue
+            for job_name, job in wf['jobs'].items():
+                owners.setdefault(job_name, []).append((name, on['pull_request'] or {}, job))
+        for check, _ in self.required():
+            self.assertEqual(len(owners.get(check, [])), 1, check + ': exactly one job a pull request runs carries this name')
+            name, pr_filter, job = owners[check][0]
+            self.assertFalse(set(pr_filter) & {'paths', 'paths-ignore', 'branches', 'branches-ignore'},
+                             name + ': a filtered workflow never reports, and the PR waits at "Expected" for ever')
+            if 'needs' in job:
+                # a job whose need failed is SKIPPED, and GitHub counts a skip as a pass
+                self.assertIn('!cancelled()', job['if'], name + ': a failed need must not skip it into a pass')
+                self.assertNotIn("== 'yes'", job['if'], name + ': it runs unless told no, never only when told yes')
+
+    def test_a_pull_requests_runs_are_its_own(self):
+        for name in sorted(os.listdir(WORKFLOWS)):
+            wf = workflow(name)
+            if 'pull_request' not in triggers(wf):
+                continue
+            group = str((wf.get('concurrency') or {}).get('group', ''))
+            self.assertIn('github.ref', group, name + ': a PR never queues behind a deploy or another PR')
+
+    def test_the_workers_deploy_only_what_scope_said(self):
+        jobs = workflow('workers.yml')['jobs']
+        self.assertIn("needs.scope.outputs.workers == 'yes'", jobs['deploy']['if'])
+        self.assertIn("needs.check.result == 'success'", jobs['deploy']['if'])
+        self.assertIn('scripts/ci_scope.py workers', steps_text(jobs['scope']))
+        (ship,) = [st for st in jobs['deploy']['steps'] if 'CONTACT' in (st.get('env') or {})]
+        self.assertEqual(ship['env']['CONTACT'], '${{ needs.scope.outputs.contact }}')
+
+    def test_the_report_runs_mains_code_and_holds_no_secret(self):
+        wf = workflow('pr-report.yml')
+        self.assertEqual(triggers(wf), {'workflow_run'})
+        self.assertEqual(wf['permissions'], {})
+        self.assertNotIn('secrets.', read('.github', 'workflows', 'pr-report.yml'))
+        (job,) = wf['jobs'].values()
+        self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read', 'issues': 'read', 'pull-requests': 'write'})
+        checkout, run = job['steps']
+        self.assertTrue(checkout['uses'].startswith('actions/checkout@'))
+        self.assertEqual(checkout['with'], {'persist-credentials': False, 'sparse-checkout': 'scripts/ci_pr_report.py',
+                                            'sparse-checkout-cone-mode': False}, 'never a ref: never a pull request\'s code')
+        self.assertEqual(run['run'], 'python3 scripts/ci_pr_report.py --event "$GITHUB_EVENT_PATH"')
+
+    def test_the_report_hears_every_workflow_a_change_runs(self):
+        wf = workflow('pr-report.yml')
+        on = wf.get('on', wf.get(True))
+        heard = set(on['workflow_run']['workflows'])
+        runs = {n for n, f in workflow_names().items()
+                if triggers(workflow(f)) & {'pull_request', 'push'} and f != 'pr-report.yml'}
+        self.assertEqual(heard, runs)
+        self.assertEqual(set(on['workflow_run']['types']), {'requested', 'completed'})
+
+    def test_the_road_is_written_down(self):
+        self.assertTrue('scripts/ship.sh' in read('CLAUDE.md'), 'CLAUDE.md names the road')
+        ship = read('scripts', 'ship.sh')
+        self.assertIn('refusing to ship from main', ship)
+        self.assertIn('--auto', ship)
+        self.assertNotIn('HEAD:main', ship)
+        self.assertNotIn('HEAD:main', read('scripts', 'agent_worktree.sh'), 'no worktree is told to push to main')
 
 
 class TheAudience(unittest.TestCase):
