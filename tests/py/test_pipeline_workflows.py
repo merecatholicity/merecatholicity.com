@@ -294,16 +294,21 @@ class ThePullRequestRoad(unittest.TestCase):
 
     def test_the_report_runs_mains_code_and_holds_no_secret(self):
         wf = workflow('pr-report.yml')
-        self.assertEqual(triggers(wf), {'workflow_run'})
+        self.assertEqual(triggers(wf), {'workflow_run', 'workflow_dispatch'})
         self.assertEqual(wf['permissions'], {})
         self.assertNotIn('secrets.', read('.github', 'workflows', 'pr-report.yml'))
         (job,) = wf['jobs'].values()
+        # a dispatch runs the chosen ref's code: only main's may hold the write token
+        self.assertEqual(job['if'], "github.event_name == 'workflow_run' || github.ref == 'refs/heads/main'")
         self.assertEqual(job['permissions'], {'contents': 'read', 'actions': 'read', 'issues': 'read', 'pull-requests': 'write'})
         checkout, run = job['steps']
         self.assertTrue(checkout['uses'].startswith('actions/checkout@'))
         self.assertEqual(checkout['with'], {'persist-credentials': False, 'sparse-checkout': 'scripts/ci_pr_report.py',
                                             'sparse-checkout-cone-mode': False}, 'never a ref: never a pull request\'s code')
-        self.assertEqual(run['run'], 'python3 scripts/ci_pr_report.py --event "$GITHUB_EVENT_PATH"')
+        self.assertIn('python3 scripts/ci_pr_report.py --event "$GITHUB_EVENT_PATH"', run['run'])
+        self.assertIn("case \"$PR\" in ''|*[!0-9]*) echo \"::error::", run['run'], 'a dispatcher\'s text reaches the script only as a number')
+        self.assertEqual(run['env']['PR'], '${{ inputs.pr }}', 'an input reaches the script through env, never spliced into it')
+        self.assertNotRegex(run['run'], r'\$\{\{\s*(github\.event\.)?inputs\.')
 
     def test_the_report_hears_every_workflow_a_change_runs(self):
         wf = workflow('pr-report.yml')

@@ -321,7 +321,12 @@ waiting for its reviewer: the *Review deployments* link (GitHub offers the appro
 on the run page and in its notification), the `ci_approve.sh` line, the plan summary and the
 ask's issue; then the gate's outcome. The gates' `ask` and `settle` jobs re-render it too (no
 run event marks a gate starting or stopping to wait). It is EDITED, never re-posted, and writes
-no mention: the ask's issue stays the one notification (§3).
+no mention: the ask's issue stays the one notification (§3). A `completed` event can arrive
+before the runs API stops calling that run in progress — the merge's last run was once reported
+*running* for good — so the report asks again (up to a minute) until the API agrees, and then
+takes the event's own word for its run. By hand: `gh workflow run pr-report.yml -f pr=<n>`
+re-renders one report from main's code (the job refuses a dispatch from any other ref; a re-run
+of an old report run would replay its old commit's script).
 
 ### 2.6 `ops-watch.yml` — **ops-watch** (the watchdog's outside leg, since 2026-09-16)
 

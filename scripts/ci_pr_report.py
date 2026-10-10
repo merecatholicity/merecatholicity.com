@@ -13,7 +13,8 @@ order and a lost one is repaired by the next.
 
     scripts/ci_pr_report.py --event FILE   a workflow_run payload ($GITHUB_EVENT_PATH)
     scripts/ci_pr_report.py --sha SHA      every pull request this commit belongs to
-    scripts/ci_pr_report.py --pr N         one pull request
+    scripts/ci_pr_report.py --pr N         one pull request (by hand: gh workflow run
+                                           pr-report.yml -f pr=N, which runs main's copy)
     ... --dry-run                          print the comment, post nothing
 
 It reads the API through `gh` with the token it is handed (the job's: actions
@@ -31,6 +32,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import zipfile
 
 MARKER = '<!-- mc-pipeline-report -->'
@@ -239,6 +241,29 @@ def gh(path, method='GET', data=None, raw=False, ok404=False):
     return json.loads(out) if out.strip() else None
 
 
+def runs_for(sha, trigger=None, tries=7, pause=10):
+    """The workflow runs for one commit, with the run that triggered this report
+    as its own event says it is. A `completed` event can arrive before GitHub's
+    runs API stops calling that run in progress (2026-10-09: the merge's last
+    run, merecat, was reported "running" for good — no later event came to
+    repair it), so the API is asked again until it agrees, and the payload
+    wins after that. Only `completed` is waited for: a `requested` event is
+    routinely behind the API, never ahead of it."""
+    waiting = bool(trigger) and trigger.get('head_sha') == sha and trigger.get('status') == 'completed'
+    for attempt in range(tries if waiting else 1):
+        runs = gh('repos/%s/actions/runs?head_sha=%s&per_page=100' % (REPO, sha))['workflow_runs']
+        mine = [r for r in runs if r['id'] == (trigger or {}).get('id')]
+        if not waiting or (mine and mine[0]['status'] == 'completed'):
+            return runs
+        if attempt < tries - 1:
+            time.sleep(pause)
+    for r in mine:
+        r.update({k: trigger[k] for k in ('status', 'conclusion', 'updated_at', 'run_started_at') if k in trigger})
+    if not mine:
+        runs.append(trigger)
+    return runs
+
+
 def latest_per_workflow(runs, event):
     best = {}
     for r in runs:
@@ -281,9 +306,14 @@ def ask_issue_of(run_id):
     return None
 
 
-def view(r, tails_left):
+def view(r, tails_left, pause=5):
     """A run as the renderer reads it; fetches a failed job's log while `tails_left` allows."""
-    jobs = (gh('repos/%s/actions/runs/%s/jobs?filter=latest&per_page=100' % (REPO, r['id'])) or {}).get('jobs', [])
+    for attempt in range(4):
+        jobs = (gh('repos/%s/actions/runs/%s/jobs?filter=latest&per_page=100' % (REPO, r['id'])) or {}).get('jobs', [])
+        # the jobs API can lag its run's completion the same way the runs API lags the event
+        if r['status'] != 'completed' or all(j['status'] == 'completed' for j in jobs) or attempt == 3:
+            break
+        time.sleep(pause)
     out_jobs = []
     for j in jobs:
         js = {'name': j['name'], 'status': j['status'], 'conclusion': j.get('conclusion'),
@@ -318,16 +348,16 @@ def prs_of(sha):
     return [p['number'] for p in pulls if (p.get('base') or {}).get('repo', {}).get('full_name') == REPO]
 
 
-def report(number, dry_run=False):
+def report(number, dry_run=False, trigger=None):
     pr = gh('repos/%s/pulls/%s' % (REPO, number))
     info = {'number': number, 'head_sha': pr['head']['sha'], 'merged': bool(pr.get('merged')),
             'merge_sha': pr.get('merge_commit_sha'), 'state': pr.get('state')}
     tails = [MAX_FAILED]
-    runs = gh('repos/%s/actions/runs?head_sha=%s&per_page=100' % (REPO, info['head_sha']))['workflow_runs']
+    runs = runs_for(info['head_sha'], trigger)
     checks = [view(r, tails) for r in latest_per_workflow(runs, 'pull_request')]
     deploy = []
     if info['merged'] and info['merge_sha']:
-        runs = gh('repos/%s/actions/runs?head_sha=%s&per_page=100' % (REPO, info['merge_sha']))['workflow_runs']
+        runs = runs_for(info['merge_sha'], trigger)
         deploy = [view(r, tails) for r in latest_per_workflow(runs, 'push')]
     body = render(info, checks, deploy)
     if dry_run:
@@ -364,6 +394,7 @@ def main(argv=None):
     g.add_argument('--pr', type=int, help='report on one pull request')
     ap.add_argument('--dry-run', action='store_true', help='print the comment instead of posting it')
     a = ap.parse_args(argv)
+    trigger = None
     if a.pr:
         numbers = [a.pr]
     elif a.sha:
@@ -371,6 +402,7 @@ def main(argv=None):
     else:
         with open(a.event, encoding='utf-8') as f:
             run = json.load(f).get('workflow_run') or {}
+        trigger = run if run.get('id') else None
         numbers = [p['number'] for p in run.get('pull_requests') or []
                    if (p.get('base') or {}).get('repo', {}).get('url', '').endswith('/repos/' + REPO)]
         if not numbers and run.get('head_sha'):
@@ -379,7 +411,7 @@ def main(argv=None):
         print('no pull request carries this commit — nothing to report')
         return
     for n in sorted(set(numbers)):
-        report(n, a.dry_run)
+        report(n, a.dry_run, trigger)
 
 
 if __name__ == '__main__':
